@@ -45,12 +45,21 @@ export type NodeMatchVerdict =
  * relation is undecidable in general (spec §3.7).
  */
 export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMatchVerdict {
+  if (!Number.isInteger(fuel) || fuel <= 0) {
+    throw new Error(`fuel must be a positive integer, got ${fuel}`)
+  }
   if (freePorts(a).length !== freePorts(b).length) return { status: 'no-match' }
-  const na = normalize(closeOverPorts(a), fuel)
+  const ca = closeOverPorts(a)
+  const cb = closeOverPorts(b)
+  // Sound shortcut, not a heuristic: structural equality of closures implies
+  // convertibility by reflexivity — and avoids spurious 'undecided' verdicts
+  // on identical non-normalizing terms.
+  if (termEq(ca, cb)) return { status: 'match' }
+  const na = normalize(ca, fuel)
   if (na.status === 'fuel-exhausted') {
     return { status: 'undecided', detail: `left closure did not normalize within ${fuel} steps` }
   }
-  const nb = normalize(closeOverPorts(b), fuel)
+  const nb = normalize(cb, fuel)
   if (nb.status === 'fuel-exhausted') {
     return { status: 'undecided', detail: `right closure did not normalize within ${fuel} steps` }
   }

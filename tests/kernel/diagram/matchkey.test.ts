@@ -55,6 +55,21 @@ describe('termsMatchModuloBetaEta', () => {
     expect(termsMatchModuloBetaEta(p('y z'), p('z y'), 100).status).toBe('match')
   })
 
+  it('matches identical non-normalizing terms by reflexivity (no spurious undecided)', () => {
+    const omega = p('(\\x. x x) (\\x. x x)')
+    expect(termsMatchModuloBetaEta(omega, omega, 25).status).toBe('match')
+  })
+
+  it('distinguishes and matches constant-carrying terms', () => {
+    const pc = (s: string) => parseTerm(s, new Set(['plus', 'times']))
+    expect(termsMatchModuloBetaEta(pc('plus y'), pc('times y'), 100).status).toBe('no-match')
+    expect(termsMatchModuloBetaEta(pc('plus y'), pc('plus z'), 100).status).toBe('match')
+  })
+
+  it('rejects non-positive fuel as a caller error', () => {
+    expect(() => termsMatchModuloBetaEta(p('y'), p('z'), 0)).toThrowError(/fuel must be a positive integer/i)
+  })
+
   it('reports undecided on fuel exhaustion, naming the side', () => {
     const omega = p('(\\x. x x) (\\x. x x)')
     const left = termsMatchModuloBetaEta(omega, p('\\x. x'), 25)
