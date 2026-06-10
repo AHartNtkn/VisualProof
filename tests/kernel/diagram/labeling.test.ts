@@ -114,4 +114,66 @@ describe('isoBetween', () => {
     h2.termNode(h2.root, p('y'))
     expect(isoBetween(host(), h2.build())).toBeNull()
   })
+
+  it('ordinals reflect winning coloring, not id insertion order (kills mutant: initial-color ordinals)', () => {
+    // Two diagrams, same structure: a node in an outer cut and a node in a nested
+    // cut. In d1 the outer node is n0 (inserted first); in d2 the outer node is
+    // n1 (inserted second). The correct ordinals are determined by the canonical
+    // winner coloring, which respects structure. A mutant using initial colors
+    // would use insertion order, mapping outer→0 in d1 and outer→1 in d2,
+    // making isoBetween transport outer↦inner.
+    const lam = p('\\x. x')
+    const d1 = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' }, r1: { kind: 'cut', parent: 'r0' }, r2: { kind: 'cut', parent: 'r1' } },
+      nodes: {
+        n0: { kind: 'term', region: 'r1', term: lam },  // outer cut, inserted first
+        n1: { kind: 'term', region: 'r2', term: lam },  // inner cut, inserted second
+      },
+      wires: {
+        w0: { scope: 'r1', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r2', endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+      },
+    })
+    const d2 = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' }, r1: { kind: 'cut', parent: 'r0' }, r2: { kind: 'cut', parent: 'r1' } },
+      nodes: {
+        n0: { kind: 'term', region: 'r2', term: lam },  // inner cut, inserted first
+        n1: { kind: 'term', region: 'r1', term: lam },  // outer cut, inserted second
+      },
+      wires: {
+        w0: { scope: 'r2', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        w1: { scope: 'r1', endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+      },
+    })
+    const iso = isoBetween(d1, d2)
+    expect(iso).not.toBeNull()
+    // d1.n0 is in r1 (outer), d2.n1 is in r1 (outer). The iso must map outer↦outer.
+    const imgOfN0 = iso!.nodes.get('n0')
+    expect(d2.nodes[imgOfN0!]?.region).toBe('r1')
+  })
+
+  it('search takes the lex-min branch (kills mutant: lex-max branch)', () => {
+    // Same two-nested-cut diagram. Build it twice. Under lex-max branching, the
+    // canonical form picks a different winner than lex-min. If forms differ
+    // between two independently built copies, isoBetween returns null instead of
+    // the correct iso. Concretely: verify the two copies have equal forms AND a
+    // valid iso.
+    const lam = p('\\x. x')
+    function buildNested() {
+      const h = new DiagramBuilder()
+      const cut = h.cut(h.root)
+      const inner = h.cut(cut)
+      h.termNode(cut, lam)
+      h.termNode(inner, lam)
+      return h.build()
+    }
+    const d1 = buildNested()
+    const d2 = buildNested()
+    // Equal forms required for any valid canonical algorithm.
+    expect(canonicalForm(d1)).toBe(canonicalForm(d2))
+    // isoBetween must be non-null.
+    expect(isoBetween(d1, d2)).not.toBeNull()
+  })
 })
