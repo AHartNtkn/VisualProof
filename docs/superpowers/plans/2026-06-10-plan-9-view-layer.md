@@ -719,14 +719,14 @@ describe('buildScene', () => {
     expect(dist + bubCircle.radius).toBeLessThanOrEqual(cutCircle.radius + 1e-9)
   })
 
-  it('shades exactly the negative regions', () => {
-    const { d, n, m, atom } = host()
+  it('marks exactly the negative-polarity regions as shaded (bubbles inherit)', () => {
+    const { d, n, m, atom, cut, bub } = host()
     const pos = new Map([[n, vec(0, 0)], [m, vec(40, 0)], [atom, vec(60, 0)]])
     const scene = buildScene(d, pos)
-    for (const r of scene.regions) {
-      const expected = d.regions[r.id]!.kind === 'cut' // depth-1 cut is the only negative region here
-      expect(r.shaded).toBe(expected)
-    }
+    const byId = new Map(scene.regions.map((r) => [r.id, r]))
+    expect(byId.get(d.nodes[n]!.region)!.shaded).toBe(false) // root sheet: positive
+    expect(byId.get(cut)!.shaded).toBe(true)                 // depth-1 cut: negative
+    expect(byId.get(bub)!.shaded).toBe(true)                 // bubble inside it: inherits negative
   })
 
   it('wire stars pass through the endpoint anchors', () => {
@@ -1258,10 +1258,24 @@ describe('renderScene', () => {
     expect(firstWire).toBeLessThan(firstNodeArc)
   })
 
-  it('fills exactly the shaded (negative) regions', () => {
-    const shapes = renderScene(scene())
-    const circles = shapes.filter((s) => s.kind === 'circle')
-    expect(circles.filter((c) => c.kind === 'circle' && c.fill !== undefined)).toHaveLength(1)
+  it('paints polarity: negative cuts shade, positive cuts un-shade, bubbles stay open', () => {
+    const h = new DiagramBuilder()
+    const c1 = h.cut(h.root)
+    const c2 = h.cut(c1)
+    const bub = h.bubble(c1, 0)
+    h.termNode(c2, p('\\x. x'))
+    const d = h.build()
+    void bub
+    const s = settle(d, initialState(d), DEFAULT_PARAMS, 20000)
+    const shapes = renderScene(buildScene(d, s.positions))
+    const circles = shapes.filter((x) => x.kind === 'circle')
+    expect(circles).toHaveLength(3)
+    const fills = circles.map((c) => (c.kind === 'circle' ? c.fill : undefined))
+    // one shade fill (the negative depth-1 cut), one background fill (the
+    // positive depth-2 cut), one open circle (the bubble)
+    expect(fills.filter((f) => f !== undefined && f.startsWith('rgba'))).toHaveLength(1)
+    expect(fills.filter((f) => f === '#fafaf7')).toHaveLength(1)
+    expect(fills.filter((f) => f === undefined)).toHaveLength(1)
   })
 
   it('binder hues are distinct per binder row and stable', () => {
@@ -1311,28 +1325,37 @@ export function binderHue(row: number): string {
 }
 
 const REGION_STROKE = '#444'
-const NEGATIVE_FILL = 'rgba(60, 60, 80, 0.15)'
+const NEGATIVE_FILL = 'rgba(60, 60, 80, 0.25)'
+const BACKGROUND_FILL = '#fafaf7'
 const BUBBLE_STROKE = '#7a4dbf'
 const WIRE_STROKE = '#1f6f8b'
 const STRUCTURE = '#222'
 
 /**
- * Pure display list, paint-ordered: regions (outer first, negatives filled,
- * bubbles in the second-order stroke), wires, then node structure with
- * binder hues at rest (tethers-on-hover is interaction, Plan 10).
+ * Pure display list, paint-ordered: regions (outer first), wires, then node
+ * structure with binder hues at rest (tethers-on-hover is interaction,
+ * Plan 10). Shading paints polarity: NEGATIVE cuts get the shade fill and
+ * POSITIVE cuts get the opaque background fill — painting outer-first, an
+ * even-depth cut visibly UN-shades the odd-depth shading it sits on. Bubbles
+ * never fill (they do not flip parity, so their interior must show their
+ * parent's shading through).
  */
 export function renderScene(scene: Scene): Shape[] {
   const shapes: Shape[] = []
   const regions = [...scene.regions].sort((a, b) => b.radius - a.radius)
   for (const r of regions) {
     if (r.kind === 'sheet') continue
-    shapes.push({
-      kind: 'circle',
-      center: r.center,
-      r: r.radius,
-      stroke: r.kind === 'bubble' ? BUBBLE_STROKE : REGION_STROKE,
-      ...(r.shaded ? { fill: NEGATIVE_FILL } : {}),
-    })
+    if (r.kind === 'bubble') {
+      shapes.push({ kind: 'circle', center: r.center, r: r.radius, stroke: BUBBLE_STROKE })
+    } else {
+      shapes.push({
+        kind: 'circle',
+        center: r.center,
+        r: r.radius,
+        stroke: REGION_STROKE,
+        fill: r.shaded ? NEGATIVE_FILL : BACKGROUND_FILL,
+      })
+    }
   }
   for (const w of scene.wires) {
     if (w.spokes.length === 0) {
@@ -1574,7 +1597,10 @@ describe('the full pipeline tracks kernel edits', () => {
     const shapes2 = renderScene(buildScene(d2, s2.positions))
     const circles2 = shapes2.filter((s) => s.kind === 'circle')
     expect(circles2).toHaveLength(2) // the two new cuts
-    expect(circles2.filter((c) => c.kind === 'circle' && c.fill !== undefined)).toHaveLength(1)
+    // outer cut is negative (shade fill), inner cut is positive (background fill)
+    const fills = circles2.map((c) => (c.kind === 'circle' ? c.fill : undefined))
+    expect(fills.filter((f) => f !== undefined && f.startsWith('rgba'))).toHaveLength(1)
+    expect(fills.filter((f) => f === '#fafaf7')).toHaveLength(1)
   })
 
   it('scenes contain no NaN under extreme aspect terms', () => {
