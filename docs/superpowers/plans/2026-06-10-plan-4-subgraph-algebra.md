@@ -641,10 +641,12 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
   const root = freshId(takenRegionIds, 'root')
 
   const regions: Record<RegionId, Region> = { [root]: { kind: 'sheet' } }
+  const subtreeRootSet = new Set(sel.regions)
   for (const id of c.allRegions) {
     const r = d.regions[id]!
     if (r.kind === 'sheet') continue // impossible: subtree roots are non-root children
-    const parent = id === sel.region ? root : (sel.regions.includes(id) ? root : r.parent)
+    // sel.region is never in allRegions (it is the anchor, not selected content)
+    const parent = subtreeRootSet.has(id) ? root : r.parent
     regions[id] = r.kind === 'cut'
       ? { kind: 'cut', parent }
       : { kind: 'bubble', parent, arity: r.arity }
@@ -745,6 +747,19 @@ describe('removeSubgraph', () => {
     // wShared survives with only nA's endpoint
     expect(after.wires[h.wShared]?.endpoints).toHaveLength(1)
     expect(after.wires[h.wShared]?.endpoints[0]?.node).toBe(h.nA)
+  })
+
+  it('a touching wire trimmed to zero endpoints survives as a bare wire at its scope', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const n = b.termNode(cut, p('\\x. x'))
+    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }]) // scoped at root, only endpoint inside the cut
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
+    const after = removeSubgraph(d, sel)
+    expect(after.wires[w]).toBeDefined()
+    expect(after.wires[w]?.endpoints).toHaveLength(0)
+    expect(after.wires[w]?.scope).toBe(d.root)
   })
 })
 
