@@ -28,7 +28,7 @@
 - Create: `src/kernel/diagram/diagram.ts`
 - Test: `tests/kernel/diagram/diagram.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/diagram.test.ts`:
 
@@ -157,18 +157,18 @@ describe('DiagramError', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/diagram.test.ts`
 Expected: FAIL — cannot resolve `../../../src/kernel/diagram/diagram`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/diagram.ts`:
 
 ```ts
 import type { Term } from '../term/term'
-import { freePorts } from '../term/term'
+import { assertWellFormedTerm, freePorts } from '../term/term'
 
 export type RegionId = string
 export type NodeId = string
@@ -293,6 +293,14 @@ export function mkDiagram(parts: {
 
   for (const [id, n] of Object.entries(nodes)) {
     if (regions[n.region] === undefined) fail(`node '${id}' is in missing region '${n.region}'`)
+    if (n.kind === 'term') {
+      // Term is structural; literals can bypass the smart constructors.
+      try {
+        assertWellFormedTerm(n.term)
+      } catch (e) {
+        fail(`node '${id}' term: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
     if (n.kind === 'atom') {
       // `?? fail(...)` rather than guard-then-use: fail is a const arrow, and
       // TS only narrows after never-returning calls when the callee binding
@@ -364,11 +372,11 @@ export function mkDiagram(parts: {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/diagram/diagram.test.ts`, then `npm test` and `npm run typecheck` — all green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/diagram.ts tests/kernel/diagram/diagram.test.ts
@@ -384,7 +392,7 @@ git commit -m "feat(kernel): diagram abstract syntax with validating constructor
 
 Every invariant gets a violation test asserting its specific error message. No implementation changes are expected — if any test fails, the validator has a hole; fix `mkDiagram` (and report which hole).
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `tests/kernel/diagram/wellformed.test.ts`:
 
@@ -544,12 +552,12 @@ describe('mkDiagram rejections', () => {
 })
 ```
 
-- [ ] **Step 2: Run the battery**
+- [x] **Step 2: Run the battery**
 
 Run: `npx vitest run tests/kernel/diagram/wellformed.test.ts`
 Expected: PASS if Task 1's validator is complete. Any failure = validator hole; fix `mkDiagram` and report which invariant had the hole.
 
-- [ ] **Step 3: Run full suite and commit**
+- [x] **Step 3: Run full suite and commit**
 
 Run: `npm test && npm run typecheck` — all green.
 
@@ -566,7 +574,7 @@ git commit -m "test(kernel): well-formedness rejection battery for diagrams"
 - Create: `src/kernel/diagram/regions.ts`
 - Test: `tests/kernel/diagram/regions.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/regions.test.ts`:
 
@@ -625,12 +633,12 @@ describe('cutDepth and polarity', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/regions.test.ts`
 Expected: FAIL — cannot resolve `regions`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/regions.ts`:
 
@@ -678,11 +686,11 @@ export function polarity(d: Diagram, id: RegionId): 'positive' | 'negative' {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
 Run: `npx vitest run tests/kernel/diagram/regions.test.ts && npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/regions.ts tests/kernel/diagram/regions.test.ts
@@ -697,7 +705,7 @@ git commit -m "feat(kernel): region ancestry, cut depth, polarity helpers"
 - Create: `src/kernel/diagram/builder.ts`
 - Test: `tests/kernel/diagram/builder.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/builder.test.ts`:
 
@@ -785,12 +793,12 @@ describe('DiagramBuilder', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/builder.test.ts`
 Expected: FAIL — cannot resolve `builder`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/builder.ts`:
 
@@ -879,11 +887,11 @@ export class DiagramBuilder {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
 Run: `npx vitest run tests/kernel/diagram/builder.test.ts && npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/builder.ts tests/kernel/diagram/builder.test.ts
@@ -898,7 +906,7 @@ git commit -m "feat(kernel): DiagramBuilder with auto-singleton wires"
 - Create: `src/kernel/diagram/json.ts`
 - Test: `tests/kernel/diagram/json.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/json.test.ts`:
 
@@ -987,12 +995,12 @@ describe('diagram JSON', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/json.test.ts`
 Expected: FAIL — cannot resolve `json`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/json.ts`:
 
@@ -1059,7 +1067,7 @@ export function diagramFromJson(j: unknown): Diagram {
   assertOnlyKeys(j, ['root', 'regions', 'nodes', 'wires'], 'top level')
   const { root, regions: jr, nodes: jn, wires: jw } = j
   if (typeof root !== 'string') fail("'root' must be a string")
-  if (!isRecord(jr) || !isRecord(jn ?? {}) || !isRecord(jw ?? {})) fail("'regions', 'nodes', 'wires' must be objects")
+  if (!isRecord(jr) || !isRecord(jn) || !isRecord(jw)) fail("'regions', 'nodes', 'wires' must be objects")
 
   const regions: Record<string, Region> = {}
   for (const [id, v] of Object.entries(jr)) {
@@ -1083,7 +1091,7 @@ export function diagramFromJson(j: unknown): Diagram {
   }
 
   const nodes: Record<string, DiagramNode> = {}
-  for (const [id, v] of Object.entries((jn ?? {}) as Record<string, unknown>)) {
+  for (const [id, v] of Object.entries(jn)) {
     if (!isRecord(v) || typeof v.region !== 'string') fail(`node '${id}' has unrecognized shape`)
     if (v.kind === 'term' && typeof v.term === 'string') {
       assertOnlyKeys(v, ['kind', 'region', 'term'], `node '${id}'`)
@@ -1103,7 +1111,7 @@ export function diagramFromJson(j: unknown): Diagram {
   }
 
   const wires: Record<string, Wire> = {}
-  for (const [id, v] of Object.entries((jw ?? {}) as Record<string, unknown>)) {
+  for (const [id, v] of Object.entries(jw)) {
     if (!isRecord(v) || typeof v.scope !== 'string' || !Array.isArray(v.endpoints)) {
       fail(`wire '${id}' has unrecognized shape`)
     }
@@ -1122,11 +1130,11 @@ export function diagramFromJson(j: unknown): Diagram {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
 Run: `npx vitest run tests/kernel/diagram/json.test.ts && npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/json.ts tests/kernel/diagram/json.test.ts
@@ -1141,7 +1149,7 @@ git commit -m "feat(kernel): diagram JSON round-trip with loud rejection and re-
 - Create: `src/kernel/diagram/boundary.ts`
 - Test: `tests/kernel/diagram/boundary.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/boundary.test.ts`:
 
@@ -1190,12 +1198,12 @@ describe('mkDiagramWithBoundary', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/boundary.test.ts`
 Expected: FAIL — cannot resolve `boundary`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/boundary.ts`:
 
@@ -1236,11 +1244,11 @@ export function boundaryArity(d: DiagramWithBoundary): number {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
 Run: `npx vitest run tests/kernel/diagram/boundary.test.ts && npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/boundary.ts tests/kernel/diagram/boundary.test.ts
@@ -1254,7 +1262,7 @@ git commit -m "feat(kernel): diagrams with ordered boundary wires"
 **Files:**
 - Create: `src/kernel/diagram/index.ts`
 
-- [ ] **Step 1: Write the barrel**
+- [x] **Step 1: Write the barrel**
 
 `src/kernel/diagram/index.ts`:
 
@@ -1270,12 +1278,12 @@ export type { DiagramWithBoundary } from './boundary'
 export { mkDiagramWithBoundary, boundaryArity } from './boundary'
 ```
 
-- [ ] **Step 2: Full gate**
+- [x] **Step 2: Full gate**
 
 Run: `npm test && npm run typecheck`
 Expected: all green (Plan 1's 69 tests plus this plan's new ones); typecheck exit 0.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/kernel/diagram/index.ts
