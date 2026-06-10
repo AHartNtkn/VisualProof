@@ -78,7 +78,17 @@ Two kinds; both conservative (no proof obligation), both yielding fold/unfold an
 
 ### 3.4 Conjectures and proofs
 
-A conjecture is authored as **LHS ⟹ RHS** over a shared boundary. Proving = transforming LHS into RHS in Proof mode, one rule application at a time. The finished proof classifies itself: all-equational steps → equational rule; otherwise → directed rule. Declaring the proved statement as a rule is one action.
+A conjecture is authored as **LHS ⟹ RHS** over a shared boundary. A *theorem* (a statement true outright) is the special case where LHS is the blank sheet: proving `blank ⟹ T` establishes T, and the resulting rule lets T be scribed into any positive region thereafter — the classical existential-graph treatment of proven theorems.
+
+Semantically, every finished proof is one directed chain: a sequence of rule applications carrying LHS to RHS, each step sound in the direction it is applied. The finished proof classifies itself: all-equational steps → equational rule; otherwise → directed rule. Declaring the proved statement as a rule is one action.
+
+**Proof construction is explicitly bidirectional.** Both modes are supported and freely mixable within one proof:
+
+- **Forward**: start from LHS and construct toward RHS — each step applies a rule in its sound direction, building up what is true. For theorems this is reasoning from the blank sheet outward.
+- **Backward**: start from RHS (the goal) and reduce it — each step applies a rule *in reverse*, and the kernel checks that the step is sound when read forward (so polarity conditions appear flipped to the user: e.g., backward erasure is forward insertion). For theorems this is rewriting the goal down to the blank sheet.
+- **Meet in the middle**: grow a forward frontier from LHS and a backward frontier from RHS; the proof completes when the two frontiers coincide up to canonical form.
+
+Whatever the construction order, the stored proof object is normalized to a single forward chain (forward segment + reversed backward segment). Replay and verification are therefore direction-agnostic, and playback can be watched in either direction.
 
 A proof object records: initial diagram, ordered steps (rule reference + match instantiation in canonical addressing), final diagram, and the content fingerprints of every definition and rule it uses. Steps replay deterministically.
 
@@ -189,7 +199,7 @@ Free construction constrained only by well-formedness. Confirmed interactions:
 
 ### 7.3 Proof mode
 
-The diagram changes only by rule application. Both interaction directions: select a subgraph → see every rule applicable there (matched modulo βη, automatically); or pick a rule → every match site lights up → click one. **Normalize** is one action on any term node. Undo/redo walks the step list. Finishing a proof offers one-action rule declaration (§3.4).
+The diagram changes only by rule application. A **direction toggle** selects which frontier the user is growing — forward (from LHS) or backward (from RHS), per §3.4 — and the picture-in-picture card always shows the opposite end. In backward mode, applicability highlighting shows where rules apply *in reverse*, with the kernel enforcing forward soundness of every step. Both interaction directions exist in either mode: select a subgraph → see every rule applicable there (matched modulo βη, automatically); or pick a rule → every match site lights up → click one. **Normalize** is one action on any term node. Undo/redo walks the step list of the active frontier. The proof completes when the frontiers coincide (or one reaches the other end), and finishing offers one-action rule declaration (§3.4).
 
 ### 7.4 Persistence
 
