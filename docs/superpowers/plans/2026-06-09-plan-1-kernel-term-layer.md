@@ -153,6 +153,10 @@ describe('term constructors and equality', () => {
     expect(() => bvar(0.5)).toThrowError(/fractional/i)
   })
 
+  it('rejects unsafely large de Bruijn indices at construction', () => {
+    expect(() => bvar(2 ** 53)).toThrowError(/safe integer/i)
+  })
+
   it('rejects empty port and const names at construction', () => {
     expect(() => port('')).toThrowError(/non-empty/i)
     expect(() => cnst('')).toThrowError(/non-empty/i)
@@ -201,8 +205,8 @@ export type Term =
   | { readonly kind: 'app'; readonly fn: Term; readonly arg: Term }
 
 export function bvar(index: number): Term {
-  if (index < 0 || !Number.isInteger(index)) {
-    throw new Error(`bvar index must be a non-negative integer, got ${index} (negative or fractional indices are meaningless)`)
+  if (!Number.isSafeInteger(index) || index < 0) {
+    throw new Error(`bvar index must be a non-negative safe integer, got ${index} (negative, fractional, or unsafely large indices are meaningless)`)
   }
   return { kind: 'bvar', index }
 }
@@ -1497,6 +1501,7 @@ describe('serializeTerm', () => {
   it('rejects malformed input loudly', () => {
     expect(() => deserializeTerm('L(')).toThrowError(/malformed/i)
     expect(() => deserializeTerm('garbage')).toThrowError(/malformed/i)
+    expect(() => deserializeTerm('P("a")x')).toThrowError(/malformed/i)
   })
 })
 ```
@@ -1540,6 +1545,8 @@ function parse(s: string, i: number): [Term, number] {
   const fail = (msg: string): never => { throw new Error(`malformed term serialization at ${i}: ${msg}`) }
   const c = s[i] ?? fail('unexpected end')
   if (c === '#') {
+    // Leading zeros are accepted; serializeTerm never emits them, so
+    // non-canonical inputs decode to the unique canonical term.
     let j = i + 1
     while (j < s.length && s[j]! >= '0' && s[j]! <= '9') j++
     if (j === i + 1) fail('expected digits after #')
