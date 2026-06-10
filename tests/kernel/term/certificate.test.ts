@@ -50,6 +50,18 @@ describe('checkConversion', () => {
     }
   })
 
+  it('rejects an invalid right step, naming the side and step index', () => {
+    const cert: ConversionCertificate = {
+      leftSteps: [],
+      rightSteps: [{ kind: 'beta', path: ['fn', 'fn'] }],
+    }
+    const result = checkConversion(YF, F_YF, cert)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.reason).toMatch(/right step 0/i)
+    }
+  })
+
   it('accepts the trivial certificate for identical terms', () => {
     const result = checkConversion(Y, Y, { leftSteps: [], rightSteps: [] })
     expect(result.ok).toBe(true)

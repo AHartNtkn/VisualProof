@@ -19,19 +19,19 @@ export type ConversionCheck =
 
 export function checkConversion(left: Term, right: Term, cert: ConversionCertificate): ConversionCheck {
   let l = left
-  for (let i = 0; i < cert.leftSteps.length; i++) {
+  for (const [i, step] of cert.leftSteps.entries()) {
     try {
-      l = applyStepAt(l, cert.leftSteps[i]!)
+      l = applyStepAt(l, step)
     } catch (e) {
-      return { ok: false, reason: `left step ${i} is invalid: ${(e as Error).message}` }
+      return { ok: false, reason: `left step ${i} is invalid: ${e instanceof Error ? e.message : String(e)}` }
     }
   }
   let r = right
-  for (let i = 0; i < cert.rightSteps.length; i++) {
+  for (const [i, step] of cert.rightSteps.entries()) {
     try {
-      r = applyStepAt(r, cert.rightSteps[i]!)
+      r = applyStepAt(r, step)
     } catch (e) {
-      return { ok: false, reason: `right step ${i} is invalid: ${(e as Error).message}` }
+      return { ok: false, reason: `right step ${i} is invalid: ${e instanceof Error ? e.message : String(e)}` }
     }
   }
   if (!termEq(l, r)) {
