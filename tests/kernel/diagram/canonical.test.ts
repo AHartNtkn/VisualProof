@@ -123,4 +123,11 @@ describe('canonicalForm', () => {
     b.termNode(b.root, p('\\x. x'))
     expect(() => canonicalForm(b.build(), ['ghost'])).toThrowError(/pinned wire 'ghost' does not exist/)
   })
+
+  it('throws on duplicate pinned wires', () => {
+    const b = new DiagramBuilder()
+    const n = b.termNode(b.root, p('\\x. x'))
+    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    expect(() => canonicalForm(b.build(), [w, w])).toThrowError(/duplicate pinned wire 'w0'/)
+  })
 })

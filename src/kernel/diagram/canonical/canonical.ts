@@ -25,8 +25,11 @@ import { termShapeKey, positionalPortKey } from './shape'
  * colors in pin order, so boundary order is significant.
  */
 export function canonicalForm(d: Diagram, pinnedWires: readonly WireId[] = []): string {
+  const seenPins = new Set<string>()
   for (const w of pinnedWires) {
     if (d.wires[w] === undefined) throw new DiagramError(`pinned wire '${w}' does not exist`)
+    if (seenPins.has(w)) throw new DiagramError(`duplicate pinned wire '${w}'`)
+    seenPins.add(w)
   }
   const idx = buildIndex(d, pinnedWires)
   const colors = refine(idx, initialColors(idx))
@@ -279,11 +282,7 @@ function individualize(c: Colors, sort: 'region' | 'node' | 'wire', id: string):
     wire: new Map(c.wire),
   }
   clone[sort].set(id, bump)
-  return {
-    region: clone.region,
-    node: clone.node,
-    wire: clone.wire,
-  }
+  return clone
 }
 
 function search(idx: Index, c: Colors): string {
@@ -304,8 +303,7 @@ function serializeWith(idx: Index, c: Colors): string {
   const lines: string[] = []
   for (const id of sortByOrd(idx.regionIds, regionOrd)) {
     const parent = idx.parentOf.get(id)
-    let parentStr: string
-    parentStr = parent === null ? '-' : (() => {
+    const parentStr = parent === null ? '-' : (() => {
       const ord = regionOrd.get(parent as RegionId)
       if (ord === undefined) throw new DiagramError(`parent region '${parent}' missing ordinal`)
       return `r${ord}`
