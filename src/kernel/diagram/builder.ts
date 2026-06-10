@@ -50,15 +50,22 @@ export class DiagramBuilder {
   }
 
   build(): Diagram {
-    const attached = new Set<string>()
+    const attached = new Map<NodeId, Set<string>>()
     for (const w of Object.values(this.wires)) {
-      for (const ep of w.endpoints) attached.add(`${ep.node} ${portKey(ep.port)}`)
+      for (const ep of w.endpoints) {
+        let byPort = attached.get(ep.node)
+        if (byPort === undefined) {
+          byPort = new Set()
+          attached.set(ep.node, byPort)
+        }
+        byPort.add(portKey(ep.port))
+      }
     }
     const autoWires: Record<WireId, Wire> = {}
     let auto = this.wireCount
     for (const [id, n] of Object.entries(this.nodes)) {
       for (const q of requiredPorts({ regions: this.regions }, n)) {
-        if (!attached.has(`${id} ${portKey(q)}`)) {
+        if (attached.get(id)?.has(portKey(q)) !== true) {
           autoWires[`w${auto++}`] = { scope: n.region, endpoints: [{ node: id, port: q }] }
         }
       }

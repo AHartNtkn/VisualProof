@@ -57,6 +57,25 @@ describe('DiagramBuilder', () => {
     b.termNode(b.root, p('\\x. x'))
     const d1 = b.build()
     const d2 = b.build()
-    expect(Object.keys(d1.wires)).toEqual(Object.keys(d2.wires))
+    expect(Object.keys(d1.wires)).toEqual(['w0'])
+    expect(Object.keys(d2.wires)).toEqual(['w0'])
+  })
+
+  it('auto-wires atom arg ports from the binder arity', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 2)
+    const a = b.atom(bub, bub)
+    const d = b.build()
+    const wires = Object.values(d.wires)
+    expect(wires).toHaveLength(2)
+    const keys = wires.flatMap((w) => w.endpoints.map((ep) => `${ep.node}/${portKey(ep.port)}`)).sort()
+    expect(keys).toEqual([`${a}/a:0`, `${a}/a:1`])
+    for (const w of wires) expect(w.scope).toBe(bub)
+  })
+
+  it('builds the empty diagram (root sheet only)', () => {
+    const d = new DiagramBuilder().build()
+    expect(Object.keys(d.nodes)).toHaveLength(0)
+    expect(Object.keys(d.wires)).toHaveLength(0)
   })
 })
