@@ -7,6 +7,8 @@ export function shift(d: number, cutoff: number, t: Term): Term {
     case 'bvar': {
       if (t.index < cutoff) return t
       const next = t.index + d
+      // Unreachable from betaReduce (substitution removes all index-0 occurrences
+      // before the decrement); guards direct callers of shift(-d, ...).
       if (next < 0) {
         throw new Error(`shift produced negative index ${next}; caller violated its guarantee (d=${d}, cutoff=${cutoff}, index=${t.index})`)
       }
