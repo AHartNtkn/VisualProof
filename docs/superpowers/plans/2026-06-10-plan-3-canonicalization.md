@@ -24,7 +24,7 @@
 - Create: `src/kernel/diagram/canonical/shape.ts`
 - Test: `tests/kernel/diagram/shape.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/shape.test.ts`:
 
@@ -78,12 +78,12 @@ describe('positionalPortKey', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/shape.test.ts`
 Expected: FAIL — cannot resolve `canonical/shape`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/canonical/shape.ts`:
 
@@ -141,11 +141,11 @@ export function positionalPortKey(termOfNode: Term, p: Port): string {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
 Run: `npx vitest run tests/kernel/diagram/shape.test.ts && npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/canonical/shape.ts tests/kernel/diagram/shape.test.ts
@@ -162,7 +162,7 @@ git commit -m "feat(kernel): positional term shape keys for canonicalization"
 
 This is the core algorithm. The test file covers basic invariance and discrimination; the adversarial battery is Task 4.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/canonical.test.ts`:
 
@@ -302,12 +302,12 @@ describe('canonicalForm', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/canonical.test.ts`
 Expected: FAIL — cannot resolve `canonical/canonical`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/canonical/canonical.ts`:
 
@@ -614,11 +614,11 @@ Note on the discrete-partition serialization precondition: `search` only calls `
 
 Transcription note (from execution): four sites in this reference block do not typecheck under the project's strict tsconfig as written — `Map.get` on a nullable parent needs an undefined re-check after narrowing, `firstTiedClass`'s unused `idx` parameter must be `_idx`, and the closure-mutated nullable `best` defeats TS narrowing and needs a non-nullable restructure. The committed `src/kernel/diagram/canonical/canonical.ts` is the authoritative form; a differential test confirmed it byte-identical in output to this reference on all probe diagrams.
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
 Run: `npx vitest run tests/kernel/diagram/canonical.test.ts && npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/canonical/canonical.ts tests/kernel/diagram/canonical.test.ts
@@ -633,7 +633,7 @@ git commit -m "feat(kernel): exact canonical form via individualization-refineme
 - Create: `src/kernel/diagram/canonical/fingerprint.ts`
 - Test: `tests/kernel/diagram/fingerprint.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/fingerprint.test.ts`:
 
@@ -713,12 +713,12 @@ describe('boundaryFingerprint', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/fingerprint.test.ts`
 Expected: FAIL — cannot resolve `canonical/fingerprint`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/canonical/fingerprint.ts`:
 
@@ -763,9 +763,9 @@ export function diagramsIsomorphic(d1: Diagram, d2: Diagram): boolean {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/canonical/fingerprint.ts tests/kernel/diagram/fingerprint.test.ts
@@ -780,7 +780,7 @@ git commit -m "feat(kernel): diagram and boundary fingerprints over the canonica
 - Test: `tests/kernel/diagram/canonical-adversarial.test.ts`
 - Create: `docs/kernel/canonicalization.md`
 
-- [ ] **Step 1: Write the adversarial tests** (these must pass against Task 2's implementation; any failure is an algorithm bug to fix test-first)
+- [x] **Step 1: Write the adversarial tests** (these must pass against Task 2's implementation; any failure is an algorithm bug to fix test-first)
 
 `tests/kernel/diagram/canonical-adversarial.test.ts`:
 
@@ -906,17 +906,17 @@ describe('canonicalForm adversarial battery', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure is an algorithm bug: write it up, fix `canonical.ts` test-first against the failing case, and report.
+- [x] **Step 2: Run; all must pass.** Any failure is an algorithm bug: write it up, fix `canonical.ts` test-first against the failing case, and report.
 
-- [ ] **Step 3: Write the algorithm documentation**
+- [x] **Step 3: Write the algorithm documentation**
 
 `docs/kernel/canonicalization.md` — must contain, in prose: the object model (three sorts, what isomorphism preserves); the positional-port decision and its semantic justification; initial coloring; the refinement signature for each sort and why including the previous color makes refinement monotone (split-only) and terminating; the individualization branch rule (first tied class, all members explored) and why taking the minimum over all branches yields an isomorphism invariant; the discrete-partition precondition of serialization; boundary pinning; complexity (exponential worst case, exact always — explicitly: this is the no-heuristics trade); and the storage note (hash only at the storage layer, never for soundness comparisons).
 
-- [ ] **Step 4: Full gate**
+- [x] **Step 4: Full gate**
 
 Run: `npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/kernel/diagram/canonical-adversarial.test.ts docs/kernel/canonicalization.md
@@ -930,7 +930,7 @@ git commit -m "test(kernel): adversarial canonicalization battery; document the 
 **Files:**
 - Modify: `src/kernel/diagram/index.ts`
 
-- [ ] **Step 1: Extend the barrel** — append to `src/kernel/diagram/index.ts`:
+- [x] **Step 1: Extend the barrel** — append to `src/kernel/diagram/index.ts`:
 
 ```ts
 export { termShapeKey, positionalPortKey } from './canonical/shape'
@@ -938,9 +938,9 @@ export { canonicalForm } from './canonical/canonical'
 export { diagramFingerprint, boundaryFingerprint, diagramsIsomorphic } from './canonical/fingerprint'
 ```
 
-- [ ] **Step 2: Full gate** — `npm test && npm run typecheck`; verify every barrel export exists.
+- [x] **Step 2: Full gate** — `npm test && npm run typecheck`; verify every barrel export exists.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/kernel/diagram/index.ts
