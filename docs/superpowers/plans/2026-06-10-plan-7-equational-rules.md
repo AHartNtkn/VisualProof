@@ -45,7 +45,7 @@
 - Modify: `src/kernel/term/index.ts` (add barrel line)
 - Test: `tests/kernel/term/path.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/path.test.ts`:
 
@@ -117,12 +117,12 @@ describe('freshPortName', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/path.test.ts`
 Expected: FAIL — cannot resolve `term/path`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/path.ts`:
 
@@ -204,14 +204,16 @@ Append to `src/kernel/term/index.ts`:
 export { subtermAt, replaceSubtermAt, isBvarClosed, substPort, freshPortName } from './path'
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/path.ts src/kernel/term/index.ts tests/kernel/term/path.test.ts
 git commit -m "feat(kernel): term path navigation, port substitution, bvar-closure"
 ```
+
+**Review outcome (commit `060cc55`):** APPROVED; only permitted deviation (unused `port` test import removed). Capture-safety probes confirmed: closed-term substitution under three nested lams leaves inner indices unchanged; escaping replacements refused. All five mutation probes killed by existing tests. Suite: 272.
 
 ---
 
@@ -222,7 +224,7 @@ git commit -m "feat(kernel): term path navigation, port substitution, bvar-closu
 - Create: `src/kernel/rules/conversion.ts`
 - Test: `tests/kernel/rules/conversion.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/conversion.test.ts`:
 
@@ -352,12 +354,12 @@ describe('applyConversionByCertificate', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/conversion.test.ts`
 Expected: FAIL — cannot resolve `rules/conversion`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/access.ts`:
 
@@ -500,14 +502,16 @@ export function applyConversionByCertificate(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/access.ts src/kernel/rules/conversion.ts tests/kernel/rules/conversion.test.ts
 git commit -m "feat(kernel): βη-conversion rule with certificates and port surgery"
 ```
+
+**Review outcome (commit `ecd8551`):** APPROVED. Probes: zero-endpoint wire after vanished-port trim validates; ancestor-scoped attachment accepted, incomparable-scope rejected by the validator; certificate round-trip + corruption refusal; simultaneous vanish+add in one call; reflexive conversion fingerprint-stable with a valid non-empty certificate. All five mutants killed (including fresh-singleton-at-root — the nested-region test from the root-bias lesson fired). Vocabulary invariant verified at every throw site. Suite: 282.
 
 ---
 
@@ -517,7 +521,7 @@ git commit -m "feat(kernel): βη-conversion rule with certificates and port sur
 - Create: `src/kernel/rules/fusion.ts`
 - Test: `tests/kernel/rules/fusion.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/fusion.test.ts`:
 
@@ -664,12 +668,12 @@ describe('applyFission', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/fusion.test.ts`
 Expected: FAIL — cannot resolve `rules/fusion`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/fusion.ts`:
 
@@ -814,14 +818,16 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/fusion.ts tests/kernel/rules/fusion.test.ts
 git commit -m "feat(kernel): fusion and fission via the one-point rule"
 ```
+
+**Review outcome (commit `7b01d7c`, fix `eda92ec`):** Deep review SOUND; zero spec deviations (byte-compared). All five side conditions enforced: probes confirmed refusals for producer-below-scope through a cut AND through a bubble, two-consumer wires, three-endpoint wires; consumed-port-in-producer and duplicated-consumed-port cases correct; depth-2 fission→fusion fingerprint identity; no input aliasing. Mutant iv (migrate colliding port to the CONSUMER's wire — silently conflates two individuals while the merged term looks right) SURVIVED the original battery; killed by strengthening the collision test to pin the freshened endpoint's wire (`eda92ec`, observed fail→pass). Suite: 290.
 
 ---
 
@@ -831,7 +837,7 @@ git commit -m "feat(kernel): fusion and fission via the one-point rule"
 - Create: `src/kernel/rules/definitions.ts`
 - Test: `tests/kernel/rules/definitions.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/definitions.test.ts`:
 
@@ -893,8 +899,11 @@ describe('applyUnfold / applyFold', () => {
   })
 
   it('fold demands syntactic equality, pointing at conversion otherwise', () => {
+    // NOTE: `\a. a` would NOT do here — de Bruijn terms are α-canonical, so it
+    // IS termEq to the definition `\x. x`. Use a term that is merely
+    // βη-convertible to it: `\a. (\b. b) a` (β-reduces to the identity).
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('(\\a. a) y'))
+    const n = h.termNode(h.root, p('(\\a. (\\b. b) a) y'))
     const d = h.build()
     expect(() => applyFold(d, defs, n, ['fn'], 'I'))
       .toThrowError(/not syntactically the definition/)
@@ -913,12 +922,12 @@ describe('applyUnfold / applyFold', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/definitions.test.ts`
 Expected: FAIL — cannot resolve `rules/definitions`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/definitions.ts`:
 
@@ -1006,14 +1015,16 @@ export function applyFold(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/definitions.ts tests/kernel/rules/definitions.test.ts
 git commit -m "feat(kernel): unfold/fold over a closed definitions environment"
 ```
+
+**Review outcome (commit `b510ba6`):** APPROVED. Plan bug found by the implementer and fixed first (`f434c06`): the fold-refusal test used `\a. a`, which is α-canonical under de Bruijn and therefore termEq to `\x. x`; corrected to the merely-convertible `\a. (\b. b) a`. Probes: unfold under three lams leaves closed-body indices unchanged; constant-chain unfold/fold round-trips by fingerprint; whole-term fold at path [] works; no input aliasing. All four mutants killed. Suite: 296.
 
 ---
 
@@ -1023,7 +1034,7 @@ git commit -m "feat(kernel): unfold/fold over a closed definitions environment"
 - Create: `src/kernel/rules/comprehension.ts` (instantiate half)
 - Test: `tests/kernel/rules/comprehension-instantiate.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/comprehension-instantiate.test.ts`:
 
@@ -1145,12 +1156,12 @@ describe('applyComprehensionInstantiate', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/comprehension-instantiate.test.ts`
 Expected: FAIL — cannot resolve `rules/comprehension`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/comprehension.ts` (instantiate half; Task 6 appends the abstract half to this file):
 
@@ -1240,14 +1251,16 @@ export function applyComprehensionInstantiate(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/comprehension.ts tests/kernel/rules/comprehension-instantiate.test.ts
 git commit -m "feat(kernel): comprehension instantiation at negative bubbles"
 ```
+
+**Review outcome (commit `1f45bb4`, fix `de028b0`):** APPROVED. Probes: deep-atom splice lands at the atom's region; impredicative comprehensions (containing bubbles) splice with fresh ids; nested-bubble interactions correct (only the named bubble's atoms replaced, only it dissolved); bubble-scoped wires promote to the parent; no input aliasing; deterministic fingerprints. Two root-bias-class mutants survived the original battery — splice at `bubble.parent` instead of `atom.region`, and dissolution promoting wire scopes to `d.root` (undetectable by mkDiagram since root encloses everything) — both killed by tests added in `de028b0`. Suite: 304.
 
 ---
 
@@ -1257,7 +1270,7 @@ git commit -m "feat(kernel): comprehension instantiation at negative bubbles"
 - Modify: `src/kernel/rules/comprehension.ts` (append the abstract half)
 - Test: `tests/kernel/rules/comprehension-abstract.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/comprehension-abstract.test.ts`:
 
@@ -1417,12 +1430,12 @@ describe('applyComprehensionAbstract', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/comprehension-abstract.test.ts`
 Expected: FAIL — `applyComprehensionAbstract` is not exported.
 
-- [ ] **Step 3: Implement** — append to `src/kernel/rules/comprehension.ts` (and extend its imports: add `Endpoint` to the diagram type imports, plus the new modules below):
+- [x] **Step 3: Implement** — append to `src/kernel/rules/comprehension.ts` (and extend its imports: add `Endpoint` to the diagram type imports, plus the new modules below):
 
 Extend the import block at the top of the file to:
 
@@ -1568,14 +1581,16 @@ export function applyComprehensionAbstract(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/comprehension.ts tests/kernel/rules/comprehension-abstract.test.ts
 git commit -m "feat(kernel): comprehension abstraction at positive regions"
 ```
+
+**Review outcome (commit `90ae876`, fix `0625d34`):** Deep review SOUND; zero deviations. Forgery probes all refused: attachment-multiplicity argument permutation, near-isomorphic occurrences differing only in a nested cut, atoms bound outside the selection; nested-anchor atoms land at their anchors; impredicative occurrences abstract correctly; selected wires pass outside the bubble; hand-built mirror instantiation closes the semantic loop. Three mutants survived and were killed in `0625d34` — notably atom-anchor-always-bubbleId, a REAL semantic gap (hoisting R out of a cut flips its polarity inside φ). The second-pass anchor-inside-other-occurrence guard was proven unreachable (pass-1 overlap always fires first; empty-occurrence escape contradicts fingerprint matching) — KEPT deliberately as a loud defense-in-depth guard, same call as Plan 6's equivalent-mutant `continue`: the unreachability proof depends on validation order that future edits could change. Suite: 314.
 
 ---
 
@@ -1585,7 +1600,7 @@ git commit -m "feat(kernel): comprehension abstraction at positive regions"
 - Modify: `src/kernel/rules/index.ts`
 - Test: `tests/kernel/rules/equational-gates.test.ts`
 
-- [ ] **Step 1: Write the battery** (must pass against Tasks 1–6; failures are rule bugs to fix test-first)
+- [x] **Step 1: Write the battery** (must pass against Tasks 1–6; failures are rule bugs to fix test-first)
 
 `tests/kernel/rules/equational-gates.test.ts`:
 
@@ -1676,9 +1691,9 @@ describe('cross-rule composition', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Extend the barrel** — `src/kernel/rules/index.ts` becomes:
+- [x] **Step 3: Extend the barrel** — `src/kernel/rules/index.ts` becomes:
 
 ```ts
 export { RuleError } from './error'
@@ -1695,9 +1710,9 @@ export type { AbstractionOccurrence } from './comprehension'
 export { applyComprehensionInstantiate, applyComprehensionAbstract } from './comprehension'
 ```
 
-- [ ] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`; verify every export exists.
+- [x] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`; verify every export exists.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/kernel/rules/equational-gates.test.ts src/kernel/rules/index.ts
@@ -1718,3 +1733,7 @@ git commit -m "test(kernel): equational gate battery; full rule surface"
 - Abstraction cannot express occurrences using one host wire as two relation arguments (extraction yields one stub per touching wire); instantiation handles that shape. Revisit if a proof needs the abstract direction with identified arguments.
 - Plan 9 (or earlier if a second package appears): mechanical forbidden-import check (spec §4.2).
 - Matcher symmetry-quotient + bare-wire pairing completeness wart (Plan 6 final review) if workloads hit them.
+
+## Final whole-branch review (HEAD `9cc88eb`)
+
+READY TO MERGE; no blocking or should-fix issues. Cross-rule probes: deiteration modulo βη composes with conversion; fusion succeeds with the consumer arbitrarily deep (even negated) and refuses the displaced-producer forgery; instantiating an abstraction's positive bubble refused; atom-outside-binder closed at every seam (extract throws, splice patterns unconstructible); definitions+conversion round-trip at negative depth; fission's fresh port dodges existing q/q_0 names; all eight appliers leave inputs byte-identical (including the comprehension argument). Vocabulary audit clean across all five modules; zero imports leave src/kernel; rule-layer helpers (termNodeAt/wireAt) deliberately not in the barrel. Performance: every rule is one mkDiagram pass; instantiation is O(atoms × diagram) — noted, acceptable at proof scale. Suite: 323 across 41 files.
