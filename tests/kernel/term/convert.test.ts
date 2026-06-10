@@ -18,9 +18,15 @@ describe('convertible', () => {
     }
   })
 
-  it('decides eta-equalities: \\x. f x = f', () => {
-    const r = convertible(p('\\x. f x'), p('f'), 100)
+  it('decides eta-equalities: \\x. f x = f, with a checkable certificate', () => {
+    const left = p('\\x. f x')
+    const right = p('f')
+    const r = convertible(left, right, 100)
     expect(r.status).toBe('convertible')
+    if (r.status === 'convertible') {
+      const check = checkConversion(left, right, r.certificate)
+      expect(check.ok, check.ok ? '' : check.reason).toBe(true)
+    }
   })
 
   it('separates distinct normal forms definitively', () => {
@@ -34,6 +40,15 @@ describe('convertible', () => {
     expect(r.status).toBe('fuel-exhausted')
     if (r.status === 'fuel-exhausted') {
       expect(r.detail).toMatch(/left/i)
+    }
+  })
+
+  it('names the right side when only the right side exhausts fuel', () => {
+    const omega = p('(\\x. x x) (\\x. x x)')
+    const r = convertible(p('\\x. x'), omega, 25)
+    expect(r.status).toBe('fuel-exhausted')
+    if (r.status === 'fuel-exhausted') {
+      expect(r.detail).toMatch(/right/i)
     }
   })
 })

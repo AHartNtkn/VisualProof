@@ -14,6 +14,9 @@ export type ConvertibleResult =
  * - Both normalize and differ: definitively not convertible (normal forms are unique).
  * - Either runs out of fuel: reported as such — the kernel never guesses.
  * Fuel affects this interactive search only; stored proofs carry certificates (§3.7 of the spec).
+ * Constants are opaque at this layer; definitional unfolding is rule 7, a separate layer.
+ * If left normalizes, right exhaustion is reported independently; when both sides would
+ * exhaust, only the left is named — call normalize directly to diagnose both.
  */
 export function convertible(left: Term, right: Term, fuel: number): ConvertibleResult {
   const l = normalize(left, fuel)
