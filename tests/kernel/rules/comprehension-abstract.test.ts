@@ -97,6 +97,27 @@ describe('applyComprehensionAbstract', () => {
     expect(() => applyComprehensionAbstract(d, wrap, comp, [mk([w0, w1])])).not.toThrow()
   })
 
+  it('rejects duplicate argument wires with the distinctness error, not a downstream one', () => {
+    // without the explicit check, [w0, w0] would surface as a DiagramError
+    // ('duplicate boundary wire') from mkDiagramWithBoundary instead of the
+    // rule-level message naming the occurrence
+    const b = new DiagramBuilder()
+    const bn = b.termNode(b.root, p('y'))
+    const b0 = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
+    const b1 = b.wire(b.root, [{ node: bn, port: { kind: 'freeVar', name: 'y' } }])
+    const comp = mkDiagramWithBoundary(b.build(), [b0, b1])
+
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('y'))
+    const w0 = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
+    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }])
+    const d = h.build()
+    const wrap = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
+    const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w0, w0] }
+    expect(() => applyComprehensionAbstract(d, wrap, comp, [occ]))
+      .toThrowError(/argument wires are not distinct/)
+  })
+
   it('rejects negative wrap regions, overlapping and out-of-wrap occurrences, by name', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
@@ -149,5 +170,44 @@ describe('applyComprehensionAbstract', () => {
     const out = applyComprehensionAbstract(d, wrap, identityComp(), [occ])
     const bub = Object.entries(out.regions).find(([, r]) => r.kind === 'bubble')!
     expect(bub[1].kind === 'bubble' && bub[1].parent).toBe(c2)
+  })
+
+  it('parents the atom at a nested occurrence anchor, not at the bubble top', () => {
+    // R must replace G at G's position: hoisting the atom to the bubble top
+    // would move R out of the cut, flipping its polarity inside φ. The arg
+    // wire is root-scoped so the hoisted variant would still validate — only
+    // the region assertion distinguishes them.
+    const h = new DiagramBuilder()
+    const c1 = h.cut(h.root)
+    const n = h.termNode(c1, p('\\x. x'))
+    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
+    const d = h.build()
+    const wrap = mkSelection(d, { region: d.root, regions: [c1], nodes: [], wires: [] })
+    const occ = { sel: mkSelection(d, { region: c1, regions: [], nodes: [n], wires: [] }), args: [w] }
+    const out = applyComprehensionAbstract(d, wrap, identityComp(), [occ])
+    const atoms = Object.values(out.nodes).filter((x) => x.kind === 'atom')
+    expect(atoms).toHaveLength(1)
+    expect(atoms[0]!.region).toBe(c1)
+  })
+
+  it('attaches the atom arg-i endpoint to args[i], in order', () => {
+    // reversed attachment would still validate (each port wired once) and is
+    // isomorphic when nothing else hangs on the wires — assert the endpoints
+    const b = new DiagramBuilder()
+    const bn = b.termNode(b.root, p('y'))
+    const b0 = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
+    const b1 = b.wire(b.root, [{ node: bn, port: { kind: 'freeVar', name: 'y' } }])
+    const comp = mkDiagramWithBoundary(b.build(), [b0, b1])
+
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('y'))
+    const w0 = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
+    const w1 = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }])
+    const d = h.build()
+    const wrap = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
+    const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w0, w1] }
+    const out = applyComprehensionAbstract(d, wrap, comp, [occ])
+    expect(out.wires[w0]!.endpoints.map((ep) => ep.port)).toEqual([{ kind: 'arg', index: 0 }])
+    expect(out.wires[w1]!.endpoints.map((ep) => ep.port)).toEqual([{ kind: 'arg', index: 1 }])
   })
 })
