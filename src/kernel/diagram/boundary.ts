@@ -12,6 +12,13 @@ export type DiagramWithBoundary = {
   readonly boundary: readonly WireId[]
 }
 
+/**
+ * Validates existence and uniqueness only. Boundary wire SCOPE is deliberately
+ * unconstrained here: the spec does not restrict it, and only the rule matcher
+ * (Plan 4) knows what splicing a boundary into a host diagram requires — it
+ * must decide whether non-root-scoped boundary wires are spliceable and reject
+ * loudly if not.
+ */
 export function mkDiagramWithBoundary(diagram: Diagram, boundary: readonly WireId[]): DiagramWithBoundary {
   const seen = new Set<WireId>()
   for (const w of boundary) {
