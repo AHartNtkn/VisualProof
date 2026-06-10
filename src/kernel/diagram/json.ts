@@ -42,7 +42,7 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
-function parsePortKey(key: string): Port {
+export function parsePortKey(key: string): Port {
   if (key === 'out') return { kind: 'output' }
   if (key.startsWith('v:') && key.length > 2) return { kind: 'freeVar', name: key.slice(2) }
   if (key.startsWith('a:')) {
