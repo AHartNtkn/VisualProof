@@ -597,6 +597,7 @@ describe('isAncestorOrEqual', () => {
   it('throws on unknown region ids', () => {
     expect(() => isAncestorOrEqual(d, 'ghost', 'r0')).toThrowError(/unknown region 'ghost'/)
     expect(() => isAncestorOrEqual(d, 'r0', 'ghost')).toThrowError(/unknown region 'ghost'/)
+    expect(() => isAncestorOrEqual(d, 'ghost', 'ghost')).toThrowError(/unknown region 'ghost'/)
   })
 })
 
@@ -646,6 +647,7 @@ function regionOf(d: Diagram, id: RegionId) {
 /** True iff anc lies on the parent chain of desc (inclusive). */
 export function isAncestorOrEqual(d: Diagram, anc: RegionId, desc: RegionId): boolean {
   regionOf(d, anc)
+  regionOf(d, desc) // the loop would also catch it; explicit for symmetry and intent
   let cur = desc
   for (;;) {
     const r = regionOf(d, cur)
