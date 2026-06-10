@@ -108,3 +108,66 @@ export function applyStepAt(t: Term, step: ReductionStep): Term {
   if (seg === 'arg' && t.kind === 'app') return app(t.fn, applyStepAt(t.arg, sub))
   throw new Error(`invalid path segment '${seg}' into '${t.kind}' (remaining path ${fmt(step.path)})`)
 }
+
+export type NormalizeResult =
+  | { status: 'normal'; term: Term; path: ReductionStep[] }
+  | { status: 'fuel-exhausted'; term: Term; path: ReductionStep[] }
+
+/** One leftmost-outermost eta step, or null if eta-normal. */
+export function stepEta(t: Term): { term: Term; path: PathSeg[] } | null {
+  if (t.kind === 'lam' && t.body.kind === 'app'
+    && t.body.arg.kind === 'bvar' && t.body.arg.index === 0
+    && !hasFreeBVar(0, t.body.fn)) {
+    return { term: shift(-1, 0, t.body.fn), path: [] }
+  }
+  switch (t.kind) {
+    case 'lam': {
+      const r = stepEta(t.body)
+      return r === null ? null : { term: lam(r.term), path: ['body', ...r.path] }
+    }
+    case 'app': {
+      const rf = stepEta(t.fn)
+      if (rf !== null) return { term: app(rf.term, t.arg), path: ['fn', ...rf.path] }
+      const ra = stepEta(t.arg)
+      if (ra !== null) return { term: app(t.fn, ra.term), path: ['arg', ...ra.path] }
+      return null
+    }
+    case 'bvar':
+    case 'port':
+    case 'const':
+      return null
+  }
+}
+
+/**
+ * Fueled βη-normalization: normal-order beta to beta-normal form, then eta
+ * contraction to fixpoint. Complete for finding βη-normal forms: normal order
+ * finds the beta-normal form whenever one exists, and by eta-postponement the
+ * eta steps can always be done after the beta steps. Each step consumes one
+ * fuel unit; constants are opaque here (unfolding is the explicit rule 7).
+ */
+export function normalize(t: Term, fuel: number): NormalizeResult {
+  if (!Number.isInteger(fuel) || fuel <= 0) {
+    throw new Error(`fuel must be a positive integer, got ${fuel}`)
+  }
+  const path: ReductionStep[] = []
+  let cur = t
+  let remaining = fuel
+  for (;;) {
+    if (remaining === 0) return { status: 'fuel-exhausted', term: cur, path }
+    const b = stepNormalOrder(cur)
+    if (b === null) break
+    path.push({ kind: 'beta', path: b.path })
+    cur = b.term
+    remaining--
+  }
+  for (;;) {
+    if (remaining === 0) return { status: 'fuel-exhausted', term: cur, path }
+    const e = stepEta(cur)
+    if (e === null) break
+    path.push({ kind: 'eta', path: e.path })
+    cur = e.term
+    remaining--
+  }
+  return { status: 'normal', term: cur, path }
+}
