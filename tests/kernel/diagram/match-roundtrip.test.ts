@@ -93,6 +93,25 @@ describe('splice → match round-trip', () => {
     expectFound(h.build(), 'r0', pattern, [hw, hw])
   })
 
+  it('attachment order is index-aligned with the boundary (distinct wires)', () => {
+    const b = new DiagramBuilder()
+    const n = b.termNode(b.root, p('y x'))
+    const sY = b.wire(b.root, [{ node: n, port: { kind: 'freeVar', name: 'y' } }])
+    const sX = b.wire(b.root, [{ node: n, port: { kind: 'freeVar', name: 'x' } }])
+    const pattern = mkDiagramWithBoundary(b.build(), [sY, sX])
+
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x'))
+    const n2 = h.termNode(h.root, p('\\x. \\y. x'))
+    const hw1 = h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
+    const hw2 = h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
+    const host = h.build()
+    // splice with [hw1, hw2]; the found occurrence must report exactly that order
+    expectFound(host, 'r0', pattern, [hw1, hw2])
+    // and the reversed splice must report the reversed order
+    expectFound(host, 'r0', pattern, [hw2, hw1])
+  })
+
   it('extract-elsewhere-splice yields at least two occurrences (deiteration shape)', () => {
     // host already contains the pattern once; splice a second copy into a cut:
     // the matcher must report both

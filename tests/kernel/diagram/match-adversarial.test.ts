@@ -113,6 +113,28 @@ describe('findOccurrences adversarial battery', () => {
     expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(0)
   })
 
+  it('rejects a scope SWAP that preserves per-region wire counts (reaches the exact-scope check)', () => {
+    // pattern: cut with nodes A (\x.x) and B (\x.\y.x); A.out scoped at the
+    // CUT, B.out scoped at the pattern ROOT — counts: 1 at cut, 1 at root
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const nA = b.termNode(cut, p('\\x. x'))
+    const nB = b.termNode(cut, p('\\x. \\y. x'))
+    b.wire(cut, [{ node: nA, port: { kind: 'output' } }])
+    b.wire(b.root, [{ node: nB, port: { kind: 'output' } }])
+    const pattern = mkDiagramWithBoundary(b.build(), [])
+    // host: same shape but the scopes are SWAPPED — counts still 1 and 1,
+    // so the count guards pass and only the per-wire scope check can reject
+    const h = new DiagramBuilder()
+    const hcut = h.cut(h.root)
+    const hA = h.termNode(hcut, p('\\x. x'))
+    const hB = h.termNode(hcut, p('\\x. \\y. x'))
+    h.wire(h.root, [{ node: hA, port: { kind: 'output' } }])
+    h.wire(hcut, [{ node: hB, port: { kind: 'output' } }])
+    const host = h.build()
+    expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(0)
+  })
+
   it('multi-endpoint boundary stubs require one host wire containing all images', () => {
     // pattern: two nodes whose v-ports share one boundary stub
     const b = new DiagramBuilder()
