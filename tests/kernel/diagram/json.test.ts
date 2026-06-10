@@ -45,7 +45,32 @@ describe('diagram JSON', () => {
     expect(() => diagramFromJson(badPort)).toThrowError(/malformed diagram.*port key 'zzz'/i)
     const badTerm = JSON.parse(JSON.stringify(good)) as { nodes: Record<string, { term?: string }> }
     badTerm.nodes['n0']!.term = 'garbage'
-    expect(() => diagramFromJson(badTerm)).toThrowError(/malformed/i)
+    expect(() => diagramFromJson(badTerm)).toThrowError(/malformed diagram JSON.*node 'n0'/i)
+  })
+
+  it('rejects unknown fields anywhere (no layout smuggling into semantic files)', () => {
+    const base = JSON.parse(JSON.stringify(diagramToJson(sample()))) as Record<string, unknown>
+    const withRegionField = JSON.parse(JSON.stringify(base)) as { regions: Record<string, Record<string, unknown>> }
+    withRegionField.regions['r1']!['color'] = 'red'
+    expect(() => diagramFromJson(withRegionField)).toThrowError(/unknown field 'color'/)
+
+    const withNodeField = JSON.parse(JSON.stringify(base)) as { nodes: Record<string, Record<string, unknown>> }
+    withNodeField.nodes['n0']!['x'] = 12
+    expect(() => diagramFromJson(withNodeField)).toThrowError(/unknown field 'x'/)
+
+    const withWireField = JSON.parse(JSON.stringify(base)) as { wires: Record<string, Record<string, unknown>> }
+    withWireField.wires['w0']!['bend'] = 0.5
+    expect(() => diagramFromJson(withWireField)).toThrowError(/unknown field 'bend'/)
+
+    const topLevel = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
+    topLevel['layout'] = {}
+    expect(() => diagramFromJson(topLevel)).toThrowError(/unknown field 'layout'/)
+  })
+
+  it('rejects non-canonical arg port keys', () => {
+    const bad = JSON.parse(JSON.stringify(diagramToJson(sample()))) as { wires: Record<string, { endpoints: { port: string }[] }> }
+    bad.wires['w0']!.endpoints[1]!.port = 'a:1e2'
+    expect(() => diagramFromJson(bad)).toThrowError(/port key 'a:1e2'/)
   })
 
   it('re-validates: structurally well-shaped JSON encoding an invalid diagram is rejected', () => {
