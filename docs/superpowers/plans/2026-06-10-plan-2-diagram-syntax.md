@@ -950,7 +950,32 @@ describe('diagram JSON', () => {
     expect(() => diagramFromJson(badPort)).toThrowError(/malformed diagram.*port key 'zzz'/i)
     const badTerm = JSON.parse(JSON.stringify(good)) as { nodes: Record<string, { term?: string }> }
     badTerm.nodes['n0']!.term = 'garbage'
-    expect(() => diagramFromJson(badTerm)).toThrowError(/malformed/i)
+    expect(() => diagramFromJson(badTerm)).toThrowError(/malformed diagram JSON.*node 'n0'/i)
+  })
+
+  it('rejects unknown fields anywhere (no layout smuggling into semantic files)', () => {
+    const base = JSON.parse(JSON.stringify(diagramToJson(sample()))) as Record<string, unknown>
+    const withRegionField = JSON.parse(JSON.stringify(base)) as { regions: Record<string, Record<string, unknown>> }
+    withRegionField.regions['r1']!['color'] = 'red'
+    expect(() => diagramFromJson(withRegionField)).toThrowError(/unknown field 'color'/)
+
+    const withNodeField = JSON.parse(JSON.stringify(base)) as { nodes: Record<string, Record<string, unknown>> }
+    withNodeField.nodes['n0']!['x'] = 12
+    expect(() => diagramFromJson(withNodeField)).toThrowError(/unknown field 'x'/)
+
+    const withWireField = JSON.parse(JSON.stringify(base)) as { wires: Record<string, Record<string, unknown>> }
+    withWireField.wires['w0']!['bend'] = 0.5
+    expect(() => diagramFromJson(withWireField)).toThrowError(/unknown field 'bend'/)
+
+    const topLevel = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
+    topLevel['layout'] = {}
+    expect(() => diagramFromJson(topLevel)).toThrowError(/unknown field 'layout'/)
+  })
+
+  it('rejects non-canonical arg port keys', () => {
+    const bad = JSON.parse(JSON.stringify(diagramToJson(sample()))) as { wires: Record<string, { endpoints: { port: string }[] }> }
+    bad.wires['w0']!.endpoints[1]!.port = 'a:1e2'
+    expect(() => diagramFromJson(bad)).toThrowError(/port key 'a:1e2'/)
   })
 
   it('re-validates: structurally well-shaped JSON encoding an invalid diagram is rejected', () => {
@@ -1010,18 +1035,28 @@ function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v)
 }
 
+/** Layer-separation enforcement: semantic files carry no extra data. */
+function assertOnlyKeys(v: Record<string, unknown>, allowed: readonly string[], what: string): void {
+  for (const k of Object.keys(v)) {
+    if (!allowed.includes(k)) fail(`${what} has unknown field '${k}' (semantic files carry no extra data)`)
+  }
+}
+
 function parsePortKey(key: string): Port {
   if (key === 'out') return { kind: 'output' }
   if (key.startsWith('v:') && key.length > 2) return { kind: 'freeVar', name: key.slice(2) }
   if (key.startsWith('a:')) {
-    const n = Number(key.slice(2))
-    if (Number.isSafeInteger(n) && n >= 0) return { kind: 'arg', index: n }
+    const raw = key.slice(2)
+    const n = Number(raw)
+    // canonical form only: portKey emits plain decimal digits, never '1e2' etc.
+    if (Number.isSafeInteger(n) && n >= 0 && String(n) === raw) return { kind: 'arg', index: n }
   }
   return fail(`unrecognized port key '${key}'`)
 }
 
 export function diagramFromJson(j: unknown): Diagram {
   if (!isRecord(j)) fail('top level must be an object')
+  assertOnlyKeys(j, ['root', 'regions', 'nodes', 'wires'], 'top level')
   const { root, regions: jr, nodes: jn, wires: jw } = j
   if (typeof root !== 'string') fail("'root' must be a string")
   if (!isRecord(jr) || !isRecord(jn ?? {}) || !isRecord(jw ?? {})) fail("'regions', 'nodes', 'wires' must be objects")
@@ -1029,9 +1064,18 @@ export function diagramFromJson(j: unknown): Diagram {
   const regions: Record<string, Region> = {}
   for (const [id, v] of Object.entries(jr)) {
     if (!isRecord(v)) fail(`region '${id}' must be an object`)
-    if (v.kind === 'sheet') { regions[id] = { kind: 'sheet' }; continue }
-    if (v.kind === 'cut' && typeof v.parent === 'string') { regions[id] = { kind: 'cut', parent: v.parent }; continue }
+    if (v.kind === 'sheet') {
+      assertOnlyKeys(v, ['kind'], `region '${id}'`)
+      regions[id] = { kind: 'sheet' }
+      continue
+    }
+    if (v.kind === 'cut' && typeof v.parent === 'string') {
+      assertOnlyKeys(v, ['kind', 'parent'], `region '${id}'`)
+      regions[id] = { kind: 'cut', parent: v.parent }
+      continue
+    }
     if (v.kind === 'bubble' && typeof v.parent === 'string' && typeof v.arity === 'number') {
+      assertOnlyKeys(v, ['kind', 'parent', 'arity'], `region '${id}'`)
       regions[id] = { kind: 'bubble', parent: v.parent, arity: v.arity }
       continue
     }
@@ -1042,10 +1086,16 @@ export function diagramFromJson(j: unknown): Diagram {
   for (const [id, v] of Object.entries((jn ?? {}) as Record<string, unknown>)) {
     if (!isRecord(v) || typeof v.region !== 'string') fail(`node '${id}' has unrecognized shape`)
     if (v.kind === 'term' && typeof v.term === 'string') {
-      nodes[id] = { kind: 'term', region: v.region, term: deserializeTerm(v.term) }
+      assertOnlyKeys(v, ['kind', 'region', 'term'], `node '${id}'`)
+      try {
+        nodes[id] = { kind: 'term', region: v.region, term: deserializeTerm(v.term) }
+      } catch (e) {
+        fail(`node '${id}' term: ${e instanceof Error ? e.message : String(e)}`)
+      }
       continue
     }
     if (v.kind === 'atom' && typeof v.binder === 'string') {
+      assertOnlyKeys(v, ['kind', 'region', 'binder'], `node '${id}'`)
       nodes[id] = { kind: 'atom', region: v.region, binder: v.binder }
       continue
     }
@@ -1057,10 +1107,12 @@ export function diagramFromJson(j: unknown): Diagram {
     if (!isRecord(v) || typeof v.scope !== 'string' || !Array.isArray(v.endpoints)) {
       fail(`wire '${id}' has unrecognized shape`)
     }
+    assertOnlyKeys(v, ['scope', 'endpoints'], `wire '${id}'`)
     const endpoints = v.endpoints.map((ep, k) => {
       if (!isRecord(ep) || typeof ep.node !== 'string' || typeof ep.port !== 'string') {
         return fail(`wire '${id}' endpoint ${k} has unrecognized shape`)
       }
+      assertOnlyKeys(ep, ['node', 'port'], `wire '${id}' endpoint ${k}`)
       return { node: ep.node, port: parsePortKey(ep.port) }
     })
     wires[id] = { scope: v.scope, endpoints }
