@@ -106,6 +106,9 @@ export function findOccurrences(
     if (pd.wires[b]!.endpoints.length === 0) {
       throw new DiagramError(`boundary wire '${b}' has no endpoints; occurrence matching cannot determine its attachment`)
     }
+    if (pd.wires[b]!.scope !== pd.root) {
+      throw new DiagramError(`boundary wire '${b}' is not scoped at the pattern root; occurrence matching mirrors splice's seam semantics`)
+    }
   }
   if (opts.inRegion !== undefined && host.regions[opts.inRegion] === undefined) {
     throw new DiagramError(`unknown region '${opts.inRegion}'`)
@@ -122,8 +125,8 @@ export function findOccurrences(
   const usedNodes = new Set<NodeId>()
 
   const undecided: UndecidedPair[] = []
-  const undecidedSeen = new Set<string>()
-  const verdictCache = new Map<string, boolean>()
+  const undecidedSeen = new Map<NodeId, Set<NodeId>>()
+  const verdictCache = new Map<NodeId, Map<NodeId, boolean>>()
 
   const matches: Occurrence[] = []
   const footprints = new Set<string>()
@@ -139,27 +142,34 @@ export function findOccurrences(
   return { matches, undecided }
 
   function termVerdict(pn: NodeId, hn: NodeId): boolean {
-    const key = `${pn} ${hn}`
-    const cached = verdictCache.get(key)
+    const cached = verdictCache.get(pn)?.get(hn)
     if (cached !== undefined) return cached
+    const setVerdict = (v: boolean): boolean => {
+      let inner = verdictCache.get(pn)
+      if (inner === undefined) {
+        inner = new Map()
+        verdictCache.set(pn, inner)
+      }
+      inner.set(hn, v)
+      return v
+    }
     const pt = pd.nodes[pn]!
     const ht = host.nodes[hn]!
-    if (pt.kind !== 'term' || ht.kind !== 'term') {
-      verdictCache.set(key, false)
-      return false
-    }
+    if (pt.kind !== 'term' || ht.kind !== 'term') return setVerdict(false)
     const v = termsMatchModuloBetaEta(pt.term, ht.term, fuel)
     if (v.status === 'undecided') {
-      if (!undecidedSeen.has(key)) {
-        undecidedSeen.add(key)
+      let seen = undecidedSeen.get(pn)
+      if (seen === undefined) {
+        seen = new Set()
+        undecidedSeen.set(pn, seen)
+      }
+      if (!seen.has(hn)) {
+        seen.add(hn)
         undecided.push({ patternNode: pn, hostNode: hn, detail: v.detail })
       }
-      verdictCache.set(key, false)
-      return false
+      return setVerdict(false)
     }
-    const ok = v.status === 'match'
-    verdictCache.set(key, ok)
-    return ok
+    return setVerdict(v.status === 'match')
   }
 
   function nodeCompatible(pn: NodeId, hn: NodeId): boolean {
@@ -291,8 +301,10 @@ export function findOccurrences(
       } else if (pBare.length !== hBare.length) {
         return
       }
-      // bare wires are indistinguishable: canonical pairing; any other pairing
-      // would produce the same footprint
+      // bare wires are indistinguishable: nested regions biject over the same
+      // sets (any pairing → same footprint); at the ROOT, canonical first-k
+      // pairing deliberately collapses the isomorphic choices of host bare
+      // wires into one occurrence
       for (let j = 0; j < pBare.length; j++) {
         wireMap.set(pBare[j]!, hBare[j]!)
         usedImages.add(hBare[j]!)
@@ -317,12 +329,12 @@ export function findOccurrences(
       attachments.push(hw)
     }
 
-    const fp = [
-      [...regionMap.values()].sort().join(','),
-      [...nodeMap.values()].sort().join(','),
-      [...wireMap.values()].sort().join(','),
-      attachments.join(','),
-    ].join('|')
+    const fp = JSON.stringify([
+      [...regionMap.values()].sort(),
+      [...nodeMap.values()].sort(),
+      [...wireMap.values()].sort(),
+      attachments,
+    ])
     if (footprints.has(fp)) return
     footprints.add(fp)
     matches.push(Object.freeze({

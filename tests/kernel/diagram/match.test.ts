@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 
 const noConsts = new Set<string>()
@@ -106,5 +107,74 @@ describe('findOccurrences basics', () => {
       .toThrowError(/fuel must be a positive integer/)
     expect(() => findOccurrences(host, ok, { fuel: 10, inRegion: 'ghost' }))
       .toThrowError(/unknown region 'ghost'/)
+  })
+})
+
+describe('adversarial ids (soundness and dedup under unconstrained id strings)', () => {
+  it('verdict caching cannot alias across node-id boundaries (no forged occurrences)', () => {
+    // pattern nodes 'a' (\x.x) and 'a b' (\x. x x): distinct shapes
+    const pd = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: {
+        'a': { kind: 'term', region: 'r0', term: p('\\x. x') },
+        'a b': { kind: 'term', region: 'r0', term: p('\\x. x x') },
+      },
+      wires: {
+        w0: { scope: 'r0', endpoints: [{ node: 'a', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', endpoints: [{ node: 'a b', port: { kind: 'output' } }] },
+      },
+    })
+    const pattern = mkDiagramWithBoundary(pd, [])
+    // host nodes 'b c' (\x.x) and 'c' (\x.x): both identity — the pattern's
+    // \x. x x node has NO image, so zero occurrences exist
+    const host = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: {
+        'b c': { kind: 'term', region: 'r0', term: p('\\x. x') },
+        'c': { kind: 'term', region: 'r0', term: p('\\x. x') },
+      },
+      wires: {
+        w0: { scope: 'r0', endpoints: [{ node: 'b c', port: { kind: 'output' } }] },
+        w1: { scope: 'r0', endpoints: [{ node: 'c', port: { kind: 'output' } }] },
+      },
+    })
+    expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(0)
+  })
+
+  it('footprint dedup cannot alias across id boundaries (no dropped occurrences)', () => {
+    // pattern: two identity nodes; host: four identity nodes with ids crafted
+    // so two DIFFERENT image sets join to the same string — C(4,2)=6 distinct
+    // occurrences must all survive
+    const mkNode = () => ({ kind: 'term' as const, region: 'r0', term: p('\\x. x') })
+    const pb = new DiagramBuilder()
+    pb.termNode(pb.root, p('\\x. x'))
+    pb.termNode(pb.root, p('\\x. x'))
+    const pattern = mkDiagramWithBoundary(pb.build(), [])
+    const host = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { 'a': mkNode(), 'b,c': mkNode(), 'a,b': mkNode(), 'c': mkNode() },
+      wires: {
+        'wa': { scope: 'r0', endpoints: [{ node: 'a', port: { kind: 'output' } }] },
+        'wb,wc': { scope: 'r0', endpoints: [{ node: 'b,c', port: { kind: 'output' } }] },
+        'wa,wb': { scope: 'r0', endpoints: [{ node: 'a,b', port: { kind: 'output' } }] },
+        'wc': { scope: 'r0', endpoints: [{ node: 'c', port: { kind: 'output' } }] },
+      },
+    })
+    expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(6)
+  })
+
+  it('rejects boundary stubs not scoped at the pattern root (silent never-match hole)', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const n = b.termNode(cut, p('y'))
+    const stub = b.wire(cut, [{ node: n, port: { kind: 'freeVar', name: 'y' } }]) // scoped INSIDE
+    const pattern = mkDiagramWithBoundary(b.build(), [stub])
+    const h = new DiagramBuilder()
+    const host = h.build()
+    expect(() => findOccurrences(host, pattern, { fuel: 100 }))
+      .toThrowError(/boundary wire 'w0' is not scoped at the pattern root/)
   })
 })
