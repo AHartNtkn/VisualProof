@@ -899,8 +899,11 @@ describe('applyUnfold / applyFold', () => {
   })
 
   it('fold demands syntactic equality, pointing at conversion otherwise', () => {
+    // NOTE: `\a. a` would NOT do here — de Bruijn terms are α-canonical, so it
+    // IS termEq to the definition `\x. x`. Use a term that is merely
+    // βη-convertible to it: `\a. (\b. b) a` (β-reduces to the identity).
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('(\\a. a) y'))
+    const n = h.termNode(h.root, p('(\\a. (\\b. b) a) y'))
     const d = h.build()
     expect(() => applyFold(d, defs, n, ['fn'], 'I'))
       .toThrowError(/not syntactically the definition/)
