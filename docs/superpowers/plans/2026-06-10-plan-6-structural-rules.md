@@ -622,7 +622,7 @@ git commit -m "feat(kernel): erasure and wire sever with positive-polarity gates
 - Create: `src/kernel/rules/iteration.ts`
 - Test: `tests/kernel/rules/iteration.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/iteration.test.ts`:
 
@@ -757,12 +757,12 @@ describe('applyDeiteration', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/iteration.test.ts`
 Expected: FAIL — cannot resolve `rules/iteration`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/iteration.ts`:
 
@@ -830,14 +830,21 @@ export function applyDeiteration(d: Diagram, sel: SubgraphSelection, fuel: numbe
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/iteration.ts tests/kernel/rules/iteration.test.ts
 git commit -m "feat(kernel): iteration and justified deiteration with undecided honesty"
 ```
+
+**Review outcomes (commit `37c51aa`, fix `46e4445`):**
+- Deep review APPROVED. Attachment index alignment proven mechanical: `extract.ts:71-81` pushes `boundary[i]`/`attachments[i]` in lockstep over sorted touching wires, and `match.ts:317-331` builds `Occurrence.attachments` by iterating the SAME `pattern.boundary` array — divergence impossible. The copy-as-occurrence always satisfies `sameAttachments`; disjointness alone excludes it, as designed.
+- Probes confirmed: strict-descendant justification refused; swapped multi-boundary attachments refused, unswapped accepted; partial-overlap (3 sharing nodes) accepted with non-copy justification; deiteration polarity-free (succeeds inside a cut where erasure refuses); separate-wires-in-negative-region refused (blocks `¬(P∧P) → ¬P` forgery); nested iteration targets covered transitively by `selectionContents` closure.
+- Mutation gap closed: descendant-justification acceptance (ancestor check dropped) was killed only by a probe; added `'rejects justification from a strict descendant'` test with observed mutant kill. Suite: 239.
+- Equivalent mutant accepted: the boundary-wire `continue` in `disjoint` is unobservable because `sameAttachments` short-circuits first and touching ∩ internal = ∅ by the selection partition — correct-by-intent, kept for robustness against future predicate reordering.
+- **Carried obligation (matcher completeness wart)**: with two bare wires in one region, the matcher's canonical first-k bare pairing (`match.ts:298-314`) makes deiteration of the first-sorted wire refuse while the second succeeds — order-dependent refusal, never unsound. Fix belongs with the symmetry-quotient work if Plan 7+ hits it.
 
 ---
 
