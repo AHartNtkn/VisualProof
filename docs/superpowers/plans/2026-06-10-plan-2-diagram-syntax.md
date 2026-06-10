@@ -272,8 +272,10 @@ export function mkDiagram(parts: {
   for (const [id, n] of Object.entries(nodes)) {
     if (regions[n.region] === undefined) fail(`node '${id}' is in missing region '${n.region}'`)
     if (n.kind === 'atom') {
-      const binder = regions[n.binder]
-      if (binder === undefined) fail(`atom '${id}' references missing binder '${n.binder}'`)
+      // `?? fail(...)` rather than guard-then-use: fail is a const arrow, and
+      // TS only narrows after never-returning calls when the callee binding
+      // has an explicit type annotation.
+      const binder = regions[n.binder] ?? fail(`atom '${id}' references missing binder '${n.binder}'`)
       if (binder.kind !== 'bubble') fail(`atom '${id}' binder '${n.binder}' must be a bubble, got '${binder.kind}'`)
       if (!ancestorOrEqualRaw(regions, n.binder, n.region)) {
         fail(`atom '${id}' must lie inside its binder bubble '${n.binder}'`)
