@@ -91,6 +91,21 @@ describe('termsMatchModuloBetaEta', () => {
     expect(termsMatchModuloBetaEta(p('y z'), p('z y'), 100).status).toBe('match')
   })
 
+  it('matches identical non-normalizing terms by reflexivity (no spurious undecided)', () => {
+    const omega = p('(\\x. x x) (\\x. x x)')
+    expect(termsMatchModuloBetaEta(omega, omega, 25).status).toBe('match')
+  })
+
+  it('distinguishes and matches constant-carrying terms', () => {
+    const pc = (s: string) => parseTerm(s, new Set(['plus', 'times']))
+    expect(termsMatchModuloBetaEta(pc('plus y'), pc('times y'), 100).status).toBe('no-match')
+    expect(termsMatchModuloBetaEta(pc('plus y'), pc('plus z'), 100).status).toBe('match')
+  })
+
+  it('rejects non-positive fuel as a caller error', () => {
+    expect(() => termsMatchModuloBetaEta(p('y'), p('z'), 0)).toThrowError(/fuel must be a positive integer/i)
+  })
+
   it('reports undecided on fuel exhaustion, naming the side', () => {
     const omega = p('(\\x. x x) (\\x. x x)')
     const left = termsMatchModuloBetaEta(omega, p('\\x. x'), 25)
@@ -160,12 +175,21 @@ export type NodeMatchVerdict =
  * relation is undecidable in general (spec §3.7).
  */
 export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMatchVerdict {
+  if (!Number.isInteger(fuel) || fuel <= 0) {
+    throw new Error(`fuel must be a positive integer, got ${fuel}`)
+  }
   if (freePorts(a).length !== freePorts(b).length) return { status: 'no-match' }
-  const na = normalize(closeOverPorts(a), fuel)
+  const ca = closeOverPorts(a)
+  const cb = closeOverPorts(b)
+  // Sound shortcut, not a heuristic: structural equality of closures implies
+  // convertibility by reflexivity — and avoids spurious 'undecided' verdicts
+  // on identical non-normalizing terms.
+  if (termEq(ca, cb)) return { status: 'match' }
+  const na = normalize(ca, fuel)
   if (na.status === 'fuel-exhausted') {
     return { status: 'undecided', detail: `left closure did not normalize within ${fuel} steps` }
   }
-  const nb = normalize(closeOverPorts(b), fuel)
+  const nb = normalize(cb, fuel)
   if (nb.status === 'fuel-exhausted') {
     return { status: 'undecided', detail: `right closure did not normalize within ${fuel} steps` }
   }
