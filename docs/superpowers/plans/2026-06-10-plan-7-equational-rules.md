@@ -1260,6 +1260,8 @@ git add src/kernel/rules/comprehension.ts tests/kernel/rules/comprehension-insta
 git commit -m "feat(kernel): comprehension instantiation at negative bubbles"
 ```
 
+**Review outcome (commit `1f45bb4`, fix `de028b0`):** APPROVED. Probes: deep-atom splice lands at the atom's region; impredicative comprehensions (containing bubbles) splice with fresh ids; nested-bubble interactions correct (only the named bubble's atoms replaced, only it dissolved); bubble-scoped wires promote to the parent; no input aliasing; deterministic fingerprints. Two root-bias-class mutants survived the original battery — splice at `bubble.parent` instead of `atom.region`, and dissolution promoting wire scopes to `d.root` (undetectable by mkDiagram since root encloses everything) — both killed by tests added in `de028b0`. Suite: 304.
+
 ---
 
 ### Task 6: Comprehension abstraction
