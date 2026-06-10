@@ -48,7 +48,7 @@ export function mkSelection(d: Diagram, sel: SubgraphSelection): SubgraphSelecti
     seenN.add(n)
   }
   // wire validation needs allNodes; compute the closure first
-  const contents = computeClosure(d, sel.region, seenR, seenN)
+  const contents = computeClosure(d, seenR, seenN)
   const seenW = new Set<WireId>()
   for (const w of sel.wires) {
     const wire = d.wires[w]
@@ -72,7 +72,6 @@ export function mkSelection(d: Diagram, sel: SubgraphSelection): SubgraphSelecti
 
 function computeClosure(
   d: Diagram,
-  _region: RegionId,
   subtreeRoots: ReadonlySet<RegionId>,
   directNodes: ReadonlySet<NodeId>,
 ): { allRegions: Set<RegionId>; allNodes: Set<NodeId> } {
@@ -98,7 +97,7 @@ function computeClosure(
 
 export function selectionContents(d: Diagram, sel: SubgraphSelection): SelectionContents {
   const { allRegions, allNodes } = computeClosure(
-    d, sel.region, new Set(sel.regions), new Set(sel.nodes),
+    d, new Set(sel.regions), new Set(sel.nodes),
   )
   const explicit = new Set(sel.wires)
   const internalWires: WireId[] = []

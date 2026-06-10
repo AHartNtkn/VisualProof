@@ -89,4 +89,14 @@ describe('selectionContents', () => {
     expect(c.internalWires).not.toContain(h.wBare)
     expect(c.touchingWires).not.toContain(h.wBare)
   })
+
+  it('zero-endpoint wires at the selection region are explicitly selectable and classify internal', () => {
+    const b = new DiagramBuilder()
+    const nA = b.termNode(b.root, p('\\x. x'))
+    void nA
+    const wEmpty = b.wire(b.root, [])
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [], wires: [wEmpty] })
+    expect(selectionContents(d, sel).internalWires).toContain(wEmpty)
+  })
 })
