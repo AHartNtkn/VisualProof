@@ -45,7 +45,7 @@
 - Modify: `src/kernel/term/index.ts` (add barrel line)
 - Test: `tests/kernel/term/path.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/path.test.ts`:
 
@@ -117,12 +117,12 @@ describe('freshPortName', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/path.test.ts`
 Expected: FAIL — cannot resolve `term/path`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/path.ts`:
 
@@ -204,9 +204,9 @@ Append to `src/kernel/term/index.ts`:
 export { subtermAt, replaceSubtermAt, isBvarClosed, substPort, freshPortName } from './path'
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/path.ts src/kernel/term/index.ts tests/kernel/term/path.test.ts
@@ -224,7 +224,7 @@ git commit -m "feat(kernel): term path navigation, port substitution, bvar-closu
 - Create: `src/kernel/rules/conversion.ts`
 - Test: `tests/kernel/rules/conversion.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/conversion.test.ts`:
 
@@ -354,12 +354,12 @@ describe('applyConversionByCertificate', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/conversion.test.ts`
 Expected: FAIL — cannot resolve `rules/conversion`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/access.ts`:
 
@@ -502,9 +502,9 @@ export function applyConversionByCertificate(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/access.ts src/kernel/rules/conversion.ts tests/kernel/rules/conversion.test.ts
@@ -521,7 +521,7 @@ git commit -m "feat(kernel): βη-conversion rule with certificates and port sur
 - Create: `src/kernel/rules/fusion.ts`
 - Test: `tests/kernel/rules/fusion.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/fusion.test.ts`:
 
@@ -668,12 +668,12 @@ describe('applyFission', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/fusion.test.ts`
 Expected: FAIL — cannot resolve `rules/fusion`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/fusion.ts`:
 
@@ -818,9 +818,9 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/fusion.ts tests/kernel/rules/fusion.test.ts
@@ -837,7 +837,7 @@ git commit -m "feat(kernel): fusion and fission via the one-point rule"
 - Create: `src/kernel/rules/definitions.ts`
 - Test: `tests/kernel/rules/definitions.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/definitions.test.ts`:
 
@@ -922,12 +922,12 @@ describe('applyUnfold / applyFold', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/definitions.test.ts`
 Expected: FAIL — cannot resolve `rules/definitions`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/definitions.ts`:
 
@@ -1015,9 +1015,9 @@ export function applyFold(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/definitions.ts tests/kernel/rules/definitions.test.ts
@@ -1034,7 +1034,7 @@ git commit -m "feat(kernel): unfold/fold over a closed definitions environment"
 - Create: `src/kernel/rules/comprehension.ts` (instantiate half)
 - Test: `tests/kernel/rules/comprehension-instantiate.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/comprehension-instantiate.test.ts`:
 
@@ -1156,12 +1156,12 @@ describe('applyComprehensionInstantiate', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/comprehension-instantiate.test.ts`
 Expected: FAIL — cannot resolve `rules/comprehension`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/comprehension.ts` (instantiate half; Task 6 appends the abstract half to this file):
 
@@ -1251,9 +1251,9 @@ export function applyComprehensionInstantiate(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/comprehension.ts tests/kernel/rules/comprehension-instantiate.test.ts
@@ -1270,7 +1270,7 @@ git commit -m "feat(kernel): comprehension instantiation at negative bubbles"
 - Modify: `src/kernel/rules/comprehension.ts` (append the abstract half)
 - Test: `tests/kernel/rules/comprehension-abstract.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/comprehension-abstract.test.ts`:
 
@@ -1430,12 +1430,12 @@ describe('applyComprehensionAbstract', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/comprehension-abstract.test.ts`
 Expected: FAIL — `applyComprehensionAbstract` is not exported.
 
-- [ ] **Step 3: Implement** — append to `src/kernel/rules/comprehension.ts` (and extend its imports: add `Endpoint` to the diagram type imports, plus the new modules below):
+- [x] **Step 3: Implement** — append to `src/kernel/rules/comprehension.ts` (and extend its imports: add `Endpoint` to the diagram type imports, plus the new modules below):
 
 Extend the import block at the top of the file to:
 
@@ -1581,9 +1581,9 @@ export function applyComprehensionAbstract(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/comprehension.ts tests/kernel/rules/comprehension-abstract.test.ts
@@ -1600,7 +1600,7 @@ git commit -m "feat(kernel): comprehension abstraction at positive regions"
 - Modify: `src/kernel/rules/index.ts`
 - Test: `tests/kernel/rules/equational-gates.test.ts`
 
-- [ ] **Step 1: Write the battery** (must pass against Tasks 1–6; failures are rule bugs to fix test-first)
+- [x] **Step 1: Write the battery** (must pass against Tasks 1–6; failures are rule bugs to fix test-first)
 
 `tests/kernel/rules/equational-gates.test.ts`:
 
@@ -1691,9 +1691,9 @@ describe('cross-rule composition', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Extend the barrel** — `src/kernel/rules/index.ts` becomes:
+- [x] **Step 3: Extend the barrel** — `src/kernel/rules/index.ts` becomes:
 
 ```ts
 export { RuleError } from './error'
@@ -1710,9 +1710,9 @@ export type { AbstractionOccurrence } from './comprehension'
 export { applyComprehensionInstantiate, applyComprehensionAbstract } from './comprehension'
 ```
 
-- [ ] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`; verify every export exists.
+- [x] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`; verify every export exists.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/kernel/rules/equational-gates.test.ts src/kernel/rules/index.ts
@@ -1733,3 +1733,7 @@ git commit -m "test(kernel): equational gate battery; full rule surface"
 - Abstraction cannot express occurrences using one host wire as two relation arguments (extraction yields one stub per touching wire); instantiation handles that shape. Revisit if a proof needs the abstract direction with identified arguments.
 - Plan 9 (or earlier if a second package appears): mechanical forbidden-import check (spec §4.2).
 - Matcher symmetry-quotient + bare-wire pairing completeness wart (Plan 6 final review) if workloads hit them.
+
+## Final whole-branch review (HEAD `9cc88eb`)
+
+READY TO MERGE; no blocking or should-fix issues. Cross-rule probes: deiteration modulo βη composes with conversion; fusion succeeds with the consumer arbitrarily deep (even negated) and refuses the displaced-producer forgery; instantiating an abstraction's positive bubble refused; atom-outside-binder closed at every seam (extract throws, splice patterns unconstructible); definitions+conversion round-trip at negative depth; fission's fresh port dodges existing q/q_0 names; all eight appliers leave inputs byte-identical (including the comprehension argument). Vocabulary audit clean across all five modules; zero imports leave src/kernel; rule-layer helpers (termNodeAt/wireAt) deliberately not in the barrel. Performance: every rule is one mkDiagram pass; instantiation is O(atoms × diagram) — noted, acceptable at proof scale. Suite: 323 across 41 files.
