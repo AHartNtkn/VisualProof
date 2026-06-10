@@ -1,5 +1,5 @@
 import type { Term } from '../term/term'
-import { freePorts } from '../term/term'
+import { freePorts, assertWellFormedTerm } from '../term/term'
 
 export type RegionId = string
 export type NodeId = string
@@ -124,6 +124,13 @@ export function mkDiagram(parts: {
 
   for (const [id, n] of Object.entries(nodes)) {
     if (regions[n.region] === undefined) fail(`node '${id}' is in missing region '${n.region}'`)
+    if (n.kind === 'term') {
+      try {
+        assertWellFormedTerm(n.term)
+      } catch (e) {
+        fail(`node '${id}' term: ${e instanceof Error ? e.message : String(e)}`)
+      }
+    }
     if (n.kind === 'atom') {
       const binder = regions[n.binder] ?? fail(`atom '${id}' references missing binder '${n.binder}'`)
       if (binder.kind !== 'bubble') fail(`atom '${id}' binder '${n.binder}' must be a bubble, got '${binder.kind}'`)

@@ -150,4 +150,17 @@ describe('mkDiagram rejections', () => {
       expect(e).toBeInstanceOf(DiagramError)
     }
   })
+
+  it('rejects term nodes carrying malformed terms (structural literals bypassing constructors)', () => {
+    expect(() => mkDiagram({
+      root: 'r0', regions: sheet,
+      nodes: { n0: { kind: 'term', region: 'r0', term: { kind: 'bvar', index: 0 } } },
+      wires: { w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
+    })).toThrowError(/node 'n0' term:.*unbound de Bruijn index/)
+    expect(() => mkDiagram({
+      root: 'r0', regions: sheet,
+      nodes: { n0: { kind: 'term', region: 'r0', term: { kind: 'port', name: '' } } },
+      wires: { w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
+    })).toThrowError(/node 'n0' term:.*non-empty/)
+  })
 })

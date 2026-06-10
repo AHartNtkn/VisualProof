@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bvar, port, cnst, lam, app, termEq, freePorts } from '../../../src/kernel/term/term'
+import { bvar, port, cnst, lam, app, termEq, freePorts, assertWellFormedTerm } from '../../../src/kernel/term/term'
 
 describe('term constructors and equality', () => {
   it('structural equality is alpha-equality because binders are de Bruijn', () => {
@@ -54,5 +54,23 @@ describe('freePorts', () => {
   it('does not count constants as ports', () => {
     const t = app(cnst('plus'), port('m'))
     expect(freePorts(t)).toEqual(['m'])
+  })
+})
+
+describe('assertWellFormedTerm', () => {
+  it('accepts closed and open well-formed terms', () => {
+    expect(() => assertWellFormedTerm(lam(bvar(0)))).not.toThrow()
+    expect(() => assertWellFormedTerm(app(port('y'), cnst('plus')))).not.toThrow()
+  })
+
+  it('rejects unbound de Bruijn indices', () => {
+    expect(() => assertWellFormedTerm({ kind: 'bvar', index: 0 })).toThrowError(/unbound de Bruijn index 0/)
+    expect(() => assertWellFormedTerm(lam({ kind: 'bvar', index: 1 }))).toThrowError(/unbound de Bruijn index 1/)
+  })
+
+  it('rejects structural literals that bypass the smart constructors', () => {
+    expect(() => assertWellFormedTerm({ kind: 'port', name: '' })).toThrowError(/non-empty/)
+    expect(() => assertWellFormedTerm({ kind: 'const', id: '' })).toThrowError(/non-empty/)
+    expect(() => assertWellFormedTerm({ kind: 'bvar', index: -1 })).toThrowError(/non-negative safe integer/)
   })
 })

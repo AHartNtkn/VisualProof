@@ -59,7 +59,7 @@ export function diagramFromJson(j: unknown): Diagram {
   assertOnlyKeys(j, ['root', 'regions', 'nodes', 'wires'], 'top level')
   const { root, regions: jr, nodes: jn, wires: jw } = j
   if (typeof root !== 'string') fail("'root' must be a string")
-  if (!isRecord(jr) || !isRecord(jn ?? {}) || !isRecord(jw ?? {})) fail("'regions', 'nodes', 'wires' must be objects")
+  if (!isRecord(jr) || !isRecord(jn) || !isRecord(jw)) fail("'regions', 'nodes', 'wires' must be objects")
 
   const regions: Record<string, Region> = {}
   for (const [id, v] of Object.entries(jr)) {
@@ -83,7 +83,7 @@ export function diagramFromJson(j: unknown): Diagram {
   }
 
   const nodes: Record<string, DiagramNode> = {}
-  for (const [id, v] of Object.entries((jn ?? {}) as Record<string, unknown>)) {
+  for (const [id, v] of Object.entries(jn)) {
     if (!isRecord(v) || typeof v.region !== 'string') fail(`node '${id}' has unrecognized shape`)
     if (v.kind === 'term' && typeof v.term === 'string') {
       assertOnlyKeys(v, ['kind', 'region', 'term'], `node '${id}'`)
@@ -103,7 +103,7 @@ export function diagramFromJson(j: unknown): Diagram {
   }
 
   const wires: Record<string, Wire> = {}
-  for (const [id, v] of Object.entries((jw ?? {}) as Record<string, unknown>)) {
+  for (const [id, v] of Object.entries(jw)) {
     if (!isRecord(v) || typeof v.scope !== 'string' || !Array.isArray(v.endpoints)) {
       fail(`wire '${id}' has unrecognized shape`)
     }

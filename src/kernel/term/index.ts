@@ -1,5 +1,5 @@
 export type { Term } from './term'
-export { bvar, port, cnst, lam, app, termEq, freePorts } from './term'
+export { bvar, port, cnst, lam, app, termEq, freePorts, assertWellFormedTerm } from './term'
 export { printTerm } from './print'
 export { parseTerm, ParseError } from './parse'
 export type { PathSeg, ReductionStep, NormalizeResult } from './reduce'

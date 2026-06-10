@@ -63,3 +63,33 @@ export function freePorts(t: Term): string[] {
   visit(t)
   return order
 }
+
+/**
+ * Term is a structural type, so object literals can bypass the smart
+ * constructors; this re-checks everything they enforce, plus binder scoping:
+ * every bvar index must be bound by an enclosing lam. Free variables are
+ * ports, never bare bvars.
+ */
+export function assertWellFormedTerm(t: Term): void {
+  const visit = (u: Term, depth: number): void => {
+    switch (u.kind) {
+      case 'bvar':
+        if (!Number.isSafeInteger(u.index) || u.index < 0) {
+          throw new Error(`bvar index must be a non-negative safe integer, got ${u.index}`)
+        }
+        if (u.index >= depth) {
+          throw new Error(`unbound de Bruijn index ${u.index} at depth ${depth}; term is malformed`)
+        }
+        return
+      case 'port':
+        if (u.name.length === 0) throw new Error('port name must be non-empty')
+        return
+      case 'const':
+        if (u.id.length === 0) throw new Error('const id must be non-empty')
+        return
+      case 'lam': visit(u.body, depth + 1); return
+      case 'app': visit(u.fn, depth); visit(u.arg, depth); return
+    }
+  }
+  visit(t, 0)
+}

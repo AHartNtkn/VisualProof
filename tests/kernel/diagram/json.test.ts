@@ -79,4 +79,14 @@ describe('diagram JSON', () => {
     j.nodes['n0']!.region = 'ghost'
     expect(() => diagramFromJson(j)).toThrowError(/missing region 'ghost'/)
   })
+
+  it('requires all four top-level keys as objects (no null, no absence)', () => {
+    const base = JSON.parse(JSON.stringify(diagramToJson(sample()))) as Record<string, unknown>
+    const noNodes = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
+    delete noNodes['nodes']
+    expect(() => diagramFromJson(noNodes)).toThrowError(/malformed diagram/)
+    const nullWires = JSON.parse(JSON.stringify(base)) as Record<string, unknown>
+    nullWires['wires'] = null
+    expect(() => diagramFromJson(nullWires)).toThrowError(/malformed diagram/)
+  })
 })
