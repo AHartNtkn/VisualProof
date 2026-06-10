@@ -74,6 +74,27 @@ describe('applyDeiteration', () => {
       .toThrowError(/no justifying occurrence found for deiteration at 'r0'/)
   })
 
+  it('rejects justification from a strict descendant: iteration only copies inward', () => {
+    // a (root) and b (inside a cut) share BOTH wires — b would justify a if
+    // the ancestor direction were ignored, which is the unsound direction
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, p('y'))
+    const cut = h.cut(h.root)
+    const b = h.termNode(cut, p('y'))
+    h.wire(h.root, [
+      { node: a, port: { kind: 'freeVar', name: 'y' } },
+      { node: b, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    h.wire(h.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: b, port: { kind: 'output' } },
+    ])
+    const d = h.build()
+    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [a], wires: [] })
+    expect(() => applyDeiteration(d, sel, 100))
+      .toThrowError(/no justifying occurrence/)
+  })
+
   it('a copy cannot justify itself, and separate wires are not shared attachments', () => {
     // ONE closed node: the matcher finds the node itself, but a copy cannot
     // justify its own removal
