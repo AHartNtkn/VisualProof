@@ -110,8 +110,8 @@ export function applyStepAt(t: Term, step: ReductionStep): Term {
 }
 
 export type NormalizeResult =
-  | { status: 'normal'; term: Term; path: ReductionStep[] }
-  | { status: 'fuel-exhausted'; term: Term; path: ReductionStep[] }
+  | { status: 'normal'; term: Term; path: readonly ReductionStep[] }
+  | { status: 'fuel-exhausted'; term: Term; path: readonly ReductionStep[] }
 
 /** One leftmost-outermost eta step, or null if eta-normal. */
 export function stepEta(t: Term): { term: Term; path: PathSeg[] } | null {
@@ -154,17 +154,17 @@ export function normalize(t: Term, fuel: number): NormalizeResult {
   let cur = t
   let remaining = fuel
   for (;;) {
-    if (remaining === 0) return { status: 'fuel-exhausted', term: cur, path }
     const b = stepNormalOrder(cur)
     if (b === null) break
+    if (remaining === 0) return { status: 'fuel-exhausted', term: cur, path }
     path.push({ kind: 'beta', path: b.path })
     cur = b.term
     remaining--
   }
   for (;;) {
-    if (remaining === 0) return { status: 'fuel-exhausted', term: cur, path }
     const e = stepEta(cur)
     if (e === null) break
+    if (remaining === 0) return { status: 'fuel-exhausted', term: cur, path }
     path.push({ kind: 'eta', path: e.path })
     cur = e.term
     remaining--
