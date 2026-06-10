@@ -59,9 +59,18 @@ describe('applyFusion', () => {
       { node: b2, port: { kind: 'freeVar', name: 'q' } },
     ])
     const d2 = h2.build()
+    // the producer's and consumer's distinct y wires (auto-singleton)
+    const wa = Object.entries(d2.wires).find(([, wv]) =>
+      wv.endpoints.some((ep) => ep.node === a2 && ep.port.kind === 'freeVar' && ep.port.name === 'y'))![0]
+    const wb = Object.entries(d2.wires).find(([, wv]) =>
+      wv.endpoints.some((ep) => ep.node === b2 && ep.port.kind === 'freeVar' && ep.port.name === 'y'))![0]
     const out = applyFusion(d2, w2)
     const merged = out.nodes[b2]
     expect(merged?.kind === 'term' && termEq(merged.term, app(port('y_0'), port('y')))).toBe(true)
+    // the freshened port must stay on the PRODUCER's wire: migrating it to the
+    // consumer's wire would conflate two distinct individuals under one wire
+    expect(out.wires[wa]?.endpoints).toEqual([{ node: b2, port: { kind: 'freeVar', name: 'y_0' } }])
+    expect(out.wires[wb]?.endpoints).toEqual([{ node: b2, port: { kind: 'freeVar', name: 'y' } }])
   })
 
   it('rejects wires of the wrong shape, self-loops, and displaced producers, by name', () => {
