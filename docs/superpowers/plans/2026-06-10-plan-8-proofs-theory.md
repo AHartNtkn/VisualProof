@@ -1698,6 +1698,8 @@ git add src/kernel/proof/store.ts tests/kernel/proof/store.test.ts
 git commit -m "feat(kernel): verified theory store with versioned JSON format"
 ```
 
+**Review outcome (commit `be23f9b`, fix `b1be7b7`):** APPROVED after one fix. Trust-boundary audit: verifyTheory is the only ProofContext constructor from external data; loadTheory is the canonical path. Probes: forward-citation, tampered-rhs, tampered-step (valid rule, wrong conclusion — replay-is-verification), port-bearing definitions, empty theory, envelope variants — all refused/handled by name. Fixes in `b1be7b7`: dwbFromJson now wraps mkDiagramWithBoundary errors with the caller label so relation names reach the message; and mutant ii — register-before-check, a REAL circular-justification hole (a theorem citing ITSELF in its own proof would verify) — killed by a permanent self-citation test. Suite: 365.
+
 ---
 
 ### Task 6: Proof barrel + end-to-end battery
