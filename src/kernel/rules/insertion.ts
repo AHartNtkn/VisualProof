@@ -52,6 +52,9 @@ export function applyWireJoin(d: Diagram, a: WireId, b: WireId): Diagram {
     throw new RuleError(`joining wires requires the inner wire's scope to be negative; '${inner.scope}' is positive`)
   }
   const outer = d.wires[outerId]!
+  // The merged wire keeps the OUTER scope: the inner endpoints' regions are
+  // enclosed by the inner scope, which the outer scope encloses transitively,
+  // so mkDiagram's scope check holds automatically.
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
     if (id === innerId) continue

@@ -40,6 +40,18 @@ describe('applyInsertion', () => {
     expect(() => applyInsertion(host, 'ghost', closedPattern(), []))
       .toThrowError(/unknown region 'ghost'/)
   })
+
+  it('bubbles do not affect the polarity gate', () => {
+    const h = new DiagramBuilder()
+    const bub = h.bubble(h.root, 0)          // still positive
+    const cut = h.cut(bub)                   // depth 1: negative
+    const bubInCut = h.bubble(cut, 0)        // still negative
+    const host = h.build()
+    expect(() => applyInsertion(host, bub, closedPattern(), []))
+      .toThrowError(/insertion requires a negative region/)
+    expect(() => applyInsertion(host, cut, closedPattern(), [])).not.toThrow()
+    expect(() => applyInsertion(host, bubInCut, closedPattern(), [])).not.toThrow()
+  })
 })
 
 describe('applyWireJoin', () => {
@@ -86,6 +98,19 @@ describe('applyWireJoin', () => {
     const host = h.build()
     expect(() => applyWireJoin(host, w1, w2))
       .toThrowError(/joining wires requires the inner wire's scope to be negative; 'r0' is positive/)
+  })
+
+  it('rejects when the inner scope is positive even though the outer is negative', () => {
+    const h = new DiagramBuilder()
+    const cut1 = h.cut(h.root)        // depth 1: negative
+    const cut2 = h.cut(cut1)          // depth 2: positive
+    const n1 = h.termNode(cut1, p('\\x. x'))
+    const n2 = h.termNode(cut2, p('\\x. \\y. x'))
+    const w1 = h.wire(cut1, [{ node: n1, port: { kind: 'output' } }])
+    const w2 = h.wire(cut2, [{ node: n2, port: { kind: 'output' } }])
+    const host = h.build()
+    expect(() => applyWireJoin(host, w1, w2))
+      .toThrowError(new RegExp(`inner wire's scope to be negative; '${cut2}' is positive`))
   })
 
   it('rejects incomparable scopes and identical wires, by name', () => {
