@@ -292,6 +292,13 @@ describe('canonicalForm', () => {
     b.termNode(b.root, p('\\x. x'))
     expect(() => canonicalForm(b.build(), ['ghost'])).toThrowError(/pinned wire 'ghost' does not exist/)
   })
+
+  it('throws on duplicate pinned wires', () => {
+    const b = new DiagramBuilder()
+    const n = b.termNode(b.root, p('\\x. x'))
+    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    expect(() => canonicalForm(b.build(), [w, w])).toThrowError(/duplicate pinned wire 'w0'/)
+  })
 })
 ```
 
@@ -332,8 +339,11 @@ import { termShapeKey, positionalPortKey } from './shape'
  * colors in pin order, so boundary order is significant.
  */
 export function canonicalForm(d: Diagram, pinnedWires: readonly WireId[] = []): string {
+  const seenPins = new Set<string>()
   for (const w of pinnedWires) {
     if (d.wires[w] === undefined) throw new DiagramError(`pinned wire '${w}' does not exist`)
+    if (seenPins.has(w)) throw new DiagramError(`duplicate pinned wire '${w}'`)
+    seenPins.add(w)
   }
   const idx = buildIndex(d, pinnedWires)
   const colors = refine(idx, initialColors(idx))
@@ -601,6 +611,8 @@ function sortByOrd(ids: readonly string[], ord: ReadonlyMap<string, number>): st
 ```
 
 Note on the discrete-partition serialization precondition: `search` only calls `serializeWith` when `firstTiedClass` returns null, i.e. every color class is a singleton, so the ordinal maps are total orders and the serialization is deterministic.
+
+Transcription note (from execution): four sites in this reference block do not typecheck under the project's strict tsconfig as written — `Map.get` on a nullable parent needs an undefined re-check after narrowing, `firstTiedClass`'s unused `idx` parameter must be `_idx`, and the closure-mutated nullable `best` defeats TS narrowing and needs a non-nullable restructure. The committed `src/kernel/diagram/canonical/canonical.ts` is the authoritative form; a differential test confirmed it byte-identical in output to this reference on all probe diagrams.
 
 - [ ] **Step 4: Verify PASS, full suite, typecheck**
 
