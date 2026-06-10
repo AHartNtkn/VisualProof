@@ -34,7 +34,7 @@
 - Create: `src/kernel/diagram/subgraph/match.ts`
 - Test: `tests/kernel/diagram/match.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/match.test.ts`:
 
@@ -151,12 +151,12 @@ describe('findOccurrences basics', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/match.test.ts`
 Expected: FAIL — cannot resolve `subgraph/match`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/subgraph/match.ts`:
 
@@ -514,11 +514,11 @@ export function findOccurrences(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
 Run: `npx vitest run tests/kernel/diagram/match.test.ts && npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/subgraph/match.ts tests/kernel/diagram/match.test.ts
@@ -534,7 +534,7 @@ git commit -m "feat(kernel): complete backtracking occurrence matcher with undec
 
 These must pass against Task 1's implementation; any failure is a matcher bug to investigate test-first and report prominently (never weaken a test).
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `tests/kernel/diagram/match-adversarial.test.ts`:
 
@@ -726,9 +726,9 @@ describe('findOccurrences adversarial battery', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix `match.ts` test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix `match.ts` test-first, report prominently.
 
-- [ ] **Step 3: Full gate, commit**
+- [x] **Step 3: Full gate, commit**
 
 ```bash
 git add tests/kernel/diagram/match-adversarial.test.ts
@@ -744,7 +744,7 @@ git commit -m "test(kernel): adversarial matcher battery"
 
 The law: whatever `spliceSubgraph` puts in, `findOccurrences` finds — at the splice region, with the splice attachments.
 
-- [ ] **Step 1: Write the tests**
+- [x] **Step 1: Write the tests**
 
 `tests/kernel/diagram/match-roundtrip.test.ts`:
 
@@ -889,9 +889,9 @@ describe('splice → match round-trip', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Full gate, commit**
+- [x] **Step 3: Full gate, commit**
 
 ```bash
 git add tests/kernel/diagram/match-roundtrip.test.ts
@@ -905,16 +905,16 @@ git commit -m "test(kernel): splice-match round-trip law"
 **Files:**
 - Modify: `src/kernel/diagram/index.ts`
 
-- [ ] **Step 1: Extend the barrel** — append:
+- [x] **Step 1: Extend the barrel** — append:
 
 ```ts
 export type { Occurrence, UndecidedPair, MatchResult } from './subgraph/match'
 export { findOccurrences } from './subgraph/match'
 ```
 
-- [ ] **Step 2: Full gate** — `npm test && npm run typecheck`; verify exports exist.
+- [x] **Step 2: Full gate** — `npm test && npm run typecheck`; verify exports exist.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add src/kernel/diagram/index.ts
