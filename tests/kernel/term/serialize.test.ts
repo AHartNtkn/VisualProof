@@ -33,5 +33,7 @@ describe('serializeTerm', () => {
     expect(() => deserializeTerm('L(')).toThrowError(/malformed/i)
     expect(() => deserializeTerm('garbage')).toThrowError(/malformed/i)
     expect(() => deserializeTerm('P("a")x')).toThrowError(/malformed/i)
+    expect(() => deserializeTerm('P("\\q")')).toThrowError(/malformed/i)
+    expect(() => deserializeTerm('#9007199254740993')).toThrowError(/malformed/i)
   })
 })

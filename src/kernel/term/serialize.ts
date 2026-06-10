@@ -32,7 +32,10 @@ function parse(s: string, i: number): [Term, number] {
     let j = i + 1
     while (j < s.length && s[j]! >= '0' && s[j]! <= '9') j++
     if (j === i + 1) fail('expected digits after #')
-    return [bvar(Number(s.slice(i + 1, j))), j]
+    const digits = s.slice(i + 1, j)
+    const value = Number(digits)
+    if (!Number.isSafeInteger(value)) fail(`bvar index ${digits} exceeds the safe integer range`)
+    return [bvar(value), j]
   }
   if (c === 'P' || c === 'C') {
     if (s[i + 1] !== '(') fail(`expected '(' after ${c}`)
@@ -63,7 +66,11 @@ function parseJsonString(s: string, i: number): [string, number] {
   while (j < s.length) {
     if (s[j] === '\\') { j += 2; continue }
     if (s[j] === '"') {
-      return [JSON.parse(s.slice(i, j + 1)) as string, j + 1]
+      try {
+        return [JSON.parse(s.slice(i, j + 1)) as string, j + 1]
+      } catch (e) {
+        throw new Error(`malformed term serialization at ${i}: invalid JSON string (${e instanceof Error ? e.message : String(e)})`)
+      }
     }
     j++
   }

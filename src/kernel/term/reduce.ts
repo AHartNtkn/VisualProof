@@ -55,6 +55,20 @@ export function hasFreeBVar(index: number, t: Term): boolean {
 }
 
 /**
+ * Contract an eta-redex at the root (\x. f x with x not free in f), or null.
+ * Shared by stepEta and applyStepAt so search and certificate replay can
+ * never disagree about what counts as an eta-redex.
+ */
+function etaContractAtRoot(t: Term): Term | null {
+  if (t.kind === 'lam' && t.body.kind === 'app'
+    && t.body.arg.kind === 'bvar' && t.body.arg.index === 0
+    && !hasFreeBVar(0, t.body.fn)) {
+    return shift(-1, 0, t.body.fn)
+  }
+  return null
+}
+
+/**
  * One leftmost-outermost beta step. Returns the reduced term and the redex path,
  * or null if t is in beta-normal form. Normal order finds a normal form whenever
  * one exists, which is why it is the kernel's strategy.
@@ -93,12 +107,8 @@ export function applyStepAt(t: Term, step: ReductionStep): Term {
       }
       throw new Error(`no beta redex at path []: term head is '${t.kind}'`)
     }
-    // eta: \x. f x with x not free in f  →  shift(-1, 0, f)
-    if (t.kind === 'lam' && t.body.kind === 'app'
-      && t.body.arg.kind === 'bvar' && t.body.arg.index === 0
-      && !hasFreeBVar(0, t.body.fn)) {
-      return shift(-1, 0, t.body.fn)
-    }
+    const contracted = etaContractAtRoot(t)
+    if (contracted !== null) return contracted
     throw new Error(`no eta redex at path []: term is not of shape \\x. f x with x unused in f`)
   }
   const [seg, ...rest] = step.path
@@ -110,16 +120,13 @@ export function applyStepAt(t: Term, step: ReductionStep): Term {
 }
 
 export type NormalizeResult =
-  | { status: 'normal'; term: Term; path: readonly ReductionStep[] }
-  | { status: 'fuel-exhausted'; term: Term; path: readonly ReductionStep[] }
+  | { readonly status: 'normal'; readonly term: Term; readonly path: readonly ReductionStep[] }
+  | { readonly status: 'fuel-exhausted'; readonly term: Term; readonly path: readonly ReductionStep[] }
 
 /** One leftmost-outermost eta step, or null if eta-normal. */
 export function stepEta(t: Term): { term: Term; path: PathSeg[] } | null {
-  if (t.kind === 'lam' && t.body.kind === 'app'
-    && t.body.arg.kind === 'bvar' && t.body.arg.index === 0
-    && !hasFreeBVar(0, t.body.fn)) {
-    return { term: shift(-1, 0, t.body.fn), path: [] }
-  }
+  const contracted = etaContractAtRoot(t)
+  if (contracted !== null) return { term: contracted, path: [] }
   switch (t.kind) {
     case 'lam': {
       const r = stepEta(t.body)

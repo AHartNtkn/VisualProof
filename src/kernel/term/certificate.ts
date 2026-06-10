@@ -14,8 +14,8 @@ export type ConversionCertificate = {
 }
 
 export type ConversionCheck =
-  | { ok: true; meet: Term }
-  | { ok: false; reason: string }
+  | { readonly ok: true; readonly meet: Term }
+  | { readonly ok: false; readonly reason: string }
 
 export function checkConversion(left: Term, right: Term, cert: ConversionCertificate): ConversionCheck {
   let l = left

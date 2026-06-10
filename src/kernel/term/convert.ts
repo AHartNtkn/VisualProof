@@ -4,9 +4,9 @@ import { normalize } from './reduce'
 import type { ConversionCertificate } from './certificate'
 
 export type ConvertibleResult =
-  | { status: 'convertible'; certificate: ConversionCertificate }
-  | { status: 'not-convertible' }
-  | { status: 'fuel-exhausted'; detail: string }
+  | { readonly status: 'convertible'; readonly certificate: ConversionCertificate }
+  | { readonly status: 'not-convertible' }
+  | { readonly status: 'fuel-exhausted'; readonly detail: string }
 
 /**
  * Interactive equality: normalize both sides under the fuel budget and compare.
