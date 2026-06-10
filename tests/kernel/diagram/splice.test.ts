@@ -34,6 +34,19 @@ describe('removeSubgraph', () => {
     expect(after.wires[h.wShared]?.endpoints).toHaveLength(1)
     expect(after.wires[h.wShared]?.endpoints[0]?.node).toBe(h.nA)
   })
+
+  it('a touching wire trimmed to zero endpoints survives as a bare wire at its scope', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const n = b.termNode(cut, p('\\x. x'))
+    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }]) // scoped at root, only endpoint inside the cut
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
+    const after = removeSubgraph(d, sel)
+    expect(after.wires[w]).toBeDefined()
+    expect(after.wires[w]?.endpoints).toHaveLength(0)
+    expect(after.wires[w]?.scope).toBe(d.root)
+  })
 })
 
 describe('spliceSubgraph', () => {

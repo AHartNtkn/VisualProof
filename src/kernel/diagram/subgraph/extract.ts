@@ -43,10 +43,12 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
   const root = freshId(takenRegionIds, 'root')
 
   const regions: Record<RegionId, Region> = { [root]: { kind: 'sheet' } }
+  const subtreeRootSet = new Set(sel.regions)
   for (const id of c.allRegions) {
     const r = d.regions[id]!
     if (r.kind === 'sheet') continue // impossible: subtree roots are non-root children
-    const parent = id === sel.region ? root : (sel.regions.includes(id) ? root : r.parent)
+    // sel.region is never in allRegions (it is the anchor, not selected content)
+    const parent = subtreeRootSet.has(id) ? root : r.parent
     regions[id] = r.kind === 'cut'
       ? { kind: 'cut', parent }
       : { kind: 'bubble', parent, arity: r.arity }
