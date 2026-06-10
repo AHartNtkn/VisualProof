@@ -42,7 +42,7 @@
 - Modify: `src/kernel/diagram/index.ts` (add exports)
 - Test: `tests/kernel/diagram/labeling.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/labeling.test.ts`:
 
@@ -166,12 +166,12 @@ describe('isoBetween', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/labeling.test.ts`
 Expected: FAIL — `canonicalLabeling` not exported / cannot resolve `canonical/iso`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/diagram/canonical/canonical.ts`:
 
@@ -289,9 +289,9 @@ export type { DiagramIso } from './canonical/iso'
 export { isoBetween } from './canonical/iso'
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck** (the refactor must not change any existing fingerprint — the full suite is the regression gate)
+- [x] **Step 4: Verify PASS, full suite, typecheck** (the refactor must not change any existing fingerprint — the full suite is the regression gate)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/canonical/canonical.ts src/kernel/diagram/canonical/iso.ts src/kernel/diagram/index.ts tests/kernel/diagram/labeling.test.ts
@@ -313,7 +313,7 @@ git commit -m "feat(kernel): canonical labeling ordinals and isomorphism extract
 
 **Why one task:** theorem steps ARE proof steps (`applyStep` dispatches to `applyTheorem`) and theorem checking REPLAYS proof steps (`checkTheorem` calls `replayProof`) — the mutual recursion is inherent to derived rules whose proofs may use earlier derived rules. The two modules form a deliberate, benign import cycle: all `import type`s are erased (`verbatimModuleSyntax`), and the two value imports (`applyTheorem` in step.ts, `replayProof` in theorem.ts) are function references only used at call time, which ESM handles. Both modules and both test files land in one commit.
 
-- [ ] **Step 1: Write the failing tests** (both files)
+- [x] **Step 1: Write the failing tests** (both files)
 
 `tests/kernel/proof/step.test.ts`:
 
@@ -425,12 +425,12 @@ describe('replayProof failure reporting', () => {
 
 (The second test file, `tests/kernel/proof/theorem.test.ts`, appears below after the implementation sources — write BOTH in this step.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/step.test.ts tests/kernel/proof/theorem.test.ts`
 Expected: FAIL — cannot resolve `proof/step` / `proof/theorem`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/proof/error.ts`:
 
@@ -724,9 +724,9 @@ describe('theorem steps inside proofs (derived rules used natively)', () => {
 
 (`replayProof` joins the top-of-file imports: `import { replayProof } from '../../../src/kernel/proof/step'`.)
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/error.ts src/kernel/proof/step.ts src/kernel/proof/theorem.ts tests/kernel/proof/step.test.ts tests/kernel/proof/theorem.test.ts
@@ -850,7 +850,7 @@ export function applyTheorem(
 - Create: `src/kernel/proof/compose.ts`
 - Test: `tests/kernel/proof/compose.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/proof/compose.test.ts`:
 
@@ -948,12 +948,12 @@ describe('composeProofs', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/compose.test.ts`
 Expected: FAIL — cannot resolve `proof/compose`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/proof/compose.ts`:
 
@@ -1071,9 +1071,9 @@ export function composeProofs(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/compose.ts tests/kernel/proof/compose.test.ts
@@ -1091,7 +1091,7 @@ git commit -m "feat(kernel): meet-in-the-middle proof composition via canonical 
 - Create: `src/kernel/proof/json.ts`
 - Test: `tests/kernel/proof/json.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/proof/json.test.ts`:
 
@@ -1178,12 +1178,12 @@ describe('theorem round-trips through JSON', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/json.test.ts`
 Expected: FAIL — cannot resolve `proof/json`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/diagram/json.ts`, change `function parsePortKey` to `export function parsePortKey` (no other changes).
 
@@ -1443,9 +1443,9 @@ export function theoremFromJson(j: unknown): Theorem {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/json.ts src/kernel/proof/json.ts tests/kernel/proof/json.test.ts
@@ -1462,7 +1462,7 @@ git commit -m "feat(kernel): proof and theorem JSON serialization with strict va
 - Create: `src/kernel/proof/store.ts`
 - Test: `tests/kernel/proof/store.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/proof/store.test.ts`:
 
@@ -1577,12 +1577,12 @@ describe('theory files', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/store.test.ts`
 Expected: FAIL — cannot resolve `proof/store`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/proof/store.ts`:
 
@@ -1689,9 +1689,9 @@ export function loadTheory(j: unknown): { theory: Theory; ctx: ProofContext } {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/store.ts tests/kernel/proof/store.test.ts
@@ -1708,7 +1708,7 @@ git commit -m "feat(kernel): verified theory store with versioned JSON format"
 - Create: `src/kernel/proof/index.ts`
 - Test: `tests/kernel/proof/endtoend.test.ts`
 
-- [ ] **Step 1: Write the battery** (must pass against Tasks 1–5; failures are bugs to fix test-first)
+- [x] **Step 1: Write the battery** (must pass against Tasks 1–5; failures are bugs to fix test-first)
 
 `tests/kernel/proof/endtoend.test.ts`:
 
@@ -1832,9 +1832,9 @@ describe('end to end: derived rule proved, stored, loaded, applied natively', ()
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Write the barrel** `src/kernel/proof/index.ts`:
+- [x] **Step 3: Write the barrel** `src/kernel/proof/index.ts`:
 
 ```ts
 export { ProofError } from './error'
@@ -1850,14 +1850,18 @@ export type { Theory } from './store'
 export { verifyTheory, theoryToJson, theoryFromJson, loadTheory } from './store'
 ```
 
-- [ ] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`; verify every export resolves.
+- [x] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`; verify every export resolves.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/index.ts tests/kernel/proof/endtoend.test.ts
 git commit -m "test(kernel): proof layer end-to-end battery; proof surface"
 ```
+
+**Review outcome (commit `a45a2d4`):** all four battery tests passed against the existing modules; barrel exports verified name-by-name. Suite: 369 at task close.
+
+**Final whole-branch review — BLOCKING forgery found and fixed (`bf9fd0c`):** boundary-wire id RESURRECTION. checkTheorem checked survival only at proof end by id presence, but freshId re-mints free ids: a proof could destroy the boundary wire (erasure with the wire as content) and a later splice (theorem citation) would mint the same id for a semantically unrelated wire — certifying the FALSE theorem K(a) ∧ ∃y.id(y) ⟹ id(a). Reproduced exactly, then fixed test-first (two regression tests observed fail→pass): (1) checkTheorem checks boundary presence after EVERY step via replayProof's new onStep invariant callback; (2) applyTheorem splices BEFORE removing, minting fresh ids against the full pre-removal id set — the only applier that both deletes wires and mints fresh wire ids, so per-step presence now fully closes the class. All other final-review probes passed: hand-built raw-JSON forgeries refused by name; compose-then-verify with corrupted-step refusal; depth-3 derived-rule chains; certificate corruption in files caught with step indices; pins live in boundaryFingerprint (isoBetween unpinned, as designed); no aliasing; vocabulary stratification clean; zero imports leave src/kernel. Suite: 371.
 
 ---
 
