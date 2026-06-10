@@ -124,6 +124,8 @@ export function findOccurrences(
   const usedRegions = new Set<RegionId>()
   const usedNodes = new Set<NodeId>()
 
+  // Nested maps, never flat composite keys: ids are unconstrained strings and
+  // any separator can alias across the id boundary (proven soundness bug).
   const undecided: UndecidedPair[] = []
   const undecidedSeen = new Map<NodeId, Set<NodeId>>()
   const verdictCache = new Map<NodeId, Map<NodeId, boolean>>()
@@ -329,6 +331,7 @@ export function findOccurrences(
       attachments.push(hw)
     }
 
+    // JSON.stringify, never join: id strings may contain any separator
     const fp = JSON.stringify([
       [...regionMap.values()].sort(),
       [...nodeMap.values()].sort(),
