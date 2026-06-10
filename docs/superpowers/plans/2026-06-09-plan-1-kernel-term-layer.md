@@ -27,7 +27,7 @@
 - Create: `vitest.config.ts`
 - Create: `tests/kernel/term/smoke.test.ts`
 
-- [ ] **Step 1: Write package.json**
+- [x] **Step 1: Write package.json**
 
 ```json
 {
@@ -48,7 +48,7 @@
 }
 ```
 
-- [ ] **Step 2: Write tsconfig.json**
+- [x] **Step 2: Write tsconfig.json**
 
 ```json
 {
@@ -73,7 +73,7 @@
 }
 ```
 
-- [ ] **Step 3: Write vitest.config.ts**
+- [x] **Step 3: Write vitest.config.ts**
 
 ```ts
 import { defineConfig } from 'vitest/config'
@@ -85,7 +85,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 4: Write smoke test**
+- [x] **Step 4: Write smoke test**
 
 `tests/kernel/term/smoke.test.ts`:
 
@@ -99,7 +99,7 @@ describe('scaffold', () => {
 })
 ```
 
-- [ ] **Step 5: Install and verify**
+- [x] **Step 5: Install and verify**
 
 Run: `npm install && npm test`
 Expected: 1 test file, 1 passed.
@@ -107,7 +107,7 @@ Expected: 1 test file, 1 passed.
 Run: `npm run typecheck`
 Expected: exit 0, no output.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add package.json package-lock.json tsconfig.json vitest.config.ts tests/kernel/term/smoke.test.ts
@@ -122,7 +122,7 @@ git commit -m "chore: scaffold TypeScript + Vitest project"
 - Create: `src/kernel/term/term.ts`
 - Test: `tests/kernel/term/term.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/term.test.ts`:
 
@@ -187,12 +187,12 @@ describe('freePorts', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/term.test.ts`
 Expected: FAIL — cannot resolve `../../../src/kernel/term/term`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/term.ts`:
 
@@ -264,12 +264,12 @@ export function freePorts(t: Term): string[] {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/term.test.ts`
 Expected: PASS (all tests). Also run `npm run typecheck` — exit 0.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/term.ts tests/kernel/term/term.test.ts
@@ -284,7 +284,7 @@ git commit -m "feat(kernel): de Bruijn term type, constructors, equality, freePo
 - Create: `src/kernel/term/print.ts`
 - Test: `tests/kernel/term/print.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/print.test.ts`:
 
@@ -330,12 +330,12 @@ describe('printTerm', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/print.test.ts`
 Expected: FAIL — cannot resolve `print`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/print.ts`:
 
@@ -398,12 +398,12 @@ function go(t: Term, env: string[], taken: Set<string>, ctx: Ctx): string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/print.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/print.ts tests/kernel/term/print.test.ts
@@ -418,7 +418,7 @@ git commit -m "feat(kernel): deterministic ASCII term printer"
 - Create: `src/kernel/term/parse.ts`
 - Test: `tests/kernel/term/parse.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/parse.test.ts`:
 
@@ -489,12 +489,12 @@ describe('parseTerm', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/parse.test.ts`
 Expected: FAIL — cannot resolve `parse`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/parse.ts`:
 
@@ -647,12 +647,12 @@ function tokenDisplay(t: Token): string {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/parse.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/parse.ts tests/kernel/term/parse.test.ts
@@ -667,7 +667,7 @@ git commit -m "feat(kernel): ASCII lambda parser with positions and name resolut
 - Create: `src/kernel/term/reduce.ts`
 - Test: `tests/kernel/term/reduce.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/reduce.test.ts`:
 
@@ -733,12 +733,12 @@ describe('betaReduce', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/reduce.test.ts`
 Expected: FAIL — cannot resolve `reduce`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/reduce.ts`:
 
@@ -785,12 +785,12 @@ export function betaReduce(body: Term, arg: Term): Term {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/reduce.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/reduce.ts tests/kernel/term/reduce.test.ts
@@ -805,7 +805,7 @@ git commit -m "feat(kernel): de Bruijn shift, substitution, beta reduction"
 - Modify: `src/kernel/term/reduce.ts`
 - Test: `tests/kernel/term/step.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/step.test.ts`:
 
@@ -898,12 +898,12 @@ describe('hasFreeBVar', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/step.test.ts`
 Expected: FAIL — `stepNormalOrder` / `applyStepAt` not exported.
 
-- [ ] **Step 3: Implement (append to `src/kernel/term/reduce.ts`)**
+- [x] **Step 3: Implement (append to `src/kernel/term/reduce.ts`)**
 
 ```ts
 export type PathSeg = 'body' | 'fn' | 'arg'
@@ -919,6 +919,20 @@ export function hasFreeBVar(index: number, t: Term): boolean {
     case 'const':
       return false
   }
+}
+
+/**
+ * Contract an eta-redex at the root (\x. f x with x not free in f), or null.
+ * Shared by stepEta and applyStepAt so search and certificate replay can
+ * never disagree about what counts as an eta-redex.
+ */
+function etaContractAtRoot(t: Term): Term | null {
+  if (t.kind === 'lam' && t.body.kind === 'app'
+    && t.body.arg.kind === 'bvar' && t.body.arg.index === 0
+    && !hasFreeBVar(0, t.body.fn)) {
+    return shift(-1, 0, t.body.fn)
+  }
+  return null
 }
 
 /**
@@ -960,12 +974,8 @@ export function applyStepAt(t: Term, step: ReductionStep): Term {
       }
       throw new Error(`no beta redex at path []: term head is '${t.kind}'`)
     }
-    // eta: \x. f x with x not free in f  →  shift(-1, 0, f)
-    if (t.kind === 'lam' && t.body.kind === 'app'
-      && t.body.arg.kind === 'bvar' && t.body.arg.index === 0
-      && !hasFreeBVar(0, t.body.fn)) {
-      return shift(-1, 0, t.body.fn)
-    }
+    const contracted = etaContractAtRoot(t)
+    if (contracted !== null) return contracted
     throw new Error(`no eta redex at path []: term is not of shape \\x. f x with x unused in f`)
   }
   const [seg, ...rest] = step.path
@@ -977,12 +987,12 @@ export function applyStepAt(t: Term, step: ReductionStep): Term {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/step.test.ts`
 Expected: PASS. Also re-run the full suite: `npm test` — all green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/reduce.ts tests/kernel/term/step.test.ts
@@ -997,7 +1007,7 @@ git commit -m "feat(kernel): normal-order stepping and path-addressed beta/eta s
 - Modify: `src/kernel/term/reduce.ts`
 - Test: `tests/kernel/term/normalize.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/normalize.test.ts`:
 
@@ -1092,25 +1102,22 @@ describe('normalize', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/normalize.test.ts`
 Expected: FAIL — `normalize` not exported.
 
-- [ ] **Step 3: Implement (append to `src/kernel/term/reduce.ts`)**
+- [x] **Step 3: Implement (append to `src/kernel/term/reduce.ts`)**
 
 ```ts
 export type NormalizeResult =
-  | { status: 'normal'; term: Term; path: readonly ReductionStep[] }
-  | { status: 'fuel-exhausted'; term: Term; path: readonly ReductionStep[] }
+  | { readonly status: 'normal'; readonly term: Term; readonly path: readonly ReductionStep[] }
+  | { readonly status: 'fuel-exhausted'; readonly term: Term; readonly path: readonly ReductionStep[] }
 
 /** One leftmost-outermost eta step, or null if eta-normal. */
 export function stepEta(t: Term): { term: Term; path: PathSeg[] } | null {
-  if (t.kind === 'lam' && t.body.kind === 'app'
-    && t.body.arg.kind === 'bvar' && t.body.arg.index === 0
-    && !hasFreeBVar(0, t.body.fn)) {
-    return { term: shift(-1, 0, t.body.fn), path: [] }
-  }
+  const contracted = etaContractAtRoot(t)
+  if (contracted !== null) return { term: contracted, path: [] }
   switch (t.kind) {
     case 'lam': {
       const r = stepEta(t.body)
@@ -1166,12 +1173,12 @@ export function normalize(t: Term, fuel: number): NormalizeResult {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/normalize.test.ts`
 Expected: PASS. Re-run `npm test` — all green.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/reduce.ts tests/kernel/term/normalize.test.ts
@@ -1186,7 +1193,7 @@ git commit -m "feat(kernel): fueled beta-eta normalization with recorded paths"
 - Create: `src/kernel/term/certificate.ts`
 - Test: `tests/kernel/term/certificate.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/certificate.test.ts`:
 
@@ -1262,12 +1269,12 @@ describe('checkConversion', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/certificate.test.ts`
 Expected: FAIL — cannot resolve `certificate`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/certificate.ts`:
 
@@ -1288,8 +1295,8 @@ export type ConversionCertificate = {
 }
 
 export type ConversionCheck =
-  | { ok: true; meet: Term }
-  | { ok: false; reason: string }
+  | { readonly ok: true; readonly meet: Term }
+  | { readonly ok: false; readonly reason: string }
 
 export function checkConversion(left: Term, right: Term, cert: ConversionCertificate): ConversionCheck {
   let l = left
@@ -1315,12 +1322,12 @@ export function checkConversion(left: Term, right: Term, cert: ConversionCertifi
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/certificate.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/certificate.ts tests/kernel/term/certificate.test.ts
@@ -1335,7 +1342,7 @@ git commit -m "feat(kernel): conversion certificates checked by path replay"
 - Create: `src/kernel/term/convert.ts`
 - Test: `tests/kernel/term/convert.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/convert.test.ts`:
 
@@ -1396,12 +1403,12 @@ describe('convertible', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/convert.test.ts`
 Expected: FAIL — cannot resolve `convert`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/convert.ts`:
 
@@ -1412,9 +1419,9 @@ import { normalize } from './reduce'
 import type { ConversionCertificate } from './certificate'
 
 export type ConvertibleResult =
-  | { status: 'convertible'; certificate: ConversionCertificate }
-  | { status: 'not-convertible' }
-  | { status: 'fuel-exhausted'; detail: string }
+  | { readonly status: 'convertible'; readonly certificate: ConversionCertificate }
+  | { readonly status: 'not-convertible' }
+  | { readonly status: 'fuel-exhausted'; readonly detail: string }
 
 /**
  * Interactive equality: normalize both sides under the fuel budget and compare.
@@ -1442,12 +1449,12 @@ export function convertible(left: Term, right: Term, fuel: number): ConvertibleR
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/convert.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/convert.ts tests/kernel/term/convert.test.ts
@@ -1462,7 +1469,7 @@ git commit -m "feat(kernel): convertibility via normalize-and-compare with certi
 - Create: `src/kernel/term/serialize.ts`
 - Test: `tests/kernel/term/serialize.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/term/serialize.test.ts`:
 
@@ -1502,16 +1509,18 @@ describe('serializeTerm', () => {
     expect(() => deserializeTerm('L(')).toThrowError(/malformed/i)
     expect(() => deserializeTerm('garbage')).toThrowError(/malformed/i)
     expect(() => deserializeTerm('P("a")x')).toThrowError(/malformed/i)
+    expect(() => deserializeTerm('P("\\q")')).toThrowError(/malformed/i)
+    expect(() => deserializeTerm('#9007199254740993')).toThrowError(/malformed/i)
   })
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/term/serialize.test.ts`
 Expected: FAIL — cannot resolve `serialize`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/term/serialize.ts`:
 
@@ -1550,7 +1559,10 @@ function parse(s: string, i: number): [Term, number] {
     let j = i + 1
     while (j < s.length && s[j]! >= '0' && s[j]! <= '9') j++
     if (j === i + 1) fail('expected digits after #')
-    return [bvar(Number(s.slice(i + 1, j))), j]
+    const digits = s.slice(i + 1, j)
+    const value = Number(digits)
+    if (!Number.isSafeInteger(value)) fail(`bvar index ${digits} exceeds the safe integer range`)
+    return [bvar(value), j]
   }
   if (c === 'P' || c === 'C') {
     if (s[i + 1] !== '(') fail(`expected '(' after ${c}`)
@@ -1581,7 +1593,11 @@ function parseJsonString(s: string, i: number): [string, number] {
   while (j < s.length) {
     if (s[j] === '\\') { j += 2; continue }
     if (s[j] === '"') {
-      return [JSON.parse(s.slice(i, j + 1)) as string, j + 1]
+      try {
+        return [JSON.parse(s.slice(i, j + 1)) as string, j + 1]
+      } catch (e) {
+        throw new Error(`malformed term serialization at ${i}: invalid JSON string (${e instanceof Error ? e.message : String(e)})`)
+      }
     }
     j++
   }
@@ -1589,12 +1605,12 @@ function parseJsonString(s: string, i: number): [string, number] {
 }
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `npx vitest run tests/kernel/term/serialize.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/term/serialize.ts tests/kernel/term/serialize.test.ts
@@ -1609,7 +1625,7 @@ git commit -m "feat(kernel): injective ASCII term serialization with safe escapi
 - Create: `src/kernel/term/index.ts`
 - Delete: `tests/kernel/term/smoke.test.ts`
 
-- [ ] **Step 1: Write the barrel module**
+- [x] **Step 1: Write the barrel module**
 
 `src/kernel/term/index.ts`:
 
@@ -1626,7 +1642,7 @@ export type { ConvertibleResult } from './convert'
 export { convertible } from './convert'
 ```
 
-- [ ] **Step 2: Delete the scaffold smoke test**
+- [x] **Step 2: Delete the scaffold smoke test**
 
 ```bash
 rm tests/kernel/term/smoke.test.ts
@@ -1634,12 +1650,12 @@ rm tests/kernel/term/smoke.test.ts
 
 (Its job — proving the harness runs — is done by every real test now. Dead tests are dead code.)
 
-- [ ] **Step 3: Run the full suite and typecheck**
+- [x] **Step 3: Run the full suite and typecheck**
 
 Run: `npm test && npm run typecheck`
 Expected: all test files pass; typecheck exits 0.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/kernel/term/index.ts
