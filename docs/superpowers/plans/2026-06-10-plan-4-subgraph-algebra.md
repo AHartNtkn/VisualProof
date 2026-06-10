@@ -29,7 +29,7 @@
 - Create: `src/kernel/diagram/canonical/matchkey.ts`
 - Test: `tests/kernel/diagram/matchkey.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/matchkey.test.ts`:
 
@@ -118,12 +118,12 @@ describe('termsMatchModuloBetaEta', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/matchkey.test.ts`
 Expected: FAIL — cannot resolve `canonical/matchkey`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/canonical/matchkey.ts`:
 
@@ -197,11 +197,11 @@ export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMat
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
 Run: `npx vitest run tests/kernel/diagram/matchkey.test.ts && npm test && npm run typecheck`
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/canonical/matchkey.ts tests/kernel/diagram/matchkey.test.ts
@@ -216,7 +216,7 @@ git commit -m "feat(kernel): node match keys via port closure, beta-eta-modulo c
 - Create: `src/kernel/diagram/subgraph/selection.ts`
 - Test: `tests/kernel/diagram/selection.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/selection.test.ts`:
 
@@ -325,12 +325,12 @@ describe('selectionContents', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/selection.test.ts`
 Expected: FAIL — cannot resolve `subgraph/selection`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/subgraph/selection.ts`:
 
@@ -456,9 +456,9 @@ export function selectionContents(d: Diagram, sel: SubgraphSelection): Selection
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/subgraph/selection.ts tests/kernel/diagram/selection.test.ts
@@ -475,7 +475,7 @@ git commit -m "feat(kernel): validated subgraph selection with wire classificati
 - Create: `src/kernel/diagram/subgraph/extract.ts`
 - Test: `tests/kernel/diagram/extract.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/extract.test.ts`:
 
@@ -589,12 +589,12 @@ describe('extractSubgraph atom-binder boundary', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/extract.test.ts`
 Expected: FAIL — cannot resolve `subgraph/extract`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/subgraph/extract.ts`:
 
@@ -693,9 +693,9 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/subgraph/extract.ts tests/kernel/diagram/extract.test.ts
@@ -710,7 +710,7 @@ git commit -m "feat(kernel): subgraph extraction to boundary patterns with attac
 - Create: `src/kernel/diagram/subgraph/splice.ts`
 - Test: `tests/kernel/diagram/splice.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/splice.test.ts`:
 
@@ -835,12 +835,12 @@ describe('spliceSubgraph', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/splice.test.ts`
 Expected: FAIL — cannot resolve `subgraph/splice`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/diagram/subgraph/splice.ts`:
 
@@ -986,9 +986,9 @@ export function spliceSubgraph(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/subgraph/splice.ts tests/kernel/diagram/splice.test.ts
@@ -1003,7 +1003,7 @@ git commit -m "feat(kernel): subgraph removal and splice with root-scope boundar
 - Test: `tests/kernel/diagram/roundtrip.test.ts`
 - Modify: `src/kernel/diagram/index.ts`
 
-- [ ] **Step 1: Write the round-trip tests** (must pass against Tasks 2–4; failures are algebra bugs to fix test-first and report)
+- [x] **Step 1: Write the round-trip tests** (must pass against Tasks 2–4; failures are algebra bugs to fix test-first and report)
 
 `tests/kernel/diagram/roundtrip.test.ts`:
 
@@ -1089,9 +1089,9 @@ describe('extract → remove → splice round-trip (fingerprint identity)', () =
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure is an algebra bug: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure is an algebra bug: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Extend the barrel** — append to `src/kernel/diagram/index.ts`:
+- [x] **Step 3: Extend the barrel** — append to `src/kernel/diagram/index.ts`:
 
 ```ts
 export type { NodeMatchVerdict } from './canonical/matchkey'
@@ -1103,9 +1103,9 @@ export { extractSubgraph } from './subgraph/extract'
 export { removeSubgraph, spliceSubgraph } from './subgraph/splice'
 ```
 
-- [ ] **Step 4: Full gate** — `npm test && npm run typecheck`; verify every barrel export exists.
+- [x] **Step 4: Full gate** — `npm test && npm run typecheck`; verify every barrel export exists.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/kernel/diagram/roundtrip.test.ts src/kernel/diagram/index.ts
