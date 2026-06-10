@@ -454,7 +454,7 @@ git commit -m "feat(kernel): insertion and wire join with negative-polarity gate
 - Create: `src/kernel/rules/erasure.ts`
 - Test: `tests/kernel/rules/erasure.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/erasure.test.ts`:
 
@@ -544,12 +544,12 @@ describe('applyWireSever', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/erasure.test.ts`
 Expected: FAIL — cannot resolve `rules/erasure`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/erasure.ts`:
 
@@ -600,14 +600,19 @@ export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoi
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/erasure.ts tests/kernel/rules/erasure.test.ts
 git commit -m "feat(kernel): erasure and wire sever with positive-polarity gates"
 ```
+
+**Review outcomes (commit `5c5aece`, fix `963178f`):**
+- Combined review APPROVED; zero spec deviations. Probes confirmed: polarity gate correct at depths 1/2/3; duplicate endpoints impossible (mkDiagram rejects them, so `has()` is exact); freshId collision path returns `${wireId}_sever_0`; endpoints in descendant regions of the wire scope sever correctly.
+- Mutation gap found and closed: the root-scoped split test could not distinguish `scope: w.scope` from `scope: d.root` on the fresh wire. Added `'creates the fresh wire at the original scope, not the root'` (wire scoped at a depth-2 region); mutant kill observed (`expected 'r0' to be 'r2'`). Suite: 230.
+- Accepted behavior, by design: `keep=[]` / `keep=all` produce a zero-endpoint wire. An empty wire is an isolated line of identity, ∃y.⊤ — sound over the nonempty λ-term domain. Sever is an endpoint partition and empty parts are legal partitions; rejecting them would be an unprincipled special case.
 
 ---
 
