@@ -683,6 +683,17 @@ describe('shift', () => {
     const t = app(port('y'), bvar(0))
     expect(termEq(shift(2, 0, t), app(port('y'), bvar(2)))).toBe(true)
   })
+
+  it('throws when negative d produces a negative index', () => {
+    expect(() => shift(-1, 0, bvar(0))).toThrow(/negative index/)
+    expect(() => shift(-2, 0, bvar(1))).toThrow(/negative index/)
+  })
+
+  it('leaves indices below the cutoff unchanged', () => {
+    // shift(1, 2, ...) must not touch bvar(0) or bvar(1)
+    const t = app(bvar(0), app(bvar(1), bvar(2)))
+    expect(termEq(shift(1, 2, t), app(bvar(0), app(bvar(1), bvar(3))))).toBe(true)
+  })
 })
 
 describe('betaReduce', () => {
@@ -697,6 +708,14 @@ describe('betaReduce', () => {
     const body = lam(bvar(1))
     const arg = bvar(0)
     expect(termEq(betaReduce(body, arg), lam(bvar(1)))).toBe(true)
+  })
+
+  it('correctly shifts arg with multiple free bvars under nested binders', () => {
+    // (\x. \y. x) (app(bvar(0), bvar(1)))
+    // body = lam(bvar(1)), arg = app(bvar(0), bvar(1))
+    // result = lam(app(bvar(1), bvar(2)))  -- under \y, bvar(0)→bvar(1), bvar(1)→bvar(2)
+    const result = betaReduce(lam(bvar(1)), app(bvar(0), bvar(1)))
+    expect(termEq(result, lam(app(bvar(1), bvar(2))))).toBe(true)
   })
 
   it('decrements indices above the substituted variable', () => {
@@ -729,6 +748,8 @@ export function shift(d: number, cutoff: number, t: Term): Term {
     case 'bvar': {
       if (t.index < cutoff) return t
       const next = t.index + d
+      // Unreachable from betaReduce (substitution removes all index-0 occurrences
+      // before the decrement); guards direct callers of shift(-d, ...).
       if (next < 0) {
         throw new Error(`shift produced negative index ${next}; caller violated its guarantee (d=${d}, cutoff=${cutoff}, index=${t.index})`)
       }
