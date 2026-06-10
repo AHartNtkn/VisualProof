@@ -854,7 +854,7 @@ git commit -m "feat(kernel): iteration and justified deiteration with undecided 
 - Create: `src/kernel/rules/doublecut.ts`
 - Test: `tests/kernel/rules/doublecut.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/doublecut.test.ts`:
 
@@ -943,12 +943,12 @@ describe('double cut', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/doublecut.test.ts`
 Expected: FAIL — cannot resolve `rules/doublecut`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/doublecut.ts`:
 
@@ -1045,14 +1045,19 @@ export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/doublecut.ts tests/kernel/rules/doublecut.test.ts
 git commit -m "feat(kernel): double cut introduction and elimination"
 ```
+
+**Review outcomes (commit `061cd9c`, fix `ef414b1`):**
+- Combined review APPROVED; zero spec deviations. Probes confirmed: intro at non-root regions parents the outer cut correctly; explicitly selected wires keep their scope and round-trip by fingerprint; nested elim promotes to the enclosing cut; bubble arity preserved through promotion; pass-through wires untouched; repeated intro produces collision-free `dc`-prefixed ids.
+- Root-bias mutation sweep found FOUR surviving mutants — intro outer-parent → root, elim target → root, `nodesInOuter` dropped (reachable only via arity-0 atoms, since termNodes always carry an auto-wire), and lone-bubble child accepted. All four killed by tests added in `ef414b1` (observed fail-under-mutant → pass-on-revert for each). Suite: 247.
+- M4 (`wiresInOuter` dropped) is killed only indirectly: the promoted diagram then fails mkDiagram with a DiagramError whose message misses the test regex — acceptable, the gate refusal stays loud either way.
 
 ---
 
