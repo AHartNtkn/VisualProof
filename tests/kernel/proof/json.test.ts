@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
 import type { ProofStep } from '../../../src/kernel/proof/step'
-import { stepToJson, stepFromJson, theoremToJson, theoremFromJson } from '../../../src/kernel/proof/json'
+import { stepToJson, stepFromJson, theoremToJson, theoremFromJson, dwbFromJson } from '../../../src/kernel/proof/json'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 
 const noConsts = new Set<string>()
@@ -90,6 +90,15 @@ describe('dwbFromJson validates boundary wire existence', () => {
     const patJson = j['pattern'] as { boundary: string[] }
     patJson.boundary = ['nonexistent_wire_id']
     expect(() => stepFromJson(j)).toThrow()
+  })
+})
+
+describe('dwbFromJson error context', () => {
+  it('dwbFromJson includes the what label when boundary wire is missing from diagram', () => {
+    const b = new DiagramBuilder()
+    b.termNode(b.root, p('\\x. x'))
+    const serialized = { diagram: { root: b.build().root, regions: b.build().regions, nodes: b.build().nodes, wires: b.build().wires }, boundary: ['nonexistent-wire'] }
+    expect(() => dwbFromJson(serialized, "relation 'myRel'")).toThrowError(/relation 'myRel'/)
   })
 })
 

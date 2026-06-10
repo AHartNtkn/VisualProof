@@ -83,7 +83,11 @@ export function dwbToJson(dwb: DiagramWithBoundary): unknown {
 export function dwbFromJson(v: unknown, what = 'pattern'): DiagramWithBoundary {
   if (!isRecord(v)) fail(`${what} must be an object`)
   assertOnlyKeys(v, ['diagram', 'boundary'], what)
-  return mkDiagramWithBoundary(diagramFromJson(v.diagram), strArray(v.boundary, `${what}.boundary`))
+  try {
+    return mkDiagramWithBoundary(diagramFromJson(v.diagram), strArray(v.boundary, `${what}.boundary`))
+  } catch (e) {
+    return fail(`${what}: ${e instanceof Error ? e.message : String(e)}`)
+  }
 }
 
 function certToJson(c: ConversionCertificate): unknown {

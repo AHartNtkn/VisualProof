@@ -86,6 +86,35 @@ describe('verifyTheory', () => {
   })
 })
 
+describe('check-before-register invariant', () => {
+  it('a theorem whose proof cites its own name is refused (no self-citation)', () => {
+    // If register came before check, 'selfCite' would be in the context when
+    // its own proof is replayed, enabling circular justification.
+    const l = new DiagramBuilder()
+    const lp = l.termNode(l.root, p('\\a. a'))
+    const lq = l.termNode(l.root, p('\\a. \\b. a'))
+    const lb = l.wire(l.root, [
+      { node: lp, port: { kind: 'output' } },
+      { node: lq, port: { kind: 'output' } },
+    ])
+    const lhs = mkDiagramWithBoundary(l.build(), [lb])
+    const r = new DiagramBuilder()
+    const rp = r.termNode(r.root, p('\\a. a'))
+    const rb = r.wire(r.root, [{ node: rp, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [rb])
+    const selfCite: Theorem = {
+      name: 'selfCite', lhs, rhs,
+      steps: [{
+        rule: 'theorem', name: 'selfCite',
+        at: { sel: { region: lhs.diagram.root, regions: [], nodes: [lp, lq], wires: [] }, args: [lb] },
+        direction: 'forward',
+      }],
+    }
+    expect(() => verifyTheory({ definitions: {}, relations: {}, theorems: [selfCite] }))
+      .toThrowError(/unknown theorem 'selfCite'/)
+  })
+})
+
 describe('theory files', () => {
   it('round-trips through JSON with verification on load', () => {
     const theory: Theory = {
