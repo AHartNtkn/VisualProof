@@ -827,6 +827,8 @@ git add src/kernel/rules/fusion.ts tests/kernel/rules/fusion.test.ts
 git commit -m "feat(kernel): fusion and fission via the one-point rule"
 ```
 
+**Review outcome (commit `7b01d7c`, fix `eda92ec`):** Deep review SOUND; zero spec deviations (byte-compared). All five side conditions enforced: probes confirmed refusals for producer-below-scope through a cut AND through a bubble, two-consumer wires, three-endpoint wires; consumed-port-in-producer and duplicated-consumed-port cases correct; depth-2 fission→fusion fingerprint identity; no input aliasing. Mutant iv (migrate colliding port to the CONSUMER's wire — silently conflates two individuals while the merged term looks right) SURVIVED the original battery; killed by strengthening the collision test to pin the freshened endpoint's wire (`eda92ec`, observed fail→pass). Suite: 290.
+
 ---
 
 ### Task 4: Definitions — unfold/fold
