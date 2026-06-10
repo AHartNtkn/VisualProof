@@ -18,9 +18,15 @@ export function occurrenceToSelection(
   pattern: DiagramWithBoundary,
   occ: Occurrence,
 ): SubgraphSelection {
+  // Missing-image throws below are DiagramError, not RuleError: a hole in the
+  // maps means the caller passed a malformed Occurrence — a structural
+  // invariant violation, not a rule-gate refusal.
   const pd = pattern.diagram
   const boundary = new Set(pattern.boundary)
   const regions: RegionId[] = []
+  // Only direct root-children enter sel.regions (mkSelection requires
+  // parent === sel.region); deeper pattern regions ride along transitively
+  // via the selectionContents subtree closure.
   for (const [pr, r] of Object.entries(pd.regions)) {
     if (r.kind === 'sheet' || r.parent !== pd.root) continue
     const img = occ.regionMap.get(pr)
