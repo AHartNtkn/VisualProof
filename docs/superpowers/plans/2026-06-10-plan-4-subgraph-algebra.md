@@ -433,8 +433,9 @@ function computeClosure(
 }
 
 export function selectionContents(d: Diagram, sel: SubgraphSelection): SelectionContents {
-  const { allRegions, allNodes } = computeClosure(d, new Set(sel.regions), new Set(sel.nodes))
-  const explicit = new Set(sel.wires)
+  const validated = mkSelection(d, sel) // idempotent; every entry point is loud
+  const { allRegions, allNodes } = computeClosure(d, new Set(validated.regions), new Set(validated.nodes))
+  const explicit = new Set(validated.wires)
   const internalWires: WireId[] = []
   const touchingWires: WireId[] = []
   for (const [id, w] of Object.entries(d.wires)) {
@@ -465,6 +466,8 @@ git commit -m "feat(kernel): validated subgraph selection with wire classificati
 ```
 
 ---
+
+> Post-review note: `freshId` lives in `src/kernel/diagram/subgraph/freshId.ts` (single shared copy imported by extract.ts and splice.ts); `selectionContents` validates via `mkSelection` at entry so all algebra entry points reject unvalidated selections loudly (pinned by tests in selection.test.ts and splice.test.ts); the matchkey fuel guard throws `DiagramError`.
 
 ### Task 3: Extraction
 
