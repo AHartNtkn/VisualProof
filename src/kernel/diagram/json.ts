@@ -1,0 +1,96 @@
+import { deserializeTerm, serializeTerm } from '../term/serialize'
+import type { Diagram, Port, Region, DiagramNode, Wire } from './diagram'
+import { mkDiagram, portKey } from './diagram'
+
+/**
+ * Pure-data JSON form of a diagram. Semantic content only — by the layer
+ * separation edict there is nothing else to save. Terms are embedded as
+ * injective term-serialization strings; ports as portKey strings. Ids are
+ * preserved verbatim. Theory files (Plan 5) wrap this in their own versioned
+ * envelope; this object carries no version of its own.
+ */
+export function diagramToJson(d: Diagram): unknown {
+  const regions: Record<string, unknown> = {}
+  for (const [id, r] of Object.entries(d.regions)) regions[id] = { ...r }
+  const nodes: Record<string, unknown> = {}
+  for (const [id, n] of Object.entries(d.nodes)) {
+    nodes[id] = n.kind === 'term'
+      ? { kind: 'term', region: n.region, term: serializeTerm(n.term) }
+      : { kind: 'atom', region: n.region, binder: n.binder }
+  }
+  const wires: Record<string, unknown> = {}
+  for (const [id, w] of Object.entries(d.wires)) {
+    wires[id] = {
+      scope: w.scope,
+      endpoints: w.endpoints.map((ep) => ({ node: ep.node, port: portKey(ep.port) })),
+    }
+  }
+  return { root: d.root, regions, nodes, wires }
+}
+
+function fail(msg: string): never {
+  throw new Error(`malformed diagram JSON: ${msg}`)
+}
+
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && !Array.isArray(v)
+}
+
+function parsePortKey(key: string): Port {
+  if (key === 'out') return { kind: 'output' }
+  if (key.startsWith('v:') && key.length > 2) return { kind: 'freeVar', name: key.slice(2) }
+  if (key.startsWith('a:')) {
+    const n = Number(key.slice(2))
+    if (Number.isSafeInteger(n) && n >= 0) return { kind: 'arg', index: n }
+  }
+  return fail(`unrecognized port key '${key}'`)
+}
+
+export function diagramFromJson(j: unknown): Diagram {
+  if (!isRecord(j)) fail('top level must be an object')
+  const { root, regions: jr, nodes: jn, wires: jw } = j
+  if (typeof root !== 'string') fail("'root' must be a string")
+  if (!isRecord(jr) || !isRecord(jn ?? {}) || !isRecord(jw ?? {})) fail("'regions', 'nodes', 'wires' must be objects")
+
+  const regions: Record<string, Region> = {}
+  for (const [id, v] of Object.entries(jr)) {
+    if (!isRecord(v)) fail(`region '${id}' must be an object`)
+    if (v.kind === 'sheet') { regions[id] = { kind: 'sheet' }; continue }
+    if (v.kind === 'cut' && typeof v.parent === 'string') { regions[id] = { kind: 'cut', parent: v.parent }; continue }
+    if (v.kind === 'bubble' && typeof v.parent === 'string' && typeof v.arity === 'number') {
+      regions[id] = { kind: 'bubble', parent: v.parent, arity: v.arity }
+      continue
+    }
+    fail(`region '${id}' has unrecognized shape`)
+  }
+
+  const nodes: Record<string, DiagramNode> = {}
+  for (const [id, v] of Object.entries((jn ?? {}) as Record<string, unknown>)) {
+    if (!isRecord(v) || typeof v.region !== 'string') fail(`node '${id}' has unrecognized shape`)
+    if (v.kind === 'term' && typeof v.term === 'string') {
+      nodes[id] = { kind: 'term', region: v.region, term: deserializeTerm(v.term) }
+      continue
+    }
+    if (v.kind === 'atom' && typeof v.binder === 'string') {
+      nodes[id] = { kind: 'atom', region: v.region, binder: v.binder }
+      continue
+    }
+    fail(`node '${id}' has unrecognized shape`)
+  }
+
+  const wires: Record<string, Wire> = {}
+  for (const [id, v] of Object.entries((jw ?? {}) as Record<string, unknown>)) {
+    if (!isRecord(v) || typeof v.scope !== 'string' || !Array.isArray(v.endpoints)) {
+      fail(`wire '${id}' has unrecognized shape`)
+    }
+    const endpoints = v.endpoints.map((ep, k) => {
+      if (!isRecord(ep) || typeof ep.node !== 'string' || typeof ep.port !== 'string') {
+        return fail(`wire '${id}' endpoint ${k} has unrecognized shape`)
+      }
+      return { node: ep.node, port: parsePortKey(ep.port) }
+    })
+    wires[id] = { scope: v.scope, endpoints }
+  }
+
+  return mkDiagram({ root, regions, nodes, wires })
+}
