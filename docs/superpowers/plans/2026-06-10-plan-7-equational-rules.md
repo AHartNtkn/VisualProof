@@ -511,6 +511,8 @@ git add src/kernel/rules/access.ts src/kernel/rules/conversion.ts tests/kernel/r
 git commit -m "feat(kernel): βη-conversion rule with certificates and port surgery"
 ```
 
+**Review outcome (commit `ecd8551`):** APPROVED. Probes: zero-endpoint wire after vanished-port trim validates; ancestor-scoped attachment accepted, incomparable-scope rejected by the validator; certificate round-trip + corruption refusal; simultaneous vanish+add in one call; reflexive conversion fingerprint-stable with a valid non-empty certificate. All five mutants killed (including fresh-singleton-at-root — the nested-region test from the root-bias lesson fired). Vocabulary invariant verified at every throw site. Suite: 282.
+
 ---
 
 ### Task 3: Fusion + fission
