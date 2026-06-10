@@ -102,9 +102,14 @@ describe('applyTheorem', () => {
       sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] },
       args: [v],
     }, 'forward')
-    expect(out.nodes[hq]).toBeUndefined()
-    // the splice brings a fresh P node; the hub keeps observing v
-    expect(out.wires[v]?.endpoints.some((ep) => ep.node !== hp && ep.port.kind === 'output')).toBe(true)
+    // NOTE: assert by SHAPE, not by id — splice may legitimately REUSE the
+    // removed nodes' ids (freshId only dodges ids still present). Expected:
+    // the hub plus exactly one spliced P node, both on v.
+    expect(Object.values(out.nodes)).toHaveLength(2)
+    const eps = out.wires[v]?.endpoints ?? []
+    expect(eps).toHaveLength(2)
+    expect(eps.filter((ep) => ep.port.kind === 'output')).toHaveLength(1)
+    expect(eps.filter((ep) => ep.port.kind === 'freeVar')).toHaveLength(1)
   })
 
   it('reverse at a negative region strengthens, and round-trips by fingerprint', () => {
