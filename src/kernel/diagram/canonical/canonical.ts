@@ -100,7 +100,11 @@ function buildIndex(d: Diagram, pinned: readonly WireId[]): Index {
       nodeContentKey.set(id, 'atom')
       nodeBinder.set(id, n.binder)
       const binder = d.regions[n.binder]!
-      const arity = binder.kind === 'bubble' ? binder.arity : 0
+      if (binder.kind !== 'bubble') {
+        // Unreachable for mkDiagram-validated diagrams; throw rather than fabricate.
+        throw new DiagramError(`atom '${id}' binder '${n.binder}' is not a bubble`)
+      }
+      const arity = binder.arity
       nodePortOrder.set(id, Array.from({ length: arity }, (_, i) => `a${i}`))
     }
   }
@@ -202,6 +206,8 @@ function refineOnce(idx: Index, c: Colors): Colors {
     entries.push([`R${id}`,
       `R|${regionColor}|p:${parentColor}|c:${children.join(',')}|n:${nodes.join(',')}|w:${wires.join(',')}`])
   }
+  // Lookups here use `!`: totality follows from buildIndex construction and
+  // mkDiagram's port-partition invariant (see docs/kernel/canonicalization.md).
   for (const id of idx.nodeIds) {
     const binder = idx.nodeBinder.get(id)
     const ports = idx.nodePortOrder.get(id)!
@@ -243,7 +249,7 @@ function refine(idx: Index, c0: Colors): Colors {
 }
 
 /** First tied class: members sharing the smallest tied color, in a fixed sort order. */
-function firstTiedClass(_idx: Index, c: Colors): { sort: 'region' | 'node' | 'wire'; members: string[] } | null {
+function firstTiedClass(c: Colors): { sort: 'region' | 'node' | 'wire'; members: string[] } | null {
   let bestColor = Infinity
   let bestSort: 'region' | 'node' | 'wire' = 'region'
   let bestMembers: string[] = []
@@ -286,7 +292,7 @@ function individualize(c: Colors, sort: 'region' | 'node' | 'wire', id: string):
 }
 
 function search(idx: Index, c: Colors): string {
-  const tied = firstTiedClass(idx, c)
+  const tied = firstTiedClass(c)
   if (tied === null) return serializeWith(idx, c)
   let best: string | null = null
   for (const member of tied.members) {
