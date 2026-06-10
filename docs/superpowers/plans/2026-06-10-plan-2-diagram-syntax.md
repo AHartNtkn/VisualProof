@@ -761,7 +761,26 @@ describe('DiagramBuilder', () => {
     b.termNode(b.root, p('\\x. x'))
     const d1 = b.build()
     const d2 = b.build()
-    expect(Object.keys(d1.wires)).toEqual(Object.keys(d2.wires))
+    expect(Object.keys(d1.wires)).toEqual(['w0'])
+    expect(Object.keys(d2.wires)).toEqual(['w0'])
+  })
+
+  it('auto-wires atom arg ports from the binder arity', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 2)
+    const a = b.atom(bub, bub)
+    const d = b.build()
+    const wires = Object.values(d.wires)
+    expect(wires).toHaveLength(2)
+    const keys = wires.flatMap((w) => w.endpoints.map((ep) => `${ep.node}/${portKey(ep.port)}`)).sort()
+    expect(keys).toEqual([`${a}/a:0`, `${a}/a:1`])
+    for (const w of wires) expect(w.scope).toBe(bub)
+  })
+
+  it('builds the empty diagram (root sheet only)', () => {
+    const d = new DiagramBuilder().build()
+    expect(Object.keys(d.nodes)).toHaveLength(0)
+    expect(Object.keys(d.wires)).toHaveLength(0)
   })
 })
 ```
@@ -828,15 +847,24 @@ export class DiagramBuilder {
   }
 
   build(): Diagram {
-    const attached = new Set<string>()
+    // Same nested pattern as mkDiagram: node ids and port names are
+    // unconstrained strings, so any flat serialization has an aliasing seam.
+    const attached = new Map<NodeId, Set<string>>()
     for (const w of Object.values(this.wires)) {
-      for (const ep of w.endpoints) attached.add(`${ep.node} ${portKey(ep.port)}`)
+      for (const ep of w.endpoints) {
+        let byPort = attached.get(ep.node)
+        if (byPort === undefined) {
+          byPort = new Set()
+          attached.set(ep.node, byPort)
+        }
+        byPort.add(portKey(ep.port))
+      }
     }
     const autoWires: Record<WireId, Wire> = {}
     let auto = this.wireCount
     for (const [id, n] of Object.entries(this.nodes)) {
       for (const q of requiredPorts({ regions: this.regions }, n)) {
-        if (!attached.has(`${id} ${portKey(q)}`)) {
+        if (attached.get(id)?.has(portKey(q)) !== true) {
           autoWires[`w${auto++}`] = { scope: n.region, endpoints: [{ node: id, port: q }] }
         }
       }
