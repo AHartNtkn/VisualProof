@@ -213,6 +213,8 @@ git add src/kernel/term/path.ts src/kernel/term/index.ts tests/kernel/term/path.
 git commit -m "feat(kernel): term path navigation, port substitution, bvar-closure"
 ```
 
+**Review outcome (commit `060cc55`):** APPROVED; only permitted deviation (unused `port` test import removed). Capture-safety probes confirmed: closed-term substitution under three nested lams leaves inner indices unchanged; escaping replacements refused. All five mutation probes killed by existing tests. Suite: 272.
+
 ---
 
 ### Task 2: Access helpers + conversion rule
