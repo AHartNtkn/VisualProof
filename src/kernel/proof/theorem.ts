@@ -29,6 +29,13 @@ export type TheoremApplication = {
  * to be isomorphic to the stated rhs respecting boundary order. Boundary
  * wires must survive the proof (keep them as the OUTER wire of any join) and
  * must be root-scoped on both sides (splice's stub invariant).
+ *
+ * Survival is checked after EVERY step, not just at the end: a destroyed
+ * boundary id could otherwise be resurrected by a later splice's fresh-id
+ * choice, certifying a false theorem through a semantically unrelated wire.
+ * Per-step presence suffices because no single applier both deletes a wire
+ * and mints fresh wire ids — applyTheorem, the one applier that removes and
+ * splices, splices FIRST so its fresh ids avoid the entire pre-removal set.
  */
 export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
   if (thm.lhs.boundary.length !== thm.rhs.boundary.length) {
@@ -43,12 +50,13 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
       }
     }
   }
-  const result = replayProof(thm.lhs.diagram, thm.steps, ctx)
-  for (const w of thm.lhs.boundary) {
-    if (result.wires[w] === undefined) {
-      throw new ProofError(`theorem '${thm.name}': boundary wire '${w}' was destroyed by the proof`)
+  const result = replayProof(thm.lhs.diagram, thm.steps, ctx, (d, i) => {
+    for (const w of thm.lhs.boundary) {
+      if (d.wires[w] === undefined) {
+        throw new ProofError(`theorem '${thm.name}': boundary wire '${w}' was destroyed by the proof (step ${i})`)
+      }
     }
-  }
+  })
   const got = boundaryFingerprint(mkDiagramWithBoundary(result, thm.lhs.boundary))
   if (got !== boundaryFingerprint(thm.rhs)) {
     throw new ProofError(`theorem '${thm.name}': the proof does not arrive at the stated right-hand side`)
@@ -97,6 +105,11 @@ export function applyTheorem(
       `the selection is not an occurrence of theorem '${thm.name}' ${direction === 'forward' ? 'left' : 'right'}-hand side`,
     )
   }
-  const removed = removeSubgraph(d, at.sel)
-  return spliceSubgraph(removed, at.sel.region, to, at.args)
+  // Splice BEFORE removing: fresh ids are then minted against the FULL
+  // pre-removal id set, so this step can never resurrect an id it destroys
+  // (checkTheorem's per-step boundary checks rely on exactly that). The two
+  // phases commute — the splice only adds content and extends the attachment
+  // wires, none of which the removal selection touches.
+  const spliced = spliceSubgraph(d, at.sel.region, to, at.args)
+  return removeSubgraph(spliced, at.sel)
 }

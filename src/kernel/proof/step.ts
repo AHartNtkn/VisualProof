@@ -72,8 +72,17 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
   }
 }
 
-/** Fold steps over a diagram, naming the failing step on any refusal. */
-export function replayProof(start: Diagram, steps: readonly ProofStep[], ctx: ProofContext): Diagram {
+/**
+ * Fold steps over a diagram, naming the failing step on any refusal. The
+ * optional onStep invariant runs after every step; its throws propagate
+ * unwrapped (they carry their own context).
+ */
+export function replayProof(
+  start: Diagram,
+  steps: readonly ProofStep[],
+  ctx: ProofContext,
+  onStep?: (d: Diagram, stepIndex: number) => void,
+): Diagram {
   let cur = start
   steps.forEach((s, i) => {
     try {
@@ -81,6 +90,7 @@ export function replayProof(start: Diagram, steps: readonly ProofStep[], ctx: Pr
     } catch (e) {
       throw new ProofError(`step ${i} (${s.rule}) failed: ${e instanceof Error ? e.message : String(e)}`)
     }
+    onStep?.(cur, i)
   })
   return cur
 }

@@ -199,3 +199,69 @@ describe('theorem steps inside proofs (derived rules used natively)', () => {
     expect(Object.values(out.nodes)).toHaveLength(1)
   })
 })
+
+describe('boundary-wire id resurrection is refused', () => {
+  /** Trivial arity-0 theorem whose sides carry a wire literally named 'w0'. */
+  function idTheorem(): Theorem {
+    const b = new DiagramBuilder()
+    const n = b.termNode(b.root, p('\\a. a'))
+    b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    const side = mkDiagramWithBoundary(b.build(), [])
+    return { name: 'idT', lhs: side, rhs: side, steps: [] }
+  }
+
+  it('a proof that destroys the boundary wire and re-mints its id later is refused', () => {
+    // the FALSE claim: K(a) ∧ ∃y.id(y) ⟹ id(a). Step 1 erases K together
+    // with the boundary wire w0; step 2 cites idT, whose splice would mint
+    // the now-free id 'w0' for a semantically unrelated wire.
+    const T = idTheorem()
+    const l = new DiagramBuilder()
+    const k = l.termNode(l.root, p('\\a. \\b. a'))
+    const idn = l.termNode(l.root, p('\\a. a'))
+    const w0 = l.wire(l.root, [{ node: k, port: { kind: 'output' } }])
+    const w1 = l.wire(l.root, [{ node: idn, port: { kind: 'output' } }])
+    const lhs = mkDiagramWithBoundary(l.build(), [w0])
+    const r = new DiagramBuilder()
+    const rn = r.termNode(r.root, p('\\a. a'))
+    const rb = r.wire(r.root, [{ node: rn, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [rb])
+    const forged: Theorem = {
+      name: 'forged', lhs, rhs,
+      steps: [
+        { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [k], wires: [w0] } },
+        {
+          rule: 'theorem', name: 'idT',
+          at: { sel: { region: lhs.diagram.root, regions: [], nodes: [idn], wires: [w1] }, args: [] },
+          direction: 'forward',
+        },
+      ],
+    }
+    const c: ProofContext = { definitions: {}, theorems: new Map([[T.name, T]]) }
+    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
+  })
+
+  it('a single theorem step cannot destroy and re-mint the boundary id within itself', () => {
+    // an invalid proof of a true-looking claim: the step removes the boundary
+    // wire as occurrence content and the splice would re-mint its id in one
+    // applier call. Only valid proofs certify — this must be refused.
+    const T = idTheorem()
+    const l = new DiagramBuilder()
+    const idn = l.termNode(l.root, p('\\a. a'))
+    const w0 = l.wire(l.root, [{ node: idn, port: { kind: 'output' } }])
+    const lhs = mkDiagramWithBoundary(l.build(), [w0])
+    const r = new DiagramBuilder()
+    const rn = r.termNode(r.root, p('\\a. a'))
+    const rb = r.wire(r.root, [{ node: rn, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [rb])
+    const forged: Theorem = {
+      name: 'forgedOneStep', lhs, rhs,
+      steps: [{
+        rule: 'theorem', name: 'idT',
+        at: { sel: { region: lhs.diagram.root, regions: [], nodes: [idn], wires: [w0] }, args: [] },
+        direction: 'forward',
+      }],
+    }
+    const c: ProofContext = { definitions: {}, theorems: new Map([[T.name, T]]) }
+    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
+  })
+})
