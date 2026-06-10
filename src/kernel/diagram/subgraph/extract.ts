@@ -1,5 +1,5 @@
 import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../diagram'
-import { mkDiagram } from '../diagram'
+import { DiagramError, mkDiagram } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { mkDiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
@@ -30,6 +30,15 @@ function freshId(taken: ReadonlySet<string>, base: string): string {
  */
 export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction {
   const c = selectionContents(d, sel)
+  // Atoms can only be extracted with their binder: a binder outside the
+  // selected content (including the anchor region itself — the pattern root
+  // is a sheet and cannot bind) makes the pattern unconstructible.
+  for (const id of c.allNodes) {
+    const n = d.nodes[id]!
+    if (n.kind === 'atom' && !c.allRegions.has(n.binder)) {
+      throw new DiagramError(`atom '${id}' is bound to '${n.binder}' which is outside the selection`)
+    }
+  }
   const takenRegionIds = new Set<string>(c.allRegions)
   const root = freshId(takenRegionIds, 'root')
 

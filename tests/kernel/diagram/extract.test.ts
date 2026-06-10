@@ -71,3 +71,37 @@ describe('extractSubgraph', () => {
     expect(() => extractSubgraph(h.d, sel)).not.toThrow()
   })
 })
+
+describe('extractSubgraph atom-binder boundary', () => {
+  it('extracts atoms whose binder is inside the selection', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 0)
+    b.atom(bub, bub)
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [bub], nodes: [], wires: [] })
+    expect(() => extractSubgraph(d, sel)).not.toThrow()
+  })
+
+  it('rejects atoms bound to an unselected ancestor bubble, naming the violation', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 0)
+    const cut = b.cut(bub)
+    const a = b.atom(cut, bub)
+    void a
+    const d = b.build()
+    // select only the cut, inside the bubble: the atom's binder stays outside
+    const sel = mkSelection(d, { region: bub, regions: [cut], nodes: [], wires: [] })
+    expect(() => extractSubgraph(d, sel))
+      .toThrowError(/atom 'n0' is bound to 'r1' which is outside the selection/)
+  })
+
+  it('rejects atoms bound to the selection region itself (the anchor is not selected content)', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 0)
+    const a = b.atom(bub, bub)
+    const d = b.build()
+    const sel = mkSelection(d, { region: bub, regions: [], nodes: [a], wires: [] })
+    expect(() => extractSubgraph(d, sel))
+      .toThrowError(/atom 'n0' is bound to 'r1' which is outside the selection/)
+  })
+})
