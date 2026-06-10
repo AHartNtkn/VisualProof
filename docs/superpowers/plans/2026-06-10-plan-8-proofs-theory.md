@@ -42,7 +42,7 @@
 - Modify: `src/kernel/diagram/index.ts` (add exports)
 - Test: `tests/kernel/diagram/labeling.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/labeling.test.ts`:
 
@@ -166,12 +166,12 @@ describe('isoBetween', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/labeling.test.ts`
 Expected: FAIL — `canonicalLabeling` not exported / cannot resolve `canonical/iso`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/diagram/canonical/canonical.ts`:
 
@@ -289,14 +289,16 @@ export type { DiagramIso } from './canonical/iso'
 export { isoBetween } from './canonical/iso'
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck** (the refactor must not change any existing fingerprint — the full suite is the regression gate)
+- [x] **Step 4: Verify PASS, full suite, typecheck** (the refactor must not change any existing fingerprint — the full suite is the regression gate)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/canonical/canonical.ts src/kernel/diagram/canonical/iso.ts src/kernel/diagram/index.ts tests/kernel/diagram/labeling.test.ts
 git commit -m "feat(kernel): canonical labeling ordinals and isomorphism extraction"
 ```
+
+**Review outcome (commit `3ccc0b9`, fix `bffbdff`):** APPROVED; diff-pure refactor (refinement/serialization untouched), zero fingerprint regressions. Discreteness verified: leaf colorings are per-sort injective (cross-sort numeric collisions are harmless since ordinalize is per-sort). Full structural transport verified on automorphic copies. Mutant iii (initial-color ordinals) survived and was killed in `bffbdff`. Mutant iv (lex-max branch choice) is EQUIVALENT: any deterministic selection over the fully-explored tie orbit is isomorphism-invariant, and fingerprints are computed fresh, never persisted — accepted. Note: pin-order swaps on automorphic attachment points correctly fingerprint EQUAL (an order-respecting iso exists via the node swap); pins distinguish structurally distinct attachments only. Suite: 331.
 
 ---
 
@@ -311,7 +313,7 @@ git commit -m "feat(kernel): canonical labeling ordinals and isomorphism extract
 
 **Why one task:** theorem steps ARE proof steps (`applyStep` dispatches to `applyTheorem`) and theorem checking REPLAYS proof steps (`checkTheorem` calls `replayProof`) — the mutual recursion is inherent to derived rules whose proofs may use earlier derived rules. The two modules form a deliberate, benign import cycle: all `import type`s are erased (`verbatimModuleSyntax`), and the two value imports (`applyTheorem` in step.ts, `replayProof` in theorem.ts) are function references only used at call time, which ESM handles. Both modules and both test files land in one commit.
 
-- [ ] **Step 1: Write the failing tests** (both files)
+- [x] **Step 1: Write the failing tests** (both files)
 
 `tests/kernel/proof/step.test.ts`:
 
@@ -423,12 +425,12 @@ describe('replayProof failure reporting', () => {
 
 (The second test file, `tests/kernel/proof/theorem.test.ts`, appears below after the implementation sources — write BOTH in this step.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/step.test.ts tests/kernel/proof/theorem.test.ts`
 Expected: FAIL — cannot resolve `proof/step` / `proof/theorem`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/proof/error.ts`:
 
@@ -642,9 +644,14 @@ describe('applyTheorem', () => {
       sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] },
       args: [v],
     }, 'forward')
-    expect(out.nodes[hq]).toBeUndefined()
-    // the splice brings a fresh P node; the hub keeps observing v
-    expect(out.wires[v]?.endpoints.some((ep) => ep.node !== hp && ep.port.kind === 'output')).toBe(true)
+    // NOTE: assert by SHAPE, not by id — splice may legitimately REUSE the
+    // removed nodes' ids (freshId only dodges ids still present). Expected:
+    // the hub plus exactly one spliced P node, both on v.
+    expect(Object.values(out.nodes)).toHaveLength(2)
+    const eps = out.wires[v]?.endpoints ?? []
+    expect(eps).toHaveLength(2)
+    expect(eps.filter((ep) => ep.port.kind === 'output')).toHaveLength(1)
+    expect(eps.filter((ep) => ep.port.kind === 'freeVar')).toHaveLength(1)
   })
 
   it('reverse at a negative region strengthens, and round-trips by fingerprint', () => {
@@ -717,14 +724,16 @@ describe('theorem steps inside proofs (derived rules used natively)', () => {
 
 (`replayProof` joins the top-of-file imports: `import { replayProof } from '../../../src/kernel/proof/step'`.)
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/error.ts src/kernel/proof/step.ts src/kernel/proof/theorem.ts tests/kernel/proof/step.test.ts tests/kernel/proof/theorem.test.ts
 git commit -m "feat(kernel): proof steps with gate-enforcing replay; theorems as derived rules"
 ```
+
+**Review outcome (commits `0042bf9`+`7694942`, fix `1c63bae`):** Deep review SOUND. Implementer caught a second plan-test bug (id-brittle assertion; splice may reuse removed ids — assert by shape). Dispatch audit 16/16 with correct argument order; conversion replays by certificate. Probes: six gate-bypass refusals through replayProof with step indices; blank ⟹ T citation via empty selection works both directions; theorem-in-theorem accepted, forged variant refused; boundary destruction via join is structurally unreachable (root-scoped boundary wires are positive-scope; join gates inner-negative) while the erasure route fires /was destroyed/. Mutant ii — UNPINNED fingerprint comparison in checkTheorem, a real argument-order forgery gap — survived and was killed by an arity-2 pin-swap test (`1c63bae`). Noted: hand-rolled Theorem records with phantom boundary wires crash with a TypeError rather than ProofError (loud, no false acceptance; structural-type seam). Suite: 348.
 
 The `src/kernel/proof/theorem.ts` source referenced in Step 3 above:
 
@@ -841,7 +850,7 @@ export function applyTheorem(
 - Create: `src/kernel/proof/compose.ts`
 - Test: `tests/kernel/proof/compose.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/proof/compose.test.ts`:
 
@@ -939,12 +948,12 @@ describe('composeProofs', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/compose.test.ts`
 Expected: FAIL — cannot resolve `proof/compose`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/proof/compose.ts`:
 
@@ -1062,14 +1071,16 @@ export function composeProofs(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/compose.ts tests/kernel/proof/compose.test.ts
 git commit -m "feat(kernel): meet-in-the-middle proof composition via canonical isomorphisms"
 ```
+
+**Review outcome (commit `59ef0f9`, fix `9f8f6cf`):** APPROVED; byte-identical to plan. mapStepIds exhaustiveness audited 16/16 field-by-field (attachment VALUES mapped, port-name keys/terms/embedded patterns deliberately not). Probes: insertion into a mid-tail fresh region maps through the re-derived iso; theorem steps map sel+args; automorphic meets compose; failure paths throw without partial output. Mutant iii (erasure unmapped) survived the symmetric battery — killed by an asymmetric-ids test (`9f8f6cf`). Divergence guard kept as defense-in-depth (reachable only under applier bugs, demonstrated by mutant ii). Suite: 353.
 
 ---
 
@@ -1080,7 +1091,7 @@ git commit -m "feat(kernel): meet-in-the-middle proof composition via canonical 
 - Create: `src/kernel/proof/json.ts`
 - Test: `tests/kernel/proof/json.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/proof/json.test.ts`:
 
@@ -1167,12 +1178,12 @@ describe('theorem round-trips through JSON', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/json.test.ts`
 Expected: FAIL — cannot resolve `proof/json`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/diagram/json.ts`, change `function parsePortKey` to `export function parsePortKey` (no other changes).
 
@@ -1432,14 +1443,16 @@ export function theoremFromJson(j: unknown): Theorem {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/json.ts src/kernel/proof/json.ts tests/kernel/proof/json.test.ts
 git commit -m "feat(kernel): proof and theorem JSON serialization with strict validation"
 ```
+
+**Review outcome (commit `42fb677`, fix `b1cc193`):** PASS; spec-verbatim. Fidelity probes: portKey-colliding port names inside terms have no crosstalk (serializeTerm is injective and JSON-escaped); non-canonical port keys (`a:1e1`, `a:01`, `a:-1`) rejected; wrong-typed fields refused by name; step order preserved; round-trip idempotent. Mutants ii (cert kind check dropped) and iv (dwb validation skipped) survived and were killed in `b1cc193`. assertOnlyKeys verified on every fromJson path. Suite: 358.
 
 ---
 
@@ -1449,7 +1462,7 @@ git commit -m "feat(kernel): proof and theorem JSON serialization with strict va
 - Create: `src/kernel/proof/store.ts`
 - Test: `tests/kernel/proof/store.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/proof/store.test.ts`:
 
@@ -1564,12 +1577,12 @@ describe('theory files', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/store.test.ts`
 Expected: FAIL — cannot resolve `proof/store`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/proof/store.ts`:
 
@@ -1676,14 +1689,16 @@ export function loadTheory(j: unknown): { theory: Theory; ctx: ProofContext } {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/store.ts tests/kernel/proof/store.test.ts
 git commit -m "feat(kernel): verified theory store with versioned JSON format"
 ```
+
+**Review outcome (commit `be23f9b`, fix `b1be7b7`):** APPROVED after one fix. Trust-boundary audit: verifyTheory is the only ProofContext constructor from external data; loadTheory is the canonical path. Probes: forward-citation, tampered-rhs, tampered-step (valid rule, wrong conclusion — replay-is-verification), port-bearing definitions, empty theory, envelope variants — all refused/handled by name. Fixes in `b1be7b7`: dwbFromJson now wraps mkDiagramWithBoundary errors with the caller label so relation names reach the message; and mutant ii — register-before-check, a REAL circular-justification hole (a theorem citing ITSELF in its own proof would verify) — killed by a permanent self-citation test. Suite: 365.
 
 ---
 
@@ -1693,7 +1708,7 @@ git commit -m "feat(kernel): verified theory store with versioned JSON format"
 - Create: `src/kernel/proof/index.ts`
 - Test: `tests/kernel/proof/endtoend.test.ts`
 
-- [ ] **Step 1: Write the battery** (must pass against Tasks 1–5; failures are bugs to fix test-first)
+- [x] **Step 1: Write the battery** (must pass against Tasks 1–5; failures are bugs to fix test-first)
 
 `tests/kernel/proof/endtoend.test.ts`:
 
@@ -1817,9 +1832,9 @@ describe('end to end: derived rule proved, stored, loaded, applied natively', ()
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Write the barrel** `src/kernel/proof/index.ts`:
+- [x] **Step 3: Write the barrel** `src/kernel/proof/index.ts`:
 
 ```ts
 export { ProofError } from './error'
@@ -1835,14 +1850,18 @@ export type { Theory } from './store'
 export { verifyTheory, theoryToJson, theoryFromJson, loadTheory } from './store'
 ```
 
-- [ ] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`; verify every export resolves.
+- [x] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`; verify every export resolves.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/index.ts tests/kernel/proof/endtoend.test.ts
 git commit -m "test(kernel): proof layer end-to-end battery; proof surface"
 ```
+
+**Review outcome (commit `a45a2d4`):** all four battery tests passed against the existing modules; barrel exports verified name-by-name. Suite: 369 at task close.
+
+**Final whole-branch review — BLOCKING forgery found and fixed (`bf9fd0c`):** boundary-wire id RESURRECTION. checkTheorem checked survival only at proof end by id presence, but freshId re-mints free ids: a proof could destroy the boundary wire (erasure with the wire as content) and a later splice (theorem citation) would mint the same id for a semantically unrelated wire — certifying the FALSE theorem K(a) ∧ ∃y.id(y) ⟹ id(a). Reproduced exactly, then fixed test-first (two regression tests observed fail→pass): (1) checkTheorem checks boundary presence after EVERY step via replayProof's new onStep invariant callback; (2) applyTheorem splices BEFORE removing, minting fresh ids against the full pre-removal id set — the only applier that both deletes wires and mints fresh wire ids, so per-step presence now fully closes the class. All other final-review probes passed: hand-built raw-JSON forgeries refused by name; compose-then-verify with corrupted-step refusal; depth-3 derived-rule chains; certificate corruption in files caught with step indices; pins live in boundaryFingerprint (isoBetween unpinned, as designed); no aliasing; vocabulary stratification clean; zero imports leave src/kernel. Suite: 371.
 
 ---
 

@@ -3,6 +3,13 @@ import { DiagramError } from '../diagram'
 import { freePorts } from '../../term/term'
 import { termShapeKey, positionalPortKey } from './shape'
 
+export type CanonicalLabeling = {
+  readonly form: string
+  readonly regionOrd: ReadonlyMap<RegionId, number>
+  readonly nodeOrd: ReadonlyMap<NodeId, number>
+  readonly wireOrd: ReadonlyMap<WireId, number>
+}
+
 /**
  * Exact canonical form by individualization-refinement.
  *
@@ -25,6 +32,15 @@ import { termShapeKey, positionalPortKey } from './shape'
  * colors in pin order, so boundary order is significant.
  */
 export function canonicalForm(d: Diagram, pinnedWires: readonly WireId[] = []): string {
+  return canonicalLabeling(d, pinnedWires).form
+}
+
+/**
+ * The canonical form together with the winning discrete coloring's ordinals.
+ * Corresponding objects of isomorphic diagrams receive equal ordinals — the
+ * basis for isomorphism extraction (iso.ts) and proof composition (proof/compose.ts).
+ */
+export function canonicalLabeling(d: Diagram, pinnedWires: readonly WireId[] = []): CanonicalLabeling {
   const seenPins = new Set<string>()
   for (const w of pinnedWires) {
     if (d.wires[w] === undefined) throw new DiagramError(`pinned wire '${w}' does not exist`)
@@ -32,8 +48,13 @@ export function canonicalForm(d: Diagram, pinnedWires: readonly WireId[] = []): 
     seenPins.add(w)
   }
   const idx = buildIndex(d, pinnedWires)
-  const colors = refine(idx, initialColors(idx))
-  return search(idx, colors)
+  const { form, colors } = search(idx, refine(idx, initialColors(idx)))
+  return {
+    form,
+    regionOrd: ordinalize(idx.regionIds, colors.region),
+    nodeOrd: ordinalize(idx.nodeIds, colors.node),
+    wireOrd: ordinalize(idx.wireIds, colors.wire),
+  }
 }
 
 type Index = {
@@ -291,13 +312,13 @@ function individualize(c: Colors, sort: 'region' | 'node' | 'wire', id: string):
   return clone
 }
 
-function search(idx: Index, c: Colors): string {
+function search(idx: Index, c: Colors): { form: string; colors: Colors } {
   const tied = firstTiedClass(c)
-  if (tied === null) return serializeWith(idx, c)
-  let best: string | null = null
+  if (tied === null) return { form: serializeWith(idx, c), colors: c }
+  let best: { form: string; colors: Colors } | null = null
   for (const member of tied.members) {
     const s = search(idx, refine(idx, individualize(c, tied.sort, member)))
-    if (best === null || s < best) best = s
+    if (best === null || s.form < best.form) best = s
   }
   return best!
 }
