@@ -62,6 +62,24 @@ describe('applyWireSever', () => {
     expect(out.wires[newWires[0]!]?.scope).toBe(host.root)
   })
 
+  it('creates the fresh wire at the original scope, not the root', () => {
+    const h = new DiagramBuilder()
+    const cut1 = h.cut(h.root)
+    const cut2 = h.cut(cut1)
+    const n1 = h.termNode(cut2, p('\\x. x'))
+    const n2 = h.termNode(cut2, p('\\x. \\y. x'))
+    const w = h.wire(cut2, [
+      { node: n1, port: { kind: 'output' } },
+      { node: n2, port: { kind: 'output' } },
+    ])
+    const host = h.build()
+    const out = applyWireSever(host, w, [{ node: n1, port: { kind: 'output' } }])
+    const newWires = Object.keys(out.wires).filter((id) => host.wires[id] === undefined)
+    expect(newWires).toHaveLength(1)
+    expect(out.wires[newWires[0]!]?.scope).toBe(cut2)
+    expect(out.wires[w]?.scope).toBe(cut2)
+  })
+
   it('rejects severing at negative scopes by name', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
