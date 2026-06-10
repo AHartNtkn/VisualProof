@@ -10,6 +10,7 @@ function regionOf(d: Diagram, id: RegionId) {
 /** True iff anc lies on the parent chain of desc (inclusive). */
 export function isAncestorOrEqual(d: Diagram, anc: RegionId, desc: RegionId): boolean {
   regionOf(d, anc)
+  regionOf(d, desc) // the loop would also catch it; explicit for symmetry and intent
   let cur = desc
   for (;;) {
     const r = regionOf(d, cur)
