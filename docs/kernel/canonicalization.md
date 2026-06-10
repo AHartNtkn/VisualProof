@@ -44,7 +44,7 @@ The function `rankSignatures` collects all these signature strings, sorts them l
 
 After initial coloring, `refine` iterates `refineOnce` until the number of color classes stops growing.
 
-`refineOnce` builds a new signature for each object that combines its current color with the colors of its neighbors, then calls `rankSignatures` to produce fresh integer colors.
+`refineOnce` builds a new signature for each object that combines its old color (the color from before this refinement round) with the colors of its neighbors, then calls `rankSignatures` to produce fresh integer colors.
 
 **Region signature:** `R|{cur}|p:{parentColor}|c:{sortedChildColors}|n:{sortedNodeColors}|w:{sortedWireColors}`. Parent color is `-` for the root sheet. Child, node, and wire color lists are sorted numerically before inclusion, so the signature is invariant under the order in which those lists were constructed.
 
@@ -52,7 +52,7 @@ After initial coloring, `refine` iterates `refineOnce` until the number of color
 
 **Wire signature:** `W|{cur}|s:{scopeColor}|e:{sortedEndpointStrings}`. Each endpoint string is `{nodeColor}.{portKey}`. The endpoint list is sorted lexicographically, making the signature invariant under the order in which endpoints were added to the wire.
 
-**Why refinement is split-only and terminates:** Every signature string is prefixed by the object's current color. If two objects had equal colors in round `k` they had identical signatures in round `k-1` and therefore the same current color going into this round; if the neighborhood colors now differ, their new signatures differ and they get different new colors — a split. If they had different colors in round `k` their signatures include different prefixes, so they get different new colors — the split is preserved. No two objects with distinct colors can merge. Formally: for any round, the partition induced by new colors is a refinement of the partition induced by current colors. The number of classes is therefore monotone non-decreasing and bounded above by the number of objects, so the loop terminates.
+**Why refinement is split-only and terminates:** Every signature string is prefixed by the object's old color. If two objects had equal colors in round `k` they had identical signatures in round `k-1` and therefore the same old color going into this round; if the neighborhood colors now differ, their new signatures differ and they get different new colors — a split. If they had different colors in round `k` their signatures include different prefixes, so they get different new colors — the split is preserved. No two objects with distinct colors can merge. Formally: for any round, the partition induced by new colors is a refinement of the partition induced by old colors. The number of classes is therefore monotone non-decreasing and bounded above by the number of objects, so the loop terminates.
 
 ---
 
@@ -85,7 +85,7 @@ The serialized lines are:
 - One line per node: `n{ord}:{contentKey}:r=r{regionOrd}` optionally followed by `:b=r{binderOrd}` for atom nodes.
 - One line per wire: `w{ord}:{pinPrefix}s=r{scopeOrd}:e={sortedEndpointStrings}` where pin prefix is `pin{i}:` for boundary-pinned wires and empty otherwise, and endpoint strings are `n{nodeOrd}.{portKey}` sorted lexicographically.
 
-All four uses of `regionOrd.get(...)` for parent, scope, region, and binder are guarded with explicit error throws (`DiagramError`) rather than `!` non-null assertions, because those are the internal consistency properties we want to verify loudly rather than silently corrupt.
+All five uses of `regionOrd.get(...)` — a region's own ordinal, a region's parent, a node's region, an atom's binder, and a wire's scope — are guarded with explicit error throws (`DiagramError`) rather than `!` non-null assertions, because those are the internal consistency properties we want to verify loudly rather than silently corrupt.
 
 ---
 
@@ -93,7 +93,7 @@ All four uses of `regionOrd.get(...)` for parent, scope, region, and binder are 
 
 `canonicalForm` accepts an optional `pinnedWires: readonly WireId[]`. Before calling `buildIndex`, it validates that every wire id in the list exists in the diagram and that there are no duplicates.
 
-`buildIndex` calls `pinned.forEach((w, i) => pinOf.set(w, i))` — each pinned wire records its index in `pinOf`. `initialColors` then uses `pinOf` to assign each pinned wire the distinct signature `"W|pin{i}"` instead of the generic `"W|w"`. Since `pin0`, `pin1`, … are lexicographically ordered, boundary wires with earlier positions receive lower-ranked initial colors.
+`buildIndex` calls `pinned.forEach((w, i) => pinOf.set(w, i))` — each pinned wire records its index in `pinOf`. `initialColors` then uses `pinOf` to assign each pinned wire the distinct signature `"W|pin{i}"` instead of the generic `"W|w"`. Boundary wires at distinct positions receive distinct initial colors, so boundary order is significant; the rank order among pins is lexicographic in the signature string (e.g. `"W|pin10"` ranks below `"W|pin2"`), which is irrelevant — only distinctness matters.
 
 This ensures boundary order is significant: two diagrams with the same wiring but different boundary orderings get different canonical forms. With an empty boundary the canonical form equals `diagramFingerprint`, intentionally — a 0-ary relation is a sentence.
 
