@@ -298,6 +298,8 @@ git add src/kernel/diagram/canonical/canonical.ts src/kernel/diagram/canonical/i
 git commit -m "feat(kernel): canonical labeling ordinals and isomorphism extraction"
 ```
 
+**Review outcome (commit `3ccc0b9`, fix `bffbdff`):** APPROVED; diff-pure refactor (refinement/serialization untouched), zero fingerprint regressions. Discreteness verified: leaf colorings are per-sort injective (cross-sort numeric collisions are harmless since ordinalize is per-sort). Full structural transport verified on automorphic copies. Mutant iii (initial-color ordinals) survived and was killed in `bffbdff`. Mutant iv (lex-max branch choice) is EQUIVALENT: any deterministic selection over the fully-explored tie orbit is isomorphism-invariant, and fingerprints are computed fresh, never persisted — accepted. Note: pin-order swaps on automorphic attachment points correctly fingerprint EQUAL (an order-respecting iso exists via the node swap); pins distinguish structurally distinct attachments only. Suite: 331.
+
 ---
 
 ### Task 2: Proof steps + theorems (one task — the modules are mutually recursive)
