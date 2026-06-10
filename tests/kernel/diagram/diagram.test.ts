@@ -31,6 +31,12 @@ describe('requiredPorts', () => {
     const node: DiagramNode = { kind: 'atom', region: 'r1', binder: 'r1' }
     expect(requiredPorts({ regions }, node).map(portKey)).toEqual(['a:0', 'a:1'])
   })
+
+  it('throws when an atom binder is not a bubble (public API error surface)', () => {
+    const regions: Record<string, Region> = { r0: { kind: 'sheet' } }
+    const node: DiagramNode = { kind: 'atom', region: 'r0', binder: 'r0' }
+    expect(() => requiredPorts({ regions }, node)).toThrowError(/atom binder 'r0' is not a bubble/)
+  })
 })
 
 describe('mkDiagram (happy path)', () => {

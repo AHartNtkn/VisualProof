@@ -27,7 +27,7 @@ describe('mkDiagram rejections', () => {
     })).toThrowError(/second sheet/)
   })
 
-  it('rejects negative and fractional bubble arity', () => {
+  it('rejects negative, fractional, and unsafely large bubble arity', () => {
     expect(() => mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: -1 } },
@@ -35,6 +35,10 @@ describe('mkDiagram rejections', () => {
     expect(() => mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: 1.5 } },
+    })).toThrowError(/arity must be a non-negative safe integer/)
+    expect(() => mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: 2 ** 53 } },
     })).toThrowError(/arity must be a non-negative safe integer/)
   })
 
