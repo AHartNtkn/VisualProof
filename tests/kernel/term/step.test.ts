@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { bvar, port, lam, app, termEq } from '../../../src/kernel/term/term'
-import { stepNormalOrder, applyStepAt } from '../../../src/kernel/term/reduce'
+import { stepNormalOrder, applyStepAt, hasFreeBVar } from '../../../src/kernel/term/reduce'
 import { parseTerm } from '../../../src/kernel/term/parse'
 
 const noConsts = new Set<string>()
@@ -35,6 +35,14 @@ describe('stepNormalOrder', () => {
     expect(r!.path).toEqual(['fn'])
     expect(termEq(r!.term, p('f ((\\y. y) a)'))).toBe(true)
   })
+
+  it('steps omega to itself at the root', () => {
+    const omega = p('(\\x. x x) (\\x. x x)')
+    const r = stepNormalOrder(omega)
+    expect(r).not.toBeNull()
+    expect(r!.path).toEqual([])
+    expect(termEq(r!.term, omega)).toBe(true)
+  })
 })
 
 describe('applyStepAt', () => {
@@ -56,9 +64,23 @@ describe('applyStepAt', () => {
     expect(termEq(applyStepAt(t, { kind: 'eta', path: [] }), port('f'))).toBe(true)
   })
 
+  it('applies an eta step under a non-empty path', () => {
+    const t = lam(lam(app(port('f'), bvar(0))))
+    expect(termEq(applyStepAt(t, { kind: 'eta', path: ['body'] }), lam(port('f')))).toBe(true)
+  })
+
   it('rejects eta when the binder occurs in the function part', () => {
     // \x. x x is not an eta redex
     const t = lam(app(bvar(0), bvar(0)))
     expect(() => applyStepAt(t, { kind: 'eta', path: [] })).toThrowError(/no eta redex/i)
+  })
+})
+
+describe('hasFreeBVar', () => {
+  it('tracks indices through binders', () => {
+    expect(hasFreeBVar(0, lam(bvar(1)))).toBe(true)
+    expect(hasFreeBVar(0, lam(bvar(0)))).toBe(false)
+    expect(hasFreeBVar(0, lam(lam(bvar(2))))).toBe(true)
+    expect(hasFreeBVar(0, app(bvar(0), port('y')))).toBe(true)
   })
 })

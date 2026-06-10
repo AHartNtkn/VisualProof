@@ -88,6 +88,9 @@ export function applyStepAt(t: Term, step: ReductionStep): Term {
   if (step.path.length === 0) {
     if (step.kind === 'beta') {
       if (t.kind === 'app' && t.fn.kind === 'lam') return betaReduce(t.fn.body, t.arg)
+      if (t.kind === 'app') {
+        throw new Error(`no beta redex at path []: app fn is '${t.fn.kind}', not 'lam'`)
+      }
       throw new Error(`no beta redex at path []: term head is '${t.kind}'`)
     }
     // eta: \x. f x with x not free in f  →  shift(-1, 0, f)
