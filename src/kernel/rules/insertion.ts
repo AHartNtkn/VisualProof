@@ -1,5 +1,5 @@
 import type { Diagram, RegionId, Wire, WireId } from '../diagram/diagram'
-import { mkDiagram } from '../diagram/diagram'
+import { DiagramError, mkDiagram } from '../diagram/diagram'
 import { isAncestorOrEqual, polarity } from '../diagram/regions'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { spliceSubgraph } from '../diagram/subgraph/splice'
@@ -15,7 +15,6 @@ export function applyInsertion(
   pattern: DiagramWithBoundary,
   attachments: readonly WireId[],
 ): Diagram {
-  if (d.regions[atRegion] === undefined) throw new RuleError(`unknown region '${atRegion}'`)
   if (polarity(d, atRegion) !== 'negative') {
     throw new RuleError(`insertion requires a negative region; '${atRegion}' is positive`)
   }
@@ -29,11 +28,11 @@ export function applyInsertion(
  * wire keeps the outer scope (and the outer wire's id).
  */
 export function applyWireJoin(d: Diagram, a: WireId, b: WireId): Diagram {
-  if (a === b) throw new RuleError(`cannot join a wire with itself ('${a}')`)
   const wa = d.wires[a]
   const wb = d.wires[b]
-  if (wa === undefined) throw new RuleError(`unknown wire '${a}'`)
-  if (wb === undefined) throw new RuleError(`unknown wire '${b}'`)
+  if (wa === undefined) throw new DiagramError(`unknown wire '${a}'`)
+  if (wb === undefined) throw new DiagramError(`unknown wire '${b}'`)
+  if (a === b) throw new RuleError(`cannot join a wire with itself ('${a}')`)
   let outerId: WireId
   let innerId: WireId
   if (isAncestorOrEqual(d, wa.scope, wb.scope)) {

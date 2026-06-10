@@ -1,5 +1,5 @@
 import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../diagram/diagram'
-import { mkDiagram } from '../diagram/diagram'
+import { DiagramError, mkDiagram } from '../diagram/diagram'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { freshId } from '../diagram/subgraph/freshId'
@@ -49,7 +49,7 @@ export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection): Diagram
  */
 export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
   const outer = d.regions[outerId]
-  if (outer === undefined) throw new RuleError(`unknown region '${outerId}'`)
+  if (outer === undefined) throw new DiagramError(`unknown region '${outerId}'`)
   if (outer.kind !== 'cut') {
     throw new RuleError(`double-cut elimination requires a cut; '${outerId}' is a ${outer.kind === 'sheet' ? 'sheet' : 'bubble'}`)
   }

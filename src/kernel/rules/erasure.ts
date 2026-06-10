@@ -1,5 +1,5 @@
 import type { Diagram, Endpoint, Wire, WireId } from '../diagram/diagram'
-import { mkDiagram, portKey } from '../diagram/diagram'
+import { DiagramError, mkDiagram, portKey } from '../diagram/diagram'
 import { polarity } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { removeSubgraph } from '../diagram/subgraph/splice'
@@ -8,7 +8,6 @@ import { RuleError } from './error'
 
 /** Rule 2a (spec §3.1): delete any subgraph from a POSITIVE region. */
 export function applyErasure(d: Diagram, sel: SubgraphSelection): Diagram {
-  if (d.regions[sel.region] === undefined) throw new RuleError(`unknown region '${sel.region}'`)
   if (polarity(d, sel.region) !== 'positive') {
     throw new RuleError(`erasure requires a positive region; '${sel.region}' is negative`)
   }
@@ -23,7 +22,7 @@ export function applyErasure(d: Diagram, sel: SubgraphSelection): Diagram {
  */
 export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoint[]): Diagram {
   const w = d.wires[wireId]
-  if (w === undefined) throw new RuleError(`unknown wire '${wireId}'`)
+  if (w === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
   if (polarity(d, w.scope) !== 'positive') {
     throw new RuleError(`severing a wire requires a positive scope; '${w.scope}' is negative`)
   }

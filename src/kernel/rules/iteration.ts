@@ -14,7 +14,6 @@ import { RuleError } from './error'
  */
 export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion: RegionId): Diagram {
   const c = selectionContents(d, sel) // validates the selection loudly
-  if (d.regions[targetRegion] === undefined) throw new RuleError(`unknown region '${targetRegion}'`)
   if (!isAncestorOrEqual(d, sel.region, targetRegion)) {
     throw new RuleError(`iteration target '${targetRegion}' must lie within the source region '${sel.region}'`)
   }
