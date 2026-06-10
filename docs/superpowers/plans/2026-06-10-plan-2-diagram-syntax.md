@@ -291,7 +291,7 @@ export function mkDiagram(parts: {
       if (!req.some((q) => portKey(q) === key)) {
         fail(`wire '${wid}' endpoint references non-existent port '${key}' of node '${ep.node}'`)
       }
-      const akey = `${ep.node} ${key}`
+      const akey = `${ep.node} ${key}`
       const prev = attached.get(akey)
       if (prev !== undefined) {
         fail(`port '${key}' of node '${ep.node}' is attached to two wires ('${prev}' and '${wid}')`)
@@ -305,7 +305,7 @@ export function mkDiagram(parts: {
 
   for (const [id, n] of Object.entries(nodes)) {
     for (const q of requiredPorts({ regions }, n)) {
-      if (!attached.has(`${id} ${portKey(q)}`)) {
+      if (!attached.has(`${id} ${portKey(q)}`)) {
         fail(`port '${portKey(q)}' of node '${id}' is not attached to any wire`)
       }
     }
@@ -768,13 +768,13 @@ export class DiagramBuilder {
   build(): Diagram {
     const attached = new Set<string>()
     for (const w of Object.values(this.wires)) {
-      for (const ep of w.endpoints) attached.add(`${ep.node} ${portKey(ep.port)}`)
+      for (const ep of w.endpoints) attached.add(`${ep.node} ${portKey(ep.port)}`)
     }
     const autoWires: Record<WireId, Wire> = {}
     let auto = this.wireCount
     for (const [id, n] of Object.entries(this.nodes)) {
       for (const q of requiredPorts({ regions: this.regions }, n)) {
-        if (!attached.has(`${id} ${portKey(q)}`)) {
+        if (!attached.has(`${id} ${portKey(q)}`)) {
           autoWires[`w${auto++}`] = { scope: n.region, endpoints: [{ node: id, port: q }] }
         }
       }
