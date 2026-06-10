@@ -34,7 +34,7 @@
 - Create: `src/kernel/diagram/subgraph/occurrence.ts`
 - Test: `tests/kernel/diagram/occurrence.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/occurrence.test.ts`:
 
@@ -133,12 +133,12 @@ describe('occurrenceToSelection', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/occurrence.test.ts`
 Expected: FAIL — cannot resolve `subgraph/occurrence`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/error.ts`:
 
@@ -205,9 +205,9 @@ export function occurrenceToSelection(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/error.ts src/kernel/diagram/subgraph/occurrence.ts tests/kernel/diagram/occurrence.test.ts
@@ -222,7 +222,7 @@ git commit -m "feat(kernel): occurrenceToSelection (boundary-excluding) and Rule
 - Create: `src/kernel/rules/insertion.ts`
 - Test: `tests/kernel/rules/insertion.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/insertion.test.ts`:
 
@@ -268,6 +268,18 @@ describe('applyInsertion', () => {
     const host = h.build()
     expect(() => applyInsertion(host, 'ghost', closedPattern(), []))
       .toThrowError(/unknown region 'ghost'/)
+  })
+
+  it('bubbles do not affect the polarity gate', () => {
+    const h = new DiagramBuilder()
+    const bub = h.bubble(h.root, 0)          // still positive
+    const cut = h.cut(bub)                   // depth 1: negative
+    const bubInCut = h.bubble(cut, 0)        // still negative
+    const host = h.build()
+    expect(() => applyInsertion(host, bub, closedPattern(), []))
+      .toThrowError(/insertion requires a negative region/)
+    expect(() => applyInsertion(host, cut, closedPattern(), [])).not.toThrow()
+    expect(() => applyInsertion(host, bubInCut, closedPattern(), [])).not.toThrow()
   })
 })
 
@@ -317,6 +329,19 @@ describe('applyWireJoin', () => {
       .toThrowError(/joining wires requires the inner wire's scope to be negative; 'r0' is positive/)
   })
 
+  it('rejects when the inner scope is positive even though the outer is negative', () => {
+    const h = new DiagramBuilder()
+    const cut1 = h.cut(h.root)        // depth 1: negative
+    const cut2 = h.cut(cut1)          // depth 2: positive
+    const n1 = h.termNode(cut1, p('\\x. x'))
+    const n2 = h.termNode(cut2, p('\\x. \\y. x'))
+    const w1 = h.wire(cut1, [{ node: n1, port: { kind: 'output' } }])
+    const w2 = h.wire(cut2, [{ node: n2, port: { kind: 'output' } }])
+    const host = h.build()
+    expect(() => applyWireJoin(host, w1, w2))
+      .toThrowError(new RegExp(`inner wire's scope to be negative; '${cut2}' is positive`))
+  })
+
   it('rejects incomparable scopes and identical wires, by name', () => {
     const h = new DiagramBuilder()
     const cutA = h.cut(h.root)
@@ -334,12 +359,12 @@ describe('applyWireJoin', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/insertion.test.ts`
 Expected: FAIL — cannot resolve `rules/insertion`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/insertion.ts`:
 
@@ -398,6 +423,9 @@ export function applyWireJoin(d: Diagram, a: WireId, b: WireId): Diagram {
     throw new RuleError(`joining wires requires the inner wire's scope to be negative; '${inner.scope}' is positive`)
   }
   const outer = d.wires[outerId]!
+  // The merged wire keeps the OUTER scope: the inner endpoints' regions are
+  // enclosed by the inner scope, which the outer scope encloses transitively,
+  // so mkDiagram's scope check holds automatically.
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
     if (id === innerId) continue
@@ -409,9 +437,9 @@ export function applyWireJoin(d: Diagram, a: WireId, b: WireId): Diagram {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/insertion.ts tests/kernel/rules/insertion.test.ts
@@ -426,7 +454,7 @@ git commit -m "feat(kernel): insertion and wire join with negative-polarity gate
 - Create: `src/kernel/rules/erasure.ts`
 - Test: `tests/kernel/rules/erasure.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/erasure.test.ts`:
 
@@ -516,12 +544,12 @@ describe('applyWireSever', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/erasure.test.ts`
 Expected: FAIL — cannot resolve `rules/erasure`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/erasure.ts`:
 
@@ -572,14 +600,19 @@ export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoi
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/erasure.ts tests/kernel/rules/erasure.test.ts
 git commit -m "feat(kernel): erasure and wire sever with positive-polarity gates"
 ```
+
+**Review outcomes (commit `5c5aece`, fix `963178f`):**
+- Combined review APPROVED; zero spec deviations. Probes confirmed: polarity gate correct at depths 1/2/3; duplicate endpoints impossible (mkDiagram rejects them, so `has()` is exact); freshId collision path returns `${wireId}_sever_0`; endpoints in descendant regions of the wire scope sever correctly.
+- Mutation gap found and closed: the root-scoped split test could not distinguish `scope: w.scope` from `scope: d.root` on the fresh wire. Added `'creates the fresh wire at the original scope, not the root'` (wire scoped at a depth-2 region); mutant kill observed (`expected 'r0' to be 'r2'`). Suite: 230.
+- Accepted behavior, by design: `keep=[]` / `keep=all` produce a zero-endpoint wire. An empty wire is an isolated line of identity, ∃y.⊤ — sound over the nonempty λ-term domain. Sever is an endpoint partition and empty parts are legal partitions; rejecting them would be an unprincipled special case.
 
 ---
 
@@ -589,7 +622,7 @@ git commit -m "feat(kernel): erasure and wire sever with positive-polarity gates
 - Create: `src/kernel/rules/iteration.ts`
 - Test: `tests/kernel/rules/iteration.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/iteration.test.ts`:
 
@@ -724,12 +757,12 @@ describe('applyDeiteration', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/iteration.test.ts`
 Expected: FAIL — cannot resolve `rules/iteration`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/iteration.ts`:
 
@@ -797,14 +830,21 @@ export function applyDeiteration(d: Diagram, sel: SubgraphSelection, fuel: numbe
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/iteration.ts tests/kernel/rules/iteration.test.ts
 git commit -m "feat(kernel): iteration and justified deiteration with undecided honesty"
 ```
+
+**Review outcomes (commit `37c51aa`, fix `46e4445`):**
+- Deep review APPROVED. Attachment index alignment proven mechanical: `extract.ts:71-81` pushes `boundary[i]`/`attachments[i]` in lockstep over sorted touching wires, and `match.ts:317-331` builds `Occurrence.attachments` by iterating the SAME `pattern.boundary` array — divergence impossible. The copy-as-occurrence always satisfies `sameAttachments`; disjointness alone excludes it, as designed.
+- Probes confirmed: strict-descendant justification refused; swapped multi-boundary attachments refused, unswapped accepted; partial-overlap (3 sharing nodes) accepted with non-copy justification; deiteration polarity-free (succeeds inside a cut where erasure refuses); separate-wires-in-negative-region refused (blocks `¬(P∧P) → ¬P` forgery); nested iteration targets covered transitively by `selectionContents` closure.
+- Mutation gap closed: descendant-justification acceptance (ancestor check dropped) was killed only by a probe; added `'rejects justification from a strict descendant'` test with observed mutant kill. Suite: 239.
+- Equivalent mutant accepted: the boundary-wire `continue` in `disjoint` is unobservable because `sameAttachments` short-circuits first and touching ∩ internal = ∅ by the selection partition — correct-by-intent, kept for robustness against future predicate reordering.
+- **Carried obligation (matcher completeness wart)**: with two bare wires in one region, the matcher's canonical first-k bare pairing (`match.ts:298-314`) makes deiteration of the first-sorted wire refuse while the second succeeds — order-dependent refusal, never unsound. Fix belongs with the symmetry-quotient work if Plan 7+ hits it.
 
 ---
 
@@ -814,7 +854,7 @@ git commit -m "feat(kernel): iteration and justified deiteration with undecided 
 - Create: `src/kernel/rules/doublecut.ts`
 - Test: `tests/kernel/rules/doublecut.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/doublecut.test.ts`:
 
@@ -903,12 +943,12 @@ describe('double cut', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/doublecut.test.ts`
 Expected: FAIL — cannot resolve `rules/doublecut`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/doublecut.ts`:
 
@@ -1005,14 +1045,19 @@ export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/doublecut.ts tests/kernel/rules/doublecut.test.ts
 git commit -m "feat(kernel): double cut introduction and elimination"
 ```
+
+**Review outcomes (commit `061cd9c`, fix `ef414b1`):**
+- Combined review APPROVED; zero spec deviations. Probes confirmed: intro at non-root regions parents the outer cut correctly; explicitly selected wires keep their scope and round-trip by fingerprint; nested elim promotes to the enclosing cut; bubble arity preserved through promotion; pass-through wires untouched; repeated intro produces collision-free `dc`-prefixed ids.
+- Root-bias mutation sweep found FOUR surviving mutants — intro outer-parent → root, elim target → root, `nodesInOuter` dropped (reachable only via arity-0 atoms, since termNodes always carry an auto-wire), and lone-bubble child accepted. All four killed by tests added in `ef414b1` (observed fail-under-mutant → pass-on-revert for each). Suite: 247.
+- M4 (`wiresInOuter` dropped) is killed only indirectly: the promoted diagram then fails mkDiagram with a DiagramError whose message misses the test regex — acceptable, the gate refusal stays loud either way.
 
 ---
 
@@ -1022,7 +1067,7 @@ git commit -m "feat(kernel): double cut introduction and elimination"
 - Test: `tests/kernel/rules/polarity-matrix.test.ts`
 - Create: `src/kernel/rules/index.ts`
 
-- [ ] **Step 1: Write the matrix tests** (must pass against Tasks 2–5; failures are rule bugs to fix test-first)
+- [x] **Step 1: Write the matrix tests** (must pass against Tasks 2–5; failures are rule bugs to fix test-first)
 
 `tests/kernel/rules/polarity-matrix.test.ts`:
 
@@ -1118,9 +1163,9 @@ describe('inverse round-trips (fingerprint identities)', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Write the barrel** `src/kernel/rules/index.ts`:
+- [x] **Step 3: Write the barrel** `src/kernel/rules/index.ts`:
 
 ```ts
 export { RuleError } from './error'
@@ -1136,14 +1181,16 @@ Also append to `src/kernel/diagram/index.ts`:
 export { occurrenceToSelection } from './subgraph/occurrence'
 ```
 
-- [ ] **Step 4: Full gate** — `npm test && npm run typecheck`; verify every export exists.
+- [x] **Step 4: Full gate** — `npm test && npm run typecheck`; verify every export exists.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/kernel/rules/polarity-matrix.test.ts src/kernel/rules/index.ts src/kernel/diagram/index.ts
 git commit -m "test(kernel): polarity matrix and inverse round-trips; structural-rules surface"
 ```
+
+**Review outcome (commit `b5bff74`):** all 10 matrix tests passed against the existing rule implementations without modification — no rule bugs surfaced. Barrel exports verified name-by-name; `occurrenceToSelection` exported adjacent to the other subgraph exports. Suite: 257/257 across 33 files, typecheck clean.
 
 ---
 
@@ -1152,6 +1199,14 @@ git commit -m "test(kernel): polarity matrix and inverse round-trips; structural
 - `npm test` green, `npm run typecheck` clean.
 - Demonstrated in tests: insertion gated negative and erasure gated positive across depths 0–3, both rejecting by name; wire join gated on the inner scope being negative with the merged wire keeping the outer scope, incomparable scopes rejected; wire sever gated positive with endpoint validation; iteration into same/descendant regions sharing attachments, with both invalid-target rejections; deiteration requiring a disjoint ancestor-positioned attachment-identical justification, with self-justification blocked and undecided counts surfacing in failures; double-cut intro/elim with pass-through wires, fingerprint round-trips at multiple depths, and all annulus violations rejected by name; occurrenceToSelection excluding boundary wires with the trap pinned (attachment trimmed, not deleted).
 - Plan 7 (equational + comprehension rules) is written against these real exports.
+
+## Final whole-branch review (commits `2cd582e` and earlier)
+
+READY TO MERGE; no soundness defects. Cross-rule probes all passed: polarity arithmetic composes across insertion→double-cut→erasure chains (polarity is a pure parent-chain walk, never cached); iteration round-trips across bubble boundaries with bubbles never counted in parity; join/sever gates evaluate against the current diagram with stale references refused loudly; occurrenceToSelection trims attachment wires (never deletes — verified with an attachment whose only endpoint lay inside the occurrence); all eight entry points leave their input diagram byte-identical (deep-snapshot verified); blank-sheet forgery probes (annulus pollution, descendant justification, negative erasure) all refused — no path puts a bare node on the root sheet. Kernel surface complete and minimal; zero imports leave `src/kernel`.
+
+Should-fix applied test-first (`2cd582e`, 7 vocabulary tests fail→pass observed): unknown ids now throw DiagramError everywhere; RuleError fires iff a rule evaluated its gate against a real referent and refused. Redundant unknown-id pre-checks in applyInsertion/applyErasure/applyIteration deleted (polarity/isAncestorOrEqual already throw the identical DiagramError); applyWireJoin checks existence before the self-join gate. Suite: 264.
+
+Reviewer also verified the Plan-5 matcher endpoint-key strings (`` `${node} ${posKey}` ``) are injective — positional port keys are space-free, so the key parses uniquely from the last space even with spaces in node ids. No action needed.
 
 ## Carried obligations (forward)
 
