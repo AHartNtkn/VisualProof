@@ -133,36 +133,56 @@ export function mkDiagram(parts: {
     }
   }
 
-  const attached = new Map<string, WireId>()
+  // Precomputed once per node; reused by both the wires loop and the
+  // partition check below.
+  const portsByNode = new Map<NodeId, Port[]>()
+  for (const [id, n] of Object.entries(nodes)) {
+    portsByNode.set(id, requiredPorts({ regions }, n))
+  }
+
+  // Nested map (node -> portKey -> wire) rather than a composite string key:
+  // node ids and port names are unconstrained strings, so any flat
+  // serialization has an aliasing seam.
+  const attached = new Map<NodeId, Map<string, WireId>>()
   for (const [wid, w] of Object.entries(wires)) {
     if (regions[w.scope] === undefined) fail(`wire '${wid}' has missing scope region '${w.scope}'`)
     for (const ep of w.endpoints) {
       const n = nodes[ep.node] ?? fail(`wire '${wid}' endpoint references missing node '${ep.node}'`)
       const key = portKey(ep.port)
-      const req = requiredPorts({ regions }, n)
+      const req = portsByNode.get(ep.node)!
       if (!req.some((q) => portKey(q) === key)) {
         fail(`wire '${wid}' endpoint references non-existent port '${key}' of node '${ep.node}'`)
       }
-      const akey = `${ep.node} ${key}`
-      const prev = attached.get(akey)
-      if (prev !== undefined) {
-        fail(`port '${key}' of node '${ep.node}' is attached to two wires ('${prev}' and '${wid}')`)
+      let byPort = attached.get(ep.node)
+      if (byPort === undefined) {
+        byPort = new Map()
+        attached.set(ep.node, byPort)
       }
-      attached.set(akey, wid)
+      const prev = byPort.get(key)
+      if (prev !== undefined) {
+        fail(prev === wid
+          ? `port '${key}' of node '${ep.node}' appears more than once in wire '${wid}'`
+          : `port '${key}' of node '${ep.node}' is attached to two wires ('${prev}' and '${wid}')`)
+      }
+      byPort.set(key, wid)
       if (!ancestorOrEqualRaw(regions, w.scope, n.region)) {
         fail(`wire '${wid}' scope '${w.scope}' does not enclose node '${ep.node}' (region '${n.region}')`)
       }
     }
   }
 
-  for (const [id, n] of Object.entries(nodes)) {
-    for (const q of requiredPorts({ regions }, n)) {
-      if (!attached.has(`${id} ${portKey(q)}`)) {
+  for (const id of Object.keys(nodes)) {
+    // portsByNode was built from the same node entries; the get cannot miss.
+    for (const q of portsByNode.get(id)!) {
+      if (attached.get(id)?.get(portKey(q)) === undefined) {
         fail(`port '${portKey(q)}' of node '${id}' is not attached to any wire`)
       }
     }
   }
 
+  // Freeze is shallow: the four records are frozen, inner objects are not.
+  // Compile-time readonly types are the mutation guard for typed code; rule
+  // implementations (Plan 4) must construct new diagrams, never mutate.
   return Object.freeze({
     root: rootId,
     regions: Object.freeze({ ...regions }),

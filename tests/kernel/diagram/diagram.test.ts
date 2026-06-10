@@ -70,6 +70,22 @@ describe('mkDiagram (happy path)', () => {
     expect(d.wires['w0']?.endpoints).toHaveLength(0)
   })
 
+  it('does not alias ports across node-id/port-name boundaries (separator safety)', () => {
+    // node id "n0 v:x" with output, plus node "n0" with free var "x out":
+    // a naive string key `${node} ${port}` collides; both must coexist.
+    const regions: Record<string, Region> = { r0: { kind: 'sheet' } }
+    const nodes: Record<string, DiagramNode> = {
+      'n0': { kind: 'term', region: 'r0', term: { kind: 'port' as const, name: 'x out' } },
+      'n0 v:x': { kind: 'term', region: 'r0', term: p('\\x. x') },
+    }
+    const wires: Record<string, Wire> = {
+      w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+      w1: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'x out' } }] },
+      w2: { scope: 'r0', endpoints: [{ node: 'n0 v:x', port: { kind: 'output' } }] },
+    }
+    expect(() => mkDiagram({ root: 'r0', regions, nodes, wires })).not.toThrow()
+  })
+
   it('accepts a wire scoped above its endpoints (line of identity reaching into a cut)', () => {
     const regions: Record<string, Region> = {
       r0: { kind: 'sheet' },
