@@ -24,6 +24,22 @@ describe('parseTerm', () => {
     expect(termEq(parseTerm('\\x. f x x', consts), lam(app(app(port('f'), bvar(0)), bvar(0))))).toBe(true)
   })
 
+  it('treats a lambda in argument position as the final argument extending to the end', () => {
+    expect(termEq(parseTerm('f \\x. x', consts), app(port('f'), lam(bvar(0))))).toBe(true)
+    expect(termEq(parseTerm('f g \\x. x', consts), app(app(port('f'), port('g')), lam(bvar(0))))).toBe(true)
+    expect(termEq(parseTerm('\\x. f \\y. y', consts), lam(app(port('f'), lam(bvar(0)))))).toBe(true)
+  })
+
+  it('rejects duplicate binder names within one binder group', () => {
+    expect(() => parseTerm('\\x x. x', consts)).toThrowError(/duplicate binder name 'x'/i)
+    // shadowing across nested lambdas remains legal (covered elsewhere): \x. \x. x
+  })
+
+  it('rejects unexpected characters with positions', () => {
+    expect(() => parseTerm('f α g', consts)).toThrowError(ParseError)
+    expect(() => parseTerm('f 0 g', consts)).toThrowError(/unexpected character '0'/i)
+  })
+
   it('resolves names: bound > const > port; inner binders shadow outer', () => {
     expect(termEq(parseTerm('plus one y', consts), app(app(cnst('plus'), cnst('one')), port('y')))).toBe(true)
     // bound name shadows a constant
@@ -35,6 +51,8 @@ describe('parseTerm', () => {
   it('round-trips with the printer', () => {
     const src = '\\x0. \\x1. x0 (x0 x1)'
     expect(printTerm(parseTerm(src, consts))).toBe(src)
+    const withNames = 'plus m (\\x0. x0)'
+    expect(printTerm(parseTerm(withNames, consts))).toBe(withNames)
   })
 
   it('rejects empty input, unbalanced parens, and stray dots with positions', () => {

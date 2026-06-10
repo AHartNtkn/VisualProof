@@ -63,8 +63,13 @@ export function parseTerm(src: string, constIds: ReadonlySet<string>): Term {
     if (t !== undefined && t.kind === 'lambda') {
       i++
       const names: string[] = []
-      while (peek()?.kind === 'ident') {
-        names.push((tokens[i]! as Token & { kind: 'ident' }).name)
+      for (;;) {
+        const tok = peek()
+        if (tok === undefined || tok.kind !== 'ident') break
+        if (names.includes(tok.name)) {
+          throw new ParseError(`duplicate binder name '${tok.name}' in binder group`, tok.pos)
+        }
+        names.push(tok.name)
         i++
       }
       if (names.length === 0) {
@@ -88,7 +93,8 @@ export function parseTerm(src: string, constIds: ReadonlySet<string>): Term {
       const nxt = peek()
       if (nxt === undefined || nxt.kind === 'dot' || nxt.kind === 'rparen') break
       if (nxt.kind === 'lambda') {
-        // `f \x. e` — lambda extends to the end: treat as final argument
+        // '\' in argument position: standard λ-calculus convention (as in Haskell/ML) —
+        // the lambda is the final argument and its body extends to the end of the expression.
         t = app(t, parseTermAt(env))
         break
       }
