@@ -34,7 +34,7 @@
 - Create: `src/kernel/diagram/subgraph/occurrence.ts`
 - Test: `tests/kernel/diagram/occurrence.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/occurrence.test.ts`:
 
@@ -133,12 +133,12 @@ describe('occurrenceToSelection', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/occurrence.test.ts`
 Expected: FAIL — cannot resolve `subgraph/occurrence`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/error.ts`:
 
@@ -205,9 +205,9 @@ export function occurrenceToSelection(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/error.ts src/kernel/diagram/subgraph/occurrence.ts tests/kernel/diagram/occurrence.test.ts
@@ -222,7 +222,7 @@ git commit -m "feat(kernel): occurrenceToSelection (boundary-excluding) and Rule
 - Create: `src/kernel/rules/insertion.ts`
 - Test: `tests/kernel/rules/insertion.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/insertion.test.ts`:
 
@@ -359,12 +359,12 @@ describe('applyWireJoin', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/insertion.test.ts`
 Expected: FAIL — cannot resolve `rules/insertion`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/insertion.ts`:
 
@@ -437,9 +437,9 @@ export function applyWireJoin(d: Diagram, a: WireId, b: WireId): Diagram {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/insertion.ts tests/kernel/rules/insertion.test.ts
@@ -1067,7 +1067,7 @@ git commit -m "feat(kernel): double cut introduction and elimination"
 - Test: `tests/kernel/rules/polarity-matrix.test.ts`
 - Create: `src/kernel/rules/index.ts`
 
-- [ ] **Step 1: Write the matrix tests** (must pass against Tasks 2–5; failures are rule bugs to fix test-first)
+- [x] **Step 1: Write the matrix tests** (must pass against Tasks 2–5; failures are rule bugs to fix test-first)
 
 `tests/kernel/rules/polarity-matrix.test.ts`:
 
@@ -1163,9 +1163,9 @@ describe('inverse round-trips (fingerprint identities)', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Write the barrel** `src/kernel/rules/index.ts`:
+- [x] **Step 3: Write the barrel** `src/kernel/rules/index.ts`:
 
 ```ts
 export { RuleError } from './error'
@@ -1181,14 +1181,16 @@ Also append to `src/kernel/diagram/index.ts`:
 export { occurrenceToSelection } from './subgraph/occurrence'
 ```
 
-- [ ] **Step 4: Full gate** — `npm test && npm run typecheck`; verify every export exists.
+- [x] **Step 4: Full gate** — `npm test && npm run typecheck`; verify every export exists.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add tests/kernel/rules/polarity-matrix.test.ts src/kernel/rules/index.ts src/kernel/diagram/index.ts
 git commit -m "test(kernel): polarity matrix and inverse round-trips; structural-rules surface"
 ```
+
+**Review outcome (commit `b5bff74`):** all 10 matrix tests passed against the existing rule implementations without modification — no rule bugs surfaced. Barrel exports verified name-by-name; `occurrenceToSelection` exported adjacent to the other subgraph exports. Suite: 257/257 across 33 files, typecheck clean.
 
 ---
 
