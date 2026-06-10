@@ -111,7 +111,7 @@ export function buildScene(d: Diagram, positions: ReadonlyMap<NodeId, Vec2>): Sc
     kind: r.kind,
     center: circles.get(id)!.center,
     radius: circles.get(id)!.radius,
-    shaded: r.kind === 'cut' && polarity(d, id) === 'negative',
+    shaded: polarity(d, id) === 'negative',
   }))
 
   const nodes: SceneNode[] = Object.keys(d.nodes).map((id) => ({

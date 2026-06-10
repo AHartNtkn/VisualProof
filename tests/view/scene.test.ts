@@ -40,14 +40,14 @@ describe('buildScene', () => {
     expect(dist + bubCircle.radius).toBeLessThanOrEqual(cutCircle.radius + 1e-9)
   })
 
-  it('shades exactly the negative regions', () => {
-    const { d, n, m, atom } = host()
+  it('marks exactly the negative-polarity regions as shaded (bubbles inherit)', () => {
+    const { d, n, m, atom, cut, bub } = host()
     const pos = new Map([[n, vec(0, 0)], [m, vec(40, 0)], [atom, vec(60, 0)]])
     const scene = buildScene(d, pos)
-    for (const r of scene.regions) {
-      const expected = d.regions[r.id]!.kind === 'cut' // depth-1 cut is the only negative region here
-      expect(r.shaded).toBe(expected)
-    }
+    const byId = new Map(scene.regions.map((r) => [r.id, r]))
+    expect(byId.get(d.nodes[n]!.region)!.shaded).toBe(false) // root sheet: positive
+    expect(byId.get(cut)!.shaded).toBe(true)                 // depth-1 cut: negative
+    expect(byId.get(bub)!.shaded).toBe(true)                 // bubble inside it: inherits negative
   })
 
   it('wire stars pass through the endpoint anchors', () => {
