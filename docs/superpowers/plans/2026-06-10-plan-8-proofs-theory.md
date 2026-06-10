@@ -1452,6 +1452,8 @@ git add src/kernel/diagram/json.ts src/kernel/proof/json.ts tests/kernel/proof/j
 git commit -m "feat(kernel): proof and theorem JSON serialization with strict validation"
 ```
 
+**Review outcome (commit `42fb677`, fix `b1cc193`):** PASS; spec-verbatim. Fidelity probes: portKey-colliding port names inside terms have no crosstalk (serializeTerm is injective and JSON-escaped); non-canonical port keys (`a:1e1`, `a:01`, `a:-1`) rejected; wrong-typed fields refused by name; step order preserved; round-trip idempotent. Mutants ii (cert kind check dropped) and iv (dwb validation skipped) survived and were killed in `b1cc193`. assertOnlyKeys verified on every fromJson path. Suite: 358.
+
 ---
 
 ### Task 5: Theory store
