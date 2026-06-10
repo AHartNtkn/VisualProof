@@ -1200,6 +1200,14 @@ git commit -m "test(kernel): polarity matrix and inverse round-trips; structural
 - Demonstrated in tests: insertion gated negative and erasure gated positive across depths 0–3, both rejecting by name; wire join gated on the inner scope being negative with the merged wire keeping the outer scope, incomparable scopes rejected; wire sever gated positive with endpoint validation; iteration into same/descendant regions sharing attachments, with both invalid-target rejections; deiteration requiring a disjoint ancestor-positioned attachment-identical justification, with self-justification blocked and undecided counts surfacing in failures; double-cut intro/elim with pass-through wires, fingerprint round-trips at multiple depths, and all annulus violations rejected by name; occurrenceToSelection excluding boundary wires with the trap pinned (attachment trimmed, not deleted).
 - Plan 7 (equational + comprehension rules) is written against these real exports.
 
+## Final whole-branch review (commits `2cd582e` and earlier)
+
+READY TO MERGE; no soundness defects. Cross-rule probes all passed: polarity arithmetic composes across insertion→double-cut→erasure chains (polarity is a pure parent-chain walk, never cached); iteration round-trips across bubble boundaries with bubbles never counted in parity; join/sever gates evaluate against the current diagram with stale references refused loudly; occurrenceToSelection trims attachment wires (never deletes — verified with an attachment whose only endpoint lay inside the occurrence); all eight entry points leave their input diagram byte-identical (deep-snapshot verified); blank-sheet forgery probes (annulus pollution, descendant justification, negative erasure) all refused — no path puts a bare node on the root sheet. Kernel surface complete and minimal; zero imports leave `src/kernel`.
+
+Should-fix applied test-first (`2cd582e`, 7 vocabulary tests fail→pass observed): unknown ids now throw DiagramError everywhere; RuleError fires iff a rule evaluated its gate against a real referent and refused. Redundant unknown-id pre-checks in applyInsertion/applyErasure/applyIteration deleted (polarity/isAncestorOrEqual already throw the identical DiagramError); applyWireJoin checks existence before the self-join gate. Suite: 264.
+
+Reviewer also verified the Plan-5 matcher endpoint-key strings (`` `${node} ${posKey}` ``) are injective — positional port keys are space-free, so the key parses uniquely from the last space even with spaces in node ids. No action needed.
+
 ## Carried obligations (forward)
 
 - Plan 7: βη-conversion (term-level convertibility, NOT closures — port names carry wiring identity; certificate path via checkConversion), fusion/fission (port freshening on collision; fission requires bvar-closed subterms), unfold/fold (definitions parameter; Plan 8's theory store owns the env), comprehension (bubble wrap/dissolve reusing double-cut's reparent/promote mechanics; atoms-as-units).
