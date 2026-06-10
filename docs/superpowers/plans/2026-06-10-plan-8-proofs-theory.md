@@ -733,6 +733,8 @@ git add src/kernel/proof/error.ts src/kernel/proof/step.ts src/kernel/proof/theo
 git commit -m "feat(kernel): proof steps with gate-enforcing replay; theorems as derived rules"
 ```
 
+**Review outcome (commits `0042bf9`+`7694942`, fix `1c63bae`):** Deep review SOUND. Implementer caught a second plan-test bug (id-brittle assertion; splice may reuse removed ids — assert by shape). Dispatch audit 16/16 with correct argument order; conversion replays by certificate. Probes: six gate-bypass refusals through replayProof with step indices; blank ⟹ T citation via empty selection works both directions; theorem-in-theorem accepted, forged variant refused; boundary destruction via join is structurally unreachable (root-scoped boundary wires are positive-scope; join gates inner-negative) while the erasure route fires /was destroyed/. Mutant ii — UNPINNED fingerprint comparison in checkTheorem, a real argument-order forgery gap — survived and was killed by an arity-2 pin-swap test (`1c63bae`). Noted: hand-rolled Theorem records with phantom boundary wires crash with a TypeError rather than ProofError (loud, no false acceptance; structural-type seam). Suite: 348.
+
 The `src/kernel/proof/theorem.ts` source referenced in Step 3 above:
 
 ```ts
