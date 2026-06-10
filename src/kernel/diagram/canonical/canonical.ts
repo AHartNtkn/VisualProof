@@ -38,7 +38,7 @@ export function canonicalForm(d: Diagram, pinnedWires: readonly WireId[] = []): 
 /**
  * The canonical form together with the winning discrete coloring's ordinals.
  * Corresponding objects of isomorphic diagrams receive equal ordinals — the
- * * basis for isomorphism extraction (iso.ts) and proof composition (proof/compose.ts).
+ * basis for isomorphism extraction (iso.ts) and proof composition (proof/compose.ts).
  */
 export function canonicalLabeling(d: Diagram, pinnedWires: readonly WireId[] = []): CanonicalLabeling {
   const seenPins = new Set<string>()
