@@ -4,19 +4,12 @@ import type { DiagramWithBoundary } from '../boundary'
 import { mkDiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
+import { freshId } from './freshId'
 
 export type Extraction = {
   readonly pattern: DiagramWithBoundary
   /** Host wires the boundary stubs came from, index-aligned with pattern.boundary. */
   readonly attachments: readonly WireId[]
-}
-
-function freshId(taken: ReadonlySet<string>, base: string): string {
-  if (!taken.has(base)) return base
-  for (let k = 0; ; k++) {
-    const candidate = `${base}_${k}`
-    if (!taken.has(candidate)) return candidate
-  }
 }
 
 /**

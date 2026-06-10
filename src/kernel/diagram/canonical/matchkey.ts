@@ -1,6 +1,7 @@
 import type { Term } from '../../term/term'
 import { app, assertWellFormedTerm, bvar, cnst, freePorts, lam, termEq } from '../../term/term'
 import { normalize } from '../../term/reduce'
+import { DiagramError } from '../diagram'
 
 /**
  * Close a term over its free ports in first-occurrence order: port i becomes
@@ -46,7 +47,7 @@ export type NodeMatchVerdict =
  */
 export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMatchVerdict {
   if (!Number.isInteger(fuel) || fuel <= 0) {
-    throw new Error(`fuel must be a positive integer, got ${fuel}`)
+    throw new DiagramError(`fuel must be a positive integer, got ${fuel}`)
   }
   if (freePorts(a).length !== freePorts(b).length) return { status: 'no-match' }
   const ca = closeOverPorts(a)

@@ -99,4 +99,12 @@ describe('selectionContents', () => {
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [], wires: [wEmpty] })
     expect(selectionContents(d, sel).internalWires).toContain(wEmpty)
   })
+
+  describe('selection provenance (all entry points validate)', () => {
+    it('selectionContents rejects raw garbage selections loudly', () => {
+      const h = host()
+      expect(() => selectionContents(h.d, { region: 'ghost', regions: [], nodes: [], wires: [] }))
+        .toThrowError(/unknown selection region 'ghost'/)
+    })
+  })
 })

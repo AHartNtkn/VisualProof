@@ -47,6 +47,20 @@ describe('removeSubgraph', () => {
     expect(after.wires[w]?.endpoints).toHaveLength(0)
     expect(after.wires[w]?.scope).toBe(d.root)
   })
+
+  it('rejects never-validated selections loudly instead of silently no-op-ing', () => {
+    const h = host()
+    expect(() => removeSubgraph(h.d, { region: 'ghost', regions: [], nodes: [], wires: [] }))
+      .toThrowError(/unknown selection region 'ghost'/)
+    // a grandchild subtree root would re-parent across a cut (polarity change) if accepted
+    const b = new DiagramBuilder()
+    const outer = b.cut(b.root)
+    const inner = b.cut(outer)
+    b.termNode(inner, p('\\x. x'))
+    const d = b.build()
+    expect(() => removeSubgraph(d, { region: d.root, regions: [inner], nodes: [], wires: [] }))
+      .toThrowError(/region 'r2' is not a child of selection region 'r0'/)
+  })
 })
 
 describe('spliceSubgraph', () => {

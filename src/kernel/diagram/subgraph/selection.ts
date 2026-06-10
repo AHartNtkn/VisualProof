@@ -96,10 +96,11 @@ function computeClosure(
 }
 
 export function selectionContents(d: Diagram, sel: SubgraphSelection): SelectionContents {
+  const validated = mkSelection(d, sel) // idempotent; every entry point is loud
   const { allRegions, allNodes } = computeClosure(
-    d, new Set(sel.regions), new Set(sel.nodes),
+    d, new Set(validated.regions), new Set(validated.nodes),
   )
-  const explicit = new Set(sel.wires)
+  const explicit = new Set(validated.wires)
   const internalWires: WireId[] = []
   const touchingWires: WireId[] = []
   for (const [id, w] of Object.entries(d.wires)) {

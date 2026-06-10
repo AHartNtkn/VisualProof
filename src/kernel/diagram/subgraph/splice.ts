@@ -4,6 +4,7 @@ import { isAncestorOrEqual } from '../regions'
 import type { DiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
+import { freshId } from './freshId'
 
 /** Drop the selection's content; touching wires keep only their outside endpoints. */
 export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
@@ -26,14 +27,6 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
     }
   }
   return mkDiagram({ root: d.root, regions, nodes, wires })
-}
-
-function freshId(taken: ReadonlySet<string>, base: string): string {
-  if (!taken.has(base)) return base
-  for (let k = 0; ; k++) {
-    const candidate = `${base}_${k}`
-    if (!taken.has(candidate)) return candidate
-  }
 }
 
 /**
