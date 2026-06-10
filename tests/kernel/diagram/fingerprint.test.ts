@@ -35,13 +35,21 @@ describe('diagramFingerprint and diagramsIsomorphic', () => {
     expect(diagramsIsomorphic(d1, d3)).toBe(false)
   })
 
-  it('isomorphism check takes a cheap size shortcut without changing the answer', () => {
+  it('size shortcut never changes the answer: unequal sizes and equal-size non-isomorphic both reject', () => {
     const b1 = new DiagramBuilder()
     b1.cut(b1.root)
     const b2 = new DiagramBuilder()
     b2.cut(b2.root)
     b2.cut(b2.root)
     expect(diagramsIsomorphic(b1.build(), b2.build())).toBe(false)
+
+    // equal counts, different content: the shortcut cannot fire; the full
+    // canonical comparison must reject
+    const c1 = new DiagramBuilder()
+    c1.termNode(c1.cut(c1.root), p('\\x. x'))
+    const c2 = new DiagramBuilder()
+    c2.termNode(c2.cut(c2.root), p('\\x. \\y. x'))
+    expect(diagramsIsomorphic(c1.build(), c2.build())).toBe(false)
   })
 })
 

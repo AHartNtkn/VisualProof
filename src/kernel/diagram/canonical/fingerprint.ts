@@ -13,7 +13,15 @@ export function diagramFingerprint(d: Diagram): string {
   return canonicalForm(d)
 }
 
-/** Boundary-pinned fingerprint: boundary order is significant. */
+/**
+ * Boundary-pinned fingerprint: boundary order is significant — pinned wires
+ * carry 'pin{i}:' markers in the canonical form, so two boundaries differing
+ * only in order fingerprint differently. With an EMPTY boundary this equals
+ * diagramFingerprint of the same diagram, intentionally: a 0-ary relation is
+ * a sentence. No cross-API collision is possible otherwise, since any
+ * non-empty boundary puts at least one pin marker in the string and unpinned
+ * forms never contain one.
+ */
 export function boundaryFingerprint(dwb: DiagramWithBoundary): string {
   return canonicalForm(dwb.diagram, dwb.boundary)
 }
