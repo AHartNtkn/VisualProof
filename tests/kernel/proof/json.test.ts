@@ -60,6 +60,39 @@ describe('step round-trips through JSON', () => {
   })
 })
 
+describe('certFromJson rejects invalid reduction-step kinds', () => {
+  it('rejects a conversion whose certificate has kind "gamma" instead of beta|eta', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('(\\x. x) y'))
+    const d = h.build()
+    const { certificate } = applyConversion(d, n, p('y'), 10)
+    // Build a valid conversion step JSON, then corrupt one reduction-step kind
+    const step: ProofStep = { rule: 'conversion', node: 'n0', term: p('y'), certificate, attachments: {} }
+    const j = JSON.parse(JSON.stringify(stepToJson(step))) as Record<string, unknown>
+    const cert = j['certificate'] as { leftSteps: unknown[] }
+    if (cert.leftSteps.length > 0) {
+      ;(cert.leftSteps[0] as Record<string, unknown>)['kind'] = 'gamma'
+    } else {
+      ;(j['certificate'] as { rightSteps: unknown[] }).rightSteps.push({ kind: 'gamma', path: [] })
+    }
+    expect(() => stepFromJson(j)).toThrowError(/beta\|eta/)
+  })
+})
+
+describe('dwbFromJson validates boundary wire existence', () => {
+  it('rejects a pattern whose boundary references a non-existent wire', () => {
+    const b = new DiagramBuilder()
+    const bn = b.termNode(b.root, p('\\x. x'))
+    const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
+    const pat = mkDiagramWithBoundary(b.build(), [bw])
+    const step: ProofStep = { rule: 'insertion', region: 'r1', pattern: pat, attachments: ['w0'] }
+    const j = JSON.parse(JSON.stringify(stepToJson(step))) as Record<string, unknown>
+    const patJson = j['pattern'] as { boundary: string[] }
+    patJson.boundary = ['nonexistent_wire_id']
+    expect(() => stepFromJson(j)).toThrow()
+  })
+})
+
 describe('theorem round-trips through JSON', () => {
   it('preserves sides, boundary order, and steps', () => {
     const l = new DiagramBuilder()
