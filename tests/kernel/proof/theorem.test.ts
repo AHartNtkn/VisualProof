@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { checkTheorem, applyTheorem } from '../../../src/kernel/proof/theorem'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
@@ -44,6 +45,26 @@ describe('checkTheorem', () => {
     const t = dropQ()
     const broken: Theorem = { ...t, steps: [] }
     expect(() => checkTheorem(broken, ctx))
+      .toThrowError(/does not arrive at the stated right-hand side/)
+  })
+
+  it('rejects a result isomorphic to rhs with SWAPPED boundary correspondence', () => {
+    // Arity-2 forgery: P on pin0 / Q on pin1 versus the same diagram pinned
+    // Q on pin0 / P on pin1. Unpinned fingerprints are EQUAL — only the
+    // boundary-pinned comparison can refuse this argument-order forgery.
+    const side = (swap: boolean) => {
+      const b = new DiagramBuilder()
+      const np = b.termNode(b.root, p('\\a. a'))
+      const nq = b.termNode(b.root, p('\\a. \\b. a'))
+      const wp = b.wire(b.root, [{ node: np, port: { kind: 'output' } }])
+      const wq = b.wire(b.root, [{ node: nq, port: { kind: 'output' } }])
+      return mkDiagramWithBoundary(b.build(), swap ? [wq, wp] : [wp, wq])
+    }
+    const lhs = side(false)
+    const rhs = side(true)
+    expect(diagramFingerprint(lhs.diagram)).toBe(diagramFingerprint(rhs.diagram))
+    const forged: Theorem = { name: 'swap', lhs, rhs, steps: [] }
+    expect(() => checkTheorem(forged, ctx))
       .toThrowError(/does not arrive at the stated right-hand side/)
   })
 
