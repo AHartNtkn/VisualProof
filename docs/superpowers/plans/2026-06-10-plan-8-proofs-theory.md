@@ -1080,6 +1080,8 @@ git add src/kernel/proof/compose.ts tests/kernel/proof/compose.test.ts
 git commit -m "feat(kernel): meet-in-the-middle proof composition via canonical isomorphisms"
 ```
 
+**Review outcome (commit `59ef0f9`, fix `9f8f6cf`):** APPROVED; byte-identical to plan. mapStepIds exhaustiveness audited 16/16 field-by-field (attachment VALUES mapped, port-name keys/terms/embedded patterns deliberately not). Probes: insertion into a mid-tail fresh region maps through the re-derived iso; theorem steps map sel+args; automorphic meets compose; failure paths throw without partial output. Mutant iii (erasure unmapped) survived the symmetric battery — killed by an asymmetric-ids test (`9f8f6cf`). Divergence guard kept as defense-in-depth (reachable only under applier bugs, demonstrated by mutant ii). Suite: 353.
+
 ---
 
 ### Task 4: Proof serialization
