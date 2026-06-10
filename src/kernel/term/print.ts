@@ -38,6 +38,9 @@ function go(t: Term, env: string[], taken: Set<string>, ctx: Ctx): string {
     case 'const': return t.id
     case 'lam': {
       let name = `x${env.length}`
+      // env.includes guards a prefix expansion of `x{d}` colliding with an outer
+      // binder's chosen name; unreachable under the current scheme (different
+      // depths produce different numeric suffixes) but kept as a safety net.
       while (taken.has(name) || env.includes(name)) name = `_${name}`
       const body = go(t.body, [...env, name], taken, 'top')
       const s = `\\${name}. ${body}`
