@@ -46,10 +46,11 @@ describe('layer separation (spec §4.2)', () => {
     expect(offenders, offenders.join('\n')).toEqual([])
   })
 
-  it('the kernel has no runtime dependencies on node built-ins beyond none at all', () => {
-    // the kernel is pure data + algorithms: any node: import is a leak
+  it('no src code imports node built-ins', () => {
+    // the kernel is pure data + algorithms and the view runs in the browser:
+    // any node: import anywhere under src is a leak
     const offenders: string[] = []
-    for (const file of tsFilesUnder('src/kernel')) {
+    for (const file of tsFilesUnder('src')) {
       for (const spec of importSpecifiers(file)) {
         if (spec.startsWith('node:')) offenders.push(`${file} imports '${spec}'`)
       }
