@@ -112,4 +112,45 @@ describe('applyComprehensionInstantiate', () => {
     expect(() => applyComprehensionInstantiate(d, bubShallow, identityComp()))
       .toThrowError(/requires a negative bubble/)
   })
+
+  it('splice lands at atom.region not bubble.parent when atom is deeper than the bubble', () => {
+    // atom lives inside an inner cut nested inside the bubble; the spliced term
+    // node must land at that inner cut, not at the bubble's parent (the outer cut)
+    const h = new DiagramBuilder()
+    const c1 = h.cut(h.root)
+    const bub = h.bubble(c1, 1)
+    const c2 = h.cut(bub) // atom sits here — deeper than bub
+    const atom = h.atom(c2, bub)
+    h.wire(c1, [{ node: atom, port: { kind: 'arg', index: 0 } }])
+    const d = h.build()
+    const out = applyComprehensionInstantiate(d, bub, identityComp())
+    // bub dissolved
+    expect(out.regions[bub]).toBeUndefined()
+    // c2 promoted to child of c1
+    const c2after = out.regions[c2]
+    expect(c2after?.kind).toBe('cut')
+    if (c2after?.kind === 'cut') expect(c2after.parent).toBe(c1)
+    // the term node from identityComp must be inside c2, not c1
+    const termNodes = Object.values(out.nodes).filter((n) => n.kind === 'term')
+    expect(termNodes).toHaveLength(1)
+    expect(termNodes[0]!.region).toBe(c2)
+  })
+
+  it('bubble-scoped wires land at bubble.parent (not root) after dissolution', () => {
+    // bubble.parent = c1 (a cut), not root; a wire scoped at bub must move to c1
+    const h = new DiagramBuilder()
+    const c1 = h.cut(h.root)
+    const bub = h.bubble(c1, 1)
+    h.termNode(bub, p('\\x. x'))
+    // the auto-wire for the term node's output will be scoped at bub
+    const d = h.build()
+    const bubScopedIds = Object.entries(d.wires)
+      .filter(([, w]) => w.scope === bub)
+      .map(([id]) => id)
+    expect(bubScopedIds.length).toBeGreaterThan(0)
+    const out = applyComprehensionInstantiate(d, bub, identityComp())
+    for (const wid of bubScopedIds) {
+      expect(out.wires[wid]?.scope).toBe(c1)
+    }
+  })
 })
