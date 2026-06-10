@@ -675,13 +675,21 @@ describe('diagramFingerprint and diagramsIsomorphic', () => {
     expect(diagramsIsomorphic(d1, d3)).toBe(false)
   })
 
-  it('isomorphism check takes a cheap size shortcut without changing the answer', () => {
+  it('size shortcut never changes the answer: unequal sizes and equal-size non-isomorphic both reject', () => {
     const b1 = new DiagramBuilder()
     b1.cut(b1.root)
     const b2 = new DiagramBuilder()
     b2.cut(b2.root)
     b2.cut(b2.root)
     expect(diagramsIsomorphic(b1.build(), b2.build())).toBe(false)
+
+    // equal counts, different content: the shortcut cannot fire; the full
+    // canonical comparison must reject
+    const c1 = new DiagramBuilder()
+    c1.termNode(c1.cut(c1.root), p('\\x. x'))
+    const c2 = new DiagramBuilder()
+    c2.termNode(c2.cut(c2.root), p('\\x. \\y. x'))
+    expect(diagramsIsomorphic(c1.build(), c2.build())).toBe(false)
   })
 })
 
@@ -730,7 +738,15 @@ export function diagramFingerprint(d: Diagram): string {
   return canonicalForm(d)
 }
 
-/** Boundary-pinned fingerprint: boundary order is significant. */
+/**
+ * Boundary-pinned fingerprint: boundary order is significant — pinned wires
+ * carry 'pin{i}:' markers in the canonical form, so two boundaries differing
+ * only in order fingerprint differently. With an EMPTY boundary this equals
+ * diagramFingerprint of the same diagram, intentionally: a 0-ary relation is
+ * a sentence. No cross-API collision is possible otherwise, since any
+ * non-empty boundary puts at least one pin marker in the string and unpinned
+ * forms never contain one.
+ */
 export function boundaryFingerprint(dwb: DiagramWithBoundary): string {
   return canonicalForm(dwb.diagram, dwb.boundary)
 }
