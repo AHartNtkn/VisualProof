@@ -445,6 +445,22 @@ describe('parseTerm', () => {
     expect(termEq(parseTerm('\\x. f x x', consts), lam(app(app(port('f'), bvar(0)), bvar(0))))).toBe(true)
   })
 
+  it('treats a lambda in argument position as the final argument extending to the end', () => {
+    expect(termEq(parseTerm('f \\x. x', consts), app(port('f'), lam(bvar(0))))).toBe(true)
+    expect(termEq(parseTerm('f g \\x. x', consts), app(app(port('f'), port('g')), lam(bvar(0))))).toBe(true)
+    expect(termEq(parseTerm('\\x. f \\y. y', consts), lam(app(port('f'), lam(bvar(0)))))).toBe(true)
+  })
+
+  it('rejects duplicate binder names within one binder group', () => {
+    expect(() => parseTerm('\\x x. x', consts)).toThrowError(/duplicate binder name 'x'/i)
+    // shadowing across nested lambdas remains legal (covered elsewhere): \x. \x. x
+  })
+
+  it('rejects unexpected characters with positions', () => {
+    expect(() => parseTerm('f α g', consts)).toThrowError(ParseError)
+    expect(() => parseTerm('f 0 g', consts)).toThrowError(/unexpected character '0'/i)
+  })
+
   it('resolves names: bound > const > port; inner binders shadow outer', () => {
     expect(termEq(parseTerm('plus one y', consts), app(app(cnst('plus'), cnst('one')), port('y')))).toBe(true)
     // bound name shadows a constant
@@ -456,6 +472,8 @@ describe('parseTerm', () => {
   it('round-trips with the printer', () => {
     const src = '\\x0. \\x1. x0 (x0 x1)'
     expect(printTerm(parseTerm(src, consts))).toBe(src)
+    const withNames = 'plus m (\\x0. x0)'
+    expect(printTerm(parseTerm(withNames, consts))).toBe(withNames)
   })
 
   it('rejects empty input, unbalanced parens, and stray dots with positions', () => {
@@ -542,8 +560,13 @@ export function parseTerm(src: string, constIds: ReadonlySet<string>): Term {
     if (t !== undefined && t.kind === 'lambda') {
       i++
       const names: string[] = []
-      while (peek()?.kind === 'ident') {
-        names.push((tokens[i]! as Token & { kind: 'ident' }).name)
+      for (;;) {
+        const tok = peek()
+        if (tok === undefined || tok.kind !== 'ident') break
+        if (names.includes(tok.name)) {
+          throw new ParseError(`duplicate binder name '${tok.name}' in binder group`, tok.pos)
+        }
+        names.push(tok.name)
         i++
       }
       if (names.length === 0) {
@@ -567,7 +590,8 @@ export function parseTerm(src: string, constIds: ReadonlySet<string>): Term {
       const nxt = peek()
       if (nxt === undefined || nxt.kind === 'dot' || nxt.kind === 'rparen') break
       if (nxt.kind === 'lambda') {
-        // `f \x. e` — lambda extends to the end: treat as final argument
+        // '\' in argument position: standard λ-calculus convention (as in Haskell/ML) —
+        // the lambda is the final argument and its body extends to the end of the expression.
         t = app(t, parseTermAt(env))
         break
       }
