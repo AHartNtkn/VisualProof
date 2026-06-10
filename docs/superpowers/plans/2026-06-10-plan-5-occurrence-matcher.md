@@ -269,6 +269,9 @@ export function findOccurrences(
     if (pd.wires[b]!.endpoints.length === 0) {
       throw new DiagramError(`boundary wire '${b}' has no endpoints; occurrence matching cannot determine its attachment`)
     }
+    if (pd.wires[b]!.scope !== pd.root) {
+      throw new DiagramError(`boundary wire '${b}' is not scoped at the pattern root; occurrence matching mirrors splice's seam semantics`)
+    }
   }
   if (opts.inRegion !== undefined && host.regions[opts.inRegion] === undefined) {
     throw new DiagramError(`unknown region '${opts.inRegion}'`)
@@ -284,9 +287,11 @@ export function findOccurrences(
   const usedRegions = new Set<RegionId>()
   const usedNodes = new Set<NodeId>()
 
+  // Nested maps, never flat composite keys: ids are unconstrained strings and
+  // any separator can alias across the id boundary (proven soundness bug).
   const undecided: UndecidedPair[] = []
-  const undecidedSeen = new Set<string>()
-  const verdictCache = new Map<string, boolean>()
+  const undecidedSeen = new Map<NodeId, Set<NodeId>>()
+  const verdictCache = new Map<NodeId, Map<NodeId, boolean>>()
 
   const matches: Occurrence[] = []
   const footprints = new Set<string>()
@@ -302,27 +307,34 @@ export function findOccurrences(
   return { matches, undecided }
 
   function termVerdict(pn: NodeId, hn: NodeId): boolean {
-    const key = `${pn} ${hn}`
-    const cached = verdictCache.get(key)
+    const cached = verdictCache.get(pn)?.get(hn)
     if (cached !== undefined) return cached
+    const setVerdict = (v: boolean): boolean => {
+      let inner = verdictCache.get(pn)
+      if (inner === undefined) {
+        inner = new Map()
+        verdictCache.set(pn, inner)
+      }
+      inner.set(hn, v)
+      return v
+    }
     const pt = pd.nodes[pn]!
     const ht = host.nodes[hn]!
-    if (pt.kind !== 'term' || ht.kind !== 'term') {
-      verdictCache.set(key, false)
-      return false
-    }
+    if (pt.kind !== 'term' || ht.kind !== 'term') return setVerdict(false)
     const v = termsMatchModuloBetaEta(pt.term, ht.term, fuel)
     if (v.status === 'undecided') {
-      if (!undecidedSeen.has(key)) {
-        undecidedSeen.add(key)
+      let seen = undecidedSeen.get(pn)
+      if (seen === undefined) {
+        seen = new Set()
+        undecidedSeen.set(pn, seen)
+      }
+      if (!seen.has(hn)) {
+        seen.add(hn)
         undecided.push({ patternNode: pn, hostNode: hn, detail: v.detail })
       }
-      verdictCache.set(key, false)
-      return false
+      return setVerdict(false)
     }
-    const ok = v.status === 'match'
-    verdictCache.set(key, ok)
-    return ok
+    return setVerdict(v.status === 'match')
   }
 
   function nodeCompatible(pn: NodeId, hn: NodeId): boolean {
@@ -437,9 +449,9 @@ export function findOccurrences(
       const hostWire = host.wires[hw]!
       if (hostWire.scope !== regionMap.get(w.scope)) return
       if (hostWire.endpoints.length !== images.length) return
-      const hostSet = new Set(hostWire.endpoints.map((ep) => `${ep.node} ${posKey(host, ep)}`))
+      const hostSet = new Set(hostWire.endpoints.map((ep) => `${ep.node} ${posKey(host, ep)}`))
       for (const im of images) {
-        if (!hostSet.has(`${im.node} ${im.key}`)) return
+        if (!hostSet.has(`${im.node} ${im.key}`)) return
       }
       if (usedImages.has(hw)) return
       usedImages.add(hw)
@@ -454,8 +466,10 @@ export function findOccurrences(
       } else if (pBare.length !== hBare.length) {
         return
       }
-      // bare wires are indistinguishable: canonical pairing; any other pairing
-      // would produce the same footprint
+      // bare wires are indistinguishable: nested regions biject over the same
+      // sets (any pairing → same footprint); at the ROOT, canonical first-k
+      // pairing deliberately collapses the isomorphic choices of host bare
+      // wires into one occurrence
       for (let j = 0; j < pBare.length; j++) {
         wireMap.set(pBare[j]!, hBare[j]!)
         usedImages.add(hBare[j]!)
@@ -471,21 +485,22 @@ export function findOccurrences(
       if (hw === undefined) return
       if (usedImages.has(hw)) return
       const hostWire = host.wires[hw]!
-      const hostSet = new Set(hostWire.endpoints.map((ep) => `${ep.node} ${posKey(host, ep)}`))
+      const hostSet = new Set(hostWire.endpoints.map((ep) => `${ep.node} ${posKey(host, ep)}`))
       for (const im of images) {
-        if (!hostSet.has(`${im.node} ${im.key}`)) return
+        if (!hostSet.has(`${im.node} ${im.key}`)) return
       }
       if (!isAncestorOrEqual(host, hostWire.scope, R)) return
       wireMap.set(b, hw)
       attachments.push(hw)
     }
 
-    const fp = [
-      [...regionMap.values()].sort().join(','),
-      [...nodeMap.values()].sort().join(','),
-      [...wireMap.values()].sort().join(','),
-      attachments.join(','),
-    ].join('|')
+    // JSON.stringify, never join: id strings may contain any separator
+    const fp = JSON.stringify([
+      [...regionMap.values()].sort(),
+      [...nodeMap.values()].sort(),
+      [...wireMap.values()].sort(),
+      attachments,
+    ])
     if (footprints.has(fp)) return
     footprints.add(fp)
     matches.push(Object.freeze({
