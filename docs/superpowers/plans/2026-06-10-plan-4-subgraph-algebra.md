@@ -550,6 +550,40 @@ describe('extractSubgraph', () => {
     expect(() => extractSubgraph(h.d, sel)).not.toThrow()
   })
 })
+
+describe('extractSubgraph atom-binder boundary', () => {
+  it('extracts atoms whose binder is inside the selection', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 0)
+    b.atom(bub, bub)
+    const d = b.build()
+    const sel = mkSelection(d, { region: d.root, regions: [bub], nodes: [], wires: [] })
+    expect(() => extractSubgraph(d, sel)).not.toThrow()
+  })
+
+  it('rejects atoms bound to an unselected ancestor bubble, naming the violation', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 0)
+    const cut = b.cut(bub)
+    const a = b.atom(cut, bub)
+    void a
+    const d = b.build()
+    // select only the cut, inside the bubble: the atom's binder stays outside
+    const sel = mkSelection(d, { region: bub, regions: [cut], nodes: [], wires: [] })
+    expect(() => extractSubgraph(d, sel))
+      .toThrowError(/atom 'n0' is bound to 'r1' which is outside the selection/)
+  })
+
+  it('rejects atoms bound to the selection region itself (the anchor is not selected content)', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 0)
+    const a = b.atom(bub, bub)
+    const d = b.build()
+    const sel = mkSelection(d, { region: bub, regions: [], nodes: [a], wires: [] })
+    expect(() => extractSubgraph(d, sel))
+      .toThrowError(/atom 'n0' is bound to 'r1' which is outside the selection/)
+  })
+})
 ```
 
 - [ ] **Step 2: Run tests to verify they fail**
@@ -563,7 +597,7 @@ Expected: FAIL — cannot resolve `subgraph/extract`.
 
 ```ts
 import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../diagram'
-import { mkDiagram } from '../diagram'
+import { DiagramError, mkDiagram } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
 import { mkDiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
@@ -594,6 +628,15 @@ function freshId(taken: ReadonlySet<string>, base: string): string {
  */
 export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction {
   const c = selectionContents(d, sel)
+  // Atoms can only be extracted with their binder: a binder outside the
+  // selected content (including the anchor region itself — the pattern root
+  // is a sheet and cannot bind) makes the pattern unconstructible.
+  for (const id of c.allNodes) {
+    const n = d.nodes[id]!
+    if (n.kind === 'atom' && !c.allRegions.has(n.binder)) {
+      throw new DiagramError(`atom '${id}' is bound to '${n.binder}' which is outside the selection`)
+    }
+  }
   const takenRegionIds = new Set<string>(c.allRegions)
   const root = freshId(takenRegionIds, 'root')
 
