@@ -32,5 +32,6 @@ describe('serializeTerm', () => {
   it('rejects malformed input loudly', () => {
     expect(() => deserializeTerm('L(')).toThrowError(/malformed/i)
     expect(() => deserializeTerm('garbage')).toThrowError(/malformed/i)
+    expect(() => deserializeTerm('P("a")x')).toThrowError(/malformed/i)
   })
 })

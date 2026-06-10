@@ -27,6 +27,8 @@ function parse(s: string, i: number): [Term, number] {
   const fail = (msg: string): never => { throw new Error(`malformed term serialization at ${i}: ${msg}`) }
   const c = s[i] ?? fail('unexpected end')
   if (c === '#') {
+    // Leading zeros are accepted; serializeTerm never emits them, so
+    // non-canonical inputs decode to the unique canonical term.
     let j = i + 1
     while (j < s.length && s[j]! >= '0' && s[j]! <= '9') j++
     if (j === i + 1) fail('expected digits after #')

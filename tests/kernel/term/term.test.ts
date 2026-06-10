@@ -24,6 +24,10 @@ describe('term constructors and equality', () => {
     expect(() => bvar(0.5)).toThrowError(/fractional/i)
   })
 
+  it('rejects unsafely large de Bruijn indices at construction', () => {
+    expect(() => bvar(2 ** 53)).toThrowError(/safe integer/i)
+  })
+
   it('rejects empty port and const names at construction', () => {
     expect(() => port('')).toThrowError(/non-empty/i)
     expect(() => cnst('')).toThrowError(/non-empty/i)
