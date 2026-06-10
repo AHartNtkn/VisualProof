@@ -1590,6 +1590,8 @@ git add src/kernel/rules/comprehension.ts tests/kernel/rules/comprehension-abstr
 git commit -m "feat(kernel): comprehension abstraction at positive regions"
 ```
 
+**Review outcome (commit `90ae876`, fix `0625d34`):** Deep review SOUND; zero deviations. Forgery probes all refused: attachment-multiplicity argument permutation, near-isomorphic occurrences differing only in a nested cut, atoms bound outside the selection; nested-anchor atoms land at their anchors; impredicative occurrences abstract correctly; selected wires pass outside the bubble; hand-built mirror instantiation closes the semantic loop. Three mutants survived and were killed in `0625d34` — notably atom-anchor-always-bubbleId, a REAL semantic gap (hoisting R out of a cut flips its polarity inside φ). The second-pass anchor-inside-other-occurrence guard was proven unreachable (pass-1 overlap always fires first; empty-occurrence escape contradicts fingerprint matching) — KEPT deliberately as a loud defense-in-depth guard, same call as Plan 6's equivalent-mutant `continue`: the unreachability proof depends on validation order that future edits could change. Suite: 314.
+
 ---
 
 ### Task 7: Barrel + cross-rule gate battery
