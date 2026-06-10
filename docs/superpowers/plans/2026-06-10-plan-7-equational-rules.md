@@ -1024,6 +1024,8 @@ git add src/kernel/rules/definitions.ts tests/kernel/rules/definitions.test.ts
 git commit -m "feat(kernel): unfold/fold over a closed definitions environment"
 ```
 
+**Review outcome (commit `b510ba6`):** APPROVED. Plan bug found by the implementer and fixed first (`f434c06`): the fold-refusal test used `\a. a`, which is α-canonical under de Bruijn and therefore termEq to `\x. x`; corrected to the merely-convertible `\a. (\b. b) a`. Probes: unfold under three lams leaves closed-body indices unchanged; constant-chain unfold/fold round-trips by fingerprint; whole-term fold at path [] works; no input aliasing. All four mutants killed. Suite: 296.
+
 ---
 
 ### Task 5: Comprehension instantiation
