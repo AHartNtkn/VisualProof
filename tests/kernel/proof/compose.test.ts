@@ -81,6 +81,35 @@ describe('composeProofs', () => {
     expect(Object.values(viaA.nodes)).toHaveLength(1)
   })
 
+  it('maps erasure sel through the iso — erases the correct node in an asymmetric meet', () => {
+    // Two distinguishable nodes: identity and a constant. Build the two copies
+    // in DIFFERENT orders so ids are swapped (identity='n0' in db, identity='n1' in da).
+    // The tail erases the identity node. Without id mapping, the composed step
+    // references a db node id that exists in da but points to the CONSTANT node,
+    // erasing the wrong node and producing a non-isomorphic result.
+    const bA = new DiagramBuilder()
+    bA.termNode(bA.root, p('\\a. \\b. a'))  // constant gets 'n0' in da
+    bA.termNode(bA.root, p('\\x. x'))       // identity gets 'n1' in da
+    const da = bA.build()
+
+    const bB = new DiagramBuilder()
+    const bn1 = bB.termNode(bB.root, p('\\x. x'))       // identity gets 'n0' in db
+    bB.termNode(bB.root, p('\\a. \\b. a'))              // constant gets 'n1' in db
+    const db = bB.build()
+
+    const tail: ProofStep[] = [{
+      rule: 'erasure',
+      sel: mkSelection(db, { region: db.root, regions: [], nodes: [bn1], wires: [] }),
+    }]
+    const composed = composeProofs(da, db, tail, ctx)
+    const viaA = replayProof(da, composed, ctx)
+    const viaB = replayProof(db, tail, ctx)
+    // Both results should have the constant node only
+    expect(Object.values(viaA.nodes)).toHaveLength(1)
+    // Fingerprints must match — the same (constant) node survives on both sides
+    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+  })
+
   it('refuses non-isomorphic meets by name', () => {
     const { da } = twoCopies()
     const other = new DiagramBuilder()
