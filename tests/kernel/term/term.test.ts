@@ -19,6 +19,20 @@ describe('term constructors and equality', () => {
   it('rejects negative de Bruijn indices at construction', () => {
     expect(() => bvar(-1)).toThrowError(/negative/i)
   })
+
+  it('rejects fractional de Bruijn indices at construction', () => {
+    expect(() => bvar(0.5)).toThrowError(/fractional/i)
+  })
+
+  it('rejects empty port and const names at construction', () => {
+    expect(() => port('')).toThrowError(/non-empty/i)
+    expect(() => cnst('')).toThrowError(/non-empty/i)
+  })
+
+  it('is reflexive on compound terms', () => {
+    const t = app(cnst('plus'), port('m'))
+    expect(termEq(t, t)).toBe(true)
+  })
 })
 
 describe('freePorts', () => {

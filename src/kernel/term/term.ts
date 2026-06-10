@@ -33,12 +33,12 @@ export function app(fn: Term, arg: Term): Term {
 export function termEq(a: Term, b: Term): boolean {
   if (a.kind !== b.kind) return false
   switch (a.kind) {
-    case 'bvar': return a.index === (b as typeof a).index
-    case 'port': return a.name === (b as typeof a).name
-    case 'const': return a.id === (b as typeof a).id
-    case 'lam': return termEq(a.body, (b as typeof a).body)
+    case 'bvar': return a.index === (b as Extract<Term, { kind: 'bvar' }>).index
+    case 'port': return a.name === (b as Extract<Term, { kind: 'port' }>).name
+    case 'const': return a.id === (b as Extract<Term, { kind: 'const' }>).id
+    case 'lam': return termEq(a.body, (b as Extract<Term, { kind: 'lam' }>).body)
     case 'app': {
-      const bb = b as typeof a
+      const bb = b as Extract<Term, { kind: 'app' }>
       return termEq(a.fn, bb.fn) && termEq(a.arg, bb.arg)
     }
   }
@@ -46,11 +46,12 @@ export function termEq(a: Term, b: Term): boolean {
 
 /** Free ports in first-occurrence order: lam descends into body; app visits fn, then arg. */
 export function freePorts(t: Term): string[] {
-  const seen: string[] = []
+  const seen = new Set<string>()
+  const order: string[] = []
   const visit = (u: Term): void => {
     switch (u.kind) {
       case 'port':
-        if (!seen.includes(u.name)) seen.push(u.name)
+        if (!seen.has(u.name)) { seen.add(u.name); order.push(u.name) }
         return
       case 'lam': visit(u.body); return
       case 'app': visit(u.fn); visit(u.arg); return
@@ -60,5 +61,5 @@ export function freePorts(t: Term): string[] {
     }
   }
   visit(t)
-  return seen
+  return order
 }
