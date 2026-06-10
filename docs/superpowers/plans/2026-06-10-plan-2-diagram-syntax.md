@@ -66,6 +66,12 @@ describe('requiredPorts', () => {
     const node: DiagramNode = { kind: 'atom', region: 'r1', binder: 'r1' }
     expect(requiredPorts({ regions }, node).map(portKey)).toEqual(['a:0', 'a:1'])
   })
+
+  it('throws when an atom binder is not a bubble (public API error surface)', () => {
+    const regions: Record<string, Region> = { r0: { kind: 'sheet' } }
+    const node: DiagramNode = { kind: 'atom', region: 'r0', binder: 'r0' }
+    expect(() => requiredPorts({ regions }, node)).toThrowError(/atom binder 'r0' is not a bubble/)
+  })
 })
 
 describe('mkDiagram (happy path)', () => {
@@ -412,7 +418,7 @@ describe('mkDiagram rejections', () => {
     })).toThrowError(/second sheet/)
   })
 
-  it('rejects negative and fractional bubble arity', () => {
+  it('rejects negative, fractional, and unsafely large bubble arity', () => {
     expect(() => mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: -1 } },
@@ -420,6 +426,10 @@ describe('mkDiagram rejections', () => {
     expect(() => mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: 1.5 } },
+    })).toThrowError(/arity must be a non-negative safe integer/)
+    expect(() => mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' }, r1: { kind: 'bubble', parent: 'r0', arity: 2 ** 53 } },
     })).toThrowError(/arity must be a non-negative safe integer/)
   })
 
