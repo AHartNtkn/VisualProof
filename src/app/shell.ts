@@ -3,13 +3,10 @@ import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { Term } from '../kernel/term/term'
 import { parseTerm } from '../kernel/term/parse'
-import { serializeTerm } from '../kernel/term/serialize'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { applyConversion } from '../kernel/rules/conversion'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { checkTheorem } from '../kernel/proof/theorem'
-import { loadTheory, theoryToJson } from '../kernel/proof/store'
-import { buildFregeTheory, buildLambdaTheory } from '../theories/index'
 import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { PhysicsState } from '../view/physics'
@@ -19,6 +16,7 @@ import { buildScene } from '../view/scene'
 import type { Shape } from '../view/display'
 import { renderScene } from '../view/display'
 import { drawShapes } from '../view/canvas'
+import { bootBundledContext } from './boot'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 import type { ProofSession } from './session'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem } from './session'
@@ -78,29 +76,12 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   const ctx2d = canvas.getContext('2d')
   if (ctx2d === null) throw new Error('the canvas has no 2d context')
 
-  // ---- boot: load both bundled theories through the JSON path, merge contexts ----
-  const frege = loadTheory(theoryToJson(buildFregeTheory()))
-  const lambda = loadTheory(theoryToJson(buildLambdaTheory()))
-  const definitions: Record<string, Term> = { ...frege.theory.definitions }
-  for (const [id, body] of Object.entries(lambda.theory.definitions)) {
-    const existing = definitions[id]
-    if (existing !== undefined && serializeTerm(existing) !== serializeTerm(body)) {
-      throw new Error(`theory merge conflict: definition '${id}' has different bodies in the two bundles`)
-    }
-    definitions[id] = body
-  }
-  const theorems = new Map(frege.ctx.theorems)
-  for (const [name, thm] of lambda.ctx.theorems) {
-    if (theorems.has(name)) throw new Error(`theory merge conflict: duplicate theorem '${name}'`)
-    theorems.set(name, thm)
-  }
-  const relations: Record<string, DiagramWithBoundary> = { ...frege.theory.relations }
-  for (const [name, rel] of Object.entries(lambda.theory.relations)) {
-    if (relations[name] !== undefined) throw new Error(`theory merge conflict: duplicate relation '${name}'`)
-    relations[name] = rel
-  }
-  const ctx: ProofContext = { definitions, theorems }
-  const constNames: ReadonlySet<string> = new Set(Object.keys(definitions))
+  // ---- boot: both bundled theories through the verifying JSON road ----
+  const boot = bootBundledContext()
+  const ctx: ProofContext = boot.ctx
+  const theorems = boot.ctx.theorems
+  const relations = boot.relations
+  const constNames: ReadonlySet<string> = boot.constNames
 
   // ---- state ----
   let mode: 'edit' | 'prove' = 'edit'

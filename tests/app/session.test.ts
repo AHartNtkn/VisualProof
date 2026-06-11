@@ -12,7 +12,7 @@ const consts = new Set(['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO'])
 const p = (s: string) => parseTerm(s, consts)
 
 function goalPair() {
-  // goal: o = PLUS ONE ONE node ⟹ same node double-cut-wrapped (a toy goal)
+  // goal: an identity node ⟹ the same node double-cut-wrapped (a toy goal)
   const l = new DiagramBuilder()
   const n = l.termNode(l.root, p('\\x. x'))
   const lhsD = l.build()
@@ -180,5 +180,34 @@ describe('multi-step backward composition', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [])
     const s = startSession(lhs, rhs, ctx)
     expect(() => assembleTheorem(s, 'nope')).toThrowError(/have not met/)
+  })
+})
+
+describe('backward undo restores the composed tail', () => {
+  it('undo then a DIFFERENT redo keeps the tail consistent', () => {
+    const theory = buildFregeTheory()
+    const ctx = verifyTheory(theory)
+    const l = new DiagramBuilder()
+    l.termNode(l.root, p('\\x. x'))
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    const r = new DiagramBuilder()
+    const m = r.termNode(r.root, p('\\x. x'))
+    const o1 = r.cut(r.root)
+    const i1 = r.cut(o1)
+    const o2 = r.cut(i1)
+    r.cut(o2)
+    void m
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    let s = startSession(lhs, rhs, ctx)
+    s = applyBackward(s, { kind: 'unDoubleCut', outer: o2 })
+    s = applyBackward(s, { kind: 'unDoubleCut', outer: o1 })
+    s = undoBackward(s)
+    expect(s.backward.composedTail).toHaveLength(1)
+    // redo: the remaining pair is o1's (the inner one was restored by undo? no —
+    // undo restored the state AFTER unwrapping o2 only, so o1's pair remains)
+    s = applyBackward(s, { kind: 'unDoubleCut', outer: o1 })
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'redo')
+    expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
 })

@@ -15,9 +15,9 @@ function tsFilesUnder(dir: string): string[] {
 function importSpecifiers(file: string): string[] {
   const src = readFileSync(file, 'utf8')
   const specs: string[] = []
-  const re = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)/g
+  const re = /from\s+['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g
   for (let m = re.exec(src); m !== null; m = re.exec(src)) {
-    specs.push(m[1] ?? m[2]!)
+    specs.push(m[1] ?? m[2] ?? m[3]!)
   }
   return specs
 }

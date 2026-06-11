@@ -96,3 +96,16 @@ describe('erase polarity with content', () => {
     expect(applicableActions(d, sel, ctx).map((a) => a.kind)).not.toContain('erase')
   })
 })
+
+describe('double-cut elimination annulus content', () => {
+  it('is not offered when the annulus holds a node beside the inner cut... or anything at all', () => {
+    const h = new DiagramBuilder()
+    const outer = h.cut(h.root)
+    h.cut(outer)
+    h.termNode(outer, p('y')) // annulus polluted but children.length is still 1
+    const d = h.build()
+    const ctx = verifyTheory(buildFregeTheory())
+    const sel = mkSelection(d, { region: d.root, regions: [outer], nodes: [], wires: [] })
+    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).not.toContain('doubleCutElim')
+  })
+})
