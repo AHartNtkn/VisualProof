@@ -60,6 +60,21 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     expect(shared.scope).toBe(d.root)
   })
 
+  it('joinPorts scopes across incomparable regions at the deepest common ancestor, not the root', () => {
+    const h = new DiagramBuilder()
+    const outer = h.cut(h.root)
+    const left = h.cut(outer)
+    const right = h.cut(outer)
+    const n1 = h.termNode(left, p('\\x. x'))
+    const n2 = h.termNode(right, p('y'))
+    const d = h.build()
+    const out = joinPorts(d,
+      { node: n1, port: { kind: 'output' } },
+      { node: n2, port: { kind: 'freeVar', name: 'y' } })
+    const shared = Object.values(out.wires).find((w) => w.endpoints.length === 2)!
+    expect(shared.scope).toBe(outer)
+  })
+
   it('deletes a selection, trimming touching wires', () => {
     const d0 = emptyDiagram()
     const a = addTermNode(d0, d0.root, p('\\x. x'))

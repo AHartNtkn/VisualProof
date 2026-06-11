@@ -1,14 +1,15 @@
 import { describe, it, expect } from 'vitest'
 import { mkDiagram, type Region } from '../../../src/kernel/diagram/diagram'
-import { isAncestorOrEqual, cutDepth, polarity } from '../../../src/kernel/diagram/regions'
+import { isAncestorOrEqual, deepestCommonAncestor, cutDepth, polarity } from '../../../src/kernel/diagram/regions'
 
-// sheet > cut1 > bubble > cut2 ; sheet > bubble2
+// sheet > cut1 > bubble > {cut2, cut3} ; sheet > bubble2
 const regions: Record<string, Region> = {
   r0: { kind: 'sheet' },
   r1: { kind: 'cut', parent: 'r0' },
   r2: { kind: 'bubble', parent: 'r1', arity: 1 },
   r3: { kind: 'cut', parent: 'r2' },
   r4: { kind: 'bubble', parent: 'r0', arity: 0 },
+  r5: { kind: 'cut', parent: 'r2' },
 }
 const d = mkDiagram({ root: 'r0', regions })
 
@@ -25,6 +26,28 @@ describe('isAncestorOrEqual', () => {
     expect(() => isAncestorOrEqual(d, 'ghost', 'r0')).toThrowError(/unknown region 'ghost'/)
     expect(() => isAncestorOrEqual(d, 'r0', 'ghost')).toThrowError(/unknown region 'ghost'/)
     expect(() => isAncestorOrEqual(d, 'ghost', 'ghost')).toThrowError(/unknown region 'ghost'/)
+  })
+})
+
+describe('deepestCommonAncestor', () => {
+  it('returns the deeper region when the two are comparable', () => {
+    expect(deepestCommonAncestor(d, 'r0', 'r3')).toBe('r0')
+    expect(deepestCommonAncestor(d, 'r3', 'r1')).toBe('r1')
+    expect(deepestCommonAncestor(d, 'r3', 'r3')).toBe('r3')
+  })
+
+  it('meets incomparable siblings at their nearest shared enclosure, not the root', () => {
+    expect(deepestCommonAncestor(d, 'r3', 'r5')).toBe('r2')
+    expect(deepestCommonAncestor(d, 'r5', 'r3')).toBe('r2')
+  })
+
+  it('meets regions from separate top-level branches at the sheet', () => {
+    expect(deepestCommonAncestor(d, 'r3', 'r4')).toBe('r0')
+  })
+
+  it('throws on unknown region ids', () => {
+    expect(() => deepestCommonAncestor(d, 'ghost', 'r0')).toThrowError(/unknown region 'ghost'/)
+    expect(() => deepestCommonAncestor(d, 'r0', 'ghost')).toThrowError(/unknown region 'ghost'/)
   })
 })
 

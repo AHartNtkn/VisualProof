@@ -2,7 +2,7 @@ import type { Term } from '../kernel/term/term'
 import { freePorts } from '../kernel/term/term'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Port, Region, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
 import { mkDiagram, portKey } from '../kernel/diagram/diagram'
-import { isAncestorOrEqual } from '../kernel/diagram/regions'
+import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { removeSubgraph } from '../kernel/diagram/subgraph/splice'
 import { freshId } from '../kernel/diagram/subgraph/freshId'
@@ -80,11 +80,7 @@ export function joinPorts(d: Diagram, a: Endpoint, b: Endpoint): Diagram {
   const wa = holder(a)
   const wb = holder(b)
   if (wa === wb) return d
-  const sa = d.wires[wa]!.scope
-  const sb = d.wires[wb]!.scope
-  const scope = isAncestorOrEqual(d, sa, sb) ? sa
-    : isAncestorOrEqual(d, sb, sa) ? sb
-    : d.root
+  const scope = deepestCommonAncestor(d, d.wires[wa]!.scope, d.wires[wb]!.scope)
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
     if (id === wb) continue

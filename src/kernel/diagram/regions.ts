@@ -20,6 +20,23 @@ export function isAncestorOrEqual(d: Diagram, anc: RegionId, desc: RegionId): bo
   }
 }
 
+/** The deepest region lying on both parent chains (inclusive). */
+export function deepestCommonAncestor(d: Diagram, a: RegionId, b: RegionId): RegionId {
+  const chain = new Set<RegionId>()
+  for (let cur = a; ; ) {
+    chain.add(cur)
+    const r = regionOf(d, cur)
+    if (r.kind === 'sheet') break
+    cur = r.parent
+  }
+  for (let cur = b; ; ) {
+    if (chain.has(cur)) return cur
+    const r = regionOf(d, cur)
+    if (r.kind === 'sheet') throw new DiagramError(`regions '${a}' and '${b}' share no ancestor`)
+    cur = r.parent
+  }
+}
+
 /** Number of cuts on the path from the root to r, counting r itself if it is a cut. */
 export function cutDepth(d: Diagram, id: RegionId): number {
   let depth = 0
