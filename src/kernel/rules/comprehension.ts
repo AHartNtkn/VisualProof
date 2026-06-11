@@ -138,7 +138,10 @@ export function applyComprehensionAbstract(
       if (seenWires.has(w)) throw new RuleError(`occurrences overlap at wire '${w}'`)
       seenWires.add(w)
     }
-    const { pattern, attachments } = extractSubgraph(d, occ.sel)
+    const { pattern, attachments, binderStubs } = extractSubgraph(d, occ.sel)
+    if (binderStubs.length > 0) {
+      throw new RuleError(`occurrence ${k}: subgraphs with atoms bound outside the occurrence cannot be abstracted`)
+    }
     if (occ.args.length !== attachments.length) {
       throw new RuleError(`occurrence ${k} has ${attachments.length} attachment wires but ${occ.args.length} argument positions`)
     }

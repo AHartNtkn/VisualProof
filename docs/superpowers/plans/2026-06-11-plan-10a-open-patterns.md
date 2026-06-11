@@ -38,7 +38,7 @@
 - Modify: `src/kernel/proof/theorem.ts` (closed-only guard in applyTheorem)
 - Test: `tests/kernel/diagram/extract-open.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/extract-open.test.ts`:
 
@@ -165,12 +165,12 @@ describe('closed-only consumers refuse open occurrences by name', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/extract-open.test.ts`
 Expected: FAIL — `binderStubs` missing / extract throws `atom ... bound to ... outside the selection`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/diagram/subgraph/extract.ts`, replace the whole file with:
 
@@ -339,14 +339,16 @@ In `src/kernel/proof/theorem.ts`, inside `applyTheorem`, change the destructurin
 
 NOTE: the test regex for abstraction is `/bound outside the occurrence cannot be abstracted/` — make the message read `occurrence ${k}: subgraphs with atoms bound outside the occurrence cannot be abstracted` so it matches.
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck** (existing extract/iteration/comprehension tests must stay green — one existing test pins the OLD outside-binder rejection message `atom ... is bound to ... which is outside the selection`; that test's scenario, binder-below-anchor, now throws the refined message `neither lies in the selection nor encloses its anchor` — UPDATE that one existing test's regex accordingly and report it; any binder that ENCLOSES the anchor now extracts instead of throwing, which is the point of this plan)
+- [x] **Step 4: Verify PASS, full suite, typecheck** (existing extract/iteration/comprehension tests must stay green — one existing test pins the OLD outside-binder rejection message `atom ... is bound to ... which is outside the selection`; that test's scenario, binder-below-anchor, now throws the refined message `neither lies in the selection nor encloses its anchor` — UPDATE that one existing test's regex accordingly and report it; any binder that ENCLOSES the anchor now extracts instead of throwing, which is the point of this plan)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/subgraph/extract.ts src/kernel/rules/comprehension.ts src/kernel/proof/theorem.ts tests/kernel/diagram/extract-open.test.ts
 git commit -m "feat(kernel): open extraction via stub-bubble layers"
 ```
+
+**Review outcome (commit `e0dd5f1`, fixes `5c7cda8`+`5d43661`):** Deep review found the PLAN itself shipped an unsound intermediate state: with open extraction live but iteration untouched, applyDeiteration matched a stub bubble onto a DIFFERENT same-arity host bubble — concrete forgery reproduced (R(x) deleted, justified by S(x) under another quantifier), violating the plan's own binder-IDENTITY clause; applyIteration likewise spliced stubs as fresh quantifiers. Both rules now carry temporary loud guards (tests observed fail→pass) that Task 4 MUST remove (block added at Task 4). The implementer's deletion of the two old rejection tests was judged correct (both scenarios were binder-encloses-anchor, now legal by design); the plan's Step 4 note misclassified them. Enclosure-rejection branch proven unreachable on validated hosts (pure invariant guard; pinned via a forged-host test). All shape probes and mutations clean. Suite: 413. **Standing lesson: a plan that widens a producer must gate every consumer in the same task.**
 
 ---
 
@@ -356,7 +358,7 @@ git commit -m "feat(kernel): open extraction via stub-bubble layers"
 - Modify: `src/kernel/diagram/subgraph/splice.ts`
 - Test: `tests/kernel/diagram/splice-open.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/splice-open.test.ts`:
 
@@ -461,12 +463,12 @@ describe('spliceSubgraph with a binder map', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/splice-open.test.ts`
 Expected: FAIL — spliceSubgraph does not accept a fifth argument / behavior missing.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/diagram/subgraph/splice.ts`, change `spliceSubgraph`'s signature and body:
 
@@ -539,9 +541,9 @@ In the node-copy loop, atoms rebind through the binder map:
 
 (Everything else — wires, boundary merging — is unchanged: `regionMap.get(w.scope)` already maps stub-scoped wires to the splice region, which is valid.)
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/subgraph/splice.ts tests/kernel/diagram/splice-open.test.ts
@@ -556,7 +558,7 @@ git commit -m "feat(kernel): splice open patterns through a binder map"
 - Modify: `src/kernel/diagram/subgraph/match.ts`
 - Test: `tests/kernel/diagram/match-open.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/diagram/match-open.test.ts`:
 
@@ -657,12 +659,12 @@ describe('findOccurrences with openBinders', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/diagram/match-open.test.ts`
 Expected: FAIL — opts has no `openBinders` / matches empty where two are expected.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/diagram/subgraph/match.ts`:
 
@@ -762,14 +764,16 @@ RESOLUTION (implement exactly this): keep `regionMap` purely for REGION correspo
 
 With that, the candidate loop seeds ONLY `regionMap.set(effectiveRoot, R)` (no stub seeding, no ordering hazard), outer stubs never appear in regionMap (they have no content), and wire scopes at the innermost stub map to R correctly. The earlier sketch's "pre-seed stubs into regionMap" is superseded by `binderImage` — implement the `binderImage` version.
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck** (all existing matcher tests must stay green — the closed path is untouched when `openBinders` is absent)
+- [x] **Step 4: Verify PASS, full suite, typecheck** (all existing matcher tests must stay green — the closed path is untouched when `openBinders` is absent)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/diagram/subgraph/match.ts tests/kernel/diagram/match-open.test.ts
 git commit -m "feat(kernel): occurrence matching for open patterns via binder images"
 ```
+
+**Review outcome (Tasks 2+3, commits `42764d7`+`d5f32c1`, fixes `f7bdc94`+`155235c`):** SOUND after two real bug fixes: (1) endpointful wires scoped at non-innermost stubs fell through to a SILENT never-match (plan said any wire there is an error — fixed to loud); (2) the bare-wire subset rule keyed on pd.root instead of effectiveRoot under stubs (conservative, never forging, but broke stub transparency). Splice was token-for-token. Aliasing analysis: two stubs mapped to one host bubble is sound-as-primitive (insertion is sound for any content; iteration cannot produce aliasing — extraction is bijective by construction). Mutants i/iii survived test residue and were killed; mutant iv — the candidate-enclosure skip — survived ALL committed tests and probes yet is SOUNDNESS-LOAD-BEARING: dropping it let a pattern match a bubble-with-its-atom at ROOT, forging an out-of-scope free relation reference; killed with a demonstrated-forgery test. Suite: 427.
 
 ---
 
@@ -782,7 +786,21 @@ git commit -m "feat(kernel): occurrence matching for open patterns via binder im
 - Modify: `src/kernel/rules/index.ts`
 - Test: `tests/kernel/rules/open-rules.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+> **MUST-REMOVE (added by the Task 1 review):** `applyIteration` and
+> `applyDeiteration` carry TEMPORARY `binderStubs.length > 0` guards
+> (`src/kernel/rules/iteration.ts`), with two pinning tests in
+> `tests/kernel/rules/iteration.test.ts` ("refuses OPEN selections..." and
+> "refuses removal justified only by an ISOMORPHIC occurrence under a
+> DIFFERENT binder..."). Between Task 1 and Task 4, without them, open
+> iteration spliced the stub as a FRESH quantifier and open deiteration
+> accepted isomorphic-but-different-binder justifiers (demonstrated unsound:
+> ∃S.S(x) justified deleting R(x) under a cut, leaving an empty cut). This
+> task must DELETE both guards and REPLACE the iteration-refusal test; the
+> different-binder deiteration test must be kept but its expectation changes
+> from the guard message to `/no justifying occurrence/` (binder-identity
+> matching makes the decoy a non-match).
+
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/open-rules.test.ts`:
 
@@ -938,12 +956,12 @@ describe('vacuous bubble intro/elim', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/open-rules.test.ts`
 Expected: FAIL — cannot resolve `rules/vacuous`; applyInsertion takes no fifth argument; iteration throws on the open extraction.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/rules/iteration.ts` — thread the open machinery through both rules:
 
@@ -1081,9 +1099,9 @@ export { applyVacuousBubbleIntro, applyVacuousBubbleElim } from './vacuous'
 
 (`iteration.ts` will need `isAncestorOrEqual` — already imported — and no new imports; `insertion.ts` signature change is source-compatible for all existing callers.)
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/iteration.ts src/kernel/rules/insertion.ts src/kernel/rules/vacuous.ts src/kernel/rules/index.ts tests/kernel/rules/open-rules.test.ts
@@ -1101,7 +1119,7 @@ git commit -m "feat(kernel): open iteration/deiteration/insertion; vacuous bubbl
 - Modify: `src/kernel/proof/index.ts` (no new exports needed unless types moved — verify)
 - Test: `tests/kernel/proof/open-steps.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/proof/open-steps.test.ts`:
 
@@ -1198,12 +1216,12 @@ describe('open and vacuous proof steps', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/proof/open-steps.test.ts`
 Expected: FAIL — step kinds missing / insertion has no `binders` field.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/kernel/proof/step.ts`:
 
@@ -1280,9 +1298,9 @@ NOTE: the `binders` field is REQUIRED on insertion steps (empty object for close
       return { rule, region: str(j.region, 'region') }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck** (report every existing test updated for the `binders: {}` field)
+- [x] **Step 4: Verify PASS, full suite, typecheck** (report every existing test updated for the `binders: {}` field)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/proof/step.ts src/kernel/proof/compose.ts src/kernel/proof/json.ts tests/kernel/proof/open-steps.test.ts tests/kernel/proof/step.test.ts tests/kernel/proof/json.test.ts
@@ -1290,6 +1308,8 @@ git commit -m "feat(kernel): open insertion and vacuous bubble proof steps"
 ```
 
 (Include any other test file the `binders` field forced you to touch in the add list.)
+
+**Review outcome (Tasks 4+5, commits `96a80af`+`f88a4ab`, fix `a2a1253`):** APPROVED; src verbatim; MUST-REMOVE block satisfied (temporary guards gone, decoy test kept with flipped expectation). Probes: iteration's explicit binder gate proven unreachable via extraction (kept as invariant guard; splice backstop pinned); multi-node open subgraph with content cut round-trips two cuts deep; vacuous elim after legitimate atom erasure is sound (R vacuous NOW) and agrees by fingerprint with the instantiate path; proof-layer binder failures loud with polarity firing first. **Probe e pre-validated Task 6's ENTIRE derivation — the plan's ℕ(z) script ran through checkTheorem end to end with zero deviations (4 atoms bound to rB as predicted).** Mutant vi (compose binder values unmapped) survived a misnamed test — killed in `a2a1253` with a non-identity-iso case. Suite: 439.
 
 ---
 
@@ -1300,7 +1320,7 @@ git commit -m "feat(kernel): open insertion and vacuous bubble proof steps"
 
 This task is DERIVATION work against the real kernel: the test builds the ℕ machinery and proves the two flagship theorems through `checkTheorem`. The spike (memory: plan10-frege-spike-findings) verified ℕ's shape and the instantiate/deiterate/double-cut mechanics; the new rules supply the missing moves. The exact step sequences below were derived on paper — where a replay refusal or fingerprint mismatch appears, that is a real finding: fix TEST-FIRST by adjusting the derivation (never the kernel) and record the correction prominently in the report. The THEOREM RHS for `zeroIsNat` is CAPTURED from the derivation (define ℕ as the derivable form): replay the steps, take the result as `rhs`, and the review verifies the captured shape is a faithful ℕ.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 `tests/kernel/proof/frege.test.ts`:
 
@@ -1441,9 +1461,9 @@ gates. If the whole strategy fails at some step with no derivable
 alternative, report BLOCKED with the precise refusal — that is a kernel
 completeness finding for the controller.
 
-- [ ] **Step 2: Run; iterate the derivation until checkTheorem accepts.** Report every adjustment.
+- [x] **Step 2: Run; iterate the derivation until checkTheorem accepts.** Report every adjustment.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/kernel/proof/frege.test.ts
@@ -1463,3 +1483,9 @@ git commit -m "test(kernel): z = ZERO ⟹ ℕ(z) derived and checked end to end"
 - ℕ(n) ⟹ ℕ(SUCC n) and the induction-instance theorems land in Plan 10b with the bundled theory (same machinery; longer derivations).
 - Open theorem sides and open comprehension abstraction remain refused-by-name (future work if a proof needs them).
 - The matcher symmetry/bare-wire items and abstraction R(x,x) limitation (Plans 6–7) remain.
+
+## Task 6 + final whole-branch review
+
+Task 6 (commit `8e0a4ea`): the derivation script passed on FIRST transcription (pre-validated by the Tasks 4–5 review probe). `z = ZERO ⟹ ℕ(z)` is a checked theorem.
+
+Final review: READY TO MERGE; no soundness issues. Forgery hunts: quantifier escape impossible (dcElim's annulus gate + mkDiagram's binder-encloses-atom invariant; probed composed chains); theorem-layer laundering clean (open-step proofs round-trip theory files with strict binders field, re-verify on load, apply in hosts); binder identity exact across proof-created (vacuousIntro) bubbles. The captured ℕ(z) shape written out in full and judged FAITHFUL: base and conclusion atoms on the boundary line carrying the ZERO evidence, closure conjunct intact with its own y/Sy wires — for z=ZERO the base/conclusion coincidence on z's line is exactly why ℕ(0) is provable. Caveat for Plan 10b: the cut part alone is tautological over an arbitrary line; the ZERO terms on the line are what pin the statement (accepted: ℕ is defined as the derivable form). Closed-path audit: every matcher/splice change gated behind openBinders/binderMap presence; extraction's behavior change is the plan's point with consumers re-guarded. Six hygiene findings all fixed in `f2283d7` (incl. the latent root-scoped-wire matcher gap, now a loud guard). Suite: 440.

@@ -72,7 +72,7 @@ describe('applyStep mirrors the direct appliers', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const d = h.build()
-    const out = applyStep(d, { rule: 'insertion', region: cut, pattern: pat, attachments: [] }, ctx)
+    const out = applyStep(d, { rule: 'insertion', region: cut, pattern: pat, attachments: [], binders: {} }, ctx)
     expect(Object.values(out.nodes)).toHaveLength(1)
   })
 })

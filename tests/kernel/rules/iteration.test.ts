@@ -135,6 +135,29 @@ describe('applyDeiteration', () => {
     expect(out.nodes[a]).toBeDefined()
   })
 
+  it('refuses removal justified only by an ISOMORPHIC occurrence under a DIFFERENT binder', () => {
+    // Host: ∃x. [∃S. S(x)] ∧ [∃R. ¬R(x)]. The selection is the R-application
+    // under the cut (an OPEN selection: R = rB binds it from outside). The
+    // only structural match of its stub pattern ∃?.?(x) is the rD bubble —
+    // a DIFFERENT relation variable. Binder identity matching makes the decoy
+    // a non-match (open binders map stubs to specific host bubbles), so the
+    // removal fails as unjustified.
+    const h = new DiagramBuilder()
+    const rD = h.bubble(h.root, 1)
+    const aJ = h.atom(rD, rD)
+    const rB = h.bubble(h.root, 1)
+    const c1 = h.cut(rB)
+    const aT = h.atom(c1, rB)
+    h.wire(h.root, [
+      { node: aJ, port: { kind: 'arg', index: 0 } },
+      { node: aT, port: { kind: 'arg', index: 0 } },
+    ])
+    const d = h.build()
+    const sel = mkSelection(d, { region: c1, regions: [], nodes: [aT], wires: [] })
+    expect(() => applyDeiteration(d, sel, 100))
+      .toThrowError(/no justifying occurrence/)
+  })
+
   it('mentions undecided pairs in the failure when fuel ran out', () => {
     // copy and candidate original are both non-normalizing and structurally
     // different — comparison exhausts fuel, so the failure must say so

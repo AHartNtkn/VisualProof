@@ -82,26 +82,21 @@ describe('extractSubgraph atom-binder boundary', () => {
     expect(() => extractSubgraph(d, sel)).not.toThrow()
   })
 
-  it('rejects atoms bound to an unselected ancestor bubble, naming the violation', () => {
+  it('allows atoms bound to the anchor to extract as open patterns', () => {
+    // atoms bound to an enclosing binder (including the anchor itself)
+    // extract as open patterns with stub-bubble layers; only binders off the
+    // ancestor chain are rejected
     const b = new DiagramBuilder()
     const bub = b.bubble(b.root, 0)
     const cut = b.cut(bub)
     const a = b.atom(cut, bub)
     void a
     const d = b.build()
-    // select only the cut, inside the bubble: the atom's binder stays outside
     const sel = mkSelection(d, { region: bub, regions: [cut], nodes: [], wires: [] })
-    expect(() => extractSubgraph(d, sel))
-      .toThrowError(/atom 'n0' is bound to 'r1' which is outside the selection/)
+    // Atoms in selected regions whose binders are external (not selected)
+    // are now extracted as open patterns
+    const ex = extractSubgraph(d, sel)
+    expect(ex.binderStubs.length).toBeGreaterThan(0) // has external binders
   })
 
-  it('rejects atoms bound to the selection region itself (the anchor is not selected content)', () => {
-    const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 0)
-    const a = b.atom(bub, bub)
-    const d = b.build()
-    const sel = mkSelection(d, { region: bub, regions: [], nodes: [a], wires: [] })
-    expect(() => extractSubgraph(d, sel))
-      .toThrowError(/atom 'n0' is bound to 'r1' which is outside the selection/)
-  })
 })

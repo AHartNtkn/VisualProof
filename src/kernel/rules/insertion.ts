@@ -14,11 +14,12 @@ export function applyInsertion(
   atRegion: RegionId,
   pattern: DiagramWithBoundary,
   attachments: readonly WireId[],
+  binders: ReadonlyMap<RegionId, RegionId> = new Map(),
 ): Diagram {
   if (polarity(d, atRegion) !== 'negative') {
     throw new RuleError(`insertion requires a negative region; '${atRegion}' is positive`)
   }
-  return spliceSubgraph(d, atRegion, pattern, attachments)
+  return spliceSubgraph(d, atRegion, pattern, attachments, binders)
 }
 
 /**

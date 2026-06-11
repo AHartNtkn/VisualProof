@@ -29,7 +29,7 @@ describe('step round-trips through JSON', () => {
 
     const sel = { region: 'r0', regions: ['r1'], nodes: ['n0'], wires: ['w0'] }
     const steps: ProofStep[] = [
-      { rule: 'insertion', region: 'r1', pattern: pat, attachments: ['w0'] },
+      { rule: 'insertion', region: 'r1', pattern: pat, attachments: ['w0'], binders: {} },
       { rule: 'wireJoin', a: 'w0', b: 'w1' },
       { rule: 'erasure', sel },
       { rule: 'wireSever', wire: 'w0', keep: [{ node: 'n0', port: { kind: 'freeVar', name: 'y' } }] },
@@ -85,7 +85,7 @@ describe('dwbFromJson validates boundary wire existence', () => {
     const bn = b.termNode(b.root, p('\\x. x'))
     const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
     const pat = mkDiagramWithBoundary(b.build(), [bw])
-    const step: ProofStep = { rule: 'insertion', region: 'r1', pattern: pat, attachments: ['w0'] }
+    const step: ProofStep = { rule: 'insertion', region: 'r1', pattern: pat, attachments: ['w0'], binders: {} }
     const j = JSON.parse(JSON.stringify(stepToJson(step))) as Record<string, unknown>
     const patJson = j['pattern'] as { boundary: string[] }
     patJson.boundary = ['nonexistent_wire_id']

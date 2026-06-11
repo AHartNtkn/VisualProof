@@ -134,7 +134,7 @@ function appFromJson(v: unknown, what: string): TheoremApplication {
 export function stepToJson(s: ProofStep): unknown {
   switch (s.rule) {
     case 'insertion':
-      return { rule: s.rule, region: s.region, pattern: dwbToJson(s.pattern), attachments: [...s.attachments] }
+      return { rule: s.rule, region: s.region, pattern: dwbToJson(s.pattern), attachments: [...s.attachments], binders: { ...s.binders } }
     case 'wireJoin':
       return { rule: s.rule, a: s.a, b: s.b }
     case 'erasure':
@@ -165,6 +165,10 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, wrap: selToJson(s.wrap), comp: dwbToJson(s.comp), occurrences: s.occurrences.map(occToJson) }
     case 'theorem':
       return { rule: s.rule, name: s.name, at: appToJson(s.at), direction: s.direction }
+    case 'vacuousIntro':
+      return { rule: s.rule, sel: selToJson(s.sel), arity: s.arity }
+    case 'vacuousElim':
+      return { rule: s.rule, region: s.region }
   }
 }
 
@@ -173,8 +177,11 @@ export function stepFromJson(j: unknown): ProofStep {
   const rule = str(j.rule, 'step.rule')
   switch (rule) {
     case 'insertion':
-      assertOnlyKeys(j, ['rule', 'region', 'pattern', 'attachments'], 'insertion step')
-      return { rule, region: str(j.region, 'region'), pattern: dwbFromJson(j.pattern), attachments: strArray(j.attachments, 'attachments') }
+      assertOnlyKeys(j, ['rule', 'region', 'pattern', 'attachments', 'binders'], 'insertion step')
+      if (!isRecord(j.binders)) fail('binders must be an object')
+      const binders: Record<string, string> = {}
+      for (const [k, v] of Object.entries(j.binders)) binders[k] = str(v, `binders['${k}']`)
+      return { rule, region: str(j.region, 'region'), pattern: dwbFromJson(j.pattern), attachments: strArray(j.attachments, 'attachments'), binders }
     case 'wireJoin':
       assertOnlyKeys(j, ['rule', 'a', 'b'], 'wireJoin step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
@@ -233,6 +240,14 @@ export function stepFromJson(j: unknown): ProofStep {
       if (direction !== 'forward' && direction !== 'reverse') fail("direction must be 'forward'|'reverse'")
       return { rule, name: str(j.name, 'name'), at: appFromJson(j.at, 'at'), direction }
     }
+    case 'vacuousIntro': {
+      assertOnlyKeys(j, ['rule', 'sel', 'arity'], 'vacuousIntro step')
+      if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')
+      return { rule, sel: selFromJson(j.sel, 'sel'), arity: j.arity }
+    }
+    case 'vacuousElim':
+      assertOnlyKeys(j, ['rule', 'region'], 'vacuousElim step')
+      return { rule, region: str(j.region, 'region') }
     default:
       return fail(`unknown rule '${rule}'`)
   }

@@ -20,8 +20,14 @@ export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion:
   if (c.allRegions.has(targetRegion)) {
     throw new RuleError(`iteration target '${targetRegion}' lies inside the iterated subgraph`)
   }
-  const { pattern, attachments } = extractSubgraph(d, sel)
-  return spliceSubgraph(d, targetRegion, pattern, attachments)
+  const { pattern, attachments, binderStubs, binderAttachments } = extractSubgraph(d, sel)
+  for (const hb of binderAttachments) {
+    if (!isAncestorOrEqual(d, hb, targetRegion)) {
+      throw new RuleError(`iteration target '${targetRegion}' lies outside binder '${hb}'; atoms cannot escape their quantifier`)
+    }
+  }
+  const binderMap = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
+  return spliceSubgraph(d, targetRegion, pattern, attachments, binderMap)
 }
 
 /**
@@ -32,8 +38,9 @@ export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion:
  */
 export function applyDeiteration(d: Diagram, sel: SubgraphSelection, fuel: number): Diagram {
   const c = selectionContents(d, sel)
-  const { pattern, attachments } = extractSubgraph(d, sel)
-  const { matches, undecided } = findOccurrences(d, pattern, { fuel })
+  const { pattern, attachments, binderStubs, binderAttachments } = extractSubgraph(d, sel)
+  const openBinders = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
+  const { matches, undecided } = findOccurrences(d, pattern, { fuel, openBinders })
   const disjoint = (m: Occurrence): boolean => {
     for (const r of m.regionMap.values()) if (c.allRegions.has(r)) return false
     for (const n of m.nodeMap.values()) if (c.allNodes.has(n)) return false

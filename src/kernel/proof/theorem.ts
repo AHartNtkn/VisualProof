@@ -86,7 +86,12 @@ export function applyTheorem(
       `theorem '${thm.name}' applied ${direction} requires a ${need} region; '${at.sel.region}' is ${have}`,
     )
   }
-  const { pattern, attachments } = extractSubgraph(d, at.sel)
+  const { pattern, attachments, binderStubs } = extractSubgraph(d, at.sel)
+  if (binderStubs.length > 0) {
+    throw new RuleError(
+      `theorem '${thm.name}' cannot be applied at an occurrence with atoms bound outside it (open theorem sides are not supported)`,
+    )
+  }
   if (at.args.length !== attachments.length) {
     throw new RuleError(
       `the selection has ${attachments.length} attachment wires but theorem '${thm.name}' takes ${at.args.length} arguments here`,

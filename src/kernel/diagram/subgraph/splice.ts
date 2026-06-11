@@ -36,12 +36,17 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
  * splice IS the attachment wire's scope — a non-root stub scope would assert
  * a location the splice cannot honor; see boundary.ts). Pattern content gets
  * fresh host ids deterministically; the result is re-validated by mkDiagram.
+ *
+ * With a binder map, mapped stubs are location-transparent layers (not copied
+ * as fresh bubbles); their children reparent to the splice region, and atoms
+ * bound to them rebind to the host bubbles indicated in the map.
  */
 export function spliceSubgraph(
   host: Diagram,
   atRegion: RegionId,
   pattern: DiagramWithBoundary,
   attachments: readonly WireId[],
+  binderMap: ReadonlyMap<RegionId, RegionId> = new Map(),
 ): Diagram {
   if (host.regions[atRegion] === undefined) {
     throw new DiagramError(`splice region '${atRegion}' does not exist`)
@@ -64,11 +69,29 @@ export function spliceSubgraph(
     }
   }
 
+  for (const [stub, hb] of binderMap) {
+    const ps = pd.regions[stub]
+    if (ps === undefined) throw new DiagramError(`binder map stub '${stub}' is not a pattern region`)
+    if (ps.kind !== 'bubble') throw new DiagramError(`binder map stub '${stub}' is not a bubble`)
+    const target = host.regions[hb]
+    if (target === undefined) throw new DiagramError(`binder map target '${hb}' does not exist`)
+    if (target.kind !== 'bubble') throw new DiagramError(`binder map target '${hb}' is not a bubble`)
+    if (target.arity !== ps.arity) {
+      throw new DiagramError(`binder map arity mismatch: stub '${stub}' has arity ${ps.arity}, host bubble '${hb}' has ${target.arity}`)
+    }
+    if (!isAncestorOrEqual(host, hb, atRegion)) {
+      throw new DiagramError(`binder map target '${hb}' does not enclose the splice region '${atRegion}'`)
+    }
+  }
+
   // fresh-id maps for pattern regions (except root), nodes, internal wires
   const takenRegions = new Set(Object.keys(host.regions))
   const regionMap = new Map<RegionId, RegionId>([[pd.root, atRegion]])
+  // mapped binder stubs are location-transparent layers: their children land
+  // at the splice region and atoms bound to them rebind to the host bubble
+  for (const stub of binderMap.keys()) regionMap.set(stub, atRegion)
   for (const id of Object.keys(pd.regions)) {
-    if (id === pd.root) continue
+    if (id === pd.root || binderMap.has(id)) continue
     const fresh = freshId(takenRegions, id)
     takenRegions.add(fresh)
     regionMap.set(id, fresh)
@@ -91,7 +114,7 @@ export function spliceSubgraph(
 
   const regions: Record<RegionId, Region> = { ...host.regions }
   for (const [id, r] of Object.entries(pd.regions)) {
-    if (id === pd.root) continue
+    if (id === pd.root || binderMap.has(id)) continue
     const mapped = regionMap.get(id)!
     if (r.kind === 'sheet') continue // impossible: single sheet is the root
     regions[mapped] = r.kind === 'cut'
@@ -104,7 +127,7 @@ export function spliceSubgraph(
     const mapped = nodeMap.get(id)!
     nodes[mapped] = n.kind === 'term'
       ? { kind: 'term', region: regionMap.get(n.region)!, term: n.term }
-      : { kind: 'atom', region: regionMap.get(n.region)!, binder: regionMap.get(n.binder)! }
+      : { kind: 'atom', region: regionMap.get(n.region)!, binder: binderMap.get(n.binder) ?? regionMap.get(n.binder)! }
   }
 
   const mapEndpoints = (eps: readonly Endpoint[]): Endpoint[] =>
