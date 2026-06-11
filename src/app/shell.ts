@@ -1,0 +1,636 @@
+import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
+import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
+import type { Term } from '../kernel/term/term'
+import { parseTerm } from '../kernel/term/parse'
+import { serializeTerm } from '../kernel/term/serialize'
+import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
+import { applyConversion } from '../kernel/rules/conversion'
+import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import { checkTheorem } from '../kernel/proof/theorem'
+import { loadTheory, theoryToJson } from '../kernel/proof/store'
+import { buildFregeTheory, buildLambdaTheory } from '../theories/index'
+import type { Vec2 } from '../view/vec'
+import { vec, length, sub } from '../view/vec'
+import type { PhysicsState } from '../view/physics'
+import { initialState, step, DEFAULT_PARAMS } from '../view/physics'
+import type { Scene } from '../view/scene'
+import { buildScene } from '../view/scene'
+import type { Shape } from '../view/display'
+import { renderScene } from '../view/display'
+import { drawShapes } from '../view/canvas'
+import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
+import type { ProofSession } from './session'
+import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem } from './session'
+import type { Hit } from './hittest'
+import { hitTest, buildSelection } from './hittest'
+import type { ActionDescriptor } from './actions'
+import { applicableActions } from './actions'
+
+/**
+ * The DOM shell: browser glue over the tested headless core (edit, session,
+ * hittest, actions) and the view layer. Every decision branch here calls a
+ * tested function; the shell itself owns only browser concerns — mode state,
+ * the displayed diagram, selection, pending two-phase actions, physics
+ * seeding + pin-while-drag, the viewport transform, and chrome wiring.
+ * Behavioral coverage is Plan 10d's E2E.
+ */
+
+export type ShellOptions = {
+  readonly canvas: HTMLCanvasElement
+  readonly chrome: HTMLElement
+}
+
+/**
+ * UI input tolerances, CSS pixels. Like WIRE_TOLERANCE these are documented
+ * interaction constants, not correctness heuristics: pointer coordinates
+ * quantize to whole pixels and hands tremble 1–2px during a click, so a
+ * zero movement threshold would misclassify ordinary clicks as drags; wheel
+ * deltas arrive in pixel units and map exponentially to zoom so equal wheel
+ * travel gives equal zoom RATIO at any scale.
+ */
+const CLICK_SLOP_PX = 3
+const ZOOM_PER_WHEEL_PX = 0.001
+
+/** Visual pacing only (same role as DEFAULT_PARAMS; the demo uses 4 too). */
+const PHYSICS_STEPS_PER_FRAME = 4
+
+const SELECT_STROKE = '#d97706'
+const HOVER_STROKE = '#2563eb'
+
+type Pending =
+  | { readonly kind: 'iterate'; readonly sel: SubgraphSelection }
+  | { readonly kind: 'cite'; readonly name: string; readonly direction: 'forward' | 'reverse'; readonly sel: SubgraphSelection; readonly args: WireId[] }
+
+type Drag =
+  | { readonly kind: 'node'; readonly node: NodeId }
+  | { readonly kind: 'pan'; readonly startOffset: { readonly x: number; readonly y: number }; readonly startScreen: Vec2 }
+
+/** Backward actions supported in 10c; the rest land in 10d with their E2E. */
+function backwardActionFor(a: ActionDescriptor, sel: SubgraphSelection): { kind: 'unDoubleCut'; outer: RegionId } | { kind: 'unVacuousBubble'; bubble: RegionId } | null {
+  if (a.kind === 'doubleCutElim') return { kind: 'unDoubleCut', outer: sel.regions[0]! }
+  if (a.kind === 'vacuousElim') return { kind: 'unVacuousBubble', bubble: sel.regions[0]! }
+  return null
+}
+
+export function mountShell(opts: ShellOptions): { dispose(): void } {
+  const { canvas, chrome } = opts
+  const ctx2d = canvas.getContext('2d')
+  if (ctx2d === null) throw new Error('the canvas has no 2d context')
+
+  // ---- boot: load both bundled theories through the JSON path, merge contexts ----
+  const frege = loadTheory(theoryToJson(buildFregeTheory()))
+  const lambda = loadTheory(theoryToJson(buildLambdaTheory()))
+  const definitions: Record<string, Term> = { ...frege.theory.definitions }
+  for (const [id, body] of Object.entries(lambda.theory.definitions)) {
+    const existing = definitions[id]
+    if (existing !== undefined && serializeTerm(existing) !== serializeTerm(body)) {
+      throw new Error(`theory merge conflict: definition '${id}' has different bodies in the two bundles`)
+    }
+    definitions[id] = body
+  }
+  const theorems = new Map(frege.ctx.theorems)
+  for (const [name, thm] of lambda.ctx.theorems) {
+    if (theorems.has(name)) throw new Error(`theory merge conflict: duplicate theorem '${name}'`)
+    theorems.set(name, thm)
+  }
+  const relations: Record<string, DiagramWithBoundary> = { ...frege.theory.relations }
+  for (const [name, rel] of Object.entries(lambda.theory.relations)) {
+    if (relations[name] !== undefined) throw new Error(`theory merge conflict: duplicate relation '${name}'`)
+    relations[name] = rel
+  }
+  const ctx: ProofContext = { definitions, theorems }
+  const constNames: ReadonlySet<string> = new Set(Object.keys(definitions))
+
+  // ---- state ----
+  let mode: 'edit' | 'prove' = 'edit'
+  let side: 'forward' | 'backward' = 'forward'
+  let editDiagram = emptyDiagram()
+  const editHistory: Diagram[] = []
+  let goalLhs: DiagramWithBoundary | null = null
+  let goalRhs: DiagramWithBoundary | null = null
+  let session: ProofSession | null = null
+  let hits: Hit[] = []
+  let kernelSel: SubgraphSelection | null = null
+  let pending: Pending | null = null
+  let displayed: Diagram = editDiagram
+  let physics: PhysicsState = initialState(displayed)
+  let pin: { readonly node: NodeId; pos: Vec2 } | null = null
+  let lastScene: Scene = buildScene(displayed, physics.positions)
+  let message = 'EDIT mode: type a term (\\ is λ) and Add, click to select, wrap/delete/join'
+  let drag: Drag | null = null
+  let downScreen: Vec2 | null = null
+  let dragMoved = false
+  let hoverWorld: Vec2 | null = null
+  let disposed = false
+  let raf = 0
+
+  canvas.width = window.innerWidth
+  canvas.height = window.innerHeight
+  const view = { scale: 6, offsetX: canvas.width / 2, offsetY: canvas.height / 2 }
+
+  const toWorld = (screen: Vec2): Vec2 =>
+    vec((screen.x - view.offsetX) / view.scale, (screen.y - view.offsetY) / view.scale)
+
+  const currentDiagram = (): Diagram => {
+    if (mode === 'prove' && session !== null) {
+      return side === 'forward' ? session.forward.current : session.backward.current
+    }
+    return editDiagram
+  }
+
+  // ---- chrome ----
+  const div = (cls: string): HTMLDivElement => {
+    const d = document.createElement('div')
+    d.className = cls
+    return d
+  }
+  const button = (label: string, onClick: () => void): HTMLButtonElement => {
+    const b = document.createElement('button')
+    b.textContent = label
+    b.type = 'button'
+    b.addEventListener('click', onClick)
+    return b
+  }
+  const textInput = (id: string, placeholder: string): HTMLInputElement => {
+    const i = document.createElement('input')
+    i.type = 'text'
+    i.id = id
+    i.placeholder = placeholder
+    return i
+  }
+  const numberInput = (id: string, label: string, value: number): { wrap: HTMLElement; input: HTMLInputElement } => {
+    const wrap = document.createElement('label')
+    wrap.append(`${label} `)
+    const input = document.createElement('input')
+    input.type = 'number'
+    input.id = id
+    input.value = String(value)
+    input.style.width = '4em'
+    wrap.append(input)
+    return { wrap, input }
+  }
+
+  const statusDiv = div('vpa-status')
+  statusDiv.id = 'status'
+  const editRow = div('vpa-row')
+  const goalRow = div('vpa-row')
+  const proveRow = div('vpa-row')
+  const menuDiv = div('vpa-menu')
+  menuDiv.id = 'action-menu'
+  const theoremsDiv = div('vpa-theorems')
+  theoremsDiv.id = 'theorems'
+
+  const termInput = textInput('term-input', 'term, e.g. \\x. x y (also: insertion pattern / convert target / relation name)')
+  const nameInput = textInput('theorem-name', 'theorem name')
+  const arity = numberInput('arity-input', 'arity', 1)
+  const fuel = numberInput('fuel-input', 'fuel', 64)
+
+  const guard = (fn: () => void) => (): void => {
+    try {
+      fn()
+    } catch (e) {
+      // the kernel's refusal message IS the UX copy — verbatim into the status line
+      message = e instanceof Error ? e.message : String(e)
+      refreshChrome()
+    }
+  }
+
+  const readCount = (input: HTMLInputElement, what: string): number => {
+    const n = Number(input.value)
+    if (!Number.isInteger(n) || n < 1) throw new Error(`${what} must be a positive integer, got '${input.value}'`)
+    return n
+  }
+  const parseInput = (): Term => {
+    if (termInput.value.trim() === '') throw new Error('the term input is empty: type a term first (\\ is λ)')
+    return parseTerm(termInput.value, constNames)
+  }
+
+  const sync = (): void => {
+    const d = currentDiagram()
+    if (d !== displayed) {
+      // diagram identity changed: re-seed physics (layout never persists),
+      // drop selection/pending/pin — their ids belong to the old diagram
+      displayed = d
+      physics = initialState(d)
+      lastScene = buildScene(displayed, physics.positions)
+      pin = null
+      hits = []
+      kernelSel = null
+      pending = null
+    }
+    refreshChrome()
+  }
+
+  const setHits = (next: Hit[]): void => {
+    hits = next
+    if (hits.length === 0) {
+      kernelSel = null
+    } else {
+      try {
+        kernelSel = buildSelection(displayed, hits)
+        message = `selected ${hits.map((h) => `${h.kind} '${h.id}'`).join(', ')}`
+      } catch (e) {
+        kernelSel = null
+        message = e instanceof Error ? e.message : String(e)
+      }
+    }
+    refreshChrome()
+  }
+
+  // ---- edit operations (mkDiagram-validated surgery via edit.ts) ----
+  const pushEdit = (d: Diagram): void => {
+    editHistory.push(editDiagram)
+    editDiagram = d
+    sync()
+  }
+  const requireEdit = (): void => {
+    if (mode !== 'edit') throw new Error('construction is an EDIT-mode operation; switch modes first')
+  }
+  const requireSel = (): SubgraphSelection => {
+    if (kernelSel === null) throw new Error('no valid selection: click nodes/regions/wires of one region first')
+    return kernelSel
+  }
+
+  const onAddTerm = guard(() => {
+    requireEdit()
+    const region = hits.length === 1 && hits[0]!.kind === 'region' ? hits[0]!.id : editDiagram.root
+    const { diagram, node } = addTermNode(editDiagram, region, parseInput())
+    pushEdit(diagram)
+    message = `added term node '${node}' in region '${region}'`
+    refreshChrome()
+  })
+  const onWrapCut = guard(() => {
+    requireEdit()
+    const { diagram, region } = addCut(editDiagram, requireSel())
+    pushEdit(diagram)
+    message = `wrapped selection in cut '${region}'`
+    refreshChrome()
+  })
+  const onWrapBubble = guard(() => {
+    requireEdit()
+    const { diagram, region } = addBubble(editDiagram, requireSel(), readCount(arity.input, 'bubble arity'))
+    pushEdit(diagram)
+    message = `wrapped selection in bubble '${region}'`
+    refreshChrome()
+  })
+  const onDelete = guard(() => {
+    requireEdit()
+    pushEdit(deleteSelection(editDiagram, requireSel()))
+    message = 'deleted the selection'
+    refreshChrome()
+  })
+  const onJoinWires = guard(() => {
+    requireEdit()
+    const wires = hits.filter((h): h is Hit & { kind: 'wire' } => h.kind === 'wire')
+    if (wires.length !== 2) throw new Error(`joining needs exactly two selected wires, got ${wires.length}`)
+    const repr = (id: WireId): Endpoint => {
+      const w = editDiagram.wires[id]
+      if (w === undefined) throw new Error(`unknown wire '${id}'`)
+      const ep = w.endpoints[0]
+      if (ep === undefined) throw new Error(`wire '${id}' has no endpoints to join through`)
+      return ep
+    }
+    pushEdit(joinPorts(editDiagram, repr(wires[0]!.id), repr(wires[1]!.id)))
+    message = `joined wires '${wires[0]!.id}' and '${wires[1]!.id}'`
+    refreshChrome()
+  })
+
+  // ---- goal + session ----
+  const onSetLhs = guard(() => {
+    requireEdit()
+    goalLhs = mkDiagramWithBoundary(editDiagram, [])
+    session = null
+    message = 'goal LHS snapshotted from the sheet'
+    refreshChrome()
+  })
+  const onSetRhs = guard(() => {
+    requireEdit()
+    goalRhs = mkDiagramWithBoundary(editDiagram, [])
+    session = null
+    message = 'goal RHS snapshotted from the sheet'
+    refreshChrome()
+  })
+
+  const meetStatus = (): string => {
+    if (session === null) return 'no session'
+    return `forward ${session.forward.steps.length} step(s) · backward ${session.backward.steps.length} step(s) · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
+  }
+
+  const onToggleMode = guard(() => {
+    if (mode === 'edit') {
+      if (goalLhs === null || goalRhs === null) {
+        throw new Error('set both goal sides (LHS and RHS snapshots) before proving')
+      }
+      if (session === null) session = startSession(goalLhs, goalRhs, ctx)
+      mode = 'prove'
+      message = `PROVE mode: ${meetStatus()}`
+    } else {
+      mode = 'edit'
+      message = 'EDIT mode'
+    }
+    sync()
+  })
+  const onToggleSide = guard(() => {
+    if (mode !== 'prove') throw new Error('the forward/backward toggle applies in PROVE mode')
+    side = side === 'forward' ? 'backward' : 'forward'
+    message = `working ${side} — ${meetStatus()}`
+    sync()
+  })
+  const onUndo = guard(() => {
+    if (mode === 'edit') {
+      const prev = editHistory.pop()
+      if (prev === undefined) throw new Error('nothing to undo in edit mode')
+      editDiagram = prev
+      message = 'edit undone'
+      sync()
+      return
+    }
+    if (session === null) throw new Error('no active proof session')
+    session = side === 'forward' ? undoForward(session) : undoBackward(session)
+    message = `undone — ${meetStatus()}`
+    sync()
+  })
+  const onAssemble = guard(() => {
+    if (session === null) throw new Error('no active proof session')
+    const name = nameInput.value.trim() === '' ? 'untitled' : nameInput.value.trim()
+    const thm = assembleTheorem(session, name)
+    checkTheorem(thm, ctx)
+    message = `theorem '${name}' assembled and CHECKED (${thm.steps.length} step(s))`
+    refreshChrome()
+  })
+
+  // ---- proof actions ----
+  const applyF = (s: ProofStep): void => {
+    if (session === null) throw new Error('no active proof session')
+    session = applyForward(session, s)
+    message = meetStatus()
+    sync()
+  }
+
+  const commitAction = (a: ActionDescriptor, sel: SubgraphSelection): void => {
+    if (session === null) throw new Error('no active proof session')
+    if (side === 'backward') {
+      const action = backwardActionFor(a, sel)
+      if (action === null) {
+        throw new Error(`backward '${a.kind}' is not supported yet; only un-double-cut and un-vacuous-bubble ship in 10c`)
+      }
+      session = applyBackward(session, action)
+      message = meetStatus()
+      sync()
+      return
+    }
+    switch (a.kind) {
+      case 'erase':
+        applyF({ rule: 'erasure', sel })
+        return
+      case 'insert': {
+        const e0 = emptyDiagram()
+        const { diagram } = addTermNode(e0, e0.root, parseInput())
+        applyF({ rule: 'insertion', region: sel.region, pattern: mkDiagramWithBoundary(diagram, []), attachments: [], binders: {} })
+        return
+      }
+      case 'doubleCutWrap':
+        applyF({ rule: 'doubleCutIntro', sel })
+        return
+      case 'doubleCutElim':
+        applyF({ rule: 'doubleCutElim', region: sel.regions[0]! })
+        return
+      case 'vacuousWrap':
+        applyF({ rule: 'vacuousIntro', sel, arity: readCount(arity.input, 'bubble arity') })
+        return
+      case 'vacuousElim':
+        applyF({ rule: 'vacuousElim', region: sel.regions[0]! })
+        return
+      case 'iterate':
+        pending = { kind: 'iterate', sel }
+        message = 'iterate: click the target region (empty space is the sheet)'
+        refreshChrome()
+        return
+      case 'deiterate':
+        applyF({ rule: 'deiteration', sel, fuel: readCount(fuel.input, 'fuel') })
+        return
+      case 'convert': {
+        const node = sel.nodes[0]!
+        const term = parseInput()
+        const conv = applyConversion(currentDiagram(), node, term, readCount(fuel.input, 'fuel'))
+        applyF({ rule: 'conversion', node, term, certificate: conv.certificate, attachments: {} })
+        return
+      }
+      case 'instantiate': {
+        const name = termInput.value.trim()
+        const comp = relations[name]
+        if (comp === undefined) {
+          throw new Error(`unknown relation '${name}' — type a loaded relation name in the term input (loaded: ${Object.keys(relations).join(', ') || 'none'})`)
+        }
+        applyF({ rule: 'comprehensionInstantiate', bubble: sel.regions[0]!, comp, binders: {} })
+        return
+      }
+      case 'citeTheorem':
+        pending = { kind: 'cite', name: a.name, direction: a.direction, sel, args: [] }
+        message = `cite '${a.name}': click the argument wires in boundary order, then Commit`
+        refreshChrome()
+        return
+    }
+  }
+
+  // ---- clicks (selection + two-phase completion) ----
+  const handleClick = (world: Vec2): void => {
+    const hit = hitTest(lastScene, world)
+    if (pending !== null && pending.kind === 'iterate') {
+      const p = pending
+      pending = null
+      guard(() => {
+        const target = hit === null ? displayed.root : hit.kind === 'region' ? hit.id : null
+        if (target === null) throw new Error('iteration targets a region: click a cut/bubble or empty space for the sheet')
+        applyF({ rule: 'iteration', sel: p.sel, target })
+      })()
+      return
+    }
+    if (pending !== null && pending.kind === 'cite') {
+      if (hit !== null && hit.kind === 'wire') {
+        pending.args.push(hit.id)
+        message = `cite '${pending.name}': ${pending.args.length} argument wire(s) picked`
+        refreshChrome()
+      } else {
+        message = `cite '${pending.name}': click wires only (or Commit/Cancel in the menu)`
+        refreshChrome()
+      }
+      return
+    }
+    if (hit === null) {
+      setHits([])
+      return
+    }
+    const idx = hits.findIndex((h) => h.kind === hit.kind && h.id === hit.id)
+    setHits(idx >= 0 ? hits.filter((_, i) => i !== idx) : [...hits, hit])
+  }
+
+  // ---- chrome refresh ----
+  const refreshChrome = (): void => {
+    const goal = `goal ${goalLhs === null ? 'LHS unset' : 'LHS set'}/${goalRhs === null ? 'RHS unset' : 'RHS set'}`
+    const head = mode === 'edit' ? 'EDIT' : `PROVE·${side}`
+    statusDiv.textContent = `[${head}] ${goal} | ${session === null ? 'no session' : meetStatus()} | ${message}`
+    modeBtn.textContent = mode === 'edit' ? 'Switch to PROVE' : 'Switch to EDIT'
+    sideBtn.textContent = side === 'forward' ? 'Side: forward (toggle)' : 'Side: backward (toggle)'
+
+    menuDiv.replaceChildren()
+    if (pending !== null) {
+      const p = pending
+      if (p.kind === 'cite') {
+        menuDiv.append(button(`Commit citation of '${p.name}' (${p.args.length} arg(s))`, guard(() => {
+          pending = null
+          applyF({ rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: p.direction })
+        })))
+      }
+      menuDiv.append(button('Cancel pending action', () => {
+        pending = null
+        message = 'pending action cancelled'
+        refreshChrome()
+      }))
+      return
+    }
+    if (mode !== 'prove' || session === null || kernelSel === null) return
+    const sel = kernelSel
+    const all = applicableActions(currentDiagram(), sel, ctx)
+    const offered = side === 'backward' ? all.filter((a) => backwardActionFor(a, sel) !== null) : all
+    for (const a of offered) {
+      menuDiv.append(button(a.label, guard(() => commitAction(a, sel))))
+    }
+  }
+
+  // ---- rendering ----
+  const itemShapes = (scene: Scene, hit: Hit, stroke: string): Shape[] => {
+    if (hit.kind === 'node') {
+      const n = scene.nodes.find((x) => x.id === hit.id)
+      return n === undefined ? [] : [{ kind: 'circle', center: n.center, r: n.geometry.outerRadius, stroke }]
+    }
+    if (hit.kind === 'region') {
+      const r = scene.regions.find((x) => x.id === hit.id)
+      return r === undefined ? [] : [{ kind: 'circle', center: r.center, r: r.radius, stroke }]
+    }
+    const w = scene.wires.find((x) => x.id === hit.id)
+    return w === undefined ? [] : w.spokes.map((s): Shape => ({ kind: 'polyline', points: [w.hub, s], stroke, width: 3 }))
+  }
+
+  const withPin = (s: PhysicsState, p: { readonly node: NodeId; readonly pos: Vec2 }): PhysicsState => {
+    if (!s.positions.has(p.node)) return s
+    const positions = new Map(s.positions)
+    positions.set(p.node, p.pos)
+    const velocities = new Map(s.velocities)
+    velocities.set(p.node, vec(0, 0))
+    return { positions, velocities }
+  }
+
+  const frame = (): void => {
+    if (disposed) return
+    if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
+      canvas.width = window.innerWidth
+      canvas.height = window.innerHeight
+    }
+    for (let i = 0; i < PHYSICS_STEPS_PER_FRAME; i++) {
+      physics = step(displayed, physics, DEFAULT_PARAMS)
+      if (pin !== null) physics = withPin(physics, pin)
+    }
+    lastScene = buildScene(displayed, physics.positions)
+    const shapes: Shape[] = renderScene(lastScene)
+    for (const h of hits) shapes.push(...itemShapes(lastScene, h, SELECT_STROKE))
+    if (hoverWorld !== null) {
+      const hov = hitTest(lastScene, hoverWorld)
+      if (hov !== null) shapes.push(...itemShapes(lastScene, hov, HOVER_STROKE))
+    }
+    ctx2d.clearRect(0, 0, canvas.width, canvas.height)
+    drawShapes(ctx2d, shapes, view)
+    raf = requestAnimationFrame(frame)
+  }
+
+  // ---- pointer + wheel ----
+  const screenOf = (e: PointerEvent | WheelEvent): Vec2 => {
+    const r = canvas.getBoundingClientRect()
+    return vec(e.clientX - r.left, e.clientY - r.top)
+  }
+  const onPointerDown = (e: PointerEvent): void => {
+    const screen = screenOf(e)
+    downScreen = screen
+    dragMoved = false
+    const hit = hitTest(lastScene, toWorld(screen))
+    drag = hit !== null && hit.kind === 'node'
+      ? { kind: 'node', node: hit.id }
+      : { kind: 'pan', startOffset: { x: view.offsetX, y: view.offsetY }, startScreen: screen }
+    canvas.setPointerCapture(e.pointerId)
+  }
+  const onPointerMove = (e: PointerEvent): void => {
+    const screen = screenOf(e)
+    hoverWorld = toWorld(screen)
+    if (downScreen === null || drag === null) return
+    if (!dragMoved && length(sub(screen, downScreen)) > CLICK_SLOP_PX) dragMoved = true
+    if (!dragMoved) return
+    if (drag.kind === 'node') {
+      pin = { node: drag.node, pos: toWorld(screen) }
+    } else {
+      view.offsetX = drag.startOffset.x + (screen.x - drag.startScreen.x)
+      view.offsetY = drag.startOffset.y + (screen.y - drag.startScreen.y)
+    }
+  }
+  const onPointerUp = (e: PointerEvent): void => {
+    const screen = screenOf(e)
+    if (downScreen !== null && !dragMoved) handleClick(toWorld(screen))
+    drag = null
+    downScreen = null
+    dragMoved = false
+    pin = null // release: the pin lifts, physics resettles
+  }
+  const onWheel = (e: WheelEvent): void => {
+    e.preventDefault()
+    const screen = screenOf(e)
+    const world = toWorld(screen)
+    view.scale *= Math.exp(-e.deltaY * ZOOM_PER_WHEEL_PX)
+    // keep the world point under the cursor fixed
+    view.offsetX = screen.x - world.x * view.scale
+    view.offsetY = screen.y - world.y * view.scale
+  }
+
+  // ---- assemble the chrome ----
+  editRow.append(
+    termInput,
+    button('Add term', onAddTerm),
+    button('Wrap in cut', onWrapCut),
+    button('Wrap in bubble', onWrapBubble),
+    arity.wrap,
+    button('Delete selection', onDelete),
+    button('Join two wires', onJoinWires),
+  )
+  goalRow.append(
+    button('Set goal LHS', onSetLhs),
+    button('Set goal RHS', onSetRhs),
+  )
+  const modeBtn = button('Switch to PROVE', onToggleMode)
+  const sideBtn = button('Side: forward (toggle)', onToggleSide)
+  goalRow.append(modeBtn, sideBtn, button('Undo', onUndo))
+  proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble))
+  const thmNames = [...theorems.keys()]
+  const relNames = Object.keys(relations)
+  theoremsDiv.textContent =
+    `theorems: ${thmNames.join(', ') || 'none'} · relations: ${relNames.join(', ') || 'none'} · constants: ${[...constNames].join(', ')}`
+  chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, theoremsDiv)
+
+  canvas.addEventListener('pointerdown', onPointerDown)
+  canvas.addEventListener('pointermove', onPointerMove)
+  canvas.addEventListener('pointerup', onPointerUp)
+  canvas.addEventListener('wheel', onWheel, { passive: false })
+
+  refreshChrome()
+  raf = requestAnimationFrame(frame)
+
+  return {
+    dispose(): void {
+      disposed = true
+      cancelAnimationFrame(raf)
+      canvas.removeEventListener('pointerdown', onPointerDown)
+      canvas.removeEventListener('pointermove', onPointerMove)
+      canvas.removeEventListener('pointerup', onPointerUp)
+      canvas.removeEventListener('wheel', onWheel)
+      chrome.replaceChildren()
+    },
+  }
+}

@@ -8,7 +8,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "demo": "vite demo"
+    "demo": "vite demo",
+    "app": "vite app"
   },
   "devDependencies": {
     "@types/node": "^20",

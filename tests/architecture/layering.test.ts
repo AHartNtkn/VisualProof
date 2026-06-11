@@ -58,6 +58,20 @@ describe('layer separation (spec §4.2)', () => {
     expect(offenders, offenders.join('\n')).toEqual([])
   })
 
+  it('nothing below the app layer imports it', () => {
+    const offenders: string[] = []
+    for (const dir of ['src/kernel', 'src/view', 'src/theories']) {
+      for (const file of tsFilesUnder(dir)) {
+        for (const spec of importSpecifiers(file)) {
+          if (spec.includes('/app/') || spec.startsWith('../app')) {
+            offenders.push(`${file} imports '${spec}'`)
+          }
+        }
+      }
+    }
+    expect(offenders, offenders.join('\n')).toEqual([])
+  })
+
   it('no src code imports node built-ins', () => {
     // the kernel is pure data + algorithms and the view runs in the browser:
     // any node: import anywhere under src is a leak
