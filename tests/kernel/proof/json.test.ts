@@ -42,7 +42,7 @@ describe('step round-trips through JSON', () => {
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
       { rule: 'unfold', node: 'n0', path: [] },
       { rule: 'fold', node: 'n0', path: ['body'], constId: 'I' },
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, binders: {} },
       { rule: 'comprehensionAbstract', wrap: sel, comp: pat, occurrences: [{ sel, args: ['w0'] }] },
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
     ]

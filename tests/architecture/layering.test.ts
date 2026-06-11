@@ -23,11 +23,23 @@ function importSpecifiers(file: string): string[] {
 }
 
 describe('layer separation (spec §4.2)', () => {
-  it('the kernel never imports from the view layer', () => {
+  it('the kernel never imports from the view or theories layers', () => {
     const offenders: string[] = []
     for (const file of tsFilesUnder('src/kernel')) {
       for (const spec of importSpecifiers(file)) {
-        if (spec.includes('/view/') || spec.startsWith('../view') || spec.startsWith('../../view')) {
+        if (spec.includes('/view/') || spec.startsWith('../view') || spec.startsWith('../../view') || spec.includes('/theories/') || spec.startsWith('../theories')) {
+          offenders.push(`${file} imports '${spec}'`)
+        }
+      }
+    }
+    expect(offenders, offenders.join('\n')).toEqual([])
+  })
+
+  it('theories import the kernel only', () => {
+    const offenders: string[] = []
+    for (const file of tsFilesUnder('src/theories')) {
+      for (const spec of importSpecifiers(file)) {
+        if (spec.includes('/view/') || spec.startsWith('../view')) {
           offenders.push(`${file} imports '${spec}'`)
         }
       }

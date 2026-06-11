@@ -44,7 +44,7 @@ export type ProofStep =
   | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
   | { readonly rule: 'unfold'; readonly node: NodeId; readonly path: readonly PathSeg[] }
   | { readonly rule: 'fold'; readonly node: NodeId; readonly path: readonly PathSeg[]; readonly constId: string }
-  | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary }
+  | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary; readonly binders: Readonly<Record<RegionId, RegionId>> }
   | { readonly rule: 'comprehensionAbstract'; readonly wrap: SubgraphSelection; readonly comp: DiagramWithBoundary; readonly occurrences: readonly AbstractionOccurrence[] }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
   | { readonly rule: 'vacuousIntro'; readonly sel: SubgraphSelection; readonly arity: number }
@@ -65,7 +65,7 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
     case 'fission': return applyFission(d, step.node, step.path)
     case 'unfold': return applyUnfold(d, ctx.definitions, step.node, step.path)
     case 'fold': return applyFold(d, ctx.definitions, step.node, step.path, step.constId)
-    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp)
+    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, new Map(Object.entries(step.binders)))
     case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences)
     case 'theorem': {
       const thm = ctx.theorems.get(step.name)

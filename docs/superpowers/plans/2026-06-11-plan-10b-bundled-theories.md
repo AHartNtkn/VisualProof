@@ -37,7 +37,7 @@
 - Modify: `src/kernel/proof/step.ts`, `src/kernel/proof/json.ts`, `src/kernel/proof/compose.ts` (required `binders` field)
 - Test: `tests/kernel/rules/open-instantiate.test.ts` (+ `binders: {}` added to existing comprehensionInstantiate step literals — grep `tests/kernel/proof/` and report each file touched)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/open-instantiate.test.ts`:
 
@@ -132,12 +132,12 @@ describe('open comprehension instantiation', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/open-instantiate.test.ts`
 Expected: FAIL — instantiate takes no fourth argument / fresh bubble minted.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/rules/comprehension.ts`:
 
@@ -185,9 +185,9 @@ In `src/kernel/proof/compose.ts`: the case maps binder VALUES through `iso.regio
 
 Update existing `comprehensionInstantiate` step literals in tests with `binders: {}` (grep `tests/kernel/proof/`; report each).
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/comprehension.ts src/kernel/proof/step.ts src/kernel/proof/json.ts src/kernel/proof/compose.ts tests/kernel/rules/open-instantiate.test.ts tests/kernel/proof/
@@ -203,7 +203,7 @@ git commit -m "feat(kernel): open comprehension instantiation with proper-enclos
 
 This is a DERIVATION SCRIPT, spike-verified end to end on 2026-06-11. The id-discovery lines are the riskiest transcription surface: when a discovery line misfires or a rule REFUSES, adjust ONLY discovery logic and report it; a refusal with no derivable alternative is BLOCKED (a kernel finding for the controller), never a reason to touch gates.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 `tests/kernel/proof/frege-succ.test.ts`:
 
@@ -423,14 +423,16 @@ discovery lines follow the proven frege.test.ts idiom. The spike verified
 every rule application in this sequence succeeds; expected failure modes are
 purely discovery-logic mismatches.
 
-- [ ] **Step 2: Run; iterate discovery logic until checkTheorem accepts.** Report every adjustment.
+- [x] **Step 2: Run; iterate discovery logic until checkTheorem accepts.** Report every adjustment.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/kernel/proof/frege-succ.test.ts
 git commit -m "test(kernel): the successor theorem — 16-step derivation checked end to end"
 ```
+
+**Execution outcome (Task 1 `f17934b`, Task 2 `54dd8c0`):** Task 1 landed per plan (4 gate tests; binders threaded through step/json/compose; json.test.ts literals updated). Task 2's implementer misdiagnosed a discovery bug as an iteration-rule constraint and committed a SKIPPED skeleton (`095f1af`) — corrected by the controller: the bubble has TWO child cuts after vacuousIntro wraps cI, so the ambient-closure discovery must exclude cI (one line). With that, the spike's 16-step sequence passed unchanged; 445 tests, no skips.
 
 ---
 
@@ -443,7 +445,7 @@ git commit -m "test(kernel): the successor theorem — 16-step derivation checke
 
 The derivation scripts proven in frege.test.ts and Task 2 become builder code producing `Theorem` values. `oneIsNat` is then TWO STEPS — two native theorem applications — the compression demo the spec demands.
 
-- [ ] **Step 1: Write the builder**
+- [x] **Step 1: Write the builder**
 
 `src/theories/frege.ts` — structure (the derivation bodies are verbatim moves of the two proven scripts, reshaped from test assertions into returned values; write them as private functions `deriveZeroIsNat(defs)` and `deriveSuccNat(defs)` each returning `Theorem`, using the same push/discovery idiom):
 
@@ -478,7 +480,8 @@ export function natRelation(): DiagramWithBoundary {
   const rB = l.bubble(cut1, 1)
   const nz = l.termNode(rB, p('ZERO'))
   const a0 = l.atom(rB, rB)
-  l.wire(rB, [
+  // the canonical general ℕ: the base zero-line is ROOT-scoped
+  l.wire(l.root, [
     { node: nz, port: { kind: 'output' } },
     { node: a0, port: { kind: 'arg', index: 0 } },
   ])
@@ -568,11 +571,11 @@ export function buildFregeTheory(): Theory {
 ```
 
 CAVEATS for the implementer, explicit and binding:
-- `deriveZeroIsNat`/`deriveSuccNat` are MOVES of the two proven test scripts. zeroIsNat's lhs ZERO node MUST be parsed with the shared `consts` set, and the moved scripts must keep their exact step sequences.
-- `deriveOneIsNat`'s SECOND citation is the genuinely new derivation work: `succNat.lhs` is the SUCC node + the FULL ℕ-shape — the occurrence selection after step 1 must match it by pinned fingerprint with `args: [wz, wo]`. zeroIsNat's rhs places ZERO evidence on wz; succNat's lhs has NO evidence terms on its wn-line beyond the conclusion atom and SUCC's y-port — IF the extra ZERO node(s) on wz make the occurrence selection mismatch, the fix is to put ONLY the cut + nS in the selection (evidence nodes stay outside as context, attached via wz — extraction makes wz an attachment either way). If the fingerprints still mismatch (e.g. zeroIsNat's captured ℕ has its zero-line JOINED to the boundary while succNat's lhs expects them SEPARATE), that is a REAL statement-mismatch finding: report BLOCKED with both pinned fingerprints — the controller will reconcile the two theorem statements (the likely fix: re-derive zeroIsNat to target the SEPARATE-line general ℕ-shape, i.e. skip its final wireJoin and instead derive the base from the boundary evidence with an extra iteration; do NOT improvise this yourself).
+- `deriveSuccNat` is a MOVE of the proven (reconciled) `frege-succ.test.ts` script. `deriveZeroIsNat` is a RE-DERIVATION targeting the canonical general ℕ (root-scoped, SEPARATE base line) — the statement-mismatch the original caveat feared was real and has been resolved by the controller; the recipe, worked out and consistent with the committed succNat form: (1) dcIntro at root → cO[cI]; (2) vacuousIntro(1) at cO wrapping [cI] → rB′; (3) open-insert the SAME `baseClPattern()` succNat uses, but with attachments to a FRESH root-scoped base line: zeroIsNat's lhs is just the ZERO node on wz, so first the builder creates the lhs with ONLY wz; the insertion's boundary attachment needs an existing wire — use attachments [wz] is WRONG (that joins base to boundary); instead the baseCl variant for zeroIsNat keeps its zero-line INTERNAL (the original closed-zero-line `baseClPattern` shape from the old frege.test.ts — keep BOTH pattern builders, named `baseClAttached` (boundary zero-line, used by succNat) and `baseClOwned` (internal zero-line, used here)), giving base′ its own rB′-scoped line w0′; (4) open-iterate the base ATOM (on w0′) into cI → conclusion copy A3 on w0′; (5) wireJoin(wz, w0′) — inner w0′ scoped rB′, negative ✓, merged keeps wz; (6) wireSever(wz, keep=[lhs-ZERO.out, A3.arg0]) — wz root-scoped, positive ✓ — the moved endpoints {ZERO′.out, A0′.arg0} land on a fresh ROOT-scoped wire = the separate base line. Final shape: general ℕ(z) with root-scoped base, conclusion atom on wz next to the evidence. Capture rhs as usual. NOTE the severed wire's id is `freshId`-derived (`wz_sever`); ids are deterministic, nothing depends on the name.
+- `deriveOneIsNat`'s SECOND citation: `succNat.lhs` is the SUCC node + the general ℕ-shape WITH its root-scoped base line. After step 1's rewrite, the host contains zeroIsNat's rhs (the same general shape on wz, base on its own root-scoped line). The occurrence selection must include the cut image, the nS node, AND the base line as an EXPLICIT selected wire (`wires: [w0Image]` — root-scoped wires are boundary unless listed; succNat.lhs holds its w0 as internal). The lhs SUCC node of succNat carries y on wn and out on wm; args: [wzImage, woImage]. The lhs ZERO-evidence node on wz stays OUTSIDE the selection (context); extraction makes wz an attachment either way. If the pinned fingerprints mismatch, print both canonical forms and report BLOCKED — do not improvise.
 - The dead `zNodes`/`void zNodes` in the sketch is plan residue — drop it if unused.
 
-- [ ] **Step 2: Write the test**
+- [x] **Step 2: Write the test**
 
 `tests/theories/frege.test.ts`:
 
@@ -620,9 +623,9 @@ describe('the bundled Frege theory', () => {
 })
 ```
 
-- [ ] **Step 3: Move, delete, run.** Delete the two kernel test files whose scripts moved (the suite count DROPS by their test counts and gains the new ones — report exact numbers); full suite + typecheck.
+- [x] **Step 3: Move, delete, run.** Delete the two kernel test files whose scripts moved (the suite count DROPS by their test counts and gains the new ones — report exact numbers); full suite + typecheck.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/theories/frege.ts tests/theories/frege.test.ts
@@ -638,7 +641,7 @@ git commit -m "feat(theories): the bundled Frege arithmetic theory"
 - Create: `src/theories/lambda.ts`
 - Test: `tests/theories/lambda.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/theories/lambda.test.ts`:
 
@@ -670,9 +673,9 @@ describe('the bundled λ demo theory', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails** (cannot resolve theories/lambda)
+- [x] **Step 2: Run to verify it fails** (cannot resolve theories/lambda)
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/theories/lambda.ts`:
 
@@ -783,14 +786,16 @@ CAVEATS, explicit and binding:
 - `deriveFixedPoint`'s certificate is the mathematical content. If `checkConversion` rejects it, print the actual reducts at each step (use `applyStepAt` manually in a scratch check) and FIX THE PATHS, not the kernel; the left side after unfold is `app(yBody, f)` whose two root betas were verified on paper; the right side's single beta lives under `['arg']`.
 - `deriveOnePlusOne`'s conversion target is `TWO`'s BODY (the definition term), and the final fold is at path `[]` — folding the WHOLE term to the constant. If the post-conversion term is not termEq to the body (e.g. an eta difference), the conversion target needs adjusting to the actual normal form and the statement re-examined — report it.
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/theories/lambda.ts tests/theories/lambda.test.ts
 git commit -m "feat(theories): the bundled lambda demo theory (1+1=2; fixed point via certificate)"
 ```
+
+**Review outcome (Tasks 3+4, commits `8b6dc19`+`4540c3b`):** PASS, no defects; kernel untouched; both plan-residue items correctly dropped. Probes: zeroIsNat rhs IS the canonical general ℕ(z) (separate root-scoped base line via the join-then-sever recipe, 4 atoms, conclusion on the evidence line); oneIsNat rhs reads 1 ∈ ℕ with the z=ZERO, o=SUCC z evidence chain; fixedPoint certificate meets at the Church–Rosser confluence point with rhs literally f (Y f); onePlusOne rhs is cnst TWO with a 5-beta recorded certificate; both builders deterministic. The explicit base-line wire in oneIsNat's second citation proven LOAD-BEARING by mutation (omitting it refuses). Tampered theory files refused. Coverage of the deleted kernel tests judged adequate (checkTheorem subsumes the shape pins); noted gap: no steps-count regression pin for succNat — added in Task 5's battery. Suite: 452.
 
 ---
 
@@ -801,14 +806,14 @@ git commit -m "feat(theories): the bundled lambda demo theory (1+1=2; fixed poin
 - Modify: `tests/architecture/layering.test.ts`
 - Test: `tests/theories/battery.test.ts`
 
-- [ ] **Step 1: Barrel** — `src/theories/index.ts`:
+- [x] **Step 1: Barrel** — `src/theories/index.ts`:
 
 ```ts
 export { buildFregeTheory, fregeDefinitions, natRelation } from './frege'
 export { buildLambdaTheory, lambdaDefinitions } from './lambda'
 ```
 
-- [ ] **Step 2: Layering** — add to `tests/architecture/layering.test.ts`:
+- [x] **Step 2: Layering** — add to `tests/architecture/layering.test.ts`:
 
 ```ts
   it('theories import the kernel only', () => {
@@ -826,7 +831,7 @@ export { buildLambdaTheory, lambdaDefinitions } from './lambda'
 
 (Also extend the kernel-purity check's spirit: the kernel must not import theories either — add `|| spec.includes('/theories/') || spec.startsWith('../theories')` to the offending-specifier condition of the FIRST test and rename it accordingly.)
 
-- [ ] **Step 3: Battery** — `tests/theories/battery.test.ts`:
+- [x] **Step 3: Battery** — `tests/theories/battery.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest'
@@ -859,9 +864,9 @@ describe('bundled theories as shipped artifacts', () => {
 })
 ```
 
-- [ ] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`.
+- [x] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/theories/index.ts tests/architecture/layering.test.ts tests/theories/battery.test.ts
@@ -880,3 +885,9 @@ git commit -m "feat(theories): barrel, layering edges, shipped-artifact battery"
 
 - Plus-commutativity for CONCRETE numerals is conversion-trivial (PLUS ONE TWO and PLUS TWO ONE share a normal form); the GENERAL ∀-statement needs an induction-instance derivation at scale — Plan 10c/10d stretch goal, not MVP-blocking (spec's flagship is satisfied by ℕ, induction-as-instantiation, and the stored-theorem compression demo).
 - Open theorem sides, open abstraction, matcher symmetry/bare-wire items, abstraction R(x,x) (Plans 6–10a) remain.
+
+## Task 5 + final whole-branch review
+
+Task 5 (commit `99946e0`): barrel, layering edges (kernel↛theories guard added and mutation-verified), battery + the 16-step drift pin. Suite: 455.
+
+Final review: READY TO MERGE. Kernel diff is exactly the Task-1 extension. Forgery walls hold under composition (binder at a below-bubble refused; vacuousElim of a now-load-bearing R′ refused). Merged-theory verification works (identical-body definition overlap is benign). **ℕ(2) reachable in 2 citations from the shipped theories — the numeral ladder composes**; discovery-idiom note for consumers: after a citation, find the base line as the root-scoped wire whose endpoints are all non-root nodes (internal wires get fresh ids through rewrites). Builders deterministic and cheap (frege ~2.8ms/build) — Plan 10c startup import is a non-issue.
