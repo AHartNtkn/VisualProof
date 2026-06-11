@@ -6,7 +6,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import type { Definitions } from '../../../src/kernel/rules/definitions'
 import { replayProof, type ProofContext, type ProofStep } from '../../../src/kernel/proof/step'
 import { checkTheorem, type Theorem } from '../../../src/kernel/proof/theorem'
-import type { Diagram } from '../../../src/kernel/diagram/diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
 
 const consts = new Set(['ZERO', 'SUCC'])
 const p = (s: string) => parseTerm(s, consts)
@@ -45,11 +45,17 @@ function baseClPattern() {
   return { pattern: mkDiagramWithBoundary(b.build(), []), stub }
 }
 
-// /** The open comp "x : R′(x)". */ - used in full derivation (steps 4-8)
-// function rPrimeComp() { ... }
+/** The open comp "x : R′(x)". */
+function rPrimeComp() {
+  const b = new DiagramBuilder()
+  const stub = b.bubble(b.root, 1)
+  const atom = b.atom(stub, stub)
+  const bx = b.wire(b.root, [{ node: atom, port: { kind: 'arg', index: 0 } }])
+  return { comp: mkDiagramWithBoundary(b.build(), [bx]), stub }
+}
 
 describe('Frege arithmetic: the successor theorem', () => {
-  it.skip('ℕ(n) ∧ m = SUCC n ⟹ m = SUCC n ∧ ℕ(m) replays and checks', () => {
+  it('ℕ(n) ∧ m = SUCC n ⟹ m = SUCC n ∧ ℕ(m) replays and checks', () => {
     // ---- lhs: SUCC evidence at root + the general ℕ(n) (separate zero-line)
     const l = new DiagramBuilder()
     const nS = l.termNode(l.root, p('SUCC y'))
@@ -90,34 +96,91 @@ describe('Frege arithmetic: the successor theorem', () => {
       steps.push(s)
       cur = replayProof(cur, [s], ctx)
     }
-    // Helper functions for full derivation discovery (steps 4-16)
-    // const newCutIn = (parent: RegionId, before: Diagram): RegionId => ...
-    // const atomsIn = (region: RegionId): ... => ...
-    // const wireOf = (node: NodeId, key: 'arg' | 'output' | 'freeVar'): WireId => ...
+    const newCutIn = (parent: RegionId, before: Diagram): RegionId =>
+      Object.entries(cur.regions).find(
+        ([id, r]) => r.kind === 'cut' && r.parent === parent && before.regions[id] === undefined,
+      )![0]
+    const atomsIn = (region: RegionId): [NodeId, { kind: 'atom'; region: RegionId; binder: RegionId }][] =>
+      Object.entries(cur.nodes).filter(
+        (e): e is [NodeId, { kind: 'atom'; region: RegionId; binder: RegionId }] =>
+          e[1].kind === 'atom' && e[1].region === region,
+      )
+    const wireOf = (node: NodeId, key: 'arg' | 'output' | 'freeVar'): WireId =>
+      Object.entries(cur.wires).find(([, w]) =>
+        w.endpoints.some((ep) => ep.node === node && ep.port.kind === key))![0]
 
     // ---- ℕ-intro skeleton (steps 1–3)
+    let snapshot = cur
     push({ rule: 'doubleCutIntro', sel: mkSelection(cur, { region: cur.root, regions: [], nodes: [], wires: [] }) })
-    const cO = Object.entries(cur.regions).find(
-      ([id, r]) => r.kind === 'cut' && r.parent === cur.root && lhsDiagram.regions[id] === undefined,
-    )![0]
-    const cI = Object.entries(cur.regions).find(
-      ([id, r]) => r.kind === 'cut' && r.parent === cO && lhsDiagram.regions[id] === undefined,
-    )![0]
+    const cO = newCutIn(cur.root, snapshot)
+    const cI = newCutIn(cO, snapshot)
 
     push({ rule: 'vacuousIntro', sel: mkSelection(cur, { region: cO, regions: [cI], nodes: [], wires: [] }), arity: 1 })
     const rBp = Object.entries(cur.regions).find(
       ([id, r]) => r.kind === 'bubble' && lhsDiagram.regions[id] === undefined,
     )![0]
-    // cI still exists; it's now a child of rBp (not used in skipped steps)
 
     const { pattern: baseCl, stub: bcStub } = baseClPattern()
     push({ rule: 'insertion', region: rBp, pattern: baseCl, attachments: [], binders: { [bcStub]: rBp } })
+    // the ambient closure cut inside rB′: its child cut OTHER than cI
+    // (vacuousIntro reparented cI into the bubble)
+    const cut2p = Object.entries(cur.regions).find(
+      ([id, r]) => r.kind === 'cut' && r.parent === rBp && id !== cI,
+    )![0]
 
-    // NOTE: Steps 4-16 (induction, modus ponens, cleanup) — SKIPPED
-    // The full 16-step derivation requires careful iteration target placement.
-    // The kernel extension (comprehensionInstantiate with binders) is verified
-    // in tests/kernel/rules/open-instantiate.test.ts with dedicated tests.
-    // (In a full derivation, rPrimeN would be eliminated in cleanup step 15)
+    // ---- induction application (steps 4–8): R′(n) materializes in cI
+    snapshot = cur
+    push({ rule: 'iteration', sel: mkSelection(cur, { region: cur.root, regions: [cut1], nodes: [], wires: [] }), target: cI })
+    const cut1c = newCutIn(cI, snapshot)
+    const rBc = Object.entries(cur.regions).find(
+      ([, r]) => r.kind === 'bubble' && r.parent === cut1c,
+    )![0]
+
+    const { comp: xRp, stub: xStub } = rPrimeComp()
+    push({ rule: 'comprehensionInstantiate', bubble: rBc, comp: xRp, binders: { [xStub]: rBp } })
+    // after dissolution, cut1c holds: ZEROc + its R′-atom (the base copy),
+    // the closure copy cut2c, and the conclusion copy cut4c
+    const zeroC = Object.entries(cur.nodes).find(
+      ([, n]) => n.kind === 'term' && n.region === cut1c,
+    )![0]
+    const w0c = wireOf(zeroC, 'output')
+    const baseAtomC = atomsIn(cut1c).find(([id]) => wireOf(id, 'arg') === w0c)![0]
+    push({
+      rule: 'deiteration',
+      sel: mkSelection(cur, { region: cut1c, regions: [], nodes: [zeroC, baseAtomC], wires: [w0c] }),
+      fuel: 64,
+    })
+
+    // the closure copy: the child of cut1c that itself has a child cut
+    const cut2c = Object.entries(cur.regions).find(
+      ([id, r]) => r.kind === 'cut' && r.parent === cut1c &&
+        Object.values(cur.regions).some((rr) => rr.kind === 'cut' && rr.parent === id),
+    )![0]
+    push({ rule: 'deiteration', sel: mkSelection(cur, { region: cut1c, regions: [cut2c], nodes: [], wires: [] }), fuel: 64 })
+
+    push({ rule: 'doubleCutElim', region: cut1c })
+    // R′(n): the atom now in cI on the wn line
+    const rPrimeN = atomsIn(cI).find(([id]) => wireOf(id, 'arg') === wn)![0]
+
+    // ---- guarded modus ponens (steps 9–14): R′(m) materializes in cI
+    snapshot = cur
+    push({ rule: 'iteration', sel: mkSelection(cur, { region: rBp, regions: [cut2p], nodes: [], wires: [] }), target: cI })
+    const cut2c2 = newCutIn(cI, snapshot)
+    const hypAtom = atomsIn(cut2c2)[0]![0]
+    const wyC2 = wireOf(hypAtom, 'arg')
+    push({ rule: 'wireJoin', a: wn, b: wyC2 })
+    push({ rule: 'deiteration', sel: mkSelection(cur, { region: cut2c2, regions: [], nodes: [hypAtom], wires: [] }), fuel: 64 })
+    const succC2 = Object.entries(cur.nodes).find(
+      ([, n]) => n.kind === 'term' && n.region === cut2c2,
+    )![0]
+    const wsC2 = wireOf(succC2, 'output')
+    push({ rule: 'wireJoin', a: wm, b: wsC2 })
+    push({ rule: 'deiteration', sel: mkSelection(cur, { region: cut2c2, regions: [], nodes: [succC2], wires: [] }), fuel: 64 })
+    push({ rule: 'doubleCutElim', region: cut2c2 })
+
+    // ---- cleanup (steps 15–16)
+    push({ rule: 'erasure', sel: mkSelection(cur, { region: cI, regions: [], nodes: [rPrimeN], wires: [] }) })
+    push({ rule: 'erasure', sel: mkSelection(cur, { region: cur.root, regions: [cut1], nodes: [], wires: [] }) })
 
     // ---- capture and check
     const rhs = mkDiagramWithBoundary(cur, [wn, wm])
