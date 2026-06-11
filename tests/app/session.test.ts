@@ -211,3 +211,138 @@ describe('backward undo restores the composed tail', () => {
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
 })
+
+describe('backward un-erase, un-conversion, un-citation', () => {
+  it('un-erase adds content backward and records the forward erasure', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    // goal: a single node; backward: the proof "had" an extra node erased
+    const l = new DiagramBuilder()
+    l.termNode(l.root, p('\\x. x'))
+    const both = new DiagramBuilder()
+    both.termNode(both.root, p('\\x. x'))
+    both.termNode(both.root, p('\\x. \\y. x'))
+    const lhs = mkDiagramWithBoundary(both.build(), [])
+    const rhs = mkDiagramWithBoundary(l.build(), [])
+    let s = startSession(lhs, rhs, ctx)
+    const pat = new DiagramBuilder()
+    pat.termNode(pat.root, p('\\x. \\y. x'))
+    s = applyBackward(s, {
+      kind: 'unErase',
+      region: s.backward.current.root,
+      pattern: mkDiagramWithBoundary(pat.build(), []),
+      attachments: [],
+    })
+    expect(s.backward.steps[0]!.rule).toBe('erasure')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'unErased')
+    expect(() => checkTheorem(thm, ctx)).not.toThrow()
+  })
+
+  it('un-conversion rewrites a node term backward with a swapped certificate', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    const l = new DiagramBuilder()
+    l.termNode(l.root, p('(\\a. a) y'))
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    const r = new DiagramBuilder()
+    const m = r.termNode(r.root, p('y'))
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    let s = startSession(lhs, rhs, ctx)
+    s = applyBackward(s, { kind: 'unConvert', node: m, term: p('(\\a. a) y'), fuel: 32 })
+    expect(s.backward.steps[0]!.rule).toBe('conversion')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'unConverted')
+    expect(() => checkTheorem(thm, ctx)).not.toThrow()
+  })
+
+  it('un-citation replaces a theorem rhs-occurrence by its lhs in the goal', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    // lhs: bare ZERO node. rhs (goal): zeroIsNat's conclusion shape — built by
+    // citing forward once, then used as the goal of a FRESH session
+    const h = new DiagramBuilder()
+    const nz = h.termNode(h.root, p('ZERO'))
+    const wz = h.wire(h.root, [{ node: nz, port: { kind: 'output' } }])
+    const lhs = mkDiagramWithBoundary(h.build(), [wz])
+    let warm = startSession(lhs, lhs, ctx)
+    warm = applyForward(warm, {
+      rule: 'theorem', name: 'zeroIsNat', direction: 'forward',
+      at: { sel: mkSelection(warm.forward.current, { region: warm.forward.current.root, regions: [], nodes: [nz], wires: [] }), args: [wz] },
+    })
+    const rhs = mkDiagramWithBoundary(warm.forward.current, [wz])
+    let s = startSession(lhs, rhs, ctx)
+    // pick the rhs occurrence in the GOAL: the ℕ cut + the evidence node + base line
+    const g = s.backward.current
+    const cut = Object.entries(g.regions).find(([, r]) => r.kind === 'cut' && r.parent === g.root)![0]
+    const evidence = Object.entries(g.nodes).filter(([, n]) => n.kind === 'term' && n.region === g.root).map(([id]) => id)
+    const baseLine = Object.entries(g.wires).find(([id, w]) =>
+      id !== wz && w.scope === g.root && w.endpoints.every((ep) => g.nodes[ep.node]!.region !== g.root))?.[0]
+    s = applyBackward(s, {
+      kind: 'unCite',
+      name: 'zeroIsNat',
+      at: {
+        sel: {
+          region: g.root,
+          regions: [cut],
+          nodes: evidence,
+          wires: baseLine === undefined ? [] : [baseLine],
+        },
+        args: [wz],
+      },
+    })
+    expect(s.backward.steps[0]!.rule).toBe('theorem')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'unCited')
+    expect(() => checkTheorem(thm, ctx)).not.toThrow()
+  })
+})
+
+describe('unCite refusals', () => {
+  it('refuses unCite at a negative region', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    // goal: a ZERO node wrapped in a cut (negative region is the cut interior)
+    const h = new DiagramBuilder()
+    const nz = h.termNode(h.root, p('ZERO'))
+    const wz = h.wire(h.root, [{ node: nz, port: { kind: 'output' } }])
+    const lhs = mkDiagramWithBoundary(h.build(), [wz])
+    const r = new DiagramBuilder()
+    const nz2 = r.termNode(r.root, p('ZERO'))
+    const wz2 = r.wire(r.root, [{ node: nz2, port: { kind: 'output' } }])
+    const cut = r.cut(r.root)
+    const rhs = mkDiagramWithBoundary(r.build(), [wz2])
+    const s = startSession(lhs, rhs, ctx)
+    const g = s.backward.current
+    const cutId = Object.entries(g.regions).find(([, reg]) => reg.kind === 'cut' && reg.parent === g.root)![0]
+    void wz2; void cut
+    expect(() =>
+      applyBackward(s, {
+        kind: 'unCite',
+        name: 'zeroIsNat',
+        at: {
+          sel: { region: cutId, regions: [], nodes: [], wires: [] },
+          args: [],
+        },
+      })
+    ).toThrowError(/positive region/)
+  })
+
+  it('refuses unCite when the selection is not an rhs occurrence', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    // goal: a ZERO node; selection is the node itself — not the zeroIsNat rhs shape
+    const h = new DiagramBuilder()
+    const nz = h.termNode(h.root, p('ZERO'))
+    const wz = h.wire(h.root, [{ node: nz, port: { kind: 'output' } }])
+    const lhsD = h.build()
+    const lhs = mkDiagramWithBoundary(lhsD, [wz])
+    const s = startSession(lhs, lhs, ctx)
+    const g = s.backward.current
+    expect(() =>
+      applyBackward(s, {
+        kind: 'unCite',
+        name: 'zeroIsNat',
+        at: {
+          sel: { region: g.root, regions: [], nodes: [nz], wires: [] },
+          args: [wz],
+        },
+      })
+    ).toThrowError(/not an occurrence/)
+  })
+})

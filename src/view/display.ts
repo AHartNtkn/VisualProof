@@ -1,6 +1,7 @@
 import type { Vec2 } from './vec'
 import { add, polar } from './vec'
 import type { Scene } from './scene'
+import type { NodeId } from '../kernel/diagram/diagram'
 
 export type Shape =
   | { readonly kind: 'circle'; readonly center: Vec2; readonly r: number; readonly stroke: string; readonly fill?: string }
@@ -31,7 +32,7 @@ const STRUCTURE = '#222'
  * never fill (they do not flip parity, so their interior must show their
  * parent's shading through).
  */
-export function renderScene(scene: Scene): Shape[] {
+export function renderScene(scene: Scene, opts: { hoverNode?: NodeId } = {}): Shape[] {
   const shapes: Shape[] = []
   const regions = [...scene.regions].sort((a, b) => b.radius - a.radius)
   for (const r of regions) {
@@ -82,5 +83,33 @@ export function renderScene(scene: Scene): Shape[] {
       shapes.push({ kind: 'label', pos: add(n.center, gl.pos), text: gl.constId, color: STRUCTURE })
     }
   }
+
+  // Emit tethers for hovered node: one segment per var radial from radial top to binder arc midpoint
+  if (opts.hoverNode !== undefined) {
+    const hoveredNode = scene.nodes.find((n) => n.id === opts.hoverNode)
+    if (hoveredNode !== undefined) {
+      const g = hoveredNode.geometry
+      for (const radial of g.radials) {
+        if (radial.kind !== 'var' || radial.hueRow === null) continue
+        // Radial top is at (angle, r0)
+        const radialTop = add(hoveredNode.center, polar(radial.angle, radial.r0))
+        // Find the binder arc with matching hueRow
+        const binderArc = g.arcs.find((a) => a.kind === 'lam' && a.hueRow === radial.hueRow)
+        if (binderArc === undefined) continue
+        // Midpoint of binder arc
+        const arcMidAngle = (binderArc.a0 + binderArc.a1) / 2
+        const arcMidpoint = add(hoveredNode.center, polar(arcMidAngle, binderArc.r))
+        // Emit tether segment with width 2.5 in binder hue
+        shapes.push({
+          kind: 'segment',
+          from: radialTop,
+          to: arcMidpoint,
+          stroke: binderHue(radial.hueRow),
+          width: 2.5,
+        })
+      }
+    }
+  }
+
   return shapes
 }

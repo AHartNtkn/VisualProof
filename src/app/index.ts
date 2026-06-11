@@ -1,6 +1,7 @@
 export { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 export type { Side, BackwardSide, ProofSession, BackwardAction } from './session'
-export { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem } from './session'
+export { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem } from './session'
+export { sessionTheory } from './persist'
 export type { Hit } from './hittest'
 export { hitTest, buildSelection } from './hittest'
 export type { ActionDescriptor } from './actions'

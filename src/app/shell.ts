@@ -4,6 +4,7 @@ import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { Term } from '../kernel/term/term'
 import { parseTerm } from '../kernel/term/parse'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
+import { polarity } from '../kernel/diagram/regions'
 import { applyConversion } from '../kernel/rules/conversion'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { checkTheorem } from '../kernel/proof/theorem'
@@ -19,7 +20,9 @@ import { drawShapes } from '../view/canvas'
 import { bootBundledContext } from './boot'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 import type { ProofSession } from './session'
-import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem } from './session'
+import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem } from './session'
+import { sessionTheory } from './persist'
+import { loadTheory, theoryToJson } from '../kernel/proof/store'
 import type { Hit } from './hittest'
 import { hitTest, buildSelection } from './hittest'
 import type { ActionDescriptor } from './actions'
@@ -59,16 +62,65 @@ const HOVER_STROKE = '#2563eb'
 type Pending =
   | { readonly kind: 'iterate'; readonly sel: SubgraphSelection }
   | { readonly kind: 'cite'; readonly name: string; readonly direction: 'forward' | 'reverse'; readonly sel: SubgraphSelection; readonly args: WireId[] }
+  | { readonly kind: 'unCite'; readonly name: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
 
 type Drag =
   | { readonly kind: 'node'; readonly node: NodeId }
   | { readonly kind: 'pan'; readonly startOffset: { readonly x: number; readonly y: number }; readonly startScreen: Vec2 }
 
-/** Backward actions supported in 10c; the rest land in 10d with their E2E. */
-function backwardActionFor(a: ActionDescriptor, sel: SubgraphSelection): { kind: 'unDoubleCut'; outer: RegionId } | { kind: 'unVacuousBubble'; bubble: RegionId } | null {
-  if (a.kind === 'doubleCutElim') return { kind: 'unDoubleCut', outer: sel.regions[0]! }
-  if (a.kind === 'vacuousElim') return { kind: 'unVacuousBubble', bubble: sel.regions[0]! }
-  return null
+/**
+ * Backward menu entry: a labelled action that commits at button-click time,
+ * reading term/fuel from the live inputs. needsInput flags are advisory only —
+ * the commit lambda reads the inputs directly when the button is clicked.
+ */
+type BackwardEntry =
+  | { readonly kind: 'unDoubleCut'; readonly label: string; readonly outer: RegionId }
+  | { readonly kind: 'unVacuousBubble'; readonly label: string; readonly bubble: RegionId }
+  | { readonly kind: 'unErase'; readonly label: string; readonly region: RegionId; readonly needsInput: 'pattern' }
+  | { readonly kind: 'unConvert'; readonly label: string; readonly node: NodeId; readonly needsInput: 'term' }
+  | { readonly kind: 'unCite'; readonly label: string; readonly name: string; readonly sel: SubgraphSelection }
+
+/**
+ * Enumerate the backward moves the UI offers for a selection. Commit-time
+ * input reading means the entries do NOT depend on the current term/fuel
+ * input values — they describe what the button will do when clicked.
+ */
+function backwardEntries(d: Diagram, sel: SubgraphSelection, ctx: ProofContext): BackwardEntry[] {
+  const out: BackwardEntry[] = []
+  // doubleCutElim → unDoubleCut: exactly one selected region, must be an outer cut of a double-cut pair
+  if (sel.regions.length === 1 && sel.nodes.length === 0 && sel.wires.length === 0) {
+    const rid = sel.regions[0]!
+    const r = d.regions[rid]
+    if (r !== undefined && r.kind === 'cut') {
+      const children = Object.entries(d.regions).filter(([, x]) => x.kind !== 'sheet' && x.parent === rid)
+      const nodesIn = Object.values(d.nodes).some((n) => n.region === rid)
+      const wiresIn = Object.values(d.wires).some((w) => w.scope === rid)
+      if (children.length === 1 && children[0]![1].kind === 'cut' && !nodesIn && !wiresIn) {
+        out.push({ kind: 'unDoubleCut', label: 'Un-wrap double cut (backward)', outer: rid })
+      }
+    }
+    if (r !== undefined && r.kind === 'bubble') {
+      const bound = Object.values(d.nodes).some((n) => n.kind === 'atom' && n.binder === rid)
+      if (!bound) {
+        out.push({ kind: 'unVacuousBubble', label: 'Dissolve vacuous bubble (backward)', bubble: rid })
+      }
+    }
+  }
+  // unErase: selected region is positive — at commit time the term input provides the pattern
+  if (polarity(d, sel.region) === 'positive') {
+    out.push({ kind: 'unErase', label: 'Un-erase into region (term input → pattern)…', region: sel.region, needsInput: 'pattern' })
+  }
+  // unConvert: single term node selected — at commit time term input + fuel provide the target
+  if (sel.nodes.length === 1 && sel.regions.length === 0 && d.nodes[sel.nodes[0]!]?.kind === 'term') {
+    out.push({ kind: 'unConvert', label: 'Un-convert node (term input + fuel)…', node: sel.nodes[0]!, needsInput: 'term' })
+  }
+  // unCite <name>: per theorem, at positive selections
+  if (polarity(d, sel.region) === 'positive') {
+    for (const [name] of ctx.theorems) {
+      out.push({ kind: 'unCite', label: `Un-cite ${name} (backward)`, name, sel })
+    }
+  }
+  return out
 }
 
 export function mountShell(opts: ShellOptions): { dispose(): void } {
@@ -78,10 +130,9 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
 
   // ---- boot: both bundled theories through the verifying JSON road ----
   const boot = bootBundledContext()
-  const ctx: ProofContext = boot.ctx
-  const theorems = boot.ctx.theorems
-  const relations = boot.relations
-  const constNames: ReadonlySet<string> = boot.constNames
+  let ctx: ProofContext = boot.ctx
+  let relations: Readonly<Record<string, DiagramWithBoundary>> = boot.relations
+  let constNames: ReadonlySet<string> = boot.constNames
 
   // ---- state ----
   let mode: 'edit' | 'prove' = 'edit'
@@ -161,6 +212,24 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   menuDiv.id = 'action-menu'
   const theoremsDiv = div('vpa-theorems')
   theoremsDiv.id = 'theorems'
+
+  // ---- context rebinding ----
+  // Renders the theorem/relation/constant list from the live bindings.
+  const renderTheoremList = (): void => {
+    const thmNames = [...ctx.theorems.keys()]
+    const relNames = Object.keys(relations)
+    theoremsDiv.textContent =
+      `theorems: ${thmNames.join(', ') || 'none'} · relations: ${relNames.join(', ') || 'none'} · constants: ${[...constNames].join(', ')}`
+  }
+
+  // Called after adopt and after load; refreshes all three context bindings and
+  // re-renders the theorem list so the UI always reflects the live context.
+  const setContext = (newCtx: ProofContext, newRelations: Readonly<Record<string, DiagramWithBoundary>>, newConstNames: ReadonlySet<string>): void => {
+    ctx = newCtx
+    relations = newRelations
+    constNames = newConstNames
+    renderTheoremList()
+  }
 
   const termInput = textInput('term-input', 'term, e.g. \\x. x y (also: insertion pattern / convert target / relation name)')
   const nameInput = textInput('theorem-name', 'theorem name')
@@ -337,7 +406,11 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     const name = nameInput.value.trim() === '' ? 'untitled' : nameInput.value.trim()
     const thm = assembleTheorem(session, name)
     checkTheorem(thm, ctx)
-    message = `theorem '${name}' assembled and CHECKED (${thm.steps.length} step(s))`
+    // Adopt the theorem into the session context for citation and rebind the
+    // shell's live ctx so saves, future citations, and applicableActions see it.
+    session = adoptTheorem(session, thm)
+    setContext(session.ctx, relations, constNames)
+    message = `theorem '${name}' assembled, CHECKED, and ADOPTED (${thm.steps.length} step(s))`
     refreshChrome()
   })
 
@@ -349,18 +422,56 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     sync()
   }
 
+  // ---- backward commit (reads inputs at click time) ----
+  const commitBackward = (e: BackwardEntry): void => {
+    if (session === null) throw new Error('no active proof session')
+    switch (e.kind) {
+      case 'unDoubleCut':
+        session = applyBackward(session, { kind: 'unDoubleCut', outer: e.outer })
+        break
+      case 'unVacuousBubble':
+        session = applyBackward(session, { kind: 'unVacuousBubble', bubble: e.bubble })
+        break
+      case 'unErase': {
+        // Pattern read from the term input at commit time
+        const termVal = termInput.value.trim()
+        if (termVal === '') throw new Error('the term input is empty: type the pattern term first (\\ is λ)')
+        const e0 = emptyDiagram()
+        const { diagram } = addTermNode(e0, e0.root, parseTerm(termVal, constNames))
+        session = applyBackward(session, {
+          kind: 'unErase',
+          region: e.region,
+          pattern: mkDiagramWithBoundary(diagram, []),
+          attachments: [],
+        })
+        break
+      }
+      case 'unConvert': {
+        // Term and fuel read from inputs at commit time
+        const termVal = termInput.value.trim()
+        if (termVal === '') throw new Error('the term input is empty: type the target term first (\\ is λ)')
+        const fuelVal = readCount(fuel.input, 'fuel')
+        session = applyBackward(session, {
+          kind: 'unConvert',
+          node: e.node,
+          term: parseTerm(termVal, constNames),
+          fuel: fuelVal,
+        })
+        break
+      }
+      case 'unCite':
+        // Collect args by clicking wires, then Commit dispatches applyBackward
+        pending = { kind: 'unCite', name: e.name, sel: e.sel, args: [] }
+        message = `un-cite '${e.name}': click the argument wires in boundary order, then Commit`
+        refreshChrome()
+        return
+    }
+    message = meetStatus()
+    sync()
+  }
+
   const commitAction = (a: ActionDescriptor, sel: SubgraphSelection): void => {
     if (session === null) throw new Error('no active proof session')
-    if (side === 'backward') {
-      const action = backwardActionFor(a, sel)
-      if (action === null) {
-        throw new Error(`backward '${a.kind}' is not supported yet; only un-double-cut and un-vacuous-bubble ship in 10c`)
-      }
-      session = applyBackward(session, action)
-      message = meetStatus()
-      sync()
-      return
-    }
     switch (a.kind) {
       case 'erase':
         applyF({ rule: 'erasure', sel })
@@ -428,13 +539,13 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       })()
       return
     }
-    if (pending !== null && pending.kind === 'cite') {
+    if (pending !== null && (pending.kind === 'cite' || pending.kind === 'unCite')) {
       if (hit !== null && hit.kind === 'wire') {
         pending.args.push(hit.id)
-        message = `cite '${pending.name}': ${pending.args.length} argument wire(s) picked`
+        message = `${pending.kind === 'cite' ? 'cite' : 'un-cite'} '${pending.name}': ${pending.args.length} argument wire(s) picked`
         refreshChrome()
       } else {
-        message = `cite '${pending.name}': click wires only (or Commit/Cancel in the menu)`
+        message = `${pending.kind === 'cite' ? 'cite' : 'un-cite'} '${pending.name}': click wires only (or Commit/Cancel in the menu)`
         refreshChrome()
       }
       return
@@ -464,6 +575,15 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
           applyF({ rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: p.direction })
         })))
       }
+      if (p.kind === 'unCite') {
+        menuDiv.append(button(`Commit un-citation of '${p.name}' (${p.args.length} arg(s))`, guard(() => {
+          if (session === null) throw new Error('no active proof session')
+          pending = null
+          session = applyBackward(session, { kind: 'unCite', name: p.name, at: { sel: p.sel, args: [...p.args] } })
+          message = meetStatus()
+          sync()
+        })))
+      }
       menuDiv.append(button('Cancel pending action', () => {
         pending = null
         message = 'pending action cancelled'
@@ -473,9 +593,15 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     }
     if (mode !== 'prove' || session === null || kernelSel === null) return
     const sel = kernelSel
+    if (side === 'backward') {
+      const entries = backwardEntries(currentDiagram(), sel, ctx)
+      for (const e of entries) {
+        menuDiv.append(button(e.label, guard(() => commitBackward(e))))
+      }
+      return
+    }
     const all = applicableActions(currentDiagram(), sel, ctx)
-    const offered = side === 'backward' ? all.filter((a) => backwardActionFor(a, sel) !== null) : all
-    for (const a of offered) {
+    for (const a of all) {
       menuDiv.append(button(a.label, guard(() => commitAction(a, sel))))
     }
   }
@@ -514,7 +640,13 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       if (pin !== null) physics = withPin(physics, pin)
     }
     lastScene = buildScene(displayed, physics.positions)
-    const shapes: Shape[] = renderScene(lastScene)
+    // Determine hovered node for tethers: hit test if hovering, or undefined if no hover
+    let hoverNodeId: NodeId | undefined
+    if (hoverWorld !== null) {
+      const hov = hitTest(lastScene, hoverWorld)
+      if (hov !== null && hov.kind === 'node') hoverNodeId = hov.id
+    }
+    const shapes: Shape[] = renderScene(lastScene, hoverNodeId !== undefined ? { hoverNode: hoverNodeId } : {})
     for (const h of hits) shapes.push(...itemShapes(lastScene, h, SELECT_STROKE))
     if (hoverWorld !== null) {
       const hov = hitTest(lastScene, hoverWorld)
@@ -571,6 +703,51 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     view.offsetY = screen.y - world.y * view.scale
   }
 
+  // ---- persistence ----
+  const onSave = guard(() => {
+    const theory = sessionTheory(ctx, { relations })
+    const json = theoryToJson(theory)
+    const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'theory.json'
+    document.body.append(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+    message = 'theory saved'
+    refreshChrome()
+  })
+
+  const onLoad = guard(() => {
+    const fileInput = document.createElement('input')
+    fileInput.type = 'file'
+    fileInput.accept = 'application/json'
+    fileInput.addEventListener('change', () => {
+      const file = fileInput.files?.[0]
+      if (file === undefined) return
+      const reader = new FileReader()
+      reader.addEventListener('load', () => {
+        try {
+          const text = reader.result
+          if (typeof text !== 'string') throw new Error('file read failed')
+          const parsed = JSON.parse(text)
+          // loadTheory re-verifies — the only road in; replace context only on success
+          const loaded = loadTheory(parsed)
+          setContext(loaded.ctx, loaded.theory.relations, new Set(Object.keys(loaded.ctx.definitions)))
+          message = 'theory loaded successfully'
+          refreshChrome()
+        } catch (e) {
+          message = e instanceof Error ? e.message : String(e)
+          refreshChrome()
+        }
+      })
+      reader.readAsText(file)
+    })
+    fileInput.click()
+  })
+
   // ---- assemble the chrome ----
   editRow.append(
     termInput,
@@ -588,17 +765,26 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   const modeBtn = button('Switch to PROVE', onToggleMode)
   const sideBtn = button('Side: forward (toggle)', onToggleSide)
   goalRow.append(modeBtn, sideBtn, button('Undo', onUndo))
-  proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble))
-  const thmNames = [...theorems.keys()]
-  const relNames = Object.keys(relations)
-  theoremsDiv.textContent =
-    `theorems: ${thmNames.join(', ') || 'none'} · relations: ${relNames.join(', ') || 'none'} · constants: ${[...constNames].join(', ')}`
+  proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave), button('Load theory', onLoad))
   chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, theoremsDiv)
+  renderTheoremList()
 
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerup', onPointerUp)
   canvas.addEventListener('wheel', onWheel, { passive: false })
+
+  // ---- E2E debug seam: window.__vpaDebug hook when ?debug in URL ----
+  if (new URLSearchParams(location.search).has('debug')) {
+    ;(window as any).__vpaDebug = {
+      nodeCount(): number {
+        return Object.keys(displayed.nodes).length
+      },
+      status(): string {
+        return message
+      },
+    }
+  }
 
   refreshChrome()
   raf = requestAnimationFrame(frame)
@@ -612,6 +798,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       canvas.removeEventListener('pointerup', onPointerUp)
       canvas.removeEventListener('wheel', onWheel)
       chrome.replaceChildren()
+      if ((window as any).__vpaDebug !== undefined) delete (window as any).__vpaDebug
     },
   }
 }

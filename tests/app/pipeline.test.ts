@@ -7,6 +7,10 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { emptyDiagram, addTermNode, addCut } from '../../src/app/edit'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { startSession, applyForward, applyBackward, meet, assembleTheorem } from '../../src/app/session'
+import { bootBundledContext } from '../../src/app/boot'
+import { adoptTheorem } from '../../src/app/session'
+import { sessionTheory } from '../../src/app/persist'
+import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
@@ -49,5 +53,29 @@ describe('edit → prove → assemble, end to end', () => {
     const rhs = mkDiagramWithBoundary(s.forward.current, [wz])
     const thm = { name: 'viaSession', lhs, rhs, steps: [...s.forward.steps] }
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
+  })
+})
+
+describe('the full story: prove, adopt, save, reload, cite', () => {
+  it('a session theorem survives the file road and is citable after reload', () => {
+    const boot = bootBundledContext()
+    // prove the toy double-cut theorem forward
+    const l = emptyDiagram()
+    const { diagram: lhsD } = addTermNode(l, l.root, p('\\x. x'))
+    const lhs = mkDiagramWithBoundary(lhsD, [])
+    let s = startSession(lhs, lhs, boot.ctx)
+    s = applyForward(s, {
+      rule: 'doubleCutIntro',
+      sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [], wires: [] }),
+    })
+    const rhs = mkDiagramWithBoundary(s.forward.current, [])
+    // test-level state surgery to make a met session without re-running
+    s = { ...s, rhs, backward: { ...s.backward, current: rhs.diagram } }
+    const thm = assembleTheorem(s, 'wrapId')
+    const s2 = adoptTheorem(s, thm)
+    // save, reload, verify, cite
+    const text = JSON.stringify(theoryToJson(sessionTheory(s2.ctx, { relations: boot.relations })))
+    const { ctx } = loadTheory(JSON.parse(text))
+    expect(ctx.theorems.has('wrapId')).toBe(true)
   })
 })

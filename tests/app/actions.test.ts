@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
+import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { applicableActions } from '../../src/app/actions'
+import { applyConversion } from '../../src/kernel/rules/conversion'
+import { applyStep } from '../../src/kernel/proof/step'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
@@ -107,5 +110,34 @@ describe('double-cut elimination annulus content', () => {
     const ctx = verifyTheory(buildFregeTheory())
     const sel = mkSelection(d, { region: d.root, regions: [outer], nodes: [], wires: [] })
     expect(applicableActions(d, sel, ctx).map((a) => a.kind)).not.toContain('doubleCutElim')
+  })
+})
+
+describe('descriptor → step construction (the shell contract)', () => {
+  it('insert: an enumerated insert commits as the shell builds it', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const d = h.build()
+    const ctx = verifyTheory(buildFregeTheory())
+    const sel = mkSelection(d, { region: cut, regions: [], nodes: [], wires: [] })
+    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('insert')
+    const b = new DiagramBuilder()
+    b.termNode(b.root, p('\\x. \\y. x'))
+    const pattern = mkDiagramWithBoundary(b.build(), [])
+    const out = applyStep(d, { rule: 'insertion', region: cut, pattern, attachments: [], binders: {} }, ctx)
+    expect(Object.values(out.nodes)).toHaveLength(1)
+  })
+
+  it('convert: an enumerated convert commits via the certificate path', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('(\\a. a) y'))
+    const d = h.build()
+    const ctx = verifyTheory(buildFregeTheory())
+    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
+    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('convert')
+    const target = p('y')
+    const pre = applyConversion(d, n, target, 32)
+    const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, attachments: {} }, ctx)
+    expect(JSON.stringify(out.nodes[n])).toContain('"port"')
   })
 })
