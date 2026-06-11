@@ -37,7 +37,7 @@
 - Modify: `src/kernel/proof/step.ts`, `src/kernel/proof/json.ts`, `src/kernel/proof/compose.ts` (required `binders` field)
 - Test: `tests/kernel/rules/open-instantiate.test.ts` (+ `binders: {}` added to existing comprehensionInstantiate step literals — grep `tests/kernel/proof/` and report each file touched)
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/open-instantiate.test.ts`:
 
@@ -132,12 +132,12 @@ describe('open comprehension instantiation', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/kernel/rules/open-instantiate.test.ts`
 Expected: FAIL — instantiate takes no fourth argument / fresh bubble minted.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/kernel/rules/comprehension.ts`:
 
@@ -185,9 +185,9 @@ In `src/kernel/proof/compose.ts`: the case maps binder VALUES through `iso.regio
 
 Update existing `comprehensionInstantiate` step literals in tests with `binders: {}` (grep `tests/kernel/proof/`; report each).
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/kernel/rules/comprehension.ts src/kernel/proof/step.ts src/kernel/proof/json.ts src/kernel/proof/compose.ts tests/kernel/rules/open-instantiate.test.ts tests/kernel/proof/
@@ -203,7 +203,7 @@ git commit -m "feat(kernel): open comprehension instantiation with proper-enclos
 
 This is a DERIVATION SCRIPT, spike-verified end to end on 2026-06-11. The id-discovery lines are the riskiest transcription surface: when a discovery line misfires or a rule REFUSES, adjust ONLY discovery logic and report it; a refusal with no derivable alternative is BLOCKED (a kernel finding for the controller), never a reason to touch gates.
 
-- [ ] **Step 1: Write the test**
+- [x] **Step 1: Write the test**
 
 `tests/kernel/proof/frege-succ.test.ts`:
 
@@ -423,9 +423,9 @@ discovery lines follow the proven frege.test.ts idiom. The spike verified
 every rule application in this sequence succeeds; expected failure modes are
 purely discovery-logic mismatches.
 
-- [ ] **Step 2: Run; iterate discovery logic until checkTheorem accepts.** Report every adjustment.
+- [x] **Step 2: Run; iterate discovery logic until checkTheorem accepts.** Report every adjustment.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/kernel/proof/frege-succ.test.ts
@@ -445,7 +445,7 @@ git commit -m "test(kernel): the successor theorem — 16-step derivation checke
 
 The derivation scripts proven in frege.test.ts and Task 2 become builder code producing `Theorem` values. `oneIsNat` is then TWO STEPS — two native theorem applications — the compression demo the spec demands.
 
-- [ ] **Step 1: Write the builder**
+- [x] **Step 1: Write the builder**
 
 `src/theories/frege.ts` — structure (the derivation bodies are verbatim moves of the two proven scripts, reshaped from test assertions into returned values; write them as private functions `deriveZeroIsNat(defs)` and `deriveSuccNat(defs)` each returning `Theorem`, using the same push/discovery idiom):
 
@@ -575,7 +575,7 @@ CAVEATS for the implementer, explicit and binding:
 - `deriveOneIsNat`'s SECOND citation: `succNat.lhs` is the SUCC node + the general ℕ-shape WITH its root-scoped base line. After step 1's rewrite, the host contains zeroIsNat's rhs (the same general shape on wz, base on its own root-scoped line). The occurrence selection must include the cut image, the nS node, AND the base line as an EXPLICIT selected wire (`wires: [w0Image]` — root-scoped wires are boundary unless listed; succNat.lhs holds its w0 as internal). The lhs SUCC node of succNat carries y on wn and out on wm; args: [wzImage, woImage]. The lhs ZERO-evidence node on wz stays OUTSIDE the selection (context); extraction makes wz an attachment either way. If the pinned fingerprints mismatch, print both canonical forms and report BLOCKED — do not improvise.
 - The dead `zNodes`/`void zNodes` in the sketch is plan residue — drop it if unused.
 
-- [ ] **Step 2: Write the test**
+- [x] **Step 2: Write the test**
 
 `tests/theories/frege.test.ts`:
 
@@ -623,9 +623,9 @@ describe('the bundled Frege theory', () => {
 })
 ```
 
-- [ ] **Step 3: Move, delete, run.** Delete the two kernel test files whose scripts moved (the suite count DROPS by their test counts and gains the new ones — report exact numbers); full suite + typecheck.
+- [x] **Step 3: Move, delete, run.** Delete the two kernel test files whose scripts moved (the suite count DROPS by their test counts and gains the new ones — report exact numbers); full suite + typecheck.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/theories/frege.ts tests/theories/frege.test.ts
@@ -641,7 +641,7 @@ git commit -m "feat(theories): the bundled Frege arithmetic theory"
 - Create: `src/theories/lambda.ts`
 - Test: `tests/theories/lambda.test.ts`
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 `tests/theories/lambda.test.ts`:
 
@@ -673,9 +673,9 @@ describe('the bundled λ demo theory', () => {
 })
 ```
 
-- [ ] **Step 2: Run to verify it fails** (cannot resolve theories/lambda)
+- [x] **Step 2: Run to verify it fails** (cannot resolve theories/lambda)
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/theories/lambda.ts`:
 
@@ -786,9 +786,9 @@ CAVEATS, explicit and binding:
 - `deriveFixedPoint`'s certificate is the mathematical content. If `checkConversion` rejects it, print the actual reducts at each step (use `applyStepAt` manually in a scratch check) and FIX THE PATHS, not the kernel; the left side after unfold is `app(yBody, f)` whose two root betas were verified on paper; the right side's single beta lives under `['arg']`.
 - `deriveOnePlusOne`'s conversion target is `TWO`'s BODY (the definition term), and the final fold is at path `[]` — folding the WHOLE term to the constant. If the post-conversion term is not termEq to the body (e.g. an eta difference), the conversion target needs adjusting to the actual normal form and the statement re-examined — report it.
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/theories/lambda.ts tests/theories/lambda.test.ts
@@ -806,14 +806,14 @@ git commit -m "feat(theories): the bundled lambda demo theory (1+1=2; fixed poin
 - Modify: `tests/architecture/layering.test.ts`
 - Test: `tests/theories/battery.test.ts`
 
-- [ ] **Step 1: Barrel** — `src/theories/index.ts`:
+- [x] **Step 1: Barrel** — `src/theories/index.ts`:
 
 ```ts
 export { buildFregeTheory, fregeDefinitions, natRelation } from './frege'
 export { buildLambdaTheory, lambdaDefinitions } from './lambda'
 ```
 
-- [ ] **Step 2: Layering** — add to `tests/architecture/layering.test.ts`:
+- [x] **Step 2: Layering** — add to `tests/architecture/layering.test.ts`:
 
 ```ts
   it('theories import the kernel only', () => {
@@ -831,7 +831,7 @@ export { buildLambdaTheory, lambdaDefinitions } from './lambda'
 
 (Also extend the kernel-purity check's spirit: the kernel must not import theories either — add `|| spec.includes('/theories/') || spec.startsWith('../theories')` to the offending-specifier condition of the FIRST test and rename it accordingly.)
 
-- [ ] **Step 3: Battery** — `tests/theories/battery.test.ts`:
+- [x] **Step 3: Battery** — `tests/theories/battery.test.ts`:
 
 ```ts
 import { describe, it, expect } from 'vitest'
@@ -864,9 +864,9 @@ describe('bundled theories as shipped artifacts', () => {
 })
 ```
 
-- [ ] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`.
+- [x] **Step 4: Full gate** — `npx vitest run && npx tsc --noEmit`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/theories/index.ts tests/architecture/layering.test.ts tests/theories/battery.test.ts
@@ -885,3 +885,9 @@ git commit -m "feat(theories): barrel, layering edges, shipped-artifact battery"
 
 - Plus-commutativity for CONCRETE numerals is conversion-trivial (PLUS ONE TWO and PLUS TWO ONE share a normal form); the GENERAL ∀-statement needs an induction-instance derivation at scale — Plan 10c/10d stretch goal, not MVP-blocking (spec's flagship is satisfied by ℕ, induction-as-instantiation, and the stored-theorem compression demo).
 - Open theorem sides, open abstraction, matcher symmetry/bare-wire items, abstraction R(x,x) (Plans 6–10a) remain.
+
+## Task 5 + final whole-branch review
+
+Task 5 (commit `99946e0`): barrel, layering edges (kernel↛theories guard added and mutation-verified), battery + the 16-step drift pin. Suite: 455.
+
+Final review: READY TO MERGE. Kernel diff is exactly the Task-1 extension. Forgery walls hold under composition (binder at a below-bubble refused; vacuousElim of a now-load-bearing R′ refused). Merged-theory verification works (identical-body definition overlap is benign). **ℕ(2) reachable in 2 citations from the shipped theories — the numeral ladder composes**; discovery-idiom note for consumers: after a citation, find the base line as the root-scoped wire whose endpoints are all non-root nodes (internal wires get fresh ids through rewrites). Builders deterministic and cheap (frege ~2.8ms/build) — Plan 10c startup import is a non-issue.
