@@ -9,6 +9,7 @@ import { applyErasure, applyWireSever } from '../rules/erasure'
 import { applyIteration, applyDeiteration } from '../rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../rules/doublecut'
 import { applyConversionByCertificate } from '../rules/conversion'
+import { applyCongruenceJoin } from '../rules/congruence'
 import { applyFusion, applyFission } from '../rules/fusion'
 import { applyUnfold, applyFold } from '../rules/definitions'
 import type { Definitions } from '../rules/definitions'
@@ -40,6 +41,7 @@ export type ProofStep =
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
   | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly attachments: Readonly<Record<string, WireId>> }
+  | { readonly rule: 'congruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }
   | { readonly rule: 'fusion'; readonly wire: WireId }
   | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
   | { readonly rule: 'unfold'; readonly node: NodeId; readonly path: readonly PathSeg[] }
@@ -61,6 +63,7 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
     case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel)
     case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
     case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.attachments)
+    case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate)
     case 'fusion': return applyFusion(d, step.wire)
     case 'fission': return applyFission(d, step.node, step.path)
     case 'unfold': return applyUnfold(d, ctx.definitions, step.node, step.path)

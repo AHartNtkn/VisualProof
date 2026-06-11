@@ -61,6 +61,8 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       for (const [name, w] of Object.entries(step.attachments)) attachments[name] = mapId(iso.wires, w, 'wire')
       return { ...step, node: mapId(iso.nodes, step.node, 'node'), attachments }
     }
+    case 'congruenceJoin':
+      return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
     case 'fusion':
       return { ...step, wire: mapId(iso.wires, step.wire, 'wire') }
     case 'fission':

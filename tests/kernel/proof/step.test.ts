@@ -37,6 +37,23 @@ describe('applyStep mirrors the direct appliers', () => {
     expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(diagram))
   })
 
+  it('congruenceJoin step merges the outputs of βη-equal co-resident nodes', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, pp('y'))
+    const n2 = h.termNode(h.root, pp('y'))
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'y' } },
+      { node: n2, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
+    h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
+    const d = h.build()
+    const step: ProofStep = { rule: 'congruenceJoin', a: n1, b: n2, certificate: { leftSteps: [], rightSteps: [] } }
+    const out = applyStep(d, step, ctx)
+    const shared = Object.values(out.wires).find((w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2)
+    expect(shared).toBeDefined()
+  })
+
   it('unfold and fold steps use the context definitions', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('I y'))

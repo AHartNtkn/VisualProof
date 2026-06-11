@@ -151,6 +151,8 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, region: s.region }
     case 'conversion':
       return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), attachments: { ...s.attachments } }
+    case 'congruenceJoin':
+      return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate) }
     case 'fusion':
       return { rule: s.rule, wire: s.wire }
     case 'fission':
@@ -214,6 +216,9 @@ export function stepFromJson(j: unknown): ProofStep {
       for (const [k, v] of Object.entries(j.attachments)) attachments[k] = str(v, `attachments['${k}']`)
       return { rule, node: str(j.node, 'node'), term: termFromJson(j.term, 'term'), certificate: certFromJson(j.certificate, 'certificate'), attachments }
     }
+    case 'congruenceJoin':
+      assertOnlyKeys(j, ['rule', 'a', 'b', 'certificate'], 'congruenceJoin step')
+      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), certificate: certFromJson(j.certificate, 'certificate') }
     case 'fusion':
       assertOnlyKeys(j, ['rule', 'wire'], 'fusion step')
       return { rule, wire: str(j.wire, 'wire') }

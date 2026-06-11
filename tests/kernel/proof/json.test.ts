@@ -38,6 +38,7 @@ describe('step round-trips through JSON', () => {
       { rule: 'doubleCutIntro', sel },
       { rule: 'doubleCutElim', region: 'r1' },
       { rule: 'conversion', node: 'n0', term: p('y'), certificate, attachments: { z: 'w0' } },
+      { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate },
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
       { rule: 'unfold', node: 'n0', path: [] },
