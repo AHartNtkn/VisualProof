@@ -795,6 +795,8 @@ git add src/theories/lambda.ts tests/theories/lambda.test.ts
 git commit -m "feat(theories): the bundled lambda demo theory (1+1=2; fixed point via certificate)"
 ```
 
+**Review outcome (Tasks 3+4, commits `8b6dc19`+`4540c3b`):** PASS, no defects; kernel untouched; both plan-residue items correctly dropped. Probes: zeroIsNat rhs IS the canonical general ℕ(z) (separate root-scoped base line via the join-then-sever recipe, 4 atoms, conclusion on the evidence line); oneIsNat rhs reads 1 ∈ ℕ with the z=ZERO, o=SUCC z evidence chain; fixedPoint certificate meets at the Church–Rosser confluence point with rhs literally f (Y f); onePlusOne rhs is cnst TWO with a 5-beta recorded certificate; both builders deterministic. The explicit base-line wire in oneIsNat's second citation proven LOAD-BEARING by mutation (omitting it refuses). Tampered theory files refused. Coverage of the deleted kernel tests judged adequate (checkTheorem subsumes the shape pins); noted gap: no steps-count regression pin for succNat — added in Task 5's battery. Suite: 452.
+
 ---
 
 ### Task 5: Theories barrel, layering, battery
