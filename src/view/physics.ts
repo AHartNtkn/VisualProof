@@ -80,15 +80,17 @@ export function step(d: Diagram, s: PhysicsState, params: PhysicsParams): Physic
     }
   }
 
-  // wire springs: endpoints pulled toward the wire centroid
+  // wire springs: the displacement is measured at the ANCHOR (the spoke),
+  // not the node center — a singleton wire's hub IS its anchor, so its
+  // spring relaxes to zero instead of becoming a constant self-force
   const scene = buildScene(d, s.positions)
   const wireById = new Map(scene.wires.map((w) => [w.id, w]))
   for (const [wid, w] of Object.entries(d.wires)) {
     const star = wireById.get(wid)!
-    for (const ep of w.endpoints) {
-      const pull = sub(star.hub, at(ep.node))
+    w.endpoints.forEach((ep, k) => {
+      const pull = sub(star.hub, star.spokes[k]!)
       addForce(ep.node, scale(pull, params.wireSpring))
-    }
+    })
   }
 
   // per-region cohesion toward the content centroid
