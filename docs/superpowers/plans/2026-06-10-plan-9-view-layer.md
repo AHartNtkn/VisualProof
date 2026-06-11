@@ -38,7 +38,7 @@ The bend (option A) maps grid → polar: column → angle within `[gap/2, 2π �
 **Files:**
 - Test: `tests/architecture/layering.test.ts`
 
-- [ ] **Step 1: Write the test** (it must PASS against the current tree — it is a standing guard, not a bug reproduction)
+- [x] **Step 1: Write the test** (it must PASS against the current tree — it is a standing guard, not a bug reproduction)
 
 `tests/architecture/layering.test.ts`:
 
@@ -104,9 +104,9 @@ describe('layer separation (spec §4.2)', () => {
 })
 ```
 
-- [ ] **Step 2: Run it** — `npx vitest run tests/architecture/layering.test.ts` — all three must PASS already (the kernel is clean today; this pins it).
+- [x] **Step 2: Run it** — `npx vitest run tests/architecture/layering.test.ts` — all three must PASS already (the kernel is clean today; this pins it).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/architecture/layering.test.ts
@@ -122,7 +122,7 @@ git commit -m "test(arch): mechanical layer-separation check (spec §4.2)"
 - Create: `src/view/tromp.ts`
 - Test: `tests/view/tromp.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/view/tromp.test.ts`:
 
@@ -214,12 +214,12 @@ describe('trompGrid', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/view/tromp.test.ts`
 Expected: FAIL — cannot resolve `view/tromp`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/view/vec.ts`:
 
@@ -417,9 +417,9 @@ export function trompGrid(t: Term): TrompGrid {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/view/vec.ts src/view/tromp.ts tests/view/tromp.test.ts
@@ -434,7 +434,7 @@ git commit -m "feat(view): rectilinear Tromp grid layout"
 - Create: `src/view/bend.ts`
 - Test: `tests/view/bend.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/view/bend.test.ts`:
 
@@ -519,12 +519,12 @@ describe('atomGeometry', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/view/bend.test.ts`
 Expected: FAIL — cannot resolve `view/bend`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/view/bend.ts`:
 
@@ -655,9 +655,9 @@ export function atomGeometry(arity: number): NodeGeometry {
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/view/bend.ts tests/view/bend.test.ts
@@ -672,7 +672,7 @@ git commit -m "feat(view): polar bend into the option-A incomplete circle"
 - Create: `src/view/scene.ts`
 - Test: `tests/view/scene.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/view/scene.test.ts`:
 
@@ -759,12 +759,12 @@ describe('buildScene', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/view/scene.test.ts`
 Expected: FAIL — cannot resolve `view/scene`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/view/scene.ts`:
 
@@ -908,9 +908,9 @@ export function buildScene(d: Diagram, positions: ReadonlyMap<NodeId, Vec2>): Sc
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/view/scene.ts tests/view/scene.test.ts
@@ -925,7 +925,7 @@ git commit -m "feat(view): scene derivation — region circles and wire stars fr
 - Create: `src/view/physics.ts`
 - Test: `tests/view/physics.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/view/physics.test.ts`:
 
@@ -1013,12 +1013,12 @@ describe('physics', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/view/physics.test.ts`
 Expected: FAIL — cannot resolve `view/physics`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/view/physics.ts`:
 
@@ -1105,7 +1105,9 @@ export function step(d: Diagram, s: PhysicsState, params: PhysicsParams): Physic
     }
   }
 
-  // wire springs: endpoints pulled toward the wire centroid
+  // wire springs: the displacement is measured at the ANCHOR (the spoke),
+  // not the node center — a singleton wire's hub IS its anchor, so its
+  // spring relaxes to zero instead of becoming a constant self-force
   const scene = buildScene(d, s.positions)
   const wireById = new Map(scene.wires.map((w) => [w.id, w]))
   for (const [wid, w] of Object.entries(d.wires)) {
@@ -1202,9 +1204,9 @@ export function settle(d: Diagram, s0: PhysicsState, params: PhysicsParams, maxT
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck** (the settle tests are the slowest in the suite; if `settle` needs more than ~2s, report timings rather than weakening assertions)
+- [x] **Step 4: Verify PASS, full suite, typecheck** (the settle tests are the slowest in the suite; if `settle` needs more than ~2s, report timings rather than weakening assertions)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/view/physics.ts tests/view/physics.test.ts
@@ -1221,7 +1223,7 @@ git commit -m "feat(view): self-organizing physics over node positions only"
 - Modify: `package.json` (add `vite` devDependency and `"demo": "vite demo"` script)
 - Test: `tests/view/display.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/view/display.test.ts`:
 
@@ -1297,12 +1299,12 @@ describe('renderScene', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/view/display.test.ts`
 Expected: FAIL — cannot resolve `view/display`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/view/display.ts`:
 
@@ -1550,9 +1552,9 @@ frame()
 
 In `package.json`: add `"vite": "^6"` (or the major already present in the lockfile via vitest — match it) to `devDependencies` and `"demo": "vite demo"` to `scripts`. Run `npm install` after editing. Add `demo/dist` to `.gitignore` (create the file if absent) so the build output never lands in a commit.
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck.** Also run `npx vite build demo --logLevel error` once to prove the demo page compiles (do not start the dev server — it blocks). Run the vite build AFTER staging is decided and never `git add` `demo/dist`.
+- [x] **Step 4: Verify PASS, full suite, typecheck.** Also run `npx vite build demo --logLevel error` once to prove the demo page compiles (do not start the dev server — it blocks). Run the vite build AFTER staging is decided and never `git add` `demo/dist`.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/view/display.ts src/view/canvas.ts src/view/index.ts demo/index.html demo/main.ts package.json package-lock.json .gitignore
@@ -1566,7 +1568,7 @@ git commit -m "feat(view): display-list renderer, canvas adapter, vite demo page
 **Files:**
 - Test: `tests/view/pipeline.test.ts`
 
-- [ ] **Step 1: Write the battery** (must pass against Tasks 1–6)
+- [x] **Step 1: Write the battery** (must pass against Tasks 1–6)
 
 `tests/view/pipeline.test.ts`:
 
@@ -1615,9 +1617,9 @@ describe('the full pipeline tracks kernel edits', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/view/pipeline.test.ts
@@ -1644,3 +1646,7 @@ git commit -m "test(view): kernel-to-pixels pipeline battery"
 - Tasks 3–4 (commits `e088133`, `013e9b3`, fix `8d4eef0`): APPROVED. The implementer caught a real plan inconsistency in shading; resolution recorded mid-flight in `a51cf00`: scene.shaded = polarity info for EVERY region (bubbles inherit); the RENDERER paints negative cuts with the shade fill, positive cuts with the opaque background fill (so even-depth interiors visibly un-shade), bubbles never fill. Quality fixes in `0705145` (rimR as radius(-railRows); exitArc nullability belongs to atomGeometry; REGION_PADDING documented as visual-only).
 - Tasks 5–6 (commits `3b0e801`, `072bb32`, fix `289e5c5`, omission fix `79b1855`): the plan's wire spring measured displacement at the NODE CENTER — observed consequence: every auto-singleton wire became a constant self-force (hub coincides with the node's own anchor) and all nodes drifted at terminal velocity forever, never settling. Fixed to pull hub − spoke (anchor displacement), which relaxes to zero for singletons; the settle tests were the failing regression tests, observed fail→pass. The plan's Task 6 git-add list omitted the display test file and lockfile — committed in `79b1855`.
 - Task 7 (commit `6251f92`): pipeline battery passed against the stack unchanged. Suite: 405.
+
+## Final whole-branch review
+
+READY TO MERGE. Kernel untouched by the branch (diff empty). Probes: single-node diagrams stay exactly at seed (singleton springs identically zero); end-to-end determinism (deep-equal shape arrays across runs); kernel-realistic erasure renders with correct spoke counts; 3-ary atoms render disc + three distinct arg radials; 12-node/4-region settle in 102ms; triple-nested cuts paint shade/background/shade outer-first. Layering test teeth verified by injected kernel→view import (fails naming the file). House rules clean; all constants carry visual-only justifications. Suite: 405 across 55 files; tsc clean; demo builds.
