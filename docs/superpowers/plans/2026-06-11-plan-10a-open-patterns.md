@@ -782,6 +782,20 @@ git commit -m "feat(kernel): occurrence matching for open patterns via binder im
 - Modify: `src/kernel/rules/index.ts`
 - Test: `tests/kernel/rules/open-rules.test.ts`
 
+> **MUST-REMOVE (added by the Task 1 review):** `applyIteration` and
+> `applyDeiteration` carry TEMPORARY `binderStubs.length > 0` guards
+> (`src/kernel/rules/iteration.ts`), with two pinning tests in
+> `tests/kernel/rules/iteration.test.ts` ("refuses OPEN selections..." and
+> "refuses removal justified only by an ISOMORPHIC occurrence under a
+> DIFFERENT binder..."). Between Task 1 and Task 4, without them, open
+> iteration spliced the stub as a FRESH quantifier and open deiteration
+> accepted isomorphic-but-different-binder justifiers (demonstrated unsound:
+> ∃S.S(x) justified deleting R(x) under a cut, leaving an empty cut). This
+> task must DELETE both guards and REPLACE the iteration-refusal test; the
+> different-binder deiteration test must be kept but its expectation changes
+> from the guard message to `/no justifying occurrence/` (binder-identity
+> matching makes the decoy a non-match).
+
 - [ ] **Step 1: Write the failing tests**
 
 `tests/kernel/rules/open-rules.test.ts`:

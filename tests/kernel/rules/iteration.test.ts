@@ -52,6 +52,21 @@ describe('applyIteration', () => {
     expect(() => applyIteration(d, sel, inner))
       .toThrowError(/iteration target 'r2' lies inside the iterated subgraph/)
   })
+
+  it('refuses OPEN selections: a copy must reference the SAME binder, not a fresh stub bubble', () => {
+    // Until splice takes a binder map (plan 10a Task 4), iterating an open
+    // selection would splice the stub bubble as an ordinary bubble — a FRESH
+    // quantifier copy ∃R'.P[R'] instead of the binder-preserving copy P[R].
+    // That is not the iteration rule; refuse loudly until Task 4 lands.
+    const h = new DiagramBuilder()
+    const rB = h.bubble(h.root, 1)
+    const a = h.atom(rB, rB)
+    const cut = h.cut(rB)
+    const d = h.build()
+    const sel = mkSelection(d, { region: rB, regions: [], nodes: [a], wires: [] })
+    expect(() => applyIteration(d, sel, cut))
+      .toThrowError(/atoms bound outside the selection/)
+  })
 })
 
 describe('applyDeiteration', () => {
@@ -133,6 +148,29 @@ describe('applyDeiteration', () => {
     const out = applyDeiteration(d, sel, 100)
     expect(Object.keys(out.nodes)).toHaveLength(1)
     expect(out.nodes[a]).toBeDefined()
+  })
+
+  it('refuses removal justified only by an ISOMORPHIC occurrence under a DIFFERENT binder', () => {
+    // Host: ∃x. [∃S. S(x)] ∧ [∃R. ¬R(x)]. The selection is the R-application
+    // under the cut (an OPEN selection: R = rB binds it from outside). The
+    // only structural match of its stub pattern ∃?.?(x) is the rD bubble —
+    // a DIFFERENT relation variable. Accepting it would delete R(x) and leave
+    // an empty cut: a satisfiable diagram rewritten to a false one. Binder
+    // justification must be by identity, not isomorphism (plan 10a).
+    const h = new DiagramBuilder()
+    const rD = h.bubble(h.root, 1)
+    const aJ = h.atom(rD, rD)
+    const rB = h.bubble(h.root, 1)
+    const c1 = h.cut(rB)
+    const aT = h.atom(c1, rB)
+    h.wire(h.root, [
+      { node: aJ, port: { kind: 'arg', index: 0 } },
+      { node: aT, port: { kind: 'arg', index: 0 } },
+    ])
+    const d = h.build()
+    const sel = mkSelection(d, { region: c1, regions: [], nodes: [aT], wires: [] })
+    expect(() => applyDeiteration(d, sel, 100))
+      .toThrowError(/atoms bound outside the selection/)
   })
 
   it('mentions undecided pairs in the failure when fuel ran out', () => {

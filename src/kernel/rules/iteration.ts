@@ -20,7 +20,16 @@ export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion:
   if (c.allRegions.has(targetRegion)) {
     throw new RuleError(`iteration target '${targetRegion}' lies inside the iterated subgraph`)
   }
-  const { pattern, attachments } = extractSubgraph(d, sel)
+  const { pattern, attachments, binderStubs } = extractSubgraph(d, sel)
+  // TEMPORARY (remove in plan 10a Task 4): splicing an open pattern today
+  // copies the stub bubble as a FRESH quantifier instead of referencing the
+  // SAME host binder — that is not the iteration rule. Refuse until splice
+  // takes a binder map.
+  if (binderStubs.length > 0) {
+    throw new RuleError(
+      `iteration of a subgraph with atoms bound outside the selection is not supported yet (open iteration lands in plan 10a Task 4)`,
+    )
+  }
   return spliceSubgraph(d, targetRegion, pattern, attachments)
 }
 
@@ -32,7 +41,18 @@ export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion:
  */
 export function applyDeiteration(d: Diagram, sel: SubgraphSelection, fuel: number): Diagram {
   const c = selectionContents(d, sel)
-  const { pattern, attachments } = extractSubgraph(d, sel)
+  const { pattern, attachments, binderStubs } = extractSubgraph(d, sel)
+  // TEMPORARY (remove in plan 10a Task 4): the matcher reads stub bubbles
+  // structurally, so an ISOMORPHIC occurrence under a DIFFERENT host binder
+  // would justify removal — demonstrably unsound (∃S.S(x) justifying the
+  // deletion of R(x) under a cut leaves an empty cut: satisfiable → false).
+  // Binder justification must be by identity; refuse until the matcher takes
+  // a binder map.
+  if (binderStubs.length > 0) {
+    throw new RuleError(
+      `deiteration of a subgraph with atoms bound outside the selection is not supported yet (open deiteration lands in plan 10a Task 4)`,
+    )
+  }
   const { matches, undecided } = findOccurrences(d, pattern, { fuel })
   const disjoint = (m: Occurrence): boolean => {
     for (const r of m.regionMap.values()) if (c.allRegions.has(r)) return false
