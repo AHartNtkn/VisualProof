@@ -25,7 +25,10 @@ function baseClPattern() {
   const stub = b.bubble(b.root, 1)
   const bz = b.termNode(stub, p('ZERO'))
   const a0 = b.atom(stub, stub)
-  b.wire(stub, [
+  // the zero-line is a BOUNDARY: insertion attaches it to the host's base
+  // line, so deiterations of base copies find this base as their justifier
+  // with matching attachments
+  const w0stub = b.wire(b.root, [
     { node: bz, port: { kind: 'output' } },
     { node: a0, port: { kind: 'arg', index: 0 } },
   ])
@@ -42,7 +45,7 @@ function baseClPattern() {
     { node: ns, port: { kind: 'output' } },
     { node: a2, port: { kind: 'arg', index: 0 } },
   ])
-  return { pattern: mkDiagramWithBoundary(b.build(), []), stub }
+  return { pattern: mkDiagramWithBoundary(b.build(), [w0stub]), stub }
 }
 
 /** The open comp "x : R′(x)". */
@@ -63,7 +66,9 @@ describe('Frege arithmetic: the successor theorem', () => {
     const rB = l.bubble(cut1, 1)
     const nz = l.termNode(rB, p('ZERO'))
     const a0 = l.atom(rB, rB)
-    l.wire(rB, [
+    // the canonical general ℕ: the base zero-line is ROOT-scoped — the form
+    // zeroIsNat derives and theorem composition (oneIsNat) matches against
+    const w0 = l.wire(l.root, [
       { node: nz, port: { kind: 'output' } },
       { node: a0, port: { kind: 'arg', index: 0 } },
     ])
@@ -121,7 +126,9 @@ describe('Frege arithmetic: the successor theorem', () => {
     )![0]
 
     const { pattern: baseCl, stub: bcStub } = baseClPattern()
-    push({ rule: 'insertion', region: rBp, pattern: baseCl, attachments: [], binders: { [bcStub]: rBp } })
+    // the inserted base shares the lhs ℕ's base line w0, so base-copy
+    // deiterations later find it with matching attachments
+    push({ rule: 'insertion', region: rBp, pattern: baseCl, attachments: [w0], binders: { [bcStub]: rBp } })
     // the ambient closure cut inside rB′: its child cut OTHER than cI
     // (vacuousIntro reparented cI into the bubble)
     const cut2p = Object.entries(cur.regions).find(
@@ -143,11 +150,12 @@ describe('Frege arithmetic: the successor theorem', () => {
     const zeroC = Object.entries(cur.nodes).find(
       ([, n]) => n.kind === 'term' && n.region === cut1c,
     )![0]
-    const w0c = wireOf(zeroC, 'output')
-    const baseAtomC = atomsIn(cut1c).find(([id]) => wireOf(id, 'arg') === w0c)![0]
+    // the copy's base sits ON the shared root-scoped w0 (an attachment, not
+    // an internal wire) — its deiteration is justified by the inserted base′
+    const baseAtomC = atomsIn(cut1c).find(([id]) => wireOf(id, 'arg') === w0)![0]
     push({
       rule: 'deiteration',
-      sel: mkSelection(cur, { region: cut1c, regions: [], nodes: [zeroC, baseAtomC], wires: [w0c] }),
+      sel: mkSelection(cur, { region: cut1c, regions: [], nodes: [zeroC, baseAtomC], wires: [] }),
       fuel: 64,
     })
 
