@@ -582,3 +582,11 @@ git commit -m "test(app): prove-adopt-save-reload-cite closing battery"
 ## Carried obligations (post-MVP)
 
 - General +-commutativity (induction at scale), open theorem sides/abstraction, matcher symmetry/bare-wire, R(x,x) abstraction, joinPorts deepest-common-ancestor, in-session relation NAMING UI, PiP/split visual companion target.
+
+## Execution record + final whole-branch review
+
+Tasks 1–2 (`e620e1b`, `0d7e848`): adopt/persist and the three backward actions landed per plan; the unCite occurrence discovery matched zeroIsNat's rhs on the proven idiom. Tasks 3–4 (`cce44d9`, `0b811ef`): tethers (world-coordinate-verified), persistence chrome, descriptor coverage, debug seam; Playwright installed cleanly in this environment and ALL THREE E2E specs pass against real chromium. Task 5 (`a276f2c`): closing battery.
+
+Final review found the session/kernel layers sound (probes: second-theorem unCite, nested-cut unErase diff exactness, certificate-swap equality, multi-adopt ordering, tether coordinate frame; mutants iii/iv/v killed, i/ii judged UX-only with the real gates subsumed by reproduction/replay) but TWO HIGH shell issues breaking the headline story: adopted theorems were unreachable through the UI (stale `const ctx` closure — saves dropped them, citations never offered) and the backward menu wiring was dead (enumeration needed commit-time inputs; unCite unmapped). Fixed in `8a4390c`: live context rebinding through a `setContext` helper with theorem-list re-rendering; backward menu rebuilt from session capabilities with commit-time input reading and a full unCite wire-collection flow; unCite refusal tests; lockfile committed; URLSearchParams debug flag; test-results/ ignored. Suite: 504; E2E 3/3 re-verified live post-fix.
+
+This completes the planned sequence, Plans 1–10d.
