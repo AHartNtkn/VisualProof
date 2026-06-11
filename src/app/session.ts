@@ -6,6 +6,7 @@ import { applyVacuousBubbleElim } from '../kernel/rules/vacuous'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { applyStep } from '../kernel/proof/step'
 import type { Theorem } from '../kernel/proof/theorem'
+import { checkTheorem } from '../kernel/proof/theorem'
 import { composeProofs } from '../kernel/proof/compose'
 
 export type Side = {
@@ -176,4 +177,15 @@ export function assembleTheorem(s: ProofSession, name: string): Theorem {
     rhs: s.rhs,
     steps: [...s.forward.steps, ...composed],
   }
+}
+
+/** Verify and add a finished theorem to the session context — citable from now on. */
+export function adoptTheorem(s: ProofSession, thm: Theorem): ProofSession {
+  if (s.ctx.theorems.has(thm.name)) {
+    throw new Error(`'${thm.name}' already names a theorem in this session`)
+  }
+  checkTheorem(thm, s.ctx)
+  const theorems = new Map(s.ctx.theorems)
+  theorems.set(thm.name, thm)
+  return { ...s, ctx: { definitions: s.ctx.definitions, theorems } }
 }
