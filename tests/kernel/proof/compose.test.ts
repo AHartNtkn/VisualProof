@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { replayProof } from '../../../src/kernel/proof/step'
@@ -107,6 +108,49 @@ describe('composeProofs', () => {
     // Both results should have the constant node only
     expect(Object.values(viaA.nodes)).toHaveLength(1)
     // Fingerprints must match — the same (constant) node survives on both sides
+    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+  })
+
+  it('maps comprehensionInstantiate binder targets through the iso', () => {
+    // Marker-first vs marker-last builds give the ∃-chain DIFFERENT region
+    // ids: db's rOuter id names the chain CUT in da. An unmapped binder
+    // target therefore points at a cut — refused inside the composed replay —
+    // while the mapped target lands on da's rOuter and the sides agree.
+    const mk = (markerFirst: boolean) => {
+      const h = new DiagramBuilder()
+      const marker = () => {
+        const c = h.cut(h.root)
+        h.termNode(c, p('\\a. \\b. a'))
+      }
+      if (markerFirst) marker()
+      const cut = h.cut(h.root)
+      const rOuter = h.bubble(cut, 1)
+      const rInner = h.bubble(rOuter, 1)
+      const a = h.atom(rInner, rInner)
+      const t = h.termNode(rInner, p('\\x. x'))
+      h.wire(rInner, [
+        { node: a, port: { kind: 'arg', index: 0 } },
+        { node: t, port: { kind: 'output' } },
+      ])
+      if (!markerFirst) marker()
+      return { d: h.build(), rOuter, rInner }
+    }
+    const { d: da } = mk(true)
+    const { d: db, rOuter: bOuter, rInner: bInner } = mk(false)
+
+    // the open comp "x : R′(x)"
+    const c = new DiagramBuilder()
+    const stub = c.bubble(c.root, 1)
+    const atom = c.atom(stub, stub)
+    const bx = c.wire(c.root, [{ node: atom, port: { kind: 'arg', index: 0 } }])
+    const comp = mkDiagramWithBoundary(c.build(), [bx])
+
+    const tail: ProofStep[] = [
+      { rule: 'comprehensionInstantiate', bubble: bInner, comp, binders: { [stub]: bOuter } },
+    ]
+    const composed = composeProofs(da, db, tail, ctx)
+    const viaA = replayProof(da, composed, ctx)
+    const viaB = replayProof(db, tail, ctx)
     expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
   })
 
