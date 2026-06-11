@@ -773,6 +773,8 @@ git add src/kernel/diagram/subgraph/match.ts tests/kernel/diagram/match-open.tes
 git commit -m "feat(kernel): occurrence matching for open patterns via binder images"
 ```
 
+**Review outcome (Tasks 2+3, commits `42764d7`+`d5f32c1`, fixes `f7bdc94`+`155235c`):** SOUND after two real bug fixes: (1) endpointful wires scoped at non-innermost stubs fell through to a SILENT never-match (plan said any wire there is an error — fixed to loud); (2) the bare-wire subset rule keyed on pd.root instead of effectiveRoot under stubs (conservative, never forging, but broke stub transparency). Splice was token-for-token. Aliasing analysis: two stubs mapped to one host bubble is sound-as-primitive (insertion is sound for any content; iteration cannot produce aliasing — extraction is bijective by construction). Mutants i/iii survived test residue and were killed; mutant iv — the candidate-enclosure skip — survived ALL committed tests and probes yet is SOUNDNESS-LOAD-BEARING: dropping it let a pattern match a bubble-with-its-atom at ROOT, forging an out-of-scope free relation reference; killed with a demonstrated-forgery test. Suite: 427.
+
 ---
 
 ### Task 4: Open rules + vacuous bubble pair
