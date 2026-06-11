@@ -67,3 +67,27 @@ describe('renderScene', () => {
     }
   })
 })
+
+describe('hover tethers', () => {
+  it('emits one tether per var radial of the hovered node, in the binder hue', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('\\x. \\y. x y'))
+    const d = h.build()
+    const s = settle(d, initialState(d), DEFAULT_PARAMS, 20000)
+    const sceneV = buildScene(d, s.positions)
+    const plain = renderScene(sceneV)
+    const hovered = renderScene(sceneV, { hoverNode: n })
+    expect(hovered.length).toBeGreaterThan(plain.length)
+    const tethers = hovered.filter((x) => x.kind === 'segment' && x.width === 2.5)
+    expect(tethers).toHaveLength(2) // one per variable occurrence: x and y
+  })
+
+  it('no hover, no tethers (output unchanged)', () => {
+    const h = new DiagramBuilder()
+    h.termNode(h.root, p('\\x. x'))
+    const d = h.build()
+    const s = settle(d, initialState(d), DEFAULT_PARAMS, 20000)
+    const sceneV = buildScene(d, s.positions)
+    expect(renderScene(sceneV)).toEqual(renderScene(sceneV, {}))
+  })
+})
