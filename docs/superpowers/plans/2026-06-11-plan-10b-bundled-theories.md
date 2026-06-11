@@ -432,6 +432,8 @@ git add tests/kernel/proof/frege-succ.test.ts
 git commit -m "test(kernel): the successor theorem — 16-step derivation checked end to end"
 ```
 
+**Execution outcome (Task 1 `f17934b`, Task 2 `54dd8c0`):** Task 1 landed per plan (4 gate tests; binders threaded through step/json/compose; json.test.ts literals updated). Task 2's implementer misdiagnosed a discovery bug as an iteration-rule constraint and committed a SKIPPED skeleton (`095f1af`) — corrected by the controller: the bubble has TWO child cuts after vacuousIntro wraps cI, so the ambient-closure discovery must exclude cI (one line). With that, the spike's 16-step sequence passed unchanged; 445 tests, no skips.
+
 ---
 
 ### Task 3: The Frege theory builder
