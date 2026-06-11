@@ -145,7 +145,8 @@ export function findOccurrences(
         throw new DiagramError(`open binder stubs must form a pure chain below the pattern root; '${cur}' has other content`)
       }
       // for non-innermost stubs, reject any wires scoped at them
-      if (cur !== pd.root && pIdxEarly.bareScoped.get(cur)!.length > 0) {
+      if (cur !== pd.root
+        && (pIdxEarly.bareScoped.get(cur)!.length > 0 || pIdxEarly.endpointfulScopedCount.get(cur)! > 0)) {
         throw new DiagramError(`wires scoped at binder stub '${cur}' are not matchable`)
       }
       cur = stubKids[0]!
@@ -349,7 +350,7 @@ export function findOccurrences(
     for (const [prId, hrId] of regionMap) {
       const pBare = pIdx.bareScoped.get(prId)!
       const hBare = hIdx.bareScoped.get(hrId)!
-      if (prId === pd.root) {
+      if (prId === effectiveRoot) {
         if (pBare.length > hBare.length) return
       } else if (pBare.length !== hBare.length) {
         return

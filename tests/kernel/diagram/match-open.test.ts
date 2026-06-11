@@ -4,6 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
@@ -80,6 +81,46 @@ describe('findOccurrences with openBinders', () => {
       .toThrowError(/open binder target 'ghost' does not exist/)
     expect(() => findOccurrences(d, ex.pattern, { fuel: 50, openBinders: new Map([[ex.pattern.diagram.root, rB]]) }))
       .toThrowError(/is not a bubble/)
+  })
+
+  it('rejects ENDPOINTFUL wires scoped at a non-innermost stub loudly', () => {
+    // hand-built open pattern: root -> s1(1) -> s2(1) -> atom bound to s1,
+    // with the atom's arg wire scoped at s1 (the non-innermost stub)
+    const b = new DiagramBuilder()
+    const s1 = b.bubble(b.root, 1)
+    const s2 = b.bubble(s1, 1)
+    const a = b.atom(s2, s1)
+    b.wire(s1, [{ node: a, port: { kind: 'arg', index: 0 } }])
+    const pattern = mkDiagramWithBoundary(b.build(), [])
+    const h = new DiagramBuilder()
+    const rB1 = h.bubble(h.root, 1)
+    const rB2 = h.bubble(rB1, 1)
+    const ha = h.atom(rB2, rB1)
+    h.wire(rB1, [{ node: ha, port: { kind: 'arg', index: 0 } }])
+    const d = h.build()
+    expect(() =>
+      findOccurrences(d, pattern, { fuel: 50, openBinders: new Map([[s1, rB1], [s2, rB2]]) }),
+    ).toThrowError(/wires scoped at binder stub/)
+  })
+
+  it('bare wires scoped at the innermost stub get root (subset) semantics like the closed case', () => {
+    const h = new DiagramBuilder()
+    const rB = h.bubble(h.root, 1)
+    const a = h.atom(rB, rB)
+    h.wire(rB, [{ node: a, port: { kind: 'arg', index: 0 } }])
+    const bw1 = h.wire(rB, [])
+    h.wire(rB, []) // second bare wire: host has MORE than the pattern selects
+    const d = h.build()
+    const sel = mkSelection(d, { region: rB, regions: [], nodes: [a], wires: [bw1] })
+    const ex = extractSubgraph(d, sel)
+    // the pattern bare wire is scoped at the innermost stub (contentParent);
+    // the stub layer is location-transparent, so the open reading must use
+    // the same subset semantics the closed root does
+    const { matches } = findOccurrences(d, ex.pattern, {
+      fuel: 50,
+      openBinders: new Map([[ex.binderStubs[0]!, rB]]),
+    })
+    expect(matches).toHaveLength(1)
   })
 
   it('candidates outside an open binder are skipped (atoms cannot escape their quantifier)', () => {
