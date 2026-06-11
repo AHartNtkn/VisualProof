@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
-import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { mkDiagram, type Diagram } from '../../../src/kernel/diagram/diagram'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
@@ -75,20 +75,49 @@ describe('open extraction', () => {
     expect((pd.regions[sOuter!]! as { parent: string }).parent).toBe(pd.root)
   })
 
-  it('still refuses atoms whose binder is below the anchor (not enclosing it)', () => {
+  it('a binder below the anchor rides inside the selection: the extraction is CLOSED', () => {
+    // A binder below the anchor must be selected content to contain its atoms
+    // (mkSelection admits no deeper direct nodes), so it always travels with
+    // the pattern and never produces a stub.
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const bub = h.bubble(cut, 1)
     const a = h.atom(bub, bub)
     const d = h.build()
-    // anchor at the CUT, selecting the atom's bubble would be closed; instead
-    // hand-build a selection of a node deeper than its unselected binder is
-    // impossible via mkSelection (atom is in bub, not cut) — the enclosing
-    // case is the only open case, so this guards the error message instead:
     const sel = mkSelection(d, { region: cut, regions: [bub], nodes: [], wires: [] })
     const ex = extractSubgraph(d, sel)
     expect(ex.binderStubs).toEqual([]) // binder inside the selection: closed
     void a
+  })
+
+  it('the non-enclosing-binder guard is unreachable through valid hosts and fires loudly on forged ones', () => {
+    // mkDiagram enforces that an atom lies inside its binder bubble, so on a
+    // validated host every unselected binder of a selected atom encloses the
+    // anchor — the rejection is a pure invariant guard. Its loudness is
+    // pinned by forging the one host shape that reaches it.
+    expect(() => mkDiagram({
+      root: 'r0',
+      regions: {
+        r0: { kind: 'sheet' },
+        b1: { kind: 'bubble', parent: 'r0', arity: 0 },
+        c1: { kind: 'cut', parent: 'r0' },
+      },
+      nodes: { n0: { kind: 'atom', region: 'c1', binder: 'b1' } },
+      wires: {},
+    })).toThrowError(/must lie inside its binder bubble/)
+    const forged = {
+      root: 'r0',
+      regions: {
+        r0: { kind: 'sheet' },
+        b1: { kind: 'bubble', parent: 'r0', arity: 0 },
+        c1: { kind: 'cut', parent: 'r0' },
+      },
+      nodes: { n0: { kind: 'atom', region: 'c1', binder: 'b1' } },
+      wires: {},
+    } as unknown as Diagram
+    const sel = mkSelection(forged, { region: 'c1', regions: [], nodes: ['n0'], wires: [] })
+    expect(() => extractSubgraph(forged, sel))
+      .toThrowError(/atom 'n0' is bound to 'b1', which neither lies in the selection nor encloses its anchor/)
   })
 
   it('boundary wires stay root-scoped with endpoints inside the stub', () => {
