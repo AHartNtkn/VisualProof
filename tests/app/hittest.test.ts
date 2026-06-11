@@ -74,3 +74,18 @@ describe('buildSelection', () => {
       .toThrowError(/select the enclosing cut instead/)
   })
 })
+
+describe('nested-region precedence', () => {
+  it('the SMALLEST containing region wins', () => {
+    const h = new DiagramBuilder()
+    const outer = h.cut(h.root)
+    const inner = h.cut(outer)
+    const m = h.termNode(inner, p('y'))
+    const d = h.build()
+    const scene = buildScene(d, new Map([[m, vec(0, 0)]]))
+    const innerCircle = scene.regions.find((r) => r.id === inner)!
+    // a point inside the inner circle but outside the node
+    const probe = vec(innerCircle.center.x + innerCircle.radius - 0.5, innerCircle.center.y)
+    expect(hitTest(scene, probe)).toEqual({ kind: 'region', id: inner })
+  })
+})

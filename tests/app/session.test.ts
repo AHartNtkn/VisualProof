@@ -6,6 +6,7 @@ import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem } from '../../src/app/session'
+import { checkTheorem } from '../../src/kernel/proof/theorem'
 
 const consts = new Set(['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO'])
 const p = (s: string) => parseTerm(s, consts)
@@ -138,5 +139,46 @@ describe('backward mode', () => {
     s = undoBackward(s)
     expect(s.backward.current).toBe(before)
     expect(s.backward.steps).toHaveLength(0)
+  })
+})
+
+describe('multi-step backward composition', () => {
+  it('two backward actions assemble into a checkable theorem', () => {
+    const theory = buildFregeTheory()
+    const ctx = verifyTheory(theory)
+    // lhs: bare node; rhs: the node wrapped in TWO nested double cuts
+    const l = new DiagramBuilder()
+    l.termNode(l.root, p('\\x. x'))
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    const r = new DiagramBuilder()
+    const m = r.termNode(r.root, p('\\x. x'))
+    const o1 = r.cut(r.root)
+    const i1 = r.cut(o1)
+    const o2 = r.cut(i1)
+    r.cut(o2)
+    void m
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    let s = startSession(lhs, rhs, ctx)
+    // unwrap the INNER pair first, then the outer pair
+    s = applyBackward(s, { kind: 'unDoubleCut', outer: o2 })
+    s = applyBackward(s, { kind: 'unDoubleCut', outer: o1 })
+    expect(s.backward.steps).toHaveLength(2)
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'doubleWrap')
+    expect(thm.steps).toHaveLength(2)
+    expect(() => checkTheorem(thm, ctx)).not.toThrow()
+  })
+
+  it('assembleTheorem refuses when the sides have not met', () => {
+    const theory = buildFregeTheory()
+    const ctx = verifyTheory(theory)
+    const l = new DiagramBuilder()
+    l.termNode(l.root, p('\\x. x'))
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    const r = new DiagramBuilder()
+    r.termNode(r.root, p('\\x. \\y. x'))
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const s = startSession(lhs, rhs, ctx)
+    expect(() => assembleTheorem(s, 'nope')).toThrowError(/have not met/)
   })
 })

@@ -14,19 +14,31 @@ export type Side = {
   readonly history: readonly Diagram[]
 }
 
+export type BackwardSide = Side & {
+  /**
+   * Steps that replay EXACTLY (id-level) from `current` back to the original
+   * rhs, maintained incrementally: replaying a recorded step reproduces the
+   * prior goal only up to isomorphism (fresh ids), so on every action the
+   * existing tail is remapped onto the freshly reproduced diagram via
+   * composeProofs. Paired with `tailHistory` for undo.
+   */
+  readonly composedTail: readonly ProofStep[]
+  readonly tailHistory: readonly (readonly ProofStep[])[]
+}
+
 export type ProofSession = {
   readonly lhs: DiagramWithBoundary
   readonly rhs: DiagramWithBoundary
   readonly ctx: ProofContext
   readonly forward: Side
-  readonly backward: Side
+  readonly backward: BackwardSide
 }
 
 export function startSession(lhs: DiagramWithBoundary, rhs: DiagramWithBoundary, ctx: ProofContext): ProofSession {
   return {
     lhs, rhs, ctx,
     forward: { current: lhs.diagram, steps: [], history: [] },
-    backward: { current: rhs.diagram, steps: [], history: [] },
+    backward: { current: rhs.diagram, steps: [], history: [], composedTail: [], tailHistory: [] },
   }
 }
 
@@ -119,12 +131,17 @@ export function applyBackward(s: ProofSession, action: BackwardAction): ProofSes
   if (diagramFingerprint(reproduced) !== diagramFingerprint(g)) {
     throw new Error(`backward action '${action.kind}' could not reconstruct the goal it inverted; this is a session bug`)
   }
+  // re-anchor the existing exact tail onto the reproduced diagram: it was
+  // exact from g, and `reproduced` is only isomorphic to g, so map it across
+  const remapped = composeProofs(reproduced, g, s.backward.composedTail, s.ctx)
   return {
     ...s,
     backward: {
       current: gPrime,
       steps: [...s.backward.steps, step],
       history: [...s.backward.history, g],
+      composedTail: [step, ...remapped],
+      tailHistory: [...s.backward.tailHistory, s.backward.composedTail],
     },
   }
 }
@@ -138,6 +155,8 @@ export function undoBackward(s: ProofSession): ProofSession {
       current: history[history.length - 1]!,
       steps: s.backward.steps.slice(0, -1),
       history: history.slice(0, -1),
+      composedTail: s.backward.tailHistory[s.backward.tailHistory.length - 1]!,
+      tailHistory: s.backward.tailHistory.slice(0, -1),
     },
   }
 }
@@ -149,8 +168,8 @@ export function meet(s: ProofSession): boolean {
 /** Compose both halves into the finished theorem (caller runs checkTheorem). */
 export function assembleTheorem(s: ProofSession, name: string): Theorem {
   if (!meet(s)) throw new Error('the two sides have not met; nothing to assemble')
-  const tail = [...s.backward.steps].reverse()
-  const composed = composeProofs(s.forward.current, s.backward.current, tail, s.ctx)
+  // composedTail is exact from backward.current; one final remap crosses the meet
+  const composed = composeProofs(s.forward.current, s.backward.current, s.backward.composedTail, s.ctx)
   return {
     name,
     lhs: s.lhs,

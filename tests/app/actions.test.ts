@@ -84,3 +84,15 @@ describe('applicableActions', () => {
     }
   })
 })
+
+describe('erase polarity with content', () => {
+  it('does not offer erase for content selected at a negative region', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const n = h.termNode(cut, p('\\x. x'))
+    const d = h.build()
+    const ctx = verifyTheory(buildFregeTheory())
+    const sel = mkSelection(d, { region: cut, regions: [], nodes: [n], wires: [] })
+    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).not.toContain('erase')
+  })
+})
