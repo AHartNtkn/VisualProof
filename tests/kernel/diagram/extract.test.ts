@@ -83,10 +83,9 @@ describe('extractSubgraph atom-binder boundary', () => {
   })
 
   it('allows atoms bound to the anchor to extract as open patterns', () => {
-    // This behavior changed with open pattern support: atoms bound to an
-    // enclosing binder (including the anchor itself) now extract successfully,
-    // creating stub-bubble layers. The old tests rejected this unconditionally;
-    // now only binders OUTSIDE the ancestor chain are rejected.
+    // atoms bound to an enclosing binder (including the anchor itself)
+    // extract as open patterns with stub-bubble layers; only binders off the
+    // ancestor chain are rejected
     const b = new DiagramBuilder()
     const bub = b.bubble(b.root, 0)
     const cut = b.cut(bub)

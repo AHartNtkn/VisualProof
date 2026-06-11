@@ -103,20 +103,17 @@ describe('Frege arithmetic: blank-side ℕ theorems', () => {
     // join its copied output wire with the base's zero wire (inner = deeper
     // scope; rB is negative ✓)
     push({ rule: 'iteration', sel: mkSelection(cur, { region: cur.root, regions: [], nodes: [Object.keys(lhsDiagram.nodes)[0]!], wires: [] }), target: rB })
-    const copiedZero = Object.entries(cur.nodes).find(([id, n]) =>
-      n.kind === 'term' && n.region === rB && cur.nodes[id] !== undefined &&
-      Object.entries(cur.wires).some(([wid, w]) => wid === wz && w.endpoints.some((ep) => ep.node === id)))![0]
-    void copiedZero
-    // the copy's OUTPUT must sit on the boundary wz (shared attachment) — the
-    // base's zero wire w0Host is separate; join them:
+    // the copy's OUTPUT sits on the boundary wz (shared attachment) — the
+    // base's zero wire w0Host is separate; join them (inner = deeper scope;
+    // rB is negative, so the join is licensed):
     push({ rule: 'wireJoin', a: wz, b: w0Host })
 
     // capture the conclusion
     const rhs = mkDiagramWithBoundary(cur, [wz])
     const thm: Theorem = { name: 'zeroIsNat', lhs, rhs, steps }
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
-    // sanity on the captured shape: one bubble, three atoms bound to it,
-    // boundary survived at root scope
+    // sanity on the captured shape: four atoms bound to the bubble (base,
+    // two closure atoms, and the cut4 conclusion copy), boundary at root scope
     expect(Object.values(rhs.diagram.nodes).filter((n) => n.kind === 'atom')).toHaveLength(4)
     expect(rhs.diagram.wires[wz]!.scope).toBe(rhs.diagram.root)
   })

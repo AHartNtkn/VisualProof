@@ -87,7 +87,7 @@ describe('spliceSubgraph with a binder map', () => {
       .toThrowError(/does not enclose the splice region/)
   })
 
-  it('rejects unmapped stub bubbles loudly (an open pattern needs its binder map)', () => {
+  it('an unmapped stub splices as an ordinary fresh bubble (binder maps are the caller contract)', () => {
     const { d, rB, a, cut } = host()
     const sel = mkSelection(d, { region: rB, regions: [], nodes: [a], wires: [] })
     const ex = extractSubgraph(d, sel)

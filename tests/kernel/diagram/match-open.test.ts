@@ -182,7 +182,7 @@ describe('findOccurrences with openBinders', () => {
     const d = h.build()
     expect(() =>
       findOccurrences(d, pattern, { fuel: 50, openBinders: new Map([[s1, rB1], [s2, rB2]]) }),
-    ).toThrowError(/wires scoped at binder stub/)
+    ).toThrowError(/above the binder-stub chain are not matchable/)
   })
 
   it('bare wires scoped at the innermost stub get root (subset) semantics like the closed case', () => {

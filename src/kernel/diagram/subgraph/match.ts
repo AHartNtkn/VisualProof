@@ -131,23 +131,29 @@ export function findOccurrences(
       throw new DiagramError(`open binder arity mismatch: '${stub}' has ${ps.arity}, '${hb}' has ${target.arity}`)
     }
   }
+  const hIdx = buildIdx(host)
+  const pIdx = buildIdx(pd)
+
   // stubs must form a pure chain root → s1 → … → sk: nothing else lives on it
-  const pIdxEarly = buildIdx(pd)
   let effectiveRoot: RegionId = pd.root
   {
     const stubSet = new Set(openBinders.keys())
     let cur: RegionId = pd.root
     while (true) {
-      const kids = pIdxEarly.childrenOf.get(cur)!
+      const kids = pIdx.childrenOf.get(cur)!
       const stubKids = kids.filter((k) => stubSet.has(k))
       if (stubKids.length === 0) break
-      if (stubKids.length > 1 || kids.length > 1 || pIdxEarly.nodesIn.get(cur)!.length > 0) {
+      if (stubKids.length > 1 || kids.length > 1 || pIdx.nodesIn.get(cur)!.length > 0) {
         throw new DiagramError(`open binder stubs must form a pure chain below the pattern root; '${cur}' has other content`)
       }
-      // for non-innermost stubs, reject any wires scoped at them
-      if (cur !== pd.root
-        && (pIdxEarly.bareScoped.get(cur)!.length > 0 || pIdxEarly.endpointfulScopedCount.get(cur)! > 0)) {
-        throw new DiagramError(`wires scoped at binder stub '${cur}' are not matchable`)
+      // non-boundary wires scoped above the content level (the root or a
+      // non-innermost stub) have no host counterpart under the stub-layer
+      // reading; boundary stubs at the root are the seam and stay fine
+      const nonBoundaryAtCur = Object.entries(pd.wires).some(
+        ([wid, w]) => w.scope === cur && !boundarySet.has(wid),
+      )
+      if (nonBoundaryAtCur) {
+        throw new DiagramError(`wires scoped at '${cur}' above the binder-stub chain are not matchable`)
       }
       cur = stubKids[0]!
       stubSet.delete(cur)
@@ -157,9 +163,6 @@ export function findOccurrences(
       throw new DiagramError(`open binder stub(s) ${[...stubSet].map((s) => `'${s}'`).join(', ')} are not on the root chain`)
     }
   }
-
-  const hIdx = buildIdx(host)
-  const pIdx = buildIdx(pd)
   const rootRegions = pIdx.childrenOf.get(effectiveRoot)!
   const rootNodes = pIdx.nodesIn.get(effectiveRoot)!
 
