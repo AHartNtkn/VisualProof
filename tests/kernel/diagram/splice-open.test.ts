@@ -62,11 +62,19 @@ describe('spliceSubgraph with a binder map', () => {
     const stub = ex.binderStubs[0]!
     expect(() => spliceSubgraph(d, cut, ex.pattern, ex.attachments, new Map([[stub, cut]])))
       .toThrowError(/binder map target '.*' is not a bubble/)
-    const h2 = new DiagramBuilder()
-    const rB2 = h2.bubble(h2.root, 2)
-    void rB2
     expect(() => spliceSubgraph(d, cut, ex.pattern, ex.attachments, new Map([[stub, 'ghost']])))
       .toThrowError(/binder map target 'ghost' does not exist/)
+    // wrong arity: an arity-2 bubble enclosing the splice region
+    const h2 = new DiagramBuilder()
+    const outer2 = h2.bubble(h2.root, 2)
+    const inner1 = h2.bubble(outer2, 1)
+    const atom2 = h2.atom(inner1, inner1)
+    const cut2 = h2.cut(inner1)
+    const d2 = h2.build()
+    const sel2 = mkSelection(d2, { region: inner1, regions: [], nodes: [atom2], wires: [] })
+    const ex2 = extractSubgraph(d2, sel2)
+    expect(() => spliceSubgraph(d2, cut2, ex2.pattern, ex2.attachments, new Map([[ex2.binderStubs[0]!, outer2]])))
+      .toThrowError(/binder map arity mismatch/)
     // not-enclosing: map the stub to a bubble that does not contain the splice region
     const h3 = new DiagramBuilder()
     const bubA = h3.bubble(h3.root, 1)

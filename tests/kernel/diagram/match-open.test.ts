@@ -81,6 +81,88 @@ describe('findOccurrences with openBinders', () => {
       .toThrowError(/open binder target 'ghost' does not exist/)
     expect(() => findOccurrences(d, ex.pattern, { fuel: 50, openBinders: new Map([[ex.pattern.diagram.root, rB]]) }))
       .toThrowError(/is not a bubble/)
+    // wrong arity: a host bubble of a different arity than the stub
+    const h2 = new DiagramBuilder()
+    const wide = h2.bubble(h2.root, 2)
+    void wide
+    const d2 = h2.build()
+    expect(() => findOccurrences(d2, ex.pattern, { fuel: 50, openBinders: new Map([[stub, wide]]) }))
+      .toThrowError(/open binder arity mismatch/)
+  })
+
+  it('binder identity holds across a cut: R(x) under a cut never matches the S copy', () => {
+    const h = new DiagramBuilder()
+    // decoy: ∃S. S(x)
+    const rD = h.bubble(h.root, 1)
+    const nD = h.termNode(rD, p('\\x. x'))
+    const aD = h.atom(rD, rD)
+    h.wire(rD, [
+      { node: nD, port: { kind: 'output' } },
+      { node: aD, port: { kind: 'arg', index: 0 } },
+    ])
+    // ∃R. ¬R(x): the R-application sits under a cut
+    const rB = h.bubble(h.root, 1)
+    const cut = h.cut(rB)
+    const nR = h.termNode(cut, p('\\x. x'))
+    const aR = h.atom(cut, rB)
+    h.wire(cut, [
+      { node: nR, port: { kind: 'output' } },
+      { node: aR, port: { kind: 'arg', index: 0 } },
+    ])
+    const d = h.build()
+    const sel = mkSelection(d, { region: cut, regions: [], nodes: [nR, aR], wires: [] })
+    const ex = extractSubgraph(d, sel)
+    const stub = ex.binderStubs[0]!
+    // bound to rB: only the original under the cut — the S copy must NOT match
+    const withRB = findOccurrences(d, ex.pattern, { fuel: 50, openBinders: new Map([[stub, rB]]) })
+    expect(withRB.matches).toHaveLength(1)
+    expect(withRB.matches[0]!.region).toBe(cut)
+    // bound to rD: only the S copy
+    const withRD = findOccurrences(d, ex.pattern, { fuel: 50, openBinders: new Map([[stub, rD]]) })
+    expect(withRD.matches).toHaveLength(1)
+    expect(withRD.matches[0]!.region).toBe(rD)
+  })
+
+  it('nested open binders enforce both identities; flipping one target to a decoy kills the match', () => {
+    const h = new DiagramBuilder()
+    const rB1 = h.bubble(h.root, 1)
+    const rB2 = h.bubble(rB1, 1)
+    const rB3 = h.bubble(rB2, 1) // decoy that ALSO encloses the content
+    const c = h.cut(rB3)
+    const a1 = h.atom(c, rB1)
+    const a2 = h.atom(c, rB2)
+    h.wire(rB1, [{ node: a1, port: { kind: 'arg', index: 0 } }])
+    h.wire(rB2, [{ node: a2, port: { kind: 'arg', index: 0 } }])
+    const d = h.build()
+    const sel = mkSelection(d, { region: c, regions: [], nodes: [a1, a2], wires: [] })
+    const ex = extractSubgraph(d, sel)
+    const [s1, s2] = [ex.binderStubs[0]!, ex.binderStubs[1]!]
+    const good = findOccurrences(d, ex.pattern, { fuel: 50, openBinders: new Map([[s1, rB1], [s2, rB2]]) })
+    expect(good.matches).toHaveLength(1)
+    expect(good.matches[0]!.region).toBe(c)
+    // same arity, still encloses c: only binder IDENTITY can reject it
+    const bad = findOccurrences(d, ex.pattern, { fuel: 50, openBinders: new Map([[s1, rB1], [s2, rB3]]) })
+    expect(bad.matches).toHaveLength(0)
+  })
+
+  it('never matches at a candidate outside the open binder, even when the binder bubble itself is matchable content', () => {
+    // pattern: root -> stub(1) -> pb(1) [ atom bound to STUB ]
+    const b = new DiagramBuilder()
+    const stub = b.bubble(b.root, 1)
+    const pb = b.bubble(stub, 1)
+    b.atom(pb, stub)
+    const pattern = mkDiagramWithBoundary(b.build(), [])
+    // host: root [ rB(1) [ atom bound to rB ] ]
+    const h = new DiagramBuilder()
+    const rB = h.bubble(h.root, 1)
+    h.atom(rB, rB)
+    const d = h.build()
+    // without the candidate enclosure skip, R = root would map pb -> rB and
+    // the atom's binder-identity check would PASS (the host atom IS bound to
+    // rB) — a forged occurrence placing the free relation variable rB at a
+    // region where rB is not in scope
+    const { matches } = findOccurrences(d, pattern, { fuel: 50, openBinders: new Map([[stub, rB]]) })
+    expect(matches).toHaveLength(0)
   })
 
   it('rejects ENDPOINTFUL wires scoped at a non-innermost stub loudly', () => {
