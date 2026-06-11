@@ -1,6 +1,6 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { polarity } from '../diagram/regions'
+import { polarity, isAncestorOrEqual } from '../diagram/regions'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
@@ -37,6 +37,7 @@ export function applyComprehensionInstantiate(
   d: Diagram,
   bubbleId: RegionId,
   comp: DiagramWithBoundary,
+  binders: ReadonlyMap<RegionId, RegionId> = new Map(),
 ): Diagram {
   const bubble = d.regions[bubbleId]
   if (bubble === undefined) throw new DiagramError(`unknown region '${bubbleId}'`)
@@ -51,6 +52,18 @@ export function applyComprehensionInstantiate(
       `arity mismatch: bubble '${bubbleId}' binds a relation of arity ${bubble.arity}, but the comprehension has ${comp.boundary.length} boundary wires`,
     )
   }
+
+  // Open comprehensions mention relation variables quantified OUTSIDE the
+  // bubble being eliminated — a binder at or below it would let the
+  // comprehension's denotation vary under that very quantifier, which the
+  // instantiation argument (φ(G) ⟹ ∃R.φ(R) for FIXED G) cannot license.
+  for (const hb of binders.values()) {
+    if (hb === bubbleId || !isAncestorOrEqual(d, hb, bubbleId)) {
+      throw new RuleError(
+        `open comprehension binder '${hb}' must properly enclose the instantiated bubble '${bubbleId}'`,
+      )
+    }
+  }
   const atoms = Object.entries(d.nodes).filter(
     (entry): entry is [NodeId, Extract<DiagramNode, { kind: 'atom' }>] =>
       entry[1].kind === 'atom' && entry[1].binder === bubbleId,
@@ -61,7 +74,7 @@ export function applyComprehensionInstantiate(
     for (let i = 0; i < bubble.arity; i++) {
       args.push(wireAt(cur, atomId, { kind: 'arg', index: i }))
     }
-    cur = spliceSubgraph(cur, atom.region, comp, args)
+    cur = spliceSubgraph(cur, atom.region, comp, args, binders)
     cur = dropNode(cur, atomId)
   }
   // dissolve the bubble: promote child regions, nodes, and wire scopes
