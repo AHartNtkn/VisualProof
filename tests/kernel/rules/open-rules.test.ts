@@ -51,8 +51,9 @@ describe('open iteration / deiteration', () => {
     // a target inside the source region but outside the binder cannot exist
     // (external binders enclose the anchor), so the source-region gate
     // subsumes the binder gate for anchored iteration; the explicit binder
-    // check guards hand-built call orders and is exercised through splice's
-    // ancestry validation — pin the splice-level message via a direct call:
+    // check is an invariant guard, and splice's own ancestry validation is
+    // pinned directly in splice-open.test.ts ('does not enclose the splice
+    // region').
   })
 
   it('deiteration justification requires the SAME binder: a decoy bubble copy does not justify', () => {

@@ -70,7 +70,7 @@ describe('open and vacuous proof steps', () => {
       .toThrowError(/binders/)
   })
 
-  it('composeProofs maps binder VALUES and vacuous step ids through the iso', () => {
+  it('composeProofs maps vacuous step ids through the iso', () => {
     const mk = () => {
       const h = new DiagramBuilder()
       const cut1 = h.cut(h.root)
@@ -81,6 +81,38 @@ describe('open and vacuous proof steps', () => {
     const { d: db, cut1: bc, n: bn } = mk()
     const tail: ProofStep[] = [
       { rule: 'vacuousIntro', sel: mkSelection(db, { region: bc, regions: [], nodes: [bn], wires: [] }), arity: 1 },
+    ]
+    const composed = composeProofs(da, db, tail, ctx)
+    const viaA = replayProof(da, composed, ctx)
+    const viaB = replayProof(db, tail, ctx)
+    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+  })
+
+  it('composeProofs maps insertion binder VALUES through a NON-IDENTITY iso', () => {
+    // Isomorphic hosts with DIFFERENT ids for the host bubble: in da the
+    // bubble is r2 and r3 is a bare cut; in db the bubble is r3 and r1 is the
+    // bare cut. An unmapped binder VALUE ('r3') would point at da's CUT —
+    // splice must see the iso image (da's bubble), or composition is wrong.
+    const mkA = () => {
+      const h = new DiagramBuilder()
+      const c = h.cut(h.root) // r1
+      const bub = h.bubble(c, 1) // r2
+      h.cut(h.root) // r3 (bare cut)
+      return { d: h.build(), bub }
+    }
+    const mkB = () => {
+      const h = new DiagramBuilder()
+      h.cut(h.root) // r1 (bare cut)
+      const c = h.cut(h.root) // r2
+      const bub = h.bubble(c, 1) // r3
+      return { d: h.build(), bub }
+    }
+    const { d: da, bub: aBub } = mkA()
+    const { d: db, bub: bBub } = mkB()
+    expect(aBub).not.toBe(bBub) // the iso is non-identity on the bubble
+    const { pattern, stub } = openPattern()
+    const tail: ProofStep[] = [
+      { rule: 'insertion', region: bBub, pattern, attachments: [], binders: { [stub]: bBub } },
     ]
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
