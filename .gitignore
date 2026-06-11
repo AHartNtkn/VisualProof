@@ -3,3 +3,4 @@ Old/
 node_modules/
 dist/
 demo/dist
+app/dist

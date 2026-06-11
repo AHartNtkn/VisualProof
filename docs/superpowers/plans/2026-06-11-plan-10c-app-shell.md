@@ -16,7 +16,7 @@
 
 **The session is the proof object under construction.** `ProofSession` holds the goal (`lhs`/`rhs` as `DiagramWithBoundary`), the forward state (current diagram + steps from lhs) and the backward state (current diagram + steps recorded as the FORWARD steps they invert, in user order — step i transforms backward-diagram i to backward-diagram i−1). Applying forward = `applyStep` + push. Applying backward = compute the inverse-applied diagram G′ AND the forward step (G′ → G) together, per supported rule pair (double cut intro↔elim, vacuous bubble intro↔elim, insertion↔erasure at the appropriate polarities, conversion↔conversion). After every change, meet detection compares `diagramFingerprint(forward.current)` against `backward.current`; on meet, `composeProofs(forward.current, backward.current, reversed backward steps)` produces the full chain, and `checkTheorem` on the assembled theorem is the final word. Undo pops the respective history (full diagrams retained — proof diagrams are small; no deltas, no cleverness).
 
-**Backward step construction must reproduce the exact prior diagram.** Each backward action computes G′ from G with known fresh ids, then builds the forward step against G′ such that `applyStep(G′, step)` is id-exactly G — asserted at construction time (loud failure if an applier's id choices drift). This keeps the recorded tail replayable without iso-rewriting anywhere except the meet itself, where Plan 8's `composeProofs` already handles it.
+**Backward steps reproduce the prior goal only up to isomorphism, so the tail is composed incrementally.** Each backward action computes G′ from G, builds the forward step against G′, and asserts by fingerprint that replaying it reproduces G — but replay mints fresh ids, so a naively reversed tail breaks on its second step (found by review, reproduced, fixed test-first). The backward side therefore maintains a `composedTail` that replays EXACTLY from the current goal: each action remaps the existing tail onto the freshly reproduced diagram via `composeProofs`, and assembly needs only the final cross-meet remap. Undo carries a parallel `tailHistory`.
 
 **Actions are enumerated, not attempted.** `applicableActions(d, sel, ctx)` mirrors the rule gates read-only (polarity checks, shape checks) and returns descriptors `{ kind, label, needsTarget?, needsInput? }`; the UI renders them as the floating menu. Two-phase actions (iteration's target, theorem citation's argument wires) get a pending state in the shell, not in the session. Enumeration NEVER invokes appliers (no speculative application); the applier remains the sole authority when the user commits — a refused action at commit time is surfaced verbatim (the kernel's message IS the UX copy).
 
@@ -40,7 +40,7 @@
 - Create: `src/app/edit.ts`
 - Test: `tests/app/edit.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/app/edit.test.ts`:
 
@@ -130,12 +130,12 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/app/edit.test.ts`
 Expected: FAIL — cannot resolve `app/edit`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/app/edit.ts`:
 
@@ -244,9 +244,9 @@ export function deleteSelection(d: Diagram, sel: SubgraphSelection): Diagram {
 
 NOTE: `joinPorts` falling back to `d.root` for incomparable scopes is correct construction semantics (the merged line's quantifier must enclose both ends; the root always does). The deepest common ANCESTOR would be tighter — acceptable simplification for construction mode, documented here; tighten in 10d if statement-authoring ever cares.
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/edit.ts tests/app/edit.test.ts
@@ -261,7 +261,7 @@ git commit -m "feat(app): construction-mode edit operations"
 - Create: `src/app/session.ts`
 - Test: `tests/app/session.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/app/session.test.ts`:
 
@@ -410,12 +410,12 @@ describe('backward mode', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `npx vitest run tests/app/session.test.ts`
 Expected: FAIL — cannot resolve `app/session`.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/app/session.ts`:
 
@@ -584,9 +584,9 @@ export function assembleTheorem(s: ProofSession, name: string): Theorem {
 
 NOTE on the reproduction assertion: it compares FINGERPRINTS, not raw ids — `composeProofs` at the meet handles any id drift between the recorded tail's diagrams and the forward side, and within the backward chain each step was literally constructed against its own predecessor, so replay works; the fingerprint assertion catches semantic divergence (a wrong selection reconstruction) loudly at action time, which is the bug class that matters. The doc comment above says "id-exactly" as the aspiration the selection-reconstruction code aims for — implementer: reword that comment to match the fingerprint check (the plan text is the drift).
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/session.ts tests/app/session.test.ts
@@ -601,7 +601,7 @@ git commit -m "feat(app): bidirectional proof session with meet composition"
 - Create: `src/app/hittest.ts`
 - Test: `tests/app/hittest.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/app/hittest.test.ts`:
 
@@ -684,9 +684,9 @@ describe('buildSelection', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/app/hittest.ts`:
 
@@ -779,9 +779,9 @@ export function buildSelection(d: Diagram, items: readonly Hit[]): SubgraphSelec
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/hittest.ts tests/app/hittest.test.ts
@@ -796,7 +796,7 @@ git commit -m "feat(app): hit testing and interactive selection building"
 - Create: `src/app/actions.ts`
 - Test: `tests/app/actions.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/app/actions.test.ts`:
 
@@ -889,9 +889,9 @@ describe('applicableActions', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 `src/app/actions.ts`:
 
@@ -966,14 +966,16 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/actions.ts tests/app/actions.test.ts
 git commit -m "feat(app): polarity-aware action enumeration"
 ```
+
+**Review outcome (Tasks 1–4, commits `d9f2161`/`17fc617`/`98b38a3`/`319ba7c`, fix `7376e6d`):** CONDITIONAL PASS resolved. The review found a REAL bug: multi-step backward composition broke because replaying a recorded step reproduces the prior goal only up to ISOMORPHISM (fresh ids), so a naively reversed tail fails on its second step (reproduced: "composition cannot map region"). Fixed test-first with incremental tail remapping: the backward side maintains a `composedTail` that replays exactly from the current goal — each action remaps the existing tail onto the freshly reproduced diagram via composeProofs; assembly does only the final cross-meet remap; undo carries a parallel tailHistory. Three mutation coverage gaps (assemble-without-meet, nested-region precedence, erase-at-negative-with-content) killed in the same commit. Action-menu/kernel agreement catalogued: only `deiterate` can refuse at commit (justification search), by design. Suite: 483.
 
 ---
 
@@ -987,7 +989,7 @@ git commit -m "feat(app): polarity-aware action enumeration"
 
 The shell is browser glue: every decision branch calls a tested headless function. No unit tests beyond the layering edges and the vite build; behavioral coverage is Plan 10d's E2E.
 
-- [ ] **Step 1: Layering edges** — extend the architecture test with:
+- [x] **Step 1: Layering edges** — extend the architecture test with:
 
 ```ts
   it('nothing below the app layer imports it', () => {
@@ -1005,7 +1007,7 @@ The shell is browser glue: every decision branch calls a tested headless functio
   })
 ```
 
-- [ ] **Step 2: Implement the shell.** `src/app/shell.ts` owns: mode state (`'edit' | 'prove'`), the displayed diagram (edit target or session side), selection (list of Hits + the derived kernel selection when valid), pending two-phase action, physics state + pin, viewport transform (pan/zoom), and the render loop. Public surface:
+- [x] **Step 2: Implement the shell.** `src/app/shell.ts` owns: mode state (`'edit' | 'prove'`), the displayed diagram (edit target or session side), selection (list of Hits + the derived kernel selection when valid), pending two-phase action, physics state + pin, viewport transform (pan/zoom), and the render loop. Public surface:
 
 ```ts
 export type ShellOptions = {
@@ -1023,9 +1025,9 @@ Internals (write straightforwardly — this is glue):
 - `src/app/index.ts` barrel: `export { mountShell } from './shell'` plus the headless modules' exports.
 - `app/main.ts`: `mountShell({ canvas, chrome })` on DOM ready; `app/index.html` mirrors demo/index.html plus a chrome `<div>`.
 
-- [ ] **Step 3: Gates** — `npx vitest run` (all green incl. new layering edge), `npx tsc --noEmit`, `npx vite build app --logLevel error` compiles. Never start the dev server.
+- [x] **Step 3: Gates** — `npx vitest run` (all green incl. new layering edge), `npx tsc --noEmit`, `npx vite build app --logLevel error` compiles. Never start the dev server.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/app/shell.ts src/app/index.ts app/index.html app/main.ts package.json tests/architecture/layering.test.ts
@@ -1039,7 +1041,7 @@ git commit -m "feat(app): canvas shell with edit/prove modes over the headless c
 **Files:**
 - Test: `tests/app/pipeline.test.ts`
 
-- [ ] **Step 1: Write the battery** (must pass against Tasks 1–5)
+- [x] **Step 1: Write the battery** (must pass against Tasks 1–5)
 
 `tests/app/pipeline.test.ts`:
 
@@ -1099,9 +1101,9 @@ describe('edit → prove → assemble, end to end', () => {
 })
 ```
 
-- [ ] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
+- [x] **Step 2: Run; all must pass.** Any failure: investigate, fix test-first, report prominently.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/app/pipeline.test.ts
@@ -1120,3 +1122,9 @@ git commit -m "test(app): edit-to-checked-theorem pipeline battery"
 
 - Backward-mode coverage grows on demand: `unDoubleCut`/`unVacuousBubble` ship now; un-erase (backward insertion), un-conversion, and un-citation land in 10d alongside the E2E that exercises them.
 - All prior carried items (open theorem sides, matcher symmetry, R(x,x), joinPorts deepest-common-ancestor) remain.
+
+## Tasks 5–6 + final whole-branch review
+
+Tasks 5–6 (commits `7266695`, `fa92ee4`): shell built per the outline (every handler guard-wrapped into headless calls; documented UI constants; backward menu mapped to the two supported actions per the carried obligation), app page compiles (109KB raw / 32KB gzip), pipeline battery green.
+
+Final review: code SOUND; all findings were coverage/hygiene, fixed in `5861703`+`f287142`: the shell's boot theory-merge extracted into tested `src/app/boot.ts` (identical-body overlap accepted, conflicts refused loudly); the layering scan now catches bare side-effect imports (it previously missed `import '…'` entirely — verified by injection); the undoBackward-tail and dirty-annulus-enumeration mutants killed; stale comment fixed. Carried to 10d as named debt: descriptor→step construction for insert/convert paths unexercised headlessly; iterate-target null→root resolution; joinPorts representative-endpoint pick; goals only snapshot with empty boundary; assembled theorems are checked but not yet citable in-session. Suite: 490.
