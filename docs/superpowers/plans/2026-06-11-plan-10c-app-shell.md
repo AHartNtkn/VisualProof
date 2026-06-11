@@ -975,6 +975,8 @@ git add src/app/actions.ts tests/app/actions.test.ts
 git commit -m "feat(app): polarity-aware action enumeration"
 ```
 
+**Review outcome (Tasks 1–4, commits `d9f2161`/`17fc617`/`98b38a3`/`319ba7c`, fix `7376e6d`):** CONDITIONAL PASS resolved. The review found a REAL bug: multi-step backward composition broke because replaying a recorded step reproduces the prior goal only up to ISOMORPHISM (fresh ids), so a naively reversed tail fails on its second step (reproduced: "composition cannot map region"). Fixed test-first with incremental tail remapping: the backward side maintains a `composedTail` that replays exactly from the current goal — each action remaps the existing tail onto the freshly reproduced diagram via composeProofs; assembly does only the final cross-meet remap; undo carries a parallel tailHistory. Three mutation coverage gaps (assemble-without-meet, nested-region precedence, erase-at-negative-with-content) killed in the same commit. Action-menu/kernel agreement catalogued: only `deiterate` can refuse at commit (justification search), by design. Suite: 483.
+
 ---
 
 ### Task 5: The shell
