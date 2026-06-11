@@ -37,8 +37,11 @@ function mapOccurrence(iso: DiagramIso, occ: AbstractionOccurrence): Abstraction
  */
 export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
   switch (step.rule) {
-    case 'insertion':
-      return { ...step, region: mapId(iso.regions, step.region, 'region'), attachments: step.attachments.map((w) => mapId(iso.wires, w, 'wire')) }
+    case 'insertion': {
+      const binders: Record<string, string> = {}
+      for (const [stub, hb] of Object.entries(step.binders)) binders[stub] = mapId(iso.regions, hb, 'region')
+      return { ...step, region: mapId(iso.regions, step.region, 'region'), attachments: step.attachments.map((w) => mapId(iso.wires, w, 'wire')), binders }
+    }
     case 'wireJoin':
       return { ...step, a: mapId(iso.wires, step.a, 'wire'), b: mapId(iso.wires, step.b, 'wire') }
     case 'erasure':
@@ -72,6 +75,10 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       return { ...step, wrap: mapSel(iso, step.wrap), occurrences: step.occurrences.map((o) => mapOccurrence(iso, o)) }
     case 'theorem':
       return { ...step, at: { sel: mapSel(iso, step.at.sel), args: step.at.args.map((w) => mapId(iso.wires, w, 'wire')) } }
+    case 'vacuousIntro':
+      return { ...step, sel: mapSel(iso, step.sel) }
+    case 'vacuousElim':
+      return { ...step, region: mapId(iso.regions, step.region, 'region') }
   }
 }
 

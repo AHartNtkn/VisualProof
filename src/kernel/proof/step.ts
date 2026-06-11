@@ -14,6 +14,7 @@ import { applyUnfold, applyFold } from '../rules/definitions'
 import type { Definitions } from '../rules/definitions'
 import { applyComprehensionInstantiate, applyComprehensionAbstract } from '../rules/comprehension'
 import type { AbstractionOccurrence } from '../rules/comprehension'
+import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../rules/vacuous'
 import type { Theorem, TheoremApplication } from './theorem'
 import { applyTheorem } from './theorem'
 import { ProofError } from './error'
@@ -30,7 +31,7 @@ export type ProofContext = {
  * deterministic, so replay reproduces the original search).
  */
 export type ProofStep =
-  | { readonly rule: 'insertion'; readonly region: RegionId; readonly pattern: DiagramWithBoundary; readonly attachments: readonly WireId[] }
+  | { readonly rule: 'insertion'; readonly region: RegionId; readonly pattern: DiagramWithBoundary; readonly attachments: readonly WireId[]; readonly binders: Readonly<Record<RegionId, RegionId>> }
   | { readonly rule: 'wireJoin'; readonly a: WireId; readonly b: WireId }
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
   | { readonly rule: 'wireSever'; readonly wire: WireId; readonly keep: readonly Endpoint[] }
@@ -46,10 +47,12 @@ export type ProofStep =
   | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary }
   | { readonly rule: 'comprehensionAbstract'; readonly wrap: SubgraphSelection; readonly comp: DiagramWithBoundary; readonly occurrences: readonly AbstractionOccurrence[] }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
+  | { readonly rule: 'vacuousIntro'; readonly sel: SubgraphSelection; readonly arity: number }
+  | { readonly rule: 'vacuousElim'; readonly region: RegionId }
 
 export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagram {
   switch (step.rule) {
-    case 'insertion': return applyInsertion(d, step.region, step.pattern, step.attachments)
+    case 'insertion': return applyInsertion(d, step.region, step.pattern, step.attachments, new Map(Object.entries(step.binders)))
     case 'wireJoin': return applyWireJoin(d, step.a, step.b)
     case 'erasure': return applyErasure(d, step.sel)
     case 'wireSever': return applyWireSever(d, step.wire, step.keep)
@@ -69,6 +72,8 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
       if (thm === undefined) throw new ProofError(`unknown theorem '${step.name}'`)
       return applyTheorem(d, thm, step.at, step.direction)
     }
+    case 'vacuousIntro': return applyVacuousBubbleIntro(d, step.sel, step.arity)
+    case 'vacuousElim': return applyVacuousBubbleElim(d, step.region)
   }
 }
 
