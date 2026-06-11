@@ -90,11 +90,16 @@ function buildIdx(d: Diagram): Idx {
  * wires are indistinguishable and paired canonically. Occurrences are
  * deduplicated by footprint. βη-undecidable node pairs are reported in
  * `undecided` and treated as non-matching — completeness modulo that list.
+ *
+ * With openBinders, atoms bound to stub bubbles match only when the stub
+ * binder maps to the specified host bubble (exact identity, not isomorphism).
+ * Candidates outside an open binder are skipped (atoms cannot escape their
+ * quantifier).
  */
 export function findOccurrences(
   host: Diagram,
   pattern: DiagramWithBoundary,
-  opts: { fuel: number; inRegion?: RegionId },
+  opts: { fuel: number; inRegion?: RegionId; openBinders?: ReadonlyMap<RegionId, RegionId> },
 ): MatchResult {
   const { fuel } = opts
   if (!Number.isInteger(fuel) || fuel <= 0) {
@@ -114,11 +119,50 @@ export function findOccurrences(
     throw new DiagramError(`unknown region '${opts.inRegion}'`)
   }
 
+  const openBinders = opts.openBinders ?? new Map<RegionId, RegionId>()
+  for (const [stub, hb] of openBinders) {
+    const ps = pd.regions[stub]
+    if (ps === undefined) throw new DiagramError(`open binder '${stub}' is not a pattern region`)
+    if (ps.kind !== 'bubble') throw new DiagramError(`open binder '${stub}' is not a bubble`)
+    const target = host.regions[hb]
+    if (target === undefined) throw new DiagramError(`open binder target '${hb}' does not exist`)
+    if (target.kind !== 'bubble') throw new DiagramError(`open binder target '${hb}' is not a bubble`)
+    if (target.arity !== ps.arity) {
+      throw new DiagramError(`open binder arity mismatch: '${stub}' has ${ps.arity}, '${hb}' has ${target.arity}`)
+    }
+  }
+  // stubs must form a pure chain root → s1 → … → sk: nothing else lives on it
+  const pIdxEarly = buildIdx(pd)
+  let effectiveRoot: RegionId = pd.root
+  {
+    const stubSet = new Set(openBinders.keys())
+    let cur: RegionId = pd.root
+    while (true) {
+      const kids = pIdxEarly.childrenOf.get(cur)!
+      const stubKids = kids.filter((k) => stubSet.has(k))
+      if (stubKids.length === 0) break
+      if (stubKids.length > 1 || kids.length > 1 || pIdxEarly.nodesIn.get(cur)!.length > 0) {
+        throw new DiagramError(`open binder stubs must form a pure chain below the pattern root; '${cur}' has other content`)
+      }
+      // for non-innermost stubs, reject any wires scoped at them
+      if (cur !== pd.root && pIdxEarly.bareScoped.get(cur)!.length > 0) {
+        throw new DiagramError(`wires scoped at binder stub '${cur}' are not matchable`)
+      }
+      cur = stubKids[0]!
+      stubSet.delete(cur)
+      effectiveRoot = cur
+    }
+    if (stubSet.size > 0) {
+      throw new DiagramError(`open binder stub(s) ${[...stubSet].map((s) => `'${s}'`).join(', ')} are not on the root chain`)
+    }
+  }
+
   const hIdx = buildIdx(host)
   const pIdx = buildIdx(pd)
-  const rootRegions = pIdx.childrenOf.get(pd.root)!
-  const rootNodes = pIdx.nodesIn.get(pd.root)!
+  const rootRegions = pIdx.childrenOf.get(effectiveRoot)!
+  const rootNodes = pIdx.nodesIn.get(effectiveRoot)!
 
+  const binderImage = new Map(openBinders)
   const regionMap = new Map<RegionId, RegionId>()
   const nodeMap = new Map<NodeId, NodeId>()
   const usedRegions = new Set<RegionId>()
@@ -137,9 +181,14 @@ export function findOccurrences(
     ? [opts.inRegion]
     : Object.keys(host.regions).sort()
   for (const R of candidates) {
-    regionMap.set(pd.root, R)
+    let ok = true
+    for (const hb of openBinders.values()) {
+      if (!isAncestorOrEqual(host, hb, R)) { ok = false; break }
+    }
+    if (!ok) continue
+    regionMap.set(effectiveRoot, R)
     assignRootItems(R, 0)
-    regionMap.delete(pd.root)
+    regionMap.delete(effectiveRoot)
   }
   return { matches, undecided }
 
@@ -179,6 +228,8 @@ export function findOccurrences(
     const hnode = host.nodes[hn]!
     if (pnode.kind !== hnode.kind) return false
     if (pnode.kind === 'atom' && hnode.kind === 'atom') {
+      const viaOpen = binderImage.get(pnode.binder)
+      if (viaOpen !== undefined) return viaOpen === hnode.binder
       return regionMap.get(pnode.binder) === hnode.binder
     }
     return termVerdict(pn, hn)
