@@ -33,6 +33,7 @@ export type Scene = {
   readonly wires: readonly SceneWire[]
 }
 
+/** Visual breathing room around region contents; containment holds at 0. */
 const REGION_PADDING = 3
 
 /** The world-space wire anchor of (node, port) given the node's center. */

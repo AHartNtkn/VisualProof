@@ -51,7 +51,7 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
   // row 0 sits at radius rowsBelow + 2 so the innermost row keeps radius 2
   const r0 = g.rows + 2
   const radius = (row: number): number => r0 - row
-  const rimR = radius(0) + g.railRows // outermost rail ring
+  const rimR = radius(-g.railRows) // outermost rail ring
   const pierceR = rimR + 1
 
   const arcs: NodeArc[] = g.bars.map((b) => ({
@@ -75,10 +75,12 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
     radials.push({ angle, r0: radius(rail.row), r1: pierceR, kind: 'port', hueRow: null })
     portAnchors[rail.name] = polar(angle, pierceR)
   }
-  // output exit: innermost ring arc to the gap edge, then straight out
+  // output exit: innermost ring arc to the gap edge, then straight out.
+  // theta() centers columns, so outAngle always clears the gap edge here —
+  // the null exitArc case belongs to atomGeometry, which has no ring to arc.
   const exitR = radius(g.rows)
   const outAngle = theta(g.outputCol)
-  const exitArc = outAngle > a0 ? { r: exitR, a0, a1: outAngle } : null
+  const exitArc = { r: exitR, a0, a1: outAngle }
   const outputAnchor = polar(0, pierceR)
   const exitLine: readonly [Vec2, Vec2] = [polar(a0, exitR), outputAnchor]
 
