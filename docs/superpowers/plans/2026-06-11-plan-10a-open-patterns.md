@@ -348,6 +348,8 @@ git add src/kernel/diagram/subgraph/extract.ts src/kernel/rules/comprehension.ts
 git commit -m "feat(kernel): open extraction via stub-bubble layers"
 ```
 
+**Review outcome (commit `e0dd5f1`, fixes `5c7cda8`+`5d43661`):** Deep review found the PLAN itself shipped an unsound intermediate state: with open extraction live but iteration untouched, applyDeiteration matched a stub bubble onto a DIFFERENT same-arity host bubble — concrete forgery reproduced (R(x) deleted, justified by S(x) under another quantifier), violating the plan's own binder-IDENTITY clause; applyIteration likewise spliced stubs as fresh quantifiers. Both rules now carry temporary loud guards (tests observed fail→pass) that Task 4 MUST remove (block added at Task 4). The implementer's deletion of the two old rejection tests was judged correct (both scenarios were binder-encloses-anchor, now legal by design); the plan's Step 4 note misclassified them. Enclosure-rejection branch proven unreachable on validated hosts (pure invariant guard; pinned via a forged-host test). All shape probes and mutations clean. Suite: 413. **Standing lesson: a plan that widens a producer must gate every consumer in the same task.**
+
 ---
 
 ### Task 2: Splice with binder map
