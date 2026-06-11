@@ -294,3 +294,55 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
 })
+
+describe('unCite refusals', () => {
+  it('refuses unCite at a negative region', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    // goal: a ZERO node wrapped in a cut (negative region is the cut interior)
+    const h = new DiagramBuilder()
+    const nz = h.termNode(h.root, p('ZERO'))
+    const wz = h.wire(h.root, [{ node: nz, port: { kind: 'output' } }])
+    const lhs = mkDiagramWithBoundary(h.build(), [wz])
+    const r = new DiagramBuilder()
+    const nz2 = r.termNode(r.root, p('ZERO'))
+    const wz2 = r.wire(r.root, [{ node: nz2, port: { kind: 'output' } }])
+    const cut = r.cut(r.root)
+    const rhs = mkDiagramWithBoundary(r.build(), [wz2])
+    const s = startSession(lhs, rhs, ctx)
+    const g = s.backward.current
+    const cutId = Object.entries(g.regions).find(([, reg]) => reg.kind === 'cut' && reg.parent === g.root)![0]
+    void wz2; void cut
+    expect(() =>
+      applyBackward(s, {
+        kind: 'unCite',
+        name: 'zeroIsNat',
+        at: {
+          sel: { region: cutId, regions: [], nodes: [], wires: [] },
+          args: [],
+        },
+      })
+    ).toThrowError(/positive region/)
+  })
+
+  it('refuses unCite when the selection is not an rhs occurrence', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    // goal: a ZERO node; selection is the node itself — not the zeroIsNat rhs shape
+    const h = new DiagramBuilder()
+    const nz = h.termNode(h.root, p('ZERO'))
+    const wz = h.wire(h.root, [{ node: nz, port: { kind: 'output' } }])
+    const lhsD = h.build()
+    const lhs = mkDiagramWithBoundary(lhsD, [wz])
+    const s = startSession(lhs, lhs, ctx)
+    const g = s.backward.current
+    expect(() =>
+      applyBackward(s, {
+        kind: 'unCite',
+        name: 'zeroIsNat',
+        at: {
+          sel: { region: g.root, regions: [], nodes: [nz], wires: [] },
+          args: [wz],
+        },
+      })
+    ).toThrowError(/not an occurrence/)
+  })
+})

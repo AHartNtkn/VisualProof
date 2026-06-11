@@ -42,7 +42,7 @@
 - Create: `src/app/persist.ts`
 - Test: `tests/app/persist.test.ts`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 `tests/app/persist.test.ts`:
 
@@ -118,9 +118,9 @@ describe('sessionTheory + the file road', () => {
 })
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/app/session.ts`, add (import `checkTheorem` from the proof barrel path used elsewhere in src/app):
 
@@ -161,9 +161,9 @@ export function sessionTheory(
 }
 ```
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/session.ts src/app/persist.ts tests/app/persist.test.ts
@@ -178,7 +178,7 @@ git commit -m "feat(app): adopt session theorems; live context as a saveable the
 - Modify: `src/app/session.ts`
 - Test: extend `tests/app/session.test.ts`
 
-- [ ] **Step 1: Write the failing tests** — append to `tests/app/session.test.ts`:
+- [x] **Step 1: Write the failing tests** — append to `tests/app/session.test.ts`:
 
 ```ts
 describe('backward un-erase, un-conversion, un-citation', () => {
@@ -268,9 +268,9 @@ describe('backward un-erase, un-conversion, un-citation', () => {
 
 NOTE: the un-citation test's occurrence selection mirrors `deriveOneIsNat`'s second-citation discovery (the base line listed explicitly when present). zeroIsNat's RHS includes the evidence ZERO node on wz — the selection must contain exactly the rhs-shape items: the cut, the evidence node(s) that belong to the rhs (zeroIsNat's rhs contains the lhs evidence node — check `buildFregeTheory().theorems[0].rhs` and adjust the picked node set to match its node count; iterate per the discovery idiom, reporting adjustments).
 
-- [ ] **Step 2: Run to verify the new tests fail** (unknown action kinds)
+- [x] **Step 2: Run to verify the new tests fail** (unknown action kinds)
 
-- [ ] **Step 3: Implement** — extend `BackwardAction` and the switch in `src/app/session.ts`:
+- [x] **Step 3: Implement** — extend `BackwardAction` and the switch in `src/app/session.ts`:
 
 ```ts
 export type BackwardAction =
@@ -343,9 +343,9 @@ Cases (new imports: `spliceSubgraph`, `removeSubgraph`, `extractSubgraph`, `boun
 
 CAVEAT (binding): the splice-first-then-remove ORDER in unCite mirrors applyTheorem's resurrection-safe order. The fresh-id diffs identify exactly the spliced content because splice mints ids avoiding the WHOLE pre-removal diagram. The wires diff for the forward selection must list only root-of-occurrence-scoped INTERNAL wires (fresh ⇒ spliced ⇒ internal ✓). If the reproduction assertion fires on any of the three new actions during testing, that is a discovery/diff bug in the session — fix the diff, never weaken the assertion.
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck**
+- [x] **Step 4: Verify PASS, full suite, typecheck**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/app/session.ts tests/app/session.test.ts
@@ -362,7 +362,7 @@ git commit -m "feat(app): backward un-erase, un-conversion, un-citation"
 - Modify: `src/app/shell.ts` (hover pass-through; persistence buttons calling Task 1; backward menu entries for Task 2's actions; the `?debug` window hook for E2E)
 - Modify: `src/app/index.ts` (export persist + adopt)
 
-- [ ] **Step 1: Tether tests** — append to `tests/view/display.test.ts`:
+- [x] **Step 1: Tether tests** — append to `tests/view/display.test.ts`:
 
 ```ts
 describe('hover tethers', () => {
@@ -390,7 +390,7 @@ describe('hover tethers', () => {
 })
 ```
 
-- [ ] **Step 2: Descriptor-path tests** — append to `tests/app/actions.test.ts`:
+- [x] **Step 2: Descriptor-path tests** — append to `tests/app/actions.test.ts`:
 
 ```ts
 describe('descriptor → step construction (the shell contract)', () => {
@@ -428,11 +428,11 @@ describe('descriptor → step construction (the shell contract)', () => {
 
 (NOTE: top-level `await import` inside non-async `it` is invalid — make those `it` callbacks `async`, or hoist the imports to the top of the file like every other import; HOIST them, matching house style. The dynamic-import spelling above is plan shorthand only.)
 
-- [ ] **Step 3: Implement** — display.ts: `export function renderScene(scene: Scene, opts: { hoverNode?: NodeId } = {}): Shape[]`; after pushing a hovered node's radials, for each `var` radial compute its top point `polar(angle, r0)` and its binder arc (the `lam` arc with the same `hueRow`); tether = segment from the radial top to `polar((arc.a0 + arc.a1) / 2, arc.r)`, stroke `binderHue(hueRow)`, width 2.5. Shell: pass the current hover's node id; add Save (download Blob of `theoryToJson(sessionTheory(...))`) and Load (file input → JSON.parse → loadTheory → replace ctx) buttons; backward menu entries for the three new actions (un-erase reuses the pattern input; un-convert the term input + fuel; un-cite the citation flow at positive); assemble flow adopts on success; when `location.search` contains `debug`, set `window.__vpaDebug = { nodeCount: () => ..., status: () => ... }` (documented as the E2E seam).
+- [x] **Step 3: Implement** — display.ts: `export function renderScene(scene: Scene, opts: { hoverNode?: NodeId } = {}): Shape[]`; after pushing a hovered node's radials, for each `var` radial compute its top point `polar(angle, r0)` and its binder arc (the `lam` arc with the same `hueRow`); tether = segment from the radial top to `polar((arc.a0 + arc.a1) / 2, arc.r)`, stroke `binderHue(hueRow)`, width 2.5. Shell: pass the current hover's node id; add Save (download Blob of `theoryToJson(sessionTheory(...))`) and Load (file input → JSON.parse → loadTheory → replace ctx) buttons; backward menu entries for the three new actions (un-erase reuses the pattern input; un-convert the term input + fuel; un-cite the citation flow at positive); assemble flow adopts on success; when `location.search` contains `debug`, set `window.__vpaDebug = { nodeCount: () => ..., status: () => ... }` (documented as the E2E seam).
 
-- [ ] **Step 4: Verify PASS, full suite, typecheck, `npx vite build app`**
+- [x] **Step 4: Verify PASS, full suite, typecheck, `npx vite build app`**
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/view/display.ts tests/view/display.test.ts tests/app/actions.test.ts src/app/shell.ts src/app/index.ts
@@ -447,9 +447,9 @@ git commit -m "feat(app): hover tethers, persistence chrome, descriptor coverage
 - Create: `playwright.config.ts`, `e2e/app.spec.ts`
 - Modify: `package.json` (`"e2e": "playwright test"`, playwright devDependency)
 
-- [ ] **Step 1: Install** — `npm install -D @playwright/test`, then `npx playwright install chromium`. IF THE BINARY DOWNLOAD FAILS in this environment: still commit config+specs+script, and report the exact failing command output as the environmental blocker — no fake passes, no silent skips (the e2e/ directory is outside vitest's glob, so the unit suite stays honest).
+- [x] **Step 1: Install** — `npm install -D @playwright/test`, then `npx playwright install chromium`. IF THE BINARY DOWNLOAD FAILS in this environment: still commit config+specs+script, and report the exact failing command output as the environmental blocker — no fake passes, no silent skips (the e2e/ directory is outside vitest's glob, so the unit suite stays honest).
 
-- [ ] **Step 2: Config** — `playwright.config.ts`:
+- [x] **Step 2: Config** — `playwright.config.ts`:
 
 ```ts
 import { defineConfig } from '@playwright/test'
@@ -467,7 +467,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 3: Specs** — `e2e/app.spec.ts`:
+- [x] **Step 3: Specs** — `e2e/app.spec.ts`:
 
 ```ts
 import { test, expect } from '@playwright/test'
@@ -513,9 +513,9 @@ test('a goal proves end to end through the chrome', async ({ page }) => {
 
 NOTE: the chrome's actual control names/placeholders are whatever Task 3's shell produced — READ shell.ts and adjust selectors to the real labels before running; the spec above is the INTENT. Keep selectors role/label-based.
 
-- [ ] **Step 4: Run** — `npm run e2e`. Iterate selectors against real failures. All three must pass (or the environmental blocker is reported per Step 1).
+- [x] **Step 4: Run** — `npm run e2e`. Iterate selectors against real failures. All three must pass (or the environmental blocker is reported per Step 1).
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add playwright.config.ts e2e/ package.json package-lock.json
@@ -529,7 +529,7 @@ git commit -m "test(e2e): app boot, term entry, prove flow"
 **Files:**
 - Test: extend `tests/app/pipeline.test.ts`
 
-- [ ] **Step 1: The closing battery** — append:
+- [x] **Step 1: The closing battery** — append:
 
 ```ts
 describe('the full story: prove, adopt, save, reload, cite', () => {
@@ -562,9 +562,9 @@ describe('the full story: prove, adopt, save, reload, cite', () => {
 
 (NOTE: hoist the dynamic imports to top-level imports per house style; the session-rhs splice `s = { ...s, rhs, ... }` is test-level state surgery to make a met session without re-running — acceptable in a test, with this comment carried over.)
 
-- [ ] **Step 2: Run; full gates** (`vitest`, `tsc`, `vite build app`, and `npm run e2e` if Task 4 unblocked).
+- [x] **Step 2: Run; full gates** (`vitest`, `tsc`, `vite build app`, and `npm run e2e` if Task 4 unblocked).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add tests/app/pipeline.test.ts
