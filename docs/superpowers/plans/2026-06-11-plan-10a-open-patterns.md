@@ -1309,6 +1309,8 @@ git commit -m "feat(kernel): open insertion and vacuous bubble proof steps"
 
 (Include any other test file the `binders` field forced you to touch in the add list.)
 
+**Review outcome (Tasks 4+5, commits `96a80af`+`f88a4ab`, fix `a2a1253`):** APPROVED; src verbatim; MUST-REMOVE block satisfied (temporary guards gone, decoy test kept with flipped expectation). Probes: iteration's explicit binder gate proven unreachable via extraction (kept as invariant guard; splice backstop pinned); multi-node open subgraph with content cut round-trips two cuts deep; vacuous elim after legitimate atom erasure is sound (R vacuous NOW) and agrees by fingerprint with the instantiate path; proof-layer binder failures loud with polarity firing first. **Probe e pre-validated Task 6's ENTIRE derivation — the plan's ℕ(z) script ran through checkTheorem end to end with zero deviations (4 atoms bound to rB as predicted).** Mutant vi (compose binder values unmapped) survived a misnamed test — killed in `a2a1253` with a non-identity-iso case. Suite: 439.
+
 ---
 
 ### Task 6: Frege acceptance — ℕ theorems end to end
