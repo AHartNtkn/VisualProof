@@ -1,15 +1,15 @@
 // Plan 11 spike (conversion half): plusAssoc, plusLeftUnit, plusRightUnit as
 // rewriting theorems in the fixedPoint shape, verified through checkTheorem.
-import { parseTerm } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/parse'
-import { app, port } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/term'
-import type { Term } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/term'
-import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/boundary'
-import { applyConversion } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/rules/conversion'
-import { replayProof, type ProofContext, type ProofStep } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/step'
-import { checkTheorem, type Theorem } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/theorem'
-import type { Diagram } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/diagram'
-import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
+import { parseTerm } from '../../../../src/kernel/term/parse'
+import { app, port } from '../../../../src/kernel/term/term'
+import type { Term } from '../../../../src/kernel/term/term'
+import { DiagramBuilder } from '../../../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary } from '../../../../src/kernel/diagram/boundary'
+import { applyConversion } from '../../../../src/kernel/rules/conversion'
+import { replayProof, type ProofContext, type ProofStep } from '../../../../src/kernel/proof/step'
+import { checkTheorem, type Theorem } from '../../../../src/kernel/proof/theorem'
+import type { Diagram } from '../../../../src/kernel/diagram/diagram'
+import { fregeDefinitions } from '../../../../src/theories/frege'
 
 const consts = new Set(['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO'])
 const p = (s: string) => parseTerm(s, consts)

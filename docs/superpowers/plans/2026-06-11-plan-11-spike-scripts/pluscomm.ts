@@ -1,23 +1,23 @@
 // plusComm spike: lhs = rooted-N(a) ^ rooted-N(b) (separate witnesses), boundary [wa, wb];
 // rhs = lhs + applied pair PLUS q q_0 -o- PLUS q_0 q riding (wa, wb).
 // Induction on a with R(x) = forall b [N(b) -> PLUS x b ~ PLUS b x] (closed comp).
-import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/boundary'
-import { mkSelection } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/selection'
-import { extractSubgraph } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/extract'
-import { boundaryFingerprint } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/canonical/fingerprint'
-import type { ProofContext } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/step'
-import { checkTheorem, type Theorem } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/theorem'
-import type { NodeId, RegionId, Term, WireId } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/diagram'
-import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
+import { DiagramBuilder } from '../../../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary } from '../../../../src/kernel/diagram/boundary'
+import { mkSelection } from '../../../../src/kernel/diagram/subgraph/selection'
+import { extractSubgraph } from '../../../../src/kernel/diagram/subgraph/extract'
+import { boundaryFingerprint } from '../../../../src/kernel/diagram/canonical/fingerprint'
+import type { ProofContext } from '../../../../src/kernel/proof/step'
+import { checkTheorem, type Theorem } from '../../../../src/kernel/proof/theorem'
+import type { NodeId, RegionId, Term, WireId } from '../../../../src/kernel/diagram/diagram'
+import { fregeDefinitions } from '../../../../src/theories/frege'
 import { Eng, p, idCert } from './lib'
-import { convertible } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/convert'
+import { convertible } from '../../../../src/kernel/term/convert'
 import { buildNatAt, buildComp, P1term, P2term } from './comp'
 import { deriveSuccShift } from './succshift-thm'
 
 const J = JSON.stringify
 
-function main(): void {
+export function buildPlusComm(): Theorem {
   const ctx0: ProofContext = { definitions: fregeDefinitions, theorems: new Map() }
   const ssS = deriveSuccShift(ctx0, { extraSucc: true })
   checkTheorem(ssS, ctx0)
@@ -306,6 +306,7 @@ function main(): void {
   const thm: Theorem = { name: 'plusComm', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb]), steps: [...e.steps] }
   checkTheorem(thm, ctx)
   console.log(`FINAL: bare plusComm checkTheorem PASSED (${e.steps.length} steps)`)
+  // (return added for the render harness; the script still runs standalone below)
   console.log('rhs audit: root nodes', Object.values(e.cur.nodes).filter((n) => n.region === e.cur.root).length,
     '| pair shares output:', e.wireOf(P1A, 'output') === e.wireOf(P2A, 'output'),
     '| P1:', J(e.termOf(P1A)) === J(p('PLUS q q_0')), 'on (q@wa, q_0@wb):',
@@ -313,10 +314,11 @@ function main(): void {
     '| P2:', J(e.termOf(P2A)) === J(p('PLUS q_0 q')), 'on (q@wa, q_0@wb):',
     e.wireOf(P2A, 'freeVar', 'q') === wa && e.wireOf(P2A, 'freeVar', 'q_0') === wb,
     '| wa endpoints:', e.cur.wires[wa]!.endpoints.length, '| wb endpoints:', e.cur.wires[wb]!.endpoints.length)
+  return thm
 }
 
 try {
-  main()
+  buildPlusComm()
 } catch (err) {
   console.log(`pluscomm: ERROR — ${err instanceof Error ? err.message : String(err)}`)
 }

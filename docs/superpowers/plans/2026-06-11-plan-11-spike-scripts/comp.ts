@@ -1,9 +1,9 @@
 // plusComm comp R(x) := forall b [N(b) -> PLUS x b ~ PLUS b x], closed 1-ary:
 // cut_H[ rooted-N(b) with internal witness ; cut_C[ PLUS q q_0 -o- PLUS q_0 q ] ]
 // stub port 'q' (x), internal-b port 'q_0' (names pinned by succShiftS pair).
-import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/boundary'
-import type { Endpoint, NodeId, RegionId, WireId } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/diagram'
+import { DiagramBuilder } from '../../../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../../../src/kernel/diagram/boundary'
+import type { Endpoint, NodeId, RegionId, WireId } from '../../../../src/kernel/diagram/diagram'
 import { p } from './lib'
 
 /** The N-cut shape alone: a0 (base atom) and a3 (conclusion atom) left for the caller to wire. */

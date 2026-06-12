@@ -1,9 +1,9 @@
 // p3: final-MP deiteration of R(a)'s N(b^) hypothesis against the AMBIENT
 // rooted-N(b): does it tolerate a SHARED zero witness (extra endpoint on w0)?
 // Builds the post-wireJoin state directly; separate-witness variant as control.
-import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
-import { mkSelection } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/selection'
-import { applyDeiteration } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/rules/iteration'
+import { DiagramBuilder } from '../../../../src/kernel/diagram/builder'
+import { mkSelection } from '../../../../src/kernel/diagram/subgraph/selection'
+import { applyDeiteration } from '../../../../src/kernel/rules/iteration'
 import { p } from './lib'
 import { buildNatAt, buildNatCut, P1term, P2term } from './comp'
 

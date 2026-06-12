@@ -1,7 +1,7 @@
 // p1: assemble succShift theorems; verify; probe citations in a depth-2 positive region.
-import { checkTheorem } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/theorem'
-import type { ProofContext } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/step'
-import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
+import { checkTheorem } from '../../../../src/kernel/proof/theorem'
+import type { ProofContext } from '../../../../src/kernel/proof/step'
+import { fregeDefinitions } from '../../../../src/theories/frege'
 import { deriveSuccShift } from './succshift-thm'
 
 const ctx: ProofContext = { definitions: fregeDefinitions, theorems: new Map() }
@@ -21,8 +21,8 @@ try {
 }
 
 // ---- p1c/p1d: cite inside cutB of a dcIntro pair (positive depth-2)
-import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
-import { mkSelection } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/selection'
+import { DiagramBuilder } from '../../../../src/kernel/diagram/builder'
+import { mkSelection } from '../../../../src/kernel/diagram/subgraph/selection'
 import { Eng, p } from './lib'
 import { buildRootedNat } from './succshift-thm'
 

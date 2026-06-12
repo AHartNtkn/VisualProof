@@ -1,7 +1,7 @@
 // Smoke: kernel imports + convertible() facts needed by plusComm design.
 // Constants are opaque to convertible(); test with unfolded forms.
-import { parseTerm } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/parse'
-import { convertible } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/convert'
+import { parseTerm } from '../../../../src/kernel/term/parse'
+import { convertible } from '../../../../src/kernel/term/convert'
 
 const Z = '(\\f.\\x.x)'
 const S = '(\\n.\\f.\\x. f (n f x))'

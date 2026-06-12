@@ -1,10 +1,10 @@
 // p2: instantiate N(a)'s bubble (in the wrapped dance) with the big closed comp R.
 // Also p3 inline: shared-witness lhs builder acceptance.
-import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/boundary'
-import { mkSelection } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/selection'
-import type { ProofContext } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/step'
-import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
+import { DiagramBuilder } from '../../../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary } from '../../../../src/kernel/diagram/boundary'
+import { mkSelection } from '../../../../src/kernel/diagram/subgraph/selection'
+import type { ProofContext } from '../../../../src/kernel/proof/step'
+import { fregeDefinitions } from '../../../../src/theories/frege'
 import { Eng, p } from './lib'
 import { buildNatAt, buildComp, P1term, P2term } from './comp'
 

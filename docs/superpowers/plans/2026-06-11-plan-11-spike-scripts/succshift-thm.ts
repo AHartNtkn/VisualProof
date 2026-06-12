@@ -2,17 +2,17 @@
 // opts.extraSucc=false → original bare-wn succShift; true → succShiftS with a
 // root SUCC-node consumer on wn (boundary [wm, wn, wsn]) and e2 arg name 'q'
 // (fusion then freshens the m-port to 'q_0': pair PLUS q_0 (SUCC q) -o- SUCC (PLUS q_0 q)).
-import { app, lam, bvar, port } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/term'
-import type { Term } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/term'
-import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/boundary'
-import { mkSelection } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/selection'
-import { extractSubgraph } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/extract'
-import { boundaryFingerprint } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/canonical/fingerprint'
-import type { ProofContext } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/step'
-import type { Theorem } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/theorem'
-import type { NodeId, RegionId, WireId } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/diagram'
-import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
+import { app, lam, bvar, port } from '../../../../src/kernel/term/term'
+import type { Term } from '../../../../src/kernel/term/term'
+import { DiagramBuilder } from '../../../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary } from '../../../../src/kernel/diagram/boundary'
+import { mkSelection } from '../../../../src/kernel/diagram/subgraph/selection'
+import { extractSubgraph } from '../../../../src/kernel/diagram/subgraph/extract'
+import { boundaryFingerprint } from '../../../../src/kernel/diagram/canonical/fingerprint'
+import type { ProofContext } from '../../../../src/kernel/proof/step'
+import type { Theorem } from '../../../../src/kernel/proof/theorem'
+import type { NodeId, RegionId, WireId } from '../../../../src/kernel/diagram/diagram'
+import { fregeDefinitions } from '../../../../src/theories/frege'
 import { Eng, p, idCert } from './lib'
 
 const F1term = p('\\n. PLUS q (SUCC n)')

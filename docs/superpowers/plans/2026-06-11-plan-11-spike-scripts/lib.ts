@@ -1,11 +1,11 @@
 // Shared engine for plusComm spike: replay cursor + helpers from rooted.ts.
-import { parseTerm } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/parse'
-import type { Term } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/term'
-import { app, lam } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/term'
-import { applyConversion } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/rules/conversion'
-import type { ConversionCertificate } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/certificate'
-import { replayProof, type ProofContext, type ProofStep } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/step'
-import type { Diagram, NodeId, RegionId, WireId } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/diagram'
+import { parseTerm } from '../../../../src/kernel/term/parse'
+import type { Term } from '../../../../src/kernel/term/term'
+import { app, lam } from '../../../../src/kernel/term/term'
+import { applyConversion } from '../../../../src/kernel/rules/conversion'
+import type { ConversionCertificate } from '../../../../src/kernel/term/certificate'
+import { replayProof, type ProofContext, type ProofStep } from '../../../../src/kernel/proof/step'
+import type { Diagram, NodeId, RegionId, WireId } from '../../../../src/kernel/diagram/diagram'
 
 export const consts = new Set(['ZERO', 'SUCC', 'PLUS'])
 export const p = (s: string) => parseTerm(s, consts)
