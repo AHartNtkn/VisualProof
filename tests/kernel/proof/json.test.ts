@@ -41,6 +41,7 @@ describe('step round-trips through JSON', () => {
       { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: { z: 'w0' } },
       { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate },
       { rule: 'headStrip', a: 'n0', b: 'n1' },
+      { rule: 'closedTermIntro', region: 'r1', term: p('\\x. \\y. x') },
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
       { rule: 'unfold', node: 'n0', path: [] },
@@ -62,6 +63,10 @@ describe('step round-trips through JSON', () => {
       .toThrowError(/path segment/)
     expect(() => stepFromJson({ rule: 'headStrip', a: 'n0', b: 'n1', certificate: { leftSteps: [], rightSteps: [] } }))
       .toThrowError(/unknown field 'certificate'/)
+    expect(() => stepFromJson({
+      ...(stepToJson({ rule: 'closedTermIntro', region: 'r1', term: p('\\x. x') }) as Record<string, unknown>),
+      node: 'n0',
+    })).toThrowError(/unknown field 'node'/)
     expect(() => stepFromJson({ rule: 'deiteration', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, fuel: -1 }))
       .toThrowError(/fuel/)
   })

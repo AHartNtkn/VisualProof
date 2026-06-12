@@ -65,6 +65,8 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
     case 'headStrip':
       return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
+    case 'closedTermIntro':
+      return { ...step, region: mapId(iso.regions, step.region, 'region') }
     case 'fusion':
       return { ...step, wire: mapId(iso.wires, step.wire, 'wire') }
     case 'fission':

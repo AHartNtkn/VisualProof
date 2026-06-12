@@ -35,36 +35,34 @@ describe('DerivationCursor', () => {
   })
 })
 
-describe('kMat', () => {
-  it('materializes a closed term node at root on a fresh singleton wire', () => {
+describe('intro', () => {
+  it('introduces a closed term node at root on a fresh singleton wire, one step', () => {
     const b = new DiagramBuilder()
-    const seed = b.termNode(b.root, p('\\x. x'))
-    b.wire(b.root, [{ node: seed, port: { kind: 'output' } }])
+    const bystander = b.termNode(b.root, p('\\x. x'))
+    b.wire(b.root, [{ node: bystander, port: { kind: 'output' } }])
     const d = b.build()
     const c = new DerivationCursor(d, ctx)
     const s = p('\\x. \\y. x')
-    const made = c.kMat('mat', seed, s, {})
+    const made = c.intro('mat', c.cur.root, s)
     const n = c.cur.nodes[made]!
     expect(n.kind === 'term' && n.region === c.cur.root && termEq(n.term, s)).toBe(true)
-    // the seed is restored to its original term
-    expect(termEq(c.termOf(seed), p('\\x. x'))).toBe(true)
+    // the bystander keeps its original term — no seed trickery touches it
+    expect(termEq(c.termOf(bystander), p('\\x. x'))).toBe(true)
     // the output rides a FRESH wire holding only the made node's output
     const w = c.wireOf(made, 'output')
     expect(d.wires[w]).toBeUndefined()
     expect(c.cur.wires[w]!.endpoints).toEqual([{ node: made, port: { kind: 'output' } }])
-    // expand + fission + restore
-    expect(c.steps).toHaveLength(3)
+    // one honest rule application, not expand + fission + restore
+    expect(c.steps).toHaveLength(1)
   })
 
-  it('materializes inside a cut (negative region) — no polarity gate', () => {
+  it('introduces inside a cut (negative region) — no polarity gate, no seed needed', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
-    const seed = b.termNode(cut, p('\\x. x'))
-    b.wire(cut, [{ node: seed, port: { kind: 'output' } }])
     const d = b.build()
     const c = new DerivationCursor(d, ctx)
     const s = p('\\x. \\y. y')
-    const made = c.kMat('matNeg', seed, s, {})
+    const made = c.intro('matNeg', cut, s)
     const n = c.cur.nodes[made]!
     expect(n.kind === 'term' && n.region === cut && termEq(n.term, s)).toBe(true)
     const w = c.wireOf(made, 'output')
@@ -72,27 +70,16 @@ describe('kMat', () => {
     expect(c.cur.wires[w]!.endpoints).toHaveLength(1)
   })
 
-  it('attaches a free port of the materialized term to a caller-named existing wire', () => {
+  it('refuses an open term with the step named and leaves the cursor untouched', () => {
     const b = new DiagramBuilder()
-    const seed = b.termNode(b.root, p('\\x. x'))
-    b.wire(b.root, [{ node: seed, port: { kind: 'output' } }])
     const host = b.termNode(b.root, p('\\x. x q'))
-    const wq = b.wire(b.root, [{ node: host, port: { kind: 'freeVar', name: 'q' } }])
+    b.wire(b.root, [{ node: host, port: { kind: 'freeVar', name: 'q' } }])
     const d = b.build()
     const c = new DerivationCursor(d, ctx)
-    const s = p('\\x. q')
-    const made = c.kMat('matFree', seed, s, { q: wq })
-    // the materialized term's free (source 'q') is canonical s0 after construction
-    expect(termEq(c.termOf(made), p('\\x. s0'))).toBe(true)
-    // the made node's endpoint landed on the NAMED wire, joining the host's
-    expect(c.wireOf(made, 'freeVar', 's0')).toBe(wq)
-    expect(c.cur.wires[wq]!.endpoints).toHaveLength(2)
-    // its output still rides a fresh singleton wire
-    const w = c.wireOf(made, 'output')
-    expect(d.wires[w]).toBeUndefined()
-    expect(c.cur.wires[w]!.endpoints).toHaveLength(1)
-    // the seed carries no residue of the trick
-    expect(termEq(c.termOf(seed), p('\\x. x'))).toBe(true)
+    expect(() => c.intro('matFree', c.cur.root, p('\\x. q')))
+      .toThrowError(/matFree.*closed-term introduction requires a closed term.*'q'/)
+    expect(c.steps).toHaveLength(0)
+    expect(c.cur).toBe(d)
   })
 })
 

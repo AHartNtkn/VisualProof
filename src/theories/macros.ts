@@ -1,5 +1,5 @@
 import type { Term } from '../kernel/term/term'
-import { app, lam, termEq } from '../kernel/term/term'
+import { termEq } from '../kernel/term/term'
 import { applyConversion } from '../kernel/rules/conversion'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
@@ -61,23 +61,13 @@ export class DerivationCursor {
   }
 
   /**
-   * K-trick materializer: mint a node carrying term `s` in the seed's region,
-   * riding a fresh singleton output wire. The seed (any term node t already
-   * there) is converted to `(λu. t) s` — βη-equal, the binder is vacuous —
-   * fissioned at ['arg'] to split `s` onto its own node, then converted back.
-   * Conversion and fission are equivalences, so this works at any polarity.
-   * Free ports of `s` attach to the wires named in `attach`; unnamed ones get
-   * fresh singleton wires. Three steps under the given tag.
+   * Introduce a closed term node in `region` on a fresh singleton output
+   * wire (one closedTermIntro step) and return the minted node's id.
    */
-  kMat(tag: string, seed: NodeId, s: Term, attach: Readonly<Record<string, WireId>>): NodeId {
-    const seedTerm = this.termOf(seed)
-    const region = this.regionOf(seed)
-    this.pushConv(`${tag} K-expand`, seed, app(lam(seedTerm), s), attach)
+  intro(tag: string, region: RegionId, t: Term): NodeId {
     const before = this.cur
-    this.push(`${tag} fission`, { rule: 'fission', node: seed, path: ['arg'] })
-    const made = this.newNodeIn(region, before)
-    this.pushConv(`${tag} K-restore`, seed, seedTerm)
-    return made
+    this.push(tag, { rule: 'closedTermIntro', region, term: t })
+    return this.newNodeIn(region, before, t)
   }
 
   /** The cut that appeared directly under `parent` since the `before` snapshot. */

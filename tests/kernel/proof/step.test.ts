@@ -7,6 +7,7 @@ import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/finger
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
 import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
+import { applyClosedTermIntro } from '../../../src/kernel/rules/intro'
 import { applyStep, replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { ProofError } from '../../../src/kernel/proof/error'
@@ -54,6 +55,19 @@ describe('applyStep mirrors the direct appliers', () => {
     const out = applyStep(d, step, ctx)
     const shared = Object.values(out.wires).find((w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2)
     expect(shared).toBeDefined()
+  })
+
+  it('closedTermIntro step mints a closed term node, replaying through replayProof', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const d = h.build()
+    const step: ProofStep = { rule: 'closedTermIntro', region: cut, term: pp('\\x. \\y. x') }
+    expect(diagramFingerprint(applyStep(d, step, ctx)))
+      .toBe(diagramFingerprint(applyClosedTermIntro(d, cut, pp('\\x. \\y. x'))))
+    const out = replayProof(d, [step], ctx)
+    const added = Object.entries(out.nodes).filter(([id]) => d.nodes[id] === undefined)
+    expect(added).toHaveLength(1)
+    expect(added[0]![1].region).toBe(cut)
   })
 
   it('headStrip step decomposes a rigid-head equation, replaying through replayProof', () => {

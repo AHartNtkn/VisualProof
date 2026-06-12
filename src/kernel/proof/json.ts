@@ -155,6 +155,8 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate) }
     case 'headStrip':
       return { rule: s.rule, a: s.a, b: s.b }
+    case 'closedTermIntro':
+      return { rule: s.rule, region: s.region, term: serializeTerm(s.term) }
     case 'fusion':
       return { rule: s.rule, wire: s.wire }
     case 'fission':
@@ -224,6 +226,9 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'headStrip':
       assertOnlyKeys(j, ['rule', 'a', 'b'], 'headStrip step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
+    case 'closedTermIntro':
+      assertOnlyKeys(j, ['rule', 'region', 'term'], 'closedTermIntro step')
+      return { rule, region: str(j.region, 'region'), term: termFromJson(j.term, 'term') }
     case 'fusion':
       assertOnlyKeys(j, ['rule', 'wire'], 'fusion step')
       return { rule, wire: str(j.wire, 'wire') }

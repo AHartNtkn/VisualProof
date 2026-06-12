@@ -155,6 +155,29 @@ describe('composeProofs', () => {
     expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
   })
 
+  it('maps a closedTermIntro region through a NON-IDENTITY iso', () => {
+    // Marker-first vs marker-last builds give the target cut DIFFERENT ids on
+    // the two sides; an unmapped region id would introduce into the marker cut.
+    const mk = (markerFirst: boolean) => {
+      const h = new DiagramBuilder()
+      const marker = () => {
+        const c = h.cut(h.root)
+        h.termNode(c, p('\\a. \\b. a'))
+      }
+      if (markerFirst) marker()
+      const cut = h.cut(h.root)
+      if (!markerFirst) marker()
+      return { d: h.build(), cut }
+    }
+    const { d: da } = mk(true)
+    const { d: db, cut: bCut } = mk(false)
+    const tail: ProofStep[] = [{ rule: 'closedTermIntro', region: bCut, term: p('\\x. x') }]
+    const composed = composeProofs(da, db, tail, ctx)
+    const viaA = replayProof(da, composed, ctx)
+    const viaB = replayProof(db, tail, ctx)
+    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+  })
+
   it('refuses non-isomorphic meets by name', () => {
     const { da } = twoCopies()
     const other = new DiagramBuilder()
@@ -165,6 +188,18 @@ describe('composeProofs', () => {
 })
 
 describe('mapStepIds', () => {
+  it('remaps the region of a closedTermIntro step through the iso; the term is host-id-free', () => {
+    const iso: DiagramIso = {
+      regions: new Map([['r1', 'R1']]),
+      nodes: new Map(),
+      wires: new Map(),
+    }
+    expect(mapStepIds({ rule: 'closedTermIntro', region: 'r1', term: p('\\x. x') }, iso))
+      .toEqual({ rule: 'closedTermIntro', region: 'R1', term: p('\\x. x') })
+    expect(() => mapStepIds({ rule: 'closedTermIntro', region: 'missing', term: p('\\x. x') }, iso))
+      .toThrowError(/cannot map region 'missing'/)
+  })
+
   it('remaps BOTH node ids of a headStrip step through the iso', () => {
     const iso: DiagramIso = {
       regions: new Map([['r0', 'R0']]),
