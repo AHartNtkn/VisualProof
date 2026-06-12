@@ -6,6 +6,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
+import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
 import { applyStep, replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { ProofError } from '../../../src/kernel/proof/error'
@@ -52,6 +53,29 @@ describe('applyStep mirrors the direct appliers', () => {
     const out = applyStep(d, step, ctx)
     const shared = Object.values(out.wires).find((w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2)
     expect(shared).toBeDefined()
+  })
+
+  it('headStrip step decomposes a rigid-head equation, replaying through replayProof', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, pp('f a b'))
+    const n2 = h.termNode(h.root, pp('f a c'))
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'f' } },
+      { node: n2, port: { kind: 'freeVar', name: 'f' } },
+    ])
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'a' } },
+      { node: n2, port: { kind: 'freeVar', name: 'a' } },
+    ])
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'output' } },
+      { node: n2, port: { kind: 'output' } },
+    ])
+    const d = h.build()
+    const step: ProofStep = { rule: 'headStrip', a: n1, b: n2 }
+    expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(applyHeadStrip(d, n1, n2)))
+    const out = replayProof(d, [step], ctx)
+    expect(Object.keys(out.nodes)).toHaveLength(4)
   })
 
   it('unfold and fold steps use the context definitions', () => {

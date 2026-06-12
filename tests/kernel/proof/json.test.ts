@@ -39,6 +39,7 @@ describe('step round-trips through JSON', () => {
       { rule: 'doubleCutElim', region: 'r1' },
       { rule: 'conversion', node: 'n0', term: p('y'), certificate, attachments: { z: 'w0' } },
       { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate },
+      { rule: 'headStrip', a: 'n0', b: 'n1' },
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
       { rule: 'unfold', node: 'n0', path: [] },
@@ -46,6 +47,8 @@ describe('step round-trips through JSON', () => {
       { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, binders: {} },
       { rule: 'comprehensionAbstract', wrap: sel, comp: pat, occurrences: [{ sel, args: ['w0'] }] },
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
+      { rule: 'vacuousIntro', sel, arity: 2 },
+      { rule: 'vacuousElim', region: 'r1' },
     ]
     for (const s of steps) roundTrip(s)
   })
