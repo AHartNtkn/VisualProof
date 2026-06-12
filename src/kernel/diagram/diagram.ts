@@ -1,5 +1,5 @@
 import type { Term } from '../term/term'
-import { freePorts, assertWellFormedTerm } from '../term/term'
+import { freePorts, renameFreePorts, assertWellFormedTerm } from '../term/term'
 
 export type RegionId = string
 export type NodeId = string
@@ -63,6 +63,81 @@ export function requiredPorts(d: { regions: Readonly<Record<RegionId, Region>> }
     throw new DiagramError(`atom binder '${node.binder}' is not a bubble`)
   }
   return Array.from({ length: binder.arity }, (_, index): Port => ({ kind: 'arg', index }))
+}
+
+/**
+ * Free-port names are never semantic: every term node's free ports are
+ * renamed to s0, s1, … in first-occurrence order, and the freeVar endpoints
+ * of its wires are rewritten through the same per-node map — one simultaneous
+ * pass, so swaps like {s0→s1, s1→s0} cannot cascade. Runs after term
+ * well-formedness checks (renaming presupposes meaningful names) and before
+ * port validation, so all downstream invariants hold over canonical names.
+ *
+ * An endpoint whose name is not an original free of its node is left for the
+ * port-membership check to reject — except when it spells a canonical name
+ * the rename is about to assign to a DIFFERENT port, where waiting would
+ * silently alias it; that case is rejected here with the same vocabulary.
+ * Already-canonical nodes and untouched wires keep their input objects.
+ */
+function canonicalizeFreePorts(
+  nodes: Record<NodeId, DiagramNode>,
+  wires: Record<WireId, Wire>,
+): { nodes: Record<NodeId, DiagramNode>; wires: Record<WireId, Wire> } {
+  const renames = new Map<NodeId, ReadonlyMap<string, string>>()
+  let nodesChanged = false
+  const nodesOut: Record<NodeId, DiagramNode> = {}
+  for (const [id, n] of Object.entries(nodes)) {
+    if (n.kind !== 'term') {
+      nodesOut[id] = n
+      continue
+    }
+    const map = new Map<string, string>()
+    let identity = true
+    for (const [i, name] of freePorts(n.term).entries()) {
+      const to = `s${i}`
+      map.set(name, to)
+      if (name !== to) identity = false
+    }
+    renames.set(id, map)
+    if (identity) {
+      nodesOut[id] = n
+      continue
+    }
+    nodesOut[id] = { kind: 'term', region: n.region, term: renameFreePorts(n.term, map) }
+    nodesChanged = true
+  }
+  let wiresChanged = false
+  const wiresOut: Record<WireId, Wire> = {}
+  for (const [wid, w] of Object.entries(wires)) {
+    let epsChanged = false
+    const endpoints = w.endpoints.map((ep): Endpoint => {
+      if (ep.port.kind !== 'freeVar') return ep
+      const map = renames.get(ep.node) // undefined for atoms and missing nodes: validation rejects those endpoints
+      if (map === undefined) return ep
+      const to = map.get(ep.port.name)
+      if (to === undefined) {
+        for (const assigned of map.values()) {
+          if (assigned === ep.port.name) {
+            throw new DiagramError(`wire '${wid}' endpoint references non-existent port 'v:${ep.port.name}' of node '${ep.node}'`)
+          }
+        }
+        return ep
+      }
+      if (to === ep.port.name) return ep
+      epsChanged = true
+      return { node: ep.node, port: { kind: 'freeVar', name: to } }
+    })
+    if (!epsChanged) {
+      wiresOut[wid] = w
+      continue
+    }
+    wiresOut[wid] = { scope: w.scope, endpoints }
+    wiresChanged = true
+  }
+  return {
+    nodes: nodesChanged ? nodesOut : nodes,
+    wires: wiresChanged ? wiresOut : wires,
+  }
 }
 
 function ancestorOrEqualRaw(regions: Readonly<Record<RegionId, Region>>, anc: RegionId, desc: RegionId): boolean {
@@ -140,10 +215,14 @@ export function mkDiagram(parts: {
     }
   }
 
+  // Canonicalization: from here on every term node's frees are s0, s1, …
+  // and freeVar endpoints are spelled in the same canonical names.
+  const { nodes: canonNodes, wires: canonWires } = canonicalizeFreePorts(nodes, wires)
+
   // Precomputed once per node; reused by both the wires loop and the
   // partition check below.
   const portsByNode = new Map<NodeId, Port[]>()
-  for (const [id, n] of Object.entries(nodes)) {
+  for (const [id, n] of Object.entries(canonNodes)) {
     portsByNode.set(id, requiredPorts({ regions }, n))
   }
 
@@ -151,10 +230,10 @@ export function mkDiagram(parts: {
   // node ids and port names are unconstrained strings, so any flat
   // serialization has an aliasing seam.
   const attached = new Map<NodeId, Map<string, WireId>>()
-  for (const [wid, w] of Object.entries(wires)) {
+  for (const [wid, w] of Object.entries(canonWires)) {
     if (regions[w.scope] === undefined) fail(`wire '${wid}' has missing scope region '${w.scope}'`)
     for (const ep of w.endpoints) {
-      const n = nodes[ep.node] ?? fail(`wire '${wid}' endpoint references missing node '${ep.node}'`)
+      const n = canonNodes[ep.node] ?? fail(`wire '${wid}' endpoint references missing node '${ep.node}'`)
       const key = portKey(ep.port)
       const req = portsByNode.get(ep.node)!
       if (!req.some((q) => portKey(q) === key)) {
@@ -178,7 +257,7 @@ export function mkDiagram(parts: {
     }
   }
 
-  for (const id of Object.keys(nodes)) {
+  for (const id of Object.keys(canonNodes)) {
     // portsByNode was built from the same node entries; the get cannot miss.
     for (const q of portsByNode.get(id)!) {
       if (attached.get(id)?.get(portKey(q)) === undefined) {
@@ -193,7 +272,7 @@ export function mkDiagram(parts: {
   return Object.freeze({
     root: rootId,
     regions: Object.freeze({ ...regions }),
-    nodes: Object.freeze({ ...nodes }),
-    wires: Object.freeze({ ...wires }),
+    nodes: Object.freeze({ ...canonNodes }),
+    wires: Object.freeze({ ...canonWires }),
   })
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bvar, port, cnst, lam, app, termEq, freePorts, assertWellFormedTerm } from '../../../src/kernel/term/term'
+import { bvar, port, cnst, lam, app, termEq, freePorts, renameFreePorts, assertWellFormedTerm } from '../../../src/kernel/term/term'
 
 describe('term constructors and equality', () => {
   it('structural equality is alpha-equality because binders are de Bruijn', () => {
@@ -54,6 +54,37 @@ describe('freePorts', () => {
   it('does not count constants as ports', () => {
     const t = app(cnst('plus'), port('m'))
     expect(freePorts(t)).toEqual(['m'])
+  })
+})
+
+describe('renameFreePorts', () => {
+  it('renames mapped ports and leaves unmapped ports unchanged', () => {
+    const t = app(port('a'), port('keep'))
+    const out = renameFreePorts(t, new Map([['a', 'x']]))
+    expect(termEq(out, app(port('x'), port('keep')))).toBe(true)
+  })
+
+  it('is simultaneous: each leaf is looked up once by its ORIGINAL name', () => {
+    // chained map {a→b, b→c}: 'a' must become 'b', NOT 'c'
+    const t = app(port('a'), port('b'))
+    const out = renameFreePorts(t, new Map([['a', 'b'], ['b', 'c']]))
+    expect(termEq(out, app(port('b'), port('c')))).toBe(true)
+  })
+
+  it('exchanges ports under a swap map {a→b, b→a}', () => {
+    const t = app(app(port('a'), port('b')), port('a'))
+    const out = renameFreePorts(t, new Map([['a', 'b'], ['b', 'a']]))
+    expect(termEq(out, app(app(port('b'), port('a')), port('b')))).toBe(true)
+  })
+
+  it('leaves bound variables and constants untouched, descending through lam and app', () => {
+    const t = lam(app(app(bvar(0), cnst('plus')), port('a')))
+    const out = renameFreePorts(t, new Map([['a', 'b'], ['plus', 'NOT-A-PORT']]))
+    expect(termEq(out, lam(app(app(bvar(0), cnst('plus')), port('b'))))).toBe(true)
+  })
+
+  it('rejects an empty replacement name loudly', () => {
+    expect(() => renameFreePorts(port('a'), new Map([['a', '']]))).toThrowError(/non-empty/)
   })
 })
 

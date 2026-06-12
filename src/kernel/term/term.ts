@@ -65,6 +65,26 @@ export function freePorts(t: Term): string[] {
 }
 
 /**
+ * Simultaneous free-port rename: a single traversal in which each port leaf
+ * is looked up once by its ORIGINAL name, so chained maps ({a→b, b→a} or
+ * {a→b, b→c}) cannot cascade or capture. Leaves not in the map, bound
+ * variables, and constants pass through unchanged.
+ */
+export function renameFreePorts(t: Term, map: ReadonlyMap<string, string>): Term {
+  switch (t.kind) {
+    case 'port': {
+      const to = map.get(t.name)
+      return to === undefined ? t : port(to)
+    }
+    case 'bvar':
+    case 'const':
+      return t
+    case 'lam': return lam(renameFreePorts(t.body, map))
+    case 'app': return app(renameFreePorts(t.fn, map), renameFreePorts(t.arg, map))
+  }
+}
+
+/**
  * Term is a structural type, so object literals can bypass the smart
  * constructors; this re-checks everything they enforce, plus binder scoping:
  * every bvar index must be bound by an enclosing lam. Free variables are

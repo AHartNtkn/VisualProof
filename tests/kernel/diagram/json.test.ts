@@ -29,10 +29,10 @@ describe('diagram JSON', () => {
     expect(JSON.stringify(j2)).toBe(JSON.stringify(j1))
   })
 
-  it('serializes terms via the injective term serialization', () => {
+  it('serializes terms via the injective term serialization (canonical port names)', () => {
     const d = sample()
     const j = diagramToJson(d) as { nodes: Record<string, { kind: string; term?: string }> }
-    expect(j.nodes['n0']?.term).toBe('L(A(P("y"),#0))')
+    expect(j.nodes['n0']?.term).toBe('L(A(P("s0"),#0))')
   })
 
   it('rejects malformed JSON loudly: bad shape, bad port key, bad term', () => {
