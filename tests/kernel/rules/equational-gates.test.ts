@@ -61,12 +61,12 @@ describe('comprehension gates mirror insertion/erasure parity', () => {
       const occ = { sel: mkSelection(d, { region, regions: [], nodes: [n], wires: [] }), args: [w] }
       if (positive) {
         expect(() => applyComprehensionAbstract(d, wrap, identityComp(), [occ])).not.toThrow()
-        expect(() => applyComprehensionInstantiate(d, bub, identityComp()))
+        expect(() => applyComprehensionInstantiate(d, bub, identityComp(), []))
           .toThrowError(/requires a negative bubble/)
       } else {
         expect(() => applyComprehensionAbstract(d, wrap, identityComp(), [occ]))
           .toThrowError(/requires a positive region/)
-        expect(() => applyComprehensionInstantiate(d, bub, identityComp())).not.toThrow()
+        expect(() => applyComprehensionInstantiate(d, bub, identityComp(), [])).not.toThrow()
       }
     })
   }

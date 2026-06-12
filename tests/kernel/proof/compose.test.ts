@@ -147,7 +147,48 @@ describe('composeProofs', () => {
     const comp = mkDiagramWithBoundary(c.build(), [bx])
 
     const tail: ProofStep[] = [
-      { rule: 'comprehensionInstantiate', bubble: bInner, comp, binders: { [stub]: bOuter } },
+      { rule: 'comprehensionInstantiate', bubble: bInner, comp, attachments: [], binders: { [stub]: bOuter } },
+    ]
+    const composed = composeProofs(da, db, tail, ctx)
+    const viaA = replayProof(da, composed, ctx)
+    const viaB = replayProof(db, tail, ctx)
+    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+  })
+
+  it('maps comprehensionInstantiate parameter attachments through the iso', () => {
+    // Marker-first vs marker-last builds shift the explicit wire ids: db's
+    // parameter-wire id names the atom's ARG wire in da. That wire still
+    // encloses the splice region, so an unmapped id would not be refused —
+    // it would silently attach the copy's parameter port to the wrong wire,
+    // which only the fingerprint comparison catches.
+    const mk = (markerFirst: boolean) => {
+      const h = new DiagramBuilder()
+      const marker = () => {
+        const c = h.cut(h.root)
+        const m = h.termNode(c, p('\\a. \\b. a'))
+        h.wire(c, [{ node: m, port: { kind: 'output' } }])
+      }
+      if (markerFirst) marker()
+      const cut = h.cut(h.root)
+      const bub = h.bubble(cut, 1)
+      const a = h.atom(bub, bub)
+      h.wire(cut, [{ node: a, port: { kind: 'arg', index: 0 } }])
+      const wParam = h.wire(h.root, [])
+      if (!markerFirst) marker()
+      return { d: h.build(), bub, wParam }
+    }
+    const { d: da } = mk(true)
+    const { d: db, bub: bBub, wParam: bParam } = mk(false)
+
+    // parameterized comp: R(x) := "x —o— q", boundary [stub, parameter]
+    const c = new DiagramBuilder()
+    const n = c.termNode(c.root, p('q'))
+    const wx = c.wire(c.root, [{ node: n, port: { kind: 'output' } }])
+    const wq = c.wire(c.root, [{ node: n, port: { kind: 'freeVar', name: 'q' } }])
+    const comp = mkDiagramWithBoundary(c.build(), [wx, wq])
+
+    const tail: ProofStep[] = [
+      { rule: 'comprehensionInstantiate', bubble: bBub, comp, attachments: [bParam], binders: {} },
     ]
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
@@ -198,6 +239,26 @@ describe('mapStepIds', () => {
       .toEqual({ rule: 'closedTermIntro', region: 'R1', term: p('\\x. x') })
     expect(() => mapStepIds({ rule: 'closedTermIntro', region: 'missing', term: p('\\x. x') }, iso))
       .toThrowError(/cannot map region 'missing'/)
+  })
+
+  it('remaps comprehensionInstantiate attachments through iso.wires (order preserved)', () => {
+    const b = new DiagramBuilder()
+    const bn = b.termNode(b.root, p('\\x. x'))
+    const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
+    const pat = mkDiagramWithBoundary(b.build(), [bw])
+    const iso: DiagramIso = {
+      regions: new Map([['r1', 'R1']]),
+      nodes: new Map(),
+      wires: new Map([['w0', 'W0'], ['w1', 'W1']]),
+    }
+    expect(mapStepIds(
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w1', 'w0'], binders: {} },
+      iso,
+    )).toEqual({ rule: 'comprehensionInstantiate', bubble: 'R1', comp: pat, attachments: ['W1', 'W0'], binders: {} })
+    expect(() => mapStepIds(
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['missing'], binders: {} },
+      iso,
+    )).toThrowError(/cannot map wire 'missing'/)
   })
 
   it('remaps BOTH node ids of a headStrip step through the iso', () => {

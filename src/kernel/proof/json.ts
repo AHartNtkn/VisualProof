@@ -166,7 +166,7 @@ export function stepToJson(s: ProofStep): unknown {
     case 'fold':
       return { rule: s.rule, node: s.node, path: [...s.path], constId: s.constId }
     case 'comprehensionInstantiate':
-      return { rule: s.rule, bubble: s.bubble, comp: dwbToJson(s.comp), binders: { ...s.binders } }
+      return { rule: s.rule, bubble: s.bubble, comp: dwbToJson(s.comp), attachments: [...s.attachments], binders: { ...s.binders } }
     case 'comprehensionAbstract':
       return { rule: s.rule, wrap: selToJson(s.wrap), comp: dwbToJson(s.comp), occurrences: s.occurrences.map(occToJson) }
     case 'theorem':
@@ -242,11 +242,11 @@ export function stepFromJson(j: unknown): ProofStep {
       assertOnlyKeys(j, ['rule', 'node', 'path', 'constId'], 'fold step')
       return { rule, node: str(j.node, 'node'), path: pathFromJson(j.path, 'path'), constId: str(j.constId, 'constId') }
     case 'comprehensionInstantiate': {
-      assertOnlyKeys(j, ['rule', 'bubble', 'comp', 'binders'], 'comprehensionInstantiate step')
+      assertOnlyKeys(j, ['rule', 'bubble', 'comp', 'attachments', 'binders'], 'comprehensionInstantiate step')
       if (!isRecord(j.binders)) fail('binders must be an object')
       const binders: Record<string, string> = {}
       for (const [k, v] of Object.entries(j.binders)) binders[k] = str(v, `binders['${k}']`)
-      return { rule, bubble: str(j.bubble, 'bubble'), comp: dwbFromJson(j.comp, 'comp'), binders }
+      return { rule, bubble: str(j.bubble, 'bubble'), comp: dwbFromJson(j.comp, 'comp'), attachments: strArray(j.attachments, 'attachments'), binders }
     }
     case 'comprehensionAbstract': {
       assertOnlyKeys(j, ['rule', 'wrap', 'comp', 'occurrences'], 'comprehensionAbstract step')

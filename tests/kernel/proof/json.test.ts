@@ -46,7 +46,8 @@ describe('step round-trips through JSON', () => {
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
       { rule: 'unfold', node: 'n0', path: [] },
       { rule: 'fold', node: 'n0', path: ['body'], constId: 'I' },
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w3', 'w7'], binders: {} },
       { rule: 'comprehensionAbstract', wrap: sel, comp: pat, occurrences: [{ sel, args: ['w0'] }] },
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
       { rule: 'vacuousIntro', sel, arity: 2 },
@@ -69,6 +70,19 @@ describe('step round-trips through JSON', () => {
     })).toThrowError(/unknown field 'node'/)
     expect(() => stepFromJson({ rule: 'deiteration', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, fuel: -1 }))
       .toThrowError(/fuel/)
+  })
+
+  it('requires the attachments field on comprehensionInstantiate — no optional-field parsing', () => {
+    const b = new DiagramBuilder()
+    const bn = b.termNode(b.root, p('\\x. x'))
+    const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
+    const pat = mkDiagramWithBoundary(b.build(), [bw])
+    const j = JSON.parse(JSON.stringify(stepToJson(
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: {} },
+    ))) as Record<string, unknown>
+    delete j['attachments']
+    expect(() => stepFromJson(j)).toThrowError(/attachments must be an array/)
+    expect(() => stepFromJson({ ...j, attachments: [], extra: 1 })).toThrowError(/unknown field 'extra'/)
   })
 })
 

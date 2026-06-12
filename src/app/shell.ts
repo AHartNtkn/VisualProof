@@ -515,7 +515,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
         if (comp === undefined) {
           throw new Error(`unknown relation '${name}' — type a loaded relation name in the term input (loaded: ${Object.keys(relations).join(', ') || 'none'})`)
         }
-        applyF({ rule: 'comprehensionInstantiate', bubble: sel.regions[0]!, comp, binders: {} })
+        applyF({ rule: 'comprehensionInstantiate', bubble: sel.regions[0]!, comp, attachments: [], binders: {} })
         return
       }
       case 'citeTheorem':

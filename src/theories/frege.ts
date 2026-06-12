@@ -270,7 +270,7 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   )![0]
 
   const { comp: xRp, stub: xStub } = rPrimeComp()
-  push({ rule: 'comprehensionInstantiate', bubble: rBc, comp: xRp, binders: { [xStub]: rBp } })
+  push({ rule: 'comprehensionInstantiate', bubble: rBc, comp: xRp, attachments: [], binders: { [xStub]: rBp } })
   // after dissolution, cut1c holds: ZEROc + its R′-atom (the base copy),
   // the closure copy cut2c, and the conclusion copy cut4c
   const zeroC = Object.entries(cur.nodes).find(

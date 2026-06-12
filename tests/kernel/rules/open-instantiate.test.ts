@@ -35,7 +35,7 @@ describe('open comprehension instantiation', () => {
   it('instantiates ∀R with "x : R′(x)" — atoms rebind to the ENCLOSING bubble', () => {
     const { d, rOuter, rInner, w } = host()
     const { comp, stub } = rPrimeComp()
-    const out = applyComprehensionInstantiate(d, rInner, comp, new Map([[stub, rOuter]]))
+    const out = applyComprehensionInstantiate(d, rInner, comp, [], new Map([[stub, rOuter]]))
     expect(out.regions[rInner]).toBeUndefined() // dissolved
     const atoms = Object.values(out.nodes).filter((x) => x.kind === 'atom')
     expect(atoms).toHaveLength(1)
@@ -51,7 +51,7 @@ describe('open comprehension instantiation', () => {
     const { d, rInner } = host()
     const { comp, stub } = rPrimeComp()
     // the bubble itself: comprehension would mention the variable being eliminated
-    expect(() => applyComprehensionInstantiate(d, rInner, comp, new Map([[stub, rInner]])))
+    expect(() => applyComprehensionInstantiate(d, rInner, comp, [], new Map([[stub, rInner]])))
       .toThrowError(/must properly enclose the instantiated bubble/)
     // a sibling bubble: not on the ancestor chain at all
     const h2 = new DiagramBuilder()
@@ -61,7 +61,7 @@ describe('open comprehension instantiation', () => {
     h2.atom(rI2, rI2)
     const d2 = h2.build()
     const { comp: comp2, stub: stub2 } = rPrimeComp()
-    expect(() => applyComprehensionInstantiate(d2, rI2, comp2, new Map([[stub2, sib]])))
+    expect(() => applyComprehensionInstantiate(d2, rI2, comp2, [], new Map([[stub2, sib]])))
       .toThrowError(/must properly enclose the instantiated bubble/)
   })
 
@@ -71,7 +71,7 @@ describe('open comprehension instantiation', () => {
     const bn = b.termNode(b.root, p('\\x. \\y. x'))
     const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
     const closed = mkDiagramWithBoundary(b.build(), [bw])
-    const out = applyComprehensionInstantiate(d, rInner, closed)
+    const out = applyComprehensionInstantiate(d, rInner, closed, [])
     expect(Object.values(out.nodes).filter((x) => x.kind === 'atom')).toHaveLength(0)
     expect(out.regions[rInner]).toBeUndefined()
   })
@@ -82,7 +82,7 @@ describe('open comprehension instantiation', () => {
     h.atom(rPos, rPos)
     const d = h.build()
     const { comp, stub } = rPrimeComp()
-    expect(() => applyComprehensionInstantiate(d, rPos, comp, new Map([[stub, 'ghost']])))
+    expect(() => applyComprehensionInstantiate(d, rPos, comp, [], new Map([[stub, 'ghost']])))
       .toThrowError(/requires a negative bubble/)
   })
 })
