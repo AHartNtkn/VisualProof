@@ -26,9 +26,9 @@ API:
 - `headNormalize(t: Term, fuel: number): { term: Term; steps: readonly ReductionStep[] }` — repeated HEAD β-steps (the spine redex only) until the head is bound/free/const, recording each step's path (the same `ReductionStep` the certificate checker consumes). Throws a plain `Error` naming the fuel on exhaustion (divergent head — loud, no silent partial result). No unfolding: a `const` head terminates normalization (the caller decides whether to unfold).
 - `weakHeadNormalize(t: Term, fuel: number)` — same but stops without descending under the binder prefix (no reduction inside a top-level λ body unless the term is itself the redex spine). Document the difference in one sentence each.
 
-- [ ] **Step 1:** Failing tests: (a) `headSpine` on `\x. f x y` → binders 1, free head, 2 args; on `\x. x y` → bound head index 0; on `PLUS a b` → const head; on `(\u. u) y` → redex. (b) `headNormalize((\u. \v. u) a b)` reaches free head `a` with recorded steps that `checkConversion` accepts as the left half of a certificate against the result. (c) `headNormalize(Y-style divergent head, fuel 50)` throws mentioning fuel. (d) `weakHeadNormalize` stops at a λ that `headNormalize` would enter. Run, observe failure.
-- [ ] **Step 2:** Implement; observe pass; `npx tsc --noEmit` + full suite green.
-- [ ] **Step 3:** Commit `plan 11b task 1: head normalization (hnf/whnf) in the term layer`.
+- [x] **Step 1:** Failing tests: (a) `headSpine` on `\x. f x y` → binders 1, free head, 2 args; on `\x. x y` → bound head index 0; on `PLUS a b` → const head; on `(\u. u) y` → redex. (b) `headNormalize((\u. \v. u) a b)` reaches free head `a` with recorded steps that `checkConversion` accepts as the left half of a certificate against the result. (c) `headNormalize(Y-style divergent head, fuel 50)` throws mentioning fuel. (d) `weakHeadNormalize` stops at a λ that `headNormalize` would enter. Run, observe failure.
+- [x] **Step 2:** Implement; observe pass; `npx tsc --noEmit` + full suite green.
+- [x] **Step 3:** Commit `plan 11b task 1: head normalization (hnf/whnf) in the term layer`.
 
 ### Task 2: The conversion tactic
 
@@ -38,9 +38,9 @@ API:
 
 `convertToHeadNormal(d: Diagram, node: NodeId, fuel: number): { diagram: Diagram; step: ProofStep }` and `convertToWeakHeadNormal(...)`: run the Task 1 normalizer on the node's term, build the certificate `{ leftSteps: steps, rightSteps: [] }`, return the applied `conversion` step (reuse `applyConversionByCertificate`; attachments `{}` — head reduction never adds free ports). Refuse loudly (plain `Error`) when the head is a constant: the message must say which constant and that unfold comes first — without mentioning any port name.
 
-- [ ] **Step 1:** Failing tests: tactic on a node with `(\u. u) y` rewrites the node to `y` and the step replays through `replayProof`; constant-head node refuses naming the constant; already-normal node refuses ("already in head-normal form") rather than emitting a no-op step.
-- [ ] **Step 2:** Implement; observe pass; suite green.
-- [ ] **Step 3:** Commit `plan 11b task 2: HNF/WHNF conversion tactic`.
+- [x] **Step 1:** Failing tests: tactic on a node with `(\u. u) y` rewrites the node to `y` and the step replays through `replayProof`; constant-head node refuses naming the constant; already-normal node refuses ("already in head-normal form") rather than emitting a no-op step.
+- [x] **Step 2:** Implement; observe pass; suite green.
+- [x] **Step 3:** Commit `plan 11b task 2: HNF/WHNF conversion tactic`.
 
 ### Task 3: headStrip kernel rule
 
@@ -60,11 +60,21 @@ API:
 
 Result passes `mkDiagram`. The rule never removes anything and never touches polarity — see the soundness comment obligations in the header.
 
-- [ ] **Step 1:** Failing tests, minimum: (a) strips `f a b —o— f a c` (f, a, b, c on wires; same f-wire, same a-wire) into ONE added equation pair for position 2 (position 1 skipped as trivial), closures correct, fresh wire scoped at R; (b) works identically inside a cut (polarity-blind); (c) bound-head case `\x. x a —o— \x. x b` strips under the binder with closures `\x. a`/`\x. b`; (d) refusals: outputs on different wires; const head (message names the constant); redex head; binder-count mismatch; arg-count mismatch; free heads on different wires; same node twice; (e) RuleError vocabulary. NO test may assert on a port name.
-- [ ] **Step 2:** Implement rule + proof-layer wiring; observe pass; suite + tsc green.
-- [ ] **Step 3:** Commit `plan 11b task 3: headStrip rule (rigid-head equation decomposition)`.
+- [x] **Step 1:** Failing tests, minimum: (a) strips `f a b —o— f a c` (f, a, b, c on wires; same f-wire, same a-wire) into ONE added equation pair for position 2 (position 1 skipped as trivial), closures correct, fresh wire scoped at R; (b) works identically inside a cut (polarity-blind); (c) bound-head case `\x. x a —o— \x. x b` strips under the binder with closures `\x. a`/`\x. b`; (d) refusals: outputs on different wires; const head (message names the constant); redex head; binder-count mismatch; arg-count mismatch; free heads on different wires; same node twice; (e) RuleError vocabulary. NO test may assert on a port name.
+- [x] **Step 2:** Implement rule + proof-layer wiring; observe pass; suite + tsc green.
+- [x] **Step 3:** Commit `plan 11b task 3: headStrip rule (rigid-head equation decomposition)`.
 
 ### Task 4: Review and plan-doc sync
 
-- [ ] **Step 1:** Adversarial review (inherit-model) with mutation probes: (a) allow const heads through gate 3 — a soundness test must fail; (b) compare free heads by name instead of wire — a test with same-named heads on different wires must fail; (c) drop the shared-output gate — a refusal test must fail. Each observed fail → revert → pass.
-- [ ] **Step 2:** Tick boxes, record deviations, full suite + E2E green. (Merge happens with Plan 11's final merge — same branch.)
+- [x] **Step 1:** Adversarial review (inherit-model) with mutation probes: (a) allow const heads through gate 3 — a soundness test must fail; (b) compare free heads by name instead of wire — a test with same-named heads on different wires must fail; (c) drop the shared-output gate — a refusal test must fail. Each observed fail → revert → pass.
+- [x] **Step 2:** Tick boxes, record deviations, full suite + E2E green. (Merge happens with Plan 11's final merge — same branch.)
+
+---
+
+## Execution record (2026-06-12)
+
+All four tasks complete on `plan-11-arithmetic`: 556a055 (hnf), 4d21c83 (tactics), 09b207d (headStrip + wiring), 0dcc6a0 (review battery). Final state: 582/582 unit tests, tsc clean, E2E 3/3.
+
+Deviations/resolutions: headSpine η-wrapper classified via the spine definition (no separate η head kind); WHNF const-refusal fires only when the constant blocked the normalizer (a top-level λ is already WHNF); all-trivial headStrip application is a no-op (pinned); json.test.ts step-kind enumeration gained the missing vacuousIntro/vacuousElim entries.
+
+Review verdict APPROVED. All three mandated mutation probes caught by existing tests; review added 7 tests pinning the closure de Bruijn index law, the hnf fuel boundary, exotic redex spines, nested-cut wire scope, tactic port-trimming, json extra-key rejection, and compose remapping. Semantic note on record: headStrip is the first rule whose validity depends on equality-as-βη (rigid-head injectivity fails in arbitrary first-order models) — the intended semantic commitment of this system, per the user-approved design.
