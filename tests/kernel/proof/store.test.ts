@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
+import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
@@ -126,6 +127,40 @@ describe('theory files', () => {
     const { theory: back, ctx } = loadTheory(JSON.parse(text))
     expect(ctx.theorems.has('dropQ')).toBe(true)
     expect(JSON.stringify(theoryToJson(back))).toBe(text)
+  })
+
+  it('canonicalizes stored non-canonical free-port names on load rather than trusting them', () => {
+    // A hand-crafted file carrying ORIGINAL names (v:y, v:z): the load path
+    // runs through mkDiagram, so the diagram that comes out spells s0, s1 in
+    // both the node term and the wire endpoints — files are data, the kernel
+    // re-establishes its own invariants.
+    const j = {
+      format: 'visual-proof-theory',
+      version: 1,
+      definitions: {},
+      relations: {
+        R: {
+          diagram: {
+            root: 'r0',
+            regions: { r0: { kind: 'sheet' } },
+            nodes: { n0: { kind: 'term', region: 'r0', term: 'A(P("y"),P("z"))' } },
+            wires: {
+              w0: { scope: 'r0', endpoints: [{ node: 'n0', port: 'out' }] },
+              w1: { scope: 'r0', endpoints: [{ node: 'n0', port: 'v:y' }] },
+              w2: { scope: 'r0', endpoints: [{ node: 'n0', port: 'v:z' }] },
+            },
+          },
+          boundary: ['w1', 'w2'],
+        },
+      },
+      theorems: [],
+    }
+    const { theory } = loadTheory(j)
+    const d = theory.relations['R']!.diagram
+    const n = d.nodes['n0']
+    expect(n?.kind === 'term' && freePorts(n.term)).toEqual(['s0', 's1'])
+    expect(d.wires['w1']?.endpoints).toEqual([{ node: 'n0', port: { kind: 'freeVar', name: 's0' } }])
+    expect(d.wires['w2']?.endpoints).toEqual([{ node: 'n0', port: { kind: 'freeVar', name: 's1' } }])
   })
 
   it('rejects unversioned or alien envelopes', () => {
