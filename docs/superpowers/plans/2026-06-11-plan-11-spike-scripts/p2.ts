@@ -5,8 +5,8 @@ import { mkDiagramWithBoundary } from '/home/ahart/Documents/VisualProofAssistan
 import { mkSelection } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/selection'
 import type { ProofContext } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/step'
 import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
-import { Eng, p } from '/tmp/spike2/lib'
-import { buildNatAt, buildComp, P1term, P2term } from '/tmp/spike2/comp'
+import { Eng, p } from './lib'
+import { buildNatAt, buildComp, P1term, P2term } from './comp'
 
 const ctx: ProofContext = { definitions: fregeDefinitions, theorems: new Map() }
 

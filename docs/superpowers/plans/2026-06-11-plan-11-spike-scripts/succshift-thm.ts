@@ -13,7 +13,7 @@ import type { ProofContext } from '/home/ahart/Documents/VisualProofAssistant/sr
 import type { Theorem } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/theorem'
 import type { NodeId, RegionId, WireId } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/diagram'
 import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
-import { Eng, p, idCert } from '/tmp/spike2/lib'
+import { Eng, p, idCert } from './lib'
 
 const F1term = p('\\n. PLUS q (SUCC n)')
 const F2term = p('\\n. SUCC (PLUS q n)')

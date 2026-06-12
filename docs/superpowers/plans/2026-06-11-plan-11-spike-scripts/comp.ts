@@ -4,7 +4,7 @@
 import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/boundary'
 import type { Endpoint, NodeId, RegionId, WireId } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/diagram'
-import { p } from '/tmp/spike2/lib'
+import { p } from './lib'
 
 /** The N-cut shape alone: a0 (base atom) and a3 (conclusion atom) left for the caller to wire. */
 export function buildNatCut(b: DiagramBuilder, parent: RegionId): { cutN: RegionId; a0: NodeId; a3: NodeId } {

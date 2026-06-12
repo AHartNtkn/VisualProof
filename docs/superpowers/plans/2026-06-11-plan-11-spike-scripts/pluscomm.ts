@@ -10,10 +10,10 @@ import type { ProofContext } from '/home/ahart/Documents/VisualProofAssistant/sr
 import { checkTheorem, type Theorem } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/theorem'
 import type { NodeId, RegionId, Term, WireId } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/diagram'
 import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
-import { Eng, p, idCert } from '/tmp/spike2/lib'
+import { Eng, p, idCert } from './lib'
 import { convertible } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/term/convert'
-import { buildNatAt, buildComp, P1term, P2term } from '/tmp/spike2/comp'
-import { deriveSuccShift } from '/tmp/spike2/succshift-thm'
+import { buildNatAt, buildComp, P1term, P2term } from './comp'
+import { deriveSuccShift } from './succshift-thm'
 
 const J = JSON.stringify
 

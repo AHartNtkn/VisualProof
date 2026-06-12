@@ -2,7 +2,7 @@
 import { checkTheorem } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/theorem'
 import type { ProofContext } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/proof/step'
 import { fregeDefinitions } from '/home/ahart/Documents/VisualProofAssistant/src/theories/frege'
-import { deriveSuccShift } from '/tmp/spike2/succshift-thm'
+import { deriveSuccShift } from './succshift-thm'
 
 const ctx: ProofContext = { definitions: fregeDefinitions, theorems: new Map() }
 try {
@@ -23,8 +23,8 @@ try {
 // ---- p1c/p1d: cite inside cutB of a dcIntro pair (positive depth-2)
 import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
 import { mkSelection } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/selection'
-import { Eng, p } from '/tmp/spike2/lib'
-import { buildRootedNat } from '/tmp/spike2/succshift-thm'
+import { Eng, p } from './lib'
+import { buildRootedNat } from './succshift-thm'
 
 const ssBare = deriveSuccShift(ctx, { extraSucc: false })
 const ssS = deriveSuccShift(ctx, { extraSucc: true })

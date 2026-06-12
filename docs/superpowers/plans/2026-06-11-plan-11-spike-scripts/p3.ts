@@ -4,8 +4,8 @@
 import { DiagramBuilder } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/builder'
 import { mkSelection } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/diagram/subgraph/selection'
 import { applyDeiteration } from '/home/ahart/Documents/VisualProofAssistant/src/kernel/rules/iteration'
-import { p } from '/tmp/spike2/lib'
-import { buildNatAt, buildNatCut, P1term, P2term } from '/tmp/spike2/comp'
+import { p } from './lib'
+import { buildNatAt, buildNatCut, P1term, P2term } from './comp'
 
 function probe(shared: boolean): void {
   const b = new DiagramBuilder()
