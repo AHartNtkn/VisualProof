@@ -59,6 +59,8 @@ describe('step round-trips through JSON', () => {
       .toThrowError(/unknown field 'extra'/)
     expect(() => stepFromJson({ rule: 'fission', node: 'n0', path: ['sideways'] }))
       .toThrowError(/path segment/)
+    expect(() => stepFromJson({ rule: 'headStrip', a: 'n0', b: 'n1', certificate: { leftSteps: [], rightSteps: [] } }))
+      .toThrowError(/unknown field 'certificate'/)
     expect(() => stepFromJson({ rule: 'deiteration', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, fuel: -1 }))
       .toThrowError(/fuel/)
   })

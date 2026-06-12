@@ -57,6 +57,20 @@ describe('headSpine', () => {
     expect(s.args.length).toBe(1)
   })
 
+  it('reports a redex head when the spine fn is itself an application of a redex: ((\\u. u) f) x y', () => {
+    const s = headSpine(p('((\\u. u) f) x y'))
+    expect(s.binders).toBe(0)
+    expect(s.head).toEqual({ kind: 'redex' })
+    expect(s.args.length).toBe(3)
+  })
+
+  it('reports a redex head for an applied eta-wrapper: (\\x. f x) a', () => {
+    const s = headSpine(p('(\\x. f x) a'))
+    expect(s.binders).toBe(0)
+    expect(s.head).toEqual({ kind: 'redex' })
+    expect(s.args.length).toBe(1)
+  })
+
   it('analyzes a bare free atom: zero binders, zero args', () => {
     const s = headSpine(p('a'))
     expect(s.binders).toBe(0)
@@ -110,6 +124,12 @@ describe('headNormalize', () => {
   it('throws naming the fuel on a divergent head', () => {
     expect(() => headNormalize(OMEGA, 50)).toThrowError(/fuel/i)
     expect(() => headNormalize(OMEGA, 50)).toThrowError(/50/)
+  })
+
+  it('fuel is an exact step budget: a two-step head reduction succeeds on fuel 2 and throws on fuel 1', () => {
+    const t = p('(\\u. \\v. u) a b')
+    expect(headNormalize(t, 2).steps.length).toBe(2)
+    expect(() => headNormalize(t, 1)).toThrowError(/fuel/i)
   })
 
   it('rejects non-positive fuel as a caller error', () => {

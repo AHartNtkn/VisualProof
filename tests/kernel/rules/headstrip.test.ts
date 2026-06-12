@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import type { Term } from '../../../src/kernel/term/term'
-import { termEq } from '../../../src/kernel/term/term'
+import { app, bvar, lam, port, termEq } from '../../../src/kernel/term/term'
 import type { Diagram, Endpoint, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
@@ -139,6 +139,52 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(freeVarWires(out, ca!)).toEqual([wa])
     expect(freeVarWires(out, cb!)).toEqual([wb])
     expect(outputWire(out, ca!)).toBe(outputWire(out, cb!))
+  })
+
+  it('builds prefix-closures with unshifted indices: an arg referencing an outer prefix binder survives wrapping', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. \\y. g (x a)'))
+    const n2 = h.termNode(h.root, p('\\x. \\y. g (x b)'))
+    h.wire(h.root, [fv(n1, 'g'), fv(n2, 'g')])
+    const wa = h.wire(h.root, [fv(n1, 'a')])
+    const wb = h.wire(h.root, [fv(n2, 'b')])
+    h.wire(h.root, [outp(n1), outp(n2)])
+    const d = h.build()
+    const out = applyHeadStrip(d, n1, n2)
+    const added = addedNodes(d, out)
+    expect(added).toHaveLength(2)
+    // Directly-constructed expected closures: \x. \y. x a — the arg's bvar 1
+    // (the OUTER prefix binder) must be wrapped UNCHANGED; a shift in either
+    // direction would equate the wrong functions.
+    const expA = lam(lam(app(bvar(1), port('a'))))
+    const expB = lam(lam(app(bvar(1), port('b'))))
+    const ca = added.find((id) => termEq(termOf(out, id), expA))
+    const cb = added.find((id) => termEq(termOf(out, id), expB))
+    expect(ca).toBeDefined()
+    expect(cb).toBeDefined()
+    expect(freeVarWires(out, ca!)).toEqual([wa])
+    expect(freeVarWires(out, cb!)).toEqual([wb])
+    expect(outputWire(out, ca!)).toBe(outputWire(out, cb!))
+  })
+
+  it('scopes the fresh equation wire at the nodes region inside a nested cut (cut within a cut)', () => {
+    const h = new DiagramBuilder()
+    const outer = h.cut(h.root)
+    const inner = h.cut(outer)
+    const n1 = h.termNode(inner, p('f a'))
+    const n2 = h.termNode(inner, p('f b'))
+    h.wire(inner, [fv(n1, 'f'), fv(n2, 'f')])
+    h.wire(inner, [fv(n1, 'a')])
+    h.wire(inner, [fv(n2, 'b')])
+    h.wire(inner, [outp(n1), outp(n2)])
+    const d = h.build()
+    const out = applyHeadStrip(d, n1, n2)
+    const added = addedNodes(d, out)
+    expect(added).toHaveLength(2)
+    for (const id of added) expect(out.nodes[id]!.region).toBe(inner)
+    const wo = outputWire(out, added[0]!)
+    expect(outputWire(out, added[1]!)).toBe(wo)
+    expect(out.wires[wo]!.scope).toBe(inner)
   })
 
   it('is a no-op when every position is trivial (nothing added, nothing removed)', () => {

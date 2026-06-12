@@ -6,7 +6,8 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
-import { composeProofs } from '../../../src/kernel/proof/compose'
+import { composeProofs, mapStepIds } from '../../../src/kernel/proof/compose'
+import type { DiagramIso } from '../../../src/kernel/diagram/canonical/iso'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
@@ -160,5 +161,19 @@ describe('composeProofs', () => {
     other.termNode(other.root, p('y'))
     expect(() => composeProofs(da, other.build(), [], ctx))
       .toThrowError(/do not meet/)
+  })
+})
+
+describe('mapStepIds', () => {
+  it('remaps BOTH node ids of a headStrip step through the iso', () => {
+    const iso: DiagramIso = {
+      regions: new Map([['r0', 'R0']]),
+      nodes: new Map([['n0', 'N0'], ['n1', 'N1']]),
+      wires: new Map(),
+    }
+    expect(mapStepIds({ rule: 'headStrip', a: 'n0', b: 'n1' }, iso))
+      .toEqual({ rule: 'headStrip', a: 'N0', b: 'N1' })
+    expect(() => mapStepIds({ rule: 'headStrip', a: 'n0', b: 'missing' }, iso))
+      .toThrowError(/cannot map node 'missing'/)
   })
 })

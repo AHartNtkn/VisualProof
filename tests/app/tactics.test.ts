@@ -38,6 +38,15 @@ describe('convertToHeadNormal', () => {
     expect(replayed).toEqual(res.diagram)
   })
 
+  it('handles a head reduction that drops a free port: (\\u. \\v. u) y z becomes y and replays', () => {
+    const { diagram: d, node } = diagramWith('(\\u. \\v. u) y z')
+    const res = convertToHeadNormal(d, node, 100)
+    const after = res.diagram.nodes[node]
+    expect(after?.kind === 'term' && termEq(after.term, p('y'))).toBe(true)
+    const replayed = replayProof(d, [res.step], ctx)
+    expect(replayed).toEqual(res.diagram)
+  })
+
   it('refuses a constant head, naming the constant and directing to unfold', () => {
     const { diagram: d, node } = diagramWith('PLUS a b', pc)
     expect(() => convertToHeadNormal(d, node, 100)).toThrowError(/PLUS/)
