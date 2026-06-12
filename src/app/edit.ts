@@ -1,7 +1,7 @@
 import type { Term } from '../kernel/term/term'
 import { freePorts } from '../kernel/term/term'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Port, Region, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
-import { mkDiagram, portKey } from '../kernel/diagram/diagram'
+import { mkDiagram, portKey, requiredPorts } from '../kernel/diagram/diagram'
 import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { removeSubgraph } from '../kernel/diagram/subgraph/splice'
@@ -72,6 +72,15 @@ export function joinPorts(d: Diagram, a: Endpoint, b: Endpoint): Diagram {
     throw new Error('cannot join a port to the same port')
   }
   const holder = (ep: Endpoint): WireId => {
+    // Resolve the port against the node's CURRENT shape first: free-port names
+    // are canonical (s0, s1, …) after construction, so an endpoint carrying a
+    // pre-construction spelling is invalid input, not a missing wire.
+    const node = d.nodes[ep.node]
+    if (node === undefined) throw new Error(`no node '${ep.node}' in the diagram`)
+    const ports = requiredPorts(d, node)
+    if (!ports.some((q) => portKey(q) === portKey(ep.port))) {
+      throw new Error(`node '${ep.node}' has no port '${portKey(ep.port)}' (its ports are ${ports.map(portKey).join(', ')}; free-port names are canonical s0, s1, …)`)
+    }
     const found = Object.entries(d.wires).find(([, w]) =>
       w.endpoints.some((x) => x.node === ep.node && portKey(x.port) === portKey(ep.port)))
     if (found === undefined) throw new Error(`no wire holds port '${portKey(ep.port)}' of node '${ep.node}'`)

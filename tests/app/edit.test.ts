@@ -40,7 +40,7 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const d = b.diagram
     const out = joinPorts(d,
       { node: a.node, port: { kind: 'output' } },
-      { node: b.node, port: { kind: 'freeVar', name: 'y' } })
+      { node: b.node, port: { kind: 'freeVar', name: 's0' } })
     const shared = Object.values(out.wires).find((w) =>
       w.endpoints.some((ep) => ep.node === a.node) && w.endpoints.some((ep) => ep.node === b.node))
     expect(shared).toBeDefined()
@@ -55,7 +55,7 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const d = h.build()
     const out = joinPorts(d,
       { node: n1, port: { kind: 'output' } },
-      { node: n2, port: { kind: 'freeVar', name: 'y' } })
+      { node: n2, port: { kind: 'freeVar', name: 's0' } })
     const shared = Object.values(out.wires).find((w) => w.endpoints.length === 2)!
     expect(shared.scope).toBe(d.root)
   })
@@ -70,7 +70,7 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const d = h.build()
     const out = joinPorts(d,
       { node: n1, port: { kind: 'output' } },
-      { node: n2, port: { kind: 'freeVar', name: 'y' } })
+      { node: n2, port: { kind: 'freeVar', name: 's0' } })
     const shared = Object.values(out.wires).find((w) => w.endpoints.length === 2)!
     expect(shared.scope).toBe(outer)
   })
@@ -81,11 +81,24 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const b = addTermNode(a.diagram, a.diagram.root, p('y'))
     const joined = joinPorts(b.diagram,
       { node: a.node, port: { kind: 'output' } },
-      { node: b.node, port: { kind: 'freeVar', name: 'y' } })
+      { node: b.node, port: { kind: 'freeVar', name: 's0' } })
     const sel = mkSelection(joined, { region: joined.root, regions: [], nodes: [b.node], wires: [] })
     const out = deleteSelection(joined, sel)
     expect(out.nodes[b.node]).toBeUndefined()
     expect(out.nodes[a.node]).toBeDefined()
+  })
+
+  it('refuses a pre-canonical port spelling, naming the canonical ports', () => {
+    // construction canonicalized the term's free 'y' to 's0'; an endpoint
+    // still spelling 'y' is invalid input, rejected against the node's
+    // CURRENT term rather than reported as a missing wire
+    const d0 = emptyDiagram()
+    const a = addTermNode(d0, d0.root, p('\\x. x'))
+    const b = addTermNode(a.diagram, a.diagram.root, p('y'))
+    expect(() => joinPorts(b.diagram,
+      { node: a.node, port: { kind: 'output' } },
+      { node: b.node, port: { kind: 'freeVar', name: 'y' } }))
+      .toThrowError(/has no port 'v:y' \(its ports are out, v:s0/)
   })
 
   it('refuses joining a port to itself, loudly', () => {

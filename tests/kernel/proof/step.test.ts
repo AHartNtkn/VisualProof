@@ -33,8 +33,9 @@ describe('applyStep mirrors the direct appliers', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, pp('(\\x. x) y'))
     const d = h.build()
-    const { diagram, certificate } = applyConversion(d, n, pp('y'), 10)
-    const step: ProofStep = { rule: 'conversion', node: n, term: pp('y'), certificate, attachments: {} }
+    // the node's source free 'y' is canonical s0 after construction
+    const { diagram, certificate } = applyConversion(d, n, pp('s0'), 10)
+    const step: ProofStep = { rule: 'conversion', node: n, term: pp('s0'), certificate, attachments: {} }
     expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(diagram))
   })
 

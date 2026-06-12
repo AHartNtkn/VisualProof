@@ -52,10 +52,15 @@ describe('head strip (rigid-head equation decomposition)', () => {
     const out = applyHeadStrip(d, n1, n2)
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
-    const bNode = added.find((id) => termEq(termOf(out, id), p('b')))
-    const cNode = added.find((id) => termEq(termOf(out, id), p('c')))
+    // every single-free closure is canonically the term 's0'; the b- and
+    // c-copies are distinguished by WIRING (which parent wire they ride)
+    const bNode = added.find((id) => freeVarWires(out, id).includes(wb))
+    const cNode = added.find((id) => freeVarWires(out, id).includes(wc))
     expect(bNode).toBeDefined()
     expect(cNode).toBeDefined()
+    expect(bNode).not.toBe(cNode)
+    expect(termEq(termOf(out, bNode!), p('s0'))).toBe(true)
+    expect(termEq(termOf(out, cNode!), p('s0'))).toBe(true)
     expect(out.nodes[bNode!]!.region).toBe(h.root)
     expect(out.nodes[cNode!]!.region).toBe(h.root)
     // closure free ports ride exactly the wires those ports ride on the parents
@@ -67,9 +72,10 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(d.wires[wo]).toBeUndefined()
     expect(out.wires[wo]!.scope).toBe(h.root)
     expect(out.wires[wo]!.endpoints).toHaveLength(2)
-    // originals untouched
-    expect(termEq(termOf(out, n1), p('f a b'))).toBe(true)
-    expect(termEq(termOf(out, n2), p('f a c'))).toBe(true)
+    // originals untouched (both parents canonicalize to the SAME spelling —
+    // their distinction lives entirely in the wiring)
+    expect(termEq(termOf(out, n1), p('s0 s1 s2'))).toBe(true)
+    expect(termEq(termOf(out, n2), p('s0 s1 s2'))).toBe(true)
     expect(outputWire(out, n1)).toBe(weq)
     expect(outputWire(out, n2)).toBe(weq)
     expect(out.wires[weq]!.endpoints).toHaveLength(2)
@@ -92,8 +98,14 @@ describe('head strip (rigid-head equation decomposition)', () => {
     const added = addedNodes(d, out)
     // both positions strip: two equation pairs
     expect(added).toHaveLength(4)
-    const aNodes = added.filter((id) => termEq(termOf(out, id), p('a')))
+    // all four closures are canonically the single-port term 's0'; the two
+    // a-copies are the ones riding the parents' a-wires
+    const aNodes = added.filter((id) => {
+      const ws = freeVarWires(out, id)
+      return ws.length === 1 && (ws[0] === wa1 || ws[0] === wa2)
+    })
     expect(aNodes).toHaveLength(2)
+    for (const id of aNodes) expect(termEq(termOf(out, id), p('s0'))).toBe(true)
     // one copy hangs off each parent's a-wire, and they share an output wire
     const ridden = aNodes.flatMap((id) => freeVarWires(out, id))
     expect(new Set(ridden)).toEqual(new Set([wa1, wa2]))
@@ -132,10 +144,14 @@ describe('head strip (rigid-head equation decomposition)', () => {
     const out = applyHeadStrip(d, n1, n2)
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
-    const ca = added.find((id) => termEq(termOf(out, id), p('\\x. a')))
-    const cb = added.find((id) => termEq(termOf(out, id), p('\\x. b')))
+    // both closures are canonically \x. s0 — distinguished by wiring alone
+    const ca = added.find((id) => freeVarWires(out, id).includes(wa))
+    const cb = added.find((id) => freeVarWires(out, id).includes(wb))
     expect(ca).toBeDefined()
     expect(cb).toBeDefined()
+    expect(ca).not.toBe(cb)
+    expect(termEq(termOf(out, ca!), p('\\x. s0'))).toBe(true)
+    expect(termEq(termOf(out, cb!), p('\\x. s0'))).toBe(true)
     expect(freeVarWires(out, ca!)).toEqual([wa])
     expect(freeVarWires(out, cb!)).toEqual([wb])
     expect(outputWire(out, ca!)).toBe(outputWire(out, cb!))
@@ -153,15 +169,18 @@ describe('head strip (rigid-head equation decomposition)', () => {
     const out = applyHeadStrip(d, n1, n2)
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
-    // Directly-constructed expected closures: \x. \y. x a — the arg's bvar 1
+    // Directly-constructed expected closure: \x. \y. x s0 — the arg's bvar 1
     // (the OUTER prefix binder) must be wrapped UNCHANGED; a shift in either
-    // direction would equate the wrong functions.
-    const expA = lam(lam(app(bvar(1), port('a'))))
-    const expB = lam(lam(app(bvar(1), port('b'))))
-    const ca = added.find((id) => termEq(termOf(out, id), expA))
-    const cb = added.find((id) => termEq(termOf(out, id), expB))
+    // direction would equate the wrong functions. The single free is
+    // canonically s0 on both copies, so they are distinguished by wiring.
+    const exp = lam(lam(app(bvar(1), port('s0'))))
+    const ca = added.find((id) => freeVarWires(out, id).includes(wa))
+    const cb = added.find((id) => freeVarWires(out, id).includes(wb))
     expect(ca).toBeDefined()
     expect(cb).toBeDefined()
+    expect(ca).not.toBe(cb)
+    expect(termEq(termOf(out, ca!), exp)).toBe(true)
+    expect(termEq(termOf(out, cb!), exp)).toBe(true)
     expect(freeVarWires(out, ca!)).toEqual([wa])
     expect(freeVarWires(out, cb!)).toEqual([wb])
     expect(outputWire(out, ca!)).toBe(outputWire(out, cb!))

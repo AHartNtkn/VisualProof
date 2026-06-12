@@ -23,7 +23,8 @@ describe('convertToHeadNormal', () => {
     const res = convertToHeadNormal(d, node, 100)
     const after = res.diagram.nodes[node]
     expect(after?.kind).toBe('term')
-    expect(after?.kind === 'term' && termEq(after.term, p('y'))).toBe(true)
+    // the node's source free 'y' is canonical s0 after construction
+    expect(after?.kind === 'term' && termEq(after.term, p('s0'))).toBe(true)
     expect(res.step.rule).toBe('conversion')
     const replayed = replayProof(d, [res.step], ctx)
     expect(replayed).toEqual(res.diagram)
@@ -42,7 +43,8 @@ describe('convertToHeadNormal', () => {
     const { diagram: d, node } = diagramWith('(\\u. \\v. u) y z')
     const res = convertToHeadNormal(d, node, 100)
     const after = res.diagram.nodes[node]
-    expect(after?.kind === 'term' && termEq(after.term, p('y'))).toBe(true)
+    // frees canonicalized y->s0, z->s1; the head normal form keeps only s0
+    expect(after?.kind === 'term' && termEq(after.term, p('s0'))).toBe(true)
     const replayed = replayProof(d, [res.step], ctx)
     expect(replayed).toEqual(res.diagram)
   })

@@ -1,5 +1,5 @@
 import { parseTerm } from '../kernel/term/parse'
-import { app, port } from '../kernel/term/term'
+import { app, freePorts, port } from '../kernel/term/term'
 import type { Term } from '../kernel/term/term'
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
@@ -73,9 +73,15 @@ function deriveFixedPoint(): Theorem {
     cur = replayProof(cur, [s], ctx)
   }
   push({ rule: 'unfold', node: n, path: ['fn'] })
+  // The node's sole free port (the f-line) under its canonical post-construction
+  // name: source spelling 'f' is gone after mkDiagram's rename to s0, s1, …
+  const nodeTerm = cur.nodes[n]
+  if (nodeTerm === undefined || nodeTerm.kind !== 'term') throw new Error(`fixedPoint derivation: '${n}' is not a term node`)
+  const f = freePorts(nodeTerm.term)[0]
+  if (f === undefined) throw new Error('fixedPoint derivation: Y-application node lost its free port')
   // newTerm: f ((λf.body) f) — Y unfolded on the right so its redex can step
   const yBody = lambdaDefinitions['Y']!
-  const newTerm: Term = app(port('f'), app(yBody, port('f')))
+  const newTerm: Term = app(port(f), app(yBody, port(f)))
   push({
     rule: 'conversion', node: n, term: newTerm,
     certificate: {

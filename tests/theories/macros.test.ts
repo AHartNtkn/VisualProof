@@ -82,9 +82,10 @@ describe('kMat', () => {
     const c = new DerivationCursor(d, ctx)
     const s = p('\\x. q')
     const made = c.kMat('matFree', seed, s, { q: wq })
-    expect(termEq(c.termOf(made), s)).toBe(true)
-    // the made node's q endpoint landed on the NAMED wire, joining the host's
-    expect(c.wireOf(made, 'freeVar', 'q')).toBe(wq)
+    // the materialized term's free (source 'q') is canonical s0 after construction
+    expect(termEq(c.termOf(made), p('\\x. s0'))).toBe(true)
+    // the made node's endpoint landed on the NAMED wire, joining the host's
+    expect(c.wireOf(made, 'freeVar', 's0')).toBe(wq)
     expect(c.cur.wires[wq]!.endpoints).toHaveLength(2)
     // its output still rides a fresh singleton wire
     const w = c.wireOf(made, 'output')

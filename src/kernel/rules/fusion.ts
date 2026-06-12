@@ -1,5 +1,5 @@
 import type { Term } from '../term/term'
-import { freePorts, port } from '../term/term'
+import { freePorts, port, renameFreePorts } from '../term/term'
 import type { PathSeg } from '../term/reduce'
 import { subtermAt, replaceSubtermAt, isBvarClosed, substPort, freshPortName } from '../term/path'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Wire, WireId } from '../diagram/diagram'
@@ -48,23 +48,40 @@ export function applyFusion(d: Diagram, wireId: WireId): Diagram {
 
   const residual = new Set(freePorts(b.term))
   residual.delete(consumedPort)
+  // Identity rides the wire, never the port name (names are canonical
+  // positions after construction, so a shared individual is usually spelled
+  // differently on the two nodes). A producer port riding the same wire as a
+  // consumer residual port IS that individual: collapse it onto the
+  // consumer's existing endpoint under the consumer's name.
+  const residualWireName = new Map<WireId, string>()
+  for (const r of residual) {
+    residualWireName.set(wireAt(d, consumerId, { kind: 'freeVar', name: r }), r)
+  }
   const taken = new Set<string>([...freePorts(a.term), ...freePorts(b.term)])
-  let producerTerm = a.term
+  const renames = new Map<string, string>()
   // endpoints to add to the consumer, on the producer's old wires
   const migrations: { readonly wire: WireId; readonly portName: string }[] = []
   for (const n of freePorts(a.term)) {
     const wa = wireAt(d, producerId, { kind: 'freeVar', name: n })
+    const shared = residualWireName.get(wa)
+    if (shared !== undefined) {
+      if (shared !== n) renames.set(n, shared)
+      continue // the consumer's existing endpoint carries the merged port
+    }
     if (residual.has(n)) {
-      const wb = wireAt(d, consumerId, { kind: 'freeVar', name: n })
-      if (wa === wb) continue // the consumer's existing endpoint carries the merged port
+      // same NAME as a residual port but a different wire: a distinct
+      // individual that must not be conflated — freshen it
       const fresh = freshPortName(taken, n)
       taken.add(fresh)
-      producerTerm = substPort(producerTerm, n, port(fresh))
+      renames.set(n, fresh)
       migrations.push({ wire: wa, portName: fresh })
     } else {
       migrations.push({ wire: wa, portName: n })
     }
   }
+  // simultaneous: a collapse target may equal another producer port's
+  // ORIGINAL name; sequential substitution would cascade into it
+  const producerTerm = renameFreePorts(a.term, renames)
   const mergedTerm = substPort(b.term, consumedPort, producerTerm)
 
   const nodes: Record<NodeId, DiagramNode> = {}

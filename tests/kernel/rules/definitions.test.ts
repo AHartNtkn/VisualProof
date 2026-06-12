@@ -32,7 +32,8 @@ describe('applyUnfold / applyFold', () => {
     const d = h.build()
     const unfolded = applyUnfold(d, defs, n, ['fn'])
     const un = unfolded.nodes[n]
-    expect(un?.kind === 'term' && printTerm(un.term)).toBe(printTerm(p('(\\x. x) y')))
+    // the node's source free 'y' is canonical s0 after construction
+    expect(un?.kind === 'term' && printTerm(un.term)).toBe(printTerm(p('(\\x. x) s0')))
     const refolded = applyFold(unfolded, defs, n, ['fn'], 'I')
     expect(diagramFingerprint(refolded)).toBe(diagramFingerprint(d))
   })
@@ -72,7 +73,7 @@ describe('applyUnfold / applyFold', () => {
     const d = h.build()
     const out = applyFold(d, defs, n, ['fn'], 'I')
     const on = out.nodes[n]
-    expect(on?.kind === 'term' && printTerm(on.term)).toBe(printTerm(p('I y')))
+    expect(on?.kind === 'term' && printTerm(on.term)).toBe(printTerm(p('I s0')))
     expect(Object.keys(out.wires).sort()).toEqual(Object.keys(d.wires).sort())
   })
 })

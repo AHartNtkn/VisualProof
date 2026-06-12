@@ -25,7 +25,8 @@ describe('step round-trips through JSON', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('(\\x. x) y'))
     const d = h.build()
-    const { certificate } = applyConversion(d, n, p('y'), 10)
+    // the node's source free 'y' is canonical s0 after construction
+    const { certificate } = applyConversion(d, n, p('s0'), 10)
 
     const sel = { region: 'r0', regions: ['r1'], nodes: ['n0'], wires: ['w0'] }
     const steps: ProofStep[] = [
@@ -37,7 +38,7 @@ describe('step round-trips through JSON', () => {
       { rule: 'deiteration', sel, fuel: 50 },
       { rule: 'doubleCutIntro', sel },
       { rule: 'doubleCutElim', region: 'r1' },
-      { rule: 'conversion', node: 'n0', term: p('y'), certificate, attachments: { z: 'w0' } },
+      { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: { z: 'w0' } },
       { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate },
       { rule: 'headStrip', a: 'n0', b: 'n1' },
       { rule: 'fusion', wire: 'w0' },
@@ -71,9 +72,9 @@ describe('certFromJson rejects invalid reduction-step kinds', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('(\\x. x) y'))
     const d = h.build()
-    const { certificate } = applyConversion(d, n, p('y'), 10)
+    const { certificate } = applyConversion(d, n, p('s0'), 10)
     // Build a valid conversion step JSON, then corrupt one reduction-step kind
-    const step: ProofStep = { rule: 'conversion', node: 'n0', term: p('y'), certificate, attachments: {} }
+    const step: ProofStep = { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: {} }
     const j = JSON.parse(JSON.stringify(stepToJson(step))) as Record<string, unknown>
     const cert = j['certificate'] as { leftSteps: unknown[] }
     if (cert.leftSteps.length > 0) {

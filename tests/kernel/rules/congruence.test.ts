@@ -140,7 +140,8 @@ describe('congruence join (functionality of equality)', () => {
     h.wire(h.root, [{ node: n2, port: { kind: 'freeVar', name: 'y' } }])
     h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
     h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
-    expect(() => applyCongruenceJoin(h.build(), n1, n2, empty)).toThrowError(/free port 'y'/)
+    // the nodes' source free 'y' is canonical s0 after construction
+    expect(() => applyCongruenceJoin(h.build(), n1, n2, empty)).toThrowError(/free port 's0'/)
   })
 
   it('refuses a rejected certificate', () => {

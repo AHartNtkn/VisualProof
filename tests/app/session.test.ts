@@ -247,7 +247,9 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     const m = r.termNode(r.root, p('y'))
     const rhs = mkDiagramWithBoundary(r.build(), [])
     let s = startSession(lhs, rhs, ctx)
-    s = applyBackward(s, { kind: 'unConvert', node: m, term: p('(\\a. a) y'), fuel: 32 })
+    // the goal node's source free 'y' is canonical s0; the backward target
+    // must be spelled in the node's CURRENT port names
+    s = applyBackward(s, { kind: 'unConvert', node: m, term: p('(\\a. a) s0'), fuel: 32 })
     expect(s.backward.steps[0]!.rule).toBe('conversion')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unConverted')

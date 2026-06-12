@@ -135,7 +135,8 @@ describe('descriptor → step construction (the shell contract)', () => {
     const ctx = verifyTheory(buildFregeTheory())
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('convert')
-    const target = p('y')
+    // the node's source free 'y' is canonical s0 after construction
+    const target = p('s0')
     const pre = applyConversion(d, n, target, 32)
     const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, attachments: {} }, ctx)
     expect(JSON.stringify(out.nodes[n])).toContain('"port"')
