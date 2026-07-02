@@ -17,14 +17,16 @@ import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
-import { fetchBootContext } from './boot'
+import { fetchManifest, theoryUrl } from './boot'
+import type { Library } from './library'
+import { mkLibrary, loadEntry, unloadEntry, adoptEntry, rebuild } from './library'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 import type { ProofSession } from './session'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
 import { sessionTheory } from './persist'
-import { loadTheory, theoryToJson } from '../kernel/proof/store'
+import { theoryToJson } from '../kernel/proof/store'
 import type { Hit } from './hittest'
 import { hitTest, buildSelection } from './hittest'
 import type { ActionDescriptor } from './actions'
@@ -140,8 +142,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const ctx2d = canvas.getContext('2d')
   if (ctx2d === null) throw new Error('the canvas has no 2d context')
 
-  // ---- boot: the shipped theories loaded as data through the verifying road ----
-  const boot = await fetchBootContext(fetchJson)
+  // ---- boot: fetch ONLY the manifest (the available files); load nothing ----
+  // The working context starts EMPTY — the user loads theories on demand from
+  // the Library panel. rebuild(empty library) is the empty context, honestly.
+  let library: Library = mkLibrary(await fetchManifest(fetchJson))
+  const boot = rebuild(library)
   let ctx: ProofContext = boot.ctx
   let relations: Readonly<Record<string, DiagramWithBoundary>> = boot.relations
   let constNames: ReadonlySet<string> = boot.constNames
@@ -243,35 +248,154 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const proveRow = div('vpa-row')
   const menuDiv = div('vpa-menu')
   menuDiv.id = 'action-menu'
-  const theoremsDiv = div('vpa-theorems')
-  theoremsDiv.id = 'theorems'
+  const libraryDiv = div('vpa-library')
+  libraryDiv.id = 'library'
+
+  // ---- Library panel state (browser-only view state) ----
+  // The panel opens by default so the available files are visible at boot; each
+  // per-file detail group and the Session group start collapsed. Load failures
+  // are stashed per file name (the empty string keys the "Load file…" picker)
+  // and rendered inline, loudly, next to their control.
+  let libraryOpen = true
+  const expandedGroups = new Set<string>()
+  const SESSION_GROUP = 'session' // sentinel; file groups are keyed 'file:<name>' so this cannot collide
+  const loadErrors = new Map<string, string>()
 
   // ---- context rebinding ----
-  // Renders the theorem/relation/constant list from the live bindings. Each
-  // theorem gets a Replay affordance: it opens the read-only stepper over that
-  // theorem's recorded derivation. The theorem NAMES stay as plain text so the
-  // list keeps its glanceable form (and the E2E boot assertion).
-  const renderTheoremList = (): void => {
-    const thmNames = [...ctx.theorems.keys()]
-    const relNames = Object.keys(relations)
-    theoremsDiv.replaceChildren()
-    theoremsDiv.append('theorems: ')
-    if (thmNames.length === 0) theoremsDiv.append('none')
-    thmNames.forEach((name, i) => {
-      if (i > 0) theoremsDiv.append(', ')
-      theoremsDiv.append(`${name} `)
-      theoremsDiv.append(button('▶ Replay', guard(() => enterReplay(name))))
-    })
-    theoremsDiv.append(` · relations: ${relNames.join(', ') || 'none'} · constants: ${[...constNames].join(', ')}`)
-  }
-
-  // Called after adopt and after load; refreshes all three context bindings and
-  // re-renders the theorem list so the UI always reflects the live context.
+  // Called after every library change (load/unload/adopt): refreshes the three
+  // live context bindings the rest of the shell reads (citation menus, replay,
+  // constNames for parsing) and re-renders the Library panel.
   const setContext = (newCtx: ProofContext, newRelations: Readonly<Record<string, DiagramWithBoundary>>, newConstNames: ReadonlySet<string>): void => {
     ctx = newCtx
     relations = newRelations
     constNames = newConstNames
-    renderTheoremList()
+    renderLibrary()
+  }
+
+  // Adopt a library change: rebuild the merged context from it and rebind live.
+  // A rebuild conflict propagates through guard() to the status line, leaving
+  // the prior library untouched.
+  const applyLibrary = (next: Library): void => {
+    library = next
+    const r = rebuild(library)
+    setContext(r.ctx, r.relations, r.constNames)
+  }
+
+  // Fetch a manifest file's JSON and load it as a library entry. A fetch or
+  // load/merge failure lands inline next to the file's row, loudly; success
+  // clears any prior error for that file.
+  const loadFromManifest = (file: string): void => {
+    void fetchJson(theoryUrl(file))
+      .then((json) => {
+        applyLibrary(loadEntry(library, file, json))
+        loadErrors.delete(file)
+        renderLibrary()
+      })
+      .catch((e: unknown) => {
+        loadErrors.set(file, e instanceof Error ? e.message : String(e))
+        renderLibrary()
+      })
+  }
+
+  // A collapsible detail group listing one loaded entry's (or the session's)
+  // theorems, relations, and constants; each theorem carries a ▶ Replay button.
+  const renderGroup = (
+    key: string,
+    title: string,
+    thms: readonly { readonly name: string; readonly steps: number }[],
+    relNames: readonly string[],
+    constNamesIn: readonly string[],
+  ): HTMLElement => {
+    const g = div('vpa-lib-group')
+    const open = expandedGroups.has(key)
+    g.append(button(`${open ? '▾' : '▸'} ${title}`, () => {
+      if (open) expandedGroups.delete(key)
+      else expandedGroups.add(key)
+      renderLibrary()
+    }))
+    if (!open) return g
+    const thmRow = div('vpa-lib-detail')
+    thmRow.append('theorems: ')
+    if (thms.length === 0) thmRow.append('none')
+    thms.forEach((t, i) => {
+      if (i > 0) thmRow.append(', ')
+      thmRow.append(`${t.name} (${t.steps} step${t.steps === 1 ? '' : 's'}) `)
+      thmRow.append(button('▶ Replay', guard(() => enterReplay(t.name))))
+    })
+    g.append(thmRow)
+    const relRow = div('vpa-lib-detail')
+    relRow.append(`relations: ${relNames.join(', ') || 'none'}`)
+    g.append(relRow)
+    const constRow = div('vpa-lib-detail')
+    constRow.append(`constants: ${constNamesIn.join(', ') || 'none'}`)
+    g.append(constRow)
+    return g
+  }
+
+  const errorSpan = (key: string): HTMLElement | null => {
+    const msg = loadErrors.get(key)
+    if (msg === undefined) return null
+    const s = document.createElement('span')
+    s.className = 'vpa-lib-error'
+    s.textContent = ` — load failed: ${msg}`
+    return s
+  }
+
+  // Render the whole Library panel from `library`: a toggle header, then (when
+  // open) the Available list (Load/Unload per file), a "Load file…" picker, a
+  // detail group per loaded entry, and the Session group for adopted theorems.
+  const renderLibrary = (): void => {
+    libraryDiv.replaceChildren()
+    libraryDiv.append(button(`${libraryOpen ? '▾' : '▸'} Library`, () => {
+      libraryOpen = !libraryOpen
+      renderLibrary()
+    }))
+    if (!libraryOpen) return
+
+    const avail = div('vpa-lib-available')
+    avail.append('Available: ')
+    if (library.entries.length === 0) avail.append('none')
+    for (const e of library.entries) {
+      const row = div('vpa-lib-row')
+      // The button carries the file name (accessible + unambiguous): 'Load
+      // <file>' toggles to 'Unload <file>' once loaded.
+      if (e.status === 'available') {
+        row.append(button(`Load ${e.file}`, guard(() => loadFromManifest(e.file))))
+      } else {
+        row.append(button(`Unload ${e.file}`, guard(() => {
+          applyLibrary(unloadEntry(library, e.file))
+          loadErrors.delete(e.file)
+          expandedGroups.delete(`file:${e.file}`)
+        })))
+      }
+      const err = errorSpan(e.file)
+      if (err !== null) row.append(err)
+      avail.append(row)
+    }
+    libraryDiv.append(avail)
+
+    const pickerRow = div('vpa-lib-row')
+    pickerRow.append(button('Load file…', onLoadFile))
+    const pickerErr = errorSpan('')
+    if (pickerErr !== null) pickerRow.append(pickerErr)
+    libraryDiv.append(pickerRow)
+
+    for (const e of library.entries) {
+      if (e.status !== 'loaded') continue
+      const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, steps: t.steps.length }))
+      libraryDiv.append(renderGroup(
+        `file:${e.file}`, e.file, thms,
+        Object.keys(e.theory.relations), Object.keys(e.ctx.definitions),
+      ))
+    }
+
+    if (library.adopted.length > 0) {
+      libraryDiv.append(renderGroup(
+        SESSION_GROUP, 'Session (adopted)',
+        library.adopted.map((t) => ({ name: t.name, steps: t.steps.length })),
+        [], [],
+      ))
+    }
   }
 
   const termInput = textInput('term-input', 'term, e.g. \\x. x y (also: insertion pattern / convert target / relation name)')
@@ -503,10 +627,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const name = nameInput.value.trim() === '' ? 'untitled' : nameInput.value.trim()
     const thm = assembleTheorem(session, name)
     checkTheorem(thm, ctx)
-    // Adopt the theorem into the session context for citation and rebind the
-    // shell's live ctx so saves, future citations, and applicableActions see it.
+    // Adopt into the session context (so this session can keep citing it) AND
+    // into the library's Session group; applyLibrary rebuilds the merged context
+    // and rebinds the shell's live ctx so saves, future citations, and the panel
+    // all see the new theorem.
     session = adoptTheorem(session, thm)
-    setContext(session.ctx, relations, constNames)
+    applyLibrary(adoptEntry(library, thm))
     message = `theorem '${name}' assembled, CHECKED, and ADOPTED (${thm.steps.length} step(s))`
     refreshChrome()
   })
@@ -882,7 +1008,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     refreshChrome()
   })
 
-  const onLoad = guard(() => {
+  // Load an arbitrary theory JSON from disk as a library entry (keyed by the
+  // chosen file's name). Same verifying road as the manifest loads: loadEntry →
+  // loadTheory. A parse/verify/merge failure lands inline under the picker (the
+  // '' error key), loudly, leaving the library unchanged.
+  const onLoadFile = (): void => {
     const fileInput = document.createElement('input')
     fileInput.type = 'file'
     fileInput.accept = 'application/json'
@@ -894,21 +1024,19 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         try {
           const text = reader.result
           if (typeof text !== 'string') throw new Error('file read failed')
-          const parsed = JSON.parse(text)
-          // loadTheory re-verifies — the only road in; replace context only on success
-          const loaded = loadTheory(parsed)
-          setContext(loaded.ctx, loaded.theory.relations, new Set(Object.keys(loaded.ctx.definitions)))
-          message = 'theory loaded successfully'
+          applyLibrary(loadEntry(library, file.name, JSON.parse(text)))
+          loadErrors.delete('')
+          message = `loaded '${file.name}' into the library`
           refreshChrome()
         } catch (e) {
-          message = e instanceof Error ? e.message : String(e)
-          refreshChrome()
+          loadErrors.set('', e instanceof Error ? e.message : String(e))
+          renderLibrary()
         }
       })
       reader.readAsText(file)
     })
     fileInput.click()
-  })
+  }
 
   // ---- assemble the chrome ----
   editRow.append(
@@ -934,9 +1062,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     themeBtn.textContent = `Theme: ${theme.name}`
   })
   goalRow.append(modeBtn, sideBtn, themeBtn, button('Undo', onUndo))
-  proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave), button('Load theory', onLoad))
-  chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, theoremsDiv)
-  renderTheoremList()
+  proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave))
+  chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, libraryDiv)
+  renderLibrary()
 
   canvas.addEventListener('pointerdown', onPointerDown)
   canvas.addEventListener('pointermove', onPointerMove)
