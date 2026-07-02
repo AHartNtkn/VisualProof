@@ -2,73 +2,34 @@ import { describe, it, expect } from 'vitest'
 import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { mergeManifest, emitTheories } from '../../scripts/emit-theories'
-
-const noWarn = (): void => {}
-
-describe('mergeManifest', () => {
-  it('keeps foreign entries, shipped-first, deduped and ordered', () => {
-    const shipped = ['frege.json', 'lambda.json']
-    // existing manifest reorders shipped and interleaves two user entries
-    const existing = JSON.stringify(['user-a.json', 'lambda.json', 'frege.json', 'user-b.json', 'user-a.json'])
-    expect(mergeManifest(shipped, existing, noWarn)).toEqual([
-      'frege.json',
-      'lambda.json',
-      'user-a.json',
-      'user-b.json',
-    ])
-  })
-
-  it('warns and rebuilds shipped-only when the manifest is missing', () => {
-    const warnings: string[] = []
-    expect(mergeManifest(['frege.json', 'lambda.json'], null, (m) => warnings.push(m))).toEqual([
-      'frege.json',
-      'lambda.json',
-    ])
-    expect(warnings.some((w) => /no existing manifest/i.test(w))).toBe(true)
-  })
-
-  it('warns and rebuilds shipped-only when the manifest is corrupt', () => {
-    const warnings: string[] = []
-    expect(mergeManifest(['frege.json', 'lambda.json'], 'not json{{', (m) => warnings.push(m))).toEqual([
-      'frege.json',
-      'lambda.json',
-    ])
-    expect(warnings.some((w) => /unparseable/i.test(w))).toBe(true)
-  })
-
-  it('warns when the manifest parses but is not an array of strings', () => {
-    const warnings: string[] = []
-    expect(mergeManifest(['frege.json'], JSON.stringify({ frege: 'frege.json' }), (m) => warnings.push(m))).toEqual([
-      'frege.json',
-    ])
-    expect(warnings.some((w) => /not an array of file-name strings/i.test(w))).toBe(true)
-  })
-})
+import { emitTheories } from '../../scripts/emit-theories'
+import { loadTheory } from '../../src/kernel/proof/store'
 
 describe('emitTheories (real filesystem)', () => {
-  it("re-emit preserves a user's custom theory file and its manifest entry, never deleting it", () => {
+  it('writes the example theory files as ordinary JSON — no manifest, verifiable by loadTheory', () => {
     const dir = mkdtempSync(join(tmpdir(), 'vpa-emit-'))
     try {
-      // simulate the state after a user dropped a custom theory and listed it:
-      // a prior emit manifest plus the user's file + entry
-      writeFileSync(join(dir, 'index.json'), JSON.stringify(['frege.json', 'lambda.json', 'mytheory.json']))
-      writeFileSync(join(dir, 'mytheory.json'), JSON.stringify({ custom: true }))
+      const { written } = emitTheories(dir)
+      expect(written).toEqual(['frege.json', 'lambda.json'])
+      // no manifest/index is produced — the app never references these files
+      expect(existsSync(join(dir, 'index.json'))).toBe(false)
+      // the shipped files exist and load through the real verifying road
+      for (const f of written) {
+        expect(existsSync(join(dir, f))).toBe(true)
+        expect(() => loadTheory(JSON.parse(readFileSync(join(dir, f), 'utf8')))).not.toThrow()
+      }
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
 
-      const { manifest } = emitTheories(dir, noWarn)
-
-      // shipped entries present and first
-      expect(manifest.slice(0, 2)).toEqual(['frege.json', 'lambda.json'])
-      // the user's entry survived the re-emit
-      expect(manifest).toContain('mytheory.json')
-      // the user's file was never touched or deleted
-      expect(existsSync(join(dir, 'mytheory.json'))).toBe(true)
-      expect(JSON.parse(readFileSync(join(dir, 'mytheory.json'), 'utf8'))).toEqual({ custom: true })
-      // the on-disk manifest matches the returned one
-      expect(JSON.parse(readFileSync(join(dir, 'index.json'), 'utf8'))).toEqual(manifest)
-      // the shipped files were actually written
-      expect(existsSync(join(dir, 'frege.json'))).toBe(true)
-      expect(existsSync(join(dir, 'lambda.json'))).toBe(true)
+  it('does not touch a user file already in the directory', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'vpa-emit-'))
+    try {
+      const mine = join(dir, 'mytheory.json')
+      writeFileSync(mine, JSON.stringify({ custom: true }))
+      emitTheories(dir)
+      expect(JSON.parse(readFileSync(mine, 'utf8'))).toEqual({ custom: true })
     } finally {
       rmSync(dir, { recursive: true, force: true })
     }

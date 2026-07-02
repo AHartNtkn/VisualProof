@@ -6,20 +6,24 @@ declare global {
   }
 }
 
-test('the app boots empty and loads a theory on demand', async ({ page }) => {
+// The workspace folder picker (File System Access) can't be automated, so the
+// e2e drives the honest single-file fallback — the same loadEntry road, no
+// privileged path — by setting files on the real hidden #open-file-input. The
+// file is a generated example emitted by the pree2e hook into examples/.
+test('the app boots empty and opens a theory file on demand', async ({ page }) => {
   await page.goto('/?debug')
   await expect(page.locator('canvas')).toBeVisible()
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
 
   const lib = page.locator('#library')
-  // The Library panel lists the available files; nothing is loaded at boot, so
-  // no theory content is on screen yet.
-  await expect(lib.getByRole('button', { name: 'Load frege.json', exact: true })).toBeVisible()
-  await expect(lib.getByRole('button', { name: 'Load lambda.json', exact: true })).toBeVisible()
+  // Boot is empty: no built-in files, no theory content on screen.
+  await expect(lib.getByRole('button', { name: 'Open folder…', exact: true })).toBeVisible()
+  await expect(lib.getByRole('button', { name: 'Open file…', exact: true })).toBeVisible()
+  await expect(lib).toContainText('No workspace folder open')
   await expect(lib).not.toContainText('plusAssoc')
 
-  // Load frege explicitly, then open its detail group — the theorems appear.
-  await lib.getByRole('button', { name: 'Load frege.json', exact: true }).click()
+  // Open a file through the real input, then expand its group — theorems appear.
+  await page.locator('#open-file-input').setInputFiles('examples/frege.json')
   await expect(lib.getByRole('button', { name: 'Unload frege.json', exact: true })).toBeVisible()
   await lib.getByRole('button', { name: '▸ frege.json', exact: true }).click()
   await expect(lib).toContainText('plusAssoc')
@@ -27,16 +31,13 @@ test('the app boots empty and loads a theory on demand', async ({ page }) => {
   // Unloading removes the theory content again; the sheet is unaffected.
   await lib.getByRole('button', { name: 'Unload frege.json', exact: true }).click()
   await expect(lib).not.toContainText('plusAssoc')
-  await expect(lib.getByRole('button', { name: 'Load frege.json', exact: true })).toBeVisible()
 
-  const status = await page.evaluate(() => window.__vpaDebug!.status())
-  expect(status.toLowerCase()).toContain('edit')
+  // still in EDIT mode throughout (the mode head in the status line)
+  await expect(page.locator('#status')).toContainText('EDIT')
 })
 
 test('term entry adds a node to the edit diagram', async ({ page }) => {
   await page.goto('/?debug')
-  // Boot fetches the manifest asynchronously; the debug seam is installed only
-  // once the mount completes. Wait for it before reading node counts.
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   const before = await page.evaluate(() => window.__vpaDebug!.nodeCount())
   await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')

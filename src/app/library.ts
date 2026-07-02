@@ -7,11 +7,11 @@ import type { BootContext } from './boot'
 import { mergeTheories } from './boot'
 
 /**
- * The library: the user's explicit view over available theory files and what
- * they have chosen to load. Boot fills `manifest` with the available file names
- * and nothing is loaded; the working ProofContext is whatever `rebuild` merges
- * from the LOADED entries plus session-adopted theorems. There is no auto-load:
- * an empty library rebuilds to an empty context, which is honest.
+ * The library: a uniform view over theory files. There is NO privileged origin
+ * — a file listed from a workspace folder and a file opened directly are the
+ * same kind of entry, with the same Load/Unload affordance. The working context
+ * is whatever `rebuild` merges from the LOADED entries plus the session-adopted
+ * theorems; an empty library rebuilds to the empty context.
  */
 export type AvailableEntry = { readonly file: string; readonly status: 'available' }
 export type LoadedEntry = {
@@ -23,34 +23,56 @@ export type LoadedEntry = {
 export type LibraryEntry = AvailableEntry | LoadedEntry
 
 export type Library = {
-  /** The manifest file names, in manifest order — the set that returns to
-   *  'available' on unload (a foreign loaded file is removed instead). */
-  readonly manifest: readonly string[]
-  /** Every known file as an entry, in display order (manifest first, then any
-   *  foreign files loaded from disk). */
+  /** File names in the currently-open workspace folder (empty when none is
+   *  open). Set by `reconcile` on Open-folder/Refresh; used only to decide
+   *  whether an unloaded file remains listed (folder file) or disappears
+   *  (a one-off opened file). It carries no privilege — it is just the folder
+   *  contents. */
+  readonly folder: readonly string[]
+  /** Every known file as an entry, in display order. */
   readonly entries: readonly LibraryEntry[]
   /** Theorems proven and adopted this session — their own group, citable and
    *  replayable, contributing to the merged context on every rebuild. */
   readonly adopted: readonly Theorem[]
 }
 
-/** A fresh library over a manifest: every file available, nothing loaded, no
- *  adopted theorems. Rebuilds to the empty context. */
-export function mkLibrary(manifest: readonly string[]): Library {
-  return {
-    manifest,
-    entries: manifest.map((file) => ({ file, status: 'available' })),
-    adopted: [],
+/** A library that knows nothing: no folder, no entries, no adopted theorems.
+ *  Rebuilds to the empty context — the honest empty boot. */
+export function emptyLibrary(): Library {
+  return { folder: [], entries: [], adopted: [] }
+}
+
+/**
+ * Reconcile the library against a workspace folder's file listing (Open folder
+ * or Refresh). Loaded entries persist untouched (their content lives in memory,
+ * independent of disk); every folder file that is not currently loaded is listed
+ * as available; a folder file that IS loaded stays loaded. One-off loaded files
+ * that are absent from the folder remain listed too, so opening a folder never
+ * silently drops what the user already loaded. Display order: folder order
+ * first, then any loaded files not in the folder.
+ */
+export function reconcile(lib: Library, folderFiles: readonly string[]): Library {
+  const loadedByName = new Map<string, LoadedEntry>()
+  for (const e of lib.entries) if (e.status === 'loaded') loadedByName.set(e.file, e)
+  const entries: LibraryEntry[] = []
+  const placed = new Set<string>()
+  for (const file of folderFiles) {
+    if (placed.has(file)) continue
+    placed.add(file)
+    entries.push(loadedByName.get(file) ?? { file, status: 'available' })
   }
+  for (const e of loadedByName.values()) {
+    if (!placed.has(e.file)) entries.push(e)
+  }
+  return { ...lib, folder: folderFiles, entries }
 }
 
 /**
  * Load a file's JSON through loadTheory (the only verifying road) and mark its
- * entry loaded; a file absent from the manifest is appended as a foreign loaded
- * entry. The candidate state is rebuilt before it is returned, so a merge
- * conflict (duplicate theorem/relation name, clashing definition body) throws
- * loudly and the CALLER keeps the prior library — the load leaves no partial
- * state behind.
+ * entry loaded; a file not already listed is appended as a loaded entry. The
+ * candidate state is rebuilt before it is returned, so a merge conflict
+ * (duplicate theorem/relation name, clashing definition body) throws loudly and
+ * the CALLER keeps the prior library — the load leaves no partial state behind.
  */
 export function loadEntry(lib: Library, file: string, json: unknown): Library {
   const { theory, ctx } = loadTheory(json)
@@ -65,15 +87,16 @@ export function loadEntry(lib: Library, file: string, json: unknown): Library {
 }
 
 /**
- * Unload a loaded entry: a manifest file returns to 'available'; a foreign file
- * is dropped entirely (it has no available form). Removal never conflicts —
- * mergeTheories is additive, so the remainder rebuilds deterministically.
+ * Unload a loaded entry: a file still present in the workspace folder returns to
+ * 'available'; a file not in the folder (opened one-off) is dropped entirely.
+ * Removal never conflicts — mergeTheories is additive, so the remainder rebuilds
+ * deterministically.
  */
 export function unloadEntry(lib: Library, file: string): Library {
   const idx = lib.entries.findIndex((e) => e.file === file)
   if (idx < 0) throw new Error(`no library entry for '${file}'`)
   if (lib.entries[idx]!.status !== 'loaded') throw new Error(`library entry '${file}' is not loaded`)
-  const entries = lib.manifest.includes(file)
+  const entries = lib.folder.includes(file)
     ? lib.entries.map((e, i) => (i === idx ? { file, status: 'available' as const } : e))
     : lib.entries.filter((_, i) => i !== idx)
   return { ...lib, entries }

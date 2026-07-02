@@ -5,6 +5,12 @@ import type { ProofContext } from '../kernel/proof/step'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { Theory } from '../kernel/proof/store'
 
+/**
+ * The merged working context. There is NO boot fetch and NO manifest: the app
+ * starts with zero knowledge of any theory file. Content enters only when the
+ * user opens files/folders through the library, so this type is just the shape
+ * `mergeTheories` (and the library's rebuild) produce.
+ */
 export type BootContext = {
   readonly ctx: ProofContext
   readonly relations: Readonly<Record<string, DiagramWithBoundary>>
@@ -43,27 +49,4 @@ export function mergeTheories(loaded: readonly { theory: Theory; ctx: ProofConte
     relations,
     constNames: new Set(Object.keys(definitions)),
   }
-}
-
-/** Where the shipped theory data lives, relative to the served app root. */
-const MANIFEST_URL = 'theories/index.json'
-
-/** The URL of a theory file named in the manifest, relative to the app root. */
-export const theoryUrl = (file: string): string => `theories/${file}`
-
-/**
- * The app's boot path: read ONLY the manifest — the list of AVAILABLE theory
- * files. No theory content is fetched here; the library loads each file on
- * demand through loadTheory. `fetchJson` abstracts the transport (the browser
- * passes a fetch-based reader; tests pass an in-memory reader). A missing or
- * malformed manifest propagates loudly; there is no empty-manifest fallback.
- */
-export async function fetchManifest(
-  fetchJson: (url: string) => Promise<unknown>,
-): Promise<string[]> {
-  const manifest = await fetchJson(MANIFEST_URL)
-  if (!Array.isArray(manifest) || !manifest.every((f): f is string => typeof f === 'string')) {
-    throw new Error(`theory manifest '${MANIFEST_URL}' must be a JSON array of file-name strings`)
-  }
-  return manifest
 }

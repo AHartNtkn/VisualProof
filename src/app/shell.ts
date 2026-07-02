@@ -17,9 +17,8 @@ import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
-import { fetchManifest, theoryUrl } from './boot'
 import type { Library } from './library'
-import { mkLibrary, loadEntry, unloadEntry, adoptEntry, rebuild } from './library'
+import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, rebuild } from './library'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
@@ -128,24 +127,15 @@ function backwardEntries(d: Diagram, sel: SubgraphSelection, ctx: ProofContext):
   return out
 }
 
-/** Browser transport for the boot reader: fetch a URL and parse it as JSON,
- *  crashing loudly on any HTTP error so a missing/corrupt file cannot boot an
- *  empty context. */
-async function fetchJson(url: string): Promise<unknown> {
-  const res = await fetch(url)
-  if (!res.ok) throw new Error(`fetching '${url}' failed: HTTP ${res.status} ${res.statusText}`)
-  return res.json()
-}
-
 export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void }> {
   const { canvas, chrome } = opts
   const ctx2d = canvas.getContext('2d')
   if (ctx2d === null) throw new Error('the canvas has no 2d context')
 
-  // ---- boot: fetch ONLY the manifest (the available files); load nothing ----
-  // The working context starts EMPTY — the user loads theories on demand from
-  // the Library panel. rebuild(empty library) is the empty context, honestly.
-  let library: Library = mkLibrary(await fetchManifest(fetchJson))
+  // ---- boot: nothing. The app has ZERO built-in knowledge of any theory file
+  // and fetches nothing. The working context is empty until the user opens
+  // files/folders through the Library panel. rebuild(empty) is the empty ctx. ----
+  let library: Library = emptyLibrary()
   const boot = rebuild(library)
   let ctx: ProofContext = boot.ctx
   let relations: Readonly<Record<string, DiagramWithBoundary>> = boot.relations
@@ -252,14 +242,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   libraryDiv.id = 'library'
 
   // ---- Library panel state (browser-only view state) ----
-  // The panel opens by default so the available files are visible at boot; each
-  // per-file detail group and the Session group start collapsed. Load failures
-  // are stashed per file name (the empty string keys the "Load file…" picker)
-  // and rendered inline, loudly, next to their control.
+  // The panel opens by default; each per-file detail group and the Session group
+  // start collapsed. Load failures are stashed per file name (the empty string
+  // keys the "Open file…" picker) and rendered inline, loudly, next to their
+  // control. `dirHandle` is the session-lifetime workspace folder (no
+  // persistence): opening or refreshing it re-lists its *.json files uniformly.
   let libraryOpen = true
   const expandedGroups = new Set<string>()
   const SESSION_GROUP = 'session' // sentinel; file groups are keyed 'file:<name>' so this cannot collide
   const loadErrors = new Map<string, string>()
+  let dirHandle: FileSystemDirectoryHandle | null = null
 
   // ---- context rebinding ----
   // Called after every library change (load/unload/adopt): refreshes the three
@@ -281,20 +273,94 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     setContext(r.ctx, r.relations, r.constNames)
   }
 
-  // Fetch a manifest file's JSON and load it as a library entry. A fetch or
-  // load/merge failure lands inline next to the file's row, loudly; success
-  // clears any prior error for that file.
-  const loadFromManifest = (file: string): void => {
-    void fetchJson(theoryUrl(file))
-      .then((json) => {
-        applyLibrary(loadEntry(library, file, json))
+  // The *.json file names directly inside a directory handle, sorted. Reads the
+  // folder listing only — content is fetched lazily when a file is loaded.
+  const listJsonFiles = async (dir: FileSystemDirectoryHandle): Promise<string[]> => {
+    const names: string[] = []
+    for await (const h of dir.values()) {
+      if (h.kind === 'file' && h.name.endsWith('.json')) names.push(h.name)
+    }
+    return names.sort((a, b) => a.localeCompare(b))
+  }
+
+  // Open a workspace folder (File System Access API) and list its *.json files
+  // uniformly. Dismissing the picker (AbortError) is not a failure.
+  const onOpenFolder = (): void => {
+    void (async () => {
+      try {
+        const handle = await window.showDirectoryPicker()
+        dirHandle = handle
+        library = reconcile(library, await listJsonFiles(handle))
+        message = `opened workspace folder '${handle.name}' (${library.folder.length} .json file(s))`
+        renderLibrary()
+        refreshChrome()
+      } catch (e) {
+        if (e instanceof DOMException && e.name === 'AbortError') return
+        message = e instanceof Error ? e.message : String(e)
+        refreshChrome()
+      }
+    })()
+  }
+
+  // Re-read the open folder's listing (files added/removed on disk since).
+  const onRefreshFolder = (): void => {
+    if (dirHandle === null) return
+    const handle = dirHandle
+    void (async () => {
+      try {
+        library = reconcile(library, await listJsonFiles(handle))
+        message = `refreshed workspace folder '${handle.name}'`
+        renderLibrary()
+        refreshChrome()
+      } catch (e) {
+        message = e instanceof Error ? e.message : String(e)
+        refreshChrome()
+      }
+    })()
+  }
+
+  // Load a folder file: read its content lazily from the folder handle and bring
+  // it in through loadEntry. A read/verify/merge failure lands inline next to the
+  // file's row, loudly; success clears any prior error for that file.
+  const loadFolderFile = (file: string): void => {
+    if (dirHandle === null) {
+      loadErrors.set(file, 'no workspace folder is open')
+      renderLibrary()
+      return
+    }
+    const handle = dirHandle
+    void (async () => {
+      try {
+        const fh = await handle.getFileHandle(file)
+        const text = await (await fh.getFile()).text()
+        applyLibrary(loadEntry(library, file, JSON.parse(text)))
         loadErrors.delete(file)
         renderLibrary()
-      })
-      .catch((e: unknown) => {
+      } catch (e) {
         loadErrors.set(file, e instanceof Error ? e.message : String(e))
         renderLibrary()
-      })
+      }
+    })()
+  }
+
+  // Bring a single opened File (from the "Open file…" input) in through the same
+  // loadEntry road, keyed by its own name. Errors land under the picker ('').
+  const handleOpenedFile = (file: File): void => {
+    const reader = new FileReader()
+    reader.addEventListener('load', () => {
+      try {
+        const text = reader.result
+        if (typeof text !== 'string') throw new Error('file read failed')
+        applyLibrary(loadEntry(library, file.name, JSON.parse(text)))
+        loadErrors.delete('')
+        message = `loaded '${file.name}' into the library`
+        refreshChrome()
+      } catch (e) {
+        loadErrors.set('', e instanceof Error ? e.message : String(e))
+        renderLibrary()
+      }
+    })
+    reader.readAsText(file)
   }
 
   // A collapsible detail group listing one loaded entry's (or the session's)
@@ -342,8 +408,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   // Render the whole Library panel from `library`: a toggle header, then (when
-  // open) the Available list (Load/Unload per file), a "Load file…" picker, a
-  // detail group per loaded entry, and the Session group for adopted theorems.
+  // open) the workspace controls (Open folder…/Refresh/Open file…), the uniform
+  // file list (Load/Unload per file — no origin distinction), a detail group per
+  // loaded entry, and the Session group for adopted theorems.
   const renderLibrary = (): void => {
     libraryDiv.replaceChildren()
     libraryDiv.append(button(`${libraryOpen ? '▾' : '▸'} Library`, () => {
@@ -352,15 +419,27 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }))
     if (!libraryOpen) return
 
-    const avail = div('vpa-lib-available')
-    avail.append('Available: ')
-    if (library.entries.length === 0) avail.append('none')
+    const controls = div('vpa-lib-row')
+    controls.append(button('Open folder…', onOpenFolder))
+    if (dirHandle !== null) controls.append(button('Refresh', onRefreshFolder))
+    controls.append(button('Open file…', () => openFileInput.click()))
+    const pickerErr = errorSpan('')
+    if (pickerErr !== null) controls.append(pickerErr)
+    libraryDiv.append(controls)
+
+    const folderLine = div('vpa-lib-folder')
+    folderLine.append(dirHandle === null ? 'No workspace folder open.' : `Workspace: ${dirHandle.name}`)
+    libraryDiv.append(folderLine)
+
+    const list = div('vpa-lib-list')
+    list.append('Files: ')
+    if (library.entries.length === 0) list.append('none — open a folder or a file')
     for (const e of library.entries) {
       const row = div('vpa-lib-row')
       // The button carries the file name (accessible + unambiguous): 'Load
       // <file>' toggles to 'Unload <file>' once loaded.
       if (e.status === 'available') {
-        row.append(button(`Load ${e.file}`, guard(() => loadFromManifest(e.file))))
+        row.append(button(`Load ${e.file}`, () => loadFolderFile(e.file)))
       } else {
         row.append(button(`Unload ${e.file}`, guard(() => {
           applyLibrary(unloadEntry(library, e.file))
@@ -370,15 +449,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
       const err = errorSpan(e.file)
       if (err !== null) row.append(err)
-      avail.append(row)
+      list.append(row)
     }
-    libraryDiv.append(avail)
-
-    const pickerRow = div('vpa-lib-row')
-    pickerRow.append(button('Load file…', onLoadFile))
-    const pickerErr = errorSpan('')
-    if (pickerErr !== null) pickerRow.append(pickerErr)
-    libraryDiv.append(pickerRow)
+    libraryDiv.append(list)
 
     for (const e of library.entries) {
       if (e.status !== 'loaded') continue
@@ -992,10 +1065,34 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   // ---- persistence ----
-  const onSave = guard(() => {
-    const theory = sessionTheory(ctx, { relations })
-    const json = theoryToJson(theory)
-    const blob = new Blob([JSON.stringify(json, null, 2)], { type: 'application/json' })
+  // Save the live theory. With a workspace folder open, write it INTO that
+  // folder (File System Access writable) and refresh the listing so the new file
+  // appears in the same uniform list — user-created content is indistinguishable
+  // from anything else. With no folder open, fall back to a browser download.
+  const onSave = (): void => {
+    const json = JSON.stringify(theoryToJson(sessionTheory(ctx, { relations })), null, 2)
+    if (dirHandle !== null) {
+      const handle = dirHandle
+      const base = nameInput.value.trim() || 'theory'
+      const fname = base.endsWith('.json') ? base : `${base}.json`
+      void (async () => {
+        try {
+          const fh = await handle.getFileHandle(fname, { create: true })
+          const w = await fh.createWritable()
+          await w.write(json)
+          await w.close()
+          library = reconcile(library, await listJsonFiles(handle))
+          renderLibrary()
+          message = `saved '${fname}' into workspace folder '${handle.name}'`
+          refreshChrome()
+        } catch (e) {
+          message = e instanceof Error ? e.message : String(e)
+          refreshChrome()
+        }
+      })()
+      return
+    }
+    const blob = new Blob([json], { type: 'application/json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
@@ -1004,41 +1101,24 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    message = 'theory saved'
+    message = 'theory downloaded (open a workspace folder to save into it)'
     refreshChrome()
-  })
-
-  // Load an arbitrary theory JSON from disk as a library entry (keyed by the
-  // chosen file's name). Same verifying road as the manifest loads: loadEntry →
-  // loadTheory. A parse/verify/merge failure lands inline under the picker (the
-  // '' error key), loudly, leaving the library unchanged.
-  const onLoadFile = (): void => {
-    const fileInput = document.createElement('input')
-    fileInput.type = 'file'
-    fileInput.accept = 'application/json'
-    fileInput.addEventListener('change', () => {
-      const file = fileInput.files?.[0]
-      if (file === undefined) return
-      const reader = new FileReader()
-      reader.addEventListener('load', () => {
-        try {
-          const text = reader.result
-          if (typeof text !== 'string') throw new Error('file read failed')
-          applyLibrary(loadEntry(library, file.name, JSON.parse(text)))
-          loadErrors.delete('')
-          message = `loaded '${file.name}' into the library`
-          refreshChrome()
-        } catch (e) {
-          loadErrors.set('', e instanceof Error ? e.message : String(e))
-          renderLibrary()
-        }
-      })
-      reader.readAsText(file)
-    })
-    fileInput.click()
   }
 
   // ---- assemble the chrome ----
+  // The "Open file…" picker is a real hidden file input (works for users and is
+  // drivable by tests via setInputFiles); its change reads the chosen file
+  // through the same loadEntry road, then clears so the same file can re-open.
+  const openFileInput = document.createElement('input')
+  openFileInput.type = 'file'
+  openFileInput.accept = 'application/json'
+  openFileInput.id = 'open-file-input'
+  openFileInput.style.display = 'none'
+  openFileInput.addEventListener('change', () => {
+    const file = openFileInput.files?.[0]
+    if (file !== undefined) handleOpenedFile(file)
+    openFileInput.value = ''
+  })
   editRow.append(
     termInput,
     button('Add term', onAddTerm),
@@ -1063,7 +1143,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   goalRow.append(modeBtn, sideBtn, themeBtn, button('Undo', onUndo))
   proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave))
-  chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, libraryDiv)
+  chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, libraryDiv, openFileInput)
   renderLibrary()
 
   canvas.addEventListener('pointerdown', onPointerDown)

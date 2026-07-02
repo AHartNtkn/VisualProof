@@ -4,5 +4,5 @@ node_modules/
 dist/
 demo/dist
 app/dist
-app/public/theories/
+examples/
 test-results/
