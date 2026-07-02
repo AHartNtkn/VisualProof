@@ -8,10 +8,10 @@ const noConsts = new Set<string>()
 const pp = (s: string) => parseTerm(s, noConsts)
 
 describe('bundled boot context', () => {
-  it('merges both bundled theories: lambda theorems citable, constants unioned, nat relation present', () => {
+  it('merges both bundled theories: all theorems citable, constants unioned, nat relation present', () => {
     const boot = bootBundledContext()
     expect([...boot.ctx.theorems.keys()].sort()).toEqual(
-      ['fixedPoint', 'onePlusOne'].sort(),
+      ['fixedPoint', 'onePlusOne', 'plusAssoc', 'plusLeftUnit', 'plusRightUnit'].sort(),
     )
     for (const name of ['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO', 'Y']) {
       expect(boot.constNames.has(name)).toBe(true)

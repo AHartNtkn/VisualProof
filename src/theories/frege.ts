@@ -1,7 +1,13 @@
 import { parseTerm } from '../kernel/term/parse'
+import { app, port, type Term } from '../kernel/term/term'
+import type { PathSeg } from '../kernel/term/reduce'
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
+import type { Diagram } from '../kernel/diagram/diagram'
 import type { Definitions } from '../kernel/rules/definitions'
+import { applyConversion } from '../kernel/rules/conversion'
+import { replayProof, type ProofContext, type ProofStep } from '../kernel/proof/step'
+import type { Theorem } from '../kernel/proof/theorem'
 import type { Theory } from '../kernel/proof/store'
 
 const consts = new Set(['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO'])
@@ -53,10 +59,81 @@ export function natRelation(): DiagramWithBoundary {
   return mkDiagramWithBoundary(l.build(), [wx])
 }
 
-export function buildFregeTheory(): Theory {
-  return {
-    definitions: fregeDefinitions,
-    relations: { nat: natRelation() },
-    theorems: [],
+const PLUS_BODY = fregeDefinitions['PLUS']!
+
+/**
+ * A conversion (βη-only) theorem `o = start ⟹ o = target-refolded`, on a single
+ * root term node whose output and free ports are the boundary. The recipe uses
+ * canonical port names (s0, s1, …), which mkDiagram's name canonicalization
+ * leaves fixed in first-occurrence order. Constants are opaque to β, so we
+ * unfold before converting to the constant-free target, then refold. Built once
+ * at load time; the recorded certificate makes replay fuel-free.
+ */
+type ConversionRecipe = {
+  readonly name: string
+  readonly start: string
+  readonly freeVars: readonly string[]
+  readonly unfolds: readonly (readonly PathSeg[])[]
+  readonly target: Term
+  readonly folds: readonly { readonly path: readonly PathSeg[]; readonly constId: string }[]
+}
+
+function deriveConversion(r: ConversionRecipe, ctx: ProofContext): Theorem {
+  const l = new DiagramBuilder()
+  const n = l.termNode(l.root, p(r.start))
+  const wo = l.wire(l.root, [{ node: n, port: { kind: 'output' } }])
+  const wf = r.freeVars.map((v) => l.wire(l.root, [{ node: n, port: { kind: 'freeVar', name: v } }]))
+  const lhsDiagram = l.build()
+  const lhs = mkDiagramWithBoundary(lhsDiagram, [wo, ...wf])
+
+  let cur: Diagram = lhsDiagram
+  const steps: ProofStep[] = []
+  const push = (s: ProofStep): void => {
+    steps.push(s)
+    cur = replayProof(cur, [s], ctx)
   }
+  for (const path of r.unfolds) push({ rule: 'unfold', node: n, path: [...path] })
+  const conv = applyConversion(cur, n, r.target, 4096)
+  push({ rule: 'conversion', node: n, term: r.target, certificate: conv.certificate, attachments: {} })
+  for (const f of r.folds) push({ rule: 'fold', node: n, path: [...f.path], constId: f.constId })
+  return { name: r.name, lhs, rhs: mkDiagramWithBoundary(cur, [wo, ...wf]), steps }
+}
+
+const conversionRecipes: readonly ConversionRecipe[] = [
+  {
+    name: 'plusAssoc',
+    start: 'PLUS (PLUS s0 s1) s2',
+    freeVars: ['s0', 's1', 's2'],
+    unfolds: [['fn', 'fn'], ['fn', 'arg', 'fn', 'fn']],
+    // the constant-free unfolded form of PLUS s0 (PLUS s1 s2)
+    target: app(app(PLUS_BODY, port('s0')), app(app(PLUS_BODY, port('s1')), port('s2'))),
+    folds: [{ path: ['arg', 'fn', 'fn'], constId: 'PLUS' }, { path: ['fn', 'fn'], constId: 'PLUS' }],
+  },
+  {
+    name: 'plusLeftUnit',
+    start: 'PLUS ZERO s0',
+    freeVars: ['s0'],
+    unfolds: [['fn', 'fn'], ['fn', 'arg']],
+    target: port('s0'),
+    folds: [],
+  },
+  {
+    name: 'plusRightUnit',
+    start: 'PLUS s0 ZERO',
+    freeVars: ['s0'],
+    unfolds: [['fn', 'fn'], ['arg']],
+    target: port('s0'),
+    folds: [],
+  },
+]
+
+export function buildFregeTheory(): Theory {
+  const relations = { nat: natRelation() }
+  const ctx: ProofContext = {
+    definitions: fregeDefinitions,
+    theorems: new Map(),
+    relations: new Map(Object.entries(relations)),
+  }
+  const theorems = conversionRecipes.map((r) => deriveConversion(r, ctx))
+  return { definitions: fregeDefinitions, relations, theorems }
 }

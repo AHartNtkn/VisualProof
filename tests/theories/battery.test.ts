@@ -13,10 +13,10 @@ const p = (s: string) => parseTerm(s, consts)
 
 describe('bundled theories as shipped artifacts', () => {
   it('both load from their serialized form; onePlusOne applies in a fresh host', () => {
-    // frege ships as a relation library (nat) with no theorems
+    // frege ships the nat relation plus the three conversion theorems
     const frege = loadTheory(JSON.parse(JSON.stringify(theoryToJson(buildFregeTheory()))))
     expect(frege.ctx.relations.has('nat')).toBe(true)
-    expect(frege.ctx.theorems.size).toBe(0)
+    expect([...frege.ctx.theorems.keys()].sort()).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit'])
 
     // lambda ships onePlusOne / fixedPoint; onePlusOne rewrites PLUS ONE ONE -> TWO
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(buildLambdaTheory()))))
