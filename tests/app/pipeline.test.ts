@@ -38,10 +38,9 @@ describe('edit → prove → assemble, end to end', () => {
   })
 
   it('forward citation sessions check too', async () => {
-    const consts = new Set(['ONE', 'PLUS'])
     const { ctx } = await bootFixture()
     const e0 = emptyDiagram()
-    const { diagram: startD, node } = addTermNode(e0, e0.root, parseTerm('PLUS ONE ONE', consts))
+    const { diagram: startD, node } = addTermNode(e0, e0.root, p('(\\m. \\n. \\f. \\x. m f (n f x)) (\\f. \\x. f x) (\\f. \\x. f x)'))
     const wo = Object.entries(startD.wires).find(([, w]) =>
       w.endpoints.some((ep) => ep.node === node && ep.port.kind === 'output'))![0]
     const lhs = mkDiagramWithBoundary(startD, [wo])

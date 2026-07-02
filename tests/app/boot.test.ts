@@ -8,13 +8,12 @@ const noConsts = new Set<string>()
 const pp = (s: string) => parseTerm(s, noConsts)
 
 describe('mergeTheories (the only thing boot.ts does — no fetch, no manifest)', () => {
-  it('merges a bundle: theorems citable, constants unioned, relation present', () => {
+  it('merges a bundle: theorems citable, relation present, no constants (const-free theory)', () => {
     const frege = loadTheory(theoryToJson(buildFregeTheory()))
     const merged = mergeTheories([frege])
     expect(merged.ctx.theorems.has('plusAssoc')).toBe(true)
-    for (const name of ['ZERO', 'SUCC', 'PLUS', 'ONE']) {
-      expect(merged.constNames.has(name)).toBe(true)
-    }
+    // the relational frege theory carries no term constants
+    expect(merged.constNames.size).toBe(0)
     expect(merged.relations['nat']).toBeDefined()
   })
 
@@ -26,13 +25,11 @@ describe('mergeTheories (the only thing boot.ts does — no fetch, no manifest)'
   })
 
   it('refuses conflicting definition bodies loudly', () => {
-    const frege = buildFregeTheory()
-    const loaded = loadTheory(JSON.parse(JSON.stringify(theoryToJson(frege))))
-    const conflicting = {
-      theory: { definitions: { ONE: pp('\\f. \\x. x') }, relations: {}, theorems: [] },
-      ctx: verifyTheory({ definitions: { ONE: pp('\\f. \\x. x') }, relations: {}, theorems: [] }),
-    }
-    expect(() => mergeTheories([loaded, conflicting]))
+    const one = { definitions: { ONE: pp('\\f. \\x. x') }, relations: {}, theorems: [] }
+    const other = { definitions: { ONE: pp('\\f. \\x. f x') }, relations: {}, theorems: [] }
+    const a = { theory: one, ctx: verifyTheory(one) }
+    const b = { theory: other, ctx: verifyTheory(other) }
+    expect(() => mergeTheories([a, b]))
       .toThrowError(/theory merge conflict: definition 'ONE'/)
   })
 })

@@ -2,100 +2,128 @@ import { describe, it, expect } from 'vitest'
 import { buildFregeTheory, natRelation } from '../../src/theories/frege'
 import { verifyTheory, theoryToJson, loadTheory } from '../../src/kernel/proof/store'
 import { boundaryFingerprint } from '../../src/kernel/diagram/canonical/fingerprint'
-import { parseTerm } from '../../src/kernel/term/parse'
-import { termEq, type Term } from '../../src/kernel/term/term'
+import type { Diagram, DiagramNode, WireId } from '../../src/kernel/diagram/diagram'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 
-const consts = new Set(['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO'])
-const p = (s: string) => parseTerm(s, consts)
-const pZero = parseTerm('ZERO', new Set(['ZERO']))
+/** The reference nodes of a theorem side, as `defId/arity` strings, sorted. */
+function refKinds(side: Theorem['lhs']): string[] {
+  return Object.values(side.diagram.nodes)
+    .filter((n): n is Extract<DiagramNode, { kind: 'ref' }> => n.kind === 'ref')
+    .map((n) => `${n.defId}/${n.arity}`).sort()
+}
 
-/** The sole root term node's term on a theorem side. */
-function soleTerm(side: Theorem['lhs']): Term {
-  const d = side.diagram
-  const node = Object.values(d.nodes).find((n) => n.kind === 'term' && n.region === d.root)
-  if (node === undefined || node.kind !== 'term') throw new Error('no root term node')
-  return node.term
+/** The wire carrying node `id`'s argument at `index`. */
+function argWire(d: Diagram, id: string, index: number): WireId {
+  return Object.entries(d.wires).find(([, w]) =>
+    w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'arg' && ep.port.index === index))![0]
 }
 
 describe('the bundled Frege theory', () => {
-  it('verifies end to end: nat resolves, conversion + induction theorems replay', () => {
-    const theory = buildFregeTheory()
-    const ctx = verifyTheory(theory)
+  it('verifies end to end: relations resolve, conversion + induction theorems replay', () => {
+    const ctx = verifyTheory(buildFregeTheory())
     expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'succShiftS', 'plusComm'])
-    expect(ctx.relations.has('nat')).toBe(true)
+    expect([...ctx.relations.keys()].sort()).toEqual(['nat', 'plus', 'succ', 'zero'])
   })
 
   it('round-trips through the file format with re-verification', () => {
-    const theory = buildFregeTheory()
-    const text = JSON.stringify(theoryToJson(theory))
+    const text = JSON.stringify(theoryToJson(buildFregeTheory()))
     const { ctx } = loadTheory(JSON.parse(text))
     expect(ctx.theorems.size).toBe(5)
     expect(ctx.relations.has('nat')).toBe(true)
   })
 
-  it('succShiftS: ℕ-guarded, boundary arity 3, rhs carries the applied SUCC-shift pair', () => {
+  it('the relations are pure: no term node anywhere carries a term constant', () => {
+    const hasConst = (t: DiagramNode): boolean => {
+      if (t.kind !== 'term') return false
+      const walk = (u: { kind: string; body?: unknown; fn?: unknown; arg?: unknown }): boolean =>
+        u.kind === 'const' ||
+        (u.body !== undefined && walk(u.body as never)) ||
+        (u.fn !== undefined && (walk(u.fn as never) || walk(u.arg as never)))
+      return walk(t.term as never)
+    }
+    const theory = buildFregeTheory()
+    for (const rel of Object.values(theory.relations)) {
+      expect(Object.values(rel.diagram.nodes).some(hasConst)).toBe(false)
+    }
+  })
+
+  it('plusLeftUnit / plusRightUnit: Zero + Plus premises reduce the sum to an identity', () => {
+    const theory = buildFregeTheory()
+    for (const name of ['plusLeftUnit', 'plusRightUnit']) {
+      const t = theory.theorems.find((x) => x.name === name)!
+      expect(t.lhs.boundary).toHaveLength(2)
+      expect(t.rhs.boundary).toHaveLength(2)
+      // lhs: exactly a zero reference and a plus reference
+      expect(refKinds(t.lhs)).toEqual(['plus/3', 'zero/1'])
+      // rhs: no references left — a single identity term node o = a
+      expect(refKinds(t.rhs)).toEqual([])
+      const rhsTerms = Object.values(t.rhs.diagram.nodes).filter((n) => n.kind === 'term')
+      expect(rhsTerms).toHaveLength(1)
+    }
+  })
+
+  it('plusAssoc: (a+b)+c into a+(b+c), two Plus references per side, 4-line boundary', () => {
+    const t = buildFregeTheory().theorems.find((x) => x.name === 'plusAssoc')!
+    expect(t.lhs.boundary).toHaveLength(4)
+    expect(t.rhs.boundary).toHaveLength(4)
+    expect(refKinds(t.lhs)).toEqual(['plus/3', 'plus/3'])
+    expect(refKinds(t.rhs)).toEqual(['plus/3', 'plus/3'])
+  })
+
+  it('succShiftS: ℕ-guarded shift; boundary [a,b,o]; lhs Succ∧Plus, rhs Plus∧Succ', () => {
     const t = buildFregeTheory().theorems.find((x) => x.name === 'succShiftS')!
     expect(t.lhs.boundary).toHaveLength(3)
     expect(t.rhs.boundary).toHaveLength(3)
-    // the ℕ(m) guard is folded on BOTH sides (one ref each)
-    const lhsRefs = Object.values(t.lhs.diagram.nodes).filter((n) => n.kind === 'ref')
-    const rhsRefs = Object.values(t.rhs.diagram.nodes).filter((n) => n.kind === 'ref')
-    expect(lhsRefs).toHaveLength(1)
-    expect(rhsRefs).toHaveLength(1)
-    expect(lhsRefs[0]).toMatchObject({ kind: 'ref', defId: 'nat', arity: 1 })
-    // the rhs materializes the exact applied pair PLUS m (SUCC n) —o— SUCC (PLUS m n)
+    // ℕ(a) is a folded guard on both sides
+    expect(refKinds(t.lhs)).toEqual(['nat/1', 'plus/3', 'succ/2'])
+    expect(refKinds(t.rhs)).toEqual(['nat/1', 'plus/3', 'succ/2'])
+    // the boundary is exactly [wa, wb, wo]; on the lhs the nat guards a and the
+    // Plus reads a as its first argument (both nat.arg0 and plus.arg0 ride wa)
+    const ld = t.lhs.diagram
+    const natId = Object.entries(ld.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
+    const plusId = Object.entries(ld.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'plus')![0]
+    const [wa] = t.lhs.boundary
+    expect(argWire(ld, natId, 0)).toBe(wa)
+    expect(argWire(ld, plusId, 0)).toBe(wa)
+    // on the rhs the successor lands on the output: Succ.arg1 rides wo
     const rd = t.rhs.diagram
-    const has = (term: Term): boolean =>
-      Object.values(rd.nodes).some((n) => n.kind === 'term' && n.region === rd.root && termEq(n.term, term))
-    expect(has(p('PLUS s0 (SUCC s1)'))).toBe(true)
-    expect(has(p('SUCC (PLUS s0 s1)'))).toBe(true)
-    // the pair asserts an EQUALITY, not mere coexistence: the two nodes share
-    // one output wire, and their m/n args ride the wm/wn boundary lines (s0=wm,
-    // s1=wn on both). Without this the two `has` checks pass a statement that
-    // merely says both terms exist on unrelated lines.
-    const node = (term: Term): string =>
-      Object.entries(rd.nodes).find(([, n]) => n.kind === 'term' && n.region === rd.root && termEq(n.term, term))![0]
-    const outOf = (id: string): string =>
-      Object.entries(rd.wires).find(([, w]) => w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'output'))![0]
-    const argOf = (id: string, name: string): string =>
-      Object.entries(rd.wires).find(([, w]) =>
-        w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === name))![0]
-    const [wm, wn] = t.rhs.boundary
-    const nP = node(p('PLUS s0 (SUCC s1)'))
-    const nS = node(p('SUCC (PLUS s0 s1)'))
-    expect(outOf(nP)).toBe(outOf(nS))
-    expect(argOf(nP, 's0')).toBe(wm)
-    expect(argOf(nP, 's1')).toBe(wn)
-    expect(argOf(nS, 's0')).toBe(wm)
-    expect(argOf(nS, 's1')).toBe(wn)
+    const succId = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'succ')![0]
+    const wo = t.rhs.boundary[2]
+    expect(argWire(rd, succId, 1)).toBe(wo)
+  })
+
+  it('plusComm: two ℕ guards + Plus(a,b,o) ⟹ two ℕ guards + Plus(b,a,o), args crossed', () => {
+    const t = buildFregeTheory().theorems.find((x) => x.name === 'plusComm')!
+    expect(t.lhs.boundary).toHaveLength(3)
+    expect(t.rhs.boundary).toHaveLength(3)
+    expect(refKinds(t.lhs)).toEqual(['nat/1', 'nat/1', 'plus/3'])
+    expect(refKinds(t.rhs)).toEqual(['nat/1', 'nat/1', 'plus/3'])
+    const [wa, wb, wo] = t.lhs.boundary
+    // lhs Plus reads (a, b, o); rhs Plus reads (b, a, o) — the commutation cross
+    const lp = Object.entries(t.lhs.diagram.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'plus')![0]
+    expect([argWire(t.lhs.diagram, lp, 0), argWire(t.lhs.diagram, lp, 1), argWire(t.lhs.diagram, lp, 2)]).toEqual([wa, wb, wo])
+    const [wa2, wb2, wo2] = t.rhs.boundary
+    const rp = Object.entries(t.rhs.diagram.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'plus')![0]
+    expect([argWire(t.rhs.diagram, rp, 0), argWire(t.rhs.diagram, rp, 1), argWire(t.rhs.diagram, rp, 2)]).toEqual([wb2, wa2, wo2])
   })
 
   it('the bundled ℕ is inCutNat: the zero-evidence is inside the guard, not root-witnessable', () => {
-    // Non-vacuity lock. In the vacuous root-scoped encoding, ℕ(x)=∃w0¬∃R[…] and
-    // any non-zero witnesses w0, making ℕ true of everything. inCutNat scopes the
-    // base line INSIDE the guard bubble, so no top-level zero witness leaks: the
-    // ZERO node lives strictly inside the guard structure AND its output line's
-    // scope is not the body root.
+    // Non-vacuity lock: the zero-evidence is a `zero` reference living strictly
+    // inside the guard bubble, its arg line scoped there — no top-level zero
+    // witness leaks. The ONLY root-scoped wire is the boundary x-line.
     const nat = buildFregeTheory().relations['nat']!
     const d = nat.diagram
-    const zeroEntry = Object.entries(d.nodes).find(
-      ([, n]) => n.kind === 'term' && termEq(n.term, pZero),
-    )
+    const zeroEntry = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero')
     expect(zeroEntry).toBeDefined()
     const [zeroId, zeroNode] = zeroEntry!
-    // (a) the zero-evidence node is not a child of the body root
+    // (a) the zero-evidence reference is not a child of the body root
     expect(zeroNode.region).not.toBe(d.root)
-    // (b) the zero-evidence output line's scope is NOT the body root
+    // (b) its argument line's scope is NOT the body root
     const w0 = Object.entries(d.wires).find(
-      ([, w]) => w.endpoints.some((ep) => ep.node === zeroId && ep.port.kind === 'output'),
-    )
+      ([, w]) => w.endpoints.some((ep) => ep.node === zeroId && ep.port.kind === 'arg'))
     expect(w0).toBeDefined()
     expect(w0![1].scope).not.toBe(d.root)
-    // (c) semantic non-vacuity: the ONLY root-scoped wire is the boundary x-line.
-    // No evidence wire (zero witness or the successor/closure structure) leaks to
-    // the body root, so ∃w0 and all of R live strictly inside the guard cut — the
-    // reading ¬∃R∃w0[…], not a surface ∃w0 witnessable by any non-zero.
+    // (c) the ONLY root-scoped wire is the boundary x-line
     const rootWires = Object.entries(d.wires).filter(([, w]) => w.scope === d.root)
     expect(rootWires.map(([id]) => id)).toEqual([...nat.boundary])
   })
@@ -106,62 +134,6 @@ describe('the bundled Frege theory', () => {
     expect(theory.relations['nat']!.boundary).toHaveLength(1)
     expect(boundaryFingerprint(theory.relations['nat']!)).toBeTruthy()
     expect(boundaryFingerprint(natRelation())).toBe(boundaryFingerprint(theory.relations['nat']!))
-  })
-
-  it('plusAssoc rewrites (a+b)+c into a+(b+c) with a 4-line boundary', () => {
-    const t = buildFregeTheory().theorems.find((x) => x.name === 'plusAssoc')!
-    expect(termEq(soleTerm(t.lhs), p('PLUS (PLUS s0 s1) s2'))).toBe(true)
-    expect(termEq(soleTerm(t.rhs), p('PLUS s0 (PLUS s1 s2)'))).toBe(true)
-    expect(t.lhs.boundary).toHaveLength(4) // output + s0,s1,s2
-    expect(t.rhs.boundary).toHaveLength(4)
-  })
-
-  it('plusLeftUnit rewrites 0+n into n; plusRightUnit rewrites n+0 into n', () => {
-    const theory = buildFregeTheory()
-    const left = theory.theorems.find((x) => x.name === 'plusLeftUnit')!
-    expect(termEq(soleTerm(left.lhs), p('PLUS ZERO s0'))).toBe(true)
-    expect(termEq(soleTerm(left.rhs), p('s0'))).toBe(true)
-    expect(left.lhs.boundary).toHaveLength(2)
-    const right = theory.theorems.find((x) => x.name === 'plusRightUnit')!
-    expect(termEq(soleTerm(right.lhs), p('PLUS s0 ZERO'))).toBe(true)
-    expect(termEq(soleTerm(right.rhs), p('s0'))).toBe(true)
-    expect(right.rhs.boundary).toHaveLength(2)
-  })
-
-  it('plusComm: two folded ℕ guards; rhs is exactly the commutation pair', () => {
-    const t = buildFregeTheory().theorems.find((x) => x.name === 'plusComm')!
-    expect(t.lhs.boundary).toHaveLength(2)
-    expect(t.rhs.boundary).toHaveLength(2)
-    // ℕ(a) ∧ ℕ(b) folded on both sides
-    expect(Object.values(t.lhs.diagram.nodes).filter((n) => n.kind === 'ref')).toHaveLength(2)
-    expect(Object.values(t.rhs.diagram.nodes).filter((n) => n.kind === 'ref')).toHaveLength(2)
-    // the lhs is the two folded guards and NOTHING else (no root term nodes): the
-    // hypothesis is exactly ℕ(a) ∧ ℕ(b), not a strengthened premise.
-    expect(Object.values(t.lhs.diagram.nodes).filter((n) => n.kind === 'term')).toHaveLength(0)
-    // rhs audit: exactly two PLUS-pair term nodes at root, sharing one output
-    const rd = t.rhs.diagram
-    const pairs = Object.entries(rd.nodes).filter(
-      ([, n]) => n.kind === 'term' && n.region === rd.root && termEq(n.term, p('PLUS s0 s1')),
-    )
-    expect(pairs).toHaveLength(2)
-    // no OTHER term nodes at the root (only the two PLUS nodes)
-    const rootTerms = Object.values(rd.nodes).filter((n) => n.kind === 'term' && n.region === rd.root)
-    expect(rootTerms).toHaveLength(2)
-    const outWire = (id: string): string =>
-      Object.entries(rd.wires).find(([, w]) => w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'output'))![0]
-    expect(outWire(pairs[0]![0])).toBe(outWire(pairs[1]![0]))
-    // the pair is CROSSED: one node reads PLUS a b, the other PLUS b a. Without
-    // this the assertions above pass a trivial reflexive PLUS a b —o— PLUS a b,
-    // certifying reflexivity as commutativity. Pin the arg wiring against the
-    // [wa, wb] boundary: the two nodes' (s0-wire, s1-wire) signatures must be
-    // exactly {(wa, wb), (wb, wa)}.
-    const [wa, wb] = t.rhs.boundary
-    const wireOfPort = (id: string, name: string): string =>
-      Object.entries(rd.wires).find(([, w]) =>
-        w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === name),
-      )![0]
-    const sig = (id: string): string => `${wireOfPort(id, 's0')},${wireOfPort(id, 's1')}`
-    expect(new Set([sig(pairs[0]![0]), sig(pairs[1]![0])])).toEqual(new Set([`${wa},${wb}`, `${wb},${wa}`]))
   })
 
   it('the theory is deterministic: two builds are identical', () => {

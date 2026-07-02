@@ -104,15 +104,15 @@ describe('law 7 — junctions: every >=3-endpoint wire gets exactly one junction
 })
 
 describe('settle — every replay step reaches a bounded layout at rest', () => {
-  // Reproduces the runaway observed live at plusComm step 25 (22 bodies):
-  // the settled "layout" was flying as a cluster at ~9 world units/tick with
-  // its content spread across thousands of units — nothing was on screen, so
-  // every drag fell through to pan. A legal settled layout must (a) stay
-  // anchored near the origin within the trivial packing bound (every body
-  // inside a chain of touching discs), and (b) actually be AT REST: after the
-  // settle budget, further ticks must not move anything appreciably.
+  // Guards against the runaway once observed live (a settled "layout" flying as
+  // a cluster with its content spread across thousands of units — nothing on
+  // screen, so every drag fell through to pan). A legal settled layout must
+  // (a) stay anchored near the origin within the trivial packing bound (every
+  // body inside a chain of touching discs), and (b) actually be AT REST after
+  // the settle budget. We sample states spread across the relational plusComm
+  // replay — early, mid, and final — each of which must satisfy both.
   const r = mkReplay(plusCommThm, bootCtx)
-  for (const k of [0, 12, 25, 37, r.stepCount]) {
+  for (const k of [0, 16, 32, 48, r.stepCount]) {
     it(`plusComm step ${k} settles bounded and at rest`, () => {
       const e = mkEngine(r.diagramAt(k), r.boundary)
       settle(e, 2600)

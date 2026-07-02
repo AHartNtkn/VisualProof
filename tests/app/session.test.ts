@@ -11,8 +11,11 @@ import { startSession, applyForward, applyBackward, undoForward, undoBackward, m
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
 
-const consts = new Set(['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO'])
-const p = (s: string) => parseTerm(s, consts)
+const p = (s: string) => parseTerm(s, new Set<string>())
+// pure Church fixtures for the onePlusOne demo (no term constants)
+const POO = p('(\\m. \\n. \\f. \\x. m f (n f x)) (\\f. \\x. f x) (\\f. \\x. f x)')
+const TWOc = p('\\f. \\x. f (f x)')
+const ZEROc = p('\\f. \\x. x')
 
 function goalPair() {
   // goal: an identity node ⟹ the same node double-cut-wrapped (a toy goal)
@@ -92,7 +95,7 @@ describe('proof session', () => {
   it('cites bundled theorems as single steps', async () => {
     const { ctx } = await bootFixture()
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('PLUS ONE ONE'))
+    const n = h.termNode(h.root, POO)
     const wo = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
     const start = mkDiagramWithBoundary(h.build(), [wo])
     const target = start // rhs irrelevant for this check
@@ -101,7 +104,7 @@ describe('proof session', () => {
       rule: 'theorem', name: 'onePlusOne', direction: 'forward',
       at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [n], wires: [] }), args: [wo] },
     })
-    expect(Object.values(s.forward.current.nodes).some((nd) => nd.kind === 'term' && termEq(nd.term, p('TWO')))).toBe(true)
+    expect(Object.values(s.forward.current.nodes).some((nd) => nd.kind === 'term' && termEq(nd.term, TWOc))).toBe(true)
   })
 })
 
@@ -263,7 +266,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     // lhs: a PLUS ONE ONE node. rhs (goal): onePlusOne's conclusion (a TWO node) —
     // built by citing forward once, then used as the goal of a FRESH session
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('PLUS ONE ONE'))
+    const n = h.termNode(h.root, POO)
     const wo = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
     const lhs = mkDiagramWithBoundary(h.build(), [wo])
     let warm = startSession(lhs, lhs, ctx)
@@ -275,7 +278,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     let s = startSession(lhs, rhs, ctx)
     // pick the rhs occurrence in the GOAL: the TWO node on the boundary line
     const g = s.backward.current
-    const two = Object.entries(g.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, p('TWO')))![0]
+    const two = Object.entries(g.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, TWOc))![0]
     s = applyBackward(s, {
       kind: 'unCite',
       name: 'onePlusOne',
@@ -296,11 +299,11 @@ describe('unCite refusals', () => {
     const { ctx } = await bootFixture()
     // goal: a TWO node wrapped in a cut (negative region is the cut interior)
     const h = new DiagramBuilder()
-    const nz = h.termNode(h.root, p('TWO'))
+    const nz = h.termNode(h.root, TWOc)
     const wz = h.wire(h.root, [{ node: nz, port: { kind: 'output' } }])
     const lhs = mkDiagramWithBoundary(h.build(), [wz])
     const r = new DiagramBuilder()
-    const nz2 = r.termNode(r.root, p('TWO'))
+    const nz2 = r.termNode(r.root, TWOc)
     const wz2 = r.wire(r.root, [{ node: nz2, port: { kind: 'output' } }])
     const cut = r.cut(r.root)
     const rhs = mkDiagramWithBoundary(r.build(), [wz2])
@@ -324,7 +327,7 @@ describe('unCite refusals', () => {
     const { ctx } = await bootFixture()
     // goal: a ZERO node; selection is the node itself — not onePlusOne's rhs (TWO)
     const h = new DiagramBuilder()
-    const nz = h.termNode(h.root, p('ZERO'))
+    const nz = h.termNode(h.root, ZEROc)
     const wz = h.wire(h.root, [{ node: nz, port: { kind: 'output' } }])
     const lhsD = h.build()
     const lhs = mkDiagramWithBoundary(lhsD, [wz])

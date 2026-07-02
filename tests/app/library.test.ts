@@ -80,7 +80,7 @@ describe('loadEntry / rebuild', () => {
     expect(lib.entries.find((e) => e.file === 'frege.json')!.status).toBe('loaded')
     const boot = rebuild(lib)
     expect(boot.ctx.theorems.has('plusAssoc')).toBe(true)
-    expect(boot.constNames.has('ZERO')).toBe(true)
+    expect(boot.constNames.size).toBe(0) // the relational frege theory has no constants
     expect(boot.relations['nat']).toBeDefined()
   })
 

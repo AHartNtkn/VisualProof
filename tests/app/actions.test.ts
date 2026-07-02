@@ -66,9 +66,8 @@ describe('applicableActions', () => {
   })
 
   it('offers theorem citations whose direction matches the selection polarity', async () => {
-    const consts = new Set(['ONE', 'PLUS'])
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, parseTerm('PLUS ONE ONE', consts))
+    const n = h.termNode(h.root, p('(\\m. \\n. \\f. \\x. m f (n f x)) (\\f. \\x. f x) (\\f. \\x. f x)'))
     const d = h.build()
     const { ctx } = await bootFixture()
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
@@ -198,8 +197,9 @@ describe('descriptor → step construction (the shell contract)', () => {
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [ref], wires: [] })
     expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('relUnfold')
     const out = applyStep(d, { rule: 'relUnfold', node: ref }, ctx)
-    // the reference is gone and the nat body has been inlined
-    expect(Object.values(out.nodes).some((n) => n.kind === 'ref')).toBe(false)
+    // the nat reference is gone and the nat body has been inlined (the body
+    // itself contains zero/succ references — nat is defined over them)
+    expect(Object.values(out.nodes).some((n) => n.kind === 'ref' && n.defId === 'nat')).toBe(false)
     expect(Object.keys(out.nodes).length).toBeGreaterThan(Object.keys(d.nodes).length)
   })
 })
