@@ -5,6 +5,7 @@ import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
+import { bootBundledContext } from '../../src/app/boot'
 import { applicableActions } from '../../src/app/actions'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { applyStep } from '../../src/kernel/proof/step'
@@ -65,12 +66,12 @@ describe('applicableActions', () => {
   })
 
   it('offers theorem citations whose direction matches the selection polarity', () => {
-    const consts = new Set(['ZERO'])
+    const consts = new Set(['ONE', 'PLUS'])
     const h = new DiagramBuilder()
-    const nz = h.termNode(h.root, parseTerm('ZERO', consts))
+    const n = h.termNode(h.root, parseTerm('PLUS ONE ONE', consts))
     const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [nz], wires: [] })
+    const { ctx } = bootBundledContext()
+    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const cites = applicableActions(d, sel, ctx).filter((a) => a.kind === 'citeTheorem')
     expect(cites.length).toBeGreaterThan(0)
     expect(cites.every((c) => c.kind === 'citeTheorem' && c.direction === 'forward')).toBe(true)

@@ -9,7 +9,7 @@ declare global {
 test('the app boots with both theories loaded', async ({ page }) => {
   await page.goto('/?debug')
   await expect(page.locator('canvas')).toBeVisible()
-  await expect(page.locator('#theorems')).toContainText('zeroIsNat')
+  await expect(page.locator('#theorems')).toContainText('onePlusOne')
   const status = await page.evaluate(() => window.__vpaDebug!.status())
   expect(status.toLowerCase()).toContain('edit')
 })

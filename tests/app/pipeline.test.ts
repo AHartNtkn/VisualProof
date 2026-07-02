@@ -38,19 +38,19 @@ describe('edit → prove → assemble, end to end', () => {
   })
 
   it('forward citation sessions check too', () => {
-    const consts = new Set(['ZERO'])
-    const ctx = verifyTheory(buildFregeTheory())
+    const consts = new Set(['ONE', 'PLUS'])
+    const { ctx } = bootBundledContext()
     const e0 = emptyDiagram()
-    const { diagram: startD, node } = addTermNode(e0, e0.root, parseTerm('ZERO', consts))
-    const wz = Object.entries(startD.wires).find(([, w]) =>
+    const { diagram: startD, node } = addTermNode(e0, e0.root, parseTerm('PLUS ONE ONE', consts))
+    const wo = Object.entries(startD.wires).find(([, w]) =>
       w.endpoints.some((ep) => ep.node === node && ep.port.kind === 'output'))![0]
-    const lhs = mkDiagramWithBoundary(startD, [wz])
+    const lhs = mkDiagramWithBoundary(startD, [wo])
     let s = startSession(lhs, lhs, ctx)
     s = applyForward(s, {
-      rule: 'theorem', name: 'zeroIsNat', direction: 'forward',
-      at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [node], wires: [] }), args: [wz] },
+      rule: 'theorem', name: 'onePlusOne', direction: 'forward',
+      at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [node], wires: [] }), args: [wo] },
     })
-    const rhs = mkDiagramWithBoundary(s.forward.current, [wz])
+    const rhs = mkDiagramWithBoundary(s.forward.current, [wo])
     const thm = { name: 'viaSession', lhs, rhs, steps: [...s.forward.steps] }
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
