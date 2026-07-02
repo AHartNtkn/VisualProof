@@ -1,7 +1,9 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
-import type { Scene } from '../view/scene'
+import type { Engine } from '../view/engine'
+import type { WirePath } from '../view/wires'
+import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
 
@@ -10,8 +12,10 @@ export type Hit =
   | { readonly kind: 'region'; readonly id: RegionId }
   | { readonly kind: 'wire'; readonly id: WireId }
 
-/** UI pick tolerance around wire segments, world units. Visual only. */
+/** UI pick tolerance around wire strokes, world units. Visual only. */
 const WIRE_TOLERANCE = 1.5
+/** Samples along a Bézier leg when measuring pick distance. */
+const WIRE_SAMPLES = 16
 
 function segmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
   const ab = sub(b, a)
@@ -21,25 +25,51 @@ function segmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
   return length(sub(p, { x: a.x + ab.x * t, y: a.y + ab.y * t }))
 }
 
-/** Topmost item under the point: node, then wire, then smallest region. */
-export function hitTest(scene: Scene, point: Vec2): Hit | null {
-  for (const n of scene.nodes) {
-    if (length(sub(point, n.center)) <= n.geometry.outerRadius) {
-      return { kind: 'node', id: n.id }
-    }
+function bezierPoint(path: WirePath, t: number): Vec2 {
+  const u = 1 - t
+  const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t
+  return {
+    x: a * path.from.x + b * path.c1.x + c * path.c2.x + d * path.to.x,
+    y: a * path.from.y + b * path.c1.y + c * path.c2.y + d * path.to.y,
   }
-  for (const w of scene.wires) {
-    for (const spoke of w.spokes) {
-      if (segmentDistance(point, w.hub, spoke) <= WIRE_TOLERANCE) {
-        return { kind: 'wire', id: w.id }
-      }
-    }
+}
+
+function bezierDistance(p: Vec2, path: WirePath): number {
+  let best = Infinity
+  let prev = bezierPoint(path, 0)
+  for (let i = 1; i <= WIRE_SAMPLES; i++) {
+    const cur = bezierPoint(path, i / WIRE_SAMPLES)
+    best = Math.min(best, segmentDistance(p, prev, cur))
+    prev = cur
+  }
+  return best
+}
+
+/**
+ * Topmost engine item under the point: a node disc first, then a wire stroke
+ * (leg spline, frame exit, or ∃ stub), then the smallest containing region.
+ * Junction dots sit on their wires' legs, so a click on one resolves to the
+ * wire — junctions are not kernel entities and are never selected.
+ */
+export function hitTest(e: Engine, point: Vec2): Hit | null {
+  for (const b of e.bodies.values()) {
+    if (b.kind === 'junction') continue
+    if (length(sub(point, b.pos)) <= b.discR) return { kind: 'node', id: b.id }
+  }
+  for (const { wid, path } of legPaths(e)) {
+    if (bezierDistance(point, path) <= WIRE_TOLERANCE) return { kind: 'wire', id: wid }
+  }
+  for (const ex of boundaryExits(e)) {
+    if (bezierDistance(point, ex.path) <= WIRE_TOLERANCE) return { kind: 'wire', id: ex.wid }
+  }
+  for (const s of existentialStubs(e)) {
+    if (segmentDistance(point, s.from, s.to) <= WIRE_TOLERANCE) return { kind: 'wire', id: s.wid }
   }
   let best: { id: RegionId; radius: number } | null = null
-  for (const r of scene.regions) {
-    if (r.kind === 'sheet') continue
-    if (length(sub(point, r.center)) <= r.radius && (best === null || r.radius < best.radius)) {
-      best = { id: r.id, radius: r.radius }
+  for (const [rid, g] of e.regions) {
+    if (e.d.regions[rid]!.kind === 'sheet') continue
+    if (length(sub(point, g.center)) <= g.radius && (best === null || g.radius < best.radius)) {
+      best = { id: rid, radius: g.radius }
     }
   }
   return best === null ? null : { kind: 'region', id: best.id }

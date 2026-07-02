@@ -75,4 +75,9 @@ describe('atomGeometry', () => {
     expect(d0).toBeCloseTo(d1, 10)
     expect(atomGeometry(0).arcs.length).toBeGreaterThan(0) // still a visible disc
   })
+
+  it('emits no exit line (law 4: refs/atoms have no term output, so no second leg)', () => {
+    expect(atomGeometry(2).exitLine).toBeNull()
+    expect(atomGeometry(0).exitLine).toBeNull()
+  })
 })

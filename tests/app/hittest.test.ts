@@ -1,41 +1,52 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { buildScene } from '../../src/view/scene'
+import { mkEngine, recomputeRegions, legPaths } from '../../src/view/index'
+import type { WirePath } from '../../src/view/index'
 import { vec } from '../../src/view/vec'
 import { hitTest, buildSelection } from '../../src/app/hittest'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
 
+/** Point on a cubic Bézier at parameter t. */
+function bezierAt(path: WirePath, t: number): { x: number; y: number } {
+  const u = 1 - t
+  const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t
+  return {
+    x: a * path.from.x + b * path.c1.x + c * path.c2.x + d * path.to.x,
+    y: a * path.from.y + b * path.c1.y + c * path.c2.y + d * path.to.y,
+  }
+}
+
 function setup() {
   const h = new DiagramBuilder()
   const n = h.termNode(h.root, p('\\x. x'))
   const cut = h.cut(h.root)
-  const m = h.termNode(cut, p('y'))
+  const m = h.termNode(cut, p('\\z. z')) // no free vars: its only loose end is the +x output stub
   const d = h.build()
-  const positions = new Map([[n, vec(0, 0)], [m, vec(60, 0)]])
-  const scene = buildScene(d, positions)
-  return { d, n, cut, m, scene }
+  const e = mkEngine(d, [])
+  e.bodies.get(n)!.pos = vec(0, 0)
+  e.bodies.get(m)!.pos = vec(60, 0)
+  recomputeRegions(e)
+  return { d, n, cut, m, e }
 }
 
 describe('hitTest', () => {
-  it('resolves a node when the point is inside its outer radius', () => {
-    const { n, scene } = setup()
-    const hit = hitTest(scene, vec(1, 1))
-    expect(hit).toEqual({ kind: 'node', id: n })
+  it('resolves a node when the point is inside its disc', () => {
+    const { n, e } = setup()
+    expect(hitTest(e, vec(1, 1))).toEqual({ kind: 'node', id: n })
   })
 
   it('resolves the smallest containing region otherwise', () => {
-    const { cut, scene } = setup()
-    const region = scene.regions.find((r) => r.id === cut)!
-    const probe = vec(region.center.x + region.radius - 1, region.center.y)
-    const hit = hitTest(scene, probe)
-    expect(hit).toEqual({ kind: 'region', id: cut })
+    const { cut, e } = setup()
+    const g = e.regions.get(cut)!
+    // probe the -x edge, clear of the node's +x output stub
+    const probe = vec(g.center.x - g.radius + 1, g.center.y)
+    expect(hitTest(e, probe)).toEqual({ kind: 'region', id: cut })
   })
 
-  it('resolves a wire near a spoke segment', () => {
-    const { d, n, m } = setup()
+  it('resolves a wire near its spline', () => {
     const h2 = new DiagramBuilder()
     const a = h2.termNode(h2.root, p('\\x. x'))
     const b = h2.termNode(h2.root, p('y'))
@@ -44,18 +55,18 @@ describe('hitTest', () => {
       { node: b, port: { kind: 'freeVar', name: 'y' } },
     ])
     const d2 = h2.build()
-    const scene2 = buildScene(d2, new Map([[a, vec(0, 0)], [b, vec(80, 0)]]))
-    const star = scene2.wires.find((x) => x.id === w)!
-    const mid = vec((star.hub.x + star.spokes[0]!.x) / 2, (star.hub.y + star.spokes[0]!.y) / 2)
-    expect(hitTest(scene2, mid)).toEqual({ kind: 'wire', id: w })
-    void d
-    void n
-    void m
+    const e2 = mkEngine(d2, [])
+    e2.bodies.get(a)!.pos = vec(0, 0)
+    e2.bodies.get(b)!.pos = vec(80, 0)
+    recomputeRegions(e2)
+    const path = legPaths(e2).find((l) => l.wid === w)!.path
+    const mid = bezierAt(path, 0.5) // guaranteed on the spline, clear of both discs
+    expect(hitTest(e2, mid)).toEqual({ kind: 'wire', id: w })
   })
 
   it('returns null in empty space', () => {
-    const { scene } = setup()
-    expect(hitTest(scene, vec(500, 500))).toBeNull()
+    const { e } = setup()
+    expect(hitTest(e, vec(500, 500))).toBeNull()
   })
 })
 
@@ -80,12 +91,14 @@ describe('nested-region precedence', () => {
     const h = new DiagramBuilder()
     const outer = h.cut(h.root)
     const inner = h.cut(outer)
-    const m = h.termNode(inner, p('y'))
+    const m = h.termNode(inner, p('\\z. z')) // only loose end is the +x output stub
     const d = h.build()
-    const scene = buildScene(d, new Map([[m, vec(0, 0)]]))
-    const innerCircle = scene.regions.find((r) => r.id === inner)!
-    // a point inside the inner circle but outside the node
-    const probe = vec(innerCircle.center.x + innerCircle.radius - 0.5, innerCircle.center.y)
-    expect(hitTest(scene, probe)).toEqual({ kind: 'region', id: inner })
+    const e = mkEngine(d, [])
+    e.bodies.get(m)!.pos = vec(0, 0)
+    recomputeRegions(e)
+    const innerCircle = e.regions.get(inner)!
+    // probe the -x edge, clear of the +x output stub
+    const probe = vec(innerCircle.center.x - innerCircle.radius + 0.5, innerCircle.center.y)
+    expect(hitTest(e, probe)).toEqual({ kind: 'region', id: inner })
   })
 })
