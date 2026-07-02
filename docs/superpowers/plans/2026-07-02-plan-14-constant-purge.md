@@ -43,8 +43,8 @@ De-risk the machinery before committing to the restatement: in a scratch vitest,
 ### Task 3: Examples, e2e, review, sync
 
 - [x] `scripts/emit-theories.ts` regenerates `examples/*.json` in the new format; e2e green; Playwright replay stress of relational plusComm through the live shell green.
-- [ ] Independent adversarial review (reviewer wrote none of the code): mutation probes — reintroduce a satellite → law test fails; smuggle a const-like label onto term anatomy → law-2 fails; check every derivation replays from JSON through `loadTheory` (not just from builders); hunt for leftover definitions plumbing.
-- [ ] Plan-doc sync; memory update (`named-defs-never-inside-terms` gains the integration state); merge.
+- [x] Independent adversarial review: ISSUES-FIXED-APPROVED (commits 726b191, d993e43). All six mutation probes caught by existing tests. Findings fixed test-first: shell replay path (enterReplay/gotoReplayStep/carryOver) had zero automated coverage → new e2e spec; JSON round-trip per theorem of both theories added with a negative control (dropped step ⇒ loadTheory throws); anchor invisibility pinned (never painted/hit/drag-targeted); at-rest sample pinned to include an anchor-carrying step; fitCamera extracted with a positive-finite scale floor. 732/732, e2e 5/5.
+- [x] Plan-doc sync; memory updated (`named-defs-never-inside-terms` integration state; `rendering-laws` interaction model). Work landed directly on main — no merge needed.
 
 ---
 
