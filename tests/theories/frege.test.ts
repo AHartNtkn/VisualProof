@@ -50,6 +50,25 @@ describe('the bundled Frege theory', () => {
       Object.values(rd.nodes).some((n) => n.kind === 'term' && n.region === rd.root && termEq(n.term, term))
     expect(has(p('PLUS s0 (SUCC s1)'))).toBe(true)
     expect(has(p('SUCC (PLUS s0 s1)'))).toBe(true)
+    // the pair asserts an EQUALITY, not mere coexistence: the two nodes share
+    // one output wire, and their m/n args ride the wm/wn boundary lines (s0=wm,
+    // s1=wn on both). Without this the two `has` checks pass a statement that
+    // merely says both terms exist on unrelated lines.
+    const node = (term: Term): string =>
+      Object.entries(rd.nodes).find(([, n]) => n.kind === 'term' && n.region === rd.root && termEq(n.term, term))![0]
+    const outOf = (id: string): string =>
+      Object.entries(rd.wires).find(([, w]) => w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'output'))![0]
+    const argOf = (id: string, name: string): string =>
+      Object.entries(rd.wires).find(([, w]) =>
+        w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === name))![0]
+    const [wm, wn] = t.rhs.boundary
+    const nP = node(p('PLUS s0 (SUCC s1)'))
+    const nS = node(p('SUCC (PLUS s0 s1)'))
+    expect(outOf(nP)).toBe(outOf(nS))
+    expect(argOf(nP, 's0')).toBe(wm)
+    expect(argOf(nP, 's1')).toBe(wn)
+    expect(argOf(nS, 's0')).toBe(wm)
+    expect(argOf(nS, 's1')).toBe(wn)
   })
 
   it('the bundled ℕ is inCutNat: the zero-evidence is inside the guard, not root-witnessable', () => {
@@ -73,6 +92,12 @@ describe('the bundled Frege theory', () => {
     )
     expect(w0).toBeDefined()
     expect(w0![1].scope).not.toBe(d.root)
+    // (c) semantic non-vacuity: the ONLY root-scoped wire is the boundary x-line.
+    // No evidence wire (zero witness or the successor/closure structure) leaks to
+    // the body root, so ∃w0 and all of R live strictly inside the guard cut — the
+    // reading ¬∃R∃w0[…], not a surface ∃w0 witnessable by any non-zero.
+    const rootWires = Object.entries(d.wires).filter(([, w]) => w.scope === d.root)
+    expect(rootWires.map(([id]) => id)).toEqual([...nat.boundary])
   })
 
   it('the named ℕ relation is arity 1 with a stable fingerprint', () => {
@@ -110,6 +135,9 @@ describe('the bundled Frege theory', () => {
     // ℕ(a) ∧ ℕ(b) folded on both sides
     expect(Object.values(t.lhs.diagram.nodes).filter((n) => n.kind === 'ref')).toHaveLength(2)
     expect(Object.values(t.rhs.diagram.nodes).filter((n) => n.kind === 'ref')).toHaveLength(2)
+    // the lhs is the two folded guards and NOTHING else (no root term nodes): the
+    // hypothesis is exactly ℕ(a) ∧ ℕ(b), not a strengthened premise.
+    expect(Object.values(t.lhs.diagram.nodes).filter((n) => n.kind === 'term')).toHaveLength(0)
     // rhs audit: exactly two PLUS-pair term nodes at root, sharing one output
     const rd = t.rhs.diagram
     const pairs = Object.entries(rd.nodes).filter(
@@ -122,6 +150,18 @@ describe('the bundled Frege theory', () => {
     const outWire = (id: string): string =>
       Object.entries(rd.wires).find(([, w]) => w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'output'))![0]
     expect(outWire(pairs[0]![0])).toBe(outWire(pairs[1]![0]))
+    // the pair is CROSSED: one node reads PLUS a b, the other PLUS b a. Without
+    // this the assertions above pass a trivial reflexive PLUS a b —o— PLUS a b,
+    // certifying reflexivity as commutativity. Pin the arg wiring against the
+    // [wa, wb] boundary: the two nodes' (s0-wire, s1-wire) signatures must be
+    // exactly {(wa, wb), (wb, wa)}.
+    const [wa, wb] = t.rhs.boundary
+    const wireOfPort = (id: string, name: string): string =>
+      Object.entries(rd.wires).find(([, w]) =>
+        w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === name),
+      )![0]
+    const sig = (id: string): string => `${wireOfPort(id, 's0')},${wireOfPort(id, 's1')}`
+    expect(new Set([sig(pairs[0]![0]), sig(pairs[1]![0])])).toEqual(new Set([`${wa},${wb}`, `${wb},${wa}`]))
   })
 
   it('the theory is deterministic: two builds are identical', () => {
