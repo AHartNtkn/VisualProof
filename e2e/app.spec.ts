@@ -5,6 +5,7 @@ declare global {
     __vpaDebug?: {
       nodeCount(): number
       status(): string
+      replay(): { mode: string; k: number; n: number; label: string; bodies: number }
       view(): { scale: number; offsetX: number; offsetY: number }
       bodies(): { id: string; kind: string; x: number; y: number; r: number }[]
     }
@@ -65,6 +66,57 @@ test('a goal proves end to end through the chrome', async ({ page }) => {
   await page.getByRole('button', { name: /assemble/i }).click()
   const status = await page.evaluate(() => window.__vpaDebug!.status())
   expect(status).toMatch(/assembled|checked|adopted/i)
+})
+
+// The plan-14 deliverable: a relational theorem replays step-by-step through the
+// live shell (enterReplay + gotoReplayStep + carryOver + boundary rendering), not
+// just through the headless mkReplay unit. Drives plusComm — the const-free
+// relational derivation — from the real Library "▶ Replay" button.
+test('a relational theorem replays step by step through the live shell', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+
+  const lib = page.locator('#library')
+  await page.locator('#open-file-input').setInputFiles('examples/frege.json')
+  await lib.getByRole('button', { name: '▸ frege.json', exact: true }).click()
+  await expect(lib).toContainText('plusComm')
+
+  // The emitted frege.json lists theorems [plusAssoc, plusLeftUnit,
+  // plusRightUnit, succShiftS, plusComm]; the Library renders one "▶ Replay"
+  // button per theorem in that order, so plusComm's is index 4.
+  await lib.getByRole('button', { name: '▶ Replay', exact: true }).nth(4).click()
+
+  // Entered replay at step 0 (the lhs). plusComm is a large derivation — the
+  // n>=40 floor confirms we grabbed a substantial theorem (not a 5-11 step one),
+  // catching any drift in the theorem order behind the index-4 button.
+  const start = await page.evaluate(() => window.__vpaDebug!.replay())
+  expect(start.mode).toBe('replay')
+  expect(start.k).toBe(0)
+  expect(start.n).toBeGreaterThanOrEqual(40)
+  expect(start.bodies).toBeGreaterThan(0)
+  const lhsNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
+
+  // Arrow-key stepping advances the step and rebuilds the displayed diagram: by
+  // step 20 the derivation has unfolded the relations, so the diagram carries
+  // strictly more nodes than the lhs and the step label is a real rule name.
+  for (let i = 0; i < 20; i++) await page.keyboard.press('ArrowRight')
+  const mid = await page.evaluate(() => window.__vpaDebug!.replay())
+  expect(mid.k).toBe(20)
+  expect(mid.label.length).toBeGreaterThan(0)
+  const midNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
+  expect(midNodes).toBeGreaterThan(lhsNodes)
+
+  // The menu Prev/Next buttons drive the same stepper (carryOver path).
+  await page.getByRole('button', { name: 'Next ▶', exact: true }).click()
+  expect(await page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(21)
+  await page.getByRole('button', { name: '◀ Prev', exact: true }).click()
+  expect(await page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(20)
+
+  // Exiting replay returns to EDIT mode with the sheet restored. (The mode
+  // button also relabels to "Exit replay"; scope to the action menu's button.)
+  await page.locator('#action-menu').getByRole('button', { name: 'Exit replay', exact: true }).click()
+  expect(await page.evaluate(() => window.__vpaDebug!.replay().mode)).toBe('edit')
+  await expect(page.locator('#status')).toContainText('EDIT')
 })
 
 // The user's core interaction: nodes are draggable and STAY where dropped;
