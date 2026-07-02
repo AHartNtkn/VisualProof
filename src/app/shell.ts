@@ -10,17 +10,17 @@ import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
-import type { PhysicsState } from '../view/physics'
-import { initialState, step, DEFAULT_PARAMS } from '../view/physics'
-import type { Scene } from '../view/scene'
-import { buildScene } from '../view/scene'
-import type { Shape } from '../view/display'
-import { renderScene } from '../view/display'
+import type { Engine } from '../view/engine'
+import { mkEngine } from '../view/engine'
+import { settleStep } from '../view/relax'
+import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
+import type { Shape, Theme } from '../view/paint'
+import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
 import { bootBundledContext } from './boot'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 import type { ProofSession } from './session'
-import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem } from './session'
+import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
 import { sessionTheory } from './persist'
 import { loadTheory, theoryToJson } from '../kernel/proof/store'
 import type { Hit } from './hittest'
@@ -53,8 +53,8 @@ export type ShellOptions = {
 const CLICK_SLOP_PX = 3
 const ZOOM_PER_WHEEL_PX = 0.001
 
-/** Visual pacing only (same role as DEFAULT_PARAMS; the demo uses 4 too). */
-const PHYSICS_STEPS_PER_FRAME = 4
+/** Relaxation ticks advanced per animation frame (visual pacing only). */
+const SETTLE_STEPS_PER_FRAME = 4
 
 const SELECT_STROKE = '#d97706'
 const HOVER_STROKE = '#2563eb'
@@ -146,10 +146,14 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   let hits: Hit[] = []
   let kernelSel: SubgraphSelection | null = null
   let pending: Pending | null = null
+  // The render engine is rebuilt whenever the displayed diagram identity
+  // changes (layout never persists). Boundary wiring for proof sides is Task 2;
+  // an edit sheet has no boundary, so [] is correct here.
+  let theme: Theme = LIGHT
   let displayed: Diagram = editDiagram
-  let physics: PhysicsState = initialState(displayed)
+  let engine: Engine = mkEngine(displayed, [])
+  settleStep(engine)
   let pin: { readonly node: NodeId; pos: Vec2 } | null = null
-  let lastScene: Scene = buildScene(displayed, physics.positions)
   let message = 'EDIT mode: type a term (\\ is λ) and Add, click to select, wrap/delete/join'
   let drag: Drag | null = null
   let downScreen: Vec2 | null = null
@@ -160,6 +164,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
 
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
+  canvas.style.background = theme.canvas
   const view = { scale: 6, offsetX: canvas.width / 2, offsetY: canvas.height / 2 }
 
   const toWorld = (screen: Vec2): Vec2 =>
@@ -170,6 +175,14 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       return side === 'forward' ? session.forward.current : session.backward.current
     }
     return editDiagram
+  }
+
+  // Prove-mode sides render their statement boundary as frame exits; an edit
+  // sheet has no boundary. mkEngine ignores boundary ids absent from the
+  // current diagram, so a stale id simply draws no exit.
+  const currentBoundary = (): readonly WireId[] => {
+    if (mode === 'prove' && session !== null) return sideBoundary(session, side)
+    return []
   }
 
   // ---- chrome ----
@@ -260,11 +273,11 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   const sync = (): void => {
     const d = currentDiagram()
     if (d !== displayed) {
-      // diagram identity changed: re-seed physics (layout never persists),
+      // diagram identity changed: rebuild the engine (layout never persists),
       // drop selection/pending/pin — their ids belong to the old diagram
       displayed = d
-      physics = initialState(d)
-      lastScene = buildScene(displayed, physics.positions)
+      engine = mkEngine(d, currentBoundary())
+      settleStep(engine)
       pin = null
       hits = []
       kernelSel = null
@@ -542,7 +555,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
 
   // ---- clicks (selection + two-phase completion) ----
   const handleClick = (world: Vec2): void => {
-    const hit = hitTest(lastScene, world)
+    const hit = hitTest(engine, world)
     if (pending !== null && pending.kind === 'iterate') {
       const p = pending
       pending = null
@@ -630,26 +643,43 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   }
 
   // ---- rendering ----
-  const itemShapes = (scene: Scene, hit: Hit, stroke: string): Shape[] => {
+  // Hover-group target: hovering an atom or its bubble highlights the WHOLE
+  // binder group (bubble ring + every atom bound to it) in their shared hue.
+  // Returns the binder region id, or null when the hit is not part of a group.
+  const hoverGroupBinder = (hit: Hit): RegionId | null => {
     if (hit.kind === 'node') {
-      const n = scene.nodes.find((x) => x.id === hit.id)
-      return n === undefined ? [] : [{ kind: 'circle', center: n.center, r: n.geometry.outerRadius, stroke }]
+      const n = displayed.nodes[hit.id]
+      return n !== undefined && n.kind === 'atom' ? n.binder : null
     }
     if (hit.kind === 'region') {
-      const r = scene.regions.find((x) => x.id === hit.id)
-      return r === undefined ? [] : [{ kind: 'circle', center: r.center, r: r.radius, stroke }]
+      const r = displayed.regions[hit.id]
+      return r !== undefined && r.kind === 'bubble' ? hit.id : null
     }
-    const w = scene.wires.find((x) => x.id === hit.id)
-    return w === undefined ? [] : w.spokes.map((s): Shape => ({ kind: 'polyline', points: [w.hub, s], stroke, width: 3 }))
+    return null
   }
 
-  const withPin = (s: PhysicsState, p: { readonly node: NodeId; readonly pos: Vec2 }): PhysicsState => {
-    if (!s.positions.has(p.node)) return s
-    const positions = new Map(s.positions)
-    positions.set(p.node, p.pos)
-    const velocities = new Map(s.velocities)
-    velocities.set(p.node, vec(0, 0))
-    return { positions, velocities }
+  // Highlight shapes for a hit, drawn over the painted engine. Node/region get
+  // a ring; a wire gets its stroked spline(s).
+  const itemShapes = (hit: Hit, stroke: string): Shape[] => {
+    if (hit.kind === 'node') {
+      const b = engine.bodies.get(hit.id)
+      return b === undefined ? [] : [{ kind: 'circle', center: b.pos, r: b.discR, fill: null, stroke, width: 2, insetColor: null, glow: null }]
+    }
+    if (hit.kind === 'region') {
+      const g = engine.regions.get(hit.id)
+      return g === undefined ? [] : [{ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke, width: 2, insetColor: null, glow: null }]
+    }
+    const out: Shape[] = []
+    for (const l of legPaths(engine)) {
+      if (l.wid === hit.id) out.push({ kind: 'bezier', from: l.path.from, c1: l.path.c1, c2: l.path.c2, to: l.path.to, stroke, width: 3, glow: null })
+    }
+    for (const ex of boundaryExits(engine)) {
+      if (ex.wid === hit.id) out.push({ kind: 'bezier', from: ex.path.from, c1: ex.path.c1, c2: ex.path.c2, to: ex.path.to, stroke, width: 3, glow: null })
+    }
+    for (const s of existentialStubs(engine)) {
+      if (s.wid === hit.id) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width: 3, glow: null })
+    }
+    return out
   }
 
   const frame = (): void => {
@@ -658,22 +688,24 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
     }
-    for (let i = 0; i < PHYSICS_STEPS_PER_FRAME; i++) {
-      physics = step(displayed, physics, DEFAULT_PARAMS)
-      if (pin !== null) physics = withPin(physics, pin)
+    for (let i = 0; i < SETTLE_STEPS_PER_FRAME; i++) {
+      // drag pins the grabbed body: hold it at the cursor and relax around it
+      // (excluded from cohesion so the drag feels direct)
+      settleStep(engine, pin?.node ?? null)
+      if (pin !== null) {
+        const b = engine.bodies.get(pin.node)
+        if (b !== undefined) { b.pos = pin.pos; b.vel = vec(0, 0) }
+      }
     }
-    lastScene = buildScene(displayed, physics.positions)
-    // Determine hovered node for tethers: hit test if hovering, or undefined if no hover
-    let hoverNodeId: NodeId | undefined
+    const shapes: Shape[] = paint(engine, theme)
+    for (const h of hits) shapes.push(...itemShapes(h, SELECT_STROKE))
     if (hoverWorld !== null) {
-      const hov = hitTest(lastScene, hoverWorld)
-      if (hov !== null && hov.kind === 'node') hoverNodeId = hov.id
-    }
-    const shapes: Shape[] = renderScene(lastScene, hoverNodeId !== undefined ? { hoverNode: hoverNodeId } : {})
-    for (const h of hits) shapes.push(...itemShapes(lastScene, h, SELECT_STROKE))
-    if (hoverWorld !== null) {
-      const hov = hitTest(lastScene, hoverWorld)
-      if (hov !== null) shapes.push(...itemShapes(lastScene, hov, HOVER_STROKE))
+      const hov = hitTest(engine, hoverWorld)
+      if (hov !== null) {
+        const binder = hoverGroupBinder(hov)
+        if (binder !== null) shapes.push(...highlightGroup(engine, theme, binder))
+        else shapes.push(...itemShapes(hov, HOVER_STROKE))
+      }
     }
     ctx2d.clearRect(0, 0, canvas.width, canvas.height)
     drawShapes(ctx2d, shapes, view)
@@ -689,7 +721,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     const screen = screenOf(e)
     downScreen = screen
     dragMoved = false
-    const hit = hitTest(lastScene, toWorld(screen))
+    const hit = hitTest(engine, toWorld(screen))
     drag = hit !== null && hit.kind === 'node'
       ? { kind: 'node', node: hit.id }
       : { kind: 'pan', startOffset: { x: view.offsetX, y: view.offsetY }, startScreen: screen }
@@ -787,7 +819,14 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   )
   const modeBtn = button('Switch to PROVE', onToggleMode)
   const sideBtn = button('Side: forward (toggle)', onToggleSide)
-  goalRow.append(modeBtn, sideBtn, button('Undo', onUndo))
+  // Theme toggle: view-only, persists for the session; paint reads `theme`
+  // every frame, so flipping it re-styles the next frame with no rebuild.
+  const themeBtn = button(`Theme: ${theme.name}`, () => {
+    theme = nextTheme(theme)
+    canvas.style.background = theme.canvas
+    themeBtn.textContent = `Theme: ${theme.name}`
+  })
+  goalRow.append(modeBtn, sideBtn, themeBtn, button('Undo', onUndo))
   proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave), button('Load theory', onLoad))
   chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, theoremsDiv)
   renderTheoremList()

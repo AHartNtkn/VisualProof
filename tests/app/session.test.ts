@@ -7,8 +7,9 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { bootBundledContext } from '../../src/app/boot'
 import { termEq } from '../../src/kernel/term/term'
-import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem } from '../../src/app/session'
+import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary } from '../../src/app/session'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
+import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
 
 const consts = new Set(['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO'])
 const p = (s: string) => parseTerm(s, consts)
@@ -339,5 +340,28 @@ describe('unCite refusals', () => {
         },
       })
     ).toThrowError(/not an occurrence/)
+  })
+})
+
+describe('sideBoundary — prove-mode sides render their statement boundary', () => {
+  it('forward reads the lhs boundary, backward reads the rhs boundary', () => {
+    const theory = buildFregeTheory()
+    const ctx = verifyTheory(theory)
+    const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
+    const s = startSession(plusComm.lhs, plusComm.rhs, ctx)
+    expect(sideBoundary(s, 'forward')).toBe(s.lhs.boundary)
+    expect(sideBoundary(s, 'backward')).toBe(s.rhs.boundary)
+  })
+
+  it('an engine built for a side renders exactly one frame exit per boundary wire', () => {
+    const theory = buildFregeTheory()
+    const ctx = verifyTheory(theory)
+    const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
+    const s = startSession(plusComm.lhs, plusComm.rhs, ctx)
+    const boundary = sideBoundary(s, 'backward')
+    expect(boundary.length).toBeGreaterThan(0)
+    const e = mkEngine(s.backward.current, boundary)
+    settle(e, 1200)
+    expect(paint(e, LIGHT).filter((sh) => sh.kind === 'exit')).toHaveLength(boundary.length)
   })
 })

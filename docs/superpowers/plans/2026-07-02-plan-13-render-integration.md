@@ -33,6 +33,39 @@
 
 ### Task 3: Cleanup + review + merge
 
-- [ ] Delete the repo-root lab/harness scratch (`render-lab*.{ts,html}`, `render-thm.*`, `shot-*.mjs`); the docs spec copy is the only survivor. Suite + tsc + e2e green.
-- [ ] Independent adversarial review: mutation probes on each law test (e.g., re-enable atom exitLine — law-4 test fails; leak text into term anatomy — law-2 fails; skip overlap projection — law-1 fails; desync anatomy stroke from wire stroke — law-5 fails; un-glow the bubble in Dark — law-6 fails); hunt for hit-test/geometry drift (a hit target must exist wherever something is painted); confirm live `settleStep` determinism (same diagram, same seed → same layout).
+- [x] Delete the repo-root lab/harness scratch (`render-lab*.{ts,html}`, `render-thm.*`, `shot-*.mjs`); the docs spec copy is the only survivor. Suite + tsc + e2e green.
+- [x] Independent adversarial review: mutation probes on each law test (e.g., re-enable atom exitLine — law-4 test fails; leak text into term anatomy — law-2 fails; skip overlap projection — law-1 fails; desync anatomy stroke from wire stroke — law-5 fails; un-glow the bubble in Dark — law-6 fails); hunt for hit-test/geometry drift (a hit target must exist wherever something is painted); confirm live `settleStep` determinism (same diagram, same seed → same layout).
 - [ ] Plan-doc sync; merge to main (branch `plan-13-render`); delete branch. The FEEL round (interaction/motion iteration with the user) starts after merge, in-app.
+
+---
+
+### Task 3 execution record (independent adversarial review)
+
+Reviewer wrote none of the code under review (commits `1a97d0d`, `0564def`). Baseline before review: 689/689 suite, tsc clean, e2e 3/3.
+
+**Part A — law-mutation probes** (each: mutate src → run → observe result → revert):
+
+| # | Mutation | Expected | Result | Catching test |
+|---|----------|----------|--------|---------------|
+| 1 | Re-enable `exitLine` in `atomGeometry` | law-4 fails | FAILED as expected | `bend.test.ts` "emits no exit line (law 4)" |
+| 2 | Emit a label at each term glyph position in `paint` | law-2 fails | FAILED as expected | `paint.test.ts` "law 2 — no text on lambda" |
+| 3 | Skip the final overlap projection in `settle` | law-1 fails | **DID NOT FAIL** (finding below) | — |
+| 4 | Hardcode anatomy arc width ≠ `wireW` | law-5 fails | FAILED as expected | `paint.test.ts` "law 5 — linework coherence" |
+| 5 | Un-glow the Dark bubble ring | law-6 fails | FAILED as expected | `paint.test.ts` "law 6 — Dark glows the bubble ring" |
+| 6 | Junction threshold `>=3` → `>=4` | law-7 fails | FAILED as expected | `wires.test.ts` junction trunk tangents + `hittest.test.ts` junction click (the bundled-theorem count test did not catch it — see note) |
+| 7 | `boundaryExits` returns `[]` | law-3 + boundary tests fail | FAILED as expected | `paint.test.ts` "law 3" + `hittest.test.ts` frame-exit click |
+| — | Inject `Math.random()*1e-9` into `settleStep` position | determinism test fails | FAILED as expected | `relax.test.ts` "deterministic incremental relaxation" (a raw seed-constant change would NOT fail it, and correctly so: same construction ⇒ same seed ⇒ same layout is still determinism; the test pins run-to-run reproducibility, which is the correct scope) |
+
+Probe 6 note: the `relax.test.ts` law-7 count test derives its `expected` from the same `>=3` formula and runs only over the bundled theorems, which contain no exactly-3-endpoint wires — so the threshold change slipped past it. The constant is anchored by `wires.test.ts` and `hittest.test.ts`, which build an explicit 3-endpoint wire; law-7 remains guarded.
+
+**Finding (fixed): law-1 containment was not pinned to its mechanism.** With `resolveOverlaps` removed from BOTH call sites (periodic in `settleStep`, final in `settle`), the ENTIRE view+app suite (117 tests) still passed. The three bundled theorem sides are sparse enough that soft repulsion alone keeps their region circles legal within EPS=0.5; a dense-diagram experiment showed 6 sibling cuts already overlap at full settle without projection (10 cuts → 4 overlaps). Fix: added `relax.test.ts` "holds for a dense sheet of sibling cuts (requires overlap projection)" — 10 sibling cuts × 3 nodes; it fails without `resolveOverlaps` (observed: `expected true to be false`) and passes with it. The projection is not dead code: it is load-bearing for dense sheets and for live drag/pin, which the sparse static cases did not exercise.
+
+**Part B — independent hunt:**
+- *Faithfulness to the reference (`render-lab8.ts`):* Hobby math (`hobbyRho`/`hobbyBezier`), junction trunk-tangent selection (`computeLegs`), minimal-circle subgradient descent (`recomputeRegions`), and overlap projection (`resolveOverlaps`) are line-for-line faithful. The lab's monolithic `relax(ticks)` loop was split into `settleStep` (one tick, `e.tick % 10` projection cadence — matches the lab's `t % 10`) + `settle` (budget then final projection); the `exitLine` law-4 fix is the only intended behavior change. No silent divergence found.
+- *Hit/paint parity:* every painted target with an action is hittable — node discs, satellite discs (→ node), junction dots (→ wire), leg splines, frame exits (→ wire), region rings, and the ∃ stub. The ∃ stub was painted but had no hit test; added `hittest.test.ts` "a click on an existential stub resolves to its internal wire". The sheet frame is background (no action) — correctly not hittable.
+- *Determinism:* verified the test pins reproducibility (injected 1e-9 noise → fails).
+- *Live-loop safety:* added `relax.test.ts` "live-loop safety (bounded, non-diverging energy)" — per-frame `settleStep` with a pinned body stays finite and per-window movement decays (no NaN, no sustained oscillation).
+- *Theme completeness:* every color/width in `paint.ts` comes from the `Theme` object; the only hex/rgba literals are inside the `LIGHT`/`DARK` definitions themselves. `canvas.ts` holds only device-pixel primitives (glow blur, tick length). No stray literals.
+- *e2e:* the 3 specs drive the new pipeline through the live shell (`settleStep`/`paint`/`drawShapes`, `__vpaDebug` from the same module) — boots, term entry, end-to-end prove. 3/3 green.
+
+**Result:** battery additions committed (`plan 13 task 3: review battery additions`). Final: 692/692 suite, tsc clean, e2e 3/3. Verdict: ISSUES-FIXED-APPROVED. Merge/branch-delete left to the team lead.

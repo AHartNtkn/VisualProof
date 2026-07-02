@@ -34,7 +34,10 @@ export type NodeGeometry = {
   /** Innermost arc carrying the output around to the gap edge (null when the
       output column already sits at the first column next to the gap). */
   readonly exitArc: { readonly r: number; readonly a0: number; readonly a1: number } | null
-  readonly exitLine: readonly [Vec2, Vec2]
+  /** The output's straight run out of the anatomy — term nodes only. Refs and
+      atoms have no term output, so they emit no exit line (law 4: non-term
+      nodes must not fabricate a second leg). */
+  readonly exitLine: readonly [Vec2, Vec2] | null
 }
 
 /**
@@ -99,15 +102,14 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
 }
 
 /**
- * Atoms (relation-variable applications) have no term structure: a small
- * disc with arg anchors spread evenly around it. Anchor keys use portKey
- * spelling without the colon ('a0', 'a1', …) purely as local labels.
- *
- * An optional center label carries a relation reference's defId — the same
- * glyph channel term-constant names use (rendered by renderScene), so a named
- * relation reads with the same visual voice as a constant like ZERO.
+ * Atoms (relation-variable applications) and relation refs have no term
+ * structure: a small disc with arg anchors spread evenly around it. Anchor
+ * keys use portKey spelling without the colon ('a0', 'a1', …) purely as local
+ * labels. A ref's name is not a geometry glyph — the paint layer draws it as
+ * the disc's label from the node's defId (law 2: named nodes, not text on
+ * anatomy).
  */
-export function atomGeometry(arity: number, label?: string): NodeGeometry {
+export function atomGeometry(arity: number): NodeGeometry {
   const r = 2
   const pierce = r + 1
   const portAnchors: Record<string, Vec2> = {}
@@ -121,10 +123,10 @@ export function atomGeometry(arity: number, label?: string): NodeGeometry {
     outerRadius: pierce + 0.5,
     arcs: [{ r, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0 }],
     radials,
-    glyphs: label === undefined ? [] : [{ pos: polar(0, 0), constId: label }],
+    glyphs: [],
     outputAnchor: polar(0, pierce),
     portAnchors,
     exitArc: null,
-    exitLine: [polar(0, r), polar(0, pierce)],
+    exitLine: null,
   }
 }

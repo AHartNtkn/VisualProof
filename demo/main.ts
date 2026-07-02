@@ -1,6 +1,6 @@
 import { parseTerm } from '../src/kernel/term/parse'
 import { DiagramBuilder } from '../src/kernel/diagram/builder'
-import { buildScene, initialState, step, renderScene, drawShapes, DEFAULT_PARAMS } from '../src/view/index'
+import { mkEngine, settleStep, paint, drawShapes, LIGHT } from '../src/view/index'
 
 const consts = new Set<string>()
 const p = (s: string) => parseTerm(s, consts)
@@ -23,16 +23,17 @@ h.wire(cut, [
 const d = h.build()
 
 const canvas = document.getElementById('c') as HTMLCanvasElement
+canvas.style.background = LIGHT.canvas
 const ctx = canvas.getContext('2d')!
-let state = initialState(d)
+const engine = mkEngine(d, [])
+settleStep(engine)
 
 function frame(): void {
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
-  for (let i = 0; i < 4; i++) state = step(d, state, DEFAULT_PARAMS)
-  const scene = buildScene(d, state.positions)
+  for (let i = 0; i < 4; i++) settleStep(engine)
   ctx.clearRect(0, 0, canvas.width, canvas.height)
-  drawShapes(ctx, renderScene(scene), {
+  drawShapes(ctx, paint(engine, LIGHT), {
     scale: 6,
     offsetX: canvas.width / 2,
     offsetY: canvas.height / 2,

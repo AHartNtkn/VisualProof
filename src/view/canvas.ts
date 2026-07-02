@@ -1,9 +1,19 @@
-import type { Shape } from './display'
+import type { Shape } from './paint'
+import type { Vec2 } from './vec'
 
 /**
  * The only module that touches the canvas API — thin, untested browser glue.
- * The transform maps world units to device pixels.
+ * The transform maps world units to device pixels; stroke WIDTHS, glow blur,
+ * junction-dot radii and boundary ticks are already in device pixels (they do
+ * not zoom), while circle/arc radii and disc-label sizes are world units and
+ * scale with the view.
  */
+
+/** Device-pixel blur of the theme glow. */
+const GLOW_BLUR = 5
+/** Half-length (device px) of a boundary-exit tick. */
+const EXIT_TICK_HALF = 5
+
 export function drawShapes(
   ctx: CanvasRenderingContext2D,
   shapes: readonly Shape[],
@@ -11,51 +21,128 @@ export function drawShapes(
 ): void {
   const X = (x: number): number => x * transform.scale + transform.offsetX
   const Y = (y: number): number => y * transform.scale + transform.offsetY
+  const P = (p: Vec2): { x: number; y: number } => ({ x: X(p.x), y: Y(p.y) })
+  const setGlow = (glow: string | null): void => {
+    if (glow === null) { ctx.shadowBlur = 0; return }
+    ctx.shadowColor = glow
+    ctx.shadowBlur = GLOW_BLUR
+  }
+  ctx.lineJoin = 'round'
+  ctx.lineCap = 'round'
   for (const s of shapes) {
     switch (s.kind) {
-      case 'circle': {
+      case 'frame': {
         ctx.beginPath()
-        ctx.arc(X(s.center.x), Y(s.center.y), s.r * transform.scale, 0, 2 * Math.PI)
-        if (s.fill !== undefined) {
-          ctx.fillStyle = s.fill
-          ctx.fill()
-        }
-        ctx.strokeStyle = s.stroke
-        ctx.lineWidth = 1
-        ctx.stroke()
-        break
-      }
-      case 'arc': {
-        ctx.beginPath()
-        ctx.arc(X(s.center.x), Y(s.center.y), s.r * transform.scale, s.a0, s.a1)
+        ctx.roundRect(X(s.x), Y(s.y), s.w * transform.scale, s.h * transform.scale, s.cornerPx)
+        ctx.fillStyle = s.fill
+        ctx.fill()
         ctx.strokeStyle = s.stroke
         ctx.lineWidth = s.width
         ctx.stroke()
         break
       }
+      case 'circle': {
+        const cx = X(s.center.x), cy = Y(s.center.y), r = s.r * transform.scale
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, 2 * Math.PI)
+        if (s.fill !== null) { ctx.fillStyle = s.fill; ctx.fill() }
+        if (s.insetColor !== null) {
+          const grad = ctx.createRadialGradient(cx, cy, r * 0.72, cx, cy, r)
+          grad.addColorStop(0, 'rgba(0,0,0,0)')
+          grad.addColorStop(1, s.insetColor)
+          ctx.fillStyle = grad
+          ctx.fill()
+        }
+        if (s.stroke !== null) {
+          setGlow(s.glow)
+          ctx.strokeStyle = s.stroke
+          ctx.lineWidth = s.width
+          ctx.stroke()
+          ctx.shadowBlur = 0
+        }
+        break
+      }
+      case 'arc': {
+        setGlow(s.glow)
+        ctx.beginPath()
+        ctx.arc(X(s.center.x), Y(s.center.y), s.r * transform.scale, s.a0, s.a1)
+        ctx.strokeStyle = s.stroke
+        ctx.lineWidth = s.width
+        ctx.stroke()
+        ctx.shadowBlur = 0
+        break
+      }
       case 'segment': {
+        setGlow(s.glow)
         ctx.beginPath()
         ctx.moveTo(X(s.from.x), Y(s.from.y))
         ctx.lineTo(X(s.to.x), Y(s.to.y))
         ctx.strokeStyle = s.stroke
         ctx.lineWidth = s.width
         ctx.stroke()
+        ctx.shadowBlur = 0
         break
       }
-      case 'polyline': {
-        if (s.points.length === 0) break
+      case 'bezier': {
+        setGlow(s.glow)
+        const a = P(s.from), c1 = P(s.c1), c2 = P(s.c2), b = P(s.to)
         ctx.beginPath()
-        ctx.moveTo(X(s.points[0]!.x), Y(s.points[0]!.y))
-        for (const pt of s.points.slice(1)) ctx.lineTo(X(pt.x), Y(pt.y))
+        ctx.moveTo(a.x, a.y)
+        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
         ctx.strokeStyle = s.stroke
         ctx.lineWidth = s.width
         ctx.stroke()
+        ctx.shadowBlur = 0
+        break
+      }
+      case 'exit': {
+        setGlow(s.glow)
+        const a = P(s.from), c1 = P(s.c1), c2 = P(s.c2), b = P(s.to)
+        ctx.strokeStyle = s.stroke
+        ctx.lineWidth = s.width
+        ctx.beginPath()
+        ctx.moveTo(a.x, a.y)
+        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
+        ctx.stroke()
+        const q = P(s.tick.center)
+        ctx.beginPath()
+        if (s.tick.vertical) { ctx.moveTo(q.x, q.y - EXIT_TICK_HALF); ctx.lineTo(q.x, q.y + EXIT_TICK_HALF) }
+        else { ctx.moveTo(q.x - EXIT_TICK_HALF, q.y); ctx.lineTo(q.x + EXIT_TICK_HALF, q.y) }
+        ctx.stroke()
+        ctx.shadowBlur = 0
+        break
+      }
+      case 'stub': {
+        setGlow(s.glow)
+        const a = P(s.from), b = P(s.to)
+        ctx.strokeStyle = s.stroke
+        ctx.lineWidth = s.width
+        ctx.beginPath()
+        ctx.moveTo(a.x, a.y)
+        ctx.lineTo(b.x, b.y)
+        ctx.stroke()
+        ctx.shadowBlur = 0
+        const d = P(s.dot)
+        ctx.beginPath()
+        ctx.arc(d.x, d.y, s.dotRpx, 0, 2 * Math.PI)
+        ctx.fillStyle = s.stroke
+        ctx.fill()
+        break
+      }
+      case 'dot': {
+        ctx.beginPath()
+        ctx.arc(X(s.center.x), Y(s.center.y), s.rPx, 0, 2 * Math.PI)
+        ctx.fillStyle = s.fill
+        ctx.fill()
         break
       }
       case 'label': {
+        const size = Math.max(8.5, Math.min(14, s.r * transform.scale * 0.5))
+        ctx.font = `600 ${size}px ${s.font}`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
         ctx.fillStyle = s.color
-        ctx.font = `${12}px sans-serif`
-        ctx.fillText(s.text, X(s.pos.x), Y(s.pos.y))
+        ctx.fillText(s.text, X(s.center.x), Y(s.center.y))
         break
       }
     }
