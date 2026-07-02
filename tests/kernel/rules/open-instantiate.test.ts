@@ -65,6 +65,47 @@ describe('open comprehension instantiation', () => {
       .toThrowError(/must properly enclose the instantiated bubble/)
   })
 
+  it('threads a parameter through an OPEN comp: atom rebinding AND parameter wire identity both hold', () => {
+    // Comp "x : R′(x) ∧ x's line meets a q-node riding a parameter":
+    // boundary [stub-arg wire, parameter wire], with a relation stub to rebind.
+    const b = new DiagramBuilder()
+    const stub = b.bubble(b.root, 1)
+    const atom = b.atom(stub, stub)
+    const qn = b.termNode(b.root, p('q'))
+    const bx = b.wire(b.root, [
+      { node: atom, port: { kind: 'arg', index: 0 } },
+      { node: qn, port: { kind: 'output' } },
+    ])
+    const bq = b.wire(b.root, [{ node: qn, port: { kind: 'freeVar', name: 'q' } }])
+    const comp = mkDiagramWithBoundary(b.build(), [bx, bq])
+
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const rOuter = h.bubble(cut, 1)
+    const rInner = h.bubble(rOuter, 1)
+    const a = h.atom(rInner, rInner)
+    const w = h.wire(rInner, [{ node: a, port: { kind: 'arg', index: 0 } }])
+    const wParam = h.wire(h.root, [])
+    const d = h.build()
+
+    const out = applyComprehensionInstantiate(d, rInner, comp, [wParam], new Map([[stub, rOuter]]))
+    expect(out.regions[rInner]).toBeUndefined()
+    // binder rebinding: the copy's atom binds to the ENCLOSING bubble
+    const atoms = Object.entries(out.nodes).filter(([, x]) => x.kind === 'atom')
+    expect(atoms).toHaveLength(1)
+    expect(atoms[0]![1].kind === 'atom' && atoms[0]![1].binder).toBe(rOuter)
+    // parameter sharing: the copy's q-node rides the GIVEN host wire itself
+    const newTerms = Object.entries(out.nodes)
+      .filter(([id, x]) => x.kind === 'term' && d.nodes[id] === undefined)
+    expect(newTerms).toHaveLength(1)
+    expect(out.wires[wParam]!.endpoints).toEqual([
+      { node: newTerms[0]![0], port: { kind: 'freeVar', name: 's0' } },
+    ])
+    // and the copy's stub-side content landed on the original argument wire
+    expect(out.wires[w]!.endpoints.some((ep) => ep.port.kind === 'arg')).toBe(true)
+    expect(out.wires[w]!.endpoints.some((ep) => ep.port.kind === 'output')).toBe(true)
+  })
+
   it('the closed path is unchanged: no binders argument behaves exactly as before', () => {
     const { d, rInner } = host()
     const b = new DiagramBuilder()
