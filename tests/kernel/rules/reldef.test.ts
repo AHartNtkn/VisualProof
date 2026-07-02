@@ -119,6 +119,35 @@ describe('relFold — refuses a near-miss body (one node changed)', () => {
   })
 })
 
+/** R(x) := ∃S[S(x)]: a top-level bubble binding one atom whose arg is the boundary. */
+function existsBody(): DiagramWithBoundary {
+  const b = new DiagramBuilder()
+  const bub = b.bubble(b.root, 1)
+  const at = b.atom(bub, bub)
+  const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
+  return mkDiagramWithBoundary(b.build(), [bound])
+}
+
+describe('relUnfold / relFold on a body with a top-level bubble (closed by construction)', () => {
+  it('copies the body bubble as fresh content and folds back to fingerprint equality', () => {
+    const relations = new Map([['E', existsBody()]])
+    const { d, node, carrier, wArg, region } = refHost('E')
+    const un = applyRelUnfold(d, node, relations)
+    expect(un.nodes[node]).toBeUndefined()
+    // the ∃-bubble was copied as a fresh region binding one fresh atom
+    const bubbles = Object.entries(un.regions).filter(([, r]) => r.kind === 'bubble')
+    expect(bubbles).toHaveLength(1)
+    const bubId = bubbles[0]![0]
+    const atoms = Object.values(un.nodes).filter((n) => n.kind === 'atom' && n.binder === bubId)
+    expect(atoms).toHaveLength(1)
+    void carrier
+    // fold the copied ∃-subtree back to the reference
+    const sel = mkSelection(un, { region, regions: [bubId], nodes: [], wires: [] })
+    const folded = applyRelFold(un, sel, 'E', [wArg], relations)
+    expect(diagramFingerprint(folded)).toBe(diagramFingerprint(d))
+  })
+})
+
 describe('relUnfold / relFold are polarity-blind (work inside a cut)', () => {
   it('unfolds a ref inside a cut and folds it back', () => {
     const relations = new Map([['R', bodyR()]])

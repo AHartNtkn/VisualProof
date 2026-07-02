@@ -53,18 +53,13 @@ export function verifyTheory(t: Theory): ProofContext {
     } catch (e) {
       throw new ProofError(`relation '${name}': ${e instanceof Error ? e.message : String(e)}`)
     }
-    // Self-containedness: open-pattern relation definitions (atoms bound to a
-    // top-level relation parameter) are deferred. extractSubgraph represents an
-    // external binder as a stub bubble hanging directly off the pattern root,
-    // so a v1 self-contained body carries NO bubble as a direct child of its
-    // root — its every binder is enclosed by the body itself.
-    for (const [rid, r] of Object.entries(rel.diagram.regions)) {
-      if (r.kind === 'bubble' && r.parent === rel.diagram.root) {
-        throw new ProofError(
-          `relation '${name}': body has an external binder stub '${rid}' (open-pattern relation definitions are not supported)`,
-        )
-      }
-    }
+    // No self-containedness check is needed: a stored relation body is closed by
+    // construction (a DiagramWithBoundary is a self-contained diagram). Openness
+    // is not a property of a stored body at all — it exists only as a splice-time
+    // binder map deciding which bubbles are external stubs, and relUnfold always
+    // splices with an EMPTY binder map, so every bubble in a body is content with
+    // ∃-meaning and is copied soundly. A body like R(x) := ∃S[S(x)] with a
+    // top-level bubble is therefore perfectly legitimate.
     relations.set(name, rel)
     relArity.set(name, rel.boundary.length)
   }

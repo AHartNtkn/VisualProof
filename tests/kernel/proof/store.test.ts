@@ -111,16 +111,20 @@ describe('verifyTheory — relation references', () => {
     expect(ctx.relations.get('R')!.boundary).toHaveLength(1)
   })
 
-  it('refuses a relation body carrying an external binder stub (top-level binder)', () => {
-    // A bubble directly under the body root is the extractSubgraph open-pattern
-    // representation — deferred, so verification must refuse it.
+  it('accepts a relation body with a top-level bubble (∃S[S(x)]-shaped, closed by construction)', () => {
+    // A bubble directly under the body root is a legitimate ∃-quantifier, not an
+    // "external binder": a stored body is closed, and relUnfold copies the bubble
+    // as fresh content. Verification must accept it, and it round-trips through
+    // theoryToJson/loadTheory unchanged.
     const b = new DiagramBuilder()
     const bub = b.bubble(b.root, 1)
     const at = b.atom(bub, bub)
     const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
-    const openBody = mkDiagramWithBoundary(b.build(), [bound])
-    expect(() => verifyTheory({ definitions: {}, relations: { R: openBody }, theorems: [] }))
-      .toThrowError(/relation 'R': body has an external binder stub/)
+    const existsBody = mkDiagramWithBoundary(b.build(), [bound])
+    expect(() => verifyTheory({ definitions: {}, relations: { R: existsBody }, theorems: [] })).not.toThrow()
+    const json = theoryToJson({ definitions: {}, relations: { R: existsBody }, theorems: [] })
+    const { ctx } = loadTheory(JSON.parse(JSON.stringify(json)))
+    expect(ctx.relations.has('R')).toBe(true)
   })
 
   it('refuses a theorem side whose reference names an unknown relation', () => {
@@ -131,17 +135,6 @@ describe('verifyTheory — relation references', () => {
   it('refuses a theorem side whose reference arity disagrees with the relation', () => {
     expect(() => verifyTheory({ definitions: {}, relations: { R: simpleBody() }, theorems: [refTheorem('R', 2)] }))
       .toThrowError(/has arity 2 but the relation has arity 1/)
-  })
-
-  it('loadTheory rejects a file whose relation body carries an external binder stub', () => {
-    const b = new DiagramBuilder()
-    const bub = b.bubble(b.root, 1)
-    const at = b.atom(bub, bub)
-    const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
-    const openBody = mkDiagramWithBoundary(b.build(), [bound])
-    const json = theoryToJson({ definitions: {}, relations: { R: openBody }, theorems: [] })
-    expect(() => loadTheory(JSON.parse(JSON.stringify(json))))
-      .toThrowError(/relation 'R': body has an external binder stub/)
   })
 })
 
