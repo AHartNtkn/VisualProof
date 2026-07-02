@@ -366,14 +366,233 @@ function deriveSuccShiftS(ctx: ProofContext): Theorem {
   return { name: 'succShiftS', lhs, rhs: mkDiagramWithBoundary(e.cur, [wm, wn, wsn]), steps: [...e.steps] }
 }
 
+// ─── plusComm (ℕ-induction citing succShiftS: PLUS a b ~ PLUS b a) ───
+//
+// Ported from the verified spike4/pluscomm4 trace, adapted to two FOLDED ℕ
+// guards. Strengthened predicate R(x) := `PLUS x b̂ —o— PLUS b̂ x` as a FLAT
+// parameterized comprehension (parameter = the ambient b-line), so R(a) IS the
+// bare commutation pair — no ∀b unwrapping. The inductive step cites succShiftS
+// forward, assembling its occurrence from the ambient folded b-reference
+// (iterated in) plus a manufactured SUCC(y) node.
+
+const PT = p('PLUS s0 s1')
+
+/** The term node in `region` carrying `t` whose freeVar `name` rides `wire`. */
+function nodeOnWire(e: DerivationCursor, region: RegionId, t: Term, name: string, wire: WireId): NodeId {
+  const found = Object.entries(e.cur.nodes).find(
+    ([id, n]) => n.kind === 'term' && n.region === region && J(n.term) === J(t) &&
+      e.cur.wires[wire]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === name),
+  )
+  if (found === undefined) throw new Error(`no '${name}'-on-'${wire}' node in '${region}'`)
+  return found[0]
+}
+
+/** Flat parameterized comp: boundary = [x-stub, b-parameter-stub]. */
+function buildComp4(): DiagramWithBoundary {
+  const cb = new DiagramBuilder()
+  const P1 = cb.termNode(cb.root, PT) // PLUS x b
+  const P2 = cb.termNode(cb.root, PT) // PLUS b x
+  const wq = cb.wire(cb.root, [
+    { node: P1, port: { kind: 'freeVar', name: 's0' } },
+    { node: P2, port: { kind: 'freeVar', name: 's1' } },
+  ])
+  const wr = cb.wire(cb.root, [
+    { node: P1, port: { kind: 'freeVar', name: 's1' } },
+    { node: P2, port: { kind: 'freeVar', name: 's0' } },
+  ])
+  cb.wire(cb.root, [{ node: P1, port: { kind: 'output' } }, { node: P2, port: { kind: 'output' } }])
+  return mkDiagramWithBoundary(cb.build(), [wq, wr])
+}
+
+/**
+ * plusComm: `ℕ(a) ∧ ℕ(b) ⟹ ℕ(a) ∧ ℕ(b) ∧ (PLUS a b —o— PLUS b a)`. Both guards
+ * stay folded; only the A-side copy is unfolded for the bubble instantiation.
+ * Boundary = [wa, wb].
+ */
+function derivePlusComm(ctx: ProofContext): Theorem {
+  const l = new DiagramBuilder()
+  const refA = l.ref(l.root, 'nat', 1)
+  const wa = l.wire(l.root, [{ node: refA, port: { kind: 'arg', index: 0 } }])
+  const refB = l.ref(l.root, 'nat', 1)
+  const wb = l.wire(l.root, [{ node: refB, port: { kind: 'arg', index: 0 } }])
+  const lhsD = l.build()
+  const lhs = mkDiagramWithBoundary(lhsD, [wa, wb])
+  const e = new DerivationCursor(lhsD, ctx)
+
+  // ---- D0: iterate refA, relUnfold the copy; instantiate with flat comp, param [wb]
+  let snap = e.cur
+  e.push('D0a iterate refA', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [refA], wires: [] }), target: e.cur.root })
+  const copyRefA = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'ref' && id !== refA && id !== refB && snap.nodes[id] === undefined)![0]
+  snap = e.cur
+  e.push('D0b relUnfold copyA', { rule: 'relUnfold', node: copyRefA })
+  const cut1c = e.newCutIn(e.cur.root, snap)
+  const rBc = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'bubble' && r.parent === cut1c)![0]
+  e.push('D2 instantiate R(x):=x+b -o- b+x', { rule: 'comprehensionInstantiate', bubble: rBc, comp: buildComp4(), attachments: [wb], binders: {} })
+
+  const nzC = e.nodeBy(cut1c, p('ZERO'))
+  const w0C = e.wireOf(nzC, 'output')
+  const cut2c = Object.entries(e.cur.regions).find(
+    ([id, r]) => r.kind === 'cut' && r.parent === cut1c &&
+      Object.values(e.cur.regions).some((rr) => rr.kind === 'cut' && rr.parent === id),
+  )![0]
+  const cut3c = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'cut' && r.parent === cut2c)![0]
+  const P1_0 = nodeOnWire(e, cut1c, PT, 's0', w0C)
+  const P2_0 = nodeOnWire(e, cut1c, PT, 's1', w0C)
+  const o0 = e.wireOf(P1_0, 'output')
+
+  // ---- t: transform the closure conjunct (fuse SUCCs in; left-shift the a-side)
+  const nSc = e.nodeBy(cut2c, p('SUCC s0'))
+  const wyC = e.wireOf(nSc, 'freeVar')
+  const wsC = e.wireOf(nSc, 'output')
+  const P1y = nodeOnWire(e, cut2c, PT, 's0', wyC)
+  const P2y = nodeOnWire(e, cut2c, PT, 's1', wyC)
+  const oyC = e.wireOf(P1y, 'output')
+  const P1s = nodeOnWire(e, cut3c, PT, 's0', wsC)
+  snap = e.cur
+  e.push('t1 iterate nSc', { rule: 'iteration', sel: mkSelection(e.cur, { region: cut2c, regions: [], nodes: [nSc], wires: [] }), target: cut2c })
+  const nS2 = e.newNodeIn(cut2c, snap)
+  snap = e.cur
+  e.push('t1b iterate nSc', { rule: 'iteration', sel: mkSelection(e.cur, { region: cut2c, regions: [], nodes: [nSc], wires: [] }), target: cut2c })
+  const nS3 = e.newNodeIn(cut2c, snap)
+  e.push('t2 sever wsC', { rule: 'wireSever', wire: wsC, keep: [{ node: nSc, port: { kind: 'output' } }] })
+  const ws2 = e.wireOf(nS2, 'output')
+  e.push('t3 sever ws2', {
+    rule: 'wireSever', wire: ws2,
+    keep: [{ node: nS2, port: { kind: 'output' } }, { node: P1s, port: { kind: 'freeVar', name: 's0' } }],
+  })
+  const ws3 = e.wireOf(nS3, 'output')
+  e.push('t4 fuse nS2->P1s', { rule: 'fusion', wire: ws2 })
+  e.push('t5 fuse nS3->P2s', { rule: 'fusion', wire: ws3 })
+  // P1s = PLUS (SUCC y) b : left-shift to SUCC (PLUS y b), fission out the IH shape
+  e.push('t6 unfold PLUS', { rule: 'unfold', node: P1s, path: ['fn', 'fn'] })
+  e.push('t6 unfold SUCC', { rule: 'unfold', node: P1s, path: ['fn', 'arg', 'fn'] })
+  e.pushConv('t6 left-shift', P1s, app(SUCC_BODY, app(app(PLUS_BODY, port('s0')), port('s1'))))
+  snap = e.cur
+  e.push('t6 fission', { rule: 'fission', node: P1s, path: ['arg'] })
+  const E1c = e.newNodeIn(cut3c, snap)
+  e.push('t6 E fold PLUS', { rule: 'fold', node: E1c, path: ['fn', 'fn'], constId: 'PLUS' })
+  e.push('t6 P1s fold SUCC', { rule: 'fold', node: P1s, path: ['fn'], constId: 'SUCC' })
+  snap = e.cur
+  e.push('t8 iterate IH pair', { rule: 'iteration', sel: mkSelection(e.cur, { region: cut2c, regions: [], nodes: [P1y, P2y], wires: [oyC] }), target: cut3c })
+  const newPair = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined)
+  const H1pc = newPair.find((id) =>
+    e.cur.wires[wyC]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === 's0'))!
+  e.push('t9 cJ E1c=H1pc', { rule: 'congruenceJoin', a: E1c, b: H1pc, certificate: idCert })
+  e.push('t11 deiterate E1c', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E1c], wires: [] }), fuel: 64 })
+
+  // ---- b: root base fact PLUS 0 b —o— PLUS b 0 (units are pure conversion)
+  const Zs = e.intro('b0 intro K-seed', e.cur.root, p('ZERO'))
+  const M = kOpen(e, 'b1 M=PLUS ZERO b', Zs, e.cur.root, p('PLUS ZERO r'), { r: wb })
+  snap = e.cur
+  e.push('b2 iterate M', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [M], wires: [] }), target: e.cur.root })
+  const Mp = e.newNodeIn(e.cur.root, snap)
+  e.push('b3 unfold PLUS', { rule: 'unfold', node: Mp, path: ['fn', 'fn'] })
+  e.push('b3 unfold ZERO', { rule: 'unfold', node: Mp, path: ['fn', 'arg'] })
+  e.pushConv('b3 convert to b+0', Mp, app(app(PLUS_BODY, port('s0')), ZERO_BODY))
+  e.push('b3 fold PLUS', { rule: 'fold', node: Mp, path: ['fn', 'fn'], constId: 'PLUS' })
+  e.push('b3 fold ZERO', { rule: 'fold', node: Mp, path: ['arg'], constId: 'ZERO' })
+  snap = e.cur
+  e.push('b4 fission ZERO out of M', { rule: 'fission', node: M, path: ['fn', 'arg'] })
+  const Z1 = e.newNodeIn(e.cur.root, snap)
+  snap = e.cur
+  e.push('b4b fission ZERO out of Mp', { rule: 'fission', node: Mp, path: ['arg'] })
+  const Z2 = e.newNodeIn(e.cur.root, snap)
+  e.push('b5 cJ Z1=Z2', { rule: 'congruenceJoin', a: Z1, b: Z2, certificate: idCert })
+  e.push('b6 erase Z2 dup', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [Z2], wires: [] }) })
+  const wZ = e.wireOf(Z1, 'output')
+  const wM = e.wireOf(M, 'output')
+  e.push('A7 deiterate base conjunct', {
+    rule: 'deiteration',
+    sel: mkSelection(e.cur, { region: cut1c, regions: [], nodes: [nzC, P1_0, P2_0], wires: [w0C, o0] }),
+    fuel: 64,
+  })
+
+  // ---- c: root Cl fact; the inductive step cites succShiftS inside cutB
+  snap = e.cur
+  e.push('c1 dcIntro', { rule: 'doubleCutIntro', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }) })
+  const cutA = e.newCutIn(e.cur.root, snap)
+  const cutB = e.newCutIn(cutA, snap)
+  const jb = new DiagramBuilder()
+  const h1 = jb.termNode(jb.root, PT)
+  const h2 = jb.termNode(jb.root, PT)
+  const ns = jb.termNode(jb.root, p('SUCC s0'))
+  jb.wire(jb.root, [
+    { node: h1, port: { kind: 'freeVar', name: 's0' } },
+    { node: h2, port: { kind: 'freeVar', name: 's1' } },
+    { node: ns, port: { kind: 'freeVar', name: 's0' } },
+  ])
+  jb.wire(jb.root, [{ node: h1, port: { kind: 'output' } }, { node: h2, port: { kind: 'output' } }])
+  jb.wire(jb.root, [{ node: ns, port: { kind: 'output' } }])
+  const wrJ = jb.wire(jb.root, [
+    { node: h1, port: { kind: 'freeVar', name: 's1' } },
+    { node: h2, port: { kind: 'freeVar', name: 's0' } },
+  ])
+  snap = e.cur
+  e.push('c2 insert hyp pair+SUCC', { rule: 'insertion', region: cutA, pattern: mkDiagramWithBoundary(jb.build(), [wrJ]), attachments: [wb], binders: {} })
+  const newA = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined)
+  const nSf = newA.find((id) => J(e.termOf(id)) === J(p('SUCC s0')))!
+  const wyF = e.wireOf(nSf, 'freeVar')
+  const H1 = nodeOnWire(e, cutA, PT, 's0', wyF)
+  const H2 = nodeOnWire(e, cutA, PT, 's1', wyF)
+  const ohF = e.wireOf(H1, 'output')
+
+  // assemble the succShiftS occurrence in cutB: iterate the AMBIENT folded refB + mint SUCC(y)
+  snap = e.cur
+  e.push('c3 iterate refB into cutB', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [refB], wires: [] }), target: cutB })
+  const refBc = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'ref' && n.region === cutB && snap.nodes[id] === undefined)![0]
+  const seedB = e.intro('c3b intro seedB', cutB, p('ZERO'))
+  const nSb = kOpen(e, 'c4 mint SUCC(y)', seedB, cutB, p('SUCC a'), { a: wyF })
+  const wsb = e.wireOf(nSb, 'output')
+  snap = e.cur
+  e.push('c5 cite succShiftS', {
+    rule: 'theorem', name: 'succShiftS', direction: 'forward',
+    at: { sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [refBc, nSb], wires: [] }), args: [wb, wyF, wsb] },
+  })
+  const newB = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined && e.cur.nodes[id]!.region === cutB)
+  const A2 = newB.find((id) => e.cur.nodes[id]!.kind === 'term' && J(e.termOf(id)) === J(p('SUCC (PLUS s0 s1)')))!
+  const nSb2 = newB.find((id) => e.cur.nodes[id]!.kind === 'term' && J(e.termOf(id)) === J(p('SUCC s0')))!
+  const refBleft = newB.find((id) => e.cur.nodes[id]!.kind === 'ref')!
+  // A2 = SUCC (PLUS b y): fission out the IH shape, join onto the iterated IH
+  snap = e.cur
+  e.push('c6 fission A2', { rule: 'fission', node: A2, path: ['arg'] })
+  const E2 = e.newNodeIn(cutB, snap)
+  snap = e.cur
+  e.push('c7 iterate IH pair', { rule: 'iteration', sel: mkSelection(e.cur, { region: cutA, regions: [], nodes: [H1, H2], wires: [ohF] }), target: cutB })
+  const newP = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined)
+  const H2p = newP.find((id) =>
+    e.cur.wires[wyF]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === 's1'))!
+  e.push('c8 cJ E2=H2p', { rule: 'congruenceJoin', a: E2, b: H2p, certificate: idCert })
+  e.push('c9 deiterate E2', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [E2], wires: [] }), fuel: 64 })
+  e.push('c10 erase occurrence leftovers', {
+    rule: 'erasure',
+    sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [refBleft, nSb2, seedB], wires: [wsb, e.wireOf(seedB, 'output')] }),
+  })
+  e.push('A8 deiterate Cl conjunct', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut1c, regions: [cut2c], nodes: [], wires: [] }), fuel: 64 })
+  e.push('A9 dcElim cut1c', { rule: 'doubleCutElim', region: cut1c })
+
+  // ---- e: cleanup — R(a) IS the bare commutation pair on (wa, wb)
+  e.push('e1 erase base fact', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [M, Mp, Z1, Zs], wires: [wM, wZ, e.wireOf(Zs, 'output')] }) })
+  e.push('e2 erase Cl fact', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [cutA], nodes: [], wires: [] }) })
+  return { name: 'plusComm', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb]), steps: [...e.steps] }
+}
+
 export function buildFregeTheory(): Theory {
   const relations = { nat: natRelation() }
+  const theorems: Theorem[] = []
   const ctx: ProofContext = {
     definitions: fregeDefinitions,
     theorems: new Map(),
     relations: new Map(Object.entries(relations)),
   }
-  const theorems: Theorem[] = conversionRecipes.map((r) => deriveConversion(r, ctx))
-  theorems.push(deriveSuccShiftS(ctx))
+  for (const r of conversionRecipes) theorems.push(deriveConversion(r, ctx))
+  // Map insertion order is dependency order: succShiftS must precede plusComm.
+  const succShiftS = deriveSuccShiftS(ctx)
+  theorems.push(succShiftS)
+  const ctxWithSucc: ProofContext = {
+    definitions: fregeDefinitions,
+    theorems: new Map([[succShiftS.name, succShiftS]]),
+    relations: ctx.relations,
+  }
+  theorems.push(derivePlusComm(ctxWithSucc))
   return { definitions: fregeDefinitions, relations, theorems }
 }

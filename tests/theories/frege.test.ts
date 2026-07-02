@@ -19,10 +19,10 @@ function soleTerm(side: Theorem['lhs']): Term {
 }
 
 describe('the bundled Frege theory', () => {
-  it('verifies end to end: nat resolves, conversion theorems + succShiftS replay', () => {
+  it('verifies end to end: nat resolves, conversion + induction theorems replay', () => {
     const theory = buildFregeTheory()
     const ctx = verifyTheory(theory)
-    expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'succShiftS'])
+    expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'succShiftS', 'plusComm'])
     expect(ctx.relations.has('nat')).toBe(true)
   })
 
@@ -30,7 +30,7 @@ describe('the bundled Frege theory', () => {
     const theory = buildFregeTheory()
     const text = JSON.stringify(theoryToJson(theory))
     const { ctx } = loadTheory(JSON.parse(text))
-    expect(ctx.theorems.size).toBe(4)
+    expect(ctx.theorems.size).toBe(5)
     expect(ctx.relations.has('nat')).toBe(true)
   })
 
@@ -101,6 +101,27 @@ describe('the bundled Frege theory', () => {
     expect(termEq(soleTerm(right.lhs), p('PLUS s0 ZERO'))).toBe(true)
     expect(termEq(soleTerm(right.rhs), p('s0'))).toBe(true)
     expect(right.rhs.boundary).toHaveLength(2)
+  })
+
+  it('plusComm: two folded ℕ guards; rhs is exactly the commutation pair', () => {
+    const t = buildFregeTheory().theorems.find((x) => x.name === 'plusComm')!
+    expect(t.lhs.boundary).toHaveLength(2)
+    expect(t.rhs.boundary).toHaveLength(2)
+    // ℕ(a) ∧ ℕ(b) folded on both sides
+    expect(Object.values(t.lhs.diagram.nodes).filter((n) => n.kind === 'ref')).toHaveLength(2)
+    expect(Object.values(t.rhs.diagram.nodes).filter((n) => n.kind === 'ref')).toHaveLength(2)
+    // rhs audit: exactly two PLUS-pair term nodes at root, sharing one output
+    const rd = t.rhs.diagram
+    const pairs = Object.entries(rd.nodes).filter(
+      ([, n]) => n.kind === 'term' && n.region === rd.root && termEq(n.term, p('PLUS s0 s1')),
+    )
+    expect(pairs).toHaveLength(2)
+    // no OTHER term nodes at the root (only the two PLUS nodes)
+    const rootTerms = Object.values(rd.nodes).filter((n) => n.kind === 'term' && n.region === rd.root)
+    expect(rootTerms).toHaveLength(2)
+    const outWire = (id: string): string =>
+      Object.entries(rd.wires).find(([, w]) => w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'output'))![0]
+    expect(outWire(pairs[0]![0])).toBe(outWire(pairs[1]![0]))
   })
 
   it('the theory is deterministic: two builds are identical', () => {
