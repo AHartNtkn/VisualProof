@@ -56,3 +56,48 @@ Green first run (relational plusLeftUnit, 5 steps: relUnfold ×2, fusion ×2, co
 - `conversion` with a recorded certificate replays fuel-free on the fused pure term; the target `port(a)` (o = a) is the relational form of the old `target: port('s0')` recipes.
 - `ProofContext.definitions` is still a required field (`{}` works) — it dies in Task 2.
 - Port names inside relation bodies are freshened by the splice; derivation code must locate spliced nodes/wires STRUCTURALLY (by term shape / endpoint pattern), never by name — consistent with the port-name law.
+
+---
+
+### Post-plan: the rest-interval redesign (feel-report physics, final)
+
+The user's live reports (never-settling jitter; cuts inflating around
+disconnected content) drove a measured redesign of the relaxation. Refuted by
+experiment along the way (each ablated/measured, see commits): θ-channel
+drive, min-circle solver wobble as sole cause, support-weighted force routing,
+PBD velocity reconciliation, degree-normalized attraction, an unbounded
+barrier (created a 2000-unit "sling": it exiled split content faster than the
+capped springs could bring it home), and project-to-interval-middle (a
+projection storm: inserting wide gaps pairwise re-violates neighbours
+forever).
+
+**What landed (the interval-rest architecture):** every standing cycle
+observed traced to a POINT equilibrium being re-excited — by breathing of the
+derived circle geometry, by field-vs-projection disagreement, or by
+unbounded-vs-bounded force mismatches. Rest is now an INTERVAL:
+
+- ONE sibling pair force on the real circle gap: a SATURATED barrier
+  (holds realistic crowds of attractions, loses to a bundle of leg springs so
+  split content can always come home) below `REST_LO = 2·SIB_GAP`; exactly
+  ZERO force through `REST_HI = 4·SIB_GAP`; saturated constant attraction
+  beyond. Content coasts into the dead zone and nothing acts on it again.
+- Exact minimal enclosing circles (closed-form support refinement) so the
+  zone's edges are not chattered by solver noise.
+- Projection to the boundary (not the zone middle), every tick.
+- All soft forces still share the single SOFT_MAX bound; springs capped.
+
+**Measured outcome:** settling is ~20× faster (full 2600-tick settles run in
+0.3–0.5 s in vitest, were 8–12 s); no pops (max single-tick jump 0.1 world
+units); most diagrams reach TRUE rest (succShiftS@24 decays to 0.4 u/200t and
+stays). Two plusComm double-cut steps (32, 48) and succShiftS@48 are
+TOPOLOGICALLY STRAINED — their wiring (legs from deep content to hub
+junctions) wants distances their cut-nesting cannot give, so the layout
+wanders a near-flat conflicted valley at ~0.05 u/tick (plateaus unchanged
+after 10k+ ticks under every field variant; the force-watch shows a permanent
+three-way tug: sibling attraction toward a region-mate vs leg springs toward
+the hub vs the crowd barrier). The battery asserts TRUE rest where achieved
+and explicit REGRESSION BOUNDS (~2× measured plateau, labelled as such — not
+rest claims) on the strained trio, pinning against the historical 20–150 u
+runaways. Open follow-up if the residual matters visually: full min-circle
+differentials (support + shrink terms), so region-level forces can pull split
+content home through the circle rather than shoving the circle away.

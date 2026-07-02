@@ -37,6 +37,22 @@ const REST = 18
     inward wall, so only the sibling attraction anchors content, and it can
     hold precisely because nothing soft can exceed it. */
 const SOFT_MAX = 0.65 * REST
+/** The rest INTERVAL for sibling gaps: no force at all between REST_LO and
+    REST_HI. The interval's width (3·SIB_GAP) is the noise budget — derived
+    circle geometry breathes well under one unit at rest, so content parked
+    mid-zone is never re-excited from either edge. */
+const REST_LO = 2 * SIB_GAP
+const REST_HI = 4 * SIB_GAP
+/** Barrier scale of the repulsive branch (the old repulsion constant). */
+const REP_K = REP
+/** The barrier SATURATES: it must hold a realistic crowd of saturated
+    attractions (a few × SOFT_MAX) but LOSE to a bundle of leg springs —
+    a region circle spanning split content legitimately overlaps its
+    siblings during transit, and an unbounded barrier exiles such content
+    forever (observed: a sub-cluster slung 2000+ units from its hub
+    junction, five springs pulling home at 60 against a barrier in the
+    thousands). The projection, not the barrier, owns hard legality. */
+const BARRIER_MAX = 3 * SOFT_MAX
 /** Per-call sweep budget for the overlap projection (work bound per tick;
     projection runs every tick, so any residual finishes on later ticks). */
 const PROJECTION_PASSES = 60
@@ -233,6 +249,7 @@ export function resolveOverlaps(e: Engine): boolean {
         const dist = Math.hypot(dx, dy)
         const need = A.r + B.r + SIB_GAP
         if (dist >= need) continue
+
         // coincident centers have no separation direction; any fixed unit
         // vector breaks the symmetry deterministically
         const ux = dist < 1e-9 ? 1 : dx / dist, uy = dist < 1e-9 ? 0 : dy / dist
@@ -293,15 +310,18 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   const force = new Map<string, { x: number; y: number }>()
   for (const id of e.bodies.keys()) force.set(id, { x: 0, y: 0 })
 
-  // Sibling pair force from ONE potential: repulsive below the target gap,
-  // zero at it, constant-force attractive beyond (the smooth corner ramps over
-  // one further SIB_GAP). One curve for what used to be repulsion + cohesion +
-  // a contact fade: the position force field is a GRADIENT, and a gradient
-  // flow with damping cannot cycle — the previous two-curve arrangement had
-  // knife-edge equilibria whose stiffness grew with region size, and large
-  // diagrams chattered on them forever. The attraction saturates at a
-  // constant (anchored to the leg rest-length — no new scale), so compaction
-  // has a pace, not a spring; pairs rest exactly at the potential minimum.
+  // Sibling pair force on the REAL circle gap, with REST AS AN INTERVAL:
+  // a barrier repulsion below the target gap (unbounded toward contact, so
+  // no bounded crowd of attractions can press a pair into the projection),
+  // then a WIDE zero-force dead zone, then saturated constant attraction
+  // ramping in beyond it. Every standing cycle this layout has ever had was
+  // a POINT equilibrium re-excited by noise in the derived geometry (region
+  // circles breathe as their content micro-moves) or by disagreement
+  // between the soft field and the hard projection; an equilibrium
+  // INTERVAL of exactly zero force absorbs both — content coasts into the
+  // zone under damping and nothing acts on it again. The attraction stays
+  // above the leg-spring cap so no spring can outpull the anchoring and
+  // drive a conveyor across the sheet.
   for (const rid of e.regions.keys()) {
     const discs: { r: number; mid?: string; sub?: RegionId }[] = []
     for (const mid of e.membersOf.get(rid)!) discs.push({ r: e.bodies.get(mid)!.discR, mid })
@@ -314,19 +334,17 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       const dx = cb.x - ca.x, dy = cb.y - ca.y
       const dist = Math.max(Math.hypot(dx, dy), 1)
       const gap = dist - A.r - B.r
-      // φ'(g): negative = repulsion (below G0), positive = attraction.
-      // Repulsive branch is the old 1/(g+8)² law shifted to vanish at G0;
-      // attractive branch ramps to COHESION over [G0, 2·G0] and stays there.
-      const G0 = 2 * SIB_GAP
-      const f = gap < G0
-        ? -(REP / Math.max(gap + 8, 4) ** 2 - REP / (G0 + 8) ** 2)
-        : SOFT_MAX * Math.min(1, (gap - G0) / G0)
+      const f = gap < REST_LO
+        ? -Math.min(REP_K * ((REST_LO + 8) / Math.max(gap + 8, 0.5) - 1), BARRIER_MAX)
+        : gap <= REST_HI
+          ? 0
+          : SOFT_MAX * Math.min(1, (gap - REST_HI) / SIB_GAP)
+      if (f === 0) continue
       const ux = dx / dist, uy = dy / dist
-      // Each side receives a TOTAL of ±f shared among its subtree members
-      // (equal-and-opposite by construction — unshared application would
-      // inject (N−1)·f of net momentum per contact per tick). A pinned
-      // (dragged) side takes no attraction — the drag must feel direct —
-      // but repulsion still applies so a drag cannot tunnel through things.
+      // each side receives a TOTAL of ±f shared over its subtree bodies
+      // (equal-and-opposite — unshared application injects net momentum);
+      // a pinned (dragged) side takes no attraction, but the barrier still
+      // applies so a drag cannot tunnel through things
       const apply = (D: typeof A, sx: number, sy: number): void => {
         const targets = D.mid !== undefined ? [D.mid] : subtreeMembers(e, D.sub!)
         const per = 1 / targets.length

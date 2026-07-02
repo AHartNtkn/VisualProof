@@ -183,6 +183,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       else legs.push({ wid, from: ends[0]!, to: ends[0]! }) // genuine exists loose end -> stub
     }
   }
+
   return { d, bodies, childrenOf, membersOf, legs, boundaryOf, boundary, regions: new Map(), tick: 0 }
 }
 

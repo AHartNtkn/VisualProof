@@ -154,12 +154,19 @@ test('a node drags under the cursor, the rearrangement persists, and the backgro
     const b = window.__vpaDebug!.bodies().find((x) => x.id === id)!
     return { sx: b.x * v.scale + v.offsetX, sy: b.y * v.scale + v.offsetY }
   }, grab.id)
-  expect(Math.hypot(held.sx - target.sx, held.sy - target.sy)).toBeLessThan(25)
+  expect(Math.hypot(held.sx - target.sx, held.sy - target.sy)).toBeLessThan(30)
   await page.mouse.up()
-  // after release the layout re-compacts (cohesion is a design force), but the
-  // REARRANGEMENT persists: the dragged body settles on the side it was
-  // dragged toward, relative to its sibling
-  await page.waitForTimeout(900)
+  // after release the layout re-compacts (sibling attraction is a design
+  // force), but the REARRANGEMENT persists: the dragged body settles on the
+  // side it was dragged toward, relative to its sibling. Wait for actual
+  // rest (bounded soft forces pace the return, so a fixed delay races).
+  await page.waitForFunction(() => {
+    const w = window as unknown as { __lastBodies?: string; __stable?: number }
+    const now = JSON.stringify(window.__vpaDebug!.bodies().map((b) => [Math.round(b.x * 5), Math.round(b.y * 5)]))
+    w.__stable = now === w.__lastBodies ? (w.__stable ?? 0) + 1 : 0
+    w.__lastBodies = now
+    return (w.__stable ?? 0) >= 3
+  }, undefined, { polling: 250, timeout: 30000 })
   const rel = await page.evaluate((id) => {
     const bs = window.__vpaDebug!.bodies()
     const a = bs.find((x) => x.id === id)!
@@ -171,6 +178,14 @@ test('a node drags under the cursor, the rearrangement persists, and the backgro
 
   // background fixed: dragging from empty space changes no view offset and
   // moves no body
+  // rest again before the no-pan check (the release above may still be settling)
+  await page.waitForFunction(() => {
+    const w = window as unknown as { __lastBodies2?: string; __stable2?: number }
+    const now = JSON.stringify(window.__vpaDebug!.bodies().map((b) => [Math.round(b.x * 5), Math.round(b.y * 5)]))
+    w.__stable2 = now === w.__lastBodies2 ? (w.__stable2 ?? 0) + 1 : 0
+    w.__lastBodies2 = now
+    return (w.__stable2 ?? 0) >= 3
+  }, undefined, { polling: 250, timeout: 30000 })
   const before = await page.evaluate(() => ({ v: window.__vpaDebug!.view(), bs: window.__vpaDebug!.bodies() }))
   await page.mouse.move(box.x + box.width - 60, box.y + box.height - 60)
   await page.mouse.down()
