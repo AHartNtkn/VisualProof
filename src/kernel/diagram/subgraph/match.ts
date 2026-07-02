@@ -42,10 +42,20 @@ type Idx = {
 
 function posKey(d: Diagram, ep: Endpoint): string {
   const n = d.nodes[ep.node]!
-  if (n.kind === 'term') return positionalPortKey(n.term, ep.port)
-  if (ep.port.kind === 'arg') return `a${ep.port.index}`
-  // unreachable for mkDiagram-validated diagrams; throw rather than fabricate
-  throw new DiagramError(`atom '${ep.node}' cannot carry port '${ep.port.kind}'`)
+  // Return-typed switch (no default): a new node kind forces its positional
+  // port key to be decided here.
+  switch (n.kind) {
+    case 'term':
+      return positionalPortKey(n.term, ep.port)
+    case 'atom':
+      if (ep.port.kind === 'arg') return `a${ep.port.index}`
+      // unreachable for mkDiagram-validated diagrams; throw rather than fabricate
+      throw new DiagramError(`atom '${ep.node}' cannot carry port '${ep.port.kind}'`)
+    case 'ref':
+      if (ep.port.kind === 'arg') return `a${ep.port.index}`
+      // unreachable: refs carry only arg ports (mkDiagram partition check)
+      throw new DiagramError(`ref '${ep.node}' cannot carry port '${ep.port.kind}'`)
+  }
 }
 
 function buildIdx(d: Diagram): Idx {
@@ -231,12 +241,24 @@ export function findOccurrences(
     const pnode = pd.nodes[pn]!
     const hnode = host.nodes[hn]!
     if (pnode.kind !== hnode.kind) return false
-    if (pnode.kind === 'atom' && hnode.kind === 'atom') {
-      const viaOpen = binderImage.get(pnode.binder)
-      if (viaOpen !== undefined) return viaOpen === hnode.binder
-      return regionMap.get(pnode.binder) === hnode.binder
+    // Kinds are equal here; the switch (no default) forces a new node kind to
+    // declare its own compatibility test rather than falling through to terms.
+    switch (pnode.kind) {
+      case 'atom': {
+        if (hnode.kind !== 'atom') return false // impossible given the equality guard; narrows hnode
+        const viaOpen = binderImage.get(pnode.binder)
+        if (viaOpen !== undefined) return viaOpen === hnode.binder
+        return regionMap.get(pnode.binder) === hnode.binder
+      }
+      case 'ref': {
+        if (hnode.kind !== 'ref') return false // impossible given the equality guard; narrows hnode
+        // References match by defId AND arity (region-independent, like
+        // constants); ordinary arg-wire alignment does the rest.
+        return pnode.defId === hnode.defId && pnode.arity === hnode.arity
+      }
+      case 'term':
+        return termVerdict(pn, hn)
     }
-    return termVerdict(pn, hn)
   }
 
   function regionsShallowCompatible(pr: RegionId, hr: RegionId): boolean {

@@ -1,5 +1,6 @@
 import type { Term } from '../term/term'
 import { serializeTerm, deserializeTerm } from '../term/serialize'
+import type { Diagram } from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { Definitions } from '../rules/definitions'
@@ -21,23 +22,59 @@ export type Theory = {
   readonly theorems: readonly Theorem[]
 }
 
+/**
+ * Every ref node in `d` must resolve against `relArity`: its defId names a
+ * relation whose arity equals the ref's. `where` names the diagram for the
+ * refusal (a theorem side or a relation body).
+ */
+function assertRefsResolve(d: Diagram, relArity: ReadonlyMap<string, number>, where: string): void {
+  for (const [id, n] of Object.entries(d.nodes)) {
+    if (n.kind !== 'ref') continue
+    const arity = relArity.get(n.defId)
+    if (arity === undefined) {
+      throw new ProofError(`${where}: reference node '${id}' names unknown relation '${n.defId}'`)
+    }
+    if (arity !== n.arity) {
+      throw new ProofError(
+        `${where}: reference node '${id}' to relation '${n.defId}' has arity ${n.arity} but the relation has arity ${arity}`,
+      )
+    }
+  }
+}
+
 /** Verify everything; returns the full proof context. There is no trust-without-verify path. */
 export function verifyTheory(t: Theory): ProofContext {
   assertWellFormedDefinitions(t.definitions)
+  const relations = new Map<string, DiagramWithBoundary>()
+  const relArity = new Map<string, number>()
   for (const [name, rel] of Object.entries(t.relations)) {
     try {
       mkDiagramWithBoundary(rel.diagram, rel.boundary) // re-validates boundary existence/uniqueness
     } catch (e) {
       throw new ProofError(`relation '${name}': ${e instanceof Error ? e.message : String(e)}`)
     }
+    // No self-containedness check is needed: a stored relation body is closed by
+    // construction (a DiagramWithBoundary is a self-contained diagram). Openness
+    // is not a property of a stored body at all — it exists only as a splice-time
+    // binder map deciding which bubbles are external stubs, and relUnfold always
+    // splices with an EMPTY binder map, so every bubble in a body is content with
+    // ∃-meaning and is copied soundly. A body like R(x) := ∃S[S(x)] with a
+    // top-level bubble is therefore perfectly legitimate.
+    relations.set(name, rel)
+    relArity.set(name, rel.boundary.length)
+  }
+  for (const [name, rel] of relations) {
+    assertRefsResolve(rel.diagram, relArity, `relation '${name}' body`)
   }
   const theorems = new Map<string, Theorem>()
   for (const thm of t.theorems) {
     if (theorems.has(thm.name)) throw new ProofError(`duplicate theorem name '${thm.name}'`)
-    checkTheorem(thm, { definitions: t.definitions, theorems })
+    assertRefsResolve(thm.lhs.diagram, relArity, `theorem '${thm.name}' left-hand side`)
+    assertRefsResolve(thm.rhs.diagram, relArity, `theorem '${thm.name}' right-hand side`)
+    checkTheorem(thm, { definitions: t.definitions, theorems, relations })
     theorems.set(thm.name, thm)
   }
-  return { definitions: t.definitions, theorems }
+  return { definitions: t.definitions, theorems, relations }
 }
 
 const FORMAT = 'visual-proof-theory'

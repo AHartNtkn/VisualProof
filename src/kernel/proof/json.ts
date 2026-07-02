@@ -151,6 +151,12 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, region: s.region }
     case 'conversion':
       return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), attachments: { ...s.attachments } }
+    case 'congruenceJoin':
+      return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate) }
+    case 'headStrip':
+      return { rule: s.rule, a: s.a, b: s.b }
+    case 'closedTermIntro':
+      return { rule: s.rule, region: s.region, term: serializeTerm(s.term) }
     case 'fusion':
       return { rule: s.rule, wire: s.wire }
     case 'fission':
@@ -160,7 +166,7 @@ export function stepToJson(s: ProofStep): unknown {
     case 'fold':
       return { rule: s.rule, node: s.node, path: [...s.path], constId: s.constId }
     case 'comprehensionInstantiate':
-      return { rule: s.rule, bubble: s.bubble, comp: dwbToJson(s.comp), binders: { ...s.binders } }
+      return { rule: s.rule, bubble: s.bubble, comp: dwbToJson(s.comp), attachments: [...s.attachments], binders: { ...s.binders } }
     case 'comprehensionAbstract':
       return { rule: s.rule, wrap: selToJson(s.wrap), comp: dwbToJson(s.comp), occurrences: s.occurrences.map(occToJson) }
     case 'theorem':
@@ -169,6 +175,10 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, sel: selToJson(s.sel), arity: s.arity }
     case 'vacuousElim':
       return { rule: s.rule, region: s.region }
+    case 'relUnfold':
+      return { rule: s.rule, node: s.node }
+    case 'relFold':
+      return { rule: s.rule, sel: selToJson(s.sel), defId: s.defId, args: [...s.args] }
   }
 }
 
@@ -214,6 +224,15 @@ export function stepFromJson(j: unknown): ProofStep {
       for (const [k, v] of Object.entries(j.attachments)) attachments[k] = str(v, `attachments['${k}']`)
       return { rule, node: str(j.node, 'node'), term: termFromJson(j.term, 'term'), certificate: certFromJson(j.certificate, 'certificate'), attachments }
     }
+    case 'congruenceJoin':
+      assertOnlyKeys(j, ['rule', 'a', 'b', 'certificate'], 'congruenceJoin step')
+      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), certificate: certFromJson(j.certificate, 'certificate') }
+    case 'headStrip':
+      assertOnlyKeys(j, ['rule', 'a', 'b'], 'headStrip step')
+      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
+    case 'closedTermIntro':
+      assertOnlyKeys(j, ['rule', 'region', 'term'], 'closedTermIntro step')
+      return { rule, region: str(j.region, 'region'), term: termFromJson(j.term, 'term') }
     case 'fusion':
       assertOnlyKeys(j, ['rule', 'wire'], 'fusion step')
       return { rule, wire: str(j.wire, 'wire') }
@@ -227,11 +246,11 @@ export function stepFromJson(j: unknown): ProofStep {
       assertOnlyKeys(j, ['rule', 'node', 'path', 'constId'], 'fold step')
       return { rule, node: str(j.node, 'node'), path: pathFromJson(j.path, 'path'), constId: str(j.constId, 'constId') }
     case 'comprehensionInstantiate': {
-      assertOnlyKeys(j, ['rule', 'bubble', 'comp', 'binders'], 'comprehensionInstantiate step')
+      assertOnlyKeys(j, ['rule', 'bubble', 'comp', 'attachments', 'binders'], 'comprehensionInstantiate step')
       if (!isRecord(j.binders)) fail('binders must be an object')
       const binders: Record<string, string> = {}
       for (const [k, v] of Object.entries(j.binders)) binders[k] = str(v, `binders['${k}']`)
-      return { rule, bubble: str(j.bubble, 'bubble'), comp: dwbFromJson(j.comp, 'comp'), binders }
+      return { rule, bubble: str(j.bubble, 'bubble'), comp: dwbFromJson(j.comp, 'comp'), attachments: strArray(j.attachments, 'attachments'), binders }
     }
     case 'comprehensionAbstract': {
       assertOnlyKeys(j, ['rule', 'wrap', 'comp', 'occurrences'], 'comprehensionAbstract step')
@@ -252,6 +271,12 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'vacuousElim':
       assertOnlyKeys(j, ['rule', 'region'], 'vacuousElim step')
       return { rule, region: str(j.region, 'region') }
+    case 'relUnfold':
+      assertOnlyKeys(j, ['rule', 'node'], 'relUnfold step')
+      return { rule, node: str(j.node, 'node') }
+    case 'relFold':
+      assertOnlyKeys(j, ['rule', 'sel', 'defId', 'args'], 'relFold step')
+      return { rule, sel: selFromJson(j.sel, 'sel'), defId: str(j.defId, 'defId'), args: strArray(j.args, 'args') }
     default:
       return fail(`unknown rule '${rule}'`)
   }

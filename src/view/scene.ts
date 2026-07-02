@@ -50,9 +50,19 @@ export function anchorOf(geometry: NodeGeometry, center: Vec2, port: Port): Vec2
 export function nodeGeometry(d: Diagram, id: NodeId): NodeGeometry {
   const n = d.nodes[id]
   if (n === undefined) throw new Error(`unknown node '${id}'`)
-  if (n.kind === 'term') return bendGrid(trompGrid(n.term))
-  const binder = d.regions[n.binder]!
-  return atomGeometry(binder.kind === 'bubble' ? binder.arity : 0)
+  // Return-typed switch (no default): a new node kind forces its geometry here.
+  switch (n.kind) {
+    case 'term':
+      return bendGrid(trompGrid(n.term))
+    case 'atom': {
+      const binder = d.regions[n.binder]!
+      return atomGeometry(binder.kind === 'bubble' ? binder.arity : 0)
+    }
+    case 'ref':
+      // arg ports only, arity read inline; the defId renders as a center glyph,
+      // the same channel term-constant names use.
+      return atomGeometry(n.arity, n.defId)
+  }
 }
 
 /**

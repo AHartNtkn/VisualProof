@@ -6,11 +6,12 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
-import { composeProofs } from '../../../src/kernel/proof/compose'
+import { composeProofs, mapStepIds } from '../../../src/kernel/proof/compose'
+import type { DiagramIso } from '../../../src/kernel/diagram/canonical/iso'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
-const ctx: ProofContext = { definitions: {}, theorems: new Map() }
+const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
 
 /** Two independently built, differently-id'd copies of the same diagram. */
 function twoCopies() {
@@ -146,8 +147,72 @@ describe('composeProofs', () => {
     const comp = mkDiagramWithBoundary(c.build(), [bx])
 
     const tail: ProofStep[] = [
-      { rule: 'comprehensionInstantiate', bubble: bInner, comp, binders: { [stub]: bOuter } },
+      { rule: 'comprehensionInstantiate', bubble: bInner, comp, attachments: [], binders: { [stub]: bOuter } },
     ]
+    const composed = composeProofs(da, db, tail, ctx)
+    const viaA = replayProof(da, composed, ctx)
+    const viaB = replayProof(db, tail, ctx)
+    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+  })
+
+  it('maps comprehensionInstantiate parameter attachments through the iso', () => {
+    // Marker-first vs marker-last builds shift the explicit wire ids: db's
+    // parameter-wire id names the atom's ARG wire in da. That wire still
+    // encloses the splice region, so an unmapped id would not be refused —
+    // it would silently attach the copy's parameter port to the wrong wire,
+    // which only the fingerprint comparison catches.
+    const mk = (markerFirst: boolean) => {
+      const h = new DiagramBuilder()
+      const marker = () => {
+        const c = h.cut(h.root)
+        const m = h.termNode(c, p('\\a. \\b. a'))
+        h.wire(c, [{ node: m, port: { kind: 'output' } }])
+      }
+      if (markerFirst) marker()
+      const cut = h.cut(h.root)
+      const bub = h.bubble(cut, 1)
+      const a = h.atom(bub, bub)
+      h.wire(cut, [{ node: a, port: { kind: 'arg', index: 0 } }])
+      const wParam = h.wire(h.root, [])
+      if (!markerFirst) marker()
+      return { d: h.build(), bub, wParam }
+    }
+    const { d: da } = mk(true)
+    const { d: db, bub: bBub, wParam: bParam } = mk(false)
+
+    // parameterized comp: R(x) := "x —o— q", boundary [stub, parameter]
+    const c = new DiagramBuilder()
+    const n = c.termNode(c.root, p('q'))
+    const wx = c.wire(c.root, [{ node: n, port: { kind: 'output' } }])
+    const wq = c.wire(c.root, [{ node: n, port: { kind: 'freeVar', name: 'q' } }])
+    const comp = mkDiagramWithBoundary(c.build(), [wx, wq])
+
+    const tail: ProofStep[] = [
+      { rule: 'comprehensionInstantiate', bubble: bBub, comp, attachments: [bParam], binders: {} },
+    ]
+    const composed = composeProofs(da, db, tail, ctx)
+    const viaA = replayProof(da, composed, ctx)
+    const viaB = replayProof(db, tail, ctx)
+    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+  })
+
+  it('maps a closedTermIntro region through a NON-IDENTITY iso', () => {
+    // Marker-first vs marker-last builds give the target cut DIFFERENT ids on
+    // the two sides; an unmapped region id would introduce into the marker cut.
+    const mk = (markerFirst: boolean) => {
+      const h = new DiagramBuilder()
+      const marker = () => {
+        const c = h.cut(h.root)
+        h.termNode(c, p('\\a. \\b. a'))
+      }
+      if (markerFirst) marker()
+      const cut = h.cut(h.root)
+      if (!markerFirst) marker()
+      return { d: h.build(), cut }
+    }
+    const { d: da } = mk(true)
+    const { d: db, cut: bCut } = mk(false)
+    const tail: ProofStep[] = [{ rule: 'closedTermIntro', region: bCut, term: p('\\x. x') }]
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
@@ -160,5 +225,74 @@ describe('composeProofs', () => {
     other.termNode(other.root, p('y'))
     expect(() => composeProofs(da, other.build(), [], ctx))
       .toThrowError(/do not meet/)
+  })
+})
+
+describe('mapStepIds', () => {
+  it('remaps the region of a closedTermIntro step through the iso; the term is host-id-free', () => {
+    const iso: DiagramIso = {
+      regions: new Map([['r1', 'R1']]),
+      nodes: new Map(),
+      wires: new Map(),
+    }
+    expect(mapStepIds({ rule: 'closedTermIntro', region: 'r1', term: p('\\x. x') }, iso))
+      .toEqual({ rule: 'closedTermIntro', region: 'R1', term: p('\\x. x') })
+    expect(() => mapStepIds({ rule: 'closedTermIntro', region: 'missing', term: p('\\x. x') }, iso))
+      .toThrowError(/cannot map region 'missing'/)
+  })
+
+  it('remaps comprehensionInstantiate attachments through iso.wires (order preserved)', () => {
+    const b = new DiagramBuilder()
+    const bn = b.termNode(b.root, p('\\x. x'))
+    const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
+    const pat = mkDiagramWithBoundary(b.build(), [bw])
+    const iso: DiagramIso = {
+      regions: new Map([['r1', 'R1']]),
+      nodes: new Map(),
+      wires: new Map([['w0', 'W0'], ['w1', 'W1']]),
+    }
+    expect(mapStepIds(
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w1', 'w0'], binders: {} },
+      iso,
+    )).toEqual({ rule: 'comprehensionInstantiate', bubble: 'R1', comp: pat, attachments: ['W1', 'W0'], binders: {} })
+    expect(() => mapStepIds(
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['missing'], binders: {} },
+      iso,
+    )).toThrowError(/cannot map wire 'missing'/)
+  })
+
+  it('remaps BOTH node ids of a headStrip step through the iso', () => {
+    const iso: DiagramIso = {
+      regions: new Map([['r0', 'R0']]),
+      nodes: new Map([['n0', 'N0'], ['n1', 'N1']]),
+      wires: new Map(),
+    }
+    expect(mapStepIds({ rule: 'headStrip', a: 'n0', b: 'n1' }, iso))
+      .toEqual({ rule: 'headStrip', a: 'N0', b: 'N1' })
+    expect(() => mapStepIds({ rule: 'headStrip', a: 'n0', b: 'missing' }, iso))
+      .toThrowError(/cannot map node 'missing'/)
+  })
+
+  it('remaps the node id of a relUnfold step through the iso', () => {
+    const iso: DiagramIso = {
+      regions: new Map(),
+      nodes: new Map([['n0', 'N0']]),
+      wires: new Map(),
+    }
+    expect(mapStepIds({ rule: 'relUnfold', node: 'n0' }, iso))
+      .toEqual({ rule: 'relUnfold', node: 'N0' })
+    expect(() => mapStepIds({ rule: 'relUnfold', node: 'missing' }, iso))
+      .toThrowError(/cannot map node 'missing'/)
+  })
+
+  it('remaps a relFold step sel and args through the iso; defId is not mapped', () => {
+    const iso: DiagramIso = {
+      regions: new Map([['r0', 'R0']]),
+      nodes: new Map([['n0', 'N0']]),
+      wires: new Map([['w0', 'W0']]),
+    }
+    const sel = { region: 'r0', regions: [], nodes: ['n0'], wires: [] }
+    expect(mapStepIds({ rule: 'relFold', sel, defId: 'nat', args: ['w0'] }, iso))
+      .toEqual({ rule: 'relFold', sel: { region: 'R0', regions: [], nodes: ['N0'], wires: [] }, defId: 'nat', args: ['W0'] })
   })
 })

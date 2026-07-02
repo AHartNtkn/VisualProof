@@ -9,12 +9,16 @@ import { applyErasure, applyWireSever } from '../rules/erasure'
 import { applyIteration, applyDeiteration } from '../rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../rules/doublecut'
 import { applyConversionByCertificate } from '../rules/conversion'
+import { applyCongruenceJoin } from '../rules/congruence'
+import { applyHeadStrip } from '../rules/headstrip'
+import { applyClosedTermIntro } from '../rules/intro'
 import { applyFusion, applyFission } from '../rules/fusion'
 import { applyUnfold, applyFold } from '../rules/definitions'
 import type { Definitions } from '../rules/definitions'
 import { applyComprehensionInstantiate, applyComprehensionAbstract } from '../rules/comprehension'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../rules/vacuous'
+import { applyRelUnfold, applyRelFold } from '../rules/reldef'
 import type { Theorem, TheoremApplication } from './theorem'
 import { applyTheorem } from './theorem'
 import { ProofError } from './error'
@@ -22,6 +26,8 @@ import { ProofError } from './error'
 export type ProofContext = {
   readonly definitions: Definitions
   readonly theorems: ReadonlyMap<string, Theorem>
+  /** Named relations (comprehension bodies) resolvable by relUnfold/relFold. */
+  readonly relations: ReadonlyMap<string, DiagramWithBoundary>
 }
 
 /**
@@ -40,15 +46,20 @@ export type ProofStep =
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
   | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly attachments: Readonly<Record<string, WireId>> }
+  | { readonly rule: 'congruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }
+  | { readonly rule: 'headStrip'; readonly a: NodeId; readonly b: NodeId }
+  | { readonly rule: 'closedTermIntro'; readonly region: RegionId; readonly term: Term }
   | { readonly rule: 'fusion'; readonly wire: WireId }
   | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
   | { readonly rule: 'unfold'; readonly node: NodeId; readonly path: readonly PathSeg[] }
   | { readonly rule: 'fold'; readonly node: NodeId; readonly path: readonly PathSeg[]; readonly constId: string }
-  | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary; readonly binders: Readonly<Record<RegionId, RegionId>> }
+  | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary; readonly attachments: readonly WireId[]; readonly binders: Readonly<Record<RegionId, RegionId>> }
   | { readonly rule: 'comprehensionAbstract'; readonly wrap: SubgraphSelection; readonly comp: DiagramWithBoundary; readonly occurrences: readonly AbstractionOccurrence[] }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
   | { readonly rule: 'vacuousIntro'; readonly sel: SubgraphSelection; readonly arity: number }
   | { readonly rule: 'vacuousElim'; readonly region: RegionId }
+  | { readonly rule: 'relUnfold'; readonly node: NodeId }
+  | { readonly rule: 'relFold'; readonly sel: SubgraphSelection; readonly defId: string; readonly args: readonly WireId[] }
 
 export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagram {
   switch (step.rule) {
@@ -61,11 +72,14 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
     case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel)
     case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
     case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.attachments)
+    case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate)
+    case 'headStrip': return applyHeadStrip(d, step.a, step.b)
+    case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term)
     case 'fusion': return applyFusion(d, step.wire)
     case 'fission': return applyFission(d, step.node, step.path)
     case 'unfold': return applyUnfold(d, ctx.definitions, step.node, step.path)
     case 'fold': return applyFold(d, ctx.definitions, step.node, step.path, step.constId)
-    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, new Map(Object.entries(step.binders)))
+    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, new Map(Object.entries(step.binders)))
     case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences)
     case 'theorem': {
       const thm = ctx.theorems.get(step.name)
@@ -74,6 +88,8 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
     }
     case 'vacuousIntro': return applyVacuousBubbleIntro(d, step.sel, step.arity)
     case 'vacuousElim': return applyVacuousBubbleElim(d, step.region)
+    case 'relUnfold': return applyRelUnfold(d, step.node, ctx.relations)
+    case 'relFold': return applyRelFold(d, step.sel, step.defId, step.args, ctx.relations)
   }
 }
 

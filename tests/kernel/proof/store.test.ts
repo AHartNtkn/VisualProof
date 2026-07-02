@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
+import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
@@ -86,6 +87,57 @@ describe('verifyTheory', () => {
   })
 })
 
+describe('verifyTheory — relation references', () => {
+  /** A self-contained arity-1 body: a term node whose free var is the argument. */
+  function simpleBody() {
+    const b = new DiagramBuilder()
+    const t = b.termNode(b.root, p('y'))
+    const w = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'y' } }])
+    return mkDiagramWithBoundary(b.build(), [w])
+  }
+
+  /** A theorem whose (identical) sides are a single reference node. */
+  function refTheorem(defId: string, arity = 1): Theorem {
+    const b = new DiagramBuilder()
+    const node = b.ref(b.root, defId, arity)
+    const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
+    const side = mkDiagramWithBoundary(b.build(), [w])
+    return { name: 'refThm', lhs: side, rhs: side, steps: [] }
+  }
+
+  it('verifies a theory whose theorem references a declared relation, exposing it in ctx', () => {
+    const ctx = verifyTheory({ definitions: {}, relations: { R: simpleBody() }, theorems: [refTheorem('R')] })
+    expect(ctx.relations.has('R')).toBe(true)
+    expect(ctx.relations.get('R')!.boundary).toHaveLength(1)
+  })
+
+  it('accepts a relation body with a top-level bubble (∃S[S(x)]-shaped, closed by construction)', () => {
+    // A bubble directly under the body root is a legitimate ∃-quantifier, not an
+    // "external binder": a stored body is closed, and relUnfold copies the bubble
+    // as fresh content. Verification must accept it, and it round-trips through
+    // theoryToJson/loadTheory unchanged.
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 1)
+    const at = b.atom(bub, bub)
+    const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
+    const existsBody = mkDiagramWithBoundary(b.build(), [bound])
+    expect(() => verifyTheory({ definitions: {}, relations: { R: existsBody }, theorems: [] })).not.toThrow()
+    const json = theoryToJson({ definitions: {}, relations: { R: existsBody }, theorems: [] })
+    const { ctx } = loadTheory(JSON.parse(JSON.stringify(json)))
+    expect(ctx.relations.has('R')).toBe(true)
+  })
+
+  it('refuses a theorem side whose reference names an unknown relation', () => {
+    expect(() => verifyTheory({ definitions: {}, relations: {}, theorems: [refTheorem('ghost')] }))
+      .toThrowError(/left-hand side: reference node .* names unknown relation 'ghost'/)
+  })
+
+  it('refuses a theorem side whose reference arity disagrees with the relation', () => {
+    expect(() => verifyTheory({ definitions: {}, relations: { R: simpleBody() }, theorems: [refTheorem('R', 2)] }))
+      .toThrowError(/has arity 2 but the relation has arity 1/)
+  })
+})
+
 describe('check-before-register invariant', () => {
   it('a theorem whose proof cites its own name is refused (no self-citation)', () => {
     // If register came before check, 'selfCite' would be in the context when
@@ -126,6 +178,40 @@ describe('theory files', () => {
     const { theory: back, ctx } = loadTheory(JSON.parse(text))
     expect(ctx.theorems.has('dropQ')).toBe(true)
     expect(JSON.stringify(theoryToJson(back))).toBe(text)
+  })
+
+  it('canonicalizes stored non-canonical free-port names on load rather than trusting them', () => {
+    // A hand-crafted file carrying ORIGINAL names (v:y, v:z): the load path
+    // runs through mkDiagram, so the diagram that comes out spells s0, s1 in
+    // both the node term and the wire endpoints — files are data, the kernel
+    // re-establishes its own invariants.
+    const j = {
+      format: 'visual-proof-theory',
+      version: 1,
+      definitions: {},
+      relations: {
+        R: {
+          diagram: {
+            root: 'r0',
+            regions: { r0: { kind: 'sheet' } },
+            nodes: { n0: { kind: 'term', region: 'r0', term: 'A(P("y"),P("z"))' } },
+            wires: {
+              w0: { scope: 'r0', endpoints: [{ node: 'n0', port: 'out' }] },
+              w1: { scope: 'r0', endpoints: [{ node: 'n0', port: 'v:y' }] },
+              w2: { scope: 'r0', endpoints: [{ node: 'n0', port: 'v:z' }] },
+            },
+          },
+          boundary: ['w1', 'w2'],
+        },
+      },
+      theorems: [],
+    }
+    const { theory } = loadTheory(j)
+    const d = theory.relations['R']!.diagram
+    const n = d.nodes['n0']
+    expect(n?.kind === 'term' && freePorts(n.term)).toEqual(['s0', 's1'])
+    expect(d.wires['w1']?.endpoints).toEqual([{ node: 'n0', port: { kind: 'freeVar', name: 's0' } }])
+    expect(d.wires['w2']?.endpoints).toEqual([{ node: 'n0', port: { kind: 'freeVar', name: 's1' } }])
   })
 
   it('rejects unversioned or alien envelopes', () => {

@@ -25,7 +25,8 @@ describe('step round-trips through JSON', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('(\\x. x) y'))
     const d = h.build()
-    const { certificate } = applyConversion(d, n, p('y'), 10)
+    // the node's source free 'y' is canonical s0 after construction
+    const { certificate } = applyConversion(d, n, p('s0'), 10)
 
     const sel = { region: 'r0', regions: ['r1'], nodes: ['n0'], wires: ['w0'] }
     const steps: ProofStep[] = [
@@ -37,14 +38,22 @@ describe('step round-trips through JSON', () => {
       { rule: 'deiteration', sel, fuel: 50 },
       { rule: 'doubleCutIntro', sel },
       { rule: 'doubleCutElim', region: 'r1' },
-      { rule: 'conversion', node: 'n0', term: p('y'), certificate, attachments: { z: 'w0' } },
+      { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: { z: 'w0' } },
+      { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate },
+      { rule: 'headStrip', a: 'n0', b: 'n1' },
+      { rule: 'closedTermIntro', region: 'r1', term: p('\\x. \\y. x') },
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
       { rule: 'unfold', node: 'n0', path: [] },
       { rule: 'fold', node: 'n0', path: ['body'], constId: 'I' },
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w3', 'w7'], binders: {} },
       { rule: 'comprehensionAbstract', wrap: sel, comp: pat, occurrences: [{ sel, args: ['w0'] }] },
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
+      { rule: 'vacuousIntro', sel, arity: 2 },
+      { rule: 'vacuousElim', region: 'r1' },
+      { rule: 'relUnfold', node: 'n0' },
+      { rule: 'relFold', sel, defId: 'nat', args: ['w0'] },
     ]
     for (const s of steps) roundTrip(s)
   })
@@ -55,8 +64,31 @@ describe('step round-trips through JSON', () => {
       .toThrowError(/unknown field 'extra'/)
     expect(() => stepFromJson({ rule: 'fission', node: 'n0', path: ['sideways'] }))
       .toThrowError(/path segment/)
+    expect(() => stepFromJson({ rule: 'headStrip', a: 'n0', b: 'n1', certificate: { leftSteps: [], rightSteps: [] } }))
+      .toThrowError(/unknown field 'certificate'/)
+    expect(() => stepFromJson({
+      ...(stepToJson({ rule: 'closedTermIntro', region: 'r1', term: p('\\x. x') }) as Record<string, unknown>),
+      node: 'n0',
+    })).toThrowError(/unknown field 'node'/)
     expect(() => stepFromJson({ rule: 'deiteration', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, fuel: -1 }))
       .toThrowError(/fuel/)
+    expect(() => stepFromJson({ rule: 'relUnfold', node: 'n0', extra: 1 }))
+      .toThrowError(/unknown field 'extra'/)
+    expect(() => stepFromJson({ rule: 'relFold', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, defId: 'nat', args: ['w0'], extra: 1 }))
+      .toThrowError(/unknown field 'extra'/)
+  })
+
+  it('requires the attachments field on comprehensionInstantiate — no optional-field parsing', () => {
+    const b = new DiagramBuilder()
+    const bn = b.termNode(b.root, p('\\x. x'))
+    const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
+    const pat = mkDiagramWithBoundary(b.build(), [bw])
+    const j = JSON.parse(JSON.stringify(stepToJson(
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: {} },
+    ))) as Record<string, unknown>
+    delete j['attachments']
+    expect(() => stepFromJson(j)).toThrowError(/attachments must be an array/)
+    expect(() => stepFromJson({ ...j, attachments: [], extra: 1 })).toThrowError(/unknown field 'extra'/)
   })
 })
 
@@ -65,9 +97,9 @@ describe('certFromJson rejects invalid reduction-step kinds', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('(\\x. x) y'))
     const d = h.build()
-    const { certificate } = applyConversion(d, n, p('y'), 10)
+    const { certificate } = applyConversion(d, n, p('s0'), 10)
     // Build a valid conversion step JSON, then corrupt one reduction-step kind
-    const step: ProofStep = { rule: 'conversion', node: 'n0', term: p('y'), certificate, attachments: {} }
+    const step: ProofStep = { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: {} }
     const j = JSON.parse(JSON.stringify(stepToJson(step))) as Record<string, unknown>
     const cert = j['certificate'] as { leftSteps: unknown[] }
     if (cert.leftSteps.length > 0) {

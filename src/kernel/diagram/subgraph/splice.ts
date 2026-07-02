@@ -122,12 +122,17 @@ export function spliceSubgraph(
       : { kind: 'bubble', parent: regionMap.get(r.parent)!, arity: r.arity }
   }
 
+  // Return-typed switch (no default): a new node kind forces its rebuild here.
+  const rebuildNode = (n: DiagramNode): DiagramNode => {
+    switch (n.kind) {
+      case 'term': return { kind: 'term', region: regionMap.get(n.region)!, term: n.term }
+      case 'atom': return { kind: 'atom', region: regionMap.get(n.region)!, binder: binderMap.get(n.binder) ?? regionMap.get(n.binder)! }
+      case 'ref': return { kind: 'ref', region: regionMap.get(n.region)!, defId: n.defId, arity: n.arity }
+    }
+  }
   const nodes: Record<string, DiagramNode> = { ...host.nodes }
   for (const [id, n] of Object.entries(pd.nodes)) {
-    const mapped = nodeMap.get(id)!
-    nodes[mapped] = n.kind === 'term'
-      ? { kind: 'term', region: regionMap.get(n.region)!, term: n.term }
-      : { kind: 'atom', region: regionMap.get(n.region)!, binder: binderMap.get(n.binder) ?? regionMap.get(n.binder)! }
+    nodes[nodeMap.get(id)!] = rebuildNode(n)
   }
 
   const mapEndpoints = (eps: readonly Endpoint[]): Endpoint[] =>

@@ -91,13 +91,19 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
       : { kind: 'bubble', parent, arity: r.arity }
   }
 
+  // Return-typed switch (no default): a new node kind forces its rebuild here.
+  const rebuildNode = (n: DiagramNode, region: RegionId): DiagramNode => {
+    switch (n.kind) {
+      case 'term': return { kind: 'term', region, term: n.term }
+      case 'atom': return { kind: 'atom', region, binder: stubOf.get(n.binder) ?? n.binder }
+      case 'ref': return { kind: 'ref', region, defId: n.defId, arity: n.arity }
+    }
+  }
   const nodes: Record<string, DiagramNode> = {}
   for (const id of c.allNodes) {
     const n = d.nodes[id]!
     const region = n.region === sel.region ? contentParent : n.region
-    nodes[id] = n.kind === 'term'
-      ? { kind: 'term', region, term: n.term }
-      : { kind: 'atom', region, binder: stubOf.get(n.binder) ?? n.binder }
+    nodes[id] = rebuildNode(n, region)
   }
 
   const wires: Record<WireId, Wire> = {}

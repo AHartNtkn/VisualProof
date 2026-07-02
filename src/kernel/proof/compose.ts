@@ -61,6 +61,12 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       for (const [name, w] of Object.entries(step.attachments)) attachments[name] = mapId(iso.wires, w, 'wire')
       return { ...step, node: mapId(iso.nodes, step.node, 'node'), attachments }
     }
+    case 'congruenceJoin':
+      return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
+    case 'headStrip':
+      return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
+    case 'closedTermIntro':
+      return { ...step, region: mapId(iso.regions, step.region, 'region') }
     case 'fusion':
       return { ...step, wire: mapId(iso.wires, step.wire, 'wire') }
     case 'fission':
@@ -72,7 +78,12 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
     case 'comprehensionInstantiate': {
       const binders: Record<string, string> = {}
       for (const [stub, hb] of Object.entries(step.binders)) binders[stub] = mapId(iso.regions, hb, 'region')
-      return { ...step, bubble: mapId(iso.regions, step.bubble, 'region'), binders }
+      return {
+        ...step,
+        bubble: mapId(iso.regions, step.bubble, 'region'),
+        attachments: step.attachments.map((w) => mapId(iso.wires, w, 'wire')),
+        binders,
+      }
     }
     case 'comprehensionAbstract':
       return { ...step, wrap: mapSel(iso, step.wrap), occurrences: step.occurrences.map((o) => mapOccurrence(iso, o)) }
@@ -82,6 +93,10 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       return { ...step, sel: mapSel(iso, step.sel) }
     case 'vacuousElim':
       return { ...step, region: mapId(iso.regions, step.region, 'region') }
+    case 'relUnfold':
+      return { ...step, node: mapId(iso.nodes, step.node, 'node') }
+    case 'relFold':
+      return { ...step, sel: mapSel(iso, step.sel), args: step.args.map((w) => mapId(iso.wires, w, 'wire')) }
   }
 }
 

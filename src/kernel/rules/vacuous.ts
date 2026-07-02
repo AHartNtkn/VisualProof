@@ -6,6 +6,18 @@ import { freshId } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
 /**
+ * Reparent a node into `region`, preserving its kind-specific payload.
+ * Return-typed switch (no default): a new node kind forces a decision here.
+ */
+function reparent(n: DiagramNode, region: RegionId): DiagramNode {
+  switch (n.kind) {
+    case 'term': return { kind: 'term', region, term: n.term }
+    case 'atom': return { kind: 'atom', region, binder: n.binder }
+    case 'ref': return { kind: 'ref', region, defId: n.defId, arity: n.arity }
+  }
+}
+
+/**
  * Vacuous bubble introduction: wrap a selection in ONE fresh bubble of the
  * given arity. ∃R φ ≡ φ when R has no occurrences — and no atom can be bound
  * to a bubble that did not exist — so this is an equivalence at ANY polarity
@@ -33,9 +45,7 @@ export function applyVacuousBubbleIntro(d: Diagram, sel: SubgraphSelection, arit
   const nodes: Record<string, DiagramNode> = { ...d.nodes }
   for (const [id, n] of Object.entries(d.nodes)) {
     if (selectedNodes.has(id)) {
-      nodes[id] = n.kind === 'term'
-        ? { kind: 'term', region: bubbleId, term: n.term }
-        : { kind: 'atom', region: bubbleId, binder: n.binder }
+      nodes[id] = reparent(n, bubbleId)
     }
   }
   return mkDiagram({ root: d.root, regions, nodes, wires: { ...d.wires } })
@@ -67,11 +77,7 @@ export function applyVacuousBubbleElim(d: Diagram, bubbleId: RegionId): Diagram 
   }
   const nodes: Record<string, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
-    nodes[id] = n.region === bubbleId
-      ? (n.kind === 'term'
-        ? { kind: 'term', region: parent, term: n.term }
-        : { kind: 'atom', region: parent, binder: n.binder })
-      : n
+    nodes[id] = n.region === bubbleId ? reparent(n, parent) : n
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {

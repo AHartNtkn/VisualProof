@@ -23,7 +23,8 @@ describe('applyFusion', () => {
     expect(out.nodes[a]).toBeUndefined()
     expect(out.wires[w]).toBeUndefined()
     const merged = out.nodes[b]
-    expect(merged?.kind === 'term' && printTerm(merged.term)).toBe(printTerm(p('(\\x. x) y')))
+    // the consumer's residual free (source 'y') is canonical s0 after construction
+    expect(merged?.kind === 'term' && printTerm(merged.term)).toBe(printTerm(p('(\\x. x) s0')))
   })
 
   it('migrates the producer ports onto the consumer, sharing wires where they already share', () => {
@@ -41,36 +42,82 @@ describe('applyFusion', () => {
     const d = h.build()
     const out = applyFusion(d, w)
     const merged = out.nodes[b]
-    // y shared the same wire: no rename, single y port carried by b's old endpoint
-    expect(merged?.kind === 'term' && printTerm(merged.term)).toBe(printTerm(p('(y z) y')))
+    // the producer's first free and the consumer's residual free ride ONE wire
+    // (same individual) even though their canonical names differ (producer s0,
+    // consumer s1): fusion collapses them onto the consumer's existing
+    // endpoint, so the merged term has TWO distinct ports, the shared one
+    // occurring twice — canonically 's0 s1 s0'
+    expect(merged?.kind === 'term' && printTerm(merged.term)).toBe(printTerm(p('s0 s1 s0')))
     expect(out.wires[shared]?.endpoints).toHaveLength(1)
-    expect(out.wires[shared]?.endpoints[0]?.node).toBe(b)
+    expect(out.wires[shared]?.endpoints[0]).toEqual({ node: b, port: { kind: 'freeVar', name: 's0' } })
   })
 
   it('freshens colliding ports wired differently', () => {
-    // builder auto-singleton wires: a.y and b.y are DIFFERENT wires, so the
-    // producer's y must be freshened to y_0 (compare via constructors — the
-    // parser need not accept underscores in identifiers)
+    // producer 'y z' canonicalizes to (s0 s1), consumer 'q y' to (s0 s1) with
+    // s0 consumed; the producer's s1 and the consumer's residual s1 share a
+    // NAME but ride DIFFERENT (auto-singleton) wires — two distinct
+    // individuals that fusion must keep apart by freshening, not conflate
     const h2 = new DiagramBuilder()
-    const a2 = h2.termNode(h2.root, p('y'))
+    const a2 = h2.termNode(h2.root, p('y z'))
     const b2 = h2.termNode(h2.root, p('q y'))
     const w2 = h2.wire(h2.root, [
       { node: a2, port: { kind: 'output' } },
       { node: b2, port: { kind: 'freeVar', name: 'q' } },
     ])
     const d2 = h2.build()
-    // the producer's and consumer's distinct y wires (auto-singleton)
-    const wa = Object.entries(d2.wires).find(([, wv]) =>
-      wv.endpoints.some((ep) => ep.node === a2 && ep.port.kind === 'freeVar' && ep.port.name === 'y'))![0]
-    const wb = Object.entries(d2.wires).find(([, wv]) =>
-      wv.endpoints.some((ep) => ep.node === b2 && ep.port.kind === 'freeVar' && ep.port.name === 'y'))![0]
+    // the producer's two singleton wires and the consumer's residual wire
+    const singleton = (node: string, name: string): string => {
+      const found = Object.entries(d2.wires).find(([, wv]) =>
+        wv.endpoints.some((ep) => ep.node === node && ep.port.kind === 'freeVar' && ep.port.name === name))
+      if (found === undefined) throw new Error(`no wire holds 'v:${name}' of '${node}'`)
+      return found[0]
+    }
+    const waY = singleton(a2, 's0')
+    const waZ = singleton(a2, 's1')
+    const wb = singleton(b2, 's1')
     const out = applyFusion(d2, w2)
     const merged = out.nodes[b2]
-    expect(merged?.kind === 'term' && termEq(merged.term, app(port('y_0'), port('y')))).toBe(true)
-    // the freshened port must stay on the PRODUCER's wire: migrating it to the
-    // consumer's wire would conflate two distinct individuals under one wire
-    expect(out.wires[wa]?.endpoints).toEqual([{ node: b2, port: { kind: 'freeVar', name: 'y_0' } }])
-    expect(out.wires[wb]?.endpoints).toEqual([{ node: b2, port: { kind: 'freeVar', name: 'y' } }])
+    // three DISTINCT ports survive: (producer-y producer-z) consumer-y,
+    // canonically s0 s1 s2 in first-occurrence order
+    expect(merged?.kind === 'term' && termEq(merged.term, app(app(port('s0'), port('s1')), port('s2')))).toBe(true)
+    // each port stays on ITS OWN original wire: migrating the freshened
+    // producer port onto the consumer's wire would conflate two individuals
+    expect(out.wires[waY]?.endpoints).toEqual([{ node: b2, port: { kind: 'freeVar', name: 's0' } }])
+    expect(out.wires[waZ]?.endpoints).toEqual([{ node: b2, port: { kind: 'freeVar', name: 's1' } }])
+    expect(out.wires[wb]?.endpoints).toEqual([{ node: b2, port: { kind: 'freeVar', name: 's2' } }])
+  })
+
+  it("applies collapse renames in ONE simultaneous pass: a collapse target equal to another producer port's original name must not cascade", () => {
+    // producer 'a b' → canonical (s0 s1); consumer 'q y z' → canonical
+    // s0 s1 s2 with s0 consumed. Producer s0 shares a wire with consumer s1,
+    // producer s1 with consumer s2, so the collapse renames are
+    // {s0→s1, s1→s2}: the first rename's TARGET is the second's SOURCE.
+    // Sequential substitution would funnel both producer ports into s2,
+    // conflating two distinct individuals.
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, p('a b'))
+    const b = h.termNode(h.root, p('q y z'))
+    const shared1 = h.wire(h.root, [
+      { node: a, port: { kind: 'freeVar', name: 'a' } },
+      { node: b, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    const shared2 = h.wire(h.root, [
+      { node: a, port: { kind: 'freeVar', name: 'b' } },
+      { node: b, port: { kind: 'freeVar', name: 'z' } },
+    ])
+    const w = h.wire(h.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: b, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    const d = h.build()
+    const out = applyFusion(d, w)
+    const merged = out.nodes[b]
+    // (consumer-y consumer-z) consumer-y consumer-z — TWO individuals, each
+    // used twice; canonically (s0 s1) s0 s1
+    expect(merged?.kind === 'term' && printTerm(merged.term)).toBe(printTerm(p('(s0 s1) s0 s1')))
+    // one endpoint per individual, each on its original wire
+    expect(out.wires[shared1]?.endpoints).toEqual([{ node: b, port: { kind: 'freeVar', name: 's0' } }])
+    expect(out.wires[shared2]?.endpoints).toEqual([{ node: b, port: { kind: 'freeVar', name: 's1' } }])
   })
 
   it('rejects wires of the wrong shape, self-loops, and displaced producers, by name', () => {
@@ -127,9 +174,63 @@ describe('applyFission', () => {
     const n = h.termNode(h.root, p('y ((\\x. x) y)'))
     const d = h.build()
     const split = applyFission(d, n, ['arg'])
+    // the host's sole free (source 'y') is canonical s0; the extracted
+    // producer's copy of it shares the SAME wire
     const yWire = Object.entries(split.wires).find(([, w]) =>
-      w.endpoints.some((ep) => ep.port.kind === 'freeVar' && ep.port.name === 'y'))![1]
-    expect(yWire.endpoints).toHaveLength(2)
+      w.endpoints.some((ep) => ep.port.kind === 'freeVar' && ep.port.name === 's0'))
+    expect(yWire, 'expected a wire holding a v:s0 endpoint').toBeDefined()
+    expect(yWire![1].endpoints).toHaveLength(2)
+  })
+
+  it('keeps every original wire association inside a multi-free-port term (positions stable)', () => {
+    // host 'a (b c)' → canonical s0 (s1 s2), each free on its own explicit
+    // wire. Extracting the arg must leave s0 on the host's original wire and
+    // put the producer's canonical (s0 s1) on b's and c's original wires —
+    // position is the invariant, the spelling is forced by it.
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('a (b c)'))
+    const wA = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'a' } }])
+    const wB = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'b' } }])
+    const wC = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'c' } }])
+    const d = h.build()
+    const split = applyFission(d, n, ['arg'])
+    const producer = Object.keys(split.nodes).find((id) => d.nodes[id] === undefined)!
+    expect(split.wires[wA]?.endpoints).toEqual([{ node: n, port: { kind: 'freeVar', name: 's0' } }])
+    expect(split.wires[wB]?.endpoints).toEqual([{ node: producer, port: { kind: 'freeVar', name: 's0' } }])
+    expect(split.wires[wC]?.endpoints).toEqual([{ node: producer, port: { kind: 'freeVar', name: 's1' } }])
+    // and fusion inverts it exactly
+    const newWire = Object.keys(split.wires).find(
+      (id) => d.wires[id] === undefined && split.wires[id]!.endpoints.length === 2,
+    )!
+    expect(diagramFingerprint(applyFusion(split, newWire))).toBe(diagramFingerprint(d))
+  })
+
+  it('round-trips a shared free spelled DIFFERENTLY on the two nodes: fusion yields ONE port on the shared wire, used in both positions', () => {
+    // host 'y ((\x. x) z y)' → canonical 's0 ((\x. x) s1 s0)'. Extracting the
+    // arg yields a producer '(\x. x) s0 s1' whose s1 rides the host's s0
+    // wire: ONE individual, spelled s1 on the producer and s0 on the host.
+    // The inverse fusion must collapse the pair to a single endpoint on that
+    // wire, and the merged term must use that variable in BOTH positions.
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('y ((\\x. x) z y)'))
+    const d = h.build()
+    const split = applyFission(d, n, ['arg'])
+    const producer = Object.keys(split.nodes).find((id) => d.nodes[id] === undefined)!
+    const sharedEntry = Object.entries(split.wires).find(([, w]) =>
+      w.endpoints.length === 2 && w.endpoints.every((ep) => ep.port.kind === 'freeVar'))
+    expect(sharedEntry, 'expected the shared individual to ride one two-endpoint freeVar wire').toBeDefined()
+    const [shared, sharedW] = sharedEntry!
+    expect(sharedW.endpoints).toContainEqual({ node: n, port: { kind: 'freeVar', name: 's0' } })
+    expect(sharedW.endpoints).toContainEqual({ node: producer, port: { kind: 'freeVar', name: 's1' } })
+    const newWire = Object.entries(split.wires).find(([, w]) =>
+      w.endpoints.some((ep) => ep.node === producer && ep.port.kind === 'output'))![0]
+    const out = applyFusion(split, newWire)
+    const merged = out.nodes[n]
+    // the shared individual is ONE variable (s0), used in the head position
+    // AND inside the inlined producer
+    expect(merged?.kind === 'term' && printTerm(merged.term)).toBe(printTerm(p('s0 ((\\x. x) s1 s0)')))
+    expect(out.wires[shared]?.endpoints).toEqual([{ node: n, port: { kind: 'freeVar', name: 's0' } }])
+    expect(diagramFingerprint(out)).toBe(diagramFingerprint(d))
   })
 
   it('rejects subterms that reference outer binders, by name', () => {

@@ -6,6 +6,18 @@ import { freshId } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
 /**
+ * Reparent a node into `region`, preserving its kind-specific payload.
+ * Return-typed switch (no default): a new node kind forces a decision here.
+ */
+function reparent(n: DiagramNode, region: RegionId): DiagramNode {
+  switch (n.kind) {
+    case 'term': return { kind: 'term', region, term: n.term }
+    case 'atom': return { kind: 'atom', region, binder: n.binder }
+    case 'ref': return { kind: 'ref', region, defId: n.defId, arity: n.arity }
+  }
+}
+
+/**
  * Rule 4a (spec §3.1): wrap a selection in two fresh nested cuts. Implemented
  * by REPARENTING — every id is stable, so callers' references survive.
  * Explicitly selected top-level wires keep their scope: they pass through the
@@ -32,9 +44,7 @@ export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection): Diagram
   const nodes: Record<string, DiagramNode> = { ...d.nodes }
   for (const [id, n] of Object.entries(d.nodes)) {
     if (selectedNodes.has(id)) {
-      nodes[id] = n.kind === 'term'
-        ? { kind: 'term', region: inner, term: n.term }
-        : { kind: 'atom', region: inner, binder: n.binder }
+      nodes[id] = reparent(n, inner)
     }
   }
   void c
@@ -76,11 +86,7 @@ export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
   }
   const nodes: Record<string, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
-    nodes[id] = n.region === innerId
-      ? (n.kind === 'term'
-        ? { kind: 'term', region: target, term: n.term }
-        : { kind: 'atom', region: target, binder: n.binder })
-      : n
+    nodes[id] = n.region === innerId ? reparent(n, target) : n
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {

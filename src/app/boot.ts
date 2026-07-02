@@ -42,7 +42,7 @@ export function mergeTheories(loaded: readonly { theory: Theory; ctx: ProofConte
     }
   }
   return {
-    ctx: { definitions, theorems },
+    ctx: { definitions, theorems, relations: new Map(Object.entries(relations)) },
     relations,
     constNames: new Set(Object.keys(definitions)),
   }

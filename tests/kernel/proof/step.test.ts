@@ -6,6 +6,8 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
+import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
+import { applyClosedTermIntro } from '../../../src/kernel/rules/intro'
 import { applyStep, replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { ProofError } from '../../../src/kernel/proof/error'
@@ -15,7 +17,7 @@ const p = (s: string) => parseTerm(s, consts)
 const noConsts = new Set<string>()
 const pp = (s: string) => parseTerm(s, noConsts)
 
-const ctx: ProofContext = { definitions: { I: pp('\\x. x') }, theorems: new Map() }
+const ctx: ProofContext = { definitions: { I: pp('\\x. x') }, theorems: new Map(), relations: new Map() }
 
 describe('applyStep mirrors the direct appliers', () => {
   it('erasure step equals applyErasure', () => {
@@ -32,9 +34,63 @@ describe('applyStep mirrors the direct appliers', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, pp('(\\x. x) y'))
     const d = h.build()
-    const { diagram, certificate } = applyConversion(d, n, pp('y'), 10)
-    const step: ProofStep = { rule: 'conversion', node: n, term: pp('y'), certificate, attachments: {} }
+    // the node's source free 'y' is canonical s0 after construction
+    const { diagram, certificate } = applyConversion(d, n, pp('s0'), 10)
+    const step: ProofStep = { rule: 'conversion', node: n, term: pp('s0'), certificate, attachments: {} }
     expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(diagram))
+  })
+
+  it('congruenceJoin step merges the outputs of βη-equal co-resident nodes', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, pp('y'))
+    const n2 = h.termNode(h.root, pp('y'))
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'y' } },
+      { node: n2, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
+    h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
+    const d = h.build()
+    const step: ProofStep = { rule: 'congruenceJoin', a: n1, b: n2, certificate: { leftSteps: [], rightSteps: [] } }
+    const out = applyStep(d, step, ctx)
+    const shared = Object.values(out.wires).find((w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2)
+    expect(shared).toBeDefined()
+  })
+
+  it('closedTermIntro step mints a closed term node, replaying through replayProof', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const d = h.build()
+    const step: ProofStep = { rule: 'closedTermIntro', region: cut, term: pp('\\x. \\y. x') }
+    expect(diagramFingerprint(applyStep(d, step, ctx)))
+      .toBe(diagramFingerprint(applyClosedTermIntro(d, cut, pp('\\x. \\y. x'))))
+    const out = replayProof(d, [step], ctx)
+    const added = Object.entries(out.nodes).filter(([id]) => d.nodes[id] === undefined)
+    expect(added).toHaveLength(1)
+    expect(added[0]![1].region).toBe(cut)
+  })
+
+  it('headStrip step decomposes a rigid-head equation, replaying through replayProof', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, pp('f a b'))
+    const n2 = h.termNode(h.root, pp('f a c'))
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'f' } },
+      { node: n2, port: { kind: 'freeVar', name: 'f' } },
+    ])
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'a' } },
+      { node: n2, port: { kind: 'freeVar', name: 'a' } },
+    ])
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'output' } },
+      { node: n2, port: { kind: 'output' } },
+    ])
+    const d = h.build()
+    const step: ProofStep = { rule: 'headStrip', a: n1, b: n2 }
+    expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(applyHeadStrip(d, n1, n2)))
+    const out = replayProof(d, [step], ctx)
+    expect(Object.keys(out.nodes)).toHaveLength(4)
   })
 
   it('unfold and fold steps use the context definitions', () => {

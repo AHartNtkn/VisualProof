@@ -56,7 +56,7 @@ describe('sessionTheory + the file road', () => {
     const theory = sessionTheory(s2.ctx, { relations: boot.relations })
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(theory))))
     expect(ctx.theorems.has('toy')).toBe(true)
-    expect(ctx.theorems.has('zeroIsNat')).toBe(true)
+    expect(ctx.theorems.has('onePlusOne')).toBe(true)
   })
 
   it('preserves dependency order: adopted theorems come after what they cite', () => {
@@ -64,6 +64,6 @@ describe('sessionTheory + the file road', () => {
     const s2 = adoptTheorem(s, assembleTheorem(s, 'toy'))
     const theory = sessionTheory(s2.ctx, { relations: boot.relations })
     const names = theory.theorems.map((t) => t.name)
-    expect(names.indexOf('toy')).toBeGreaterThan(names.indexOf('zeroIsNat'))
+    expect(names.indexOf('toy')).toBeGreaterThan(names.indexOf('onePlusOne'))
   })
 })

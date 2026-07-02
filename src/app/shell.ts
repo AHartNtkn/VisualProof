@@ -63,6 +63,7 @@ type Pending =
   | { readonly kind: 'iterate'; readonly sel: SubgraphSelection }
   | { readonly kind: 'cite'; readonly name: string; readonly direction: 'forward' | 'reverse'; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'unCite'; readonly name: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
+  | { readonly kind: 'relFold'; readonly defId: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
 
 type Drag =
   | { readonly kind: 'node'; readonly node: NodeId }
@@ -515,7 +516,20 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
         if (comp === undefined) {
           throw new Error(`unknown relation '${name}' — type a loaded relation name in the term input (loaded: ${Object.keys(relations).join(', ') || 'none'})`)
         }
-        applyF({ rule: 'comprehensionInstantiate', bubble: sel.regions[0]!, comp, binders: {} })
+        applyF({ rule: 'comprehensionInstantiate', bubble: sel.regions[0]!, comp, attachments: [], binders: {} })
+        return
+      }
+      case 'relUnfold':
+        applyF({ rule: 'relUnfold', node: sel.nodes[0]! })
+        return
+      case 'relFold': {
+        const name = termInput.value.trim()
+        if (!ctx.relations.has(name)) {
+          throw new Error(`unknown relation '${name}' — type a loaded relation name in the term input (loaded: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
+        }
+        pending = { kind: 'relFold', defId: name, sel, args: [] }
+        message = `fold into '${name}': click the argument wires in boundary order, then Commit`
+        refreshChrome()
         return
       }
       case 'citeTheorem':
@@ -539,13 +553,16 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       })()
       return
     }
-    if (pending !== null && (pending.kind === 'cite' || pending.kind === 'unCite')) {
+    if (pending !== null && (pending.kind === 'cite' || pending.kind === 'unCite' || pending.kind === 'relFold')) {
+      const what = pending.kind === 'cite' ? `cite '${pending.name}'`
+        : pending.kind === 'unCite' ? `un-cite '${pending.name}'`
+        : `fold into '${pending.defId}'`
       if (hit !== null && hit.kind === 'wire') {
         pending.args.push(hit.id)
-        message = `${pending.kind === 'cite' ? 'cite' : 'un-cite'} '${pending.name}': ${pending.args.length} argument wire(s) picked`
+        message = `${what}: ${pending.args.length} argument wire(s) picked`
         refreshChrome()
       } else {
-        message = `${pending.kind === 'cite' ? 'cite' : 'un-cite'} '${pending.name}': click wires only (or Commit/Cancel in the menu)`
+        message = `${what}: click wires only (or Commit/Cancel in the menu)`
         refreshChrome()
       }
       return
@@ -582,6 +599,12 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
           session = applyBackward(session, { kind: 'unCite', name: p.name, at: { sel: p.sel, args: [...p.args] } })
           message = meetStatus()
           sync()
+        })))
+      }
+      if (p.kind === 'relFold') {
+        menuDiv.append(button(`Commit fold into '${p.defId}' (${p.args.length} arg(s))`, guard(() => {
+          pending = null
+          applyF({ rule: 'relFold', sel: p.sel, defId: p.defId, args: [...p.args] })
         })))
       }
       menuDiv.append(button('Cancel pending action', () => {

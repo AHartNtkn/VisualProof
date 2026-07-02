@@ -43,6 +43,12 @@ export class DiagramBuilder {
     return id
   }
 
+  ref(region: RegionId, defId: string, arity: number): NodeId {
+    const id = `n${this.nodeCount++}`
+    this.nodes[id] = { kind: 'ref', region, defId, arity }
+    return id
+  }
+
   wire(scope: RegionId, endpoints: Endpoint[]): WireId {
     const id = `w${this.wireCount++}`
     this.wires[id] = { scope, endpoints }

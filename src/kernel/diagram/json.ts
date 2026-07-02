@@ -12,11 +12,17 @@ import { mkDiagram, portKey } from './diagram'
 export function diagramToJson(d: Diagram): unknown {
   const regions: Record<string, unknown> = {}
   for (const [id, r] of Object.entries(d.regions)) regions[id] = { ...r }
+  // Return-typed switch (no default): a new node kind forces a serialization here.
+  const nodeToJson = (n: DiagramNode): Record<string, unknown> => {
+    switch (n.kind) {
+      case 'term': return { kind: 'term', region: n.region, term: serializeTerm(n.term) }
+      case 'atom': return { kind: 'atom', region: n.region, binder: n.binder }
+      case 'ref': return { kind: 'ref', region: n.region, defId: n.defId, arity: n.arity }
+    }
+  }
   const nodes: Record<string, unknown> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
-    nodes[id] = n.kind === 'term'
-      ? { kind: 'term', region: n.region, term: serializeTerm(n.term) }
-      : { kind: 'atom', region: n.region, binder: n.binder }
+    nodes[id] = nodeToJson(n)
   }
   const wires: Record<string, unknown> = {}
   for (const [id, w] of Object.entries(d.wires)) {
@@ -97,6 +103,14 @@ export function diagramFromJson(j: unknown): Diagram {
     if (v.kind === 'atom' && typeof v.binder === 'string') {
       assertOnlyKeys(v, ['kind', 'region', 'binder'], `node '${id}'`)
       nodes[id] = { kind: 'atom', region: v.region, binder: v.binder }
+      continue
+    }
+    if (v.kind === 'ref' && typeof v.defId === 'string' && typeof v.arity === 'number') {
+      assertOnlyKeys(v, ['kind', 'region', 'defId', 'arity'], `node '${id}'`)
+      if (!Number.isSafeInteger(v.arity) || v.arity < 0) {
+        fail(`node '${id}' arity must be a non-negative integer, got ${v.arity}`)
+      }
+      nodes[id] = { kind: 'ref', region: v.region, defId: v.defId, arity: v.arity }
       continue
     }
     fail(`node '${id}' has unrecognized shape`)

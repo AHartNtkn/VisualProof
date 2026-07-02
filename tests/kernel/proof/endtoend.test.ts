@@ -30,14 +30,14 @@ describe('end to end: a sentence theorem built bidirectionally', () => {
       rule: 'doubleCutIntro',
       sel: mkSelection(backwardStart, { region: backwardStart.root, regions: [], nodes: [], wires: [] }),
     }]
-    const composed = composeProofs(blank, backwardStart, tail, { definitions: {}, theorems: new Map() })
+    const composed = composeProofs(blank, backwardStart, tail, { definitions: {}, theorems: new Map(), relations: new Map() })
     const thm: Theorem = {
       name: 'blankToDoubleCut',
       lhs: mkDiagramWithBoundary(blank, []),
       rhs: mkDiagramWithBoundary(goal, []),
       steps: composed,
     }
-    expect(() => checkTheorem(thm, { definitions: {}, theorems: new Map() })).not.toThrow()
+    expect(() => checkTheorem(thm, { definitions: {}, theorems: new Map(), relations: new Map() })).not.toThrow()
   })
 })
 

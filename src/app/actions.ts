@@ -20,6 +20,8 @@ export type ActionDescriptor =
   | { readonly kind: 'deiterate'; readonly label: string }
   | { readonly kind: 'instantiate'; readonly label: string; readonly needsInput: 'comprehension' }
   | { readonly kind: 'convert'; readonly label: string; readonly needsInput: 'term' }
+  | { readonly kind: 'relUnfold'; readonly label: string }
+  | { readonly kind: 'relFold'; readonly label: string; readonly needsInput: 'relation' }
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
 
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext): ActionDescriptor[] {
@@ -37,6 +39,23 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
   }
   if (sel.nodes.length === 1 && sel.regions.length === 0 && d.nodes[sel.nodes[0]!]?.kind === 'term') {
     out.push({ kind: 'convert', label: 'Convert (βη)…', needsInput: 'term' })
+  }
+
+  // A single reference node unfolds when its relation is in scope. Unfold is a
+  // definitional equivalence (polarity-blind): no polarity gate.
+  if (sel.nodes.length === 1 && sel.regions.length === 0 && sel.wires.length === 0) {
+    const n = d.nodes[sel.nodes[0]!]
+    if (n?.kind === 'ref' && ctx.relations.has(n.defId)) {
+      out.push({ kind: 'relUnfold', label: `Unfold ${n.defId}` })
+    }
+  }
+
+  // Folding replaces an occurrence of a relation body by its reference. It is
+  // selection-based (the body may span nodes/regions/wires) and needs the
+  // relation name; the applier's fingerprint check is the authority. Also
+  // polarity-blind. Only offered when a relation exists to fold into.
+  if (hasContent && ctx.relations.size > 0) {
+    out.push({ kind: 'relFold', label: 'Fold into a relation…', needsInput: 'relation' })
   }
 
   // single selected region: structural eliminations

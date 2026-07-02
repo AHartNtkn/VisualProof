@@ -12,6 +12,18 @@ import { freshId } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { wireAt } from './access'
 
+/**
+ * Reparent a node into `region`, preserving its kind-specific payload.
+ * Return-typed switch (no default): a new node kind forces a decision here.
+ */
+function reparent(n: DiagramNode, region: RegionId): DiagramNode {
+  switch (n.kind) {
+    case 'term': return { kind: 'term', region, term: n.term }
+    case 'atom': return { kind: 'atom', region, binder: n.binder }
+    case 'ref': return { kind: 'ref', region, defId: n.defId, arity: n.arity }
+  }
+}
+
 /** Remove one node, trimming its endpoints off their wires. */
 function dropNode(d: Diagram, nodeId: NodeId): Diagram {
   const nodes: Record<NodeId, DiagramNode> = {}
@@ -32,11 +44,21 @@ function dropNode(d: Diagram, nodeId: NodeId): Diagram {
  * then dissolve the bubble, promoting its contents to its parent. The gate
  * tests the bubble's own polarity, which equals its parent's: bubbles never
  * flip parity (spec §2.1).
+ *
+ * Comprehension with parameters (textbook SO comprehension): the comp's
+ * boundary is `arity` argument stubs FOLLOWED BY parameter wires, positional
+ * and exact. Each copy's trailing boundary stubs splice onto the SAME host
+ * `attachments` wires — sharing across instances is what makes them
+ * parameters (G is one fixed relation R := λx⃗. ψ(x⃗, b⃗) over host lines b⃗).
+ * Per-copy enclosure of each parameter wire over the copy's landing region is
+ * the splice's own attachment validation; this rule enforces existence and
+ * the count split itself.
  */
 export function applyComprehensionInstantiate(
   d: Diagram,
   bubbleId: RegionId,
   comp: DiagramWithBoundary,
+  attachments: readonly WireId[],
   binders: ReadonlyMap<RegionId, RegionId> = new Map(),
 ): Diagram {
   const bubble = d.regions[bubbleId]
@@ -47,10 +69,15 @@ export function applyComprehensionInstantiate(
   if (polarity(d, bubbleId) !== 'negative') {
     throw new RuleError(`comprehension instantiation requires a negative bubble; '${bubbleId}' is positive`)
   }
-  if (comp.boundary.length !== bubble.arity) {
+  if (comp.boundary.length !== bubble.arity + attachments.length) {
     throw new RuleError(
-      `arity mismatch: bubble '${bubbleId}' binds a relation of arity ${bubble.arity}, but the comprehension has ${comp.boundary.length} boundary wires`,
+      `arity mismatch: bubble '${bubbleId}' binds a relation of arity ${bubble.arity} and ${attachments.length} parameter attachments were given, but the comprehension has ${comp.boundary.length} boundary wires`,
     )
+  }
+  for (const a of attachments) {
+    if (d.wires[a] === undefined) {
+      throw new RuleError(`parameter attachment wire '${a}' does not exist`)
+    }
   }
 
   // Open comprehensions mention relation variables quantified OUTSIDE the
@@ -74,7 +101,7 @@ export function applyComprehensionInstantiate(
     for (let i = 0; i < bubble.arity; i++) {
       args.push(wireAt(cur, atomId, { kind: 'arg', index: i }))
     }
-    cur = spliceSubgraph(cur, atom.region, comp, args, binders)
+    cur = spliceSubgraph(cur, atom.region, comp, [...args, ...attachments], binders)
     cur = dropNode(cur, atomId)
   }
   // dissolve the bubble: promote child regions, nodes, and wire scopes
@@ -88,11 +115,7 @@ export function applyComprehensionInstantiate(
   }
   const nodes: Record<NodeId, DiagramNode> = {}
   for (const [id, n] of Object.entries(cur.nodes)) {
-    nodes[id] = n.region === bubbleId
-      ? (n.kind === 'term'
-        ? { kind: 'term', region: parent, term: n.term }
-        : { kind: 'atom', region: parent, binder: n.binder })
-      : n
+    nodes[id] = n.region === bubbleId ? reparent(n, parent) : n
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(cur.wires)) {
@@ -196,11 +219,7 @@ export function applyComprehensionAbstract(
   const nodes: Record<NodeId, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
     if (seenNodes.has(id)) continue
-    nodes[id] = selectedNodes.has(id)
-      ? (n.kind === 'term'
-        ? { kind: 'term', region: bubbleId, term: n.term }
-        : { kind: 'atom', region: bubbleId, binder: n.binder })
-      : n
+    nodes[id] = selectedNodes.has(id) ? reparent(n, bubbleId) : n
   }
   const takenNodeIds = new Set(Object.keys(d.nodes))
   const atomIds = occurrences.map(() => {

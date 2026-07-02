@@ -11,7 +11,7 @@ import { stepToJson, stepFromJson } from '../../../src/kernel/proof/json'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
-const ctx: ProofContext = { definitions: {}, theorems: new Map() }
+const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
 
 function openPattern() {
   const b = new DiagramBuilder()

@@ -34,7 +34,8 @@ describe('equational rules are polarity-free at depths 0..3', () => {
 
       expect(() => applyUnfold(d, defs, n, ['fn'])).not.toThrow()
       expect(() => applyFold(applyUnfold(d, defs, n, ['fn']), defs, n, ['fn'], 'I')).not.toThrow()
-      expect(() => applyConversion(d, n, p('I y'), 10)).not.toThrow()
+      // the node's source free 'y' is canonical s0 after construction
+      expect(() => applyConversion(d, n, p('I s0'), 10)).not.toThrow()
 
       const split = applyFission(d, n, ['arg'])
       const newWire = Object.keys(split.wires).find(
@@ -60,12 +61,12 @@ describe('comprehension gates mirror insertion/erasure parity', () => {
       const occ = { sel: mkSelection(d, { region, regions: [], nodes: [n], wires: [] }), args: [w] }
       if (positive) {
         expect(() => applyComprehensionAbstract(d, wrap, identityComp(), [occ])).not.toThrow()
-        expect(() => applyComprehensionInstantiate(d, bub, identityComp()))
+        expect(() => applyComprehensionInstantiate(d, bub, identityComp(), []))
           .toThrowError(/requires a negative bubble/)
       } else {
         expect(() => applyComprehensionAbstract(d, wrap, identityComp(), [occ]))
           .toThrowError(/requires a positive region/)
-        expect(() => applyComprehensionInstantiate(d, bub, identityComp())).not.toThrow()
+        expect(() => applyComprehensionInstantiate(d, bub, identityComp(), [])).not.toThrow()
       }
     })
   }
@@ -77,8 +78,9 @@ describe('cross-rule composition', () => {
     const n = h.termNode(h.root, p('I y'))
     const d = h.build()
     const unfolded = applyUnfold(d, defs, n, ['fn'])
-    const { diagram: converted } = applyConversion(unfolded, n, p('y'), 10)
-    const back = applyConversion(converted, n, p('(\\x. x) y'), 10).diagram
+    // the node's source free 'y' is canonical s0 after construction
+    const { diagram: converted } = applyConversion(unfolded, n, p('s0'), 10)
+    const back = applyConversion(converted, n, p('(\\x. x) s0'), 10).diagram
     expect(diagramFingerprint(applyFold(back, defs, n, ['fn'], 'I'))).toBe(diagramFingerprint(d))
   })
 })

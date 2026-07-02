@@ -28,12 +28,12 @@ describe('DiagramBuilder', () => {
 
   it('auto-attaches a fresh singleton wire to every unattached port, scoped at the node region', () => {
     const b = new DiagramBuilder()
-    const t = b.termNode(b.root, p('\\x. y (z x)')) // ports: out, v:y, v:z — none wired
+    const t = b.termNode(b.root, p('\\x. y (z x)')) // ports: out plus two frees, canonicalized to v:s0, v:s1
     const d = b.build()
     const wires = Object.values(d.wires)
     expect(wires).toHaveLength(3)
     const keys = wires.flatMap((w) => w.endpoints.map((ep) => `${ep.node}/${portKey(ep.port)}`)).sort()
-    expect(keys).toEqual([`${t}/out`, `${t}/v:y`, `${t}/v:z`])
+    expect(keys).toEqual([`${t}/out`, `${t}/v:s0`, `${t}/v:s1`])
     for (const w of wires) {
       expect(w.scope).toBe(b.root)
       expect(w.endpoints).toHaveLength(1)

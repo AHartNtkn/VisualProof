@@ -6,7 +6,7 @@ import { RuleError } from './error'
 export function termNodeAt(d: Diagram, nodeId: NodeId): Extract<DiagramNode, { kind: 'term' }> {
   const node = d.nodes[nodeId]
   if (node === undefined) throw new DiagramError(`unknown node '${nodeId}'`)
-  if (node.kind !== 'term') throw new RuleError(`this rule applies to term nodes; '${nodeId}' is an atom`)
+  if (node.kind !== 'term') throw new RuleError(`this rule applies to term nodes; '${nodeId}' has kind '${node.kind}'`)
   return node
 }
 

@@ -33,9 +33,10 @@ function renamed(d: Diagram): Diagram {
   }
   const nodes: Record<string, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
-    nodes[r(id)] = n.kind === 'term'
-      ? { kind: 'term', region: r(n.region), term: n.term }
-      : { kind: 'atom', region: r(n.region), binder: r(n.binder) }
+    nodes[r(id)] =
+      n.kind === 'term' ? { kind: 'term', region: r(n.region), term: n.term }
+      : n.kind === 'atom' ? { kind: 'atom', region: r(n.region), binder: r(n.binder) }
+      : { kind: 'ref', region: r(n.region), defId: n.defId, arity: n.arity }
   }
   const wires: Record<string, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
