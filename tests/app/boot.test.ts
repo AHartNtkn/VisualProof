@@ -11,7 +11,7 @@ describe('bundled boot context', () => {
   it('merges both bundled theories: all theorems citable, constants unioned, nat relation present', () => {
     const boot = bootBundledContext()
     expect([...boot.ctx.theorems.keys()].sort()).toEqual(
-      ['fixedPoint', 'onePlusOne', 'plusAssoc', 'plusLeftUnit', 'plusRightUnit'].sort(),
+      ['fixedPoint', 'onePlusOne', 'plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'succShiftS'].sort(),
     )
     for (const name of ['ZERO', 'SUCC', 'PLUS', 'ONE', 'TWO', 'Y']) {
       expect(boot.constNames.has(name)).toBe(true)

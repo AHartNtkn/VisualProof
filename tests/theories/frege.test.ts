@@ -19,10 +19,10 @@ function soleTerm(side: Theorem['lhs']): Term {
 }
 
 describe('the bundled Frege theory', () => {
-  it('verifies end to end: nat resolves, the three conversion theorems replay', () => {
+  it('verifies end to end: nat resolves, conversion theorems + succShiftS replay', () => {
     const theory = buildFregeTheory()
     const ctx = verifyTheory(theory)
-    expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit'])
+    expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'succShiftS'])
     expect(ctx.relations.has('nat')).toBe(true)
   })
 
@@ -30,8 +30,26 @@ describe('the bundled Frege theory', () => {
     const theory = buildFregeTheory()
     const text = JSON.stringify(theoryToJson(theory))
     const { ctx } = loadTheory(JSON.parse(text))
-    expect(ctx.theorems.size).toBe(3)
+    expect(ctx.theorems.size).toBe(4)
     expect(ctx.relations.has('nat')).toBe(true)
+  })
+
+  it('succShiftS: ℕ-guarded, boundary arity 3, rhs carries the applied SUCC-shift pair', () => {
+    const t = buildFregeTheory().theorems.find((x) => x.name === 'succShiftS')!
+    expect(t.lhs.boundary).toHaveLength(3)
+    expect(t.rhs.boundary).toHaveLength(3)
+    // the ℕ(m) guard is folded on BOTH sides (one ref each)
+    const lhsRefs = Object.values(t.lhs.diagram.nodes).filter((n) => n.kind === 'ref')
+    const rhsRefs = Object.values(t.rhs.diagram.nodes).filter((n) => n.kind === 'ref')
+    expect(lhsRefs).toHaveLength(1)
+    expect(rhsRefs).toHaveLength(1)
+    expect(lhsRefs[0]).toMatchObject({ kind: 'ref', defId: 'nat', arity: 1 })
+    // the rhs materializes the exact applied pair PLUS m (SUCC n) —o— SUCC (PLUS m n)
+    const rd = t.rhs.diagram
+    const has = (term: Term): boolean =>
+      Object.values(rd.nodes).some((n) => n.kind === 'term' && n.region === rd.root && termEq(n.term, term))
+    expect(has(p('PLUS s0 (SUCC s1)'))).toBe(true)
+    expect(has(p('SUCC (PLUS s0 s1)'))).toBe(true)
   })
 
   it('the bundled ℕ is inCutNat: the zero-evidence is inside the guard, not root-witnessable', () => {
