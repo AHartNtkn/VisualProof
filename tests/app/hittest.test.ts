@@ -5,7 +5,7 @@ import { mkEngine, recomputeRegions, legPaths, settle, satelliteWorld, boundaryE
 import type { WirePath } from '../../src/view/index'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
-import { hitTest, buildSelection } from '../../src/app/hittest'
+import { hitTest, dragTarget, buildSelection } from '../../src/app/hittest'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
@@ -68,6 +68,42 @@ describe('hitTest', () => {
   it('returns null in empty space', () => {
     const { e } = setup()
     expect(hitTest(e, vec(500, 500))).toBeNull()
+  })
+})
+
+describe('dragTarget — what a press-and-drag grabs', () => {
+  it('a point inside a node disc grabs that body', () => {
+    const { n, e } = setup()
+    expect(dragTarget(e, vec(1, 1))).toEqual({ kind: 'body', id: n })
+  })
+
+  it('a point on a junction dot grabs the junction body (clicks resolve it to the wire, drags do not)', () => {
+    const h2 = new DiagramBuilder()
+    const a = h2.termNode(h2.root, p('x'))
+    const b = h2.termNode(h2.root, p('y'))
+    const c = h2.termNode(h2.root, p('z'))
+    const w = h2.wire(h2.root, [
+      { node: a, port: { kind: 'freeVar', name: 'x' } },
+      { node: b, port: { kind: 'freeVar', name: 'y' } },
+      { node: c, port: { kind: 'freeVar', name: 'z' } },
+    ])
+    const e2 = mkEngine(h2.build(), [])
+    settle(e2, 600)
+    const j = [...e2.bodies.values()].find((x) => x.kind === 'junction')!
+    expect(hitTest(e2, j.pos)).toEqual({ kind: 'wire', id: w })
+    expect(dragTarget(e2, j.pos)).toEqual({ kind: 'body', id: j.id })
+  })
+
+  it('a point inside a region (off every disc) grabs the region', () => {
+    const { cut, e } = setup()
+    const g = e.regions.get(cut)!
+    const probe = vec(g.center.x - g.radius + 1, g.center.y)
+    expect(dragTarget(e, probe)).toEqual({ kind: 'region', id: cut })
+  })
+
+  it('empty sheet space grabs nothing — the background is not draggable', () => {
+    const { e } = setup()
+    expect(dragTarget(e, vec(500, 500))).toBeNull()
   })
 })
 

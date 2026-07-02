@@ -159,7 +159,7 @@ describe('settleStep — drag pin', () => {
     const e = mkEngine(h.build(), [])
     const pinPos = { x: 40, y: 40 }
     for (let i = 0; i < 400; i++) {
-      settleStep(e, a)
+      settleStep(e, new Set([a]))
       const pa = e.bodies.get(a)!
       pa.pos = { ...pinPos }
       pa.vel = { x: 0, y: 0 }
@@ -190,7 +190,7 @@ describe('settleStep — drag pin', () => {
     }
     const pinned = build()
     const free = build()
-    settleStep(pinned.e, pinned.a)
+    settleStep(pinned.e, new Set([pinned.a]))
     settleStep(free.e, null)
     const moved = (r: ReturnType<typeof build>): number => {
       const p = r.e.bodies.get(r.a)!.pos
@@ -222,7 +222,7 @@ describe('settleStep — live-loop safety (bounded, non-diverging energy)', () =
     const windowMovement = (): number => {
       const before = new Map(free.map((id) => [id, { ...e.bodies.get(id)!.pos }]))
       for (let i = 0; i < 30; i++) {
-        settleStep(e, a)
+        settleStep(e, new Set([a]))
         const pa = e.bodies.get(a)!
         pa.pos = { ...pinPos }
         pa.vel = { x: 0, y: 0 }

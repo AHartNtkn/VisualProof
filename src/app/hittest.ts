@@ -75,6 +75,31 @@ export function hitTest(e: Engine, point: Vec2): Hit | null {
   return best === null ? null : { kind: 'region', id: best.id }
 }
 
+export type DragTarget =
+  | { readonly kind: 'body'; readonly id: string }
+  | { readonly kind: 'region'; readonly id: RegionId }
+
+/**
+ * What a press-and-drag grabs: any body disc (junctions included — they are
+ * draggable geometry even though a CLICK on one resolves to its wire), else
+ * the smallest containing region (a grab of a cut/bubble moves its whole
+ * subtree), else nothing. Wires are derived geometry and the sheet is the
+ * fixed background — neither is draggable.
+ */
+export function dragTarget(e: Engine, point: Vec2): DragTarget | null {
+  for (const b of e.bodies.values()) {
+    if (length(sub(point, b.pos)) <= b.discR) return { kind: 'body', id: b.id }
+  }
+  let best: { id: RegionId; radius: number } | null = null
+  for (const [rid, g] of e.regions) {
+    if (e.d.regions[rid]!.kind === 'sheet') continue
+    if (length(sub(point, g.center)) <= g.radius && (best === null || g.radius < best.radius)) {
+      best = { id: rid, radius: g.radius }
+    }
+  }
+  return best === null ? null : { kind: 'region', id: best.id }
+}
+
 /**
  * Build a kernel selection from clicked items. The anchor is the common
  * parent: every picked node must live DIRECTLY in it and every picked region

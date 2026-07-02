@@ -1,7 +1,7 @@
 import type { RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine } from './engine'
-import { pkey, worldAnchor } from './engine'
+import { pkey, subtreeCarriers, worldAnchor } from './engine'
 
 /**
  * Rotation-aware relaxation for the render engine. Bodies (nodes + junctions)
@@ -93,18 +93,6 @@ function emptyLeafRegions(e: Engine): RegionId[] {
   return out
 }
 
-/** Positional state carriers in a subtree: member bodies, plus one per empty
-    leaf region (whose center is its own state). Used as the mass of a subtree
-    in projections — a region is as heavy as what actually moves with it. */
-function subtreeCarriers(e: Engine, rid: RegionId): number {
-  const mids = e.membersOf.get(rid)!
-  const kids = e.childrenOf.get(rid)!
-  if (mids.length === 0 && kids.length === 0) return 1
-  let n = mids.length
-  for (const c of kids) n += subtreeCarriers(e, c)
-  return n
-}
-
 function subtreeMembers(e: Engine, rid: RegionId): string[] {
   const out = [...e.membersOf.get(rid)!]
   for (const c of e.childrenOf.get(rid)!) out.push(...subtreeMembers(e, c))
@@ -146,8 +134,12 @@ export function resolveOverlaps(e: Engine): boolean {
         // vector breaks the symmetry deterministically
         const ux = dist < 1e-9 ? 1 : dx / dist, uy = dist < 1e-9 ? 0 : dy / dist
         const viol = need - dist
-        const mA = A.sub === null ? 1 : subtreeCarriers(e, A.sub)
-        const mB = B.sub === null ? 1 : subtreeCarriers(e, B.sub)
+        const carriersOf = (sub: RegionId): number => {
+          const g = subtreeCarriers(e, sub)
+          return g.bodies.length + g.emptyLeaves.length
+        }
+        const mA = A.sub === null ? 1 : carriersOf(A.sub)
+        const mB = B.sub === null ? 1 : carriersOf(B.sub)
         const wA = mB / (mA + mB), wB = mA / (mA + mB)
         const shift = (it: typeof A, sx: number, sy: number): void => {
           if (it.sub === null) {
@@ -184,11 +176,11 @@ export function resolveOverlaps(e: Engine): boolean {
 
 type LegRef = { key: string; other: Body; otherKey: string | null }
 
-/** One relaxation tick — force integration + rotation + periodic projection.
-    Deterministic: no randomness, seed comes from mkEngine's spiral. A `pinned`
-    body is excluded from the cohesion pull so a drag holding it at the cursor
-    feels direct (the caller overrides its position each tick). */
-export function settleStep(e: Engine, pinned: string | null = null): void {
+/** One relaxation tick — force integration + rotation + projection.
+    Deterministic: no randomness, seed comes from mkEngine's spiral. `pinned`
+    bodies are excluded from the cohesion pull so a drag holding them at the
+    cursor feels direct (the caller overrides their positions each tick). */
+export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): void {
   recomputeRegions(e)
   // snapshot every positional carrier: the end-of-tick quotient of the global
   // rotation zero mode is fitted against this
@@ -297,7 +289,7 @@ export function settleStep(e: Engine, pinned: string | null = null): void {
       else { p.x += fx; p.y += fy }
     }
     for (const mid of mids) {
-      if (mid === pinned) continue // a dragged body is not pulled toward the centroid
+      if (pinned !== null && pinned.has(mid)) continue // a dragged body is not pulled toward the centroid
       const b = e.bodies.get(mid)!
       const k = 0.65 * cohesionFactor(mid, b.pos, b.discR)
       addPull(mid, (cen.x - b.pos.x) * k, (cen.y - b.pos.y) * k)

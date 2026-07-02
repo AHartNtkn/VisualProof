@@ -99,6 +99,26 @@ export function anchorOf(geometry: NodeGeometry, center: Vec2, port: Port): Vec2
   return add(center, local)
 }
 
+/** Positional carriers of a region subtree: the member bodies, plus every
+    empty leaf region (whose center is its own state). This is the subtree's
+    mass in projections and the grab set of a region drag. */
+export function subtreeCarriers(e: Engine, rid: RegionId): { bodies: string[]; emptyLeaves: RegionId[] } {
+  const bodies: string[] = []
+  const emptyLeaves: RegionId[] = []
+  const walk = (r: RegionId): void => {
+    const mids = e.membersOf.get(r)!
+    const kids = e.childrenOf.get(r)!
+    if (mids.length === 0 && kids.length === 0) {
+      emptyLeaves.push(r)
+      return
+    }
+    bodies.push(...mids)
+    for (const c of kids) walk(c)
+  }
+  walk(rid)
+  return { bodies, emptyLeaves }
+}
+
 export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
   const bodies = new Map<string, Body>()
   let i = 0

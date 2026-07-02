@@ -11,7 +11,7 @@ import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
-import { mkEngine, carryOver } from '../view/engine'
+import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
 import { settleStep } from '../view/relax'
 import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
@@ -26,8 +26,8 @@ import type { ProofSession } from './session'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
 import { sessionTheory } from './persist'
 import { theoryToJson } from '../kernel/proof/store'
-import type { Hit } from './hittest'
-import { hitTest, buildSelection } from './hittest'
+import type { DragTarget, Hit } from './hittest'
+import { hitTest, dragTarget, buildSelection } from './hittest'
 import type { ActionDescriptor } from './actions'
 import { applicableActions } from './actions'
 
@@ -68,9 +68,12 @@ type Pending =
   | { readonly kind: 'unCite'; readonly name: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'relFold'; readonly defId: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
 
-type Drag =
-  | { readonly kind: 'node'; readonly node: NodeId }
-  | { readonly kind: 'pan'; readonly startOffset: { readonly x: number; readonly y: number }; readonly startScreen: Vec2 }
+/** A grab: the carriers moved by this drag, each with its offset from the
+    cursor's world position at grab time (so a drag moves, never teleports). */
+type Drag = {
+  readonly bodies: ReadonlyMap<string, Vec2>
+  readonly emptyLeaves: ReadonlyMap<RegionId, Vec2>
+}
 
 /**
  * Backward menu entry: a labelled action that commits at button-click time,
@@ -165,7 +168,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let displayed: Diagram = editDiagram
   let engine: Engine = mkEngine(displayed, [])
   settleStep(engine)
-  let pin: { readonly node: NodeId; pos: Vec2 } | null = null
+  // The pin stores the cursor in SCREEN space: the camera refits every frame,
+  // so a world-space pin would drift off the cursor whenever the fit moves.
+  let pin: { readonly drag: Drag; screen: Vec2 } | null = null
   let message = 'EDIT mode: type a term (\\ is λ) and Add, click to select, wrap/delete/join'
   let drag: Drag | null = null
   let downScreen: Vec2 | null = null
@@ -177,7 +182,23 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
   canvas.style.background = theme.canvas
-  const view = { scale: 6, offsetX: canvas.width / 2, offsetY: canvas.height / 2 }
+  // There is NO pan: the camera is a fit — centered on the sheet circle with
+  // a scale that keeps the whole sheet on screen (never past the design's
+  // unit scale, so small sheets don't blow up) times the user's wheel-zoom
+  // factor. It is recomputed every frame and STABILIZES because settled
+  // layouts are at rest; the user cannot move the background, only zoom it.
+  const DESIGN_SCALE = 6
+  const view = { scale: DESIGN_SCALE, offsetX: canvas.width / 2, offsetY: canvas.height / 2 }
+  let userZoom = 1
+  const fitView = (): void => {
+    const sheet = engine.regions.get(engine.d.root)
+    const R = Math.max(sheet === undefined ? 10 : sheet.radius, 10)
+    const cx = sheet === undefined ? 0 : sheet.center.x
+    const cy = sheet === undefined ? 0 : sheet.center.y
+    view.scale = Math.min(DESIGN_SCALE, (0.45 * Math.min(canvas.width, canvas.height)) / R) * userZoom
+    view.offsetX = canvas.width / 2 - cx * view.scale
+    view.offsetY = canvas.height / 2 - cy * view.scale
+  }
 
   const toWorld = (screen: Vec2): Vec2 =>
     vec((screen.x - view.offsetX) / view.scale, (screen.y - view.offsetY) / view.scale)
@@ -985,15 +1006,30 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       canvas.width = window.innerWidth
       canvas.height = window.innerHeight
     }
+    const pinnedIds = pin === null ? null : new Set(pin.drag.bodies.keys())
     for (let i = 0; i < SETTLE_STEPS_PER_FRAME; i++) {
-      // drag pins the grabbed body: hold it at the cursor and relax around it
-      // (excluded from cohesion so the drag feels direct)
-      settleStep(engine, pin?.node ?? null)
+      // a drag pins the grabbed carriers: hold them at their grab offsets from
+      // the cursor and relax everything else around them (pinned bodies are
+      // excluded from cohesion so the drag feels direct)
+      settleStep(engine, pinnedIds)
       if (pin !== null) {
-        const b = engine.bodies.get(pin.node)
-        if (b !== undefined) { b.pos = pin.pos; b.vel = vec(0, 0) }
+        const at = toWorld(pin.screen)
+        for (const [id, off] of pin.drag.bodies) {
+          const b = engine.bodies.get(id)
+          if (b !== undefined) {
+            b.pos = { x: at.x + off.x, y: at.y + off.y }
+            b.vel = vec(0, 0)
+          }
+        }
+        for (const [rid, off] of pin.drag.emptyLeaves) {
+          const g = engine.regions.get(rid)
+          if (g !== undefined) {
+            engine.regions.set(rid, { center: { x: at.x + off.x, y: at.y + off.y }, radius: g.radius })
+          }
+        }
       }
     }
+    fitView()
     const shapes: Shape[] = paint(engine, theme)
     for (const h of hits) shapes.push(...itemShapes(h, SELECT_STROKE))
     if (hoverWorld !== null) {
@@ -1014,14 +1050,32 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const r = canvas.getBoundingClientRect()
     return vec(e.clientX - r.left, e.clientY - r.top)
   }
+  const grabAt = (world: Vec2): Drag | null => {
+    const t: DragTarget | null = dragTarget(engine, world)
+    if (t === null) return null
+    const bodies = new Map<string, Vec2>()
+    const emptyLeaves = new Map<RegionId, Vec2>()
+    if (t.kind === 'body') {
+      const b = engine.bodies.get(t.id)!
+      bodies.set(t.id, vec(b.pos.x - world.x, b.pos.y - world.y))
+    } else {
+      const g = subtreeCarriers(engine, t.id)
+      for (const id of g.bodies) {
+        const b = engine.bodies.get(id)!
+        bodies.set(id, vec(b.pos.x - world.x, b.pos.y - world.y))
+      }
+      for (const rid of g.emptyLeaves) {
+        const c = engine.regions.get(rid)!.center
+        emptyLeaves.set(rid, vec(c.x - world.x, c.y - world.y))
+      }
+    }
+    return { bodies, emptyLeaves }
+  }
   const onPointerDown = (e: PointerEvent): void => {
     const screen = screenOf(e)
     downScreen = screen
     dragMoved = false
-    const hit = hitTest(engine, toWorld(screen))
-    drag = hit !== null && hit.kind === 'node'
-      ? { kind: 'node', node: hit.id }
-      : { kind: 'pan', startOffset: { x: view.offsetX, y: view.offsetY }, startScreen: screen }
+    drag = grabAt(toWorld(screen))
     canvas.setPointerCapture(e.pointerId)
   }
   const onPointerMove = (e: PointerEvent): void => {
@@ -1030,12 +1084,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (downScreen === null || drag === null) return
     if (!dragMoved && length(sub(screen, downScreen)) > CLICK_SLOP_PX) dragMoved = true
     if (!dragMoved) return
-    if (drag.kind === 'node') {
-      pin = { node: drag.node, pos: toWorld(screen) }
-    } else {
-      view.offsetX = drag.startOffset.x + (screen.x - drag.startScreen.x)
-      view.offsetY = drag.startOffset.y + (screen.y - drag.startScreen.y)
-    }
+    pin = { drag, screen }
   }
   const onPointerUp = (e: PointerEvent): void => {
     const screen = screenOf(e)
@@ -1056,12 +1105,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
   const onWheel = (e: WheelEvent): void => {
     e.preventDefault()
-    const screen = screenOf(e)
-    const world = toWorld(screen)
-    view.scale *= Math.exp(-e.deltaY * ZOOM_PER_WHEEL_PX)
-    // keep the world point under the cursor fixed
-    view.offsetX = screen.x - world.x * view.scale
-    view.offsetY = screen.y - world.y * view.scale
+    // zoom about the fixed background origin (the canvas center) — the only
+    // view DOF; cursor-anchored zoom would let the offsets drift with no pan
+    // to recover them
+    userZoom *= Math.exp(-e.deltaY * ZOOM_PER_WHEEL_PX)
   }
 
   // ---- persistence ----
@@ -1169,6 +1216,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           label: replay === null ? '' : replayK === 0 ? '(start)' : replay.labelAt(replayK),
           bodies: engine.bodies.size,
         }
+      },
+      view(): { scale: number; offsetX: number; offsetY: number } {
+        return { ...view }
+      },
+      bodies(): { id: string; kind: string; x: number; y: number; r: number }[] {
+        return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR }))
       },
     }
   }
