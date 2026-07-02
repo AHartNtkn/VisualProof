@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkEngine, recomputeRegions, legPaths, settle, satelliteWorld, boundaryExits } from '../../src/view/index'
+import { mkEngine, recomputeRegions, legPaths, settle, satelliteWorld, boundaryExits, existentialStubs } from '../../src/view/index'
 import type { WirePath } from '../../src/view/index'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
@@ -117,6 +117,22 @@ describe('engine hit targets (satellites, junctions, frame exits → existing vo
     e.bodies.get(`j:${w}`)!.pos = vec(0, -10)
     recomputeRegions(e)
     expect(hitTest(e, vec(0, -10))).toEqual({ kind: 'wire', id: w })
+  })
+
+  it('a click on an existential stub resolves to its internal wire', () => {
+    // A lone internal identity node: its output is a genuine internal singleton
+    // wire, painted as an ∃ stub. The stub is a painted target, so it must be
+    // hittable (paint/hit parity) and resolve to that wire.
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('\\x. x'))
+    const d = h.build()
+    const e = mkEngine(d, [])
+    e.bodies.get(n)!.pos = vec(0, 0)
+    recomputeRegions(e)
+    const stub = existentialStubs(e)[0]!
+    expect(stub).toBeDefined()
+    const mid = { x: (stub.from.x + stub.to.x) / 2, y: (stub.from.y + stub.to.y) / 2 }
+    expect(hitTest(e, mid)).toEqual({ kind: 'wire', id: stub.wid })
   })
 
   it('a click on a frame exit resolves to its boundary wire', () => {
