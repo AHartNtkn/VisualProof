@@ -52,17 +52,20 @@ export function portKey(p: Port): string {
  * 0..arity-1 for atoms, arity read from the binder bubble.
  */
 export function requiredPorts(d: { regions: Readonly<Record<RegionId, Region>> }, node: DiagramNode): Port[] {
-  if (node.kind === 'term') {
-    return [
-      { kind: 'output' },
-      ...freePorts(node.term).map((name): Port => ({ kind: 'freeVar', name })),
-    ]
+  switch (node.kind) {
+    case 'term':
+      return [
+        { kind: 'output' },
+        ...freePorts(node.term).map((name): Port => ({ kind: 'freeVar', name })),
+      ]
+    case 'atom': {
+      const binder = d.regions[node.binder]
+      if (binder === undefined || binder.kind !== 'bubble') {
+        throw new DiagramError(`atom binder '${node.binder}' is not a bubble`)
+      }
+      return Array.from({ length: binder.arity }, (_, index): Port => ({ kind: 'arg', index }))
+    }
   }
-  const binder = d.regions[node.binder]
-  if (binder === undefined || binder.kind !== 'bubble') {
-    throw new DiagramError(`atom binder '${node.binder}' is not a bubble`)
-  }
-  return Array.from({ length: binder.arity }, (_, index): Port => ({ kind: 'arg', index }))
 }
 
 /**
@@ -86,25 +89,28 @@ function canonicalizeFreePorts(
   const renames = new Map<NodeId, ReadonlyMap<string, string>>()
   let nodesChanged = false
   const nodesOut: Record<NodeId, DiagramNode> = {}
+  // Return-typed switch (no default): a new node kind forces a decision here.
+  const canonicalizeNode = (id: NodeId, n: DiagramNode): DiagramNode => {
+    switch (n.kind) {
+      case 'atom':
+        return n
+      case 'term': {
+        const map = new Map<string, string>()
+        let identity = true
+        for (const [i, name] of freePorts(n.term).entries()) {
+          const to = `s${i}`
+          map.set(name, to)
+          if (name !== to) identity = false
+        }
+        renames.set(id, map)
+        if (identity) return n
+        nodesChanged = true
+        return { kind: 'term', region: n.region, term: renameFreePorts(n.term, map) }
+      }
+    }
+  }
   for (const [id, n] of Object.entries(nodes)) {
-    if (n.kind !== 'term') {
-      nodesOut[id] = n
-      continue
-    }
-    const map = new Map<string, string>()
-    let identity = true
-    for (const [i, name] of freePorts(n.term).entries()) {
-      const to = `s${i}`
-      map.set(name, to)
-      if (name !== to) identity = false
-    }
-    renames.set(id, map)
-    if (identity) {
-      nodesOut[id] = n
-      continue
-    }
-    nodesOut[id] = { kind: 'term', region: n.region, term: renameFreePorts(n.term, map) }
-    nodesChanged = true
+    nodesOut[id] = canonicalizeNode(id, n)
   }
   let wiresChanged = false
   const wiresOut: Record<WireId, Wire> = {}
@@ -199,19 +205,26 @@ export function mkDiagram(parts: {
 
   for (const [id, n] of Object.entries(nodes)) {
     if (regions[n.region] === undefined) fail(`node '${id}' is in missing region '${n.region}'`)
-    if (n.kind === 'term') {
-      try {
-        assertWellFormedTerm(n.term)
-      } catch (e) {
-        fail(`node '${id}' term: ${e instanceof Error ? e.message : String(e)}`)
+    switch (n.kind) {
+      case 'term':
+        try {
+          assertWellFormedTerm(n.term)
+        } catch (e) {
+          fail(`node '${id}' term: ${e instanceof Error ? e.message : String(e)}`)
+        }
+        break
+      case 'atom': {
+        const binder = regions[n.binder] ?? fail(`atom '${id}' references missing binder '${n.binder}'`)
+        if (binder.kind !== 'bubble') fail(`atom '${id}' binder '${n.binder}' must be a bubble, got '${binder.kind}'`)
+        if (!ancestorOrEqualRaw(regions, n.binder, n.region)) {
+          fail(`atom '${id}' must lie inside its binder bubble '${n.binder}'`)
+        }
+        break
       }
-    }
-    if (n.kind === 'atom') {
-      const binder = regions[n.binder] ?? fail(`atom '${id}' references missing binder '${n.binder}'`)
-      if (binder.kind !== 'bubble') fail(`atom '${id}' binder '${n.binder}' must be a bubble, got '${binder.kind}'`)
-      if (!ancestorOrEqualRaw(regions, n.binder, n.region)) {
-        fail(`atom '${id}' must lie inside its binder bubble '${n.binder}'`)
-      }
+      default:
+        // Exhaustiveness: a new node kind must add its own validation here.
+        n satisfies never
+        fail(`node '${id}' has an unrecognized kind`)
     }
   }
 

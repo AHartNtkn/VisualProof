@@ -1,4 +1,4 @@
-import type { Diagram, NodeId, RegionId, WireId } from '../diagram'
+import type { Diagram, DiagramNode, NodeId, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
 import { freePorts } from '../../term/term'
 import { termShapeKey, positionalPortKey } from './shape'
@@ -107,27 +107,40 @@ function buildIndex(d: Diagram, pinned: readonly WireId[]): Index {
   const nodeBinder = new Map<NodeId, RegionId | null>()
   const nodePortOrder = new Map<NodeId, string[]>()
   const nodePortWire = new Map<NodeId, Map<string, WireId>>()
+  // Return-typed switch (no default): a new node kind forces its canonical
+  // content key, binder, and port order to be decided here.
+  const nodeCanon = (id: NodeId, n: DiagramNode): { contentKey: string; binder: RegionId | null; portOrder: string[] } => {
+    switch (n.kind) {
+      case 'term':
+        return {
+          contentKey: `term:${termShapeKey(n.term)}`,
+          binder: null,
+          // positional v-keys: one per free port, already in first-occurrence order
+          portOrder: ['out', ...freePorts(n.term).map((_, i) => `v${i}`)],
+        }
+      case 'atom': {
+        const binder = d.regions[n.binder]!
+        if (binder.kind !== 'bubble') {
+          // Unreachable for mkDiagram-validated diagrams; throw rather than fabricate.
+          throw new DiagramError(`atom '${id}' binder '${n.binder}' is not a bubble`)
+        }
+        return {
+          contentKey: 'atom',
+          binder: n.binder,
+          portOrder: Array.from({ length: binder.arity }, (_, i) => `a${i}`),
+        }
+      }
+    }
+  }
   for (const id of nodeIds) {
     const n = d.nodes[id]!
     nodeRegion.set(id, n.region)
     nodesIn.get(n.region)!.push(id)
     nodePortWire.set(id, new Map())
-    if (n.kind === 'term') {
-      nodeContentKey.set(id, `term:${termShapeKey(n.term)}`)
-      nodeBinder.set(id, null)
-      // positional v-keys: one per free port, already in first-occurrence order
-      nodePortOrder.set(id, ['out', ...freePorts(n.term).map((_, i) => `v${i}`)])
-    } else {
-      nodeContentKey.set(id, 'atom')
-      nodeBinder.set(id, n.binder)
-      const binder = d.regions[n.binder]!
-      if (binder.kind !== 'bubble') {
-        // Unreachable for mkDiagram-validated diagrams; throw rather than fabricate.
-        throw new DiagramError(`atom '${id}' binder '${n.binder}' is not a bubble`)
-      }
-      const arity = binder.arity
-      nodePortOrder.set(id, Array.from({ length: arity }, (_, i) => `a${i}`))
-    }
+    const canon = nodeCanon(id, n)
+    nodeContentKey.set(id, canon.contentKey)
+    nodeBinder.set(id, canon.binder)
+    nodePortOrder.set(id, canon.portOrder)
   }
 
   const wireScope = new Map<WireId, RegionId>()
@@ -138,16 +151,19 @@ function buildIndex(d: Diagram, pinned: readonly WireId[]): Index {
     wiresScoped.get(w.scope)!.push(id)
     const eps = w.endpoints.map((ep) => {
       const n = d.nodes[ep.node]!
-      let pkey: string
-      if (n.kind === 'term') {
-        pkey = positionalPortKey(n.term, ep.port)
-      } else if (ep.port.kind === 'arg') {
-        pkey = `a${ep.port.index}`
-      } else {
-        // mkDiagram's port-membership check makes this unreachable: atoms have
-        // only arg ports. Throw rather than fabricate.
-        throw new DiagramError(`atom '${ep.node}' cannot carry port '${ep.port.kind}'`)
-      }
+      // Return-typed switch (no default): a new node kind forces its positional
+      // port key to be decided here.
+      const pkey: string = ((): string => {
+        switch (n.kind) {
+          case 'term':
+            return positionalPortKey(n.term, ep.port)
+          case 'atom':
+            if (ep.port.kind === 'arg') return `a${ep.port.index}`
+            // mkDiagram's port-membership check makes this unreachable: atoms have
+            // only arg ports. Throw rather than fabricate.
+            throw new DiagramError(`atom '${ep.node}' cannot carry port '${ep.port.kind}'`)
+        }
+      })()
       nodePortWire.get(ep.node)!.set(pkey, id)
       return { node: ep.node, pkey }
     })

@@ -43,11 +43,16 @@ function wrap(d: Diagram, sel: SubgraphSelection, make: (parent: RegionId) => Re
   }
   const selectedNodes = new Set(sel.nodes)
   const nodes: Record<NodeId, DiagramNode> = { ...d.nodes }
+  // Return-typed switch (no default): a new node kind forces its reparent here.
+  const reparent = (n: DiagramNode): DiagramNode => {
+    switch (n.kind) {
+      case 'term': return { kind: 'term', region, term: n.term }
+      case 'atom': return { kind: 'atom', region, binder: n.binder }
+    }
+  }
   for (const [id, n] of Object.entries(d.nodes)) {
     if (selectedNodes.has(id)) {
-      nodes[id] = n.kind === 'term'
-        ? { kind: 'term', region, term: n.term }
-        : { kind: 'atom', region, binder: n.binder }
+      nodes[id] = reparent(n)
     }
   }
   return { diagram: mkDiagram({ root: d.root, regions, nodes, wires: { ...d.wires } }), region }

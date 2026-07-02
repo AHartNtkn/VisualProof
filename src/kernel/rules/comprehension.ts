@@ -12,6 +12,17 @@ import { freshId } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { wireAt } from './access'
 
+/**
+ * Reparent a node into `region`, preserving its kind-specific payload.
+ * Return-typed switch (no default): a new node kind forces a decision here.
+ */
+function reparent(n: DiagramNode, region: RegionId): DiagramNode {
+  switch (n.kind) {
+    case 'term': return { kind: 'term', region, term: n.term }
+    case 'atom': return { kind: 'atom', region, binder: n.binder }
+  }
+}
+
 /** Remove one node, trimming its endpoints off their wires. */
 function dropNode(d: Diagram, nodeId: NodeId): Diagram {
   const nodes: Record<NodeId, DiagramNode> = {}
@@ -103,11 +114,7 @@ export function applyComprehensionInstantiate(
   }
   const nodes: Record<NodeId, DiagramNode> = {}
   for (const [id, n] of Object.entries(cur.nodes)) {
-    nodes[id] = n.region === bubbleId
-      ? (n.kind === 'term'
-        ? { kind: 'term', region: parent, term: n.term }
-        : { kind: 'atom', region: parent, binder: n.binder })
-      : n
+    nodes[id] = n.region === bubbleId ? reparent(n, parent) : n
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(cur.wires)) {
@@ -211,11 +218,7 @@ export function applyComprehensionAbstract(
   const nodes: Record<NodeId, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
     if (seenNodes.has(id)) continue
-    nodes[id] = selectedNodes.has(id)
-      ? (n.kind === 'term'
-        ? { kind: 'term', region: bubbleId, term: n.term }
-        : { kind: 'atom', region: bubbleId, binder: n.binder })
-      : n
+    nodes[id] = selectedNodes.has(id) ? reparent(n, bubbleId) : n
   }
   const takenNodeIds = new Set(Object.keys(d.nodes))
   const atomIds = occurrences.map(() => {

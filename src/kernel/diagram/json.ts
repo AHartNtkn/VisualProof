@@ -12,11 +12,16 @@ import { mkDiagram, portKey } from './diagram'
 export function diagramToJson(d: Diagram): unknown {
   const regions: Record<string, unknown> = {}
   for (const [id, r] of Object.entries(d.regions)) regions[id] = { ...r }
+  // Return-typed switch (no default): a new node kind forces a serialization here.
+  const nodeToJson = (n: DiagramNode): Record<string, unknown> => {
+    switch (n.kind) {
+      case 'term': return { kind: 'term', region: n.region, term: serializeTerm(n.term) }
+      case 'atom': return { kind: 'atom', region: n.region, binder: n.binder }
+    }
+  }
   const nodes: Record<string, unknown> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
-    nodes[id] = n.kind === 'term'
-      ? { kind: 'term', region: n.region, term: serializeTerm(n.term) }
-      : { kind: 'atom', region: n.region, binder: n.binder }
+    nodes[id] = nodeToJson(n)
   }
   const wires: Record<string, unknown> = {}
   for (const [id, w] of Object.entries(d.wires)) {
