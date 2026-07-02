@@ -27,6 +27,9 @@ const REP = 900
 const SPRING = 2.2
 const ROT_BLEND = 0.15
 const REST = 18
+/** Per-call sweep budget for the overlap projection (work bound per tick;
+    projection runs every tick, so any residual finishes on later ticks). */
+const PROJECTION_PASSES = 60
 
 export function recomputeRegions(e: Engine): void {
   const order: RegionId[] = []
@@ -39,7 +42,15 @@ export function recomputeRegions(e: Engine): void {
       discs.push({ c: b.pos, r: b.discR })
     }
     for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8 })
-    if (discs.length === 0) { e.regions.set(rid, { center: { x: 0, y: 0 }, radius: 10 }); continue }
+    if (discs.length === 0) {
+      // An empty leaf region has no member to derive a center from: its center
+      // IS its positional state, preserved across recomputes and moved by
+      // shiftSubtree/projection like any other carrier. Resetting it here
+      // would pin every empty cut to the origin, immovably and illegally.
+      const prev = e.regions.get(rid)
+      e.regions.set(rid, { center: prev === undefined ? { x: 0, y: 0 } : { x: prev.center.x, y: prev.center.y }, radius: 10 })
+      continue
+    }
     // true minimal enclosing circle of the member discs: subgradient descent
     // on the convex objective f(c) = max_i (|c - c_i| + r_i)
     const center = { x: 0, y: 0 }
@@ -65,11 +76,33 @@ export function recomputeRegions(e: Engine): void {
 }
 
 function shiftSubtree(e: Engine, rid: RegionId, dx: number, dy: number): void {
+  const g = e.regions.get(rid)
+  if (g !== undefined) e.regions.set(rid, { center: { x: g.center.x + dx, y: g.center.y + dy }, radius: g.radius })
   for (const mid of e.membersOf.get(rid)!) {
     const b = e.bodies.get(mid)!
     b.pos = { x: b.pos.x + dx, y: b.pos.y + dy }
   }
   for (const c of e.childrenOf.get(rid)!) shiftSubtree(e, c, dx, dy)
+}
+
+function emptyLeafRegions(e: Engine): RegionId[] {
+  const out: RegionId[] = []
+  for (const rid of e.regions.keys()) {
+    if (e.membersOf.get(rid)!.length === 0 && e.childrenOf.get(rid)!.length === 0) out.push(rid)
+  }
+  return out
+}
+
+/** Positional state carriers in a subtree: member bodies, plus one per empty
+    leaf region (whose center is its own state). Used as the mass of a subtree
+    in projections — a region is as heavy as what actually moves with it. */
+function subtreeCarriers(e: Engine, rid: RegionId): number {
+  const mids = e.membersOf.get(rid)!
+  const kids = e.childrenOf.get(rid)!
+  if (mids.length === 0 && kids.length === 0) return 1
+  let n = mids.length
+  for (const c of kids) n += subtreeCarriers(e, c)
+  return n
 }
 
 function subtreeMembers(e: Engine, rid: RegionId): string[] {
@@ -79,51 +112,74 @@ function subtreeMembers(e: Engine, rid: RegionId): string[] {
 }
 
 export function resolveOverlaps(e: Engine): boolean {
-  let moved = false
-  for (const rid of e.regions.keys()) {
-    const items: { sub: RegionId | null; id: string; c: Vec2; r: number }[] = []
-    for (const mid of e.membersOf.get(rid)!) {
-      const b = e.bodies.get(mid)!
-      items.push({ sub: null, id: mid, c: b.pos, r: b.discR })
-    }
-    for (const c of e.childrenOf.get(rid)!) {
-      const g = e.regions.get(c)!
-      items.push({ sub: c, id: c, c: g.center, r: g.radius })
-    }
-    for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
-      const A = items[i]!, B = items[j]!
-      const dx = B.c.x - A.c.x, dy = B.c.y - A.c.y
-      const dist = Math.hypot(dx, dy) || 0.001
-      const need = A.r + B.r + SIB_GAP
-      if (dist < need) {
-        const push = (need - dist) / 2
-        const ux = dx / dist, uy = dy / dist
-        // A projection is an inelastic constraint: besides separating the
-        // positions, it must absorb the CLOSING component of each party's
-        // velocity, or the pair re-collides every cycle and never rests.
-        const move = (it: typeof A, sx: number, sy: number, nx: number, ny: number): void => {
-          const absorb = (b: { vel: Vec2 }): void => {
-            const closing = b.vel.x * nx + b.vel.y * ny
-            if (closing > 0) b.vel = { x: b.vel.x - closing * nx, y: b.vel.y - closing * ny }
-          }
+  // Iterative projection to a legal drawing. Every violated sibling pair is
+  // separated by a MASS-WEIGHTED positional split (the pair's mutual centroid
+  // stays fixed) and given a perfectly inelastic normal impulse (both sides
+  // leave the contact with the common normal velocity), then region geometry
+  // is recomputed and the sweep repeats until legal or the pass budget is
+  // spent — any residual is finished by the following ticks. Both properties
+  // are conservation requirements, not tuning: an equal split between unequal
+  // masses displaces the centroid every contact, and a one-sided velocity
+  // clip injects net momentum — either one, repeated each tick, drives the
+  // whole drawing off the sheet at a damping-limited terminal velocity.
+  let any = false
+  for (let pass = 0; pass < PROJECTION_PASSES; pass++) {
+    let moved = false
+    for (const rid of e.regions.keys()) {
+      const items: { sub: RegionId | null; id: string; r: number }[] = []
+      for (const mid of e.membersOf.get(rid)!) {
+        items.push({ sub: null, id: mid, r: e.bodies.get(mid)!.discR })
+      }
+      for (const c of e.childrenOf.get(rid)!) {
+        items.push({ sub: c, id: c, r: e.regions.get(c)!.radius })
+      }
+      const centerOf = (it: { sub: RegionId | null; id: string }): Vec2 =>
+        it.sub === null ? e.bodies.get(it.id)!.pos : e.regions.get(it.sub)!.center
+      for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
+        const A = items[i]!, B = items[j]!
+        const ca = centerOf(A), cb = centerOf(B)
+        const dx = cb.x - ca.x, dy = cb.y - ca.y
+        const dist = Math.hypot(dx, dy)
+        const need = A.r + B.r + SIB_GAP
+        if (dist >= need) continue
+        // coincident centers have no separation direction; any fixed unit
+        // vector breaks the symmetry deterministically
+        const ux = dist < 1e-9 ? 1 : dx / dist, uy = dist < 1e-9 ? 0 : dy / dist
+        const viol = need - dist
+        const mA = A.sub === null ? 1 : subtreeCarriers(e, A.sub)
+        const mB = B.sub === null ? 1 : subtreeCarriers(e, B.sub)
+        const wA = mB / (mA + mB), wB = mA / (mA + mB)
+        const shift = (it: typeof A, sx: number, sy: number): void => {
           if (it.sub === null) {
             const b = e.bodies.get(it.id)!
             b.pos = { x: b.pos.x + sx, y: b.pos.y + sy }
-            absorb(b)
           } else {
             shiftSubtree(e, it.sub, sx, sy)
-            for (const mid of subtreeMembers(e, it.sub)) absorb(e.bodies.get(mid)!)
           }
         }
-        // closing direction for A is +u (toward B), for B it is −u
-        move(A, -ux * push, -uy * push, ux, uy)
-        move(B, ux * push, uy * push, -ux, -uy)
+        shift(A, -ux * viol * wA, -uy * viol * wA)
+        shift(B, ux * viol * wB, uy * viol * wB)
+        const bodiesOf = (it: typeof A): Body[] =>
+          it.sub === null ? [e.bodies.get(it.id)!] : subtreeMembers(e, it.sub).map((m) => e.bodies.get(m)!)
+        const bodiesA = bodiesOf(A), bodiesB = bodiesOf(B)
+        if (bodiesA.length > 0 && bodiesB.length > 0) {
+          const meanN = (bs: readonly Body[]): number =>
+            bs.reduce((s, b) => s + b.vel.x * ux + b.vel.y * uy, 0) / bs.length
+          const vrel = meanN(bodiesB) - meanN(bodiesA)
+          if (vrel < 0) { // closing: inelastic — both sides take the common normal velocity
+            const dA = wA * vrel, dB = -wB * vrel
+            for (const b of bodiesA) b.vel = { x: b.vel.x + dA * ux, y: b.vel.y + dA * uy }
+            for (const b of bodiesB) b.vel = { x: b.vel.x + dB * ux, y: b.vel.y + dB * uy }
+          }
+        }
         moved = true
       }
     }
+    if (!moved) break
+    any = true
+    recomputeRegions(e)
   }
-  if (moved) recomputeRegions(e)
-  return moved
+  return any
 }
 
 type LegRef = { key: string; other: Body; otherKey: string | null }
@@ -134,6 +190,19 @@ type LegRef = { key: string; other: Body; otherKey: string | null }
     feels direct (the caller overrides its position each tick). */
 export function settleStep(e: Engine, pinned: string | null = null): void {
   recomputeRegions(e)
+  // snapshot every positional carrier: the end-of-tick quotient of the global
+  // rotation zero mode is fitted against this
+  const carrierStart: { get(): Vec2; set(p: Vec2): void; p0: Vec2 }[] = []
+  for (const b of e.bodies.values()) {
+    carrierStart.push({ get: () => b.pos, set: (p) => { b.pos = p }, p0: b.pos })
+  }
+  for (const rid of emptyLeafRegions(e)) {
+    carrierStart.push({
+      get: () => e.regions.get(rid)!.center,
+      set: (p) => { const g = e.regions.get(rid)!; e.regions.set(rid, { center: p, radius: g.radius }) },
+      p0: e.regions.get(rid)!.center,
+    })
+  }
   // force accumulator: mutable points, not the readonly Vec2 used for state
   const force = new Map<string, { x: number; y: number }>()
   for (const id of e.bodies.keys()) force.set(id, { x: 0, y: 0 })
@@ -150,16 +219,30 @@ export function settleStep(e: Engine, pinned: string | null = null): void {
       const gap = dist - A.r - B.r
       const f = REP / Math.max(gap + 8, 4) ** 2
       const ux = dx / dist, uy = dy / dist
+      // Each side of the pair receives a TOTAL of ±f, shared among the
+      // subtree's members (a region is heavier than a lone disc). Adding f to
+      // every member instead would make the pair interaction inject
+      // (N−1)·f of net momentum per tick — with damping that is a constant
+      // thrust, and dense diagrams fly off-screen at terminal velocity.
       const apply = (D: typeof A, sx: number, sy: number): void => {
         const targets = D.mid !== undefined ? [D.mid] : subtreeMembers(e, D.sub!)
-        for (const mid of targets) { const F = force.get(mid)!; F.x += sx; F.y += sy }
+        const per = 1 / targets.length
+        for (const mid of targets) { const F = force.get(mid)!; F.x += sx * per; F.y += sy * per }
       }
       apply(A, -ux * f, -uy * f)
       apply(B, ux * f, uy * f)
     }
   }
 
-  // leg springs with a rest length: legs approach one spatial rhythm
+  // Leg springs with a rest length, acting AT THE ANCHORS: the pair exchanges
+  // equal-and-opposite forces along the anchor-to-anchor line (zero net torque
+  // on the drawing by construction — collinear application points), and the
+  // moment (anchor − center) × F becomes SPIN torque on the body's own θ.
+  // Applying the same force at the centers instead leaves that moment as an
+  // orbital couple on the whole layout: with multi-leg bodies the couples
+  // never all vanish at rest, and the drawing spins forever.
+  const torque = new Map<string, number>()
+  for (const id of e.bodies.keys()) torque.set(id, 0)
   for (const leg of e.legs) {
     const A = e.bodies.get(leg.from.body)!, B = e.bodies.get(leg.to.body)!
     if (A === B) continue
@@ -170,6 +253,10 @@ export function settleStep(e: Engine, pinned: string | null = null): void {
     const FA = force.get(A.id)!, FB = force.get(B.id)!
     FA.x += dx * f; FA.y += dy * f
     FB.x -= dx * f; FB.y -= dy * f
+    const rax = pa.x - A.pos.x, ray = pa.y - A.pos.y
+    const rbx = pb.x - B.pos.x, rby = pb.y - B.pos.y
+    torque.set(A.id, torque.get(A.id)! + rax * dy * f - ray * dx * f)
+    torque.set(B.id, torque.get(B.id)! + rbx * -dy * f - rby * -dx * f)
   }
 
   // per-region cohesion toward the content centroid
@@ -198,18 +285,38 @@ export function settleStep(e: Engine, pinned: string | null = null): void {
       if (nearest === Infinity) return 1
       return Math.min(1, Math.max(0, (nearest - SIB_GAP) / SIB_GAP))
     }
+    // Cohesion is INTERNAL to the region: its resultant over the pulled bodies
+    // must be zero, or the region self-propels (the fade factors make the raw
+    // pulls asymmetric, so the net does not cancel by itself). Accumulate the
+    // pulls, then subtract the mean — relative compaction is unchanged, net
+    // thrust is removed exactly.
+    const pulls = new Map<string, { x: number; y: number }>()
+    const addPull = (mid: string, fx: number, fy: number): void => {
+      const p = pulls.get(mid)
+      if (p === undefined) pulls.set(mid, { x: fx, y: fy })
+      else { p.x += fx; p.y += fy }
+    }
     for (const mid of mids) {
       if (mid === pinned) continue // a dragged body is not pulled toward the centroid
       const b = e.bodies.get(mid)!
-      const F = force.get(mid)!
       const k = 0.65 * cohesionFactor(mid, b.pos, b.discR)
-      F.x += (cen.x - b.pos.x) * k; F.y += (cen.y - b.pos.y) * k
+      addPull(mid, (cen.x - b.pos.x) * k, (cen.y - b.pos.y) * k)
     }
     for (const c of kids) {
       const g = e.regions.get(c)!
       const kSub = 0.35 * cohesionFactor(c, g.center, g.radius)
-      const pull = { x: (cen.x - g.center.x) * kSub, y: (cen.y - g.center.y) * kSub }
-      for (const mid of subtreeMembers(e, c)) { const F = force.get(mid)!; F.x += pull.x; F.y += pull.y }
+      for (const mid of subtreeMembers(e, c)) {
+        addPull(mid, (cen.x - g.center.x) * kSub, (cen.y - g.center.y) * kSub)
+      }
+    }
+    if (pulls.size > 0) {
+      let nx = 0, ny = 0
+      for (const p of pulls.values()) { nx += p.x; ny += p.y }
+      nx /= pulls.size; ny /= pulls.size
+      for (const [mid, p] of pulls) {
+        const F = force.get(mid)!
+        F.x += p.x - nx; F.y += p.y - ny
+      }
     }
   }
 
@@ -219,19 +326,23 @@ export function settleStep(e: Engine, pinned: string | null = null): void {
     b.pos = { x: b.pos.x + b.vel.x * DT, y: b.pos.y + b.vel.y * DT }
   }
 
-  // rotation toward the circular mean of leg-direction mismatches
+  // spin: overdamped rotation under the accumulated anchor torques
+  // (rotational drag scales with the disc area, the rotational analogue of
+  // the translational damping)
+  for (const b of e.bodies.values()) {
+    const tq = torque.get(b.id)!
+    if (tq !== 0) b.theta += (tq / (DAMP * b.discR * b.discR)) * DT
+  }
+
+  // boundary exits keep a kinematic aim (there is no spring to take a torque
+  // from): the exit body rotates its port normal toward its nearest frame
+  // edge (approximated by the sheet box)
   const legsByBody = new Map<string, LegRef[]>()
   const push = (body: string, ref: LegRef): void => {
     let ls = legsByBody.get(body)
     if (ls === undefined) { ls = []; legsByBody.set(body, ls) }
     ls.push(ref)
   }
-  for (const leg of e.legs) {
-    if (leg.from.key !== null) push(leg.from.body, { key: leg.from.key, other: e.bodies.get(leg.to.body)!, otherKey: leg.to.key })
-    if (leg.to.key !== null) push(leg.to.body, { key: leg.to.key, other: e.bodies.get(leg.from.body)!, otherKey: leg.from.key })
-  }
-  // boundary exits contribute rotation torque: the exit body wants its port
-  // normal aimed at its nearest frame edge (approximated by the sheet box)
   const sheetG = e.regions.get(e.d.root)
   for (const [wid, bid] of e.boundaryOf) {
     const b = e.bodies.get(bid)!
@@ -264,7 +375,50 @@ export function settleStep(e: Engine, pinned: string | null = null): void {
     b.theta += Math.atan2(sinS, cosS) * ROT_BLEND
   }
 
-  if (e.tick % 10 === 0) resolveOverlaps(e)
+  // project every tick: per-tick motion is small, so corrections stay small —
+  // a sparser cadence lets violations accumulate and resolves them as
+  // spring-fighting teleports
+  resolveOverlaps(e)
+
+  // Quotient the global-rotation zero mode. Nothing anchors the layout's
+  // absolute orientation, and the overlap projection separates pairs along
+  // circle-center lines while applying the shifts at member positions — the
+  // mismatch injects a small rigid rotation at every contact, which
+  // accumulates as a visible constant-rate spin of the whole drawing
+  // (observed: ~26°/100 ticks). A rigid rotation preserves every pairwise
+  // distance, so removing the tick's best-fit rotation about the centroid
+  // keeps all constraints satisfied and all relative geometry untouched.
+  if (carrierStart.length > 1) {
+    let c0x = 0, c0y = 0, c1x = 0, c1y = 0
+    for (const c of carrierStart) {
+      c0x += c.p0.x; c0y += c.p0.y
+      const p = c.get(); c1x += p.x; c1y += p.y
+    }
+    const n = carrierStart.length
+    c0x /= n; c0y /= n; c1x /= n; c1y /= n
+    let cross = 0, dot = 0
+    for (const c of carrierStart) {
+      const ax = c.p0.x - c0x, ay = c.p0.y - c0y
+      const p = c.get()
+      const bx = p.x - c1x, by = p.y - c1y
+      cross += ax * by - ay * bx
+      dot += ax * bx + ay * by
+    }
+    const dth = Math.atan2(cross, dot)
+    if (Math.abs(dth) > 1e-12) {
+      const cs = Math.cos(-dth), sn = Math.sin(-dth)
+      for (const c of carrierStart) {
+        const p = c.get()
+        const rx = p.x - c1x, ry = p.y - c1y
+        c.set({ x: c1x + rx * cs - ry * sn, y: c1y + rx * sn + ry * cs })
+      }
+      for (const b of e.bodies.values()) {
+        b.vel = { x: b.vel.x * cs - b.vel.y * sn, y: b.vel.x * sn + b.vel.y * cs }
+        b.theta -= dth
+      }
+      recomputeRegions(e)
+    }
+  }
   e.tick++
 }
 
@@ -272,5 +426,5 @@ export function settleStep(e: Engine, pinned: string | null = null): void {
 export function settle(e: Engine, ticks: number): void {
   for (let t = 0; t < ticks; t++) settleStep(e)
   recomputeRegions(e)
-  for (let k = 0; k < 400 && resolveOverlaps(e); k++) { /* push to a legal drawing */ }
+  resolveOverlaps(e)
 }

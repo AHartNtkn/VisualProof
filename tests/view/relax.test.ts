@@ -6,8 +6,13 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
 import { settle, settleStep } from '../../src/view/relax'
+import { mkReplay } from '../../src/app/replay'
+import { bootFixture } from '../app/boot-fixture'
 
 const idp = (s: string) => parseTerm(s, new Set<string>())
+
+const bootCtx = (await bootFixture()).ctx
+const plusCommThm = bootCtx.theorems.get('plusComm')!
 
 const theory = buildFregeTheory()
 const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
@@ -94,6 +99,35 @@ describe('law 7 — junctions: every >=3-endpoint wire gets exactly one junction
       // other attached port appears in exactly one leg. Nothing exceeds 2,
       // and only genuine stubs reach 2.
       for (const [, count] of perPort) expect(count).toBeLessThanOrEqual(2)
+    })
+  }
+})
+
+describe('settle — every replay step reaches a bounded layout at rest', () => {
+  // Reproduces the runaway observed live at plusComm step 25 (22 bodies):
+  // the settled "layout" was flying as a cluster at ~9 world units/tick with
+  // its content spread across thousands of units — nothing was on screen, so
+  // every drag fell through to pan. A legal settled layout must (a) stay
+  // anchored near the origin within the trivial packing bound (every body
+  // inside a chain of touching discs), and (b) actually be AT REST: after the
+  // settle budget, further ticks must not move anything appreciably.
+  const r = mkReplay(plusCommThm, bootCtx)
+  for (const k of [0, 12, 25, 37, r.stepCount]) {
+    it(`plusComm step ${k} settles bounded and at rest`, () => {
+      const e = mkEngine(r.diagramAt(k), r.boundary)
+      settle(e, 2600)
+      const discSum = [...e.bodies.values()].reduce((s, b) => s + 2 * b.discR, 0)
+      for (const b of e.bodies.values()) {
+        const dist = Math.hypot(b.pos.x, b.pos.y)
+        expect(dist, `body ${b.id} at distance ${dist.toFixed(0)} — content flew away (packing bound ${discSum.toFixed(0)})`).toBeLessThanOrEqual(discSum)
+      }
+      const before = new Map([...e.bodies].map(([id, b]) => [id, { ...b.pos }]))
+      for (let i = 0; i < 50; i++) settleStep(e)
+      for (const [id, b] of e.bodies) {
+        const p = before.get(id)!
+        const moved = Math.hypot(b.pos.x - p.x, b.pos.y - p.y)
+        expect(moved, `body ${id} moved ${moved.toFixed(2)} in 50 post-settle ticks — not at rest`).toBeLessThanOrEqual(1)
+      }
     })
   }
 })
