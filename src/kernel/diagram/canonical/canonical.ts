@@ -130,6 +130,14 @@ function buildIndex(d: Diagram, pinned: readonly WireId[]): Index {
           portOrder: Array.from({ length: binder.arity }, (_, i) => `a${i}`),
         }
       }
+      case 'ref':
+        // defId AND arity are content: two refs to DIFFERENT relations must
+        // never canonicalize equal (survey soundness case). No binder.
+        return {
+          contentKey: `ref:${n.defId}:${n.arity}`,
+          binder: null,
+          portOrder: Array.from({ length: n.arity }, (_, i) => `a${i}`),
+        }
     }
   }
   for (const id of nodeIds) {
@@ -162,6 +170,10 @@ function buildIndex(d: Diagram, pinned: readonly WireId[]): Index {
             // mkDiagram's port-membership check makes this unreachable: atoms have
             // only arg ports. Throw rather than fabricate.
             throw new DiagramError(`atom '${ep.node}' cannot carry port '${ep.port.kind}'`)
+          case 'ref':
+            if (ep.port.kind === 'arg') return `a${ep.port.index}`
+            // Unreachable: refs have only arg ports (mkDiagram partition check).
+            throw new DiagramError(`ref '${ep.node}' cannot carry port '${ep.port.kind}'`)
         }
       })()
       nodePortWire.get(ep.node)!.set(pkey, id)

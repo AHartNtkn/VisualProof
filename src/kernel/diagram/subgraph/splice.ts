@@ -127,6 +127,7 @@ export function spliceSubgraph(
     switch (n.kind) {
       case 'term': return { kind: 'term', region: regionMap.get(n.region)!, term: n.term }
       case 'atom': return { kind: 'atom', region: regionMap.get(n.region)!, binder: binderMap.get(n.binder) ?? regionMap.get(n.binder)! }
+      case 'ref': return { kind: 'ref', region: regionMap.get(n.region)!, defId: n.defId, arity: n.arity }
     }
   }
   const nodes: Record<string, DiagramNode> = { ...host.nodes }

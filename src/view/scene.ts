@@ -58,6 +58,9 @@ export function nodeGeometry(d: Diagram, id: NodeId): NodeGeometry {
       const binder = d.regions[n.binder]!
       return atomGeometry(binder.kind === 'bubble' ? binder.arity : 0)
     }
+    case 'ref':
+      // arg ports only, arity read inline; defId label lands in Task 3.
+      return atomGeometry(n.arity)
   }
 }
 

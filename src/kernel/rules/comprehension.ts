@@ -20,6 +20,7 @@ function reparent(n: DiagramNode, region: RegionId): DiagramNode {
   switch (n.kind) {
     case 'term': return { kind: 'term', region, term: n.term }
     case 'atom': return { kind: 'atom', region, binder: n.binder }
+    case 'ref': return { kind: 'ref', region, defId: n.defId, arity: n.arity }
   }
 }
 

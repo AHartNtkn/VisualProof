@@ -13,6 +13,7 @@ export type Region =
 export type DiagramNode =
   | { readonly kind: 'term'; readonly region: RegionId; readonly term: Term }
   | { readonly kind: 'atom'; readonly region: RegionId; readonly binder: RegionId }
+  | { readonly kind: 'ref'; readonly region: RegionId; readonly defId: string; readonly arity: number }
 
 export type Port =
   | { readonly kind: 'output' }
@@ -65,6 +66,10 @@ export function requiredPorts(d: { regions: Readonly<Record<RegionId, Region>> }
       }
       return Array.from({ length: binder.arity }, (_, index): Port => ({ kind: 'arg', index }))
     }
+    case 'ref':
+      // arity is stored inline on the node (mkDiagram is context-free); the
+      // ref has arg ports 0..arity-1 and no output.
+      return Array.from({ length: node.arity }, (_, index): Port => ({ kind: 'arg', index }))
   }
 }
 
@@ -93,6 +98,9 @@ function canonicalizeFreePorts(
   const canonicalizeNode = (id: NodeId, n: DiagramNode): DiagramNode => {
     switch (n.kind) {
       case 'atom':
+        return n
+      case 'ref':
+        // no free ports to canonicalize (arg ports only)
         return n
       case 'term': {
         const map = new Map<string, string>()
@@ -221,6 +229,13 @@ export function mkDiagram(parts: {
         }
         break
       }
+      case 'ref':
+        // Context-free: arity is stored inline and validated here; defId
+        // resolution (exists? arity agrees?) is the rules' / verifyTheory's job.
+        if (!Number.isSafeInteger(n.arity) || n.arity < 0) {
+          fail(`ref '${id}' arity must be a non-negative safe integer, got ${n.arity}`)
+        }
+        break
       default:
         // Exhaustiveness: a new node kind must add its own validation here.
         n satisfies never

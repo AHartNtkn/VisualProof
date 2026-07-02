@@ -17,6 +17,7 @@ export function diagramToJson(d: Diagram): unknown {
     switch (n.kind) {
       case 'term': return { kind: 'term', region: n.region, term: serializeTerm(n.term) }
       case 'atom': return { kind: 'atom', region: n.region, binder: n.binder }
+      case 'ref': return { kind: 'ref', region: n.region, defId: n.defId, arity: n.arity }
     }
   }
   const nodes: Record<string, unknown> = {}
@@ -102,6 +103,14 @@ export function diagramFromJson(j: unknown): Diagram {
     if (v.kind === 'atom' && typeof v.binder === 'string') {
       assertOnlyKeys(v, ['kind', 'region', 'binder'], `node '${id}'`)
       nodes[id] = { kind: 'atom', region: v.region, binder: v.binder }
+      continue
+    }
+    if (v.kind === 'ref' && typeof v.defId === 'string' && typeof v.arity === 'number') {
+      assertOnlyKeys(v, ['kind', 'region', 'defId', 'arity'], `node '${id}'`)
+      if (!Number.isSafeInteger(v.arity) || v.arity < 0) {
+        fail(`node '${id}' arity must be a non-negative integer, got ${v.arity}`)
+      }
+      nodes[id] = { kind: 'ref', region: v.region, defId: v.defId, arity: v.arity }
       continue
     }
     fail(`node '${id}' has unrecognized shape`)
