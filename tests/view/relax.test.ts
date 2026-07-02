@@ -147,6 +147,35 @@ describe('settle — every replay step reaches a bounded layout at rest', () => 
   }
 })
 
+describe('settle — observed jitter reproductions (disconnected content vs large sibling circles)', () => {
+  // Live-report regressions: a DISCONNECTED body (self-loop stub only) next to
+  // a large sibling region chattered forever — distance-proportional cohesion
+  // made the contact fade-band stiffer the bigger the layout, a knife edge the
+  // integrator cannot rest on. These are the worst observed cases from a full
+  // sweep of every displayable diagram; the general bound is the replay-step
+  // battery above.
+  const succShiftS = bootCtx.theorems.get('succShiftS')!
+  const jitterCases: [string, () => { d: Diagram; b: readonly WireId[] }][] = [
+    ['plusComm@20', () => { const r = mkReplay(plusCommThm, bootCtx); return { d: r.diagramAt(20), b: r.boundary } }],
+    ['succShiftS@24', () => { const r = mkReplay(succShiftS, bootCtx); return { d: r.diagramAt(24), b: r.boundary } }],
+    ['succShiftS@48', () => { const r = mkReplay(succShiftS, bootCtx); return { d: r.diagramAt(48), b: r.boundary } }],
+  ]
+  for (const [name, mk] of jitterCases) {
+    it(`${name} rests (no chatter over 200 post-settle ticks)`, () => {
+      const { d, b } = mk()
+      const e = mkEngine(d, b)
+      settle(e, 2600)
+      const before = new Map([...e.bodies].map(([id, bb]) => [id, { ...bb.pos }]))
+      for (let i = 0; i < 200; i++) settleStep(e)
+      for (const [id, bb] of e.bodies) {
+        const p = before.get(id)!
+        const moved = Math.hypot(bb.pos.x - p.x, bb.pos.y - p.y)
+        expect(moved, `body ${id} moved ${moved.toFixed(2)} over 200 post-settle ticks`).toBeLessThanOrEqual(2)
+      }
+    })
+  }
+})
+
 describe('settleStep — deterministic incremental relaxation', () => {
   it('same diagram, same steps, identical layout (seedless determinism)', () => {
     const d = theory.relations.nat!.diagram

@@ -27,58 +27,167 @@ const REP = 900
 const SPRING = 2.2
 const ROT_BLEND = 0.15
 const REST = 18
+/** The soft-force bound: every SOFT pull (sibling attraction, leg-spring
+    tension) saturates at this one magnitude — the old linear cohesion
+    evaluated at one leg rest-length (0.65·REST), no new scale. An unbounded
+    soft force can outpull every bounded one and drive a permanent conveyor:
+    a leg spring stretched across a region ring (its geometric length must
+    exceed the rest length) would otherwise drag body + enclosing circle +
+    junction across the sheet forever — minimal enclosing circles exert no
+    inward wall, so only the sibling attraction anchors content, and it can
+    hold precisely because nothing soft can exceed it. */
+const SOFT_MAX = 0.65 * REST
 /** Per-call sweep budget for the overlap projection (work bound per tick;
     projection runs every tick, so any residual finishes on later ticks). */
 const PROJECTION_PASSES = 60
 
-export function recomputeRegions(e: Engine): void {
+type Disc = { readonly c: Vec2; readonly r: number; readonly mid?: string; readonly sub?: RegionId }
+
+/** Exact enclosing circle of two discs (the bigger one if it contains the other). */
+function mec2(a: Disc, b: Disc): { center: Vec2; radius: number } | null {
+  const dx = b.c.x - a.c.x, dy = b.c.y - a.c.y
+  const d = Math.hypot(dx, dy)
+  if (d + b.r <= a.r) return { center: { x: a.c.x, y: a.c.y }, radius: a.r }
+  if (d + a.r <= b.r) return { center: { x: b.c.x, y: b.c.y }, radius: b.r }
+  const R = (d + a.r + b.r) / 2
+  const t = (R - a.r) / d
+  return { center: { x: a.c.x + dx * t, y: a.c.y + dy * t }, radius: R }
+}
+
+/** Exact circle enclosing three discs and tangent to all (Apollonius):
+    |c − cᵢ| = R − rᵢ. Subtracting pairs gives two equations linear in
+    (cx, cy, R); solving them expresses c = p + R·q, and substituting back
+    yields a quadratic in R. Returns null on degeneracy (caller falls back). */
+function mec3(a: Disc, b: Disc, cD: Disc): { center: Vec2; radius: number } | null {
+  const rows = [
+    [2 * (b.c.x - a.c.x), 2 * (b.c.y - a.c.y), -2 * (b.r - a.r),
+      b.c.x ** 2 - a.c.x ** 2 + b.c.y ** 2 - a.c.y ** 2 - (b.r ** 2 - a.r ** 2)],
+    [2 * (cD.c.x - a.c.x), 2 * (cD.c.y - a.c.y), -2 * (cD.r - a.r),
+      cD.c.x ** 2 - a.c.x ** 2 + cD.c.y ** 2 - a.c.y ** 2 - (cD.r ** 2 - a.r ** 2)],
+  ] as const
+  // solve [m00 m01; m10 m11]·c = rhs − R·(k0; k1)  →  c = p + R·q
+  const det = rows[0][0] * rows[1][1] - rows[0][1] * rows[1][0]
+  if (Math.abs(det) < 1e-12) return null
+  const px = (rows[0][3] * rows[1][1] - rows[0][1] * rows[1][3]) / det
+  const py = (rows[0][0] * rows[1][3] - rows[0][3] * rows[1][0]) / det
+  const qx = (-rows[0][2] * rows[1][1] + rows[0][1] * rows[1][2]) / det
+  const qy = (-rows[0][0] * rows[1][2] + rows[0][2] * rows[1][0]) / det
+  // |p + R·q − c_a|² = (R − r_a)²
+  const ex = px - a.c.x, ey = py - a.c.y
+  const A = qx * qx + qy * qy - 1
+  const B = 2 * (ex * qx + ey * qy) + 2 * a.r
+  const C = ex * ex + ey * ey - a.r * a.r
+  let R: number | null = null
+  if (Math.abs(A) < 1e-12) {
+    if (Math.abs(B) < 1e-12) return null
+    R = -C / B
+  } else {
+    const disc = B * B - 4 * A * C
+    if (disc < 0) return null
+    const s = Math.sqrt(disc)
+    for (const cand of [(-B - s) / (2 * A), (-B + s) / (2 * A)]) {
+      if (cand >= Math.max(a.r, b.r, cD.r) - 1e-9 && (R === null || cand < R)) R = cand
+    }
+  }
+  if (R === null || !Number.isFinite(R)) return null
+  return { center: { x: px + R * qx, y: py + R * qy }, radius: R }
+}
+
+/** Exact-terminating minimal enclosing circle of discs: a coarse subgradient
+    descent locates the support region, then the 1/2/3 farthest discs are
+    solved in closed form and verified against every disc. Exactness matters
+    dynamically, not just geometrically: a capped iterative solve leaves
+    unit-scale wobble on LARGE regions (its final steps still move several
+    units), and that wobble re-excites gap-resting content every tick — the
+    drawing shimmers forever. Falls back to the coarse result if refinement
+    degenerates. */
+function minimalEnclosingCircle(discs: readonly Disc[]): { center: Vec2; radius: number; support: Disc[] } {
+  const center = { x: 0, y: 0 }
+  for (const m of discs) { center.x += m.c.x; center.y += m.c.y }
+  center.x /= discs.length
+  center.y /= discs.length
+  for (let it = 0; it < 80; it++) {
+    let worst = discs[0]!, worstV = -Infinity
+    for (const m of discs) {
+      const vv = Math.hypot(m.c.x - center.x, m.c.y - center.y) + m.r
+      if (vv > worstV) { worstV = vv; worst = m }
+    }
+    const dx = worst.c.x - center.x, dy = worst.c.y - center.y
+    const dd = Math.hypot(dx, dy)
+    if (dd < 0.02) break
+    const step = Math.min(dd, worstV * 0.6 / (it + 2))
+    center.x += (dx / dd) * step
+    center.y += (dy / dd) * step
+  }
+  let radius = 0
+  for (const m of discs) radius = Math.max(radius, Math.hypot(m.c.x - center.x, m.c.y - center.y) + m.r)
+  const coarse = { center, radius }
+  // support refinement: the three discs deepest against the coarse circle
+  const byDepth = [...discs].sort((m, n) =>
+    (Math.hypot(n.c.x - center.x, n.c.y - center.y) + n.r) - (Math.hypot(m.c.x - center.x, m.c.y - center.y) + m.r))
+  const encloses = (g: { center: Vec2; radius: number }): boolean =>
+    discs.every((m) => Math.hypot(m.c.x - g.center.x, m.c.y - g.center.y) + m.r <= g.radius + 1e-6)
+  const cands: ({ center: Vec2; radius: number } | null)[] = [
+    { center: { x: byDepth[0]!.c.x, y: byDepth[0]!.c.y }, radius: byDepth[0]!.r },
+  ]
+  if (byDepth.length >= 2) cands.push(mec2(byDepth[0]!, byDepth[1]!))
+  if (byDepth.length >= 3) {
+    cands.push(mec2(byDepth[0]!, byDepth[2]!), mec2(byDepth[1]!, byDepth[2]!), mec3(byDepth[0]!, byDepth[1]!, byDepth[2]!))
+  }
+  let best = coarse
+  for (const g of cands) {
+    if (g !== null && g.radius < best.radius && encloses(g)) best = g
+  }
+  // support = the discs on the rim of the final circle: the only content
+  // whose position the circle actually depends on
+  const support = discs.filter((m) => Math.hypot(m.c.x - best.center.x, m.c.y - best.center.y) + m.r >= best.radius - 1e-4)
+  return { ...best, support: support.length > 0 ? support : [...discs] }
+}
+
+export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null = null): void {
   const order: RegionId[] = []
   const visit = (rid: RegionId): void => { for (const c of e.childrenOf.get(rid)!) visit(c); order.push(rid) }
   visit(e.d.root)
+  // a circle depends on its descendants only, so a dirty region invalidates
+  // itself and its ancestors; everything else keeps its converged circle
+  let affected: Set<RegionId> | null = null
+  if (dirty !== null) {
+    affected = new Set()
+    const parentOf = new Map<RegionId, RegionId>()
+    for (const [pid, kids] of e.childrenOf) for (const c of kids) parentOf.set(c, pid)
+    for (const rid of dirty) {
+      let cur: RegionId | undefined = rid
+      while (cur !== undefined && !affected.has(cur)) { affected.add(cur); cur = parentOf.get(cur) }
+    }
+  }
   for (const rid of order) {
-    const discs: { c: Vec2; r: number }[] = []
+    if (affected !== null && !affected.has(rid)) continue
+    const discs: Disc[] = []
     for (const mid of e.membersOf.get(rid)!) {
       const b = e.bodies.get(mid)!
-      discs.push({ c: b.pos, r: b.discR })
+      discs.push({ c: b.pos, r: b.discR, mid })
     }
-    for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8 })
+    for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8, sub: c })
     if (discs.length === 0) {
       // only a contentless sheet reaches here (empty leaf regions carry an
       // anchor body)
-      e.regions.set(rid, { center: { x: 0, y: 0 }, radius: 10 })
+      e.regions.set(rid, { center: { x: 0, y: 0 }, radius: 10, support: [] })
       continue
     }
-    // true minimal enclosing circle of the member discs: subgradient descent
-    // on the convex objective f(c) = max_i (|c - c_i| + r_i). The objective is
-    // convex, so any start converges; warm-starting from the previous center
-    // makes the recompute near-free once the layout is quiescent (this runs
-    // inside every projection pass).
-    const prev = e.regions.get(rid)
-    const center = prev !== undefined ? { x: prev.center.x, y: prev.center.y } : { x: 0, y: 0 }
-    if (prev === undefined) {
-      for (const m of discs) { center.x += m.c.x; center.y += m.c.y }
-      center.x /= discs.length; center.y /= discs.length
-    }
-    for (let it = 0; it < 80; it++) {
-      let worst = discs[0]!, worstV = -Infinity
-      for (const m of discs) {
-        const vv = Math.hypot(m.c.x - center.x, m.c.y - center.y) + m.r
-        if (vv > worstV) { worstV = vv; worst = m }
-      }
-      const dx = worst.c.x - center.x, dy = worst.c.y - center.y
-      const dd = Math.hypot(dx, dy)
-      if (dd < 0.02) break
-      const step = Math.min(dd, worstV * 0.6 / (it + 2))
-      center.x += (dx / dd) * step
-      center.y += (dy / dd) * step
-    }
-    let radius = 10
-    for (const m of discs) radius = Math.max(radius, Math.hypot(m.c.x - center.x, m.c.y - center.y) + m.r + REGION_PAD)
-    e.regions.set(rid, { center, radius })
+    const mec = minimalEnclosingCircle(discs)
+    e.regions.set(rid, {
+      center: mec.center,
+      radius: Math.max(mec.radius + REGION_PAD, 10),
+      support: mec.support.map((m) => (m.mid !== undefined ? { mid: m.mid } : { sub: m.sub! })),
+    })
   }
 }
 
 function shiftSubtree(e: Engine, rid: RegionId, dx: number, dy: number): void {
+  // a rigid translation moves the region's circle exactly — keep the stored
+  // geometry consistent mid-pass without a recompute
+  const g = e.regions.get(rid)
+  if (g !== undefined) e.regions.set(rid, { center: { x: g.center.x + dx, y: g.center.y + dy }, radius: g.radius, support: g.support })
   for (const mid of e.membersOf.get(rid)!) {
     const b = e.bodies.get(mid)!
     b.pos = { x: b.pos.x + dx, y: b.pos.y + dy }
@@ -106,6 +215,7 @@ export function resolveOverlaps(e: Engine): boolean {
   let any = false
   for (let pass = 0; pass < PROJECTION_PASSES; pass++) {
     let moved = false
+    const dirty = new Set<RegionId>()
     for (const rid of e.regions.keys()) {
       const items: { sub: RegionId | null; id: string; r: number }[] = []
       for (const mid of e.membersOf.get(rid)!) {
@@ -134,8 +244,10 @@ export function resolveOverlaps(e: Engine): boolean {
           if (it.sub === null) {
             const b = e.bodies.get(it.id)!
             b.pos = { x: b.pos.x + sx, y: b.pos.y + sy }
+            dirty.add(b.region)
           } else {
             shiftSubtree(e, it.sub, sx, sy)
+            dirty.add(it.sub)
           }
         }
         shift(A, -ux * viol * wA, -uy * viol * wA)
@@ -158,7 +270,7 @@ export function resolveOverlaps(e: Engine): boolean {
     }
     if (!moved) break
     any = true
-    recomputeRegions(e)
+    recomputeRegions(e, dirty)
   }
   return any
 }
@@ -167,8 +279,8 @@ type LegRef = { key: string; other: Body; otherKey: string | null }
 
 /** One relaxation tick — force integration + rotation + projection.
     Deterministic: no randomness, seed comes from mkEngine's spiral. `pinned`
-    bodies are excluded from the cohesion pull so a drag holding them at the
-    cursor feels direct (the caller overrides their positions each tick). */
+    bodies take no sibling attraction so a drag holding them at the cursor
+    feels direct (the caller overrides their positions each tick). */
 export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): void {
   recomputeRegions(e)
   // snapshot every body position: the end-of-tick quotient of the global
@@ -181,30 +293,52 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   const force = new Map<string, { x: number; y: number }>()
   for (const id of e.bodies.keys()) force.set(id, { x: 0, y: 0 })
 
-  // disc repulsion within each region (members + child-region discs)
+  // Sibling pair force from ONE potential: repulsive below the target gap,
+  // zero at it, constant-force attractive beyond (the smooth corner ramps over
+  // one further SIB_GAP). One curve for what used to be repulsion + cohesion +
+  // a contact fade: the position force field is a GRADIENT, and a gradient
+  // flow with damping cannot cycle — the previous two-curve arrangement had
+  // knife-edge equilibria whose stiffness grew with region size, and large
+  // diagrams chattered on them forever. The attraction saturates at a
+  // constant (anchored to the leg rest-length — no new scale), so compaction
+  // has a pace, not a spring; pairs rest exactly at the potential minimum.
   for (const rid of e.regions.keys()) {
-    const discs: { c: Vec2; r: number; mid?: string; sub?: RegionId }[] = []
-    for (const mid of e.membersOf.get(rid)!) discs.push({ c: e.bodies.get(mid)!.pos, r: e.bodies.get(mid)!.discR, mid })
-    for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius, sub: c })
+    const discs: { r: number; mid?: string; sub?: RegionId }[] = []
+    for (const mid of e.membersOf.get(rid)!) discs.push({ r: e.bodies.get(mid)!.discR, mid })
+    for (const c of e.childrenOf.get(rid)!) discs.push({ r: e.regions.get(c)!.radius, sub: c })
+    const centerOf = (D: { mid?: string; sub?: RegionId }): Vec2 =>
+      D.mid !== undefined ? e.bodies.get(D.mid)!.pos : e.regions.get(D.sub!)!.center
     for (let i = 0; i < discs.length; i++) for (let j = i + 1; j < discs.length; j++) {
       const A = discs[i]!, B = discs[j]!
-      const dx = B.c.x - A.c.x, dy = B.c.y - A.c.y
+      const ca = centerOf(A), cb = centerOf(B)
+      const dx = cb.x - ca.x, dy = cb.y - ca.y
       const dist = Math.max(Math.hypot(dx, dy), 1)
       const gap = dist - A.r - B.r
-      const f = REP / Math.max(gap + 8, 4) ** 2
+      // φ'(g): negative = repulsion (below G0), positive = attraction.
+      // Repulsive branch is the old 1/(g+8)² law shifted to vanish at G0;
+      // attractive branch ramps to COHESION over [G0, 2·G0] and stays there.
+      const G0 = 2 * SIB_GAP
+      const f = gap < G0
+        ? -(REP / Math.max(gap + 8, 4) ** 2 - REP / (G0 + 8) ** 2)
+        : SOFT_MAX * Math.min(1, (gap - G0) / G0)
       const ux = dx / dist, uy = dy / dist
-      // Each side of the pair receives a TOTAL of ±f, shared among the
-      // subtree's members (a region is heavier than a lone disc). Adding f to
-      // every member instead would make the pair interaction inject
-      // (N−1)·f of net momentum per tick — with damping that is a constant
-      // thrust, and dense diagrams fly off-screen at terminal velocity.
+      // Each side receives a TOTAL of ±f shared among its subtree members
+      // (equal-and-opposite by construction — unshared application would
+      // inject (N−1)·f of net momentum per contact per tick). A pinned
+      // (dragged) side takes no attraction — the drag must feel direct —
+      // but repulsion still applies so a drag cannot tunnel through things.
       const apply = (D: typeof A, sx: number, sy: number): void => {
         const targets = D.mid !== undefined ? [D.mid] : subtreeMembers(e, D.sub!)
         const per = 1 / targets.length
-        for (const mid of targets) { const F = force.get(mid)!; F.x += sx * per; F.y += sy * per }
+        for (const mid of targets) {
+          if (f > 0 && pinned !== null && pinned.has(mid)) continue
+          const F = force.get(mid)!
+          F.x += sx * per
+          F.y += sy * per
+        }
       }
-      apply(A, -ux * f, -uy * f)
-      apply(B, ux * f, uy * f)
+      apply(A, ux * f, uy * f)
+      apply(B, -ux * f, -uy * f)
     }
   }
 
@@ -223,7 +357,8 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     const pa = worldAnchor(A, leg.from.key), pb = worldAnchor(B, leg.to.key)
     const dx = pb.x - pa.x, dy = pb.y - pa.y
     const dist = Math.max(Math.hypot(dx, dy), 0.5)
-    const f = SPRING * (dist - REST) / dist
+    const stretch = dist - REST
+    const f = Math.sign(stretch) * Math.min(SPRING * Math.abs(stretch), SOFT_MAX) / dist
     const FA = force.get(A.id)!, FB = force.get(B.id)!
     FA.x += dx * f; FA.y += dy * f
     FB.x -= dx * f; FB.y -= dy * f
@@ -231,67 +366,6 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     const rbx = pb.x - B.pos.x, rby = pb.y - B.pos.y
     torque.set(A.id, torque.get(A.id)! + rax * dy * f - ray * dx * f)
     torque.set(B.id, torque.get(B.id)! + rbx * -dy * f - rby * -dx * f)
-  }
-
-  // per-region cohesion toward the content centroid
-  for (const rid of e.regions.keys()) {
-    const mids = e.membersOf.get(rid)!
-    const kids = e.childrenOf.get(rid)!
-    if (mids.length + kids.length < 2) continue
-    const cen = { x: 0, y: 0 }
-    let m = 0
-    for (const mid of mids) { const b = e.bodies.get(mid)!; cen.x += b.pos.x; cen.y += b.pos.y; m++ }
-    for (const c of kids) { const g = e.regions.get(c)!; cen.x += g.center.x; cen.y += g.center.y; m++ }
-    cen.x /= m; cen.y /= m
-    // Cohesion is a compaction force: it is meaningless once the separation
-    // constraint binds. Fade it to zero as a member's nearest-sibling gap
-    // approaches SIB_GAP, so a genuine force equilibrium exists (constant
-    // cohesion at contact fights the projection forever — a limit cycle).
-    const sibDiscs: { c: Vec2; r: number; id: string }[] = []
-    for (const mid of mids) { const b = e.bodies.get(mid)!; sibDiscs.push({ c: b.pos, r: b.discR, id: mid }) }
-    for (const c of kids) { const g = e.regions.get(c)!; sibDiscs.push({ c: g.center, r: g.radius, id: c }) }
-    const cohesionFactor = (id: string, c: Vec2, r: number): number => {
-      let nearest = Infinity
-      for (const s of sibDiscs) {
-        if (s.id === id) continue
-        nearest = Math.min(nearest, Math.hypot(s.c.x - c.x, s.c.y - c.y) - s.r - r)
-      }
-      if (nearest === Infinity) return 1
-      return Math.min(1, Math.max(0, (nearest - SIB_GAP) / SIB_GAP))
-    }
-    // Cohesion is INTERNAL to the region: its resultant over the pulled bodies
-    // must be zero, or the region self-propels (the fade factors make the raw
-    // pulls asymmetric, so the net does not cancel by itself). Accumulate the
-    // pulls, then subtract the mean — relative compaction is unchanged, net
-    // thrust is removed exactly.
-    const pulls = new Map<string, { x: number; y: number }>()
-    const addPull = (mid: string, fx: number, fy: number): void => {
-      const p = pulls.get(mid)
-      if (p === undefined) pulls.set(mid, { x: fx, y: fy })
-      else { p.x += fx; p.y += fy }
-    }
-    for (const mid of mids) {
-      if (pinned !== null && pinned.has(mid)) continue // a dragged body is not pulled toward the centroid
-      const b = e.bodies.get(mid)!
-      const k = 0.65 * cohesionFactor(mid, b.pos, b.discR)
-      addPull(mid, (cen.x - b.pos.x) * k, (cen.y - b.pos.y) * k)
-    }
-    for (const c of kids) {
-      const g = e.regions.get(c)!
-      const kSub = 0.35 * cohesionFactor(c, g.center, g.radius)
-      for (const mid of subtreeMembers(e, c)) {
-        addPull(mid, (cen.x - g.center.x) * kSub, (cen.y - g.center.y) * kSub)
-      }
-    }
-    if (pulls.size > 0) {
-      let nx = 0, ny = 0
-      for (const p of pulls.values()) { nx += p.x; ny += p.y }
-      nx /= pulls.size; ny /= pulls.size
-      for (const [mid, p] of pulls) {
-        const F = force.get(mid)!
-        F.x += p.x - nx; F.y += p.y - ny
-      }
-    }
   }
 
   for (const b of e.bodies.values()) {

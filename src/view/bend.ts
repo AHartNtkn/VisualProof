@@ -115,6 +115,14 @@ export function atomGeometry(arity: number): NodeGeometry {
     portAnchors[`a${i}`] = polar(angle, pierce)
     radials.push({ angle, r0: r, r1: pierce, kind: 'port', hueRow: null })
   }
+  // The pip: with two or more ordered ports, a featureless rotating disc gives
+  // no way to tell which leg is which. A short tick INSIDE the rail at a0's
+  // angle marks the first port; ports read clockwise from it (canvas y-down,
+  // so increasing angle is clockwise on screen). Pure anatomy linework —
+  // rotates with the body, no text, one-port discs need no mark.
+  if (arity >= 2) {
+    radials.push({ angle: Math.PI / 2, r0: r * 0.45, r1: r * 0.8, kind: 'port', hueRow: null })
+  }
   return {
     outerRadius: pierce + 0.5,
     arcs: [{ r, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0 }],

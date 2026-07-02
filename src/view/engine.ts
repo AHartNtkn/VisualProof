@@ -40,7 +40,10 @@ export type Body = {
 export type LegEnd = { readonly body: string; readonly key: string | null }
 export type Leg = { readonly wid: WireId; readonly from: LegEnd; readonly to: LegEnd }
 
-export type RegionCircle = { center: Vec2; radius: number }
+/** A region's drawn circle. `support` lists the direct items (member body or
+    child region) ON the rim — the only content the circle's geometry depends
+    on, and therefore where region-level forces land. */
+export type RegionCircle = { center: Vec2; radius: number; support: readonly { mid?: string; sub?: RegionId }[] }
 
 export type Engine = {
   readonly d: Diagram

@@ -80,3 +80,41 @@ describe('atomGeometry', () => {
     expect(atomGeometry(0).exitLine).toBeNull()
   })
 })
+
+describe('port-order pip (n-ary discs, n >= 2)', () => {
+  // Which port is a0 is invisible on a featureless disc once the body rotates.
+  // The pip — a short radial tick INSIDE the rail at a0's angle — marks the
+  // first port; ports then read clockwise (canvas y-down) from the pip.
+  it('arity >= 2 discs carry exactly one inner pip tick at the a0 angle', () => {
+    for (const arity of [2, 3, 5]) {
+      const g = atomGeometry(arity)
+      const rail = g.arcs[0]!.r
+      const a0angle = Math.PI / 2
+      const pips = g.radials.filter((r) => r.r1 <= rail && Math.abs(r.angle - a0angle) < 1e-9)
+      expect(pips, `arity ${arity}`).toHaveLength(1)
+      expect(pips[0]!.r0).toBeGreaterThan(0)
+      expect(pips[0]!.r1).toBeLessThan(rail)
+    }
+  })
+
+  it('arity <= 1 discs carry no pip (nothing to disambiguate)', () => {
+    for (const arity of [0, 1]) {
+      const rail = atomGeometry(arity).arcs[0]!.r
+      const pips = atomGeometry(arity).radials.filter((r) => r.r1 <= rail)
+      expect(pips, `arity ${arity}`).toHaveLength(0)
+    }
+  })
+
+  it('ports order clockwise from the pip: anchor i sits at pip-angle + i*(2pi/n)', () => {
+    // canvas coordinates are y-down, so increasing angle IS clockwise on screen
+    for (const arity of [2, 3, 4]) {
+      const g = atomGeometry(arity)
+      for (let i = 0; i < arity; i++) {
+        const a = g.portAnchors[`a${i}`]!
+        const angle = Math.atan2(a.y, a.x)
+        const expected = Math.atan2(Math.sin(Math.PI / 2 + (i * 2 * Math.PI) / arity), Math.cos(Math.PI / 2 + (i * 2 * Math.PI) / arity))
+        expect(angle, `arity ${arity} port ${i}`).toBeCloseTo(expected, 9)
+      }
+    }
+  })
+})
