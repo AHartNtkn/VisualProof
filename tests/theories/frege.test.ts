@@ -21,14 +21,14 @@ function argWire(d: Diagram, id: string, index: number): WireId {
 describe('the bundled Frege theory', () => {
   it('verifies end to end: relations resolve, conversion + induction theorems replay', () => {
     const ctx = verifyTheory(buildFregeTheory())
-    expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'succShiftS', 'plusComm'])
+    expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'zeroIsNat', 'succShiftS', 'plusComm'])
     expect([...ctx.relations.keys()].sort()).toEqual(['nat', 'plus', 'succ', 'zero'])
   })
 
   it('round-trips through the file format with re-verification', () => {
     const text = JSON.stringify(theoryToJson(buildFregeTheory()))
     const { ctx } = loadTheory(JSON.parse(text))
-    expect(ctx.theorems.size).toBe(5)
+    expect(ctx.theorems.size).toBe(6)
     expect(ctx.relations.has('nat')).toBe(true)
   })
 
@@ -105,6 +105,22 @@ describe('the bundled Frege theory', () => {
     const [wa2, wb2, wo2] = t.rhs.boundary
     const rp = Object.entries(t.rhs.diagram.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'plus')![0]
     expect([argWire(t.rhs.diagram, rp, 0), argWire(t.rhs.diagram, rp, 1), argWire(t.rhs.diagram, rp, 2)]).toEqual([wb2, wa2, wo2])
+  })
+
+  it('zeroIsNat: Zero(z) ⟹ nat(z) ∧ Zero(z); boundary [z]; nat and zero co-ride z', () => {
+    const t = buildFregeTheory().theorems.find((x) => x.name === 'zeroIsNat')!
+    expect(t.lhs.boundary).toHaveLength(1)
+    expect(t.rhs.boundary).toHaveLength(1)
+    // lhs is the bare Zero premise; rhs adds the nat guard, retaining Zero
+    expect(refKinds(t.lhs)).toEqual(['zero/1'])
+    expect(refKinds(t.rhs)).toEqual(['nat/1', 'zero/1'])
+    // both the produced nat guard and the retained Zero ride the boundary z-line
+    const rd = t.rhs.diagram
+    const [wz] = t.rhs.boundary
+    const natId = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
+    const zeroId = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero')![0]
+    expect(argWire(rd, natId, 0)).toBe(wz)
+    expect(argWire(rd, zeroId, 0)).toBe(wz)
   })
 
   it('the bundled ℕ is inCutNat: the zero-evidence is inside the guard, not root-witnessable', () => {

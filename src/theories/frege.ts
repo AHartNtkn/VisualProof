@@ -117,6 +117,14 @@ function nodeOnWire(e: DerivationCursor, region: RegionId, t: Term, name: string
   return found[0]
 }
 
+/** The wire holding `node`'s arg-`i` endpoint. */
+function argWire(e: DerivationCursor, node: NodeId, i: number): WireId {
+  const found = Object.entries(e.cur.wires).find(([, w]) =>
+    w.endpoints.some((ep) => ep.node === node && ep.port.kind === 'arg' && ep.port.index === i))
+  if (found === undefined) throw new Error(`node '${node}' has no arg-${i} endpoint on any wire`)
+  return found[0]
+}
+
 /**
  * K-trick: mint a node carrying the OPEN term `s` (its frees wired per `attach`)
  * in `region`, off the closed `seed`, restoring the seed after. closedTermIntro
@@ -646,6 +654,93 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   return { name: 'plusComm', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wo]), steps: [...e.steps] }
 }
 
+// ─── guard-producing theorems (closed-evidence endpoint transport) ───
+//
+// natRelation(x) = ¬∃R∃w0[Zero(w0) ∧ R(w0) ∧ Cl(R) ∧ ¬R(x)], the base line w0
+// scoped strictly INSIDE the guard bubble (non-vacuity). Producing a concrete
+// nat guard requires relating the internal zero witness w0 to the external
+// argument line — every wire/quantifier move lifts w0 out of the bubble and
+// re-opens vacuity, so a single ENDPOINT is transported instead (endpointTransport):
+// wires and quantifiers stay put, the base keeps its bubble scope forever.
+
+/**
+ * zeroIsNat: `Zero(z) ⟹ nat(z) ∧ Zero(z)`. Build the guard body with the
+ * conclusion atom on the internal base line (a tautology built by sound
+ * moves), then transport that endpoint onto the external z line — justified by
+ * the hypothesis Zero(z), co-resident with the internal Zero(w0) as equal
+ * closed values. Boundary [wz].
+ */
+function deriveZeroIsNat(ctx: ProofContext): Theorem {
+  const l = new DiagramBuilder()
+  const zsrc = l.ref(l.root, 'zero', 1)
+  const wz = l.wire(l.root, [{ node: zsrc, port: { kind: 'arg', index: 0 } }])
+  const lhsD = l.build()
+  const lhs = mkDiagramWithBoundary(lhsD, [wz])
+  const e = new DerivationCursor(lhsD, ctx)
+
+  // ¬¬ scaffold; cI becomes the ¬R conclusion cut
+  let snap = e.cur
+  e.push('dcIntro', { rule: 'doubleCutIntro', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }) })
+  const cutO = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === e.cur.root && snap.regions[id] === undefined)![0]
+  const cutI = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cutO && snap.regions[id] === undefined)![0]
+
+  // wrap the conclusion cut in the guard bubble (absorbs it — no empty sibling)
+  snap = e.cur
+  e.push('vbIntro rB', { rule: 'vacuousIntro', sel: mkSelection(e.cur, { region: cutO, regions: [cutI], nodes: [], wires: [] }), arity: 1 })
+  const rB = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'bubble' && r.parent === cutO && snap.regions[id] === undefined)![0]
+
+  // insert Zero(w0) ∧ R(w0) ∧ Cl(R) into rB (negative); atoms bound to rB
+  const pb = new DiagramBuilder()
+  const stub = pb.bubble(pb.root, 1)
+  const pz = pb.ref(stub, 'zero', 1)
+  const pa0 = pb.atom(stub, stub)
+  pb.wire(stub, [{ node: pz, port: { kind: 'arg', index: 0 } }, { node: pa0, port: { kind: 'arg', index: 0 } }])
+  const pcut2 = pb.cut(stub)
+  const pa1 = pb.atom(pcut2, stub)
+  const ps = pb.ref(pcut2, 'succ', 2)
+  pb.wire(pcut2, [{ node: pa1, port: { kind: 'arg', index: 0 } }, { node: ps, port: { kind: 'arg', index: 0 } }])
+  const pcut3 = pb.cut(pcut2)
+  const pa2 = pb.atom(pcut3, stub)
+  pb.wire(pcut2, [{ node: ps, port: { kind: 'arg', index: 1 } }, { node: pa2, port: { kind: 'arg', index: 0 } }])
+  e.push('insert base+closure', { rule: 'insertion', region: rB, pattern: mkDiagramWithBoundary(pb.build(), []), attachments: [], binders: { [stub]: rB } })
+
+  const zrefIn = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'ref' && n.defId === 'zero' && n.region === rB && id !== zsrc)![0]
+  const w0 = argWire(e, zrefIn, 0)
+  const a0 = e.cur.wires[w0]!.endpoints.find((ep) => ep.node !== zrefIn)!.node
+
+  // iterate the base R(w0) into the conclusion cut → ¬R(w0) (tautological body)
+  snap = e.cur
+  e.push('iterate base R into conclusion cut', { rule: 'iteration', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [a0], wires: [] }), target: cutI })
+  const a3 = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'atom' && n.region === cutI && snap.nodes[id] === undefined)![0]
+
+  // unfold both zero evidences to λ-term nodes for transport
+  e.push('unfold internal zero', { rule: 'relUnfold', node: zrefIn })
+  const z0 = e.nodeBy(rB, ZEROp)
+  e.push('unfold external zero', { rule: 'relUnfold', node: zsrc })
+  const zExt = e.nodeBy(e.cur.root, ZEROp)
+  snap = e.cur
+  e.push('iterate external zero into bubble', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zExt], wires: [] }), target: rB })
+  const b = e.newNodeIn(rB, snap, ZEROp)
+
+  // transport the conclusion endpoint from the base line onto the z line
+  e.push('transport conclusion onto z-line', {
+    rule: 'endpointTransport', a: z0, b, endpoint: { node: a3, port: { kind: 'arg', index: 0 } }, certificate: idCert,
+  })
+
+  // remove the iterated external copy; refold both zeros; fold the guard to nat
+  e.push('deiterate external zero copy', { rule: 'deiteration', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [b], wires: [] }), fuel: 64 })
+  e.push('refold internal zero', { rule: 'relFold', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [z0], wires: [] }), defId: 'zero', args: [w0] })
+  e.push('refold external zero', { rule: 'relFold', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zExt], wires: [] }), defId: 'zero', args: [wz] })
+  e.push('fold nat', { rule: 'relFold', sel: mkSelection(e.cur, { region: e.cur.root, regions: [cutO], nodes: [], wires: [] }), defId: 'nat', args: [wz] })
+
+  const rl = new DiagramBuilder()
+  const rnat = rl.ref(rl.root, 'nat', 1)
+  const rzero = rl.ref(rl.root, 'zero', 1)
+  const rwz = rl.wire(rl.root, [{ node: rnat, port: { kind: 'arg', index: 0 } }, { node: rzero, port: { kind: 'arg', index: 0 } }])
+  const rhs = mkDiagramWithBoundary(rl.build(), [rwz])
+  return { name: 'zeroIsNat', lhs, rhs, steps: [...e.steps] }
+}
+
 export function buildFregeTheory(): Theory {
   const relations = buildRelations()
   const ctx: ProofContext = {
@@ -656,6 +751,7 @@ export function buildFregeTheory(): Theory {
     derivePlusAssoc(ctx),
     derivePlusLeftUnit(ctx),
     derivePlusRightUnit(ctx),
+    deriveZeroIsNat(ctx),
   ]
   // Map insertion order is dependency order: succShiftS must precede plusComm.
   const succShiftS = deriveSuccShiftS(ctx)
