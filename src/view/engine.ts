@@ -176,6 +176,23 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
   return { d, bodies, childrenOf, membersOf, legs, boundaryOf, boundary, regions: new Map(), tick: 0 }
 }
 
+/** Map an anatomy-local point (before ascale) into world space through the
+    body's scale, rotation, and position. Shared by paint and hit-testing. */
+export function localToWorld(b: Body, lp: Vec2): Vec2 {
+  const ascale = ascaleOf(b.kind)
+  const c = Math.cos(b.theta), s = Math.sin(b.theta)
+  const x = lp.x * ascale, y = lp.y * ascale
+  return { x: b.pos.x + x * c - y * s, y: b.pos.y + x * s + y * c }
+}
+
+/** Satellite discs are slightly smaller than relation-ref discs. */
+export const SAT_DISC_R = DISC_R * 0.82
+
+/** World centre of a satellite's named disc. */
+export function satelliteWorld(b: Body, sat: Satellite): Vec2 {
+  return localToWorld(b, sat.discLocal)
+}
+
 /** World anchor of (body, port key); key null returns the body centre. */
 export function worldAnchor(b: Body, key: string | null): Vec2 {
   if (key === null) return b.pos

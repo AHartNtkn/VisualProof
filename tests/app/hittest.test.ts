@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkEngine, recomputeRegions, legPaths } from '../../src/view/index'
+import { mkEngine, recomputeRegions, legPaths, settle, satelliteWorld, boundaryExits } from '../../src/view/index'
 import type { WirePath } from '../../src/view/index'
+import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
 import { hitTest, buildSelection } from '../../src/app/hittest'
 
@@ -83,6 +84,49 @@ describe('buildSelection', () => {
     const { d, n, m } = setup()
     expect(() => buildSelection(d, [{ kind: 'node', id: n }, { kind: 'node', id: m }]))
       .toThrowError(/select the enclosing cut instead/)
+  })
+})
+
+describe('engine hit targets (satellites, junctions, frame exits → existing vocabulary)', () => {
+  it('a click on a satellite disc resolves to its term node', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, parseTerm('\\m. SUCC m', new Set(['SUCC'])))
+    const d = h.build()
+    const e = mkEngine(d, [])
+    e.bodies.get(n)!.pos = vec(0, 0)
+    recomputeRegions(e)
+    const body = e.bodies.get(n)!
+    const c = satelliteWorld(body, body.satellites[0]!)
+    expect(hitTest(e, c)).toEqual({ kind: 'node', id: n })
+  })
+
+  it('a click on a junction resolves to its wire', () => {
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, p('x'))
+    const b = h.termNode(h.root, p('x'))
+    const c = h.termNode(h.root, p('x'))
+    const w = h.wire(h.root, [
+      { node: a, port: { kind: 'freeVar', name: 'x' } },
+      { node: b, port: { kind: 'freeVar', name: 'x' } },
+      { node: c, port: { kind: 'freeVar', name: 'x' } },
+    ])
+    const e = mkEngine(h.build(), [])
+    e.bodies.get(a)!.pos = vec(-30, 0)
+    e.bodies.get(b)!.pos = vec(30, 0)
+    e.bodies.get(c)!.pos = vec(0, 30)
+    e.bodies.get(`j:${w}`)!.pos = vec(0, -10)
+    recomputeRegions(e)
+    expect(hitTest(e, vec(0, -10))).toEqual({ kind: 'wire', id: w })
+  })
+
+  it('a click on a frame exit resolves to its boundary wire', () => {
+    const nat = buildFregeTheory().relations.nat!
+    const e = mkEngine(nat.diagram, nat.boundary)
+    settle(e, 1200)
+    const ex = boundaryExits(e)[0]!
+    expect(ex).toBeDefined()
+    // the tick sits at the frame edge, on the exit spline, clear of nodes/regions
+    expect(hitTest(e, ex.tick.center)).toEqual({ kind: 'wire', id: ex.wid })
   })
 })
 

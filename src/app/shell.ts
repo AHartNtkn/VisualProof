@@ -15,12 +15,12 @@ import { mkEngine } from '../view/engine'
 import { settleStep } from '../view/relax'
 import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
-import { paint, LIGHT } from '../view/paint'
+import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
 import { bootBundledContext } from './boot'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 import type { ProofSession } from './session'
-import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem } from './session'
+import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
 import { sessionTheory } from './persist'
 import { loadTheory, theoryToJson } from '../kernel/proof/store'
 import type { Hit } from './hittest'
@@ -177,6 +177,14 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     return editDiagram
   }
 
+  // Prove-mode sides render their statement boundary as frame exits; an edit
+  // sheet has no boundary. mkEngine ignores boundary ids absent from the
+  // current diagram, so a stale id simply draws no exit.
+  const currentBoundary = (): readonly WireId[] => {
+    if (mode === 'prove' && session !== null) return sideBoundary(session, side)
+    return []
+  }
+
   // ---- chrome ----
   const div = (cls: string): HTMLDivElement => {
     const d = document.createElement('div')
@@ -268,7 +276,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       // diagram identity changed: rebuild the engine (layout never persists),
       // drop selection/pending/pin — their ids belong to the old diagram
       displayed = d
-      engine = mkEngine(d, [])
+      engine = mkEngine(d, currentBoundary())
       settleStep(engine)
       pin = null
       hits = []
@@ -635,9 +643,23 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   }
 
   // ---- rendering ----
+  // Hover-group target: hovering an atom or its bubble highlights the WHOLE
+  // binder group (bubble ring + every atom bound to it) in their shared hue.
+  // Returns the binder region id, or null when the hit is not part of a group.
+  const hoverGroupBinder = (hit: Hit): RegionId | null => {
+    if (hit.kind === 'node') {
+      const n = displayed.nodes[hit.id]
+      return n !== undefined && n.kind === 'atom' ? n.binder : null
+    }
+    if (hit.kind === 'region') {
+      const r = displayed.regions[hit.id]
+      return r !== undefined && r.kind === 'bubble' ? hit.id : null
+    }
+    return null
+  }
+
   // Highlight shapes for a hit, drawn over the painted engine. Node/region get
-  // a ring; a wire gets its stroked spline(s). Hover-group highlighting (the
-  // binder-hue tether replacement) is Task 2.
+  // a ring; a wire gets its stroked spline(s).
   const itemShapes = (hit: Hit, stroke: string): Shape[] => {
     if (hit.kind === 'node') {
       const b = engine.bodies.get(hit.id)
@@ -667,8 +689,9 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       canvas.height = window.innerHeight
     }
     for (let i = 0; i < SETTLE_STEPS_PER_FRAME; i++) {
-      settleStep(engine)
       // drag pins the grabbed body: hold it at the cursor and relax around it
+      // (excluded from cohesion so the drag feels direct)
+      settleStep(engine, pin?.node ?? null)
       if (pin !== null) {
         const b = engine.bodies.get(pin.node)
         if (b !== undefined) { b.pos = pin.pos; b.vel = vec(0, 0) }
@@ -678,7 +701,11 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     for (const h of hits) shapes.push(...itemShapes(h, SELECT_STROKE))
     if (hoverWorld !== null) {
       const hov = hitTest(engine, hoverWorld)
-      if (hov !== null) shapes.push(...itemShapes(hov, HOVER_STROKE))
+      if (hov !== null) {
+        const binder = hoverGroupBinder(hov)
+        if (binder !== null) shapes.push(...highlightGroup(engine, theme, binder))
+        else shapes.push(...itemShapes(hov, HOVER_STROKE))
+      }
     }
     ctx2d.clearRect(0, 0, canvas.width, canvas.height)
     drawShapes(ctx2d, shapes, view)
@@ -792,7 +819,14 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   )
   const modeBtn = button('Switch to PROVE', onToggleMode)
   const sideBtn = button('Side: forward (toggle)', onToggleSide)
-  goalRow.append(modeBtn, sideBtn, button('Undo', onUndo))
+  // Theme toggle: view-only, persists for the session; paint reads `theme`
+  // every frame, so flipping it re-styles the next frame with no rebuild.
+  const themeBtn = button(`Theme: ${theme.name}`, () => {
+    theme = nextTheme(theme)
+    canvas.style.background = theme.canvas
+    themeBtn.textContent = `Theme: ${theme.name}`
+  })
+  goalRow.append(modeBtn, sideBtn, themeBtn, button('Undo', onUndo))
   proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave), button('Load theory', onLoad))
   chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, theoremsDiv)
   renderTheoremList()

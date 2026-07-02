@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import type { WireId } from '../../src/kernel/diagram/diagram'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
+import { parseTerm } from '../../src/kernel/term/parse'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
 import { settle, settleStep } from '../../src/view/relax'
+
+const idp = (s: string) => parseTerm(s, new Set<string>())
 
 const theory = buildFregeTheory()
 const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
@@ -85,5 +89,56 @@ describe('settleStep — deterministic incremental relaxation', () => {
       expect(a.bodies.get(id)!.pos).toEqual(b.bodies.get(id)!.pos)
       expect(a.bodies.get(id)!.theta).toEqual(b.bodies.get(id)!.theta)
     }
+  })
+})
+
+describe('settleStep — drag pin', () => {
+  it('holds a pinned body at the cursor while neighbours relax legally around it', () => {
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, idp('\\x. x'))
+    const b = h.termNode(h.root, idp('\\x. x'))
+    const c = h.termNode(h.root, idp('\\x. x'))
+    void b; void c
+    const e = mkEngine(h.build(), [])
+    const pinPos = { x: 40, y: 40 }
+    for (let i = 0; i < 400; i++) {
+      settleStep(e, a)
+      const pa = e.bodies.get(a)!
+      pa.pos = { ...pinPos }
+      pa.vel = { x: 0, y: 0 }
+    }
+    const pinned = e.bodies.get(a)!
+    expect(pinned.pos).toEqual(pinPos) // held exactly at the cursor
+    // neighbours relaxed AROUND it: no other body overlaps the pinned disc
+    for (const other of e.bodies.values()) {
+      if (other.id === a) continue
+      const dist = Math.hypot(other.pos.x - pinPos.x, other.pos.y - pinPos.y)
+      expect(dist).toBeGreaterThan(other.discR + pinned.discR - 1e-6)
+    }
+  })
+
+  it('excludes the pinned body from the cohesion pull (drag feels direct)', () => {
+    // A sits far from a tight B/C cluster: cohesion (linear in distance) dominates
+    // repulsion (1/d²) at A, so exclusion visibly changes A's one-step motion.
+    const build = () => {
+      const h = new DiagramBuilder()
+      const a = h.termNode(h.root, idp('\\x. x'))
+      const b = h.termNode(h.root, idp('\\x. x'))
+      const c = h.termNode(h.root, idp('\\x. x'))
+      const e = mkEngine(h.build(), [])
+      e.bodies.get(a)!.pos = { x: 100, y: 0 }
+      e.bodies.get(b)!.pos = { x: 0, y: 5 }
+      e.bodies.get(c)!.pos = { x: 0, y: -5 }
+      return { e, a }
+    }
+    const pinned = build()
+    const free = build()
+    settleStep(pinned.e, pinned.a)
+    settleStep(free.e, null)
+    const moved = (r: ReturnType<typeof build>): number => {
+      const p = r.e.bodies.get(r.a)!.pos
+      return Math.hypot(p.x - 100, p.y - 0)
+    }
+    expect(moved(pinned)).toBeLessThan(moved(free))
   })
 })

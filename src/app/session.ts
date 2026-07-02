@@ -41,6 +41,17 @@ export type ProofSession = {
   readonly backward: BackwardSide
 }
 
+/**
+ * The boundary wires of a side's statement: the forward side proves from the
+ * lhs, the backward side from the rhs, so each renders its own boundary as
+ * frame exits. Ids are stable across a side's proof steps (the proof transforms
+ * the interior; the interface persists), so this is the boundary the render
+ * engine receives for that side.
+ */
+export function sideBoundary(s: ProofSession, side: 'forward' | 'backward'): readonly WireId[] {
+  return side === 'forward' ? s.lhs.boundary : s.rhs.boundary
+}
+
 export function startSession(lhs: DiagramWithBoundary, rhs: DiagramWithBoundary, ctx: ProofContext): ProofSession {
   return {
     lhs, rhs, ctx,

@@ -117,8 +117,10 @@ export function resolveOverlaps(e: Engine): boolean {
 type LegRef = { key: string; other: Body; otherKey: string | null }
 
 /** One relaxation tick — force integration + rotation + periodic projection.
-    Deterministic: no randomness, seed comes from mkEngine's spiral. */
-export function settleStep(e: Engine): void {
+    Deterministic: no randomness, seed comes from mkEngine's spiral. A `pinned`
+    body is excluded from the cohesion pull so a drag holding it at the cursor
+    feels direct (the caller overrides its position each tick). */
+export function settleStep(e: Engine, pinned: string | null = null): void {
   recomputeRegions(e)
   // force accumulator: mutable points, not the readonly Vec2 used for state
   const force = new Map<string, { x: number; y: number }>()
@@ -169,6 +171,7 @@ export function settleStep(e: Engine): void {
     for (const c of kids) { const g = e.regions.get(c)!; cen.x += g.center.x; cen.y += g.center.y; m++ }
     cen.x /= m; cen.y /= m
     for (const mid of mids) {
+      if (mid === pinned) continue // a dragged body is not pulled toward the centroid
       const b = e.bodies.get(mid)!
       const F = force.get(mid)!
       F.x += (cen.x - b.pos.x) * 0.65; F.y += (cen.y - b.pos.y) * 0.65

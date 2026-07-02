@@ -1,7 +1,8 @@
 import type { Diagram, RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Engine } from './engine'
-import { ascaleOf, DISC_R, frameBounds } from './engine'
+import type { NodeGeometry } from './bend'
+import type { Body, Engine } from './engine'
+import { ascaleOf, DISC_R, SAT_DISC_R, frameBounds, localToWorld, satelliteWorld } from './engine'
 import { boundaryExits, existentialStubs, legPaths } from './wires'
 
 /**
@@ -57,12 +58,13 @@ const DISC_RIM_W = 1.4
 const JUNCTION_OUTER_R = 3.6
 const JUNCTION_INNER_R = 2.6
 const STUB_DOT_R = 2.6
-/** Satellite discs are slightly smaller than relation-ref discs. */
-const SAT_DISC_SCALE = 0.82
 /** Satellite stems read as thinner tethers than core λ-anatomy. */
 const SAT_STEM_W = 0.85
 /** Disc labels truncate to this many glyphs. */
 const LABEL_MAX = 5
+/** Hover-group highlight: lightness bump and extra stroke width over the base. */
+const HL_BRIGHT = 18
+const HL_WIDTH = 0.8
 
 /** Per-bubble hue (golden-angle spread from binder violet); the ONLY node
     colour code (law 6/8). Same map feeds atom strokes and the bubble ring. */
@@ -75,6 +77,26 @@ export function bubbleHues(d: Diagram, lightness: number): Map<RegionId, string>
       out.set(rid, `hsl(${hue.toFixed(0)}, 48%, ${lightness}%)`)
       k++
     }
+  }
+  return out
+}
+
+/** The disc/port outline of a body (arcs + radials) in one stroke/width/glow.
+    Shared by the base paint and the hover-group highlight; term-only extras
+    (output run, satellites) are added by the caller. */
+function anatomyOutline(b: Body, g: NodeGeometry, stroke: string, width: number, glow: string | null): Shape[] {
+  const ascale = ascaleOf(b.kind)
+  const out: Shape[] = []
+  for (const a of g.arcs) {
+    out.push({ kind: 'arc', center: b.pos, r: a.r * ascale, a0: a.a0 + b.theta, a1: a.a1 + b.theta, stroke, width, glow })
+  }
+  for (const r of g.radials) {
+    out.push({
+      kind: 'segment',
+      from: localToWorld(b, { x: Math.cos(r.angle) * r.r0, y: Math.sin(r.angle) * r.r0 }),
+      to: localToWorld(b, { x: Math.cos(r.angle) * r.r1, y: Math.sin(r.angle) * r.r1 }),
+      stroke, width, glow,
+    })
   }
   return out
 }
@@ -145,20 +167,9 @@ export function paint(e: Engine, st: Theme): Shape[] {
     }
     const g = b.geometry!
     const ascale = ascaleOf(b.kind)
-    const cos = Math.cos(b.theta), sin = Math.sin(b.theta)
-    const worldLocal = (lp: Vec2): Vec2 => {
-      const x = lp.x * ascale, y = lp.y * ascale
-      return { x: b.pos.x + x * cos - y * sin, y: b.pos.y + x * sin + y * cos }
-    }
     const atomHue = node.kind === 'atom' ? hues.get(node.binder)! : null
     const stroke = atomHue ?? st.wire
-    const anatomyGlow = glow(atomHue ?? st.wire)
-    for (const a of g.arcs) {
-      shapes.push({ kind: 'arc', center: b.pos, r: a.r * ascale, a0: a.a0 + b.theta, a1: a.a1 + b.theta, stroke, width: st.wireW, glow: anatomyGlow })
-    }
-    for (const r of g.radials) {
-      shapes.push({ kind: 'segment', from: worldLocal({ x: Math.cos(r.angle) * r.r0, y: Math.sin(r.angle) * r.r0 }), to: worldLocal({ x: Math.cos(r.angle) * r.r1, y: Math.sin(r.angle) * r.r1 }), stroke, width: st.wireW, glow: anatomyGlow })
-    }
+    shapes.push(...anatomyOutline(b, g, stroke, st.wireW, glow(atomHue ?? st.wire)))
     if (node.kind === 'term') {
       // the term output run stays monochrome linework (term-internal anatomy
       // never carries a binder hue — law 8)
@@ -166,20 +177,46 @@ export function paint(e: Engine, st: Theme): Shape[] {
         shapes.push({ kind: 'arc', center: b.pos, r: g.exitArc.r * ascale, a0: g.exitArc.a0 + b.theta, a1: g.exitArc.a1 + b.theta, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
       }
       if (g.exitLine !== null) {
-        shapes.push({ kind: 'segment', from: worldLocal(g.exitLine[0]), to: worldLocal(g.exitLine[1]), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+        shapes.push({ kind: 'segment', from: localToWorld(b, g.exitLine[0]), to: localToWorld(b, g.exitLine[1]), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
       }
     }
     for (const s of b.satellites) {
-      shapes.push({ kind: 'segment', from: worldLocal(s.localPos), to: worldLocal(s.discLocal), stroke: st.wire, width: st.wireW * SAT_STEM_W, glow: glow(st.wire) })
+      shapes.push({ kind: 'segment', from: localToWorld(b, s.localPos), to: localToWorld(b, s.discLocal), stroke: st.wire, width: st.wireW * SAT_STEM_W, glow: glow(st.wire) })
     }
     for (const s of b.satellites) {
-      const c = worldLocal(s.discLocal)
-      shapes.push({ kind: 'circle', center: c, r: DISC_R * SAT_DISC_SCALE, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
-      shapes.push({ kind: 'label', center: c, text: s.label.slice(0, LABEL_MAX), color: st.discText, r: DISC_R * SAT_DISC_SCALE, font: st.font })
+      const c = satelliteWorld(b, s)
+      shapes.push({ kind: 'circle', center: c, r: SAT_DISC_R, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
+      shapes.push({ kind: 'label', center: c, text: s.label.slice(0, LABEL_MAX), color: st.discText, r: SAT_DISC_R, font: st.font })
     }
   }
 
   return shapes
+}
+
+/** The alternate theme (two-theme toggle). */
+export function nextTheme(t: Theme): Theme {
+  return t === LIGHT ? DARK : LIGHT
+}
+
+/**
+ * Hover-group highlight: brighten a whole binder group (its bubble ring and
+ * every atom bound to it) in the shared hue — same hue family, brighter and
+ * wider, glowing in Dark. Returns overlay shapes drawn over the base paint;
+ * empty when `binderRid` is not a bubble.
+ */
+export function highlightGroup(e: Engine, st: Theme, binderRid: RegionId): Shape[] {
+  const hue = bubbleHues(e.d, Math.min(st.bubbleLightness + HL_BRIGHT, 88)).get(binderRid)
+  if (hue === undefined) return []
+  const out: Shape[] = []
+  const g = e.regions.get(binderRid)
+  if (g !== undefined) {
+    out.push({ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke: hue, width: BUBBLE_RING_W + HL_WIDTH, insetColor: null, glow: st.wireGlow ? hue : null })
+  }
+  for (const b of e.bodies.values()) {
+    if (b.node?.kind !== 'atom' || b.node.binder !== binderRid) continue
+    out.push(...anatomyOutline(b, b.geometry!, hue, st.wireW + HL_WIDTH, st.wireGlow ? hue : null))
+  }
+  return out
 }
 
 export const LIGHT: Theme = {
