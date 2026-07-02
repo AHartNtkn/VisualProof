@@ -13,8 +13,7 @@ import { applyRelUnfold, applyRelFold } from '../../../src/kernel/rules/reldef'
  * mandated mutation set. Each targets a specific claim in the plan's Part B.
  */
 
-const consts = new Set(['C', 'D'])
-const pc = (s: string) => parseTerm(s, consts)
+const pc = (s: string) => parseTerm(s)
 
 /** Arity-1 body identical to reldef.test's bodyR: `y`-line boundary feeding `C w`. */
 function bodyR(): DiagramWithBoundary {

@@ -5,8 +5,7 @@ import { applyDoubleCutIntro } from '../../src/kernel/rules/doublecut'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** Every numeric field of a shape must be finite (NaN would blow up the canvas). */
 function assertFinite(value: unknown): void {

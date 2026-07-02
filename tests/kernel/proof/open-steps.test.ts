@@ -9,9 +9,8 @@ import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { composeProofs } from '../../../src/kernel/proof/compose'
 import { stepToJson, stepFromJson } from '../../../src/kernel/proof/json'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
-const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
+const p = (s: string) => parseTerm(s)
+const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
 
 function openPattern() {
   const b = new DiagramBuilder()

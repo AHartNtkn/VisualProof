@@ -28,7 +28,6 @@ export type NodeGeometry = {
   readonly outerRadius: number
   readonly arcs: readonly NodeArc[]
   readonly radials: readonly NodeRadial[]
-  readonly glyphs: readonly { readonly pos: Vec2; readonly constId: string }[]
   readonly outputAnchor: Vec2
   readonly portAnchors: Readonly<Record<string, Vec2>>
   /** Innermost arc carrying the output around to the gap edge (null when the
@@ -87,13 +86,10 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
   const outputAnchor = polar(0, pierceR)
   const exitLine: readonly [Vec2, Vec2] = [polar(a0, exitR), outputAnchor]
 
-  const glyphs = g.glyphs.map((gl) => ({ pos: polar(theta(gl.col), radius(gl.row)), constId: gl.constId }))
-
   return {
     outerRadius: pierceR + 0.5,
     arcs,
     radials,
-    glyphs,
     outputAnchor,
     portAnchors,
     exitArc,
@@ -123,7 +119,6 @@ export function atomGeometry(arity: number): NodeGeometry {
     outerRadius: pierce + 0.5,
     arcs: [{ r, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0 }],
     radials,
-    glyphs: [],
     outputAnchor: polar(0, pierce),
     portAnchors,
     exitArc: null,

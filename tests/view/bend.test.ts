@@ -4,8 +4,7 @@ import { trompGrid } from '../../src/view/tromp'
 import { bendGrid, atomGeometry, GAP_ANGLE } from '../../src/view/bend'
 import { length } from '../../src/view/vec'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('bendGrid', () => {
   it('maps binder bars to rim arcs, outermost binder outermost', () => {

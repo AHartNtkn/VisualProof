@@ -14,7 +14,7 @@ const TWOp = lam(lam(app(bvar(1), app(bvar(1), bvar(0)))))             // λf x.
 const PLUSp = lam(lam(lam(lam(app(app(bvar(3), bvar(1)), app(app(bvar(2), bvar(1)), bvar(0))))))) // λm n f x. m f (n f x)
 const Yp = lam(app(lam(app(bvar(1), app(bvar(0), bvar(0)))), lam(app(bvar(1), app(bvar(0), bvar(0)))))) // λf. (λx. f (x x)) (λx. f (x x))
 
-const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
 
 /** o = (PLUS ONE ONE) ⟹ o = TWO, by a single recorded βη conversion. */
 function deriveOnePlusOne(): Theorem {
@@ -60,7 +60,6 @@ function deriveFixedPoint(): Theorem {
 
 export function buildLambdaTheory(): Theory {
   return {
-    definitions: {},
     relations: {},
     theorems: [deriveOnePlusOne(), deriveFixedPoint()],
   }

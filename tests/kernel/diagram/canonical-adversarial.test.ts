@@ -3,8 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { canonicalForm } from '../../../src/kernel/diagram/canonical/canonical'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('canonicalForm adversarial battery', () => {
   it('distinguishes atom binder depth (inner vs outer bubble of equal arity)', () => {

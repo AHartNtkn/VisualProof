@@ -1,5 +1,5 @@
 import type { Term } from './term'
-import { bvar, port, cnst, lam, app } from './term'
+import { bvar, port, lam, app } from './term'
 
 /**
  * Stable, injective, ASCII serialization. De Bruijn makes this canonical for
@@ -11,7 +11,6 @@ export function serializeTerm(t: Term): string {
   switch (t.kind) {
     case 'bvar': return `#${t.index}`
     case 'port': return `P(${JSON.stringify(t.name)})`
-    case 'const': return `C(${JSON.stringify(t.id)})`
     case 'lam': return `L(${serializeTerm(t.body)})`
     case 'app': return `A(${serializeTerm(t.fn)},${serializeTerm(t.arg)})`
   }
@@ -37,11 +36,11 @@ function parse(s: string, i: number): [Term, number] {
     if (!Number.isSafeInteger(value)) fail(`bvar index ${digits} exceeds the safe integer range`)
     return [bvar(value), j]
   }
-  if (c === 'P' || c === 'C') {
-    if (s[i + 1] !== '(') fail(`expected '(' after ${c}`)
+  if (c === 'P') {
+    if (s[i + 1] !== '(') fail("expected '(' after P")
     const [str, j] = parseJsonString(s, i + 2)
-    if (s[j] !== ')') fail(`expected ')' closing ${c}(...)`)
-    return [c === 'P' ? port(str) : cnst(str), j + 1]
+    if (s[j] !== ')') fail("expected ')' closing P(...)")
+    return [port(str), j + 1]
   }
   if (c === 'L') {
     if (s[i + 1] !== '(') fail("expected '(' after L")

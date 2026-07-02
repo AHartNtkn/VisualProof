@@ -9,7 +9,7 @@ import { settle, settleStep } from '../../src/view/relax'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
 
-const idp = (s: string) => parseTerm(s, new Set<string>())
+const idp = (s: string) => parseTerm(s)
 
 const bootCtx = (await bootFixture()).ctx
 const plusCommThm = bootCtx.theorems.get('plusComm')!

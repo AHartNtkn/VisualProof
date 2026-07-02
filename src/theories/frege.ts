@@ -649,7 +649,6 @@ function derivePlusComm(ctx: ProofContext): Theorem {
 export function buildFregeTheory(): Theory {
   const relations = buildRelations()
   const ctx: ProofContext = {
-    definitions: {},
     theorems: new Map(),
     relations: new Map(Object.entries(relations)),
   }
@@ -662,10 +661,9 @@ export function buildFregeTheory(): Theory {
   const succShiftS = deriveSuccShiftS(ctx)
   theorems.push(succShiftS)
   const ctxWithSucc: ProofContext = {
-    definitions: {},
     theorems: new Map([[succShiftS.name, succShiftS]]),
     relations: ctx.relations,
   }
   theorems.push(derivePlusComm(ctxWithSucc))
-  return { definitions: {}, relations, theorems }
+  return { relations, theorems }
 }

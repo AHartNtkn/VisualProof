@@ -12,8 +12,7 @@ import { replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { stepToJson, stepFromJson } from '../../../src/kernel/proof/json'
 
-const consts = new Set(['C', 'D'])
-const pc = (s: string) => parseTerm(s, consts)
+const pc = (s: string) => parseTerm(s)
 
 /**
  * A self-contained arity-1 relation body: a term node `y` whose y-input is the
@@ -109,10 +108,12 @@ describe('relUnfold — refusals', () => {
 })
 
 describe('relFold — refuses a near-miss body (one node changed)', () => {
-  it('refuses to fold a D-body as the C-relation (fingerprint mismatch)', () => {
-    const relations = new Map([['R', bodyR('C w')], ['RD', bodyR('D w')]])
+  it('refuses to fold a structurally different body as the R-relation (fingerprint mismatch)', () => {
+    // R's tail node is the bare arg `w`; RD's tail applies it to itself `w w` —
+    // a one-node structural change the canonical fingerprint must distinguish.
+    const relations = new Map([['R', bodyR('w')], ['RD', bodyR('w w')]])
     const { d, node, carrier, wArg } = refHost('RD')
-    const un = applyRelUnfold(d, node, relations) // inlines the D-body
+    const un = applyRelUnfold(d, node, relations) // inlines the RD-body
     const sel = bodySelection(un, carrier, un.root)
     expect(() => applyRelFold(un, sel, 'R', [wArg], relations)).toThrow(RuleError)
     expect(() => applyRelFold(un, sel, 'R', [wArg], relations)).toThrow(/does not match relation 'R'/)
@@ -165,7 +166,7 @@ describe('relUnfold / relFold replay through applyStep', () => {
   it('replays a relUnfold step to the same diagram as the direct applier', () => {
     const relations = new Map([['R', bodyR()]])
     const { d, node } = refHost('R')
-    const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations }
+    const ctx: ProofContext = { theorems: new Map(), relations }
     const replayed = replayProof(d, [{ rule: 'relUnfold', node }], ctx)
     expect(diagramFingerprint(replayed)).toBe(diagramFingerprint(applyRelUnfold(d, node, relations)))
   })
@@ -173,7 +174,7 @@ describe('relUnfold / relFold replay through applyStep', () => {
   it('replays unfold then fold back to the original', () => {
     const relations = new Map([['R', bodyR()]])
     const { d, node, carrier, wArg } = refHost('R')
-    const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations }
+    const ctx: ProofContext = { theorems: new Map(), relations }
     const un = applyRelUnfold(d, node, relations)
     const sel = bodySelection(un, carrier, un.root)
     const steps: ProofStep[] = [

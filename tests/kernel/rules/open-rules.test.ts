@@ -8,8 +8,7 @@ import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iter
 import { applyInsertion } from '../../../src/kernel/rules/insertion'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../../../src/kernel/rules/vacuous'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** rB(1)[ R-app on a shared wire ; an empty cut to iterate into ]. */
 function host() {

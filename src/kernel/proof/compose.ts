@@ -71,10 +71,6 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       return { ...step, wire: mapId(iso.wires, step.wire, 'wire') }
     case 'fission':
       return { ...step, node: mapId(iso.nodes, step.node, 'node') }
-    case 'unfold':
-      return { ...step, node: mapId(iso.nodes, step.node, 'node') }
-    case 'fold':
-      return { ...step, node: mapId(iso.nodes, step.node, 'node') }
     case 'comprehensionInstantiate': {
       const binders: Record<string, string> = {}
       for (const [stub, hb] of Object.entries(step.binders)) binders[stub] = mapId(iso.regions, hb, 'region')

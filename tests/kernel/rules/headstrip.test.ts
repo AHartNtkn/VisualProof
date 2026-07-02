@@ -7,10 +7,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
 import { RuleError } from '../../../src/kernel/rules/error'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
-const consts = new Set(['PLUS'])
-const pc = (s: string) => parseTerm(s, consts)
+const p = (s: string) => parseTerm(s)
 
 const fv = (node: NodeId, name: string): Endpoint => ({ node, port: { kind: 'freeVar', name } })
 const outp = (node: NodeId): Endpoint => ({ node, port: { kind: 'output' } })
@@ -247,17 +244,6 @@ describe('head strip (rigid-head equation decomposition)', () => {
     h.wire(h.root, [outp(n1)])
     h.wire(h.root, [outp(n2)])
     expect(() => applyHeadStrip(h.build(), n1, n2)).toThrowError(/one wire/)
-  })
-
-  it('refuses a defined constant head, naming the constant', () => {
-    const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, pc('PLUS a b'))
-    const n2 = h.termNode(h.root, pc('PLUS b a'))
-    h.wire(h.root, [fv(n1, 'a'), fv(n2, 'a')])
-    h.wire(h.root, [fv(n1, 'b'), fv(n2, 'b')])
-    h.wire(h.root, [outp(n1), outp(n2)])
-    expect(() => applyHeadStrip(h.build(), n1, n2)).toThrowError(/'PLUS'/)
-    expect(() => applyHeadStrip(h.build(), n1, n2)).toThrowError(/unfold/)
   })
 
   it('refuses a redex head, pointing to the HNF tactic', () => {

@@ -5,8 +5,7 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** Pattern: single node `y x` with its v:y wire as the only boundary stub. */
 function nodePattern() {

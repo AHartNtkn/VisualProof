@@ -10,20 +10,15 @@ import { trompGrid } from './tromp'
  * The converged render engine (round-8 lab spec). A Diagram-plus-boundary is
  * lifted into a set of relaxation BODIES — one per node, plus one JUNCTION body
  * for every branch (>=3-endpoint) line of identity — each carrying its local
- * anatomy geometry, its satellite constant discs, and an enclosing disc radius.
- * Positions/rotations are relaxed by `relax.ts`; geometry is emitted by
- * `wires.ts`/`paint.ts`. Nothing here is semantic and nothing is serialized.
+ * anatomy geometry and an enclosing disc radius. Positions/rotations are
+ * relaxed by `relax.ts`; geometry is emitted by `wires.ts`/`paint.ts`. Nothing
+ * here is semantic and nothing is serialized.
  */
 
 /** Standard named-disc radius (world units) — one size for every named disc. */
 export const DISC_R = 5.5
-/** Satellite stem length beyond the anatomy edge. */
-export const SAT_STEM = 3.5
 /** Sheet frame margin beyond the outermost region (world units). */
 export const FRAME_MARGIN = 6
-
-/** A constant leaf lifted OUT of the anatomy onto a short stem + named disc. */
-export type Satellite = { readonly localPos: Vec2; readonly discLocal: Vec2; readonly label: string }
 
 export type BodyKind = 'term' | 'ref' | 'atom' | 'junction'
 
@@ -34,7 +29,6 @@ export type Body = {
   readonly geometry: NodeGeometry | null
   /** Port key (pkey) -> anatomy-local anchor, ascale already folded in. */
   readonly localAnchor: Map<string, Vec2>
-  readonly satellites: readonly Satellite[]
   readonly discR: number
   readonly region: RegionId
   pos: Vec2
@@ -134,28 +128,10 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       anatomyR = Math.max(anatomyR, Math.hypot(a.x, a.y))
     }
     for (const arc of g.arcs) anatomyR = Math.max(anatomyR, arc.r)
-    // satellites: constant leaves hang outside the anatomy on a stem, so
-    // nothing paints over the term structure (geometry reserves the space).
-    const satellites: Satellite[] = []
-    if (n.kind === 'term') {
-      for (const gl of g.glyphs) {
-        const glr = Math.hypot(gl.pos.x, gl.pos.y)
-        const dir = glr < 0.01 ? { x: 1, y: 0 } : { x: gl.pos.x / glr, y: gl.pos.y / glr }
-        const discLocal = {
-          x: gl.pos.x + dir.x * (anatomyR - glr + SAT_STEM + DISC_R),
-          y: gl.pos.y + dir.y * (anatomyR - glr + SAT_STEM + DISC_R),
-        }
-        satellites.push({ localPos: gl.pos, discLocal, label: gl.constId })
-      }
-    }
-    let discR = anatomyR + 2
-    for (const s of satellites) {
-      discR = Math.max(discR, Math.hypot(s.discLocal.x, s.discLocal.y) * (n.kind === 'term' ? 1.4 : 1) + DISC_R + 1.5)
-    }
-    if (n.kind === 'ref') discR = DISC_R + 1.5
+    const discR = n.kind === 'ref' ? DISC_R + 1.5 : anatomyR + 2
     const ang = i * 2.399963, rad = 6 + 5 * i
     bodies.set(id, {
-      id, kind: n.kind, node: n, geometry: g, localAnchor, satellites, discR,
+      id, kind: n.kind, node: n, geometry: g, localAnchor, discR,
       region: n.region,
       pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, vel: { x: 0, y: 0 }, theta: 0,
     })
@@ -180,7 +156,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       const jid = `j:${wid}`
       bodies.set(jid, {
         id: jid, kind: 'junction', node: null, geometry: null,
-        localAnchor: new Map(), satellites: [], discR: 4.5, region: w.scope,
+        localAnchor: new Map(), discR: 4.5, region: w.scope,
         pos: { x: (i++) * 3, y: -(i * 2) }, vel: { x: 0, y: 0 }, theta: 0,
       })
       membersOf.get(w.scope)!.push(jid)
@@ -222,14 +198,6 @@ export function localToWorld(b: Body, lp: Vec2): Vec2 {
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   const x = lp.x * ascale, y = lp.y * ascale
   return { x: b.pos.x + x * c - y * s, y: b.pos.y + x * s + y * c }
-}
-
-/** Satellite discs are slightly smaller than relation-ref discs. */
-export const SAT_DISC_R = DISC_R * 0.82
-
-/** World centre of a satellite's named disc. */
-export function satelliteWorld(b: Body, sat: Satellite): Vec2 {
-  return localToWorld(b, sat.discLocal)
 }
 
 /** World anchor of (body, port key); key null returns the body centre. */

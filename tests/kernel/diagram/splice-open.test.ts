@@ -6,8 +6,7 @@ import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function host() {
   const h = new DiagramBuilder()

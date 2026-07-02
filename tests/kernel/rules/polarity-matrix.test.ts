@@ -9,8 +9,7 @@ import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** Depth-parameterized host: a node nested under `depth` cuts. */
 function nested(depth: number) {

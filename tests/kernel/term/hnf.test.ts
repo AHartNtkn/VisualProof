@@ -5,9 +5,7 @@ import { printTerm } from '../../../src/kernel/term/print'
 import { checkConversion } from '../../../src/kernel/term/certificate'
 import { headSpine, headNormalize, weakHeadNormalize } from '../../../src/kernel/term/hnf'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
-const pc = (s: string) => parseTerm(s, new Set(['PLUS']))
+const p = (s: string) => parseTerm(s)
 
 const OMEGA = p('(\\x. x x) (\\x. x x)')
 
@@ -36,10 +34,10 @@ describe('headSpine', () => {
     expect(s.args.length).toBe(0)
   })
 
-  it('analyzes PLUS a b: const head carrying the constId', () => {
-    const s = headSpine(pc('PLUS a b'))
+  it('analyzes f a b: free head carrying the port name, two args', () => {
+    const s = headSpine(p('f a b'))
     expect(s.binders).toBe(0)
-    expect(s.head).toEqual({ kind: 'const', constId: 'PLUS' })
+    expect(s.head).toEqual({ kind: 'free', name: 'f' })
     expect(s.args.length).toBe(2)
   })
 
@@ -97,12 +95,12 @@ describe('headNormalize', () => {
     expect(termEq(r.term, t)).toBe(true)
   })
 
-  it('terminates at a const head without unfolding', () => {
-    const t = pc('PLUS ((\\u. u) a) b')
+  it('terminates at a rigid free head, leaving argument redexes untouched', () => {
+    const t = p('f ((\\u. u) a) b')
     const r = headNormalize(t, 100)
     expect(r.steps.length).toBe(0)
     expect(termEq(r.term, t)).toBe(true)
-    expect(headSpine(r.term).head).toEqual({ kind: 'const', constId: 'PLUS' })
+    expect(headSpine(r.term).head).toEqual({ kind: 'free', name: 'f' })
   })
 
   it('descends under the binder prefix: \\x. (\\u. u) x becomes \\x. x with the body-path step recorded', () => {
@@ -163,8 +161,8 @@ describe('weakHeadNormalize', () => {
     expect(r.steps.length).toBe(2)
   })
 
-  it('terminates at a const head without unfolding', () => {
-    const t = pc('PLUS a')
+  it('terminates at a rigid free head without reducing', () => {
+    const t = p('f a')
     const r = weakHeadNormalize(t, 100)
     expect(r.steps.length).toBe(0)
     expect(termEq(r.term, t)).toBe(true)

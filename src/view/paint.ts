@@ -2,7 +2,7 @@ import type { Diagram, RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
-import { ascaleOf, DISC_R, SAT_DISC_R, frameBounds, localToWorld, satelliteWorld } from './engine'
+import { ascaleOf, DISC_R, frameBounds, localToWorld } from './engine'
 import { boundaryExits, existentialStubs, legPaths } from './wires'
 
 /**
@@ -58,8 +58,6 @@ const DISC_RIM_W = 1.4
 const JUNCTION_OUTER_R = 3.6
 const JUNCTION_INNER_R = 2.6
 const STUB_DOT_R = 2.6
-/** Satellite stems read as thinner tethers than core λ-anatomy. */
-const SAT_STEM_W = 0.85
 /** Disc labels truncate to this many glyphs. */
 const LABEL_MAX = 5
 /** Hover-group highlight: lightness bump and extra stroke width over the base. */
@@ -82,8 +80,8 @@ export function bubbleHues(d: Diagram, lightness: number): Map<RegionId, string>
 }
 
 /** The disc/port outline of a body (arcs + radials) in one stroke/width/glow.
-    Shared by the base paint and the hover-group highlight; term-only extras
-    (output run, satellites) are added by the caller. */
+    Shared by the base paint and the hover-group highlight; the term-only
+    output run is added by the caller. */
 function anatomyOutline(b: Body, g: NodeGeometry, stroke: string, width: number, glow: string | null): Shape[] {
   const ascale = ascaleOf(b.kind)
   const out: Shape[] = []
@@ -179,14 +177,6 @@ export function paint(e: Engine, st: Theme): Shape[] {
       if (g.exitLine !== null) {
         shapes.push({ kind: 'segment', from: localToWorld(b, g.exitLine[0]), to: localToWorld(b, g.exitLine[1]), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
       }
-    }
-    for (const s of b.satellites) {
-      shapes.push({ kind: 'segment', from: localToWorld(b, s.localPos), to: localToWorld(b, s.discLocal), stroke: st.wire, width: st.wireW * SAT_STEM_W, glow: glow(st.wire) })
-    }
-    for (const s of b.satellites) {
-      const c = satelliteWorld(b, s)
-      shapes.push({ kind: 'circle', center: c, r: SAT_DISC_R, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
-      shapes.push({ kind: 'label', center: c, text: s.label.slice(0, LABEL_MAX), color: st.discText, r: SAT_DISC_R, font: st.font })
     }
   }
 

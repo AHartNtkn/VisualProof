@@ -11,8 +11,7 @@ import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
 import { parseTerm } from '../../../src/kernel/term/parse'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** A single ℕ(a)-shaped reference: one ref node of the given arity, its arg
  *  wires auto-attached as singleton bare wires. */

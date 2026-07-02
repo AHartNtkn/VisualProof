@@ -5,8 +5,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { boundaryArity } from '../../../src/kernel/diagram/boundary'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function host() {
   const b = new DiagramBuilder()

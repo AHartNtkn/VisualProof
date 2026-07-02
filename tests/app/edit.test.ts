@@ -6,8 +6,7 @@ import {
   addTermNode, addCut, addBubble, joinPorts, deleteSelection, emptyDiagram,
 } from '../../src/app/edit'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('edit operations (construction mode, mkDiagram-validated surgery)', () => {
   it('starts from the empty sheet and adds parsed term nodes with auto wires', () => {

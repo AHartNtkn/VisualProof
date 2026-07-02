@@ -13,8 +13,6 @@ import { applyCongruenceJoin } from '../rules/congruence'
 import { applyHeadStrip } from '../rules/headstrip'
 import { applyClosedTermIntro } from '../rules/intro'
 import { applyFusion, applyFission } from '../rules/fusion'
-import { applyUnfold, applyFold } from '../rules/definitions'
-import type { Definitions } from '../rules/definitions'
 import { applyComprehensionInstantiate, applyComprehensionAbstract } from '../rules/comprehension'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../rules/vacuous'
@@ -24,7 +22,6 @@ import { applyTheorem } from './theorem'
 import { ProofError } from './error'
 
 export type ProofContext = {
-  readonly definitions: Definitions
   readonly theorems: ReadonlyMap<string, Theorem>
   /** Named relations (comprehension bodies) resolvable by relUnfold/relFold. */
   readonly relations: ReadonlyMap<string, DiagramWithBoundary>
@@ -51,8 +48,6 @@ export type ProofStep =
   | { readonly rule: 'closedTermIntro'; readonly region: RegionId; readonly term: Term }
   | { readonly rule: 'fusion'; readonly wire: WireId }
   | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
-  | { readonly rule: 'unfold'; readonly node: NodeId; readonly path: readonly PathSeg[] }
-  | { readonly rule: 'fold'; readonly node: NodeId; readonly path: readonly PathSeg[]; readonly constId: string }
   | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary; readonly attachments: readonly WireId[]; readonly binders: Readonly<Record<RegionId, RegionId>> }
   | { readonly rule: 'comprehensionAbstract'; readonly wrap: SubgraphSelection; readonly comp: DiagramWithBoundary; readonly occurrences: readonly AbstractionOccurrence[] }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
@@ -77,8 +72,6 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
     case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term)
     case 'fusion': return applyFusion(d, step.wire)
     case 'fission': return applyFission(d, step.node, step.path)
-    case 'unfold': return applyUnfold(d, ctx.definitions, step.node, step.path)
-    case 'fold': return applyFold(d, ctx.definitions, step.node, step.path, step.constId)
     case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, new Map(Object.entries(step.binders)))
     case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences)
     case 'theorem': {

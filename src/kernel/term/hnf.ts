@@ -5,7 +5,6 @@ import { applyStepAt } from './reduce'
 export type SpineHead =
   | { readonly kind: 'bound'; readonly index: number }
   | { readonly kind: 'free'; readonly name: string }
-  | { readonly kind: 'const'; readonly constId: string }
   | { readonly kind: 'redex' }
 
 export type HeadSpine = {
@@ -33,7 +32,6 @@ export function headSpine(t: Term): HeadSpine {
   switch (cur.kind) {
     case 'bvar': return { binders, head: { kind: 'bound', index: cur.index }, args }
     case 'port': return { binders, head: { kind: 'free', name: cur.name }, args }
-    case 'const': return { binders, head: { kind: 'const', constId: cur.id }, args }
     case 'lam': return { binders, head: { kind: 'redex' }, args }
   }
 }
@@ -67,7 +65,7 @@ function reduceHead(
     const spine = headSpine(cur)
     if (spine.head.kind !== 'redex') return { term: cur, steps }
     if (remaining === 0) {
-      throw new Error(`${fnName} exhausted its fuel of ${fuel} steps without reaching a rigid or constant head; the head reduction appears divergent`)
+      throw new Error(`${fnName} exhausted its fuel of ${fuel} steps without reaching a rigid head; the head reduction appears divergent`)
     }
     const step = headRedexStep(spine)
     cur = applyStepAt(cur, step)
@@ -78,9 +76,9 @@ function reduceHead(
 
 /**
  * Head normalization: repeated HEAD beta steps only (the spine redex,
- * descending under the binder prefix) until the head is bound/free/const,
+ * descending under the binder prefix) until the head is bound/free,
  * recording each step for certificate consumption; arguments are never
- * reduced and constants are never unfolded. Throws on fuel exhaustion.
+ * reduced. Throws on fuel exhaustion.
  */
 export function headNormalize(t: Term, fuel: number): { term: Term; steps: readonly ReductionStep[] } {
   return reduceHead(t, fuel, true, 'headNormalize')

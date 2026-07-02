@@ -6,8 +6,7 @@ import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import type { Diagram, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function expectFound(
   host: Diagram,

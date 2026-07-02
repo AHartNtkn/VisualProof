@@ -1,5 +1,5 @@
 import type { Term } from '../../term/term'
-import { app, assertWellFormedTerm, bvar, cnst, freePorts, lam, termEq } from '../../term/term'
+import { app, assertWellFormedTerm, bvar, freePorts, lam, termEq } from '../../term/term'
 import { normalize } from '../../term/reduce'
 import { DiagramError } from '../diagram'
 
@@ -24,7 +24,6 @@ export function closeOverPorts(t: Term): Term {
         return bvar(depth + (n - 1 - i))
       }
       case 'bvar': return bvar(u.index)
-      case 'const': return cnst(u.id)
       case 'lam': return lam(walk(u.body, depth + 1))
       case 'app': return app(walk(u.fn, depth), walk(u.arg, depth))
     }

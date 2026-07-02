@@ -12,8 +12,7 @@ import { adoptTheorem } from '../../src/app/session'
 import { sessionTheory } from '../../src/app/persist'
 import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('edit → prove → assemble, end to end', () => {
   it('a user-constructed goal is proven bidirectionally and checks', () => {

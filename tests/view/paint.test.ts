@@ -2,29 +2,62 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
+import { buildLambdaTheory } from '../../src/theories/lambda'
+import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkEngine } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, bubbleHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
-describe('law 2 — no text on lambda: labels only on named discs', () => {
-  it('emits one label per ref and per constant satellite, none over term anatomy', () => {
+describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
+  it('emits exactly one label per ref, at the ref disc, and none over term anatomy', () => {
     const h = new DiagramBuilder()
-    h.termNode(h.root, parseTerm('\\n. SUCC n', new Set(['SUCC']))) // one satellite: SUCC
+    h.termNode(h.root, p('\\n. n')) // pure λ anatomy — no text of any kind
     h.ref(h.root, 'Nat', 1) // one ref disc
     const d = h.build()
     const e = mkEngine(d, [])
     settle(e, 400)
     const shapes = paint(e, LIGHT)
     const labels = shapes.filter((s) => s.kind === 'label')
-    expect(labels.map((l) => (l.kind === 'label' ? l.text : ''))).toEqual(
-      expect.arrayContaining(['SUCC', 'Nat']),
-    )
-    expect(labels).toHaveLength(2) // exactly: one satellite constant + one ref
+    expect(labels).toHaveLength(1)
+    expect(labels[0]!.kind === 'label' && labels[0]!.text).toBe('Nat')
     // term anatomy is present (arcs) yet carries zero text
     expect(shapes.some((s) => s.kind === 'arc')).toBe(true)
+  })
+
+  it('across both theories: every label sits on a ref-node disc; term anatomy emits no text and no disc', () => {
+    const sides: DiagramWithBoundary[] = []
+    for (const theory of [buildFregeTheory(), buildLambdaTheory()]) {
+      for (const rel of Object.values(theory.relations)) sides.push(rel)
+      for (const thm of theory.theorems) { sides.push(thm.lhs); sides.push(thm.rhs) }
+    }
+    for (const side of sides) {
+      const e = mkEngine(side.diagram, side.boundary)
+      settle(e, 200)
+      const shapes = paint(e, LIGHT)
+      const refPositions = [...e.bodies.values()]
+        .filter((b) => b.kind === 'ref')
+        .map((b) => b.pos)
+      const labels = shapes.filter((s) => s.kind === 'label')
+      // one label per ref, and never more
+      expect(labels).toHaveLength(refPositions.length)
+      // every label sits exactly on a ref-node disc centre
+      for (const l of labels) {
+        if (l.kind !== 'label') continue
+        const onRef = refPositions.some((pos) => Math.hypot(pos.x - l.center.x, pos.y - l.center.y) < 1e-9)
+        expect(onRef, `label '${l.text}' is not on a ref disc`).toBe(true)
+      }
+      // named discs (circles filled with the disc fill) are emitted only for
+      // refs — a satellite would attach one to term anatomy off a ref centre
+      const discs = shapes.filter((s) => s.kind === 'circle' && s.fill === LIGHT.discFill)
+      expect(discs).toHaveLength(refPositions.length)
+      for (const disc of discs) {
+        if (disc.kind !== 'circle') continue
+        const onRef = refPositions.some((pos) => Math.hypot(pos.x - disc.center.x, pos.y - disc.center.y) < 1e-9)
+        expect(onRef, 'a named disc is not on a ref centre').toBe(true)
+      }
+    }
   })
 })
 

@@ -6,8 +6,7 @@ import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** Host: rB(1) holding TWO structurally identical R-applications on separate wires, plus a decoy bubble. */
 function host() {

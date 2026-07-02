@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bvar, port, cnst, lam, app } from '../../../src/kernel/term/term'
+import { bvar, port, lam, app } from '../../../src/kernel/term/term'
 import { printTerm } from '../../../src/kernel/term/print'
 
 describe('printTerm', () => {
@@ -23,8 +23,8 @@ describe('printTerm', () => {
     expect(printTerm(app(port('f'), lam(bvar(0))))).toBe('f (\\x0. x0)')
   })
 
-  it('prints ports and constants by name', () => {
-    expect(printTerm(app(cnst('plus'), port('m')))).toBe('plus m')
+  it('prints ports by name', () => {
+    expect(printTerm(app(port('plus'), port('m')))).toBe('plus m')
   })
 
   it('avoids capture-looking collisions with port names by prefixing underscores', () => {

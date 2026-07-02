@@ -11,7 +11,7 @@ import { startSession, applyForward, applyBackward, undoForward, undoBackward, m
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
 
-const p = (s: string) => parseTerm(s, new Set<string>())
+const p = (s: string) => parseTerm(s)
 // pure Church fixtures for the onePlusOne demo (no term constants)
 const POO = p('(\\m. \\n. \\f. \\x. m f (n f x)) (\\f. \\x. f x) (\\f. \\x. f x)')
 const TWOc = p('\\f. \\x. f (f x)')

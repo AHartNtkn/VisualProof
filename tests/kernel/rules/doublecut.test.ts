@@ -5,8 +5,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('double cut', () => {
   it('intro wraps a selection in two fresh cuts; elim undoes it (fingerprint identity)', () => {

@@ -10,8 +10,7 @@ import { applyErasure, applyWireSever } from '../../../src/kernel/rules/erasure'
 import { applyIteration } from '../../../src/kernel/rules/iteration'
 import { applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function closedPattern() {
   const b = new DiagramBuilder()

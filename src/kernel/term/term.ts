@@ -1,7 +1,6 @@
 export type Term =
   | { readonly kind: 'bvar'; readonly index: number }
   | { readonly kind: 'port'; readonly name: string }
-  | { readonly kind: 'const'; readonly id: string }
   | { readonly kind: 'lam'; readonly body: Term }
   | { readonly kind: 'app'; readonly fn: Term; readonly arg: Term }
 
@@ -17,11 +16,6 @@ export function port(name: string): Term {
   return { kind: 'port', name }
 }
 
-export function cnst(id: string): Term {
-  if (id.length === 0) throw new Error('const id must be non-empty')
-  return { kind: 'const', id }
-}
-
 export function lam(body: Term): Term {
   return { kind: 'lam', body }
 }
@@ -35,7 +29,6 @@ export function termEq(a: Term, b: Term): boolean {
   switch (a.kind) {
     case 'bvar': return a.index === (b as Extract<Term, { kind: 'bvar' }>).index
     case 'port': return a.name === (b as Extract<Term, { kind: 'port' }>).name
-    case 'const': return a.id === (b as Extract<Term, { kind: 'const' }>).id
     case 'lam': return termEq(a.body, (b as Extract<Term, { kind: 'lam' }>).body)
     case 'app': {
       const bb = b as Extract<Term, { kind: 'app' }>
@@ -56,7 +49,6 @@ export function freePorts(t: Term): string[] {
       case 'lam': visit(u.body); return
       case 'app': visit(u.fn); visit(u.arg); return
       case 'bvar':
-      case 'const':
         return
     }
   }
@@ -67,8 +59,8 @@ export function freePorts(t: Term): string[] {
 /**
  * Simultaneous free-port rename: a single traversal in which each port leaf
  * is looked up once by its ORIGINAL name, so chained maps ({a→b, b→a} or
- * {a→b, b→c}) cannot cascade or capture. Leaves not in the map, bound
- * variables, and constants pass through unchanged.
+ * {a→b, b→c}) cannot cascade or capture. Leaves not in the map and bound
+ * variables pass through unchanged.
  */
 export function renameFreePorts(t: Term, map: ReadonlyMap<string, string>): Term {
   switch (t.kind) {
@@ -77,7 +69,6 @@ export function renameFreePorts(t: Term, map: ReadonlyMap<string, string>): Term
       return to === undefined ? t : port(to)
     }
     case 'bvar':
-    case 'const':
       return t
     case 'lam': return lam(renameFreePorts(t.body, map))
     case 'app': return app(renameFreePorts(t.fn, map), renameFreePorts(t.arg, map))
@@ -103,9 +94,6 @@ export function assertWellFormedTerm(t: Term): void {
         return
       case 'port':
         if (u.name.length === 0) throw new Error('port name must be non-empty')
-        return
-      case 'const':
-        if (u.id.length === 0) throw new Error('const id must be non-empty')
         return
       case 'lam': visit(u.body, depth + 1); return
       case 'app': visit(u.fn, depth); visit(u.arg, depth); return

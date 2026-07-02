@@ -3,8 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary, boundaryArity } from '../../../src/kernel/diagram/boundary'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('mkDiagramWithBoundary', () => {
   it('accepts ordered boundary wires and reports arity; a relation IS a diagram with a boundary', () => {

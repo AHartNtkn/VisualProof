@@ -3,8 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection, selectionContents } from '../../../src/kernel/diagram/subgraph/selection'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 // host: sheet contains node nA('y x'), cut C containing node nB('\x. x'),
 // wire wShared (scope root) joining nA.v:y with nB.out (crosses into the cut),

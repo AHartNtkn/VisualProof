@@ -6,8 +6,7 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, carryOver, worldAnchor, portNormal, pkey, DISC_R } from '../../src/view/engine'
 import { emptyDiagram } from '../../src/app/edit'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 const nat = () => {
   const b = buildFregeTheory().relations.nat!
@@ -40,19 +39,6 @@ describe('mkEngine', () => {
     const refs = [...e.bodies.values()].filter((b) => b.kind === 'ref')
     expect(refs).toHaveLength(2)
     for (const r of refs) expect(r.discR).toBeCloseTo(DISC_R + 1.5, 10)
-  })
-
-  it('term-constant leaves become satellites (never inline glyph text)', () => {
-    const h = new DiagramBuilder()
-    // \\n. SUCC n has one constant leaf, SUCC
-    const n = h.termNode(h.root, parseTerm('\\n. SUCC n', new Set(['SUCC'])))
-    const d = h.build()
-    const e = mkEngine(d, [])
-    const body = e.bodies.get(n)!
-    expect(body.satellites.map((s) => s.label)).toEqual(['SUCC'])
-    // the disc reserves clearance: it sits beyond the anatomy edge
-    expect(body.satellites[0]!.discLocal.x ** 2 + body.satellites[0]!.discLocal.y ** 2)
-      .toBeGreaterThan(body.satellites[0]!.localPos.x ** 2 + body.satellites[0]!.localPos.y ** 2)
   })
 
   it('law 4: every ref/atom port has exactly one connection (leg XOR boundary exit)', () => {

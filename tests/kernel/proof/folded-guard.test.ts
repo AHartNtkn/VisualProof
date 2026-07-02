@@ -20,25 +20,24 @@ import { applyRelUnfold } from '../../../src/kernel/rules/reldef'
  * that folded/unfolded statements are DISTINCT statements (ref-keyed identity).
  */
 
-const consts = new Set(['Q'])
-const pc = (s: string) => parseTerm(s, consts)
+const p = (s: string) => parseTerm(s)
 
 /** R(x): a two-node closed body — the argument line `x` plus a disconnected
- *  constant conjunct Q. (Q gives the derivation a clean node to operate on.) */
+ *  closed-term conjunct (a clean node for the derivation to operate on). */
 function bodyR() {
   const b = new DiagramBuilder()
-  const tArg = b.termNode(b.root, pc('y')) // freeVar y is the argument line
-  b.termNode(b.root, pc('Q')) // a disconnected constant conjunct
+  const tArg = b.termNode(b.root, p('y')) // freeVar y is the argument line
+  b.termNode(b.root, p('\\z. z')) // a disconnected closed conjunct
   const bound = b.wire(b.root, [{ node: tArg, port: { kind: 'freeVar', name: 'y' } }])
   return mkDiagramWithBoundary(b.build(), [bound])
 }
 
-const isQ = (n: DiagramNode): boolean => n.kind === 'term' && termEq(n.term, pc('Q'))
+const isConjunct = (n: DiagramNode): boolean => n.kind === 'term' && termEq(n.term, p('\\z. z'))
 
 describe('folded-guard integration proof', () => {
   it('unfolds a working copy while the ambient guard stays folded, and folded ≠ unfolded statements', () => {
     const relations = new Map([['R', bodyR()]])
-    const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations }
+    const ctx: ProofContext = { theorems: new Map(), relations }
 
     // lhs: a single folded reference R(x) with x as the boundary line.
     const lb = new DiagramBuilder()
@@ -63,8 +62,8 @@ describe('folded-guard integration proof', () => {
     cur = applyStep(cur, s2, ctx); steps.push(s2)
     expect(Object.values(cur.nodes).filter((n) => n.kind === 'ref')).toHaveLength(1) // ambient survives
 
-    // 3. one real rule application inside the unfolded material: double-cut the Q conjunct
-    const qNode = Object.entries(cur.nodes).find(([, n]) => isQ(n))![0]
+    // 3. one real rule application inside the unfolded material: double-cut the conjunct
+    const qNode = Object.entries(cur.nodes).find(([, n]) => isConjunct(n))![0]
     const wrapSel = mkSelection(cur, { region: cur.root, regions: [], nodes: [qNode], wires: [] })
     const s3: ProofStep = { rule: 'doubleCutIntro', sel: wrapSel }
     cur = applyStep(cur, s3, ctx); steps.push(s3)

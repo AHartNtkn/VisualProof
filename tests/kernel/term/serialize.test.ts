@@ -3,8 +3,7 @@ import { termEq } from '../../../src/kernel/term/term'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { serializeTerm, deserializeTerm } from '../../../src/kernel/term/serialize'
 
-const consts = new Set(['plus'])
-const p = (s: string) => parseTerm(s, consts)
+const p = (s: string) => parseTerm(s)
 
 describe('serializeTerm', () => {
   it('round-trips every term shape', () => {

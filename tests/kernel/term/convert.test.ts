@@ -3,8 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { convertible } from '../../../src/kernel/term/convert'
 import { checkConversion } from '../../../src/kernel/term/certificate'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('convertible', () => {
   it('decides 1 + 1 = 2 and returns a checkable certificate', () => {

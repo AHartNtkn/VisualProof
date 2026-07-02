@@ -1,5 +1,5 @@
 import type { Term } from '../../term/term'
-import { app, assertWellFormedTerm, cnst, freePorts, lam, port, bvar } from '../../term/term'
+import { app, assertWellFormedTerm, freePorts, lam, port, bvar } from '../../term/term'
 import { serializeTerm } from '../../term/serialize'
 import type { Port } from '../diagram'
 import { DiagramError } from '../diagram'
@@ -29,7 +29,6 @@ function renamePorts(t: Term, rename: ReadonlyMap<string, string>): Term {
     case 'lam': return lam(renamePorts(t.body, rename))
     case 'app': return app(renamePorts(t.fn, rename), renamePorts(t.arg, rename))
     case 'bvar': return bvar(t.index)
-    case 'const': return cnst(t.id)
   }
 }
 

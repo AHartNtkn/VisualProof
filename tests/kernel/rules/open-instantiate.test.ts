@@ -4,8 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { applyComprehensionInstantiate } from '../../../src/kernel/rules/comprehension'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** The open comp "x : R′(x)": one atom bound to a stub, arg on the boundary. */
 function rPrimeComp() {

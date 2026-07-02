@@ -1,14 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkEngine, recomputeRegions, legPaths, settle, satelliteWorld, boundaryExits, existentialStubs } from '../../src/view/index'
+import { mkEngine, recomputeRegions, legPaths, settle, boundaryExits, existentialStubs } from '../../src/view/index'
 import type { WirePath } from '../../src/view/index'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
 import { hitTest, dragTarget, buildSelection } from '../../src/app/hittest'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** Point on a cubic Bézier at parameter t. */
 function bezierAt(path: WirePath, t: number): { x: number; y: number } {
@@ -123,19 +122,7 @@ describe('buildSelection', () => {
   })
 })
 
-describe('engine hit targets (satellites, junctions, frame exits → existing vocabulary)', () => {
-  it('a click on a satellite disc resolves to its term node', () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, parseTerm('\\m. SUCC m', new Set(['SUCC'])))
-    const d = h.build()
-    const e = mkEngine(d, [])
-    e.bodies.get(n)!.pos = vec(0, 0)
-    recomputeRegions(e)
-    const body = e.bodies.get(n)!
-    const c = satelliteWorld(body, body.satellites[0]!)
-    expect(hitTest(e, c)).toEqual({ kind: 'node', id: n })
-  })
-
+describe('engine hit targets (junctions, frame exits → existing vocabulary)', () => {
   it('a click on a junction resolves to its wire', () => {
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('x'))

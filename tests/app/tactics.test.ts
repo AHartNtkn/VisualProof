@@ -6,11 +6,9 @@ import { replayProof } from '../../src/kernel/proof/step'
 import { addTermNode, emptyDiagram } from '../../src/app/edit'
 import { convertToHeadNormal, convertToWeakHeadNormal } from '../../src/app/tactics'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
-const pc = (s: string) => parseTerm(s, new Set(['PLUS']))
+const p = (s: string) => parseTerm(s)
 
-const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
 
 const diagramWith = (s: string, parser: (x: string) => ReturnType<typeof p> = p) => {
   const d0 = emptyDiagram()
@@ -49,18 +47,6 @@ describe('convertToHeadNormal', () => {
     expect(replayed).toEqual(res.diagram)
   })
 
-  it('refuses a constant head, naming the constant and directing to unfold', () => {
-    const { diagram: d, node } = diagramWith('PLUS a b', pc)
-    expect(() => convertToHeadNormal(d, node, 100)).toThrowError(/PLUS/)
-    expect(() => convertToHeadNormal(d, node, 100)).toThrowError(/unfold/i)
-  })
-
-  it('refuses a constant head even when head reduction recorded steps before hitting it', () => {
-    const { diagram: d, node } = diagramWith('(\\u. PLUS u) a', pc)
-    expect(() => convertToHeadNormal(d, node, 100)).toThrowError(/PLUS/)
-    expect(() => convertToHeadNormal(d, node, 100)).toThrowError(/unfold/i)
-  })
-
   it('refuses an already-head-normal node rather than emitting a no-op step', () => {
     const { diagram: d, node } = diagramWith('f y')
     expect(() => convertToHeadNormal(d, node, 100)).toThrowError(/already in head-normal form/i)
@@ -88,14 +74,8 @@ describe('convertToWeakHeadNormal', () => {
     expect(() => convertToWeakHeadNormal(d, node, 100)).toThrowError(/already in weak head-normal form/i)
   })
 
-  it('treats a top-level lambda over a constant head as already weak head-normal, not a constant-head refusal', () => {
-    const { diagram: d, node } = diagramWith('\\x. PLUS x', pc)
+  it('treats a top-level lambda as already weak head-normal rather than emitting a no-op step', () => {
+    const { diagram: d, node } = diagramWith('\\x. f x')
     expect(() => convertToWeakHeadNormal(d, node, 100)).toThrowError(/already in weak head-normal form/i)
-  })
-
-  it('refuses a constant head that blocked head reduction, naming the constant and directing to unfold', () => {
-    const { diagram: d, node } = diagramWith('(\\u. u) (PLUS a)', pc)
-    expect(() => convertToWeakHeadNormal(d, node, 100)).toThrowError(/PLUS/)
-    expect(() => convertToWeakHeadNormal(d, node, 100)).toThrowError(/unfold/i)
   })
 })

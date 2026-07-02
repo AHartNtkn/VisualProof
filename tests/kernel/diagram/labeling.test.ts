@@ -7,8 +7,7 @@ import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/finger
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import type { Diagram, Region, DiagramNode, Wire } from '../../../src/kernel/diagram/diagram'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function host() {
   const h = new DiagramBuilder()

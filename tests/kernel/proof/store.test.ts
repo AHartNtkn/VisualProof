@@ -8,8 +8,7 @@ import type { Theory } from '../../../src/kernel/proof/store'
 import { verifyTheory, theoryToJson, loadTheory } from '../../../src/kernel/proof/store'
 import { ProofError } from '../../../src/kernel/proof/error'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function dropQ(): Theorem {
   const l = new DiagramBuilder()
@@ -38,9 +37,8 @@ function isIdentity() {
 }
 
 describe('verifyTheory', () => {
-  it('verifies definitions, relations, theorems in order and returns the context', () => {
+  it('verifies relations, theorems in order and returns the context', () => {
     const theory: Theory = {
-      definitions: { I: p('\\x. x') },
       relations: { isIdentity: isIdentity() },
       theorems: [dropQ()],
     }
@@ -50,11 +48,11 @@ describe('verifyTheory', () => {
 
   it('rejects duplicate theorem names and broken proofs, by name', () => {
     const t = dropQ()
-    expect(() => verifyTheory({ definitions: {}, relations: {}, theorems: [t, t] }))
+    expect(() => verifyTheory({ relations: {}, theorems: [t, t] }))
       .toThrowError(/duplicate theorem name 'dropQ'/)
     const broken: Theorem = { ...t, steps: [] }
     let caught: unknown
-    try { verifyTheory({ definitions: {}, relations: {}, theorems: [broken] }) } catch (e) { caught = e }
+    try { verifyTheory({ relations: {}, theorems: [broken] }) } catch (e) { caught = e }
     expect(caught).toBeInstanceOf(ProofError)
   })
 
@@ -81,8 +79,8 @@ describe('verifyTheory', () => {
         direction: 'forward',
       }],
     }
-    expect(() => verifyTheory({ definitions: {}, relations: {}, theorems: [base, derived] })).not.toThrow()
-    expect(() => verifyTheory({ definitions: {}, relations: {}, theorems: [derived, base] }))
+    expect(() => verifyTheory({ relations: {}, theorems: [base, derived] })).not.toThrow()
+    expect(() => verifyTheory({ relations: {}, theorems: [derived, base] }))
       .toThrowError(/unknown theorem 'dropQ'/)
   })
 })
@@ -106,7 +104,7 @@ describe('verifyTheory — relation references', () => {
   }
 
   it('verifies a theory whose theorem references a declared relation, exposing it in ctx', () => {
-    const ctx = verifyTheory({ definitions: {}, relations: { R: simpleBody() }, theorems: [refTheorem('R')] })
+    const ctx = verifyTheory({ relations: { R: simpleBody() }, theorems: [refTheorem('R')] })
     expect(ctx.relations.has('R')).toBe(true)
     expect(ctx.relations.get('R')!.boundary).toHaveLength(1)
   })
@@ -121,19 +119,19 @@ describe('verifyTheory — relation references', () => {
     const at = b.atom(bub, bub)
     const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
     const existsBody = mkDiagramWithBoundary(b.build(), [bound])
-    expect(() => verifyTheory({ definitions: {}, relations: { R: existsBody }, theorems: [] })).not.toThrow()
-    const json = theoryToJson({ definitions: {}, relations: { R: existsBody }, theorems: [] })
+    expect(() => verifyTheory({ relations: { R: existsBody }, theorems: [] })).not.toThrow()
+    const json = theoryToJson({ relations: { R: existsBody }, theorems: [] })
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(json)))
     expect(ctx.relations.has('R')).toBe(true)
   })
 
   it('refuses a theorem side whose reference names an unknown relation', () => {
-    expect(() => verifyTheory({ definitions: {}, relations: {}, theorems: [refTheorem('ghost')] }))
+    expect(() => verifyTheory({ relations: {}, theorems: [refTheorem('ghost')] }))
       .toThrowError(/left-hand side: reference node .* names unknown relation 'ghost'/)
   })
 
   it('refuses a theorem side whose reference arity disagrees with the relation', () => {
-    expect(() => verifyTheory({ definitions: {}, relations: { R: simpleBody() }, theorems: [refTheorem('R', 2)] }))
+    expect(() => verifyTheory({ relations: { R: simpleBody() }, theorems: [refTheorem('R', 2)] }))
       .toThrowError(/has arity 2 but the relation has arity 1/)
   })
 })
@@ -162,7 +160,7 @@ describe('check-before-register invariant', () => {
         direction: 'forward',
       }],
     }
-    expect(() => verifyTheory({ definitions: {}, relations: {}, theorems: [selfCite] }))
+    expect(() => verifyTheory({ relations: {}, theorems: [selfCite] }))
       .toThrowError(/unknown theorem 'selfCite'/)
   })
 })
@@ -170,7 +168,6 @@ describe('check-before-register invariant', () => {
 describe('theory files', () => {
   it('round-trips through JSON with verification on load', () => {
     const theory: Theory = {
-      definitions: { I: p('\\x. x') },
       relations: { isIdentity: isIdentity() },
       theorems: [dropQ()],
     }
@@ -188,7 +185,6 @@ describe('theory files', () => {
     const j = {
       format: 'visual-proof-theory',
       version: 1,
-      definitions: {},
       relations: {
         R: {
           diagram: {
@@ -215,9 +211,9 @@ describe('theory files', () => {
   })
 
   it('rejects unversioned or alien envelopes', () => {
-    expect(() => loadTheory({ format: 'something-else', version: 1, definitions: {}, relations: {}, theorems: [] }))
+    expect(() => loadTheory({ format: 'something-else', version: 1, relations: {}, theorems: [] }))
       .toThrowError(/format/)
-    expect(() => loadTheory({ format: 'visual-proof-theory', version: 99, definitions: {}, relations: {}, theorems: [] }))
+    expect(() => loadTheory({ format: 'visual-proof-theory', version: 99, relations: {}, theorems: [] }))
       .toThrowError(/version/)
   })
 })

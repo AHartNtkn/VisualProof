@@ -4,8 +4,7 @@ import { printTerm } from '../../../src/kernel/term/print'
 import { termEq } from '../../../src/kernel/term/term'
 import { subtermAt, replaceSubtermAt, isBvarClosed, substPort, freshPortName } from '../../../src/kernel/term/path'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('subtermAt / replaceSubtermAt', () => {
   it('navigates body/fn/arg and round-trips replacement', () => {

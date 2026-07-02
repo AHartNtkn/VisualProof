@@ -7,8 +7,7 @@ import { occurrenceToSelection } from '../../../src/kernel/diagram/subgraph/occu
 import { removeSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
 import { selectionContents } from '../../../src/kernel/diagram/subgraph/selection'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('occurrenceToSelection', () => {
   it('converts a mixed occurrence (root node + subtree + internal root wire) to a valid selection', () => {

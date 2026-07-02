@@ -3,8 +3,7 @@ import { bvar, port, lam, app, termEq } from '../../../src/kernel/term/term'
 import { stepNormalOrder, applyStepAt, hasFreeBVar } from '../../../src/kernel/term/reduce'
 import { parseTerm } from '../../../src/kernel/term/parse'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('stepNormalOrder', () => {
   it('returns null for terms in beta-normal form', () => {

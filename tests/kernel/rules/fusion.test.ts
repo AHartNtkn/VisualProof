@@ -6,8 +6,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { applyFusion, applyFission } from '../../../src/kernel/rules/fusion'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('applyFusion', () => {
   it('inlines a producer along a two-endpoint wire (one-point rule)', () => {

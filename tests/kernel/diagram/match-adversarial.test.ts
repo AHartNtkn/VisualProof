@@ -4,8 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('findOccurrences adversarial battery', () => {
   it('matches modulo beta-eta with positional wiring intact', () => {

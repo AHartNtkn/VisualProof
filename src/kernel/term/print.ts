@@ -3,24 +3,12 @@ import { freePorts } from './term'
 
 /**
  * Deterministic printer. Binder at nesting depth d (outermost = 0) is named
- * `x{d}`, prefixed with underscores until it collides with no port name,
- * constant id, or other binder name in the term. ASCII `\` for lambda.
+ * `x{d}`, prefixed with underscores until it collides with no port name or
+ * other binder name in the term. ASCII `\` for lambda.
  */
 export function printTerm(t: Term): string {
   const taken = new Set<string>(freePorts(t))
-  collectConsts(t, taken)
   return go(t, [], taken, 'top')
-}
-
-function collectConsts(t: Term, out: Set<string>): void {
-  switch (t.kind) {
-    case 'const': out.add(t.id); return
-    case 'lam': collectConsts(t.body, out); return
-    case 'app': collectConsts(t.fn, out); collectConsts(t.arg, out); return
-    case 'bvar':
-    case 'port':
-      return
-  }
 }
 
 type Ctx = 'top' | 'appFn' | 'appArg'
@@ -35,7 +23,6 @@ function go(t: Term, env: string[], taken: Set<string>, ctx: Ctx): string {
       return name
     }
     case 'port': return t.name
-    case 'const': return t.id
     case 'lam': {
       let name = `x${env.length}`
       // env.includes guards a prefix expansion of `x{d}` colliding with an outer

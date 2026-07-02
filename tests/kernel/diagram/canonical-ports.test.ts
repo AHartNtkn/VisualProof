@@ -11,9 +11,7 @@ import type { ConversionCertificate } from '../../../src/kernel/term/certificate
 import { applyCongruenceJoin } from '../../../src/kernel/rules/congruence'
 import { applyDeiteration } from '../../../src/kernel/rules/iteration'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
-const pS = (s: string) => parseTerm(s, new Set(['SUCC']))
+const p = (s: string) => parseTerm(s)
 const empty: ConversionCertificate = { leftSteps: [], rightSteps: [] }
 
 function termOf(d: Diagram, id: NodeId): Term {
@@ -134,8 +132,8 @@ describe('name-blind free ports (canonicalization at construction)', () => {
 
   it('(f) congruence join with the EMPTY certificate joins same-shape nodes built under different names', () => {
     const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, pS('SUCC q'))
-    const n2 = h.termNode(h.root, pS('SUCC y'))
+    const n1 = h.termNode(h.root, p('\\f. f q'))
+    const n2 = h.termNode(h.root, p('\\f. f y'))
     h.wire(h.root, [
       { node: n1, port: { kind: 'freeVar', name: 'q' } },
       { node: n2, port: { kind: 'freeVar', name: 'y' } },

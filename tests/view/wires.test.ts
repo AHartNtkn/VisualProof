@@ -5,7 +5,7 @@ import { mkEngine } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { computeLegs, hobbyBezier } from '../../src/view/wires'
 
-const p = (s: string) => parseTerm(s, new Set<string>())
+const p = (s: string) => parseTerm(s)
 
 const wrap = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
 

@@ -10,8 +10,7 @@ import { bootFixture } from './boot-fixture'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { applyStep } from '../../src/kernel/proof/step'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('applicableActions', () => {
   it('offers erasure at positive selections and insertion at negative regions', () => {
@@ -150,7 +149,7 @@ describe('reference-node gates', () => {
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const withRel = verifyTheory(buildFregeTheory())
     expect(applicableActions(d, sel, withRel).map((a) => a.kind)).toContain('relFold')
-    const noRel = verifyTheory({ definitions: {}, relations: {}, theorems: [] })
+    const noRel = verifyTheory({ relations: {}, theorems: [] })
     expect(applicableActions(d, sel, noRel).map((a) => a.kind)).not.toContain('relFold')
   })
 })

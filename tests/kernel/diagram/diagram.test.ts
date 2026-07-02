@@ -5,8 +5,7 @@ import {
   type Region, type DiagramNode, type Wire,
 } from '../../../src/kernel/diagram/diagram'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('portKey', () => {
   it('produces distinct keys for the three port kinds', () => {

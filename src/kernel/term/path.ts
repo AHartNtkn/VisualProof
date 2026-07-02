@@ -32,7 +32,6 @@ export function isBvarClosed(t: Term): boolean {
       case 'lam': return visit(u.body, depth + 1)
       case 'app': return visit(u.fn, depth) && visit(u.arg, depth)
       case 'port':
-      case 'const':
         return true
     }
   }
@@ -52,7 +51,6 @@ export function substPort(t: Term, name: string, s: Term): Term {
       case 'lam': return lam(visit(u.body))
       case 'app': return app(visit(u.fn), visit(u.arg))
       case 'bvar':
-      case 'const':
         return u
     }
   }

@@ -4,8 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { applyErasure, applyWireSever } from '../../../src/kernel/rules/erasure'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('applyErasure', () => {
   it('removes a selection from a positive region', () => {

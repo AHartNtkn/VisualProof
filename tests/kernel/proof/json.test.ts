@@ -7,8 +7,7 @@ import type { ProofStep } from '../../../src/kernel/proof/step'
 import { stepToJson, stepFromJson, theoremToJson, theoremFromJson, dwbFromJson } from '../../../src/kernel/proof/json'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function roundTrip(s: ProofStep): void {
   const j = JSON.parse(JSON.stringify(stepToJson(s)))
@@ -44,8 +43,6 @@ describe('step round-trips through JSON', () => {
       { rule: 'closedTermIntro', region: 'r1', term: p('\\x. \\y. x') },
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
-      { rule: 'unfold', node: 'n0', path: [] },
-      { rule: 'fold', node: 'n0', path: ['body'], constId: 'I' },
       { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: {} },
       { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w3', 'w7'], binders: {} },
       { rule: 'comprehensionAbstract', wrap: sel, comp: pat, occurrences: [{ sel, args: ['w0'] }] },

@@ -1,5 +1,5 @@
 import type { Term } from './term'
-import { bvar, port, cnst, lam, app } from './term'
+import { bvar, port, lam, app } from './term'
 
 export class ParseError extends Error {
   constructor(message: string, readonly position: number) {
@@ -45,9 +45,9 @@ function tokenize(src: string): Token[] {
  *   lambda := '\' ident+ '.' term
  *   appSeq := atom atom*            (left-associative)
  *   atom   := ident | '(' term ')'
- * Name resolution: innermost binder first, then constants, then port.
+ * Name resolution: innermost binder first, then port.
  */
-export function parseTerm(src: string, constIds: ReadonlySet<string>): Term {
+export function parseTerm(src: string): Term {
   const tokens = tokenize(src)
   if (tokens.length === 0) throw new ParseError('empty input', 0)
   let i = 0
@@ -110,7 +110,6 @@ export function parseTerm(src: string, constIds: ReadonlySet<string>): Term {
       i++
       const idx = env.lastIndexOf(t.name)
       if (idx >= 0) return bvar(env.length - 1 - idx)
-      if (constIds.has(t.name)) return cnst(t.name)
       return port(t.name)
     }
     if (t.kind === 'lparen') {

@@ -3,8 +3,7 @@ import { termEq } from '../../../src/kernel/term/term'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { closeOverPorts, termsMatchModuloBetaEta } from '../../../src/kernel/diagram/canonical/matchkey'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('closeOverPorts', () => {
   it('closes free ports as outermost lambdas in first-occurrence order', () => {
@@ -58,12 +57,6 @@ describe('termsMatchModuloBetaEta', () => {
   it('matches identical non-normalizing terms by reflexivity (no spurious undecided)', () => {
     const omega = p('(\\x. x x) (\\x. x x)')
     expect(termsMatchModuloBetaEta(omega, omega, 25).status).toBe('match')
-  })
-
-  it('distinguishes and matches constant-carrying terms', () => {
-    const pc = (s: string) => parseTerm(s, new Set(['plus', 'times']))
-    expect(termsMatchModuloBetaEta(pc('plus y'), pc('times y'), 100).status).toBe('no-match')
-    expect(termsMatchModuloBetaEta(pc('plus y'), pc('plus z'), 100).status).toBe('match')
   })
 
   it('rejects non-positive fuel as a caller error', () => {

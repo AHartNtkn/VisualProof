@@ -262,5 +262,5 @@ export function adoptTheorem(s: ProofSession, thm: Theorem): ProofSession {
   checkTheorem(thm, s.ctx)
   const theorems = new Map(s.ctx.theorems)
   theorems.set(thm.name, thm)
-  return { ...s, ctx: { definitions: s.ctx.definitions, theorems, relations: s.ctx.relations } }
+  return { ...s, ctx: { theorems, relations: s.ctx.relations } }
 }

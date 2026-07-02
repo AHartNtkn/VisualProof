@@ -5,8 +5,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** Host: node `y` at root wired to a hub, plus an empty cut to iterate into. */
 function host() {

@@ -142,7 +142,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const boot = rebuild(library)
   let ctx: ProofContext = boot.ctx
   let relations: Readonly<Record<string, DiagramWithBoundary>> = boot.relations
-  let constNames: ReadonlySet<string> = boot.constNames
 
   // ---- state ----
   let mode: 'edit' | 'prove' | 'replay' = 'edit'
@@ -275,13 +274,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let dirHandle: FileSystemDirectoryHandle | null = null
 
   // ---- context rebinding ----
-  // Called after every library change (load/unload/adopt): refreshes the three
-  // live context bindings the rest of the shell reads (citation menus, replay,
-  // constNames for parsing) and re-renders the Library panel.
-  const setContext = (newCtx: ProofContext, newRelations: Readonly<Record<string, DiagramWithBoundary>>, newConstNames: ReadonlySet<string>): void => {
+  // Called after every library change (load/unload/adopt): refreshes the live
+  // context bindings the rest of the shell reads (citation menus, replay) and
+  // re-renders the Library panel.
+  const setContext = (newCtx: ProofContext, newRelations: Readonly<Record<string, DiagramWithBoundary>>): void => {
     ctx = newCtx
     relations = newRelations
-    constNames = newConstNames
     renderLibrary()
   }
 
@@ -291,7 +289,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const applyLibrary = (next: Library): void => {
     library = next
     const r = rebuild(library)
-    setContext(r.ctx, r.relations, r.constNames)
+    setContext(r.ctx, r.relations)
   }
 
   // The *.json file names directly inside a directory handle, sorted. Reads the
@@ -385,13 +383,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   // A collapsible detail group listing one loaded entry's (or the session's)
-  // theorems, relations, and constants; each theorem carries a ▶ Replay button.
+  // theorems and relations; each theorem carries a ▶ Replay button.
   const renderGroup = (
     key: string,
     title: string,
     thms: readonly { readonly name: string; readonly steps: number }[],
     relNames: readonly string[],
-    constNamesIn: readonly string[],
   ): HTMLElement => {
     const g = div('vpa-lib-group')
     const open = expandedGroups.has(key)
@@ -413,9 +410,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const relRow = div('vpa-lib-detail')
     relRow.append(`relations: ${relNames.join(', ') || 'none'}`)
     g.append(relRow)
-    const constRow = div('vpa-lib-detail')
-    constRow.append(`constants: ${constNamesIn.join(', ') || 'none'}`)
-    g.append(constRow)
     return g
   }
 
@@ -479,7 +473,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, steps: t.steps.length }))
       libraryDiv.append(renderGroup(
         `file:${e.file}`, e.file, thms,
-        Object.keys(e.theory.relations), Object.keys(e.ctx.definitions),
+        Object.keys(e.theory.relations),
       ))
     }
 
@@ -487,7 +481,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       libraryDiv.append(renderGroup(
         SESSION_GROUP, 'Session (adopted)',
         library.adopted.map((t) => ({ name: t.name, steps: t.steps.length })),
-        [], [],
+        [],
       ))
     }
   }
@@ -514,7 +508,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
   const parseInput = (): Term => {
     if (termInput.value.trim() === '') throw new Error('the term input is empty: type a term first (\\ is λ)')
-    return parseTerm(termInput.value, constNames)
+    return parseTerm(termInput.value)
   }
 
   const sync = (): void => {
@@ -754,7 +748,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const termVal = termInput.value.trim()
         if (termVal === '') throw new Error('the term input is empty: type the pattern term first (\\ is λ)')
         const e0 = emptyDiagram()
-        const { diagram } = addTermNode(e0, e0.root, parseTerm(termVal, constNames))
+        const { diagram } = addTermNode(e0, e0.root, parseTerm(termVal))
         session = applyBackward(session, {
           kind: 'unErase',
           region: e.region,
@@ -771,7 +765,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         session = applyBackward(session, {
           kind: 'unConvert',
           node: e.node,
-          term: parseTerm(termVal, constNames),
+          term: parseTerm(termVal),
           fuel: fuelVal,
         })
         break

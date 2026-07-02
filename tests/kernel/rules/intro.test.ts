@@ -10,8 +10,7 @@ import { applyClosedTermIntro } from '../../../src/kernel/rules/intro'
 import { applyInsertion } from '../../../src/kernel/rules/insertion'
 import { RuleError } from '../../../src/kernel/rules/error'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** The single term node present in `out` but not in `before`. */
 function newNode(out: Diagram, before: Diagram): NodeId {

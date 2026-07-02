@@ -8,8 +8,7 @@ import { startSession, applyForward, meet, assembleTheorem, adoptTheorem } from 
 import { sessionTheory } from '../../src/app/persist'
 import { bootFixture } from './boot-fixture'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 async function provenToy() {
   const boot = await bootFixture()

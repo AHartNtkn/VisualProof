@@ -12,12 +12,9 @@ import { applyStep, replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { ProofError } from '../../../src/kernel/proof/error'
 
-const consts = new Set(['I'])
-const p = (s: string) => parseTerm(s, consts)
-const noConsts = new Set<string>()
-const pp = (s: string) => parseTerm(s, noConsts)
+const pp = (s: string) => parseTerm(s)
 
-const ctx: ProofContext = { definitions: { I: pp('\\x. x') }, theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
 
 describe('applyStep mirrors the direct appliers', () => {
   it('erasure step equals applyErasure', () => {
@@ -91,15 +88,6 @@ describe('applyStep mirrors the direct appliers', () => {
     expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(applyHeadStrip(d, n1, n2)))
     const out = replayProof(d, [step], ctx)
     expect(Object.keys(out.nodes)).toHaveLength(4)
-  })
-
-  it('unfold and fold steps use the context definitions', () => {
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, p('I y'))
-    const d = h.build()
-    const unfolded = applyStep(d, { rule: 'unfold', node: n, path: ['fn'] }, ctx)
-    const refolded = applyStep(unfolded, { rule: 'fold', node: n, path: ['fn'], constId: 'I' }, ctx)
-    expect(diagramFingerprint(refolded)).toBe(diagramFingerprint(d))
   })
 
   it('double-cut intro/elim and iteration/deiteration round-trip through steps', () => {

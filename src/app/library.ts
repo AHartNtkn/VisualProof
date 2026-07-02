@@ -131,7 +131,7 @@ export function rebuild(lib: Library): BootContext {
     if (theorems.has(thm.name)) {
       throw new Error(`library conflict: adopted theorem '${thm.name}' duplicates a loaded theorem`)
     }
-    checkTheorem(thm, { definitions: base.ctx.definitions, theorems, relations: base.ctx.relations })
+    checkTheorem(thm, { theorems, relations: base.ctx.relations })
     theorems.set(thm.name, thm)
   }
   return { ...base, ctx: { ...base.ctx, theorems } }

@@ -3,8 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { diagramToJson, diagramFromJson } from '../../../src/kernel/diagram/json'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function sample() {
   const b = new DiagramBuilder()

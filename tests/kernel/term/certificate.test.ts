@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { checkConversion, type ConversionCertificate } from '../../../src/kernel/term/certificate'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 const Y = p('\\f. (\\x. f (x x)) (\\x. f (x x))')
 const YF = p('(\\f. (\\x. f (x x)) (\\x. f (x x))) g')         // Y g

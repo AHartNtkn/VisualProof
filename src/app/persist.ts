@@ -12,7 +12,6 @@ export function sessionTheory(
   extras: { readonly relations: Readonly<Record<string, DiagramWithBoundary>> },
 ): Theory {
   return {
-    definitions: ctx.definitions,
     relations: extras.relations,
     theorems: [...ctx.theorems.values()],
   }

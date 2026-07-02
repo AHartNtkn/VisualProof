@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { mkDiagram, DiagramError, type Region, type DiagramNode, type Wire } from '../../../src/kernel/diagram/diagram'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 const sheet: Record<string, Region> = { r0: { kind: 'sheet' } }
 

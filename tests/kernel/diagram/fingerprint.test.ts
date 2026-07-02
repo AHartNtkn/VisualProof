@@ -6,8 +6,7 @@ import {
   diagramFingerprint, boundaryFingerprint, diagramsIsomorphic,
 } from '../../../src/kernel/diagram/canonical/fingerprint'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 function pair() {
   const mk = (swap: boolean) => {

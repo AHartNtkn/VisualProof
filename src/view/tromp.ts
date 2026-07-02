@@ -16,8 +16,6 @@ export type Stem = {
   readonly portName?: string
 }
 
-export type Glyph = { readonly col: number; readonly row: number; readonly constId: string }
-
 export type Rail = {
   readonly name: string
   readonly row: number
@@ -41,7 +39,6 @@ export type TrompGrid = {
   readonly railRows: number
   readonly bars: readonly Bar[]
   readonly stems: readonly Stem[]
-  readonly glyphs: readonly Glyph[]
   readonly outputCol: number
   readonly rails: readonly Rail[]
 }
@@ -52,7 +49,6 @@ type Box = {
   readonly stemCol: number
   readonly bars: readonly Bar[]
   readonly stems: readonly Stem[]
-  readonly glyphs: readonly Glyph[]
   readonly ports: ReadonlyMap<string, readonly number[]>
 }
 
@@ -64,7 +60,6 @@ function shifted(b: Box, dc: number): Box {
     stemCol: b.stemCol + dc,
     bars: b.bars.map((x) => ({ ...x, colStart: x.colStart + dc, colEnd: x.colEnd + dc })),
     stems: b.stems.map((x) => ({ ...x, col: x.col + dc })),
-    glyphs: b.glyphs.map((x) => ({ ...x, col: x.col + dc })),
     ports: new Map([...b.ports].map(([n, cols]) => [n, cols.map((c) => c + dc)])),
   }
 }
@@ -81,23 +76,17 @@ function layoutAt(t: Term, depth: number): Box {
       // assertWellFormedTerm guarantees index < depth for diagram node terms
       const barRow = depth - 1 - t.index
       return {
-        width: 1, bottom: depth, stemCol: 0, bars: [], glyphs: [], ports: new Map(),
+        width: 1, bottom: depth, stemCol: 0, bars: [], ports: new Map(),
         stems: [{ col: 0, rowTop: barRow, rowBottom: depth, kind: 'var' }],
       }
     }
     case 'port':
       return {
-        width: 1, bottom: depth, stemCol: 0, bars: [], glyphs: [],
+        width: 1, bottom: depth, stemCol: 0, bars: [],
         ports: new Map([[t.name, [0]]]),
         // runs from row 0 down through the binder block; the rail drop above
         // row 0 is added at assembly once the rail row is known
         stems: depth > 0 ? [{ col: 0, rowTop: 0, rowBottom: depth, kind: 'port', portName: t.name }] : [],
-      }
-    case 'const':
-      return {
-        width: 1, bottom: depth, stemCol: 0, bars: [], ports: new Map(),
-        glyphs: [{ col: 0, row: depth, constId: t.id }],
-        stems: [],
       }
     case 'lam': {
       const inner = layoutAt(t.body, depth + 1)
@@ -120,7 +109,6 @@ function layoutAt(t: Term, depth: number): Box {
           { col: f.stemCol, rowTop: f.bottom, rowBottom: barRow, kind: 'output' },
           { col: a.stemCol, rowTop: a.bottom, rowBottom: barRow, kind: 'output' },
         ],
-        glyphs: [...f.glyphs, ...a.glyphs],
         ports: mergePorts(f.ports, a.ports),
       }
     }
@@ -154,7 +142,6 @@ export function trompGrid(t: Term): TrompGrid {
     railRows: rails.length,
     bars: [...box.bars, ...rails.map((r): Bar => ({ row: r.row, colStart: r.colStart, colEnd: r.colEnd, kind: 'rail' }))],
     stems: [...box.stems, ...drops, output],
-    glyphs: box.glyphs,
     outputCol: box.stemCol,
     rails,
   }

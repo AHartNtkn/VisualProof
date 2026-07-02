@@ -6,8 +6,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { applyComprehensionAbstract } from '../../../src/kernel/rules/comprehension'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** Comprehension of arity 1: "the argument is the identity function". */
 function identityComp() {

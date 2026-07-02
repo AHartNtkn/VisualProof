@@ -17,7 +17,6 @@ export function shift(d: number, cutoff: number, t: Term): Term {
     case 'lam': return lam(shift(d, cutoff + 1, t.body))
     case 'app': return app(shift(d, cutoff, t.fn), shift(d, cutoff, t.arg))
     case 'port':
-    case 'const':
       return t
   }
 }
@@ -29,7 +28,6 @@ function subst(j: number, s: Term, t: Term): Term {
     case 'lam': return lam(subst(j + 1, shift(1, 0, s), t.body))
     case 'app': return app(subst(j, s, t.fn), subst(j, s, t.arg))
     case 'port':
-    case 'const':
       return t
   }
 }
@@ -49,7 +47,6 @@ export function hasFreeBVar(index: number, t: Term): boolean {
     case 'lam': return hasFreeBVar(index + 1, t.body)
     case 'app': return hasFreeBVar(index, t.fn) || hasFreeBVar(index, t.arg)
     case 'port':
-    case 'const':
       return false
   }
 }
@@ -91,7 +88,6 @@ export function stepNormalOrder(t: Term): { term: Term; path: PathSeg[] } | null
     }
     case 'bvar':
     case 'port':
-    case 'const':
       return null
   }
 }
@@ -141,7 +137,6 @@ export function stepEta(t: Term): { term: Term; path: PathSeg[] } | null {
     }
     case 'bvar':
     case 'port':
-    case 'const':
       return null
   }
 }
@@ -151,7 +146,7 @@ export function stepEta(t: Term): { term: Term; path: PathSeg[] } | null {
  * contraction to fixpoint. Complete for finding βη-normal forms: normal order
  * finds the beta-normal form whenever one exists, and by eta-postponement the
  * eta steps can always be done after the beta steps. Each step consumes one
- * fuel unit; constants are opaque here (unfolding is the explicit rule 7).
+ * fuel unit.
  */
 export function normalize(t: Term, fuel: number): NormalizeResult {
   if (!Number.isInteger(fuel) || fuel <= 0) {

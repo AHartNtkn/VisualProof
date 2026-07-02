@@ -161,10 +161,6 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, wire: s.wire }
     case 'fission':
       return { rule: s.rule, node: s.node, path: [...s.path] }
-    case 'unfold':
-      return { rule: s.rule, node: s.node, path: [...s.path] }
-    case 'fold':
-      return { rule: s.rule, node: s.node, path: [...s.path], constId: s.constId }
     case 'comprehensionInstantiate':
       return { rule: s.rule, bubble: s.bubble, comp: dwbToJson(s.comp), attachments: [...s.attachments], binders: { ...s.binders } }
     case 'comprehensionAbstract':
@@ -239,12 +235,6 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'fission':
       assertOnlyKeys(j, ['rule', 'node', 'path'], 'fission step')
       return { rule, node: str(j.node, 'node'), path: pathFromJson(j.path, 'path') }
-    case 'unfold':
-      assertOnlyKeys(j, ['rule', 'node', 'path'], 'unfold step')
-      return { rule, node: str(j.node, 'node'), path: pathFromJson(j.path, 'path') }
-    case 'fold':
-      assertOnlyKeys(j, ['rule', 'node', 'path', 'constId'], 'fold step')
-      return { rule, node: str(j.node, 'node'), path: pathFromJson(j.path, 'path'), constId: str(j.constId, 'constId') }
     case 'comprehensionInstantiate': {
       assertOnlyKeys(j, ['rule', 'bubble', 'comp', 'attachments', 'binders'], 'comprehensionInstantiate step')
       if (!isRecord(j.binders)) fail('binders must be an object')

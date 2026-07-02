@@ -9,9 +9,8 @@ import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { composeProofs, mapStepIds } from '../../../src/kernel/proof/compose'
 import type { DiagramIso } from '../../../src/kernel/diagram/canonical/iso'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
-const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
+const p = (s: string) => parseTerm(s)
+const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
 
 /** Two independently built, differently-id'd copies of the same diagram. */
 function twoCopies() {

@@ -4,8 +4,7 @@ import { normalize, applyStepAt } from '../../../src/kernel/term/reduce'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { printTerm } from '../../../src/kernel/term/print'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 const ZERO = p('\\f. \\x. x')
 const SUCC = p('\\n. \\f. \\x. f (n f x)')

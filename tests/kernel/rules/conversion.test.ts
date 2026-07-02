@@ -5,8 +5,7 @@ import { DiagramError } from '../../../src/kernel/diagram/diagram'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { applyConversion, applyConversionByCertificate } from '../../../src/kernel/rules/conversion'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('applyConversion', () => {
   it('normalizes a node term in place (same ports), returning a certificate', () => {

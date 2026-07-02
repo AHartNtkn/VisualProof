@@ -5,10 +5,8 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
 import { applyComprehensionInstantiate } from '../../../src/kernel/rules/comprehension'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
-const arith = new Set(['ZERO', 'SUCC', 'PLUS'])
-const pc = (s: string) => parseTerm(s, arith)
+const p = (s: string) => parseTerm(s)
+const pc = (s: string) => parseTerm(s)
 
 /** Comprehension of arity 1: "the argument is the identity function". */
 function identityComp() {

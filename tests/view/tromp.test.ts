@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { trompGrid } from '../../src/view/tromp'
 
-const consts = new Set(['C'])
-const p = (s: string) => parseTerm(s, consts)
+const p = (s: string) => parseTerm(s)
 
 describe('trompGrid', () => {
   it('lays out the identity: one binder bar, one stem, one output', () => {
@@ -46,12 +45,6 @@ describe('trompGrid', () => {
     expect(yRail.colStart).toBe(0)
     expect(yRail.colEnd).toBe(2)
     expect(g.stems.filter((s) => s.kind === 'port' && s.portName === 'y' && s.rowTop === -1)).toHaveLength(2)
-  })
-
-  it('renders constants as glyphs with output stems', () => {
-    const g = trompGrid(p('C y'))
-    expect(g.glyphs).toEqual([{ col: 0, row: 0, constId: 'C' }])
-    expect(g.outputCol).toBe(0)
   })
 
   it('every stem and bar stays inside the declared grid bounds', () => {

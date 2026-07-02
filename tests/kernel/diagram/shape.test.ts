@@ -2,8 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { termShapeKey, positionalPortKey } from '../../../src/kernel/diagram/canonical/shape'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 describe('termShapeKey', () => {
   it('is invariant under free-variable renaming (positional relation identity)', () => {
@@ -15,8 +14,6 @@ describe('termShapeKey', () => {
   it('distinguishes different positional relations', () => {
     // one free var used twice vs two distinct free vars
     expect(termShapeKey(p('y y'))).not.toBe(termShapeKey(p('y z')))
-    // constants are global names, never renamed
-    expect(termShapeKey(p('y'))).not.toBe(termShapeKey(parseTerm('plus', new Set(['plus']))))
     // structure matters
     expect(termShapeKey(p('\\x. x'))).not.toBe(termShapeKey(p('\\x. \\y. x')))
   })

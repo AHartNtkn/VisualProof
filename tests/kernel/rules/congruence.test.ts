@@ -6,8 +6,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { applyCongruenceJoin } from '../../../src/kernel/rules/congruence'
 import { RuleError } from '../../../src/kernel/rules/error'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 const empty: ConversionCertificate = { leftSteps: [], rightSteps: [] }
 
 const certFor = (l: string, r: string): ConversionCertificate => {

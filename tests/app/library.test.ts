@@ -9,8 +9,7 @@ import { emptyDiagram, addTermNode } from '../../src/app/edit'
 import type { LibraryEntry } from '../../src/app/library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, rebuild } from '../../src/app/library'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 const fregeJson = () => theoryToJson(buildFregeTheory())
 const lambdaJson = () => theoryToJson(buildLambdaTheory())
 const status = (entries: readonly LibraryEntry[]) => entries.map((e) => [e.file, e.status])
@@ -32,7 +31,6 @@ describe('emptyLibrary', () => {
     expect(lib.adopted).toEqual([])
     const boot = rebuild(lib)
     expect([...boot.ctx.theorems.keys()]).toEqual([])
-    expect(boot.constNames.size).toBe(0)
     expect(Object.keys(boot.relations)).toEqual([])
   })
 })
@@ -80,7 +78,6 @@ describe('loadEntry / rebuild', () => {
     expect(lib.entries.find((e) => e.file === 'frege.json')!.status).toBe('loaded')
     const boot = rebuild(lib)
     expect(boot.ctx.theorems.has('plusAssoc')).toBe(true)
-    expect(boot.constNames.size).toBe(0) // the relational frege theory has no constants
     expect(boot.relations['nat']).toBeDefined()
   })
 
@@ -98,7 +95,7 @@ describe('loadEntry / rebuild', () => {
   })
 
   it('propagates a malformed-theory refusal from loadTheory (the only road)', () => {
-    const bad = { format: 'visual-proof-theory', version: 1, definitions: 'nope', relations: {}, theorems: [] }
+    const bad = { format: 'visual-proof-theory', version: 1, relations: 'nope', theorems: [] }
     expect(() => loadEntry(emptyLibrary(), 'x.json', bad)).toThrowError(/malformed theory JSON/)
   })
 })
@@ -113,7 +110,6 @@ describe('unloadEntry', () => {
     const boot = rebuild(lib)
     expect(boot.ctx.theorems.has('plusAssoc')).toBe(true) // frege still loaded
     expect(boot.ctx.theorems.has('fixedPoint')).toBe(false) // lambda gone
-    expect(boot.constNames.has('Y')).toBe(false)
   })
 
   it('drops a directly-opened (non-folder) file entirely on unload', () => {

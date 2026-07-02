@@ -5,8 +5,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkDiagram, type Diagram } from '../../../src/kernel/diagram/diagram'
 
-const noConsts = new Set<string>()
-const p = (s: string) => parseTerm(s, noConsts)
+const p = (s: string) => parseTerm(s)
 
 /** Host: bubble rB(1) containing an atom + a term node sharing a wire, plus a cut inside rB. */
 function host() {

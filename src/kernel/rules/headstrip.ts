@@ -25,9 +25,6 @@ import { termNodeAt, wireAt } from './access'
  * justification as congruenceJoin, valid under any polarity. Nothing is
  * removed and no polarity is touched.
  *
- * Constant heads are NOT rigid (definitionally transparent) and are refused:
- * PLUS a b = PLUS b a must never strip to a = b. Unfold first.
- *
  * Name-blindness: heads correspond by bound de Bruijn INDEX or by the WIRE
  * their free head ports ride — never by port name, which is plumbing, not
  * semantics.
@@ -55,11 +52,6 @@ export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId): Diagram {
 
   // Gate 3: both heads rigid (bound or free).
   const rigidHead = (node: NodeId, s: HeadSpine): Extract<HeadSpine['head'], { kind: 'bound' | 'free' }> => {
-    if (s.head.kind === 'const') {
-      throw new RuleError(
-        `the head of '${node}' is the defined constant '${s.head.constId}'; a defined constant head is not rigid — unfold it first`,
-      )
-    }
     if (s.head.kind === 'redex') {
       throw new RuleError(`'${node}' is not in head-normal form; apply the HNF tactic first`)
     }

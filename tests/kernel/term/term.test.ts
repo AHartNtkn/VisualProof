@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { bvar, port, cnst, lam, app, termEq, freePorts, renameFreePorts, assertWellFormedTerm } from '../../../src/kernel/term/term'
+import { bvar, port, lam, app, termEq, freePorts, renameFreePorts, assertWellFormedTerm } from '../../../src/kernel/term/term'
 
 describe('term constructors and equality', () => {
   it('structural equality is alpha-equality because binders are de Bruijn', () => {
@@ -12,7 +12,6 @@ describe('term constructors and equality', () => {
   it('distinguishes structurally different terms', () => {
     expect(termEq(lam(bvar(0)), lam(lam(bvar(0))))).toBe(false)
     expect(termEq(port('y'), port('z'))).toBe(false)
-    expect(termEq(cnst('plus'), port('plus'))).toBe(false)
     expect(termEq(app(port('f'), port('a')), app(port('a'), port('f')))).toBe(false)
   })
 
@@ -28,13 +27,12 @@ describe('term constructors and equality', () => {
     expect(() => bvar(2 ** 53)).toThrowError(/safe integer/i)
   })
 
-  it('rejects empty port and const names at construction', () => {
+  it('rejects empty port names at construction', () => {
     expect(() => port('')).toThrowError(/non-empty/i)
-    expect(() => cnst('')).toThrowError(/non-empty/i)
   })
 
   it('is reflexive on compound terms', () => {
-    const t = app(cnst('plus'), port('m'))
+    const t = app(port('plus'), port('m'))
     expect(termEq(t, t)).toBe(true)
   })
 })
@@ -51,8 +49,8 @@ describe('freePorts', () => {
     expect(freePorts(churchTwo)).toEqual([])
   })
 
-  it('does not count constants as ports', () => {
-    const t = app(cnst('plus'), port('m'))
+  it('does not count bound variables as ports', () => {
+    const t = lam(app(bvar(0), port('m')))
     expect(freePorts(t)).toEqual(['m'])
   })
 })
@@ -77,10 +75,10 @@ describe('renameFreePorts', () => {
     expect(termEq(out, app(app(port('b'), port('a')), port('b')))).toBe(true)
   })
 
-  it('leaves bound variables and constants untouched, descending through lam and app', () => {
-    const t = lam(app(app(bvar(0), cnst('plus')), port('a')))
-    const out = renameFreePorts(t, new Map([['a', 'b'], ['plus', 'NOT-A-PORT']]))
-    expect(termEq(out, lam(app(app(bvar(0), cnst('plus')), port('b'))))).toBe(true)
+  it('leaves bound variables untouched, descending through lam and app', () => {
+    const t = lam(app(bvar(0), port('a')))
+    const out = renameFreePorts(t, new Map([['a', 'b']]))
+    expect(termEq(out, lam(app(bvar(0), port('b'))))).toBe(true)
   })
 
   it('rejects an empty replacement name loudly', () => {
@@ -91,7 +89,7 @@ describe('renameFreePorts', () => {
 describe('assertWellFormedTerm', () => {
   it('accepts closed and open well-formed terms', () => {
     expect(() => assertWellFormedTerm(lam(bvar(0)))).not.toThrow()
-    expect(() => assertWellFormedTerm(app(port('y'), cnst('plus')))).not.toThrow()
+    expect(() => assertWellFormedTerm(app(port('y'), port('z')))).not.toThrow()
   })
 
   it('rejects unbound de Bruijn indices', () => {
@@ -101,7 +99,6 @@ describe('assertWellFormedTerm', () => {
 
   it('rejects structural literals that bypass the smart constructors', () => {
     expect(() => assertWellFormedTerm({ kind: 'port', name: '' })).toThrowError(/non-empty/)
-    expect(() => assertWellFormedTerm({ kind: 'const', id: '' })).toThrowError(/non-empty/)
     expect(() => assertWellFormedTerm({ kind: 'bvar', index: -1 })).toThrowError(/non-negative safe integer/)
   })
 })
