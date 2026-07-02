@@ -63,6 +63,8 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
     }
     case 'congruenceJoin':
       return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
+    case 'endpointTransport':
+      return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node'), endpoint: mapEndpoint(iso, step.endpoint) }
     case 'headStrip':
       return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
     case 'closedTermIntro':

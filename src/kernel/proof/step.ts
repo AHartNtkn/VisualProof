@@ -10,6 +10,7 @@ import { applyIteration, applyDeiteration } from '../rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../rules/doublecut'
 import { applyConversionByCertificate } from '../rules/conversion'
 import { applyCongruenceJoin } from '../rules/congruence'
+import { applyEndpointTransport } from '../rules/transport'
 import { applyHeadStrip } from '../rules/headstrip'
 import { applyClosedTermIntro } from '../rules/intro'
 import { applyFusion, applyFission } from '../rules/fusion'
@@ -44,6 +45,7 @@ export type ProofStep =
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
   | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly attachments: Readonly<Record<string, WireId>> }
   | { readonly rule: 'congruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }
+  | { readonly rule: 'endpointTransport'; readonly a: NodeId; readonly b: NodeId; readonly endpoint: Endpoint; readonly certificate: ConversionCertificate }
   | { readonly rule: 'headStrip'; readonly a: NodeId; readonly b: NodeId }
   | { readonly rule: 'closedTermIntro'; readonly region: RegionId; readonly term: Term }
   | { readonly rule: 'fusion'; readonly wire: WireId }
@@ -68,6 +70,7 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
     case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
     case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.attachments)
     case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate)
+    case 'endpointTransport': return applyEndpointTransport(d, step.a, step.b, step.endpoint, step.certificate)
     case 'headStrip': return applyHeadStrip(d, step.a, step.b)
     case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term)
     case 'fusion': return applyFusion(d, step.wire)

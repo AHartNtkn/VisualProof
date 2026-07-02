@@ -153,6 +153,8 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), attachments: { ...s.attachments } }
     case 'congruenceJoin':
       return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate) }
+    case 'endpointTransport':
+      return { rule: s.rule, a: s.a, b: s.b, endpoint: endpointToJson(s.endpoint), certificate: certToJson(s.certificate) }
     case 'headStrip':
       return { rule: s.rule, a: s.a, b: s.b }
     case 'closedTermIntro':
@@ -223,6 +225,9 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'congruenceJoin':
       assertOnlyKeys(j, ['rule', 'a', 'b', 'certificate'], 'congruenceJoin step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), certificate: certFromJson(j.certificate, 'certificate') }
+    case 'endpointTransport':
+      assertOnlyKeys(j, ['rule', 'a', 'b', 'endpoint', 'certificate'], 'endpointTransport step')
+      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), endpoint: endpointFromJson(j.endpoint, 'endpoint'), certificate: certFromJson(j.certificate, 'certificate') }
     case 'headStrip':
       assertOnlyKeys(j, ['rule', 'a', 'b'], 'headStrip step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
