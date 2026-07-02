@@ -96,16 +96,28 @@ export function resolveOverlaps(e: Engine): boolean {
       const dist = Math.hypot(dx, dy) || 0.001
       const need = A.r + B.r + SIB_GAP
       if (dist < need) {
-        const push = (need - dist) / 2 + 0.1
+        const push = (need - dist) / 2
         const ux = dx / dist, uy = dy / dist
-        const move = (it: typeof A, sx: number, sy: number): void => {
+        // A projection is an inelastic constraint: besides separating the
+        // positions, it must absorb the CLOSING component of each party's
+        // velocity, or the pair re-collides every cycle and never rests.
+        const move = (it: typeof A, sx: number, sy: number, nx: number, ny: number): void => {
+          const absorb = (b: { vel: Vec2 }): void => {
+            const closing = b.vel.x * nx + b.vel.y * ny
+            if (closing > 0) b.vel = { x: b.vel.x - closing * nx, y: b.vel.y - closing * ny }
+          }
           if (it.sub === null) {
             const b = e.bodies.get(it.id)!
             b.pos = { x: b.pos.x + sx, y: b.pos.y + sy }
-          } else shiftSubtree(e, it.sub, sx, sy)
+            absorb(b)
+          } else {
+            shiftSubtree(e, it.sub, sx, sy)
+            for (const mid of subtreeMembers(e, it.sub)) absorb(e.bodies.get(mid)!)
+          }
         }
-        move(A, -ux * push, -uy * push)
-        move(B, ux * push, uy * push)
+        // closing direction for A is +u (toward B), for B it is −u
+        move(A, -ux * push, -uy * push, ux, uy)
+        move(B, ux * push, uy * push, -ux, -uy)
         moved = true
       }
     }
@@ -170,15 +182,33 @@ export function settleStep(e: Engine, pinned: string | null = null): void {
     for (const mid of mids) { const b = e.bodies.get(mid)!; cen.x += b.pos.x; cen.y += b.pos.y; m++ }
     for (const c of kids) { const g = e.regions.get(c)!; cen.x += g.center.x; cen.y += g.center.y; m++ }
     cen.x /= m; cen.y /= m
+    // Cohesion is a compaction force: it is meaningless once the separation
+    // constraint binds. Fade it to zero as a member's nearest-sibling gap
+    // approaches SIB_GAP, so a genuine force equilibrium exists (constant
+    // cohesion at contact fights the projection forever — a limit cycle).
+    const sibDiscs: { c: Vec2; r: number; id: string }[] = []
+    for (const mid of mids) { const b = e.bodies.get(mid)!; sibDiscs.push({ c: b.pos, r: b.discR, id: mid }) }
+    for (const c of kids) { const g = e.regions.get(c)!; sibDiscs.push({ c: g.center, r: g.radius, id: c }) }
+    const cohesionFactor = (id: string, c: Vec2, r: number): number => {
+      let nearest = Infinity
+      for (const s of sibDiscs) {
+        if (s.id === id) continue
+        nearest = Math.min(nearest, Math.hypot(s.c.x - c.x, s.c.y - c.y) - s.r - r)
+      }
+      if (nearest === Infinity) return 1
+      return Math.min(1, Math.max(0, (nearest - SIB_GAP) / SIB_GAP))
+    }
     for (const mid of mids) {
       if (mid === pinned) continue // a dragged body is not pulled toward the centroid
       const b = e.bodies.get(mid)!
       const F = force.get(mid)!
-      F.x += (cen.x - b.pos.x) * 0.65; F.y += (cen.y - b.pos.y) * 0.65
+      const k = 0.65 * cohesionFactor(mid, b.pos, b.discR)
+      F.x += (cen.x - b.pos.x) * k; F.y += (cen.y - b.pos.y) * k
     }
     for (const c of kids) {
       const g = e.regions.get(c)!
-      const pull = { x: (cen.x - g.center.x) * 0.35, y: (cen.y - g.center.y) * 0.35 }
+      const kSub = 0.35 * cohesionFactor(c, g.center, g.radius)
+      const pull = { x: (cen.x - g.center.x) * kSub, y: (cen.y - g.center.y) * kSub }
       for (const mid of subtreeMembers(e, c)) { const F = force.get(mid)!; F.x += pull.x; F.y += pull.y }
     }
   }

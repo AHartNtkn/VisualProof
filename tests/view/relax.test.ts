@@ -217,3 +217,28 @@ describe('settleStep — live-loop safety (bounded, non-diverging energy)', () =
     }
   })
 })
+
+describe('two floating terms settle (no vibration limit cycle)', () => {
+  it('two unconnected term nodes on the sheet come to rest', () => {
+    const h = new DiagramBuilder()
+    h.termNode(h.root, idp('\\x. x'))
+    h.termNode(h.root, idp('\\x. \\y. x'))
+    const d = h.build()
+    const e = mkEngine(d, [])
+    // long free run: track recent movement; it must decay to (near) zero
+    let recent = Infinity
+    for (let w = 0; w < 40; w++) {
+      const before = [...e.bodies.values()].map((b) => ({ ...b.pos }))
+      for (let t = 0; t < 100; t++) settleStep(e)
+      recent = 0
+      const after = [...e.bodies.values()]
+      after.forEach((b, i) => { recent += Math.hypot(b.pos.x - before[i]!.x, b.pos.y - before[i]!.y) })
+    }
+    // after 4000 ticks the pair must be essentially stationary per 100-tick window
+    expect(recent).toBeLessThan(0.5)
+    // and legally separated, not overlapping
+    const [a, b] = [...e.bodies.values()]
+    const dist = Math.hypot(a!.pos.x - b!.pos.x, a!.pos.y - b!.pos.y)
+    expect(dist).toBeGreaterThan(a!.discR + b!.discR)
+  })
+})
