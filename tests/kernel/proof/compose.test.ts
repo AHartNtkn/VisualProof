@@ -11,7 +11,7 @@ import type { DiagramIso } from '../../../src/kernel/diagram/canonical/iso'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
-const ctx: ProofContext = { definitions: {}, theorems: new Map() }
+const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
 
 /** Two independently built, differently-id'd copies of the same diagram. */
 function twoCopies() {
@@ -271,5 +271,28 @@ describe('mapStepIds', () => {
       .toEqual({ rule: 'headStrip', a: 'N0', b: 'N1' })
     expect(() => mapStepIds({ rule: 'headStrip', a: 'n0', b: 'missing' }, iso))
       .toThrowError(/cannot map node 'missing'/)
+  })
+
+  it('remaps the node id of a relUnfold step through the iso', () => {
+    const iso: DiagramIso = {
+      regions: new Map(),
+      nodes: new Map([['n0', 'N0']]),
+      wires: new Map(),
+    }
+    expect(mapStepIds({ rule: 'relUnfold', node: 'n0' }, iso))
+      .toEqual({ rule: 'relUnfold', node: 'N0' })
+    expect(() => mapStepIds({ rule: 'relUnfold', node: 'missing' }, iso))
+      .toThrowError(/cannot map node 'missing'/)
+  })
+
+  it('remaps a relFold step sel and args through the iso; defId is not mapped', () => {
+    const iso: DiagramIso = {
+      regions: new Map([['r0', 'R0']]),
+      nodes: new Map([['n0', 'N0']]),
+      wires: new Map([['w0', 'W0']]),
+    }
+    const sel = { region: 'r0', regions: [], nodes: ['n0'], wires: [] }
+    expect(mapStepIds({ rule: 'relFold', sel, defId: 'nat', args: ['w0'] }, iso))
+      .toEqual({ rule: 'relFold', sel: { region: 'R0', regions: [], nodes: ['N0'], wires: [] }, defId: 'nat', args: ['W0'] })
   })
 })

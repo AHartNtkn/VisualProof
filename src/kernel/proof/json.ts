@@ -175,6 +175,10 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, sel: selToJson(s.sel), arity: s.arity }
     case 'vacuousElim':
       return { rule: s.rule, region: s.region }
+    case 'relUnfold':
+      return { rule: s.rule, node: s.node }
+    case 'relFold':
+      return { rule: s.rule, sel: selToJson(s.sel), defId: s.defId, args: [...s.args] }
   }
 }
 
@@ -267,6 +271,12 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'vacuousElim':
       assertOnlyKeys(j, ['rule', 'region'], 'vacuousElim step')
       return { rule, region: str(j.region, 'region') }
+    case 'relUnfold':
+      assertOnlyKeys(j, ['rule', 'node'], 'relUnfold step')
+      return { rule, node: str(j.node, 'node') }
+    case 'relFold':
+      assertOnlyKeys(j, ['rule', 'sel', 'defId', 'args'], 'relFold step')
+      return { rule, sel: selFromJson(j.sel, 'sel'), defId: str(j.defId, 'defId'), args: strArray(j.args, 'args') }
     default:
       return fail(`unknown rule '${rule}'`)
   }

@@ -11,7 +11,7 @@ import { replayProof } from '../../../src/kernel/proof/step'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
-const ctx: ProofContext = { definitions: {}, theorems: new Map() }
+const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
 
 /**
  * The running example: P(x) := x = λa.a, Q(x) := x = λa.λb.a.
@@ -180,7 +180,7 @@ describe('theorem steps inside proofs (derived rules used natively)', () => {
   it('a registered theorem applies through replayProof without expansion', () => {
     const t = dropQ()
     const theorems = new Map([[t.name, t]])
-    const c2: ProofContext = { definitions: {}, theorems }
+    const c2: ProofContext = { definitions: {}, theorems, relations: new Map() }
     const { d, hp, hq, v } = (() => {
       const h = new DiagramBuilder()
       const hp = h.termNode(h.root, p('\\a. a'))
@@ -236,7 +236,7 @@ describe('boundary-wire id resurrection is refused', () => {
         },
       ],
     }
-    const c: ProofContext = { definitions: {}, theorems: new Map([[T.name, T]]) }
+    const c: ProofContext = { definitions: {}, theorems: new Map([[T.name, T]]), relations: new Map() }
     expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
   })
 
@@ -261,7 +261,7 @@ describe('boundary-wire id resurrection is refused', () => {
         direction: 'forward',
       }],
     }
-    const c: ProofContext = { definitions: {}, theorems: new Map([[T.name, T]]) }
+    const c: ProofContext = { definitions: {}, theorems: new Map([[T.name, T]]), relations: new Map() }
     expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
   })
 })

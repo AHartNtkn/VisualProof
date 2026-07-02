@@ -52,6 +52,8 @@ describe('step round-trips through JSON', () => {
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
       { rule: 'vacuousIntro', sel, arity: 2 },
       { rule: 'vacuousElim', region: 'r1' },
+      { rule: 'relUnfold', node: 'n0' },
+      { rule: 'relFold', sel, defId: 'nat', args: ['w0'] },
     ]
     for (const s of steps) roundTrip(s)
   })
@@ -70,6 +72,10 @@ describe('step round-trips through JSON', () => {
     })).toThrowError(/unknown field 'node'/)
     expect(() => stepFromJson({ rule: 'deiteration', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, fuel: -1 }))
       .toThrowError(/fuel/)
+    expect(() => stepFromJson({ rule: 'relUnfold', node: 'n0', extra: 1 }))
+      .toThrowError(/unknown field 'extra'/)
+    expect(() => stepFromJson({ rule: 'relFold', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, defId: 'nat', args: ['w0'], extra: 1 }))
+      .toThrowError(/unknown field 'extra'/)
   })
 
   it('requires the attachments field on comprehensionInstantiate — no optional-field parsing', () => {

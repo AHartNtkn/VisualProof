@@ -87,6 +87,64 @@ describe('verifyTheory', () => {
   })
 })
 
+describe('verifyTheory — relation references', () => {
+  /** A self-contained arity-1 body: a term node whose free var is the argument. */
+  function simpleBody() {
+    const b = new DiagramBuilder()
+    const t = b.termNode(b.root, p('y'))
+    const w = b.wire(b.root, [{ node: t, port: { kind: 'freeVar', name: 'y' } }])
+    return mkDiagramWithBoundary(b.build(), [w])
+  }
+
+  /** A theorem whose (identical) sides are a single reference node. */
+  function refTheorem(defId: string, arity = 1): Theorem {
+    const b = new DiagramBuilder()
+    const node = b.ref(b.root, defId, arity)
+    const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
+    const side = mkDiagramWithBoundary(b.build(), [w])
+    return { name: 'refThm', lhs: side, rhs: side, steps: [] }
+  }
+
+  it('verifies a theory whose theorem references a declared relation, exposing it in ctx', () => {
+    const ctx = verifyTheory({ definitions: {}, relations: { R: simpleBody() }, theorems: [refTheorem('R')] })
+    expect(ctx.relations.has('R')).toBe(true)
+    expect(ctx.relations.get('R')!.boundary).toHaveLength(1)
+  })
+
+  it('refuses a relation body carrying an external binder stub (top-level binder)', () => {
+    // A bubble directly under the body root is the extractSubgraph open-pattern
+    // representation — deferred, so verification must refuse it.
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 1)
+    const at = b.atom(bub, bub)
+    const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
+    const openBody = mkDiagramWithBoundary(b.build(), [bound])
+    expect(() => verifyTheory({ definitions: {}, relations: { R: openBody }, theorems: [] }))
+      .toThrowError(/relation 'R': body has an external binder stub/)
+  })
+
+  it('refuses a theorem side whose reference names an unknown relation', () => {
+    expect(() => verifyTheory({ definitions: {}, relations: {}, theorems: [refTheorem('ghost')] }))
+      .toThrowError(/left-hand side: reference node .* names unknown relation 'ghost'/)
+  })
+
+  it('refuses a theorem side whose reference arity disagrees with the relation', () => {
+    expect(() => verifyTheory({ definitions: {}, relations: { R: simpleBody() }, theorems: [refTheorem('R', 2)] }))
+      .toThrowError(/has arity 2 but the relation has arity 1/)
+  })
+
+  it('loadTheory rejects a file whose relation body carries an external binder stub', () => {
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 1)
+    const at = b.atom(bub, bub)
+    const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
+    const openBody = mkDiagramWithBoundary(b.build(), [bound])
+    const json = theoryToJson({ definitions: {}, relations: { R: openBody }, theorems: [] })
+    expect(() => loadTheory(JSON.parse(JSON.stringify(json))))
+      .toThrowError(/relation 'R': body has an external binder stub/)
+  })
+})
+
 describe('check-before-register invariant', () => {
   it('a theorem whose proof cites its own name is refused (no self-citation)', () => {
     // If register came before check, 'selfCite' would be in the context when

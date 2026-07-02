@@ -17,7 +17,7 @@ const p = (s: string) => parseTerm(s, consts)
 const noConsts = new Set<string>()
 const pp = (s: string) => parseTerm(s, noConsts)
 
-const ctx: ProofContext = { definitions: { I: pp('\\x. x') }, theorems: new Map() }
+const ctx: ProofContext = { definitions: { I: pp('\\x. x') }, theorems: new Map(), relations: new Map() }
 
 describe('applyStep mirrors the direct appliers', () => {
   it('erasure step equals applyErasure', () => {

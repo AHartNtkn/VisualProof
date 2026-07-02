@@ -18,6 +18,7 @@ import type { Definitions } from '../rules/definitions'
 import { applyComprehensionInstantiate, applyComprehensionAbstract } from '../rules/comprehension'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../rules/vacuous'
+import { applyRelUnfold, applyRelFold } from '../rules/reldef'
 import type { Theorem, TheoremApplication } from './theorem'
 import { applyTheorem } from './theorem'
 import { ProofError } from './error'
@@ -25,6 +26,8 @@ import { ProofError } from './error'
 export type ProofContext = {
   readonly definitions: Definitions
   readonly theorems: ReadonlyMap<string, Theorem>
+  /** Named relations (comprehension bodies) resolvable by relUnfold/relFold. */
+  readonly relations: ReadonlyMap<string, DiagramWithBoundary>
 }
 
 /**
@@ -55,6 +58,8 @@ export type ProofStep =
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
   | { readonly rule: 'vacuousIntro'; readonly sel: SubgraphSelection; readonly arity: number }
   | { readonly rule: 'vacuousElim'; readonly region: RegionId }
+  | { readonly rule: 'relUnfold'; readonly node: NodeId }
+  | { readonly rule: 'relFold'; readonly sel: SubgraphSelection; readonly defId: string; readonly args: readonly WireId[] }
 
 export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagram {
   switch (step.rule) {
@@ -83,6 +88,8 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
     }
     case 'vacuousIntro': return applyVacuousBubbleIntro(d, step.sel, step.arity)
     case 'vacuousElim': return applyVacuousBubbleElim(d, step.region)
+    case 'relUnfold': return applyRelUnfold(d, step.node, ctx.relations)
+    case 'relFold': return applyRelFold(d, step.sel, step.defId, step.args, ctx.relations)
   }
 }
 

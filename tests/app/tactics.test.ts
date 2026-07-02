@@ -10,7 +10,7 @@ const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
 const pc = (s: string) => parseTerm(s, new Set(['PLUS']))
 
-const ctx: ProofContext = { definitions: {}, theorems: new Map() }
+const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
 
 const diagramWith = (s: string, parser: (x: string) => ReturnType<typeof p> = p) => {
   const d0 = emptyDiagram()

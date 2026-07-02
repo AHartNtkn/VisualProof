@@ -93,6 +93,10 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       return { ...step, sel: mapSel(iso, step.sel) }
     case 'vacuousElim':
       return { ...step, region: mapId(iso.regions, step.region, 'region') }
+    case 'relUnfold':
+      return { ...step, node: mapId(iso.nodes, step.node, 'node') }
+    case 'relFold':
+      return { ...step, sel: mapSel(iso, step.sel), args: step.args.map((w) => mapId(iso.wires, w, 'wire')) }
   }
 }
 

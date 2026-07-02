@@ -366,17 +366,20 @@ function deriveOneIsNat(zeroIsNat: Theorem, succNat: Theorem, ctx: ProofContext)
 }
 
 export function buildFregeTheory(): Theory {
-  const ctx0: ProofContext = { definitions: fregeDefinitions, theorems: new Map() }
+  const nat = natRelation()
+  const relations = new Map([['nat', nat]])
+  const ctx0: ProofContext = { definitions: fregeDefinitions, theorems: new Map(), relations }
   const zeroIsNat = deriveZeroIsNat(ctx0)
   const succNat = deriveSuccNat(ctx0)
   const ctx1: ProofContext = {
     definitions: fregeDefinitions,
     theorems: new Map([[zeroIsNat.name, zeroIsNat], [succNat.name, succNat]]),
+    relations,
   }
   const oneIsNat = deriveOneIsNat(zeroIsNat, succNat, ctx1)
   return {
     definitions: fregeDefinitions,
-    relations: { nat: natRelation() },
+    relations: { nat },
     theorems: [zeroIsNat, succNat, oneIsNat],
   }
 }

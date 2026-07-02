@@ -8,7 +8,7 @@ import type { ProofContext } from '../../src/kernel/proof/step'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
-const ctx: ProofContext = { definitions: {}, theorems: new Map() }
+const ctx: ProofContext = { definitions: {}, theorems: new Map(), relations: new Map() }
 
 describe('DerivationCursor', () => {
   it('tracks the diagram across pushes: a doubleCutIntro gains two regions', () => {

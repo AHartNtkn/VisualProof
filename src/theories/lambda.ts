@@ -22,7 +22,7 @@ export const lambdaDefinitions: Definitions = {
   Y: pp('\\f. (\\x. f (x x)) (\\x. f (x x))'),
 }
 
-const ctx: ProofContext = { definitions: lambdaDefinitions, theorems: new Map() }
+const ctx: ProofContext = { definitions: lambdaDefinitions, theorems: new Map(), relations: new Map() }
 
 /** o = PLUS ONE ONE ⟹ o = TWO, by unfold → convert → fold. */
 function deriveOnePlusOne(): Theorem {
