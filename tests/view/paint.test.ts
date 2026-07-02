@@ -222,3 +222,50 @@ describe('hover-group highlight', () => {
     expect(highlightGroup(e, DARK, e.d.root)).toEqual([]) // the sheet is not a bubble group
   })
 })
+
+describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports', () => {
+  // Live feel report: nothing marked which leg of an n-ary relation is which,
+  // and the first attempt (world-unit anatomy tick) was invisible at fitted
+  // zoom and never painted for refs at all. The pip is a device-pixel DOT
+  // (junction-dot family) on the drawn rim at port a0's angle, rotating with
+  // the body; ports read clockwise from it.
+  const p2 = (s: string) => parseTerm(s)
+  const build = (arity: number) => {
+    const h = new DiagramBuilder()
+    const ref = h.ref(h.root, 'rel', arity)
+    for (let i = 0; i < arity; i++) h.wire(h.root, [{ node: ref, port: { kind: 'arg', index: i } }])
+    const e = mkEngine(h.build(), [])
+    settle(e, 200)
+    return { e, ref }
+  }
+  it('a ternary ref carries exactly one pip dot on its rim at the a0 angle', () => {
+    const { e, ref } = build(3)
+    const b = e.bodies.get(ref)!
+    const shapes = paint(e, LIGHT)
+    const rim = 5.5
+    const expected = { x: b.pos.x + Math.cos(b.theta + Math.PI / 2) * rim, y: b.pos.y + Math.sin(b.theta + Math.PI / 2) * rim }
+    const pips = shapes.filter((s) => s.kind === 'dot' && Math.hypot(s.center.x - expected.x, s.center.y - expected.y) < 1e-6)
+    expect(pips).toHaveLength(1)
+  })
+  it('a unary ref carries no pip (nothing to disambiguate)', () => {
+    const { e, ref } = build(1)
+    const b = e.bodies.get(ref)!
+    const shapes = paint(e, LIGHT)
+    const near = shapes.filter((s) => s.kind === 'dot' && Math.hypot(s.center.x - b.pos.x, s.center.y - b.pos.y) < 8)
+    expect(near).toHaveLength(0)
+  })
+  it('an atom bound to an arity-2 bubble carries a pip in its own stroke', () => {
+    const h = new DiagramBuilder()
+    const bub = h.bubble(h.root, 2)
+    const a = h.atom(bub, bub)
+    void p2
+    const e = mkEngine(h.build(), [])
+    settle(e, 200)
+    const b = e.bodies.get(a)!
+    const shapes = paint(e, LIGHT)
+    const rim = 2 * 2 // atom rail radius x atom ascale
+    const expected = { x: b.pos.x + Math.cos(b.theta + Math.PI / 2) * rim, y: b.pos.y + Math.sin(b.theta + Math.PI / 2) * rim }
+    const pips = shapes.filter((s) => s.kind === 'dot' && Math.hypot(s.center.x - expected.x, s.center.y - expected.y) < 1e-6)
+    expect(pips).toHaveLength(1)
+  })
+})

@@ -1,7 +1,7 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, Leg } from './engine'
-import { frameBounds, pkey, portNormal, worldAnchor } from './engine'
+import { FRAME_CORNER_W, frameBounds, pkey, portNormal, worldAnchor } from './engine'
 
 /**
  * Wire geometry (round-8 lab spec), pure — returns paths, paints nothing.
@@ -14,7 +14,7 @@ import { frameBounds, pkey, portNormal, worldAnchor } from './engine'
 
 export type WirePath = { from: Vec2; c1: Vec2; c2: Vec2; to: Vec2 }
 export type LegGeom = { leg: Leg; pa: Vec2; ta: number; pb: Vec2; tb: number }
-export type BoundaryExit = { wid: WireId; path: WirePath; tick: { center: Vec2; vertical: boolean } }
+export type BoundaryExit = { wid: WireId; path: WirePath; tick: { center: Vec2; angle: number } }
 export type ExStub = { wid: WireId; from: Vec2; to: Vec2; dot: Vec2 }
 
 const wrap = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
@@ -104,6 +104,14 @@ export function legPaths(e: Engine): { wid: WireId; path: WirePath }[] {
 }
 
 /** One frame exit per boundary wire, routed by port normal to the nearest edge. */
+/** Signed distance to the frame's rounded rectangle (negative inside). */
+function frameSdf(px: number, py: number, fb: { minX: number; maxX: number; minY: number; maxY: number }, r: number): number {
+  const cx = (fb.minX + fb.maxX) / 2, cy = (fb.minY + fb.maxY) / 2
+  const hw = (fb.maxX - fb.minX) / 2 - r, hh = (fb.maxY - fb.minY) / 2 - r
+  const qx = Math.abs(px - cx) - hw, qy = Math.abs(py - cy) - hh
+  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r
+}
+
 export function boundaryExits(e: Engine): BoundaryExit[] {
   const fb = frameBounds(e)
   if (fb === null) return []
@@ -113,15 +121,33 @@ export function boundaryExits(e: Engine): BoundaryExit[] {
     const b = e.bodies.get(bid)!
     const anchorKey = b.kind === 'junction' ? null : pkey(w0.endpoints.find((ep) => ep.node === bid)!.port)
     const p = worldAnchor(b, anchorKey)
-    const cand: Vec2[] = [
-      { x: fb.minX, y: p.y }, { x: fb.maxX, y: p.y }, { x: p.x, y: fb.minY }, { x: p.x, y: fb.maxY },
-    ]
-    let q = cand[0]!
-    for (const c of cand) if (Math.hypot(c.x - p.x, c.y - p.y) < Math.hypot(q.x - p.x, q.y - p.y)) q = c
-    const vertical = q.x === fb.minX || q.x === fb.maxX
-    const tb = vertical ? (q.x === fb.minX ? Math.PI : 0) : (q.y === fb.minY ? -Math.PI / 2 : Math.PI / 2)
+    // The exit is where the ray from the frame center through the anchor
+    // crosses the ROUNDED frame rectangle — a continuous function of the
+    // anchor everywhere, including around corners. (Choosing the nearest
+    // edge instead teleports the exit across the frame whenever the anchor
+    // crosses a frame diagonal — the reported side-snap.) The rounding is
+    // the frame's own drawn corner radius, so exits ride the visible line.
+    let dx = p.x - fb.center.x, dy = p.y - fb.center.y
+    const dd = Math.hypot(dx, dy)
+    if (dd < 1e-9) { dx = 1; dy = 0 } else { dx /= dd; dy /= dd }
+    // the SDF grows monotonically along an outward ray from the center, so
+    // bisection between the center (inside) and a point past the corner
+    // diagonal (outside) converges unconditionally
+    let lo = 0, hi = (fb.maxX - fb.minX) * 0.71 + FRAME_CORNER_W
+    for (let it = 0; it < 40; it++) {
+      const mid = (lo + hi) / 2
+      if (frameSdf(fb.center.x + dx * mid, fb.center.y + dy * mid, fb, FRAME_CORNER_W) < 0) lo = mid
+      else hi = mid
+    }
+    const t = (lo + hi) / 2
+    const q = { x: fb.center.x + dx * t, y: fb.center.y + dy * t }
+    // outward frame normal from the SDF gradient (central differences)
+    const h = 1e-3
+    const nx = frameSdf(q.x + h, q.y, fb, FRAME_CORNER_W) - frameSdf(q.x - h, q.y, fb, FRAME_CORNER_W)
+    const ny = frameSdf(q.x, q.y + h, fb, FRAME_CORNER_W) - frameSdf(q.x, q.y - h, fb, FRAME_CORNER_W)
+    const nAng = Math.atan2(ny, nx)
     const ta = b.kind === 'junction' ? Math.atan2(q.y - p.y, q.x - p.x) : portNormal(b, anchorKey, q)
-    out.push({ wid, path: hobbyBezier(p, ta, q, tb + Math.PI), tick: { center: q, vertical } })
+    out.push({ wid, path: hobbyBezier(p, ta, q, nAng + Math.PI), tick: { center: q, angle: nAng + Math.PI / 2 } })
   }
   return out
 }

@@ -33,7 +33,7 @@ export function drawShapes(
     switch (s.kind) {
       case 'frame': {
         ctx.beginPath()
-        ctx.roundRect(X(s.x), Y(s.y), s.w * transform.scale, s.h * transform.scale, s.cornerPx)
+        ctx.roundRect(X(s.x), Y(s.y), s.w * transform.scale, s.h * transform.scale, s.cornerW * transform.scale)
         ctx.fillStyle = s.fill
         ctx.fill()
         ctx.strokeStyle = s.stroke
@@ -105,9 +105,10 @@ export function drawShapes(
         ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
         ctx.stroke()
         const q = P(s.tick.center)
+        const tx = Math.cos(s.tick.angle) * EXIT_TICK_HALF, ty = Math.sin(s.tick.angle) * EXIT_TICK_HALF
         ctx.beginPath()
-        if (s.tick.vertical) { ctx.moveTo(q.x, q.y - EXIT_TICK_HALF); ctx.lineTo(q.x, q.y + EXIT_TICK_HALF) }
-        else { ctx.moveTo(q.x - EXIT_TICK_HALF, q.y); ctx.lineTo(q.x + EXIT_TICK_HALF, q.y) }
+        ctx.moveTo(q.x - tx, q.y - ty)
+        ctx.lineTo(q.x + tx, q.y + ty)
         ctx.stroke()
         ctx.shadowBlur = 0
         break

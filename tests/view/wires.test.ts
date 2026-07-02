@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
-import { settle } from '../../src/view/relax'
-import { computeLegs, hobbyBezier } from '../../src/view/wires'
+import { vec } from '../../src/view/vec'
+import { settle, recomputeRegions } from '../../src/view/relax'
+import { computeLegs, hobbyBezier, boundaryExits } from '../../src/view/wires'
 
 const p = (s: string) => parseTerm(s)
 
@@ -59,5 +60,47 @@ describe('computeLegs — junction trunk tangents flow tangent-continuously', ()
       }
       expect(foundOpposite, `junction ${j.id} has an opposite trunk pair`).toBe(true)
     }
+  })
+})
+
+describe('boundary exits are continuous around frame corners', () => {
+  // Live feel report: the exit snapped between frame sides when its node
+  // rounded a corner — the nearest-edge candidate scheme teleports the exit
+  // point across the frame, and the per-side tick/tangent snaps 90°. The
+  // exit is now the ray–rounded-rect intersection (continuous everywhere),
+  // with the tick following the frame tangent.
+  it('sweeping a boundary node through a corner sector moves the exit smoothly', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('x'))
+    const m = h.termNode(h.root, p('\\z. z'))
+    const w = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'x' } }])
+    const d = h.build()
+    const e = mkEngine(d, [w])
+    // park the second body at the center so the sheet circle stays put
+    e.bodies.get(m)!.pos = vec(0, 0)
+    const nb = e.bodies.get(n)!
+    let prev: { x: number; y: number } | null = null
+    let prevTick: number | null = null
+    let maxStep = 0
+    let maxTickStep = 0
+    // sweep through the north-east corner sector in fine steps
+    for (let i = 0; i <= 60; i++) {
+      const a = Math.PI / 4 - Math.PI / 6 + (i / 60) * (Math.PI / 3)
+      nb.pos = { x: Math.cos(a) * 25, y: Math.sin(a) * 25 }
+      recomputeRegions(e)
+      const ex = boundaryExits(e).find((x) => x.wid === w)!
+      if (prev !== null) {
+        maxStep = Math.max(maxStep, Math.hypot(ex.path.to.x - prev.x, ex.path.to.y - prev.y))
+        let dth = Math.abs(ex.tick.angle - prevTick!)
+        while (dth > Math.PI) dth = Math.abs(dth - 2 * Math.PI)
+        maxTickStep = Math.max(maxTickStep, dth)
+      }
+      prev = { x: ex.path.to.x, y: ex.path.to.y }
+      prevTick = ex.tick.angle
+    }
+    // node moves ~1.3 units per sweep step; a continuous exit moves the same
+    // order — a side-snap teleports it tens of units in one step
+    expect(maxStep, `max exit-point step ${maxStep.toFixed(2)}`).toBeLessThan(6)
+    expect(maxTickStep, `max tick rotation step ${maxTickStep.toFixed(3)} rad`).toBeLessThan(0.3)
   })
 })

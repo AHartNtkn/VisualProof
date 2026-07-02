@@ -19,6 +19,10 @@ import { trompGrid } from './tromp'
 export const DISC_R = 5.5
 /** Sheet frame margin beyond the outermost region (world units). */
 export const FRAME_MARGIN = 6
+/** Corner radius of the sheet frame, world units — shared by the drawn
+    rounded rectangle and the boundary-exit geometry so exits ride the
+    visible frame line exactly. */
+export const FRAME_CORNER_W = 8
 
 export type BodyKind = 'term' | 'ref' | 'atom' | 'junction' | 'anchor'
 

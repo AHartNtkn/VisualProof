@@ -2,7 +2,7 @@ import type { Diagram, RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
-import { ascaleOf, DISC_R, frameBounds, localToWorld } from './engine'
+import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, localToWorld } from './engine'
 import { boundaryExits, existentialStubs, legPaths } from './wires'
 
 /**
@@ -39,12 +39,12 @@ export type Theme = {
 }
 
 export type Shape =
-  | { readonly kind: 'frame'; readonly x: number; readonly y: number; readonly w: number; readonly h: number; readonly cornerPx: number; readonly fill: string; readonly stroke: string; readonly width: number }
+  | { readonly kind: 'frame'; readonly x: number; readonly y: number; readonly w: number; readonly h: number; readonly cornerW: number; readonly fill: string; readonly stroke: string; readonly width: number }
   | { readonly kind: 'circle'; readonly center: Vec2; readonly r: number; readonly fill: string | null; readonly stroke: string | null; readonly width: number; readonly insetColor: string | null; readonly glow: string | null }
   | { readonly kind: 'arc'; readonly center: Vec2; readonly r: number; readonly a0: number; readonly a1: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'segment'; readonly from: Vec2; readonly to: Vec2; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'bezier'; readonly from: Vec2; readonly c1: Vec2; readonly c2: Vec2; readonly to: Vec2; readonly stroke: string; readonly width: number; readonly glow: string | null }
-  | { readonly kind: 'exit'; readonly from: Vec2; readonly c1: Vec2; readonly c2: Vec2; readonly to: Vec2; readonly tick: { readonly center: Vec2; readonly vertical: boolean }; readonly stroke: string; readonly width: number; readonly glow: string | null }
+  | { readonly kind: 'exit'; readonly from: Vec2; readonly c1: Vec2; readonly c2: Vec2; readonly to: Vec2; readonly tick: { readonly center: Vec2; readonly angle: number }; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'stub'; readonly from: Vec2; readonly to: Vec2; readonly dot: Vec2; readonly dotRpx: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   /** A filled disc whose radius is fixed DEVICE pixels (junction dots): stays a
       constant size under zoom, unlike world-scaled circles. */
@@ -52,12 +52,13 @@ export type Shape =
   | { readonly kind: 'label'; readonly center: Vec2; readonly text: string; readonly color: string; readonly r: number; readonly font: string }
 
 const FRAME_STROKE_W = 2
-const FRAME_CORNER_PX = 16
 const BUBBLE_RING_W = 2.0
 const DISC_RIM_W = 1.4
 const JUNCTION_OUTER_R = 3.6
 const JUNCTION_INNER_R = 2.6
 const STUB_DOT_R = 2.6
+/** Device-pixel radius of the port-order pip (junction-dot family). */
+const PIP_R = 3.2
 /** Disc labels truncate to this many glyphs. */
 const LABEL_MAX = 5
 /** Hover-group highlight: lightness bump and extra stroke width over the base. */
@@ -118,7 +119,7 @@ export function paint(e: Engine, st: Theme): Shape[] {
   const shapes: Shape[] = []
 
   // sheet frame
-  shapes.push({ kind: 'frame', x: fb.minX, y: fb.minY, w: fb.maxX - fb.minX, h: fb.maxY - fb.minY, cornerPx: FRAME_CORNER_PX, fill: st.paper, stroke: st.frame, width: FRAME_STROKE_W })
+  shapes.push({ kind: 'frame', x: fb.minX, y: fb.minY, w: fb.maxX - fb.minX, h: fb.maxY - fb.minY, cornerW: FRAME_CORNER_W, fill: st.paper, stroke: st.frame, width: FRAME_STROKE_W })
 
   // regions, outer first: cuts fill + inset well + ink rim; bubbles are hue rings
   const rs = [...e.regions.entries()]
@@ -154,6 +155,27 @@ export function paint(e: Engine, st: Theme): Shape[] {
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: st.wire })
   }
 
+  // The port-order pip: nodes with two or more ORDERED ports (refs by arity,
+  // atoms by their binder's arity) get a filled dot on their rim at port a0's
+  // angle; ports read clockwise from it (canvas y-down). Device-pixel sized
+  // like junction dots so it survives every zoom, drawn in the node's own
+  // stroke, rotating with the body. Without it a featureless rotating disc
+  // gives no way to tell which leg is which.
+  const pipArity = (b: Body): number => {
+    const node = b.node
+    if (node === null) return 0
+    if (node.kind === 'ref') return node.arity
+    if (node.kind === 'atom') {
+      const binder = e.d.regions[node.binder]!
+      return binder.kind === 'bubble' ? binder.arity : 0
+    }
+    return 0
+  }
+  const pipAt = (b: Body, rimR: number, fill: string): Shape => {
+    const c = Math.cos(b.theta + Math.PI / 2), s = Math.sin(b.theta + Math.PI / 2)
+    return { kind: 'dot', center: { x: b.pos.x + c * rimR, y: b.pos.y + s * rimR }, rPx: PIP_R, fill }
+  }
+
   // node bodies: anatomy (shared linework / binder-hue atoms) + named discs
   for (const b of e.bodies.values()) {
     if (b.kind === 'junction' || b.kind === 'anchor') continue
@@ -161,6 +183,7 @@ export function paint(e: Engine, st: Theme): Shape[] {
     if (node.kind === 'ref') {
       shapes.push({ kind: 'circle', center: b.pos, r: DISC_R, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
       shapes.push({ kind: 'label', center: b.pos, text: node.defId.slice(0, LABEL_MAX), color: st.discText, r: DISC_R, font: st.font })
+      if (pipArity(b) >= 2) shapes.push(pipAt(b, DISC_R, st.ink))
       continue
     }
     const g = b.geometry!
@@ -168,6 +191,9 @@ export function paint(e: Engine, st: Theme): Shape[] {
     const atomHue = node.kind === 'atom' ? hues.get(node.binder)! : null
     const stroke = atomHue ?? st.wire
     shapes.push(...anatomyOutline(b, g, stroke, st.wireW, glow(atomHue ?? st.wire)))
+    if (node.kind === 'atom' && pipArity(b) >= 2) {
+      shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
+    }
     if (node.kind === 'term') {
       // the term output run stays monochrome linework (term-internal anatomy
       // never carries a binder hue — law 8)
