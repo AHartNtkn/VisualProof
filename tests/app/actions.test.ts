@@ -113,6 +113,48 @@ describe('double-cut elimination annulus content', () => {
   })
 })
 
+describe('reference-node gates', () => {
+  const refHost = (defId: string) => {
+    const b = new DiagramBuilder()
+    const ref = b.ref(b.root, defId, 1)
+    const carrier = b.termNode(b.root, p('y'))
+    b.wire(b.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+      { node: carrier, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    return { d: b.build(), ref }
+  }
+
+  it('a ref node is not convertible, unfolds when its relation is in scope, and joins selection-based actions', () => {
+    const { d, ref } = refHost('nat') // buildFregeTheory carries the 'nat' relation
+    const ctx = verifyTheory(buildFregeTheory())
+    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [ref], wires: [] })
+    const kinds = applicableActions(d, sel, ctx).map((a) => a.kind)
+    expect(kinds).not.toContain('convert') // refs are not term nodes
+    expect(kinds).toContain('relUnfold')
+    expect(kinds).toContain('doubleCutWrap') // selection-based actions still flow through
+    expect(kinds).toContain('iterate')
+  })
+
+  it('does not offer relUnfold when the referenced relation is not in scope', () => {
+    const { d, ref } = refHost('ghost')
+    const ctx = verifyTheory(buildFregeTheory())
+    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [ref], wires: [] })
+    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).not.toContain('relUnfold')
+  })
+
+  it('offers relFold on a content selection when a relation exists, and not otherwise', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('y'))
+    const d = h.build()
+    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
+    const withRel = verifyTheory(buildFregeTheory())
+    expect(applicableActions(d, sel, withRel).map((a) => a.kind)).toContain('relFold')
+    const noRel = verifyTheory({ definitions: {}, relations: {}, theorems: [] })
+    expect(applicableActions(d, sel, noRel).map((a) => a.kind)).not.toContain('relFold')
+  })
+})
+
 describe('descriptor → step construction (the shell contract)', () => {
   it('insert: an enumerated insert commits as the shell builds it', () => {
     const h = new DiagramBuilder()
@@ -140,5 +182,23 @@ describe('descriptor → step construction (the shell contract)', () => {
     const pre = applyConversion(d, n, target, 32)
     const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, attachments: {} }, ctx)
     expect(JSON.stringify(out.nodes[n])).toContain('"port"')
+  })
+
+  it('relUnfold: an enumerated unfold commits via applyStep against ctx.relations', () => {
+    const b = new DiagramBuilder()
+    const ref = b.ref(b.root, 'nat', 1)
+    const carrier = b.termNode(b.root, p('y'))
+    b.wire(b.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+      { node: carrier, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    const d = b.build()
+    const ctx = verifyTheory(buildFregeTheory())
+    const sel = mkSelection(d, { region: d.root, regions: [], nodes: [ref], wires: [] })
+    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('relUnfold')
+    const out = applyStep(d, { rule: 'relUnfold', node: ref }, ctx)
+    // the reference is gone and the nat body has been inlined
+    expect(Object.values(out.nodes).some((n) => n.kind === 'ref')).toBe(false)
+    expect(Object.keys(out.nodes).length).toBeGreaterThan(Object.keys(d.nodes).length)
   })
 })

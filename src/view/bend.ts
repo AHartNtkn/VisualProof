@@ -102,8 +102,12 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
  * Atoms (relation-variable applications) have no term structure: a small
  * disc with arg anchors spread evenly around it. Anchor keys use portKey
  * spelling without the colon ('a0', 'a1', …) purely as local labels.
+ *
+ * An optional center label carries a relation reference's defId — the same
+ * glyph channel term-constant names use (rendered by renderScene), so a named
+ * relation reads with the same visual voice as a constant like ZERO.
  */
-export function atomGeometry(arity: number): NodeGeometry {
+export function atomGeometry(arity: number, label?: string): NodeGeometry {
   const r = 2
   const pierce = r + 1
   const portAnchors: Record<string, Vec2> = {}
@@ -117,7 +121,7 @@ export function atomGeometry(arity: number): NodeGeometry {
     outerRadius: pierce + 0.5,
     arcs: [{ r, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0 }],
     radials,
-    glyphs: [],
+    glyphs: label === undefined ? [] : [{ pos: polar(0, 0), constId: label }],
     outputAnchor: polar(0, pierce),
     portAnchors,
     exitArc: null,

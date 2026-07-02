@@ -59,8 +59,9 @@ export function nodeGeometry(d: Diagram, id: NodeId): NodeGeometry {
       return atomGeometry(binder.kind === 'bubble' ? binder.arity : 0)
     }
     case 'ref':
-      // arg ports only, arity read inline; defId label lands in Task 3.
-      return atomGeometry(n.arity)
+      // arg ports only, arity read inline; the defId renders as a center glyph,
+      // the same channel term-constant names use.
+      return atomGeometry(n.arity, n.defId)
   }
 }
 
