@@ -3,7 +3,8 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { requiredPorts } from '../../src/kernel/diagram/diagram'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { mkEngine, worldAnchor, portNormal, pkey, DISC_R } from '../../src/view/engine'
+import { mkEngine, carryOver, worldAnchor, portNormal, pkey, DISC_R } from '../../src/view/engine'
+import { emptyDiagram } from '../../src/app/edit'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
@@ -91,5 +92,43 @@ describe('mkEngine', () => {
     expect(a1.y).toBeCloseTo(-3 + lx, 9)
     // the port normal tracks theta too
     expect(portNormal(b, 'out', { x: 100, y: -3 })).toBeCloseTo(Math.atan2(0, 1) + Math.PI / 2, 9)
+  })
+})
+
+describe('carryOver', () => {
+  it('shared body ids inherit pos/vel/theta from the previous engine', () => {
+    const { d, boundary } = nat()
+    const prev = mkEngine(d, boundary)
+    // perturb prev so the carried state is unmistakably NOT a fresh seed
+    let t = 0
+    for (const b of prev.bodies.values()) {
+      b.pos = { x: 42 + t, y: -7 - t }
+      b.vel = { x: 1 + t, y: 2 }
+      b.theta = 0.5 + t
+      t++
+    }
+    const next = mkEngine(d, boundary) // same diagram → identical id set
+    carryOver(prev, next)
+    expect(next.bodies.size).toBe(prev.bodies.size)
+    for (const [id, nb] of next.bodies) {
+      const pb = prev.bodies.get(id)!
+      expect(nb.pos).toEqual(pb.pos)
+      expect(nb.vel).toEqual(pb.vel)
+      expect(nb.theta).toBe(pb.theta)
+    }
+  })
+
+  it('bodies absent from the previous engine keep their deterministic seed (new ids do not crash)', () => {
+    const { d, boundary } = nat()
+    const empty = mkEngine(emptyDiagram(), []) // zero bodies → nothing to carry
+    const next = mkEngine(d, boundary)
+    const reference = mkEngine(d, boundary) // mkEngine is deterministic: identical seeds
+    expect(() => carryOver(empty, next)).not.toThrow()
+    for (const [id, nb] of next.bodies) {
+      const rb = reference.bodies.get(id)!
+      expect(nb.pos).toEqual(rb.pos)
+      expect(nb.vel).toEqual(rb.vel)
+      expect(nb.theta).toBe(rb.theta)
+    }
   })
 })

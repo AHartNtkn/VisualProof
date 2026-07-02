@@ -176,6 +176,25 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
   return { d, bodies, childrenOf, membersOf, legs, boundaryOf, boundary, regions: new Map(), tick: 0 }
 }
 
+/**
+ * Transplant the physics state of every body shared between two engines. When a
+ * new engine is built for the next diagram in a replay, bodies whose id survives
+ * (nodes keyed by NodeId, junctions by `j:<wireId>`) keep their pos/vel/theta so
+ * the layout glides from where it was rather than re-seeding from the spiral.
+ * Bodies present only in `next` keep their deterministic mkEngine seeds. Vec2 is
+ * treated as an immutable value here, matching relax.ts's replace-not-mutate
+ * discipline, so copying the reference cannot alias `prev` into `next`'s motion.
+ */
+export function carryOver(prev: Engine, next: Engine): void {
+  for (const [id, nb] of next.bodies) {
+    const pb = prev.bodies.get(id)
+    if (pb === undefined) continue
+    nb.pos = pb.pos
+    nb.vel = pb.vel
+    nb.theta = pb.theta
+  }
+}
+
 /** Map an anatomy-local point (before ascale) into world space through the
     body's scale, rotation, and position. Shared by paint and hit-testing. */
 export function localToWorld(b: Body, lp: Vec2): Vec2 {

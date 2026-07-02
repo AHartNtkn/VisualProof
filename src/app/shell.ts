@@ -11,13 +11,15 @@ import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
-import { mkEngine } from '../view/engine'
+import { mkEngine, carryOver } from '../view/engine'
 import { settleStep } from '../view/relax'
 import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
 import { bootBundledContext } from './boot'
+import type { Replay } from './replay'
+import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 import type { ProofSession } from './session'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
@@ -136,8 +138,14 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   let constNames: ReadonlySet<string> = boot.constNames
 
   // ---- state ----
-  let mode: 'edit' | 'prove' = 'edit'
+  let mode: 'edit' | 'prove' | 'replay' = 'edit'
   let side: 'forward' | 'backward' = 'forward'
+  // Replay mode: step through a bundled theorem's recorded derivation. `replay`
+  // caches every intermediate diagram; `replayK` is the displayed step; the
+  // mode we came from is restored on exit. Read-only — no rule dispatches.
+  let replay: Replay | null = null
+  let replayK = 0
+  let replayReturnMode: 'edit' | 'prove' = 'edit'
   let editDiagram = emptyDiagram()
   const editHistory: Diagram[] = []
   let goalLhs: DiagramWithBoundary | null = null
@@ -171,6 +179,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     vec((screen.x - view.offsetX) / view.scale, (screen.y - view.offsetY) / view.scale)
 
   const currentDiagram = (): Diagram => {
+    if (mode === 'replay' && replay !== null) return replay.diagramAt(replayK)
     if (mode === 'prove' && session !== null) {
       return side === 'forward' ? session.forward.current : session.backward.current
     }
@@ -181,6 +190,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   // sheet has no boundary. mkEngine ignores boundary ids absent from the
   // current diagram, so a stale id simply draws no exit.
   const currentBoundary = (): readonly WireId[] => {
+    if (mode === 'replay' && replay !== null) return replay.boundary
     if (mode === 'prove' && session !== null) return sideBoundary(session, side)
     return []
   }
@@ -228,12 +238,22 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   theoremsDiv.id = 'theorems'
 
   // ---- context rebinding ----
-  // Renders the theorem/relation/constant list from the live bindings.
+  // Renders the theorem/relation/constant list from the live bindings. Each
+  // theorem gets a Replay affordance: it opens the read-only stepper over that
+  // theorem's recorded derivation. The theorem NAMES stay as plain text so the
+  // list keeps its glanceable form (and the E2E boot assertion).
   const renderTheoremList = (): void => {
     const thmNames = [...ctx.theorems.keys()]
     const relNames = Object.keys(relations)
-    theoremsDiv.textContent =
-      `theorems: ${thmNames.join(', ') || 'none'} · relations: ${relNames.join(', ') || 'none'} · constants: ${[...constNames].join(', ')}`
+    theoremsDiv.replaceChildren()
+    theoremsDiv.append('theorems: ')
+    if (thmNames.length === 0) theoremsDiv.append('none')
+    thmNames.forEach((name, i) => {
+      if (i > 0) theoremsDiv.append(', ')
+      theoremsDiv.append(`${name} `)
+      theoremsDiv.append(button('▶ Replay', guard(() => enterReplay(name))))
+    })
+    theoremsDiv.append(` · relations: ${relNames.join(', ') || 'none'} · constants: ${[...constNames].join(', ')}`)
   }
 
   // Called after adopt and after load; refreshes all three context bindings and
@@ -381,7 +401,61 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     return `forward ${session.forward.steps.length} step(s) · backward ${session.backward.steps.length} step(s) · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
   }
 
+  // ---- replay stepping ----
+  // Open the stepper over a bundled/adopted theorem, remembering the mode we
+  // leave so exit restores it. Step 0 (the lhs) seeds a fresh engine.
+  const enterReplay = (name: string): void => {
+    const thm = ctx.theorems.get(name)
+    if (thm === undefined) throw new Error(`unknown theorem '${name}'`)
+    if (mode !== 'replay') replayReturnMode = mode
+    replay = mkReplay(thm, ctx)
+    replayK = 0
+    mode = 'replay'
+    displayed = replay.diagramAt(0)
+    engine = mkEngine(displayed, replay.boundary)
+    settleStep(engine)
+    pin = null
+    hits = []
+    kernelSel = null
+    pending = null
+    message = `replay '${name}'`
+    refreshChrome()
+  }
+
+  // Move to step k (clamped). The new engine carries over shared bodies' physics
+  // from the old one so the layout GLIDES from where it was rather than
+  // re-seeding — the whole point of the stepper. currentDiagram() returns the
+  // cached diagram object, so an incidental sync() will not rebuild and scramble.
+  const gotoReplayStep = (k: number): void => {
+    if (replay === null) return
+    replayK = Math.max(0, Math.min(replay.stepCount, k))
+    const prevEngine = engine
+    displayed = replay.diagramAt(replayK)
+    const next = mkEngine(displayed, replay.boundary)
+    carryOver(prevEngine, next)
+    settleStep(next)
+    engine = next
+    pin = null
+    hits = []
+    kernelSel = null
+    pending = null
+    message = `step ${replayK}/${replay.stepCount}${replayK > 0 ? ` — ${replay.labelAt(replayK)}` : ''}`
+    refreshChrome()
+  }
+
+  const exitReplay = (): void => {
+    mode = replayReturnMode
+    replay = null
+    replayK = 0
+    message = mode === 'edit' ? 'EDIT mode' : `PROVE mode: ${meetStatus()}`
+    sync() // rebuilds the engine for the restored mode's diagram
+  }
+
   const onToggleMode = guard(() => {
+    if (mode === 'replay') {
+      exitReplay()
+      return
+    }
     if (mode === 'edit') {
       if (goalLhs === null || goalRhs === null) {
         throw new Error('set both goal sides (LHS and RHS snapshots) before proving')
@@ -555,6 +629,8 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
 
   // ---- clicks (selection + two-phase completion) ----
   const handleClick = (world: Vec2): void => {
+    // Replay is read-only: canvas clicks select nothing and dispatch no rule.
+    if (mode === 'replay') return
     const hit = hitTest(engine, world)
     if (pending !== null && pending.kind === 'iterate') {
       const p = pending
@@ -591,12 +667,25 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   // ---- chrome refresh ----
   const refreshChrome = (): void => {
     const goal = `goal ${goalLhs === null ? 'LHS unset' : 'LHS set'}/${goalRhs === null ? 'RHS unset' : 'RHS set'}`
-    const head = mode === 'edit' ? 'EDIT' : `PROVE·${side}`
-    statusDiv.textContent = `[${head}] ${goal} | ${session === null ? 'no session' : meetStatus()} | ${message}`
-    modeBtn.textContent = mode === 'edit' ? 'Switch to PROVE' : 'Switch to EDIT'
+    if (mode === 'replay' && replay !== null) {
+      const rule = replayK === 0 ? '(start)' : replay.labelAt(replayK)
+      statusDiv.textContent = `[REPLAY] step ${replayK}/${replay.stepCount} — ${rule} | ${message}`
+    } else {
+      const head = mode === 'edit' ? 'EDIT' : `PROVE·${side}`
+      statusDiv.textContent = `[${head}] ${goal} | ${session === null ? 'no session' : meetStatus()} | ${message}`
+    }
+    modeBtn.textContent = mode === 'edit' ? 'Switch to PROVE' : mode === 'prove' ? 'Switch to EDIT' : 'Exit replay'
     sideBtn.textContent = side === 'forward' ? 'Side: forward (toggle)' : 'Side: backward (toggle)'
 
     menuDiv.replaceChildren()
+    if (mode === 'replay' && replay !== null) {
+      const prev = button('◀ Prev', () => gotoReplayStep(replayK - 1))
+      const next = button('Next ▶', () => gotoReplayStep(replayK + 1))
+      prev.disabled = replayK === 0
+      next.disabled = replayK === replay.stepCount
+      menuDiv.append(prev, next, button('Exit replay', exitReplay))
+      return
+    }
     if (pending !== null) {
       const p = pending
       if (p.kind === 'cite') {
@@ -748,6 +837,15 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
     dragMoved = false
     pin = null // release: the pin lifts, physics resettles
   }
+  // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
+  // a text/number input is focused so typing a term is never hijacked.
+  const onKeyDown = (e: KeyboardEvent): void => {
+    if (mode !== 'replay' || replay === null) return
+    const el = document.activeElement
+    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return
+    if (e.key === 'ArrowRight') { gotoReplayStep(replayK + 1); e.preventDefault() }
+    else if (e.key === 'ArrowLeft') { gotoReplayStep(replayK - 1); e.preventDefault() }
+  }
   const onWheel = (e: WheelEvent): void => {
     e.preventDefault()
     const screen = screenOf(e)
@@ -835,6 +933,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
   canvas.addEventListener('pointermove', onPointerMove)
   canvas.addEventListener('pointerup', onPointerUp)
   canvas.addEventListener('wheel', onWheel, { passive: false })
+  window.addEventListener('keydown', onKeyDown)
 
   // ---- E2E debug seam: window.__vpaDebug hook when ?debug in URL ----
   if (new URLSearchParams(location.search).has('debug')) {
@@ -844,6 +943,15 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       },
       status(): string {
         return message
+      },
+      replay(): { mode: string; k: number; n: number; label: string; bodies: number } {
+        return {
+          mode,
+          k: replayK,
+          n: replay?.stepCount ?? 0,
+          label: replay === null ? '' : replayK === 0 ? '(start)' : replay.labelAt(replayK),
+          bodies: engine.bodies.size,
+        }
       },
     }
   }
@@ -859,6 +967,7 @@ export function mountShell(opts: ShellOptions): { dispose(): void } {
       canvas.removeEventListener('pointermove', onPointerMove)
       canvas.removeEventListener('pointerup', onPointerUp)
       canvas.removeEventListener('wheel', onWheel)
+      window.removeEventListener('keydown', onKeyDown)
       chrome.replaceChildren()
       if ((window as any).__vpaDebug !== undefined) delete (window as any).__vpaDebug
     },
