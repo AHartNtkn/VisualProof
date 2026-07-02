@@ -50,6 +50,36 @@ describe('bundled theories as shipped artifacts', () => {
     expect(rewritten).toBe(true)
   })
 
+  // The road the app actually uses to bring a theory in is theoryToJson (save)
+  // → loadTheory (open), and loadTheory's verifyTheory re-runs checkTheorem on
+  // EVERY theorem — a full re-derivation, not a parse. These pins assert both
+  // theories survive that road with every theorem intact, and (negative
+  // control) that the road genuinely re-verifies: corrupting one theorem's
+  // recorded steps makes loadTheory throw rather than silently accept it.
+  for (const [label, build] of [['frege', buildFregeTheory], ['lambda', buildLambdaTheory]] as const) {
+    it(`${label}: every theorem replays and verifies through theoryToJson → loadTheory`, () => {
+      const src = build()
+      const { theory } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(src))))
+      expect(theory.theorems.map((t) => t.name)).toEqual(src.theorems.map((t) => t.name))
+      for (const s of src.theorems) {
+        const loaded = theory.theorems.find((t) => t.name === s.name)
+        expect(loaded, `theorem '${s.name}' lost in the JSON round-trip`).toBeDefined()
+        expect(loaded!.steps.length, `theorem '${s.name}' step count changed`).toBe(s.steps.length)
+      }
+    })
+
+    it(`${label}: dropping a recorded proof step makes loadTheory reject the theory`, () => {
+      const json = theoryToJson(build()) as { theorems: { name: string; steps: unknown[] }[] }
+      // corrupt the LAST theorem (the richest derivation of each theory) by
+      // dropping its final step: the recorded proof no longer reaches the rhs.
+      const victim = json.theorems[json.theorems.length - 1]!
+      const broken = JSON.parse(JSON.stringify(json)) as typeof json
+      broken.theorems[broken.theorems.length - 1]!.steps.pop()
+      expect(victim.steps.length).toBeGreaterThan(0)
+      expect(() => loadTheory(broken)).toThrow()
+    })
+  }
+
   it('every statement and relation body is a pure term (guards the constant purge)', () => {
     for (const theory of [buildFregeTheory(), buildLambdaTheory()]) {
       for (const [name, rel] of Object.entries(theory.relations)) {

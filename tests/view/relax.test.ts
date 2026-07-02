@@ -112,7 +112,22 @@ describe('settle — every replay step reaches a bounded layout at rest', () => 
   // the settle budget. We sample states spread across the relational plusComm
   // replay — early, mid, and final — each of which must satisfy both.
   const r = mkReplay(plusCommThm, bootCtx)
-  for (const k of [0, 16, 32, 48, r.stepCount]) {
+  const sampleSteps = [0, 16, 32, 48, r.stepCount]
+
+  // Probe 2 (skip anchor-body creation) only fails a test if a SAMPLED step
+  // actually contains an empty leaf region — that is the layout that regressed.
+  // If the derivation ever shifts so no sampled step has one, the at-rest
+  // battery would pass with the anchor mechanism broken. Pin it: at least one
+  // sampled step must carry an anchor body.
+  it('the sampled steps exercise the empty-leaf anchor path', () => {
+    const anchored = sampleSteps.filter((k) => {
+      const e = mkEngine(r.diagramAt(k), r.boundary)
+      return [...e.bodies.values()].some((b) => b.kind === 'anchor')
+    })
+    expect(anchored.length, 'no sampled step has an empty-leaf anchor; adjust the sample so probe 2 stays caught').toBeGreaterThan(0)
+  })
+
+  for (const k of sampleSteps) {
     it(`plusComm step ${k} settles bounded and at rest`, () => {
       const e = mkEngine(r.diagramAt(k), r.boundary)
       settle(e, 2600)

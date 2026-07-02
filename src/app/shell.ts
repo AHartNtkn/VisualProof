@@ -17,6 +17,7 @@ import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
+import { fitCamera, DESIGN_SCALE } from '../view/camera'
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, rebuild } from './library'
 import type { Replay } from './replay'
@@ -183,17 +184,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // unit scale, so small sheets don't blow up) times the user's wheel-zoom
   // factor. It is recomputed every frame and STABILIZES because settled
   // layouts are at rest; the user cannot move the background, only zoom it.
-  const DESIGN_SCALE = 6
   const view = { scale: DESIGN_SCALE, offsetX: canvas.width / 2, offsetY: canvas.height / 2 }
   let userZoom = 1
   const fitView = (): void => {
-    const sheet = engine.regions.get(engine.d.root)
-    const R = Math.max(sheet === undefined ? 10 : sheet.radius, 10)
-    const cx = sheet === undefined ? 0 : sheet.center.x
-    const cy = sheet === undefined ? 0 : sheet.center.y
-    view.scale = Math.min(DESIGN_SCALE, (0.45 * Math.min(canvas.width, canvas.height)) / R) * userZoom
-    view.offsetX = canvas.width / 2 - cx * view.scale
-    view.offsetY = canvas.height / 2 - cy * view.scale
+    const cam = fitCamera(engine.regions.get(engine.d.root), canvas.width, canvas.height, userZoom)
+    view.scale = cam.scale
+    view.offsetX = cam.offsetX
+    view.offsetY = cam.offsetY
   }
 
   const toWorld = (screen: Vec2): Vec2 =>
