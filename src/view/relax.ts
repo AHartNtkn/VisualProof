@@ -43,19 +43,22 @@ export function recomputeRegions(e: Engine): void {
     }
     for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8 })
     if (discs.length === 0) {
-      // An empty leaf region has no member to derive a center from: its center
-      // IS its positional state, preserved across recomputes and moved by
-      // shiftSubtree/projection like any other carrier. Resetting it here
-      // would pin every empty cut to the origin, immovably and illegally.
-      const prev = e.regions.get(rid)
-      e.regions.set(rid, { center: prev === undefined ? { x: 0, y: 0 } : { x: prev.center.x, y: prev.center.y }, radius: 10 })
+      // only a contentless sheet reaches here (empty leaf regions carry an
+      // anchor body)
+      e.regions.set(rid, { center: { x: 0, y: 0 }, radius: 10 })
       continue
     }
     // true minimal enclosing circle of the member discs: subgradient descent
-    // on the convex objective f(c) = max_i (|c - c_i| + r_i)
-    const center = { x: 0, y: 0 }
-    for (const m of discs) { center.x += m.c.x; center.y += m.c.y }
-    center.x /= discs.length; center.y /= discs.length
+    // on the convex objective f(c) = max_i (|c - c_i| + r_i). The objective is
+    // convex, so any start converges; warm-starting from the previous center
+    // makes the recompute near-free once the layout is quiescent (this runs
+    // inside every projection pass).
+    const prev = e.regions.get(rid)
+    const center = prev !== undefined ? { x: prev.center.x, y: prev.center.y } : { x: 0, y: 0 }
+    if (prev === undefined) {
+      for (const m of discs) { center.x += m.c.x; center.y += m.c.y }
+      center.x /= discs.length; center.y /= discs.length
+    }
     for (let it = 0; it < 80; it++) {
       let worst = discs[0]!, worstV = -Infinity
       for (const m of discs) {
@@ -76,21 +79,11 @@ export function recomputeRegions(e: Engine): void {
 }
 
 function shiftSubtree(e: Engine, rid: RegionId, dx: number, dy: number): void {
-  const g = e.regions.get(rid)
-  if (g !== undefined) e.regions.set(rid, { center: { x: g.center.x + dx, y: g.center.y + dy }, radius: g.radius })
   for (const mid of e.membersOf.get(rid)!) {
     const b = e.bodies.get(mid)!
     b.pos = { x: b.pos.x + dx, y: b.pos.y + dy }
   }
   for (const c of e.childrenOf.get(rid)!) shiftSubtree(e, c, dx, dy)
-}
-
-function emptyLeafRegions(e: Engine): RegionId[] {
-  const out: RegionId[] = []
-  for (const rid of e.regions.keys()) {
-    if (e.membersOf.get(rid)!.length === 0 && e.childrenOf.get(rid)!.length === 0) out.push(rid)
-  }
-  return out
 }
 
 function subtreeMembers(e: Engine, rid: RegionId): string[] {
@@ -134,12 +127,8 @@ export function resolveOverlaps(e: Engine): boolean {
         // vector breaks the symmetry deterministically
         const ux = dist < 1e-9 ? 1 : dx / dist, uy = dist < 1e-9 ? 0 : dy / dist
         const viol = need - dist
-        const carriersOf = (sub: RegionId): number => {
-          const g = subtreeCarriers(e, sub)
-          return g.bodies.length + g.emptyLeaves.length
-        }
-        const mA = A.sub === null ? 1 : carriersOf(A.sub)
-        const mB = B.sub === null ? 1 : carriersOf(B.sub)
+        const mA = A.sub === null ? 1 : subtreeCarriers(e, A.sub).length
+        const mB = B.sub === null ? 1 : subtreeCarriers(e, B.sub).length
         const wA = mB / (mA + mB), wB = mA / (mA + mB)
         const shift = (it: typeof A, sx: number, sy: number): void => {
           if (it.sub === null) {
@@ -182,18 +171,11 @@ type LegRef = { key: string; other: Body; otherKey: string | null }
     cursor feels direct (the caller overrides their positions each tick). */
 export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): void {
   recomputeRegions(e)
-  // snapshot every positional carrier: the end-of-tick quotient of the global
+  // snapshot every body position: the end-of-tick quotient of the global
   // rotation zero mode is fitted against this
   const carrierStart: { get(): Vec2; set(p: Vec2): void; p0: Vec2 }[] = []
   for (const b of e.bodies.values()) {
     carrierStart.push({ get: () => b.pos, set: (p) => { b.pos = p }, p0: b.pos })
-  }
-  for (const rid of emptyLeafRegions(e)) {
-    carrierStart.push({
-      get: () => e.regions.get(rid)!.center,
-      set: (p) => { const g = e.regions.get(rid)!; e.regions.set(rid, { center: p, radius: g.radius }) },
-      p0: e.regions.get(rid)!.center,
-    })
   }
   // force accumulator: mutable points, not the readonly Vec2 used for state
   const force = new Map<string, { x: number; y: number }>()
@@ -327,8 +309,12 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   }
 
   // boundary exits keep a kinematic aim (there is no spring to take a torque
-  // from): the exit body rotates its port normal toward its nearest frame
-  // edge (approximated by the sheet box)
+  // from): the exit body rotates its port normal OUTWARD along the radial
+  // from the sheet center through the body. The radial is continuous in
+  // position and independent of θ — an anchor- or nearest-edge-derived
+  // target feeds back through θ (the anchor moves as the body rotates) and
+  // flips discontinuously near the frame diagonals, which sustains a chase
+  // oscillation that never rests.
   const legsByBody = new Map<string, LegRef[]>()
   const push = (body: string, ref: LegRef): void => {
     let ls = legsByBody.get(body)
@@ -341,14 +327,11 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     if (b.kind === 'junction' || sheetG === undefined) continue
     const w0 = e.d.wires[wid]!
     const key = pkey(w0.endpoints.find((ep) => ep.node === bid)!.port)
-    const p = worldAnchor(b, key)
-    const fr = sheetG.radius + 6
-    const cand: Vec2[] = [
-      { x: sheetG.center.x - fr, y: p.y }, { x: sheetG.center.x + fr, y: p.y },
-      { x: p.x, y: sheetG.center.y - fr }, { x: p.x, y: sheetG.center.y + fr },
-    ]
-    let q = cand[0]!
-    for (const c of cand) if (Math.hypot(c.x - p.x, c.y - p.y) < Math.hypot(q.x - p.x, q.y - p.y)) q = c
+    const dx = b.pos.x - sheetG.center.x, dy = b.pos.y - sheetG.center.y
+    const rr = Math.hypot(dx, dy)
+    const q = rr < 1e-9
+      ? { x: sheetG.center.x + sheetG.radius, y: sheetG.center.y }
+      : { x: b.pos.x + (dx / rr) * sheetG.radius, y: b.pos.y + (dy / rr) * sheetG.radius }
     push(bid, { key, other: { ...b, id: '__frame__', pos: q }, otherKey: null })
   }
   for (const b of e.bodies.values()) {
@@ -367,9 +350,10 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     b.theta += Math.atan2(sinS, cosS) * ROT_BLEND
   }
 
-  // project every tick: per-tick motion is small, so corrections stay small —
-  // a sparser cadence lets violations accumulate and resolves them as
-  // spring-fighting teleports
+  // project to feasibility every tick: per-tick motion is small, so the
+  // sweeps converge in a few passes; partial projection (one sweep, or a
+  // sparser cadence) leaves standing violations that the forces feed on —
+  // observed as a persistent conveyor limit cycle that never rests
   resolveOverlaps(e)
 
   // Quotient the global-rotation zero mode. Nothing anchors the layout's

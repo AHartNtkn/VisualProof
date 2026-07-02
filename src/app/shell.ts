@@ -68,12 +68,9 @@ type Pending =
   | { readonly kind: 'unCite'; readonly name: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'relFold'; readonly defId: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
 
-/** A grab: the carriers moved by this drag, each with its offset from the
+/** A grab: the bodies moved by this drag, each with its offset from the
     cursor's world position at grab time (so a drag moves, never teleports). */
-type Drag = {
-  readonly bodies: ReadonlyMap<string, Vec2>
-  readonly emptyLeaves: ReadonlyMap<RegionId, Vec2>
-}
+type Drag = { readonly bodies: ReadonlyMap<string, Vec2> }
 
 /**
  * Backward menu entry: a labelled action that commits at button-click time,
@@ -1015,12 +1012,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             b.vel = vec(0, 0)
           }
         }
-        for (const [rid, off] of pin.drag.emptyLeaves) {
-          const g = engine.regions.get(rid)
-          if (g !== undefined) {
-            engine.regions.set(rid, { center: { x: at.x + off.x, y: at.y + off.y }, radius: g.radius })
-          }
-        }
       }
     }
     fitView()
@@ -1048,22 +1039,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const t: DragTarget | null = dragTarget(engine, world)
     if (t === null) return null
     const bodies = new Map<string, Vec2>()
-    const emptyLeaves = new Map<RegionId, Vec2>()
-    if (t.kind === 'body') {
-      const b = engine.bodies.get(t.id)!
-      bodies.set(t.id, vec(b.pos.x - world.x, b.pos.y - world.y))
-    } else {
-      const g = subtreeCarriers(engine, t.id)
-      for (const id of g.bodies) {
-        const b = engine.bodies.get(id)!
-        bodies.set(id, vec(b.pos.x - world.x, b.pos.y - world.y))
-      }
-      for (const rid of g.emptyLeaves) {
-        const c = engine.regions.get(rid)!.center
-        emptyLeaves.set(rid, vec(c.x - world.x, c.y - world.y))
-      }
+    const ids = t.kind === 'body' ? [t.id] : subtreeCarriers(engine, t.id)
+    for (const id of ids) {
+      const b = engine.bodies.get(id)!
+      bodies.set(id, vec(b.pos.x - world.x, b.pos.y - world.y))
     }
-    return { bodies, emptyLeaves }
+    return { bodies }
   }
   const onPointerDown = (e: PointerEvent): void => {
     const screen = screenOf(e)

@@ -20,7 +20,7 @@ export const DISC_R = 5.5
 /** Sheet frame margin beyond the outermost region (world units). */
 export const FRAME_MARGIN = 6
 
-export type BodyKind = 'term' | 'ref' | 'atom' | 'junction'
+export type BodyKind = 'term' | 'ref' | 'atom' | 'junction' | 'anchor'
 
 export type Body = {
   readonly id: string
@@ -93,24 +93,14 @@ export function anchorOf(geometry: NodeGeometry, center: Vec2, port: Port): Vec2
   return add(center, local)
 }
 
-/** Positional carriers of a region subtree: the member bodies, plus every
-    empty leaf region (whose center is its own state). This is the subtree's
-    mass in projections and the grab set of a region drag. */
-export function subtreeCarriers(e: Engine, rid: RegionId): { bodies: string[]; emptyLeaves: RegionId[] } {
-  const bodies: string[] = []
-  const emptyLeaves: RegionId[] = []
-  const walk = (r: RegionId): void => {
-    const mids = e.membersOf.get(r)!
-    const kids = e.childrenOf.get(r)!
-    if (mids.length === 0 && kids.length === 0) {
-      emptyLeaves.push(r)
-      return
-    }
-    bodies.push(...mids)
-    for (const c of kids) walk(c)
-  }
-  walk(rid)
-  return { bodies, emptyLeaves }
+/** All bodies of a region subtree: the subtree's mass in projections and the
+    grab set of a region drag. Every region carries at least one body — empty
+    leaf regions get an invisible anchor body at mkEngine, so bodies are the
+    ONLY kind of positional state. */
+export function subtreeCarriers(e: Engine, rid: RegionId): string[] {
+  const out = [...e.membersOf.get(rid)!]
+  for (const c of e.childrenOf.get(rid)!) out.push(...subtreeCarriers(e, c))
+  return out
 }
 
 export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
@@ -145,6 +135,27 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     if (r.kind !== 'sheet') childrenOf.get(r.parent)!.push(rid)
   }
   for (const [nid, n] of Object.entries(d.nodes)) membersOf.get(n.region)!.push(nid)
+
+  // Empty leaf regions get an invisible anchor body: the region's positional
+  // state carrier. With it, cohesion/repulsion/damping/projection apply to
+  // empty cuts uniformly — without it they are dynamically inert (only
+  // projections could teleport them, nothing could restore them, and one
+  // dangling empty cut inflates its parent circle into permanent violation).
+  // discR restores the historical empty-region circle radius of 10 once
+  // recomputeRegions adds REGION_PAD around the disc.
+  for (const [rid] of Object.entries(d.regions)) {
+    if (membersOf.get(rid)!.length === 0 && childrenOf.get(rid)!.length === 0) {
+      const aid = `anchor:${rid}`
+      const ang = i * 2.399963, rad = 6 + 5 * i
+      bodies.set(aid, {
+        id: aid, kind: 'anchor', node: null, geometry: null,
+        localAnchor: new Map(), discR: 5, region: rid,
+        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, vel: { x: 0, y: 0 }, theta: 0,
+      })
+      membersOf.get(rid)!.push(aid)
+      i++
+    }
+  }
 
   const legs: Leg[] = []
   const boundaryOf = new Map<WireId, string>()

@@ -156,7 +156,7 @@ export function paint(e: Engine, st: Theme): Shape[] {
 
   // node bodies: anatomy (shared linework / binder-hue atoms) + named discs
   for (const b of e.bodies.values()) {
-    if (b.kind === 'junction') continue
+    if (b.kind === 'junction' || b.kind === 'anchor') continue
     const node = b.node!
     if (node.kind === 'ref') {
       shapes.push({ kind: 'circle', center: b.pos, r: DISC_R, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })

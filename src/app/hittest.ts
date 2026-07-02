@@ -53,7 +53,7 @@ function bezierDistance(p: Vec2, path: WirePath): number {
  */
 export function hitTest(e: Engine, point: Vec2): Hit | null {
   for (const b of e.bodies.values()) {
-    if (b.kind === 'junction') continue
+    if (b.kind === 'junction' || b.kind === 'anchor') continue
     if (length(sub(point, b.pos)) <= b.discR) return { kind: 'node', id: b.id }
   }
   for (const { wid, path } of legPaths(e)) {
@@ -88,6 +88,7 @@ export type DragTarget =
  */
 export function dragTarget(e: Engine, point: Vec2): DragTarget | null {
   for (const b of e.bodies.values()) {
+    if (b.kind === 'anchor') continue // an empty cut is grabbed by its region circle
     if (length(sub(point, b.pos)) <= b.discR) return { kind: 'body', id: b.id }
   }
   let best: { id: RegionId; radius: number } | null = null
