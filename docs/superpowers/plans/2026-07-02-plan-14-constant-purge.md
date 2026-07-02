@@ -23,7 +23,13 @@ De-risk the machinery before committing to the restatement: in a scratch vitest,
 **Files:** `src/theories/frege.ts` (relations `zero/1`, `succ/2`, `plus/3`, `nat/1` restated pure — the nat body uses Zero/Succ REF nodes per the user's round-3 directive, no bare λ in the definition; theorems `plusAssoc`, `plusLeftUnit`, `plusRightUnit`, `succShiftS`, `plusComm` restated relationally with the same names and re-derived), `src/theories/lambda.ts` (same treatment for whatever it defines), `src/theories/macros.ts` as needed.
 **Test:** `tests/theories/*` batteries updated to the relational statements; `checkTheorem` green for every theorem; the battery asserts the statements contain NO `const` term anywhere (guards the coming purge).
 
-- [ ] All five arithmetic theorems re-derived relationally, batteries green, suite + tsc green. Commit.
+- [x] All five arithmetic theorems re-derived relationally, batteries green, suite + tsc green. Commit (5fc60bc).
+
+**Task 1 findings.** All five re-derived const-free (relUnfold/relFold + fusion/fission + conversion; no unfold/fold, definitions `{}`). Step counts: plusLeftUnit 5, plusRightUnit 5, plusAssoc 11, succShiftS 77, plusComm 62. lambda's onePlusOne/fixedPoint restated as pure-λ conversion theorems.
+- **FLAGGED statement correction (succShiftS):** the target in Task 1 above labels the guard `nat(n)` with `Succ(n,s) ∧ Plus(m,s,o)` — i.e. the nat is on the SECOND Plus addend. That is NOT provable: `m + (S n) ~ S(m + n)` is not βη and needs induction on the FIRST addend (Church PLUS recurses on arg 1); `(S m) + n ~ S(m + n)` is the pure one (verified directly). The shipped statement guards the first Plus argument: `nat(a) ∧ Succ(b,sb) ∧ Plus(a,sb,o) ⟹ nat(a) ∧ Plus(a,b,t) ∧ Succ(t,o)`, boundary [a,b,o], sb/t internal. plusComm cites it with a:=b (its ℕ(b) guard). Same math, corrected guard placement.
+- plusComm cites the RELATIONAL succShiftS (not a pure helper) via fold-cite-unfold at the closure step: the manufactured `b + (Sy)` node is iterated (one copy kept for the Cl fact), the copy folded to Succ/Plus refs, succShiftS applied forward, the produced Plus∧Succ unfolded back to `S(b + y)`.
+- Deleted: `fregeDefinitions`, `lambdaDefinitions`, `deriveConversion`/`ConversionRecipe` recipe machinery, and their index.ts re-exports (no external consumers). natRelation() kept exported.
+- Battery gains a no-const guard walking every theorem lhs/rhs + relation body of both theories.
 
 ### Task 2: The purge (kernel + view + app)
 
