@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { mkReplay } from '../../src/app/replay'
-import { bootBundledContext } from '../../src/app/boot'
 import { replayProof } from '../../src/kernel/proof/step'
 import { diagramFingerprint } from '../../src/kernel/diagram/canonical/fingerprint'
 import type { Theorem } from '../../src/kernel/proof/theorem'
+import { bootFixture } from './boot-fixture'
 
-const boot = bootBundledContext()
+const boot = await bootFixture()
 const ctx = boot.ctx
 const thm = (name: string): Theorem => {
   const t = ctx.theorems.get(name)

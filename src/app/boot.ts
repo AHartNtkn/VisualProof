@@ -4,9 +4,7 @@ import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { ProofContext } from '../kernel/proof/step'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { Theory } from '../kernel/proof/store'
-import { loadTheory, theoryToJson } from '../kernel/proof/store'
-import { buildFregeTheory } from '../theories/frege'
-import { buildLambdaTheory } from '../theories/lambda'
+import { loadTheory } from '../kernel/proof/store'
 
 export type BootContext = {
   readonly ctx: ProofContext
@@ -48,10 +46,28 @@ export function mergeTheories(loaded: readonly { theory: Theory; ctx: ProofConte
   }
 }
 
-/** The app's boot path: both bundled theories through the verifying JSON road. */
-export function bootBundledContext(): BootContext {
-  return mergeTheories([
-    loadTheory(theoryToJson(buildFregeTheory())),
-    loadTheory(theoryToJson(buildLambdaTheory())),
-  ])
+/** Where the shipped theory data lives, relative to the served app root. */
+const MANIFEST_URL = 'theories/index.json'
+const theoryUrl = (file: string): string => `theories/${file}`
+
+/**
+ * The app's boot path: read the shipped theory files as DATA and bring each one
+ * into the kernel through loadTheory (parse + verify), then merge. `fetchJson`
+ * abstracts the transport — the browser passes a fetch-based reader; tests pass
+ * an in-memory reader built from the generators + theoryToJson, exercising the
+ * real load path minus HTTP. Every failure (missing manifest, malformed file,
+ * unverifiable theory) propagates loudly; there is no empty-context fallback.
+ */
+export async function fetchBootContext(
+  fetchJson: (url: string) => Promise<unknown>,
+): Promise<BootContext> {
+  const manifest = await fetchJson(MANIFEST_URL)
+  if (!Array.isArray(manifest) || !manifest.every((f): f is string => typeof f === 'string')) {
+    throw new Error(`theory manifest '${MANIFEST_URL}' must be a JSON array of file-name strings`)
+  }
+  const loaded: { theory: Theory; ctx: ProofContext }[] = []
+  for (const file of manifest) {
+    loaded.push(loadTheory(await fetchJson(theoryUrl(file))))
+  }
+  return mergeTheories(loaded)
 }

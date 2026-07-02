@@ -17,7 +17,7 @@ import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
-import { bootBundledContext } from './boot'
+import { fetchBootContext } from './boot'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
@@ -126,13 +126,22 @@ function backwardEntries(d: Diagram, sel: SubgraphSelection, ctx: ProofContext):
   return out
 }
 
-export function mountShell(opts: ShellOptions): { dispose(): void } {
+/** Browser transport for the boot reader: fetch a URL and parse it as JSON,
+ *  crashing loudly on any HTTP error so a missing/corrupt file cannot boot an
+ *  empty context. */
+async function fetchJson(url: string): Promise<unknown> {
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`fetching '${url}' failed: HTTP ${res.status} ${res.statusText}`)
+  return res.json()
+}
+
+export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void }> {
   const { canvas, chrome } = opts
   const ctx2d = canvas.getContext('2d')
   if (ctx2d === null) throw new Error('the canvas has no 2d context')
 
-  // ---- boot: both bundled theories through the verifying JSON road ----
-  const boot = bootBundledContext()
+  // ---- boot: the shipped theories loaded as data through the verifying road ----
+  const boot = await fetchBootContext(fetchJson)
   let ctx: ProofContext = boot.ctx
   let relations: Readonly<Record<string, DiagramWithBoundary>> = boot.relations
   let constNames: ReadonlySet<string> = boot.constNames

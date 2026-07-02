@@ -4,14 +4,15 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
-import { bootBundledContext } from '../../src/app/boot'
 import { startSession, applyForward, meet, assembleTheorem, adoptTheorem } from '../../src/app/session'
 import { sessionTheory } from '../../src/app/persist'
+import { bootFixture } from './boot-fixture'
 
 const noConsts = new Set<string>()
 const p = (s: string) => parseTerm(s, noConsts)
 
-function provenToy(boot = bootBundledContext()) {
+async function provenToy() {
+  const boot = await bootFixture()
   const l = new DiagramBuilder()
   l.termNode(l.root, p('\\x. x'))
   const lhs = mkDiagramWithBoundary(l.build(), [])
@@ -31,16 +32,16 @@ function provenToy(boot = bootBundledContext()) {
 }
 
 describe('adoptTheorem', () => {
-  it('a checked session result becomes citable in the session context', () => {
-    const { s } = provenToy()
+  it('a checked session result becomes citable in the session context', async () => {
+    const { s } = await provenToy()
     const thm = assembleTheorem(s, 'toy')
     const s2 = adoptTheorem(s, thm)
     expect(s2.ctx.theorems.has('toy')).toBe(true)
     expect(s.ctx.theorems.has('toy')).toBe(false) // immutably extended
   })
 
-  it('refuses duplicate names and unverifiable theorems loudly', () => {
-    const { s } = provenToy()
+  it('refuses duplicate names and unverifiable theorems loudly', async () => {
+    const { s } = await provenToy()
     const thm = assembleTheorem(s, 'toy')
     const s2 = adoptTheorem(s, thm)
     expect(() => adoptTheorem(s2, thm)).toThrowError(/already names a theorem/)
@@ -50,8 +51,8 @@ describe('adoptTheorem', () => {
 })
 
 describe('sessionTheory + the file road', () => {
-  it('round-trips the live context (with an adopted theorem) through theory JSON', () => {
-    const { s, boot } = provenToy()
+  it('round-trips the live context (with an adopted theorem) through theory JSON', async () => {
+    const { s, boot } = await provenToy()
     const s2 = adoptTheorem(s, assembleTheorem(s, 'toy'))
     const theory = sessionTheory(s2.ctx, { relations: boot.relations })
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(theory))))
@@ -59,8 +60,8 @@ describe('sessionTheory + the file road', () => {
     expect(ctx.theorems.has('onePlusOne')).toBe(true)
   })
 
-  it('preserves dependency order: adopted theorems come after what they cite', () => {
-    const { s, boot } = provenToy()
+  it('preserves dependency order: adopted theorems come after what they cite', async () => {
+    const { s, boot } = await provenToy()
     const s2 = adoptTheorem(s, assembleTheorem(s, 'toy'))
     const theory = sessionTheory(s2.ctx, { relations: boot.relations })
     const names = theory.theorems.map((t) => t.name)

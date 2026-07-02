@@ -16,6 +16,9 @@ test('the app boots with both theories loaded', async ({ page }) => {
 
 test('term entry adds a node to the edit diagram', async ({ page }) => {
   await page.goto('/?debug')
+  // Boot fetches the theory data asynchronously; the debug seam is installed
+  // only once the mount completes. Wait for it before reading node counts.
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
   const before = await page.evaluate(() => window.__vpaDebug!.nodeCount())
   await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
   await page.getByRole('button', { name: /add term/i }).click()

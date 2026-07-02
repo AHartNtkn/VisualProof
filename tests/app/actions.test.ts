@@ -5,8 +5,8 @@ import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
-import { bootBundledContext } from '../../src/app/boot'
 import { applicableActions } from '../../src/app/actions'
+import { bootFixture } from './boot-fixture'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { applyStep } from '../../src/kernel/proof/step'
 
@@ -65,12 +65,12 @@ describe('applicableActions', () => {
     expect(onNeg).not.toContain('vacuousElim')
   })
 
-  it('offers theorem citations whose direction matches the selection polarity', () => {
+  it('offers theorem citations whose direction matches the selection polarity', async () => {
     const consts = new Set(['ONE', 'PLUS'])
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, parseTerm('PLUS ONE ONE', consts))
     const d = h.build()
-    const { ctx } = bootBundledContext()
+    const { ctx } = await bootFixture()
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const cites = applicableActions(d, sel, ctx).filter((a) => a.kind === 'citeTheorem')
     expect(cites.length).toBeGreaterThan(0)

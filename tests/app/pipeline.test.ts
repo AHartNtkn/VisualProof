@@ -7,7 +7,7 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { emptyDiagram, addTermNode, addCut } from '../../src/app/edit'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { startSession, applyForward, applyBackward, meet, assembleTheorem } from '../../src/app/session'
-import { bootBundledContext } from '../../src/app/boot'
+import { bootFixture } from './boot-fixture'
 import { adoptTheorem } from '../../src/app/session'
 import { sessionTheory } from '../../src/app/persist'
 import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
@@ -37,9 +37,9 @@ describe('edit → prove → assemble, end to end', () => {
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
 
-  it('forward citation sessions check too', () => {
+  it('forward citation sessions check too', async () => {
     const consts = new Set(['ONE', 'PLUS'])
-    const { ctx } = bootBundledContext()
+    const { ctx } = await bootFixture()
     const e0 = emptyDiagram()
     const { diagram: startD, node } = addTermNode(e0, e0.root, parseTerm('PLUS ONE ONE', consts))
     const wo = Object.entries(startD.wires).find(([, w]) =>
@@ -57,8 +57,8 @@ describe('edit → prove → assemble, end to end', () => {
 })
 
 describe('the full story: prove, adopt, save, reload, cite', () => {
-  it('a session theorem survives the file road and is citable after reload', () => {
-    const boot = bootBundledContext()
+  it('a session theorem survives the file road and is citable after reload', async () => {
+    const boot = await bootFixture()
     // prove the toy double-cut theorem forward
     const l = emptyDiagram()
     const { diagram: lhsD } = addTermNode(l, l.root, p('\\x. x'))

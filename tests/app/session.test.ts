@@ -5,8 +5,8 @@ import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
-import { bootBundledContext } from '../../src/app/boot'
 import { termEq } from '../../src/kernel/term/term'
+import { bootFixture } from './boot-fixture'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary } from '../../src/app/session'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
@@ -89,8 +89,8 @@ describe('proof session', () => {
     expect(() => undoForward(s2)).toThrowError(/nothing to undo/)
   })
 
-  it('cites bundled theorems as single steps', () => {
-    const { ctx } = bootBundledContext()
+  it('cites bundled theorems as single steps', async () => {
+    const { ctx } = await bootFixture()
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('PLUS ONE ONE'))
     const wo = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
@@ -258,8 +258,8 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
 
-  it('un-citation replaces a theorem rhs-occurrence by its lhs in the goal', () => {
-    const { ctx } = bootBundledContext()
+  it('un-citation replaces a theorem rhs-occurrence by its lhs in the goal', async () => {
+    const { ctx } = await bootFixture()
     // lhs: a PLUS ONE ONE node. rhs (goal): onePlusOne's conclusion (a TWO node) —
     // built by citing forward once, then used as the goal of a FRESH session
     const h = new DiagramBuilder()
@@ -292,8 +292,8 @@ describe('backward un-erase, un-conversion, un-citation', () => {
 })
 
 describe('unCite refusals', () => {
-  it('refuses unCite at a negative region', () => {
-    const { ctx } = bootBundledContext()
+  it('refuses unCite at a negative region', async () => {
+    const { ctx } = await bootFixture()
     // goal: a TWO node wrapped in a cut (negative region is the cut interior)
     const h = new DiagramBuilder()
     const nz = h.termNode(h.root, p('TWO'))
@@ -320,8 +320,8 @@ describe('unCite refusals', () => {
     ).toThrowError(/positive region/)
   })
 
-  it('refuses unCite when the selection is not an rhs occurrence', () => {
-    const { ctx } = bootBundledContext()
+  it('refuses unCite when the selection is not an rhs occurrence', async () => {
+    const { ctx } = await bootFixture()
     // goal: a ZERO node; selection is the node itself — not onePlusOne's rhs (TWO)
     const h = new DiagramBuilder()
     const nz = h.termNode(h.root, p('ZERO'))
