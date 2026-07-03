@@ -30,8 +30,22 @@ function deriveOnePlusOne(): Theorem {
     { rule: 'closedTermIntro', region: lhsDiagram.root, term: poo },
     { rule: 'closedTermIntro', region: lhsDiagram.root, term: TWOp },
   ]
-  const cur = replayProof(lhsDiagram, steps, ctx)
-  return { name: 'onePlusOne', lhs, rhs: mkDiagramWithBoundary(cur, []), steps } // PROBE: skip congruenceJoin
+  let cur = replayProof(lhsDiagram, steps, ctx)
+  const nodeWith = (t: Term): string => {
+    const found = Object.entries(cur.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, t))
+    if (found === undefined) throw new Error('onePlusOne derivation: intro node not found')
+    return found[0]
+  }
+  const a = nodeWith(poo)
+  const b = nodeWith(TWOp)
+  // harvest the 1+1 ~ 2 certificate once at build time (fuel-free replay)
+  const scratch = new DiagramBuilder()
+  const sn = scratch.termNode(scratch.root, poo)
+  const conv = applyConversion(scratch.build(), sn, TWOp, 4096)
+  const join: ProofStep = { rule: 'congruenceJoin', a, b, certificate: conv.certificate }
+  steps.push(join)
+  cur = replayProof(cur, [join], ctx)
+  return { name: 'onePlusOne', lhs, rhs: mkDiagramWithBoundary(cur, []), steps }
 }
 
 /**
