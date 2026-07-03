@@ -94,7 +94,7 @@ export type LabCtx = {
   freeze(on: boolean): void
 }
 
-export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void): void {
+export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, mk: () => { d: Diagram; boundary: WireId[] } = showcase): void {
   document.title = title
   const head = document.createElement('div')
   head.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#ffffffd8;font:13px system-ui;z-index:5;border-bottom:1px solid #ccc'
@@ -108,7 +108,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void): 
   msg.style.cssText = 'position:fixed;bottom:0;left:0;right:0;padding:6px 12px;background:#ffffffd8;font:13px system-ui;z-index:5;border-top:1px solid #ccc;color:#7c2d12;min-height:1.2em'
   document.body.append(msg)
   const ctx2d = canvas.getContext('2d')!
-  const start = showcase()
+  const start = mk()
   const view = { scale: 6, offsetX: 0, offsetY: 0 }
   const history: { d: Diagram; boundary: WireId[] }[] = []
   const fit = () => {
@@ -126,6 +126,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void): 
   const swap = (d2: Diagram, boundary2: WireId[]): void => {
     const next = mkEngine(d2, boundary2)
     carryOver(lab.engine, next)
+    settleStep(next) // paint requires a settled engine — same discipline as the shell
     lab.d = d2
     lab.boundary = boundary2
     lab.engine = next
