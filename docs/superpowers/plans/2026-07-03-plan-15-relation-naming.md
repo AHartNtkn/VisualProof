@@ -15,7 +15,11 @@
 **Files:** `src/app/define.ts` (or the existing edit/session module if it fits better — one home, no scattering): `defineRelation(diagram, sel, orderedWires, name, ctx, relations) → { relation: DiagramWithBoundary }` implementing every gate above as loud errors.
 **Test:** `tests/app/define.test.ts` — happy path (define, then relFold a fresh copy of the body into the new ref, then relUnfold reproduces it — the round-trip IS the correctness statement); every refusal observed with its message (empty name, name collisions both kinds, missed crossing wire, duplicate pick, non-crossing wire picked, extraction-gate violations pass through verbatim).
 
-- [ ] Core + tests green; suite + tsc green. Commit.
+- [x] Core + tests green; suite + tsc green. Commit.
+
+**Findings (Task 1):** `src/app/define.ts` + `tests/app/define.test.ts` (11 tests). Two points where the spec's letter met the implementation:
+- *"extraction-gate violations pass through verbatim"*: the DiagramError extractSubgraph can throw (atom bound below the anchor) is UNREACHABLE from a valid `mkSelection` — extract.ts:33 documents this. The reachable extraction gate is the OPEN-subgraph case (`binderStubs.length > 0`): an atom bound by a binder that encloses the anchor but sits outside the selection. Comprehension abstraction (comprehension.ts:177) and relFold (reldef.ts:69) both refuse it, and such a body could never be folded, so `defineRelation` refuses it too — that is the gate the test exercises.
+- *name-collision message "(loaded from a.json)"*: the pure core receives only `ctx` + the `relations` record, neither of which carries per-file provenance, so the message names the namespace ("relation … already exists (loaded or defined this session)" / "already a theorem") but not the source file. Loud and instructive; provenance would require threading the Library, which the headless core does not take.
 
 ### Task 2: Shell wiring + e2e
 
