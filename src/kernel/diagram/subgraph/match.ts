@@ -147,7 +147,13 @@ export function findOccurrences(
     inRegion?: RegionId
     openBinders?: ReadonlyMap<RegionId, RegionId>
     mode?: MatchMode
-    /** Citation-supplied boundary anchors: keep only occurrences whose attachments are exactly these (index-aligned). */
+    /**
+     * Citation-supplied boundary anchors, index-aligned with `pattern.boundary`.
+     * A BARE boundary wire (no endpoints) has nothing to discover, so its
+     * attachment is taken directly from here (the only check is the visibility
+     * gate); an endpointful boundary wire's discovered attachment must equal the
+     * one here, so occurrences are restricted to this exact seam.
+     */
     attachments?: readonly WireId[]
   },
 ): MatchResult {
@@ -158,12 +164,25 @@ export function findOccurrences(
   }
   const pd = pattern.diagram
   const boundarySet = new Set(pattern.boundary)
-  for (const b of pattern.boundary) {
-    if (pd.wires[b]!.endpoints.length === 0) {
-      throw new DiagramError(`boundary wire '${b}' has no endpoints; occurrence matching cannot determine its attachment`)
+  if (opts.attachments !== undefined) {
+    if (opts.attachments.length !== pattern.boundary.length) {
+      throw new DiagramError(
+        `seeded attachments (${opts.attachments.length}) must be index-aligned with the pattern boundary (${pattern.boundary.length})`,
+      )
     }
+    for (const a of opts.attachments) {
+      if (host.wires[a] === undefined) throw new DiagramError(`seeded attachment wire '${a}' does not exist in the host`)
+    }
+  }
+  for (const b of pattern.boundary) {
     if (pd.wires[b]!.scope !== pd.root) {
       throw new DiagramError(`boundary wire '${b}' is not scoped at the pattern root; occurrence matching mirrors splice's seam semantics`)
+    }
+    // A bare boundary wire has no endpoints to anchor a search; its attachment
+    // must be supplied (citations do). Enumerating every in-scope host wire
+    // would be meaningless guessing — determinism over guessing.
+    if (pd.wires[b]!.endpoints.length === 0 && opts.attachments === undefined) {
+      throw new DiagramError(`bare boundary wire '${b}' has no endpoints to anchor a search; supply its attachment (citations do)`)
     }
   }
   if (opts.inRegion !== undefined && host.regions[opts.inRegion] === undefined) {
@@ -255,13 +274,6 @@ export function findOccurrences(
     regionMap.set(effectiveRoot, R)
     assignContainer(rootRegions, rootNodes, R, () => finishWires(R))
     regionMap.delete(effectiveRoot)
-  }
-  if (opts.attachments !== undefined) {
-    const seed = opts.attachments
-    const kept = matches.filter(
-      (m) => m.attachments.length === seed.length && m.attachments.every((w, i) => w === seed[i]),
-    )
-    return { matches: kept, undecided }
   }
   return { matches, undecided }
 
@@ -462,7 +474,9 @@ export function findOccurrences(
     }
 
     for (const [prId, hrId] of regionMap) {
-      const pBare = pIdx.bareScoped.get(prId)!
+      // bare BOUNDARY wires are seam anchors, not internal content — they are
+      // resolved from the seed below, never paired against host bare wires here
+      const pBare = pIdx.bareScoped.get(prId)!.filter((w) => !boundarySet.has(w))
       const hBare = hIdx.bareScoped.get(hrId)!
       if (prId === effectiveRoot) {
         if (pBare.length > hBare.length) return
@@ -480,12 +494,24 @@ export function findOccurrences(
     }
 
     const attachments: WireId[] = []
-    for (const b of pattern.boundary) {
+    for (const [i, b] of pattern.boundary.entries()) {
       const stub = pd.wires[b]!
+      if (stub.endpoints.length === 0) {
+        // Bare boundary: the seed IS the attachment (unseeded bare threw up
+        // front). Its only condition is the same visibility gate every
+        // attachment passes — there are no endpoints to verify.
+        const hw = opts.attachments![i]!
+        if (!isAncestorOrEqual(host, host.wires[hw]!.scope, R)) return
+        wireMap.set(b, hw)
+        attachments.push(hw)
+        continue
+      }
       const images = stub.endpoints.map((ep) => ({ node: nodeMap.get(ep.node)!, key: posKey(pd, ep) }))
       const first = images[0]!
       const hw = hIdx.portWire.get(first.node)?.get(first.key)
       if (hw === undefined) return
+      // seeded: an endpointful boundary wire's discovered attachment is pinned
+      if (opts.attachments !== undefined && hw !== opts.attachments[i]) return
       if (usedImages.has(hw)) return
       const hostWire = host.wires[hw]!
       const hostSet = new Set(hostWire.endpoints.map((ep) => `${ep.node} ${posKey(host, ep)}`))

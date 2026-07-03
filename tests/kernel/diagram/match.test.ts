@@ -92,20 +92,55 @@ describe('findOccurrences basics', () => {
     expect(findOccurrences(host, mkPattern(), { fuel: 100 }).matches).toHaveLength(0)
   })
 
-  it('rejects zero-endpoint boundary stubs, non-positive fuel, unknown inRegion', () => {
+  it('refuses UNSEEDED bare boundary stubs, non-positive fuel, unknown inRegion', () => {
     const b = new DiagramBuilder()
     b.termNode(b.root, p('\\x. x'))
     const bare = b.wire(b.root, [])
     const pattern = mkDiagramWithBoundary(b.build(), [bare])
     const h = new DiagramBuilder()
     const host = h.build()
+    // a bare boundary wire has no endpoints to anchor a search; unseeded it is
+    // refused with an instructive message, not silently guessed
     expect(() => findOccurrences(host, pattern, { fuel: 100 }))
-      .toThrowError(/boundary wire 'w0' has no endpoints/)
+      .toThrowError(/bare boundary wire 'w0' has no endpoints to anchor a search; supply its attachment/)
     const { pattern: ok } = nodePattern()
     expect(() => findOccurrences(host, ok, { fuel: 0 }))
       .toThrowError(/fuel must be a positive integer/)
     expect(() => findOccurrences(host, ok, { fuel: 10, inRegion: 'ghost' }))
       .toThrowError(/unknown region 'ghost'/)
+  })
+
+  it('SEEDED bare boundary wire: its image is the supplied host wire, gated only by visibility', () => {
+    // pattern: a `\x. x` node plus a bare boundary wire (a pass-through arg)
+    const b = new DiagramBuilder()
+    b.termNode(b.root, p('\\x. x'))
+    const bare = b.wire(b.root, [])
+    const pattern = mkDiagramWithBoundary(b.build(), [bare])
+    // host: a matching node plus a spare root-scoped wire to anchor the arg to
+    const h = new DiagramBuilder()
+    h.termNode(h.root, p('\\x. x'))
+    const anchor = h.wire(h.root, [])
+    const host = h.build()
+    const r = findOccurrences(host, pattern, { fuel: 100, attachments: [anchor] })
+    expect(r.matches).toHaveLength(1)
+    expect(r.matches[0]?.attachments).toEqual([anchor])
+    expect(r.matches[0]?.wireMap.get(bare)).toBe(anchor)
+  })
+
+  it('SEEDED bare boundary wire is refused when the supplied wire is not in scope', () => {
+    const b = new DiagramBuilder()
+    b.termNode(b.root, p('\\x. x'))
+    const bare = b.wire(b.root, [])
+    const pattern = mkDiagramWithBoundary(b.build(), [bare])
+    // host: the seed wire is scoped INSIDE a cut, so it does not enclose the
+    // root region the occurrence lands in — the visibility gate refuses it
+    const h = new DiagramBuilder()
+    h.termNode(h.root, p('\\x. x'))
+    const cut = h.cut(h.root)
+    const buried = h.wire(cut, [])
+    const host = h.build()
+    const r = findOccurrences(host, pattern, { fuel: 100, inRegion: 'r0', attachments: [buried] })
+    expect(r.matches).toHaveLength(0)
   })
 })
 
