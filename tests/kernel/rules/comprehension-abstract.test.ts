@@ -96,10 +96,11 @@ describe('applyComprehensionAbstract', () => {
     expect(() => applyComprehensionAbstract(d, wrap, comp, [mk([w0, w1])])).not.toThrow()
   })
 
-  it('rejects duplicate argument wires with the distinctness error, not a downstream one', () => {
-    // without the explicit check, [w0, w0] would surface as a DiagramError
-    // ('duplicate boundary wire') from mkDiagramWithBoundary instead of the
-    // rule-level message naming the occurrence
+  it('rejects diagonal args that leave a distinct attachment wire unused', () => {
+    // The occurrence node `y` has TWO distinct attachment wires (its output w0
+    // and its free var w1). Aliasing both relation positions onto w0 is not a
+    // valid diagonal: w1 is a real crossing wire and would be silently dropped
+    // from the atom. The rule refuses by naming the unused attachment.
     const b = new DiagramBuilder()
     const bn = b.termNode(b.root, p('y'))
     const b0 = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
@@ -114,7 +115,7 @@ describe('applyComprehensionAbstract', () => {
     const wrap = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [w0, w0] }
     expect(() => applyComprehensionAbstract(d, wrap, comp, [occ]))
-      .toThrowError(/argument wires are not distinct/)
+      .toThrowError(/is not used by any argument position/)
   })
 
   it('rejects negative wrap regions, overlapping and out-of-wrap occurrences, by name', () => {

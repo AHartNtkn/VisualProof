@@ -2,6 +2,7 @@ import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, Wi
 import { DiagramError, mkDiagram } from '../diagram/diagram'
 import { polarity, isAncestorOrEqual } from '../diagram/regions'
 import type { DiagramWithBoundary } from '../diagram/boundary'
+import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
@@ -123,6 +124,53 @@ export function applyComprehensionInstantiate(
   return mkDiagram({ root: cur.root, regions, nodes, wires })
 }
 
+/**
+ * A copy of `comp` whose boundary wires are merged per `aliasPattern`: boundary
+ * positions carrying the same pattern label share one root-scoped wire (their
+ * endpoint sets unioned; scope unchanged — both were root-scoped stubs). This
+ * is the diagonalized relation R := λx⃗. G(x⃗ aliased): where argument positions
+ * i and j ride one occurrence wire, the standard the occurrence must meet is G
+ * with b_i and b_j fused. `aliasPattern` has one label per comp boundary wire;
+ * labels induce equivalence classes, numbered by first appearance, and the
+ * result boundary lists each class's wire once in that order. The identity
+ * pattern (every label distinct) merges nothing and returns a structurally
+ * identical relation. Pure: `comp` is never mutated.
+ */
+export function diagonalize(comp: DiagramWithBoundary, aliasPattern: readonly number[]): DiagramWithBoundary {
+  if (aliasPattern.length !== comp.boundary.length) {
+    throw new DiagramError(
+      `alias pattern length ${aliasPattern.length} does not match comprehension arity ${comp.boundary.length}`,
+    )
+  }
+  // Renumber labels by first appearance so classes are 0..groupCount-1 and the
+  // result boundary comes out in first-appearance order regardless of input labels.
+  const classOf = new Map<number, number>()
+  const norm = aliasPattern.map((label) => {
+    if (!classOf.has(label)) classOf.set(label, classOf.size)
+    return classOf.get(label)!
+  })
+  const groupCount = classOf.size
+  const repPos = Array.from({ length: groupCount }, (_, g) => norm.indexOf(g))
+  const d = comp.diagram
+  const endpointsOf: Record<WireId, Endpoint[]> = {}
+  for (const [id, w] of Object.entries(d.wires)) endpointsOf[id] = [...w.endpoints]
+  for (let g = 0; g < groupCount; g++) {
+    const repWire = comp.boundary[repPos[g]!]!
+    for (let i = 0; i < norm.length; i++) {
+      if (norm[i] === g && i !== repPos[g]) {
+        const memberWire = comp.boundary[i]!
+        endpointsOf[repWire]!.push(...endpointsOf[memberWire]!)
+        delete endpointsOf[memberWire]
+      }
+    }
+  }
+  const wires: Record<WireId, Wire> = {}
+  for (const [id, eps] of Object.entries(endpointsOf)) wires[id] = { scope: d.wires[id]!.scope, endpoints: eps }
+  const newBoundary = repPos.map((p) => comp.boundary[p]!)
+  const diagram = mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
+  return mkDiagramWithBoundary(diagram, newBoundary)
+}
+
 export type AbstractionOccurrence = {
   readonly sel: SubgraphSelection
   /** Host wire serving as relation argument i — a permutation of the occurrence's attachment wires. */
@@ -150,7 +198,6 @@ export function applyComprehensionAbstract(
   if (polarity(d, wrap.region) !== 'positive') {
     throw new RuleError(`comprehension abstraction requires a positive region; '${wrap.region}' is negative`)
   }
-  const compFp = exploreForm(comp.diagram, comp.boundary)
   const seenNodes = new Set<NodeId>()
   const seenRegions = new Set<RegionId>()
   const seenWires = new Set<WireId>()
@@ -177,19 +224,35 @@ export function applyComprehensionAbstract(
     if (binderStubs.length > 0) {
       throw new RuleError(`occurrence ${k}: subgraphs with atoms bound outside the occurrence cannot be abstracted`)
     }
-    if (occ.args.length !== attachments.length) {
-      throw new RuleError(`occurrence ${k} has ${attachments.length} attachment wires but ${occ.args.length} argument positions`)
+    // args index the relation's argument positions and may repeat (a diagonal
+    // occurrence rides one wire through several positions), so their count is
+    // the comprehension's arity, not the distinct-attachment count.
+    if (occ.args.length !== comp.boundary.length) {
+      throw new RuleError(`occurrence ${k} has ${occ.args.length} argument positions but the comprehension has arity ${comp.boundary.length}`)
     }
-    if (new Set(occ.args).size !== occ.args.length) {
-      throw new RuleError(`occurrence ${k} argument wires are not distinct`)
+    // Group argument positions sharing a wire, labelling classes in first-
+    // appearance order; the distinct wires are the occurrence's collapsed boundary.
+    const classOf = new Map<WireId, number>()
+    const aliasPattern = occ.args.map((a) => {
+      if (!classOf.has(a)) classOf.set(a, classOf.size)
+      return classOf.get(a)!
+    })
+    const distinctArgs = [...classOf.keys()]
+    // Every attachment wire must serve at least one argument position: a
+    // crossing wire left unused would be silently dropped from the atom.
+    for (const at of attachments) {
+      if (!classOf.has(at)) {
+        throw new RuleError(`occurrence ${k} attachment wire '${at}' is not used by any argument position`)
+      }
     }
-    const reordered = occ.args.map((a) => {
+    const reordered = distinctArgs.map((a) => {
       const j = attachments.indexOf(a)
       if (j === -1) throw new RuleError(`occurrence ${k} argument wire '${a}' is not one of its attachment wires`)
       return pattern.boundary[j]!
     })
+    const diag = diagonalize(comp, aliasPattern)
     const fp = exploreForm(pattern.diagram, reordered)
-    if (fp !== compFp) {
+    if (fp !== exploreForm(diag.diagram, diag.boundary)) {
       throw new RuleError(`occurrence ${k} does not match the comprehension (boundary-pinned canonical forms differ)`)
     }
   })
