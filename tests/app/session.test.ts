@@ -12,8 +12,9 @@ import { checkTheorem } from '../../src/kernel/proof/theorem'
 import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
 
 const p = (s: string) => parseTerm(s)
-// pure Church fixtures for the onePlusOne demo (no term constants)
-const POO = p('(\\m. \\n. \\f. \\x. m f (n f x)) (\\f. \\x. f x) (\\f. \\x. f x)')
+// pure λ fixtures for the citation demos (no term constants)
+const YF = p('(\\g. (\\x. g (x x)) (\\x. g (x x))) f')
+const FYF = p('s0 ((\\g. (\\x. g (x x)) (\\x. g (x x))) s0)')
 const TWOc = p('\\f. \\x. f (f x)')
 const ZEROc = p('\\f. \\x. x')
 
@@ -95,16 +96,17 @@ describe('proof session', () => {
   it('cites bundled theorems as single steps', async () => {
     const { ctx } = await bootFixture()
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, POO)
+    const n = h.termNode(h.root, YF)
     const wo = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
-    const start = mkDiagramWithBoundary(h.build(), [wo])
+    const wf = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'f' } }])
+    const start = mkDiagramWithBoundary(h.build(), [wo, wf])
     const target = start // rhs irrelevant for this check
     let s = startSession(start, target, ctx)
     s = applyForward(s, {
-      rule: 'theorem', name: 'onePlusOne', direction: 'forward',
-      at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [n], wires: [] }), args: [wo] },
+      rule: 'theorem', name: 'fixedPoint', direction: 'forward',
+      at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [n], wires: [] }), args: [wo, wf] },
     })
-    expect(Object.values(s.forward.current.nodes).some((nd) => nd.kind === 'term' && termEq(nd.term, TWOc))).toBe(true)
+    expect(Object.values(s.forward.current.nodes).some((nd) => nd.kind === 'term' && termEq(nd.term, FYF))).toBe(true)
   })
 })
 
@@ -263,28 +265,29 @@ describe('backward un-erase, un-conversion, un-citation', () => {
 
   it('un-citation replaces a theorem rhs-occurrence by its lhs in the goal', async () => {
     const { ctx } = await bootFixture()
-    // lhs: a PLUS ONE ONE node. rhs (goal): onePlusOne's conclusion (a TWO node) —
-    // built by citing forward once, then used as the goal of a FRESH session
+    // lhs: a `Y f` node. rhs (goal): fixedPoint's conclusion (an `f (Y f)` node)
+    // — built by citing forward once, then used as the goal of a FRESH session
     const h = new DiagramBuilder()
-    const n = h.termNode(h.root, POO)
+    const n = h.termNode(h.root, YF)
     const wo = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
-    const lhs = mkDiagramWithBoundary(h.build(), [wo])
+    const wf = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'f' } }])
+    const lhs = mkDiagramWithBoundary(h.build(), [wo, wf])
     let warm = startSession(lhs, lhs, ctx)
     warm = applyForward(warm, {
-      rule: 'theorem', name: 'onePlusOne', direction: 'forward',
-      at: { sel: mkSelection(warm.forward.current, { region: warm.forward.current.root, regions: [], nodes: [n], wires: [] }), args: [wo] },
+      rule: 'theorem', name: 'fixedPoint', direction: 'forward',
+      at: { sel: mkSelection(warm.forward.current, { region: warm.forward.current.root, regions: [], nodes: [n], wires: [] }), args: [wo, wf] },
     })
-    const rhs = mkDiagramWithBoundary(warm.forward.current, [wo])
+    const rhs = mkDiagramWithBoundary(warm.forward.current, [wo, wf])
     let s = startSession(lhs, rhs, ctx)
-    // pick the rhs occurrence in the GOAL: the TWO node on the boundary line
+    // pick the rhs occurrence in the GOAL: the f (Y f) node on the boundary lines
     const g = s.backward.current
-    const two = Object.entries(g.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, TWOc))![0]
+    const two = Object.entries(g.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, FYF))![0]
     s = applyBackward(s, {
       kind: 'unCite',
-      name: 'onePlusOne',
+      name: 'fixedPoint',
       at: {
         sel: { region: g.root, regions: [], nodes: [two], wires: [] },
-        args: [wo],
+        args: [wo, wf],
       },
     })
     expect(s.backward.steps[0]!.rule).toBe('theorem')

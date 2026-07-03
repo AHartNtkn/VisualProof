@@ -11,8 +11,6 @@ import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../src/kernel/term/parse'
 
 const p = (s: string) => parseTerm(s)
-const POO = p('(\\m. \\n. \\f. \\x. m f (n f x)) (\\f. \\x. f x) (\\f. \\x. f x)') // pure PLUS ONE ONE
-const TWOc = p('\\f. \\x. f (f x)')
 
 /**
  * Every term node round-trips through the pure serializer/deserializer. The
@@ -29,27 +27,45 @@ function assertPureTerms(d: Diagram, where: string): void {
 }
 
 describe('bundled theories as shipped artifacts', () => {
-  it('both load from their serialized form; onePlusOne applies in a fresh host', () => {
-    // frege ships the four relations plus the five theorems
+  it('both load from their serialized form; closed onePlusOne inserts, fixedPoint rewrites in a fresh host', () => {
+    // frege ships the four relations plus the eight theorems
     const frege = loadTheory(JSON.parse(JSON.stringify(theoryToJson(buildFregeTheory()))))
     expect([...frege.ctx.relations.keys()].sort()).toEqual(['nat', 'plus', 'succ', 'zero'])
     expect([...frege.ctx.theorems.keys()].sort()).toEqual(['oneIsNat', 'plusAssoc', 'plusComm', 'plusLeftUnit', 'plusRightUnit', 'succNat', 'succShiftS', 'zeroIsNat'])
 
-    // lambda ships onePlusOne / fixedPoint; onePlusOne rewrites (PLUS ONE ONE) -> TWO
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(buildLambdaTheory()))))
+
+    // onePlusOne is the CLOSED equation 1+1=2 (boundary []): cited by inserting
+    // the proven sentence into an empty positive host — the inserted line
+    // carries BOTH closed descriptions (the join is the content).
     const onePlusOne = ctx.theorems.get('onePlusOne')!
-    const h = new DiagramBuilder()
-    const n = h.termNode(h.root, POO)
-    const w = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
-    const d = h.build()
-    const out = applyTheorem(d, onePlusOne, {
-      sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }),
-      args: [w],
+    expect(onePlusOne.lhs.boundary).toHaveLength(0)
+    const empty = new DiagramBuilder().build()
+    const inserted = applyTheorem(empty, onePlusOne, {
+      sel: mkSelection(empty, { region: empty.root, regions: [], nodes: [], wires: [] }),
+      args: [],
     }, 'forward')
-    const rewritten = Object.values(out.nodes).some((nd) => nd.kind === 'term' && termEq(nd.term, TWOc))
+    const termNodes = Object.values(inserted.nodes).filter((nd) => nd.kind === 'term')
+    expect(termNodes).toHaveLength(2)
+    const wires = Object.values(inserted.wires)
+    expect(wires).toHaveLength(1) // one shared line: the equation
+    expect(wires[0]!.endpoints).toHaveLength(2)
+
+    // fixedPoint stays rule-shaped (free f): rewrites `Y f` -> `f (Y f)` in place
+    const fixedPoint = ctx.theorems.get('fixedPoint')!
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('(\\g. (\\x. g (x x)) (\\x. g (x x))) f'))
+    const wo = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
+    const wf = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'f' } }])
+    const d = h.build()
+    const out = applyTheorem(d, fixedPoint, {
+      sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }),
+      args: [wo, wf],
+    }, 'forward')
+    const rewritten = Object.values(out.nodes).some((nd) =>
+      nd.kind === 'term' && termEq(nd.term, p('s0 ((\\g. (\\x. g (x x)) (\\x. g (x x))) s0)')))
     expect(rewritten).toBe(true)
   })
-
   // The road the app actually uses to bring a theory in is theoryToJson (save)
   // → loadTheory (open), and loadTheory's verifyTheory re-runs checkTheorem on
   // EVERY theorem — a full re-derivation, not a parse. These pins assert both

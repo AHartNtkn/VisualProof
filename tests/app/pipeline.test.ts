@@ -39,16 +39,18 @@ describe('edit → prove → assemble, end to end', () => {
   it('forward citation sessions check too', async () => {
     const { ctx } = await bootFixture()
     const e0 = emptyDiagram()
-    const { diagram: startD, node } = addTermNode(e0, e0.root, p('(\\m. \\n. \\f. \\x. m f (n f x)) (\\f. \\x. f x) (\\f. \\x. f x)'))
+    const { diagram: startD, node } = addTermNode(e0, e0.root, p('(\\g. (\\x. g (x x)) (\\x. g (x x))) f'))
     const wo = Object.entries(startD.wires).find(([, w]) =>
       w.endpoints.some((ep) => ep.node === node && ep.port.kind === 'output'))![0]
-    const lhs = mkDiagramWithBoundary(startD, [wo])
+    const wf = Object.entries(startD.wires).find(([, w]) =>
+      w.endpoints.some((ep) => ep.node === node && ep.port.kind === 'freeVar'))![0]
+    const lhs = mkDiagramWithBoundary(startD, [wo, wf])
     let s = startSession(lhs, lhs, ctx)
     s = applyForward(s, {
-      rule: 'theorem', name: 'onePlusOne', direction: 'forward',
-      at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [node], wires: [] }), args: [wo] },
+      rule: 'theorem', name: 'fixedPoint', direction: 'forward',
+      at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [node], wires: [] }), args: [wo, wf] },
     })
-    const rhs = mkDiagramWithBoundary(s.forward.current, [wo])
+    const rhs = mkDiagramWithBoundary(s.forward.current, [wo, wf])
     const thm = { name: 'viaSession', lhs, rhs, steps: [...s.forward.steps] }
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })

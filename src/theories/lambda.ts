@@ -1,4 +1,4 @@
-import { app, lam, bvar, port, type Term } from '../kernel/term/term'
+import { app, lam, bvar, port, termEq, type Term } from '../kernel/term/term'
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { applyConversion } from '../kernel/rules/conversion'
@@ -16,19 +16,36 @@ const Yp = lam(app(lam(app(bvar(1), app(bvar(0), bvar(0)))), lam(app(bvar(1), ap
 
 const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
 
-/** o = (PLUS ONE ONE) ⟹ o = TWO, by a single recorded βη conversion. */
+/**
+ * The CLOSED equation 1+1=2: empty sheet ⟹ ∃z. z = (PLUS ONE ONE) ∧ z = TWO —
+ * one existential line carrying BOTH closed descriptions. Mere existence of a
+ * closed term is trivial (terms denote); the JOIN of the two descriptions is
+ * the content. Backwards reading: disconnect and erase to the blank page.
+ */
 function deriveOnePlusOne(): Theorem {
-  const l = new DiagramBuilder()
-  const n = l.termNode(l.root, app(app(PLUSp, ONEp), ONEp))
-  const wo = l.wire(l.root, [{ node: n, port: { kind: 'output' } }])
-  const lhsDiagram = l.build()
-  const lhs = mkDiagramWithBoundary(lhsDiagram, [wo])
-  // interactive conversion ONCE at build time; the recorded step carries the
-  // certificate, so replay (verifyTheory, loadTheory) is fuel-free
-  const conv = applyConversion(lhsDiagram, n, TWOp, 4096)
-  const step: ProofStep = { rule: 'conversion', node: n, term: TWOp, certificate: conv.certificate, attachments: {} }
-  const cur = replayProof(lhsDiagram, [step], ctx)
-  return { name: 'onePlusOne', lhs, rhs: mkDiagramWithBoundary(cur, [wo]), steps: [step] }
+  const lhsDiagram = new DiagramBuilder().build()
+  const lhs = mkDiagramWithBoundary(lhsDiagram, [])
+  const poo = app(app(PLUSp, ONEp), ONEp)
+  const steps: ProofStep[] = [
+    { rule: 'closedTermIntro', region: lhsDiagram.root, term: poo },
+    { rule: 'closedTermIntro', region: lhsDiagram.root, term: TWOp },
+  ]
+  let cur = replayProof(lhsDiagram, steps, ctx)
+  const nodeWith = (t: Term): string => {
+    const found = Object.entries(cur.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, t))
+    if (found === undefined) throw new Error('onePlusOne derivation: intro node not found')
+    return found[0]
+  }
+  const a = nodeWith(poo)
+  const b = nodeWith(TWOp)
+  // harvest the 1+1 ~ 2 certificate once at build time (fuel-free replay)
+  const scratch = new DiagramBuilder()
+  const sn = scratch.termNode(scratch.root, poo)
+  const conv = applyConversion(scratch.build(), sn, TWOp, 4096)
+  const join: ProofStep = { rule: 'congruenceJoin', a, b, certificate: conv.certificate }
+  steps.push(join)
+  cur = replayProof(cur, [join], ctx)
+  return { name: 'onePlusOne', lhs, rhs: mkDiagramWithBoundary(cur, []), steps }
 }
 
 /**
