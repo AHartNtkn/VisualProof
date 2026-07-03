@@ -7,6 +7,7 @@ import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { polarity } from '../kernel/diagram/regions'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { applyConversion } from '../kernel/rules/conversion'
+import { applyRelFold, applyRelUnfold } from '../kernel/rules/reldef'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
@@ -24,7 +25,7 @@ import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntr
 import { defineRelation } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
-import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
+import { emptyDiagram, addTermNode, addRefNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 import type { ProofSession } from './session'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
 import { sessionTheory } from './persist'
@@ -562,6 +563,19 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     message = `added term node '${node}' in region '${region}'`
     refreshChrome()
   })
+  const onAddRelation = guard(() => {
+    requireEdit()
+    const name = termInput.value.trim()
+    const body = ctx.relations.get(name)
+    if (body === undefined) {
+      throw new Error(`unknown relation '${name}' — type a defined or loaded relation name in the term input (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
+    }
+    const region = hits.length === 1 && hits[0]!.kind === 'region' ? hits[0]!.id : editDiagram.root
+    const { diagram, node } = addRefNode(editDiagram, region, name, body.boundary.length)
+    pushEdit(diagram)
+    message = `added relation node '${node}' (${name}/${body.boundary.length}) in region '${region}'`
+    refreshChrome()
+  })
   const onWrapCut = guard(() => {
     requireEdit()
     const { diagram, region } = addCut(editDiagram, requireSel())
@@ -935,6 +949,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
       if (p.kind === 'relFold') {
         menuDiv.append(button(`Commit fold into '${p.defId}' (${p.args.length} arg(s))`, guard(() => {
+          if (mode === 'edit') {
+            const next = applyRelFold(editDiagram, p.sel, p.defId, [...p.args], ctx.relations)
+            pending = null
+            pushEdit(next)
+            message = `folded into '${p.defId}'`
+            refreshChrome()
+            return
+          }
           pending = null
           applyF({ rule: 'relFold', sel: p.sel, defId: p.defId, args: [...p.args] })
         })))
@@ -961,11 +983,32 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return
     }
     // EDIT mode: a valid selection offers "Define relation…" (names the
-    // selection as a new relation; the sheet is unchanged by defining).
+    // selection as a new relation; the sheet is unchanged by defining), plus
+    // fold/unfold as CONSTRUCTION operations — relation references are
+    // notation for their bodies, so folding while drawing carries no proof
+    // obligation (the same definitional equivalence relFold/relUnfold apply
+    // in proofs).
     if (mode === 'edit') {
       if (kernelSel !== null) {
         const sel = kernelSel
         menuDiv.append(button('Define relation…', guard(() => enterDefineRelation(sel))))
+        menuDiv.append(button('Fold into a relation (term input = name)…', guard(() => {
+          const name = termInput.value.trim()
+          if (!ctx.relations.has(name)) {
+            throw new Error(`unknown relation '${name}' — type a defined or loaded relation name in the term input (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
+          }
+          pending = { kind: 'relFold', defId: name, sel, args: [] }
+          message = `fold into '${name}': click the argument wires in boundary order, then Commit`
+          refreshChrome()
+        })))
+        if (sel.nodes.length === 1 && sel.regions.length === 0 && sel.wires.length === 0
+          && displayed.nodes[sel.nodes[0]!]?.kind === 'ref') {
+          menuDiv.append(button('Unfold relation', guard(() => {
+            pushEdit(applyRelUnfold(editDiagram, sel.nodes[0]!, ctx.relations))
+            message = 'relation unfolded'
+            refreshChrome()
+          })))
+        }
       }
       return
     }
@@ -1177,6 +1220,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   editRow.append(
     termInput,
     button('Add term', onAddTerm),
+    button('Add relation', onAddRelation),
     button('Wrap in cut', onWrapCut),
     button('Wrap in bubble', onWrapBubble),
     arity.wrap,

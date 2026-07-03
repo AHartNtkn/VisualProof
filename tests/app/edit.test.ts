@@ -3,7 +3,7 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import {
-  addTermNode, addCut, addBubble, joinPorts, deleteSelection, emptyDiagram,
+  addTermNode, addRefNode, addCut, addBubble, joinPorts, deleteSelection, emptyDiagram,
 } from '../../src/app/edit'
 
 const p = (s: string) => parseTerm(s)
@@ -106,5 +106,37 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     expect(() => joinPorts(a.diagram,
       { node: a.node, port: { kind: 'output' } },
       { node: a.node, port: { kind: 'output' } })).toThrowError(/same port/)
+  })
+})
+
+describe('addRefNode', () => {
+  it('spawns a ref node with one fresh bare-ended wire per argument, in the chosen region', () => {
+    const d0 = emptyDiagram()
+    const { diagram, node } = addRefNode(d0, d0.root, 'plus', 3)
+    const n = diagram.nodes[node]!
+    expect(n.kind).toBe('ref')
+    if (n.kind === 'ref') {
+      expect(n.defId).toBe('plus')
+      expect(n.arity).toBe(3)
+    }
+    // three wires, each holding exactly the ref's arg endpoint i
+    const wires = Object.values(diagram.wires)
+    expect(wires).toHaveLength(3)
+    const indices = wires.map((w) => {
+      expect(w.endpoints).toHaveLength(1)
+      expect(w.endpoints[0]!.node).toBe(node)
+      expect(w.scope).toBe(d0.root)
+      const port = w.endpoints[0]!.port
+      if (port.kind !== 'arg') throw new Error(`expected arg port, got ${port.kind}`)
+      return port.index
+    }).sort()
+    expect(indices).toEqual([0, 1, 2])
+  })
+
+  it('does not disturb existing content', () => {
+    const d0 = emptyDiagram()
+    const { diagram: d1, node: t } = addTermNode(d0, d0.root, parseTerm('\\x. x'))
+    const { diagram: d2 } = addRefNode(d1, d1.root, 'r', 1)
+    expect(d2.nodes[t]).toEqual(d1.nodes[t])
   })
 })

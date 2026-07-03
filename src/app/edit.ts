@@ -32,6 +32,19 @@ export function addTermNode(d: Diagram, region: RegionId, term: Term): { diagram
   return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }), node }
 }
 
+export function addRefNode(d: Diagram, region: RegionId, defId: string, arity: number): { diagram: Diagram; node: NodeId } {
+  const node = freshId(new Set(Object.keys(d.nodes)), 'n')
+  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: { kind: 'ref', region, defId, arity } }
+  const wires: Record<WireId, Wire> = { ...d.wires }
+  const takenWires = new Set(Object.keys(d.wires))
+  for (let i = 0; i < arity; i++) {
+    const w = freshId(takenWires, 'w')
+    takenWires.add(w)
+    wires[w] = { scope: region, endpoints: [{ node, port: { kind: 'arg', index: i } }] }
+  }
+  return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }), node }
+}
+
 function wrap(d: Diagram, sel: SubgraphSelection, make: (parent: RegionId) => Region, base: string): { diagram: Diagram; region: RegionId } {
   const region = freshId(new Set(Object.keys(d.regions)), base)
   const regions: Record<RegionId, Region> = { ...d.regions, [region]: make(sel.region) }

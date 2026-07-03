@@ -187,24 +187,46 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   await lib.getByRole('button', { name: /Session/, exact: false }).click()
   await expect(lib).toContainText('relations: R')
 
-  // relFold cites the new relation: set a goal, enter PROVE, and fold the node —
-  // it becomes a ref (a 'ref' body appears).
-  await page.getByRole('button', { name: /set goal lhs/i }).click()
-  await page.getByRole('button', { name: /set goal rhs/i }).click()
-  await page.getByRole('button', { name: /switch to prove/i }).click()
-  await page.waitForTimeout(400)
-  // The goal LHS snapshots the sheet by reference, so entering PROVE carries the
-  // edit selection; clear it and reselect the node freshly for an explicit state.
+  // Folding is a CONSTRUCTION operation — no goals, no PROVE: select the node
+  // right here in EDIT mode and fold it into the new relation.
   await clickEmpty()
   await clickTerm()
   await expect(page.locator('#status')).toContainText("node '")
-  await page.getByPlaceholder(/term, e\.g/).fill('R') // relFold reads the term input for the relation name
+  await page.getByPlaceholder(/term, e\.g/).fill('R') // fold reads the term input for the relation name
   await page.locator('#action-menu').getByRole('button', { name: /Fold into a relation/, exact: false }).click()
   expect(await clickOnlyWire()).toBe(1)
   await page.locator('#action-menu').getByRole('button', { name: /Commit fold into 'R'/, exact: false }).click()
   await expect
     .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).some((b) => b.kind === 'ref'))
     .toBe(true)
+
+  // Spawning: "Add relation" drops a fresh R reference with bare argument
+  // wires — no need to rebuild the body and fold every time.
+  const refsBefore = await page.evaluate(() => window.__vpaDebug!.bodies().filter((b) => b.kind === 'ref').length)
+  await page.getByPlaceholder(/term, e\.g/).fill('R')
+  await page.getByRole('button', { name: 'Add relation', exact: true }).click()
+  await expect(page.locator('#status')).toContainText("added relation node")
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).filter((b) => b.kind === 'ref').length)
+    .toBe(refsBefore + 1)
+
+  // Unfolding is construction too: select the spawned ref, Unfold — the body
+  // (one \x. x node) replaces it.
+  await page.waitForTimeout(600)
+  const termsBefore = await page.evaluate(() => window.__vpaDebug!.bodies().filter((b) => b.kind === 'term').length)
+  const refPos = await page.evaluate(() => {
+    const v = window.__vpaDebug!.view()
+    const refs = window.__vpaDebug!.bodies().filter((b) => b.kind === 'ref')
+    const r = refs[refs.length - 1]!
+    return { x: r.x * v.scale + v.offsetX, y: r.y * v.scale + v.offsetY }
+  })
+  await page.mouse.click(box.x + refPos.x, box.y + refPos.y)
+  await expect(page.locator('#status')).toContainText("node '")
+  await page.locator('#action-menu').getByRole('button', { name: 'Unfold relation', exact: true }).click()
+  await expect(page.locator('#status')).toContainText('relation unfolded')
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).filter((b) => b.kind === 'term').length)
+    .toBe(termsBefore + 1)
 
   // Save serializes the relation. Capture the live theory JSON (the same object
   // Save theory writes) and confirm it carries R.
