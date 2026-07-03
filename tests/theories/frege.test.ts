@@ -3,7 +3,9 @@ import { buildFregeTheory, natRelation } from '../../src/theories/frege'
 import { verifyTheory, theoryToJson, loadTheory } from '../../src/kernel/proof/store'
 import { boundaryFingerprint } from '../../src/kernel/diagram/canonical/fingerprint'
 import type { Diagram, DiagramNode, WireId } from '../../src/kernel/diagram/diagram'
-import type { Theorem } from '../../src/kernel/proof/theorem'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
+import { applyTheorem, type Theorem } from '../../src/kernel/proof/theorem'
 
 /** The reference nodes of a theorem side, as `defId/arity` strings, sorted. */
 function refKinds(side: Theorem['lhs']): string[] {
@@ -21,14 +23,14 @@ function argWire(d: Diagram, id: string, index: number): WireId {
 describe('the bundled Frege theory', () => {
   it('verifies end to end: relations resolve, conversion + induction theorems replay', () => {
     const ctx = verifyTheory(buildFregeTheory())
-    expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'zeroIsNat', 'succShiftS', 'plusComm'])
+    expect([...ctx.theorems.keys()]).toEqual(['plusAssoc', 'plusLeftUnit', 'plusRightUnit', 'zeroIsNat', 'succNat', 'oneIsNat', 'succShiftS', 'plusComm'])
     expect([...ctx.relations.keys()].sort()).toEqual(['nat', 'plus', 'succ', 'zero'])
   })
 
   it('round-trips through the file format with re-verification', () => {
     const text = JSON.stringify(theoryToJson(buildFregeTheory()))
     const { ctx } = loadTheory(JSON.parse(text))
-    expect(ctx.theorems.size).toBe(6)
+    expect(ctx.theorems.size).toBe(8)
     expect(ctx.relations.has('nat')).toBe(true)
   })
 
@@ -121,6 +123,79 @@ describe('the bundled Frege theory', () => {
     const zeroId = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero')![0]
     expect(argWire(rd, natId, 0)).toBe(wz)
     expect(argWire(rd, zeroId, 0)).toBe(wz)
+  })
+
+  it('succNat: nat(n) ∧ Succ(n,s) ⟹ Succ(n,s) ∧ nat(s); guard rides the successor', () => {
+    const t = buildFregeTheory().theorems.find((x) => x.name === 'succNat')!
+    expect(t.lhs.boundary).toHaveLength(2)
+    expect(t.rhs.boundary).toHaveLength(2)
+    expect(refKinds(t.lhs)).toEqual(['nat/1', 'succ/2'])
+    expect(refKinds(t.rhs)).toEqual(['nat/1', 'succ/2'])
+    // lhs: nat guards n = Succ's predecessor (nat.arg0 and succ.arg0 both on wn)
+    const ld = t.lhs.diagram
+    const [wn] = t.lhs.boundary
+    const lNat = Object.entries(ld.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
+    const lSuc = Object.entries(ld.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'succ')![0]
+    expect(argWire(ld, lNat, 0)).toBe(wn)
+    expect(argWire(ld, lSuc, 0)).toBe(wn)
+    // rhs: nat now guards s = Succ's output (nat.arg0 and succ.arg1 both on ws)
+    const rd = t.rhs.diagram
+    const ws = t.rhs.boundary[1]
+    const rNat = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
+    const rSuc = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'succ')![0]
+    expect(argWire(rd, rNat, 0)).toBe(ws)
+    expect(argWire(rd, rSuc, 1)).toBe(ws)
+  })
+
+  it('oneIsNat: Zero(z) ∧ Succ(z,o) ⟹ nat(o) ∧ Zero(z) ∧ Succ(z,o); guard on the successor', () => {
+    const t = buildFregeTheory().theorems.find((x) => x.name === 'oneIsNat')!
+    expect(t.lhs.boundary).toHaveLength(2)
+    expect(t.rhs.boundary).toHaveLength(2)
+    expect(refKinds(t.lhs)).toEqual(['succ/2', 'zero/1'])
+    expect(refKinds(t.rhs)).toEqual(['nat/1', 'succ/2', 'zero/1'])
+    // the produced nat guards o = the successor output (o-line is boundary[1])
+    const rd = t.rhs.diagram
+    const wo = t.rhs.boundary[1]
+    const rNat = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
+    const rSuc = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'succ')![0]
+    expect(argWire(rd, rNat, 0)).toBe(wo)
+    expect(argWire(rd, rSuc, 1)).toBe(wo)
+  })
+
+  it('smoke: oneIsNat certifies nat(1), which then satisfies a plusComm citation', () => {
+    const theory = buildFregeTheory()
+    const oneIsNat = theory.theorems.find((x) => x.name === 'oneIsNat')!
+    const plusComm = theory.theorems.find((x) => x.name === 'plusComm')!
+
+    // host: Zero(z) ∧ Succ(z,o) ∧ nat(b) ∧ Plus(o,b,sum)
+    const h = new DiagramBuilder()
+    const zRef = h.ref(h.root, 'zero', 1)
+    const sRef = h.ref(h.root, 'succ', 2)
+    const bNat = h.ref(h.root, 'nat', 1)
+    const pRef = h.ref(h.root, 'plus', 3)
+    const wz = h.wire(h.root, [{ node: zRef, port: { kind: 'arg', index: 0 } }, { node: sRef, port: { kind: 'arg', index: 0 } }])
+    const wo = h.wire(h.root, [{ node: sRef, port: { kind: 'arg', index: 1 } }, { node: pRef, port: { kind: 'arg', index: 0 } }])
+    const wb = h.wire(h.root, [{ node: bNat, port: { kind: 'arg', index: 0 } }, { node: pRef, port: { kind: 'arg', index: 1 } }])
+    const wsum = h.wire(h.root, [{ node: pRef, port: { kind: 'arg', index: 2 } }])
+    const d = h.build()
+
+    // certify nat(o) — o is Succ of a Zero, i.e. 1
+    const d1 = applyTheorem(d, oneIsNat, {
+      sel: mkSelection(d, { region: d.root, regions: [], nodes: [zRef, sRef], wires: [] }), args: [wz, wo],
+    }, 'forward')
+    const natO = Object.entries(d1.nodes).find(([id, n]) =>
+      n.kind === 'ref' && n.defId === 'nat' && id !== bNat &&
+      d1.wires[wo]!.endpoints.some((ep) => ep.node === id))![0]
+    expect(natO).toBeDefined()
+
+    // feed nat(1) ∧ nat(b) ∧ Plus(o,b,sum) into plusComm → Plus(b,o,sum)
+    const d2 = applyTheorem(d1, plusComm, {
+      sel: mkSelection(d1, { region: d1.root, regions: [], nodes: [natO, bNat, pRef], wires: [] }), args: [wo, wb, wsum],
+    }, 'forward')
+    // the Plus now reads (b, o, sum): its first argument rides wb
+    const plusAfter = Object.entries(d2.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'plus')![0]
+    expect(argWire(d2, plusAfter, 0)).toBe(wb)
+    expect(argWire(d2, plusAfter, 1)).toBe(wo)
   })
 
   it('the bundled ℕ is inCutNat: the zero-evidence is inside the guard, not root-witnessable', () => {

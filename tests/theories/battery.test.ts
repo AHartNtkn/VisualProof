@@ -33,7 +33,7 @@ describe('bundled theories as shipped artifacts', () => {
     // frege ships the four relations plus the five theorems
     const frege = loadTheory(JSON.parse(JSON.stringify(theoryToJson(buildFregeTheory()))))
     expect([...frege.ctx.relations.keys()].sort()).toEqual(['nat', 'plus', 'succ', 'zero'])
-    expect([...frege.ctx.theorems.keys()].sort()).toEqual(['plusAssoc', 'plusComm', 'plusLeftUnit', 'plusRightUnit', 'succShiftS', 'zeroIsNat'])
+    expect([...frege.ctx.theorems.keys()].sort()).toEqual(['oneIsNat', 'plusAssoc', 'plusComm', 'plusLeftUnit', 'plusRightUnit', 'succNat', 'succShiftS', 'zeroIsNat'])
 
     // lambda ships onePlusOne / fixedPoint; onePlusOne rewrites (PLUS ONE ONE) -> TWO
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(buildLambdaTheory()))))

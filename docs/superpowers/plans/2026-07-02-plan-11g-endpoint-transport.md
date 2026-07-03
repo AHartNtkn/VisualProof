@@ -46,7 +46,14 @@ Result: `nat(z) ∧ Zero(z)`, boundary [wz]. The nat body (natRelation) is NEVER
 **Files:** `src/theories/frege.ts` — derive `zeroIsNat` (Zero(z) ⟹ nat(z) ∧ Zero(z)), `succNat` (nat(n) ∧ Succ(n,s) ⟹ nat(s) ∧ …), `oneIsNat` (composition), per the spike trace. Insert in dependency order before their consumers if any citation uses them.
 **Test:** theory battery — checkTheorem green for the new theorems; the non-vacuity guard test still green (the nat body is UNCHANGED — transport must not have required touching it); a citation smoke test: `nat(1)` certified and fed into a `plusComm` citation.
 
-- [ ] Theorems green through the JSON road; suite + tsc + e2e green. Commit.
+- [x] Theorems green through the JSON road; suite + tsc green. Commit. (e2e left for the reviewer.)
+
+**Task 2 findings.** All three guard-producers derived, folded relational statements, verified through `theoryToJson → loadTheory` (verifyTheory re-runs checkTheorem). `natRelation` was NOT touched — the non-vacuity guard test stays green.
+- `deriveZeroIsNat` (12 steps): transport, as spiked above. Boundary [z].
+- `deriveSuccNat` (19 steps): `nat(n) ∧ Succ(n,s) ⟹ Succ(n,s) ∧ nat(s)`, boundary [wn,ws]. Does NOT use transport. Fresh nat(s) skeleton; iterate nat(n) into the conclusion cut and `comprehensionInstantiate` its R with the skeleton's R (second-order MP, binder-parameter); **bridge the two bubble-scoped zero witnesses with `wireJoin`** — both are INTERNAL lines, so the merge keeps the outer bubble scope and never touches root, sidestepping the UPDATE-10 wall (which only bit relating the base to the EXTERNAL arg line). Deiterate the copy's base + closure → R(n); guarded MP (`iterate Cl → bind m=n,t=s via wireJoin → deiterate R(n) and the hypothesis Succ(n,s) → dcElim`) → R(s); fold to nat(s); erase the consumed nat(n). This confirms UPDATE 10's prediction that succNat is OK ("base inherited, never created").
+- `deriveOneIsNat` (2 steps): composition — cite zeroIsNat forward on Zero(z), then succNat forward on nat(z) ∧ Succ(z,o). `Zero(z) ∧ Succ(z,o) ⟹ nat(o) ∧ Zero(z) ∧ Succ(z,o)`, boundary [wz,wo]. Certifies concrete nat(1). Smoke test: nat(o) from oneIsNat fed into a `plusComm` forward citation (Plus(o,b,sum) → Plus(b,o,sum)) green.
+
+**Statement adjustments (flagged):** none — all three ship the intended relational statements. succNat and oneIsNat CONSUME/retain exactly as stated (succNat consumes nat(n), retains Succ; oneIsNat retains both premises and adds nat(o)).
 
 ### Task 3: Review + sync
 

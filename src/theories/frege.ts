@@ -741,19 +741,162 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   return { name: 'zeroIsNat', lhs, rhs, steps: [...e.steps] }
 }
 
+/**
+ * succNat: `nat(n) ∧ Succ(n,s) ⟹ Succ(n,s) ∧ nat(s)`. The base is INHERITED
+ * from nat(n), never created, so no external-line identification is needed and
+ * transport is not used here (the wall of UPDATE 10 only bit the base-creating
+ * theorems). Build a fresh nat(s) guard skeleton, iterate nat(n) into its
+ * conclusion cut and instantiate its R with the skeleton's R (second-order
+ * modus ponens), bridge the two bubble-scoped zero witnesses with wireJoin
+ * (both internal — the merge keeps the outer bubble scope, so non-vacuity
+ * holds), deiterate the copy's base and closure to leave R(n), then run a
+ * guarded modus ponens: R(n) ∧ Cl(R) ∧ Succ(n,s) ⟹ R(s), contradicting the
+ * conclusion. Fold to nat(s); the input nat(n) is consumed. Boundary [wn, ws].
+ */
+function deriveSuccNat(ctx: ProofContext): Theorem {
+  const l = new DiagramBuilder()
+  const rN = l.ref(l.root, 'nat', 1)
+  const rS = l.ref(l.root, 'succ', 2)
+  const wn = l.wire(l.root, [{ node: rN, port: { kind: 'arg', index: 0 } }, { node: rS, port: { kind: 'arg', index: 0 } }])
+  const ws = l.wire(l.root, [{ node: rS, port: { kind: 'arg', index: 1 } }])
+  const lhsD = l.build()
+  const lhs = mkDiagramWithBoundary(lhsD, [wn, ws])
+  const e = new DerivationCursor(lhsD, ctx)
+
+  // Phase A: fresh nat(s) guard skeleton (¬¬ scaffold, guard bubble, base+closure)
+  let snap = e.cur
+  e.push('dcIntro', { rule: 'doubleCutIntro', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }) })
+  const cO = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === e.cur.root && snap.regions[id] === undefined)![0]
+  const cI = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cO && snap.regions[id] === undefined)![0]
+  snap = e.cur
+  e.push('vbIntro rB', { rule: 'vacuousIntro', sel: mkSelection(e.cur, { region: cO, regions: [cI], nodes: [], wires: [] }), arity: 1 })
+  const rBp = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'bubble' && r.parent === cO && snap.regions[id] === undefined)![0]
+
+  const pb = new DiagramBuilder()
+  const stub = pb.bubble(pb.root, 1)
+  const pz = pb.ref(stub, 'zero', 1)
+  const pa0 = pb.atom(stub, stub)
+  pb.wire(stub, [{ node: pz, port: { kind: 'arg', index: 0 } }, { node: pa0, port: { kind: 'arg', index: 0 } }])
+  const pcut2 = pb.cut(stub)
+  const pa1 = pb.atom(pcut2, stub)
+  const ps = pb.ref(pcut2, 'succ', 2)
+  pb.wire(pcut2, [{ node: pa1, port: { kind: 'arg', index: 0 } }, { node: ps, port: { kind: 'arg', index: 0 } }])
+  const pcut3 = pb.cut(pcut2)
+  const pa2 = pb.atom(pcut3, stub)
+  pb.wire(pcut2, [{ node: ps, port: { kind: 'arg', index: 1 } }, { node: pa2, port: { kind: 'arg', index: 0 } }])
+  e.push('insert base+closure', { rule: 'insertion', region: rBp, pattern: mkDiagramWithBoundary(pb.build(), []), attachments: [], binders: { [stub]: rBp } })
+
+  // Phase B: iterate nat(n) into cI, instantiate its R with the skeleton's R,
+  // bridge the zero witnesses, deiterate base + closure, dcElim → R(n) in cI
+  snap = e.cur
+  e.push('iterate nat(n) into cI', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [rN], wires: [] }), target: cI })
+  const copyRef = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'ref' && n.defId === 'nat' && id !== rN && snap.nodes[id] === undefined)![0]
+  e.push('unfold copy', { rule: 'relUnfold', node: copyRef })
+  const cut1c = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cI && snap.regions[id] === undefined)![0]
+  const rBc = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'bubble' && r.parent === cut1c)![0]
+  const cb = new DiagramBuilder()
+  const cstub = cb.bubble(cb.root, 1)
+  const catom = cb.atom(cstub, cstub)
+  const cbx = cb.wire(cb.root, [{ node: catom, port: { kind: 'arg', index: 0 } }])
+  e.push("instantiate R'=R", { rule: 'comprehensionInstantiate', bubble: rBc, comp: mkDiagramWithBoundary(cb.build(), [cbx]), attachments: [], binders: { [cstub]: rBp } })
+
+  const skZero = refBy(e, rBp, 'zero')
+  const w0s = argWire(e, skZero, 0)
+  const cpZero = refBy(e, cut1c, 'zero')
+  const cpAtom = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'atom' && n.region === cut1c)![0]
+  const cpClosure = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cut1c && Object.values(e.cur.regions).some((rr) => rr.kind === 'cut' && rr.parent === id))![0]
+  e.push('bridge base lines', { rule: 'wireJoin', a: w0s, b: argWire(e, cpZero, 0) })
+  e.push('deiterate copy base', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut1c, regions: [], nodes: [cpZero, cpAtom], wires: [] }), fuel: 64 })
+  e.push('deiterate copy closure', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut1c, regions: [cpClosure], nodes: [], wires: [] }), fuel: 64 })
+  e.push('dcElim cut1c', { rule: 'doubleCutElim', region: cut1c })
+  const rNn = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'atom' && n.region === cI)![0]
+
+  // Phase C: guarded modus ponens — R(n) ∧ Cl(R) ∧ Succ(n,s) ⟹ R(s) in cI
+  const skClosure = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === rBp && id !== cI)![0]
+  snap = e.cur
+  e.push('iterate closure into cI', { rule: 'iteration', sel: mkSelection(e.cur, { region: rBp, regions: [skClosure], nodes: [], wires: [] }), target: cI })
+  const cut2c2 = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cI && snap.regions[id] === undefined)![0]
+  const succCopy = refBy(e, cut2c2, 'succ')
+  const mLine = argWire(e, succCopy, 0)
+  const rmAtom = e.cur.wires[mLine]!.endpoints.find((ep) => ep.node !== succCopy)!.node
+  e.push('bind m=n', { rule: 'wireJoin', a: wn, b: mLine })
+  e.push('deiterate R(m) against R(n)', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut2c2, regions: [], nodes: [rmAtom], wires: [] }), fuel: 64 })
+  e.push('bind t=s', { rule: 'wireJoin', a: ws, b: argWire(e, succCopy, 1) })
+  e.push('deiterate Succ(n,s) against hypothesis', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut2c2, regions: [], nodes: [succCopy], wires: [] }), fuel: 64 })
+  e.push('dcElim closure copy', { rule: 'doubleCutElim', region: cut2c2 })
+  e.push('erase R(n)', { rule: 'erasure', sel: mkSelection(e.cur, { region: cI, regions: [], nodes: [rNn], wires: [] }) })
+
+  // Phase D: fold the guard to nat(s); consume nat(n)
+  e.push('fold nat(s)', { rule: 'relFold', sel: mkSelection(e.cur, { region: e.cur.root, regions: [cO], nodes: [], wires: [] }), defId: 'nat', args: [ws] })
+  e.push('erase nat(n)', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [rN], wires: [] }) })
+
+  const rl = new DiagramBuilder()
+  const rSuc = rl.ref(rl.root, 'succ', 2)
+  const rNat = rl.ref(rl.root, 'nat', 1)
+  const rwn = rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 0 } }])
+  const rws = rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 1 } }, { node: rNat, port: { kind: 'arg', index: 0 } }])
+  const rhs = mkDiagramWithBoundary(rl.build(), [rwn, rws])
+  return { name: 'succNat', lhs, rhs, steps: [...e.steps] }
+}
+
+/**
+ * oneIsNat: `Zero(z) ∧ Succ(z,o) ⟹ nat(o) ∧ Zero(z) ∧ Succ(z,o)` — the
+ * successor of a zero is a nat. Two native theorem citations: zeroIsNat lifts
+ * Zero(z) to nat(z), then succNat carries nat(z) ∧ Succ(z,o) to nat(o). This
+ * certifies concrete nat(1). Boundary [wz, wo].
+ */
+function deriveOneIsNat(ctx: ProofContext): Theorem {
+  const l = new DiagramBuilder()
+  const zRef = l.ref(l.root, 'zero', 1)
+  const sRef = l.ref(l.root, 'succ', 2)
+  const wz = l.wire(l.root, [{ node: zRef, port: { kind: 'arg', index: 0 } }, { node: sRef, port: { kind: 'arg', index: 0 } }])
+  const wo = l.wire(l.root, [{ node: sRef, port: { kind: 'arg', index: 1 } }])
+  const lhsD = l.build()
+  const lhs = mkDiagramWithBoundary(lhsD, [wz, wo])
+  const e = new DerivationCursor(lhsD, ctx)
+
+  e.push('cite zeroIsNat on Zero(z)', {
+    rule: 'theorem', name: 'zeroIsNat', direction: 'forward',
+    at: { sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zRef], wires: [] }), args: [wz] },
+  })
+  const natZ = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
+  e.push('cite succNat on nat(z) ∧ Succ(z,o)', {
+    rule: 'theorem', name: 'succNat', direction: 'forward',
+    at: { sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [natZ, sRef], wires: [] }), args: [wz, wo] },
+  })
+
+  const rl = new DiagramBuilder()
+  const rZero = rl.ref(rl.root, 'zero', 1)
+  const rSuc = rl.ref(rl.root, 'succ', 2)
+  const rNat = rl.ref(rl.root, 'nat', 1)
+  const rwz = rl.wire(rl.root, [{ node: rZero, port: { kind: 'arg', index: 0 } }, { node: rSuc, port: { kind: 'arg', index: 0 } }])
+  const rwo = rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 1 } }, { node: rNat, port: { kind: 'arg', index: 0 } }])
+  const rhs = mkDiagramWithBoundary(rl.build(), [rwz, rwo])
+  return { name: 'oneIsNat', lhs, rhs, steps: [...e.steps] }
+}
+
 export function buildFregeTheory(): Theory {
   const relations = buildRelations()
   const ctx: ProofContext = {
     theorems: new Map(),
     relations: new Map(Object.entries(relations)),
   }
+  // Map insertion order is dependency order. zeroIsNat and succNat must precede
+  // oneIsNat (which cites both); succShiftS must precede plusComm.
+  const zeroIsNat = deriveZeroIsNat(ctx)
+  const succNat = deriveSuccNat(ctx)
+  const oneIsNat = deriveOneIsNat({
+    theorems: new Map([[zeroIsNat.name, zeroIsNat], [succNat.name, succNat]]),
+    relations: ctx.relations,
+  })
   const theorems: Theorem[] = [
     derivePlusAssoc(ctx),
     derivePlusLeftUnit(ctx),
     derivePlusRightUnit(ctx),
-    deriveZeroIsNat(ctx),
+    zeroIsNat,
+    succNat,
+    oneIsNat,
   ]
-  // Map insertion order is dependency order: succShiftS must precede plusComm.
   const succShiftS = deriveSuccShiftS(ctx)
   theorems.push(succShiftS)
   const ctxWithSucc: ProofContext = {
