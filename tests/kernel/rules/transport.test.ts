@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import { lam, bvar, port } from '../../../src/kernel/term/term'
+import { lam, bvar, port, app } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import type { Diagram, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
 import { applyEndpointTransport } from '../../../src/kernel/rules/transport'
 import { boundaryFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
@@ -53,6 +54,45 @@ describe('endpoint transport — happy path', () => {
     const out = applyEndpointTransport(s.d, s.za, s.zb, { node: s.cons, port: { kind: 'freeVar', name: 's0' } }, idCert)
     const wB = outWireOf(out, s.zb)
     expect(out.wires[wB]!.endpoints.some((ep) => ep.node === s.cons && ep.port.kind === 'freeVar')).toBe(true)
+  })
+
+  it('accepts syntactically DISTINCT but βη-equal closed evidence (real conversion, not termEq)', () => {
+    // a = (λx.x) ZERO  β-reduces to  b = ZERO. Every other happy-path test uses
+    // identical spellings + idCert, so a `checkConversion := termEq` stub would
+    // pass them; this one exercises the certificate machinery genuinely.
+    const b = new DiagramBuilder()
+    const za = b.termNode(b.root, app(lam(bvar(0)), ZEROp))
+    const zb = b.termNode(b.root, ZEROp)
+    const cons = b.termNode(b.root, port('s0'))
+    b.wire(b.root, [{ node: za, port: { kind: 'output' } }, { node: cons, port: { kind: 'freeVar', name: 's0' } }])
+    b.wire(b.root, [{ node: zb, port: { kind: 'output' } }])
+    const d = b.build()
+    const cert = { leftSteps: [{ kind: 'beta' as const, path: [] }], rightSteps: [] }
+    const out = applyEndpointTransport(d, za, zb, { node: cons, port: { kind: 'freeVar', name: 's0' } }, cert)
+    const wB = outWireOf(out, zb)
+    expect(out.wires[wB]!.endpoints.some((ep) => ep.node === cons)).toBe(true)
+  })
+
+  it('SOUNDNESS INVARIANT — moves exactly one endpoint; wire scopes, ids, regions, nodes all unchanged', () => {
+    // The vacuity guarantee in operational form: transport never re-scopes,
+    // creates, or deletes a wire, and never moves a node or region. It only
+    // changes which wire ONE consumer endpoint names. So no quantifier bubble
+    // can be collapsed and no base line can be lifted out of its scope — the
+    // exact abuses that sank the wireJoin / congruenceJoin routes (memory
+    // UPDATE 10). A mutation that rescoped or added/removed a wire fails here.
+    const b = new DiagramBuilder()
+    const rB = b.bubble(b.root, 1)
+    const za = b.termNode(rB, ZEROp)
+    const zb = b.termNode(rB, ONEp)
+    const cons = b.termNode(rB, port('s0'))
+    b.wire(rB, [{ node: za, port: { kind: 'output' } }, { node: cons, port: { kind: 'freeVar', name: 's0' } }])
+    b.wire(rB, [{ node: zb, port: { kind: 'output' } }])
+    const d = b.build()
+    const out = applyEndpointTransport(d, za, zb, { node: cons, port: { kind: 'freeVar', name: 's0' } }, idCert)
+    expect(Object.keys(out.wires).sort()).toEqual(Object.keys(d.wires).sort())
+    for (const id of Object.keys(d.wires)) expect(out.wires[id]!.scope).toBe(d.wires[id]!.scope)
+    expect(JSON.stringify(out.regions)).toBe(JSON.stringify(d.regions))
+    expect(JSON.stringify(out.nodes)).toBe(JSON.stringify(d.nodes))
   })
 })
 
@@ -159,6 +199,65 @@ describe('endpoint transport — refusals (each message observed)', () => {
     void wA
     expect(() => applyEndpointTransport(d, za, zb, { node: cons, port: { kind: 'freeVar', name: 's0' } }, idCert))
       .toThrow(/does not lie inside the evidence region/)
+  })
+
+  it("refuses a consumer node in a SIBLING region (neither ancestor nor descendant of R)", () => {
+    // a,b co-resident in cutX; consumer in a disjoint sibling cutY. The wire is
+    // root-scoped so it can span both, but cutY is not inside R = cutX.
+    const b = new DiagramBuilder()
+    const cutX = b.cut(b.root)
+    const cutY = b.cut(b.root)
+    const za = b.termNode(cutX, ZEROp)
+    const zb = b.termNode(cutX, ONEp)
+    const cons = b.termNode(cutY, port('s0'))
+    b.wire(b.root, [{ node: za, port: { kind: 'output' } }, { node: cons, port: { kind: 'freeVar', name: 's0' } }])
+    b.wire(cutX, [{ node: zb, port: { kind: 'output' } }])
+    const d = b.build()
+    expect(() => applyEndpointTransport(d, za, zb, { node: cons, port: { kind: 'freeVar', name: 's0' } }, idCert))
+      .toThrow(/does not lie inside the evidence region/)
+  })
+
+  it("refuses evidence node b's OWN output as the endpoint (not on a's wire)", () => {
+    // Degenerate self-transport: b's output rides wB, never wA, so it is caught
+    // by the on-a's-wire gate before anything is moved.
+    const s = twoEvidence(false)
+    expect(() => applyEndpointTransport(s.d, s.za, s.zb, { node: s.zb, port: { kind: 'output' } }, idCert))
+      .toThrow(/is not on/)
+  })
+})
+
+describe('endpoint locality — gate direction (at-or-INSIDE R, not above)', () => {
+  it('ALLOWS a consumer node in a cut strictly INSIDE the evidence region', () => {
+    // The load-bearing direction: zeroIsNat transports the conclusion atom,
+    // which lives in the ¬R cut nested inside the guard bubble. A gate reversed
+    // to `epNode.region ⊇ R` (or tightened to exact equality) would refuse this.
+    const b = new DiagramBuilder()
+    const inner = b.cut(b.root)
+    const za = b.termNode(b.root, ZEROp)
+    const zb = b.termNode(b.root, ONEp)
+    const cons = b.termNode(inner, port('s0'))
+    b.wire(b.root, [{ node: za, port: { kind: 'output' } }, { node: cons, port: { kind: 'freeVar', name: 's0' } }])
+    b.wire(b.root, [{ node: zb, port: { kind: 'output' } }])
+    const d = b.build()
+    const out = applyEndpointTransport(d, za, zb, { node: cons, port: { kind: 'freeVar', name: 's0' } }, idCert)
+    const wB = outWireOf(out, zb)
+    expect(out.wires[wB]!.endpoints.some((ep) => ep.node === cons && ep.port.kind === 'freeVar')).toBe(true)
+  })
+})
+
+describe('closedness precondition — unbound bvars cannot masquerade as closed', () => {
+  it('mkDiagram rejects a term node with an unbound bvar (freePorts is empty but the term is NOT closed)', () => {
+    // The rule reads closedness off freePorts, which only counts `port` leaves.
+    // A bare bvar has empty freePorts yet is not a constant — its value would
+    // ride a binder. That escape is impossible in a validated diagram because
+    // mkDiagram calls assertWellFormedTerm, which rejects unbound de Bruijn
+    // indices. This pins the upstream half of the closedness guarantee.
+    expect(() => mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { n0: { kind: 'term', region: 'r0', term: bvar(0) } },
+      wires: { w0: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] } },
+    })).toThrow(/unbound de Bruijn index/)
   })
 })
 

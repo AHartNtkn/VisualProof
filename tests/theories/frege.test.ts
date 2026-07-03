@@ -140,11 +140,16 @@ describe('the bundled Frege theory', () => {
     expect(argWire(ld, lSuc, 0)).toBe(wn)
     // rhs: nat now guards s = Succ's output (nat.arg0 and succ.arg1 both on ws)
     const rd = t.rhs.diagram
-    const ws = t.rhs.boundary[1]
+    const [rwn, ws] = t.rhs.boundary
     const rNat = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
     const rSuc = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'succ')![0]
     expect(argWire(rd, rNat, 0)).toBe(ws)
     expect(argWire(rd, rSuc, 1)).toBe(ws)
+    // the guard is on the SUCCESSOR, not the predecessor: Succ's arg0 rides the
+    // other boundary line, distinct from ws — the statement is nat(succ n), not
+    // a degenerate nat(s) ∧ Succ(s,s).
+    expect(argWire(rd, rSuc, 0)).toBe(rwn)
+    expect(rwn).not.toBe(ws)
   })
 
   it('oneIsNat: Zero(z) ∧ Succ(z,o) ⟹ nat(o) ∧ Zero(z) ∧ Succ(z,o); guard on the successor', () => {
@@ -155,11 +160,18 @@ describe('the bundled Frege theory', () => {
     expect(refKinds(t.rhs)).toEqual(['nat/1', 'succ/2', 'zero/1'])
     // the produced nat guards o = the successor output (o-line is boundary[1])
     const rd = t.rhs.diagram
-    const wo = t.rhs.boundary[1]
+    const [wz, wo] = t.rhs.boundary
     const rNat = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
     const rSuc = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'succ')![0]
+    const rZero = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero')![0]
     expect(argWire(rd, rNat, 0)).toBe(wo)
     expect(argWire(rd, rSuc, 1)).toBe(wo)
+    // nat(1) is genuinely nat(succ(zero)): the successor's predecessor rides the
+    // SAME line as the retained Zero(z), distinct from the o-line. Without this
+    // the "1" could be any Succ, not the successor of a certified zero.
+    expect(argWire(rd, rSuc, 0)).toBe(wz)
+    expect(argWire(rd, rZero, 0)).toBe(wz)
+    expect(wz).not.toBe(wo)
   })
 
   it('smoke: oneIsNat certifies nat(1), which then satisfies a plusComm citation', () => {
