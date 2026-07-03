@@ -10,7 +10,7 @@ import { parseTerm } from '../src/kernel/term/parse'
 import { polarity } from '../src/kernel/diagram/regions'
 import { mkSelection, type SubgraphSelection } from '../src/kernel/diagram/subgraph/selection'
 import { findOccurrences, type Occurrence } from '../src/kernel/diagram/subgraph/match'
-import type { DiagramWithBoundary } from '../src/kernel/diagram/boundary'
+import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../src/kernel/diagram/boundary'
 import { applyStep, type ProofContext } from '../src/kernel/proof/step'
 import { verifyTheory } from '../src/kernel/proof/store'
 import { buildFregeTheory } from '../src/theories/frege'
@@ -86,6 +86,58 @@ export function occToSel(pattern: DiagramWithBoundary, occ: Occurrence, host: Di
     the infer-first flow's search (exact mode: the matcher's default UX law). */
 export function citeOccurrences(lab: LabCtx, from: DiagramWithBoundary): Occurrence[] {
   return [...findOccurrences(lab.d, from, { fuel: FUEL, mode: 'exact' }).matches]
+}
+
+/** Selection disambiguates (USER ruling): keep only occurrences whose image
+    CONTAINS every selected item. Whether the user brushed the wires along
+    with the nodes must not matter — the matcher derives the real seam. */
+export function occurrencesContaining(occs: readonly Occurrence[], hits: readonly Hit[]): Occurrence[] {
+  return occs.filter((occ) => {
+    const nodeImg = new Set(occ.nodeMap.values())
+    const wireImg = new Set(occ.wireMap.values())
+    const regionImg = new Set(occ.regionMap.values())
+    return hits.every((h) =>
+      h.kind === 'node' ? nodeImg.has(h.id)
+      : h.kind === 'wire' ? wireImg.has(h.id)
+      : regionImg.has(h.id))
+  })
+}
+
+export type CiteCandidate = {
+  readonly name: string
+  readonly direction: 'forward' | 'reverse'
+  readonly from: DiagramWithBoundary
+  /** null = closed statement (insertion, always available). */
+  readonly occs: Occurrence[] | null
+}
+
+/** The context-filtered theorem list (USER ruling: never show a theorem that
+    cannot apply HERE; a selection narrows to occurrences containing it).
+    Closed statements are always insertable and listed separately. */
+export function citeCandidates(lab: LabCtx, ctx: ProofContext, hits: readonly Hit[], direction: 'forward' | 'reverse'): { applicable: CiteCandidate[]; closed: CiteCandidate[] } {
+  const applicable: CiteCandidate[] = []
+  const closed: CiteCandidate[] = []
+  for (const [name] of ctx.theorems) {
+    const from = citeFrom(ctx, name, direction)
+    if (citeIsClosed(from)) { closed.push({ name, direction, from, occs: null }); continue }
+    const occs = occurrencesContaining(citeOccurrences(lab, from), hits)
+    if (occs.length > 0) applicable.push({ name, direction, from, occs })
+  }
+  return { applicable, closed }
+}
+
+/** A comprehension that stays FOLDED (USER ruling): instantiating a named
+    relation splices its REF NODE, never its body — unfold is a later,
+    selective choice. */
+export function foldedComp(ctx: ProofContext, name: string): DiagramWithBoundary {
+  const body = ctx.relations.get(name)
+  if (body === undefined) throw new Error(`unknown relation '${name}'`)
+  const arity = body.boundary.length
+  const b = new DiagramBuilder()
+  const r = b.ref(b.root, name, arity)
+  const ws: WireId[] = []
+  for (let i = 0; i < arity; i++) ws.push(b.wire(b.root, [{ node: r, port: { kind: 'arg', index: i } }]))
+  return mkDiagramWithBoundary(b.build(), ws)
 }
 
 export function applyCitation(lab: LabCtx, ctx: ProofContext, name: string, direction: 'forward' | 'reverse', sel: SubgraphSelection, args: readonly WireId[]): Diagram {

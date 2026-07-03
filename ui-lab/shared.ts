@@ -15,7 +15,7 @@ import { settleStep } from '../src/view/relax'
 import { paint, LIGHT, type Shape } from '../src/view/paint'
 import { drawShapes } from '../src/view/canvas'
 import { computeLegs, hobbyBezier, legPaths, boundaryExits, existentialStubs, type ExStub, type LegGeom, type WirePath } from '../src/view/wires'
-import { buildSelection, hitTest, type Hit } from '../src/app/hittest'
+import { buildSelection, dragTarget, hitTest, type Hit } from '../src/app/hittest'
 import { addBubble, addCut, addRefNode, addTermNode, deleteSelection } from '../src/app/edit'
 import { mkSelection } from '../src/kernel/diagram/subgraph/selection'
 import { deepestCommonAncestor, polarity } from '../src/kernel/diagram/regions'
@@ -302,12 +302,28 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
     else if (i < 0) { selected.push(h); painted = true }
   }
   const announce = () => readout(hover ? lab.describe(hover) + (isSelected(hover) ? ' — selected' : '') : '')
+  // Ctrl+drag = physics-only handle (USER ruling, round 4): pull any body
+  // against the live simulation; no proof or diagram meaning whatsoever.
+  let physDrag: { id: string; cursor: Vec2 } | null = null
+  lab.onFrame(() => {
+    if (physDrag === null) return
+    const b = lab.engine.bodies.get(physDrag.id)
+    if (b) { b.pos = { x: physDrag.cursor.x, y: physDrag.cursor.y }; b.vel = { x: 0, y: 0 } }
+  })
   lab.canvas.addEventListener('pointermove', (e) => {
+    if (physDrag) { physDrag.cursor = lab.toWorld(e.clientX, e.clientY); return }
     hover = lab.hitAt(e.clientX, e.clientY)
     if (brushing) applyBrush(hover)
     announce()
   })
+  lab.canvas.addEventListener('pointerup', () => { physDrag = null })
   lab.canvas.addEventListener('pointerdown', (e) => {
+    if (e.ctrlKey && e.button === 0) {
+      const w = lab.toWorld(e.clientX, e.clientY)
+      const t = dragTarget(lab.engine, w)
+      if (t?.kind === 'body') physDrag = { id: t.id, cursor: w }
+      return
+    }
     const h = lab.hitAt(e.clientX, e.clientY)
     if (claim && claim(h, e)) return
     brushing = true
