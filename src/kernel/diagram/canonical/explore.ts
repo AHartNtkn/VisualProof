@@ -71,6 +71,33 @@ export function exploreLabeling(d: Diagram, pinnedWires: readonly WireId[] = [])
   }
 }
 
+export type RefinedColors = {
+  readonly region: ReadonlyMap<RegionId, number>
+  readonly node: ReadonlyMap<NodeId, number>
+  readonly wire: ReadonlyMap<WireId, number>
+}
+
+/**
+ * The refinement fixpoint colors (BEFORE any individualization). Two objects
+ * with the same color are indistinguishable by the exploration — a sound
+ * over-approximation of automorphism orbits (orbits refine colors; colors are
+ * never finer than orbits). The matcher uses this to break the symmetry of
+ * interchangeable pattern items: same-color siblings are forced onto host
+ * candidates in increasing order, collapsing their factorial of equivalent
+ * assignments to the one canonical representative.
+ */
+export function refinedColors(d: Diagram, pinnedWires: readonly WireId[] = []): RefinedColors {
+  const seenPins = new Set<string>()
+  for (const w of pinnedWires) {
+    if (d.wires[w] === undefined) throw new DiagramError(`pinned wire '${w}' does not exist`)
+    if (seenPins.has(w)) throw new DiagramError(`duplicate pinned wire '${w}'`)
+    seenPins.add(w)
+  }
+  const idx = buildExploreIndex(d, pinnedWires)
+  const c = refine(idx, initialColors(idx))
+  return { region: c.region, node: c.node, wire: c.wire }
+}
+
 export type ExploreIndex = {
   readonly regionIds: readonly RegionId[]
   readonly nodeIds: readonly NodeId[]

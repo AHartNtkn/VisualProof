@@ -31,12 +31,34 @@
 
 - [x] Engine + labeling + isomorphism green; full suite + tsc green. Commit. — `canonical/explore.ts` (`exploreLabeling`/`exploreForm`/`exploreIso`); `tests/kernel/diagram/explore.test.ts` (8 tests: brute-force property oracle over ~1830 random pairs + 80 relabelings, boundary-order sensitivity, wire-set deferral, twin-empty-cut lex-least, exact-not-βη). tsc clean, 770/770.
 
+### Benchmark: old backtracking matcher (measured before deletion)
+
+Benchmark diagram: N identical `\x. x` term nodes whose outputs all lie on ONE
+N-endpoint equality wire; pattern identical (empty boundary); exactly 1
+occurrence (the whole thing; the N! node bijections collapse to one footprint).
+Visited-state counter = `nodeCompatible` calls.
+
+| N  | old matcher visited | old wall time | new matcher visited |
+|----|---------------------|---------------|---------------------|
+| 5  | 325                 | 2 ms          | 5                   |
+| 10 | 9,864,100           | 10.4 s        | 10                  |
+| 20 | infeasible (20! ≈ 2.4e18) | never terminates | 20            |
+
+The 325 → 9.86M jump for a 2× increase in N is the factorial signature: the old
+matcher enumerates every interior bijection of the interchangeable nodes and
+verifies wiring only post-hoc, so N=20 cannot be measured at all. The
+exploration matcher visits exactly N states (the single forced increasing
+assignment), pinned in `match-explore.test.ts`. The feasibility bound (an item's
+host index must leave enough larger indices free for its colour-run tail) is
+what turns the increasing-order enumeration from 2^N into linear.
+
 ### Task 2: Matching mode + consumer migration
 
 **Files:** occurrence matching over the engine; `findOccurrences` keeps its signature plus the attachment seed and the mode parameter; every consumer (iteration/deiteration justification, theorem citation, comprehension, relFold occurrence check) migrated with their CURRENT comparison semantics (βη where today's behavior is βη — recorded derivations must replay byte-identical); bare-boundary support live (the artificial-consumer workarounds in theory derivations may now be simplified ONLY if statements stay identical — otherwise leave and note).
 **Test:** the ENTIRE existing matcher battery green unchanged (it is the semantic contract); new: bare-boundary citation case; seeded-vs-unseeded agreement; benchmark test with a visited-state counter — N identical sibling nodes and an N-endpoint equality wire, asserting linear-ish growth where the old matcher is factorial (pin the counts).
 
-- [ ] Matching green, all consumers migrated, old backtracking matcher DELETED, suite + tsc + e2e green. Commit.
+- [x] Matching green, all consumers migrated, old backtracking matcher DELETED, suite + tsc + e2e green. Commit. — `subgraph/match.ts` rewritten: exploration-driven assignment (canonical (colour,id) order + increasing-order symmetry break + feasibility bound) replaces the factorial backtracking IN PLACE (same module/signature, no dual system); added `mode: exact|betaEta` (default betaEta preserves current behavior) and an `attachments` seed filter. deiteration is unchanged (defaults to betaEta; its manual attachment filter still holds — recorded derivations replay identically). `match-explore.test.ts` (12 tests): pinned linear benchmark (5/10/20), C(M,k) completeness oracle, twin-cut collapse, distinct-wiring non-collapse, seeded/unseeded agreement, exact-vs-betaEta.
+  - **DEFERRED pending team-lead ruling:** bare-boundary support. The plan mandates bare boundary wires "must now WORK, not throw", but `match.test.ts` asserts they throw and the non-negotiable forbids editing expectations. Kept the throw; flagged the conflict + the undefined attachment semantics. See message to team-lead.
 
 ### Task 3: Fingerprint unification + review
 

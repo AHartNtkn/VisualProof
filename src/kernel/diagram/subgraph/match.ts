@@ -3,7 +3,14 @@ import { DiagramError } from '../diagram'
 import { isAncestorOrEqual } from '../regions'
 import type { DiagramWithBoundary } from '../boundary'
 import { positionalPortKey } from '../canonical/shape'
+import { termShapeKey } from '../canonical/shape'
 import { termsMatchModuloBetaEta } from '../canonical/matchkey'
+import { refinedColors } from '../canonical/explore'
+
+/** Visited-state counter (node-compatibility probes). Reset by callers that measure. */
+export const __benchCounter = { n: 0 }
+
+export type MatchMode = 'exact' | 'betaEta'
 
 export type Occurrence = {
   /** Host region the pattern root maps to. */
@@ -28,6 +35,7 @@ export type MatchResult = {
    * Candidate node pairs whose βη comparison exhausted fuel. Such pairs are
    * treated as non-matching, so completeness holds only modulo this list —
    * which is why it is part of the result, never swallowed (spec §3.7).
+   * Exact mode never produces undecided pairs.
    */
   readonly undecided: readonly UndecidedPair[]
 }
@@ -49,11 +57,9 @@ function posKey(d: Diagram, ep: Endpoint): string {
       return positionalPortKey(n.term, ep.port)
     case 'atom':
       if (ep.port.kind === 'arg') return `a${ep.port.index}`
-      // unreachable for mkDiagram-validated diagrams; throw rather than fabricate
       throw new DiagramError(`atom '${ep.node}' cannot carry port '${ep.port.kind}'`)
     case 'ref':
       if (ep.port.kind === 'arg') return `a${ep.port.index}`
-      // unreachable: refs carry only arg ports (mkDiagram partition check)
       throw new DiagramError(`ref '${ep.node}' cannot carry port '${ep.port.kind}'`)
   }
 }
@@ -92,14 +98,22 @@ function buildIdx(d: Diagram): Idx {
 }
 
 /**
- * Complete backtracking occurrence search. Root items are assigned to a
- * subset of the candidate region's items; nested regions correspond exactly;
- * interior bijections are explored exhaustively via continuations. Wire
- * images are determined by the port-partition invariant (each endpoint lies
- * on exactly one host wire), so wires need verification, not search; bare
+ * Exploration-driven occurrence search. The pattern's effective-root items are
+ * matched against a host region, its nested regions corresponding exactly, and
+ * the interior filled by a guided walk: pattern items are visited in canonical
+ * (refined-color, id) order and, WITHIN a group of indistinguishable siblings,
+ * their host images are forced into strictly increasing candidate order. That
+ * collapses the factorial of interchangeable assignments the old backtracking
+ * matcher paid for — same-color pattern siblings are related by a pattern
+ * automorphism, so every permutation of their images yields the same
+ * occurrence, and only the one increasing representative is explored.
+ *
+ * Wire images stay determined by the port-partition invariant (each endpoint
+ * lies on exactly one host wire), so wires are verified, not searched; bare
  * wires are indistinguishable and paired canonically. Occurrences are
- * deduplicated by footprint. βη-undecidable node pairs are reported in
- * `undecided` and treated as non-matching — completeness modulo that list.
+ * deduplicated by footprint. In `betaEta` mode (default) term-node comparison
+ * is modulo beta-eta with the fuel + `undecided` contract; in `exact` mode it
+ * is name-blind structural (de Bruijn) equality with no fuel and no undecided.
  *
  * With openBinders, atoms bound to stub bubbles match only when the stub
  * binder maps to the specified host bubble (exact identity, not isomorphism).
@@ -109,9 +123,17 @@ function buildIdx(d: Diagram): Idx {
 export function findOccurrences(
   host: Diagram,
   pattern: DiagramWithBoundary,
-  opts: { fuel: number; inRegion?: RegionId; openBinders?: ReadonlyMap<RegionId, RegionId> },
+  opts: {
+    fuel: number
+    inRegion?: RegionId
+    openBinders?: ReadonlyMap<RegionId, RegionId>
+    mode?: MatchMode
+    /** Citation-supplied boundary anchors: keep only occurrences whose attachments are exactly these (index-aligned). */
+    attachments?: readonly WireId[]
+  },
 ): MatchResult {
   const { fuel } = opts
+  const mode: MatchMode = opts.mode ?? 'betaEta'
   if (!Number.isInteger(fuel) || fuel <= 0) {
     throw new DiagramError(`fuel must be a positive integer, got ${fuel}`)
   }
@@ -144,6 +166,11 @@ export function findOccurrences(
   const hIdx = buildIdx(host)
   const pIdx = buildIdx(pd)
 
+  // Pattern refined colors (boundary pinned: the anchor). Same color ⟹
+  // indistinguishable ⟹ freely interchangeable, which is what licenses the
+  // increasing-order symmetry break below.
+  const pColors = refinedColors(pd, pattern.boundary)
+
   // stubs must form a pure chain root → s1 → … → sk: nothing else lives on it
   let effectiveRoot: RegionId = pd.root
   {
@@ -156,9 +183,6 @@ export function findOccurrences(
       if (stubKids.length > 1 || kids.length > 1 || pIdx.nodesIn.get(cur)!.length > 0) {
         throw new DiagramError(`open binder stubs must form a pure chain below the pattern root; '${cur}' has other content`)
       }
-      // non-boundary wires scoped above the content level (the root or a
-      // non-innermost stub) have no host counterpart under the stub-layer
-      // reading; boundary stubs at the root are the seam and stay fine
       const nonBoundaryAtCur = Object.entries(pd.wires).some(
         ([wid, w]) => w.scope === cur && !boundarySet.has(wid),
       )
@@ -173,8 +197,30 @@ export function findOccurrences(
       throw new DiagramError(`open binder stub(s) ${[...stubSet].map((s) => `'${s}'`).join(', ')} are not on the root chain`)
     }
   }
-  const rootRegions = pIdx.childrenOf.get(effectiveRoot)!
-  const rootNodes = pIdx.nodesIn.get(effectiveRoot)!
+  // Pattern items visited in (refined-color, id) order so indistinguishable
+  // siblings are consecutive; the increasing-order break then applies along
+  // each same-color run.
+  const byColor = <T extends string>(ids: readonly T[], colors: ReadonlyMap<T, number>): T[] =>
+    [...ids].sort((a, b) => {
+      const ca = colors.get(a)!
+      const cb = colors.get(b)!
+      return ca !== cb ? ca - cb : a < b ? -1 : a > b ? 1 : 0
+    })
+  // For each item, how many later items share its color (its run tail). An
+  // item's host-candidate index must leave at least that many larger indices
+  // free — the feasibility bound that keeps the increasing-order enumeration
+  // linear instead of exploring every dead-end increasing prefix.
+  const runTail = <T extends string>(sorted: readonly T[], colors: ReadonlyMap<T, number>): number[] => {
+    const out = new Array(sorted.length).fill(0)
+    for (let i = sorted.length - 2; i >= 0; i--) {
+      out[i] = colors.get(sorted[i]!)! === colors.get(sorted[i + 1]!)! ? out[i + 1] + 1 : 0
+    }
+    return out
+  }
+  const rootRegions = byColor(pIdx.childrenOf.get(effectiveRoot)!, pColors.region)
+  const rootNodes = byColor(pIdx.nodesIn.get(effectiveRoot)!, pColors.node)
+  const rootRegionsTail = runTail(rootRegions, pColors.region)
+  const rootNodesTail = runTail(rootNodes, pColors.node)
 
   const binderImage = new Map(openBinders)
   const regionMap = new Map<RegionId, RegionId>()
@@ -201,8 +247,15 @@ export function findOccurrences(
     }
     if (!ok) continue
     regionMap.set(effectiveRoot, R)
-    assignRootItems(R, 0)
+    assignRootItems(R, 0, -1)
     regionMap.delete(effectiveRoot)
+  }
+  if (opts.attachments !== undefined) {
+    const seed = opts.attachments
+    const kept = matches.filter(
+      (m) => m.attachments.length === seed.length && m.attachments.every((w, i) => w === seed[i]),
+    )
+    return { matches: kept, undecided }
   }
   return { matches, undecided }
 
@@ -221,6 +274,9 @@ export function findOccurrences(
     const pt = pd.nodes[pn]!
     const ht = host.nodes[hn]!
     if (pt.kind !== 'term' || ht.kind !== 'term') return setVerdict(false)
+    if (mode === 'exact') {
+      return setVerdict(termShapeKey(pt.term) === termShapeKey(ht.term))
+    }
     const v = termsMatchModuloBetaEta(pt.term, ht.term, fuel)
     if (v.status === 'undecided') {
       let seen = undecidedSeen.get(pn)
@@ -238,6 +294,7 @@ export function findOccurrences(
   }
 
   function nodeCompatible(pn: NodeId, hn: NodeId): boolean {
+    __benchCounter.n++
     const pnode = pd.nodes[pn]!
     const hnode = host.nodes[hn]!
     if (pnode.kind !== hnode.kind) return false
@@ -252,8 +309,6 @@ export function findOccurrences(
       }
       case 'ref': {
         if (hnode.kind !== 'ref') return false // impossible given the equality guard; narrows hnode
-        // References match by defId AND arity (region-independent, like
-        // constants); ordinary arg-wire alignment does the rest.
         return pnode.defId === hnode.defId && pnode.arity === hnode.arity
       }
       case 'term':
@@ -269,7 +324,11 @@ export function findOccurrences(
     return true
   }
 
-  function assignRootItems(R: RegionId, i: number): void {
+  // The symmetry break: within a run of consecutive same-color pattern items
+  // the chosen host-candidate INDEX must strictly increase. `prevIdx` is the
+  // index chosen for the preceding item; a lower bound of it applies only when
+  // that item shares this one's color.
+  function assignRootItems(R: RegionId, i: number, prevIdx: number): void {
     const total = rootRegions.length + rootNodes.length
     if (i === total) {
       finishWires(R)
@@ -277,26 +336,37 @@ export function findOccurrences(
     }
     if (i < rootRegions.length) {
       const pr = rootRegions[i]!
-      for (const hr of hIdx.childrenOf.get(R)!) {
+      const sameColorPrev = i > 0 && pColors.region.get(rootRegions[i - 1]!)! === pColors.region.get(pr)!
+      const lower = sameColorPrev ? prevIdx : -1
+      const hcands = hIdx.childrenOf.get(R)!
+      const upper = hcands.length - 1 - rootRegionsTail[i]!
+      for (let k = lower + 1; k <= upper; k++) {
+        const hr = hcands[k]!
         if (usedRegions.has(hr)) continue
         if (!regionsShallowCompatible(pr, hr)) continue
-        matchSubtree(pr, hr, () => assignRootItems(R, i + 1))
+        matchSubtree(pr, hr, () => assignRootItems(R, i + 1, k))
       }
       return
     }
-    const pn = rootNodes[i - rootRegions.length]!
-    for (const hn of hIdx.nodesIn.get(R)!) {
+    const j = i - rootRegions.length
+    const pn = rootNodes[j]!
+    const sameColorPrev = j > 0 && pColors.node.get(rootNodes[j - 1]!)! === pColors.node.get(pn)!
+    const lower = sameColorPrev ? prevIdx : -1
+    const hcands = hIdx.nodesIn.get(R)!
+    const upper = hcands.length - 1 - rootNodesTail[j]!
+    for (let k = lower + 1; k <= upper; k++) {
+      const hn = hcands[k]!
       if (usedNodes.has(hn)) continue
       if (!nodeCompatible(pn, hn)) continue
       nodeMap.set(pn, hn)
       usedNodes.add(hn)
-      assignRootItems(R, i + 1)
+      assignRootItems(R, i + 1, k)
       nodeMap.delete(pn)
       usedNodes.delete(hn)
     }
   }
 
-  /** Exact correspondence: equal counts, then exhaustive interior bijections. */
+  /** Exact correspondence: equal counts, then guided interior bijection. */
   function matchSubtree(pr: RegionId, hr: RegionId, k: () => void): void {
     const pChildren = pIdx.childrenOf.get(pr)!
     const hChildren = hIdx.childrenOf.get(hr)!
@@ -308,17 +378,25 @@ export function findOccurrences(
     if (pIdx.bareScoped.get(pr)!.length !== hIdx.bareScoped.get(hr)!.length) return
     regionMap.set(pr, hr)
     usedRegions.add(hr)
-    assignInterior(pChildren, hChildren, pNodes, hNodes, 0, k)
+    const pc = byColor(pChildren, pColors.region)
+    const pn = byColor(pNodes, pColors.node)
+    assignInterior(
+      pc, runTail(pc, pColors.region), hChildren,
+      pn, runTail(pn, pColors.node), hNodes, 0, -1, k,
+    )
     regionMap.delete(pr)
     usedRegions.delete(hr)
   }
 
   function assignInterior(
     pChildren: readonly RegionId[],
+    pChildrenTail: readonly number[],
     hChildren: readonly RegionId[],
     pNodes: readonly NodeId[],
+    pNodesTail: readonly number[],
     hNodes: readonly NodeId[],
     i: number,
+    prevIdx: number,
     k: () => void,
   ): void {
     const total = pChildren.length + pNodes.length
@@ -328,20 +406,29 @@ export function findOccurrences(
     }
     if (i < pChildren.length) {
       const pc = pChildren[i]!
-      for (const hc of hChildren) {
+      const sameColorPrev = i > 0 && pColors.region.get(pChildren[i - 1]!)! === pColors.region.get(pc)!
+      const lower = sameColorPrev ? prevIdx : -1
+      const upper = hChildren.length - 1 - pChildrenTail[i]!
+      for (let idx = lower + 1; idx <= upper; idx++) {
+        const hc = hChildren[idx]!
         if (usedRegions.has(hc)) continue
         if (!regionsShallowCompatible(pc, hc)) continue
-        matchSubtree(pc, hc, () => assignInterior(pChildren, hChildren, pNodes, hNodes, i + 1, k))
+        matchSubtree(pc, hc, () => assignInterior(pChildren, pChildrenTail, hChildren, pNodes, pNodesTail, hNodes, i + 1, idx, k))
       }
       return
     }
-    const pn = pNodes[i - pChildren.length]!
-    for (const hn of hNodes) {
+    const j = i - pChildren.length
+    const pn = pNodes[j]!
+    const sameColorPrev = j > 0 && pColors.node.get(pNodes[j - 1]!)! === pColors.node.get(pn)!
+    const lower = sameColorPrev ? prevIdx : -1
+    const upper = hNodes.length - 1 - pNodesTail[j]!
+    for (let idx = lower + 1; idx <= upper; idx++) {
+      const hn = hNodes[idx]!
       if (usedNodes.has(hn)) continue
       if (!nodeCompatible(pn, hn)) continue
       nodeMap.set(pn, hn)
       usedNodes.add(hn)
-      assignInterior(pChildren, hChildren, pNodes, hNodes, i + 1, k)
+      assignInterior(pChildren, pChildrenTail, hChildren, pNodes, pNodesTail, hNodes, i + 1, idx, k)
       nodeMap.delete(pn)
       usedNodes.delete(hn)
     }
@@ -384,9 +471,9 @@ export function findOccurrences(
       // sets (any pairing → same footprint); at the ROOT, canonical first-k
       // pairing deliberately collapses the isomorphic choices of host bare
       // wires into one occurrence
-      for (let j = 0; j < pBare.length; j++) {
-        wireMap.set(pBare[j]!, hBare[j]!)
-        usedImages.add(hBare[j]!)
+      for (let jj = 0; jj < pBare.length; jj++) {
+        wireMap.set(pBare[jj]!, hBare[jj]!)
+        usedImages.add(hBare[jj]!)
       }
     }
 
