@@ -3,6 +3,7 @@ import { buildFregeTheory, natRelation } from '../../src/theories/frege'
 import { verifyTheory, theoryToJson, loadTheory } from '../../src/kernel/proof/store'
 import { boundaryForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Diagram, DiagramNode, WireId } from '../../src/kernel/diagram/diagram'
+import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyTheorem, type Theorem } from '../../src/kernel/proof/theorem'
@@ -109,20 +110,22 @@ describe('the bundled Frege theory', () => {
     expect([argWire(t.rhs.diagram, rp, 0), argWire(t.rhs.diagram, rp, 1), argWire(t.rhs.diagram, rp, 2)]).toEqual([wb2, wa2, wo2])
   })
 
-  it('zeroIsNat: Zero(z) ⟹ nat(z) ∧ Zero(z); boundary [z]; nat and zero co-ride z', () => {
+  it('zeroIsNat: the closed sentence ⟹ ∃z. Zero(z) ∧ nat(z); no boundary; nat and zero co-ride the existential z', () => {
     const t = buildFregeTheory().theorems.find((x) => x.name === 'zeroIsNat')!
-    expect(t.lhs.boundary).toHaveLength(1)
-    expect(t.rhs.boundary).toHaveLength(1)
-    // lhs is the bare Zero premise; rhs adds the nat guard, retaining Zero
-    expect(refKinds(t.lhs)).toEqual(['zero/1'])
+    // a standalone fact, so both sides are closed sentences (empty boundary)
+    expect(t.lhs.boundary).toHaveLength(0)
+    expect(t.rhs.boundary).toHaveLength(0)
+    // lhs is the blank sheet — no references at all
+    expect(refKinds(t.lhs)).toEqual([])
+    // rhs asserts nat(z) ∧ Zero(z), both guards riding one existential z-line
     expect(refKinds(t.rhs)).toEqual(['nat/1', 'zero/1'])
-    // both the produced nat guard and the retained Zero ride the boundary z-line
     const rd = t.rhs.diagram
-    const [wz] = t.rhs.boundary
     const natId = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
     const zeroId = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero')![0]
-    expect(argWire(rd, natId, 0)).toBe(wz)
+    const wz = argWire(rd, natId, 0)
     expect(argWire(rd, zeroId, 0)).toBe(wz)
+    // z is a genuine existential: root-scoped but NOT a boundary wire
+    expect(rd.wires[wz]!.scope).toBe(rd.root)
   })
 
   it('succNat: nat(n) ∧ Succ(n,s) ⟹ Succ(n,s) ∧ nat(s); guard rides the successor', () => {
@@ -152,62 +155,76 @@ describe('the bundled Frege theory', () => {
     expect(rwn).not.toBe(ws)
   })
 
-  it('oneIsNat: Zero(z) ∧ Succ(z,o) ⟹ nat(o) ∧ Zero(z) ∧ Succ(z,o); guard on the successor', () => {
+  it('oneIsNat: the closed sentence ⟹ ∃z,s. Zero(z) ∧ Succ(z,s) ∧ nat(s); no boundary; guard on the successor', () => {
     const t = buildFregeTheory().theorems.find((x) => x.name === 'oneIsNat')!
-    expect(t.lhs.boundary).toHaveLength(2)
-    expect(t.rhs.boundary).toHaveLength(2)
-    expect(refKinds(t.lhs)).toEqual(['succ/2', 'zero/1'])
+    // a standalone fact: closed on both sides
+    expect(t.lhs.boundary).toHaveLength(0)
+    expect(t.rhs.boundary).toHaveLength(0)
+    // lhs is the blank sheet
+    expect(refKinds(t.lhs)).toEqual([])
     expect(refKinds(t.rhs)).toEqual(['nat/1', 'succ/2', 'zero/1'])
-    // the produced nat guards o = the successor output (o-line is boundary[1])
     const rd = t.rhs.diagram
-    const [wz, wo] = t.rhs.boundary
     const rNat = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
     const rSuc = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'succ')![0]
     const rZero = Object.entries(rd.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero')![0]
-    expect(argWire(rd, rNat, 0)).toBe(wo)
-    expect(argWire(rd, rSuc, 1)).toBe(wo)
+    // the produced nat guards s = the successor output
+    const ws = argWire(rd, rNat, 0)
+    expect(argWire(rd, rSuc, 1)).toBe(ws)
     // nat(1) is genuinely nat(succ(zero)): the successor's predecessor rides the
-    // SAME line as the retained Zero(z), distinct from the o-line. Without this
-    // the "1" could be any Succ, not the successor of a certified zero.
-    expect(argWire(rd, rSuc, 0)).toBe(wz)
+    // SAME line as the Zero witness, distinct from the s-line. Without this the
+    // "1" could be any Succ, not the successor of a certified zero.
+    const wz = argWire(rd, rSuc, 0)
     expect(argWire(rd, rZero, 0)).toBe(wz)
-    expect(wz).not.toBe(wo)
+    expect(wz).not.toBe(ws)
+    // both z and s are genuine existentials: root-scoped, no boundary
+    expect(rd.wires[ws]!.scope).toBe(rd.root)
+    expect(rd.wires[wz]!.scope).toBe(rd.root)
   })
 
-  it('smoke: oneIsNat certifies nat(1), which then satisfies a plusComm citation', () => {
+  it('smoke: oneIsNat inserts a certified nat(1) that then satisfies a plusComm citation', () => {
     const theory = buildFregeTheory()
     const oneIsNat = theory.theorems.find((x) => x.name === 'oneIsNat')!
     const plusComm = theory.theorems.find((x) => x.name === 'plusComm')!
 
-    // host: Zero(z) ∧ Succ(z,o) ∧ nat(b) ∧ Plus(o,b,sum)
-    const h = new DiagramBuilder()
-    const zRef = h.ref(h.root, 'zero', 1)
-    const sRef = h.ref(h.root, 'succ', 2)
-    const bNat = h.ref(h.root, 'nat', 1)
-    const pRef = h.ref(h.root, 'plus', 3)
-    const wz = h.wire(h.root, [{ node: zRef, port: { kind: 'arg', index: 0 } }, { node: sRef, port: { kind: 'arg', index: 0 } }])
-    const wo = h.wire(h.root, [{ node: sRef, port: { kind: 'arg', index: 1 } }, { node: pRef, port: { kind: 'arg', index: 0 } }])
-    const wb = h.wire(h.root, [{ node: bNat, port: { kind: 'arg', index: 0 } }, { node: pRef, port: { kind: 'arg', index: 1 } }])
-    const wsum = h.wire(h.root, [{ node: pRef, port: { kind: 'arg', index: 2 } }])
-    const d = h.build()
-
-    // certify nat(o) — o is Succ of a Zero, i.e. 1
-    const d1 = applyTheorem(d, oneIsNat, {
-      sel: mkSelection(d, { region: d.root, regions: [], nodes: [zRef, sRef], wires: [] }), args: [wz, wo],
+    // The closed oneIsNat is a standalone fact: cite it (empty selection) at a
+    // positive region and it PLANTS its own certified 1 as Zero(z) ∧ Succ(z,s)
+    // ∧ nat(s) on fresh existential lines — no host premise needed.
+    const d0 = new DiagramBuilder().build()
+    const d = applyTheorem(d0, oneIsNat, {
+      sel: mkSelection(d0, { region: d0.root, regions: [], nodes: [], wires: [] }), args: [],
     }, 'forward')
-    const natO = Object.entries(d1.nodes).find(([id, n]) =>
-      n.kind === 'ref' && n.defId === 'nat' && id !== bNat &&
-      d1.wires[wo]!.endpoints.some((ep) => ep.node === id))![0]
-    expect(natO).toBeDefined()
+    const natS = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
+    const succS = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'succ')![0]
+    const ws = argWire(d, natS, 0)                 // the certified 1 line
+    expect(argWire(d, succS, 1)).toBe(ws)          // genuinely succ(zero)
 
-    // feed nat(1) ∧ nat(b) ∧ Plus(o,b,sum) into plusComm → Plus(b,o,sum)
+    // build the surrounding arithmetic around the certified line: nat(b) and
+    // Plus(s,b,sum) reading the certified 1 as its first argument.
+    const natB = 'smoke_natB', plusN = 'smoke_plus', wb = 'smoke_wb', wsum = 'smoke_wsum'
+    const d1 = mkDiagram({
+      root: d.root,
+      regions: d.regions,
+      nodes: {
+        ...d.nodes,
+        [natB]: { kind: 'ref', region: d.root, defId: 'nat', arity: 1 },
+        [plusN]: { kind: 'ref', region: d.root, defId: 'plus', arity: 3 },
+      },
+      wires: {
+        ...d.wires,
+        [ws]: { scope: d.wires[ws]!.scope, endpoints: [...d.wires[ws]!.endpoints, { node: plusN, port: { kind: 'arg', index: 0 } }] },
+        [wb]: { scope: d.root, endpoints: [{ node: natB, port: { kind: 'arg', index: 0 } }, { node: plusN, port: { kind: 'arg', index: 1 } }] },
+        [wsum]: { scope: d.root, endpoints: [{ node: plusN, port: { kind: 'arg', index: 2 } }] },
+      },
+    })
+
+    // feed nat(1) ∧ nat(b) ∧ Plus(s,b,sum) into plusComm → Plus(b,s,sum)
     const d2 = applyTheorem(d1, plusComm, {
-      sel: mkSelection(d1, { region: d1.root, regions: [], nodes: [natO, bNat, pRef], wires: [] }), args: [wo, wb, wsum],
+      sel: mkSelection(d1, { region: d1.root, regions: [], nodes: [natS, natB, plusN], wires: [] }), args: [ws, wb, wsum],
     }, 'forward')
-    // the Plus now reads (b, o, sum): its first argument rides wb
+    // the Plus now reads (b, s, sum): its first argument rides wb, the crossed 1
     const plusAfter = Object.entries(d2.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'plus')![0]
     expect(argWire(d2, plusAfter, 0)).toBe(wb)
-    expect(argWire(d2, plusAfter, 1)).toBe(wo)
+    expect(argWire(d2, plusAfter, 1)).toBe(ws)
   })
 
   it('the bundled ℕ is inCutNat: the zero-evidence is inside the guard, not root-witnessable', () => {

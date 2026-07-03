@@ -34,7 +34,32 @@
 **Files:** `src/theories/frege.ts` (restatements + re-derivations), `src/theories/lambda.ts` (same audit), batteries updated to the new statements (the no-const guard, statement-adequacy pins, and JSON round-trips all retarget).
 **Test:** every restated theorem checkTheorem-green through the JSON road; statement-adequacy pins updated to pin the NEW forms (closed sentences: assert boundary [] and the rhs canonical form; the crossing pin for plusComm survives); e2e replay retargets if step counts shift.
 
-- [ ] All theorems restated per rubric (or flagged with reasons), batteries green, suite + tsc + e2e green. Commit.
+- [x] All theorems restated per rubric (or flagged with reasons), batteries green, suite + tsc + e2e green. Commit.
+
+**Findings (Task 2, done):**
+
+Statement table (old → new). Only two theorems changed form; the rest are recorded with the reason they keep their shape.
+
+| theorem | old statement (boundary) | new statement (boundary) | verdict |
+| --- | --- | --- | --- |
+| zeroIsNat | `Zero(z) ⟹ nat(z) ∧ Zero(z)` (1) | `⟹ ∃z. Zero(z) ∧ nat(z)` (0, CLOSED) | **restated** — standalone fact |
+| oneIsNat | `Zero(z) ∧ Succ(z,o) ⟹ nat(o) ∧ Zero(z) ∧ Succ(z,o)` (2) | `⟹ ∃z,s. Zero(z) ∧ Succ(z,s) ∧ nat(s)` (0, CLOSED) | **restated** — standalone fact |
+| succNat | `nat(n) ∧ Succ(n,s) ⟹ Succ(n,s) ∧ nat(s)` (2) | *unchanged* | kept rule-shaped (see verdict) |
+| plusComm | `ℕ(a) ∧ ℕ(b) ∧ Plus(a,b,o) ⟹ ℕ(a) ∧ ℕ(b) ∧ Plus(b,a,o)` (3) | *unchanged* | kept sequent — cited with args by the smoke test |
+| succShiftS | `ℕ(a) ∧ Succ(b,sb) ∧ Plus(a,sb,o) ⟹ ℕ(a) ∧ Plus(a,b,t) ∧ Succ(t,o)` (3) | *unchanged* | kept sequent — cited by plusComm |
+| plusAssoc | `Plus(a,b,t) ∧ Plus(t,c,o) ⟹ Plus(b,c,u) ∧ Plus(a,u,o)` (4) | *unchanged* | universal rewrite (free a,b,c) — inherently open |
+| plusLeftUnit | `Zero(z) ∧ Plus(z,a,o) ⟹ o = a` (2) | *unchanged* | universal identity (free a) — inherently open |
+| plusRightUnit | `Zero(z) ∧ Plus(a,z,o) ⟹ o = a` (2) | *unchanged* | universal identity (free a) — inherently open |
+| lambda onePlusOne | `o = (PLUS ONE ONE) ⟹ o = TWO` (1) | *unchanged* | computation rewrite, cited with args in battery.test |
+| lambda fixedPoint | `o = Y f ⟹ o = f (Y f)` (2) | *unchanged* | Y-unfolding rewrite, cited with args |
+
+- **zeroIsNat (closed):** empty lhs; the zero witness is minted by `closedTermIntro ZEROp` on a fresh existential z-line (replacing the old boundary hypothesis + its `relUnfold`). Everything else — guard bubble, base+closure insertion, the endpointTransport of the conclusion atom onto the z-line — is unchanged. rhs is `∃z. nat(z) ∧ Zero(z)`, boundary []. Steps 12 (was 12: gained the intro, lost the external-zero unfold).
+- **oneIsNat (closed):** empty lhs. Cites the closed zeroIsNat (empty-selection insertion) to plant `Zero(z) ∧ nat(z)`, mints `Succ(z,s)` on the z-line (K-trick a `SUCC z` node off a spent ZEROp seed, then `refoldSucc`), then cites the **rule-shaped** succNat forward on `nat(z) ∧ Succ(z,s)` to reach `nat(s)`. rhs `∃z,s. Zero(z) ∧ Succ(z,s) ∧ nat(s)`, boundary []. Steps 9 (was 2).
+- **succNat composability verdict — kept rule-shaped.** A closed-sentence succNat would be `¬∃n,s[nat(n) ∧ Succ(n,s) ∧ ¬nat(s)]`. Spiked (observed, not theorized): a closed theorem is `boundary []`, so `applyTheorem` forces `at.args = []` — a citation can only INSERT the whole proven sentence; it carries no argument wires to bind onto the host's own n,s lines. Directly observed with the now-closed oneIsNat: `applyTheorem` with host args `[wz,wo]` is REJECTED ("selection is not an occurrence of oneIsNat lhs"); only empty-selection insertion is accepted, which plants a fresh certified 1 disconnected from any host line. To then extract `nat(s)` for a concrete host `s` from an inserted `¬∃n,s[...]` you must identify the ∃-bound n,s with the host's z,s (deiteration needs the copies already joined) — i.e. join a bubble-scoped line to a root line, the scope wall these theorems fight (endpointTransport only sidesteps it for equal CLOSED values, which a general n,s is not). So the closed road does NOT compose in the current kernel. The rule-shaped succNat, by contrast, matches the occurrence's lines by the boundary-pinned check and rewrites in place — exactly what oneIsNat needs. oneIsNat + the smoke test both verify against it end-to-end.
+- **plusComm / succShiftS audit (no gratuitous artifacts):** the repeated ℕ-guards on both sides are soundness preconditions retained for chaining, not derivation residue — dropping them from the rhs would state a different (unsound-to-chain) rule. succNat's retained `Succ(n,s)` on its rhs is likewise load-bearing (it is exactly the `Succ(z,s) ∧ nat(s)` oneIsNat consumes). Left as-is.
+- **Units / assoc / lambda:** all are universally-quantified rewrites over free boundary parameters (0+a, a+0, (a+b)+c, PLUS ONE ONE, Y f). A closed form would have to bind those parameters, which is not their meaning; the natural statement IS the open rule. Nothing cites the units/assoc, but the rubric's "otherwise judge by the rubric" resolves them to sequent form. onePlusOne is demonstrably cited with args (battery.test), confirming the rule shape.
+- **Batteries retargeted alongside each restatement:** frege.test.ts zeroIsNat/oneIsNat pins now assert boundary [], empty lhs, and existential (root-scoped, non-boundary) z/s lines; the smoke test now INSERTS the closed oneIsNat, builds `nat(b) ∧ Plus(s,b,sum)` around the certified 1-line, and cites plusComm — the crossing assertion (`Plus` reads `(b,s,sum)`) survives verbatim. succNat/plusComm/succShiftS/units/assoc pins unchanged. battery.test.ts, macros.test.ts, lambda.test.ts unchanged (names and counts stable). transport.test.ts:231's descriptive comment about zeroIsNat's nested-cut conclusion atom stays accurate (the transport structure is unchanged).
+- **Validation:** `tsc --noEmit` clean; `vitest run` 885/885; `npm run e2e` 8/8 (plusComm still last, 64 steps, boundary 3 — the replay spec needed no retarget). JSON round-trip (`theoryToJson → loadTheory`) re-verifies both closed theorems via checkTheorem.
 
 ### Task 3: Review + close
 

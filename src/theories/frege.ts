@@ -664,19 +664,21 @@ function derivePlusComm(ctx: ProofContext): Theorem {
 // wires and quantifiers stay put, the base keeps its bubble scope forever.
 
 /**
- * zeroIsNat: `Zero(z) ⟹ nat(z) ∧ Zero(z)`. Build the guard body with the
- * conclusion atom on the internal base line (a tautology built by sound
- * moves), then transport that endpoint onto the external z line — justified by
- * the hypothesis Zero(z), co-resident with the internal Zero(w0) as equal
- * closed values. Boundary [wz].
+ * zeroIsNat: the closed sentence `⟹ ∃z. Zero(z) ∧ nat(z)` — from the blank
+ * sheet, zero is a natural number. The zero witness is minted as a closed term
+ * on an existential z-line (no boundary); the guard body carries the conclusion
+ * atom on the internal base line (a tautology built by sound moves), then that
+ * endpoint is transported onto the z-line — justified by the minted Zero(z),
+ * co-resident with the internal Zero(w0) as equal closed values. Boundary [].
  */
 function deriveZeroIsNat(ctx: ProofContext): Theorem {
-  const l = new DiagramBuilder()
-  const zsrc = l.ref(l.root, 'zero', 1)
-  const wz = l.wire(l.root, [{ node: zsrc, port: { kind: 'arg', index: 0 } }])
-  const lhsD = l.build()
-  const lhs = mkDiagramWithBoundary(lhsD, [wz])
+  const lhsD = new DiagramBuilder().build()
+  const lhs = mkDiagramWithBoundary(lhsD, [])
   const e = new DerivationCursor(lhsD, ctx)
+
+  // the zero witness: a closed term on a fresh existential z-line
+  const zExt = e.intro('intro zero witness', e.cur.root, ZEROp)
+  const wz = e.wireOf(zExt, 'output')
 
   // ¬¬ scaffold; cI becomes the ¬R conclusion cut
   let snap = e.cur
@@ -704,7 +706,7 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   pb.wire(pcut2, [{ node: ps, port: { kind: 'arg', index: 1 } }, { node: pa2, port: { kind: 'arg', index: 0 } }])
   e.push('insert base+closure', { rule: 'insertion', region: rB, pattern: mkDiagramWithBoundary(pb.build(), []), attachments: [], binders: { [stub]: rB } })
 
-  const zrefIn = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'ref' && n.defId === 'zero' && n.region === rB && id !== zsrc)![0]
+  const zrefIn = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero' && n.region === rB)![0]
   const w0 = argWire(e, zrefIn, 0)
   const a0 = e.cur.wires[w0]!.endpoints.find((ep) => ep.node !== zrefIn)!.node
 
@@ -713,11 +715,10 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   e.push('iterate base R into conclusion cut', { rule: 'iteration', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [a0], wires: [] }), target: cutI })
   const a3 = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'atom' && n.region === cutI && snap.nodes[id] === undefined)![0]
 
-  // unfold both zero evidences to λ-term nodes for transport
+  // unfold the internal zero evidence to a λ-term node for transport (the
+  // external witness zExt is already the ZEROp term node)
   e.push('unfold internal zero', { rule: 'relUnfold', node: zrefIn })
   const z0 = e.nodeBy(rB, ZEROp)
-  e.push('unfold external zero', { rule: 'relUnfold', node: zsrc })
-  const zExt = e.nodeBy(e.cur.root, ZEROp)
   snap = e.cur
   e.push('iterate external zero into bubble', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zExt], wires: [] }), target: rB })
   const b = e.newNodeIn(rB, snap, ZEROp)
@@ -736,8 +737,8 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   const rl = new DiagramBuilder()
   const rnat = rl.ref(rl.root, 'nat', 1)
   const rzero = rl.ref(rl.root, 'zero', 1)
-  const rwz = rl.wire(rl.root, [{ node: rnat, port: { kind: 'arg', index: 0 } }, { node: rzero, port: { kind: 'arg', index: 0 } }])
-  const rhs = mkDiagramWithBoundary(rl.build(), [rwz])
+  rl.wire(rl.root, [{ node: rnat, port: { kind: 'arg', index: 0 } }, { node: rzero, port: { kind: 'arg', index: 0 } }])
+  const rhs = mkDiagramWithBoundary(rl.build(), [])
   return { name: 'zeroIsNat', lhs, rhs, steps: [...e.steps] }
 }
 
@@ -840,38 +841,47 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
 }
 
 /**
- * oneIsNat: `Zero(z) ∧ Succ(z,o) ⟹ nat(o) ∧ Zero(z) ∧ Succ(z,o)` — the
- * successor of a zero is a nat. Two native theorem citations: zeroIsNat lifts
- * Zero(z) to nat(z), then succNat carries nat(z) ∧ Succ(z,o) to nat(o). This
- * certifies concrete nat(1). Boundary [wz, wo].
+ * oneIsNat: the closed sentence `⟹ ∃z,s. Zero(z) ∧ Succ(z,s) ∧ nat(s)` — the
+ * successor of zero is a natural number. Cite the closed zeroIsNat to plant
+ * Zero(z) ∧ nat(z) on a fresh existential z-line, mint Succ(z,s) onto that
+ * line, then cite the rule-shaped succNat to carry nat(z) ∧ Succ(z,s) to
+ * nat(s). This certifies concrete nat(1). Boundary [].
  */
 function deriveOneIsNat(ctx: ProofContext): Theorem {
-  const l = new DiagramBuilder()
-  const zRef = l.ref(l.root, 'zero', 1)
-  const sRef = l.ref(l.root, 'succ', 2)
-  const wz = l.wire(l.root, [{ node: zRef, port: { kind: 'arg', index: 0 } }, { node: sRef, port: { kind: 'arg', index: 0 } }])
-  const wo = l.wire(l.root, [{ node: sRef, port: { kind: 'arg', index: 1 } }])
-  const lhsD = l.build()
-  const lhs = mkDiagramWithBoundary(lhsD, [wz, wo])
+  const lhsD = new DiagramBuilder().build()
+  const lhs = mkDiagramWithBoundary(lhsD, [])
   const e = new DerivationCursor(lhsD, ctx)
 
-  e.push('cite zeroIsNat on Zero(z)', {
+  // plant Zero(z) ∧ nat(z) on a fresh existential z-line
+  e.push('cite zeroIsNat', {
     rule: 'theorem', name: 'zeroIsNat', direction: 'forward',
-    at: { sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zRef], wires: [] }), args: [wz] },
+    at: { sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }), args: [] },
   })
-  const natZ = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
-  e.push('cite succNat on nat(z) ∧ Succ(z,o)', {
+  const zRef = refBy(e, e.cur.root, 'zero')
+  const natZ = refBy(e, e.cur.root, 'nat')
+  const wz = argWire(e, zRef, 0)
+
+  // mint Succ(z,s) on the z-line (K-trick a `SUCC z` node off a spent seed, then refold)
+  const seed = e.intro('intro succ seed', e.cur.root, ZEROp)
+  const sNode = kOpen(e, 'mint SUCC z', seed, e.cur.root, SC(port('z')), { z: wz })
+  e.push('erase succ seed', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [seed], wires: [e.wireOf(seed, 'output')] }) })
+  const ws = e.wireOf(sNode, 'output')
+  refoldSucc(e, sNode, [wz, ws])
+  const sRef = refBy(e, e.cur.root, 'succ')
+
+  // carry nat(z) ∧ Succ(z,s) to nat(s) by the rule-shaped succNat
+  e.push('cite succNat', {
     rule: 'theorem', name: 'succNat', direction: 'forward',
-    at: { sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [natZ, sRef], wires: [] }), args: [wz, wo] },
+    at: { sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [natZ, sRef], wires: [] }), args: [wz, ws] },
   })
 
   const rl = new DiagramBuilder()
   const rZero = rl.ref(rl.root, 'zero', 1)
   const rSuc = rl.ref(rl.root, 'succ', 2)
   const rNat = rl.ref(rl.root, 'nat', 1)
-  const rwz = rl.wire(rl.root, [{ node: rZero, port: { kind: 'arg', index: 0 } }, { node: rSuc, port: { kind: 'arg', index: 0 } }])
-  const rwo = rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 1 } }, { node: rNat, port: { kind: 'arg', index: 0 } }])
-  const rhs = mkDiagramWithBoundary(rl.build(), [rwz, rwo])
+  rl.wire(rl.root, [{ node: rZero, port: { kind: 'arg', index: 0 } }, { node: rSuc, port: { kind: 'arg', index: 0 } }])
+  rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 1 } }, { node: rNat, port: { kind: 'arg', index: 0 } }])
+  const rhs = mkDiagramWithBoundary(rl.build(), [])
   return { name: 'oneIsNat', lhs, rhs, steps: [...e.steps] }
 }
 
