@@ -66,7 +66,7 @@ Statement table (old → new). Only two theorems changed form; the rest are reco
 ### Task 3: Review + close
 
 - [x] Independent adversarial review: slot-order mutation probes (swap two slots → order test fails; drop the pip → paint test fails; revert the aim to radial → the slip-past test must fail — construct it); statement probes (restated theorems' rhs pins are real: a trivialized rhs must fail checkTheorem or the pin); replay + physics sentinels.
-- [ ] Plan-doc + memory sync; close.
+- [x] Plan-doc + memory sync; closed (review e68fd7c ISSUES-FIXED-APPROVED; onePlusOne closed-equation addendum c04358f per user ruling; 886/886, e2e 8/8).
 
 **Findings (Task 3 — adversarial review, ISSUES-FIXED-APPROVED):**
 
