@@ -20,7 +20,7 @@ import { mkEngine } from '../src/view/engine'
 import { settleStep } from '../src/view/relax'
 import { paint, LIGHT, type Shape } from '../src/view/paint'
 import { drawShapes } from '../src/view/canvas'
-import { promptAt, tryEdit, type BrushHandle, type LabCtx } from './shared'
+import { absorbHits, promptAt, tryEdit, type BrushHandle, type LabCtx } from './shared'
 
 export const PROVE_CTX: ProofContext = { theorems: new Map(), relations: new Map() }
 
@@ -57,11 +57,24 @@ export function proveShowcase(): { d: Diagram; boundary: WireId[] } {
 export function discover(lab: LabCtx, hits: readonly Hit[]): { sel: SubgraphSelection; actions: ActionDescriptor[] } | null {
   if (hits.length === 0) return null
   try {
-    const sel = buildSelection(lab.d, hits)
+    // absorb first: picking a cut AND things inside it means the subtree once —
+    // "select ONLY the outer cut" secrets must not gate any rule
+    const sel = buildSelection(lab.d, absorbHits(lab.d, hits))
     return { sel, actions: applicableActions(lab.d, sel, PROVE_CTX) }
   } catch {
     return null
   }
+}
+
+/**
+ * The contextual-deletion resolution (user ruling, round 3): deiterate,
+ * double-cut elim, positive erasure, and vacuous dissolving are all
+ * "delete THIS" — one key, interpreted by what is selected. Most specific
+ * first, then the sign-appropriate deletion; the kernel stays the authority.
+ */
+export function deleteInterpretation(lab: LabCtx, disc: { sel: SubgraphSelection; actions: ActionDescriptor[] }): ActionDescriptor | null {
+  const byKind = (k: ActionDescriptor['kind']) => disc.actions.find((a) => a.kind === k)
+  return byKind('doubleCutElim') ?? byKind('vacuousElim') ?? byKind('erase') ?? byKind('deiterate') ?? null
 }
 
 /** Static explanations for why a rule is dim (variant B's teaching layer). */

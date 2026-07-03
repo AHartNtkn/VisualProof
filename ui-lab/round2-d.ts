@@ -6,7 +6,7 @@
 import { boot, promptAt, spawnRelAt, spawnTermAt, tryEdit, REL_PALETTE } from './shared'
 import { installComposite, installGhostDrag } from './composite'
 
-boot('Round 2 · D — composite', 'drag joins · slash (or dbl-click, see ⚙) severs · Space cuts around · Shift+Space bubbles · drag selected node moves it · Delete dissolves', (lab) => {
+boot('Round 2 · D — composite', 'drag joins · slash (or dbl-click, see ⚙) severs · W cuts around · Shift+W bubbles · drag selected node moves it · Delete dissolves', (lab) => {
   installComposite(lab)
 
   const palette = document.createElement('div')

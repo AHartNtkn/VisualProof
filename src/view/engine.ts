@@ -1,5 +1,6 @@
 import type { Diagram, DiagramNode, NodeId, Port, RegionId, WireId } from '../kernel/diagram/diagram'
 import { requiredPorts, portKey } from '../kernel/diagram/diagram'
+import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import type { Vec2 } from './vec'
 import { add } from './vec'
 import type { NodeGeometry } from './bend'
@@ -169,7 +170,20 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
   const bset = new Set(boundary)
   for (const [wid, w] of Object.entries(d.wires)) {
     const ends = w.endpoints.map((ep): LegEnd => ({ body: ep.node, key: pkey(ep.port) }))
-    const needsJunction = ends.length + (bset.has(wid) ? 1 : 0) >= 3
+    // The line's OUTERMOST POINT is where its individual is quantified, and
+    // it must be a body homed at the wire's SCOPE (USER LAW: dangling ends
+    // are their own nodes — the ∃ is manipulable independently of what it
+    // attaches to). A dangling wire gets a degree-1 junction (the ∃ dot); a
+    // 2-endpoint wire scoped ABOVE its endpoints (the ∀ shape: quantified in
+    // an outer region while both ports sit deeper) gets a degree-2 via body
+    // so the line visibly bulges through its scope instead of drawing as a
+    // direct connection.
+    const looseEnd = ends.length === 1 && !bset.has(wid)
+    const scopeAboveEndpoints = ends.length === 2 && !bset.has(wid)
+      && w.scope !== w.endpoints
+        .map((ep) => d.nodes[ep.node]!.region)
+        .reduce((a, b) => deepestCommonAncestor(d, a, b))
+    const needsJunction = ends.length + (bset.has(wid) ? 1 : 0) >= 3 || looseEnd || scopeAboveEndpoints
     if (needsJunction) {
       const jid = `j:${wid}`
       bodies.set(jid, {
@@ -183,8 +197,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     } else if (ends.length === 2) {
       legs.push({ wid, from: ends[0]!, to: ends[1]! })
     } else if (ends.length === 1) {
-      if (bset.has(wid)) boundaryOf.set(wid, ends[0]!.body)
-      else legs.push({ wid, from: ends[0]!, to: ends[0]! }) // genuine exists loose end -> stub
+      boundaryOf.set(wid, ends[0]!.body) // boundary singleton: the frame slot is its end
     }
   }
 

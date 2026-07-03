@@ -73,6 +73,8 @@ export type LabCtx = {
       fresh node at a world point so creation lands under the cursor. */
   mutate(next: Diagram, place?: { node: NodeId; at: Vec2 }): void
   undo(): boolean
+  /** What Ctrl+Z would restore (the memory box renders this), or null. */
+  peekUndo(): { d: Diagram; boundary: WireId[] } | null
   /** Deepest region whose circle contains the point (root when none does). */
   regionAt(w: Vec2): RegionId
   legs(): LegGeom[]
@@ -169,6 +171,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
       swap(prev.d, prev.boundary)
       return true
     },
+    peekUndo: () => history.length === 0 ? null : history[history.length - 1]!,
     regionAt: (w) => {
       let best: { id: RegionId; radius: number } | null = null
       for (const [rid, g] of lab.engine.regions) {

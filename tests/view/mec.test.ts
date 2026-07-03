@@ -13,9 +13,10 @@ it('property: region circles enclose all content tightly and reproducibly', () =
   for (let trial = 0; trial < 40; trial++) {
     const h = new DiagramBuilder()
     const n = 2 + Math.floor(rnd() * 8)
-    const ids = []
-    for (let i = 0; i < n; i++) ids.push(h.termNode(h.root, p('\\x. x')))
+    for (let i = 0; i < n; i++) h.termNode(h.root, p('\\x. x'))
     const e = mkEngine(h.build(), [])
+    // every body counts: nodes AND the loose-end ∃ bodies their outputs carry
+    const ids = [...e.bodies.keys()]
     for (const id of ids) {
       const b = e.bodies.get(id)!
       b.pos = { x: (rnd() - 0.5) * 800, y: (rnd() - 0.5) * 800 }

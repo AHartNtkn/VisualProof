@@ -1,7 +1,8 @@
 /**
  * The Round-2 composite construction environment, factored so spawn-surface
  * variants (Round 2b) share it verbatim: brush selection, drag-join + J,
- * slash/double-click sever behind the ⚙ toggle, Space/Shift+Space wrap,
+ * slash/double-click sever behind the ⚙ toggle, W/Shift+W wrap (cut/bubble —
+ * the round-3 ruling moved wraps off Space, which is freed),
  * selected-node move with region drop, dissolve-delete, undo.
  * A still right-click is surfaced via `onRightStill` (spawn-menu hook);
  * only a moved right-drag slashes.
@@ -124,7 +125,7 @@ export function installComposite(lab: LabCtx, opts: CompositeOpts = {}): { brush
 
   window.addEventListener('keydown', (e) => {
     if (document.activeElement instanceof HTMLInputElement) return
-    if (e.key === ' ') {
+    if (e.key === 'w' || e.key === 'W') {
       e.preventDefault()
       if (brush.selected.length === 0) { lab.toast('select what the cut should go around first'); return }
       if (e.shiftKey) {

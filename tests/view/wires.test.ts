@@ -44,6 +44,7 @@ describe('computeLegs — junction trunk tangents flow tangent-continuously', ()
     const junctions = [...e.bodies.values()].filter((b) => b.kind === 'junction')
     expect(junctions.length).toBeGreaterThan(0)
     const legged = computeLegs(e)
+    let trunked = 0
     for (const j of junctions) {
       // the J-side tangent of each leg incident to this junction
       const tans: number[] = []
@@ -51,7 +52,9 @@ describe('computeLegs — junction trunk tangents flow tangent-continuously', ()
         if (g.leg.from.body === j.id && g.leg.from.key === null) tans.push(g.ta)
         if (g.leg.to.body === j.id && g.leg.to.key === null) tans.push(g.tb)
       }
-      expect(tans.length).toBeGreaterThanOrEqual(2)
+      // loose-end ∃ bodies are degree-1 junctions: no trunk to pair
+      if (tans.length < 2) continue
+      trunked++
       // some pair of incident tangents is exactly opposite (the chosen trunk)
       let foundOpposite = false
       for (let i = 0; i < tans.length; i++) {
@@ -61,6 +64,7 @@ describe('computeLegs — junction trunk tangents flow tangent-continuously', ()
       }
       expect(foundOpposite, `junction ${j.id} has an opposite trunk pair`).toBe(true)
     }
+    expect(trunked, 'the 3-endpoint wire still yields a real trunk junction').toBeGreaterThan(0)
   })
 })
 

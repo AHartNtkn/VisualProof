@@ -68,6 +68,12 @@ export function computeLegs(e: Engine): LegGeom[] {
       const q = worldAnchor(ob, otherEnd.key)
       return Math.atan2(q.y - j.pos.y, q.x - j.pos.x)
     })
+    // a loose end (degree-1 junction: the ∃ body) has no trunk to pair —
+    // its single leg leaves straight toward the port it hangs from
+    if (ls.length === 1) {
+      junctionTangent.set(jid, new Map([[ls[0]!.leg, dirs[0]!]]))
+      continue
+    }
     let bi = 0, bj = 1, best = -Infinity
     for (let i = 0; i < dirs.length; i++) for (let k = i + 1; k < dirs.length; k++) {
       const diff = wrap(dirs[i]! - dirs[k]!)
@@ -127,17 +133,26 @@ export function boundaryExits(e: Engine): BoundaryExit[] {
   return out
 }
 
-/** Existential stubs: genuine internal singleton wires draw a short loose end
-    with an open dot (the ∃ marker), out along the port normal. */
+/** Existential dots: a dangling wire end is its own body (USER LAW — the
+    loose end IS the first-order ∃, homed at the wire's scope). The leg to it
+    is drawn by legPaths like any other; here we mark the open dot at the
+    degree-1 junction body. */
 export function existentialStubs(e: Engine): ExStub[] {
+  const degree = new Map<string, number>()
+  for (const leg of e.legs) {
+    for (const end of [leg.from, leg.to]) {
+      const b = e.bodies.get(end.body)!
+      if (b.kind === 'junction') degree.set(end.body, (degree.get(end.body) ?? 0) + 1)
+    }
+  }
   const out: ExStub[] = []
   for (const leg of e.legs) {
-    const A: Body = e.bodies.get(leg.from.body)!
-    if (!(leg.from.body === leg.to.body && leg.from.key === leg.to.key)) continue
-    const p = worldAnchor(A, leg.from.key)
-    const n = portNormal(A, leg.from.key, { x: p.x + 1, y: p.y })
-    const q = { x: p.x + Math.cos(n) * 10, y: p.y + Math.sin(n) * 10 }
-    out.push({ wid: leg.wid, from: p, to: q, dot: q })
+    for (const end of [leg.from, leg.to]) {
+      const b: Body = e.bodies.get(end.body)!
+      if (b.kind === 'junction' && degree.get(end.body) === 1) {
+        out.push({ wid: leg.wid, from: b.pos, to: b.pos, dot: b.pos })
+      }
+    }
   }
   return out
 }

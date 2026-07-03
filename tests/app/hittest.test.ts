@@ -28,6 +28,12 @@ function setup() {
   const e = mkEngine(d, [])
   e.bodies.get(n)!.pos = vec(0, 0)
   e.bodies.get(m)!.pos = vec(60, 0)
+  // loose-end ∃ bodies are bodies too — place them beside their nodes so the
+  // hand-built geometry stays fully deliberate
+  for (const [wid, w] of Object.entries(d.wires)) {
+    const j = e.bodies.get(`j:${wid}`)
+    if (j) { const at = e.bodies.get(w.endpoints[0]!.node)!.pos; j.pos = vec(at.x + 12, at.y + 8) }
+  }
   recomputeRegions(e)
   return { d, n, cut, m, e }
 }
@@ -151,11 +157,12 @@ describe('engine hit targets (junctions, frame exits → existing vocabulary)', 
     const d = h.build()
     const e = mkEngine(d, [])
     e.bodies.get(n)!.pos = vec(0, 0)
+    const loose = [...e.bodies.values()].find((b) => b.kind === 'junction')!
+    loose.pos = vec(30, 0) // the ∃ dot is its own body — place it clear of the node disc
     recomputeRegions(e)
     const stub = existentialStubs(e)[0]!
     expect(stub).toBeDefined()
-    const mid = { x: (stub.from.x + stub.to.x) / 2, y: (stub.from.y + stub.to.y) / 2 }
-    expect(hitTest(e, mid)).toEqual({ kind: 'wire', id: stub.wid })
+    expect(hitTest(e, stub.dot)).toEqual({ kind: 'wire', id: stub.wid })
   })
 
   it('a click on a frame exit resolves to its boundary wire', () => {
