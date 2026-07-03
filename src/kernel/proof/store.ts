@@ -22,7 +22,7 @@ export type Theory = {
  * relation whose arity equals the ref's. `where` names the diagram for the
  * refusal (a theorem side or a relation body).
  */
-function assertRefsResolve(d: Diagram, relArity: ReadonlyMap<string, number>, where: string): void {
+export function assertRefsResolve(d: Diagram, relArity: ReadonlyMap<string, number>, where: string): void {
   for (const [id, n] of Object.entries(d.nodes)) {
     if (n.kind !== 'ref') continue
     const arity = relArity.get(n.defId)

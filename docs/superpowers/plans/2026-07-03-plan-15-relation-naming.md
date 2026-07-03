@@ -26,7 +26,13 @@
 **Files:** `src/app/shell.ts` — a "Define relation…" action available with a selection in EDIT mode: enters a pending state (same two-phase pattern as cite/relFold: "click the crossing wires in argument order, then Commit"), name read from the existing name input at commit; success registers the relation, updates the Library Session group, and reports "defined 'foo' (arity 2)". Refusals verbatim in the status line.
 **Test:** e2e: build a small body on the sheet, select it, define it, fold a second copy into the new ref (the panel's relation appears; the fold works), Save theory → the downloaded/persisted JSON contains the relation; reload through the Library round-trips it.
 
-- [ ] Shell + e2e green; full suite + tsc green. Commit.
+- [x] Shell + e2e green; full suite + tsc green. Commit.
+
+**Findings (Task 2):**
+- *Persistence design*: session-defined relations are first-class in the `Library` (a new `definedRelations` list, parallel to `adopted` theorems) so `rebuild` re-merges them on every library change — mutating `ctx.relations`/`relations` directly would be wiped by the next load/unload. `defineEntry(lib, name, relation)` mirrors `adoptEntry` (rebuild-for-conflict pre-check). `rebuild` layers defined relations into both the `relations` record and `ctx.relations`, checks name collisions across the single relation+theorem namespace (defined-vs-loaded/defined relation, defined-vs-theorem, and adopted-theorem-vs-relation), and re-resolves each defined body's refs (`assertRefsResolve`, now exported from store.ts) so unloading a file a defined relation cited refuses loudly. Save theory needs NO change — the defined relation is already in the `relations` record `sessionTheory` serializes.
+- *Shell*: "Define relation…" appears in the EDIT-mode action menu when a selection exists; the pending pick reuses the exact cite/relFold two-phase branch; commit reads the name input, calls `defineRelation` then `defineEntry`→`applyLibrary`, reports `defined 'foo' (arity N)`. Session group renders defined relation names.
+- *e2e seam additions (noted per instructions)*: `wires()` returns verified-hittable world points per rendered wire (each confirmed via the real `hitTest` to resolve back to its wire) — the wire analogue of the existing `bodies()` locator, used to click argument wires with real canvas clicks. `theoryJson()` returns the live saveable theory (the seam path the plan sanctions for the Save assertion). No selection was driven through a non-click seam; every select/pick/commit is a real pointer event.
+- *Friction surfaced (not a semantic change)*: `onSetLhs` snapshots `editDiagram` by reference, so `session.forward.current === editDiagram` on entering PROVE and `sync()` sees no identity change — the edit selection carries into PROVE. Legitimate app behavior; the e2e deselects+reselects explicitly rather than depend on it.
 
 ### Task 3: Review + close
 

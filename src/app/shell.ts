@@ -19,7 +19,8 @@ import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
 import { fitCamera, DESIGN_SCALE } from '../view/camera'
 import type { Library } from './library'
-import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, rebuild } from './library'
+import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
+import { defineRelation } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
@@ -68,6 +69,7 @@ type Pending =
   | { readonly kind: 'cite'; readonly name: string; readonly direction: 'forward' | 'reverse'; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'unCite'; readonly name: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'relFold'; readonly defId: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
+  | { readonly kind: 'defineRelation'; readonly sel: SubgraphSelection; readonly args: WireId[] }
 
 /** A grab: the bodies moved by this drag, each with its offset from the
     cursor's world position at grab time (so a drag moves, never teleports). */
@@ -471,11 +473,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       ))
     }
 
-    if (library.adopted.length > 0) {
+    if (library.adopted.length > 0 || library.definedRelations.length > 0) {
       libraryDiv.append(renderGroup(
-        SESSION_GROUP, 'Session (adopted)',
+        SESSION_GROUP, 'Session (adopted + defined)',
         library.adopted.map((t) => ({ name: t.name, steps: t.steps.length })),
-        [],
+        library.definedRelations.map((r) => r.name),
       ))
     }
   }
@@ -844,6 +846,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
   }
 
+  // ---- define relation (EDIT mode, two-phase like relFold) ----
+  // Enter the pending pick: the crossing wires clicked in order become the
+  // relation's argument boundary. Defining never mutates the sheet.
+  const enterDefineRelation = (sel: SubgraphSelection): void => {
+    pending = { kind: 'defineRelation', sel, args: [] }
+    message = 'define relation: click the crossing wires in argument order, then Commit (name from the name input)'
+    refreshChrome()
+  }
+
   // ---- clicks (selection + two-phase completion) ----
   const handleClick = (world: Vec2): void => {
     // Replay is read-only: canvas clicks select nothing and dispatch no rule.
@@ -859,10 +870,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       })()
       return
     }
-    if (pending !== null && (pending.kind === 'cite' || pending.kind === 'unCite' || pending.kind === 'relFold')) {
+    if (pending !== null && (pending.kind === 'cite' || pending.kind === 'unCite' || pending.kind === 'relFold' || pending.kind === 'defineRelation')) {
       const what = pending.kind === 'cite' ? `cite '${pending.name}'`
         : pending.kind === 'unCite' ? `un-cite '${pending.name}'`
-        : `fold into '${pending.defId}'`
+        : pending.kind === 'relFold' ? `fold into '${pending.defId}'`
+        : 'define relation'
       if (hit !== null && hit.kind === 'wire') {
         pending.args.push(hit.id)
         message = `${what}: ${pending.args.length} argument wire(s) picked`
@@ -926,11 +938,34 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           applyF({ rule: 'relFold', sel: p.sel, defId: p.defId, args: [...p.args] })
         })))
       }
+      if (p.kind === 'defineRelation') {
+        menuDiv.append(button(`Commit relation definition (${p.args.length} arg(s))`, guard(() => {
+          const name = nameInput.value.trim()
+          // defineRelation gates the name/pick/extraction; defineEntry re-checks
+          // against the whole library before it is adopted. A refusal from either
+          // lands in the status line and leaves the pending pick intact to fix.
+          const { relation } = defineRelation(editDiagram, p.sel, [...p.args], name, ctx, relations)
+          const next = defineEntry(library, name, relation)
+          pending = null
+          applyLibrary(next)
+          message = `defined '${name}' (arity ${relation.boundary.length})`
+          refreshChrome()
+        })))
+      }
       menuDiv.append(button('Cancel pending action', () => {
         pending = null
         message = 'pending action cancelled'
         refreshChrome()
       }))
+      return
+    }
+    // EDIT mode: a valid selection offers "Define relation…" (names the
+    // selection as a new relation; the sheet is unchanged by defining).
+    if (mode === 'edit') {
+      if (kernelSel !== null) {
+        const sel = kernelSel
+        menuDiv.append(button('Define relation…', guard(() => enterDefineRelation(sel))))
+      }
       return
     }
     if (mode !== 'prove' || session === null || kernelSel === null) return
@@ -1194,6 +1229,39 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       },
       bodies(): { id: string; kind: string; x: number; y: number; r: number }[] {
         return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR }))
+      },
+      // Verified-hittable world points for every rendered wire — the locator the
+      // e2e uses to click argument wires, exactly as bodies() locates nodes. Each
+      // point is confirmed by the real hitTest to resolve back to its wire, so a
+      // returned entry is guaranteed clickable; unhittable wires are omitted.
+      wires(): { id: string; x: number; y: number }[] {
+        const bez = (t: number, p: { from: Vec2; c1: Vec2; c2: Vec2; to: Vec2 }): Vec2 => {
+          const u = 1 - t
+          return vec(
+            u * u * u * p.from.x + 3 * u * u * t * p.c1.x + 3 * u * t * t * p.c2.x + t * t * t * p.to.x,
+            u * u * u * p.from.y + 3 * u * u * t * p.c1.y + 3 * u * t * t * p.c2.y + t * t * t * p.to.y,
+          )
+        }
+        const out: { id: string; x: number; y: number }[] = []
+        const take = (id: WireId, samples: Vec2[]): void => {
+          for (const s of samples) {
+            const h = hitTest(engine, s)
+            if (h !== null && h.kind === 'wire' && h.id === id) {
+              out.push({ id, x: s.x, y: s.y })
+              return
+            }
+          }
+        }
+        for (const l of legPaths(engine)) take(l.wid, [bez(0.5, l.path), bez(0.4, l.path), bez(0.6, l.path)])
+        for (const ex of boundaryExits(engine)) take(ex.wid, [bez(0.5, ex.path), bez(0.4, ex.path), bez(0.6, ex.path)])
+        for (const st of existentialStubs(engine)) {
+          take(st.wid, [vec((st.from.x + st.to.x) / 2, (st.from.y + st.to.y) / 2), st.dot, vec(st.from.x * 0.4 + st.to.x * 0.6, st.from.y * 0.4 + st.to.y * 0.6)])
+        }
+        return out
+      },
+      // The live saveable theory as JSON — the same object Save theory writes.
+      theoryJson(): string {
+        return JSON.stringify(theoryToJson(sessionTheory(ctx, { relations })))
       },
     }
   }

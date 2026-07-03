@@ -1,8 +1,9 @@
 import type { ProofContext } from '../kernel/proof/step'
 import type { Theorem } from '../kernel/proof/theorem'
 import { checkTheorem } from '../kernel/proof/theorem'
+import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { Theory } from '../kernel/proof/store'
-import { loadTheory } from '../kernel/proof/store'
+import { loadTheory, assertRefsResolve } from '../kernel/proof/store'
 import type { BootContext } from './boot'
 import { mergeTheories } from './boot'
 
@@ -34,12 +35,18 @@ export type Library = {
   /** Theorems proven and adopted this session — their own group, citable and
    *  replayable, contributing to the merged context on every rebuild. */
   readonly adopted: readonly Theorem[]
+  /** Relations named from the live sheet this session, in definition order —
+   *  the same Session group as adopted theorems, foldable/citable and merged
+   *  into the working context (and thus into a Save) on every rebuild. */
+  readonly definedRelations: readonly DefinedRelation[]
 }
 
-/** A library that knows nothing: no folder, no entries, no adopted theorems.
+export type DefinedRelation = { readonly name: string; readonly relation: DiagramWithBoundary }
+
+/** A library that knows nothing: no folder, no entries, no adopted content.
  *  Rebuilds to the empty context — the honest empty boot. */
 export function emptyLibrary(): Library {
-  return { folder: [], entries: [], adopted: [] }
+  return { folder: [], entries: [], adopted: [], definedRelations: [] }
 }
 
 /**
@@ -115,24 +122,63 @@ export function adoptEntry(lib: Library, thm: Theorem): Library {
 }
 
 /**
- * Merge every LOADED entry (mergeTheories) and then layer the session-adopted
- * theorems on top, verifying each against the growing context in adoption order.
+ * Record a session-defined relation in the Session group. The candidate state is
+ * rebuilt first, so a definition that would collide with a loaded/defined
+ * relation name, a theorem name, or that references a relation no longer present
+ * throws loudly and the caller keeps the prior library.
+ */
+export function defineEntry(lib: Library, name: string, relation: DiagramWithBoundary): Library {
+  const next: Library = { ...lib, definedRelations: [...lib.definedRelations, { name, relation }] }
+  rebuild(next)
+  return next
+}
+
+/**
+ * Merge every LOADED entry (mergeTheories), layer the session-defined relations,
+ * then the session-adopted theorems — each verified against the growing context.
  * The result is the working ProofContext the shell binds live. Any conflict
- * refuses loudly.
+ * (name collision across the single relation+theorem namespace, or a defined
+ * relation whose refs no longer resolve) refuses loudly.
  */
 export function rebuild(lib: Library): BootContext {
   const loaded = lib.entries
     .filter((e): e is LoadedEntry => e.status === 'loaded')
     .map((e) => ({ theory: e.theory, ctx: e.ctx }))
   const base = mergeTheories(loaded)
-  if (lib.adopted.length === 0) return base
+  if (lib.adopted.length === 0 && lib.definedRelations.length === 0) return base
+
+  // Session-defined relations layer onto the merged relations. Names disjoint
+  // from every loaded/defined relation and every loaded theorem; each body's
+  // refs must still resolve against the completed relation set.
+  let relations = base.relations
+  if (lib.definedRelations.length > 0) {
+    const merged: Record<string, DiagramWithBoundary> = { ...base.relations }
+    for (const { name, relation } of lib.definedRelations) {
+      if (merged[name] !== undefined) {
+        throw new Error(`library conflict: defined relation '${name}' duplicates a loaded or defined relation`)
+      }
+      if (base.ctx.theorems.has(name)) {
+        throw new Error(`library conflict: defined relation '${name}' duplicates a theorem name`)
+      }
+      merged[name] = relation
+    }
+    const relArity = new Map<string, number>()
+    for (const [n, r] of Object.entries(merged)) relArity.set(n, r.boundary.length)
+    for (const { name, relation } of lib.definedRelations) {
+      assertRefsResolve(relation.diagram, relArity, `defined relation '${name}' body`)
+    }
+    relations = merged
+  }
+  const ctxRelations = relations === base.relations ? base.ctx.relations : new Map(Object.entries(relations))
+
   const theorems = new Map(base.ctx.theorems)
   for (const thm of lib.adopted) {
-    if (theorems.has(thm.name)) {
-      throw new Error(`library conflict: adopted theorem '${thm.name}' duplicates a loaded theorem`)
+    if (theorems.has(thm.name) || relations[thm.name] !== undefined) {
+      throw new Error(`library conflict: adopted theorem '${thm.name}' duplicates a loaded theorem or a relation`)
     }
-    checkTheorem(thm, { theorems, relations: base.ctx.relations })
+    checkTheorem(thm, { theorems, relations: ctxRelations })
     theorems.set(thm.name, thm)
   }
-  return { ...base, ctx: { ...base.ctx, theorems } }
+
+  return { ctx: { theorems, relations: ctxRelations }, relations }
 }

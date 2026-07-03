@@ -5,9 +5,10 @@ import { theoryToJson } from '../../src/kernel/proof/store'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { buildLambdaTheory } from '../../src/theories/lambda'
+import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { emptyDiagram, addTermNode } from '../../src/app/edit'
 import type { LibraryEntry } from '../../src/app/library'
-import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, rebuild } from '../../src/app/library'
+import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from '../../src/app/library'
 
 const p = (s: string) => parseTerm(s)
 const fregeJson = () => theoryToJson(buildFregeTheory())
@@ -21,6 +22,17 @@ function trivTheorem(name: string): Theorem {
   const { diagram } = addTermNode(e0, e0.root, p('\\x. x'))
   const dwb = mkDiagramWithBoundary(diagram, [])
   return { name, lhs: dwb, rhs: dwb, steps: [] }
+}
+
+/** A closed arity-1 relation body (one term node, its free-var line the
+ *  boundary). No ref nodes, so its refs resolve against any context. */
+function trivRelation(): DiagramWithBoundary {
+  const e0 = emptyDiagram()
+  const { diagram, node } = addTermNode(e0, e0.root, p('y'))
+  const bound = Object.keys(diagram.wires).find((w) =>
+    diagram.wires[w]!.endpoints.some((ep) => ep.node === node && ep.port.kind === 'freeVar'),
+  )!
+  return mkDiagramWithBoundary(diagram, [bound])
 }
 
 describe('emptyLibrary', () => {
@@ -145,5 +157,51 @@ describe('adoptEntry', () => {
     expect(() => adoptEntry(lib, trivTheorem('plusAssoc')))
       .toThrowError(/adopted theorem 'plusAssoc' duplicates a loaded theorem/)
     expect(lib.adopted).toEqual([])
+  })
+})
+
+describe('defineEntry', () => {
+  it('records a defined relation in its group and merges it into ctx.relations and the record', () => {
+    let lib = loadEntry(emptyLibrary(), 'frege.json', fregeJson())
+    lib = defineEntry(lib, 'myRel', trivRelation())
+    expect(lib.definedRelations.map((r) => r.name)).toEqual(['myRel'])
+    const boot = rebuild(lib)
+    expect(boot.ctx.relations.has('myRel')).toBe(true)
+    expect(boot.relations['myRel']).toBeDefined()
+    expect(boot.relations['nat']).toBeDefined() // loaded relation still present
+  })
+
+  it('defines onto an empty library too (no file loaded)', () => {
+    const lib = defineEntry(emptyLibrary(), 'solo', trivRelation())
+    expect(Object.keys(rebuild(lib).relations)).toEqual(['solo'])
+  })
+
+  it('survives unloading an unrelated file — the defined relation persists across rebuild', () => {
+    let lib = loadEntry(emptyLibrary(), 'frege.json', fregeJson())
+    lib = defineEntry(lib, 'myRel', trivRelation())
+    lib = unloadEntry(lib, 'frege.json') // folder-less open → dropped
+    const boot = rebuild(lib)
+    expect(boot.relations['myRel']).toBeDefined()
+    expect(boot.relations['nat']).toBeUndefined() // frege gone
+  })
+
+  it('refuses a defined name that duplicates a loaded relation, leaving state unchanged', () => {
+    const lib = loadEntry(emptyLibrary(), 'frege.json', fregeJson())
+    expect(() => defineEntry(lib, 'nat', trivRelation()))
+      .toThrowError(/defined relation 'nat' duplicates a loaded or defined relation/)
+    expect(lib.definedRelations).toEqual([])
+  })
+
+  it('refuses a defined name that duplicates a loaded theorem (one namespace)', () => {
+    const lib = loadEntry(emptyLibrary(), 'frege.json', fregeJson())
+    expect(() => defineEntry(lib, 'plusAssoc', trivRelation()))
+      .toThrowError(/defined relation 'plusAssoc' duplicates a theorem name/)
+    expect(lib.definedRelations).toEqual([])
+  })
+
+  it('refuses adopting a theorem whose name collides with a defined relation', () => {
+    const lib = defineEntry(emptyLibrary(), 'shared', trivRelation())
+    expect(() => adoptEntry(lib, trivTheorem('shared')))
+      .toThrowError(/adopted theorem 'shared' duplicates a loaded theorem or a relation/)
   })
 })

@@ -8,6 +8,8 @@ declare global {
       replay(): { mode: string; k: number; n: number; label: string; bodies: number }
       view(): { scale: number; offsetX: number; offsetY: number }
       bodies(): { id: string; kind: string; x: number; y: number; r: number }[]
+      wires(): { id: string; x: number; y: number }[]
+      theoryJson(): string
     }
   }
 }
@@ -116,6 +118,101 @@ test('a relational theorem replays step by step through the live shell', async (
   await page.locator('#action-menu').getByRole('button', { name: 'Exit replay', exact: true }).click()
   expect(await page.evaluate(() => window.__vpaDebug!.replay().mode)).toBe('edit')
   await expect(page.locator('#status')).toContainText('EDIT')
+})
+
+// Plan 15: name a live selection as a relation, then exercise every downstream
+// consequence — the Session group lists it, relFold cites it, Save serializes it,
+// and a reload round-trips it. Real canvas clicks throughout; the debug seam is a
+// pure locator (bodies() for nodes, wires() for verified-hittable wire points).
+test('name a selection as a relation, fold with it, save it, and round-trip on reload', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  const canvas = page.locator('canvas')
+  const box = (await canvas.boundingBox())!
+  // Read geometry and camera in ONE evaluate so a still-settling layout can't
+  // skew the world→screen mapping between the two reads.
+  const clickTerm = async (): Promise<void> => {
+    const s = await page.evaluate(() => {
+      const v = window.__vpaDebug!.view()
+      const b = window.__vpaDebug!.bodies().find((x) => x.kind === 'term')!
+      return { x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
+    })
+    await page.mouse.click(box.x + s.x, box.y + s.y)
+  }
+  const clickOnlyWire = async (): Promise<number> => {
+    const s = await page.evaluate(() => {
+      const v = window.__vpaDebug!.view()
+      const ws = window.__vpaDebug!.wires()
+      const w = ws[0]!
+      return { x: w.x * v.scale + v.offsetX, y: w.y * v.scale + v.offsetY, n: ws.length }
+    })
+    await page.mouse.click(box.x + s.x, box.y + s.y)
+    return s.n
+  }
+  // A guaranteed-empty click (far corner, off every node/wire and below the top
+  // chrome) clears the current selection — the sheet region is never a hit.
+  const clickEmpty = async (): Promise<void> => {
+    await page.mouse.click(box.x + box.width - 2, box.y + box.height - 2)
+  }
+
+  // A closed lambda has only an output line, so the whole-node selection has a
+  // single crossing wire → an arity-1 relation.
+  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
+  await page.getByRole('button', { name: /add term/i }).click()
+  await page.waitForTimeout(400) // let the layout settle so seam coords are current
+
+  // Select the term node (click its body), then the EDIT menu offers Define.
+  await clickTerm()
+  await expect(page.locator('#status')).toContainText("node '")
+  await page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true }).click()
+  await expect(page.locator('#status')).toContainText('click the crossing wires')
+
+  // Pick the single crossing wire, name it, commit.
+  expect(await clickOnlyWire()).toBe(1)
+  await expect(page.locator('#status')).toContainText('1 argument wire(s) picked')
+  await page.locator('#theorem-name').fill('R')
+  await page.locator('#action-menu').getByRole('button', { name: /Commit relation definition/, exact: false }).click()
+  await expect(page.locator('#status')).toContainText("defined 'R' (arity 1)")
+
+  // The Session group lists the new relation beside adopted theorems.
+  const lib = page.locator('#library')
+  await lib.getByRole('button', { name: /Session/, exact: false }).click()
+  await expect(lib).toContainText('relations: R')
+
+  // relFold cites the new relation: set a goal, enter PROVE, and fold the node —
+  // it becomes a ref (a 'ref' body appears).
+  await page.getByRole('button', { name: /set goal lhs/i }).click()
+  await page.getByRole('button', { name: /set goal rhs/i }).click()
+  await page.getByRole('button', { name: /switch to prove/i }).click()
+  await page.waitForTimeout(400)
+  // The goal LHS snapshots the sheet by reference, so entering PROVE carries the
+  // edit selection; clear it and reselect the node freshly for an explicit state.
+  await clickEmpty()
+  await clickTerm()
+  await expect(page.locator('#status')).toContainText("node '")
+  await page.getByPlaceholder(/term, e\.g/).fill('R') // relFold reads the term input for the relation name
+  await page.locator('#action-menu').getByRole('button', { name: /Fold into a relation/, exact: false }).click()
+  expect(await clickOnlyWire()).toBe(1)
+  await page.locator('#action-menu').getByRole('button', { name: /Commit fold into 'R'/, exact: false }).click()
+  await expect
+    .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).some((b) => b.kind === 'ref'))
+    .toBe(true)
+
+  // Save serializes the relation. Capture the live theory JSON (the same object
+  // Save theory writes) and confirm it carries R.
+  const json = await page.evaluate(() => window.__vpaDebug!.theoryJson())
+  const theory = JSON.parse(json) as { relations: Record<string, unknown> }
+  expect(theory.relations.R).toBeDefined()
+
+  // Reload round-trip: a FRESH empty app loads the saved JSON through the real
+  // #open-file-input; the loaded group lists R again.
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await page.locator('#open-file-input').setInputFiles({ name: 'saved.json', mimeType: 'application/json', buffer: Buffer.from(json) })
+  const lib2 = page.locator('#library')
+  await expect(lib2.getByRole('button', { name: 'Unload saved.json', exact: true })).toBeVisible()
+  await lib2.getByRole('button', { name: '▸ saved.json', exact: true }).click()
+  await expect(lib2).toContainText('relations: R')
 })
 
 // The user's core interaction: nodes are draggable and STAY where dropped;
