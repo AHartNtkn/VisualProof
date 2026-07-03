@@ -1,11 +1,10 @@
 import type { Diagram, WireId } from '../diagram/diagram'
 import { polarity } from '../diagram/regions'
 import type { DiagramWithBoundary } from '../diagram/boundary'
-import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import { removeSubgraph, spliceSubgraph } from '../diagram/subgraph/splice'
-import { boundaryFingerprint } from '../diagram/canonical/fingerprint'
+import { exploreForm } from '../diagram/canonical/explore'
 import { RuleError } from '../rules/error'
 import type { ProofStep, ProofContext } from './step'
 import { replayProof } from './step'
@@ -57,8 +56,8 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
       }
     }
   })
-  const got = boundaryFingerprint(mkDiagramWithBoundary(result, thm.lhs.boundary))
-  if (got !== boundaryFingerprint(thm.rhs)) {
+  const got = exploreForm(result, thm.lhs.boundary)
+  if (got !== exploreForm(thm.rhs.diagram, thm.rhs.boundary)) {
     throw new ProofError(`theorem '${thm.name}': the proof does not arrive at the stated right-hand side`)
   }
 }
@@ -105,7 +104,7 @@ export function applyTheorem(
     if (j === -1) throw new RuleError(`argument wire '${a}' is not an attachment wire of the selection`)
     return pattern.boundary[j]!
   })
-  if (boundaryFingerprint(mkDiagramWithBoundary(pattern.diagram, reordered)) !== boundaryFingerprint(from)) {
+  if (exploreForm(pattern.diagram, reordered) !== exploreForm(from.diagram, from.boundary)) {
     throw new RuleError(
       `the selection is not an occurrence of theorem '${thm.name}' ${direction === 'forward' ? 'left' : 'right'}-hand side`,
     )

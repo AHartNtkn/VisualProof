@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import {
   replayProof, composeProofs, checkTheorem, verifyTheory, loadTheory, theoryToJson,
 } from '../../../src/kernel/proof/index'
@@ -111,6 +111,6 @@ describe('end to end: derived rule proved, stored, loaded, applied natively', ()
     const primitive = replayProof(d, [{
       rule: 'erasure', sel: { region: d.root, regions: [], nodes: [hq], wires: [] },
     }], ctx)
-    expect(diagramFingerprint(native)).toBe(diagramFingerprint(primitive))
+    expect(exploreForm(native)).toBe(exploreForm(primitive))
   })
 })

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildFregeTheory, natRelation } from '../../src/theories/frege'
 import { verifyTheory, theoryToJson, loadTheory } from '../../src/kernel/proof/store'
-import { boundaryFingerprint } from '../../src/kernel/diagram/canonical/fingerprint'
+import { boundaryForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Diagram, DiagramNode, WireId } from '../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
@@ -235,8 +235,8 @@ describe('the bundled Frege theory', () => {
     const theory = buildFregeTheory()
     expect(theory.relations['nat']).toBeDefined()
     expect(theory.relations['nat']!.boundary).toHaveLength(1)
-    expect(boundaryFingerprint(theory.relations['nat']!)).toBeTruthy()
-    expect(boundaryFingerprint(natRelation())).toBe(boundaryFingerprint(theory.relations['nat']!))
+    expect(boundaryForm(theory.relations['nat']!)).toBeTruthy()
+    expect(boundaryForm(natRelation())).toBe(boundaryForm(theory.relations['nat']!))
   })
 
   it('the theory is deterministic: two builds are identical', () => {

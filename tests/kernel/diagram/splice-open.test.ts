@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
 
@@ -51,7 +51,7 @@ describe('spliceSubgraph with a binder map', () => {
     const ex = extractSubgraph(d, sel)
     const out = spliceSubgraph(d, rB, ex.pattern, ex.attachments, new Map([[ex.binderStubs[0]!, rB]]))
     expect(Object.keys(out.nodes)).toHaveLength(4) // two originals + two copies
-    expect(diagramFingerprint(out)).not.toBe(diagramFingerprint(d))
+    expect(exploreForm(out)).not.toBe(exploreForm(d))
   })
 
   it('rejects binder maps whose host id is not a bubble, wrong arity, or not enclosing', () => {

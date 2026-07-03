@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import {
   applyConversion, applyFusion, applyFission,
   applyComprehensionInstantiate, applyComprehensionAbstract,
@@ -35,7 +35,7 @@ describe('equational rules are polarity-free at depths 0..3', () => {
       const newWire = Object.keys(split.wires).find(
         (id) => d.wires[id] === undefined && split.wires[id]!.endpoints.length === 2,
       )!
-      expect(diagramFingerprint(applyFusion(split, newWire))).toBe(diagramFingerprint(d))
+      expect(exploreForm(applyFusion(split, newWire))).toBe(exploreForm(d))
     })
   }
 })

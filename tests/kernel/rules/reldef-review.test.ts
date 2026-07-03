@@ -5,7 +5,7 @@ import type { Diagram, RegionId } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyRelUnfold, applyRelFold } from '../../../src/kernel/rules/reldef'
 
 /**
@@ -85,7 +85,7 @@ describe('canonical key injectivity — adversarial colon-bearing defIds', () =>
   // colon is an unambiguous separator, so no distinct pair can collide. The
   // adversarial `a:1` / `a` pair — the one a naive last-colon split might blur —
   // must produce different fingerprints.
-  const fp = (defId: string) => diagramFingerprint(refHost1(defId).d)
+  const fp = (defId: string) => exploreForm(refHost1(defId).d)
 
   it('a defId containing a colon does not collide with its prefix', () => {
     expect(fp('a:1')).not.toBe(fp('a'))
@@ -109,9 +109,9 @@ describe('fold is defId-directed — no ref is canonicalized by its body', () =>
     const asR1 = applyRelFold(un, sel, 'R1', [wArg], relations)
     const asR2 = applyRelFold(un, sel, 'R2', [wArg], relations)
 
-    expect(diagramFingerprint(asR1)).not.toBe(diagramFingerprint(asR2))
+    expect(exploreForm(asR1)).not.toBe(exploreForm(asR2))
     // folding back under the original name reproduces the original ref diagram
-    expect(diagramFingerprint(asR1)).toBe(diagramFingerprint(d))
+    expect(exploreForm(asR1)).toBe(exploreForm(d))
   })
 })
 

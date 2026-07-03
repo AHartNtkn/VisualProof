@@ -2,11 +2,11 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import {
-  diagramFingerprint, boundaryFingerprint, diagramsIsomorphic,
-} from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm, boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
+import type { Diagram } from '../../../src/kernel/diagram/diagram'
 
 const p = (s: string) => parseTerm(s)
+const isomorphic = (a: Diagram, b: Diagram) => exploreForm(a) === exploreForm(b)
 
 function pair() {
   const mk = (swap: boolean) => {
@@ -21,38 +21,37 @@ function pair() {
   return [mk(false), mk(true)] as const
 }
 
-describe('diagramFingerprint and diagramsIsomorphic', () => {
-  it('equal fingerprints iff isomorphic', () => {
+describe('exploreForm as isomorphism key', () => {
+  it('equal forms iff isomorphic', () => {
     const [d1, d2] = pair()
-    expect(diagramFingerprint(d1)).toBe(diagramFingerprint(d2))
-    expect(diagramsIsomorphic(d1, d2)).toBe(true)
+    expect(exploreForm(d1)).toBe(exploreForm(d2))
+    expect(isomorphic(d1, d2)).toBe(true)
 
     const b = new DiagramBuilder()
     b.cut(b.root)
     const d3 = b.build()
-    expect(diagramFingerprint(d1)).not.toBe(diagramFingerprint(d3))
-    expect(diagramsIsomorphic(d1, d3)).toBe(false)
+    expect(exploreForm(d1)).not.toBe(exploreForm(d3))
+    expect(isomorphic(d1, d3)).toBe(false)
   })
 
-  it('size shortcut never changes the answer: unequal sizes and equal-size non-isomorphic both reject', () => {
+  it('unequal sizes and equal-size non-isomorphic both reject', () => {
     const b1 = new DiagramBuilder()
     b1.cut(b1.root)
     const b2 = new DiagramBuilder()
     b2.cut(b2.root)
     b2.cut(b2.root)
-    expect(diagramsIsomorphic(b1.build(), b2.build())).toBe(false)
+    expect(isomorphic(b1.build(), b2.build())).toBe(false)
 
-    // equal counts, different content: the shortcut cannot fire; the full
-    // canonical comparison must reject
+    // equal counts, different content: the full canonical comparison must reject
     const c1 = new DiagramBuilder()
     c1.termNode(c1.cut(c1.root), p('\\x. x'))
     const c2 = new DiagramBuilder()
     c2.termNode(c2.cut(c2.root), p('\\x. \\y. x'))
-    expect(diagramsIsomorphic(c1.build(), c2.build())).toBe(false)
+    expect(isomorphic(c1.build(), c2.build())).toBe(false)
   })
 })
 
-describe('boundaryFingerprint', () => {
+describe('boundaryForm', () => {
   it('is order-sensitive and id-invariant', () => {
     const mk = () => {
       const b = new DiagramBuilder()
@@ -63,9 +62,9 @@ describe('boundaryFingerprint', () => {
     }
     const a = mk()
     const c = mk()
-    const fa = boundaryFingerprint(mkDiagramWithBoundary(a.d, [a.wOut, a.wY]))
-    const fc = boundaryFingerprint(mkDiagramWithBoundary(c.d, [c.wOut, c.wY]))
-    const faRev = boundaryFingerprint(mkDiagramWithBoundary(a.d, [a.wY, a.wOut]))
+    const fa = boundaryForm(mkDiagramWithBoundary(a.d, [a.wOut, a.wY]))
+    const fc = boundaryForm(mkDiagramWithBoundary(c.d, [c.wOut, c.wY]))
+    const faRev = boundaryForm(mkDiagramWithBoundary(a.d, [a.wY, a.wOut]))
     expect(fa).toBe(fc)
     expect(fa).not.toBe(faRev)
   })

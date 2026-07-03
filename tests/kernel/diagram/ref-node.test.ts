@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram, requiredPorts } from '../../../src/kernel/diagram/diagram'
 import { diagramToJson, diagramFromJson } from '../../../src/kernel/diagram/json'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
@@ -81,7 +81,7 @@ describe('ref node — JSON', () => {
   it('round-trips through JSON preserving defId and arity', () => {
     const { d } = loneRef('Nat', 2)
     const back = diagramFromJson(JSON.parse(JSON.stringify(diagramToJson(d))))
-    expect(diagramFingerprint(back)).toBe(diagramFingerprint(d))
+    expect(exploreForm(back)).toBe(exploreForm(d))
     const n = Object.values(back.nodes)[0]!
     expect(n).toMatchObject({ kind: 'ref', defId: 'Nat', arity: 2 })
   })
@@ -122,12 +122,12 @@ describe('ref node — JSON', () => {
 
 describe('ref node — canonical fingerprint (soundness pin)', () => {
   it('two refs identical in defId/arity/wiring have EQUAL fingerprints', () => {
-    expect(diagramFingerprint(loneRef('Nat', 1).d)).toBe(diagramFingerprint(loneRef('Nat', 1).d))
+    expect(exploreForm(loneRef('Nat', 1).d)).toBe(exploreForm(loneRef('Nat', 1).d))
   })
 
   it('two refs identical except defId have DIFFERENT fingerprints', () => {
     // The survey soundness case: an atom-blind content key would collapse these.
-    expect(diagramFingerprint(loneRef('Nat', 1).d)).not.toBe(diagramFingerprint(loneRef('Fin', 1).d))
+    expect(exploreForm(loneRef('Nat', 1).d)).not.toBe(exploreForm(loneRef('Fin', 1).d))
   })
 
   it('a ref and an atom of the same arity have DIFFERENT fingerprints', () => {
@@ -137,7 +137,7 @@ describe('ref node — canonical fingerprint (soundness pin)', () => {
       b.atom(bub, bub)
       return b.build()
     })()
-    expect(diagramFingerprint(loneRef('Nat', 1).d)).not.toBe(diagramFingerprint(atomD))
+    expect(exploreForm(loneRef('Nat', 1).d)).not.toBe(exploreForm(atomD))
   })
 })
 
@@ -209,7 +209,7 @@ describe('ref node — iteration round-trip', () => {
     const copyId = Object.entries(iterated.nodes).find(([, n]) => n.kind === 'ref' && n.region === cut)![0]
     const selCopy = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
     const back = applyDeiteration(iterated, selCopy, 100)
-    expect(diagramFingerprint(back)).toBe(diagramFingerprint(d0))
+    expect(exploreForm(back)).toBe(exploreForm(d0))
   })
 })
 

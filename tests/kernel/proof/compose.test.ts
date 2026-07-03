@@ -3,11 +3,11 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { composeProofs, mapStepIds } from '../../../src/kernel/proof/compose'
-import type { DiagramIso } from '../../../src/kernel/diagram/canonical/iso'
+import type { DiagramIso } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
 const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
@@ -43,7 +43,7 @@ describe('composeProofs', () => {
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
-    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+    expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
   it('handles multi-step tails whose later steps reference ids created by earlier ones', () => {
@@ -61,7 +61,7 @@ describe('composeProofs', () => {
     ]
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
-    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(da))
+    expect(exploreForm(viaA)).toBe(exploreForm(da))
   })
 
   it('works across automorphic diagrams (two identical nodes)', () => {
@@ -108,7 +108,7 @@ describe('composeProofs', () => {
     // Both results should have the constant node only
     expect(Object.values(viaA.nodes)).toHaveLength(1)
     // Fingerprints must match — the same (constant) node survives on both sides
-    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+    expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
   it('maps comprehensionInstantiate binder targets through the iso', () => {
@@ -151,7 +151,7 @@ describe('composeProofs', () => {
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
-    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+    expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
   it('maps comprehensionInstantiate parameter attachments through the iso', () => {
@@ -192,7 +192,7 @@ describe('composeProofs', () => {
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
-    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+    expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
   it('maps a closedTermIntro region through a NON-IDENTITY iso', () => {
@@ -215,7 +215,7 @@ describe('composeProofs', () => {
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
-    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+    expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
   it('refuses non-isomorphic meets by name', () => {

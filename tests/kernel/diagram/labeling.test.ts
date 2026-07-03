@@ -1,9 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { canonicalForm, canonicalLabeling } from '../../../src/kernel/diagram/canonical/canonical'
-import { isoBetween } from '../../../src/kernel/diagram/canonical/iso'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm, exploreLabeling, exploreIso } from '../../../src/kernel/diagram/canonical/explore'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import type { Diagram, Region, DiagramNode, Wire } from '../../../src/kernel/diagram/diagram'
 
@@ -44,11 +42,11 @@ function renamed(d: Diagram): Diagram {
   return mkDiagram({ root: r(d.root), regions, nodes, wires })
 }
 
-describe('canonicalLabeling', () => {
-  it('its form field equals canonicalForm and ordinals are total and distinct', () => {
+describe('exploreLabeling', () => {
+  it('its form field equals exploreForm and ordinals are total and distinct', () => {
     const d = host()
-    const lab = canonicalLabeling(d)
-    expect(lab.form).toBe(canonicalForm(d))
+    const lab = exploreLabeling(d)
+    expect(lab.form).toBe(exploreForm(d))
     expect(new Set(lab.regionOrd.values()).size).toBe(Object.keys(d.regions).length)
     expect(new Set(lab.nodeOrd.values()).size).toBe(Object.keys(d.nodes).length)
     expect(new Set(lab.wireOrd.values()).size).toBe(Object.keys(d.wires).length)
@@ -57,8 +55,8 @@ describe('canonicalLabeling', () => {
   it('assigns the same ordinals to corresponding objects across renamings', () => {
     const d = host()
     const e = renamed(d)
-    const ld = canonicalLabeling(d)
-    const le = canonicalLabeling(e)
+    const ld = exploreLabeling(d)
+    const le = exploreLabeling(e)
     expect(ld.form).toBe(le.form)
     for (const [id, ord] of ld.nodeOrd) {
       expect(le.nodeOrd.get(`X_${id}`)).toBe(ord)
@@ -66,11 +64,11 @@ describe('canonicalLabeling', () => {
   })
 })
 
-describe('isoBetween', () => {
+describe('exploreIso', () => {
   it('returns the identity-like mapping between a diagram and its renaming', () => {
     const d = host()
     const e = renamed(d)
-    const iso = isoBetween(d, e)
+    const iso = exploreIso(d, e)
     expect(iso).not.toBeNull()
     for (const id of Object.keys(d.nodes)) expect(iso!.nodes.get(id)).toBe(`X_${id}`)
     for (const id of Object.keys(d.regions)) expect(iso!.regions.get(id)).toBe(`X_${id}`)
@@ -80,7 +78,7 @@ describe('isoBetween', () => {
   it('transports structure: mapped parents, regions, scopes, endpoints agree', () => {
     const d = host()
     const e = renamed(d)
-    const iso = isoBetween(d, e)!
+    const iso = exploreIso(d, e)!
     for (const [id, n] of Object.entries(d.nodes)) {
       const img = e.nodes[iso.nodes.get(id)!]!
       expect(img.region).toBe(iso.regions.get(n.region))
@@ -103,16 +101,16 @@ describe('isoBetween', () => {
     h2.termNode(h2.root, p('\\x. x'))
     h2.termNode(h2.root, p('\\x. x'))
     const e = h2.build()
-    const iso = isoBetween(d, e)!
+    const iso = exploreIso(d, e)!
     const images = new Set(iso.nodes.values())
     expect(images.size).toBe(2)
-    expect(diagramFingerprint(d)).toBe(diagramFingerprint(e))
+    expect(exploreForm(d)).toBe(exploreForm(e))
   })
 
   it('returns null for non-isomorphic diagrams', () => {
     const h2 = new DiagramBuilder()
     h2.termNode(h2.root, p('y'))
-    expect(isoBetween(host(), h2.build())).toBeNull()
+    expect(exploreIso(host(), h2.build())).toBeNull()
   })
 
   it('ordinals reflect winning coloring, not id insertion order (kills mutant: initial-color ordinals)', () => {
@@ -121,7 +119,7 @@ describe('isoBetween', () => {
     // n1 (inserted second). The correct ordinals are determined by the canonical
     // winner coloring, which respects structure. A mutant using initial colors
     // would use insertion order, mapping outer→0 in d1 and outer→1 in d2,
-    // making isoBetween transport outer↦inner.
+    // making exploreIso transport outer↦inner.
     const lam = p('\\x. x')
     const d1 = mkDiagram({
       root: 'r0',
@@ -147,7 +145,7 @@ describe('isoBetween', () => {
         w1: { scope: 'r1', endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
       },
     })
-    const iso = isoBetween(d1, d2)
+    const iso = exploreIso(d1, d2)
     expect(iso).not.toBeNull()
     // d1.n0 is in r1 (outer), d2.n1 is in r1 (outer). The iso must map outer↦outer.
     const imgOfN0 = iso!.nodes.get('n0')
@@ -157,7 +155,7 @@ describe('isoBetween', () => {
   it('search takes the lex-min branch (kills mutant: lex-max branch)', () => {
     // Same two-nested-cut diagram. Build it twice. Under lex-max branching, the
     // canonical form picks a different winner than lex-min. If forms differ
-    // between two independently built copies, isoBetween returns null instead of
+    // between two independently built copies, exploreIso returns null instead of
     // the correct iso. Concretely: verify the two copies have equal forms AND a
     // valid iso.
     const lam = p('\\x. x')
@@ -172,8 +170,8 @@ describe('isoBetween', () => {
     const d1 = buildNested()
     const d2 = buildNested()
     // Equal forms required for any valid canonical algorithm.
-    expect(canonicalForm(d1)).toBe(canonicalForm(d2))
-    // isoBetween must be non-null.
-    expect(isoBetween(d1, d2)).not.toBeNull()
+    expect(exploreForm(d1)).toBe(exploreForm(d2))
+    // exploreIso must be non-null.
+    expect(exploreIso(d1, d2)).not.toBeNull()
   })
 })

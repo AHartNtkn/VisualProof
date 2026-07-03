@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { mkReplay } from '../../src/app/replay'
 import { replayProof } from '../../src/kernel/proof/step'
-import { diagramFingerprint } from '../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { bootFixture } from './boot-fixture'
 
@@ -24,14 +24,14 @@ describe('mkReplay', () => {
 
   it('step 0 is the left-hand side; the boundary is the lhs boundary', () => {
     const r = mkReplay(plusComm, ctx)
-    expect(diagramFingerprint(r.diagramAt(0))).toBe(diagramFingerprint(plusComm.lhs.diagram))
+    expect(exploreForm(r.diagramAt(0))).toBe(exploreForm(plusComm.lhs.diagram))
     expect(r.boundary).toBe(plusComm.lhs.boundary)
   })
 
   it('the last step matches an independently replayed result', () => {
     const r = mkReplay(plusComm, ctx)
     const independent = replayProof(plusComm.lhs.diagram, plusComm.steps, ctx)
-    expect(diagramFingerprint(r.diagramAt(r.stepCount))).toBe(diagramFingerprint(independent))
+    expect(exploreForm(r.diagramAt(r.stepCount))).toBe(exploreForm(independent))
   })
 
   it('labels are the rule names, 1-based, with the empty string at 0', () => {
@@ -46,7 +46,7 @@ describe('mkReplay', () => {
     const r = mkReplay(plusComm, ctx)
     for (let k = 0; k <= r.stepCount; k++) {
       const fresh = replayProof(plusComm.lhs.diagram, plusComm.steps.slice(0, k), ctx)
-      expect(diagramFingerprint(r.diagramAt(k)), `step ${k}`).toBe(diagramFingerprint(fresh))
+      expect(exploreForm(r.diagramAt(k)), `step ${k}`).toBe(exploreForm(fresh))
     }
   })
 

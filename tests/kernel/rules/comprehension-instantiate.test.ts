@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyComprehensionInstantiate } from '../../../src/kernel/rules/comprehension'
 
 const p = (s: string) => parseTerm(s)
@@ -43,7 +43,7 @@ describe('applyComprehensionInstantiate', () => {
     const ecut = e.cut(e.root)
     const en = e.termNode(ecut, p('\\x. x'))
     e.wire(ecut, [{ node: en, port: { kind: 'output' } }])
-    expect(diagramFingerprint(out)).toBe(diagramFingerprint(e.build()))
+    expect(exploreForm(out)).toBe(exploreForm(e.build()))
   })
 
   it('duplicates the comprehension across multiple atoms', () => {

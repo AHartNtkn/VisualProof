@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { checkTheorem, applyTheorem } from '../../../src/kernel/proof/theorem'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
@@ -61,7 +61,7 @@ describe('checkTheorem', () => {
     }
     const lhs = side(false)
     const rhs = side(true)
-    expect(diagramFingerprint(lhs.diagram)).toBe(diagramFingerprint(rhs.diagram))
+    expect(exploreForm(lhs.diagram)).toBe(exploreForm(rhs.diagram))
     const forged: Theorem = { name: 'swap', lhs, rhs, steps: [] }
     expect(() => checkTheorem(forged, ctx))
       .toThrowError(/does not arrive at the stated right-hand side/)

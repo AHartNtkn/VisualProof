@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyInsertion } from '../../../src/kernel/rules/insertion'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
@@ -65,7 +65,7 @@ describe('inverse round-trips (fingerprint identities)', () => {
       const wrapped = applyDoubleCutIntro(d, sel)
       const outer = Object.entries(wrapped.regions)
         .find(([id, r]) => r.kind === 'cut' && r.parent === region && d.regions[id] === undefined)![0]
-      expect(diagramFingerprint(applyDoubleCutElim(wrapped, outer))).toBe(diagramFingerprint(d))
+      expect(exploreForm(applyDoubleCutElim(wrapped, outer))).toBe(exploreForm(d))
     }
   })
 
@@ -83,6 +83,6 @@ describe('inverse round-trips (fingerprint identities)', () => {
     const iterated = applyIteration(d, sel, cut)
     const copyId = Object.entries(iterated.nodes).find(([, x]) => x.region === cut)![0]
     const copySel = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
-    expect(diagramFingerprint(applyDeiteration(iterated, copySel, 100))).toBe(diagramFingerprint(d))
+    expect(exploreForm(applyDeiteration(iterated, copySel, 100))).toBe(exploreForm(d))
   })
 })

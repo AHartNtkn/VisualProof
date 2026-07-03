@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { printTerm } from '../../../src/kernel/term/print'
 import { app, port, termEq } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyFusion, applyFission } from '../../../src/kernel/rules/fusion'
 
 const p = (s: string) => parseTerm(s)
@@ -165,7 +165,7 @@ describe('applyFission', () => {
       (id) => d.wires[id] === undefined && split.wires[id]!.endpoints.length === 2,
     )!
     expect(split.wires[newWire]?.scope).toBe(cut)
-    expect(diagramFingerprint(applyFusion(split, newWire))).toBe(diagramFingerprint(d))
+    expect(exploreForm(applyFusion(split, newWire))).toBe(exploreForm(d))
   })
 
   it('keeps shared ports attached on both nodes', () => {
@@ -201,7 +201,7 @@ describe('applyFission', () => {
     const newWire = Object.keys(split.wires).find(
       (id) => d.wires[id] === undefined && split.wires[id]!.endpoints.length === 2,
     )!
-    expect(diagramFingerprint(applyFusion(split, newWire))).toBe(diagramFingerprint(d))
+    expect(exploreForm(applyFusion(split, newWire))).toBe(exploreForm(d))
   })
 
   it('round-trips a shared free spelled DIFFERENTLY on the two nodes: fusion yields ONE port on the shared wire, used in both positions', () => {
@@ -229,7 +229,7 @@ describe('applyFission', () => {
     // AND inside the inlined producer
     expect(merged?.kind === 'term' && printTerm(merged.term)).toBe(printTerm(p('s0 ((\\x. x) s1 s0)')))
     expect(out.wires[shared]?.endpoints).toEqual([{ node: n, port: { kind: 'freeVar', name: 's0' } }])
-    expect(diagramFingerprint(out)).toBe(diagramFingerprint(d))
+    expect(exploreForm(out)).toBe(exploreForm(d))
   })
 
   it('rejects subterms that reference outer binders, by name', () => {

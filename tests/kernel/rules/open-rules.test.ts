@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
 import { applyInsertion } from '../../../src/kernel/rules/insertion'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../../../src/kernel/rules/vacuous'
@@ -39,7 +39,7 @@ describe('open iteration / deiteration', () => {
           wv.scope === cut).map(([id]) => id),
     })
     const back = applyDeiteration(iterated, copySel, 100)
-    expect(diagramFingerprint(back)).toBe(diagramFingerprint(d))
+    expect(exploreForm(back)).toBe(exploreForm(d))
   })
 
   it('refuses iteration to a target outside an external binder', () => {
@@ -123,7 +123,7 @@ describe('vacuous bubble intro/elim', () => {
       expect(bub[1].kind === 'bubble' && bub[1].arity).toBe(2)
       expect(wrapped.nodes[n]?.region).toBe(bub[0])
       const back = applyVacuousBubbleElim(wrapped, bub[0])
-      expect(diagramFingerprint(back)).toBe(diagramFingerprint(d))
+      expect(exploreForm(back)).toBe(exploreForm(d))
     }
   })
 

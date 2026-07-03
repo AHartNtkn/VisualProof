@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { DiagramError } from '../../../src/kernel/diagram/diagram'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyConversion, applyConversionByCertificate } from '../../../src/kernel/rules/conversion'
 
 const p = (s: string) => parseTerm(s)
@@ -59,7 +59,7 @@ describe('applyConversion', () => {
     const d = h.build()
     const there = applyConversion(d, n, p('s0'), 10).diagram
     const back = applyConversion(there, n, p('(\\x. x) s0'), 10).diagram
-    expect(diagramFingerprint(back)).toBe(diagramFingerprint(d))
+    expect(exploreForm(back)).toBe(exploreForm(d))
   })
 
   it('rejects non-convertible terms by name', () => {

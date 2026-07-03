@@ -1,11 +1,10 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, Region, Wire, WireId } from '../diagram/diagram'
 import { mkDiagram } from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
-import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import { removeSubgraph, spliceSubgraph } from '../diagram/subgraph/splice'
-import { boundaryFingerprint } from '../diagram/canonical/fingerprint'
+import { exploreForm } from '../diagram/canonical/explore'
 import { freshId } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { wireAt } from './access'
@@ -81,9 +80,9 @@ export function applyRelFold(
     if (j === -1) throw new RuleError(`relation fold: argument wire '${a}' is not one of the occurrence's attachment wires`)
     return pattern.boundary[j]!
   })
-  const fp = boundaryFingerprint(mkDiagramWithBoundary(pattern.diagram, reordered))
-  if (fp !== boundaryFingerprint(body)) {
-    throw new RuleError(`relation fold: the occurrence does not match relation '${defId}' (boundary-pinned fingerprints differ)`)
+  const fp = exploreForm(pattern.diagram, reordered)
+  if (fp !== exploreForm(body.diagram, body.boundary)) {
+    throw new RuleError(`relation fold: the occurrence does not match relation '${defId}' (boundary-pinned canonical forms differ)`)
   }
 
   const cleaned = removeSubgraph(d, sel)

@@ -1,7 +1,6 @@
 import type { Diagram, RegionId, NodeId, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
-import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
-import { diagramFingerprint, boundaryFingerprint } from '../kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { polarity } from '../kernel/diagram/regions'
 import { spliceSubgraph, removeSubgraph } from '../kernel/diagram/subgraph/splice'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
@@ -186,7 +185,7 @@ export function applyBackward(s: ProofSession, action: BackwardAction): ProofSes
         if (j === -1) throw new Error(`argument wire '${a}' is not an attachment of the selection`)
         return pattern.boundary[j]!
       })
-      if (boundaryFingerprint(mkDiagramWithBoundary(pattern.diagram, reordered)) !== boundaryFingerprint(thm.rhs)) {
+      if (exploreForm(pattern.diagram, reordered) !== exploreForm(thm.rhs.diagram, thm.rhs.boundary)) {
         throw new Error(`the selection is not an occurrence of '${action.name}' right-hand side`)
       }
       const spliced = spliceSubgraph(g, action.at.sel.region, thm.lhs, action.at.args)
@@ -204,7 +203,7 @@ export function applyBackward(s: ProofSession, action: BackwardAction): ProofSes
   }
   // the reproduction assertion: forward(step, G′) must match G semantically by fingerprint
   const reproduced = applyStep(gPrime, step, s.ctx)
-  if (diagramFingerprint(reproduced) !== diagramFingerprint(g)) {
+  if (exploreForm(reproduced) !== exploreForm(g)) {
     throw new Error(`backward action '${action.kind}' could not reconstruct the goal it inverted; this is a session bug`)
   }
   // re-anchor the existing exact tail onto the reproduced diagram: it was
@@ -238,7 +237,7 @@ export function undoBackward(s: ProofSession): ProofSession {
 }
 
 export function meet(s: ProofSession): boolean {
-  return diagramFingerprint(s.forward.current) === diagramFingerprint(s.backward.current)
+  return exploreForm(s.forward.current) === exploreForm(s.backward.current)
 }
 
 /** Compose both halves into the finished theorem (caller runs checkTheorem). */

@@ -5,7 +5,7 @@ import { freePorts, termEq } from '../../../src/kernel/term/term'
 import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import type { ConversionCertificate } from '../../../src/kernel/term/certificate'
 import { applyCongruenceJoin } from '../../../src/kernel/rules/congruence'
@@ -43,7 +43,7 @@ describe('name-blind free ports (canonicalization at construction)', () => {
       ])
       return h.build()
     }
-    expect(diagramFingerprint(mk('y', 'z'))).toBe(diagramFingerprint(mk('a', 'b')))
+    expect(exploreForm(mk('y', 'z'))).toBe(exploreForm(mk('a', 'b')))
   })
 
   it('(b) mkDiagram renames node frees to s0… in first-occurrence order and rewrites endpoints to match', () => {
@@ -98,7 +98,7 @@ describe('name-blind free ports (canonicalization at construction)', () => {
       { node: rn, port: { kind: 'freeVar', name: 'a' } },
       { node: rh, port: { kind: 'output' } },
     ])
-    expect(diagramFingerprint(d)).toBe(diagramFingerprint(ref.build()))
+    expect(exploreForm(d)).toBe(exploreForm(ref.build()))
   })
 
   it("(e) an endpoint naming a port absent from the node's term still fails with today's error", () => {
@@ -179,6 +179,6 @@ describe('name-blind free ports (canonicalization at construction)', () => {
       { node: rn, port: { kind: 'freeVar', name: 'y' } },
       { node: rh, port: { kind: 'output' } },
     ])
-    expect(diagramFingerprint(out)).toBe(diagramFingerprint(ref.build()))
+    expect(exploreForm(out)).toBe(exploreForm(ref.build()))
   })
 })

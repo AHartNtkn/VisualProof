@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { composeProofs } from '../../../src/kernel/proof/compose'
@@ -46,7 +46,7 @@ describe('open and vacuous proof steps', () => {
     expect(() => replayProof(wrapped, more, ctx)).toThrowError(/step 1 \(vacuousElim\) failed: bubble .* binds 1 atom/)
     // without the insertion the pair round-trips
     const back = replayProof(wrapped, [{ rule: 'vacuousElim', region: bub }], ctx)
-    expect(diagramFingerprint(back)).toBe(diagramFingerprint(d))
+    expect(exploreForm(back)).toBe(exploreForm(d))
   })
 
   it('round-trips the new step shapes through JSON', () => {
@@ -84,7 +84,7 @@ describe('open and vacuous proof steps', () => {
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
-    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+    expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
   it('composeProofs maps insertion binder VALUES through a NON-IDENTITY iso', () => {
@@ -116,6 +116,6 @@ describe('open and vacuous proof steps', () => {
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
-    expect(diagramFingerprint(viaA)).toBe(diagramFingerprint(viaB))
+    expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 })

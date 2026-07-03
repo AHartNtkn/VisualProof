@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { canonicalForm } from '../../../src/kernel/diagram/canonical/canonical'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
 
-describe('canonicalForm adversarial battery', () => {
+describe('exploreForm adversarial battery', () => {
   it('distinguishes atom binder depth (inner vs outer bubble of equal arity)', () => {
     const mk = (inner: boolean) => {
       const b = new DiagramBuilder()
@@ -14,7 +14,7 @@ describe('canonicalForm adversarial battery', () => {
       b.atom(innerB, inner ? innerB : outer)
       return b.build()
     }
-    expect(canonicalForm(mk(true))).not.toBe(canonicalForm(mk(false)))
+    expect(exploreForm(mk(true))).not.toBe(exploreForm(mk(false)))
   })
 
   it('distinguishes which of two same-shape nodes a third connects to, under symmetry', () => {
@@ -44,7 +44,7 @@ describe('canonicalForm adversarial battery', () => {
     }
     const one = mk(false)
     const two = mk(true)
-    expect(canonicalForm(one)).not.toBe(canonicalForm(two))
+    expect(exploreForm(one)).not.toBe(exploreForm(two))
     // and the one-sided version is invariant under which side is chosen
     const mkOther = () => {
       const b = new DiagramBuilder()
@@ -60,7 +60,7 @@ describe('canonicalForm adversarial battery', () => {
       void n1
       return b.build()
     }
-    expect(canonicalForm(one)).toBe(canonicalForm(mkOther()))
+    expect(exploreForm(one)).toBe(exploreForm(mkOther()))
   })
 
   it('distinguishes arg-position wiring on an atom (X(s,t) vs X(t,s))', () => {
@@ -80,7 +80,7 @@ describe('canonicalForm adversarial battery', () => {
       ])
       return b.build()
     }
-    expect(canonicalForm(mk(false))).not.toBe(canonicalForm(mk(true)))
+    expect(exploreForm(mk(false))).not.toBe(exploreForm(mk(true)))
   })
 
   it('three-way symmetry: triple identical cuts canonicalize order-independently', () => {
@@ -92,7 +92,7 @@ describe('canonicalForm adversarial battery', () => {
       const cuts = [b.cut(b.root), b.cut(b.root), b.cut(b.root)]
       const contents = [p('\\x. x'), p('\\x. \\y. x'), p('\\x. \\y. y')]
       perm.forEach((ci, i) => b.termNode(cuts[ci]!, contents[i]!))
-      return canonicalForm(b.build())
+      return exploreForm(b.build())
     })
     expect(new Set(forms).size).toBe(1)
   })
@@ -104,7 +104,7 @@ describe('canonicalForm adversarial battery', () => {
       for (let i = 0; i < count; i++) b.wire(cut, [])
       return b.build()
     }
-    expect(canonicalForm(mk(1))).not.toBe(canonicalForm(mk(2)))
+    expect(exploreForm(mk(1))).not.toBe(exploreForm(mk(2)))
   })
 
   it('term content distinguishes beyond shape of wiring', () => {
@@ -113,6 +113,6 @@ describe('canonicalForm adversarial battery', () => {
       b.termNode(b.root, p(term))
       return b.build()
     }
-    expect(canonicalForm(mk('\\x. x'))).not.toBe(canonicalForm(mk('\\x. \\y. x')))
+    expect(exploreForm(mk('\\x. x'))).not.toBe(exploreForm(mk('\\x. \\y. x')))
   })
 })

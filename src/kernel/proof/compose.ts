@@ -1,6 +1,6 @@
 import type { Diagram, Endpoint, WireId } from '../diagram/diagram'
-import type { DiagramIso } from '../diagram/canonical/iso'
-import { isoBetween } from '../diagram/canonical/iso'
+import type { DiagramIso } from '../diagram/canonical/explore'
+import { exploreIso } from '../diagram/canonical/explore'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { ProofContext, ProofStep } from './step'
@@ -111,7 +111,7 @@ export function composeProofs(
   tail: readonly ProofStep[],
   ctx: ProofContext,
 ): ProofStep[] {
-  let iso = isoBetween(meetSource, meetTarget)
+  let iso = exploreIso(meetSource, meetTarget)
   if (iso === null) throw new ProofError('the two sides do not meet: the diagrams are not isomorphic')
   let curTarget = meetTarget
   let curSource = meetSource
@@ -125,7 +125,7 @@ export function composeProofs(
     } catch (e) {
       throw new ProofError(`composing step ${i} (${step.rule}) failed: ${e instanceof Error ? e.message : String(e)}`)
     }
-    iso = isoBetween(curSource, curTarget)
+    iso = exploreIso(curSource, curTarget)
     if (iso === null) {
       throw new ProofError(`composing step ${i} (${step.rule}) diverged: the sides are no longer isomorphic`)
     }

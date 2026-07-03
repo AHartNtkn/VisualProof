@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { canonicalForm } from '../../../src/kernel/diagram/canonical/canonical'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
 
-describe('canonicalForm', () => {
+describe('exploreForm', () => {
   it('is invariant under construction order (id renaming)', () => {
     // same diagram, two construction orders → different ids, same canonical form
     const b1 = new DiagramBuilder()
@@ -24,7 +24,7 @@ describe('canonicalForm', () => {
       { node: t2, port: { kind: 'output' } },
       { node: s2, port: { kind: 'output' } },
     ])
-    expect(canonicalForm(b1.build())).toBe(canonicalForm(b2.build()))
+    expect(exploreForm(b1.build())).toBe(exploreForm(b2.build()))
   })
 
   it('is invariant under per-node free-variable renaming', () => {
@@ -39,7 +39,7 @@ describe('canonicalForm', () => {
       ])
       return b.build()
     }
-    expect(canonicalForm(mk('y z'))).toBe(canonicalForm(mk('a b')))
+    expect(exploreForm(mk('y z'))).toBe(exploreForm(mk('a b')))
   })
 
   it('distinguishes wiring differences', () => {
@@ -63,7 +63,7 @@ describe('canonicalForm', () => {
       }
       return b.build()
     }
-    expect(canonicalForm(mk(true))).not.toBe(canonicalForm(mk(false)))
+    expect(exploreForm(mk(true))).not.toBe(exploreForm(mk(false)))
   })
 
   it('distinguishes cut from bubble and arity from arity', () => {
@@ -73,8 +73,8 @@ describe('canonicalForm', () => {
       else b.bubble(b.root, arity!)
       return b.build()
     }
-    expect(canonicalForm(mk('cut'))).not.toBe(canonicalForm(mk('bubble', 0)))
-    expect(canonicalForm(mk('bubble', 0))).not.toBe(canonicalForm(mk('bubble', 1)))
+    expect(exploreForm(mk('cut'))).not.toBe(exploreForm(mk('bubble', 0)))
+    expect(exploreForm(mk('bubble', 0))).not.toBe(exploreForm(mk('bubble', 1)))
   })
 
   it('handles symmetric diagrams via individualization (two identical disconnected cuts)', () => {
@@ -89,7 +89,7 @@ describe('canonicalForm', () => {
     }
     // refinement alone cannot split the two cuts; individualization must, and
     // the result must not depend on construction order
-    expect(canonicalForm(mk(false))).toBe(canonicalForm(mk(true)))
+    expect(exploreForm(mk(false))).toBe(exploreForm(mk(true)))
   })
 
   it('distinguishes wire scope (same endpoints, different quantifier location)', () => {
@@ -100,7 +100,7 @@ describe('canonicalForm', () => {
       b.wire(scopeAtRoot ? b.root : cut, [{ node: t, port: { kind: 'output' } }])
       return b.build()
     }
-    expect(canonicalForm(mk(true))).not.toBe(canonicalForm(mk(false)))
+    expect(exploreForm(mk(true))).not.toBe(exploreForm(mk(false)))
   })
 
   it('pins boundary wires by order when given', () => {
@@ -113,20 +113,20 @@ describe('canonicalForm', () => {
     }
     const a = mk()
     const b2 = mk()
-    expect(canonicalForm(a.d, [a.wOut, a.wY])).toBe(canonicalForm(b2.d, [b2.wOut, b2.wY]))
-    expect(canonicalForm(a.d, [a.wOut, a.wY])).not.toBe(canonicalForm(a.d, [a.wY, a.wOut]))
+    expect(exploreForm(a.d, [a.wOut, a.wY])).toBe(exploreForm(b2.d, [b2.wOut, b2.wY]))
+    expect(exploreForm(a.d, [a.wOut, a.wY])).not.toBe(exploreForm(a.d, [a.wY, a.wOut]))
   })
 
   it('throws on pinned wires that do not exist', () => {
     const b = new DiagramBuilder()
     b.termNode(b.root, p('\\x. x'))
-    expect(() => canonicalForm(b.build(), ['ghost'])).toThrowError(/pinned wire 'ghost' does not exist/)
+    expect(() => exploreForm(b.build(), ['ghost'])).toThrowError(/pinned wire 'ghost' does not exist/)
   })
 
   it('throws on duplicate pinned wires', () => {
     const b = new DiagramBuilder()
     const n = b.termNode(b.root, p('\\x. x'))
     const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
-    expect(() => canonicalForm(b.build(), [w, w])).toThrowError(/duplicate pinned wire 'w0'/)
+    expect(() => exploreForm(b.build(), [w, w])).toThrowError(/duplicate pinned wire 'w0'/)
   })
 })

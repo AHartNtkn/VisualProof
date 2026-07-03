@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 
 const p = (s: string) => parseTerm(s)
@@ -28,7 +28,7 @@ describe('double cut', () => {
     const crossing = Object.values(wrapped.wires).find((w) => w.endpoints.length === 2)
     expect(crossing?.scope).toBe(d.root)
     const unwrapped = applyDoubleCutElim(wrapped, outer)
-    expect(diagramFingerprint(unwrapped)).toBe(diagramFingerprint(d))
+    expect(exploreForm(unwrapped)).toBe(exploreForm(d))
   })
 
   it('intro on an empty selection produces a bare double cut', () => {

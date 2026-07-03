@@ -5,7 +5,7 @@ import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
 import { DiagramError } from '../../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyClosedTermIntro } from '../../../src/kernel/rules/intro'
 import { applyInsertion } from '../../../src/kernel/rules/insertion'
 import { RuleError } from '../../../src/kernel/rules/error'
@@ -99,7 +99,7 @@ describe('closed-term introduction', () => {
     const pattern = mkDiagramWithBoundary(b.build(), [])
     const viaInsertion = applyInsertion(d, cut, pattern, [])
     const viaIntro = applyClosedTermIntro(d, cut, t)
-    expect(diagramFingerprint(viaInsertion)).toBe(diagramFingerprint(viaIntro))
+    expect(exploreForm(viaInsertion)).toBe(exploreForm(viaIntro))
   })
 
   it('rejects an unknown region structurally', () => {

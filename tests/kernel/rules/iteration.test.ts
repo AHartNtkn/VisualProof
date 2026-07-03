@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
 
 const p = (s: string) => parseTerm(s)
@@ -62,7 +62,7 @@ describe('applyDeiteration', () => {
     const copyId = Object.entries(iterated.nodes).find(([, x]) => x.region === cut)![0]
     const copySel = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
     const back = applyDeiteration(iterated, copySel, 100)
-    expect(diagramFingerprint(back)).toBe(diagramFingerprint(d))
+    expect(exploreForm(back)).toBe(exploreForm(d))
   })
 
   it('rejects removal of an unjustified subgraph, by name', () => {

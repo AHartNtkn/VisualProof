@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
 import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
@@ -24,7 +24,7 @@ describe('applyStep mirrors the direct appliers', () => {
     const d = h.build()
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const step: ProofStep = { rule: 'erasure', sel }
-    expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(applyErasure(d, sel)))
+    expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(applyErasure(d, sel)))
   })
 
   it('conversion step replays by certificate, fuel-free', () => {
@@ -34,7 +34,7 @@ describe('applyStep mirrors the direct appliers', () => {
     // the node's source free 'y' is canonical s0 after construction
     const { diagram, certificate } = applyConversion(d, n, pp('s0'), 10)
     const step: ProofStep = { rule: 'conversion', node: n, term: pp('s0'), certificate, attachments: {} }
-    expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(diagram))
+    expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(diagram))
   })
 
   it('congruenceJoin step merges the outputs of βη-equal co-resident nodes', () => {
@@ -59,8 +59,8 @@ describe('applyStep mirrors the direct appliers', () => {
     const cut = h.cut(h.root)
     const d = h.build()
     const step: ProofStep = { rule: 'closedTermIntro', region: cut, term: pp('\\x. \\y. x') }
-    expect(diagramFingerprint(applyStep(d, step, ctx)))
-      .toBe(diagramFingerprint(applyClosedTermIntro(d, cut, pp('\\x. \\y. x'))))
+    expect(exploreForm(applyStep(d, step, ctx)))
+      .toBe(exploreForm(applyClosedTermIntro(d, cut, pp('\\x. \\y. x'))))
     const out = replayProof(d, [step], ctx)
     const added = Object.entries(out.nodes).filter(([id]) => d.nodes[id] === undefined)
     expect(added).toHaveLength(1)
@@ -85,7 +85,7 @@ describe('applyStep mirrors the direct appliers', () => {
     ])
     const d = h.build()
     const step: ProofStep = { rule: 'headStrip', a: n1, b: n2 }
-    expect(diagramFingerprint(applyStep(d, step, ctx))).toBe(diagramFingerprint(applyHeadStrip(d, n1, n2)))
+    expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(applyHeadStrip(d, n1, n2)))
     const out = replayProof(d, [step], ctx)
     expect(Object.keys(out.nodes)).toHaveLength(4)
   })

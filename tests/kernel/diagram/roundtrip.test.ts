@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection, type SubgraphSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { removeSubgraph, spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
@@ -13,7 +13,7 @@ function roundTrip(d: ReturnType<DiagramBuilder['build']>, sel: SubgraphSelectio
   const { pattern, attachments } = extractSubgraph(d, validated)
   const removed = removeSubgraph(d, validated)
   const restored = spliceSubgraph(removed, validated.region, pattern, attachments)
-  expect(diagramFingerprint(restored)).toBe(diagramFingerprint(d))
+  expect(exploreForm(restored)).toBe(exploreForm(d))
 }
 
 describe('extract → remove → splice round-trip (fingerprint identity)', () => {

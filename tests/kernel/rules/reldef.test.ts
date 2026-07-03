@@ -5,7 +5,7 @@ import type { Diagram, RegionId, WireId } from '../../../src/kernel/diagram/diag
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type { DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyRelUnfold, applyRelFold } from '../../../src/kernel/rules/reldef'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { replayProof } from '../../../src/kernel/proof/step'
@@ -82,7 +82,7 @@ describe('relFold — round-trips to fingerprint equality with the original refe
     const un = applyRelUnfold(d, node, relations)
     const sel = bodySelection(un, carrier, un.root)
     const folded = applyRelFold(un, sel, 'R', [wArg], relations)
-    expect(diagramFingerprint(folded)).toBe(diagramFingerprint(d))
+    expect(exploreForm(folded)).toBe(exploreForm(d))
   })
 })
 
@@ -145,7 +145,7 @@ describe('relUnfold / relFold on a body with a top-level bubble (closed by const
     // fold the copied ∃-subtree back to the reference
     const sel = mkSelection(un, { region, regions: [bubId], nodes: [], wires: [] })
     const folded = applyRelFold(un, sel, 'E', [wArg], relations)
-    expect(diagramFingerprint(folded)).toBe(diagramFingerprint(d))
+    expect(exploreForm(folded)).toBe(exploreForm(d))
   })
 })
 
@@ -158,7 +158,7 @@ describe('relUnfold / relFold are polarity-blind (work inside a cut)', () => {
     expect(Object.values(un.nodes).filter((n) => n.kind === 'ref')).toHaveLength(0)
     const sel = bodySelection(un, carrier, region)
     const folded = applyRelFold(un, sel, 'R', [wArg], relations)
-    expect(diagramFingerprint(folded)).toBe(diagramFingerprint(d))
+    expect(exploreForm(folded)).toBe(exploreForm(d))
   })
 })
 
@@ -168,7 +168,7 @@ describe('relUnfold / relFold replay through applyStep', () => {
     const { d, node } = refHost('R')
     const ctx: ProofContext = { theorems: new Map(), relations }
     const replayed = replayProof(d, [{ rule: 'relUnfold', node }], ctx)
-    expect(diagramFingerprint(replayed)).toBe(diagramFingerprint(applyRelUnfold(d, node, relations)))
+    expect(exploreForm(replayed)).toBe(exploreForm(applyRelUnfold(d, node, relations)))
   })
 
   it('replays unfold then fold back to the original', () => {
@@ -182,7 +182,7 @@ describe('relUnfold / relFold replay through applyStep', () => {
       { rule: 'relFold', sel, defId: 'R', args: [wArg] },
     ]
     const out = replayProof(d, steps, ctx)
-    expect(diagramFingerprint(out)).toBe(diagramFingerprint(d))
+    expect(exploreForm(out)).toBe(exploreForm(d))
   })
 })
 

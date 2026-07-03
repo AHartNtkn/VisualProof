@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { diagramFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyComprehensionAbstract } from '../../../src/kernel/rules/comprehension'
 
 const p = (s: string) => parseTerm(s)
@@ -42,7 +42,7 @@ describe('applyComprehensionAbstract', () => {
     // hub's output wire stays scoped at root in the actual result (the rule
     // never rescopes wires), so the expected diagram pins it there explicitly
     e.wire(e.root, [{ node: ehub, port: { kind: 'output' } }])
-    expect(diagramFingerprint(out)).toBe(diagramFingerprint(e.build()))
+    expect(exploreForm(out)).toBe(exploreForm(e.build()))
   })
 
   it('abstracts several disjoint occurrences consistently', () => {

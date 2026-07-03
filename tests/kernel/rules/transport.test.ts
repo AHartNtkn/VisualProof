@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import type { Diagram, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
 import { applyEndpointTransport } from '../../../src/kernel/rules/transport'
-import { boundaryFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { stepToJson, stepFromJson } from '../../../src/kernel/proof/json'
 import { applyStep, type ProofStep, type ProofContext } from '../../../src/kernel/proof/step'
@@ -273,7 +273,7 @@ describe('endpoint transport — JSON round-trip', () => {
     const round = stepFromJson(JSON.parse(JSON.stringify(stepToJson(step))))
     const replayed = applyStep(s.d, round, ctx)
     const boundary = [outWireOf(direct, s.zb)]
-    expect(boundaryFingerprint(mkDiagramWithBoundary(replayed, [outWireOf(replayed, s.zb)])))
-      .toBe(boundaryFingerprint(mkDiagramWithBoundary(direct, boundary)))
+    expect(boundaryForm(mkDiagramWithBoundary(replayed, [outWireOf(replayed, s.zb)])))
+      .toBe(boundaryForm(mkDiagramWithBoundary(direct, boundary)))
   })
 })

@@ -5,7 +5,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import type { DiagramNode } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { boundaryFingerprint } from '../../../src/kernel/diagram/canonical/fingerprint'
+import { boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyStep } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { checkTheorem } from '../../../src/kernel/proof/theorem'
@@ -84,8 +84,8 @@ describe('folded-guard integration proof', () => {
     //     unfolded statements are distinct statements.
     const ambientRef = Object.entries(rhs.diagram.nodes).find(([, n]) => n.kind === 'ref')![0]
     const unfoldEverything = applyRelUnfold(rhs.diagram, ambientRef, relations)
-    expect(boundaryFingerprint(mkDiagramWithBoundary(unfoldEverything, lhs.boundary)))
-      .not.toBe(boundaryFingerprint(rhs))
+    expect(boundaryForm(mkDiagramWithBoundary(unfoldEverything, lhs.boundary)))
+      .not.toBe(boundaryForm(rhs))
     // and the unfold-everything variant carries NO ref at all
     expect(Object.values(unfoldEverything.nodes).some((n) => n.kind === 'ref')).toBe(false)
   })

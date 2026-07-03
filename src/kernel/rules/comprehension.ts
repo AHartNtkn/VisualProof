@@ -2,12 +2,11 @@ import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, Wi
 import { DiagramError, mkDiagram } from '../diagram/diagram'
 import { polarity, isAncestorOrEqual } from '../diagram/regions'
 import type { DiagramWithBoundary } from '../diagram/boundary'
-import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import { spliceSubgraph } from '../diagram/subgraph/splice'
-import { boundaryFingerprint } from '../diagram/canonical/fingerprint'
+import { exploreForm } from '../diagram/canonical/explore'
 import { freshId } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { wireAt } from './access'
@@ -151,7 +150,7 @@ export function applyComprehensionAbstract(
   if (polarity(d, wrap.region) !== 'positive') {
     throw new RuleError(`comprehension abstraction requires a positive region; '${wrap.region}' is negative`)
   }
-  const compFp = boundaryFingerprint(comp)
+  const compFp = exploreForm(comp.diagram, comp.boundary)
   const seenNodes = new Set<NodeId>()
   const seenRegions = new Set<RegionId>()
   const seenWires = new Set<WireId>()
@@ -189,9 +188,9 @@ export function applyComprehensionAbstract(
       if (j === -1) throw new RuleError(`occurrence ${k} argument wire '${a}' is not one of its attachment wires`)
       return pattern.boundary[j]!
     })
-    const fp = boundaryFingerprint(mkDiagramWithBoundary(pattern.diagram, reordered))
+    const fp = exploreForm(pattern.diagram, reordered)
     if (fp !== compFp) {
-      throw new RuleError(`occurrence ${k} does not match the comprehension (boundary-pinned fingerprints differ)`)
+      throw new RuleError(`occurrence ${k} does not match the comprehension (boundary-pinned canonical forms differ)`)
     }
   })
   occurrences.forEach((occ, k) => {

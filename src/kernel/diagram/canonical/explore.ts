@@ -1,5 +1,6 @@
 import type { Diagram, DiagramNode, NodeId, Port, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
+import type { DiagramWithBoundary } from '../boundary'
 import { freePorts } from '../../term/term'
 import { termShapeKey, positionalPortKey } from './shape'
 
@@ -47,6 +48,17 @@ export type ExploreLabeling = {
 /** The canonical serialization: equal strings iff isomorphic diagrams. */
 export function exploreForm(d: Diagram, pinnedWires: readonly WireId[] = []): string {
   return exploreLabeling(d, pinnedWires).form
+}
+
+/**
+ * Canonical form of a bounded diagram: the diagram pinned by its boundary
+ * order. Equal strings iff the two bounded diagrams are isomorphic respecting
+ * boundary order — the exactness guarantee relFold, comprehension abstraction,
+ * and theorem citation rely on. With an empty boundary this equals
+ * `exploreForm` of the diagram (a 0-ary relation is a sentence).
+ */
+export function boundaryForm(dwb: DiagramWithBoundary): string {
+  return exploreForm(dwb.diagram, dwb.boundary)
 }
 
 /**
