@@ -10,6 +10,7 @@ declare global {
       bodies(): { id: string; kind: string; x: number; y: number; r: number }[]
       wires(): { id: string; x: number; y: number }[]
       theoryJson(): string
+      editForm(): string
     }
   }
 }
@@ -164,6 +165,10 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   // Select the term node (click its body), then the EDIT menu offers Define.
   await clickTerm()
   await expect(page.locator('#status')).toContainText("node '")
+  // Structural fingerprint of the sheet BEFORE defining: a conservative
+  // definitional extension must leave it byte-identical (not just node-count).
+  const sheetBefore = await page.evaluate(() => window.__vpaDebug!.editForm())
+  expect(sheetBefore.length).toBeGreaterThan(0) // a real fingerprint, not a vacuous empty string
   await page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true }).click()
   await expect(page.locator('#status')).toContainText('click the crossing wires')
 
@@ -173,6 +178,9 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   await page.locator('#theorem-name').fill('R')
   await page.locator('#action-menu').getByRole('button', { name: /Commit relation definition/, exact: false }).click()
   await expect(page.locator('#status')).toContainText("defined 'R' (arity 1)")
+  // The whole define flow (defineRelation + defineEntry) changed nothing on the
+  // sheet — the canonical form is identical to the pre-define snapshot.
+  expect(await page.evaluate(() => window.__vpaDebug!.editForm())).toBe(sheetBefore)
 
   // The Session group lists the new relation beside adopted theorems.
   const lib = page.locator('#library')

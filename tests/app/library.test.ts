@@ -1,14 +1,19 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import { theoryToJson } from '../../src/kernel/proof/store'
+import { theoryToJson, loadTheory } from '../../src/kernel/proof/store'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { buildLambdaTheory } from '../../src/theories/lambda'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
+import { applyRelFold } from '../../src/kernel/rules/reldef'
 import { emptyDiagram, addTermNode } from '../../src/app/edit'
+import { defineRelation } from '../../src/app/define'
 import type { LibraryEntry } from '../../src/app/library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from '../../src/app/library'
+import { sheetBody, emptyCtx } from './relationFixture'
 
 const p = (s: string) => parseTerm(s)
 const fregeJson = () => theoryToJson(buildFregeTheory())
@@ -33,6 +38,16 @@ function trivRelation(): DiagramWithBoundary {
     diagram.wires[w]!.endpoints.some((ep) => ep.node === node && ep.port.kind === 'freeVar'),
   )!
   return mkDiagramWithBoundary(diagram, [bound])
+}
+
+/** An arity-1 relation body whose ONLY node is a ref to `nat`: its ref resolves
+ *  iff a theory providing `nat` (arity 1) is in the merged context. Used to pin
+ *  the ref-resolution lifecycle — a defined relation depending on a loaded one. */
+function relationCitingNat(): DiagramWithBoundary {
+  const b = new DiagramBuilder()
+  const r = b.ref(b.root, 'nat', 1)
+  const w = b.wire(b.root, [{ node: r, port: { kind: 'arg', index: 0 } }])
+  return mkDiagramWithBoundary(b.build(), [w])
 }
 
 describe('emptyLibrary', () => {
@@ -203,5 +218,91 @@ describe('defineEntry', () => {
     const lib = defineEntry(emptyLibrary(), 'shared', trivRelation())
     expect(() => adoptEntry(lib, trivTheorem('shared')))
       .toThrowError(/adopted theorem 'shared' duplicates a loaded theorem or a relation/)
+  })
+
+  it('refuses defining a relation whose name collides with an ADOPTED theorem', () => {
+    // The reverse of the line above: a name adopted as a theorem this session is
+    // still taken for a relation (one namespace), and defineEntry's pre-check
+    // must catch it before the definedRelations list grows.
+    const lib = adoptEntry(emptyLibrary(), trivTheorem('shared'))
+    expect(() => defineEntry(lib, 'shared', trivRelation()))
+      .toThrowError(/duplicates a (loaded theorem or a relation|theorem name)/)
+    expect(lib.definedRelations).toEqual([])
+  })
+})
+
+describe('namespace integrity across the load boundary (define-then-load)', () => {
+  // The defineEntry block covers define-AFTER-load; this is the reverse order —
+  // a file loaded into a session that already defines a colliding relation. The
+  // load must refuse, not silently shadow, and leave the file unloaded.
+  it('refuses LOADING a file whose relation name a session-defined relation already holds', () => {
+    const lib = defineEntry(emptyLibrary(), 'nat', trivRelation()) // 'nat' now defined
+    expect(() => loadEntry(lib, 'frege.json', fregeJson())) // frege also defines 'nat'
+      .toThrowError(/defined relation 'nat' duplicates a loaded or defined relation/)
+    // The file is not listed and the working context still has only the session 'nat'.
+    expect(lib.entries).toEqual([])
+    expect(Object.keys(rebuild(lib).relations)).toEqual(['nat'])
+  })
+
+  it('refuses LOADING a file whose THEOREM name a session-defined relation already holds', () => {
+    const lib = defineEntry(emptyLibrary(), 'plusAssoc', trivRelation()) // relation named for frege's theorem
+    expect(() => loadEntry(lib, 'frege.json', fregeJson()))
+      .toThrowError(/defined relation 'plusAssoc' duplicates a theorem name/)
+    expect(lib.entries).toEqual([])
+  })
+})
+
+describe('ref-resolution lifecycle: a defined relation citing a LOADED relation', () => {
+  it('resolves the defined body while the cited file is loaded', () => {
+    let lib = loadEntry(emptyLibrary(), 'frege.json', fregeJson())
+    lib = defineEntry(lib, 'usesNat', relationCitingNat())
+    const boot = rebuild(lib)
+    expect(boot.relations['usesNat']).toBeDefined()
+    expect(boot.relations['nat']).toBeDefined()
+  })
+
+  it('refuses to unload the cited file, keeping it loaded and the context resolvable', () => {
+    // Every OTHER library mutator (load/adopt/define) rebuilds as an atomic
+    // pre-check before returning; unloadEntry must do the same, or unloading a
+    // file a defined relation still cites strands that ref while the library
+    // silently records the file as gone.
+    let lib = loadEntry(emptyLibrary(), 'frege.json', fregeJson())
+    lib = defineEntry(lib, 'usesNat', relationCitingNat())
+    expect(() => unloadEntry(lib, 'frege.json'))
+      .toThrowError(/unknown relation 'nat'/)
+    // atomic: the entry is still loaded and the working context still resolves.
+    expect(lib.entries.find((e) => e.file === 'frege.json')!.status).toBe('loaded')
+    expect(() => rebuild(lib)).not.toThrow()
+  })
+
+  it('permits unloading once the citing relation is not present (no false positive)', () => {
+    // A defined relation with no cross-file ref never blocks an unload.
+    let lib = loadEntry(emptyLibrary(), 'frege.json', fregeJson())
+    lib = defineEntry(lib, 'standalone', trivRelation())
+    expect(() => unloadEntry(lib, 'frege.json')).not.toThrow()
+  })
+})
+
+describe('session-defined relation round-trips through Save → loadTheory (fresh library)', () => {
+  it('folds/unfolds identically and preserves argument ORDER after a JSON round-trip', () => {
+    // Define an asymmetric arity-2 relation, save it the way the shell saves
+    // (theoryToJson over the rebuilt relations), then reload through the ONLY
+    // verifying road (loadTheory) into a fresh context.
+    const { d, sel, wY, wZ } = sheetBody()
+    const lib = defineEntry(emptyLibrary(), 'R', defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {}).relation)
+    const saved = rebuild(lib).relations
+    const json = theoryToJson({ relations: saved, theorems: [] })
+
+    const reloaded = loadTheory(json).ctx.relations
+    const R2 = reloaded.get('R')!
+    expect(R2).toBeDefined()
+    // Bodies are form-equal across the round-trip.
+    expect(exploreForm(R2.diagram)).toBe(exploreForm(saved['R']!.diagram))
+    // Argument order survived: folding the original body with the SAVED pick
+    // order [wY,wZ] matches the reloaded relation; the reversed order does not —
+    // the same order-sensitivity defineRelation established, now through JSON.
+    const rels = new Map([['R', R2]])
+    expect(() => applyRelFold(d, sel, 'R', [wY, wZ], rels)).not.toThrow()
+    expect(() => applyRelFold(d, sel, 'R', [wZ, wY], rels)).toThrow(/does not match relation 'R'/)
   })
 })

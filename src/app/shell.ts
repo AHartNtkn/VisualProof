@@ -5,6 +5,7 @@ import type { Term } from '../kernel/term/term'
 import { parseTerm } from '../kernel/term/parse'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { polarity } from '../kernel/diagram/regions'
+import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { applyConversion } from '../kernel/rules/conversion'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { checkTheorem } from '../kernel/proof/theorem'
@@ -1262,6 +1263,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // The live saveable theory as JSON — the same object Save theory writes.
       theoryJson(): string {
         return JSON.stringify(theoryToJson(sessionTheory(ctx, { relations })))
+      },
+      // The EDIT sheet's canonical form: a structural fingerprint (not a node
+      // count) an e2e uses to assert defining a relation leaves the sheet
+      // untouched — the spec's "no diagram changes when a relation is defined".
+      editForm(): string {
+        return exploreForm(editDiagram)
       },
     }
   }

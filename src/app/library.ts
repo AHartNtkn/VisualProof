@@ -96,8 +96,10 @@ export function loadEntry(lib: Library, file: string, json: unknown): Library {
 /**
  * Unload a loaded entry: a file still present in the workspace folder returns to
  * 'available'; a file not in the folder (opened one-off) is dropped entirely.
- * Removal never conflicts — mergeTheories is additive, so the remainder rebuilds
- * deterministically.
+ * Removal never introduces a NAME conflict (mergeTheories is additive), but it
+ * CAN strand a session-defined relation whose body cites a relation the unloaded
+ * file provided — so the candidate is rebuilt first, exactly like load/adopt/
+ * define, and a broken ref throws loudly and the CALLER keeps the prior library.
  */
 export function unloadEntry(lib: Library, file: string): Library {
   const idx = lib.entries.findIndex((e) => e.file === file)
@@ -106,7 +108,9 @@ export function unloadEntry(lib: Library, file: string): Library {
   const entries = lib.folder.includes(file)
     ? lib.entries.map((e, i) => (i === idx ? { file, status: 'available' as const } : e))
     : lib.entries.filter((_, i) => i !== idx)
-  return { ...lib, entries }
+  const next: Library = { ...lib, entries }
+  rebuild(next) // conflict check: a defined relation's now-unresolvable ref throws before adoption
+  return next
 }
 
 /**
