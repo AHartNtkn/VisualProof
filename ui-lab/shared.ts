@@ -288,12 +288,14 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
   const selected: Hit[] = []
   let brushing = false
   let brushErase = false
+  let fromVoid = false
+  let painted = false
   const isSelected = (h: Hit | null) => h !== null && selected.some((s) => sameHit(s, h))
   const applyBrush = (h: Hit | null) => {
     if (h === null) return
     const i = selected.findIndex((s) => sameHit(s, h))
-    if (brushErase) { if (i >= 0) selected.splice(i, 1) }
-    else if (i < 0) selected.push(h)
+    if (brushErase) { if (i >= 0) { selected.splice(i, 1); painted = true } }
+    else if (i < 0) { selected.push(h); painted = true }
   }
   const announce = () => readout(hover ? lab.describe(hover) + (isSelected(hover) ? ' — selected' : '') : '')
   lab.canvas.addEventListener('pointermove', (e) => {
@@ -304,13 +306,19 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
   lab.canvas.addEventListener('pointerdown', (e) => {
     const h = lab.hitAt(e.clientX, e.clientY)
     if (claim && claim(h, e)) return
-    if (h === null) { selected.length = 0; announce(); return }
     brushing = true
-    brushErase = isSelected(h)
+    painted = false
+    fromVoid = h === null
+    // a stroke starting in the void PAINTS (adds) whatever it passes over;
+    // only a stroke that never touches anything clears (the still empty click)
+    brushErase = h !== null && isSelected(h)
     applyBrush(h)
     announce()
   })
-  lab.canvas.addEventListener('pointerup', () => { brushing = false })
+  lab.canvas.addEventListener('pointerup', () => {
+    if (brushing && fromVoid && !painted) { selected.length = 0; announce() }
+    brushing = false
+  })
   const tint = (h: Hit, color: string, out: Shape[]) => {
     if (h.kind === 'node') {
       const b = lab.engine.bodies.get(h.id)
