@@ -13,7 +13,15 @@
 **Files:** `src/view/wires.ts` (boundaryExits: slot placement by perimeter arc-length parameterization of the rounded rect, exit tangent = frame normal at the slot), `src/view/relax.ts` (the boundary aim targets slot i), `src/view/paint.ts` (frame pip dot at slot-0's perimeter position), `src/view/engine.ts` if slot geometry helpers belong there.
 **Test:** exits are order-faithful (for a 3-boundary diagram, the perimeter order of exit points equals the boundary order, clockwise from the pip — sweep the layout by moving bodies; the slot assignment NEVER changes); the corner-continuity test survives (slots are fixed, so continuity is trivial — keep the sweep as a regression); paint-level frame-pip test (≥2 boundary → exactly one pip dot at slot 0; ≤1 → none); the plusComm acid test: render lhs and rhs of the bundled plusComm — their canonical DRAWN forms must differ (the crossing is visible: assert the wire→disc-port correspondence read from the two sides' display lists differs). Physics battery stays green (the aim change must not regress the at-rest results — rerun the strained-case bounds).
 
-- [ ] Slots + pip + aim + tests green; suite + tsc + e2e green. Commit.
+- [x] Slots + pip + aim + tests green; suite + tsc + e2e green. Commit.
+
+**Findings (Task 1, done):**
+- Slot geometry lives in `engine.ts` as `frameSlots(fb, n)`: n points spaced evenly by arc length around the frame's rounded rect, slot 0 at the top-edge midpoint (the pip origin), clockwise (canvas y-down). `normal` is the exact outward frame normal (axis-aligned on edges, radial on corners) — analytic, so exits ride the drawn line without the old bisection/SDF machinery. The ray-cast `frameSdf` in `wires.ts` is deleted (was dead once slots are fixed).
+- `boundaryExits` (wires.ts) and the boundary aim (relax.ts) both target slot i for boundary index i, read from the same `frameSlots`, so the relaxed aim and the drawn exit coincide exactly (no chase). Junction boundary bodies keep their exits (aimed by trunk geometry); relax skips their port-normal aim as before.
+- Frame pip: device-pixel dot (PIP_R family, ink stroke) at slot 0, drawn only when `e.boundary.length >= 2`.
+- plusComm acid test (directly observed): lhs and rhs draw slot 0/1/2 at the SAME fixed perimeter points (top ~y-42, right ~x45, lower-left ~x-33) but slot→plus-arg wiring differs — lhs [0,1,2], rhs [1,0,2]. Slots 0 and 1 cross; the crossing is now visible instead of hidden by position-derived exits.
+- **Strained trio, before (radial aim) → after (fixed-slot aim), max drift over 200 post-settle ticks (bound):** plusComm@20 3.474 → 3.104 (bound 6); succShiftS@24 0.433 → 0.364 (bound 2); succShiftS@48 9.212 → 8.955 (bound 12). Fixed slots slightly IMPROVE all three; no bound tightened.
+- Tests: `frameSlots` geometry (engine.test.ts); order-faithfulness under a 6-layout wild sweep + plusComm acid test (wires.test.ts); frame-pip present/absent (paint.test.ts); corner-continuity sweep kept as regression. Suite 885/885, tsc clean, e2e 8/8.
 
 ### Task 2: Natural theorem statements (the restatement pass)
 

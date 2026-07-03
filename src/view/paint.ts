@@ -2,7 +2,7 @@ import type { Diagram, RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
-import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, localToWorld } from './engine'
+import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
 import { boundaryExits, existentialStubs, legPaths } from './wires'
 
 /**
@@ -147,6 +147,13 @@ export function paint(e: Engine, st: Theme): Shape[] {
   // boundary frame exits
   for (const ex of boundaryExits(e)) {
     shapes.push({ kind: 'exit', from: ex.path.from, c1: ex.path.c1, c2: ex.path.c2, to: ex.path.to, tick: ex.tick, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+  }
+  // The frame pip: a device-pixel dot at slot 0 (the top-edge midpoint) marks
+  // boundary position 0, from which slots read clockwise. Shown only when >= 2
+  // boundary wires need distinguishing — the same "arity >= 2" rule as disc pips.
+  if (e.boundary.length >= 2) {
+    const s0 = frameSlots(fb, e.boundary.length)[0]!.point
+    shapes.push({ kind: 'dot', center: s0, rPx: PIP_R, fill: st.ink })
   }
   // junction dots (ring: paper halo + wire core), fixed device size
   for (const b of e.bodies.values()) {

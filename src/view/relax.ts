@@ -1,7 +1,7 @@
 import type { RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine } from './engine'
-import { pkey, subtreeCarriers, worldAnchor } from './engine'
+import { frameBounds, frameSlots, pkey, subtreeCarriers, worldAnchor } from './engine'
 
 /**
  * Rotation-aware relaxation for the render engine. Bodies (nodes + junctions)
@@ -400,30 +400,28 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     if (tq !== 0) b.theta += (tq / (DAMP * b.discR * b.discR)) * DT
   }
 
-  // boundary exits keep a kinematic aim (there is no spring to take a torque
-  // from): the exit body rotates its port normal OUTWARD along the radial
-  // from the sheet center through the body. The radial is continuous in
-  // position and independent of θ — an anchor- or nearest-edge-derived
-  // target feeds back through θ (the anchor moves as the body rotates) and
-  // flips discontinuously near the frame diagonals, which sustains a chase
-  // oscillation that never rests.
+  // Boundary exits keep a kinematic aim (there is no spring to take a torque
+  // from): the exit body rotates its port normal toward its OWN boundary slot —
+  // a point fixed on the frame perimeter, assigned in boundary order. A fixed
+  // frame-relative target neither feeds back through θ (unlike an anchor-derived
+  // aim, whose target moves as the body rotates) nor flips near a frame diagonal
+  // (unlike a nearest-edge aim), so the layout settles into its slots with no
+  // chase oscillation.
   const legsByBody = new Map<string, LegRef[]>()
   const push = (body: string, ref: LegRef): void => {
     let ls = legsByBody.get(body)
     if (ls === undefined) { ls = []; legsByBody.set(body, ls) }
     ls.push(ref)
   }
-  const sheetG = e.regions.get(e.d.root)
+  const fb = frameBounds(e)
+  const slots = fb === null ? null : frameSlots(fb, e.boundary.length)
+  const slotIndex = new Map(e.boundary.map((w, i) => [w, i] as const))
   for (const [wid, bid] of e.boundaryOf) {
     const b = e.bodies.get(bid)!
-    if (b.kind === 'junction' || sheetG === undefined) continue
+    if (b.kind === 'junction' || slots === null) continue
     const w0 = e.d.wires[wid]!
     const key = pkey(w0.endpoints.find((ep) => ep.node === bid)!.port)
-    const dx = b.pos.x - sheetG.center.x, dy = b.pos.y - sheetG.center.y
-    const rr = Math.hypot(dx, dy)
-    const q = rr < 1e-9
-      ? { x: sheetG.center.x + sheetG.radius, y: sheetG.center.y }
-      : { x: b.pos.x + (dx / rr) * sheetG.radius, y: b.pos.y + (dy / rr) * sheetG.radius }
+    const q = slots[slotIndex.get(wid)!]!.point
     push(bid, { key, other: { ...b, id: '__frame__', pos: q }, otherKey: null })
   }
   for (const b of e.bodies.values()) {

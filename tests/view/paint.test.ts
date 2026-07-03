@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { buildLambdaTheory } from '../../src/theories/lambda'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import { mkEngine } from '../../src/view/engine'
+import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, bubbleHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
 
@@ -80,6 +80,54 @@ describe('law 3 — boundary honesty: boundary wires exit the frame, internal si
     const shapes = paint(e, LIGHT)
     expect(shapes.filter((s) => s.kind === 'exit')).toHaveLength(nat.boundary.length)
     expect(nat.boundary.length).toBeGreaterThan(0)
+  })
+})
+
+describe('frame pip — a rim dot marks boundary slot 0 when >= 2 boundary wires', () => {
+  // The frame is the sheet's node; like a disc with >= 2 ordered ports it earns
+  // a pip. The pip sits at slot 0 (the top-edge midpoint), from which the
+  // boundary slots read clockwise. A 0/1-boundary sheet has nothing to order,
+  // so it carries no pip. Device-pixel dot, drawn in the ink stroke.
+  const dotsAt = (shapes: ReturnType<typeof paint>, pt: { x: number; y: number }) =>
+    shapes.filter((s) => s.kind === 'dot' && Math.hypot(s.center.x - pt.x, s.center.y - pt.y) < 1e-6)
+
+  it('two boundary wires: exactly one pip dot at slot 0 (the top-edge midpoint)', () => {
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, p('x'))
+    const b = h.termNode(h.root, p('y'))
+    const w1 = h.wire(h.root, [{ node: a, port: { kind: 'freeVar', name: 'x' } }])
+    const w2 = h.wire(h.root, [{ node: b, port: { kind: 'freeVar', name: 'y' } }])
+    const e = mkEngine(h.build(), [w1, w2])
+    settle(e, 800)
+    const shapes = paint(e, LIGHT)
+    const s0 = frameSlots(frameBounds(e)!, e.boundary.length)[0]!.point
+    // slot 0 is on the top edge of the frame
+    expect(s0.y).toBeCloseTo(frameBounds(e)!.minY, 6)
+    const pip = dotsAt(shapes, s0)
+    expect(pip).toHaveLength(1)
+    expect(pip[0]!.kind === 'dot' && pip[0]!.fill).toBe(LIGHT.ink)
+  })
+
+  it('one boundary wire: no pip (nothing to order)', () => {
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, p('x'))
+    const w1 = h.wire(h.root, [{ node: a, port: { kind: 'freeVar', name: 'x' } }])
+    const e = mkEngine(h.build(), [w1])
+    settle(e, 800)
+    const shapes = paint(e, LIGHT)
+    const s0 = frameSlots(frameBounds(e)!, e.boundary.length)[0]!.point
+    expect(dotsAt(shapes, s0)).toHaveLength(0)
+  })
+
+  it('no boundary wires: no pip', () => {
+    const h = new DiagramBuilder()
+    h.termNode(h.root, p('\\x. x'))
+    const e = mkEngine(h.build(), [])
+    settle(e, 400)
+    const shapes = paint(e, LIGHT)
+    // no boundary → the top-edge midpoint carries no dot
+    const fb = frameBounds(e)!
+    expect(dotsAt(shapes, { x: fb.center.x, y: fb.minY })).toHaveLength(0)
   })
 })
 

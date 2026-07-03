@@ -235,9 +235,11 @@ export function portNormal(b: Body, key: string | null, toward: Vec2): number {
   return Math.atan2(a.y, a.x) + b.theta
 }
 
+export type FrameBounds = { minX: number; maxX: number; minY: number; maxY: number; frameR: number; center: Vec2 }
+
 /** The sheet frame box (sheet region radius + margin). Null before the first
     settle populates region circles. */
-export function frameBounds(e: Engine): { minX: number; maxX: number; minY: number; maxY: number; frameR: number; center: Vec2 } | null {
+export function frameBounds(e: Engine): FrameBounds | null {
   const sheet = e.regions.get(e.d.root)
   if (sheet === undefined) return null
   const frameR = sheet.radius + FRAME_MARGIN
@@ -246,4 +248,52 @@ export function frameBounds(e: Engine): { minX: number; maxX: number; minY: numb
     minY: sheet.center.y - frameR, maxY: sheet.center.y + frameR,
     frameR, center: sheet.center,
   }
+}
+
+/** A boundary slot: a fixed perimeter point plus the outward frame normal there. */
+export type FrameSlot = { readonly point: Vec2; readonly normal: number }
+
+/**
+ * The n boundary slots: points spaced evenly BY ARC LENGTH around the frame's
+ * rounded-rectangle perimeter, slot 0 at the top-edge midpoint (the pip origin)
+ * and proceeding CLOCKWISE (canvas y-down). `normal` is the outward frame normal
+ * — axis-aligned on a straight edge, radial from the corner centre on a corner
+ * (the same rounded rect paint draws, so a slot rides the visible frame line).
+ * Slot i is the fixed frame-relative target of boundary wire i, so exits carry
+ * the boundary order and structurally cannot swap.
+ */
+export function frameSlots(fb: FrameBounds, n: number): FrameSlot[] {
+  const cx = fb.center.x, cy = fb.center.y
+  const hw = (fb.maxX - fb.minX) / 2, hh = (fb.maxY - fb.minY) / 2
+  const r = Math.min(FRAME_CORNER_W, hw, hh)
+  const sx = hw - r, sy = hh - r
+  const arc = (Math.PI / 2) * r
+  const corner = (ccx: number, ccy: number, phi: number): FrameSlot =>
+    ({ point: { x: ccx + Math.cos(phi) * r, y: ccy + Math.sin(phi) * r }, normal: phi })
+  // Perimeter segments, clockwise from the top-edge midpoint. `u` is arc length
+  // from the segment start; corner arcs advance the angle by u / r.
+  const segs: { len: number; at: (u: number) => FrameSlot }[] = [
+    { len: sx, at: (u) => ({ point: { x: cx + u, y: cy - hh }, normal: -Math.PI / 2 }) },
+    { len: arc, at: (u) => corner(cx + sx, cy - sy, -Math.PI / 2 + u / r) },
+    { len: 2 * sy, at: (u) => ({ point: { x: cx + hw, y: cy - sy + u }, normal: 0 }) },
+    { len: arc, at: (u) => corner(cx + sx, cy + sy, u / r) },
+    { len: 2 * sx, at: (u) => ({ point: { x: cx + sx - u, y: cy + hh }, normal: Math.PI / 2 }) },
+    { len: arc, at: (u) => corner(cx - sx, cy + sy, Math.PI / 2 + u / r) },
+    { len: 2 * sy, at: (u) => ({ point: { x: cx - hw, y: cy + sy - u }, normal: Math.PI }) },
+    { len: arc, at: (u) => corner(cx - sx, cy - sy, Math.PI + u / r) },
+    { len: sx, at: (u) => ({ point: { x: cx - sx + u, y: cy - hh }, normal: -Math.PI / 2 }) },
+  ]
+  const P = segs.reduce((s, g) => s + g.len, 0)
+  const slotAt = (s0: number): FrameSlot => {
+    let s = ((s0 % P) + P) % P
+    for (const g of segs) {
+      if (s < g.len) return g.at(s)
+      s -= g.len
+    }
+    const last = segs[segs.length - 1]!
+    return last.at(last.len)
+  }
+  const out: FrameSlot[] = []
+  for (let i = 0; i < n; i++) out.push(slotAt((i / n) * P))
+  return out
 }

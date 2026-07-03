@@ -3,7 +3,7 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { requiredPorts } from '../../src/kernel/diagram/diagram'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { mkEngine, carryOver, worldAnchor, portNormal, pkey, DISC_R } from '../../src/view/engine'
+import { mkEngine, carryOver, worldAnchor, portNormal, pkey, DISC_R, frameSlots, FRAME_CORNER_W, type FrameBounds } from '../../src/view/engine'
 import { emptyDiagram } from '../../src/app/edit'
 
 const p = (s: string) => parseTerm(s)
@@ -78,6 +78,68 @@ describe('mkEngine', () => {
     expect(a1.y).toBeCloseTo(-3 + lx, 9)
     // the port normal tracks theta too
     expect(portNormal(b, 'out', { x: 100, y: -3 })).toBeCloseTo(Math.atan2(0, 1) + Math.PI / 2, 9)
+  })
+})
+
+describe('frameSlots — canonical boundary slots on the rounded-rect perimeter', () => {
+  // A centred square frame, half-side 40, corner radius FRAME_CORNER_W. Slot 0
+  // is the top-edge midpoint; slots read clockwise (canvas y-down).
+  const fb: FrameBounds = { minX: -40, maxX: 40, minY: -40, maxY: 40, frameR: 40, center: { x: 0, y: 0 } }
+
+  /** Signed distance to the frame's rounded rectangle (negative inside, 0 on it). */
+  const sdf = (px: number, py: number): number => {
+    const hw = 40 - FRAME_CORNER_W, hh = 40 - FRAME_CORNER_W
+    const qx = Math.abs(px) - hw, qy = Math.abs(py) - hh
+    return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - FRAME_CORNER_W
+  }
+
+  it('slot 0 is the top-edge midpoint, pointing outward (up in y-down)', () => {
+    const [s0] = frameSlots(fb, 1)
+    expect(s0!.point.x).toBeCloseTo(0, 9)
+    expect(s0!.point.y).toBeCloseTo(-40, 9)
+    // outward normal = -pi/2 (screen-up); its unit vector is (0,-1)
+    expect(Math.cos(s0!.normal)).toBeCloseTo(0, 9)
+    expect(Math.sin(s0!.normal)).toBeCloseTo(-1, 9)
+  })
+
+  it('four slots land on the four edge midpoints, clockwise', () => {
+    const s = frameSlots(fb, 4)
+    expect(s).toHaveLength(4)
+    // top, right, bottom, left — clockwise in canvas y-down
+    const expected = [{ x: 0, y: -40 }, { x: 40, y: 0 }, { x: 0, y: 40 }, { x: -40, y: 0 }]
+    for (let i = 0; i < 4; i++) {
+      expect(s[i]!.point.x).toBeCloseTo(expected[i]!.x, 6)
+      expect(s[i]!.point.y).toBeCloseTo(expected[i]!.y, 6)
+    }
+  })
+
+  it('every slot lies exactly on the drawn rounded-rect perimeter, with an outward normal', () => {
+    for (const n of [1, 2, 3, 5, 7, 12]) {
+      const slots = frameSlots(fb, n)
+      expect(slots).toHaveLength(n)
+      for (const sl of slots) {
+        // on the perimeter: SDF ~ 0
+        expect(Math.abs(sdf(sl.point.x, sl.point.y)), `slot at (${sl.point.x.toFixed(2)},${sl.point.y.toFixed(2)})`).toBeLessThan(1e-6)
+        // stated normal points strictly outward from the frame centre
+        const outward = Math.cos(sl.normal) * sl.point.x + Math.sin(sl.normal) * sl.point.y
+        expect(outward).toBeGreaterThan(0)
+      }
+    }
+  })
+
+  it('slots proceed monotonically clockwise (increasing polar angle from the top, y-down)', () => {
+    const slots = frameSlots(fb, 8)
+    // polar angle measured clockwise from screen-up; slot 0 at ~0, strictly increasing
+    const clockwiseAngle = (x: number, y: number): number => {
+      const a = Math.atan2(x, -y) // 0 at top, +pi/2 at right (x>0), grows clockwise
+      return a < -1e-9 ? a + 2 * Math.PI : a
+    }
+    let prev = -1
+    for (const sl of slots) {
+      const a = clockwiseAngle(sl.point.x, sl.point.y)
+      expect(a).toBeGreaterThan(prev)
+      prev = a
+    }
   })
 })
 
