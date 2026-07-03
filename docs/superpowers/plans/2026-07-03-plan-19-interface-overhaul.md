@@ -60,7 +60,7 @@
 
 Rule of the process: a round's demos may ONLY depend on machinery already decided in earlier rounds (or shipped pre-overhaul). If a variant needs an undecided dependency, it moves to the round after that dependency. The inventory above is the checklist — every item gets a ⟨round, decided-in, verdict⟩ record as the rounds complete.
 
-- [ ] Round 1 demos built and judged.
+- [x] Round 1 demos built and judged. **VERDICT (user, 2026-07-03): A1 = variant D's brush** — drag paints items in/out of the selection, plain click toggles one, empty click clears (subsumes B's shift-click toggle, which the user liked); B judged strictly better than the current model, D a step above B. **Required fix adopted:** hover must stay visible on already-selected items (B's darkening vanished there; on wires there was NO signal at all). Realized as `ui-lab/round1-e.ts`: hover on unselected = blue tint/stroke (the would-be catch); hover on selected = the amber darkens (dark-amber #92400e tint on nodes/regions, wider dark-amber restroke on wires); readout appends "— selected". Verified by screenshot on both the selected-wire and selected-node cases.
 - [ ] Round 2 demos built and judged.
 - [ ] Round 3 demos built and judged.
 - [ ] Round 4 demos built and judged.
