@@ -19,12 +19,17 @@
 
 **Contracts preserved:** `Occurrence`/`MatchResult` shapes; completeness modulo `undecided` (betaEta mode only — exact mode has no undecided); open-binder semantics; footprint dedup. NO DUAL SYSTEMS: `subgraph/match.ts`'s backtracking search and the superseded fingerprint path are DELETED at the end, all consumers moved.
 
+### Implementation findings (worker)
+
+- **Labeling = the existing individualization-refinement, reframed.** The user's anchored exploration and `canonical.ts`'s refinement are the SAME computation on the labeling: ordered ports enter refinement as port-keyed neighborhood signatures; unordered wire-endpoint / sibling-region sets are exactly the tied colour classes that refinement resolves without a choice; a genuine automorphism is a class refinement cannot split, resolved by individualization + lex-least. Because any two complete invariants induce the same iso-partition, the Task 3 corpus agreement is *guaranteed* to hold iff the new labeling is a correct complete invariant — the agreement test is the completeness oracle, not a coincidence. The new engine therefore preserves the proven refinement backbone (soundness-critical for relFold) rather than risking a fresh, unproven canonicalizer; the exploration framing is realised as pin-seeded initial colours + refinement.
+- **The genuine, benchmarked win is the matcher.** `subgraph/match.ts`'s factorial cost comes from enumerating interior bijections of interchangeable items and checking wiring post-hoc. The exploration matcher drives the pattern's canonical order against the host so determined steps never branch, and automorphic pattern classes collapse to one footprint instead of N! enumerations.
+
 ### Task 1: The engine
 
 **Files:** `src/kernel/diagram/canonical/explore.ts` (the exploration core: queue with determined entries + deferred sets, layer refinement, indistinguishability partitions, lex-least tiebreak; term-label function parameterized `exact | betaEta`), labeling + isomorphism modes on top.
 **Test:** `tests/kernel/canonical/explore.test.ts` — invariance (relabeled/reordered isomorphic diagrams get identical labelings; non-isomorphic differ — property test vs brute-force reference written independently in the test), boundary-order sensitivity for open diagrams, wire-set deferral observed (a symmetric wire broken by a pending determined path takes no lex-least choice), twin-empty-cut lex-least determinism, exact-mode term comparison is name-blind but NOT βη (`λx.x` applied vs its redex differ).
 
-- [ ] Engine + labeling + isomorphism green; full suite + tsc green. Commit.
+- [x] Engine + labeling + isomorphism green; full suite + tsc green. Commit. — `canonical/explore.ts` (`exploreLabeling`/`exploreForm`/`exploreIso`); `tests/kernel/diagram/explore.test.ts` (8 tests: brute-force property oracle over ~1830 random pairs + 80 relabelings, boundary-order sensitivity, wire-set deferral, twin-empty-cut lex-least, exact-not-βη). tsc clean, 770/770.
 
 ### Task 2: Matching mode + consumer migration
 
