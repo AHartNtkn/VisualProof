@@ -4,7 +4,9 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyComprehensionAbstract, diagonalize } from '../../../src/kernel/rules/comprehension'
+import { applyComprehensionAbstract, applyComprehensionInstantiate, diagonalize } from '../../../src/kernel/rules/comprehension'
+import { loadTheory, theoryToJson } from '../../../src/kernel/proof/index'
+import type { Theorem, Theory } from '../../../src/kernel/proof/index'
 
 const p = (s: string) => parseTerm(s)
 
@@ -224,5 +226,128 @@ describe('applyComprehensionAbstract — diagonal occurrences', () => {
     const occ = { sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }), args: [x] }
     expect(() => applyComprehensionAbstract(d, wrap, binaryComp(), [occ]))
       .toThrowError(/has 1 argument positions but the comprehension has arity 2/)
+  })
+})
+
+/** ∃R. R(x,x): bubble(2) at `region`, atom's two arg ports on one wire scoped at `wireScope`. */
+function diagonalExR(region: 'root' | 'cut') {
+  const h = new DiagramBuilder()
+  const anchor = region === 'cut' ? h.cut(h.root) : h.root
+  const bub = h.bubble(anchor, 2)
+  const atom = h.atom(bub, bub)
+  h.wire(anchor, [
+    { node: atom, port: { kind: 'arg', index: 0 } },
+    { node: atom, port: { kind: 'arg', index: 1 } },
+  ])
+  return { d: h.build(), bub }
+}
+
+/** φ(x,x): node `y` with output and free var both on one wire scoped at `region`. */
+function diagonalPhi(region: 'root' | 'cut') {
+  const h = new DiagramBuilder()
+  const anchor = region === 'cut' ? h.cut(h.root) : h.root
+  const n = h.termNode(anchor, p('y'))
+  h.wire(anchor, [
+    { node: n, port: { kind: 'output' } },
+    { node: n, port: { kind: 'freeVar', name: 'y' } },
+  ])
+  return h.build()
+}
+
+describe('diagonal comprehension: instantiation and the inverse round-trip', () => {
+  it('abstraction and instantiation are mutually inverse on φ(x,x) ⟷ ∃R.R(x,x)', () => {
+    const comp = binaryComp() // φ(a,b): node y, output=b0, free var=b1
+
+    // abstraction: φ(x,x) at a positive region  ⟹  ∃R.R(x,x)
+    const phi = diagonalPhi('root')
+    const nId = Object.keys(phi.nodes)[0]!
+    const xId = Object.keys(phi.wires)[0]!
+    const abs = applyComprehensionAbstract(
+      phi,
+      mkSelection(phi, { region: phi.root, regions: [], nodes: [nId], wires: [] }),
+      comp,
+      [{ sel: mkSelection(phi, { region: phi.root, regions: [], nodes: [nId], wires: [] }), args: [xId, xId] }],
+    )
+    expect(exploreForm(abs)).toBe(exploreForm(diagonalExR('root').d))
+
+    // instantiation: ∃R.R(x,x) at a negative region  ⟹  φ(x,x)
+    const { d: negExR, bub } = diagonalExR('cut')
+    const inst = applyComprehensionInstantiate(negExR, bub, comp, [])
+    expect(exploreForm(inst)).toBe(exploreForm(diagonalPhi('cut')))
+  })
+
+  it('a diagonal comprehensionAbstract step survives JSON round-trip and re-verifies', () => {
+    const comp = binaryComp()
+    const phi = diagonalPhi('root')
+    const nId = Object.keys(phi.nodes)[0]!
+    const xId = Object.keys(phi.wires)[0]!
+    const thm: Theorem = {
+      name: 'diagAbstract',
+      lhs: mkDiagramWithBoundary(phi, []),
+      rhs: mkDiagramWithBoundary(diagonalExR('root').d, []),
+      steps: [{
+        rule: 'comprehensionAbstract',
+        wrap: mkSelection(phi, { region: phi.root, regions: [], nodes: [nId], wires: [] }),
+        comp,
+        occurrences: [{
+          sel: mkSelection(phi, { region: phi.root, regions: [], nodes: [nId], wires: [] }),
+          args: [xId, xId],
+        }],
+      }],
+    }
+    const theory: Theory = { relations: {}, theorems: [thm] }
+    // loadTheory replays and checks the proof arrives at rhs; the repeated-wire
+    // args must survive JSON.stringify → parse → loadTheory unchanged.
+    const roundTripped = JSON.parse(JSON.stringify(theoryToJson(theory)))
+    expect(() => loadTheory(roundTripped)).not.toThrow()
+    // sanity: the serialized step still carries the repeated wire
+    const step = roundTripped.theorems[0].steps[0]
+    expect(step.occurrences[0].args).toEqual([xId, xId])
+  })
+
+  it('rejects aliasing-pattern confusion: a (1,2)-merge occurrence under a (0,1)-merge call', () => {
+    // Ternary comp body `f g` is asymmetric (output, function f, argument g are
+    // distinct roles). The occurrence aliases positions 1,2 (f and g share wire
+    // q; output rides p) — a genuine (1,2)-merge. The honest call is [p,q,q].
+    const comp = ternaryComp()
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('f g'))
+    const pp = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
+    const q = h.wire(h.root, [
+      { node: n, port: { kind: 'freeVar', name: 'f' } },
+      { node: n, port: { kind: 'freeVar', name: 'g' } },
+    ])
+    const d = h.build()
+    const wrap = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
+    const mk = (args: readonly string[]) => ({
+      sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }),
+      args,
+    })
+    // honest (1,2)-merge call verifies
+    expect(() => applyComprehensionAbstract(d, wrap, comp, [mk([pp, q, q])])).not.toThrow()
+    // fraudulent (0,1)-merge call ([q,q,p] aliases output+f) must refuse: the
+    // diagonalized-form standard for (0,1) does not equal this occurrence.
+    expect(() => applyComprehensionAbstract(d, wrap, comp, [mk([q, q, pp])]))
+      .toThrowError(/does not match the comprehension/)
+  })
+
+  it('a diagonal comprehensionInstantiate step survives JSON round-trip and re-verifies', () => {
+    const comp = binaryComp()
+    const { d: negExR, bub } = diagonalExR('cut')
+    const inst = applyComprehensionInstantiate(negExR, bub, comp, [])
+    const thm: Theorem = {
+      name: 'diagInstantiate',
+      lhs: mkDiagramWithBoundary(negExR, []),
+      rhs: mkDiagramWithBoundary(inst, []),
+      steps: [{
+        rule: 'comprehensionInstantiate',
+        bubble: bub,
+        comp,
+        attachments: [],
+        binders: {},
+      }],
+    }
+    const theory: Theory = { relations: {}, theorems: [thm] }
+    expect(() => loadTheory(JSON.parse(JSON.stringify(theoryToJson(theory))))).not.toThrow()
   })
 })

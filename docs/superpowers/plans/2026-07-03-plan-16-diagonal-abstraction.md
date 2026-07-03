@@ -22,7 +22,9 @@
 **Files:** `applyComprehensionInstantiate` accepts repeated attachments (splice merges the aliased boundary stubs onto the shared host wire — verify spliceSubgraph's behavior and gate loudly if it needs work); proof-step JSON unchanged in shape (args already carry the wire list; repeats now legal).
 **Test:** instantiate-then-abstract round-trip on a diagonal case (the inverse pair is the correctness statement); JSON round-trip of a derivation containing a diagonal step through theoryToJson → loadTheory; the existing polarity/arity refusals still fire.
 
-- [ ] Instantiation + round-trip green; suite + tsc + e2e green. Commit.
+- [x] Instantiation + round-trip green; suite + tsc + e2e green. Commit.
+
+**Findings (Task 2):** `applyComprehensionInstantiate` needed NO source change. It reads the atom's per-position arg wires via `wireAt` (returning the shared wire for aliased positions), so a diagonal atom yields a repeated `attachments` list to `spliceSubgraph`; splice's boundary-merge loop accumulates each stub's endpoints onto the (already-mutated) host wire entry, unioning the aliased boundary stubs onto the one shared line — exactly the diagonal splice. This was verified directly (not assumed) by the inverse round-trip test: instantiating ∃R.R(x,x) lands on a φ(x,x) whose canonical form equals a hand-built φ(x,x). Round-trip added: abstraction and instantiation are mutually inverse on φ(x,x) ⟷ ∃R.R(x,x) (both directions land on the matched canonical form); and diagonal `comprehensionAbstract`/`comprehensionInstantiate` steps survive `theoryToJson → JSON.stringify → parse → loadTheory` and re-verify (repeated-wire `args` preserved). The proof-step JSON shape was already repeat-tolerant (`strArray`). Suite green, tsc clean, e2e green.
 
 ### Task 3: Review + close
 
