@@ -22,7 +22,7 @@ import { drawShapes } from '../view/canvas'
 import { fitCamera, DESIGN_SCALE } from '../view/camera'
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
-import { defineRelation } from './define'
+import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addRefNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
@@ -70,8 +70,9 @@ type Pending =
   | { readonly kind: 'iterate'; readonly sel: SubgraphSelection }
   | { readonly kind: 'cite'; readonly name: string; readonly direction: 'forward' | 'reverse'; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'unCite'; readonly name: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
-  | { readonly kind: 'relFold'; readonly defId: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
-  | { readonly kind: 'defineRelation'; readonly sel: SubgraphSelection; readonly args: WireId[] }
+  | { readonly kind: 'defineRelation'; readonly sel: SubgraphSelection; readonly args: WireId[]; name: string }
+  | { readonly kind: 'foldChoose'; readonly sel: SubgraphSelection }
+  | { readonly kind: 'addRelChoose' }
 
 /** A grab: the bodies moved by this drag, each with its offset from the
     cursor's world position at grab time (so a drag moves, never teleports). */
@@ -565,17 +566,20 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   const onAddRelation = guard(() => {
     requireEdit()
-    const name = termInput.value.trim()
-    const body = ctx.relations.get(name)
-    if (body === undefined) {
-      throw new Error(`unknown relation '${name}' — type a defined or loaded relation name in the term input (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
-    }
+    if (ctx.relations.size === 0) throw new Error('no relations to add — define one or load a theory first')
+    pending = { kind: 'addRelChoose' }
+    message = 'add relation: choose one (spawns with fresh argument wires)'
+    refreshChrome()
+  })
+  const spawnRelation = (name: string): void => {
+    const body = ctx.relations.get(name)!
     const region = hits.length === 1 && hits[0]!.kind === 'region' ? hits[0]!.id : editDiagram.root
     const { diagram, node } = addRefNode(editDiagram, region, name, body.boundary.length)
+    pending = null
     pushEdit(diagram)
     message = `added relation node '${node}' (${name}/${body.boundary.length}) in region '${region}'`
     refreshChrome()
-  })
+  }
   const onWrapCut = guard(() => {
     requireEdit()
     const { diagram, region } = addCut(editDiagram, requireSel())
@@ -844,12 +848,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         applyF({ rule: 'relUnfold', node: sel.nodes[0]! })
         return
       case 'relFold': {
-        const name = termInput.value.trim()
-        if (!ctx.relations.has(name)) {
-          throw new Error(`unknown relation '${name}' — type a loaded relation name in the term input (loaded: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
-        }
-        pending = { kind: 'relFold', defId: name, sel, args: [] }
-        message = `fold into '${name}': click the argument wires in boundary order, then Commit`
+        if (ctx.relations.size === 0) throw new Error('no relations to fold into — define one or load a theory first')
+        pending = { kind: 'foldChoose', sel }
+        message = 'fold: choose the relation — its argument wires are inferred by matching'
         refreshChrome()
         return
       }
@@ -865,8 +866,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Enter the pending pick: the crossing wires clicked in order become the
   // relation's argument boundary. Defining never mutates the sheet.
   const enterDefineRelation = (sel: SubgraphSelection): void => {
-    pending = { kind: 'defineRelation', sel, args: [] }
-    message = 'define relation: click the crossing wires in argument order, then Commit (name from the name input)'
+    pending = { kind: 'defineRelation', sel, args: [], name: '' }
+    message = 'define relation: name it, then Commit — the argument order is canonical unless you pick the crossing wires yourself'
     refreshChrome()
   }
 
@@ -885,10 +886,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       })()
       return
     }
-    if (pending !== null && (pending.kind === 'cite' || pending.kind === 'unCite' || pending.kind === 'relFold' || pending.kind === 'defineRelation')) {
+    if (pending !== null && (pending.kind === 'cite' || pending.kind === 'unCite' || pending.kind === 'defineRelation')) {
       const what = pending.kind === 'cite' ? `cite '${pending.name}'`
         : pending.kind === 'unCite' ? `un-cite '${pending.name}'`
-        : pending.kind === 'relFold' ? `fold into '${pending.defId}'`
         : 'define relation'
       if (hit !== null && hit.kind === 'wire') {
         pending.args.push(hit.id)
@@ -947,27 +947,53 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           sync()
         })))
       }
-      if (p.kind === 'relFold') {
-        menuDiv.append(button(`Commit fold into '${p.defId}' (${p.args.length} arg(s))`, guard(() => {
-          if (mode === 'edit') {
-            const next = applyRelFold(editDiagram, p.sel, p.defId, [...p.args], ctx.relations)
+      if (p.kind === 'foldChoose') {
+        for (const name of ctx.relations.keys()) {
+          menuDiv.append(button(`Fold into '${name}'`, guard(() => {
+            const psel = p.sel
+            // the definition's boundary order is fixed, so which host wire
+            // plays which argument is an occurrence match — inferred, never
+            // hand-picked
+            const args = inferFoldArgs(mode === 'edit' ? editDiagram : currentDiagram(), psel, name, ctx)
+            if (mode === 'edit') {
+              const next = applyRelFold(editDiagram, psel, name, args, ctx.relations)
+              pending = null
+              pushEdit(next)
+              message = `folded into '${name}'`
+              refreshChrome()
+              return
+            }
             pending = null
-            pushEdit(next)
-            message = `folded into '${p.defId}'`
-            refreshChrome()
-            return
-          }
-          pending = null
-          applyF({ rule: 'relFold', sel: p.sel, defId: p.defId, args: [...p.args] })
-        })))
+            applyF({ rule: 'relFold', sel: psel, defId: name, args })
+          })))
+        }
+      }
+      if (p.kind === 'addRelChoose') {
+        for (const name of ctx.relations.keys()) {
+          menuDiv.append(button(`Add '${name}'`, guard(() => spawnRelation(name))))
+        }
       }
       if (p.kind === 'defineRelation') {
-        menuDiv.append(button(`Commit relation definition (${p.args.length} arg(s))`, guard(() => {
-          const name = nameInput.value.trim()
-          // defineRelation gates the name/pick/extraction; defineEntry re-checks
-          // against the whole library before it is adopted. A refusal from either
-          // lands in the status line and leaves the pending pick intact to fix.
-          const { relation } = defineRelation(editDiagram, p.sel, [...p.args], name, ctx, relations)
+        // A DEDICATED name field: relation names never ride the term or
+        // theorem inputs. Its value lives on the pending state so chrome
+        // refreshes don't wipe it.
+        const nameField = document.createElement('input')
+        nameField.id = 'relation-name'
+        nameField.placeholder = 'new relation name'
+        nameField.value = p.name
+        nameField.addEventListener('input', () => { p.name = nameField.value })
+        menuDiv.append(nameField)
+        const label = p.args.length > 0
+          ? `Commit relation definition (${p.args.length} picked arg(s))`
+          : 'Commit relation definition (canonical argument order)'
+        menuDiv.append(button(label, guard(() => {
+          const name = p.name.trim()
+          // No picks = the canonical explorer order; picking the crossing
+          // wires yourself overrides it. defineRelation gates the
+          // name/pick/extraction; defineEntry re-checks against the whole
+          // library. A refusal lands in the status line, pending intact.
+          const order = p.args.length > 0 ? [...p.args] : canonicalArgOrder(editDiagram, p.sel)
+          const { relation } = defineRelation(editDiagram, p.sel, order, name, ctx, relations)
           const next = defineEntry(library, name, relation)
           pending = null
           applyLibrary(next)
@@ -992,13 +1018,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       if (kernelSel !== null) {
         const sel = kernelSel
         menuDiv.append(button('Define relation…', guard(() => enterDefineRelation(sel))))
-        menuDiv.append(button('Fold into a relation (term input = name)…', guard(() => {
-          const name = termInput.value.trim()
-          if (!ctx.relations.has(name)) {
-            throw new Error(`unknown relation '${name}' — type a defined or loaded relation name in the term input (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
-          }
-          pending = { kind: 'relFold', defId: name, sel, args: [] }
-          message = `fold into '${name}': click the argument wires in boundary order, then Commit`
+        menuDiv.append(button('Fold into a relation…', guard(() => {
+          if (ctx.relations.size === 0) throw new Error('no relations to fold into — define one or load a theory first')
+          pending = { kind: 'foldChoose', sel }
+          message = 'fold: choose the relation — its argument wires are inferred by matching'
           refreshChrome()
         })))
         if (sel.nodes.length === 1 && sel.regions.length === 0 && sel.wires.length === 0

@@ -140,16 +140,6 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
     })
     await page.mouse.click(box.x + s.x, box.y + s.y)
   }
-  const clickOnlyWire = async (): Promise<number> => {
-    const s = await page.evaluate(() => {
-      const v = window.__vpaDebug!.view()
-      const ws = window.__vpaDebug!.wires()
-      const w = ws[0]!
-      return { x: w.x * v.scale + v.offsetX, y: w.y * v.scale + v.offsetY, n: ws.length }
-    })
-    await page.mouse.click(box.x + s.x, box.y + s.y)
-    return s.n
-  }
   // A guaranteed-empty click (far corner, off every node/wire and below the top
   // chrome) clears the current selection — the sheet region is never a hit.
   const clickEmpty = async (): Promise<void> => {
@@ -170,13 +160,12 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   const sheetBefore = await page.evaluate(() => window.__vpaDebug!.editForm())
   expect(sheetBefore.length).toBeGreaterThan(0) // a real fingerprint, not a vacuous empty string
   await page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true }).click()
-  await expect(page.locator('#status')).toContainText('click the crossing wires')
+  await expect(page.locator('#status')).toContainText('argument order is canonical')
 
-  // Pick the single crossing wire, name it, commit.
-  expect(await clickOnlyWire()).toBe(1)
-  await expect(page.locator('#status')).toContainText('1 argument wire(s) picked')
-  await page.locator('#theorem-name').fill('R')
-  await page.locator('#action-menu').getByRole('button', { name: /Commit relation definition/, exact: false }).click()
+  // No wire picking needed: name it in the DEDICATED field and commit with the
+  // canonical argument order. (Picking crossing wires remains an override.)
+  await page.locator('#relation-name').fill('R')
+  await page.locator('#action-menu').getByRole('button', { name: /Commit relation definition \(canonical argument order\)/ }).click()
   await expect(page.locator('#status')).toContainText("defined 'R' (arity 1)")
   // The whole define flow (defineRelation + defineEntry) changed nothing on the
   // sheet — the canonical form is identical to the pre-define snapshot.
@@ -187,24 +176,24 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   await lib.getByRole('button', { name: /Session/, exact: false }).click()
   await expect(lib).toContainText('relations: R')
 
-  // Folding is a CONSTRUCTION operation — no goals, no PROVE: select the node
-  // right here in EDIT mode and fold it into the new relation.
+  // Folding is a CONSTRUCTION operation — no goals, no PROVE — and the
+  // argument wires are INFERRED by occurrence matching: choose the relation,
+  // done. No text box, no wire picking.
   await clickEmpty()
   await clickTerm()
   await expect(page.locator('#status')).toContainText("node '")
-  await page.getByPlaceholder(/term, e\.g/).fill('R') // fold reads the term input for the relation name
-  await page.locator('#action-menu').getByRole('button', { name: /Fold into a relation/, exact: false }).click()
-  expect(await clickOnlyWire()).toBe(1)
-  await page.locator('#action-menu').getByRole('button', { name: /Commit fold into 'R'/, exact: false }).click()
+  await page.locator('#action-menu').getByRole('button', { name: 'Fold into a relation…', exact: true }).click()
+  await page.locator('#action-menu').getByRole('button', { name: "Fold into 'R'", exact: true }).click()
+  await expect(page.locator('#status')).toContainText("folded into 'R'")
   await expect
     .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).some((b) => b.kind === 'ref'))
     .toBe(true)
 
-  // Spawning: "Add relation" drops a fresh R reference with bare argument
-  // wires — no need to rebuild the body and fold every time.
+  // Spawning: "Add relation" lists the known relations — one click drops a
+  // fresh R reference with bare argument wires.
   const refsBefore = await page.evaluate(() => window.__vpaDebug!.bodies().filter((b) => b.kind === 'ref').length)
-  await page.getByPlaceholder(/term, e\.g/).fill('R')
   await page.getByRole('button', { name: 'Add relation', exact: true }).click()
+  await page.locator('#action-menu').getByRole('button', { name: "Add 'R'", exact: true }).click()
   await expect(page.locator('#status')).toContainText("added relation node")
   await expect
     .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).filter((b) => b.kind === 'ref').length)

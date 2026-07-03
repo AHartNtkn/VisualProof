@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { WireId } from '../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
@@ -9,7 +10,7 @@ import { mkEngine, settle, paint, LIGHT, DISC_R } from '../../src/view/index'
 import type { ProofContext } from '../../src/kernel/proof/step'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { emptyDiagram } from '../../src/app/edit'
-import { defineRelation } from '../../src/app/define'
+import { defineRelation, canonicalArgOrder, inferFoldArgs } from '../../src/app/define'
 import { sheetBody, emptyCtx } from './relationFixture'
 
 const refNodeOf = (d: { nodes: Record<string, { kind: string }> }): string => {
@@ -161,5 +162,63 @@ describe('defineRelation — refusals (each message observed)', () => {
     expect(() => defineRelation(d, sel, [wArg], 'R', emptyCtx, {})).toThrow(
       /binds atoms outside itself/,
     )
+  })
+})
+
+describe('canonicalArgOrder — a deterministic default argument order', () => {
+  it('orders the crossing wires by the canonical explorer, stably across identical builds', () => {
+    const a = sheetBody()
+    const b2 = sheetBody()
+    const ordA = canonicalArgOrder(a.d, a.sel)
+    const ordB = canonicalArgOrder(b2.d, b2.sel)
+    expect(ordA).toHaveLength(2)
+    expect(new Set(ordA)).toEqual(new Set([a.wY, a.wZ]))
+    // identical constructions get the identical order — the default is a
+    // property of the shape, not of iteration accidents
+    expect(ordA).toEqual(ordB)
+    // and defining with it round-trips like any explicit pick
+    const { relation } = defineRelation(a.d, a.sel, ordA, 'C', emptyCtx, {})
+    expect(relation.boundary).toHaveLength(2)
+  })
+
+  it('refuses open subgraphs with the self-containment message', () => {
+    // an atom whose binder bubble is NOT part of the selection: open subgraph
+    const b = new DiagramBuilder()
+    const bub = b.bubble(b.root, 1)
+    const atom = b.atom(bub, bub)
+    const d = b.build()
+    const sel = mkSelection(d, { region: bub, regions: [], nodes: [atom], wires: [] })
+    expect(() => canonicalArgOrder(d, sel)).toThrowError(/binds atoms outside itself/)
+  })
+})
+
+describe('inferFoldArgs — the fold arguments come from occurrence matching', () => {
+  it('infers the attachment order that folds, without any user pick', () => {
+    const { d, sel, wY, wZ } = sheetBody()
+    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
+    const ctx: ProofContext = { theorems: new Map(), relations: new Map([['R', relation]]) }
+    const args = inferFoldArgs(d, sel, 'R', ctx)
+    // the body is asymmetric, so exactly one assignment is valid — the pick order
+    expect(args).toEqual([wY, wZ])
+    // and applying the fold with the inferred args succeeds
+    const folded = applyRelFold(d, sel, 'R', args, ctx.relations)
+    expect(Object.values(folded.nodes).some((n) => n.kind === 'ref')).toBe(true)
+  })
+
+  it('refuses when the selection is not an occurrence of the body', () => {
+    const { d, sel, wY, wZ } = sheetBody()
+    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
+    // a different, non-matching sheet: a single closed term node
+    const b = new DiagramBuilder()
+    const t = b.termNode(b.root, parseTerm('\\x. x'))
+    const d2 = b.build()
+    const sel2 = mkSelection(d2, { region: b.root, regions: [], nodes: [t], wires: [] })
+    const ctx: ProofContext = { theorems: new Map(), relations: new Map([['R', relation]]) }
+    expect(() => inferFoldArgs(d2, sel2, 'R', ctx)).toThrowError(/not an occurrence of 'R'/)
+  })
+
+  it('refuses unknown relations, listing the known ones', () => {
+    const { d, sel } = sheetBody()
+    expect(() => inferFoldArgs(d, sel, 'nope', emptyCtx)).toThrowError(/unknown relation 'nope'/)
   })
 })
