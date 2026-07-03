@@ -10,6 +10,25 @@ import { refinedColors } from '../canonical/explore'
 /** Visited-state counter (node-compatibility probes). Reset by callers that measure. */
 export const __benchCounter = { n: 0 }
 
+/** Every permutation of [0, m) except the identity — the fallback bijections of a run onto a fixed host subset. */
+function nonIdentityPermutations(m: number): number[][] {
+  const out: number[][] = []
+  const arr = Array.from({ length: m }, (_, i) => i)
+  const permute = (k: number): void => {
+    if (k === m) {
+      if (arr.some((v, i) => v !== i)) out.push([...arr])
+      return
+    }
+    for (let i = k; i < m; i++) {
+      ;[arr[k], arr[i]] = [arr[i]!, arr[k]!]
+      permute(k + 1)
+      ;[arr[k], arr[i]] = [arr[i]!, arr[k]!]
+    }
+  }
+  permute(0)
+  return out
+}
+
 export type MatchMode = 'exact' | 'betaEta'
 
 export type Occurrence = {
@@ -198,29 +217,16 @@ export function findOccurrences(
     }
   }
   // Pattern items visited in (refined-color, id) order so indistinguishable
-  // siblings are consecutive; the increasing-order break then applies along
-  // each same-color run.
+  // siblings are consecutive; the symmetry break then applies along each
+  // same-color run.
   const byColor = <T extends string>(ids: readonly T[], colors: ReadonlyMap<T, number>): T[] =>
     [...ids].sort((a, b) => {
       const ca = colors.get(a)!
       const cb = colors.get(b)!
       return ca !== cb ? ca - cb : a < b ? -1 : a > b ? 1 : 0
     })
-  // For each item, how many later items share its color (its run tail). An
-  // item's host-candidate index must leave at least that many larger indices
-  // free — the feasibility bound that keeps the increasing-order enumeration
-  // linear instead of exploring every dead-end increasing prefix.
-  const runTail = <T extends string>(sorted: readonly T[], colors: ReadonlyMap<T, number>): number[] => {
-    const out = new Array(sorted.length).fill(0)
-    for (let i = sorted.length - 2; i >= 0; i--) {
-      out[i] = colors.get(sorted[i]!)! === colors.get(sorted[i + 1]!)! ? out[i + 1] + 1 : 0
-    }
-    return out
-  }
   const rootRegions = byColor(pIdx.childrenOf.get(effectiveRoot)!, pColors.region)
   const rootNodes = byColor(pIdx.nodesIn.get(effectiveRoot)!, pColors.node)
-  const rootRegionsTail = runTail(rootRegions, pColors.region)
-  const rootNodesTail = runTail(rootNodes, pColors.node)
 
   const binderImage = new Map(openBinders)
   const regionMap = new Map<RegionId, RegionId>()
@@ -247,7 +253,7 @@ export function findOccurrences(
     }
     if (!ok) continue
     regionMap.set(effectiveRoot, R)
-    assignRootItems(R, 0, -1)
+    assignContainer(rootRegions, rootNodes, R, () => finishWires(R))
     regionMap.delete(effectiveRoot)
   }
   if (opts.attachments !== undefined) {
@@ -324,49 +330,96 @@ export function findOccurrences(
     return true
   }
 
-  // The symmetry break: within a run of consecutive same-color pattern items
-  // the chosen host-candidate INDEX must strictly increase. `prevIdx` is the
-  // index chosen for the preceding item; a lower bound of it applies only when
-  // that item shares this one's color.
-  function assignRootItems(R: RegionId, i: number, prevIdx: number): void {
-    const total = rootRegions.length + rootNodes.length
-    if (i === total) {
-      finishWires(R)
-      return
+  // Assign a container's pattern items to a host region: region-phase (child
+  // subtrees) then node-phase, then `done`. Subset semantics at the root (extra
+  // host content is fine); exact below (matchSubtree's count guards).
+  function assignContainer(pRegions: readonly RegionId[], pNodes: readonly NodeId[], R: RegionId, done: () => void): void {
+    const regionCand = hIdx.childrenOf.get(R)!
+    const nodeCand = hIdx.nodesIn.get(R)!
+    const placeRegion = (pr: string, k: number, cont: () => void): void => {
+      const hr = regionCand[k]
+      if (hr === undefined || usedRegions.has(hr) || !regionsShallowCompatible(pr, hr)) return
+      matchSubtree(pr, hr, cont)
     }
-    if (i < rootRegions.length) {
-      const pr = rootRegions[i]!
-      const sameColorPrev = i > 0 && pColors.region.get(rootRegions[i - 1]!)! === pColors.region.get(pr)!
-      const lower = sameColorPrev ? prevIdx : -1
-      const hcands = hIdx.childrenOf.get(R)!
-      const upper = hcands.length - 1 - rootRegionsTail[i]!
-      for (let k = lower + 1; k <= upper; k++) {
-        const hr = hcands[k]!
-        if (usedRegions.has(hr)) continue
-        if (!regionsShallowCompatible(pr, hr)) continue
-        matchSubtree(pr, hr, () => assignRootItems(R, i + 1, k))
-      }
-      return
-    }
-    const j = i - rootRegions.length
-    const pn = rootNodes[j]!
-    const sameColorPrev = j > 0 && pColors.node.get(rootNodes[j - 1]!)! === pColors.node.get(pn)!
-    const lower = sameColorPrev ? prevIdx : -1
-    const hcands = hIdx.nodesIn.get(R)!
-    const upper = hcands.length - 1 - rootNodesTail[j]!
-    for (let k = lower + 1; k <= upper; k++) {
-      const hn = hcands[k]!
-      if (usedNodes.has(hn)) continue
-      if (!nodeCompatible(pn, hn)) continue
+    const placeNode = (pn: string, k: number, cont: () => void): void => {
+      const hn = nodeCand[k]
+      if (hn === undefined || usedNodes.has(hn) || !nodeCompatible(pn, hn)) return
       nodeMap.set(pn, hn)
       usedNodes.add(hn)
-      assignRootItems(R, i + 1, k)
+      cont()
       nodeMap.delete(pn)
       usedNodes.delete(hn)
     }
+    const doNodes = () => assignRuns(pNodes, (id) => pColors.node.get(id)!, placeNode, nodeCand.length, 0, done)
+    assignRuns(pRegions, (id) => pColors.region.get(id)!, placeRegion, regionCand.length, 0, doNodes)
   }
 
-  /** Exact correspondence: equal counts, then guided interior bijection. */
+  /**
+   * Assign a phase's pre-sorted pattern items to host candidates run by run.
+   * Same-color siblings form a run; the run is explored subset by subset, and
+   * for each subset the CANONICAL (identity) bijection is tried first — every
+   * assignment that permutes interchangeable siblings collapses to it, which is
+   * where the old matcher's factorial died. Only if a subset's canonical
+   * bijection yields NO occurrence does the run fall back to the remaining
+   * bijections of that same subset. That scoped fallback keeps completeness
+   * UNCONDITIONAL where refinement color is coarser than the true automorphism
+   * orbit — believed impossible for these port-hypergraphs, so it never fires
+   * on real diagrams and the common case stays polynomial — the same shape as
+   * the `undecided` contract: a documented, tested boundary, not an assumption.
+   */
+  function assignRuns(
+    items: readonly string[],
+    colorOf: (id: string) => number,
+    place: (item: string, k: number, cont: () => void) => void,
+    candCount: number,
+    i: number,
+    done: () => void,
+  ): void {
+    if (i === items.length) { done(); return }
+    let b = i + 1
+    while (b < items.length && colorOf(items[b]!) === colorOf(items[i]!)) b++
+    const after = () => assignRuns(items, colorOf, place, candCount, b, done)
+    placeRun(items, place, candCount, i, b, after)
+  }
+
+  /** Enumerate injections of run items [a,b) into host candidates: subset, then canonical bijection, then permutation fallback. */
+  function placeRun(
+    items: readonly string[],
+    place: (item: string, k: number, cont: () => void) => void,
+    candCount: number,
+    a: number,
+    b: number,
+    cont: () => void,
+  ): void {
+    const m = b - a
+    const bindPerm = (indices: readonly number[], perm: readonly number[]): void => {
+      const step = (t: number): void => {
+        if (t === m) { cont(); return }
+        place(items[a + t]!, indices[perm[t]!]!, () => step(t + 1))
+      }
+      step(0)
+    }
+    const bindSubset = (indices: readonly number[]): void => {
+      const identity = indices.map((_, t) => t)
+      const before = matches.length
+      bindPerm(indices, identity)
+      if (m > 1 && matches.length === before) {
+        for (const perm of nonIdentityPermutations(m)) bindPerm(indices, perm)
+      }
+    }
+    // increasing index combinations of size m (each host subset once)
+    const chooseSubset = (t: number, start: number, chosen: number[]): void => {
+      if (t === m) { bindSubset(chosen); return }
+      for (let k = start; k <= candCount - (m - t); k++) {
+        chosen.push(k)
+        chooseSubset(t + 1, k + 1, chosen)
+        chosen.pop()
+      }
+    }
+    chooseSubset(0, 0, [])
+  }
+
+  /** Exact correspondence: equal counts, then guided interior assignment. */
   function matchSubtree(pr: RegionId, hr: RegionId, k: () => void): void {
     const pChildren = pIdx.childrenOf.get(pr)!
     const hChildren = hIdx.childrenOf.get(hr)!
@@ -378,60 +431,9 @@ export function findOccurrences(
     if (pIdx.bareScoped.get(pr)!.length !== hIdx.bareScoped.get(hr)!.length) return
     regionMap.set(pr, hr)
     usedRegions.add(hr)
-    const pc = byColor(pChildren, pColors.region)
-    const pn = byColor(pNodes, pColors.node)
-    assignInterior(
-      pc, runTail(pc, pColors.region), hChildren,
-      pn, runTail(pn, pColors.node), hNodes, 0, -1, k,
-    )
+    assignContainer(byColor(pChildren, pColors.region), byColor(pNodes, pColors.node), hr, k)
     regionMap.delete(pr)
     usedRegions.delete(hr)
-  }
-
-  function assignInterior(
-    pChildren: readonly RegionId[],
-    pChildrenTail: readonly number[],
-    hChildren: readonly RegionId[],
-    pNodes: readonly NodeId[],
-    pNodesTail: readonly number[],
-    hNodes: readonly NodeId[],
-    i: number,
-    prevIdx: number,
-    k: () => void,
-  ): void {
-    const total = pChildren.length + pNodes.length
-    if (i === total) {
-      k()
-      return
-    }
-    if (i < pChildren.length) {
-      const pc = pChildren[i]!
-      const sameColorPrev = i > 0 && pColors.region.get(pChildren[i - 1]!)! === pColors.region.get(pc)!
-      const lower = sameColorPrev ? prevIdx : -1
-      const upper = hChildren.length - 1 - pChildrenTail[i]!
-      for (let idx = lower + 1; idx <= upper; idx++) {
-        const hc = hChildren[idx]!
-        if (usedRegions.has(hc)) continue
-        if (!regionsShallowCompatible(pc, hc)) continue
-        matchSubtree(pc, hc, () => assignInterior(pChildren, pChildrenTail, hChildren, pNodes, pNodesTail, hNodes, i + 1, idx, k))
-      }
-      return
-    }
-    const j = i - pChildren.length
-    const pn = pNodes[j]!
-    const sameColorPrev = j > 0 && pColors.node.get(pNodes[j - 1]!)! === pColors.node.get(pn)!
-    const lower = sameColorPrev ? prevIdx : -1
-    const upper = hNodes.length - 1 - pNodesTail[j]!
-    for (let idx = lower + 1; idx <= upper; idx++) {
-      const hn = hNodes[idx]!
-      if (usedNodes.has(hn)) continue
-      if (!nodeCompatible(pn, hn)) continue
-      nodeMap.set(pn, hn)
-      usedNodes.add(hn)
-      assignInterior(pChildren, pChildrenTail, hChildren, pNodes, pNodesTail, hNodes, i + 1, idx, k)
-      nodeMap.delete(pn)
-      usedNodes.delete(hn)
-    }
   }
 
   /** Wire images are determined; verify them and record the occurrence. */

@@ -3,7 +3,8 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { findOccurrences, __benchCounter } from '../../../src/kernel/diagram/subgraph/match'
-import type { Endpoint } from '../../../src/kernel/diagram/diagram'
+import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
+import { termShapeKey, positionalPortKey } from '../../../src/kernel/diagram/canonical/shape'
 
 const p = (s: string) => parseTerm(s)
 
@@ -158,5 +159,195 @@ describe('exploration matcher — exact vs betaEta mode', () => {
     const r = findOccurrences(hb.build(), pattern, { fuel: 5, mode: 'exact', inRegion: 'r0' })
     expect(r.undecided).toHaveLength(0)
     expect(r.matches).toHaveLength(1)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// STANDING brute-force footprint-equality oracle (team-lead ruling): an
+// independent full-enumeration reference matcher — every injective region/node
+// assignment, verified directly, footprints collected. It shares NONE of the
+// matcher's search strategy, so agreement is a genuine completeness check on
+// the symmetry break + per-subset fallback. Scoped to CLOSED patterns (empty
+// boundary), term nodes + cut regions, matched at the root — enough to exercise
+// symmetric node/region runs, which is exactly where the break could drop
+// occurrences. It is a regression guard, not a gate.
+// ---------------------------------------------------------------------------
+
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0
+  return () => {
+    a |= 0; a = (a + 0x6d2b79f5) | 0
+    let t = Math.imul(a ^ (a >>> 15), 1 | a)
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296
+  }
+}
+
+const closedTermPool = ['\\x. x', '\\x. \\y. x', '\\x. \\y. y']
+
+/** Random closed diagram: term nodes (small pool) across the root and up to two cuts, some shared output wires. */
+function randomClosed(rng: () => number): Diagram {
+  const b = new DiagramBuilder()
+  const regions: RegionId[] = [b.root]
+  const nCuts = Math.floor(rng() * 3) // 0..2
+  for (let i = 0; i < nCuts; i++) regions.push(b.cut(regions[Math.floor(rng() * regions.length)]!))
+  const outs: Endpoint[] = []
+  const nNodes = 1 + Math.floor(rng() * 3) // 1..3
+  for (let i = 0; i < nNodes; i++) {
+    const region = regions[Math.floor(rng() * regions.length)]!
+    const n = b.termNode(region, p(closedTermPool[Math.floor(rng() * closedTermPool.length)]!))
+    outs.push({ node: n, port: { kind: 'output' } })
+  }
+  if (outs.length >= 2 && rng() < 0.5) {
+    const k = 2 + Math.floor(rng() * (outs.length - 1))
+    b.wire(b.root, outs.slice(0, k)) // one shared root-scoped wire
+  }
+  return b.build()
+}
+
+function epKey(d: Diagram, ep: Endpoint): string {
+  const n = d.nodes[ep.node]!
+  if (n.kind === 'term') return positionalPortKey(n.term, ep.port)
+  if (ep.port.kind === 'arg') return `a${ep.port.index}`
+  throw new Error('unexpected port')
+}
+
+function nodeContent(d: Diagram, id: NodeId): string {
+  const n = d.nodes[id]!
+  return n.kind === 'term' ? `t:${termShapeKey(n.term)}` : n.kind === 'ref' ? `r:${n.defId}:${n.arity}` : 'atom'
+}
+function regionContent(d: Diagram, id: RegionId): string {
+  const r = d.regions[id]!
+  return r.kind === 'bubble' ? `b/${r.arity}` : r.kind
+}
+
+/** All injective maps sources→targets respecting `ok(s,t)`, as an array of Maps. */
+function injections<S extends string, T extends string>(
+  sources: readonly S[], targets: readonly T[], ok: (s: S, t: T, m: Map<S, T>) => boolean,
+): Map<S, T>[] {
+  const out: Map<S, T>[] = []
+  const used = new Set<T>()
+  const cur = new Map<S, T>()
+  const rec = (i: number): void => {
+    if (i === sources.length) { out.push(new Map(cur)); return }
+    const s = sources[i]!
+    for (const t of targets) {
+      if (used.has(t) || !ok(s, t, cur)) continue
+      used.add(t); cur.set(s, t)
+      rec(i + 1)
+      used.delete(t); cur.delete(s)
+    }
+  }
+  rec(0)
+  return out
+}
+
+/** Footprint set of all occurrences of a closed pattern at host region R, by full enumeration. */
+function bruteFootprints(host: Diagram, pd: Diagram, R: RegionId): Set<string> {
+  const results = new Set<string>()
+  const pRegionsNonRoot = Object.keys(pd.regions).filter((r) => r !== pd.root)
+  const hRegionsNonRoot = Object.keys(host.regions).filter((r) => r !== host.root)
+  const pNodes = Object.keys(pd.nodes)
+  const hNodes = Object.keys(host.nodes)
+  const childrenOf = (d: Diagram, id: RegionId) =>
+    Object.keys(d.regions).filter((r) => { const x = d.regions[r]!; return x.kind !== 'sheet' && x.parent === id })
+  const nodesIn = (d: Diagram, id: RegionId) => Object.keys(d.nodes).filter((n) => d.nodes[n]!.region === id)
+  const endpointfulScoped = (d: Diagram, id: RegionId) =>
+    Object.keys(d.wires).filter((w) => d.wires[w]!.scope === id && d.wires[w]!.endpoints.length > 0).length
+
+  const regionMaps = injections(pRegionsNonRoot, hRegionsNonRoot, (pr, hr) => regionContent(pd, pr) === regionContent(host, hr))
+  for (const rm0 of regionMaps) {
+    const rm = new Map(rm0); rm.set(pd.root, R)
+    const img = (pr: RegionId) => rm.get(pr)!
+    // parent structure + exact-below (non-root) / subset (root)
+    let ok = true
+    for (const pr of Object.keys(pd.regions)) {
+      const hr = img(pr)
+      const pr0 = pd.regions[pr]!
+      if (pr0.kind !== 'sheet') {
+        const hrReg = host.regions[hr]!
+        if (hrReg.kind === 'sheet') { ok = false; break }
+        if (img(pr0.parent) !== hrReg.parent) { ok = false; break }
+      }
+      if (pr !== pd.root) {
+        if (childrenOf(host, hr).length !== childrenOf(pd, pr).length) { ok = false; break }
+        if (nodesIn(host, hr).length !== nodesIn(pd, pr).length) { ok = false; break }
+        if (endpointfulScoped(host, hr) !== endpointfulScoped(pd, pr)) { ok = false; break }
+      }
+    }
+    if (!ok) continue
+    const nodeMaps = injections(pNodes, hNodes, (pn, hn, m) => {
+      if (nodeContent(pd, pn) !== nodeContent(host, hn)) return false
+      if (img(pd.nodes[pn]!.region) !== host.nodes[hn]!.region) return false
+      void m
+      return true
+    })
+    for (const nm of nodeMaps) {
+      // verify wires
+      const wireMap = new Map<WireId, WireId>()
+      const usedWires = new Set<WireId>()
+      let wok = true
+      for (const [pw, w] of Object.entries(pd.wires)) {
+        if (w.endpoints.length === 0) continue
+        const imgs = w.endpoints.map((ep) => `${nm.get(ep.node)!} ${epKey(pd, ep)}`).sort()
+        const scope = img(w.scope)
+        let found: WireId | undefined
+        for (const [hw, hwire] of Object.entries(host.wires)) {
+          if (usedWires.has(hw) || hwire.scope !== scope) continue
+          if (hwire.endpoints.length !== w.endpoints.length) continue
+          const hs = hwire.endpoints.map((ep) => `${ep.node} ${epKey(host, ep)}`).sort()
+          if (hs.length === imgs.length && hs.every((v, i) => v === imgs[i])) { found = hw; break }
+        }
+        if (found === undefined) { wok = false; break }
+        usedWires.add(found); wireMap.set(pw, found)
+      }
+      if (!wok) continue
+      const fp = JSON.stringify([
+        [...rm.values()].sort(),
+        [...nm.values()].sort(),
+        [...wireMap.values()].sort(),
+        [],
+      ])
+      results.add(fp)
+    }
+  }
+  return results
+}
+
+function matcherFootprints(host: Diagram, pd: Diagram, R: RegionId): Set<string> {
+  const r = findOccurrences(host, _dwbEmpty(pd), { fuel: 100, mode: 'exact', inRegion: R })
+  const out = new Set<string>()
+  for (const m of r.matches) {
+    out.add(JSON.stringify([
+      [...m.regionMap.values()].sort(),
+      [...m.nodeMap.values()].sort(),
+      [...m.wireMap.values()].sort(),
+      [...m.attachments],
+    ]))
+  }
+  return out
+}
+function _dwbEmpty(d: Diagram) {
+  return { diagram: d, boundary: [] as readonly WireId[] }
+}
+
+describe('exploration matcher — brute-force footprint-equality oracle (standing regression guard)', () => {
+  it('matches an independent full-enumeration reference across random closed diagrams', () => {
+    const rng = mulberry32(0x1234ABCD)
+    let sawMatch = false
+    let sawEmpty = false
+    let sawMulti = false
+    for (let i = 0; i < 200; i++) {
+      const host = randomClosed(rng)
+      const pattern = randomClosed(rng)
+      const brute = bruteFootprints(host, pattern, host.root)
+      const mine = matcherFootprints(host, pattern, host.root)
+      expect([...mine].sort(), `case ${i}: matcher vs brute-force footprints differ`).toEqual([...brute].sort())
+      if (mine.size > 0) sawMatch = true
+      if (mine.size === 0) sawEmpty = true
+      if (mine.size > 1) sawMulti = true
+    }
+    // the corpus exercises matches, non-matches, and multi-occurrence cases
+    expect(sawMatch && sawEmpty && sawMulti).toBe(true)
   })
 })
