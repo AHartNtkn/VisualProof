@@ -58,7 +58,7 @@ Result: `nat(z) ∧ Zero(z)`, boundary [wz]. The nat body (natRelation) is NEVER
 ### Task 3: Review + sync
 
 - [x] Independent adversarial review (commit 062621f; test-only, `git diff src/` empty). Verdict **ISSUES-FIXED-APPROVED** — no soundness holes; the "issues" were test-coverage gaps, now pinned. Baseline re-verified before touching: tsc clean, 756/756, e2e 5/5; final tsc clean, **762/762** (+6), e2e 5/5.
-- [ ] Plan-doc + memory sync (`plan11-arithmetic-spike-findings` gains the resolution). *(team lead)*
+- [x] Plan-doc + memory sync (`plan11-arithmetic-spike-findings` UPDATE 12). *(team lead)*
 
 **Task 3 review record.**
 
