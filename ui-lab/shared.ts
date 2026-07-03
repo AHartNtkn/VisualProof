@@ -5,7 +5,7 @@
  */
 import { parseTerm } from '../src/kernel/term/parse'
 import { DiagramBuilder } from '../src/kernel/diagram/builder'
-import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../src/kernel/diagram/diagram'
+import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, WireId } from '../src/kernel/diagram/diagram'
 import { mkDiagram, portKey } from '../src/kernel/diagram/diagram'
 import { freshId } from '../src/kernel/diagram/subgraph/freshId'
 import { joinPorts } from '../src/app/edit'
@@ -18,7 +18,7 @@ import { computeLegs, hobbyBezier, legPaths, boundaryExits, existentialStubs, ty
 import { buildSelection, hitTest, type Hit } from '../src/app/hittest'
 import { addBubble, addCut, addRefNode, addTermNode, deleteSelection } from '../src/app/edit'
 import { mkSelection } from '../src/kernel/diagram/subgraph/selection'
-import { polarity } from '../src/kernel/diagram/regions'
+import { deepestCommonAncestor, polarity } from '../src/kernel/diagram/regions'
 
 const p = (s: string) => parseTerm(s)
 
@@ -90,6 +90,8 @@ export type LabCtx = {
   /** Drop selection entries whose ids no longer exist. */
   prune(hs: Hit[]): Hit[]
   toast(text: string): void
+  /** Pause/resume settling — while placing something, the world holds still. */
+  freeze(on: boolean): void
 }
 
 export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void): void {
@@ -120,6 +122,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void): 
   const toWorld = (sx: number, sy: number) => ({ x: (sx - view.offsetX) / view.scale, y: (sy - view.offsetY) / view.scale })
   const overlays: ((out: Shape[]) => void)[] = []
   const frameHooks: (() => void)[] = []
+  let frozen = false
   const swap = (d2: Diagram, boundary2: WireId[]): void => {
     const next = mkEngine(d2, boundary2)
     carryOver(lab.engine, next)
@@ -218,10 +221,11 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void): 
       : h.kind === 'region' ? lab.d.regions[h.id] !== undefined
       : lab.d.wires[h.id] !== undefined),
     toast: (text) => { msg.textContent = text },
+    freeze: (on) => { frozen = on },
   }
   const frame = () => {
     if (canvas.width !== innerWidth || canvas.height !== innerHeight) { canvas.width = innerWidth; canvas.height = innerHeight }
-    for (let i = 0; i < 4; i++) settleStep(lab.engine)
+    if (!frozen) for (let i = 0; i < 4; i++) settleStep(lab.engine)
     fit()
     for (const fn of frameHooks) fn()
     const shapes: Shape[] = [...paint(lab.engine, LIGHT)]
@@ -327,6 +331,7 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
       tint(hover, '#2563eb1c', out)
     }
   })
+  ;(window as unknown as { __labSel: Hit[] }).__labSel = selected
   return {
     selected, isSelected,
     clear: () => { selected.length = 0 },
@@ -440,9 +445,9 @@ export function installEditKeys(lab: LabCtx, brush: BrushHandle): void {
     } else if (e.key === 'Delete' || e.key === 'Backspace') {
       if (brush.selected.length === 0) { lab.toast('nothing selected to delete'); return }
       tryEdit(lab, () => {
-        lab.mutate(deleteSelection(lab.d, buildSelection(lab.d, brush.selected)))
+        lab.mutate(deleteHits(lab.d, brush.selected))
         brush.clear()
-        lab.toast('deleted the selection')
+        lab.toast('deleted (selected boundaries dissolve; their contents propagate up)')
       })
     }
   })
@@ -470,6 +475,119 @@ export function promptAt(sx: number, sy: number, placeholder: string, commit: (t
 export function legShape(g: LegGeom, stroke: string, width: number): Shape {
   const p = hobbyBezier(g.pa, g.ta, g.pb, g.tb)
   return { kind: 'bezier', from: p.from, c1: p.c1, c2: p.c2, to: p.to, stroke, width, glow: null }
+}
+
+/** Merge every listed wire into one (N-ary join — selecting three lines and
+    joining should not take two gestures). */
+export function mergeAllWires(d: Diagram, wids: readonly WireId[]): Diagram {
+  if (wids.length < 2) throw new Error(`joining needs at least two lines, got ${wids.length}`)
+  let cur = d
+  for (let i = 1; i < wids.length; i++) cur = mergeWires(cur, wids[0]!, wids[i]!)
+  return cur
+}
+
+function subtreeContains(d: Diagram, root: RegionId, r: RegionId): boolean {
+  let cur = r
+  for (;;) {
+    if (cur === root) return true
+    const reg = d.regions[cur]
+    if (reg === undefined || reg.kind === 'sheet') return false
+    cur = reg.parent
+  }
+}
+
+/** Absorb hits that already live inside a selected region's subtree: picking
+    a cut AND something within it means the subtree, once — not a refusal. */
+export function absorbHits(d: Diagram, hits: readonly Hit[]): Hit[] {
+  const roots = hits.filter((h) => h.kind === 'region').map((h) => h.id)
+  const strictlyInside = (r: RegionId): boolean => roots.some((root) => r !== root && subtreeContains(d, root, r))
+  const insideOrOn = (r: RegionId): boolean => roots.some((root) => subtreeContains(d, root, r))
+  return hits.filter((h) =>
+    h.kind === 'region' ? !strictlyInside(h.id)
+    : h.kind === 'node' ? !insideOrOn(d.nodes[h.id]!.region)
+    : !insideOrOn(d.wires[h.id]!.scope))
+}
+
+/** Remove a cut/bubble boundary, splicing its contents into the parent. */
+export function dissolveRegion(d: Diagram, rid: RegionId): Diagram {
+  const r = d.regions[rid]
+  if (r === undefined) throw new Error(`unknown region '${rid}'`)
+  if (r.kind === 'sheet') throw new Error('the sheet cannot be dissolved')
+  const parent = r.parent
+  const regions: Record<RegionId, Region> = {}
+  for (const [id, reg] of Object.entries(d.regions)) {
+    if (id === rid) continue
+    regions[id] = reg.kind !== 'sheet' && reg.parent === rid
+      ? (reg.kind === 'cut' ? { kind: 'cut', parent } : { kind: 'bubble', parent, arity: reg.arity })
+      : reg
+  }
+  const nodes: Record<NodeId, DiagramNode> = {}
+  for (const [id, n] of Object.entries(d.nodes)) {
+    nodes[id] = n.region === rid
+      ? (n.kind === 'term' ? { kind: 'term', region: parent, term: n.term }
+        : n.kind === 'atom' ? { kind: 'atom', region: parent, binder: n.binder }
+        : { kind: 'ref', region: parent, defId: n.defId, arity: n.arity })
+      : n
+  }
+  const wires: Record<WireId, Wire> = {}
+  for (const [id, w] of Object.entries(d.wires)) {
+    wires[id] = w.scope === rid ? { scope: parent, endpoints: w.endpoints } : w
+  }
+  return mkDiagram({ root: d.root, regions, nodes, wires })
+}
+
+/** Delete hit items. Nodes/wires go (grouped by region — spanning several
+    regions is fine); selected cuts/bubbles DISSOLVE: the boundary vanishes
+    and unselected contents propagate to the parent. */
+export function deleteHits(d: Diagram, hits: readonly Hit[]): Diagram {
+  let cur = d
+  const groups = new Map<RegionId, Hit[]>()
+  for (const h of hits) {
+    if (h.kind === 'region') continue
+    const anchor = h.kind === 'node' ? cur.nodes[h.id]?.region : cur.wires[h.id]?.scope
+    if (anchor === undefined) throw new Error(`unknown ${h.kind} '${h.id}'`)
+    const g = groups.get(anchor) ?? []
+    g.push(h)
+    groups.set(anchor, g)
+  }
+  for (const g of groups.values()) cur = deleteSelection(cur, buildSelection(cur, g))
+  const depth = (r: RegionId): number => {
+    let n = 0, c = r
+    for (;;) {
+      const reg = cur.regions[c]!
+      if (reg.kind === 'sheet') return n
+      n++; c = reg.parent
+    }
+  }
+  const rs = hits.filter((h) => h.kind === 'region').map((h) => h.id).sort((a, b) => depth(b) - depth(a))
+  for (const rid of rs) cur = dissolveRegion(cur, rid)
+  return cur
+}
+
+/** Move a node into another region. Wires wholly owned by the node travel
+    with it; shared wires keep their scope when still valid, else correct to
+    the deepest common ancestor of their endpoints (the tightest valid scope). */
+export function reparentNode(d: Diagram, nid: NodeId, region: RegionId): Diagram {
+  const n = d.nodes[nid]
+  if (n === undefined) throw new Error(`unknown node '${nid}'`)
+  if (d.regions[region] === undefined) throw new Error(`unknown region '${region}'`)
+  if (n.region === region) return d
+  const nodes: Record<NodeId, DiagramNode> = {
+    ...d.nodes,
+    [nid]: n.kind === 'term' ? { kind: 'term', region, term: n.term }
+      : n.kind === 'atom' ? { kind: 'atom', region, binder: n.binder }
+      : { kind: 'ref', region, defId: n.defId, arity: n.arity },
+  }
+  const regionOf = (id: NodeId): RegionId => nodes[id]!.region
+  const wires: Record<WireId, Wire> = {}
+  for (const [id, w] of Object.entries(d.wires)) {
+    if (!w.endpoints.some((ep) => ep.node === nid)) { wires[id] = w; continue }
+    if (w.endpoints.every((ep) => ep.node === nid)) { wires[id] = { scope: region, endpoints: w.endpoints }; continue }
+    const stillValid = w.endpoints.every((ep) => subtreeContains(d, w.scope, regionOf(ep.node)))
+    const scope = stillValid ? w.scope : w.endpoints.map((ep) => regionOf(ep.node)).reduce((a, b) => deepestCommonAncestor(d, a, b))
+    wires[id] = { scope, endpoints: w.endpoints }
+  }
+  return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
 }
 
 /** Detach the node-side endpoint of a leg into its own wire (the sever a
