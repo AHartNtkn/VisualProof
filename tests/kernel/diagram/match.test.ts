@@ -127,6 +127,25 @@ describe('findOccurrences basics', () => {
     expect(r.matches[0]?.wireMap.get(bare)).toBe(anchor)
   })
 
+  it('SEEDED bare boundary attachments may not alias: one host wire cannot serve two boundary positions', () => {
+    // Two bare boundary lines supplied the SAME host wire must refuse, exactly
+    // as endpointful attachments do (the used-images seam rule). Diagonal
+    // instantiation (a = b) is a deliberate future design (the queued diagonal
+    // abstraction work), not something the matcher may improvise.
+    const b = new DiagramBuilder()
+    b.termNode(b.root, p('\\x. x'))
+    const bare0 = b.wire(b.root, [])
+    const bare1 = b.wire(b.root, [])
+    const pattern = mkDiagramWithBoundary(b.build(), [bare0, bare1])
+    const h = new DiagramBuilder()
+    h.termNode(h.root, p('\\x. x'))
+    const anchor = h.wire(h.root, [])
+    const other = h.wire(h.root, [])
+    const host = h.build()
+    expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, anchor] }).matches).toHaveLength(0)
+    expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, other] }).matches).toHaveLength(1)
+  })
+
   it('SEEDED bare boundary wire is refused when the supplied wire is not in scope', () => {
     const b = new DiagramBuilder()
     b.termNode(b.root, p('\\x. x'))

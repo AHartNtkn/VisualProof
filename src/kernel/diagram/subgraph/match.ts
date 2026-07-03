@@ -498,10 +498,14 @@ export function findOccurrences(
       const stub = pd.wires[b]!
       if (stub.endpoints.length === 0) {
         // Bare boundary: the seed IS the attachment (unseeded bare threw up
-        // front). Its only condition is the same visibility gate every
-        // attachment passes — there are no endpoints to verify.
+        // front). It passes the same visibility gate and the same used-images
+        // seam rule as every other attachment — one host wire cannot serve
+        // two boundary positions (diagonal instantiation is a deliberate
+        // future design, not matcher improvisation).
         const hw = opts.attachments![i]!
         if (!isAncestorOrEqual(host, host.wires[hw]!.scope, R)) return
+        if (usedImages.has(hw)) return
+        usedImages.add(hw)
         wireMap.set(b, hw)
         attachments.push(hw)
         continue
