@@ -57,5 +57,39 @@ Result: `nat(z) ∧ Zero(z)`, boundary [wz]. The nat body (natRelation) is NEVER
 
 ### Task 3: Review + sync
 
-- [ ] Independent adversarial review: mutation probes on every transport gate; verify no derivation path re-opens vacuity (the guard test is the sentinel); JSON replay of the new theorems.
-- [ ] Plan-doc + memory sync (`plan11-arithmetic-spike-findings` gains the resolution).
+- [x] Independent adversarial review (commit 062621f; test-only, `git diff src/` empty). Verdict **ISSUES-FIXED-APPROVED** — no soundness holes; the "issues" were test-coverage gaps, now pinned. Baseline re-verified before touching: tsc clean, 756/756, e2e 5/5; final tsc clean, **762/762** (+6), e2e 5/5.
+- [ ] Plan-doc + memory sync (`plan11-arithmetic-spike-findings` gains the resolution). *(team lead)*
+
+**Task 3 review record.**
+
+*Part A — soundness attacks (each built as a test; refusals became pins).*
+| Attack | Expected | Observed | Caught by |
+| --- | --- | --- | --- |
+| A.1 unbound-bvar "closed" term (freePorts empty, value rides a binder) | refuse upstream | mkDiagram throws `unbound de Bruijn index` | new closedness-precondition pin |
+| A.1' open evidence, free ports on different wires | refuse | `requires closed evidence` (open refused categorically → "different wires" moot) | closedness gate |
+| A.2 consumer above R (ancestor) | refuse | refused | locality gate (existing) |
+| A.2 consumer in a **sibling** region | refuse | `does not lie inside` | new sibling pin |
+| A.2 consumer **deeper inside** R | **allow** | allowed, endpoint moved | new gate-direction pin |
+| A.3 cert for different terms / wrong node | refuse | refused — cert always replayed against the actual node terms | `checkConversion` |
+| A.4 vacuity: move base atom onto a root-scoped line / lift w0 | must not lift w0 | see below | SOUNDNESS INVARIANT pin + relFold fingerprint |
+| A.5 endpoint = a's own output | refuse | refused | own-output gate |
+| A.5 endpoint = b's own output | refuse | `is not on a's wire` | new b's-output pin |
+| A.5 a,b share one output wire | refuse | `already share wire` | shared-output gate |
+| A.6 JSON round-trip + theory-road replay under renamed ids | replay-stable | green | round-trip + `theoryToJson→loadTheory` battery |
+
+*A.4 vacuity sequences actually tried:* (1) Built a bubble R with internal zero `z0` (base atom on its rB-scoped output) and a co-resident closed zero `bcopy` whose output wire is **root-scoped** (legal: root encloses rB); transported the base atom from w0 onto bcopy's root line. Transport **succeeded** — but this is sound congruence, not vacuity: `bcopy` is closed (gate refuses open b), so the base atom now predicates R of an equal *closed* ZERO value, never an unconstrained root existential; and the operation writes no scope, so w0's own scope is untouched. (2) Confirmed the structural backstop by deleting the transport step from `deriveZeroIsNat`: `relFold` to `nat` then refuses (`occurrence has 0 attachment wires but 1 argument positions` / `≠ natRelation`) — nothing folds to `nat` unless it is exactly the non-vacuous `natRelation` the `inCutNat` battery pins. Transport is load-bearing *and* cannot manufacture a vacuous nat.
+
+*Part B — mutation probes (mutate src → observe fail → revert).*
+| Mutation | Test that failed |
+| --- | --- |
+| drop closedness gate | OPEN-evidence probe |
+| drop co-residency gate | different-regions refusal |
+| drop endpoint-locality gate | outside-region refusal |
+| skip certificate replay | rejected-certificate refusal |
+| **reverse** locality gate direction | new deeper-allowed pin |
+| **rescope** wB to root | new SOUNDNESS INVARIANT pin (mkDiagram accepts the rescope — nothing else caught it) |
+| skip transport step in `deriveZeroIsNat` | zeroIsNat fold-to-nat refuses |
+
+*Part C — statement adequacy.* Battery already pinned boundary identity and single-nat consumption. Strengthened succNat + oneIsNat rhs to pin the successor's predecessor line as **distinct** from the guarded line (nat(succ n), not degenerate Succ(s,s); nat(1) = nat(succ zero), predecessor on the retained Zero line).
+
+*Additions (test-only, 062621f):* transport.test.ts 12→18 (βη-nontrivial cert acceptance; scope/region/node invariance; gate-direction deeper-allowed; sibling refusal; b's-output refusal; unbound-bvar precondition); frege.test.ts succNat + oneIsNat rhs distinctness pins.
