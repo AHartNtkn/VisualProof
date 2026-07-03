@@ -6,6 +6,7 @@ declare global {
       nodeCount(): number
       status(): string
       replay(): { mode: string; k: number; n: number; label: string; bodies: number }
+      companion(): { visible: boolean; label: string; bodies: number } | null
       view(): { scale: number; offsetX: number; offsetY: number }
       bodies(): { id: string; kind: string; x: number; y: number; r: number }[]
       wires(): { id: string; x: number; y: number }[]
@@ -21,7 +22,7 @@ declare global {
 // file is a generated example emitted by the pree2e hook into examples/.
 test('the app boots empty and opens a theory file on demand', async ({ page }) => {
   await page.goto('/?debug')
-  await expect(page.locator('canvas')).toBeVisible()
+  await expect(page.locator('#c')).toBeVisible()
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
 
   const lib = page.locator('#library')
@@ -71,6 +72,69 @@ test('a goal proves end to end through the chrome', async ({ page }) => {
   expect(status).toMatch(/assembled|checked|adopted/i)
 })
 
+// Plan 17: the PiP companion. Entering PROVE surfaces a view-only pane showing
+// the OTHER side (the meet target). A forward step moves the main view but not
+// the companion (its diagram identity — the backward side — is untouched). The
+// toggle cycles PiP → split → hidden → PiP.
+test('the companion pane targets the other side, survives a forward step, and toggles', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  const canvas = page.locator('#c')
+  const box = (await canvas.boundingBox())!
+
+  // A goal with a node on each side, so the backward-side companion has a body.
+  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
+  await page.getByRole('button', { name: /add term/i }).click()
+  await page.getByRole('button', { name: /set goal lhs/i }).click()
+  await page.getByRole('button', { name: /set goal rhs/i }).click()
+
+  // EDIT: nothing to walk toward — the companion is not applicable.
+  expect(await page.evaluate(() => window.__vpaDebug!.companion())).toBeNull()
+
+  await page.getByRole('button', { name: /switch to prove/i }).click()
+
+  // The pane appears (default PiP) showing the BACKWARD side, with a real body.
+  await expect.poll(async () => (await page.evaluate(() => window.__vpaDebug!.companion()))?.bodies ?? 0).toBeGreaterThan(0)
+  const c0 = await page.evaluate(() => window.__vpaDebug!.companion())
+  expect(c0!.visible).toBe(true)
+  expect(c0!.label).toBe('meeting: backward side')
+  await expect(page.locator('#companion')).toBeVisible()
+
+  // Apply a forward step: select the node, wrap it in a double cut. The forward
+  // side gains a step (main view changes) while the companion tracks the
+  // untouched backward side — same label, same body count, no reseed.
+  await page.waitForTimeout(300)
+  const s = await page.evaluate(() => {
+    const v = window.__vpaDebug!.view()
+    const b = window.__vpaDebug!.bodies().find((x) => x.kind === 'term')!
+    return { x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
+  })
+  await page.mouse.click(box.x + s.x, box.y + s.y)
+  await page.locator('#action-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true }).click()
+  await expect(page.locator('#status')).toContainText('forward 1 step')
+  const c1 = await page.evaluate(() => window.__vpaDebug!.companion())
+  expect(c1!.label).toBe('meeting: backward side')
+  expect(c1!.bodies).toBe(c0!.bodies)
+
+  // Toggle: PiP → split (right half) → hidden → PiP.
+  const companionBtn = page.getByRole('button', { name: /^Companion:/ })
+  await companionBtn.click()
+  await expect(page.locator('#companion')).toBeVisible()
+  // The next frame restyles pip (28vw) → split (50vw); poll for the resize.
+  await expect.poll(async () => (await page.locator('#companion').boundingBox())!.width).toBeGreaterThan(box.width * 0.4)
+  expect((await page.evaluate(() => window.__vpaDebug!.companion()))!.visible).toBe(true)
+
+  await companionBtn.click()
+  await expect(page.locator('#companion')).toBeHidden()
+  // Still applicable (we are in PROVE), just not on-screen.
+  const hidden = await page.evaluate(() => window.__vpaDebug!.companion())
+  expect(hidden).not.toBeNull()
+  expect(hidden!.visible).toBe(false)
+
+  await companionBtn.click()
+  await expect(page.locator('#companion')).toBeVisible()
+})
+
 // The plan-14 deliverable: a relational theorem replays step-by-step through the
 // live shell (enterReplay + gotoReplayStep + carryOver + boundary rendering), not
 // just through the headless mkReplay unit. Drives plusComm — the const-free
@@ -98,6 +162,12 @@ test('a relational theorem replays step by step through the live shell', async (
   expect(start.bodies).toBeGreaterThan(0)
   const lhsNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
 
+  // The companion pane shows the theorem's final state (the goal) while stepping.
+  await expect.poll(async () => (await page.evaluate(() => window.__vpaDebug!.companion()))?.bodies ?? 0).toBeGreaterThan(0)
+  const compStart = await page.evaluate(() => window.__vpaDebug!.companion())
+  expect(compStart!.visible).toBe(true)
+  expect(compStart!.label).toBe('goal: final state')
+
   // Arrow-key stepping advances the step and rebuilds the displayed diagram: by
   // step 20 the derivation has unfolded the relations, so the diagram carries
   // strictly more nodes than the lhs and the step label is a real rule name.
@@ -107,6 +177,13 @@ test('a relational theorem replays step by step through the live shell', async (
   expect(mid.label.length).toBeGreaterThan(0)
   const midNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
   expect(midNodes).toBeGreaterThan(lhsNodes)
+
+  // Stepping the replay does not change what the companion targets: it still
+  // shows the final state (identity-stable diagram, no reseed) with the same
+  // body count as at step 0.
+  const compMid = await page.evaluate(() => window.__vpaDebug!.companion())
+  expect(compMid!.label).toBe('goal: final state')
+  expect(compMid!.bodies).toBe(compStart!.bodies)
 
   // The menu Prev/Next buttons drive the same stepper (carryOver path).
   await page.getByRole('button', { name: 'Next ▶', exact: true }).click()
@@ -128,7 +205,7 @@ test('a relational theorem replays step by step through the live shell', async (
 test('name a selection as a relation, fold with it, save it, and round-trip on reload', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
-  const canvas = page.locator('canvas')
+  const canvas = page.locator('#c')
   const box = (await canvas.boundingBox())!
   // Read geometry and camera in ONE evaluate so a still-settling layout can't
   // skew the world→screen mapping between the two reads.
@@ -251,7 +328,7 @@ test('a node drags under the cursor, the rearrangement persists, and the backgro
     const b = window.__vpaDebug!.bodies()[0]!
     return { id: b.id, sx: b.x * v.scale + v.offsetX, sy: b.y * v.scale + v.offsetY }
   })
-  const canvas = page.locator('canvas')
+  const canvas = page.locator('#c')
   const box = (await canvas.boundingBox())!
   // drag toward +x: the grabbed body must end up on the +x side of its sibling
   const target = { sx: grab.sx + 220, sy: grab.sy }

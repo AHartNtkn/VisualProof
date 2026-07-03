@@ -28,6 +28,8 @@ import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addRefNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 import type { ProofSession } from './session'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
+import type { Companion } from './companion'
+import { companionFor } from './companion'
 import { sessionTheory } from './persist'
 import { theoryToJson } from '../kernel/proof/store'
 import type { DragTarget, Hit } from './hittest'
@@ -181,6 +183,40 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let disposed = false
   let raf = 0
 
+  // ---- companion viewport (view-only "where you are going" pane) ----
+  // A second canvas driven by the SAME frame() rAF: its own engine + fit camera,
+  // rebuilt only when companionFor's diagram identity changes (carryOver
+  // warm-start, exactly the replay discipline). Session-lifetime display mode
+  // like the theme toggle. No pin/selection/hover ever touches it.
+  let companionMode: 'hidden' | 'pip' | 'split' = 'pip'
+  let companionEngine: Engine | null = null
+  let companionShownDiagram: Diagram | null = null
+  const companionView = { scale: DESIGN_SCALE, offsetX: 0, offsetY: 0 }
+  let companionStyleKey = ''
+
+  const companionWrap = document.createElement('div')
+  companionWrap.id = 'companion'
+  const companionCanvas = document.createElement('canvas')
+  companionCanvas.id = 'companion-canvas'
+  companionCanvas.style.display = 'block'
+  companionCanvas.style.width = '100%'
+  companionCanvas.style.height = '100%'
+  const companionLabel = document.createElement('div')
+  companionLabel.id = 'companion-label'
+  companionLabel.style.position = 'absolute'
+  companionLabel.style.top = '2px'
+  companionLabel.style.left = '6px'
+  companionLabel.style.font = '12px sans-serif'
+  companionLabel.style.padding = '1px 6px'
+  companionLabel.style.borderRadius = '3px'
+  companionLabel.style.background = 'rgba(255, 255, 255, 0.8)'
+  companionLabel.style.color = '#222'
+  companionLabel.style.pointerEvents = 'none'
+  companionWrap.append(companionCanvas, companionLabel)
+  document.body.append(companionWrap)
+  const cctx = companionCanvas.getContext('2d')
+  if (cctx === null) throw new Error('the companion canvas has no 2d context')
+
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
   canvas.style.background = theme.canvas
@@ -191,12 +227,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // layouts are at rest; the user cannot move the background, only zoom it.
   const view = { scale: DESIGN_SCALE, offsetX: canvas.width / 2, offsetY: canvas.height / 2 }
   let userZoom = 1
-  const fitView = (): void => {
-    const cam = fitCamera(engine.regions.get(engine.d.root), canvas.width, canvas.height, userZoom)
-    view.scale = cam.scale
-    view.offsetX = cam.offsetX
-    view.offsetY = cam.offsetY
+  // Fit a camera onto an engine's sheet circle for a given viewport, writing the
+  // transform into `out`. The one fit both the main view and the companion use —
+  // the pure `fitCamera` math, no fork. The companion passes zoom 1 (view-only,
+  // no wheel input reaches it).
+  const applyFit = (eng: Engine, w: number, h: number, zoom: number, out: { scale: number; offsetX: number; offsetY: number }): void => {
+    const cam = fitCamera(eng.regions.get(eng.d.root), w, h, zoom)
+    out.scale = cam.scale
+    out.offsetX = cam.offsetX
+    out.offsetY = cam.offsetY
   }
+  const fitView = (): void => applyFit(engine, canvas.width, canvas.height, userZoom, view)
 
   const toWorld = (screen: Vec2): Vec2 =>
     vec((screen.x - view.offsetX) / view.scale, (screen.y - view.offsetY) / view.scale)
@@ -1090,10 +1131,80 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     return out
   }
 
+  // Position/show the companion wrapper for the current display mode. Plain CSS
+  // sizing — PiP is a fixed-fraction bottom-right inset, split is the right half;
+  // the queued interface overhaul restyles this. Only re-writes styles when the
+  // visibility/mode key changes so an idle frame touches no layout.
+  const restyleCompanion = (visible: boolean): void => {
+    const key = visible ? companionMode : 'hidden'
+    if (key === companionStyleKey) return
+    companionStyleKey = key
+    if (!visible) {
+      companionWrap.style.display = 'none'
+      return
+    }
+    companionWrap.style.display = 'block'
+    companionWrap.style.position = 'fixed'
+    companionWrap.style.zIndex = '1'
+    companionWrap.style.boxSizing = 'border-box'
+    companionWrap.style.background = theme.canvas
+    if (companionMode === 'split') {
+      companionWrap.style.top = '0'
+      companionWrap.style.bottom = ''
+      companionWrap.style.right = '0'
+      companionWrap.style.width = '50vw'
+      companionWrap.style.height = '100vh'
+      companionWrap.style.border = ''
+      companionWrap.style.borderLeft = '1px solid rgba(0, 0, 0, 0.2)'
+      companionWrap.style.borderRadius = ''
+    } else {
+      companionWrap.style.top = ''
+      companionWrap.style.bottom = '16px'
+      companionWrap.style.right = '16px'
+      companionWrap.style.width = '28vw'
+      companionWrap.style.height = '28vh'
+      companionWrap.style.borderLeft = ''
+      companionWrap.style.border = '1px solid rgba(0, 0, 0, 0.25)'
+      companionWrap.style.borderRadius = '4px'
+    }
+  }
+
+  // Drive the companion pane for this frame: rebuild its engine ONLY when the
+  // target diagram's identity changes (carryOver warm-start), settle, fit, paint.
+  const renderCompanion = (comp: Companion | null, visible: boolean): void => {
+    restyleCompanion(visible)
+    if (!visible || comp === null) return
+    companionWrap.style.background = theme.canvas
+    const w = companionCanvas.clientWidth
+    const h = companionCanvas.clientHeight
+    if (w > 0 && h > 0 && (companionCanvas.width !== w || companionCanvas.height !== h)) {
+      companionCanvas.width = w
+      companionCanvas.height = h
+    }
+    if (comp.diagram !== companionShownDiagram || companionEngine === null) {
+      const prev = companionEngine
+      const next = mkEngine(comp.diagram, comp.boundary)
+      if (prev !== null) carryOver(prev, next)
+      companionEngine = next
+      companionShownDiagram = comp.diagram
+    }
+    for (let i = 0; i < SETTLE_STEPS_PER_FRAME; i++) settleStep(companionEngine)
+    applyFit(companionEngine, companionCanvas.width, companionCanvas.height, 1, companionView)
+    const shapes = paint(companionEngine, theme)
+    cctx.clearRect(0, 0, companionCanvas.width, companionCanvas.height)
+    drawShapes(cctx, shapes, companionView)
+    companionLabel.textContent = comp.label
+  }
+
   const frame = (): void => {
     if (disposed) return
-    if (canvas.width !== window.innerWidth || canvas.height !== window.innerHeight) {
-      canvas.width = window.innerWidth
+    const comp = companionFor({ mode, session, side, replay })
+    const companionVisible = comp !== null && companionMode !== 'hidden'
+    // Split gives the companion the right half, so the main view fits the left
+    // half; PiP/hidden leave the main view full-width (PiP overlays a corner).
+    const mainW = comp !== null && companionMode === 'split' ? Math.floor(window.innerWidth / 2) : window.innerWidth
+    if (canvas.width !== mainW || canvas.height !== window.innerHeight) {
+      canvas.width = mainW
       canvas.height = window.innerHeight
     }
     const pinnedIds = pin === null ? null : new Set(pin.drag.bodies.keys())
@@ -1126,6 +1237,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     ctx2d.clearRect(0, 0, canvas.width, canvas.height)
     drawShapes(ctx2d, shapes, view)
+    renderCompanion(comp, companionVisible)
     raf = requestAnimationFrame(frame)
   }
 
@@ -1263,7 +1375,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     canvas.style.background = theme.canvas
     themeBtn.textContent = `Theme: ${theme.name}`
   })
-  goalRow.append(modeBtn, sideBtn, themeBtn, button('Undo', onUndo))
+  // Cycle the companion pane hidden → PiP → split. Session-lifetime, like the
+  // theme toggle; the next frame reads companionMode and re-lays-out.
+  const companionBtn = button(`Companion: ${companionMode}`, () => {
+    companionMode = companionMode === 'hidden' ? 'pip' : companionMode === 'pip' ? 'split' : 'hidden'
+    companionBtn.textContent = `Companion: ${companionMode}`
+  })
+  goalRow.append(modeBtn, sideBtn, themeBtn, companionBtn, button('Undo', onUndo))
   proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave))
   chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, libraryDiv, openFileInput)
   renderLibrary()
@@ -1327,6 +1445,18 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         }
         return out
       },
+      // The companion pane's live decision + engine, for the e2e: null when the
+      // companion is not applicable (EDIT / no session / no replay), else the
+      // label, whether it is on-screen, and its engine body count.
+      companion(): { visible: boolean; label: string; bodies: number } | null {
+        const c = companionFor({ mode, session, side, replay })
+        if (c === null) return null
+        return {
+          visible: companionMode !== 'hidden',
+          label: c.label,
+          bodies: companionEngine === null ? 0 : companionEngine.bodies.size,
+        }
+      },
       // The live saveable theory as JSON — the same object Save theory writes.
       theoryJson(): string {
         return JSON.stringify(theoryToJson(sessionTheory(ctx, { relations })))
@@ -1353,6 +1483,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       canvas.removeEventListener('wheel', onWheel)
       window.removeEventListener('keydown', onKeyDown)
       chrome.replaceChildren()
+      companionWrap.remove()
       if ((window as any).__vpaDebug !== undefined) delete (window as any).__vpaDebug
     },
   }
