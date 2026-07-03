@@ -191,6 +191,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let companionMode: 'hidden' | 'pip' | 'split' = 'pip'
   let companionEngine: Engine | null = null
   let companionShownDiagram: Diagram | null = null
+  // How many times the companion engine has been (re)seeded via mkEngine. It is
+  // the rebuild-discipline observable: a step that leaves the companion's target
+  // diagram identity unchanged must NOT bump this (no reseed); a step that
+  // changes the target bumps it by exactly one (a single carryOver warm-start).
+  let companionRebuilds = 0
   const companionView = { scale: DESIGN_SCALE, offsetX: 0, offsetY: 0 }
   let companionStyleKey = ''
 
@@ -1187,6 +1192,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       if (prev !== null) carryOver(prev, next)
       companionEngine = next
       companionShownDiagram = comp.diagram
+      companionRebuilds++
     }
     for (let i = 0; i < SETTLE_STEPS_PER_FRAME; i++) settleStep(companionEngine)
     applyFit(companionEngine, companionCanvas.width, companionCanvas.height, 1, companionView)
@@ -1448,13 +1454,18 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // The companion pane's live decision + engine, for the e2e: null when the
       // companion is not applicable (EDIT / no session / no replay), else the
       // label, whether it is on-screen, and its engine body count.
-      companion(): { visible: boolean; label: string; bodies: number } | null {
+      companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null {
         const c = companionFor({ mode, session, side, replay })
         if (c === null) return null
         return {
           visible: companionMode !== 'hidden',
           label: c.label,
           bodies: companionEngine === null ? 0 : companionEngine.bodies.size,
+          // Reseed count (see companionRebuilds) and live body positions — the
+          // e2e diffs these to pin no-reseed on an identity-stable step and the
+          // companion's total non-interactivity (a click on it moves nothing).
+          rebuilds: companionRebuilds,
+          pos: companionEngine === null ? [] : [...companionEngine.bodies.values()].map((b) => ({ id: b.id, x: b.pos.x, y: b.pos.y })),
         }
       },
       // The live saveable theory as JSON — the same object Save theory writes.

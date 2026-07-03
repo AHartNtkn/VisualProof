@@ -6,7 +6,7 @@ declare global {
       nodeCount(): number
       status(): string
       replay(): { mode: string; k: number; n: number; label: string; bodies: number }
-      companion(): { visible: boolean; label: string; bodies: number } | null
+      companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null
       view(): { scale: number; offsetX: number; offsetY: number }
       bodies(): { id: string; kind: string; x: number; y: number; r: number }[]
       wires(): { id: string; x: number; y: number }[]
@@ -115,6 +115,11 @@ test('the companion pane targets the other side, survives a forward step, and to
   const c1 = await page.evaluate(() => window.__vpaDebug!.companion())
   expect(c1!.label).toBe('meeting: backward side')
   expect(c1!.bodies).toBe(c0!.bodies)
+  // Rebuild discipline: the forward step changed the MAIN diagram, not the
+  // companion's target (the backward side), so the companion engine was NOT
+  // reseeded — its reseed count is identical. (A per-frame rebuild would bump
+  // this by dozens of frames between c0 and c1.)
+  expect(c1!.rebuilds).toBe(c0!.rebuilds)
 
   // Toggle: PiP → split (right half) → hidden → PiP.
   const companionBtn = page.getByRole('button', { name: /^Companion:/ })
@@ -123,6 +128,22 @@ test('the companion pane targets the other side, survives a forward step, and to
   // The next frame restyles pip (28vw) → split (50vw); poll for the resize.
   await expect.poll(async () => (await page.locator('#companion').boundingBox())!.width).toBeGreaterThan(box.width * 0.4)
   expect((await page.evaluate(() => window.__vpaDebug!.companion()))!.visible).toBe(true)
+
+  // Split hit-testing: the MAIN camera fits the HALVED left half, so a node
+  // renders in the left half — a real click at its rendered position must still
+  // select it. (If the main camera ignored the halving, the node would render
+  // centered UNDER the companion pane and the click would miss.) Re-read the
+  // main box: it is now half-width.
+  await page.waitForTimeout(200)
+  const splitBox = (await canvas.boundingBox())!
+  expect(splitBox.width).toBeLessThan(box.width * 0.75)
+  const sn = await page.evaluate(() => {
+    const v = window.__vpaDebug!.view()
+    const b = window.__vpaDebug!.bodies().find((x) => x.kind === 'term')!
+    return { x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
+  })
+  await page.mouse.click(splitBox.x + sn.x, splitBox.y + sn.y)
+  await expect(page.locator('#status')).toContainText("node '")
 
   await companionBtn.click()
   await expect(page.locator('#companion')).toBeHidden()
@@ -133,6 +154,80 @@ test('the companion pane targets the other side, survives a forward step, and to
 
   await companionBtn.click()
   await expect(page.locator('#companion')).toBeVisible()
+})
+
+// Plan 17 HARD RULE: the companion is VIEW-ONLY. A real click, drag, and wheel
+// on the companion canvas must change NO state — no main-view zoom/pan, no
+// selection, no pending action, and the companion itself must neither reseed nor
+// change. (The companion canvas carries no pointer/wheel listeners; this pins
+// that a gesture on it is completely inert, seam-diffed before/after.)
+test('the companion canvas is inert: a click, drag, and wheel on it change nothing', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+
+  // A goal with a node on each side, then enter PROVE — companion visible (PiP).
+  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
+  await page.getByRole('button', { name: /add term/i }).click()
+  await page.getByRole('button', { name: /set goal lhs/i }).click()
+  await page.getByRole('button', { name: /set goal rhs/i }).click()
+  await page.getByRole('button', { name: /switch to prove/i }).click()
+  await expect.poll(async () => (await page.evaluate(() => window.__vpaDebug!.companion()))?.bodies ?? 0).toBeGreaterThan(0)
+  await expect(page.locator('#companion')).toBeVisible()
+  await page.waitForTimeout(300) // let both engines settle so positions are at rest
+
+  // Baseline: main camera, status, node count, and the companion's own state.
+  const before = await page.evaluate(() => ({
+    view: window.__vpaDebug!.view(),
+    status: window.__vpaDebug!.status(),
+    nodes: window.__vpaDebug!.nodeCount(),
+    comp: window.__vpaDebug!.companion(),
+  }))
+
+  // Aim every gesture at the CENTER of the companion pane (bottom-right in PiP).
+  const cbox = (await page.locator('#companion-canvas').boundingBox())!
+  const cx = cbox.x + cbox.width / 2
+  const cy = cbox.y + cbox.height / 2
+
+  // A real click on the companion.
+  await page.mouse.click(cx, cy)
+  // A real drag across the companion.
+  await page.mouse.move(cx, cy)
+  await page.mouse.down()
+  for (let i = 1; i <= 6; i++) await page.mouse.move(cx - i * 8, cy - i * 6)
+  await page.mouse.up()
+  // A real wheel over the companion (would zoom the MAIN view if it leaked).
+  await page.mouse.move(cx, cy)
+  await page.mouse.wheel(0, -400)
+  await page.waitForTimeout(150)
+
+  const after = await page.evaluate(() => ({
+    view: window.__vpaDebug!.view(),
+    status: window.__vpaDebug!.status(),
+    nodes: window.__vpaDebug!.nodeCount(),
+    comp: window.__vpaDebug!.companion(),
+  }))
+
+  // Main view unchanged: no wheel zoom (scale) and no drag pan (offsets).
+  expect(Math.abs(after.view.scale - before.view.scale)).toBeLessThan(0.01)
+  expect(Math.abs(after.view.offsetX - before.view.offsetX)).toBeLessThan(1)
+  expect(Math.abs(after.view.offsetY - before.view.offsetY)).toBeLessThan(1)
+  // No selection / pending action fired: the status message is byte-identical
+  // (no "selected node '...'") and no node was created or removed.
+  expect(after.status).toBe(before.status)
+  expect(after.nodes).toBe(before.nodes)
+  // The sheet has no selection — the action menu offers no node action.
+  await expect(page.locator('#action-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true })).toHaveCount(0)
+  // The companion itself neither reseeded nor changed its target, and its own
+  // layout did not move (a drag on it does NOT drag its bodies — same ids, each
+  // within rest micro-jitter of where it was).
+  expect(after.comp!.rebuilds).toBe(before.comp!.rebuilds)
+  expect(after.comp!.label).toBe(before.comp!.label)
+  expect(after.comp!.bodies).toBe(before.comp!.bodies)
+  expect(after.comp!.pos.map((p) => p.id).sort()).toEqual(before.comp!.pos.map((p) => p.id).sort())
+  for (const b of before.comp!.pos) {
+    const a = after.comp!.pos.find((p) => p.id === b.id)!
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(1)
+  }
 })
 
 // The plan-14 deliverable: a relational theorem replays step-by-step through the
@@ -184,6 +279,9 @@ test('a relational theorem replays step by step through the live shell', async (
   const compMid = await page.evaluate(() => window.__vpaDebug!.companion())
   expect(compMid!.label).toBe('goal: final state')
   expect(compMid!.bodies).toBe(compStart!.bodies)
+  // 20 replay steps rebuilt the MAIN diagram 20 times; the companion target (the
+  // final state) is identity-stable, so the companion engine was never reseeded.
+  expect(compMid!.rebuilds).toBe(compStart!.rebuilds)
 
   // The menu Prev/Next buttons drive the same stepper (carryOver path).
   await page.getByRole('button', { name: 'Next ▶', exact: true }).click()
