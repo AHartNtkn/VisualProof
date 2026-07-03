@@ -15,7 +15,9 @@
 **Files:** `src/app/companion.ts`: `companionFor(state) → { diagram, boundary, label } | null` where state carries mode/session/side/replay — pure, total, tested for every mode×side×presence combination (no session → null; replay → rhs + "goal" label; prove-forward → backward current + label "meeting: backward side"; etc.).
 **Test:** `tests/app/companion.test.ts` — the full decision table, including the degenerate cases (replay at the last step: companion equals the displayed diagram — still shown, the label says so; backward side with a fresh session).
 
-- [ ] Logic + tests green; suite + tsc green. Commit.
+- [x] Logic + tests green; suite + tsc green. Commit.
+
+**Findings (Task 1):** `companionFor` is one pure total function over `CompanionState = {mode, session, side, replay}`. Decision: EDIT→null; PROVE·forward→backward.current + rhs boundary, label `meeting: backward side`; PROVE·backward→forward.current + lhs boundary, label `meeting: forward side`; PROVE no-session→null; REPLAY→`diagramAt(stepCount)` (final rhs) + replay boundary, label `goal: final state`, independent of k so the last-step diagram IS the companion (still shown); REPLAY no-replay→null. Boundaries come from `sideBoundary`/`replay.boundary` verbatim — no new boundary logic. Tests assert diagram/boundary by object identity (airtight side selection) plus the exact label strings. 9 tests, suite 875 green, tsc clean.
 
 ### Task 2: The pane + e2e
 
