@@ -37,7 +37,7 @@
 ### Task 3: Review + close
 
 - [x] Independent adversarial review: name-collision and partial-pick probes; verify defining NEVER mutates the sheet diagram; JSON round-trip of a session-defined relation through loadTheory; the pip renders the defined argument order (paint-level check).
-- [ ] Plan-doc + memory sync; close.
+- [x] Plan-doc + memory sync; closed (review commit 2264ed4: one MEDIUM fixed test-first — unloadEntry was the only library mutator skipping the rebuild pre-check, so unloading a file cited by a session-defined relation stranded the ref and desynced library from ctx; ten probes added; both documented deviations independently confirmed. 831/831, e2e 6/6).
 
 **Findings (Task 3):** Verdict ISSUES-FIXED-APPROVED. Baseline reverified at HEAD 2a13f8e (tsc clean, vitest 821/821, e2e 6/6). Ten probes added (+10 → 831 vitest); one real finding fixed test-first.
 
