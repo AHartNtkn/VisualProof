@@ -173,31 +173,44 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     // The line's OUTERMOST POINT is where its individual is quantified, and
     // it must be a body homed at the wire's SCOPE (USER LAW: dangling ends
     // are their own nodes — the ∃ is manipulable independently of what it
-    // attaches to). A dangling wire gets a degree-1 junction (the ∃ dot); a
-    // 2-endpoint wire scoped ABOVE its endpoints (the ∀ shape: quantified in
-    // an outer region while both ports sit deeper) gets a degree-2 via body
-    // so the line visibly bulges through its scope instead of drawing as a
-    // direct connection.
-    const looseEnd = ends.length === 1 && !bset.has(wid)
-    const scopeAboveEndpoints = ends.length === 2 && !bset.has(wid)
-      && w.scope !== w.endpoints
-        .map((ep) => d.nodes[ep.node]!.region)
-        .reduce((a, b) => deepestCommonAncestor(d, a, b))
-    const needsJunction = ends.length + (bset.has(wid) ? 1 : 0) >= 3 || looseEnd || scopeAboveEndpoints
-    if (needsJunction) {
-      const jid = `j:${wid}`
-      bodies.set(jid, {
-        id: jid, kind: 'junction', node: null, geometry: null,
-        localAnchor: new Map(), discR: 4.5, region: w.scope,
+    // attaches to). A dangling wire's loose end IS that body. A multi-port
+    // wire connects its ports naturally — junction homed at the DCA of the
+    // port regions — and when the scope sits ABOVE the dca (the ∀ shape:
+    // quantified in an outer region the line would not otherwise touch) a
+    // dangling ∃ branch reaches out to a scope-homed body, so the line never
+    // contorts through its scope (USER rendering rule). Boundary wires show
+    // their quantifier at the frame exit instead.
+    const isBoundary = bset.has(wid)
+    const mkWireBody = (id: string, region: RegionId): void => {
+      bodies.set(id, {
+        id, kind: 'junction', node: null, geometry: null,
+        localAnchor: new Map(), discR: 4.5, region,
         pos: { x: (i++) * 3, y: -(i * 2) }, vel: { x: 0, y: 0 }, theta: 0,
       })
-      membersOf.get(w.scope)!.push(jid)
+      membersOf.get(region)!.push(id)
+    }
+    if (ends.length === 1) {
+      if (isBoundary) { boundaryOf.set(wid, ends[0]!.body); continue } // the frame slot is its end
+      mkWireBody(`j:${wid}`, w.scope)
+      legs.push({ wid, from: ends[0]!, to: { body: `j:${wid}`, key: null } })
+      continue
+    }
+    const dca = w.endpoints
+      .map((ep) => d.nodes[ep.node]!.region)
+      .reduce((a, b) => deepestCommonAncestor(d, a, b))
+    const needsDangle = !isBoundary && w.scope !== dca
+    if (ends.length + (isBoundary ? 1 : 0) >= 3 || needsDangle) {
+      const jid = `j:${wid}`
+      mkWireBody(jid, isBoundary ? w.scope : dca)
       for (const en of ends) legs.push({ wid, from: en, to: { body: jid, key: null } })
-      if (bset.has(wid)) boundaryOf.set(wid, jid)
-    } else if (ends.length === 2) {
+      if (isBoundary) boundaryOf.set(wid, jid)
+      if (needsDangle) {
+        const xid = `x:${wid}`
+        mkWireBody(xid, w.scope)
+        legs.push({ wid, from: { body: jid, key: null }, to: { body: xid, key: null } })
+      }
+    } else {
       legs.push({ wid, from: ends[0]!, to: ends[1]! })
-    } else if (ends.length === 1) {
-      boundaryOf.set(wid, ends[0]!.body) // boundary singleton: the frame slot is its end
     }
   }
 

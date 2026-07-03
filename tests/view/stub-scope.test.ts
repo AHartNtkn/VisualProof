@@ -48,10 +48,12 @@ describe('existential stubs honor wire scope', () => {
     expect(dist, 'the dot must not sit inside the outer cut — the individual is quantified on the sheet').toBeGreaterThan(g1.radius)
   })
 
-  it('∀-shape: a 2-endpoint wire scoped between the cuts bulges its outermost point THERE (via body)', () => {
+  it('∀-shape: a 2-endpoint wire scoped between the cuts grows a dangling ∃ branch THERE (never contorts)', () => {
     // ∀x (P(x) ∧ Q(x)) — the line's two endpoints sit inside the inner cut,
-    // but the line is quantified in the annulus: its outermost point must
-    // visibly live between the cuts, not render as a direct connection.
+    // but the line is quantified in the annulus. USER rendering rule: the
+    // line connects its ports naturally (junction at the dca) and a dangling
+    // ∃ node homed at the scope carries the quantifier — the line itself
+    // never detours through the annulus.
     const b = new DiagramBuilder()
     const c1 = b.cut(b.root)
     const c2 = b.cut(c1)
@@ -65,15 +67,21 @@ describe('existential stubs honor wire scope', () => {
     ]) // scoped at c1 — the annulus — while both endpoints live in c2
     const d = b.build()
     const e = mkEngine(d, [])
-    const via = e.bodies.get(`j:${w}`)
-    expect(via, 'the quantifier location needs its own body in the scope region').toBeDefined()
-    expect(via!.region).toBe(c1)
-    expect(e.legs.filter((l) => l.wid === w).length).toBe(2)
+    const j = e.bodies.get(`j:${w}`)
+    expect(j, 'the port connectivity keeps a junction near the ports').toBeDefined()
+    expect(j!.region, 'junction homes at the dca — the line does not contort into the annulus').toBe(c2)
+    const x = e.bodies.get(`x:${w}`)
+    expect(x, 'the quantifier is a dangling ∃ body at the scope').toBeDefined()
+    expect(x!.region).toBe(c1)
+    expect(e.legs.filter((l) => l.wid === w).length).toBe(3)
     settle(e, 600)
     recomputeRegions(e)
     const g2 = e.regions.get(c2)!
-    const dist = Math.hypot(via!.pos.x - g2.center.x, via!.pos.y - g2.center.y)
-    expect(dist, 'the outermost point of the line sits outside the inner cut').toBeGreaterThan(g2.radius)
+    const dist = Math.hypot(x!.pos.x - g2.center.x, x!.pos.y - g2.center.y)
+    expect(dist, 'the ∃ dot sits outside the inner cut').toBeGreaterThan(g2.radius)
+    const stub = existentialStubs(e).find((s) => s.wid === w)
+    expect(stub, 'the dangling branch end draws the ∃ dot').toBeDefined()
+    expect(stub!.dot.x).toBe(x!.pos.x)
   })
 
   it('a same-region 2-endpoint wire stays a direct leg (no via body)', () => {
