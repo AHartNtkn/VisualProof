@@ -141,6 +141,43 @@ describe('frameSlots — canonical boundary slots on the rounded-rect perimeter'
       prev = a
     }
   })
+
+  it('degenerate frames (corner radius collapses the straight edges) keep slots distinct, on-perimeter, outward', () => {
+    // When hw or hh <= FRAME_CORNER_W the straight edges vanish (r = min(corner,
+    // hw, hh)) and the perimeter becomes a stadium or full circle. Slot placement
+    // is by ARC LENGTH regardless, so slots must stay distinct and ride the drawn
+    // rounded rect even when n far exceeds the edge count and the frame is
+    // off-origin — the property the arc-length parameterization guarantees but
+    // the 40-square cases above never exercise.
+    const frames: FrameBounds[] = [
+      { minX: -6, maxX: 6, minY: -6, maxY: 6, frameR: 6, center: { x: 0, y: 0 } },      // tiny square → full circle
+      { minX: 0, maxX: 4, minY: -14, maxY: 6, frameR: 10, center: { x: 2, y: -4 } },    // tall stadium, off-origin
+      { minX: -3, maxX: 3, minY: -3, maxY: 3, frameR: 3, center: { x: 0, y: 0 } },      // sub-corner square
+    ]
+    for (const f of frames) {
+      const hw = (f.maxX - f.minX) / 2, hh = (f.maxY - f.minY) / 2
+      const r = Math.min(FRAME_CORNER_W, hw, hh)
+      // SDF to THIS frame's rounded rect (corner radius r, centred at f.center).
+      const sdfDeg = (px: number, py: number): number => {
+        const qx = Math.abs(px - f.center.x) - (hw - r), qy = Math.abs(py - f.center.y) - (hh - r)
+        return Math.hypot(Math.max(qx, 0), Math.max(qy, 0)) + Math.min(Math.max(qx, qy), 0) - r
+      }
+      for (const n of [5, 12, 20]) {
+        const slots = frameSlots(f, n)
+        expect(slots).toHaveLength(n)
+        for (const sl of slots) {
+          expect(Math.abs(sdfDeg(sl.point.x, sl.point.y)), `slot off perimeter at (${sl.point.x.toFixed(2)},${sl.point.y.toFixed(2)})`).toBeLessThan(1e-6)
+          const outward = Math.cos(sl.normal) * (sl.point.x - f.center.x) + Math.sin(sl.normal) * (sl.point.y - f.center.y)
+          expect(outward, 'normal points outward from centre').toBeGreaterThan(0)
+        }
+        let minD = Infinity
+        for (let i = 0; i < slots.length; i++) for (let j = i + 1; j < slots.length; j++) {
+          minD = Math.min(minD, Math.hypot(slots[i]!.point.x - slots[j]!.point.x, slots[i]!.point.y - slots[j]!.point.y))
+        }
+        expect(minD, `n=${n} distinct slots on frame hw=${hw} hh=${hh}`).toBeGreaterThan(0)
+      }
+    }
+  })
 })
 
 describe('carryOver', () => {
