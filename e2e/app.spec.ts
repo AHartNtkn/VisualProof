@@ -81,10 +81,9 @@ test('a relational theorem replays step by step through the live shell', async (
   await lib.getByRole('button', { name: '▸ frege.json', exact: true }).click()
   await expect(lib).toContainText('plusComm')
 
-  // The emitted frege.json lists theorems [plusAssoc, plusLeftUnit,
-  // plusRightUnit, succShiftS, plusComm]; the Library renders one "▶ Replay"
-  // button per theorem in that order, so plusComm's is index 4.
-  await lib.getByRole('button', { name: '▶ Replay', exact: true }).nth(4).click()
+  // The Library renders one "▶ Replay" button per theorem in derivation
+  // (dependency) order, so plusComm — which cites succShiftS — is last.
+  await lib.getByRole('button', { name: '▶ Replay', exact: true }).last().click()
 
   // Entered replay at step 0 (the lhs). plusComm is a large derivation — the
   // n>=40 floor confirms we grabbed a substantial theorem (not a 5-11 step one),
