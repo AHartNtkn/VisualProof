@@ -609,11 +609,28 @@ export function dissolveRegion(d: Diagram, rid: RegionId): Diagram {
   return mkDiagram({ root: d.root, regions, nodes, wires })
 }
 
+/** Wires whose EVERY endpoint sits on the given nodes would survive a
+    deletion as bare ∃ dots — semantically an equivalence (closed terms
+    denote, so ∃x.⊤ ≡ ⊤) and pure clutter (USER ruling): deletions take
+    them along. */
+export function orphanedWires(d: Diagram, nodeIds: ReadonlySet<NodeId>): WireId[] {
+  return Object.entries(d.wires)
+    .filter(([, w]) => w.endpoints.length > 0 && w.endpoints.every((ep) => nodeIds.has(ep.node)))
+    .map(([id]) => id)
+}
+
 /** Delete hit items. Nodes/wires go (grouped by region — spanning several
     regions is fine); selected cuts/bubbles DISSOLVE: the boundary vanishes
-    and unselected contents propagate to the parent. */
+    and unselected contents propagate to the parent. Wires that would be
+    left with no endpoints are deleted along (USER ruling). */
 export function deleteHits(d: Diagram, hits: readonly Hit[]): Diagram {
   let cur = d
+  // take along wires that only connect to deleted nodes (no bare ∃ litter)
+  const deadNodes = new Set(hits.filter((h) => h.kind === 'node').map((h) => h.id))
+  const extra: Hit[] = orphanedWires(d, deadNodes)
+    .filter((w) => !hits.some((h) => h.kind === 'wire' && h.id === w))
+    .map((w): Hit => ({ kind: 'wire', id: w }))
+  hits = [...hits, ...extra]
   const groups = new Map<RegionId, Hit[]>()
   for (const h of hits) {
     if (h.kind === 'region') continue

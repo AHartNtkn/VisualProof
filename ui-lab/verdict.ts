@@ -14,7 +14,7 @@ import { convertToHeadNormal, convertToWeakHeadNormal } from '../src/app/tactics
 import { inferFoldArgs } from '../src/app/define'
 import { parseTerm } from '../src/kernel/term/parse'
 import { polarity } from '../src/kernel/diagram/regions'
-import { hitShapes, installBrush, promptAt, type BrushHandle, type LabCtx } from './shared'
+import { hitShapes, installBrush, orphanedWires, promptAt, type BrushHandle, type LabCtx } from './shared'
 import { discover, iterationTargets, FUEL } from './prove'
 import { citeCandidates, citeFrom, citeOccurrences, emptySelAt, foldedComp, occToSel, occurrencesContaining } from './prove4'
 import type { Occurrence } from '../src/kernel/diagram/subgraph/match'
@@ -132,9 +132,18 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink, opts: { active?
       const byKind = (k: string) => disc.actions.find((a) => a.kind === k)
       const a = byKind('doubleCutElim') ?? byKind('vacuousElim') ?? byKind('erase') ?? byKind('deiterate')
       if (a === undefined) { sink.refuse('nothing here reads as a deletion'); return }
+      // erasure takes its would-be-orphaned wires along (USER ruling: no
+      // bare ∃ litter) — extending the selection, not the rule. Deiteration
+      // is NOT augmented: its sel is a pattern matched against the master
+      // occurrence, and a rider wire the master lacks would refuse the step.
+      const withOrphans = (sel: typeof disc.sel) => {
+        const dead = new Set(sel.nodes)
+        const extra = orphanedWires(lab.d, dead).filter((w) => !sel.wires.includes(w) && lab.d.wires[w]!.scope === sel.region)
+        return extra.length === 0 ? sel : { ...sel, wires: [...sel.wires, ...extra] }
+      }
       const step: ProofStep = a.kind === 'doubleCutElim' ? { rule: 'doubleCutElim', region: disc.sel.regions[0]! }
         : a.kind === 'vacuousElim' ? { rule: 'vacuousElim', region: disc.sel.regions[0]! }
-        : a.kind === 'erase' ? { rule: 'erasure', sel: disc.sel }
+        : a.kind === 'erase' ? { rule: 'erasure', sel: withOrphans(disc.sel) }
         : { rule: 'deiteration', sel: disc.sel, fuel: FUEL }
       if (guarded(() => sink.apply(step))) brush.clear()
     } else if (e.shiftKey) {

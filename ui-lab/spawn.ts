@@ -11,6 +11,12 @@ import { promptAt, spawnRelAt, spawnTermAt, tryEdit, type LabCtx } from './share
 let menu: HTMLDivElement | null = null
 export function closeSpawnCascade(): void { menu?.remove(); menu = null }
 
+// dismissal is global: Escape anywhere, or any press outside the menu
+window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeSpawnCascade() })
+window.addEventListener('pointerdown', (e) => {
+  if (menu !== null && !(e.target instanceof Node && menu.contains(e.target))) closeSpawnCascade()
+}, { capture: true })
+
 export function openSpawnCascade(lab: LabCtx, ctx: ProofContext, at: { sx: number; sy: number }, world: Vec2): void {
   closeSpawnCascade()
   const region = lab.regionAt(world)
