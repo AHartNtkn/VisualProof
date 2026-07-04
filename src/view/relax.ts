@@ -3,7 +3,7 @@ import type { Vec2 } from './vec'
 import type { Body, Engine } from './engine'
 import { frameBounds, frameSlots, subtreeCarriers, worldAnchor } from './engine'
 import type { ChainDisc } from './wirechain'
-import { chainEnergy, chainGradient, resampleGated, topologyStep, WIRE_TRAVEL_CAP } from './wirechain'
+import { chainEnergy, chainGradient, localStencilE, resample, topologyStep, WIRE_TRAVEL_CAP } from './wirechain'
 export { WIRE_TRAVEL_CAP } from './wirechain'
 
 /**
@@ -34,6 +34,7 @@ const REST = 18
 /** Chain descent: step size and iterations per tick (trust-region capped in
     wirechain.ts — a shortened gradient step still descends). */
 const CHAIN_STEP = 0.15
+const HOMED_STEP = 0.08
 /** The soft-force bound: every SOFT pull (sibling attraction, leg-spring
     tension) saturates at this one magnitude — the old linear cohesion
     evaluated at one leg rest-length (0.65·REST), no new scale. An unbounded
@@ -505,7 +506,12 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     for (const hm of ch.homed) {
       const r = grad.f[hm.idx]!
       const b = e.bodies.get(hm.bodyId)!
-      let dx = r.x * CHAIN_STEP, dy = r.y * CHAIN_STEP
+      // stability bound: the dot parks inside the barrier ramp (slope ≈
+      // BARRIER_SLOPE over half a clearance ≈ 5/wu) stacked with spacing
+      // and bend curvature (~2·SPACING + …); an explicit step is stable
+      // only below 2/k_total ≈ 0.08 — at CHAIN_STEP (0.15) it overshoots
+      // the contact every tick (measured: exact period-2, ±0.8 E)
+      let dx = r.x * HOMED_STEP, dy = r.y * HOMED_STEP
       const d = Math.hypot(dx, dy)
       if (d > WIRE_TRAVEL_CAP) {
         dx = (dx / d) * WIRE_TRAVEL_CAP
@@ -548,10 +554,26 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
         dx = (dx / d) * WIRE_TRAVEL_CAP
         dy = (dy / d) * WIRE_TRAVEL_CAP
       }
-      ch.pts[v] = { x: ch.pts[v]!.x + dx, y: ch.pts[v]!.y + dy }
+      // BACKTRACKING LINE SEARCH (Gauss–Seidel descent): the move must not
+      // raise the point's complete local energy, else halve it (×3) and
+      // finally stay. Guarantees per-move descent for EVERY term — the
+      // serial per-term stability tunings this replaces are all measured
+      // failures (bend 1/l, barrier ramp, mask band each found a mobility
+      // × stiffness product to oscillate at).
+      const p0 = ch.pts[v]!
+      const e0 = localStencilE(ch, discs, v)
+      let scale = 1
+      for (let t = 0; t < 4; t++) {
+        ch.pts[v] = { x: p0.x + dx * scale, y: p0.y + dy * scale }
+        if (localStencilE(ch, discs, v) <= e0 + 1e-9) break
+        ch.pts[v] = p0
+        scale /= 2
+        if (t === 3) scale = 0
+      }
+      if (scale === 0) ch.pts[v] = p0
     }
     topologyStep(ch, discs)
-    resampleGated(ch, discs)
+    resample(ch)
   }
 
   // Damped momentum integration. NOTE (plan 21, measured): the velocity

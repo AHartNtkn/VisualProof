@@ -34,18 +34,17 @@ export const BEND = 0.6
     Potential: quadratic ramp over the outer half of the clearance zone,
     constant slope inside — finite everywhere, gradient bounded. */
 export const BARRIER_SLOPE = 18
-/** Discretization health is part of the ONE functional — but ONE-SIDED:
-    a floor against segment COMPRESSION only (onset pitch/2). Tangential
-    sliding is a zero mode of pure tension: points bunch up and the
-    1/segment bend gradient explodes into oscillation. A symmetric rest
-    length was tried and is WRONG — it makes the chain an inextensible rope
-    of its birth length (tension can only coil it, never shorten it;
-    measured: taut dangle ropes coiling forever, driving a slow swimmer).
-    Stretch costs nothing here; tension owns shortening; resample removes
-    surplus points as chains contract (its compression trigger sits at
-    pitch/4, below the floor's equilibrium, so it cannot churn). */
-export const SPACING = 2.0
-export const spacingOnset = (pitch: number): number => pitch / 2
+/** There is NO spacing energy term. Three formulations were built and
+    measured before concluding the term itself is wrong: a symmetric rest
+    length makes the chain an inextensible rope of its birth length
+    (coiling swimmers); a one-sided compression floor locks surplus length
+    into standing wrinkles (a stretched dangle could never re-contract);
+    pure adjacent-uniformity lets whole paths collapse together. The
+    parameterization is a GAUGE and is handled outside the energy by the
+    canonical resample (E-neutral now that every term is a proper continuum
+    discretization), while the invariant bend term turn²/arc-share already
+    diverges when a CURVED point bunches — the one case where bunching
+    hurts the drawing. */
 /** Trust region: max distance any chain point moves per tick — a shortened
     descent step still descends; drawn motion stays continuous at frame
     scale (round-8 law). */
@@ -157,6 +156,10 @@ export const clearance = (r: number): number => r + 1.5
 export function exitMask(ch: WireChain, disc: ChainDisc, v: number): { m: number; anchorIdx: number; dm: number } {
   const r = clearance(disc.r)
   let best = { m: 1, anchorIdx: -1, dm: 0 }
+  // a HOMED end TERMINATES — it is not passing through to a port, so it
+  // gets no exemption: the barrier parks the ∃ dot just outside the rim
+  // (without this, tension buries the dot inside its node's disc)
+  if (ch.homed.some((h) => h.idx === v)) return best
   for (const b of ch.binds) {
     if (b.body !== disc.id) continue
     const dvec = sub(ch.pts[v]!, ch.pts[b.idx]!)
@@ -174,32 +177,69 @@ export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { 
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
-      const L = len(sub(ch.pts[n]!, ch.pts[v]!))
-      parts.tension += TENSION * L
-      const under = spacingOnset(ch.pitch) - L
-      if (under > 0) parts.spacing += SPACING * under * under
+      parts.tension += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
     }
-    if (ch.adj[v]!.length === 2) {
-      const [a, b] = ch.adj[v]! as [number, number]
-      const u = sub(ch.pts[a]!, ch.pts[v]!)
-      const w = sub(ch.pts[b]!, ch.pts[v]!)
-      const lu = len(u), lw = len(w)
-      if (lu > 1e-9 && lw > 1e-9) {
-        const cos = Math.max(-1, Math.min(1, (u.x * w.x + u.y * w.y) / (lu * lw)))
-        const turn = Math.PI - Math.acos(cos)
-        parts.bend += BEND * turn * turn
-      }
-    }
-    for (const disc of discs) {
-      const r = clearance(disc.r)
-      const d = len(sub(ch.pts[v]!, disc.pos))
-      if (d < r) {
-        const { m } = exitMask(ch, disc, v)
-        if (m > 0) parts.barrier += m * barrierU(d, r)
-      }
-    }
+    parts.bend += localBend(ch, v)
+    parts.barrier += localBarrier(ch, discs, v)
   }
   return parts
+}
+
+/** DISCRETIZATION-INVARIANT local terms: the functional must be a proper
+    discretization of a continuum energy, or every resample changes E and
+    no gate can tell physics from bookkeeping (measured: coarsening bumps
+    blocked chain contraction entirely).
+    Bend: ∫κ²ds → Σ turn²/arc-share. Barrier: ∫U ds → Σ m·U·arc-share. */
+export function arcShare(ch: WireChain, v: number): number {
+  let s = 0
+  for (const n of ch.adj[v]!) s += len(sub(ch.pts[n]!, ch.pts[v]!)) / 2
+  return s
+}
+
+export function localBend(ch: WireChain, v: number): number {
+  if (ch.adj[v]!.length !== 2) return 0
+  const [a, b] = ch.adj[v]! as [number, number]
+  const u = sub(ch.pts[a]!, ch.pts[v]!)
+  const w = sub(ch.pts[b]!, ch.pts[v]!)
+  const lu = len(u), lw = len(w)
+  if (lu < 1e-9 || lw < 1e-9) return 0
+  const cos = Math.max(-1, Math.min(1, (u.x * w.x + u.y * w.y) / (lu * lw)))
+  const turn = Math.PI - Math.acos(cos)
+  return (BEND * turn * turn) / Math.max(0.25, (lu + lw) / 2)
+}
+
+export function localBarrier(ch: WireChain, discs: readonly ChainDisc[], v: number): number {
+  let E = 0
+  const share = Math.max(0.25, arcShare(ch, v))
+  for (const disc of discs) {
+    const r = clearance(disc.r)
+    const d = len(sub(ch.pts[v]!, disc.pos))
+    if (d < r) {
+      const { m } = exitMask(ch, disc, v)
+      if (m > 0) E += m * barrierU(d, r) * share
+    }
+  }
+  return E
+}
+
+/** Complete local-stencil energy of point v: every term of E that depends
+    on p_v (own bend/spacing-free/barrier plus the neighbors' terms that
+    reference v through arc shares and turns). The gradient differentiates
+    this; the descent line-search backtracks against it. */
+function tensionAt(ch: WireChain, v: number): number {
+  let s = 0
+  for (const n of ch.adj[v]!) s += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
+  return s
+}
+
+export function localStencilE(ch: WireChain, discs: readonly ChainDisc[], v: number): number {
+  let s = 0
+  for (const k of [v, ...ch.adj[v]!]) {
+    s += localBend(ch, k)
+    s += localBarrier(ch, discs, k)
+  }
+  for (const n of ch.adj[v]!) s += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
+  return s
 }
 
 /** E_wire of one chain against the given discs. */
@@ -208,31 +248,10 @@ export function chainEnergy(ch: WireChain, discs: readonly ChainDisc[]): number 
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
-      const L = len(sub(ch.pts[n]!, ch.pts[v]!))
-      E += TENSION * L
-      const under = spacingOnset(ch.pitch) - L
-      if (under > 0) E += SPACING * under * under
+      E += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
     }
-    // bend at degree-2 interior points: (π − angle between segments)²
-    if (ch.adj[v]!.length === 2) {
-      const [a, b] = ch.adj[v]! as [number, number]
-      const u = sub(ch.pts[a]!, ch.pts[v]!)
-      const w = sub(ch.pts[b]!, ch.pts[v]!)
-      const lu = len(u), lw = len(w)
-      if (lu > 1e-9 && lw > 1e-9) {
-        const cos = Math.max(-1, Math.min(1, (u.x * w.x + u.y * w.y) / (lu * lw)))
-        const turn = Math.PI - Math.acos(cos)
-        E += BEND * turn * turn
-      }
-    }
-    for (const disc of discs) {
-      const r = clearance(disc.r)
-      const d = len(sub(ch.pts[v]!, disc.pos))
-      if (d < r) {
-        const { m } = exitMask(ch, disc, v)
-        if (m > 0) E += m * barrierU(d, r)
-      }
-    }
+    E += localBend(ch, v)
+    E += localBarrier(ch, discs, v)
   }
   return E
 }
@@ -247,44 +266,34 @@ export function chainGradient(ch: WireChain, discs: readonly ChainDisc[]): { f: 
     onDiscs.set(id, { x: cur.x + x, y: cur.y + y })
   }
   for (let v = 0; v < ch.pts.length; v++) {
-    // tension + spacing: unit pull toward each neighbor (gradient of
-    // length) plus the parameterization-pinning quadratic's gradient
+    // tension: unit pull toward each neighbor (gradient of length)
     for (const n of ch.adj[v]!) {
       const dvec = sub(ch.pts[n]!, ch.pts[v]!)
       const d = len(dvec)
       if (d < 1e-9) continue
-      const under = spacingOnset(ch.pitch) - d
-      const mag = TENSION - (under > 0 ? 2 * SPACING * under : 0)
-      f[v]!.x += (mag * dvec.x) / d
-      f[v]!.y += (mag * dvec.y) / d
+      f[v]!.x += (TENSION * dvec.x) / d
+      f[v]!.y += (TENSION * dvec.y) / d
     }
-    // bend: numeric gradient of the local turn terms (the analytic form is
-    // long; the term only involves v and its two neighbors, so a two-sided
-    // difference on those three points stays cheap and exactly matches E)
-    if (ch.adj[v]!.length === 2) {
+    // bend + barrier: numeric gradient of the LOCAL terms (they couple v
+    // and its neighbors through arc shares; differentiating the same code
+    // that defines E keeps force ≡ −∇E exactly). Stencil: E terms that
+    // depend on p_v are localBend at v and its neighbors, and localBarrier
+    // at v and its neighbors.
+    {
       const h = 1e-4
-      const local = (): number => {
-        const [a, b] = ch.adj[v]! as [number, number]
-        const u = sub(ch.pts[a]!, ch.pts[v]!)
-        const w = sub(ch.pts[b]!, ch.pts[v]!)
-        const lu = len(u), lw = len(w)
-        if (lu < 1e-9 || lw < 1e-9) return 0
-        const cos = Math.max(-1, Math.min(1, (u.x * w.x + u.y * w.y) / (lu * lw)))
-        const turn = Math.PI - Math.acos(cos)
-        return BEND * turn * turn
-      }
       const p = ch.pts[v]!
-      const e0 = local()
+      const e0 = localStencilE(ch, discs, v) - tensionAt(ch, v) // tension handled analytically above
       ch.pts[v] = { x: p.x + h, y: p.y }
-      const ex = local()
+      const ex = localStencilE(ch, discs, v) - tensionAt(ch, v)
       ch.pts[v] = { x: p.x, y: p.y + h }
-      const ey = local()
+      const ey = localStencilE(ch, discs, v) - tensionAt(ch, v)
       ch.pts[v] = p
       f[v]!.x -= (ex - e0) / h
       f[v]!.y -= (ey - e0) / h
     }
-    // barrier: push out of every intruded clearance zone; equal-and-opposite
-    // on the disc (this is the single term both sides differentiate)
+    // disc reactions + mask anchor pairs, analytic on the dominant radial
+    // term (the arc-share factor is even in the disc position, so the
+    // reaction is the share-weighted radial gradient)
     for (const disc of discs) {
       const r = clearance(disc.r)
       const dvec = sub(ch.pts[v]!, disc.pos)
@@ -292,25 +301,16 @@ export function chainGradient(ch: WireChain, discs: readonly ChainDisc[]): { f: 
       if (d >= r || d < 1e-9) continue
       const { m, anchorIdx, dm } = exitMask(ch, disc, v)
       if (m <= 0) continue
-      const U = barrierU(d, r)
-      const mag = m * barrierG(d, r)
-      const ux = dvec.x / d, uy = dvec.y / d
-      f[v]!.x += ux * mag
-      f[v]!.y += uy * mag
-      addDisc(disc.id, -ux * mag, -uy * mag)
-      // the mask's own gradient (transition band only): pulls the point
-      // toward the anchor's exempt bubble and pushes the anchor back —
-      // an internal Newton pair of the chain
+      const share = Math.max(0.25, arcShare(ch, v))
+      const mag = m * barrierG(d, r) * share
+      addDisc(disc.id, (-dvec.x / d) * mag, (-dvec.y / d) * mag)
       if (dm > 0 && anchorIdx >= 0) {
         const avec = sub(ch.pts[v]!, ch.pts[anchorIdx]!)
         const ad = len(avec)
         if (ad > 1e-9) {
-          const gm = U * dm
-          const ax = avec.x / ad, ay = avec.y / ad
-          f[v]!.x -= ax * gm
-          f[v]!.y -= ay * gm
-          f[anchorIdx]!.x += ax * gm
-          f[anchorIdx]!.y += ay * gm
+          const gm = barrierU(d, r) * dm * share
+          f[anchorIdx]!.x += (avec.x / ad) * gm
+          f[anchorIdx]!.y += (avec.y / ad) * gm
         }
       }
     }
@@ -462,7 +462,7 @@ export function resample(ch: WireChain): void {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
       const d = len(sub(ch.pts[n]!, ch.pts[v]!))
-      if (d > 2 * ch.pitch || (d < ch.pitch / 4 && !structural.has(v) && !structural.has(n))) { needs = true; break }
+      if (d > 2 * ch.pitch || (d < ch.pitch / 2 && !structural.has(v) && !structural.has(n))) { needs = true; break }
     }
   }
   if (!needs) return
@@ -537,31 +537,3 @@ export function resample(ch: WireChain): void {
   ch.slots = ch.slots.map((s) => ({ ...s, idx: remap(s.idx) }))
 }
 
-/** Resample under the discrete-move discipline: a re-parameterization must
-    not raise the energy (rebuilding a COMPRESSED path to fewer points
-    concentrates turn angles and can raise E_bend — such rebuilds are
-    rejected; extra resolution is harmless, a coarser lie is not). */
-export function resampleGated(ch: WireChain, discs: readonly ChainDisc[]): void {
-  const saved = {
-    pts: ch.pts.map((p) => ({ ...p })),
-    adj: ch.adj.map((a) => [...a]),
-    binds: ch.binds.map((b) => ({ ...b })),
-    homed: ch.homed.map((h) => ({ ...h })),
-    slots: ch.slots.map((s) => ({ ...s })),
-  }
-  const before = chainEnergy(ch, discs)
-  resample(ch)
-  // REFINEMENT is always legitimate: if the rebuild ADDED points and E
-  // rose, the coarse energy was an UNDERESTIMATE of the continuum (e.g. a
-  // long segment tunnelling through a disc with no sample point inside —
-  // measured: the gate kept rejecting the refinement that would expose it,
-  // flapping forever). Only COARSENING must pass the energy gate.
-  if (ch.pts.length <= saved.pts.length && chainEnergy(ch, discs) > before + 1e-6) {
-    debugCounts.resampleReverted++
-    ch.pts = saved.pts
-    ch.adj = saved.adj
-    ch.binds = saved.binds
-    ch.homed = saved.homed
-    ch.slots = saved.slots
-  }
-}

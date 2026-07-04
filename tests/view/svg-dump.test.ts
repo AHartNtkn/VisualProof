@@ -4,18 +4,18 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
 import { settle, settleStep } from '../../src/view/relax'
 
-it('DUMP forallShape geometry over time', () => {
+it('DUMP tow scenario', () => {
   const b = new DiagramBuilder()
-  const r1 = b.ref(b.root, 'lt', 2), r2 = b.ref(b.root, 'gt', 2)
-  b.wire(b.root, [
-    { node: r1, port: { kind: 'arg', index: 0 } },
-    { node: r2, port: { kind: 'arg', index: 0 } },
-  ])
+  const n = b.ref(b.root, 'nat', 1)
+  const wid = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
+  void wid
   const e = mkEngine(b.build(), [])
   settle(e, 2600)
+  const body = e.bodies.get(n)!
+  body.pos = { x: body.pos.x + 40, y: body.pos.y }
   const frames: string[] = []
   for (let f = 0; f < 4; f++) {
-    if (f > 0) for (let i = 0; i < 60; i++) settleStep(e)
+    if (f > 0) for (let i = 0; i < 800; i++) settleStep(e)
     const parts: string[] = []
     for (const bb of e.bodies.values()) {
       const col = bb.kind === 'junction' ? 'red' : 'steelblue'
@@ -31,9 +31,9 @@ it('DUMP forallShape geometry over time', () => {
       }
       void wid
     }
-    frames.push(`<g transform="translate(${f * 90},0)">${parts.join('')}</g>`)
+    frames.push(`<g transform="translate(${f * 100},0)">${parts.join('')}</g>`)
   }
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-45 -45 380 90">${frames.join('')}</svg>`
-  writeFileSync('/tmp/claude-1001/-home-ahart-Documents-VisualProofAssistant/a640ce42-c609-401f-a2ca-17a76e2bb103/scratchpad/plain2-frames.svg', svg)
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="-65 -65 420 130">${frames.join('')}</svg>`
+  writeFileSync('/tmp/claude-1001/-home-ahart-Documents-VisualProofAssistant/a640ce42-c609-401f-a2ca-17a76e2bb103/scratchpad/tow-frames.svg', svg)
   console.log('dumped')
 })
