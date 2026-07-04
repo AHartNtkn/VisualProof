@@ -35,6 +35,11 @@ const REST = 18
     wirechain.ts — a shortened gradient step still descends). */
 const CHAIN_STEP = 0.15
 const HOMED_STEP = 0.08
+/** Homed-tip ring containment: gradient ramps to RING_SLOPE over RING_BAND
+    outside a child region's circle. Slope above the tip's possible wire
+    pull (tension ≈ 1–2 per incident branch) so the ring holds. */
+const RING_SLOPE = 8
+const RING_BAND = 4
 /** The soft-force bound: every SOFT pull (sibling attraction, leg-spring
     tension) saturates at this one magnitude — the old linear cohesion
     evaluated at one leg rest-length (0.65·REST), no new scale. An unbounded
@@ -502,10 +507,33 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     // homed ∃/∀ bodies are WIRE degrees of freedom: they move at the
     // chain's mobility, not the content integrator's (10× slower — a
     // 40-unit re-contraction at body mobility takes ~44 s of real time).
-    // Region projection still corrals them; content forces don't apply.
+    // Content forces don't apply; scope containment is an ENERGY here (a
+    // soft ring barrier vs child regions, reactions distributed over the
+    // region's subtree — the content pattern), with the projection as the
+    // final legality guarantee. A hard projection alone against wire
+    // tension at a breathing circle is a standing contact cycle (measured
+    // on the ∀-shape fixture: +2.7 E swings, 3 wu/200-tick drift).
     for (const hm of ch.homed) {
-      const r = grad.f[hm.idx]!
+      const r = { ...grad.f[hm.idx]! }
       const b = e.bodies.get(hm.bodyId)!
+      for (const child of e.childrenOf.get(b.region)!) {
+        const g = e.regions.get(child)
+        if (g === undefined) continue
+        const rr = g.radius + b.discR
+        const dx = b.pos.x - g.center.x, dy = b.pos.y - g.center.y
+        const dd = Math.max(Math.hypot(dx, dy), 1e-9)
+        if (dd >= rr + RING_BAND) continue
+        const mag = RING_SLOPE * Math.min(1, (rr + RING_BAND - dd) / RING_BAND)
+        const ux = dx / dd, uy = dy / dd
+        r.x += ux * mag
+        r.y += uy * mag
+        const carriers = subtreeCarriers(e, child)
+        for (const cid of carriers) {
+          const F = force.get(cid)!
+          F.x -= (ux * mag) / carriers.length
+          F.y -= (uy * mag) / carriers.length
+        }
+      }
       // stability bound: the dot parks inside the barrier ramp (slope ≈
       // BARRIER_SLOPE over half a clearance ≈ 5/wu) stacked with spacing
       // and bend curvature (~2·SPACING + …); an explicit step is stable
