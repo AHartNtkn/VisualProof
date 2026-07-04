@@ -278,17 +278,26 @@ export function stepFromJson(j: unknown): ProofStep {
 }
 
 export function theoremToJson(t: Theorem): unknown {
-  return { name: t.name, lhs: dwbToJson(t.lhs), rhs: dwbToJson(t.rhs), steps: t.steps.map(stepToJson) }
+  const backSteps = t.backSteps ?? []
+  return {
+    name: t.name, lhs: dwbToJson(t.lhs), rhs: dwbToJson(t.rhs),
+    steps: t.steps.map(stepToJson),
+    // dual-replay form: backward-oriented steps, replayed from the rhs.
+    // Omitted when empty so classic all-forward files stay byte-identical.
+    ...(backSteps.length > 0 ? { backSteps: backSteps.map(stepToJson) } : {}),
+  }
 }
 
 export function theoremFromJson(j: unknown): Theorem {
   if (!isRecord(j)) fail('theorem must be an object')
-  assertOnlyKeys(j, ['name', 'lhs', 'rhs', 'steps'], 'theorem')
+  assertOnlyKeys(j, ['name', 'lhs', 'rhs', 'steps', 'backSteps'], 'theorem')
   if (!Array.isArray(j.steps)) fail('theorem.steps must be an array')
+  if (j.backSteps !== undefined && !Array.isArray(j.backSteps)) fail('theorem.backSteps must be an array')
   return {
     name: str(j.name, 'theorem.name'),
     lhs: dwbFromJson(j.lhs, 'theorem.lhs'),
     rhs: dwbFromJson(j.rhs, 'theorem.rhs'),
     steps: j.steps.map((s) => stepFromJson(s)),
+    ...(Array.isArray(j.backSteps) && j.backSteps.length > 0 ? { backSteps: j.backSteps.map((s) => stepFromJson(s)) } : {}),
   }
 }

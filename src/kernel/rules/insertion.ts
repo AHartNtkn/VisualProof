@@ -33,7 +33,7 @@ export function applyInsertion(
  * INNER wire's scope must be negative. Scopes must be comparable; the merged
  * wire keeps the outer scope (and the outer wire's id).
  */
-export function applyWireJoin(d: Diagram, a: WireId, b: WireId): Diagram {
+export function applyWireJoin(d: Diagram, a: WireId, b: WireId, orientation: 'forward' | 'backward' = 'forward'): Diagram {
   const wa = d.wires[a]
   const wb = d.wires[b]
   if (wa === undefined) throw new DiagramError(`unknown wire '${a}'`)
@@ -53,8 +53,10 @@ export function applyWireJoin(d: Diagram, a: WireId, b: WireId): Diagram {
     )
   }
   const inner = d.wires[innerId]!
-  if (polarity(d, inner.scope) !== 'negative') {
-    throw new RuleError(`joining wires requires the inner wire's scope to be negative; '${inner.scope}' is positive`)
+  const needJoin = orientation === 'forward' ? 'negative' : 'positive'
+  const haveJoin = polarity(d, inner.scope)
+  if (haveJoin !== needJoin) {
+    throw new RuleError(`${orientation === 'backward' ? 'backward ' : ''}joining wires requires the inner wire's scope to be ${needJoin}; '${inner.scope}' is ${haveJoin}`)
   }
   const outer = d.wires[outerId]!
   // The merged wire keeps the OUTER scope: the inner endpoints' regions are

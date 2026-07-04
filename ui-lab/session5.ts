@@ -45,7 +45,7 @@ export function sessionStart(): { d: Diagram; boundary: WireId[] } {
  * DECLARE — the other end of the theorem falls out of the proof for free.
  * Forward: theorem = (origin ⟹ current), steps as recorded. Backward:
  * theorem = (current ⟹ origin); the internal backward side maintains the
- * exact replay tail (composedTail), so declaration is checkTheorem-ready.
+ * recorded flip-gated steps, replayed from the rhs at declaration.
  * The two-ended meet session remains the special case for statements fixed
  * a priori — an optional second front, not an entry ritual.
  */
@@ -133,7 +133,7 @@ export function mkTrackLab(lab: LabCtx, ctx: ProofContext = fregeCtx()): TrackLa
       const bd = (d: Diagram) => origin.boundary.filter((w) => d.wires[w] !== undefined)
       const thm: Theorem = dir === 'forward'
         ? { name, lhs: originDWB(), rhs: mkDiagramWithBoundary(current(), bd(current())), steps: fSteps.slice(0, cursor) }
-        : { name, lhs: mkDiagramWithBoundary(current(), bd(current())), rhs: originDWB(), steps: [...bSessions[cursor]!.backward.composedTail] }
+        : { name, lhs: mkDiagramWithBoundary(current(), bd(current())), rhs: originDWB(), steps: [], backSteps: [...bSessions[cursor]!.backward.steps] }
       checkTheorem(thm, ctx)
       ctx.theorems.set(name, thm)
       changed()
@@ -229,9 +229,16 @@ export function mkSessionLab(lab: LabCtx): SessionLab {
       return sd.steps.map((st) => st.rule === 'theorem' ? `cite ${st.name}` : st.rule)
     },
     replayStates: (thm) => {
-      const out: { d: Diagram; boundary: readonly WireId[] }[] = [{ d: thm.lhs.diagram, boundary: thm.lhs.boundary }]
-      replayProof(thm.lhs.diagram, thm.steps, ctx, (d) => out.push({ d, boundary: thm.lhs.boundary }))
-      return out
+      // dual-form theorems: the forward half walks from the lhs, the backward
+      // half from the rhs — display them lhs → meet → rhs
+      const fwd: { d: Diagram; boundary: readonly WireId[] }[] = [{ d: thm.lhs.diagram, boundary: thm.lhs.boundary }]
+      replayProof(thm.lhs.diagram, thm.steps, ctx, (d) => fwd.push({ d, boundary: thm.lhs.boundary }))
+      const bwd: { d: Diagram; boundary: readonly WireId[] }[] = []
+      replayProof(thm.rhs.diagram, thm.backSteps ?? [], ctx, (d) => bwd.push({ d, boundary: thm.rhs.boundary }), 'backward')
+      bwd.reverse()
+      // the backward walk's last-produced state IS the meet (≅ fwd's end) —
+      // skip it to avoid showing the meet twice; then append rhs-ward states
+      return [...fwd, ...bwd.slice(1), ...(thm.backSteps?.length ? [{ d: thm.rhs.diagram, boundary: thm.rhs.boundary }] : [])]
     },
     onChange: (fn) => listeners.push(fn),
   }

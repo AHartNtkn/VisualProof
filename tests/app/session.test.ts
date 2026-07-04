@@ -126,12 +126,13 @@ describe('backward mode', () => {
     )![0]
     s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
     expect(s.backward.steps).toHaveLength(1)
-    expect(s.backward.steps[0]!.rule).toBe('doubleCutIntro')
+    expect(s.backward.steps[0]!.rule).toBe('doubleCutElim')
     expect(Object.keys(s.backward.current.regions)).toHaveLength(1)
     // and now the two sides meet: lhs ≅ unwrapped rhs
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'toy2')
-    expect(thm.steps).toHaveLength(1)
+    expect(thm.steps).toHaveLength(0)
+    expect(thm.backSteps).toHaveLength(1)
   })
 
   it('backward undo restores the prior goal diagram', () => {
@@ -173,7 +174,8 @@ describe('multi-step backward composition', () => {
     expect(s.backward.steps).toHaveLength(2)
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'doubleWrap')
-    expect(thm.steps).toHaveLength(2)
+    expect(thm.steps).toHaveLength(0)
+    expect(thm.backSteps).toHaveLength(2)
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
 
@@ -210,7 +212,7 @@ describe('backward undo restores the composed tail', () => {
     s = applyBackward(s, { rule: 'doubleCutElim', region: o2 })
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
     s = undoBackward(s)
-    expect(s.backward.composedTail).toHaveLength(1)
+    expect(s.backward.steps).toHaveLength(1)
     // redo: the remaining pair is o1's (the inner one was restored by undo? no —
     // undo restored the state AFTER unwrapping o2 only, so o1's pair remains)
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
@@ -241,7 +243,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
       attachments: [],
       binders: {},
     })
-    expect(s.backward.steps[0]!.rule).toBe('erasure')
+    expect(s.backward.steps[0]!.rule).toBe('insertion')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unErased')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -397,7 +399,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'erasure', sel: { region: cut, regions: [], nodes: [m], wires: [wm] } })
-    expect(s.backward.steps[0]!.rule).toBe('insertion')
+    expect(s.backward.steps[0]!.rule).toBe('erasure')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardErased')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -430,7 +432,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'iteration', sel: { region: s.backward.current.root, regions: [], nodes: [a], wires: [wa] }, target: cut })
-    expect(s.backward.steps[0]!.rule).toBe('deiteration')
+    expect(s.backward.steps[0]!.rule).toBe('iteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardIterated')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -452,7 +454,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'deiteration', sel: { region: cut, regions: [], nodes: [c], wires: [wc] }, fuel: 64 })
-    expect(s.backward.steps[0]!.rule).toBe('iteration')
+    expect(s.backward.steps[0]!.rule).toBe('deiteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardDeiterated')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -473,19 +475,25 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'doubleCutIntro', sel: { region: s.backward.current.root, regions: [], nodes: [a], wires: [wa] } })
-    expect(s.backward.steps[0]!.rule).toBe('doubleCutElim')
+    expect(s.backward.steps[0]!.rule).toBe('doubleCutIntro')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardWrapped')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
   })
 
-  it('refuses rules with no backward inverse, naming the invertible set', () => {
+  it('every rule runs backward — only polarity gates flip (wireSever needs NEGATIVE scope backward)', () => {
     const r = new DiagramBuilder()
-    const a = r.termNode(r.root, p('\\x. x'))
-    const wa = r.wire(r.root, [{ node: a, port: { kind: 'output' } }])
+    const a = r.termNode(r.root, p('x y'))
+    const wa = r.wire(r.root, [
+      { node: a, port: { kind: 'freeVar', name: 'x' } },
+      { node: a, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    r.wire(r.root, [{ node: a, port: { kind: 'output' } }])
     const rhs = mkDiagramWithBoundary(r.build(), [])
     const s = startSession(rhs, rhs, ctx())
-    expect(() => applyBackward(s, { rule: 'fusion', wire: wa })).toThrowError(/no backward inverse/)
+    expect(() =>
+      applyBackward(s, { rule: 'wireSever', wire: wa, keep: [{ node: a, port: { kind: 'freeVar', name: 's0' } }] }),
+    ).toThrowError(/backward severing a wire requires a negative scope/)
   })
 })
 
@@ -514,9 +522,66 @@ describe('backward erasure of externally-bound atoms (binder stubs)', () => {
     void w
     // the bubble sits inside a cut: NEGATIVE — backward erasure's gate
     s = applyBackward(s, { rule: 'erasure', sel: { region: bub, regions: [], nodes: [a2], wires: [] } })
-    expect(s.backward.steps[0]!.rule).toBe('insertion')
+    expect(s.backward.steps[0]!.rule).toBe('erasure')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'boundAtomErased')
     expect(() => checkTheorem(thm, c)).not.toThrow()
+  })
+})
+
+describe('dual-replay redesign: record actions, verify from both ends', () => {
+  it("the user's scenario: backward-deiterate a bound predicate copy in a POSITIVE sheet", () => {
+    const c = verifyTheory(buildFregeTheory())
+    // goal (positive sheet): bubble with TWO bound atoms on one line — as
+    // after iterating a bound predicate into its own scope
+    const r = new DiagramBuilder()
+    const bub = r.bubble(r.root, 1)
+    const a1 = r.atom(bub, bub)
+    const a2 = r.atom(bub, bub)
+    const w = r.wire(bub, [
+      { node: a1, port: { kind: 'arg', index: 0 } },
+      { node: a2, port: { kind: 'arg', index: 0 } },
+    ])
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const l = new DiagramBuilder()
+    const lbub = l.bubble(l.root, 1)
+    const b1 = l.atom(lbub, lbub)
+    l.wire(lbub, [{ node: b1, port: { kind: 'arg', index: 0 } }])
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    let s = startSession(lhs, rhs, c)
+    void w
+    // erase is gated out (positive+backward needs negative) — deletion here IS
+    // deiteration, justified by the surviving copy at the same scope
+    s = applyBackward(s, { rule: 'deiteration', sel: { region: bub, regions: [], nodes: [a2], wires: [] }, fuel: 64 })
+    expect(s.backward.steps[0]!.rule).toBe('deiteration')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'boundCopyDeiterated')
+    expect(() => checkTheorem(thm, c)).not.toThrow()
+  })
+
+  it('tampered backSteps cannot certify: the dual replay is the authority', () => {
+    const c = verifyTheory(buildFregeTheory())
+    const r = new DiagramBuilder()
+    const t = r.termNode(r.root, p('\\x. x'))
+    r.wire(r.root, [{ node: t, port: { kind: 'output' } }])
+    const cut = r.cut(r.root)
+    const m = r.termNode(cut, p('\\y. y'))
+    const wm = r.wire(cut, [{ node: m, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const l = new DiagramBuilder()
+    const t2 = l.termNode(l.root, p('\\x. x'))
+    l.wire(l.root, [{ node: t2, port: { kind: 'output' } }])
+    l.cut(l.root)
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    let s = startSession(lhs, rhs, c)
+    s = applyBackward(s, { rule: 'erasure', sel: { region: cut, regions: [], nodes: [m], wires: [wm] } })
+    const thm = assembleTheorem(s, 'honest')
+    expect(() => checkTheorem(thm, c)).not.toThrow()
+    // drop the backward step: the halves no longer meet
+    const forged = { ...thm, backSteps: [] }
+    expect(() => checkTheorem(forged, c)).toThrowError(/do not meet|does not arrive/)
+    // flip the gate: an erasure claimed at a POSITIVE region cannot replay backward
+    const forged2 = { ...thm, backSteps: [{ rule: 'erasure' as const, sel: { region: rhs.diagram.root, regions: [], nodes: [t], wires: [] } }] }
+    expect(() => checkTheorem(forged2, c)).toThrowError(/backward erasure requires a negative region/)
   })
 })

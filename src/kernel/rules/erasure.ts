@@ -26,11 +26,13 @@ export function applyErasure(d: Diagram, sel: SubgraphSelection, orientation: 'f
  * Replaces `φ(x,x)` by the weaker `∃y φ(x,y)` at the wire's scope, so the
  * scope must be POSITIVE.
  */
-export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoint[]): Diagram {
+export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoint[], orientation: 'forward' | 'backward' = 'forward'): Diagram {
   const w = d.wires[wireId]
   if (w === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
-  if (polarity(d, w.scope) !== 'positive') {
-    throw new RuleError(`severing a wire requires a positive scope; '${w.scope}' is negative`)
+  const need = orientation === 'forward' ? 'positive' : 'negative'
+  const haveScope = polarity(d, w.scope)
+  if (haveScope !== need) {
+    throw new RuleError(`${orientation === 'backward' ? 'backward ' : ''}severing a wire requires a ${need} scope; '${w.scope}' is ${haveScope}`)
   }
   const has = (eps: readonly Endpoint[], ep: Endpoint): boolean =>
     eps.some((e) => e.node === ep.node && portKey(e.port) === portKey(ep.port))

@@ -60,14 +60,16 @@ export function applyComprehensionInstantiate(
   comp: DiagramWithBoundary,
   attachments: readonly WireId[],
   binders: ReadonlyMap<RegionId, RegionId> = new Map(),
+  orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
   const bubble = d.regions[bubbleId]
   if (bubble === undefined) throw new DiagramError(`unknown region '${bubbleId}'`)
   if (bubble.kind !== 'bubble') {
     throw new RuleError(`comprehension instantiation requires a bubble; '${bubbleId}' is a ${bubble.kind}`)
   }
-  if (polarity(d, bubbleId) !== 'negative') {
-    throw new RuleError(`comprehension instantiation requires a negative bubble; '${bubbleId}' is positive`)
+  const need = orientation === 'forward' ? 'negative' : 'positive'
+  if (polarity(d, bubbleId) !== need) {
+    throw new RuleError(`${orientation === 'backward' ? 'backward ' : ''}comprehension instantiation requires a ${need} bubble; '${bubbleId}' is not`)
   }
   if (comp.boundary.length !== bubble.arity + attachments.length) {
     throw new RuleError(
@@ -193,10 +195,12 @@ export function applyComprehensionAbstract(
   wrap: SubgraphSelection,
   comp: DiagramWithBoundary,
   occurrences: readonly AbstractionOccurrence[],
+  orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
   const wc = selectionContents(d, wrap) // validates the wrap selection loudly
-  if (polarity(d, wrap.region) !== 'positive') {
-    throw new RuleError(`comprehension abstraction requires a positive region; '${wrap.region}' is negative`)
+  const need = orientation === 'forward' ? 'positive' : 'negative'
+  if (polarity(d, wrap.region) !== need) {
+    throw new RuleError(`${orientation === 'backward' ? 'backward ' : ''}comprehension abstraction requires a ${need} region; '${wrap.region}' is not`)
   }
   const seenNodes = new Set<NodeId>()
   const seenRegions = new Set<RegionId>()

@@ -68,9 +68,9 @@ export type ProofStep =
 export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext, orientation: 'forward' | 'backward' = 'forward'): Diagram {
   switch (step.rule) {
     case 'insertion': return applyInsertion(d, step.region, step.pattern, step.attachments, new Map(Object.entries(step.binders)), orientation)
-    case 'wireJoin': return applyWireJoin(d, step.a, step.b)
+    case 'wireJoin': return applyWireJoin(d, step.a, step.b, orientation)
     case 'erasure': return applyErasure(d, step.sel, orientation)
-    case 'wireSever': return applyWireSever(d, step.wire, step.keep)
+    case 'wireSever': return applyWireSever(d, step.wire, step.keep, orientation)
     case 'iteration': return applyIteration(d, step.sel, step.target)
     case 'deiteration': return applyDeiteration(d, step.sel, step.fuel)
     case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel)
@@ -82,8 +82,8 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext, orient
     case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term)
     case 'fusion': return applyFusion(d, step.wire)
     case 'fission': return applyFission(d, step.node, step.path)
-    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, new Map(Object.entries(step.binders)))
-    case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences)
+    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, new Map(Object.entries(step.binders)), orientation)
+    case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences, orientation)
     case 'theorem': {
       const thm = ctx.theorems.get(step.name)
       if (thm === undefined) throw new ProofError(`unknown theorem '${step.name}'`)
@@ -106,11 +106,12 @@ export function replayProof(
   steps: readonly ProofStep[],
   ctx: ProofContext,
   onStep?: (d: Diagram, stepIndex: number) => void,
+  orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
   let cur = start
   steps.forEach((s, i) => {
     try {
-      cur = applyStep(cur, s, ctx)
+      cur = applyStep(cur, s, ctx, orientation)
     } catch (e) {
       throw new ProofError(`step ${i} (${s.rule}) failed: ${e instanceof Error ? e.message : String(e)}`)
     }
