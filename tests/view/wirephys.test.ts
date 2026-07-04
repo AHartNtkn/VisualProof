@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine, worldAnchor, type Engine } from '../../src/view/engine'
-import { settle, settleStep, wireEnergy, WIRE_TRAVEL_CAP } from '../../src/view/relax'
+import { settle, settleStep, wireEnergy, WIREP } from '../../src/view/relax'
 
 /**
  * PLAN 21 LAW BATTERY — wires as first-class physical objects.
@@ -215,7 +215,7 @@ describe('wire physics — energy discipline', () => {
         }
         for (let k = 0; k < ch.pts.length; k++) {
           if (pinned.has(k)) continue
-          expect(segDist(ch.pts[k]!)).toBeLessThanOrEqual(WIRE_TRAVEL_CAP + 1e-6)
+          expect(segDist(ch.pts[k]!)).toBeLessThanOrEqual(WIREP.travelCap + 1e-6)
         }
       }
     }

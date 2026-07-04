@@ -63,6 +63,9 @@ export const motionPrefs = {
   hoverEaseMs: 0,
 }
 
+/** Lab frame pacing (tunable): settle ticks per animation frame. */
+export const labPace = { ticksPerFrame: 4 }
+
 export type LabCtx = {
   engine: Engine
   d: Diagram
@@ -252,7 +255,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
   }
   const frame = () => {
     if (canvas.width !== innerWidth || canvas.height !== innerHeight) { canvas.width = innerWidth; canvas.height = innerHeight }
-    if (!frozen) for (let i = 0; i < 4; i++) settleStep(lab.engine)
+    if (!frozen) for (let i = 0; i < labPace.ticksPerFrame; i++) settleStep(lab.engine)
     fit()
     for (const fn of frameHooks) fn()
     const shapes: Shape[] = [...paint(lab.engine, LIGHT, opts?.wires)]

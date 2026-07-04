@@ -12,8 +12,8 @@ import type { Vec2 } from './vec'
  * the whole discipline (USER: "this should still be energy based; I don't
  * want to end up in the previous mess").
  *
- *   E_wire = TENSION · Σ|segment|                      (wants to be short)
- *          + BEND · Σ turn²                            (wants to be straight)
+ *   E_wire = WIREP.tension · Σ|segment|                      (wants to be short)
+ *          + WIREP.bend · Σ turn²                            (wants to be straight)
  *          + Σ barrier(disc, point)                    (wires ↔ nodes, symmetric)
  *
  * The barrier potential is finite-depth (saturating force — the engine's
@@ -23,17 +23,24 @@ import type { Vec2 } from './vec'
  * disc reactions, which is what makes wires push nodes.
  */
 
-export const TENSION = 1.0
-export const BEND = 0.6
-/** The disc↔wire barrier's SATURATED slope. It must exceed any single
-    saturated content attraction (the engine's soft cap is 0.65·18 ≈ 11.7):
-    with a weaker slope an attracted disc plows straight through a wire —
-    the wire yields, snaps to the disc's far side, and the cycle repeats
-    forever (measured: +1…+5 E spikes, wandering bodies). 1.5× for margin;
-    crowds of stacked attractions can still push through, which is physical.
-    Potential: quadratic ramp over the outer half of the clearance zone,
-    constant slope inside — finite everywhere, gradient bounded. */
-export const BARRIER_SLOPE = 18
+/** LIVE-TUNABLE wire parameters (the feel levers — ui-lab/tune.html).
+    Defaults are the values every law in the battery was pinned against.
+    Constraints that stay true at any setting: barrierSlope must exceed the
+    content soft cap (≈11.7) or attracted discs plow through wires
+    (measured); travelCap bounds drawn per-tick motion (continuity law). */
+export const WIREP = {
+  /** wire shortness: unit pull along the chain */
+  tension: 1.0,
+  /** straightness stiffness (∫κ²ds weight); junction angles deviate from
+      120° in proportion (soap limit at 0) */
+  bend: 0.6,
+  /** disc↔wire push, saturated slope (see constraint above) */
+  barrierSlope: 18,
+  /** how far beyond a disc's radius wires keep clear */
+  clearanceMargin: 1.5,
+  /** trust region: max drawn wire motion per tick */
+  travelCap: 0.5,
+}
 /** There is NO spacing energy term. Three formulations were built and
     measured before concluding the term itself is wrong: a symmetric rest
     length makes the chain an inextensible rope of its birth length
@@ -45,10 +52,6 @@ export const BARRIER_SLOPE = 18
     discretization), while the invariant bend term turn²/arc-share already
     diverges when a CURVED point bunches — the one case where bunching
     hurts the drawing. */
-/** Trust region: max distance any chain point moves per tick — a shortened
-    descent step still descends; drawn motion stays continuous at frame
-    scale (round-8 law). */
-export const WIRE_TRAVEL_CAP = 0.5
 /** Sampling pitch (wu) between chain points; resample beyond 2× drift. */
 export const PITCH = 2
 /** Point budget per rebuilt path: transient chains can be HUNDREDS of wu
@@ -125,27 +128,27 @@ export function mkChain(terminals: Vec2[], pitch: number): { pts: Vec2[]; adj: n
   return { pts, adj }
 }
 
-/** Barrier potential: gradient ramps 0 → BARRIER_SLOPE over the outer half
-    of the clearance zone, constant BARRIER_SLOPE inside. */
+/** Barrier potential: gradient ramps 0 → WIREP.barrierSlope over the outer half
+    of the clearance zone, constant WIREP.barrierSlope inside. */
 export function barrierU(d: number, r: number): number {
   if (d >= r) return 0
   const half = r / 2
   if (d >= half) {
     const t = (r - d) / half // 0 at rim, 1 at half depth
-    return (BARRIER_SLOPE * half * t * t) / 2
+    return (WIREP.barrierSlope * half * t * t) / 2
   }
-  return (BARRIER_SLOPE * half) / 2 + BARRIER_SLOPE * (half - d)
+  return (WIREP.barrierSlope * half) / 2 + WIREP.barrierSlope * (half - d)
 }
 
 export function barrierG(d: number, r: number): number {
   if (d >= r) return 0
   const half = r / 2
-  if (d >= half) return (BARRIER_SLOPE * (r - d)) / half
-  return BARRIER_SLOPE
+  if (d >= half) return (WIREP.barrierSlope * (r - d)) / half
+  return WIREP.barrierSlope
 }
 
 /** The barrier clearance radius of a disc for wire points. */
-export const clearance = (r: number): number => r + 1.5
+export const clearance = (r: number): number => r + WIREP.clearanceMargin
 
 /** The wire legitimately passes THROUGH its own ports: barrier pairs are
     exempted for chain points within the exit run of a bind on that disc
@@ -239,7 +242,7 @@ export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { 
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
-      parts.tension += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
+      parts.tension += WIREP.tension * len(sub(ch.pts[n]!, ch.pts[v]!))
     }
     parts.bend += localBend(ch, v)
     parts.barrier += localBarrier(ch, discs, v)
@@ -268,7 +271,7 @@ export function localBend(ch: WireChain, v: number): number {
   if (lu < 1e-9 || lw < 1e-9) return 0
   const cos = Math.max(-1, Math.min(1, (ux * wx + uy * wy) / (lu * lw)))
   const turn = Math.PI - Math.acos(cos)
-  return (BEND * turn * turn) / Math.max(0.25, (lu + lw) / 2)
+  return (WIREP.bend * turn * turn) / Math.max(0.25, (lu + lw) / 2)
 }
 
 /** TUNNEL-PROOF barrier: the line integral ∫m·U ds evaluated per EDGE by
@@ -298,7 +301,7 @@ export function buildEdgeNear(ch: WireChain, allDiscs: readonly ChainDisc[]): Ed
       let near: ChainDisc[] | null = null
       for (const disc of discs) {
         // one travel-cap of slack: positions move ≤ cap within the tick
-        if (Math.hypot(mx - disc.pos.x, my - disc.pos.y) < clearance(disc.r) + L / 2 + PITCH + 2 * WIRE_TRAVEL_CAP) {
+        if (Math.hypot(mx - disc.pos.x, my - disc.pos.y) < clearance(disc.r) + L / 2 + PITCH + 2 * WIREP.travelCap) {
           if (near === null) near = []
           near.push(disc)
         }
@@ -376,7 +379,7 @@ export function localStencilE(ch: WireChain, discs: readonly ChainDisc[], v: num
     s += localBend(ch, k)
     s += localBarrier(ch, discs, k)
   }
-  for (const n of ch.adj[v]!) s += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
+  for (const n of ch.adj[v]!) s += WIREP.tension * len(sub(ch.pts[n]!, ch.pts[v]!))
   return s
 }
 
@@ -387,7 +390,7 @@ export function chainEnergy(ch: WireChain, allDiscs: readonly ChainDisc[]): numb
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
-      E += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
+      E += WIREP.tension * len(sub(ch.pts[n]!, ch.pts[v]!))
     }
     E += localBend(ch, v)
     E += localBarrier(ch, discs, v)
@@ -431,8 +434,8 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nea
       const dx = ch.pts[n]!.x - ch.pts[v]!.x, dy = ch.pts[n]!.y - ch.pts[v]!.y
       const d = Math.hypot(dx, dy)
       if (d < 1e-9) continue
-      f[v]!.x += (TENSION * dx) / d
-      f[v]!.y += (TENSION * dy) / d
+      f[v]!.x += (WIREP.tension * dx) / d
+      f[v]!.y += (WIREP.tension * dy) / d
     }
   }
   // ---- bend: ANALYTIC 3-point gradient per degree-2 point ----
@@ -458,8 +461,8 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nea
     const dcay = wyv / (lu * lw) - (c * uyv) / (lu * lu)
     const dcbx = uxv / (lu * lw) - (c * wxv) / (lw * lw)
     const dcby = uyv / (lu * lw) - (c * wyv) / (lw * lw)
-    const kC = (2 * BEND * theta) / (sBar * sinPhi)
-    const kS = sMean > 0.25 ? -(BEND * theta * theta) / (sBar * sBar) : 0
+    const kC = (2 * WIREP.bend * theta) / (sBar * sinPhi)
+    const kS = sMean > 0.25 ? -(WIREP.bend * theta * theta) / (sBar * sBar) : 0
     const uhx = uxv / lu, uhy = uyv / lu
     const whx = wxv / lw, why = wyv / lw
     f[ai]!.x -= kC * dcax + kS * (uhx / 2)
@@ -534,7 +537,7 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nea
 /** One damped, trust-region descent step over the chain's FREE points
     (terminals — binds, homed, slots — are constraint-owned and skipped).
     Returns the disc reactions for the caller to apply. */
-export function chainStep(ch: WireChain, discs: readonly ChainDisc[], step: number, cap: number = WIRE_TRAVEL_CAP, rays: Map<number, { origin: Vec2; angle: number }> | null = null): Map<string, MVec> {
+export function chainStep(ch: WireChain, discs: readonly ChainDisc[], step: number, cap: number = WIREP.travelCap, rays: Map<number, { origin: Vec2; angle: number }> | null = null): Map<string, MVec> {
   const pinned = new Set<number>()
   for (const b of ch.binds) pinned.add(b.idx)
   for (const hm of ch.homed) pinned.add(hm.idx)

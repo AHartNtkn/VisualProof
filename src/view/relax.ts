@@ -3,7 +3,7 @@ import type { Vec2 } from './vec'
 import type { Body, Engine } from './engine'
 import { frameBounds, frameSlots, subtreeCarriers, worldAnchor } from './engine'
 import type { ChainDisc } from './wirechain'
-import { buildEdgeNear, chainEnergy, chainGradient, pointLocalE, resample, topologyStep, WIRE_TRAVEL_CAP } from './wirechain'
+import { buildEdgeNear, chainEnergy, chainGradient, pointLocalE, resample, topologyStep, WIREP } from './wirechain'
 
 /** Tension of a point's incident edges (analytic in the gradient; the local
     line-search energies need it explicitly). */
@@ -12,7 +12,7 @@ function tensionLocal(ch: { pts: Vec2[]; adj: number[][] }, v: number): number {
   for (const n of ch.adj[v]!) s += Math.hypot(ch.pts[n]!.x - ch.pts[v]!.x, ch.pts[n]!.y - ch.pts[v]!.y)
   return s
 }
-export { WIRE_TRAVEL_CAP } from './wirechain'
+export { WIREP } from './wirechain'
 
 /**
  * Rotation-aware relaxation for the render engine. Bodies (nodes + junctions)
@@ -28,52 +28,57 @@ export { WIRE_TRAVEL_CAP } from './wirechain'
 /** Region padding beyond the minimal enclosing circle of its contents. */
 export const REGION_PAD = 5
 /** Minimum gap enforced between sibling discs/regions by overlap projection. */
-export const SIB_GAP = 5
+export const SIB_GAP = 5 // structural fallback; live value is PACE.sibGap
 
 // Relaxation coefficients. Not correctness heuristics: any positive values give
 // a valid equilibrium of the same constraint system; they tune visual pacing.
-const DT = 0.06
-const DAMP = 4
-const REP = 900
-/** The SOFT energy scale (formerly the leg rest length; leg springs are
-    gone — PLAN 21 wire chains own edge length — but every soft bound below
-    derives from this one scale, so it stays). */
-const REST = 18
-/** Chain descent: step size and iterations per tick (trust-region capped in
-    wirechain.ts — a shortened gradient step still descends). */
-const CHAIN_STEP = 0.15
-const HOMED_STEP = 0.08
-/** Homed-tip ring containment: gradient ramps to RING_SLOPE over RING_BAND
-    outside a child region's circle. Slope above the tip's possible wire
-    pull (tension ≈ 1–2 per incident branch) so the ring holds. */
-const RING_SLOPE = 8
-const RING_BAND = 4
+// LIVE-TUNABLE (the feel levers — ui-lab/tune.html); defaults are what the
+// pinned batteries were derived against.
+export const PACE = {
+  /** body integrator timestep */
+  dt: 0.06,
+  /** body damping (higher = syrupier) */
+  damp: 4,
+  /** content soft-force scale (sibling anchoring strength derives from it) */
+  softScale: 18,
+  /** content barrier stiffness */
+  rep: 900,
+  /** sibling gap (spacing between discs/regions) */
+  sibGap: 5,
+  /** wire descent step (wire responsiveness) */
+  chainStep: 0.15,
+  /** ∃-dot descent step */
+  homedStep: 0.08,
+  /** scope-ring containment on ∃ tips: slope must exceed wire pull (1–2) */
+  ringSlope: 8,
+  ringBand: 4,
+  /** rotation responsiveness divisor (higher = slower turning) */
+  rotDrag: 1,
+}
 /** The soft-force bound: every SOFT pull (sibling attraction, leg-spring
     tension) saturates at this one magnitude — the old linear cohesion
-    evaluated at one leg rest-length (0.65·REST), no new scale. An unbounded
+    evaluated at one leg rest-length (0.65·PACE.softScale), no new scale. An unbounded
     soft force can outpull every bounded one and drive a permanent conveyor:
     a leg spring stretched across a region ring (its geometric length must
     exceed the rest length) would otherwise drag body + enclosing circle +
     junction across the sheet forever — minimal enclosing circles exert no
     inward wall, so only the sibling attraction anchors content, and it can
     hold precisely because nothing soft can exceed it. */
-const SOFT_MAX = 0.65 * REST
-/** The rest INTERVAL for sibling gaps: no force at all between REST_LO and
-    REST_HI. The interval's width (3·SIB_GAP) is the noise budget — derived
+const SOFT_MAX = (): number => 0.65 * PACE.softScale
+/** The rest INTERVAL for sibling gaps: no force at all between REST_LO() and
+    REST_HI(). The interval's width (3·PACE.sibGap) is the noise budget — derived
     circle geometry breathes well under one unit at rest, so content parked
     mid-zone is never re-excited from either edge. */
-const REST_LO = 2 * SIB_GAP
-const REST_HI = 4 * SIB_GAP
-/** Barrier scale of the repulsive branch (the old repulsion constant). */
-const REP_K = REP
+const REST_LO = (): number => 2 * PACE.sibGap
+const REST_HI = (): number => 4 * PACE.sibGap
 /** The barrier SATURATES: it must hold a realistic crowd of saturated
-    attractions (a few × SOFT_MAX) but LOSE to a bundle of leg springs —
+    attractions (a few × SOFT_MAX()) but LOSE to a bundle of leg springs —
     a region circle spanning split content legitimately overlaps its
     siblings during transit, and an unbounded barrier exiles such content
     forever (observed: a sub-cluster slung 2000+ units from its hub
     junction, five springs pulling home at 60 against a barrier in the
     thousands). The projection, not the barrier, owns hard legality. */
-const BARRIER_MAX = 3 * SOFT_MAX
+const BARRIER_MAX = (): number => 3 * SOFT_MAX()
 /** Per-call sweep budget for the overlap projection (work bound per tick;
     projection runs every tick, so any residual finishes on later ticks). */
 const PROJECTION_PASSES = 60
@@ -254,7 +259,7 @@ export function resolveOverlaps(e: Engine): boolean {
   // for REGIONS — a root-scoped ∃ inside a cut circle reads as the wrong
   // quantifier scope, so region pairs keep projecting them. Disc-vs-disc
   // spacing is NOT semantic for a wire-end dot: the wire's own barrier
-  // handles disc clearance, and a hard SIB_GAP projection against soft
+  // handles disc clearance, and a hard PACE.sibGap projection against soft
   // wire tension parks the dot 15 wu out and cycles forever (measured).
   const wireOwnedP = new Set<string>()
   for (const ch of e.chains.values()) for (const hm of ch.homed) wireOwnedP.add(hm.bodyId)
@@ -281,7 +286,7 @@ export function resolveOverlaps(e: Engine): boolean {
         const ca = centerOf(A), cb = centerOf(B)
         const dx = cb.x - ca.x, dy = cb.y - ca.y
         const dist = Math.hypot(dx, dy)
-        const need = A.r + B.r + SIB_GAP
+        const need = A.r + B.r + PACE.sibGap
         if (dist >= need) continue
 
         // coincident centers have no separation direction; any fixed unit
@@ -385,7 +390,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   const wireOwned = new Set<string>()
   for (const ch of e.chains.values()) for (const hm of ch.homed) wireOwned.add(hm.bodyId)
 
-  // Sibling pair force on the REAL circle gap, with REST AS AN INTERVAL:
+  // Sibling pair force on the REAL circle gap, with PACE.softScale AS AN INTERVAL:
   // a barrier repulsion below the target gap (unbounded toward contact, so
   // no bounded crowd of attractions can press a pair into the projection),
   // then a WIDE zero-force dead zone, then saturated constant attraction
@@ -415,11 +420,11 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       // original user complaint). Scope legality is the projection's job;
       // clearance is the wire barrier's.
       if ((A.mid !== undefined && wireOwned.has(A.mid)) || (B.mid !== undefined && wireOwned.has(B.mid))) continue
-      const f = gap < REST_LO
-        ? -Math.min(REP_K * ((REST_LO + 8) / Math.max(gap + 8, 0.5) - 1), BARRIER_MAX)
-        : gap <= REST_HI
+      const f = gap < REST_LO()
+        ? -Math.min(PACE.rep * ((REST_LO() + 8) / Math.max(gap + 8, 0.5) - 1), BARRIER_MAX())
+        : gap <= REST_HI()
           ? 0
-          : SOFT_MAX * Math.min(1, (gap - REST_HI) / SIB_GAP)
+          : SOFT_MAX() * Math.min(1, (gap - REST_HI()) / PACE.sibGap)
       if (f === 0) continue
       const ux = dx / dist, uy = dy / dist
       // each side receives a TOTAL of ±f shared over its subtree bodies
@@ -525,8 +530,8 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
         const rr = g.radius + b.discR
         const dx = b.pos.x - g.center.x, dy = b.pos.y - g.center.y
         const dd = Math.max(Math.hypot(dx, dy), 1e-9)
-        if (dd >= rr + RING_BAND) continue
-        const mag = RING_SLOPE * Math.min(1, (rr + RING_BAND - dd) / RING_BAND)
+        if (dd >= rr + PACE.ringBand) continue
+        const mag = PACE.ringSlope * Math.min(1, (rr + PACE.ringBand - dd) / PACE.ringBand)
         const ux = dx / dd, uy = dy / dd
         r.x += ux * mag
         r.y += uy * mag
@@ -540,13 +545,13 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       // stability bound: the dot parks inside the barrier ramp (slope ≈
       // BARRIER_SLOPE over half a clearance ≈ 5/wu) stacked with spacing
       // and bend curvature (~2·SPACING + …); an explicit step is stable
-      // only below 2/k_total ≈ 0.08 — at CHAIN_STEP (0.15) it overshoots
+      // only below 2/k_total ≈ 0.08 — at PACE.chainStep (0.15) it overshoots
       // the contact every tick (measured: exact period-2, ±0.8 E)
-      let dx = r.x * HOMED_STEP, dy = r.y * HOMED_STEP
+      let dx = r.x * PACE.homedStep, dy = r.y * PACE.homedStep
       const d = Math.hypot(dx, dy)
-      if (d > WIRE_TRAVEL_CAP) {
-        dx = (dx / d) * WIRE_TRAVEL_CAP
-        dy = (dy / d) * WIRE_TRAVEL_CAP
+      if (d > WIREP.travelCap) {
+        dx = (dx / d) * WIREP.travelCap
+        dy = (dy / d) * WIREP.travelCap
       }
       // backtracking line search for the tip too: its ring + barrier
       // channels are as stiff as any chain term (an unguarded step here
@@ -558,9 +563,9 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
           if (g === undefined) continue
           const rr = g.radius + b.discR
           const dd = Math.max(Math.hypot(b.pos.x - g.center.x, b.pos.y - g.center.y), 1e-9)
-          if (dd < rr + RING_BAND) {
-            const pen = rr + RING_BAND - dd
-            s2 += (RING_SLOPE / 2) * Math.min(pen, RING_BAND) * pen
+          if (dd < rr + PACE.ringBand) {
+            const pen = rr + PACE.ringBand - dd
+            s2 += (PACE.ringSlope / 2) * Math.min(pen, PACE.ringBand) * pen
           }
         }
         return s2
@@ -598,18 +603,18 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       let dx: number, dy: number
       if (ray !== undefined) {
         const ux = Math.cos(ray.angle), uy = Math.sin(ray.angle)
-        const along = (grad.f[v]!.x * ux + grad.f[v]!.y * uy) * CHAIN_STEP
+        const along = (grad.f[v]!.x * ux + grad.f[v]!.y * uy) * PACE.chainStep
         const cur = (ch.pts[v]!.x - ray.origin.x) * ux + (ch.pts[v]!.y - ray.origin.y) * uy
-        const next = Math.max(0.5, cur + Math.max(-WIRE_TRAVEL_CAP, Math.min(WIRE_TRAVEL_CAP, along)))
+        const next = Math.max(0.5, cur + Math.max(-WIREP.travelCap, Math.min(WIREP.travelCap, along)))
         ch.pts[v] = { x: ray.origin.x + ux * next, y: ray.origin.y + uy * next }
         continue
       }
-      dx = grad.f[v]!.x * CHAIN_STEP
-      dy = grad.f[v]!.y * CHAIN_STEP
+      dx = grad.f[v]!.x * PACE.chainStep
+      dy = grad.f[v]!.y * PACE.chainStep
       const d = Math.hypot(dx, dy)
-      if (d > WIRE_TRAVEL_CAP) {
-        dx = (dx / d) * WIRE_TRAVEL_CAP
-        dy = (dy / d) * WIRE_TRAVEL_CAP
+      if (d > WIREP.travelCap) {
+        dx = (dx / d) * WIREP.travelCap
+        dy = (dy / d) * WIREP.travelCap
       }
       // BACKTRACKING LINE SEARCH (Gauss–Seidel descent): the move must not
       // raise the point's complete local energy, else halve it (×3) and
@@ -650,8 +655,8 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   // recorded in the plan as future work, out of plan-21 scope.
   for (const b of e.bodies.values()) {
     const F = force.get(b.id)!
-    b.vel = { x: (b.vel.x + F.x * DT) / (1 + DAMP * DT), y: (b.vel.y + F.y * DT) / (1 + DAMP * DT) }
-    b.pos = { x: b.pos.x + b.vel.x * DT, y: b.pos.y + b.vel.y * DT }
+    b.vel = { x: (b.vel.x + F.x * PACE.dt) / (1 + PACE.damp * PACE.dt), y: (b.vel.y + F.y * PACE.dt) / (1 + PACE.damp * PACE.dt) }
+    b.pos = { x: b.pos.x + b.vel.x * PACE.dt, y: b.pos.y + b.vel.y * PACE.dt }
   }
 
   // spin: overdamped rotation under the accumulated anchor torques
@@ -659,7 +664,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   // the translational damping)
   for (const b of e.bodies.values()) {
     const tq = torque.get(b.id)!
-    if (tq !== 0) b.theta += (tq / (DAMP * b.discR * b.discR)) * DT
+    if (tq !== 0) b.theta += (tq / (PACE.damp * PACE.rotDrag * b.discR * b.discR)) * PACE.dt
   }
 
   // re-pin after body motion so this tick's drawn chains touch their
