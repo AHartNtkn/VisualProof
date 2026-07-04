@@ -166,12 +166,22 @@ export function installDrag(lab: LabCtx): void {
 // where the wire would anyway have entered through a port. Spawn/merge
 // distances are a hysteresis pair — they must be separated or the topology
 // flaps every frame.
-export type SoapTree = { pts: Vec2[]; adj: number[][]; nT: number }
+export type SoapTree = { pts: Vec2[]; adj: number[][]; nT: number; phi: number[] }
 
-const SPAWN_DIST = 1.0
+// splits spawn AT the parent (offset only breaks the symmetry of the force
+// computation) and grow out under their own tension — no pop; merges are
+// gated by CONVERGENCE (the film is actually collapsing the edge), so an
+// unjustified split folds back and a justified one never flaps
+const SPAWN_EPS = 0.05
 const MERGE_DIST = 0.3
 const TENSION_STEP = 0.25
 const COS120 = Math.cos((2 * Math.PI) / 3)
+
+/** π-periodic wrap: orientations (unsigned axes) live in (−π/2, π/2]. */
+const wrapAxis = (x: number): number => {
+  const w = Math.atan2(Math.sin(2 * x), Math.cos(2 * x)) / 2
+  return w
+}
 
 export type Obstacle = { pos: Vec2; r: number }
 
@@ -213,31 +223,77 @@ export function driveHub(hub: Body, t: SoapTree): void {
 export function mkSoapTree(terminals: readonly Terminal[], hubPos: Vec2): SoapTree {
   const pts = terminals.map((x) => ({ ...x.p }))
   pts.push({ ...hubPos })
-  return { pts, adj: [...terminals.map(() => [terminals.length]), terminals.map((_, i) => i)], nT: terminals.length }
+  return {
+    pts,
+    adj: [...terminals.map(() => [terminals.length]), terminals.map((_, i) => i)],
+    nT: terminals.length,
+    phi: pts.map(() => 0),
+  }
 }
 
+/** Net tension (+ keep-out) force on a point — the same field relaxSoap
+    integrates; also the merge test's convergence oracle. */
+function netForce(t: SoapTree, v: number, obstacles: readonly Obstacle[]): Vec2 {
+  let fx = 0, fy = 0
+  for (const n of t.adj[v]!) {
+    const dx = t.pts[n]!.x - t.pts[v]!.x, dy = t.pts[n]!.y - t.pts[v]!.y
+    const d = Math.hypot(dx, dy)
+    if (d < 1e-9) continue
+    fx += dx / d
+    fy += dy / d
+  }
+  for (const o of obstacles) {
+    const dx = t.pts[v]!.x - o.pos.x, dy = t.pts[v]!.y - o.pos.y
+    const d = Math.hypot(dx, dy)
+    if (d >= o.r || d < 1e-9) continue
+    const push = (o.r - d) / o.r
+    fx += (dx / d) * push * 2
+    fy += (dy / d) * push * 2
+  }
+  return { x: fx, y: fy }
+}
+
+/** The junction's ORIENTATION is state, not a per-frame choice: a low-pass
+    filter tracks the incident branches' principal axis (orientation tensor
+    angle), weighted by its anisotropy — at a perfectly symmetric junction
+    the axis is undefined, the weight is zero, and the stored orientation
+    simply keeps its inertia instead of jumping. */
+function relaxPhi(t: SoapTree): void {
+  for (let v = t.nT; v < t.pts.length; v++) {
+    const nbrs = t.adj[v]!
+    if (nbrs.length === 0) continue
+    let c2 = 0, s2 = 0
+    for (const n of nbrs) {
+      const a = Math.atan2(t.pts[n]!.y - t.pts[v]!.y, t.pts[n]!.x - t.pts[v]!.x)
+      c2 += Math.cos(2 * a)
+      s2 += Math.sin(2 * a)
+    }
+    const anis = Math.hypot(c2, s2) / nbrs.length
+    if (anis < 1e-9) continue
+    const target = Math.atan2(s2, c2) / 2
+    t.phi[v] = wrapAxis(t.phi[v]! + wrapAxis(target - t.phi[v]!) * Math.min(1, anis) * 0.2)
+  }
+}
+
+/** Per-frame travel cap: iterations settle the film fast, but what is DRAWN
+    must move continuously at frame scale — a point may not cross more than
+    this many world units between two frames, however hard it is pulled. */
+const MAX_TRAVEL = 0.5
+
 export function relaxSoap(t: SoapTree, obstacles: readonly Obstacle[]): void {
+  const start = t.pts.map((p) => ({ ...p }))
   for (let iter = 0; iter < 6; iter++) {
     for (let v = t.nT; v < t.pts.length; v++) {
-      let fx = 0, fy = 0
-      for (const n of t.adj[v]!) {
-        const dx = t.pts[n]!.x - t.pts[v]!.x, dy = t.pts[n]!.y - t.pts[v]!.y
-        const d = Math.hypot(dx, dy)
-        if (d < 1e-9) continue
-        fx += dx / d
-        fy += dy / d
-      }
-      for (const o of obstacles) {
-        const dx = t.pts[v]!.x - o.pos.x, dy = t.pts[v]!.y - o.pos.y
-        const d = Math.hypot(dx, dy)
-        if (d >= o.r || d < 1e-9) continue
-        const push = (o.r - d) / o.r // full tension-strength at the center, zero at the rim
-        fx += (dx / d) * push * 2
-        fy += (dy / d) * push * 2
-      }
-      t.pts[v] = { x: t.pts[v]!.x + fx * TENSION_STEP, y: t.pts[v]!.y + fy * TENSION_STEP }
+      const f = netForce(t, v, obstacles)
+      t.pts[v] = { x: t.pts[v]!.x + f.x * TENSION_STEP, y: t.pts[v]!.y + f.y * TENSION_STEP }
     }
   }
+  for (let v = t.nT; v < t.pts.length; v++) {
+    const dx = t.pts[v]!.x - start[v]!.x, dy = t.pts[v]!.y - start[v]!.y
+    const d = Math.hypot(dx, dy)
+    if (d > MAX_TRAVEL) t.pts[v] = { x: start[v]!.x + (dx / d) * MAX_TRAVEL, y: start[v]!.y + (dy / d) * MAX_TRAVEL }
+  }
+  relaxPhi(t)
 }
 
 export function reshapeSoap(t: SoapTree): void {
@@ -262,18 +318,30 @@ export function reshapeSoap(t: SoapTree): void {
       (t.pts[a]!.x + t.pts[b]!.x) / 2 - t.pts[v]!.x,
     )
     const w = t.pts.length
-    t.pts.push({ x: t.pts[v]!.x + Math.cos(dir) * SPAWN_DIST, y: t.pts[v]!.y + Math.sin(dir) * SPAWN_DIST })
+    // spawn AT the parent (ε breaks force symmetry); the child GROWS out
+    // under its own tension — the transition is continuous
+    t.pts.push({ x: t.pts[v]!.x + Math.cos(dir) * SPAWN_EPS, y: t.pts[v]!.y + Math.sin(dir) * SPAWN_EPS })
     t.adj.push([a, b, v])
+    t.phi.push(t.phi[v]!)
     t.adj[v] = nbrs.filter((n) => n !== a && n !== b)
     t.adj[v]!.push(w)
     for (const x of [a, b]) t.adj[x] = t.adj[x]!.map((n) => (n === v ? w : n))
   }
-  // MERGE: an internal edge that tension collapsed folds back into one point
+}
+
+export function mergeSoap(t: SoapTree, obstacles: readonly Obstacle[]): void {
+  // MERGE: only an edge the film is actively COLLAPSING (endpoints converge
+  // under the force field) folds back — a freshly split child under outward
+  // pull is left to grow, so split/merge cannot flap
   for (let v = t.nT; v < t.pts.length; v++) {
     for (const w of [...t.adj[v]!]) {
       if (w < t.nT || w <= v) continue
-      const d = Math.hypot(t.pts[w]!.x - t.pts[v]!.x, t.pts[w]!.y - t.pts[v]!.y)
-      if (d >= MERGE_DIST) continue
+      const dx = t.pts[w]!.x - t.pts[v]!.x, dy = t.pts[w]!.y - t.pts[v]!.y
+      const d = Math.hypot(dx, dy)
+      if (d >= MERGE_DIST || d < 1e-9) continue
+      const fv = netForce(t, v, obstacles), fw = netForce(t, w, obstacles)
+      const closing = ((fv.x - fw.x) * dx + (fv.y - fw.y) * dy) / d
+      if (closing <= 0) continue
       t.adj[v] = [...t.adj[v]!.filter((n) => n !== w), ...t.adj[w]!.filter((n) => n !== v)]
       for (const n of t.adj[w]!) if (n !== v) t.adj[n] = t.adj[n]!.map((m) => (m === w ? v : m))
       t.adj[w] = []

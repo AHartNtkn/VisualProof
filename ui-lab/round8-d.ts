@@ -9,34 +9,32 @@
  * (production's trunk rule) while the third merges TANGENT TO THE TRUNK,
  * like a stream joining a river. Node discs repel branch points (keep-out).
  */
-import { boot, mkMultiportStart, collectMultiport, basePaintExcept, installDrag, mkSoapTree, relaxSoap, reshapeSoap, nodeObstacles, driveHub, terminalTangent, type SoapTree } from './multiport'
+import { boot, mkMultiportStart, collectMultiport, basePaintExcept, installDrag, mkSoapTree, relaxSoap, reshapeSoap, mergeSoap, nodeObstacles, driveHub, terminalTangent, type SoapTree } from './multiport'
 import { hobbyBezier } from '../src/view/wires'
 import type { Engine } from '../src/view/engine'
 import type { Shape, Theme } from '../src/view/paint'
 import type { WireId } from '../src/kernel/diagram/diagram'
 
 const trees = new Map<WireId, SoapTree>()
+;(window as unknown as { __r8trees: Map<WireId, SoapTree> }).__r8trees = trees
 const wrap = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
 
-/** Outgoing tangents at an internal point: the two most-opposite branches
-    form the through-trunk (tangents u and u+π); every other branch leaves
-    along whichever trunk direction it is closer to — the tributary merge. */
+/** Outgoing tangents at an internal point, CONTINUOUS in the layout: the
+    junction's through-axis is its RELAXED orientation phi (state with
+    inertia, not a per-frame pair choice); each branch's tangent is its own
+    direction pulled toward the nearer axis side, with a blend weight
+    |cos(dir − phi)| that vanishes exactly where the side choice flips —
+    so no configuration can jump. */
 function outTangents(t: SoapTree, v: number): Map<number, number> {
   const nbrs = t.adj[v]!
-  const dirs = nbrs.map((n) => Math.atan2(t.pts[n]!.y - t.pts[v]!.y, t.pts[n]!.x - t.pts[v]!.x))
   const out = new Map<number, number>()
-  if (nbrs.length === 1) { out.set(nbrs[0]!, dirs[0]!); return out }
-  let bi = 0, bj = 1, best = -Infinity
-  for (let i = 0; i < dirs.length; i++) for (let j = i + 1; j < dirs.length; j++) {
-    const score = -Math.abs(Math.abs(wrap(dirs[i]! - dirs[j]!)) - Math.PI)
-    if (score > best) { best = score; bi = i; bj = j }
+  const phi = t.phi[v]!
+  for (const n of nbrs) {
+    const dir = Math.atan2(t.pts[n]!.y - t.pts[v]!.y, t.pts[n]!.x - t.pts[v]!.x)
+    const axisSide = Math.abs(wrap(phi - dir)) <= Math.PI / 2 ? phi : phi + Math.PI
+    const wgt = Math.abs(Math.cos(dir - phi))
+    out.set(n, dir + wrap(axisSide - dir) * wgt)
   }
-  const u = Math.atan2(Math.sin(dirs[bi]!) - Math.sin(dirs[bj]!), Math.cos(dirs[bi]!) - Math.cos(dirs[bj]!))
-  nbrs.forEach((n, idx) => {
-    if (idx === bi) out.set(n, u)
-    else if (idx === bj) out.set(n, u + Math.PI)
-    else out.set(n, Math.abs(wrap(dirs[idx]! - u)) <= Math.PI / 2 ? u : u + Math.PI)
-  })
   return out
 }
 
@@ -55,6 +53,7 @@ const wires = (e: Engine, st: Theme): Shape[] => {
     m.terminals.forEach((x, i) => { t!.pts[i] = { ...x.p } })
     relaxSoap(t, obstacles)
     reshapeSoap(t)
+    mergeSoap(t, obstacles)
     driveHub(m.hub, t)
     const tangents = new Map<number, Map<number, number>>()
     for (let v = t.nT; v < t.pts.length; v++) {
