@@ -19,6 +19,23 @@
 
 **Standing laws that must survive unchanged:** loose ends are bodies homed at the wire's SCOPE (the ∃ is independently manipulable — it becomes the chain's free-end point, still a member of the scope region); junctions home at the port dca with the ∀-dangle branch for scope-above wires; boundary wires exit at canonical frame slots; existential stubs and bare-∃ dots; wire exits perpendicular to node surfaces (round-8 law); no text on λ-anatomy; containment (region circles never intersect); paint requires a settled engine; NO DUAL SYSTEMS — legs, leg springs, junction point-bodies, `SPRING`/`REST`, and the lab's promoted machinery are deleted, all consumers migrated.
 
+## The energy discipline (USER clarification, 2026-07-06: "this should still be energy based… I don't want to end up in the previous mess")
+
+There is ONE scalar functional. Everything below is a term of it; every force in the implementation is the NEGATIVE GRADIENT of a named term; damped gradient descent is the only integrator. Nothing may write positions except a descent step. Consequences, by construction rather than by testing: total energy is monotone non-increasing and bounded below, so the system SETTLES — limit cycles, orbits, and conveyors are impossible; and every interaction is automatically a Newton pair (symmetry is free when both sides differentiate the same term, never a property someone remembers to implement).
+
+E(wire-points, bodies) =
+- **E_tension** = k_t · Σ segment lengths (soap: constant-magnitude pull — the gradient of length).
+- **E_bend** = k_b · Σ (turn angle)² at interior wire-points.
+- **E_barrier** = Σ over (disc, wire-point) of a saturating barrier potential (finite total depth — the SOFT_MAX discipline restated as energy; its gradient is the bounded push, applied to BOTH sides by differentiation).
+- **E_content** = the existing sibling pair potentials between nodes/regions (the current piecewise force profile is already the gradient of a 1D pair potential; it stays, acting on nodes and HOMED wire-points only).
+- **Pins are constraints, not forces:** port endpoints and the first-segment direction (perpendicular exit law) are enforced by projection onto the constraint manifold, not by stiff springs.
+
+Rules for the machinery being promoted from round 8:
+- **Topology moves (split/merge) are discrete descent steps:** a move is accepted ONLY if it strictly lowers E (splitting a >120° pinch lowers length — that IS the Plateau criterion; merging a collapsed edge likewise). The convergence gate becomes an acceptance margin (an energy barrier for hysteresis), so flapping stays impossible AND monotonicity is preserved.
+- **The travel cap is a trust region on the descent step** (a shortened gradient step still descends); it is a step-size rule, not a force.
+- **The junction orientation `phi` is RENDERING state only** (which curve is drawn through which branch); it must never feed back into E or positions.
+- **Banned outright:** any velocity/position write that is not a descent step (the driveHub class), any one-sided force (cannot occur if forces only come from differentiation), any per-frame re-decision of discrete structure without the ΔE acceptance test.
+
 ## The model
 
 - **Chain:** each 2-endpoint wire is a chain of wire-points every ~2 wu (resampled only on >2× length change); each k-endpoint wire is a TREE of chains joined at free Steiner points (the round-8 topology: degree-3 splits with spawn-at-parent growth, convergence-gated merges).
@@ -37,7 +54,7 @@
 
 ### Task 2: Forces
 **Files:** `src/view/relax.ts` — wire tension + bending + symmetric disc barrier + port pinning; leg springs and `SPRING`/`REST` DELETED; sibling content forces keep acting on nodes and homed points only. Travel caps and the no-driver rule documented at the force site.
-**Test:** the existing settle/jitter battery re-pinned on the new equilibria (bounds re-derived, not loosened); NEW pins: dangle-follows (drag a node 40 wu → its wire's free end follows ≥ half), wire-disc clearance (no wire-point inside any disc after settle), no-orbit (post-settle drift bounds), 120° junctions at equilibrium (±5°), per-frame travel ≤ cap.
+**Test:** an E-MONOTONICITY pin (E evaluated per tick over long runs on strained fixtures never increases beyond fp tolerance — the master test that makes the previous mess unrepresentable); the existing settle/jitter battery re-pinned on the new equilibria (bounds re-derived, not loosened); NEW pins: dangle-follows (drag a node 40 wu → its wire's free end follows ≥ half), wire-disc clearance (no wire-point inside any disc after settle), no-orbit (post-settle drift bounds), 120° junctions at equilibrium (±5°), per-frame travel ≤ cap.
 
 - [ ] Battery failing → forces built → green; full suite + e2e green. Commit.
 
