@@ -323,13 +323,14 @@ export function resolveOverlaps(e: Engine): boolean {
     (the perpendicular-exit law as a constraint, not a spring); homed
     terminals mirror their owning bodies; slot terminals sit at their
     canonical frame slots. */
-function pinChain(e: Engine, ch: { pts: Vec2[]; adj: number[][]; binds: { idx: number; body: string; key: string }[]; homed: { idx: number; bodyId: string }[]; slots: { idx: number; slot: number }[] }, slotPts: { point: Vec2 }[] | null): void {
+function pinChain(e: Engine, ch: { pts: Vec2[]; adj: number[][]; binds: { idx: number; body: string; key: string; normal?: number }[]; homed: { idx: number; bodyId: string }[]; slots: { idx: number; slot: number }[] }, slotPts: { point: Vec2 }[] | null): void {
   for (const bind of ch.binds) {
     const b = e.bodies.get(bind.body)!
     const anchor = worldAnchor(b, bind.key)
     ch.pts[bind.idx] = anchor
     const a = b.localAnchor.get(bind.key)!
     const normal = Math.atan2(a.y, a.x) + b.theta
+    bind.normal = normal
     const nbr = ch.adj[bind.idx]![0]
     if (nbr !== undefined) {
       const p = ch.pts[nbr]!
@@ -473,8 +474,10 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       rays.set(nbr, { origin: ch.pts[bind.idx]!, angle: Math.atan2(a.y, a.x) + b.theta })
     }
     const grad = chainGradient(ch, discs)
+    const G = globalThis as { __noWireBind?: boolean; __noWireHomed?: boolean; __noWireDisc?: boolean }
     // pinned-point gradients -> body forces + torques (analytic levers)
     for (const bind of ch.binds) {
+      if (G.__noWireBind === true) break
       const A = e.bodies.get(bind.body)!
       const F = force.get(A.id)!
       const r = grad.f[bind.idx]!
@@ -514,6 +517,8 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     // tension at a breathing circle is a standing contact cycle (measured
     // on the ∀-shape fixture: +2.7 E swings, 3 wu/200-tick drift).
     for (const hm of ch.homed) {
+      if (G.__noWireHomed === true) break
+      if ((globalThis as { __freezeTip?: boolean }).__freezeTip === true) break
       const r = { ...grad.f[hm.idx]! }
       const b = e.bodies.get(hm.bodyId)!
       for (const child of e.childrenOf.get(b.region)!) {
@@ -545,13 +550,44 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
         dx = (dx / d) * WIRE_TRAVEL_CAP
         dy = (dy / d) * WIRE_TRAVEL_CAP
       }
-      b.pos = { x: b.pos.x + dx, y: b.pos.y + dy }
+      // backtracking line search for the tip too: its ring + barrier
+      // channels are as stiff as any chain term (an unguarded step here
+      // was the ∀-fixture walker's leading edge)
+      const ringE = (): number => {
+        let s2 = 0
+        for (const child of e.childrenOf.get(b.region)!) {
+          const g = e.regions.get(child)
+          if (g === undefined) continue
+          const rr = g.radius + b.discR
+          const dd = Math.max(Math.hypot(b.pos.x - g.center.x, b.pos.y - g.center.y), 1e-9)
+          if (dd < rr + RING_BAND) {
+            const pen = rr + RING_BAND - dd
+            s2 += (RING_SLOPE / 2) * Math.min(pen, RING_BAND) * pen
+          }
+        }
+        return s2
+      }
+      const tipE = (): number => localStencilE(ch, discs, hm.idx) + ringE()
+      const p0 = b.pos
+      const chainP0 = ch.pts[hm.idx]!
+      const e0 = tipE()
+      let scale = 1
+      for (let t2 = 0; t2 < 4; t2++) {
+        b.pos = { x: p0.x + dx * scale, y: p0.y + dy * scale }
+        ch.pts[hm.idx] = b.pos
+        if (tipE() <= e0 + 1e-9) break
+        b.pos = p0
+        ch.pts[hm.idx] = chainP0
+        scale /= 2
+        if (t2 === 3) scale = 0
+      }
       b.vel = { x: 0, y: 0 }
       debugNetWire.x += r.x
       debugNetWire.y += r.y
     }
     // disc barrier reactions (the other half of the shared term)
     for (const [id, r] of grad.onDiscs) {
+      if (G.__noWireDisc === true) break
       const F = force.get(id)!
       F.x += r.x
       F.y += r.y
@@ -601,7 +637,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       if (scale === 0) ch.pts[v] = p0
     }
     topologyStep(ch, discs)
-    resample(ch)
+    if ((globalThis as { __noResample?: boolean }).__noResample !== true) resample(ch)
   }
 
   // Damped momentum integration. NOTE (plan 21, measured): the velocity

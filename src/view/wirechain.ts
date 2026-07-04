@@ -52,7 +52,7 @@ export const WIRE_TRAVEL_CAP = 0.5
 /** Sampling pitch (wu) between chain points; resample beyond 2× drift. */
 export const PITCH = 2
 
-export type ChainBind = { idx: number; body: string; key: string }
+export type ChainBind = { idx: number; body: string; key: string; normal?: number }
 export type ChainHomed = { idx: number; bodyId: string }
 
 export type WireChain = {
@@ -153,20 +153,33 @@ export const clearance = (r: number): number => r + 1.5
     gradient carries an exact anchor-side reaction, a Newton pair inside
     the chain (the anchor index accumulates it, and the bind loop forwards
     it to the body). */
-export function exitMask(ch: WireChain, disc: ChainDisc, v: number): { m: number; anchorIdx: number; dm: number } {
+/** The exemption is a CORRIDOR along the exit ray (port normal), not a
+    bubble around the anchor: the wire passes through its own disc's
+    clearance zone exactly along the constrained exit run. A bubble mask
+    swallowed short dangles whole (buried ∃ dots), and the position-
+    dependent boost that patched it broke stencil locality (the tip's move
+    re-masked Euclidean-near but topologically-far edges — measured E
+    rising under 'monotone' descent). The corridor depends only on PINNED
+    state (anchor, normal), so locality holds. Falloffs are one-pitch
+    smoothing bands. */
+export function exitMaskAt(ch: WireChain, disc: ChainDisc, p: Vec2): { m: number; anchorIdx: number; dm: number } {
   const r = clearance(disc.r)
   let best = { m: 1, anchorIdx: -1, dm: 0 }
-  // a HOMED end TERMINATES — it is not passing through to a port, so it
-  // gets no exemption: the barrier parks the ∃ dot just outside the rim
-  // (without this, tension buries the dot inside its node's disc)
-  if (ch.homed.some((h) => h.idx === v)) return best
   for (const b of ch.binds) {
     if (b.body !== disc.id) continue
-    const dvec = sub(ch.pts[v]!, ch.pts[b.idx]!)
+    const dvec = sub(p, ch.pts[b.idx]!)
     const d = len(dvec)
+    // radial band: full exemption only within the clearance reach
     const t = (d - r) / PITCH
-    const m = Math.max(0, Math.min(1, t))
-    if (m < best.m) best = { m, anchorIdx: b.idx, dm: t > 0 && t < 1 ? 1 / PITCH : 0 }
+    const radial = Math.max(0, Math.min(1, t))
+    // angular corridor: exempt only along the exit direction
+    let angular = 0
+    if (b.normal !== undefined && d > 1e-9) {
+      const cos = (dvec.x * Math.cos(b.normal) + dvec.y * Math.sin(b.normal)) / d
+      angular = Math.max(0, Math.min(1, (0.8 - cos) / 0.3))
+    }
+    const m = Math.max(radial, angular)
+    if (m < best.m) best = { m, anchorIdx: b.idx, dm: t > 0 && t < 1 && radial >= angular ? 1 / PITCH : 0 }
   }
   return best
 }
@@ -208,16 +221,36 @@ export function localBend(ch: WireChain, v: number): number {
   return (BEND * turn * turn) / Math.max(0.25, (lu + lw) / 2)
 }
 
+/** TUNNEL-PROOF barrier: the line integral ∫m·U ds evaluated per EDGE by
+    sub-sampling at unit steps — no coarse sampling can hide a disc between
+    points. (Point-sampled barriers let long segments tunnel; the always-
+    accept refinement rule then "revealed" the hidden energy, +2.7 per
+    event, and the release powered a permanent conveyor of the ∀-fixture.) */
+export function edgeBarrier(ch: WireChain, discs: readonly ChainDisc[], v: number, n: number): number {
+  const a = ch.pts[v]!, b = ch.pts[n]!
+  const L = len(sub(b, a))
+  if (L < 1e-9) return 0
+  const K = Math.max(1, Math.ceil(L))
+  let E = 0
+  for (let k = 0; k <= K; k++) {
+    const t = k / K
+    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+    const w = (k === 0 || k === K ? 0.5 : 1) * (L / K)
+    for (const disc of discs) {
+      const r = clearance(disc.r)
+      const d = len(sub(p, disc.pos))
+      if (d >= r) continue
+      const { m } = exitMaskAt(ch, disc, p)
+      if (m > 0) E += m * barrierU(d, r) * w
+    }
+  }
+  return E
+}
+
 export function localBarrier(ch: WireChain, discs: readonly ChainDisc[], v: number): number {
   let E = 0
-  const share = Math.max(0.25, arcShare(ch, v))
-  for (const disc of discs) {
-    const r = clearance(disc.r)
-    const d = len(sub(ch.pts[v]!, disc.pos))
-    if (d < r) {
-      const { m } = exitMask(ch, disc, v)
-      if (m > 0) E += m * barrierU(d, r) * share
-    }
+  for (const n of ch.adj[v]!) {
+    if (n > v) E += edgeBarrier(ch, discs, v, n)
   }
   return E
 }
@@ -291,26 +324,36 @@ export function chainGradient(ch: WireChain, discs: readonly ChainDisc[]): { f: 
       f[v]!.x -= (ex - e0) / h
       f[v]!.y -= (ey - e0) / h
     }
-    // disc reactions + mask anchor pairs, analytic on the dominant radial
-    // term (the arc-share factor is even in the disc position, so the
-    // reaction is the share-weighted radial gradient)
-    for (const disc of discs) {
-      const r = clearance(disc.r)
-      const dvec = sub(ch.pts[v]!, disc.pos)
-      const d = len(dvec)
-      if (d >= r || d < 1e-9) continue
-      const { m, anchorIdx, dm } = exitMask(ch, disc, v)
-      if (m <= 0) continue
-      const share = Math.max(0.25, arcShare(ch, v))
-      const mag = m * barrierG(d, r) * share
-      addDisc(disc.id, (-dvec.x / d) * mag, (-dvec.y / d) * mag)
-      if (dm > 0 && anchorIdx >= 0) {
-        const avec = sub(ch.pts[v]!, ch.pts[anchorIdx]!)
-        const ad = len(avec)
-        if (ad > 1e-9) {
-          const gm = barrierU(d, r) * dm * share
-          f[anchorIdx]!.x += (avec.x / ad) * gm
-          f[anchorIdx]!.y += (avec.y / ad) * gm
+    // disc reactions + mask anchor pairs: sub-sampled along each owned
+    // incident edge (the same integral the energy uses)
+    for (const n of ch.adj[v]!) {
+      if (n <= v) continue
+      const a = ch.pts[v]!, b2 = ch.pts[n]!
+      const L = len(sub(b2, a))
+      if (L < 1e-9) continue
+      const K = Math.max(1, Math.ceil(L))
+      for (let k = 0; k <= K; k++) {
+        const t = k / K
+        const p = { x: a.x + (b2.x - a.x) * t, y: a.y + (b2.y - a.y) * t }
+        const w = (k === 0 || k === K ? 0.5 : 1) * (L / K)
+        for (const disc of discs) {
+          const r = clearance(disc.r)
+          const dvec = sub(p, disc.pos)
+          const d = len(dvec)
+          if (d >= r || d < 1e-9) continue
+          const { m, anchorIdx, dm } = exitMaskAt(ch, disc, p)
+          if (m <= 0) continue
+          const mag = m * barrierG(d, r) * w
+          addDisc(disc.id, (-dvec.x / d) * mag, (-dvec.y / d) * mag)
+          if (dm > 0 && anchorIdx >= 0) {
+            const avec = sub(p, ch.pts[anchorIdx]!)
+            const ad = len(avec)
+            if (ad > 1e-9) {
+              const gm = barrierU(d, r) * dm * w
+              f[anchorIdx]!.x += (avec.x / ad) * gm
+              f[anchorIdx]!.y += (avec.y / ad) * gm
+            }
+          }
         }
       }
     }

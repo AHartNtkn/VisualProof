@@ -224,9 +224,12 @@ describe('wire physics — energy discipline (settling)', () => {
       settle(e, 2600)
       const before = new Map([...e.bodies].map(([id, bb]) => [id, { ...bb.pos }]))
       for (let i = 0; i < 200; i++) settleStep(e)
-      for (const [id, bb] of e.bodies) {
+      const drifts = [...e.bodies].map(([id, bb]) => {
         const p = before.get(id)!
-        const moved = Math.hypot(bb.pos.x - p.x, bb.pos.y - p.y)
+        return { id, moved: Math.hypot(bb.pos.x - p.x, bb.pos.y - p.y) }
+      }).sort((a, b2) => b2.moved - a.moved)
+      console.log(`no-orbit [${mk.name}]:`, drifts.slice(0, 4).map((x) => `${x.id}=${x.moved.toFixed(3)}`).join(' '))
+      for (const { id, moved } of drifts) {
         // the known residual wiggles bodies ~0.02 wu about a fixed point;
         // an orbit or conveyor moves them by tens (driveHub: 30 wu)
         expect(moved, `body ${id} drifted ${moved.toFixed(3)} over 200 post-settle ticks`).toBeLessThanOrEqual(1)
