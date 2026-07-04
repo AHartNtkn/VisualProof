@@ -18,6 +18,16 @@ it('TRACE which fixture misbehaves', () => {
       ])
       return { d: b.build(), b: [] }
     },
+    threeWay: () => {
+      const b = new DiagramBuilder()
+      const r1 = b.ref(b.root, 'plus', 3), r2 = b.ref(b.root, 'times', 3), r3 = b.ref(b.root, 'succ', 2)
+      b.wire(b.root, [
+        { node: r1, port: { kind: 'arg', index: 0 } },
+        { node: r2, port: { kind: 'arg', index: 0 } },
+        { node: r3, port: { kind: 'arg', index: 0 } },
+      ])
+      return { d: b.build(), b: [] }
+    },
     plain2: () => {
       const b = new DiagramBuilder()
       const r1 = b.ref(b.root, 'lt', 2), r2 = b.ref(b.root, 'gt', 2)

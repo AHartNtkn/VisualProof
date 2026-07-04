@@ -498,11 +498,21 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       }
       torque.set(A.id, torque.get(A.id)! + tq)
     }
+    // homed ∃/∀ bodies are WIRE degrees of freedom: they move at the
+    // chain's mobility, not the content integrator's (10× slower — a
+    // 40-unit re-contraction at body mobility takes ~44 s of real time).
+    // Region projection still corrals them; content forces don't apply.
     for (const hm of ch.homed) {
       const r = grad.f[hm.idx]!
-      const F = force.get(hm.bodyId)!
-      F.x += r.x
-      F.y += r.y
+      const b = e.bodies.get(hm.bodyId)!
+      let dx = r.x * CHAIN_STEP, dy = r.y * CHAIN_STEP
+      const d = Math.hypot(dx, dy)
+      if (d > WIRE_TRAVEL_CAP) {
+        dx = (dx / d) * WIRE_TRAVEL_CAP
+        dy = (dy / d) * WIRE_TRAVEL_CAP
+      }
+      b.pos = { x: b.pos.x + dx, y: b.pos.y + dy }
+      b.vel = { x: 0, y: 0 }
       debugNetWire.x += r.x
       debugNetWire.y += r.y
     }

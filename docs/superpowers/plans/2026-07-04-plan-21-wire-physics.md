@@ -46,6 +46,14 @@ Rules for the machinery being promoted from round 8:
 
 ## Tasks
 
+### EXECUTION STATE (2026-07-06, mid-Task-2 — read before continuing)
+
+Battery `tests/view/wirephys.test.ts` at 8–10/12 depending on tick. ARCHITECTURE SETTLED after measured failures of alternatives (all documented in code comments): UNIFIED CO-EVOLUTION — one chainGradient per tick drives interior points (overdamped, travel-capped), bind gradients land on bodies as force + analytic lever torque (exit point's rigid share split by ray projection), homed ∃/∀ bodies move at WIRE mobility (body mobility made a 40-wu re-contraction take 44 s), disc reactions symmetric. Rejected-with-measurements: separate converging chain subsystem (stale-force swimmers), trapezoid force filter (worse), pure-descent bodies (projection needs the velocity impulses), symmetric spacing term (inextensible-rope swimmers), binary exempt zones (±19 E kicks), body-only rotation quotient (chain-twist conveyor). Now in the energy: one-sided compression floor (SPACING, onset pitch/2), continuous exit mask (exitMask, Newton-paired anchor reaction), un-phase-through-able barrier slope (BARRIER_SLOPE 18 > content cap 11.7), refinement-always/coarsen-gated resample.
+
+**Fixture status (tests/view/e-trace.test.ts + svg-dump.test.ts are the diagnostic tools):** interposed PERFECT (0 rises, 0.003 drift); plain2/forallShape sub-2-wu drift, no spikes; threeWay has a residual ~30-tick cycle: +0.5 E rises coinciding with resample-attempt-rejected flaps (a segment slowly stretches past 2×pitch, the coarsening rebuild is E-rejected, repeats). NEXT DIAGNOSTIC: svg-dump threeWay and find WHICH segment strains — suspect the junction area or a masked-zone redistribution near a bound disc. Remaining battery gaps: threeWay E-band + 120° (5.3° vs 5°), no-orbit bound on one fixture (1.6 vs 1.0), dangle-tow restore (2.25 vs 0.56 — rest gap ~2.25, ends at ~2× rest).
+
+Task 3 (rendering/hittest/lab/app migration + old test files engine/relax/stub-scope) NOT STARTED — wires.ts rewritten over chains with same exports; tests/view/{engine,relax,stub-scope}.test.ts still reference legs and need migration.
+
 ### Task 1: The law battery + chain model
 **Files:** `src/view/engine.ts` — wires construct chains/trees instead of legs+junction bodies (wire-points as light engine citizens; homed points per the scope law); the round-8 topology machinery moves in from `ui-lab/multiport.ts`.
 **Test first (`tests/view/wirephys.test.ts`):** chain construction invariants (every wire covered end-to-end; homed points exactly where the laws put them; boundary wires still map to frame slots); the topology laws from round 8 (no zero-extent leftovers, degree-3 interior points).

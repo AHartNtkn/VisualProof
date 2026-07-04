@@ -551,7 +551,12 @@ export function resampleGated(ch: WireChain, discs: readonly ChainDisc[]): void 
   }
   const before = chainEnergy(ch, discs)
   resample(ch)
-  if (chainEnergy(ch, discs) > before + 1e-6) {
+  // REFINEMENT is always legitimate: if the rebuild ADDED points and E
+  // rose, the coarse energy was an UNDERESTIMATE of the continuum (e.g. a
+  // long segment tunnelling through a disc with no sample point inside —
+  // measured: the gate kept rejecting the refinement that would expose it,
+  // flapping forever). Only COARSENING must pass the energy gate.
+  if (ch.pts.length <= saved.pts.length && chainEnergy(ch, discs) > before + 1e-6) {
     debugCounts.resampleReverted++
     ch.pts = saved.pts
     ch.adj = saved.adj
