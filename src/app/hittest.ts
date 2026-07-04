@@ -51,7 +51,19 @@ function bezierDistance(p: Vec2, path: WirePath): number {
  * Junction dots sit on their wires' legs, so a click on one resolves to the
  * wire — junctions are not kernel entities and are never selected.
  */
+/** Hit radius of an ∃ dot (world units) — small like the drawn dot. */
+const DOT_HIT_R = 2.5
+
 export function hitTest(e: Engine, point: Vec2): Hit | null {
+  // ∃ dots first: they are drawn ON TOP of node discs and may rest within
+  // a disc's margin ring (paint/hit parity — the topmost target wins)
+  for (const b of e.bodies.values()) {
+    if (b.kind !== 'junction') continue
+    if (length(sub(point, b.pos)) <= DOT_HIT_R) {
+      const wid = b.id.startsWith('j:') || b.id.startsWith('x:') ? b.id.slice(2) : null
+      if (wid !== null && e.d.wires[wid] !== undefined) return { kind: 'wire', id: wid }
+    }
+  }
   for (const b of e.bodies.values()) {
     if (b.kind === 'junction' || b.kind === 'anchor') continue
     if (length(sub(point, b.pos)) <= b.discR) return { kind: 'node', id: b.id }
@@ -87,6 +99,12 @@ export type DragTarget =
  * fixed background — neither is draggable.
  */
 export function dragTarget(e: Engine, point: Vec2): DragTarget | null {
+  // ∃ dots first (paint/hit parity, same as hitTest): a dot resting inside
+  // a disc's margin ring must stay independently grabbable (loose-ends law)
+  for (const b of e.bodies.values()) {
+    if (b.kind !== 'junction') continue
+    if (length(sub(point, b.pos)) <= DOT_HIT_R) return { kind: 'body', id: b.id }
+  }
   for (const b of e.bodies.values()) {
     if (b.kind === 'anchor') continue // an empty cut is grabbed by its region circle
     if (length(sub(point, b.pos)) <= b.discR) return { kind: 'body', id: b.id }

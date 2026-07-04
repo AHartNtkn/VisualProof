@@ -51,6 +51,13 @@ export const BARRIER_SLOPE = 18
 export const WIRE_TRAVEL_CAP = 0.5
 /** Sampling pitch (wu) between chain points; resample beyond 2× drift. */
 export const PITCH = 2
+/** Point budget per rebuilt path: transient chains can be HUNDREDS of wu
+    long (spiral-seeded bodies), and pitch-sampling them explodes per-tick
+    work quadratically before contraction shrinks anything (measured: a
+    bundled-theory paint test at 226 s and a call-stack overflow). Coarse
+    segments stay energetically honest — the barrier is a per-segment line
+    integral and the bend is arc-share-invariant. */
+export const MAX_PATH_PTS = 64
 
 export type ChainBind = { idx: number; body: string; key: string; normal?: number }
 export type ChainHomed = { idx: number; bodyId: string }
@@ -93,7 +100,7 @@ export function mkChain(terminals: Vec2[], pitch: number): { pts: Vec2[]; adj: n
   }
   const subdividedLink = (a: number, b: number): void => {
     const d = len(sub(pts[b]!, pts[a]!))
-    const k = Math.max(1, Math.round(d / pitch))
+    const k = Math.min(MAX_PATH_PTS, Math.max(1, Math.round(d / pitch)))
     let prev = a
     for (let i = 1; i < k; i++) {
       const t = i / k
@@ -230,13 +237,19 @@ export function edgeBarrier(ch: WireChain, discs: readonly ChainDisc[], v: numbe
   const a = ch.pts[v]!, b = ch.pts[n]!
   const L = len(sub(b, a))
   if (L < 1e-9) return 0
+  // quick reject: segment bounding sphere vs disc clearance
+  const near = discs.filter((disc) => {
+    const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+    return len(sub({ x: mx, y: my }, disc.pos)) < clearance(disc.r) + L / 2 + PITCH
+  })
+  if (near.length === 0) return 0
   const K = Math.max(1, Math.ceil(L))
   let E = 0
   for (let k = 0; k <= K; k++) {
     const t = k / K
     const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
     const w = (k === 0 || k === K ? 0.5 : 1) * (L / K)
-    for (const disc of discs) {
+    for (const disc of near) {
       const r = clearance(disc.r)
       const d = len(sub(p, disc.pos))
       if (d >= r) continue
@@ -276,7 +289,8 @@ export function localStencilE(ch: WireChain, discs: readonly ChainDisc[], v: num
 }
 
 /** E_wire of one chain against the given discs. */
-export function chainEnergy(ch: WireChain, discs: readonly ChainDisc[]): number {
+export function chainEnergy(ch: WireChain, allDiscs: readonly ChainDisc[]): number {
+  const discs = reachableDiscs(ch, allDiscs)
   let E = 0
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
@@ -291,7 +305,26 @@ export function chainEnergy(ch: WireChain, discs: readonly ChainDisc[]): number 
 
 /** Negative gradient of E_wire at every chain point, plus the equal-and-
     opposite barrier reactions on each disc (by id). Pure — no state writes. */
-export function chainGradient(ch: WireChain, discs: readonly ChainDisc[]): { f: MVec[]; onDiscs: Map<string, MVec> } {
+/** Discs within reach of the chain's bounding box (+ their clearance):
+    everything else cannot contribute to any term — pure culling, no
+    behavior change. On theory-sized diagrams this is the difference
+    between minutes and hours per test file. */
+export function reachableDiscs(ch: WireChain, discs: readonly ChainDisc[]): ChainDisc[] {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  for (const p of ch.pts) {
+    minX = Math.min(minX, p.x)
+    minY = Math.min(minY, p.y)
+    maxX = Math.max(maxX, p.x)
+    maxY = Math.max(maxY, p.y)
+  }
+  return discs.filter((d) => {
+    const r = clearance(d.r) + PITCH
+    return d.pos.x >= minX - r && d.pos.x <= maxX + r && d.pos.y >= minY - r && d.pos.y <= maxY + r
+  })
+}
+
+export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[]): { f: MVec[]; onDiscs: Map<string, MVec> } {
+  const discs = reachableDiscs(ch, allDiscs)
   const f: MVec[] = ch.pts.map(() => ({ x: 0, y: 0 }))
   const onDiscs = new Map<string, MVec>()
   const addDisc = (id: string, x: number, y: number): void => {
@@ -550,7 +583,7 @@ export function resample(ch: WireChain): void {
       // total length + resample count
       let L = 0
       for (let i = 1; i < path.length; i++) L += len(sub(path[i]!, path[i - 1]!))
-      const k = Math.max(1, Math.round(L / ch.pitch))
+      const k = Math.min(MAX_PATH_PTS, Math.max(1, Math.round(L / ch.pitch)))
       // arc-length interpolate k−1 interior points
       let a = map.get(s)!
       let acc = 0, seg = 1

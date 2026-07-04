@@ -173,7 +173,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     shapes.push({ kind: 'circle', center: g.center, r: g.radius, fill, stroke: st.ink, width: st.rimW, insetColor: st.insetColor, glow: null })
   }
 
-  shapes.push(...wires(e, st))
+  for (const s of wires(e, st)) shapes.push(s) // no spread: big diagrams overflow the arg stack
 
   // The port-order pip: nodes with two or more ORDERED ports (refs by arity,
   // atoms by their binder's arity) get a filled dot on their rim at port a0's

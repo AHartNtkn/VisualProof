@@ -27,46 +27,45 @@ describe('hobbyBezier — Metafont velocity control arms', () => {
   })
 })
 
-describe('computeLegs — junction trunk tangents flow tangent-continuously', () => {
-  it('the two trunk tangents at a junction differ by pi', () => {
-    // three nodes sharing one line of identity => a >=3-endpoint wire => junction
+describe('computeLegs — chains draw tangent-continuously (PLAN 21 form)', () => {
+  it('a 3-endpoint wire settles a degree-3 tree point; degree-2 points draw C1', () => {
+    // three nodes sharing one line of identity => a tree chain with a
+    // free Plateau junction (junction BODIES are gone — the junction is
+    // the chain's own degree-3 point)
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('x'))
     const b = h.termNode(h.root, p('x'))
     const c = h.termNode(h.root, p('x'))
-    h.wire(h.root, [
+    const w = h.wire(h.root, [
       { node: a, port: { kind: 'freeVar', name: 'x' } },
       { node: b, port: { kind: 'freeVar', name: 'x' } },
       { node: c, port: { kind: 'freeVar', name: 'x' } },
     ])
     const e = mkEngine(h.build(), [])
-    settle(e, 1200)
-    const junctions = [...e.bodies.values()].filter((b) => b.kind === 'junction')
-    expect(junctions.length).toBeGreaterThan(0)
-    const legged = computeLegs(e)
-    let trunked = 0
-    for (const j of junctions) {
-      // the J-side tangent of each leg incident to this junction
-      const tans: number[] = []
+    settle(e, 2600)
+    const ch = e.chains.get(w)!
+    const junctions = ch.pts.map((_, i) => i).filter((i) => ch.adj[i]!.length >= 3)
+    expect(junctions.length, 'the tree has a junction point').toBeGreaterThanOrEqual(1)
+    // tangent continuity at degree-2 interior points: the drawn tangents of
+    // the two incident segments at the point are the SAME through-direction
+    const legged = computeLegs(e).filter((g) => g.leg.wid === w)
+    for (let v = 0; v < ch.pts.length; v++) {
+      if (ch.adj[v]!.length !== 2) continue
+      const tangentsAtV: number[] = []
       for (const g of legged) {
-        if (g.leg.from.body === j.id && g.leg.from.key === null) tans.push(g.ta)
-        if (g.leg.to.body === j.id && g.leg.to.key === null) tans.push(g.tb)
+        // interior ends carry wire-local ids w:<wid>:<idx>
+        if (g.leg.from.body === `w:${w}:${v}`) tangentsAtV.push(g.ta)
+        if (g.leg.to.body === `w:${w}:${v}`) tangentsAtV.push(g.tb)
       }
-      // loose-end ∃ bodies are degree-1 junctions: no trunk to pair
-      if (tans.length < 2) continue
-      trunked++
-      // some pair of incident tangents is exactly opposite (the chosen trunk)
-      let foundOpposite = false
-      for (let i = 0; i < tans.length; i++) {
-        for (let k = i + 1; k < tans.length; k++) {
-          if (Math.abs(Math.abs(wrap(tans[i]! - tans[k]!)) - Math.PI) < 1e-6) foundOpposite = true
-        }
+      if (tangentsAtV.length === 2) {
+        const diff = wrap(tangentsAtV[0]! - tangentsAtV[1]!)
+        // same through-direction read from either side: 0 or pi
+        expect(Math.min(Math.abs(diff), Math.abs(Math.abs(diff) - Math.PI))).toBeLessThan(1e-6)
       }
-      expect(foundOpposite, `junction ${j.id} has an opposite trunk pair`).toBe(true)
     }
-    expect(trunked, 'the 3-endpoint wire still yields a real trunk junction').toBeGreaterThan(0)
   })
 })
+
 
 describe('boundary exits are continuous around frame corners', () => {
   // Regression for the original side-snap report. The exit now terminates at a

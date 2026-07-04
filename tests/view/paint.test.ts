@@ -299,7 +299,12 @@ describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports
     const { e, ref } = build(1)
     const b = e.bodies.get(ref)!
     const shapes = paint(e, LIGHT)
-    const near = shapes.filter((s) => s.kind === 'dot' && Math.hypot(s.center.x - b.pos.x, s.center.y - b.pos.y) < 8)
+    // ∃ dots (junction bodies) are wire geometry, not pips — exclude them
+    const jpos = [...e.bodies.values()].filter((x) => x.kind === 'junction').map((x) => x.pos)
+    const near = shapes.filter((s) =>
+      s.kind === 'dot'
+      && Math.hypot(s.center.x - b.pos.x, s.center.y - b.pos.y) < 8
+      && !jpos.some((jp) => Math.hypot(s.center.x - jp.x, s.center.y - jp.y) < 1e-9))
     expect(near).toHaveLength(0)
   })
   it('an atom bound to an arity-2 bubble carries a pip in its own stroke', () => {

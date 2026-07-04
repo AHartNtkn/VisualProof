@@ -82,19 +82,16 @@ describe('dragTarget — what a press-and-drag grabs', () => {
     expect(dragTarget(e, vec(1, 1))).toEqual({ kind: 'body', id: n })
   })
 
-  it('a point on a junction dot grabs the junction body (clicks resolve it to the wire, drags do not)', () => {
+  it('a point on an ∃ dot grabs its homed body (clicks resolve it to the wire, drags do not)', () => {
+    // PLAN 21: hub junction bodies are gone — the grabbable junction-kind
+    // bodies are the homed wire ends (the ∃ dots), which stay independently
+    // manipulable (loose-ends law)
     const h2 = new DiagramBuilder()
-    const a = h2.termNode(h2.root, p('x'))
-    const b = h2.termNode(h2.root, p('y'))
-    const c = h2.termNode(h2.root, p('z'))
-    const w = h2.wire(h2.root, [
-      { node: a, port: { kind: 'freeVar', name: 'x' } },
-      { node: b, port: { kind: 'freeVar', name: 'y' } },
-      { node: c, port: { kind: 'freeVar', name: 'z' } },
-    ])
+    const a = h2.termNode(h2.root, p('\\x. x'))
+    const w = h2.wire(h2.root, [{ node: a, port: { kind: 'output' } }])
     const e2 = mkEngine(h2.build(), [])
-    settle(e2, 600)
-    const j = [...e2.bodies.values()].find((x) => x.kind === 'junction')!
+    settle(e2, 2600) // the ∃ dot parks just outside the disc's clearance once settled
+    const j = e2.bodies.get(e2.chains.get(w)!.homed[0]!.bodyId)!
     expect(hitTest(e2, j.pos)).toEqual({ kind: 'wire', id: w })
     expect(dragTarget(e2, j.pos)).toEqual({ kind: 'body', id: j.id })
   })
@@ -129,7 +126,7 @@ describe('buildSelection', () => {
 })
 
 describe('engine hit targets (junctions, frame exits → existing vocabulary)', () => {
-  it('a click on a junction resolves to its wire', () => {
+  it('a click on a branch junction resolves to its wire (the junction is the chain\'s own point)', () => {
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('x'))
     const b = h.termNode(h.root, p('x'))
@@ -140,12 +137,11 @@ describe('engine hit targets (junctions, frame exits → existing vocabulary)', 
       { node: c, port: { kind: 'freeVar', name: 'x' } },
     ])
     const e = mkEngine(h.build(), [])
-    e.bodies.get(a)!.pos = vec(-30, 0)
-    e.bodies.get(b)!.pos = vec(30, 0)
-    e.bodies.get(c)!.pos = vec(0, 30)
-    e.bodies.get(`j:${w}`)!.pos = vec(0, -10)
+    settle(e, 2600)
     recomputeRegions(e)
-    expect(hitTest(e, vec(0, -10))).toEqual({ kind: 'wire', id: w })
+    const ch = e.chains.get(w)!
+    const ji = ch.pts.map((_, i) => i).find((i) => ch.adj[i]!.length >= 3)!
+    expect(hitTest(e, ch.pts[ji]!)).toEqual({ kind: 'wire', id: w })
   })
 
   it('a click on an existential stub resolves to its internal wire', () => {
