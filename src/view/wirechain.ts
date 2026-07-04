@@ -169,33 +169,65 @@ export const clearance = (r: number): number => r + 1.5
     rising under 'monotone' descent). The corridor depends only on PINNED
     state (anchor, normal), so locality holds. Falloffs are one-pitch
     smoothing bands. */
-const maskScratch = { m: 1, anchorIdx: -1, dm: 0 }
+const maskScratch = { m: 1, anchorIdx: -1, gx: 0, gy: 0, dTheta: 0 }
 
-export function exitMaskAt(ch: WireChain, disc: ChainDisc, p: Vec2): { m: number; anchorIdx: number; dm: number } {
+/** Mask value AND its gradients: ∂m/∂p of the winning bind's active branch
+    (the anchor-side gradient is exactly the negation — a Newton pair inside
+    the chain) and ∂m/∂normal for the angular branch (the corridor turns
+    WITH the body; omitting this from the torque is an incomplete θ-gradient
+    — the one-sided-force class). */
+export function exitMaskAt(ch: WireChain, disc: ChainDisc, p: Vec2): { m: number; anchorIdx: number; gx: number; gy: number; dTheta: number } {
   const r = clearance(disc.r)
   const best = maskScratch
   best.m = 1
   best.anchorIdx = -1
-  best.dm = 0
+  best.gx = 0
+  best.gy = 0
+  best.dTheta = 0
   for (const b of ch.binds) {
     if (b.body !== disc.id) continue
     const ax = ch.pts[b.idx]!.x, ay = ch.pts[b.idx]!.y
     const dvx = p.x - ax, dvy = p.y - ay
     const d = Math.hypot(dvx, dvy)
+    if (d < 1e-9) {
+      if (0 < best.m) { best.m = 0; best.anchorIdx = b.idx; best.gx = 0; best.gy = 0; best.dTheta = 0 }
+      continue
+    }
+    const ux = dvx / d, uy = dvy / d
     // radial band: full exemption only within the clearance reach
     const t = (d - r) / PITCH
     const radial = Math.max(0, Math.min(1, t))
     // angular corridor: exempt only along the exit direction
     let angular = 0
-    if (b.normal !== undefined && d > 1e-9) {
-      const cos = (dvx * Math.cos(b.normal) + dvy * Math.sin(b.normal)) / d
+    let cos = 0, nx = 0, ny = 0
+    if (b.normal !== undefined) {
+      nx = Math.cos(b.normal)
+      ny = Math.sin(b.normal)
+      cos = ux * nx + uy * ny
       angular = Math.max(0, Math.min(1, (0.8 - cos) / 0.3))
     }
     const m = Math.max(radial, angular)
     if (m < best.m) {
       best.m = m
       best.anchorIdx = b.idx
-      best.dm = t > 0 && t < 1 && radial >= angular ? 1 / PITCH : 0
+      if (radial >= angular) {
+        const inBand = t > 0 && t < 1
+        best.gx = inBand ? ux / PITCH : 0
+        best.gy = inBand ? uy / PITCH : 0
+        best.dTheta = 0
+      } else {
+        const inBand = angular > 0 && angular < 1
+        if (inBand) {
+          // ∇_p cos = (n̂ − cos·û)/d ; m = (0.8 − cos)/0.3
+          best.gx = (-(nx - cos * ux) / d) / 0.3
+          best.gy = (-(ny - cos * uy) / d) / 0.3
+          best.dTheta = (-(ux * -ny + uy * nx)) / 0.3
+        } else {
+          best.gx = 0
+          best.gy = 0
+          best.dTheta = 0
+        }
+      }
     }
   }
   return best
@@ -383,17 +415,18 @@ export function reachableDiscs(ch: WireChain, discs: readonly ChainDisc[]): Chai
   })
 }
 
-export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nearMap?: EdgeNear): { f: MVec[]; onDiscs: Map<string, MVec> } {
+export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nearMap?: EdgeNear): { f: MVec[]; onDiscs: Map<string, MVec>; bindTorque: Map<number, number> } {
   const discs = reachableDiscs(ch, allDiscs)
   const near = nearMap ?? buildEdgeNear(ch, allDiscs)
   const f: MVec[] = ch.pts.map(() => ({ x: 0, y: 0 }))
   const onDiscs = new Map<string, MVec>()
+  const bindTorque = new Map<number, number>()
   const addDisc = (id: string, x: number, y: number): void => {
     const cur = onDiscs.get(id) ?? { x: 0, y: 0 }
     onDiscs.set(id, { x: cur.x + x, y: cur.y + y })
   }
+  // ---- tension: unit pull toward each neighbor (gradient of length) ----
   for (let v = 0; v < ch.pts.length; v++) {
-    // tension: unit pull toward each neighbor (gradient of length)
     for (const n of ch.adj[v]!) {
       const dx = ch.pts[n]!.x - ch.pts[v]!.x, dy = ch.pts[n]!.y - ch.pts[v]!.y
       const d = Math.hypot(dx, dy)
@@ -401,60 +434,101 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nea
       f[v]!.x += (TENSION * dx) / d
       f[v]!.y += (TENSION * dy) / d
     }
-    // bend + barrier: numeric gradient of the LOCAL terms (they couple v
-    // and its neighbors through arc shares; differentiating the same code
-    // that defines E keeps force ≡ −∇E exactly). Stencil: E terms that
-    // depend on p_v are localBend at v and its neighbors, and localBarrier
-    // at v and its neighbors.
-    {
-      const h = 1e-4
-      const p = ch.pts[v]!
-      const e0 = pointLocalE(ch, discs, v, near)
-      ch.pts[v] = { x: p.x + h, y: p.y }
-      const ex = pointLocalE(ch, discs, v, near)
-      ch.pts[v] = { x: p.x, y: p.y + h }
-      const ey = pointLocalE(ch, discs, v, near)
-      ch.pts[v] = p
-      f[v]!.x -= (ex - e0) / h
-      f[v]!.y -= (ey - e0) / h
-    }
-    // disc reactions + mask anchor pairs: sub-sampled along each owned
-    // incident edge (the same integral the energy uses)
+  }
+  // ---- bend: ANALYTIC 3-point gradient per degree-2 point ----
+  // E = B·θ²/s̄, θ = π − acos(c), c = û·ŵ, s̄ = max(0.25, (lu+lw)/2).
+  // dθ/dc = 1/sinφ; near straight (θ→0) the coefficient θ/sinφ → 1, so the
+  // product stays finite (guarded at the fully-folded pole). Pinned exact
+  // against finite differences of chainEnergy by the battery.
+  for (let i = 0; i < ch.pts.length; i++) {
+    if (ch.adj[i]!.length !== 2) continue
+    const ai = ch.adj[i]![0]!, bi = ch.adj[i]![1]!
+    const pi = ch.pts[i]!, pa = ch.pts[ai]!, pb = ch.pts[bi]!
+    const uxv = pa.x - pi.x, uyv = pa.y - pi.y
+    const wxv = pb.x - pi.x, wyv = pb.y - pi.y
+    const lu = Math.hypot(uxv, uyv), lw = Math.hypot(wxv, wyv)
+    if (lu < 1e-9 || lw < 1e-9) continue
+    const c = Math.max(-1, Math.min(1, (uxv * wxv + uyv * wyv) / (lu * lw)))
+    const phi = Math.acos(c)
+    const theta = Math.PI - phi
+    const sMean = (lu + lw) / 2
+    const sBar = Math.max(0.25, sMean)
+    const sinPhi = Math.max(Math.sin(phi), 1e-9)
+    const dcax = wxv / (lu * lw) - (c * uxv) / (lu * lu)
+    const dcay = wyv / (lu * lw) - (c * uyv) / (lu * lu)
+    const dcbx = uxv / (lu * lw) - (c * wxv) / (lw * lw)
+    const dcby = uyv / (lu * lw) - (c * wyv) / (lw * lw)
+    const kC = (2 * BEND * theta) / (sBar * sinPhi)
+    const kS = sMean > 0.25 ? -(BEND * theta * theta) / (sBar * sBar) : 0
+    const uhx = uxv / lu, uhy = uyv / lu
+    const whx = wxv / lw, why = wyv / lw
+    f[ai]!.x -= kC * dcax + kS * (uhx / 2)
+    f[ai]!.y -= kC * dcay + kS * (uhy / 2)
+    f[bi]!.x -= kC * dcbx + kS * (whx / 2)
+    f[bi]!.y -= kC * dcby + kS * (why / 2)
+    f[i]!.x -= kC * (-dcax - dcbx) + kS * (-(uhx + whx) / 2)
+    f[i]!.y -= kC * (-dcay - dcby) + kS * (-(uhy + why) / 2)
+  }
+  // ---- barrier: ANALYTIC along each owned edge — the same integral the
+  // energy uses, with every dependency differentiated: the sub-point (to
+  // the endpoints via 1−t / t), the mask (point side + exact anchor-side
+  // negation — Newton pair — and its θ-dependence via bindTorque), the
+  // disc (reaction), and the weight via L ----
+  for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
       const nearE = near.get(edgeKey(v, n))
       if (nearE === null) continue
       const a = ch.pts[v]!, b2 = ch.pts[n]!
-      const L = Math.hypot(b2.x - a.x, b2.y - a.y)
+      const ex2 = b2.x - a.x, ey2 = b2.y - a.y
+      const L = Math.hypot(ex2, ey2)
       if (L < 1e-9) continue
+      const ehx = ex2 / L, ehy = ey2 / L
       const K = Math.max(1, Math.ceil(L))
       for (let k = 0; k <= K; k++) {
         const t = k / K
-        const p = { x: a.x + (b2.x - a.x) * t, y: a.y + (b2.y - a.y) * t }
-        const w = (k === 0 || k === K ? 0.5 : 1) * (L / K)
-        for (const disc of discs) {
+        scratchP.x = a.x + ex2 * t
+        scratchP.y = a.y + ey2 * t
+        const cW = (k === 0 || k === K ? 0.5 : 1) / K
+        const w = cW * L
+        for (const disc of nearE ?? discs) {
           const r = clearance(disc.r)
-          const dvec = sub(p, disc.pos)
-          const d = len(dvec)
+          const dvx = scratchP.x - disc.pos.x, dvy = scratchP.y - disc.pos.y
+          const d = Math.hypot(dvx, dvy)
           if (d >= r || d < 1e-9) continue
-          const { m, anchorIdx, dm } = exitMaskAt(ch, disc, p)
-          if (m <= 0) continue
-          const mag = m * barrierG(d, r) * w
-          addDisc(disc.id, (-dvec.x / d) * mag, (-dvec.y / d) * mag)
-          if (dm > 0 && anchorIdx >= 0) {
-            const avec = sub(p, ch.pts[anchorIdx]!)
-            const ad = len(avec)
-            if (ad > 1e-9) {
-              const gm = barrierU(d, r) * dm * w
-              f[anchorIdx]!.x += (avec.x / ad) * gm
-              f[anchorIdx]!.y += (avec.y / ad) * gm
-            }
+          const { m, anchorIdx, gx, gy, dTheta } = exitMaskAt(ch, disc, scratchP)
+          if (m <= 0 && gx === 0 && gy === 0 && dTheta === 0) continue
+          const U = barrierU(d, r)
+          const G = barrierG(d, r)
+          const ux = dvx / d, uy = dvy / d
+          const magP = m * G * w
+          f[v]!.x += magP * ux * (1 - t)
+          f[v]!.y += magP * uy * (1 - t)
+          f[n]!.x += magP * ux * t
+          f[n]!.y += magP * uy * t
+          addDisc(disc.id, -magP * ux, -magP * uy)
+          if ((gx !== 0 || gy !== 0) && anchorIdx >= 0) {
+            const gm = w * U
+            f[v]!.x -= gm * gx * (1 - t)
+            f[v]!.y -= gm * gy * (1 - t)
+            f[n]!.x -= gm * gx * t
+            f[n]!.y -= gm * gy * t
+            f[anchorIdx]!.x += gm * gx
+            f[anchorIdx]!.y += gm * gy
           }
+          if (dTheta !== 0 && anchorIdx >= 0) {
+            bindTorque.set(anchorIdx, (bindTorque.get(anchorIdx) ?? 0) - w * U * dTheta)
+          }
+          const gL = cW * m * U
+          f[v]!.x += gL * ehx
+          f[v]!.y += gL * ehy
+          f[n]!.x -= gL * ehx
+          f[n]!.y -= gL * ehy
         }
       }
     }
   }
-  return { f, onDiscs }
+  return { f, onDiscs, bindTorque }
 }
 
 /** One damped, trust-region descent step over the chain's FREE points

@@ -503,6 +503,8 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
         const pn = ch.pts[nbr]!
         tq += (pn.x - A.pos.x) * py - (pn.y - A.pos.y) * px
       }
+      // the mask's θ-dependence (the exit corridor turns with the body)
+      tq += grad.bindTorque.get(bind.idx) ?? 0
       torque.set(A.id, torque.get(A.id)! + tq)
     }
     // homed ∃/∀ bodies are WIRE degrees of freedom: they move at the
