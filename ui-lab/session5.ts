@@ -56,10 +56,14 @@ export type TrackLab = {
   labels(): string[]
   states(): Diagram[]
   boundary(): readonly WireId[]
-  /** Build (origin ⟹ current) or (current ⟹ origin), kernel-check by
-      replay, adopt into the context; the track keeps going (lemmas stack). */
+  /** The current position in history (0 = origin). States AFTER the cursor
+      are the retained future — redo reaches them; a NEW move from here
+      discards them (USER ruling: scrubbing is rapid undo AND redo). */
+  cursor(): number
+  /** Build (origin ⟹ cursor state) or (cursor state ⟹ origin) from the steps
+      up to the cursor, kernel-check by replay, adopt into the context. */
   declare(name: string): Theorem
-  /** Jump the track back to state k (0 = origin) — click-to-rewind. */
+  /** Move the cursor to state k — non-destructive time travel (undo/redo). */
   rewind(k: number): void
   sink(refuse: (text: string) => void): MoveSink
   onChange(fn: () => void): void
@@ -94,11 +98,16 @@ export function mkTrackLab(lab: LabCtx, ctx: ProofContext = fregeCtx()): TrackLa
   let fStates: Diagram[] = [origin.d]
   // what the USER did, in their orientation (backward.steps hold inverses)
   let actionLabels: string[] = []
-  // backward bookkeeping rides a session's backward side (composedTail law)
-  let bs: ProofSession | null = null
+  // backward bookkeeping: one immutable session snapshot per state, so the
+  // retained future survives cursor travel
+  let bSessions: ProofSession[] = []
+  // the time-travel position: 0 = origin; states beyond it are the future
+  let cursor = 0
   const listeners: (() => void)[] = []
   const changed = () => { for (const fn of listeners) fn() }
-  const current = (): Diagram => dir === 'backward' ? bs!.backward.current : fStates[fStates.length - 1]!
+  const stateAt = (k: number): Diagram => dir === 'backward' ? bSessions[k]!.backward.current : fStates[k]!
+  const current = (): Diagram => stateAt(cursor)
+  const count = (): number => dir === 'backward' ? bSessions.length - 1 : fStates.length - 1
   const sync = () => {
     lab.mutate(current(), undefined, origin.boundary.filter((w) => current().wires[w] !== undefined))
     changed()
@@ -108,18 +117,23 @@ export function mkTrackLab(lab: LabCtx, ctx: ProofContext = fregeCtx()): TrackLa
     start: (d) => {
       if (dir !== null) throw new Error(`already proving ${dir} — declare or undo to the origin first`)
       dir = d
-      if (d === 'backward') bs = startSession(mkDiagramWithBoundary(new DiagramBuilder().build(), []), originDWB(), ctx)
+      if (d === 'backward') bSessions = [startSession(mkDiagramWithBoundary(new DiagramBuilder().build(), []), originDWB(), ctx)]
       changed()
     },
     labels: () => [...actionLabels],
-    states: () => dir === 'backward' ? [...bs!.backward.history, bs!.backward.current] : [...fStates],
+    states: () => {
+      const out: Diagram[] = []
+      for (let k = 0; k <= count(); k++) out.push(stateAt(k))
+      return out
+    },
     boundary: () => origin.boundary,
+    cursor: () => cursor,
     declare: (name) => {
       if (dir === null) throw new Error('start proving first (F forward, B backward)')
       const bd = (d: Diagram) => origin.boundary.filter((w) => d.wires[w] !== undefined)
       const thm: Theorem = dir === 'forward'
-        ? { name, lhs: originDWB(), rhs: mkDiagramWithBoundary(current(), bd(current())), steps: [...fSteps] }
-        : { name, lhs: mkDiagramWithBoundary(current(), bd(current())), rhs: originDWB(), steps: [...bs!.backward.composedTail] }
+        ? { name, lhs: originDWB(), rhs: mkDiagramWithBoundary(current(), bd(current())), steps: fSteps.slice(0, cursor) }
+        : { name, lhs: mkDiagramWithBoundary(current(), bd(current())), rhs: originDWB(), steps: [...bSessions[cursor]!.backward.composedTail] }
       checkTheorem(thm, ctx)
       ctx.theorems.set(name, thm)
       changed()
@@ -129,34 +143,37 @@ export function mkTrackLab(lab: LabCtx, ctx: ProofContext = fregeCtx()): TrackLa
       ctx,
       apply: (step: ProofStep) => {
         if (dir === null) throw new Error('start proving first (F forward, B backward)')
+        // a NEW move from the cursor discards the retained future
+        fSteps = fSteps.slice(0, cursor)
+        fStates = fStates.slice(0, cursor + 1)
+        bSessions = bSessions.slice(0, cursor + 1)
+        actionLabels = actionLabels.slice(0, cursor)
         if (dir === 'forward') {
           const next = applyStep(lab.d, step, ctx)
           fSteps.push(step)
           fStates.push(next)
         } else {
-          bs = applyBackward(bs!, step)
+          bSessions.push(applyBackward(bSessions[cursor]!, step))
         }
         actionLabels.push(stepLabel(step))
+        cursor++
         sync()
       },
       refuse,
       mode: () => dir ?? 'forward',
       undo: () => {
-        if (dir === 'forward' && fSteps.length > 0) { fSteps.pop(); fStates.pop(); actionLabels.pop(); sync(); return }
-        if (dir === 'backward' && bs !== null && bs.backward.steps.length > 0) { bs = undoBackward(bs); actionLabels.pop(); sync(); return }
+        if (dir !== null && cursor > 0) { cursor--; sync(); return }
         refuse('nothing to undo on this track')
+      },
+      redo: () => {
+        if (dir !== null && cursor < count()) { cursor++; sync(); return }
+        refuse('nothing to redo on this track')
       },
     }),
     rewind: (k) => {
-      if (dir === 'forward') {
-        if (k < 0 || k > fSteps.length) throw new Error(`no state ${k} on this track`)
-        fSteps = fSteps.slice(0, k)
-        fStates = fStates.slice(0, k + 1)
-        actionLabels = actionLabels.slice(0, k)
-      } else if (dir === 'backward') {
-        if (bs === null || k < 0 || k > bs.backward.steps.length) throw new Error(`no state ${k} on this track`)
-        while (bs.backward.steps.length > k) { bs = undoBackward(bs); actionLabels.pop() }
-      } else throw new Error('start proving first (F forward, B backward)')
+      if (dir === null) throw new Error('start proving first (F forward, B backward)')
+      if (k < 0 || k > count()) throw new Error(`no state ${k} on this track`)
+      cursor = k
       sync()
     },
     onChange: (fn) => listeners.push(fn),

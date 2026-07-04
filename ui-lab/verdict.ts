@@ -32,6 +32,8 @@ export type MoveSink = {
   mode?(): 'forward' | 'backward'
   /** Session pages own undo (session history, not the lab's); absent = lab undo. */
   undo?(): void
+  /** Cursor-model redo (the retained future) — Ctrl+Shift+Z. */
+  redo?(): void
 }
 
 export function installVerdictMoves(lab: LabCtx, sink: MoveSink, opts: { active?: () => boolean } = {}): BrushHandle {
@@ -62,10 +64,11 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink, opts: { active?
   window.addEventListener('keydown', (e) => {
     if (!act()) return
     if (document.activeElement instanceof HTMLInputElement) return
-    if (!(e.ctrlKey || e.metaKey) || e.key !== 'z') return
+    if (!(e.ctrlKey || e.metaKey) || (e.key !== 'z' && e.key !== 'Z')) return
     e.preventDefault()
-    if (sink.undo) { sink.undo(); brush.prune(); return }
-    if (lab.undo()) { brush.prune(); lab.toast('undo') } else lab.toast('nothing to undo')
+    if (e.shiftKey && sink.redo) { sink.redo(); brush.prune(); return }
+    if (!e.shiftKey && sink.undo) { sink.undo(); brush.prune(); return }
+    if (!e.shiftKey) { if (lab.undo()) { brush.prune(); lab.toast('undo') } else lab.toast('nothing to undo') }
   })
   lab.canvas.addEventListener('contextmenu', (e) => e.preventDefault())
   lab.canvas.addEventListener('pointerdown', () => closeMenu())

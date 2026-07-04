@@ -155,12 +155,26 @@ export function tryAction(lab: LabCtx, sel: SubgraphSelection, a: ActionDescript
 
 /** Render a diagram into an inset canvas (the ghost preview): fresh engine,
     synchronous settle, fit, paint — the real pipeline, miniaturized. */
-export function renderPreview(canvas: HTMLCanvasElement, d: Diagram, boundary: readonly WireId[]): void {
+export function renderPreview(canvas: HTMLCanvasElement, d: Diagram, boundary: readonly WireId[], focus?: readonly string[]): void {
   const eng = mkEngine(d, boundary as WireId[])
   for (let i = 0; i < 240; i++) settleStep(eng)
   const sheet = eng.regions.get(d.root)
-  const R = Math.max(sheet?.radius ?? 10, 10)
-  const cx = sheet?.center.x ?? 0, cy = sheet?.center.y ?? 0
+  let R = Math.max(sheet?.radius ?? 10, 10)
+  let cx = sheet?.center.x ?? 0, cy = sheet?.center.y ?? 0
+  // focus: fit the view to the listed body ids (zoom-to-affected) — a move
+  // that barely changes the whole shape is still legible up close
+  if (focus !== undefined && focus.length > 0) {
+    const bs = focus.map((id) => eng.bodies.get(id)).filter((b): b is NonNullable<typeof b> => b !== undefined)
+    if (bs.length > 0) {
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity
+      for (const b of bs) {
+        x0 = Math.min(x0, b.pos.x - b.discR); y0 = Math.min(y0, b.pos.y - b.discR)
+        x1 = Math.max(x1, b.pos.x + b.discR); y1 = Math.max(y1, b.pos.y + b.discR)
+      }
+      cx = (x0 + x1) / 2; cy = (y0 + y1) / 2
+      R = Math.max((Math.max(x1 - x0, y1 - y0) / 2) * 1.6, 12)
+    }
+  }
   const scale = (0.44 * Math.min(canvas.width, canvas.height)) / R
   const view = { scale, offsetX: canvas.width / 2 - cx * scale, offsetY: canvas.height / 2 - cy * scale }
   const shapes: Shape[] = [...paint(eng, LIGHT)]

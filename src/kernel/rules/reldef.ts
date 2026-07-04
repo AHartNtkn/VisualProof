@@ -86,7 +86,10 @@ export function applyRelFold(
   }
 
   const cleaned = removeSubgraph(d, sel)
-  const refId = freshId(new Set(Object.keys(cleaned.nodes)), 'relFold')
+  // Mint against the FULL pre-removal id set (the applyTheorem discipline):
+  // minting after removal can resurrect a just-deleted node id, breaking
+  // every diff-based consumer (backward inverses, proof remapping).
+  const refId = freshId(new Set(Object.keys(d.nodes)), 'relFold')
   const nodes: Record<NodeId, DiagramNode> = {
     ...cleaned.nodes,
     [refId]: { kind: 'ref', region: sel.region, defId, arity: args.length },

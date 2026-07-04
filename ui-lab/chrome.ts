@@ -78,6 +78,7 @@ export function mkChromeApp(lab: LabCtx): ChromeApp {
     refuse,
     mode: () => track?.direction() ?? 'forward',
     undo: () => { trackSink?.undo?.() },
+    redo: () => { trackSink?.redo?.() },
   }
   brushRef = installVerdictMoves(lab, proxySink, { active: () => mode() !== 'edit' })
 
