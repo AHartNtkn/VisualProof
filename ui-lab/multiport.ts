@@ -75,7 +75,7 @@ export function mkMultiportStart(): { d: Diagram; boundary: WireId[] } {
 
 // ---- multiport extraction: the hub body and the terminal ends of every
 // ≥3-legged junction (endpoint anchors AND the scope-∃ dangle both count)
-export type Terminal = { p: Vec2; tangent: number }
+export type Terminal = { p: Vec2; tangent: number; body: string; key: string | null }
 export type MWire = { wid: WireId; hub: Body; terminals: Terminal[] }
 
 export function collectMultiport(e: Engine): MWire[] {
@@ -85,7 +85,9 @@ export function collectMultiport(e: Engine): MWire[] {
     const B = e.bodies.get(g.leg.to.body)!
     const hub = A.id === `j:${g.leg.wid}` ? A : B.id === `j:${g.leg.wid}` ? B : null
     if (hub === null) continue
-    const term: Terminal = hub === A ? { p: g.pb, tangent: g.tb } : { p: g.pa, tangent: g.ta }
+    const term: Terminal = hub === A
+      ? { p: g.pb, tangent: g.tb, body: g.leg.to.body, key: g.leg.to.key }
+      : { p: g.pa, tangent: g.ta, body: g.leg.from.body, key: g.leg.from.key }
     let entry = groups.get(hub.id)
     if (entry === undefined) { entry = { wid: g.leg.wid, terminals: [] }; groups.set(hub.id, entry) }
     entry.terminals.push(term)
@@ -128,14 +130,6 @@ export function basePaintExcept(e: Engine, st: Theme, skip: ReadonlySet<WireId>)
   return shapes
 }
 
-/** A short entry curve out of a terminal port: keeps the port-normal tangent
-    so branches blend into the anatomy the way production legs do. */
-export function entryCurve(t: Terminal, to: Vec2, stroke: string, width: number, glow: string | null): Shape {
-  const dir = Math.atan2(to.y - t.p.y, to.x - t.p.x)
-  const path = hobbyBezier(t.p, t.tangent, to, dir + Math.PI)
-  return { kind: 'bezier', from: path.from, c1: path.c1, c2: path.c2, to: path.to, stroke, width, glow }
-}
-
 /** Direct body dragging for the render demos: grab any node and shove it —
     the branches must respond live. (No brush here: its wire hover overlay
     draws the production star, which would lie about these renderings.) */
@@ -161,6 +155,131 @@ export function installDrag(lab: LabCtx): void {
     b.vel.y = 0
   })
   lab.canvas.addEventListener('pointerup', () => { grab = null })
+}
+
+// ---- the soap-film Steiner machinery (round8-a verdict: acceptable with
+// tweaks; shared by the straight-segment and tributary renderings).
+// Free internal points relax under UNIT tension per incident branch
+// (surface tension → 120° Plateau junctions) plus a KEEP-OUT from node
+// discs: a branch point that settles behind a disc obscures the connection
+// structure (USER report), so discs repel internal points from a radius
+// where the wire would anyway have entered through a port. Spawn/merge
+// distances are a hysteresis pair — they must be separated or the topology
+// flaps every frame.
+export type SoapTree = { pts: Vec2[]; adj: number[][]; nT: number }
+
+const SPAWN_DIST = 1.0
+const MERGE_DIST = 0.3
+const TENSION_STEP = 0.25
+const COS120 = Math.cos((2 * Math.PI) / 3)
+
+export type Obstacle = { pos: Vec2; r: number }
+
+export function nodeObstacles(e: Engine): Obstacle[] {
+  const out: Obstacle[] = []
+  for (const b of e.bodies.values()) {
+    if (b.kind === 'junction' || b.kind === 'anchor') continue
+    out.push({ pos: b.pos, r: b.discR + 1 })
+  }
+  return out
+}
+
+/** Terminal tangent against an ACTUAL target: real ports keep their anatomy
+    normal (rotation relaxation turns the body); free-floating ends (the ∃
+    dangle, key null) aim at the tree point they attach to — computeLegs
+    aimed them at the production hub, which these renderings replace. */
+export function terminalTangent(t: Terminal, toward: Vec2): number {
+  return t.key === null ? Math.atan2(toward.y - t.p.y, toward.x - t.p.x) : t.tangent
+}
+
+/** Drive the production hub body to the tree's interior so the engine's
+    ROTATION relaxation turns every node's port toward the drawn structure
+    (with a stranded hub, ports face the wrong way and entry curves loop). */
+export function driveHub(hub: Body, t: SoapTree): void {
+  let n = 0, cx = 0, cy = 0
+  for (let v = t.nT; v < t.pts.length; v++) {
+    if (t.adj[v]!.length === 0) continue
+    cx += t.pts[v]!.x
+    cy += t.pts[v]!.y
+    n++
+  }
+  if (n === 0) return
+  hub.pos.x += (cx / n - hub.pos.x) * 0.2
+  hub.pos.y += (cy / n - hub.pos.y) * 0.2
+  hub.vel.x = 0
+  hub.vel.y = 0
+}
+
+export function mkSoapTree(terminals: readonly Terminal[], hubPos: Vec2): SoapTree {
+  const pts = terminals.map((x) => ({ ...x.p }))
+  pts.push({ ...hubPos })
+  return { pts, adj: [...terminals.map(() => [terminals.length]), terminals.map((_, i) => i)], nT: terminals.length }
+}
+
+export function relaxSoap(t: SoapTree, obstacles: readonly Obstacle[]): void {
+  for (let iter = 0; iter < 6; iter++) {
+    for (let v = t.nT; v < t.pts.length; v++) {
+      let fx = 0, fy = 0
+      for (const n of t.adj[v]!) {
+        const dx = t.pts[n]!.x - t.pts[v]!.x, dy = t.pts[n]!.y - t.pts[v]!.y
+        const d = Math.hypot(dx, dy)
+        if (d < 1e-9) continue
+        fx += dx / d
+        fy += dy / d
+      }
+      for (const o of obstacles) {
+        const dx = t.pts[v]!.x - o.pos.x, dy = t.pts[v]!.y - o.pos.y
+        const d = Math.hypot(dx, dy)
+        if (d >= o.r || d < 1e-9) continue
+        const push = (o.r - d) / o.r // full tension-strength at the center, zero at the rim
+        fx += (dx / d) * push * 2
+        fy += (dy / d) * push * 2
+      }
+      t.pts[v] = { x: t.pts[v]!.x + fx * TENSION_STEP, y: t.pts[v]!.y + fy * TENSION_STEP }
+    }
+  }
+}
+
+export function reshapeSoap(t: SoapTree): void {
+  // SPLIT: a branch point holding two branches tighter than 120° sheds them
+  for (let v = t.nT; v < t.pts.length; v++) {
+    const nbrs = t.adj[v]!
+    if (nbrs.length < 4) continue
+    let bi = -1, bj = -1, best = COS120
+    for (let i = 0; i < nbrs.length; i++) for (let j = i + 1; j < nbrs.length; j++) {
+      const a = t.pts[nbrs[i]!]!, b = t.pts[nbrs[j]!]!
+      const ua = { x: a.x - t.pts[v]!.x, y: a.y - t.pts[v]!.y }
+      const ub = { x: b.x - t.pts[v]!.x, y: b.y - t.pts[v]!.y }
+      const la = Math.hypot(ua.x, ua.y), lb = Math.hypot(ub.x, ub.y)
+      if (la < 1e-9 || lb < 1e-9) continue
+      const cos = (ua.x * ub.x + ua.y * ub.y) / (la * lb)
+      if (cos > best) { best = cos; bi = i; bj = j }
+    }
+    if (bi < 0) continue
+    const a = nbrs[bi]!, b = nbrs[bj]!
+    const dir = Math.atan2(
+      (t.pts[a]!.y + t.pts[b]!.y) / 2 - t.pts[v]!.y,
+      (t.pts[a]!.x + t.pts[b]!.x) / 2 - t.pts[v]!.x,
+    )
+    const w = t.pts.length
+    t.pts.push({ x: t.pts[v]!.x + Math.cos(dir) * SPAWN_DIST, y: t.pts[v]!.y + Math.sin(dir) * SPAWN_DIST })
+    t.adj.push([a, b, v])
+    t.adj[v] = nbrs.filter((n) => n !== a && n !== b)
+    t.adj[v]!.push(w)
+    for (const x of [a, b]) t.adj[x] = t.adj[x]!.map((n) => (n === v ? w : n))
+  }
+  // MERGE: an internal edge that tension collapsed folds back into one point
+  for (let v = t.nT; v < t.pts.length; v++) {
+    for (const w of [...t.adj[v]!]) {
+      if (w < t.nT || w <= v) continue
+      const d = Math.hypot(t.pts[w]!.x - t.pts[v]!.x, t.pts[w]!.y - t.pts[v]!.y)
+      if (d >= MERGE_DIST) continue
+      t.adj[v] = [...t.adj[v]!.filter((n) => n !== w), ...t.adj[w]!.filter((n) => n !== v)]
+      for (const n of t.adj[w]!) if (n !== v) t.adj[n] = t.adj[n]!.map((m) => (m === w ? v : m))
+      t.adj[w] = []
+      return
+    }
+  }
 }
 
 export { boot }
