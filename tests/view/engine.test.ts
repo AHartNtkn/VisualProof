@@ -13,11 +13,6 @@ const nat = () => {
   return { d: b.diagram, boundary: b.boundary }
 }
 
-/** How many DISTINCT legs touch a given (body, port key). */
-function legsAt(legs: readonly { from: { body: string; key: string | null }; to: { body: string; key: string | null } }[], body: string, key: string): number {
-  return legs.filter((l) => (l.from.body === body && l.from.key === key) || (l.to.body === body && l.to.key === key)).length
-}
-
 describe('mkEngine', () => {
   it('creates exactly one body per diagram node', () => {
     const h = new DiagramBuilder()
@@ -41,22 +36,17 @@ describe('mkEngine', () => {
     for (const r of refs) expect(r.discR).toBeCloseTo(DISC_R + 1.5, 10)
   })
 
-  it('law 4: every ref/atom port has exactly one connection (leg XOR boundary exit)', () => {
+  it('law 4: every ref/atom port is bound by exactly one chain (PLAN 21: chains own connectivity)', () => {
     const { d, boundary } = nat()
     const e = mkEngine(d, boundary)
-    // ports reached by a boundary exit rather than a leg
-    const boundaryPorts = new Set<string>()
-    for (const [wid, body] of e.boundaryOf) {
-      const w = d.wires[wid]!
-      const ep = w.endpoints.find((x) => x.node === body)
-      if (ep !== undefined) boundaryPorts.add(`${body}|${pkey(ep.port)}`)
-    }
     for (const [id, node] of Object.entries(d.nodes)) {
       if (node.kind === 'term') continue // term outputs may exit; law 4 is about refs/atoms
       for (const port of requiredPorts(d, node)) {
-        const key = `${id}|${pkey(port)}`
-        const connections = legsAt(e.legs, id, pkey(port)) + (boundaryPorts.has(key) ? 1 : 0)
-        expect(connections, `port ${key}`).toBe(1)
+        let count = 0
+        for (const ch of e.chains.values()) {
+          count += ch.binds.filter((b) => b.body === id && b.key === pkey(port)).length
+        }
+        expect(count, `port ${id}|${pkey(port)}`).toBe(1)
       }
     }
   })

@@ -71,34 +71,29 @@ describe('law 1 — containment: no two region circles ever intersect', () => {
   })
 })
 
-describe('law 7 — junctions: every >=3-endpoint wire gets exactly one junction body', () => {
+describe('law 7 (PLAN 21 form) — junction-kind bodies are exactly the homed wire ends', () => {
   for (const [name, d, boundary] of cases) {
-    it(`one junction per branch wire in ${name}`, () => {
+    it(`junction bodies = chain homed points + bare wires in ${name}`, () => {
       const e = mkEngine(d, boundary)
-      const bset = new Set(boundary)
-      const expected = Object.entries(d.wires).filter(
-        ([wid, w]) => w.endpoints.length + (bset.has(wid) ? 1 : 0) >= 3,
-      ).length
+      const homed = new Set<string>()
+      for (const ch of e.chains.values()) for (const hm of ch.homed) homed.add(hm.bodyId)
+      for (const [wid, w] of Object.entries(d.wires)) {
+        if (w.endpoints.length === 0) homed.add(`j:${wid}`)
+      }
       const junctions = [...e.bodies.values()].filter((b) => b.kind === 'junction')
-      expect(junctions).toHaveLength(expected)
+      expect(new Set(junctions.map((b) => b.id))).toEqual(homed)
     })
 
-    it(`no unary node shows two legs in ${name} (one leg per attached port)`, () => {
+    it(`every attached port is bound by exactly one chain in ${name}`, () => {
       const e = mkEngine(d, boundary)
       const perPort = new Map<string, number>()
-      for (const leg of e.legs) {
-        for (const end of [leg.from, leg.to]) {
-          if (end.key === null) continue
-          const b = e.bodies.get(end.body)!
-          if (b.kind === 'junction') continue
-          const k = `${end.body}|${end.key}`
+      for (const ch of e.chains.values()) {
+        for (const bind of ch.binds) {
+          const k = `${bind.body}|${bind.key}`
           perPort.set(k, (perPort.get(k) ?? 0) + 1)
         }
       }
-      // a self-loop stub counts its single port twice (from and to); every
-      // other attached port appears in exactly one leg. Nothing exceeds 2,
-      // and only genuine stubs reach 2.
-      for (const [, count] of perPort) expect(count).toBeLessThanOrEqual(2)
+      for (const [port, count] of perPort) expect(count, port).toBe(1)
     })
   }
 })

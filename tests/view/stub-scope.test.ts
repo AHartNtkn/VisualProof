@@ -30,10 +30,11 @@ describe('existential stubs honor wire scope', () => {
     const loose = e.bodies.get(`j:${w}`)
     expect(loose, 'the loose end needs its own body (junction of degree 1) — the node body lives two cuts deep').toBeDefined()
     expect(loose!.region).toBe(d.root)
-    const leg = e.legs.find((l) => l.wid === w)
-    expect(leg, 'the wire draws as a leg from the port out to the loose end').toBeDefined()
-    expect(leg!.from.body === `j:${w}` || leg!.to.body === `j:${w}`).toBe(true)
-    expect(leg!.from.body === leg!.to.body).toBe(false)
+    const ch = e.chains.get(w)!
+    expect(ch, 'the wire draws as a chain from the port out to the loose end').toBeDefined()
+    expect(ch.homed).toHaveLength(1)
+    expect(ch.homed[0]!.bodyId).toBe(`j:${w}`)
+    expect(ch.binds).toHaveLength(1)
   })
 
   it('after settling, the ∃ dot sits OUTSIDE both cut circles (in its scope region)', () => {
@@ -67,18 +68,27 @@ describe('existential stubs honor wire scope', () => {
     ]) // scoped at c1 — the annulus — while both endpoints live in c2
     const d = b.build()
     const e = mkEngine(d, [])
-    const j = e.bodies.get(`j:${w}`)
-    expect(j, 'the port connectivity keeps a junction near the ports').toBeDefined()
-    expect(j!.region, 'junction homes at the dca — the line does not contort into the annulus').toBe(c2)
     const x = e.bodies.get(`x:${w}`)
     expect(x, 'the quantifier is a dangling ∃ body at the scope').toBeDefined()
     expect(x!.region).toBe(c1)
-    expect(e.legs.filter((l) => l.wid === w).length).toBe(3)
-    settle(e, 600)
+    // the chain carries both ports AND the scope tip: a tree with a branch
+    const ch = e.chains.get(w)!
+    expect(ch.binds).toHaveLength(2)
+    expect(ch.homed).toHaveLength(1)
+    expect(ch.homed[0]!.bodyId).toBe(`x:${w}`)
+    settle(e, 2600)
     recomputeRegions(e)
     const g2 = e.regions.get(c2)!
     const dist = Math.hypot(x!.pos.x - g2.center.x, x!.pos.y - g2.center.y)
     expect(dist, 'the ∃ dot sits outside the inner cut').toBeGreaterThan(g2.radius)
+    // the line itself does not contort into the annulus: the tree's branch
+    // point (degree ≥ 3) stays inside the inner cut with the ports
+    const junctionIdx = ch.pts.map((_, i) => i).filter((i) => ch.adj[i]!.length >= 3)
+    expect(junctionIdx.length, 'the branch point exists').toBeGreaterThanOrEqual(1)
+    for (const ji of junctionIdx) {
+      const dj = Math.hypot(ch.pts[ji]!.x - g2.center.x, ch.pts[ji]!.y - g2.center.y)
+      expect(dj, 'the junction stays with the ports (dca), not in the annulus').toBeLessThan(g2.radius + 2)
+    }
     const stub = existentialStubs(e).find((s) => s.wid === w)
     expect(stub, 'the dangling branch end draws the ∃ dot').toBeDefined()
     expect(stub!.dot.x).toBe(x!.pos.x)
@@ -96,7 +106,9 @@ describe('existential stubs honor wire scope', () => {
     ])
     const e = mkEngine(b.build(), [])
     expect(e.bodies.get(`j:${w}`)).toBeUndefined()
-    expect(e.legs.filter((l) => l.wid === w).length).toBe(1)
+    const ch = e.chains.get(w)!
+    expect(ch.binds).toHaveLength(2)
+    expect(ch.homed).toHaveLength(0)
   })
 
   it('a same-region singleton ALSO carries its loose end as its own body (USER LAW: dangling ends are nodes)', () => {
@@ -108,8 +120,8 @@ describe('existential stubs honor wire scope', () => {
     const loose = e.bodies.get(`j:${w}`)
     expect(loose).toBeDefined()
     expect(loose!.region).toBe(d.root)
-    const leg = e.legs.find((l) => l.wid === w)!
-    expect(leg.from.body === leg.to.body).toBe(false)
+    const ch = e.chains.get(w)!
+    expect(ch.homed[0]!.bodyId).toBe(`j:${w}`)
   })
 })
 
