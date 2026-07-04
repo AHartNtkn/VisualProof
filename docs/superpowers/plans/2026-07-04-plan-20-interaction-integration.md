@@ -1,0 +1,102 @@
+# Plan 20: Interaction Integration (the converged plan-19 vocabulary into production)
+
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+
+**Goal:** Replace the shell's interaction layer wholesale with the verdict-converged vocabulary from plan 19's seven demo rounds: brush selection, direct construction gestures, the spawn cascade, dedicated rule mechanics, infer-first citation, derive-then-declare tracks, the scrubber-as-undo/redo, minimal chrome, and the view-only motion layers. Every round has a user verdict; nothing here is open design.
+
+**Authority:** The reference implementations are the lab modules — `ui-lab/shared.ts` (brush, LabCtx, physics handles), `composite.ts` (EDIT gestures), `spawn.ts` (cascade), `verdict.ts` (PROVE moves + citation), `session5.ts` (cursor-based TrackLab), `chrome.ts` (mode machine + minimal chrome), `history.ts` (scrubber + zoom thumbnails), `round7.ts` (motion layers), plus `src/view/morph.ts` (already production). The verdict record is `2026-07-03-plan-19-interface-overhaul.md`; standing laws live in the memory files (`port-names-are-not-semantic`, `rendering-laws`, `loose-ends-are-bodies`, `backward-is-flipped-polarity`, `named-defs-never-inside-terms`). NO DUAL SYSTEMS: the shell's current interaction surface (button rows, click-wire-click-wire join, the two-phase target pickers, the un\* backward remnants if any resurface, the goal-snapshot buttons) is DELETED as each task lands — the lab vocabulary is not an alternate mode.
+
+**Kernel/back-end status (already production, NOT in scope):** dual-replay theorems + orientation-gated appliers (backward redesign), `occurrenceSelection`, folded-comp instantiation acceptance, zero-endpoint wire bodies, orphaned-wire auto-delete semantics at the selection layer, `mkGridMorph`/`bendMaps`. This plan is the interaction/UI layer only.
+
+**The laws as tests (Task 1's battery, referenced throughout).** Each law is pinned either as a vitest unit (pure logic: selection arithmetic, gesture-claim predicates, step construction) or as a Playwright e2e (pointer-driven gesture laws), whichever actually exercises it. A law without a test does not count as integrated.
+
+*Selection & pointer (round 1 + later rulings):*
+1. **Brush:** drag paints hit items into the selection (out of it when the stroke starts on a selected item); plain click toggles exactly one; void click clears; painting may START in the void.
+2. **Hover never vanishes on selection:** unselected hover = the would-be-catch tint; selected hover = the selection tint darkens; wires included; readout appends "— selected".
+3. **Ring band:** a MOVING brush claims a region only within ~1.5 world units of its ring; a stationary click claims the whole disc.
+4. **Shift is selection-only:** with Shift held, no gesture (move, join, iterate, drag-anything) may claim the pointer.
+5. **Ctrl+drag is physics-only:** repositions bodies in every mode, never touches the diagram, never emits a step.
+
+*Construction, EDIT mode (rounds 2/2b + round-7 report):*
+6. **Join:** drag a loose end onto another line joins them; J joins ALL selected lines (n-ary).
+7. **Sever:** right-drag slash severs immediately (no second phase); double-click sever exists behind an options toggle, slash the default.
+8. **Wraps:** W = double cut around the selection, Shift+W = bubble; selecting a cut plus its contents wraps the subtree ONCE (absorb-normalized); wholly-enclosed wires rescope INTO the new cut (the `edit.ts wrap()` fix — drawing a circle around a thing must mean the thing is inside).
+9. **Delete (EDIT):** selected boundaries DISSOLVE (unselected contents propagate to the parent), selected contents die, multi-region selections work, and wires left with no endpoints are deleted along.
+10. **Move:** dragging a selected node between regions reparents with wire-scope correction (wholly-owned wires travel; shared wires keep scope when valid, else tightest common ancestor); settling FREEZES during placement drags.
+11. **Spawn cascade:** right-STILL-click opens the cascade at the point (search row, λ-term entry, recents, namespace submenus); spawns land where clicked, inside cuts included; right-drag still slashes; the selection is untouched; Escape and any press outside close it without spawning.
+12. **Disc labels:** a relation node's disc shows its name sans namespace (no arbitrary truncation of long defIds).
+
+*Rule application, PROVE mode (rounds 3/4):*
+13. **Dedicated mechanics, no consolidation:** Delete = contextual deletion — double-cut elim / vacuous dissolve / positive erasure / deiteration, chosen by the absorb-normalized selection; no "arbitrary secrets" (selecting both cuts of a double cut works).
+14. **Drag-to-iterate:** dragging a selection toward legal regions glows them; release commits; MOVEMENT is required (a still click on a selected item toggles it off instead).
+15. **Conversion:** double-click a term = quick normalize; head-normal and custom-target reachable from the same entry; the certificate plays as the connected grid morph (law 26).
+16. **Memory box:** after a move, the box shows what Ctrl+Z restores, labeled with the move (preview = do it, then undo).
+17. **Refusals:** kernel refusal text VERBATIM, in an anchored bubble at the selection, auto-fading. The kernel's message is the UX copy — no paraphrase layer.
+18. **Infer-first citation:** the citation menu lists ONLY theorems whose from-side occurs in the diagram AND whose occurrence contains the selection; a unique occurrence applies instantly (sel + args derived by the matcher); several = highlighted Tab/click cycling + Enter; argument wires are never hand-picked; closed theorems cite as empty-selection insertions; citation direction = region sign XOR track orientation.
+19. **Instantiate:** named substitution stays FOLDED (the ref is spliced, never auto-expanded); only the relation is asked.
+
+*Proof model (round 5 + backward redesign):*
+20. **Derive-then-declare:** F/B start a forward/backward track from the current sheet; D declares (origin ⟹ here, or here ⟹ origin with the backward steps recorded as given); E exits to EDIT keeping the sheet; ONE ProofContext persists — a declared theorem is immediately citable.
+21. **Backward is flipped polarity:** the backward track exposes the identical move vocabulary, flip-gated through the shared appliers; no backward-only code paths in the UI beyond the orientation boolean.
+22. **Declare at the cursor:** declaring after a rewind uses the steps up to the cursor.
+
+*History (round 6h):*
+23. **Scrubber = undo/redo:** cursor-based; dragging time-travels the main view; the future is RETAINED (dashed ticks) and reachable by Ctrl+Shift+Z; a new move truncates it (linear model — the decided ruling); Ctrl+Z steps back.
+24. **Zoom-to-change previews:** hovering anywhere on the bar pops the nearest tick's thumbnail, zoomed to the changed bodies (whole-diagram fallback for pure removals); no dead zones along the bar.
+
+*Chrome (round 6):*
+25. **Minimal sheet:** mode pill + '?' keyboard map; NO permanent panels; the scrubber appears only while a track is open; mode identity unmistakable (EDIT vs PROVING FORWARD vs PROVING BACKWARD).
+
+*Motion (round 7):*
+26. **View-only, toggleable motion:** βη playback = `mkGridMorph` (the attachment invariant is already unit-pinned in `tests/view/morph.test.ts`; the pinned `mkGeomMorph` stays selectable per the user's instruction), input held during play, commit deferred to the final frame, speed 0.25–3×; transition ghosts (dying fade, born pulse); hover ease; each layer independently off-switchable; none of it ever touches diagram state (layer law).
+
+---
+
+### Task 1: The law battery + interaction core (brush, hover, physics handles)
+
+**Files:** Create `src/app/interact/` — `brush.ts` (laws 1–5, ported from `ui-lab/shared.ts installBrush`: void-start painting, ring-band gate, shift purity, ctrl physics drag, hover-ease hook), `ctx.ts` (the InteractCtx seam the lab called LabCtx: mutate/undo-cursor/freeze/regionAt/legs/toast — backed by the real shell engine loop). Rebuild the shell's pointer routing on it; DELETE the shell's current click-selection code. `src/app/hittest.ts` gains the ring-band query (moving-brush hit ≠ click hit) — the disc-claims-everything behavior stays for CLICKS only.
+**Test:** unit — selection arithmetic, ring-band predicate, shift/ctrl claim gates; e2e — laws 1, 2, 3, 4, 5 as pointer scripts (the plan-19 probe scripts are the reference; they become `tests/e2e` cases).
+
+- [ ] Battery written first and observed failing; core ported; battery green; suite + tsc + e2e green. Commit.
+
+### Task 2: EDIT vocabulary (construction gestures, spawn cascade, real library)
+
+**Files:** `src/app/interact/construct.ts` (laws 6–10 from `ui-lab/composite.ts` + `shared.ts deleteHits/orphanedWires`), `src/app/interact/spawn.ts` (law 11 from `ui-lab/spawn.ts`, browsing the REAL loaded library — `src/app/library.ts` relations + namespaces, not the synthetic 140); label rule (law 12) lands in paint's disc-label source. Fix `src/app/edit.ts wrap()` wire rescoping (law 8) — kernel-side edit helper, test-first. DELETE the shell's button-driven join/sever/wrap/delete UI.
+**Test:** unit — wrap rescoping (the exact wholly-enclosed-wire case), deleteHits dissolve/orphan matrix; e2e — slash sever, drag join, W/Shift+W, cascade open/spawn-in-cut/Escape/click-away, reparent drag.
+
+- [ ] Failing battery → port → green everywhere. Commit.
+
+### Task 3: PROVE vocabulary (dedicated mechanics, infer-first citation, tracks)
+
+**Files:** `src/app/interact/moves.ts` (laws 13–17, 19 from `ui-lab/verdict.ts`: contextual Delete with orphan-riding erasure, drag-iterate, dbl-click normalize chain, memory box, anchored refusals, folded instantiate — steps emitted through a MoveSink over the real session), `src/app/interact/cite.ts` (law 18: occurrence matcher over the context's theorems, Tab-cycling), `src/app/tracks.ts` (laws 20–22 from `ui-lab/session5.ts` mkTrackLab: cursor-based state ring over `session.ts` applyForward/applyBackward, declare-at-cursor via assembleTheorem). The shell's goal-snapshot buttons, two-phase pickers, and any remaining directional special-casing are DELETED. `src/app/session.ts`/`actions.ts` stay semantically untouched (they already carry orientation).
+**Test:** unit — contextual-Delete resolution matrix, citation context filter (occurs + contains-selection + direction), declare-at-cursor step slicing; e2e — the round-4 "exact failing gesture" (brush everything, cite, must apply), Tab-cycle ambiguity, a backward track using the same gestures, refusal copy verbatim on a gated move.
+
+- [ ] Failing battery → port → green everywhere. Commit.
+
+### Task 4: Chrome (mode machine, minimal sheet, scrubber)
+
+**Files:** `src/app/shell.ts` rebuilt around the mode machine (`ui-lab/chrome.ts` mkChromeApp: EDIT ↔ track lifecycle, one persistent ProofContext, F/B/D/E keys, interceptStep hook) + minimal chrome (law 25) + `src/app/interact/scrubber.ts` (laws 23–24 from `ui-lab/history.ts`: installScrubber + zoomThumb over `renderPreview` focus). Replay/companion (`replay.ts`, `companion.ts`) reconcile with the scrubber (the scrubber IS the replay surface for tracks; theorem replay keeps its stepper). Library/file panel reduces to what the minimal-sheet verdict allows (summonable, not permanent). `mountShell` gets a real `dispose()` (listeners, rAF, observers) — the standing deferred item.
+**Test:** unit — mode-machine transitions, cursor truncate-on-new-move; e2e — full lifecycle (spawn → construct → F → cite → declare → E → construct → B → declare), scrubber drag + hover previews + redo reach, mode pill correctness.
+
+- [ ] Failing battery → port → green everywhere. Commit.
+
+### Task 5: Motion layers
+
+**Files:** `src/app/interact/motion.ts` (law 26 from `ui-lab/round7.ts`: playConversion over mkGridMorph with the pinned-v1 toggle, ghosts via the engine mutate hook, hover ease through the brush's motionPrefs, the ⚙ panel). Input guard while playing; commit deferred.
+**Test:** unit already pinned in `tests/view/morph.test.ts`; e2e — mid-play sampling (geometry interpolating, wires d=0, commit deferred, toggle works, speed slider).
+
+- [ ] Failing e2e → port → green. Commit.
+
+### Task 6: Teardown + adversarial review + merge
+
+- [ ] Preserve the converged lab composite as the spec copy (`docs/superpowers/plans/2026-07-04-ui-lab-final/`: shared/composite/verdict/session5/chrome/spawn/history/round7 + the round pages' verdict index); then DELETE `ui-lab/` from the build and the repo-root probe scratch. Suite + tsc + e2e green after deletion (nothing in src may import ui-lab).
+- [ ] Independent adversarial review: mutation probes per law (disable ring-band → law 3 e2e fails; let shift enter the move claim → law 4 fails; unfilter the citation menu → law 18 fails; paraphrase a refusal → law 17 fails; drop orphan-riding from erasure → law 9/13 fails; re-enable auto-expand instantiate → law 19 fails; make a motion layer mutate the diagram → law 26 fails); hit-target/paint drift check; determinism check on track replay.
+- [ ] Plan-doc sync; merge (branch `plan-20-interaction`); delete branch.
+
+---
+
+**Queued design items (recorded, NOT in scope — each needs its own user round):**
+- Both-interactive split fronts: two live viewports for a-priori statements, declare-time isomorphism check (the round-5 dual-front ruling; camera/viewport work).
+- Anonymous-comprehension construction box: instantiate without a name via a miniaturized EDIT canvas (round-4 ruling).
+- Dropped-node position stickiness (physics feel item, round 2 observation).
+- History-display placement refinements beyond the scrubber, if large proofs demand more than zoom-thumbs (round 6h left the door open).
