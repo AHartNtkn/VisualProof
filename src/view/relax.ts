@@ -3,7 +3,15 @@ import type { Vec2 } from './vec'
 import type { Body, Engine } from './engine'
 import { frameBounds, frameSlots, subtreeCarriers, worldAnchor } from './engine'
 import type { ChainDisc } from './wirechain'
-import { chainEnergy, chainGradient, localStencilE, resample, topologyStep, WIRE_TRAVEL_CAP } from './wirechain'
+import { buildEdgeNear, chainEnergy, chainGradient, pointLocalE, resample, topologyStep, WIRE_TRAVEL_CAP } from './wirechain'
+
+/** Tension of a point's incident edges (analytic in the gradient; the local
+    line-search energies need it explicitly). */
+function tensionLocal(ch: { pts: Vec2[]; adj: number[][] }, v: number): number {
+  let s = 0
+  for (const n of ch.adj[v]!) s += Math.hypot(ch.pts[n]!.x - ch.pts[v]!.x, ch.pts[n]!.y - ch.pts[v]!.y)
+  return s
+}
 export { WIRE_TRAVEL_CAP } from './wirechain'
 
 /**
@@ -468,7 +476,8 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       const a = b.localAnchor.get(bind.key)!
       rays.set(nbr, { origin: ch.pts[bind.idx]!, angle: Math.atan2(a.y, a.x) + b.theta })
     }
-    const grad = chainGradient(ch, discs)
+    const nearMap = buildEdgeNear(ch, discs)
+    const grad = chainGradient(ch, discs, nearMap)
     // pinned-point gradients -> body forces + torques (analytic levers)
     for (const bind of ch.binds) {
       const A = e.bodies.get(bind.body)!
@@ -554,7 +563,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
         }
         return s2
       }
-      const tipE = (): number => localStencilE(ch, discs, hm.idx) + ringE()
+      const tipE = (): number => pointLocalE(ch, discs, hm.idx, nearMap) + tensionLocal(ch, hm.idx) + ringE()
       const p0 = b.pos
       const chainP0 = ch.pts[hm.idx]!
       const e0 = tipE()
@@ -606,12 +615,18 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       // serial per-term stability tunings this replaces are all measured
       // failures (bend 1/l, barrier ramp, mask band each found a mobility
       // × stiffness product to oscillate at).
+      // sub-milli steps skip the search: at rest nearly every point takes
+      // a ~0 step and the bounded energy error is far inside the band
+      if (Math.hypot(dx, dy) < 1e-3) {
+        ch.pts[v] = { x: ch.pts[v]!.x + dx, y: ch.pts[v]!.y + dy }
+        continue
+      }
       const p0 = ch.pts[v]!
-      const e0 = localStencilE(ch, discs, v)
+      const e0 = pointLocalE(ch, discs, v, nearMap) + tensionLocal(ch, v)
       let scale = 1
       for (let t = 0; t < 4; t++) {
         ch.pts[v] = { x: p0.x + dx * scale, y: p0.y + dy * scale }
-        if (localStencilE(ch, discs, v) <= e0 + 1e-9) break
+        if (pointLocalE(ch, discs, v, nearMap) + tensionLocal(ch, v) <= e0 + 1e-9) break
         ch.pts[v] = p0
         scale /= 2
         if (t === 3) scale = 0

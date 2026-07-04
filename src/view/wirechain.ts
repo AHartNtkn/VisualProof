@@ -169,24 +169,34 @@ export const clearance = (r: number): number => r + 1.5
     rising under 'monotone' descent). The corridor depends only on PINNED
     state (anchor, normal), so locality holds. Falloffs are one-pitch
     smoothing bands. */
+const maskScratch = { m: 1, anchorIdx: -1, dm: 0 }
+
 export function exitMaskAt(ch: WireChain, disc: ChainDisc, p: Vec2): { m: number; anchorIdx: number; dm: number } {
   const r = clearance(disc.r)
-  let best = { m: 1, anchorIdx: -1, dm: 0 }
+  const best = maskScratch
+  best.m = 1
+  best.anchorIdx = -1
+  best.dm = 0
   for (const b of ch.binds) {
     if (b.body !== disc.id) continue
-    const dvec = sub(p, ch.pts[b.idx]!)
-    const d = len(dvec)
+    const ax = ch.pts[b.idx]!.x, ay = ch.pts[b.idx]!.y
+    const dvx = p.x - ax, dvy = p.y - ay
+    const d = Math.hypot(dvx, dvy)
     // radial band: full exemption only within the clearance reach
     const t = (d - r) / PITCH
     const radial = Math.max(0, Math.min(1, t))
     // angular corridor: exempt only along the exit direction
     let angular = 0
     if (b.normal !== undefined && d > 1e-9) {
-      const cos = (dvec.x * Math.cos(b.normal) + dvec.y * Math.sin(b.normal)) / d
+      const cos = (dvx * Math.cos(b.normal) + dvy * Math.sin(b.normal)) / d
       angular = Math.max(0, Math.min(1, (0.8 - cos) / 0.3))
     }
     const m = Math.max(radial, angular)
-    if (m < best.m) best = { m, anchorIdx: b.idx, dm: t > 0 && t < 1 && radial >= angular ? 1 / PITCH : 0 }
+    if (m < best.m) {
+      best.m = m
+      best.anchorIdx = b.idx
+      best.dm = t > 0 && t < 1 && radial >= angular ? 1 / PITCH : 0
+    }
   }
   return best
 }
@@ -218,12 +228,13 @@ export function arcShare(ch: WireChain, v: number): number {
 
 export function localBend(ch: WireChain, v: number): number {
   if (ch.adj[v]!.length !== 2) return 0
-  const [a, b] = ch.adj[v]! as [number, number]
-  const u = sub(ch.pts[a]!, ch.pts[v]!)
-  const w = sub(ch.pts[b]!, ch.pts[v]!)
-  const lu = len(u), lw = len(w)
+  const a = ch.adj[v]![0]!, b = ch.adj[v]![1]!
+  const pv = ch.pts[v]!, pa = ch.pts[a]!, pb = ch.pts[b]!
+  const ux = pa.x - pv.x, uy = pa.y - pv.y
+  const wx = pb.x - pv.x, wy = pb.y - pv.y
+  const lu = Math.hypot(ux, uy), lw = Math.hypot(wx, wy)
   if (lu < 1e-9 || lw < 1e-9) return 0
-  const cos = Math.max(-1, Math.min(1, (u.x * w.x + u.y * w.y) / (lu * lw)))
+  const cos = Math.max(-1, Math.min(1, (ux * wx + uy * wy) / (lu * lw)))
   const turn = Math.PI - Math.acos(cos)
   return (BEND * turn * turn) / Math.max(0.25, (lu + lw) / 2)
 }
@@ -233,27 +244,68 @@ export function localBend(ch: WireChain, v: number): number {
     points. (Point-sampled barriers let long segments tunnel; the always-
     accept refinement rule then "revealed" the hidden energy, +2.7 per
     event, and the release powered a permanent conveyor of the ∀-fixture.) */
-export function edgeBarrier(ch: WireChain, discs: readonly ChainDisc[], v: number, n: number): number {
+const scratchNear: ChainDisc[] = []
+const scratchP = { x: 0, y: 0 }
+
+/** Per-tick cache: which discs are near each edge (keyed min*65536+max).
+    The numeric differentiation and line searches re-evaluate the same
+    edges 3–8× per point per tick — recomputing the reject loop each time
+    was measured at ~36% of settle. Rebuilt once per chain per tick. */
+export type EdgeNear = Map<number, ChainDisc[] | null>
+export const edgeKey = (v: number, n: number): number => (v < n ? v * 65536 + n : n * 65536 + v)
+
+export function buildEdgeNear(ch: WireChain, allDiscs: readonly ChainDisc[]): EdgeNear {
+  const discs = reachableDiscs(ch, allDiscs)
+  const out: EdgeNear = new Map()
+  for (let v = 0; v < ch.pts.length; v++) {
+    for (const n of ch.adj[v]!) {
+      if (n <= v) continue
+      const a = ch.pts[v]!, b = ch.pts[n]!
+      const L = Math.hypot(b.x - a.x, b.y - a.y)
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
+      let near: ChainDisc[] | null = null
+      for (const disc of discs) {
+        // one travel-cap of slack: positions move ≤ cap within the tick
+        if (Math.hypot(mx - disc.pos.x, my - disc.pos.y) < clearance(disc.r) + L / 2 + PITCH + 2 * WIRE_TRAVEL_CAP) {
+          if (near === null) near = []
+          near.push(disc)
+        }
+      }
+      out.set(edgeKey(v, n), near)
+    }
+  }
+  return out
+}
+
+export function edgeBarrier(ch: WireChain, discs: readonly ChainDisc[], v: number, n: number, nearHint?: readonly ChainDisc[] | null): number {
+  if (nearHint === null) return 0
   const a = ch.pts[v]!, b = ch.pts[n]!
-  const L = len(sub(b, a))
+  const L = Math.hypot(b.x - a.x, b.y - a.y)
   if (L < 1e-9) return 0
-  // quick reject: segment bounding sphere vs disc clearance
-  const near = discs.filter((disc) => {
+  let near: readonly ChainDisc[]
+  if (nearHint !== undefined) {
+    near = nearHint
+  } else {
     const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2
-    return len(sub({ x: mx, y: my }, disc.pos)) < clearance(disc.r) + L / 2 + PITCH
-  })
-  if (near.length === 0) return 0
+    scratchNear.length = 0
+    for (const disc of discs) {
+      if (Math.hypot(mx - disc.pos.x, my - disc.pos.y) < clearance(disc.r) + L / 2 + PITCH) scratchNear.push(disc)
+    }
+    if (scratchNear.length === 0) return 0
+    near = scratchNear
+  }
   const K = Math.max(1, Math.ceil(L))
   let E = 0
   for (let k = 0; k <= K; k++) {
     const t = k / K
-    const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }
+    scratchP.x = a.x + (b.x - a.x) * t
+    scratchP.y = a.y + (b.y - a.y) * t
     const w = (k === 0 || k === K ? 0.5 : 1) * (L / K)
     for (const disc of near) {
       const r = clearance(disc.r)
-      const d = len(sub(p, disc.pos))
+      const d = Math.hypot(scratchP.x - disc.pos.x, scratchP.y - disc.pos.y)
       if (d >= r) continue
-      const { m } = exitMaskAt(ch, disc, p)
+      const { m } = exitMaskAt(ch, disc, scratchP)
       if (m > 0) E += m * barrierU(d, r) * w
     }
   }
@@ -272,9 +324,17 @@ export function localBarrier(ch: WireChain, discs: readonly ChainDisc[], v: numb
     on p_v (own bend/spacing-free/barrier plus the neighbors' terms that
     reference v through arc shares and turns). The gradient differentiates
     this; the descent line-search backtracks against it. */
-function tensionAt(ch: WireChain, v: number): number {
-  let s = 0
-  for (const n of ch.adj[v]!) s += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
+/** EXACTLY the terms that depend on p_v, nothing else: bend at v and its
+    neighbors, barrier on v's incident edges. (localStencilE also carries
+    the neighbors' other edges — constant under moves of v; differentiating
+    them is pure waste, measured at ~3× the barrier cost.) Tension is
+    handled analytically by the caller. */
+export function pointLocalE(ch: WireChain, discs: readonly ChainDisc[], v: number, near?: EdgeNear): number {
+  let s = localBend(ch, v)
+  for (const n of ch.adj[v]!) {
+    s += localBend(ch, n)
+    s += edgeBarrier(ch, discs, Math.min(v, n), Math.max(v, n), near?.get(edgeKey(v, n)))
+  }
   return s
 }
 
@@ -323,8 +383,9 @@ export function reachableDiscs(ch: WireChain, discs: readonly ChainDisc[]): Chai
   })
 }
 
-export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[]): { f: MVec[]; onDiscs: Map<string, MVec> } {
+export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nearMap?: EdgeNear): { f: MVec[]; onDiscs: Map<string, MVec> } {
   const discs = reachableDiscs(ch, allDiscs)
+  const near = nearMap ?? buildEdgeNear(ch, allDiscs)
   const f: MVec[] = ch.pts.map(() => ({ x: 0, y: 0 }))
   const onDiscs = new Map<string, MVec>()
   const addDisc = (id: string, x: number, y: number): void => {
@@ -334,11 +395,11 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[]): { 
   for (let v = 0; v < ch.pts.length; v++) {
     // tension: unit pull toward each neighbor (gradient of length)
     for (const n of ch.adj[v]!) {
-      const dvec = sub(ch.pts[n]!, ch.pts[v]!)
-      const d = len(dvec)
+      const dx = ch.pts[n]!.x - ch.pts[v]!.x, dy = ch.pts[n]!.y - ch.pts[v]!.y
+      const d = Math.hypot(dx, dy)
       if (d < 1e-9) continue
-      f[v]!.x += (TENSION * dvec.x) / d
-      f[v]!.y += (TENSION * dvec.y) / d
+      f[v]!.x += (TENSION * dx) / d
+      f[v]!.y += (TENSION * dy) / d
     }
     // bend + barrier: numeric gradient of the LOCAL terms (they couple v
     // and its neighbors through arc shares; differentiating the same code
@@ -348,11 +409,11 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[]): { 
     {
       const h = 1e-4
       const p = ch.pts[v]!
-      const e0 = localStencilE(ch, discs, v) - tensionAt(ch, v) // tension handled analytically above
+      const e0 = pointLocalE(ch, discs, v, near)
       ch.pts[v] = { x: p.x + h, y: p.y }
-      const ex = localStencilE(ch, discs, v) - tensionAt(ch, v)
+      const ex = pointLocalE(ch, discs, v, near)
       ch.pts[v] = { x: p.x, y: p.y + h }
-      const ey = localStencilE(ch, discs, v) - tensionAt(ch, v)
+      const ey = pointLocalE(ch, discs, v, near)
       ch.pts[v] = p
       f[v]!.x -= (ex - e0) / h
       f[v]!.y -= (ey - e0) / h
@@ -361,8 +422,10 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[]): { 
     // incident edge (the same integral the energy uses)
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
+      const nearE = near.get(edgeKey(v, n))
+      if (nearE === null) continue
       const a = ch.pts[v]!, b2 = ch.pts[n]!
-      const L = len(sub(b2, a))
+      const L = Math.hypot(b2.x - a.x, b2.y - a.y)
       if (L < 1e-9) continue
       const K = Math.max(1, Math.ceil(L))
       for (let k = 0; k <= K; k++) {
@@ -451,7 +514,13 @@ export function pinReactions(ch: WireChain, discs: readonly ChainDisc[]): Map<nu
 const TOPO_MARGIN = 0.05
 
 export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
-  const E0 = chainEnergy(ch, discs)
+  // lazy: most chains have no candidate move most ticks — don't pay a
+  // full-chain energy evaluation until a move is actually about to be tried
+  let E0cache: number | null = null
+  const E0v = (): number => {
+    if (E0cache === null) E0cache = chainEnergy(ch, discs)
+    return E0cache
+  }
   // SPLIT: junction of degree >= 4 sheds its tightest branch pair to a child
   for (let v = 0; v < ch.pts.length; v++) {
     if (ch.adj[v]!.length < 4) continue
@@ -482,7 +551,7 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
     ch.adj[v] = nbrs.filter((n) => n !== a && n !== b)
     ch.adj[v]!.push(w2)
     for (const x of [a, b]) ch.adj[x] = ch.adj[x]!.map((n) => (n === v ? w2 : n))
-    if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) return
+    if (chainEnergy(ch, discs) < E0v() - TOPO_MARGIN) return
     // reject: undo
     for (const x of [a, b]) ch.adj[x] = ch.adj[x]!.map((n) => (n === w2 ? v : n))
     ch.adj[v] = nbrs
@@ -503,7 +572,7 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
       ch.adj[v] = [...savedV.filter((n) => n !== w), ...savedW.filter((n) => n !== v)]
       for (const n of savedW) if (n !== v) ch.adj[n] = ch.adj[n]!.map((m) => (m === w ? v : m))
       ch.adj[w] = []
-      if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) return
+      if (chainEnergy(ch, discs) < E0v() - TOPO_MARGIN) return
       for (const n of savedW) if (n !== v) ch.adj[n] = ch.adj[n]!.map((m) => (m === v ? w : m))
       ch.adj[v] = savedV
       ch.adj[w] = savedW
