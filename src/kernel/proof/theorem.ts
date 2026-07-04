@@ -75,14 +75,18 @@ export function applyTheorem(
   thm: Theorem,
   at: TheoremApplication,
   direction: 'forward' | 'reverse',
+  orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
   const from = direction === 'forward' ? thm.lhs : thm.rhs
   const to = direction === 'forward' ? thm.rhs : thm.lhs
-  const need = direction === 'forward' ? 'positive' : 'negative'
+  // direction ties to sign; the backward orientation (reasoning from a goal)
+  // flips the gate — reverse-citing on a goal's positive region is the
+  // forward citation read right-to-left
+  const need = (direction === 'forward') === (orientation === 'forward') ? 'positive' : 'negative'
   const have = polarity(d, at.sel.region)
   if (have !== need) {
     throw new RuleError(
-      `theorem '${thm.name}' applied ${direction} requires a ${need} region; '${at.sel.region}' is ${have}`,
+      `theorem '${thm.name}' applied ${direction}${orientation === 'backward' ? ' (backward)' : ''} requires a ${need} region; '${at.sel.region}' is ${have}`,
     )
   }
   const { pattern, attachments, binderStubs } = extractSubgraph(d, at.sel)

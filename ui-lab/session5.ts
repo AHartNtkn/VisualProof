@@ -11,7 +11,7 @@ import { DiagramBuilder } from '../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../src/kernel/diagram/boundary'
 import { applyStep, replayProof, type ProofStep } from '../src/kernel/proof/step'
 import { checkTheorem, type Theorem } from '../src/kernel/proof/theorem'
-import { applyBackward, applyForward, assembleTheorem, meet, sideBoundary, startSession, undoBackward, undoForward, type BackwardAction, type ProofSession } from '../src/app/session'
+import { applyBackward, applyForward, assembleTheorem, meet, sideBoundary, startSession, undoBackward, undoForward, type ProofSession } from '../src/app/session'
 import type { LabCtx } from './shared'
 import { fregeCtx } from './prove4'
 import type { MoveSink } from './verdict'
@@ -59,6 +59,8 @@ export type TrackLab = {
   /** Build (origin ⟹ current) or (current ⟹ origin), kernel-check by
       replay, adopt into the context; the track keeps going (lemmas stack). */
   declare(name: string): Theorem
+  /** Jump the track back to state k (0 = origin) — click-to-rewind. */
+  rewind(k: number): void
   sink(refuse: (text: string) => void): MoveSink
   onChange(fn: () => void): void
 }
@@ -71,6 +73,8 @@ export function mkTrackLab(lab: LabCtx): TrackLab {
   // forward bookkeeping
   let fSteps: ProofStep[] = []
   let fStates: Diagram[] = [origin.d]
+  // what the USER did, in their orientation (backward.steps hold inverses)
+  let actionLabels: string[] = []
   // backward bookkeeping rides a session's backward side (composedTail law)
   let bs: ProofSession | null = null
   const listeners: (() => void)[] = []
@@ -88,10 +92,7 @@ export function mkTrackLab(lab: LabCtx): TrackLab {
       if (d === 'backward') bs = startSession(mkDiagramWithBoundary(new DiagramBuilder().build(), []), originDWB(), ctx)
       changed()
     },
-    labels: () => {
-      const steps = dir === 'backward' ? bs?.backward.steps ?? [] : fSteps
-      return steps.map((st) => st.rule === 'theorem' ? `cite ${st.name}` : st.rule)
-    },
+    labels: () => [...actionLabels],
     states: () => dir === 'backward' ? [...bs!.backward.history, bs!.backward.current] : [...fStates],
     boundary: () => origin.boundary,
     declare: (name) => {
@@ -109,25 +110,36 @@ export function mkTrackLab(lab: LabCtx): TrackLab {
       ctx,
       apply: (step: ProofStep) => {
         if (dir === null) throw new Error('start proving first (F forward, B backward)')
-        if (dir !== 'forward') throw new Error('this track proves backward — right-click for un-citations')
-        const next = applyStep(lab.d, step, ctx)
-        fSteps.push(step)
-        fStates.push(next)
-        sync()
-      },
-      applyBackward: (action: BackwardAction) => {
-        if (dir !== 'backward') throw new Error('un-citations belong to a backward track (start with B)')
-        bs = applyBackward(bs!, action)
+        if (dir === 'forward') {
+          const next = applyStep(lab.d, step, ctx)
+          fSteps.push(step)
+          fStates.push(next)
+        } else {
+          bs = applyBackward(bs!, step)
+        }
+        actionLabels.push(step.rule === 'theorem' ? `cite ${step.name}` : step.rule)
         sync()
       },
       refuse,
       mode: () => dir ?? 'forward',
       undo: () => {
-        if (dir === 'forward' && fSteps.length > 0) { fSteps.pop(); fStates.pop(); sync(); return }
-        if (dir === 'backward' && bs!.backward.steps.length > 0) { bs = undoBackward(bs!); sync(); return }
+        if (dir === 'forward' && fSteps.length > 0) { fSteps.pop(); fStates.pop(); actionLabels.pop(); sync(); return }
+        if (dir === 'backward' && bs !== null && bs.backward.steps.length > 0) { bs = undoBackward(bs); actionLabels.pop(); sync(); return }
         refuse('nothing to undo on this track')
       },
     }),
+    rewind: (k) => {
+      if (dir === 'forward') {
+        if (k < 0 || k > fSteps.length) throw new Error(`no state ${k} on this track`)
+        fSteps = fSteps.slice(0, k)
+        fStates = fStates.slice(0, k + 1)
+        actionLabels = actionLabels.slice(0, k)
+      } else if (dir === 'backward') {
+        if (bs === null || k < 0 || k > bs.backward.steps.length) throw new Error(`no state ${k} on this track`)
+        while (bs.backward.steps.length > k) { bs = undoBackward(bs); actionLabels.pop() }
+      } else throw new Error('start proving first (F forward, B backward)')
+      sync()
+    },
     onChange: (fn) => listeners.push(fn),
   }
 }
@@ -158,12 +170,8 @@ export function mkSessionLab(lab: LabCtx): SessionLab {
     sink: (refuse) => ({
       ctx,
       apply: (step: ProofStep) => {
-        if (side !== 'forward') throw new Error('forward moves act on the forward side; swap sides first')
-        s = applyForward(s, step)
-        sync()
-      },
-      applyBackward: (action: BackwardAction) => {
-        s = applyBackward(s, action)
+        // ONE vocabulary: the side decides the orientation, not the caller
+        s = side === 'forward' ? applyForward(s, step) : applyBackward(s, step)
         sync()
       },
       refuse,

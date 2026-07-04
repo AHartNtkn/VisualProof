@@ -24,13 +24,20 @@ export type ActionDescriptor =
   | { readonly kind: 'relFold'; readonly label: string; readonly needsInput: 'relation' }
   | { readonly kind: 'citeTheorem'; readonly label: string; readonly name: string; readonly direction: 'forward' | 'reverse' }
 
-export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext): ActionDescriptor[] {
+/**
+ * `backward` is the reasoning orientation (USER ruling): the SAME move list
+ * with exactly the polarity-tied gates flipped — erasure offers in negative
+ * regions, insertion in positive, and citation direction ties to sign XOR
+ * orientation. Everything else is direction-free and unchanged.
+ */
+export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
   const out: ActionDescriptor[] = []
   const pol = polarity(d, sel.region)
+  const eraseSign = backward ? 'negative' : 'positive'
   const hasContent = sel.nodes.length + sel.regions.length + sel.wires.length > 0
 
-  if (hasContent && pol === 'positive') out.push({ kind: 'erase', label: 'Erase (positive region)' })
-  if (!hasContent && pol === 'negative') out.push({ kind: 'insert', label: 'Insert…', needsInput: 'pattern' })
+  if (hasContent && pol === eraseSign) out.push({ kind: 'erase', label: `Erase (${eraseSign} region)` })
+  if (!hasContent && pol !== eraseSign) out.push({ kind: 'insert', label: 'Insert…', needsInput: 'pattern' })
   out.push({ kind: 'doubleCutWrap', label: 'Wrap in a double cut' })
   out.push({ kind: 'vacuousWrap', label: 'Wrap in a vacuous bubble…', needsInput: 'arity' })
   if (hasContent) {
@@ -73,14 +80,16 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
     if (r.kind === 'bubble') {
       const bound = Object.values(d.nodes).some((n) => n.kind === 'atom' && n.binder === rid)
       if (!bound) out.push({ kind: 'vacuousElim', label: 'Dissolve the vacuous bubble' })
-      if (bound && polarity(d, rid) === 'negative') {
+      // no backward inverse is defined for instantiation yet, so it is a
+      // forward-only offer (the applier would refuse it anyway)
+      if (bound && !backward && polarity(d, rid) === 'negative') {
         out.push({ kind: 'instantiate', label: 'Instantiate the relation…', needsInput: 'comprehension' })
       }
     }
   }
 
   for (const [name] of ctx.theorems) {
-    const direction = pol === 'positive' ? 'forward' as const : 'reverse' as const
+    const direction = (pol === 'positive') !== backward ? 'forward' as const : 'reverse' as const
     out.push({ kind: 'citeTheorem', label: `Cite ${name} (${direction})`, name, direction })
   }
   return out

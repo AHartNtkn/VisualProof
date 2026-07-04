@@ -1,18 +1,14 @@
-import type { Diagram, RegionId, NodeId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
-import { polarity } from '../kernel/diagram/regions'
-import { spliceSubgraph, removeSubgraph } from '../kernel/diagram/subgraph/splice'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
-import { applyDoubleCutElim } from '../kernel/rules/doublecut'
-import { applyVacuousBubbleElim } from '../kernel/rules/vacuous'
-import { applyConversion } from '../kernel/rules/conversion'
+import { findOccurrences, occurrenceSelection } from '../kernel/diagram/subgraph/match'
+import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { applyStep } from '../kernel/proof/step'
-import type { Theorem, TheoremApplication } from '../kernel/proof/theorem'
+import type { Theorem } from '../kernel/proof/theorem'
 import { checkTheorem } from '../kernel/proof/theorem'
 import { composeProofs } from '../kernel/proof/compose'
-import type { Term } from '../kernel/term'
 
 export type Side = {
   readonly current: Diagram
@@ -92,119 +88,153 @@ export function undoForward(s: ProofSession): ProofSession {
  * replaying the step on G′ reproduces G semantically (by fingerprint) — keeping
  * the recorded tail replayable without id-rewriting anywhere except the meet.
  */
-export type BackwardAction =
-  | { readonly kind: 'unDoubleCut'; readonly outer: RegionId }
-  | { readonly kind: 'unVacuousBubble'; readonly bubble: RegionId }
-  | { readonly kind: 'unErase'; readonly region: RegionId; readonly pattern: DiagramWithBoundary; readonly attachments: readonly WireId[] }
-  | { readonly kind: 'unConvert'; readonly node: NodeId; readonly term: Term; readonly fuel: number }
-  | { readonly kind: 'unCite'; readonly name: string; readonly at: TheoremApplication }
+/**
+ * Backward proving takes ORDINARY steps (USER ruling: no mirrored un-rule
+ * vocabulary — one shared implementation). Acting on the goal G, the step is
+ * EXECUTED by the very same appliers with orientation='backward', which flips
+ * exactly the polarity-tied gates (erasure, insertion, theorem citation) and
+ * nothing else. The recorded replay step is the INVERSE, constructed here by
+ * pure diff bookkeeping — its correctness is enforced twice: the reproduction
+ * assertion below, and checkTheorem's full forward replay at declaration.
+ */
+const BACKWARD_INVERTIBLE = new Set([
+  'erasure', 'insertion', 'doubleCutIntro', 'doubleCutElim', 'vacuousIntro',
+  'vacuousElim', 'iteration', 'deiteration', 'conversion', 'theorem',
+  'relUnfold', 'relFold',
+])
 
-export function applyBackward(s: ProofSession, action: BackwardAction): ProofSession {
-  const g = s.backward.current
-  let gPrime: Diagram
-  let step: ProofStep
-  switch (action.kind) {
-    case 'unDoubleCut': {
-      const inner = Object.entries(g.regions).find(
-        ([, r]) => r.kind === 'cut' && r.parent === action.outer,
+/** Ids present in `after` but not `before`, sitting directly at `region`. */
+function freshSelection(before: Diagram, after: Diagram, region: RegionId): SubgraphSelection {
+  return {
+    region,
+    regions: Object.keys(after.regions).filter((id) => before.regions[id] === undefined && (after.regions[id] as { parent?: RegionId }).parent === region),
+    nodes: Object.keys(after.nodes).filter((id) => before.nodes[id] === undefined && after.nodes[id]!.region === region),
+    wires: Object.keys(after.wires).filter((id) => before.wires[id] === undefined && after.wires[id]!.scope === region),
+  }
+}
+
+/** Ids that sat in `fromRegion` in `before` and now sit at `parent` in `after`
+    (the contents an elimination promoted). */
+function promotedSelection(before: Diagram, after: Diagram, parent: RegionId, fromRegion: RegionId): SubgraphSelection {
+  return {
+    region: parent,
+    regions: Object.entries(after.regions)
+      .filter(([id, r]) => r.kind !== 'sheet' && r.parent === parent &&
+        (before.regions[id] as { parent?: RegionId } | undefined)?.parent === fromRegion)
+      .map(([id]) => id),
+    nodes: Object.entries(after.nodes)
+      .filter(([id, n]) => n.region === parent && before.nodes[id]?.region === fromRegion)
+      .map(([id]) => id),
+    wires: Object.entries(after.wires)
+      .filter(([id, w]) => w.scope === parent && before.wires[id]?.scope === fromRegion)
+      .map(([id]) => id),
+  }
+}
+
+/** The forward step undoing `step`: applyStep(gPrime, inverseStep(...)) ≅ g.
+    Diff bookkeeping only — every transformation lives in the appliers. */
+function inverseStep(g: Diagram, step: ProofStep, gPrime: Diagram, ctx: ProofContext): ProofStep {
+  switch (step.rule) {
+    case 'erasure': {
+      const { pattern, attachments } = extractSubgraph(g, step.sel)
+      return { rule: 'insertion', region: step.sel.region, pattern, attachments, binders: {} }
+    }
+    case 'insertion':
+      return { rule: 'erasure', sel: freshSelection(g, gPrime, step.region) }
+    case 'doubleCutIntro': {
+      const outer = Object.entries(gPrime.regions).find(
+        ([id, r]) => g.regions[id] === undefined && r.kind === 'cut' && r.parent === step.sel.region,
       )
-      if (inner === undefined) throw new Error(`'${action.outer}' has no inner cut to unwrap`)
-      gPrime = applyDoubleCutElim(g, action.outer)
-      // the forward step re-creating the pair: intro around what the inner
-      // cut contained, which now sits where the OUTER cut's parent was
-      const outerRegion = g.regions[action.outer]!
+      if (outer === undefined) throw new Error('backward doubleCutIntro left no fresh outer cut; this is a session bug')
+      return { rule: 'doubleCutElim', region: outer[0] }
+    }
+    case 'doubleCutElim': {
+      const outerRegion = g.regions[step.region]!
       const parent: RegionId = outerRegion.kind === 'sheet' ? g.root : outerRegion.parent
-      const regions = Object.entries(gPrime.regions)
-        .filter(([id, r]) => r.kind !== 'sheet' && r.parent === parent && g.regions[id] !== undefined &&
-          (g.regions[id]! as { parent?: RegionId }).parent === inner[0])
-        .map(([id]) => id)
-      const nodes = Object.entries(gPrime.nodes)
-        .filter(([id, n]) => n.region === parent && g.nodes[id]?.region === inner[0])
-        .map(([id]) => id)
-      const wires = Object.entries(gPrime.wires)
-        .filter(([id, w]) => w.scope === parent && g.wires[id]?.scope === inner[0])
-        .map(([id]) => id)
-      step = { rule: 'doubleCutIntro', sel: { region: parent, regions, nodes, wires } }
-      break
+      const inner = Object.entries(g.regions).find(([, r]) => r.kind === 'cut' && r.parent === step.region)!
+      return { rule: 'doubleCutIntro', sel: promotedSelection(g, gPrime, parent, inner[0]) }
     }
-    case 'unVacuousBubble': {
-      const b = g.regions[action.bubble]
-      if (b === undefined || b.kind !== 'bubble') throw new Error(`'${action.bubble}' is not a bubble`)
-      gPrime = applyVacuousBubbleElim(g, action.bubble)
-      const parent = b.parent
-      const regions = Object.entries(gPrime.regions)
-        .filter(([id, r]) => r.kind !== 'sheet' && r.parent === parent &&
-          (g.regions[id] as { parent?: RegionId } | undefined)?.parent === action.bubble)
-        .map(([id]) => id)
-      const nodes = Object.entries(gPrime.nodes)
-        .filter(([id, n]) => n.region === parent && g.nodes[id]?.region === action.bubble)
-        .map(([id]) => id)
-      const wires = Object.entries(gPrime.wires)
-        .filter(([id, w]) => w.scope === parent && g.wires[id]?.scope === action.bubble)
-        .map(([id]) => id)
-      step = { rule: 'vacuousIntro', sel: { region: parent, regions, nodes, wires }, arity: b.arity }
-      break
+    case 'vacuousIntro': {
+      const bubble = Object.entries(gPrime.regions).find(
+        ([id, r]) => g.regions[id] === undefined && r.kind === 'bubble' && r.parent === step.sel.region,
+      )
+      if (bubble === undefined) throw new Error('backward vacuousIntro left no fresh bubble; this is a session bug')
+      return { rule: 'vacuousElim', region: bubble[0] }
     }
-    case 'unErase': {
-      if (polarity(g, action.region) !== 'positive') {
-        throw new Error(`un-erase targets a positive region (the forward erasure's gate); '${action.region}' is negative`)
+    case 'vacuousElim': {
+      const b = g.regions[step.region]
+      if (b === undefined || b.kind !== 'bubble') throw new Error(`'${step.region}' is not a bubble`)
+      return { rule: 'vacuousIntro', sel: promotedSelection(g, gPrime, b.parent, step.region), arity: b.arity }
+    }
+    case 'iteration':
+      return { rule: 'deiteration', sel: freshSelection(g, gPrime, step.target), fuel: 64 }
+    case 'deiteration': {
+      // the removed copy's justifier survives in gPrime; iterating it back
+      // into the emptied region must reproduce g — try each occurrence and
+      // let the reproduction check pick (the assertion below re-verifies)
+      const { pattern } = extractSubgraph(g, step.sel)
+      const occs = findOccurrences(gPrime, pattern, { fuel: step.fuel, mode: 'exact' }).matches
+      for (const occ of occs) {
+        const cand: ProofStep = { rule: 'iteration', sel: occurrenceSelection(pattern, occ, gPrime), target: step.sel.region }
+        try {
+          if (exploreForm(applyStep(gPrime, cand, ctx)) === exploreForm(g)) return cand
+        } catch {
+          // an out-of-scope occurrence refuses to iterate here; try the next
+        }
       }
-      gPrime = spliceSubgraph(g, action.region, action.pattern, action.attachments)
-      const regions = Object.keys(gPrime.regions).filter((id) => g.regions[id] === undefined && (gPrime.regions[id] as { parent?: RegionId }).parent === action.region)
-      const nodes = Object.keys(gPrime.nodes).filter((id) => g.nodes[id] === undefined && gPrime.nodes[id]!.region === action.region)
-      const wires = Object.keys(gPrime.wires).filter((id) => g.wires[id] === undefined && gPrime.wires[id]!.scope === action.region)
-      step = { rule: 'erasure', sel: { region: action.region, regions, nodes, wires } }
-      break
+      throw new Error('backward deiteration: no surviving occurrence iterates back to the goal (the justifying copy must remain in scope)')
     }
-    case 'unConvert': {
-      const node = g.nodes[action.node]
-      if (node === undefined || node.kind !== 'term') throw new Error(`'${action.node}' is not a term node`)
-      const res = applyConversion(g, action.node, action.term, action.fuel)
-      gPrime = res.diagram
-      step = {
-        rule: 'conversion', node: action.node, term: node.term,
-        certificate: { leftSteps: res.certificate.rightSteps, rightSteps: res.certificate.leftSteps },
+    case 'conversion': {
+      const node = g.nodes[step.node]
+      if (node === undefined || node.kind !== 'term') throw new Error(`'${step.node}' is not a term node`)
+      return {
+        rule: 'conversion', node: step.node, term: node.term,
+        certificate: { leftSteps: step.certificate.rightSteps, rightSteps: step.certificate.leftSteps },
         attachments: {},
       }
-      break
     }
-    case 'unCite': {
-      const thm = s.ctx.theorems.get(action.name)
-      if (thm === undefined) throw new Error(`unknown theorem '${action.name}'`)
-      if (polarity(g, action.at.sel.region) !== 'positive') {
-        throw new Error(`un-citation targets a positive region (the forward citation's gate); '${action.at.sel.region}' is negative`)
+    case 'theorem':
+      return {
+        rule: 'theorem', name: step.name,
+        at: { sel: freshSelection(g, gPrime, step.at.sel.region), args: [...step.at.args] },
+        direction: step.direction === 'forward' ? 'reverse' : 'forward',
       }
-      // verify the selection IS an rhs-occurrence (applyTheorem's machinery, sans polarity gate)
-      const { pattern, attachments, binderStubs } = extractSubgraph(g, action.at.sel)
-      if (binderStubs.length > 0) throw new Error('open occurrences cannot be un-cited')
-      if (action.at.args.length !== attachments.length || new Set(action.at.args).size !== action.at.args.length) {
-        throw new Error(`the selection has ${attachments.length} attachment wires; arguments must list each exactly once`)
+    case 'relUnfold': {
+      const ref = g.nodes[step.node]
+      if (ref === undefined || ref.kind !== 'ref') throw new Error(`'${step.node}' is not a relation reference`)
+      const args: WireId[] = []
+      for (let i = 0; i < ref.arity; i++) {
+        const port = { kind: 'arg', index: i } as const
+        const holder = Object.entries(g.wires).find(([, w]) => w.endpoints.some((ep) => ep.node === step.node && ep.port.kind === 'arg' && ep.port.index === i))
+        if (holder === undefined) throw new Error(`ref '${step.node}' has no wire on arg ${i}`)
+        void port
+        args.push(holder[0])
       }
-      const reordered = action.at.args.map((a) => {
-        const j = attachments.indexOf(a)
-        if (j === -1) throw new Error(`argument wire '${a}' is not an attachment of the selection`)
-        return pattern.boundary[j]!
-      })
-      if (exploreForm(pattern.diagram, reordered) !== exploreForm(thm.rhs.diagram, thm.rhs.boundary)) {
-        throw new Error(`the selection is not an occurrence of '${action.name}' right-hand side`)
-      }
-      const spliced = spliceSubgraph(g, action.at.sel.region, thm.lhs, action.at.args)
-      gPrime = removeSubgraph(spliced, action.at.sel)
-      // the forward citation references the spliced LHS occurrence in G′
-      const lhsRegions = Object.keys(gPrime.regions).filter((id) => g.regions[id] === undefined && (gPrime.regions[id] as { parent?: RegionId }).parent === action.at.sel.region)
-      const lhsNodes = Object.keys(gPrime.nodes).filter((id) => g.nodes[id] === undefined && gPrime.nodes[id]!.region === action.at.sel.region)
-      const lhsWires = Object.keys(gPrime.wires).filter((id) => g.wires[id] === undefined && gPrime.wires[id]!.scope === action.at.sel.region)
-      step = {
-        rule: 'theorem', name: action.name, direction: 'forward',
-        at: { sel: { region: action.at.sel.region, regions: lhsRegions, nodes: lhsNodes, wires: lhsWires }, args: action.at.args },
-      }
-      break
+      return { rule: 'relFold', sel: freshSelection(g, gPrime, ref.region), defId: ref.defId, args }
     }
+    case 'relFold': {
+      const fresh = freshSelection(g, gPrime, step.sel.region)
+      const refId = fresh.nodes.find((id) => gPrime.nodes[id]!.kind === 'ref')
+      if (refId === undefined) throw new Error('backward relFold left no reference node; this is a session bug')
+      return { rule: 'relUnfold', node: refId }
+    }
+    default:
+      throw new Error(`rule '${step.rule}' has no backward inverse yet (invertible: ${[...BACKWARD_INVERTIBLE].join(', ')})`)
   }
-  // the reproduction assertion: forward(step, G′) must match G semantically by fingerprint
-  const reproduced = applyStep(gPrime, step, s.ctx)
+}
+
+export function applyBackward(s: ProofSession, step: ProofStep): ProofSession {
+  const g = s.backward.current
+  if (!BACKWARD_INVERTIBLE.has(step.rule)) {
+    throw new Error(`rule '${step.rule}' has no backward inverse yet (invertible: ${[...BACKWARD_INVERTIBLE].join(', ')})`)
+  }
+  // SHARED execution: the same appliers, orientation flips only polarity gates
+  const gPrime = applyStep(g, step, s.ctx, 'backward')
+  const inv = inverseStep(g, step, gPrime, s.ctx)
+  // the reproduction assertion: forward(inv, G\u2032) must match G semantically
+  const reproduced = applyStep(gPrime, inv, s.ctx)
   if (exploreForm(reproduced) !== exploreForm(g)) {
-    throw new Error(`backward action '${action.kind}' could not reconstruct the goal it inverted; this is a session bug`)
+    throw new Error(`backward '${step.rule}' could not reconstruct the goal it inverted; this is a session bug`)
   }
   // re-anchor the existing exact tail onto the reproduced diagram: it was
   // exact from g, and `reproduced` is only isomorphic to g, so map it across
@@ -213,9 +243,9 @@ export function applyBackward(s: ProofSession, action: BackwardAction): ProofSes
     ...s,
     backward: {
       current: gPrime,
-      steps: [...s.backward.steps, step],
+      steps: [...s.backward.steps, inv],
       history: [...s.backward.history, g],
-      composedTail: [step, ...remapped],
+      composedTail: [inv, ...remapped],
       tailHistory: [...s.backward.tailHistory, s.backward.composedTail],
     },
   }

@@ -58,11 +58,18 @@ export type ProofStep =
   | { readonly rule: 'relUnfold'; readonly node: NodeId }
   | { readonly rule: 'relFold'; readonly sel: SubgraphSelection; readonly defId: string; readonly args: readonly WireId[] }
 
-export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagram {
+/**
+ * Apply one step. `orientation` is the reasoning direction: 'forward' (the
+ * default — replay and forward proving) keeps every gate as stated;
+ * 'backward' (acting on a GOAL) flips exactly the polarity-tied gates
+ * (erasure, insertion, theorem citation) — the calculus's cut symmetry.
+ * Execution is IDENTICAL either way: one applier per rule, no mirrors.
+ */
+export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext, orientation: 'forward' | 'backward' = 'forward'): Diagram {
   switch (step.rule) {
-    case 'insertion': return applyInsertion(d, step.region, step.pattern, step.attachments, new Map(Object.entries(step.binders)))
+    case 'insertion': return applyInsertion(d, step.region, step.pattern, step.attachments, new Map(Object.entries(step.binders)), orientation)
     case 'wireJoin': return applyWireJoin(d, step.a, step.b)
-    case 'erasure': return applyErasure(d, step.sel)
+    case 'erasure': return applyErasure(d, step.sel, orientation)
     case 'wireSever': return applyWireSever(d, step.wire, step.keep)
     case 'iteration': return applyIteration(d, step.sel, step.target)
     case 'deiteration': return applyDeiteration(d, step.sel, step.fuel)
@@ -80,7 +87,7 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext): Diagr
     case 'theorem': {
       const thm = ctx.theorems.get(step.name)
       if (thm === undefined) throw new ProofError(`unknown theorem '${step.name}'`)
-      return applyTheorem(d, thm, step.at, step.direction)
+      return applyTheorem(d, thm, step.at, step.direction, orientation)
     }
     case 'vacuousIntro': return applyVacuousBubbleIntro(d, step.sel, step.arity)
     case 'vacuousElim': return applyVacuousBubbleElim(d, step.region)

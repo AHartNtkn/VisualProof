@@ -14,7 +14,6 @@ import { convertToHeadNormal, convertToWeakHeadNormal } from '../src/app/tactics
 import { inferFoldArgs } from '../src/app/define'
 import { parseTerm } from '../src/kernel/term/parse'
 import { polarity } from '../src/kernel/diagram/regions'
-import type { BackwardAction } from '../src/app/session'
 import { hitShapes, installBrush, promptAt, type BrushHandle, type LabCtx } from './shared'
 import { discover, iterationTargets, FUEL } from './prove'
 import { citeCandidates, citeFrom, citeOccurrences, emptySelAt, foldedComp, occToSel, occurrencesContaining } from './prove4'
@@ -23,13 +22,14 @@ import type { Vec2 } from '../src/view/vec'
 
 export type MoveSink = {
   readonly ctx: ProofContext
-  /** Apply a forward-shaped step (kernel refusals throw; sink surfaces). */
+  /** Apply a step. The sink owns routing: a forward track applies it as-is,
+      a backward track applies it with the flipped-gate orientation and
+      records the inverse (USER ruling: ONE vocabulary, shared execution). */
   apply(step: ProofStep): void
   refuse(text: string): void
-  /** Which way the active side proves: 'forward' takes the full move set;
-      'backward' takes un-citations only (round-5 scope). Absent = forward. */
+  /** The active reasoning direction — flips exactly the polarity gates in
+      discovery. Absent = forward. */
   mode?(): 'forward' | 'backward'
-  applyBackward?(action: BackwardAction): void
   /** Session pages own undo (session history, not the lab's); absent = lab undo. */
   undo?(): void
 }
@@ -50,8 +50,8 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
   let iterDrag: { sel: SubgraphSelection; targets: RegionId[]; cursor: Vec2; over: RegionId | null } | null = null
   const brush = installBrush(lab, (h, e) => {
     if (e.button === 2) { rightDown = { sx: e.clientX, sy: e.clientY }; return true }
-    if (e.button === 0 && h?.kind === 'node' && brush.isSelected(h) && mode() === 'forward') {
-      const disc = discover(lab, brush.selected, ctx)
+    if (e.button === 0 && h?.kind === 'node' && brush.isSelected(h)) {
+      const disc = discover(lab, brush.selected, ctx, mode() === 'backward')
       if (disc === null || !disc.actions.some((a) => a.kind === 'iterate')) return false
       iterDrag = { sel: disc.sel, targets: iterationTargets(lab, disc.sel), cursor: lab.toWorld(e.clientX, e.clientY), over: null }
       return true
@@ -107,8 +107,7 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
   window.addEventListener('keydown', (e) => {
     if (document.activeElement instanceof HTMLInputElement) return
     if (e.key !== 'Delete' && e.key !== 'Backspace' && e.key !== 'w' && e.key !== 'W') return
-    if (mode() === 'backward') { sink.refuse('the backward side takes un-citations (right-click); structural backward moves are future work'); return }
-    const disc = discover(lab, brush.selected, ctx)
+    const disc = discover(lab, brush.selected, ctx, mode() === 'backward')
     if (disc === null) { sink.refuse(brush.selected.length === 0 ? 'select something first' : 'this selection spans several regions'); return }
     if (e.key === 'Delete' || e.key === 'Backspace') {
       const byKind = (k: string) => disc.actions.find((a) => a.kind === k)
@@ -137,25 +136,23 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
     sink.refuse('already in normal form — use Convert → custom target for a specific βη-equal shape')
   }
   lab.canvas.addEventListener('dblclick', (e) => {
-    if (mode() === 'backward') return
     const h = lab.hitAt(e.clientX, e.clientY)
     if (h?.kind === 'node' && lab.d.nodes[h.id]!.kind === 'term') normalize(h.id)
   })
 
   // ---- occurrence cycling ----
-  let cycle: { name: string; direction: 'forward' | 'reverse'; from: ReturnType<typeof citeFrom>; occs: Occurrence[]; k: number; backward: boolean } | null = null
+  let cycle: { name: string; direction: 'forward' | 'reverse'; from: ReturnType<typeof citeFrom>; occs: Occurrence[]; k: number } | null = null
   const applyOcc = (): void => {
     const cy = cycle!
     const occ = cy.occs[cy.k]!
     const ok = guarded(() => {
       const at = { sel: occToSel(cy.from, occ, lab.d), args: [...occ.attachments] }
-      if (cy.backward) sink.applyBackward!({ kind: 'unCite', name: cy.name, at })
-      else sink.apply({ rule: 'theorem', name: cy.name, at, direction: cy.direction })
+      sink.apply({ rule: 'theorem', name: cy.name, at, direction: cy.direction })
     })
     if (ok) { cycle = null; brush.clear() }
   }
-  const beginCite = (c: { name: string; direction: 'forward' | 'reverse'; from: ReturnType<typeof citeFrom>; occs: Occurrence[] }, backward: boolean): void => {
-    cycle = { ...c, k: 0, backward }
+  const beginCite = (c: { name: string; direction: 'forward' | 'reverse'; from: ReturnType<typeof citeFrom>; occs: Occurrence[] }): void => {
+    cycle = { ...c, k: 0 }
     if (c.occs.length === 1) { applyOcc(); return }
     lab.toast(`${c.occs.length} occurrences of '${c.name}' — Tab/click cycles, Enter applies, Esc cancels`)
   }
@@ -188,22 +185,8 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
       }
       menu!.append(r)
     }
-    if (mode() === 'backward') {
-      // un-citations: theorems whose TO-side occurs in the current goal
-      row('un-cite (backward)', null)
-      let any = false
-      for (const [name, thm] of ctx.theorems) {
-        const to = thm.rhs
-        const occs = occurrencesContaining(citeOccurrences(lab, to), brush.selected)
-        if (occs.length === 0) continue
-        any = true
-        row(`${name}  (${occs.length === 1 ? 'applies' : `${occs.length} places`})`, () => beginCite({ name, direction: 'forward', from: to, occs }, true))
-      }
-      if (!any) row('nothing un-cites here', null)
-      document.body.append(menu)
-      return
-    }
-    const disc = discover(lab, brush.selected, ctx)
+    const backward = mode() === 'backward'
+    const disc = discover(lab, brush.selected, ctx, backward)
     if (disc !== null) {
       for (const a of disc.actions) {
         if (a.kind === 'convert') {
@@ -239,12 +222,13 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
         }
       }
     }
-    const direction = disc === null ? 'forward' as const : polarity(lab.d, disc.sel.region) === 'positive' ? 'forward' as const : 'reverse' as const
+    const pol = disc === null ? 'positive' : polarity(lab.d, disc.sel.region)
+    const direction = (pol === 'positive') !== backward ? 'forward' as const : 'reverse' as const
     const cands = citeCandidates(lab, ctx, disc === null ? [] : brush.selected, direction)
     if (cands.applicable.length > 0) {
       row(disc === null ? 'applicable here' : 'applicable to the selection', null)
       for (const c of cands.applicable) {
-        row(`${c.name}  (${c.occs!.length === 1 ? 'applies' : `${c.occs!.length} places`}, ${direction})`, () => beginCite({ name: c.name, direction: c.direction, from: c.from, occs: c.occs! }, false))
+        row(`${c.name}  (${c.occs!.length === 1 ? 'applies' : `${c.occs!.length} places`}, ${direction})`, () => beginCite({ name: c.name, direction: c.direction, from: c.from, occs: c.occs! }))
       }
     }
     row('insert (closed statements)', null)

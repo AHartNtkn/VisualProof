@@ -6,10 +6,16 @@ import { removeSubgraph } from '../diagram/subgraph/splice'
 import { freshId } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
-/** Rule 2a (spec §3.1): delete any subgraph from a POSITIVE region. */
-export function applyErasure(d: Diagram, sel: SubgraphSelection): Diagram {
-  if (polarity(d, sel.region) !== 'positive') {
-    throw new RuleError(`erasure requires a positive region; '${sel.region}' is negative`)
+/** Rule 2a (spec §3.1): delete any subgraph from a POSITIVE region. Applied
+    with the backward orientation (reasoning from a goal), the gate flips to
+    NEGATIVE — the calculus's cut symmetry: erasing from a goal's negative
+    region is forward insertion read right-to-left. The gate stays inside the
+    applier either way; there is no gate-free entry. */
+export function applyErasure(d: Diagram, sel: SubgraphSelection, orientation: 'forward' | 'backward' = 'forward'): Diagram {
+  const need = orientation === 'forward' ? 'positive' : 'negative'
+  const have = polarity(d, sel.region)
+  if (have !== need) {
+    throw new RuleError(`${orientation === 'backward' ? 'backward ' : ''}erasure requires a ${need} region; '${sel.region}' is ${have}`)
   }
   return removeSubgraph(d, sel)
 }

@@ -6,6 +6,7 @@ import { positionalPortKey } from '../canonical/shape'
 import { termShapeKey } from '../canonical/shape'
 import { termsMatchModuloBetaEta } from '../canonical/matchkey'
 import { refinedColors } from '../canonical/explore'
+import { mkSelection, type SubgraphSelection } from './selection'
 
 /** Visited-state counter (node-compatibility probes). Reset by callers that measure. */
 export const __benchCounter = { n: 0 }
@@ -544,4 +545,26 @@ export function findOccurrences(
       attachments: Object.freeze(attachments),
     }))
   }
+}
+
+/**
+ * The host selection an occurrence denotes: the pattern's direct contents
+ * mapped through the occurrence's images (boundary wires excluded — they are
+ * the seam, not the selection). This is what a citation or backward inverse
+ * acts on.
+ */
+export function occurrenceSelection(pattern: DiagramWithBoundary, occ: Occurrence, host: Diagram): SubgraphSelection {
+  const pd = pattern.diagram
+  const boundary = new Set(pattern.boundary)
+  const regions: RegionId[] = []
+  for (const [rid, r] of Object.entries(pd.regions)) {
+    if (r.kind !== 'sheet' && r.parent === pd.root) regions.push(occ.regionMap.get(rid)!)
+  }
+  const nodes = Object.entries(pd.nodes)
+    .filter(([, n]) => n.region === pd.root)
+    .map(([id]) => occ.nodeMap.get(id)!)
+  const wires = Object.entries(pd.wires)
+    .filter(([id, w]) => w.scope === pd.root && !boundary.has(id))
+    .map(([id]) => occ.wireMap.get(id)!)
+  return mkSelection(host, { region: occ.region, regions, nodes, wires })
 }

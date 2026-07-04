@@ -15,9 +15,14 @@ export function applyInsertion(
   pattern: DiagramWithBoundary,
   attachments: readonly WireId[],
   binders: ReadonlyMap<RegionId, RegionId> = new Map(),
+  orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
-  if (polarity(d, atRegion) !== 'negative') {
-    throw new RuleError(`insertion requires a negative region; '${atRegion}' is positive`)
+  // backward orientation (reasoning from a goal) flips the gate to POSITIVE:
+  // inserting into a goal's positive region is forward erasure read backwards
+  const need = orientation === 'forward' ? 'negative' : 'positive'
+  const have = polarity(d, atRegion)
+  if (have !== need) {
+    throw new RuleError(`${orientation === 'backward' ? 'backward ' : ''}insertion requires a ${need} region; '${atRegion}' is ${have}`)
   }
   return spliceSubgraph(d, atRegion, pattern, attachments, binders)
 }

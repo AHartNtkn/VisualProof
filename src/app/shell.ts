@@ -799,10 +799,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (session === null) throw new Error('no active proof session')
     switch (e.kind) {
       case 'unDoubleCut':
-        session = applyBackward(session, { kind: 'unDoubleCut', outer: e.outer })
+        session = applyBackward(session, { rule: 'doubleCutElim', region: e.outer })
         break
       case 'unVacuousBubble':
-        session = applyBackward(session, { kind: 'unVacuousBubble', bubble: e.bubble })
+        session = applyBackward(session, { rule: 'vacuousElim', region: e.bubble })
         break
       case 'unErase': {
         // Pattern read from the term input at commit time
@@ -811,10 +811,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const e0 = emptyDiagram()
         const { diagram } = addTermNode(e0, e0.root, parseTerm(termVal))
         session = applyBackward(session, {
-          kind: 'unErase',
+          rule: 'insertion',
           region: e.region,
           pattern: mkDiagramWithBoundary(diagram, []),
           attachments: [],
+          binders: {},
         })
         break
       }
@@ -823,11 +824,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const termVal = termInput.value.trim()
         if (termVal === '') throw new Error('the term input is empty: type the target term first (\\ is λ)')
         const fuelVal = readCount(fuel.input, 'fuel')
+        // conversion is direction-free: build the certificate with the same
+        // fueled search the forward flow uses, then submit the ordinary step
+        const goal = session.backward.current
+        const conv = applyConversion(goal, e.node, parseTerm(termVal), fuelVal)
         session = applyBackward(session, {
-          kind: 'unConvert',
+          rule: 'conversion',
           node: e.node,
           term: parseTerm(termVal),
-          fuel: fuelVal,
+          certificate: conv.certificate,
+          attachments: {},
         })
         break
       }
@@ -988,7 +994,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         menuDiv.append(button(`Commit un-citation of '${p.name}' (${p.args.length} arg(s))`, guard(() => {
           if (session === null) throw new Error('no active proof session')
           pending = null
-          session = applyBackward(session, { kind: 'unCite', name: p.name, at: { sel: p.sel, args: [...p.args] } })
+          session = applyBackward(session, { rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: 'reverse' })
           message = meetStatus()
           sync()
         })))

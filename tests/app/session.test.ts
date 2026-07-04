@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
+import { applyConversion } from '../../src/kernel/rules/conversion'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
@@ -123,7 +124,7 @@ describe('backward mode', () => {
     const outer = Object.entries(s.backward.current.regions).find(
       ([, r]) => r.kind === 'cut' && r.parent === s.backward.current.root,
     )![0]
-    s = applyBackward(s, { kind: 'unDoubleCut', outer })
+    s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
     expect(s.backward.steps).toHaveLength(1)
     expect(s.backward.steps[0]!.rule).toBe('doubleCutIntro')
     expect(Object.keys(s.backward.current.regions)).toHaveLength(1)
@@ -142,7 +143,7 @@ describe('backward mode', () => {
       ([, r]) => r.kind === 'cut' && r.parent === s.backward.current.root,
     )![0]
     const before = s.backward.current
-    s = applyBackward(s, { kind: 'unDoubleCut', outer })
+    s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
     s = undoBackward(s)
     expect(s.backward.current).toBe(before)
     expect(s.backward.steps).toHaveLength(0)
@@ -167,8 +168,8 @@ describe('multi-step backward composition', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [])
     let s = startSession(lhs, rhs, ctx)
     // unwrap the INNER pair first, then the outer pair
-    s = applyBackward(s, { kind: 'unDoubleCut', outer: o2 })
-    s = applyBackward(s, { kind: 'unDoubleCut', outer: o1 })
+    s = applyBackward(s, { rule: 'doubleCutElim', region: o2 })
+    s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
     expect(s.backward.steps).toHaveLength(2)
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'doubleWrap')
@@ -206,13 +207,13 @@ describe('backward undo restores the composed tail', () => {
     void m
     const rhs = mkDiagramWithBoundary(r.build(), [])
     let s = startSession(lhs, rhs, ctx)
-    s = applyBackward(s, { kind: 'unDoubleCut', outer: o2 })
-    s = applyBackward(s, { kind: 'unDoubleCut', outer: o1 })
+    s = applyBackward(s, { rule: 'doubleCutElim', region: o2 })
+    s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
     s = undoBackward(s)
     expect(s.backward.composedTail).toHaveLength(1)
     // redo: the remaining pair is o1's (the inner one was restored by undo? no —
     // undo restored the state AFTER unwrapping o2 only, so o1's pair remains)
-    s = applyBackward(s, { kind: 'unDoubleCut', outer: o1 })
+    s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'redo')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -234,10 +235,11 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     const pat = new DiagramBuilder()
     pat.termNode(pat.root, p('\\x. \\y. x'))
     s = applyBackward(s, {
-      kind: 'unErase',
+      rule: 'insertion',
       region: s.backward.current.root,
       pattern: mkDiagramWithBoundary(pat.build(), []),
       attachments: [],
+      binders: {},
     })
     expect(s.backward.steps[0]!.rule).toBe('erasure')
     expect(meet(s)).toBe(true)
@@ -256,7 +258,8 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     let s = startSession(lhs, rhs, ctx)
     // the goal node's source free 'y' is canonical s0; the backward target
     // must be spelled in the node's CURRENT port names
-    s = applyBackward(s, { kind: 'unConvert', node: m, term: p('(\\a. a) s0'), fuel: 32 })
+    const conv = applyConversion(s.backward.current, m, p('(\\a. a) s0'), 32)
+    s = applyBackward(s, { rule: 'conversion', node: m, term: p('(\\a. a) s0'), certificate: conv.certificate, attachments: {} })
     expect(s.backward.steps[0]!.rule).toBe('conversion')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unConverted')
@@ -283,8 +286,9 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     const g = s.backward.current
     const two = Object.entries(g.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, FYF))![0]
     s = applyBackward(s, {
-      kind: 'unCite',
+      rule: 'theorem',
       name: 'fixedPoint',
+      direction: 'reverse',
       at: {
         sel: { region: g.root, regions: [], nodes: [two], wires: [] },
         args: [wo, wf],
@@ -316,8 +320,9 @@ describe('unCite refusals', () => {
     void wz2; void cut
     expect(() =>
       applyBackward(s, {
-        kind: 'unCite',
+        rule: 'theorem',
         name: 'onePlusOne',
+        direction: 'reverse',
         at: {
           sel: { region: cutId, regions: [], nodes: [], wires: [] },
           args: [],
@@ -338,8 +343,9 @@ describe('unCite refusals', () => {
     const g = s.backward.current
     expect(() =>
       applyBackward(s, {
-        kind: 'unCite',
+        rule: 'theorem',
         name: 'onePlusOne',
+        direction: 'reverse',
         at: {
           sel: { region: g.root, regions: [], nodes: [nz], wires: [] },
           args: [wz],
@@ -369,5 +375,116 @@ describe('sideBoundary — prove-mode sides render their statement boundary', ()
     const e = mkEngine(s.backward.current, boundary)
     settle(e, 1200)
     expect(paint(e, LIGHT).filter((sh) => sh.kind === 'exit')).toHaveLength(boundary.length)
+  })
+})
+
+describe('backward proving takes the full vocabulary (shared implementation, flipped gates)', () => {
+  const ctx = () => verifyTheory(buildFregeTheory())
+
+  it('erasure applies in NEGATIVE regions backward (forward reading: insertion) and declares green', () => {
+    // goal: T at root + cut containing M; lhs: T + empty cut
+    const r = new DiagramBuilder()
+    const t = r.termNode(r.root, p('\\x. x'))
+    r.wire(r.root, [{ node: t, port: { kind: 'output' } }])
+    const cut = r.cut(r.root)
+    const m = r.termNode(cut, p('\\y. y'))
+    const wm = r.wire(cut, [{ node: m, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const l = new DiagramBuilder()
+    const t2 = l.termNode(l.root, p('\\x. x'))
+    l.wire(l.root, [{ node: t2, port: { kind: 'output' } }])
+    l.cut(l.root)
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    let s = startSession(lhs, rhs, ctx())
+    s = applyBackward(s, { rule: 'erasure', sel: { region: cut, regions: [], nodes: [m], wires: [wm] } })
+    expect(s.backward.steps[0]!.rule).toBe('insertion')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'backwardErased')
+    expect(() => checkTheorem(thm, ctx())).not.toThrow()
+  })
+
+  it('refuses backward erasure in a POSITIVE region (the flipped gate)', () => {
+    const r = new DiagramBuilder()
+    const t = r.termNode(r.root, p('\\x. x'))
+    const wt = r.wire(r.root, [{ node: t, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const s = startSession(rhs, rhs, ctx())
+    expect(() =>
+      applyBackward(s, { rule: 'erasure', sel: { region: s.backward.current.root, regions: [], nodes: [t], wires: [wt] } }),
+    ).toThrowError(/backward erasure requires a negative region/)
+  })
+
+  it('backward iteration records deiteration and declares green', () => {
+    // goal: A at root + empty cut; lhs: A + cut containing the copy
+    const r = new DiagramBuilder()
+    const a = r.termNode(r.root, p('\\x. x'))
+    const wa = r.wire(r.root, [{ node: a, port: { kind: 'output' } }])
+    const cut = r.cut(r.root)
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const l = new DiagramBuilder()
+    const a2 = l.termNode(l.root, p('\\x. x'))
+    l.wire(l.root, [{ node: a2, port: { kind: 'output' } }])
+    const lcut = l.cut(l.root)
+    const a3 = l.termNode(lcut, p('\\x. x'))
+    l.wire(lcut, [{ node: a3, port: { kind: 'output' } }])
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    let s = startSession(lhs, rhs, ctx())
+    s = applyBackward(s, { rule: 'iteration', sel: { region: s.backward.current.root, regions: [], nodes: [a], wires: [wa] }, target: cut })
+    expect(s.backward.steps[0]!.rule).toBe('deiteration')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'backwardIterated')
+    expect(() => checkTheorem(thm, ctx())).not.toThrow()
+  })
+
+  it('backward deiteration finds the surviving justifier and records iteration', () => {
+    // goal: A at root + cut containing exact copy; lhs: A + empty cut
+    const r = new DiagramBuilder()
+    const a = r.termNode(r.root, p('\\x. x'))
+    r.wire(r.root, [{ node: a, port: { kind: 'output' } }])
+    const cut = r.cut(r.root)
+    const c = r.termNode(cut, p('\\x. x'))
+    const wc = r.wire(cut, [{ node: c, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const l = new DiagramBuilder()
+    const a2 = l.termNode(l.root, p('\\x. x'))
+    l.wire(l.root, [{ node: a2, port: { kind: 'output' } }])
+    l.cut(l.root)
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    let s = startSession(lhs, rhs, ctx())
+    s = applyBackward(s, { rule: 'deiteration', sel: { region: cut, regions: [], nodes: [c], wires: [wc] }, fuel: 64 })
+    expect(s.backward.steps[0]!.rule).toBe('iteration')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'backwardDeiterated')
+    expect(() => checkTheorem(thm, ctx())).not.toThrow()
+  })
+
+  it('backward doubleCutIntro records the elimination', () => {
+    const r = new DiagramBuilder()
+    const a = r.termNode(r.root, p('\\x. x'))
+    const wa = r.wire(r.root, [{ node: a, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const l = new DiagramBuilder()
+    const c1 = l.cut(l.root)
+    const c2 = l.cut(c1)
+    const a2 = l.termNode(c2, p('\\x. x'))
+    // the intro keeps the selected wire at its OLD scope (the ∃ passes
+    // through the annulus), so the lhs scopes it at the root
+    l.wire(l.root, [{ node: a2, port: { kind: 'output' } }])
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    let s = startSession(lhs, rhs, ctx())
+    s = applyBackward(s, { rule: 'doubleCutIntro', sel: { region: s.backward.current.root, regions: [], nodes: [a], wires: [wa] } })
+    expect(s.backward.steps[0]!.rule).toBe('doubleCutElim')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'backwardWrapped')
+    expect(() => checkTheorem(thm, ctx())).not.toThrow()
+  })
+
+  it('refuses rules with no backward inverse, naming the invertible set', () => {
+    const r = new DiagramBuilder()
+    const a = r.termNode(r.root, p('\\x. x'))
+    const wa = r.wire(r.root, [{ node: a, port: { kind: 'output' } }])
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    const s = startSession(rhs, rhs, ctx())
+    expect(() => applyBackward(s, { rule: 'fusion', wire: wa })).toThrowError(/no backward inverse/)
   })
 })

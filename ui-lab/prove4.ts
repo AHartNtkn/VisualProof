@@ -65,22 +65,7 @@ export function emptySelAt(d: Diagram, region: RegionId): SubgraphSelection {
   return mkSelection(d, { region, regions: [], nodes: [], wires: [] })
 }
 
-/** Turn a matcher occurrence into the citation's host selection. */
-export function occToSel(pattern: DiagramWithBoundary, occ: Occurrence, host: Diagram): SubgraphSelection {
-  const pd = pattern.diagram
-  const boundary = new Set(pattern.boundary)
-  const regions: RegionId[] = []
-  for (const [rid, r] of Object.entries(pd.regions)) {
-    if (r.kind !== 'sheet' && r.parent === pd.root) regions.push(occ.regionMap.get(rid)!)
-  }
-  const nodes = Object.entries(pd.nodes)
-    .filter(([, n]) => n.region === pd.root)
-    .map(([id]) => occ.nodeMap.get(id)!)
-  const wires = Object.entries(pd.wires)
-    .filter(([id, w]) => w.scope === pd.root && !boundary.has(id))
-    .map(([id]) => occ.wireMap.get(id)!)
-  return mkSelection(host, { region: occ.region, regions, nodes, wires })
-}
+export { occurrenceSelection as occToSel } from '../src/kernel/diagram/subgraph/match'
 
 /** Every occurrence of the citation's from-side in the current diagram —
     the infer-first flow's search (exact mode: the matcher's default UX law). */

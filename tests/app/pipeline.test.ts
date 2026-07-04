@@ -30,7 +30,7 @@ describe('edit → prove → assemble, end to end', () => {
 
     // PROVE: backward unwrap meets the untouched forward side
     let s = startSession(lhs, rhs, ctx)
-    s = applyBackward(s, { kind: 'unDoubleCut', outer: r3.region })
+    s = applyBackward(s, { rule: 'doubleCutElim', region: r3.region })
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'identityDoubleCut')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()

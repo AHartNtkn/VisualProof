@@ -43,11 +43,12 @@ boot('Round 5 · D — derive, then declare', 'F = prove forward from here · B 
     peek.style.display = 'block'
   }
 
-  const chip = (label: string, opts: { strong?: boolean; onClick?: () => void }): HTMLElement => {
+  const chip = (label: string, opts: { strong?: boolean; onClick?: () => void; onHover?: () => void }): HTMLElement => {
     const c = document.createElement('button')
     c.textContent = label
     c.style.cssText = `font:12px system-ui;padding:3px 9px;border-radius:999px;cursor:${opts.onClick ? 'pointer' : 'default'};border:1.5px solid ${opts.strong ? '#d97706' : '#bbb'};background:#fff;${opts.strong ? 'font-weight:600;' : ''}`
     if (opts.onClick) c.addEventListener('click', opts.onClick)
+    if (opts.onHover) c.addEventListener('pointerenter', opts.onHover)
     return c
   }
   const rebuild = () => {
@@ -58,8 +59,17 @@ boot('Round 5 · D — derive, then declare', 'F = prove forward from here · B 
     strip.replaceChildren()
     if (dir === null) return
     const states = track.states()
-    strip.append(chip('origin', { strong: true, onClick: () => showPeek('origin', states[0]!) }))
-    track.labels().forEach((l, i) => strip.append(chip(l, { onClick: () => showPeek(`after step ${i + 1}: ${l}`, states[i + 1]!) })))
+    // hover a chip to PEEK that state; CLICK to REWIND the track to it
+    // (the user ruling: one click beats Ctrl+Z over and over)
+    const jump = (k: number) => {
+      try { track.rewind(k); peek.style.display = 'none'; lab.toast(k === 0 ? 'rewound to the origin' : `rewound to state ${k}`) }
+      catch (err) { refuse(err instanceof Error ? err.message : String(err)) }
+    }
+    strip.append(chip('origin', { strong: true, onHover: () => showPeek('origin (click to rewind)', states[0]!), onClick: () => jump(0) }))
+    track.labels().forEach((l, i) => strip.append(chip(l, {
+      onHover: () => showPeek(`after step ${i + 1}: ${l} (click to rewind)`, states[i + 1]!),
+      onClick: () => jump(i + 1),
+    })))
     strip.append(chip('● here', { strong: true }))
     strip.append(chip('declare…', {
       strong: true,

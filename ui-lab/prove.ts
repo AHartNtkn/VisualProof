@@ -54,13 +54,13 @@ export function proveShowcase(): { d: Diagram; boundary: WireId[] } {
 
 /** Applicable actions for the current brush selection (empty list when the
     hits do not form a kernel selection). */
-export function discover(lab: LabCtx, hits: readonly Hit[], ctx: ProofContext = PROVE_CTX): { sel: SubgraphSelection; actions: ActionDescriptor[] } | null {
+export function discover(lab: LabCtx, hits: readonly Hit[], ctx: ProofContext = PROVE_CTX, backward = false): { sel: SubgraphSelection; actions: ActionDescriptor[] } | null {
   if (hits.length === 0) return null
   try {
     // absorb first: picking a cut AND things inside it means the subtree once —
     // "select ONLY the outer cut" secrets must not gate any rule
     const sel = buildSelection(lab.d, absorbHits(lab.d, hits))
-    return { sel, actions: applicableActions(lab.d, sel, ctx) }
+    return { sel, actions: applicableActions(lab.d, sel, ctx, backward) }
   } catch {
     return null
   }
