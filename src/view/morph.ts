@@ -1,4 +1,5 @@
-import type { NodeArc, NodeGeometry, NodeRadial } from './bend'
+import { bendMaps, type NodeArc, type NodeGeometry, type NodeRadial } from './bend'
+import type { Bar, Rail, Stem, TrompGrid } from './tromp'
 import { polar, type Vec2 } from './vec'
 
 // ---- CONTINUOUS SHAPE MORPHING between two bent-grid anatomies.
@@ -129,6 +130,217 @@ export function mkGeomMorph(from: NodeGeometry, to: NodeGeometry): (p: number) =
       portAnchors,
       exitLine,
       exitArc,
+    }
+  }
+}
+
+// ---- GRID-SPACE MORPHING (connection-preserving). bendGrid is a pure image
+// of integer grid coordinates through the frame maps theta(col)/radius(row),
+// so INCIDENCE IS A SHARED COORDINATE: a stem touches its bar because
+// stem.rowTop === bar.row. Linear interpolation preserves equalities that
+// hold at both endpoints, so pairing elements in GRID space and lerping both
+// their coordinates and the frame keeps every surviving junction connected
+// at every p — no snapping pass. The unpaired follow the user's ruling
+// ("shrink while still connected, disappear before disconnecting") via a
+// three-phase clock: dying pieces retract INTO their host while the grid
+// holds still (phase A), the paired skeleton morphs (phase B), born pieces
+// grow OUT of their host on the settled target grid (phase C). Equal thirds:
+// each phase is one visual beat of the step.
+const A_END = 1 / 3
+const B_END = 2 / 3
+
+type BarPair = { from: Bar | null; to: Bar | null }
+type StemPair = { from: Stem | null; to: Stem | null }
+type RailPair = { from: Rail | null; to: Rail | null }
+
+/** On-screen travel a pairing would cause — the principled matching cost:
+    minimize how far each piece moves. Host-incoherent pairs (the stem's bar
+    at one end is NOT the pair of its bar at the other) rank strictly below
+    every coherent pair (lexicographic via an additive bound exceeding any
+    possible travel): an incoherent pair detaches mid-morph, which is the
+    exact defect this interpolator exists to remove. */
+const INCOHERENT = 1e6
+
+export function mkGridMorph(gF: TrompGrid, gT: TrompGrid): (p: number) => NodeGeometry {
+  const mF = bendMaps(gF.cols, gF.rows, gF.railRows)
+  const mT = bendMaps(gT.cols, gT.rows, gT.railRows)
+  const meanR = (mF.pierceR + mT.pierceR) / 2
+
+  // ---- rails pair BY NAME (port identity is semantic)
+  const railNames = [...new Set([...gF.rails.map((r) => r.name), ...gT.rails.map((r) => r.name)])]
+  const rails: RailPair[] = railNames.map((name) => ({
+    from: gF.rails.find((r) => r.name === name) ?? null,
+    to: gT.rails.find((r) => r.name === name) ?? null,
+  }))
+
+  // ---- bars: rail bars ride their rail's pairing; lam/app pair per kind by
+  // least travel
+  const railBarF = new Map(gF.rails.map((r) => [r.name, gF.bars.find((b) => b.kind === 'rail' && b.row === r.row)!]))
+  const railBarT = new Map(gT.rails.map((r) => [r.name, gT.bars.find((b) => b.kind === 'rail' && b.row === r.row)!]))
+  const barTravel = (a: Bar, b: Bar): number =>
+    Math.abs(mF.radius(a.row) - mT.radius(b.row))
+    + (Math.abs(mF.theta(a.colStart) - mT.theta(b.colStart)) + Math.abs(mF.theta(a.colEnd) - mT.theta(b.colEnd))) * meanR
+  const bars: BarPair[] = []
+  const barPairOf = new Map<Bar, Bar>()
+  for (const name of railNames) {
+    const f = railBarF.get(name) ?? null, t = railBarT.get(name) ?? null
+    bars.push({ from: f, to: t })
+    if (f !== null && t !== null) barPairOf.set(f, t)
+  }
+  for (const kind of ['lam', 'app'] as const) {
+    const fs = gF.bars.filter((b) => b.kind === kind)
+    const ts = gT.bars.filter((b) => b.kind === kind)
+    const g = greedyPairs(fs, ts, barTravel)
+    for (const [f, t] of g.pairs) { bars.push({ from: f, to: t }); barPairOf.set(f, t) }
+    for (const f of g.loneA) bars.push({ from: f, to: null })
+    for (const t of g.loneB) bars.push({ from: null, to: t })
+  }
+
+  // ---- stems: output pairs with output; port drops pair per NAME by least
+  // travel; var stems pair by least travel, host-coherent pairs first
+  const hostOf = (g: TrompGrid, s: Stem): Bar | null =>
+    g.bars.find((b) => b.row === s.rowTop && b.colStart <= s.col && s.col <= b.colEnd) ?? null
+  const stemTravel = (a: Stem, b: Stem): number =>
+    Math.abs(mF.theta(a.col) - mT.theta(b.col)) * meanR
+    + Math.abs(mF.radius(a.rowTop) - mT.radius(b.rowTop)) + Math.abs(mF.radius(a.rowBottom) - mT.radius(b.rowBottom))
+  // host-coherent pairs first (lexicographic): a stem paired across
+  // NON-paired host bars keeps living while its bar dies — detaching mid-B,
+  // the exact defect this interpolator removes
+  const stemCost = (a: Stem, b: Stem): number => {
+    const hf = hostOf(gF, a), ht = hostOf(gT, b)
+    const coherent = hf === null && ht === null ? true : hf !== null && ht !== null && barPairOf.get(hf) === ht
+    return stemTravel(a, b) + (coherent ? 0 : INCOHERENT)
+  }
+  const stems: StemPair[] = []
+  for (const name of railNames) {
+    const fs = gF.stems.filter((s) => s.kind === 'port' && s.portName === name)
+    const ts = gT.stems.filter((s) => s.kind === 'port' && s.portName === name)
+    const g = greedyPairs(fs, ts, stemCost)
+    for (const [f, t] of g.pairs) stems.push({ from: f, to: t })
+    for (const f of g.loneA) stems.push({ from: f, to: null })
+    for (const t of g.loneB) stems.push({ from: null, to: t })
+  }
+  for (const kind of ['var', 'output'] as const) {
+    const fs = gF.stems.filter((s) => s.kind === kind)
+    const ts = gT.stems.filter((s) => s.kind === kind)
+    const g = greedyPairs(fs, ts, stemCost)
+    for (const [f, t] of g.pairs) stems.push({ from: f, to: t })
+    for (const f of g.loneA) stems.push({ from: f, to: null })
+    for (const t of g.loneB) stems.push({ from: null, to: t })
+  }
+
+  // clamp a dying/born stem's col into its (possibly shrinking/growing) host
+  // bar's span so a collapsing bar sweeps its stems up rather than leaving
+  // them behind
+  const shrunkSpan = (b: Bar, q: number, dying: boolean): { s: number; e: number } => {
+    // a vanishing bar retracts toward an incident SURVIVING stem's column if
+    // one exists (the junction that remains meaningful), else its midpoint
+    const survivors = stems.filter((sp) => {
+      const s = dying ? sp.from : sp.to
+      const paired = dying ? sp.to !== null : sp.from !== null
+      return s !== null && paired && (s.rowTop === b.row || s.rowBottom === b.row) && b.colStart <= s.col && s.col <= b.colEnd
+    })
+    const s0 = dying ? survivors[0]?.from : survivors[0]?.to
+    const anchor = s0 !== undefined && s0 !== null ? s0.col : (b.colStart + b.colEnd) / 2
+    return { s: lerpN(b.colStart, anchor, q), e: lerpN(b.colEnd, anchor, q) }
+  }
+
+  return (p: number): NodeGeometry => {
+    // phase clocks: qA retracts the dying, qB moves the skeleton, qC grows
+    const qA = Math.min(1, p / A_END)
+    const qB = Math.max(0, Math.min(1, (p - A_END) / (B_END - A_END)))
+    const qC = Math.max(0, (p - B_END) / (1 - B_END))
+    const frame = bendMaps(
+      lerpN(gF.cols, gT.cols, qB),
+      lerpN(gF.rows, gT.rows, qB),
+      lerpN(gF.railRows, gT.railRows, qB),
+    )
+    const { theta, radius, pierceR, a0 } = frame
+
+    const outArcs: NodeArc[] = []
+    const outRadials: NodeRadial[] = []
+    const portAnchors: Record<string, Vec2> = {}
+    const deadBarSpan = new Map<Bar, { s: number; e: number }>()
+
+    for (const bp of bars) {
+      if (bp.from !== null && bp.to !== null) {
+        const row = lerpN(bp.from.row, bp.to.row, qB)
+        const id = qB < 0.5 ? bp.from : bp.to
+        outArcs.push({ r: radius(row), a0: theta(lerpN(bp.from.colStart, bp.to.colStart, qB)), a1: theta(lerpN(bp.from.colEnd, bp.to.colEnd, qB)), kind: id.kind, hueRow: id.row })
+      } else if (bp.from !== null) {
+        if (qA >= 1) continue
+        const span = shrunkSpan(bp.from, qA, true)
+        deadBarSpan.set(bp.from, span)
+        outArcs.push({ r: radius(bp.from.row), a0: theta(span.s), a1: theta(span.e), kind: bp.from.kind, hueRow: bp.from.row })
+      } else if (bp.to !== null) {
+        if (qC <= 0) continue
+        const span = shrunkSpan(bp.to, 1 - qC, false)
+        deadBarSpan.set(bp.to, span)
+        outArcs.push({ r: radius(bp.to.row), a0: theta(span.s), a1: theta(span.e), kind: bp.to.kind, hueRow: bp.to.row })
+      }
+    }
+
+    const clampCol = (g: TrompGrid, s: Stem): number => {
+      const host = hostOf(g, s)
+      const span = host !== null ? deadBarSpan.get(host) : undefined
+      return span === undefined ? s.col : Math.max(span.s, Math.min(span.e, s.col))
+    }
+    for (const sp of stems) {
+      if (sp.from !== null && sp.to !== null) {
+        const id = qB < 0.5 ? sp.from : sp.to
+        outRadials.push({
+          angle: theta(lerpN(sp.from.col, sp.to.col, qB)),
+          r0: radius(lerpN(sp.from.rowTop, sp.to.rowTop, qB)),
+          r1: radius(lerpN(sp.from.rowBottom, sp.to.rowBottom, qB)),
+          kind: id.kind,
+          hueRow: id.kind === 'var' ? id.rowTop : null,
+        })
+      } else if (sp.from !== null) {
+        if (qA >= 1) continue
+        const s = sp.from
+        outRadials.push({ angle: theta(clampCol(gF, s)), r0: radius(s.rowTop), r1: radius(lerpN(s.rowBottom, s.rowTop, qA)), kind: s.kind, hueRow: s.kind === 'var' ? s.rowTop : null })
+      } else if (sp.to !== null) {
+        if (qC <= 0) continue
+        const s = sp.to
+        outRadials.push({ angle: theta(clampCol(gT, s)), r0: radius(s.rowTop), r1: radius(lerpN(s.rowTop, s.rowBottom, qC)), kind: s.kind, hueRow: s.kind === 'var' ? s.rowTop : null })
+      }
+    }
+
+    for (const rp of rails) {
+      if (rp.from !== null && rp.to !== null) {
+        const angle = theta(lerpN(rp.from.stemCol, rp.to.stemCol, qB))
+        const row = lerpN(rp.from.row, rp.to.row, qB)
+        outRadials.push({ angle, r0: radius(row), r1: pierceR, kind: 'port', hueRow: null })
+        portAnchors[rp.from.name] = polar(angle, pierceR)
+      } else if (rp.from !== null) {
+        // the pierce retracts to the rim with the rest of the dying port;
+        // its anchor rides the tip so the wire dives into the rim with it
+        const angle = theta(rp.from.stemCol)
+        const rim = radius(rp.from.row)
+        const tip = lerpN(pierceR, rim, qA)
+        if (qA < 1) outRadials.push({ angle, r0: rim, r1: tip, kind: 'port', hueRow: null })
+        portAnchors[rp.from.name] = polar(angle, tip)
+      } else if (rp.to !== null) {
+        const angle = theta(rp.to.stemCol)
+        const rim = radius(rp.to.row)
+        const tip = lerpN(rim, pierceR, qC)
+        if (qC > 0) outRadials.push({ angle, r0: rim, r1: tip, kind: 'port', hueRow: null })
+        portAnchors[rp.to.name] = polar(angle, tip)
+      }
+    }
+
+    const outputCol = lerpN(gF.outputCol, gT.outputCol, qB)
+    const outRows = lerpN(gF.rows, gT.rows, qB)
+    const exitR = radius(outRows)
+    const outputAnchor = polar(0, pierceR)
+    return {
+      outerRadius: pierceR + 0.5,
+      arcs: outArcs,
+      radials: outRadials,
+      outputAnchor,
+      portAnchors,
+      exitArc: { r: exitR, a0, a1: theta(outputCol) },
+      exitLine: [polar(a0, exitR), outputAnchor],
     }
   }
 }

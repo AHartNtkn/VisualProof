@@ -46,15 +46,30 @@ export type NodeGeometry = {
  * as radial pierces; the output runs to the innermost ring, arcs to the gap
  * edge, and exits straight through the gap to an anchor at angle 0.
  */
-export function bendGrid(g: TrompGrid): NodeGeometry {
+/** The col→angle and row→radius maps of the bend, parameterized by the frame
+    (cols, rows, railRows). Real-valued arguments are legal — the morph layer
+    interpolates frames and coordinates through these same formulas. */
+export type BendMaps = {
+  readonly a0: number
+  readonly theta: (col: number) => number
+  readonly radius: (row: number) => number
+  readonly rimR: number
+  readonly pierceR: number
+}
+
+export function bendMaps(cols: number, rows: number, railRows: number): BendMaps {
   const a0 = GAP_ANGLE / 2
   const span = 2 * Math.PI - GAP_ANGLE
-  const theta = (col: number): number => a0 + ((col + 0.5) / g.cols) * span
+  const theta = (col: number): number => a0 + ((col + 0.5) / cols) * span
   // row 0 sits at radius rowsBelow + 2 so the innermost row keeps radius 2
-  const r0 = g.rows + 2
+  const r0 = rows + 2
   const radius = (row: number): number => r0 - row
-  const rimR = radius(-g.railRows) // outermost rail ring
-  const pierceR = rimR + 1
+  const rimR = radius(-railRows) // outermost rail ring
+  return { a0, theta, radius, rimR, pierceR: rimR + 1 }
+}
+
+export function bendGrid(g: TrompGrid): NodeGeometry {
+  const { a0, theta, radius, pierceR } = bendMaps(g.cols, g.rows, g.railRows)
 
   const arcs: NodeArc[] = g.bars.map((b) => ({
     r: radius(b.row),

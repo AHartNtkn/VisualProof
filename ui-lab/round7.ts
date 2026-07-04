@@ -19,10 +19,10 @@ import { ascaleOf, pkey } from '../src/view/engine'
 import type { Term } from '../src/kernel/term/term'
 import type { ProofStep } from '../src/kernel/proof/step'
 import type { Vec2 } from '../src/view/vec'
-import { mkGeomMorph } from '../src/view/morph'
+import { mkGeomMorph, mkGridMorph } from '../src/view/morph'
 
 boot('Round 7 — motion', 'βη conversion MORPHS continuously (a → a′ → b, speed under ⚙); erasures fade out, fresh bodies pulse; hover eases — every layer toggleable', (lab) => {
-  const motion = { convAnim: true, speed: 1, ghosts: true }
+  const motion = { convAnim: true, gridMorph: true, speed: 1, ghosts: true }
   motionPrefs.hoverEaseMs = 120
 
   // ---- βη playback: one interpolated anatomy per frame (mkGeomMorph); the
@@ -43,8 +43,12 @@ boot('Round 7 — motion', 'βη conversion MORPHS continuously (a → a′ → 
     frames.push(...right.slice(1))
     if (frames.length <= 1) { commit(); return }
     playing = true
-    const geoms = frames.map((f) => bendGrid(trompGrid(f)))
-    const morphs = geoms.slice(1).map((g, i) => mkGeomMorph(geoms[i]!, g))
+    // connected (grid-space) morphing by default; the pinned independent
+    // interpolator stays selectable under the gear for comparison
+    const grids = frames.map(trompGrid)
+    const morphs = motion.gridMorph
+      ? grids.slice(1).map((g, i) => mkGridMorph(grids[i]!, g))
+      : grids.slice(1).map((g, i) => mkGeomMorph(bendGrid(grids[i]!), bendGrid(g)))
     const ascale = ascaleOf('term')
     const t0 = performance.now()
     const smooth = (p: number): number => p * p * (3 - 2 * p) // C¹ ease
@@ -140,6 +144,7 @@ boot('Round 7 — motion', 'βη conversion MORPHS continuously (a → a′ → 
   }
   panel.append(Object.assign(document.createElement('div'), { textContent: '⚙ motion', style: 'color:#999;font-size:11px;text-transform:uppercase' }))
   row('βη animation', motion.convAnim, (on) => { motion.convAnim = on })
+  row('connected morph (off = pinned v1)', motion.gridMorph, (on) => { motion.gridMorph = on })
   const speedRow = document.createElement('label')
   speedRow.style.cssText = 'display:flex;gap:6px;align-items:center'
   const slider = document.createElement('input')
