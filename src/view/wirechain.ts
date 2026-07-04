@@ -25,13 +25,27 @@ import type { Vec2 } from './vec'
 
 export const TENSION = 1.0
 export const BEND = 0.6
-export const BARRIER_DEPTH = 40
-/** Discretization health is part of the ONE functional: a small quadratic
-    about the sampling pitch pins the chain's parameterization (tangential
-    sliding is otherwise a zero mode of pure tension — points bunch up, the
-    1/segment bend gradient explodes, and fixed-step descent oscillates).
-    Small against TENSION so it barely biases shape. */
-export const SPACING = 0.2
+/** The disc↔wire barrier's SATURATED slope. It must exceed any single
+    saturated content attraction (the engine's soft cap is 0.65·18 ≈ 11.7):
+    with a weaker slope an attracted disc plows straight through a wire —
+    the wire yields, snaps to the disc's far side, and the cycle repeats
+    forever (measured: +1…+5 E spikes, wandering bodies). 1.5× for margin;
+    crowds of stacked attractions can still push through, which is physical.
+    Potential: quadratic ramp over the outer half of the clearance zone,
+    constant slope inside — finite everywhere, gradient bounded. */
+export const BARRIER_SLOPE = 18
+/** Discretization health is part of the ONE functional — but ONE-SIDED:
+    a floor against segment COMPRESSION only (onset pitch/2). Tangential
+    sliding is a zero mode of pure tension: points bunch up and the
+    1/segment bend gradient explodes into oscillation. A symmetric rest
+    length was tried and is WRONG — it makes the chain an inextensible rope
+    of its birth length (tension can only coil it, never shorten it;
+    measured: taut dangle ropes coiling forever, driving a slow swimmer).
+    Stretch costs nothing here; tension owns shortening; resample removes
+    surplus points as chains contract (its compression trigger sits at
+    pitch/4, below the floor's equilibrium, so it cannot churn). */
+export const SPACING = 2.0
+export const spacingOnset = (pitch: number): number => pitch / 2
 /** Trust region: max distance any chain point moves per tick — a shortened
     descent step still descends; drawn motion stays continuous at frame
     scale (round-8 law). */
@@ -105,6 +119,25 @@ export function mkChain(terminals: Vec2[], pitch: number): { pts: Vec2[]; adj: n
   return { pts, adj }
 }
 
+/** Barrier potential: gradient ramps 0 → BARRIER_SLOPE over the outer half
+    of the clearance zone, constant BARRIER_SLOPE inside. */
+export function barrierU(d: number, r: number): number {
+  if (d >= r) return 0
+  const half = r / 2
+  if (d >= half) {
+    const t = (r - d) / half // 0 at rim, 1 at half depth
+    return (BARRIER_SLOPE * half * t * t) / 2
+  }
+  return (BARRIER_SLOPE * half) / 2 + BARRIER_SLOPE * (half - d)
+}
+
+export function barrierG(d: number, r: number): number {
+  if (d >= r) return 0
+  const half = r / 2
+  if (d >= half) return (BARRIER_SLOPE * (r - d)) / half
+  return BARRIER_SLOPE
+}
+
 /** The barrier clearance radius of a disc for wire points. */
 export const clearance = (r: number): number => r + 1.5
 
@@ -112,39 +145,39 @@ export const clearance = (r: number): number => r + 1.5
     exempted for chain points within the exit run of a bind on that disc
     (tree-distance ≤ the clearance depth). Everywhere else the barrier
     applies — a wire cannot wrap back through its own node. */
-export function exemptSets(ch: WireChain, discs: readonly ChainDisc[]): Map<string, Set<number>> {
-  const out = new Map<string, Set<number>>()
-  for (const disc of discs) {
-    const binds = ch.binds.filter((b) => b.body === disc.id)
-    if (binds.length === 0) continue
-    const depth = Math.ceil(clearance(disc.r) / ch.pitch) + 1
-    const seen = new Set<number>()
-    for (const b of binds) {
-      let frontier = [b.idx]
-      seen.add(b.idx)
-      for (let k = 0; k < depth; k++) {
-        const next: number[] = []
-        for (const v of frontier) {
-          for (const n of ch.adj[v]!) if (!seen.has(n)) { seen.add(n); next.push(n) }
-        }
-        frontier = next
-      }
-    }
-    out.set(disc.id, seen)
+/** CONTINUOUS exit exemption: the barrier of a disc the chain is bound to
+    is scaled by a mask m ∈ [0,1] vanishing near the chain's own anchor on
+    that disc (the wire must pass through there), ramping to 1 over one
+    pitch beyond the clearance radius. Geometric (resample-proof) AND
+    continuous — a binary exempt boundary was measured kicking ±19 E as
+    points crossed it. The mask is part of the ENERGY (U_eff = m·U): its
+    gradient carries an exact anchor-side reaction, a Newton pair inside
+    the chain (the anchor index accumulates it, and the bind loop forwards
+    it to the body). */
+export function exitMask(ch: WireChain, disc: ChainDisc, v: number): { m: number; anchorIdx: number; dm: number } {
+  const r = clearance(disc.r)
+  let best = { m: 1, anchorIdx: -1, dm: 0 }
+  for (const b of ch.binds) {
+    if (b.body !== disc.id) continue
+    const dvec = sub(ch.pts[v]!, ch.pts[b.idx]!)
+    const d = len(dvec)
+    const t = (d - r) / PITCH
+    const m = Math.max(0, Math.min(1, t))
+    if (m < best.m) best = { m, anchorIdx: b.idx, dm: t > 0 && t < 1 ? 1 / PITCH : 0 }
   }
-  return out
+  return best
 }
 
 /** Component split of one chain's energy (debug/trace). */
 export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { tension: number; spacing: number; bend: number; barrier: number } {
   const parts = { tension: 0, spacing: 0, bend: 0, barrier: 0 }
-  const exempt = exemptSets(ch, discs)
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
       const L = len(sub(ch.pts[n]!, ch.pts[v]!))
       parts.tension += TENSION * L
-      parts.spacing += SPACING * (L - ch.pitch) * (L - ch.pitch)
+      const under = spacingOnset(ch.pitch) - L
+      if (under > 0) parts.spacing += SPACING * under * under
     }
     if (ch.adj[v]!.length === 2) {
       const [a, b] = ch.adj[v]! as [number, number]
@@ -158,10 +191,12 @@ export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { 
       }
     }
     for (const disc of discs) {
-      if (exempt.get(disc.id)?.has(v) === true) continue
       const r = clearance(disc.r)
       const d = len(sub(ch.pts[v]!, disc.pos))
-      if (d < r) parts.barrier += BARRIER_DEPTH * (1 - d / r) * (1 - d / r)
+      if (d < r) {
+        const { m } = exitMask(ch, disc, v)
+        if (m > 0) parts.barrier += m * barrierU(d, r)
+      }
     }
   }
   return parts
@@ -169,13 +204,14 @@ export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { 
 
 /** E_wire of one chain against the given discs. */
 export function chainEnergy(ch: WireChain, discs: readonly ChainDisc[]): number {
-  const exempt = exemptSets(ch, discs)
   let E = 0
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
       const L = len(sub(ch.pts[n]!, ch.pts[v]!))
-      E += TENSION * L + SPACING * (L - ch.pitch) * (L - ch.pitch)
+      E += TENSION * L
+      const under = spacingOnset(ch.pitch) - L
+      if (under > 0) E += SPACING * under * under
     }
     // bend at degree-2 interior points: (π − angle between segments)²
     if (ch.adj[v]!.length === 2) {
@@ -190,12 +226,11 @@ export function chainEnergy(ch: WireChain, discs: readonly ChainDisc[]): number 
       }
     }
     for (const disc of discs) {
-      if (exempt.get(disc.id)?.has(v) === true) continue
       const r = clearance(disc.r)
       const d = len(sub(ch.pts[v]!, disc.pos))
       if (d < r) {
-        const t = 1 - d / r
-        E += BARRIER_DEPTH * t * t
+        const { m } = exitMask(ch, disc, v)
+        if (m > 0) E += m * barrierU(d, r)
       }
     }
   }
@@ -207,7 +242,6 @@ export function chainEnergy(ch: WireChain, discs: readonly ChainDisc[]): number 
 export function chainGradient(ch: WireChain, discs: readonly ChainDisc[]): { f: MVec[]; onDiscs: Map<string, MVec> } {
   const f: MVec[] = ch.pts.map(() => ({ x: 0, y: 0 }))
   const onDiscs = new Map<string, MVec>()
-  const exempt = exemptSets(ch, discs)
   const addDisc = (id: string, x: number, y: number): void => {
     const cur = onDiscs.get(id) ?? { x: 0, y: 0 }
     onDiscs.set(id, { x: cur.x + x, y: cur.y + y })
@@ -219,7 +253,8 @@ export function chainGradient(ch: WireChain, discs: readonly ChainDisc[]): { f: 
       const dvec = sub(ch.pts[n]!, ch.pts[v]!)
       const d = len(dvec)
       if (d < 1e-9) continue
-      const mag = TENSION + 2 * SPACING * (d - ch.pitch)
+      const under = spacingOnset(ch.pitch) - d
+      const mag = TENSION - (under > 0 ? 2 * SPACING * under : 0)
       f[v]!.x += (mag * dvec.x) / d
       f[v]!.y += (mag * dvec.y) / d
     }
@@ -251,16 +286,33 @@ export function chainGradient(ch: WireChain, discs: readonly ChainDisc[]): { f: 
     // barrier: push out of every intruded clearance zone; equal-and-opposite
     // on the disc (this is the single term both sides differentiate)
     for (const disc of discs) {
-      if (exempt.get(disc.id)?.has(v) === true) continue
       const r = clearance(disc.r)
       const dvec = sub(ch.pts[v]!, disc.pos)
       const d = len(dvec)
       if (d >= r || d < 1e-9) continue
-      const mag = (2 * BARRIER_DEPTH * (1 - d / r)) / r
+      const { m, anchorIdx, dm } = exitMask(ch, disc, v)
+      if (m <= 0) continue
+      const U = barrierU(d, r)
+      const mag = m * barrierG(d, r)
       const ux = dvec.x / d, uy = dvec.y / d
       f[v]!.x += ux * mag
       f[v]!.y += uy * mag
       addDisc(disc.id, -ux * mag, -uy * mag)
+      // the mask's own gradient (transition band only): pulls the point
+      // toward the anchor's exempt bubble and pushes the anchor back —
+      // an internal Newton pair of the chain
+      if (dm > 0 && anchorIdx >= 0) {
+        const avec = sub(ch.pts[v]!, ch.pts[anchorIdx]!)
+        const ad = len(avec)
+        if (ad > 1e-9) {
+          const gm = U * dm
+          const ax = avec.x / ad, ay = avec.y / ad
+          f[v]!.x -= ax * gm
+          f[v]!.y -= ay * gm
+          f[anchorIdx]!.x += ax * gm
+          f[anchorIdx]!.y += ay * gm
+        }
+      }
     }
   }
   return { f, onDiscs }
@@ -410,7 +462,7 @@ export function resample(ch: WireChain): void {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
       const d = len(sub(ch.pts[n]!, ch.pts[v]!))
-      if (d > 2 * ch.pitch || (d < ch.pitch / 2 && !structural.has(v) && !structural.has(n))) { needs = true; break }
+      if (d > 2 * ch.pitch || (d < ch.pitch / 4 && !structural.has(v) && !structural.has(n))) { needs = true; break }
     }
   }
   if (!needs) return
