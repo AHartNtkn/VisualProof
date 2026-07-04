@@ -186,10 +186,12 @@ const wrapAxis = (x: number): number => {
 export type Obstacle = { pos: Vec2; r: number }
 
 export function nodeObstacles(e: Engine): Obstacle[] {
+  // keep-out reaches past the drawn exit stubs with clear daylight: a branch
+  // point inside this zone reads as the node's own output (USER report)
   const out: Obstacle[] = []
   for (const b of e.bodies.values()) {
     if (b.kind === 'junction' || b.kind === 'anchor') continue
-    out.push({ pos: b.pos, r: b.discR + 1 })
+    out.push({ pos: b.pos, r: b.discR + STUB_LEN + 2 })
   }
   return out
 }

@@ -68,10 +68,16 @@ const wires = (e: Engine, st: Theme): Shape[] => {
     for (let v = 0; v < t.pts.length; v++) {
       for (const n of t.adj[v]!) {
         if (n <= v) continue
-        // terminal ends draw from the PORT ANCHOR (the stub end is only the
-        // leaf's position in the tree's energy)
-        const pv = v < t.nT ? m.terminals[v]!.p : t.pts[v]!
-        const pn = n < t.nT ? m.terminals[n]!.p : t.pts[n]!
+        // perpendicular exit (USER law): a straight stub out of each port,
+        // then the curve between stub ends — wires never leave a node at an
+        // odd angle, and arcs are welcome to be large
+        if (v < t.nT && m.terminals[v]!.key !== null) {
+          shapes.push({ kind: 'segment', from: m.terminals[v]!.p, to: t.pts[v]!, stroke: st.wire, width: st.wireW, glow })
+        }
+        if (n < t.nT && m.terminals[n]!.key !== null) {
+          shapes.push({ kind: 'segment', from: m.terminals[n]!.p, to: t.pts[n]!, stroke: st.wire, width: st.wireW, glow })
+        }
+        const pv = t.pts[v]!, pn = t.pts[n]!
         const chord = Math.atan2(pn.y - pv.y, pn.x - pv.x)
         const tv = v < t.nT ? terminalTangent(m.terminals[v]!, pn) : clampTo(tangents.get(v)!.get(n)!, chord)
         const tn = n < t.nT ? terminalTangent(m.terminals[n]!, pv) : clampTo(tangents.get(n)!.get(v)!, chord + Math.PI)

@@ -35,8 +35,12 @@ const wires = (e: Engine, st: Theme): Shape[] => {
         if (n <= v) continue
         if (v < t.nT) {
           const term = m.terminals[v]!
-          const dir = Math.atan2(t.pts[n]!.y - term.p.y, t.pts[n]!.x - term.p.x)
-          const path = hobbyBezier(term.p, terminalTangent(term, t.pts[n]!), t.pts[n]!, dir + Math.PI)
+          // perpendicular exit (USER law): a straight stub out of the port,
+          // THEN the curve — wires never leave a node at an odd angle
+          const s = t.pts[v]!
+          if (term.key !== null) shapes.push({ kind: 'segment', from: term.p, to: s, stroke: st.wire, width: st.wireW, glow })
+          const dir = Math.atan2(t.pts[n]!.y - s.y, t.pts[n]!.x - s.x)
+          const path = hobbyBezier(s, terminalTangent(term, t.pts[n]!), t.pts[n]!, dir + Math.PI)
           shapes.push({ kind: 'bezier', from: path.from, c1: path.c1, c2: path.c2, to: path.to, stroke: st.wire, width: st.wireW, glow })
         } else shapes.push({ kind: 'segment', from: t.pts[v]!, to: t.pts[n]!, stroke: st.wire, width: st.wireW, glow })
       }

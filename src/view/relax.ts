@@ -24,7 +24,12 @@ export const SIB_GAP = 5
 const DT = 0.06
 const DAMP = 4
 const REP = 900
-const SPRING = 2.2
+/** Leg-spring stiffness. Halved from 2.2 (USER feel ruling, round 8): wires
+    were minimizing edge length harder than they should, crushing node
+    spacing. A weaker GRADIENT calms the pull at every distance without
+    moving the push/pull frontier (raising REST instead broke the pinned
+    settle-drift bounds — springs started pushing at working distances). */
+const SPRING = 1.1
 const ROT_BLEND = 0.15
 const REST = 18
 /** The soft-force bound: every SOFT pull (sibling attraction, leg-spring
