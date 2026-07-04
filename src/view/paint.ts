@@ -111,31 +111,15 @@ function cutDepth(d: Diagram, rid: RegionId): number {
   }
 }
 
-export function paint(e: Engine, st: Theme): Shape[] {
+/** The wire pass of the base painter: legs, existential stubs, boundary
+    exits, the frame pip, and junction dots. Exported (and overridable via
+    paint's `wires` parameter) so wire-rendering experiments can substitute
+    their own pass without duplicating the rest of the painter. */
+export function paintWires(e: Engine, st: Theme): Shape[] {
   const fb = frameBounds(e)
-  if (fb === null) throw new Error('paint requires a settled engine: call settleStep/settle first')
-  const hues = bubbleHues(e.d, st.bubbleLightness)
+  if (fb === null) throw new Error('paintWires requires a settled engine: call settleStep/settle first')
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
   const shapes: Shape[] = []
-
-  // sheet frame
-  shapes.push({ kind: 'frame', x: fb.minX, y: fb.minY, w: fb.maxX - fb.minX, h: fb.maxY - fb.minY, cornerW: FRAME_CORNER_W, fill: st.paper, stroke: st.frame, width: FRAME_STROKE_W })
-
-  // regions, outer first: cuts fill + inset well + ink rim; bubbles are hue rings
-  const rs = [...e.regions.entries()]
-    .filter(([rid]) => e.d.regions[rid]!.kind !== 'sheet')
-    .sort((a, b) => b[1].radius - a[1].radius)
-  for (const [rid, g] of rs) {
-    const kind = e.d.regions[rid]!.kind
-    if (kind === 'bubble') {
-      const hue = hues.get(rid)!
-      shapes.push({ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke: hue, width: BUBBLE_RING_W, insetColor: null, glow: glow(hue) })
-      continue
-    }
-    const fill = cutDepth(e.d, rid) % 2 === 1 ? st.negFill : st.paper
-    shapes.push({ kind: 'circle', center: g.center, r: g.radius, fill, stroke: st.ink, width: st.rimW, insetColor: st.insetColor, glow: null })
-  }
-
   // wires
   for (const { path } of legPaths(e)) {
     shapes.push({ kind: 'bezier', from: path.from, c1: path.c1, c2: path.c2, to: path.to, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
@@ -161,6 +145,35 @@ export function paint(e: Engine, st: Theme): Shape[] {
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: st.wire })
   }
+  return shapes
+}
+
+export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Shape[] = paintWires): Shape[] {
+  const fb = frameBounds(e)
+  if (fb === null) throw new Error('paint requires a settled engine: call settleStep/settle first')
+  const hues = bubbleHues(e.d, st.bubbleLightness)
+  const glow = (c: string): string | null => (st.wireGlow ? c : null)
+  const shapes: Shape[] = []
+
+  // sheet frame
+  shapes.push({ kind: 'frame', x: fb.minX, y: fb.minY, w: fb.maxX - fb.minX, h: fb.maxY - fb.minY, cornerW: FRAME_CORNER_W, fill: st.paper, stroke: st.frame, width: FRAME_STROKE_W })
+
+  // regions, outer first: cuts fill + inset well + ink rim; bubbles are hue rings
+  const rs = [...e.regions.entries()]
+    .filter(([rid]) => e.d.regions[rid]!.kind !== 'sheet')
+    .sort((a, b) => b[1].radius - a[1].radius)
+  for (const [rid, g] of rs) {
+    const kind = e.d.regions[rid]!.kind
+    if (kind === 'bubble') {
+      const hue = hues.get(rid)!
+      shapes.push({ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke: hue, width: BUBBLE_RING_W, insetColor: null, glow: glow(hue) })
+      continue
+    }
+    const fill = cutDepth(e.d, rid) % 2 === 1 ? st.negFill : st.paper
+    shapes.push({ kind: 'circle', center: g.center, r: g.radius, fill, stroke: st.ink, width: st.rimW, insetColor: st.insetColor, glow: null })
+  }
+
+  shapes.push(...wires(e, st))
 
   // The port-order pip: nodes with two or more ORDERED ports (refs by arity,
   // atoms by their binder's arity) get a filled dot on their rim at port a0's

@@ -12,7 +12,7 @@ import { joinPorts } from '../src/app/edit'
 import { carryOver, mkEngine, pkey, type Engine, type Leg } from '../src/view/engine'
 import type { Vec2 } from '../src/view/vec'
 import { settleStep } from '../src/view/relax'
-import { paint, LIGHT, type Shape } from '../src/view/paint'
+import { paint, LIGHT, type Shape, type Theme } from '../src/view/paint'
 import { drawShapes } from '../src/view/canvas'
 import { computeLegs, hobbyBezier, legPaths, boundaryExits, existentialStubs, type ExStub, type LegGeom, type WirePath } from '../src/view/wires'
 import { buildSelection, dragTarget, hitTest, type Hit } from '../src/app/hittest'
@@ -112,7 +112,7 @@ export type LabCtx = {
   onMutate(fn: (died: { pos: Vec2; discR: number }[], born: string[]) => void): void
 }
 
-export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, mk: () => { d: Diagram; boundary: WireId[] } = showcase): void {
+export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, mk: () => { d: Diagram; boundary: WireId[] } = showcase, opts?: { wires?: (e: Engine, st: Theme) => Shape[] }): void {
   document.title = title
   const head = document.createElement('div')
   head.style.cssText = 'position:fixed;top:0;left:0;right:0;padding:8px 12px;background:#ffffffd8;font:13px system-ui;z-index:5;border-bottom:1px solid #ccc'
@@ -255,7 +255,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
     if (!frozen) for (let i = 0; i < 4; i++) settleStep(lab.engine)
     fit()
     for (const fn of frameHooks) fn()
-    const shapes: Shape[] = [...paint(lab.engine, LIGHT)]
+    const shapes: Shape[] = [...paint(lab.engine, LIGHT, opts?.wires)]
     for (const fn of overlays) fn(shapes)
     ctx2d.clearRect(0, 0, canvas.width, canvas.height)
     drawShapes(ctx2d, shapes, view)
