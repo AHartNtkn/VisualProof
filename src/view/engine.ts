@@ -6,6 +6,8 @@ import { add } from './vec'
 import type { NodeGeometry } from './bend'
 import { bendGrid, atomGeometry } from './bend'
 import { trompGrid } from './tromp'
+import type { WireChain } from './wirechain'
+import { mkChain, PITCH } from './wirechain'
 
 /**
  * The converged render engine (round-8 lab spec). A Diagram-plus-boundary is
@@ -56,9 +58,9 @@ export type Engine = {
   readonly childrenOf: Map<RegionId, RegionId[]>
   /** node/junction body ids per region. */
   readonly membersOf: Map<RegionId, string[]>
-  readonly legs: Leg[]
-  /** boundary wire -> the body its frame exit emanates from. */
-  readonly boundaryOf: Map<WireId, string>
+  /** PLAN 21: each wire is a physical CHAIN (a tree for multiport wires) —
+      see wirechain.ts for the energy model. Replaces legs + hub bodies. */
+  readonly chains: Map<WireId, WireChain>
   readonly boundary: readonly WireId[]
   regions: Map<RegionId, RegionCircle>
   /** relaxation tick counter (drives overlap-projection cadence, determinism). */
@@ -165,62 +167,61 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     }
   }
 
-  const legs: Leg[] = []
-  const boundaryOf = new Map<WireId, string>()
+  const chains = new Map<WireId, WireChain>()
   const bset = new Set(boundary)
+  const slotOf = new Map(boundary.map((w, k) => [w, k] as const))
   for (const [wid, w] of Object.entries(d.wires)) {
     const ends = w.endpoints.map((ep): LegEnd => ({ body: ep.node, key: pkey(ep.port) }))
     // The line's OUTERMOST POINT is where its individual is quantified, and
     // it must be a body homed at the wire's SCOPE (USER LAW: dangling ends
     // are their own nodes — the ∃ is manipulable independently of what it
-    // attaches to). A dangling wire's loose end IS that body. A multi-port
-    // wire connects its ports naturally — junction homed at the DCA of the
-    // port regions — and when the scope sits ABOVE the dca (the ∀ shape:
-    // quantified in an outer region the line would not otherwise touch) a
-    // dangling ∃ branch reaches out to a scope-homed body, so the line never
-    // contorts through its scope (USER rendering rule). Boundary wires show
-    // their quantifier at the frame exit instead.
+    // attaches to). A dangling wire's free chain end IS that body. When the
+    // scope sits ABOVE the dca (the ∀ shape) a dangling branch reaches a
+    // scope-homed body, so the line never contorts through its scope.
+    // Boundary wires get a frame-slot terminal instead of an ∃ end.
     const isBoundary = bset.has(wid)
-    const mkWireBody = (id: string, region: RegionId): void => {
-      bodies.set(id, {
+    const mkWireBody = (id: string, region: RegionId): Body => {
+      const b: Body = {
         id, kind: 'junction', node: null, geometry: null,
         localAnchor: new Map(), discR: 4.5, region,
         pos: { x: (i++) * 3, y: -(i * 2) }, vel: { x: 0, y: 0 }, theta: 0,
-      })
+      }
+      bodies.set(id, b)
       membersOf.get(region)!.push(id)
+      return b
     }
     if (ends.length === 0) {
       // a bare ∃ — the wire asserts only that an individual exists: one
-      // scope-homed body, no legs (its dot is the whole rendering)
+      // scope-homed body, no chain (its dot is the whole rendering)
       mkWireBody(`j:${wid}`, w.scope)
       continue
     }
-    if (ends.length === 1) {
-      if (isBoundary) { boundaryOf.set(wid, ends[0]!.body); continue } // the frame slot is its end
-      mkWireBody(`j:${wid}`, w.scope)
-      legs.push({ wid, from: ends[0]!, to: { body: `j:${wid}`, key: null } })
-      continue
-    }
+    // terminals: port anchors first (in endpoint order), then homed/slot ends
+    const terminalPos: Vec2[] = ends.map((en) => worldAnchor(bodies.get(en.body)!, en.key))
+    const binds = ends.map((en, k) => ({ idx: k, body: en.body, key: en.key! }))
+    const homed: { idx: number; bodyId: string }[] = []
+    const slots: { idx: number; slot: number }[] = []
     const dca = w.endpoints
       .map((ep) => d.nodes[ep.node]!.region)
       .reduce((a, b) => deepestCommonAncestor(d, a, b))
-    const needsDangle = !isBoundary && w.scope !== dca
-    if (ends.length + (isBoundary ? 1 : 0) >= 3 || needsDangle) {
-      const jid = `j:${wid}`
-      mkWireBody(jid, isBoundary ? w.scope : dca)
-      for (const en of ends) legs.push({ wid, from: en, to: { body: jid, key: null } })
-      if (isBoundary) boundaryOf.set(wid, jid)
-      if (needsDangle) {
-        const xid = `x:${wid}`
-        mkWireBody(xid, w.scope)
-        legs.push({ wid, from: { body: jid, key: null }, to: { body: xid, key: null } })
-      }
-    } else {
-      legs.push({ wid, from: ends[0]!, to: ends[1]! })
+    if (isBoundary) {
+      // slot position is derived per tick; seed near the first anchor
+      slots.push({ idx: terminalPos.length, slot: slotOf.get(wid)! })
+      terminalPos.push({ x: terminalPos[0]!.x, y: terminalPos[0]!.y - 6 })
+    } else if (ends.length === 1) {
+      const b = mkWireBody(`j:${wid}`, w.scope)
+      homed.push({ idx: terminalPos.length, bodyId: b.id })
+      terminalPos.push(b.pos)
+    } else if (w.scope !== dca) {
+      const b = mkWireBody(`x:${wid}`, w.scope)
+      homed.push({ idx: terminalPos.length, bodyId: b.id })
+      terminalPos.push(b.pos)
     }
+    const built = mkChain(terminalPos, PITCH)
+    chains.set(wid, { pts: built.pts, adj: built.adj, binds, homed, slots, pitch: PITCH })
   }
 
-  return { d, bodies, childrenOf, membersOf, legs, boundaryOf, boundary, regions: new Map(), tick: 0 }
+  return { d, bodies, childrenOf, membersOf, chains, boundary, regions: new Map(), tick: 0 }
 }
 
 /**
@@ -239,6 +240,20 @@ export function carryOver(prev: Engine, next: Engine): void {
     nb.pos = pb.pos
     nb.vel = pb.vel
     nb.theta = pb.theta
+  }
+  // chains glide too: a surviving wire with the same terminal signature
+  // keeps its relaxed shape (pts/adj) instead of re-seeding a star
+  for (const [wid, nc] of next.chains) {
+    const pc = prev.chains.get(wid)
+    if (pc === undefined) continue
+    const sig = (c: WireChain): string =>
+      [...c.binds.map((b) => `${b.body}:${b.key}`), `h${c.homed.length}`, `s${c.slots.length}`].join('|')
+    if (sig(pc) !== sig(nc)) continue
+    nc.pts = pc.pts.map((p) => ({ ...p }))
+    nc.adj = pc.adj.map((a) => [...a])
+    nc.binds = pc.binds.map((b) => ({ ...b }))
+    nc.homed = pc.homed.map((h) => ({ ...h }))
+    nc.slots = pc.slots.map((s) => ({ ...s }))
   }
 }
 

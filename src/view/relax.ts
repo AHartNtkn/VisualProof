@@ -1,7 +1,10 @@
 import type { RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine } from './engine'
-import { frameBounds, frameSlots, pkey, subtreeCarriers, worldAnchor } from './engine'
+import { frameBounds, frameSlots, subtreeCarriers, worldAnchor } from './engine'
+import type { ChainDisc } from './wirechain'
+import { chainEnergy, chainGradient, chainStep, resample, topologyStep, WIRE_TRAVEL_CAP } from './wirechain'
+export { WIRE_TRAVEL_CAP } from './wirechain'
 
 /**
  * Rotation-aware relaxation for the render engine. Bodies (nodes + junctions)
@@ -24,14 +27,14 @@ export const SIB_GAP = 5
 const DT = 0.06
 const DAMP = 4
 const REP = 900
-/** Leg-spring stiffness. Halved from 2.2 (USER feel ruling, round 8): wires
-    were minimizing edge length harder than they should, crushing node
-    spacing. A weaker GRADIENT calms the pull at every distance without
-    moving the push/pull frontier (raising REST instead broke the pinned
-    settle-drift bounds — springs started pushing at working distances). */
-const SPRING = 1.1
-const ROT_BLEND = 0.15
+/** The SOFT energy scale (formerly the leg rest length; leg springs are
+    gone — PLAN 21 wire chains own edge length — but every soft bound below
+    derives from this one scale, so it stays). */
 const REST = 18
+/** Chain descent: step size and iterations per tick (trust-region capped in
+    wirechain.ts — a shortened gradient step still descends). */
+const CHAIN_STEP = 0.15
+const CHAIN_ITERS = 3
 /** The soft-force bound: every SOFT pull (sibling attraction, leg-spring
     tension) saturates at this one magnitude — the old linear cohesion
     evaluated at one leg rest-length (0.65·REST), no new scale. An unbounded
@@ -297,7 +300,38 @@ export function resolveOverlaps(e: Engine): boolean {
   return any
 }
 
-type LegRef = { key: string; other: Body; otherKey: string | null }
+/** Constraint projection for one chain: bind terminals sit AT their port
+    anchors with the first interior point projected onto the port-normal ray
+    (the perpendicular-exit law as a constraint, not a spring); homed
+    terminals mirror their owning bodies; slot terminals sit at their
+    canonical frame slots. */
+function pinChain(e: Engine, ch: { pts: Vec2[]; adj: number[][]; binds: { idx: number; body: string; key: string }[]; homed: { idx: number; bodyId: string }[]; slots: { idx: number; slot: number }[] }, slotPts: { point: Vec2 }[] | null): void {
+  for (const bind of ch.binds) {
+    const b = e.bodies.get(bind.body)!
+    const anchor = worldAnchor(b, bind.key)
+    ch.pts[bind.idx] = anchor
+    const a = b.localAnchor.get(bind.key)!
+    const normal = Math.atan2(a.y, a.x) + b.theta
+    const nbr = ch.adj[bind.idx]![0]
+    if (nbr !== undefined) {
+      const p = ch.pts[nbr]!
+      const dist = Math.max(0.5, Math.hypot(p.x - anchor.x, p.y - anchor.y))
+      ch.pts[nbr] = { x: anchor.x + Math.cos(normal) * dist, y: anchor.y + Math.sin(normal) * dist }
+    }
+  }
+  for (const hm of ch.homed) ch.pts[hm.idx] = e.bodies.get(hm.bodyId)!.pos
+  if (slotPts !== null) for (const s of ch.slots) if (slotPts[s.slot] !== undefined) ch.pts[s.idx] = slotPts[s.slot]!.point
+}
+
+/** Total wire energy of the engine — the monotonicity pin's observable. */
+export function wireEnergy(e: Engine): number {
+  const discs: ChainDisc[] = [...e.bodies.values()]
+    .filter((b) => b.kind !== 'junction' && b.kind !== 'anchor')
+    .map((b) => ({ id: b.id, pos: b.pos, r: b.discR }))
+  let E = 0
+  for (const ch of e.chains.values()) E += chainEnergy(ch, discs)
+  return E
+}
 
 /** One relaxation tick — force integration + rotation + projection.
     Deterministic: no randomness, seed comes from mkEngine's spiral. `pinned`
@@ -314,6 +348,15 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   // force accumulator: mutable points, not the readonly Vec2 used for state
   const force = new Map<string, { x: number; y: number }>()
   for (const id of e.bodies.keys()) force.set(id, { x: 0, y: 0 })
+
+  // Homed wire ends (∃ free ends, ∀-dangle tips) are owned by their WIRE'S
+  // energy: the chain's tension + bend + exit constraint fully determine
+  // them (no zero mode), so the content anchoring must not park them (USER:
+  // dangles must be pulled by their edges). Their sibling pairs skip the
+  // attraction branch symmetrically; the barrier stands. A bare ∃ (no
+  // chain) keeps full anchoring — nothing else holds it.
+  const wireOwned = new Set<string>()
+  for (const ch of e.chains.values()) for (const hm of ch.homed) wireOwned.add(hm.bodyId)
 
   // Sibling pair force on the REAL circle gap, with REST AS AN INTERVAL:
   // a barrier repulsion below the target gap (unbounded toward contact, so
@@ -339,9 +382,10 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       const dx = cb.x - ca.x, dy = cb.y - ca.y
       const dist = Math.max(Math.hypot(dx, dy), 1)
       const gap = dist - A.r - B.r
+      const owned = (A.mid !== undefined && wireOwned.has(A.mid)) || (B.mid !== undefined && wireOwned.has(B.mid))
       const f = gap < REST_LO
         ? -Math.min(REP_K * ((REST_LO + 8) / Math.max(gap + 8, 0.5) - 1), BARRIER_MAX)
-        : gap <= REST_HI
+        : gap <= REST_HI || owned
           ? 0
           : SOFT_MAX * Math.min(1, (gap - REST_HI) / SIB_GAP)
       if (f === 0) continue
@@ -365,30 +409,85 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     }
   }
 
-  // Leg springs with a rest length, acting AT THE ANCHORS: the pair exchanges
-  // equal-and-opposite forces along the anchor-to-anchor line (zero net torque
-  // on the drawing by construction — collinear application points), and the
-  // moment (anchor − center) × F becomes SPIN torque on the body's own θ.
-  // Applying the same force at the centers instead leaves that moment as an
-  // orbital couple on the whole layout: with multi-leg bodies the couples
-  // never all vanish at rest, and the drawing spins forever.
+  // PLAN 21 — the wire chains. Constraints pin terminals (port anchors,
+  // homed bodies, frame slots); the chain descends its OWN energy; the
+  // wire's pull on the bodies is the TRUE gradient of the chain energy with
+  // respect to the body's DOF, INCLUDING the constraint coupling: a
+  // translation carries the anchor AND the ray-constrained exit point
+  // rigidly (both gradients land on the body), and the θ-gradient is
+  // evaluated numerically THROUGH the constraint — an incomplete gradient
+  // is a one-sided force and injects energy. Disc↔wire barrier reactions
+  // land at disc centers (radial: no torque).
   const torque = new Map<string, number>()
   for (const id of e.bodies.keys()) torque.set(id, 0)
-  for (const leg of e.legs) {
-    const A = e.bodies.get(leg.from.body)!, B = e.bodies.get(leg.to.body)!
-    if (A === B) continue
-    const pa = worldAnchor(A, leg.from.key), pb = worldAnchor(B, leg.to.key)
-    const dx = pb.x - pa.x, dy = pb.y - pa.y
-    const dist = Math.max(Math.hypot(dx, dy), 0.5)
-    const stretch = dist - REST
-    const f = Math.sign(stretch) * Math.min(SPRING * Math.abs(stretch), SOFT_MAX) / dist
-    const FA = force.get(A.id)!, FB = force.get(B.id)!
-    FA.x += dx * f; FA.y += dy * f
-    FB.x -= dx * f; FB.y -= dy * f
-    const rax = pa.x - A.pos.x, ray = pa.y - A.pos.y
-    const rbx = pb.x - B.pos.x, rby = pb.y - B.pos.y
-    torque.set(A.id, torque.get(A.id)! + rax * dy * f - ray * dx * f)
-    torque.set(B.id, torque.get(B.id)! + rbx * -dy * f - rby * -dx * f)
+  const fb0 = frameBounds(e)
+  const slotPts = fb0 === null ? null : frameSlots(fb0, e.boundary.length)
+  const discs: ChainDisc[] = [...e.bodies.values()]
+    .filter((b) => b.kind !== 'junction' && b.kind !== 'anchor')
+    .map((b) => ({ id: b.id, pos: b.pos, r: b.discR }))
+  for (const ch of e.chains.values()) {
+    pinChain(e, ch, slotPts)
+    const grad = chainGradient(ch, discs)
+    for (const bind of ch.binds) {
+      const A = e.bodies.get(bind.body)!
+      const F = force.get(A.id)!
+      const r = grad.f[bind.idx]!
+      F.x += r.x
+      F.y += r.y
+      const nbr = ch.adj[bind.idx]![0]
+      if (nbr !== undefined) {
+        const rn = grad.f[nbr]!
+        F.x += rn.x
+        F.y += rn.y
+      }
+      // dE/dθ through the constraint: rotate the bind point and its exit
+      // neighbor rigidly about the body centre, measure the chain energy
+      const h = 1e-3
+      const rot = (p: Vec2, ang: number): Vec2 => {
+        const dx = p.x - A.pos.x, dy = p.y - A.pos.y
+        const c = Math.cos(ang), s = Math.sin(ang)
+        return { x: A.pos.x + dx * c - dy * s, y: A.pos.y + dx * s + dy * c }
+      }
+      const p0 = ch.pts[bind.idx]!
+      const p1 = nbr !== undefined ? ch.pts[nbr]! : null
+      const eval2 = (ang: number): number => {
+        ch.pts[bind.idx] = rot(p0, ang)
+        if (nbr !== undefined && p1 !== null) ch.pts[nbr] = rot(p1, ang)
+        return chainEnergy(ch, discs)
+      }
+      const ePlus = eval2(h)
+      const eMinus = eval2(-h)
+      ch.pts[bind.idx] = p0
+      if (nbr !== undefined && p1 !== null) ch.pts[nbr] = p1
+      torque.set(A.id, torque.get(A.id)! - (ePlus - eMinus) / (2 * h))
+    }
+    for (const hm of ch.homed) {
+      const r = grad.f[hm.idx]!
+      const F = force.get(hm.bodyId)!
+      F.x += r.x
+      F.y += r.y
+    }
+    // damped trust-region descent of the chain's free points; the barrier
+    // reactions it returns are the discs' half of the shared term
+    const rays = new Map<number, { origin: Vec2; angle: number }>()
+    for (const bind of ch.binds) {
+      const nbr = ch.adj[bind.idx]![0]
+      if (nbr === undefined) continue
+      const b = e.bodies.get(bind.body)!
+      const a = b.localAnchor.get(bind.key)!
+      rays.set(nbr, { origin: ch.pts[bind.idx]!, angle: Math.atan2(a.y, a.x) + b.theta })
+    }
+    for (let it = 0; it < CHAIN_ITERS; it++) {
+      const onDiscs = chainStep(ch, discs, CHAIN_STEP, WIRE_TRAVEL_CAP / CHAIN_ITERS, rays)
+      for (const [id, r] of onDiscs) {
+        const F = force.get(id)!
+        F.x += r.x / CHAIN_ITERS
+        F.y += r.y / CHAIN_ITERS
+      }
+    }
+    // discrete descent: topology moves only when they strictly lower E
+    topologyStep(ch, discs)
+    resample(ch)
   }
 
   for (const b of e.bodies.values()) {
@@ -405,45 +504,11 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     if (tq !== 0) b.theta += (tq / (DAMP * b.discR * b.discR)) * DT
   }
 
-  // Boundary exits keep a kinematic aim (there is no spring to take a torque
-  // from): the exit body rotates its port normal toward its OWN boundary slot —
-  // a point fixed on the frame perimeter, assigned in boundary order. A fixed
-  // frame-relative target neither feeds back through θ (unlike an anchor-derived
-  // aim, whose target moves as the body rotates) nor flips near a frame diagonal
-  // (unlike a nearest-edge aim), so the layout settles into its slots with no
-  // chase oscillation.
-  const legsByBody = new Map<string, LegRef[]>()
-  const push = (body: string, ref: LegRef): void => {
-    let ls = legsByBody.get(body)
-    if (ls === undefined) { ls = []; legsByBody.set(body, ls) }
-    ls.push(ref)
-  }
-  const fb = frameBounds(e)
-  const slots = fb === null ? null : frameSlots(fb, e.boundary.length)
-  const slotIndex = new Map(e.boundary.map((w, i) => [w, i] as const))
-  for (const [wid, bid] of e.boundaryOf) {
-    const b = e.bodies.get(bid)!
-    if (b.kind === 'junction' || slots === null) continue
-    const w0 = e.d.wires[wid]!
-    const key = pkey(w0.endpoints.find((ep) => ep.node === bid)!.port)
-    const q = slots[slotIndex.get(wid)!]!.point
-    push(bid, { key, other: { ...b, id: '__frame__', pos: q }, otherKey: null })
-  }
-  for (const b of e.bodies.values()) {
-    const ls = legsByBody.get(b.id)
-    if (ls === undefined || ls.length === 0) continue
-    let sinS = 0, cosS = 0
-    for (const l of ls) {
-      if (l.other.id === b.id) continue
-      const q = worldAnchor(l.other, l.otherKey)
-      const want = Math.atan2(q.y - b.pos.y, q.x - b.pos.x)
-      const a = b.localAnchor.get(l.key)!
-      const rest = Math.atan2(a.y, a.x)
-      const delta = want - rest - b.theta
-      sinS += Math.sin(delta); cosS += Math.cos(delta)
-    }
-    b.theta += Math.atan2(sinS, cosS) * ROT_BLEND
-  }
+  // re-pin after body motion so this tick's drawn chains touch their
+  // anchors exactly (constraint projection, incl. the perpendicular exit)
+  const fb1 = frameBounds(e)
+  const slotPts1 = fb1 === null ? null : frameSlots(fb1, e.boundary.length)
+  for (const ch of e.chains.values()) pinChain(e, ch, slotPts1)
 
   // project to feasibility every tick: per-tick motion is small, so the
   // sweeps converge in a few passes; partial projection (one sweep, or a
