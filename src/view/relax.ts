@@ -356,12 +356,7 @@ export function wireEnergy(e: Engine): number {
     Deterministic: no randomness, seed comes from mkEngine's spiral. `pinned`
     bodies take no sibling attraction so a drag holding them at the cursor
     feels direct (the caller overrides their positions each tick). */
-/** debug: net wire-derived force applied to bodies this tick (trace only) */
-export const debugNetWire = { x: 0, y: 0 }
-
 export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): void {
-  debugNetWire.x = 0
-  debugNetWire.y = 0
   recomputeRegions(e)
   // snapshot every body position: the end-of-tick quotient of the global
   // rotation zero mode is fitted against this
@@ -474,17 +469,13 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       rays.set(nbr, { origin: ch.pts[bind.idx]!, angle: Math.atan2(a.y, a.x) + b.theta })
     }
     const grad = chainGradient(ch, discs)
-    const G = globalThis as { __noWireBind?: boolean; __noWireHomed?: boolean; __noWireDisc?: boolean }
     // pinned-point gradients -> body forces + torques (analytic levers)
     for (const bind of ch.binds) {
-      if (G.__noWireBind === true) break
       const A = e.bodies.get(bind.body)!
       const F = force.get(A.id)!
       const r = grad.f[bind.idx]!
       F.x += r.x
       F.y += r.y
-      debugNetWire.x += r.x
-      debugNetWire.y += r.y
       const pa = ch.pts[bind.idx]!
       let tq = (pa.x - A.pos.x) * r.y - (pa.y - A.pos.y) * r.x
       const nbr = ch.adj[bind.idx]![0]
@@ -500,8 +491,6 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
         const px = rn.x - along * ux, py = rn.y - along * uy
         F.x += px
         F.y += py
-        debugNetWire.x += px
-        debugNetWire.y += py
         const pn = ch.pts[nbr]!
         tq += (pn.x - A.pos.x) * py - (pn.y - A.pos.y) * px
       }
@@ -517,8 +506,6 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     // tension at a breathing circle is a standing contact cycle (measured
     // on the ∀-shape fixture: +2.7 E swings, 3 wu/200-tick drift).
     for (const hm of ch.homed) {
-      if (G.__noWireHomed === true) break
-      if ((globalThis as { __freezeTip?: boolean }).__freezeTip === true) break
       const r = { ...grad.f[hm.idx]! }
       const b = e.bodies.get(hm.bodyId)!
       for (const child of e.childrenOf.get(b.region)!) {
@@ -582,17 +569,12 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
         if (t2 === 3) scale = 0
       }
       b.vel = { x: 0, y: 0 }
-      debugNetWire.x += r.x
-      debugNetWire.y += r.y
     }
     // disc barrier reactions (the other half of the shared term)
     for (const [id, r] of grad.onDiscs) {
-      if (G.__noWireDisc === true) break
       const F = force.get(id)!
       F.x += r.x
       F.y += r.y
-      debugNetWire.x += r.x
-      debugNetWire.y += r.y
     }
     // interior points step by the SAME gradient (overdamped, capped)
     const pinnedIdx = new Set<number>()
@@ -637,7 +619,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       if (scale === 0) ch.pts[v] = p0
     }
     topologyStep(ch, discs)
-    if ((globalThis as { __noResample?: boolean }).__noResample !== true) resample(ch)
+    resample(ch)
   }
 
   // Damped momentum integration. NOTE (plan 21, measured): the velocity

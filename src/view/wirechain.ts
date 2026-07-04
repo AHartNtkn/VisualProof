@@ -449,7 +449,7 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
     ch.adj[v] = nbrs.filter((n) => n !== a && n !== b)
     ch.adj[v]!.push(w2)
     for (const x of [a, b]) ch.adj[x] = ch.adj[x]!.map((n) => (n === v ? w2 : n))
-    if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) { debugCounts.topoSplit++; return }
+    if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) return
     // reject: undo
     for (const x of [a, b]) ch.adj[x] = ch.adj[x]!.map((n) => (n === w2 ? v : n))
     ch.adj[v] = nbrs
@@ -470,7 +470,7 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
       ch.adj[v] = [...savedV.filter((n) => n !== w), ...savedW.filter((n) => n !== v)]
       for (const n of savedW) if (n !== v) ch.adj[n] = ch.adj[n]!.map((m) => (m === w ? v : m))
       ch.adj[w] = []
-      if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) { debugCounts.topoMerge++; return }
+      if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) return
       for (const n of savedW) if (n !== v) ch.adj[n] = ch.adj[n]!.map((m) => (m === v ? w : m))
       ch.adj[v] = savedV
       ch.adj[w] = savedW
@@ -483,9 +483,6 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
     the same polyline — E_tension is unchanged by construction, E_bend moves
     within discretization tolerance. Junction points, binds, homed, and slot
     indices are preserved (paths are rebuilt BETWEEN structure points). */
-/** debug counter (trace tests only) */
-export const debugCounts = { resample: 0, resampleReverted: 0, topoSplit: 0, topoMerge: 0 }
-
 export function resample(ch: WireChain): void {
   const structural = new Set<number>()
   for (const b of ch.binds) {
@@ -505,11 +502,15 @@ export function resample(ch: WireChain): void {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
       const d = len(sub(ch.pts[n]!, ch.pts[v]!))
+      // lazy triggers: the edge barrier is sub-sampled (tunnel-proof) and
+      // the bend is arc-share-invariant, so coarse or dense sampling is
+      // energetically honest — re-discretize only on gross drift (every
+      // resample event re-excites a settling transient; measured as the
+      // dominant correlate of the ∀-fixture's residual wander)
       if (d > 2 * ch.pitch || (d < ch.pitch / 2 && !structural.has(v) && !structural.has(n))) { needs = true; break }
     }
   }
   if (!needs) return
-  debugCounts.resample++
   // walk structure-to-structure paths, rebuild each at pitch
   const oldPts = ch.pts, oldAdj = ch.adj
   const map = new Map<number, number>() // old structural idx -> new idx
