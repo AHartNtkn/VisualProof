@@ -16,9 +16,14 @@ boot('Round 6h · D — scrubber = undo/redo', 'drag the bar: real time travel, 
 
   const bar = document.createElement('div')
   bar.style.cssText = 'position:fixed;left:10%;right:18%;bottom:40px;height:26px;z-index:7;display:none;align-items:center;cursor:ew-resize'
+  // ticks live on an INSET inner rail so the extreme ticks (0% / 100%) sit
+  // strictly inside the bar's hover zone — the edge tick must still preview
+  const inner = document.createElement('div')
+  inner.style.cssText = 'position:absolute;left:12px;right:12px;top:0;bottom:0'
   const rail = document.createElement('div')
   rail.style.cssText = 'position:absolute;left:0;right:0;height:4px;top:11px;background:#d6d3d1;border-radius:2px'
-  bar.append(rail)
+  inner.append(rail)
+  bar.append(inner)
   document.body.append(bar)
   const caption = document.createElement('div')
   caption.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:14px;z-index:7;display:none;color:#666;font:12px system-ui'
@@ -43,7 +48,7 @@ boot('Round 6h · D — scrubber = undo/redo', 'drag the bar: real time travel, 
   let dragging = false
   const layout = () => {
     const track = app.track()
-    bar.querySelectorAll('.tick').forEach((t) => t.remove())
+    inner.querySelectorAll('.tick').forEach((t) => t.remove())
     if (track === null || track.direction() === null) {
       bar.style.display = 'none'; caption.style.display = 'none'; chips.style.display = 'none'; pop.style.display = 'none'
       return
@@ -63,13 +68,13 @@ boot('Round 6h · D — scrubber = undo/redo', 'drag the bar: real time travel, 
       const future = k > cur
       t.style.cssText = `position:absolute;top:${isCur ? 4 : 7}px;width:${isCur ? 12 : 8}px;height:${isCur ? 18 : 12}px;border-radius:4px;transform:translateX(-50%);left:${frac * 100}%;background:${isCur ? '#d97706' : future ? '#d6d3d1' : '#a8a29e'};${future ? 'border:1px dashed #a8a29e;' : ''}`
       t.style.pointerEvents = 'none' // the BAR drives hover — no dead zones
-      bar.append(t)
+      inner.append(t)
     }
     caption.style.display = 'block'
     caption.textContent = cur === 0 ? `origin${n > 1 ? ' — redo (Ctrl+Shift+Z) walks forward' : ''}` : `${cur}/${n - 1} · ${labels[cur - 1]}${cur < n - 1 ? ' — future retained' : ''}`
   }
   const kAt = (clientX: number): number => {
-    const r = bar.getBoundingClientRect()
+    const r = inner.getBoundingClientRect()
     const n = app.track()!.states().length
     return Math.max(0, Math.min(n - 1, Math.round(((clientX - r.left) / r.width) * (n - 1))))
   }

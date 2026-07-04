@@ -308,6 +308,16 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
     else if (i < 0) { selected.push(h); painted = true }
   }
   const announce = () => readout(hover ? lab.describe(hover) + (isSelected(hover) ? ' — selected' : '') : '')
+  // USER ruling: the MOVING brush (de)selects a region only when the stroke
+  // passes over its drawn ring — sweeping through the interior must not grab
+  // the cut. The ring is a drawn stroke, so it picks like one (the wire
+  // tolerance). A plain CLICK keeps whole-disc selection.
+  const paintable = (h: Hit | null, w: Vec2): Hit | null => {
+    if (h === null || h.kind !== 'region') return h
+    const g = lab.engine.regions.get(h.id)
+    if (g === undefined) return h
+    return Math.abs(Math.hypot(w.x - g.center.x, w.y - g.center.y) - g.radius) <= 1.5 ? h : null
+  }
   // Ctrl+drag = physics-only handle (USER ruling, round 4): pull any body
   // against the live simulation; no proof or diagram meaning whatsoever.
   let physDrag: { id: string; cursor: Vec2 } | null = null
@@ -320,7 +330,7 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
     if (physDrag) { physDrag.cursor = lab.toWorld(e.clientX, e.clientY); return }
     if (!active()) return
     hover = lab.hitAt(e.clientX, e.clientY)
-    if (brushing) applyBrush(hover)
+    if (brushing) applyBrush(paintable(hover, lab.toWorld(e.clientX, e.clientY)))
     announce()
   })
   lab.canvas.addEventListener('pointerup', () => { physDrag = null })
