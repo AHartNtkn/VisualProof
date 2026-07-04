@@ -26,6 +26,35 @@ export type ChromeApp = {
   onChange(fn: () => void): void
 }
 
+/** The round-6 verdict chrome (variant A): the mode pill and the '?' map —
+    the only permanent apparatus. History surfaces plug in beside it. */
+export function installMinimalChrome(lab: LabCtx, app: ChromeApp): void {
+  const pill = document.createElement('div')
+  pill.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);top:44px;z-index:7;padding:5px 18px;border-radius:0 0 12px 12px;font:600 13px system-ui;color:#fff'
+  document.body.append(pill)
+  const MODE = { edit: ['#b45309', 'EDIT — construct freely'], forward: ['#15803d', 'PROVING FORWARD — D declares (origin ⟹ here)'], backward: ['#6d28d9', 'PROVING BACKWARD — D declares (here ⟹ origin)'] } as const
+  const sync = () => { pill.style.background = MODE[app.mode()][0]; pill.textContent = MODE[app.mode()][1] }
+  app.onChange(sync)
+  sync()
+  const help = document.createElement('div')
+  help.style.cssText = 'position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:10;display:none;background:#fff;border:1.5px solid #d97706;border-radius:10px;box-shadow:0 8px 30px #0004;padding:14px 18px;font:13px/1.7 system-ui;white-space:pre'
+  help.textContent = [
+    'EDIT   right-click: spawn cascade · drag line→line: join · J: join selected',
+    '       right-drag: slash sever (⚙ toggles dbl-click) · W/Shift+W: cut/bubble wrap',
+    '       drag selected node: move between regions · Delete: dissolve/delete · Ctrl+Z',
+    'PROVE  F/B: start forward/backward from the sheet · right-click: moves legal here',
+    '       Delete: contextual deletion · W/Shift+W: wraps · drag selection: iterate',
+    '       dbl-click term: normalize · Tab/Enter: cycle/apply citation · D: declare · E: exit',
+    'ALWAYS Ctrl+drag: physics handle (no meaning) · ?: this map · Esc: close things',
+  ].join('\n')
+  document.body.append(help)
+  window.addEventListener('keydown', (e) => {
+    if (document.activeElement instanceof HTMLInputElement) return
+    if (e.key === '?') help.style.display = help.style.display === 'none' ? 'block' : 'none'
+    else if (e.key === 'Escape') help.style.display = 'none'
+  })
+}
+
 export function mkChromeApp(lab: LabCtx): ChromeApp {
   const ctx = fregeCtx()
   let track: TrackLab | null = null

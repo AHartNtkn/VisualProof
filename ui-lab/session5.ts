@@ -65,6 +65,26 @@ export type TrackLab = {
   onChange(fn: () => void): void
 }
 
+/** Human copy for a step — rule identifiers are jargon, not labels. */
+export function stepLabel(step: ProofStep): string {
+  switch (step.rule) {
+    case 'theorem': return `cite ${step.name}`
+    case 'doubleCutIntro': return 'wrap in double cut'
+    case 'doubleCutElim': return 'eliminate double cut'
+    case 'vacuousIntro': return 'wrap in bubble'
+    case 'vacuousElim': return 'dissolve bubble'
+    case 'erasure': return 'erase'
+    case 'insertion': return 'insert'
+    case 'iteration': return 'iterate'
+    case 'deiteration': return 'deiterate'
+    case 'conversion': return 'convert (βη)'
+    case 'relUnfold': return 'unfold'
+    case 'relFold': return `fold into ${step.defId}`
+    case 'comprehensionInstantiate': return 'instantiate'
+    default: return step.rule
+  }
+}
+
 export function mkTrackLab(lab: LabCtx, ctx: ProofContext = fregeCtx()): TrackLab {
   const origin: { d: Diagram; boundary: readonly WireId[] } = { d: lab.d, boundary: [...lab.boundary] }
   const originDWB = (): DiagramWithBoundary => mkDiagramWithBoundary(origin.d, origin.boundary)
@@ -116,7 +136,7 @@ export function mkTrackLab(lab: LabCtx, ctx: ProofContext = fregeCtx()): TrackLa
         } else {
           bs = applyBackward(bs!, step)
         }
-        actionLabels.push(step.rule === 'theorem' ? `cite ${step.name}` : step.rule)
+        actionLabels.push(stepLabel(step))
         sync()
       },
       refuse,

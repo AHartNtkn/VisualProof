@@ -1,6 +1,13 @@
 <!doctype html><html><head><meta charset="utf-8"/><title>UI lab — interface overhaul rounds</title></head>
 <body style="font:15px system-ui;padding:2rem;max-width:40rem">
-<h2>Round 6 — chrome assembly</h2>
+<h2>Round 6h — the history display (design pass)</h2>
+<p>Three answers to "what does a derivation look like", on the winning minimal chrome. Same drill in each: spawn something, F, make a few moves, then live in the history. Step labels are now words, not rule identifiers.</p>
+<ol>
+<li><a href="/ui-lab/round6h-a.html">A — filmstrip</a>: history as pictures — a thumbnail per state, captioned; click any frame to rewind</li>
+<li><a href="/ui-lab/round6h-b.html">B — ledger</a>: history as a proof script — a numbered step column; hover = thumbnail; click = rewind</li>
+<li><a href="/ui-lab/round6h-c.html">C — time scrubber</a>: drag a bar and the MAIN VIEW time-travels; release to dwell, Enter rewinds there, Esc returns</li>
+</ol>
+<h2>Round 6 — chrome assembly <small>(decided: A, minimal sheet)</small></h2>
 <p>Whole-app variants: every decided piece composes — construction composite + spawn cascade (EDIT), the verdict move layer on a derive-then-declare track (PROVE), one persistent theorem context. Start from an EMPTY sheet: right-click to spawn, build a statement, F/B to prove from it, D to declare, E back to construction. Same lifecycle everywhere; the chrome differs.</p>
 <ol>
 <li><a href="/ui-lab/round6-a.html">A — minimal sheet</a>: a mode pill and nothing else permanent; timeline only while proving; '?' = keyboard map</li>
