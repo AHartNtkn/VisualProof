@@ -69,9 +69,10 @@ export type LabCtx = {
   onFrame(fn: () => void): void
   describe(h: Hit | null): string
   /** Swap in a mutated diagram: pushes undo history, filters the boundary to
-      surviving wires, rebuilds the engine warm (carryOver), optionally pins a
-      fresh node at a world point so creation lands under the cursor. */
-  mutate(next: Diagram, place?: { node: NodeId; at: Vec2 }): void
+      surviving wires (or replaces it when `boundary` is given — session side
+      switches), rebuilds the engine warm (carryOver), optionally pins a fresh
+      node at a world point so creation lands under the cursor. */
+  mutate(next: Diagram, place?: { node: NodeId; at: Vec2 }, boundary?: readonly WireId[]): void
   undo(): boolean
   /** What Ctrl+Z would restore (the memory box renders this), or null. */
   peekUndo(): { d: Diagram; boundary: WireId[] } | null
@@ -157,9 +158,9 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
       if (h.kind === 'region') { const r = lab.d.regions[h.id]!; return `${r.kind === 'cut' ? 'cut' : 'bubble'} (${polarity(lab.d, h.id)})` }
       return 'line of identity'
     },
-    mutate: (next, place) => {
+    mutate: (next, place, boundary) => {
       history.push({ d: lab.d, boundary: lab.boundary })
-      swap(next, lab.boundary.filter((w) => next.wires[w] !== undefined))
+      swap(next, boundary !== undefined ? [...boundary] : lab.boundary.filter((w) => next.wires[w] !== undefined))
       if (place) {
         const b = lab.engine.bodies.get(place.node)
         if (b) { b.pos.x = place.at.x; b.pos.y = place.at.y }

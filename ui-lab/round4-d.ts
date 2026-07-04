@@ -103,11 +103,11 @@ boot('Round 4 · D — verdict composite', 'menu lists only what applies; select
         } else if (a.kind === 'instantiate') {
           const bubble = disc.sel.regions[0]!
           for (const name of ctx.relations.keys()) {
-            row(`Instantiate ${name} (stays folded)`, () => {
+            row(`Instantiate ${name}`, () => {
               guarded(() => {
                 lab.mutate(applyStep(lab.d, { rule: 'comprehensionInstantiate', bubble, comp: foldedComp(ctx, name), attachments: [], binders: {} }, ctx))
                 brush.clear()
-                lab.toast(`instantiated '${name}' — still folded; unfold selectively later`)
+                lab.toast(`instantiated '${name}'`)
               })
             })
           }
