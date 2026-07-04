@@ -26,6 +26,12 @@ import type { Vec2 } from './vec'
 export const TENSION = 1.0
 export const BEND = 0.6
 export const BARRIER_DEPTH = 40
+/** Discretization health is part of the ONE functional: a small quadratic
+    about the sampling pitch pins the chain's parameterization (tangential
+    sliding is otherwise a zero mode of pure tension — points bunch up, the
+    1/segment bend gradient explodes, and fixed-step descent oscillates).
+    Small against TENSION so it barely biases shape. */
+export const SPACING = 0.2
 /** Trust region: max distance any chain point moves per tick — a shortened
     descent step still descends; drawn motion stays continuous at frame
     scale (round-8 law). */
@@ -129,6 +135,38 @@ export function exemptSets(ch: WireChain, discs: readonly ChainDisc[]): Map<stri
   return out
 }
 
+/** Component split of one chain's energy (debug/trace). */
+export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { tension: number; spacing: number; bend: number; barrier: number } {
+  const parts = { tension: 0, spacing: 0, bend: 0, barrier: 0 }
+  const exempt = exemptSets(ch, discs)
+  for (let v = 0; v < ch.pts.length; v++) {
+    for (const n of ch.adj[v]!) {
+      if (n <= v) continue
+      const L = len(sub(ch.pts[n]!, ch.pts[v]!))
+      parts.tension += TENSION * L
+      parts.spacing += SPACING * (L - ch.pitch) * (L - ch.pitch)
+    }
+    if (ch.adj[v]!.length === 2) {
+      const [a, b] = ch.adj[v]! as [number, number]
+      const u = sub(ch.pts[a]!, ch.pts[v]!)
+      const w = sub(ch.pts[b]!, ch.pts[v]!)
+      const lu = len(u), lw = len(w)
+      if (lu > 1e-9 && lw > 1e-9) {
+        const cos = Math.max(-1, Math.min(1, (u.x * w.x + u.y * w.y) / (lu * lw)))
+        const turn = Math.PI - Math.acos(cos)
+        parts.bend += BEND * turn * turn
+      }
+    }
+    for (const disc of discs) {
+      if (exempt.get(disc.id)?.has(v) === true) continue
+      const r = clearance(disc.r)
+      const d = len(sub(ch.pts[v]!, disc.pos))
+      if (d < r) parts.barrier += BARRIER_DEPTH * (1 - d / r) * (1 - d / r)
+    }
+  }
+  return parts
+}
+
 /** E_wire of one chain against the given discs. */
 export function chainEnergy(ch: WireChain, discs: readonly ChainDisc[]): number {
   const exempt = exemptSets(ch, discs)
@@ -136,7 +174,8 @@ export function chainEnergy(ch: WireChain, discs: readonly ChainDisc[]): number 
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
-      E += TENSION * len(sub(ch.pts[n]!, ch.pts[v]!))
+      const L = len(sub(ch.pts[n]!, ch.pts[v]!))
+      E += TENSION * L + SPACING * (L - ch.pitch) * (L - ch.pitch)
     }
     // bend at degree-2 interior points: (π − angle between segments)²
     if (ch.adj[v]!.length === 2) {
@@ -174,13 +213,15 @@ export function chainGradient(ch: WireChain, discs: readonly ChainDisc[]): { f: 
     onDiscs.set(id, { x: cur.x + x, y: cur.y + y })
   }
   for (let v = 0; v < ch.pts.length; v++) {
-    // tension: unit pull toward each neighbor (gradient of length)
+    // tension + spacing: unit pull toward each neighbor (gradient of
+    // length) plus the parameterization-pinning quadratic's gradient
     for (const n of ch.adj[v]!) {
       const dvec = sub(ch.pts[n]!, ch.pts[v]!)
       const d = len(dvec)
       if (d < 1e-9) continue
-      f[v]!.x += (TENSION * dvec.x) / d
-      f[v]!.y += (TENSION * dvec.y) / d
+      const mag = TENSION + 2 * SPACING * (d - ch.pitch)
+      f[v]!.x += (mag * dvec.x) / d
+      f[v]!.y += (mag * dvec.y) / d
     }
     // bend: numeric gradient of the local turn terms (the analytic form is
     // long; the term only involves v and its two neighbors, so a two-sided
@@ -313,7 +354,7 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
     ch.adj[v] = nbrs.filter((n) => n !== a && n !== b)
     ch.adj[v]!.push(w2)
     for (const x of [a, b]) ch.adj[x] = ch.adj[x]!.map((n) => (n === v ? w2 : n))
-    if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) return
+    if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) { debugCounts.topoSplit++; return }
     // reject: undo
     for (const x of [a, b]) ch.adj[x] = ch.adj[x]!.map((n) => (n === w2 ? v : n))
     ch.adj[v] = nbrs
@@ -334,7 +375,7 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
       ch.adj[v] = [...savedV.filter((n) => n !== w), ...savedW.filter((n) => n !== v)]
       for (const n of savedW) if (n !== v) ch.adj[n] = ch.adj[n]!.map((m) => (m === w ? v : m))
       ch.adj[w] = []
-      if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) return
+      if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) { debugCounts.topoMerge++; return }
       for (const n of savedW) if (n !== v) ch.adj[n] = ch.adj[n]!.map((m) => (m === v ? w : m))
       ch.adj[v] = savedV
       ch.adj[w] = savedW
@@ -347,6 +388,9 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
     the same polyline — E_tension is unchanged by construction, E_bend moves
     within discretization tolerance. Junction points, binds, homed, and slot
     indices are preserved (paths are rebuilt BETWEEN structure points). */
+/** debug counter (trace tests only) */
+export const debugCounts = { resample: 0, resampleReverted: 0, topoSplit: 0, topoMerge: 0 }
+
 export function resample(ch: WireChain): void {
   const structural = new Set<number>()
   for (const b of ch.binds) {
@@ -370,6 +414,7 @@ export function resample(ch: WireChain): void {
     }
   }
   if (!needs) return
+  debugCounts.resample++
   // walk structure-to-structure paths, rebuild each at pitch
   const oldPts = ch.pts, oldAdj = ch.adj
   const map = new Map<number, number>() // old structural idx -> new idx
@@ -438,4 +483,28 @@ export function resample(ch: WireChain): void {
   ch.binds = ch.binds.map((b) => ({ ...b, idx: remap(b.idx) }))
   ch.homed = ch.homed.map((h) => ({ ...h, idx: remap(h.idx) }))
   ch.slots = ch.slots.map((s) => ({ ...s, idx: remap(s.idx) }))
+}
+
+/** Resample under the discrete-move discipline: a re-parameterization must
+    not raise the energy (rebuilding a COMPRESSED path to fewer points
+    concentrates turn angles and can raise E_bend — such rebuilds are
+    rejected; extra resolution is harmless, a coarser lie is not). */
+export function resampleGated(ch: WireChain, discs: readonly ChainDisc[]): void {
+  const saved = {
+    pts: ch.pts.map((p) => ({ ...p })),
+    adj: ch.adj.map((a) => [...a]),
+    binds: ch.binds.map((b) => ({ ...b })),
+    homed: ch.homed.map((h) => ({ ...h })),
+    slots: ch.slots.map((s) => ({ ...s })),
+  }
+  const before = chainEnergy(ch, discs)
+  resample(ch)
+  if (chainEnergy(ch, discs) > before + 1e-6) {
+    debugCounts.resampleReverted++
+    ch.pts = saved.pts
+    ch.adj = saved.adj
+    ch.binds = saved.binds
+    ch.homed = saved.homed
+    ch.slots = saved.slots
+  }
 }

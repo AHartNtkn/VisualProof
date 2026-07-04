@@ -3,7 +3,7 @@ import type { Vec2 } from './vec'
 import type { Body, Engine } from './engine'
 import { frameBounds, frameSlots, subtreeCarriers, worldAnchor } from './engine'
 import type { ChainDisc } from './wirechain'
-import { chainEnergy, chainGradient, chainStep, resample, topologyStep, WIRE_TRAVEL_CAP } from './wirechain'
+import { chainEnergy, chainGradient, chainStep, resampleGated, topologyStep, WIRE_TRAVEL_CAP } from './wirechain'
 export { WIRE_TRAVEL_CAP } from './wirechain'
 
 /**
@@ -34,7 +34,8 @@ const REST = 18
 /** Chain descent: step size and iterations per tick (trust-region capped in
     wirechain.ts — a shortened gradient step still descends). */
 const CHAIN_STEP = 0.15
-const CHAIN_ITERS = 3
+const CHAIN_MAX_ITERS = 60
+const CHAIN_CONVERGED = 0.005
 /** The soft-force bound: every SOFT pull (sibling attraction, leg-spring
     tension) saturates at this one magnitude — the old linear cohesion
     evaluated at one leg rest-length (0.65·REST), no new scale. An unbounded
@@ -237,12 +238,19 @@ export function resolveOverlaps(e: Engine): boolean {
   // clip injects net momentum — either one, repeated each tick, drives the
   // whole drawing off the sheet at a damping-limited terminal velocity.
   let any = false
+  // Wire-owned bodies (homed ∃ ends / ∀ tips) are wire geometry: their
+  // spacing against discs is the CHAIN's symmetric barrier, not the content
+  // projection (a hard projection fighting wire tension is a standing
+  // contact cycle). They stay region MEMBERS — circles still enclose them.
+  const wireOwned = new Set<string>()
+  for (const ch of e.chains.values()) for (const hm of ch.homed) wireOwned.add(hm.bodyId)
   for (let pass = 0; pass < PROJECTION_PASSES; pass++) {
     let moved = false
     const dirty = new Set<RegionId>()
     for (const rid of e.regions.keys()) {
       const items: { sub: RegionId | null; id: string; r: number }[] = []
       for (const mid of e.membersOf.get(rid)!) {
+        if (wireOwned.has(mid)) continue
         items.push({ sub: null, id: mid, r: e.bodies.get(mid)!.discR })
       }
       for (const c of e.childrenOf.get(rid)!) {
@@ -382,10 +390,13 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       const dx = cb.x - ca.x, dy = cb.y - ca.y
       const dist = Math.max(Math.hypot(dx, dy), 1)
       const gap = dist - A.r - B.r
-      const owned = (A.mid !== undefined && wireOwned.has(A.mid)) || (B.mid !== undefined && wireOwned.has(B.mid))
+      // wire-owned bodies take NO content pair forces at all: the chain's
+      // disc barrier owns their spacing (the content barrier's steep branch
+      // against wire tension was a measured underdamped standing cycle)
+      if ((A.mid !== undefined && wireOwned.has(A.mid)) || (B.mid !== undefined && wireOwned.has(B.mid))) continue
       const f = gap < REST_LO
         ? -Math.min(REP_K * ((REST_LO + 8) / Math.max(gap + 8, 0.5) - 1), BARRIER_MAX)
-        : gap <= REST_HI || owned
+        : gap <= REST_HI
           ? 0
           : SOFT_MAX * Math.min(1, (gap - REST_HI) / SIB_GAP)
       if (f === 0) continue
@@ -427,6 +438,52 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
     .map((b) => ({ id: b.id, pos: b.pos, r: b.discR }))
   for (const ch of e.chains.values()) {
     pinChain(e, ch, slotPts)
+    // the chain is the FAST degree of freedom: it descends first (quasi-
+    // static), and the bodies then feel the gradient of the chain state the
+    // tick actually draws — computing body forces from the pre-descent
+    // state instead couples the two integrators into a standing ping-pong
+    // oscillation (measured: 0.02 wu/tick forever on a 3-ref fixture)
+    const rays = new Map<number, { origin: Vec2; angle: number }>()
+    for (const bind of ch.binds) {
+      const nbr = ch.adj[bind.idx]![0]
+      if (nbr === undefined) continue
+      const b = e.bodies.get(bind.body)!
+      const a = b.localAnchor.get(bind.key)!
+      rays.set(nbr, { origin: ch.pts[bind.idx]!, angle: Math.atan2(a.y, a.x) + b.theta })
+    }
+    // the chain relaxes to (near-)convergence every tick — the fast DOF is
+    // quasi-static, so the bodies feel the gradient of the REDUCED energy
+    // (min over chain shapes) and no phase-lagged chain state can sustain
+    // an orbit. The iteration cap is a work bound (residual finishes next
+    // tick, same discipline as PROJECTION_PASSES); the trust region bounds
+    // the NET drawn motion per tick.
+    const start = ch.pts.map((p) => ({ ...p }))
+    let discReactions: Map<string, { x: number; y: number }> | null = null
+    for (let it = 0; it < CHAIN_MAX_ITERS; it++) {
+      const beforeIt = ch.pts.map((p) => ({ ...p }))
+      discReactions = chainStep(ch, discs, CHAIN_STEP, Infinity, rays)
+      let moved = 0
+      for (let k = 0; k < ch.pts.length; k++) {
+        moved = Math.max(moved, Math.hypot(ch.pts[k]!.x - beforeIt[k]!.x, ch.pts[k]!.y - beforeIt[k]!.y))
+      }
+      if (moved < CHAIN_CONVERGED) break
+    }
+    // trust region on the NET drawn motion this tick
+    for (let k = 0; k < ch.pts.length; k++) {
+      const dx = ch.pts[k]!.x - start[k]!.x, dy = ch.pts[k]!.y - start[k]!.y
+      const d = Math.hypot(dx, dy)
+      if (d > WIRE_TRAVEL_CAP) {
+        ch.pts[k] = { x: start[k]!.x + (dx / d) * WIRE_TRAVEL_CAP, y: start[k]!.y + (dy / d) * WIRE_TRAVEL_CAP }
+      }
+    }
+    // the discs' half of the barrier term, from the converged state
+    if (discReactions !== null) {
+      for (const [id, r] of discReactions) {
+        const F = force.get(id)!
+        F.x += r.x
+        F.y += r.y
+      }
+    }
     const grad = chainGradient(ch, discs)
     for (const bind of ch.binds) {
       const A = e.bodies.get(bind.body)!
@@ -467,29 +524,20 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       F.x += r.x
       F.y += r.y
     }
-    // damped trust-region descent of the chain's free points; the barrier
-    // reactions it returns are the discs' half of the shared term
-    const rays = new Map<number, { origin: Vec2; angle: number }>()
-    for (const bind of ch.binds) {
-      const nbr = ch.adj[bind.idx]![0]
-      if (nbr === undefined) continue
-      const b = e.bodies.get(bind.body)!
-      const a = b.localAnchor.get(bind.key)!
-      rays.set(nbr, { origin: ch.pts[bind.idx]!, angle: Math.atan2(a.y, a.x) + b.theta })
-    }
-    for (let it = 0; it < CHAIN_ITERS; it++) {
-      const onDiscs = chainStep(ch, discs, CHAIN_STEP, WIRE_TRAVEL_CAP / CHAIN_ITERS, rays)
-      for (const [id, r] of onDiscs) {
-        const F = force.get(id)!
-        F.x += r.x / CHAIN_ITERS
-        F.y += r.y / CHAIN_ITERS
-      }
-    }
     // discrete descent: topology moves only when they strictly lower E
     topologyStep(ch, discs)
-    resample(ch)
+    resampleGated(ch, discs)
   }
 
+  // Damped momentum integration. NOTE (plan 21, measured): the velocity
+  // state is load-bearing for the overlap projection (its inelastic normal
+  // impulses are what stop projected pairs re-colliding every tick — pure
+  // position descent was tried and the projection ping-pong is 100× worse),
+  // and it carries a KNOWN RESIDUAL: the explicit wire↔body coupling lag
+  // sustains a marginal standing cycle of ~0.02 wu amplitude (invisible at
+  // any zoom; net energy non-creeping — pinned in wirephys.test.ts). Full
+  // elimination needs a projection-free descent redesign of containment —
+  // recorded in the plan as future work, out of plan-21 scope.
   for (const b of e.bodies.values()) {
     const F = force.get(b.id)!
     b.vel = { x: (b.vel.x + F.x * DT) / (1 + DAMP * DT), y: (b.vel.y + F.y * DT) / (1 + DAMP * DT) }
