@@ -80,9 +80,8 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
     if (r.kind === 'bubble') {
       const bound = Object.values(d.nodes).some((n) => n.kind === 'atom' && n.binder === rid)
       if (!bound) out.push({ kind: 'vacuousElim', label: 'Dissolve the vacuous bubble' })
-      // no backward inverse is defined for instantiation yet, so it is a
-      // forward-only offer (the applier would refuse it anyway)
-      if (bound && !backward && polarity(d, rid) === 'negative') {
+      // instantiation's gate flips with orientation like every polarity gate
+      if (bound && polarity(d, rid) === (backward ? 'positive' : 'negative')) {
         out.push({ kind: 'instantiate', label: 'Instantiate the relation…', needsInput: 'comprehension' })
       }
     }
