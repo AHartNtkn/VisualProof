@@ -34,8 +34,9 @@ export type MoveSink = {
   undo?(): void
 }
 
-export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
+export function installVerdictMoves(lab: LabCtx, sink: MoveSink, opts: { active?: () => boolean } = {}): BrushHandle {
   const ctx = sink.ctx
+  const act = opts.active ?? (() => true)
   const mode = () => sink.mode?.() ?? 'forward'
   const guarded = (fn: () => void): boolean => {
     try { fn(); return true } catch (e) { sink.refuse(e instanceof Error ? e.message : String(e)); return false }
@@ -57,8 +58,9 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
       return true
     }
     return false
-  })
+  }, act)
   window.addEventListener('keydown', (e) => {
+    if (!act()) return
     if (document.activeElement instanceof HTMLInputElement) return
     if (!(e.ctrlKey || e.metaKey) || e.key !== 'z') return
     e.preventDefault()
@@ -69,6 +71,7 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
   lab.canvas.addEventListener('pointerdown', () => closeMenu())
   window.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeMenu() })
   lab.canvas.addEventListener('pointerup', (e) => {
+    if (!act()) { rightDown = null; iterDrag = null; return }
     if (rightDown !== null) {
       const rd = rightDown
       rightDown = null
@@ -83,12 +86,13 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
     }
   })
   lab.canvas.addEventListener('pointermove', (e) => {
-    if (iterDrag === null) return
+    if (!act() || iterDrag === null) return
     iterDrag.cursor = lab.toWorld(e.clientX, e.clientY)
     const r = lab.regionAt(iterDrag.cursor)
     iterDrag.over = iterDrag.targets.includes(r) ? r : null
   })
   lab.overlay((out) => {
+    if (!act()) return
     if (iterDrag !== null) {
       for (const r of iterDrag.targets) {
         if (lab.d.regions[r]!.kind === 'sheet') continue
@@ -105,6 +109,7 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
 
   // ---- dedicated keys (forward side only) ----
   window.addEventListener('keydown', (e) => {
+    if (!act()) return
     if (document.activeElement instanceof HTMLInputElement) return
     if (e.key !== 'Delete' && e.key !== 'Backspace' && e.key !== 'w' && e.key !== 'W') return
     const disc = discover(lab, brush.selected, ctx, mode() === 'backward')
@@ -136,6 +141,7 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
     sink.refuse('already in normal form — use Convert → custom target for a specific βη-equal shape')
   }
   lab.canvas.addEventListener('dblclick', (e) => {
+    if (!act()) return
     const h = lab.hitAt(e.clientX, e.clientY)
     if (h?.kind === 'node' && lab.d.nodes[h.id]!.kind === 'term') normalize(h.id)
   })
@@ -157,13 +163,13 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink): BrushHandle {
     lab.toast(`${c.occs.length} occurrences of '${c.name}' — Tab/click cycles, Enter applies, Esc cancels`)
   }
   window.addEventListener('keydown', (e) => {
-    if (cycle === null) return
+    if (!act() || cycle === null) return
     if (e.key === 'Escape') { cycle = null; lab.toast('citation cancelled') }
     else if (e.key === 'Tab') { e.preventDefault(); cycle.k = (cycle.k + 1) % cycle.occs.length; lab.toast(`occurrence ${cycle.k + 1}/${cycle.occs.length} — Enter applies`) }
     else if (e.key === 'Enter') applyOcc()
   })
   lab.canvas.addEventListener('pointerdown', (e) => {
-    if (cycle === null || e.button !== 0 || e.ctrlKey) return
+    if (!act() || cycle === null || e.button !== 0 || e.ctrlKey) return
     e.stopImmediatePropagation()
     cycle.k = (cycle.k + 1) % cycle.occs.length
     lab.toast(`occurrence ${cycle.k + 1}/${cycle.occs.length} — Enter applies`)

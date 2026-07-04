@@ -154,5 +154,12 @@ export function existentialStubs(e: Engine): ExStub[] {
       }
     }
   }
+  // degree-0 junctions: a bare ∃ (zero-endpoint wire) — the dot IS the wire.
+  // The body id is the engine's wire-body convention (`j:<wid>`).
+  for (const b of e.bodies.values()) {
+    if (b.kind === 'junction' && !degree.has(b.id) && b.id.startsWith('j:')) {
+      out.push({ wid: b.id.slice(2), from: b.pos, to: b.pos, dot: b.pos })
+    }
+  }
   return out
 }

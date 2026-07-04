@@ -112,3 +112,22 @@ describe('existential stubs honor wire scope', () => {
     expect(leg.from.body === leg.to.body).toBe(false)
   })
 })
+
+describe('zero-endpoint wires (a bare ∃) render as a lone dot', () => {
+  it('mkEngine gives the wire a scope-homed body and the dot renders', () => {
+    // erasing a node can legally leave its wire with no endpoints: the bare
+    // assertion that an individual exists — it must render, not crash
+    const b = new DiagramBuilder()
+    const n = b.termNode(b.root, p('\\x. x'))
+    b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    const w = b.wire(b.root, [])
+    const d = b.build()
+    const e = mkEngine(d, [])
+    const body = e.bodies.get(`j:${w}`)
+    expect(body, 'the bare ∃ is its own body at the wire scope').toBeDefined()
+    expect(body!.region).toBe(d.root)
+    const stub = existentialStubs(e).find((s) => s.wid === w)
+    expect(stub, 'the bare ∃ draws its dot').toBeDefined()
+    expect(stub!.dot.x).toBe(body!.pos.x)
+  })
+})

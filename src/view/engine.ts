@@ -189,6 +189,12 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       })
       membersOf.get(region)!.push(id)
     }
+    if (ends.length === 0) {
+      // a bare ∃ — the wire asserts only that an individual exists: one
+      // scope-homed body, no legs (its dot is the whole rendering)
+      mkWireBody(`j:${wid}`, w.scope)
+      continue
+    }
     if (ends.length === 1) {
       if (isBoundary) { boundaryOf.set(wid, ends[0]!.body); continue } // the frame slot is its end
       mkWireBody(`j:${wid}`, w.scope)

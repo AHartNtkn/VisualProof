@@ -15,9 +15,13 @@ export type CompositeOpts = {
   /** A right-button press released without movement (the gesture slash never
       uses) — the spawn-menu trigger that coexists with selection. */
   onRightStill?: (at: { sx: number; sy: number; world: Vec2 }) => void
+  /** Mode gate: construction listens only while this is true (chrome pages
+      host EDIT and PROVE vocabularies on one canvas). Absent = always on. */
+  active?: () => boolean
 }
 
 export function installComposite(lab: LabCtx, opts: CompositeOpts = {}): { brush: BrushHandle } {
+  const act = opts.active ?? (() => true)
   let severMode: 'slash' | 'dblclick' = 'slash'
   let joinDrag: { wid: string; from: Vec2; cursor: Vec2; target: string | null; moved: boolean } | null = null
   let slash: { a: Vec2; b: Vec2; sx: number; sy: number } | null = null
@@ -40,11 +44,12 @@ export function installComposite(lab: LabCtx, opts: CompositeOpts = {}): { brush
       return true
     }
     return false
-  })
-  installEditKeys(lab, brush)
+  }, act)
+  installEditKeys(lab, brush, act)
   lab.canvas.addEventListener('contextmenu', (e) => e.preventDefault())
 
   lab.canvas.addEventListener('pointermove', (e) => {
+    if (!act()) return
     const w = lab.toWorld(e.clientX, e.clientY)
     if (slash) { slash.b = w; return }
     if (moveDrag) {
@@ -65,6 +70,7 @@ export function installComposite(lab: LabCtx, opts: CompositeOpts = {}): { brush
     if (b) { b.pos.x = moveDrag.cursor.x; b.pos.y = moveDrag.cursor.y }
   })
   lab.canvas.addEventListener('pointerup', () => {
+    if (!act()) { slash = null; moveDrag = null; joinDrag = null; return }
     if (slash) {
       const s = slash
       slash = null
@@ -118,12 +124,13 @@ export function installComposite(lab: LabCtx, opts: CompositeOpts = {}): { brush
   })
 
   lab.canvas.addEventListener('dblclick', (e) => {
-    if (severMode !== 'dblclick') return
+    if (!act() || severMode !== 'dblclick') return
     const g = lab.legAt(lab.toWorld(e.clientX, e.clientY), 2.5)
     if (g !== null && severLeg(lab, g)) { brush.prune(); lab.toast('strand severed') }
   })
 
   window.addEventListener('keydown', (e) => {
+    if (!act()) return
     if (document.activeElement instanceof HTMLInputElement) return
     if (e.key === 'w' || e.key === 'W') {
       e.preventDefault()
@@ -160,8 +167,10 @@ export function installComposite(lab: LabCtx, opts: CompositeOpts = {}): { brush
   sevBtn.addEventListener('click', () => { severMode = severMode === 'slash' ? 'dblclick' : 'slash'; syncOpts() })
   optsBox.append('⚙ sever: ', sevBtn)
   document.body.append(optsBox)
+  lab.onFrame(() => { optsBox.style.display = act() ? 'block' : 'none' })
 
   lab.overlay((out) => {
+    if (!act()) return
     if (joinDrag && joinDrag.moved) {
       out.push({ kind: 'segment', from: joinDrag.from, to: joinDrag.cursor, stroke: '#16a34a', width: 1.6, glow: null })
       if (joinDrag.target !== null) out.push(...hitShapes(lab, { kind: 'wire', id: joinDrag.target }, '#16a34a', 3.2))

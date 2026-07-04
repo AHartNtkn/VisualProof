@@ -9,7 +9,7 @@
 import type { Diagram, WireId } from '../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../src/kernel/diagram/boundary'
-import { applyStep, replayProof, type ProofStep } from '../src/kernel/proof/step'
+import { applyStep, replayProof, type ProofContext, type ProofStep } from '../src/kernel/proof/step'
 import { checkTheorem, type Theorem } from '../src/kernel/proof/theorem'
 import { applyBackward, applyForward, assembleTheorem, meet, sideBoundary, startSession, undoBackward, undoForward, type ProofSession } from '../src/app/session'
 import type { LabCtx } from './shared'
@@ -65,8 +65,7 @@ export type TrackLab = {
   onChange(fn: () => void): void
 }
 
-export function mkTrackLab(lab: LabCtx): TrackLab {
-  const ctx = fregeCtx()
+export function mkTrackLab(lab: LabCtx, ctx: ProofContext = fregeCtx()): TrackLab {
   const origin: { d: Diagram; boundary: readonly WireId[] } = { d: lab.d, boundary: [...lab.boundary] }
   const originDWB = (): DiagramWithBoundary => mkDiagramWithBoundary(origin.d, origin.boundary)
   let dir: 'forward' | 'backward' | null = null

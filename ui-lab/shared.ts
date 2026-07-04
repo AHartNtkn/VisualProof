@@ -51,6 +51,11 @@ export function showcase(): { d: Diagram; boundary: WireId[] } {
   return { d: b.build(), boundary: [wb, wb2] }
 }
 
+/** An empty sheet — the true entry experience for chrome pages. */
+export function emptyStart(): { d: Diagram; boundary: WireId[] } {
+  return { d: new DiagramBuilder().build(), boundary: [] }
+}
+
 export type LabCtx = {
   engine: Engine
   d: Diagram
@@ -282,7 +287,7 @@ export function pointInPolygon(w: Vec2, poly: readonly Vec2[]): boolean {
 /** The Round-1 verdict selection: brush painting with hover that never goes
     silent. Installs pointer handlers + overlay; returns live handles. Other
     gestures claim a pointerdown first via `claim` (checked before brushing). */
-export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEvent) => boolean): {
+export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEvent) => boolean, active: () => boolean = () => true): {
   selected: Hit[]
   isSelected(h: Hit | null): boolean
   clear(): void
@@ -313,18 +318,21 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
   })
   lab.canvas.addEventListener('pointermove', (e) => {
     if (physDrag) { physDrag.cursor = lab.toWorld(e.clientX, e.clientY); return }
+    if (!active()) return
     hover = lab.hitAt(e.clientX, e.clientY)
     if (brushing) applyBrush(hover)
     announce()
   })
   lab.canvas.addEventListener('pointerup', () => { physDrag = null })
   lab.canvas.addEventListener('pointerdown', (e) => {
+    // Ctrl+drag physics is mode-independent (it means nothing, everywhere)
     if (e.ctrlKey && e.button === 0) {
       const w = lab.toWorld(e.clientX, e.clientY)
       const t = dragTarget(lab.engine, w)
       if (t?.kind === 'body') physDrag = { id: t.id, cursor: w }
       return
     }
+    if (!active()) return
     const h = lab.hitAt(e.clientX, e.clientY)
     if (claim && claim(h, e)) return
     brushing = true
@@ -350,6 +358,7 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
     }
   }
   lab.overlay((out) => {
+    if (!active()) return
     for (const s of selected) out.push(...hitShapes(lab, s, '#d97706', 2.5))
     if (hover === null) return
     if (isSelected(hover)) {
@@ -465,8 +474,9 @@ export function spawnRelAt(lab: LabCtx, region: RegionId, name: string, arity: n
 
 /** Ctrl+Z undo and Delete/Backspace on the brush selection — every Round-2
     page carries these identically (A4/A10 baseline). */
-export function installEditKeys(lab: LabCtx, brush: BrushHandle): void {
+export function installEditKeys(lab: LabCtx, brush: BrushHandle, active: () => boolean = () => true): void {
   window.addEventListener('keydown', (e) => {
+    if (!active()) return
     if (document.activeElement instanceof HTMLInputElement) return
     if ((e.ctrlKey || e.metaKey) && e.key === 'z') {
       e.preventDefault()
