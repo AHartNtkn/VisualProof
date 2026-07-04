@@ -6,7 +6,7 @@
  * USER tweak applied: node discs repel branch points (keep-out), so
  * intersections no longer hide behind nodes.
  */
-import { boot, mkMultiportStart, collectMultiport, basePaintExcept, installDrag, mkSoapTree, relaxSoap, reshapeSoap, mergeSoap, nodeObstacles, driveHub, terminalTangent, type SoapTree } from './multiport'
+import { boot, mkMultiportStart, collectMultiport, basePaintExcept, installDrag, mkSoapTree, relaxSoap, reshapeSoap, mergeSoap, nodeObstacles, stubEnd, terminalTangent, type SoapTree } from './multiport'
 import { hobbyBezier } from '../src/view/wires'
 import type { Engine } from '../src/view/engine'
 import type { Shape, Theme } from '../src/view/paint'
@@ -26,11 +26,10 @@ const wires = (e: Engine, st: Theme): Shape[] => {
       t = mkSoapTree(m.terminals, m.hub.pos)
       trees.set(m.wid, t)
     }
-    m.terminals.forEach((x, i) => { t!.pts[i] = { ...x.p } })
-    relaxSoap(t, obstacles)
+    m.terminals.forEach((x, i) => { t!.pts[i] = stubEnd(x) })
+    relaxSoap(t, obstacles, m.hub.pos)
     reshapeSoap(t)
-    mergeSoap(t, obstacles)
-    driveHub(m.hub, t)
+    mergeSoap(t, obstacles, m.hub.pos)
     for (let v = 0; v < t.pts.length; v++) {
       for (const n of t.adj[v]!) {
         if (n <= v) continue

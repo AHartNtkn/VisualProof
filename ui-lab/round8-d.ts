@@ -9,7 +9,7 @@
  * (production's trunk rule) while the third merges TANGENT TO THE TRUNK,
  * like a stream joining a river. Node discs repel branch points (keep-out).
  */
-import { boot, mkMultiportStart, collectMultiport, basePaintExcept, installDrag, mkSoapTree, relaxSoap, reshapeSoap, mergeSoap, nodeObstacles, driveHub, terminalTangent, type SoapTree } from './multiport'
+import { boot, mkMultiportStart, collectMultiport, basePaintExcept, installDrag, mkSoapTree, relaxSoap, reshapeSoap, mergeSoap, nodeObstacles, stubEnd, terminalTangent, type SoapTree } from './multiport'
 import { hobbyBezier } from '../src/view/wires'
 import type { Engine } from '../src/view/engine'
 import type { Shape, Theme } from '../src/view/paint'
@@ -50,11 +50,10 @@ const wires = (e: Engine, st: Theme): Shape[] => {
       t = mkSoapTree(m.terminals, m.hub.pos)
       trees.set(m.wid, t)
     }
-    m.terminals.forEach((x, i) => { t!.pts[i] = { ...x.p } })
-    relaxSoap(t, obstacles)
+    m.terminals.forEach((x, i) => { t!.pts[i] = stubEnd(x) })
+    relaxSoap(t, obstacles, m.hub.pos)
     reshapeSoap(t)
-    mergeSoap(t, obstacles)
-    driveHub(m.hub, t)
+    mergeSoap(t, obstacles, m.hub.pos)
     const tangents = new Map<number, Map<number, number>>()
     for (let v = t.nT; v < t.pts.length; v++) {
       if (t.adj[v]!.length > 0) tangents.set(v, outTangents(t, v))
@@ -69,10 +68,14 @@ const wires = (e: Engine, st: Theme): Shape[] => {
     for (let v = 0; v < t.pts.length; v++) {
       for (const n of t.adj[v]!) {
         if (n <= v) continue
-        const chord = Math.atan2(t.pts[n]!.y - t.pts[v]!.y, t.pts[n]!.x - t.pts[v]!.x)
-        const tv = v < t.nT ? terminalTangent(m.terminals[v]!, t.pts[n]!) : clampTo(tangents.get(v)!.get(n)!, chord)
-        const tn = n < t.nT ? terminalTangent(m.terminals[n]!, t.pts[v]!) : clampTo(tangents.get(n)!.get(v)!, chord + Math.PI)
-        const path = hobbyBezier(t.pts[v]!, tv, t.pts[n]!, tn)
+        // terminal ends draw from the PORT ANCHOR (the stub end is only the
+        // leaf's position in the tree's energy)
+        const pv = v < t.nT ? m.terminals[v]!.p : t.pts[v]!
+        const pn = n < t.nT ? m.terminals[n]!.p : t.pts[n]!
+        const chord = Math.atan2(pn.y - pv.y, pn.x - pv.x)
+        const tv = v < t.nT ? terminalTangent(m.terminals[v]!, pn) : clampTo(tangents.get(v)!.get(n)!, chord)
+        const tn = n < t.nT ? terminalTangent(m.terminals[n]!, pv) : clampTo(tangents.get(n)!.get(v)!, chord + Math.PI)
+        const path = hobbyBezier(pv, tv, pn, tn)
         shapes.push({ kind: 'bezier', from: path.from, c1: path.c1, c2: path.c2, to: path.to, stroke: st.wire, width: st.wireW, glow })
       }
     }

@@ -202,26 +202,17 @@ export function terminalTangent(t: Terminal, toward: Vec2): number {
   return t.key === null ? Math.atan2(toward.y - t.p.y, toward.x - t.p.x) : t.tangent
 }
 
-/** Drive the production hub body to the tree's interior so the engine's
-    ROTATION relaxation turns every node's port toward the drawn structure
-    (with a stranded hub, ports face the wrong way and entry curves loop). */
-export function driveHub(hub: Body, t: SoapTree): void {
-  let n = 0, cx = 0, cy = 0
-  for (let v = t.nT; v < t.pts.length; v++) {
-    if (t.adj[v]!.length === 0) continue
-    cx += t.pts[v]!.x
-    cy += t.pts[v]!.y
-    n++
-  }
-  if (n === 0) return
-  hub.pos.x += (cx / n - hub.pos.x) * 0.2
-  hub.pos.y += (cy / n - hub.pos.y) * 0.2
-  hub.vel.x = 0
-  hub.vel.y = 0
+/** A terminal's tree attachment: a short stub out along its port normal
+    (free ends attach directly). The drawn branch leaves the anatomy the way
+    every pierce does, whatever the tree does beyond the stub. */
+export const STUB_LEN = 1.2
+export function stubEnd(t: Terminal): Vec2 {
+  if (t.key === null) return t.p
+  return { x: t.p.x + Math.cos(t.tangent) * STUB_LEN, y: t.p.y + Math.sin(t.tangent) * STUB_LEN }
 }
 
 export function mkSoapTree(terminals: readonly Terminal[], hubPos: Vec2): SoapTree {
-  const pts = terminals.map((x) => ({ ...x.p }))
+  const pts = terminals.map((x) => stubEnd(x))
   pts.push({ ...hubPos })
   return {
     pts,
@@ -231,9 +222,14 @@ export function mkSoapTree(terminals: readonly Terminal[], hubPos: Vec2): SoapTr
   }
 }
 
-/** Net tension (+ keep-out) force on a point — the same field relaxSoap
-    integrates; also the merge test's convergence oracle. */
-function netForce(t: SoapTree, v: number, obstacles: readonly Obstacle[]): Vec2 {
+/** Net force on a point from the view-layer energy: unit tension per branch
+    (soap film), disc keep-out, and a WEAK pull toward the engine's own
+    junction body — the equilibrium every node's rotation already faces, so
+    living near it is what keeps port normals pointing at the drawn tree.
+    STRICTLY ONE-DIRECTIONAL: the tree reads engine state; it never writes
+    it (an earlier hub-driving experiment pumped the engine into permanent
+    orbits — drivers are banned, the engine is a closed dissipative system). */
+function netForce(t: SoapTree, v: number, obstacles: readonly Obstacle[], hub: Vec2): Vec2 {
   let fx = 0, fy = 0
   for (const n of t.adj[v]!) {
     const dx = t.pts[n]!.x - t.pts[v]!.x, dy = t.pts[n]!.y - t.pts[v]!.y
@@ -241,6 +237,14 @@ function netForce(t: SoapTree, v: number, obstacles: readonly Obstacle[]): Vec2 
     if (d < 1e-9) continue
     fx += dx / d
     fy += dy / d
+  }
+  {
+    const dx = hub.x - t.pts[v]!.x, dy = hub.y - t.pts[v]!.y
+    const d = Math.hypot(dx, dy)
+    if (d > 1e-9) {
+      fx += (dx / d) * 0.3
+      fy += (dy / d) * 0.3
+    }
   }
   for (const o of obstacles) {
     const dx = t.pts[v]!.x - o.pos.x, dy = t.pts[v]!.y - o.pos.y
@@ -280,11 +284,11 @@ function relaxPhi(t: SoapTree): void {
     this many world units between two frames, however hard it is pulled. */
 const MAX_TRAVEL = 0.5
 
-export function relaxSoap(t: SoapTree, obstacles: readonly Obstacle[]): void {
+export function relaxSoap(t: SoapTree, obstacles: readonly Obstacle[], hub: Vec2): void {
   const start = t.pts.map((p) => ({ ...p }))
   for (let iter = 0; iter < 6; iter++) {
     for (let v = t.nT; v < t.pts.length; v++) {
-      const f = netForce(t, v, obstacles)
+      const f = netForce(t, v, obstacles, hub)
       t.pts[v] = { x: t.pts[v]!.x + f.x * TENSION_STEP, y: t.pts[v]!.y + f.y * TENSION_STEP }
     }
   }
@@ -329,7 +333,7 @@ export function reshapeSoap(t: SoapTree): void {
   }
 }
 
-export function mergeSoap(t: SoapTree, obstacles: readonly Obstacle[]): void {
+export function mergeSoap(t: SoapTree, obstacles: readonly Obstacle[], hub: Vec2): void {
   // MERGE: only an edge the film is actively COLLAPSING (endpoints converge
   // under the force field) folds back — a freshly split child under outward
   // pull is left to grow, so split/merge cannot flap
@@ -339,7 +343,7 @@ export function mergeSoap(t: SoapTree, obstacles: readonly Obstacle[]): void {
       const dx = t.pts[w]!.x - t.pts[v]!.x, dy = t.pts[w]!.y - t.pts[v]!.y
       const d = Math.hypot(dx, dy)
       if (d >= MERGE_DIST || d < 1e-9) continue
-      const fv = netForce(t, v, obstacles), fw = netForce(t, w, obstacles)
+      const fv = netForce(t, v, obstacles, hub), fw = netForce(t, w, obstacles, hub)
       const closing = ((fv.x - fw.x) * dx + (fv.y - fw.y) * dy) / d
       if (closing <= 0) continue
       t.adj[v] = [...t.adj[v]!.filter((n) => n !== w), ...t.adj[w]!.filter((n) => n !== v)]
