@@ -2,8 +2,9 @@
  * ROUND 7 — MOTION, on the full winner stack (minimal chrome + scrubber).
  * Every motion layer is view-only (layer law) and individually toggleable:
  *  - βη ANIMATION (the user's design): converting a → b plays a's reduction
- *    to the common reduct a′, then b's reduction REVERSED (a → a′ → b), one
- *    readable step at a time; speed slider; off = instant (today).
+ *    to the common reduct a′, then b's reduction REVERSED (a → a′ → b) as a
+ *    CONTINUOUS SHAPE MORPH — one interpolated anatomy per frame, nothing
+ *    fades, nothing snaps; speed slider; off = instant.
  *  - TRANSITION GHOSTS: erased bodies fade out where they died; fresh bodies
  *    pulse a ring — moves show WHERE they acted instead of teleporting.
  *  - HOVER EASE: the hover tint fades in instead of snapping.
@@ -13,39 +14,22 @@ import { mkChromeApp, installMinimalChrome } from './chrome'
 import { installScrubber } from './history'
 import { applyStepAt } from '../src/kernel/term/reduce'
 import { trompGrid } from '../src/view/tromp'
-import { bendGrid, type NodeGeometry } from '../src/view/bend'
-import { anchorOf, ascaleOf, localToWorld, pkey } from '../src/view/engine'
-import { freePorts, type Term } from '../src/kernel/term/term'
-import type { Port } from '../src/kernel/diagram/diagram'
+import { bendGrid } from '../src/view/bend'
+import { ascaleOf, pkey } from '../src/view/engine'
+import type { Term } from '../src/kernel/term/term'
 import type { ProofStep } from '../src/kernel/proof/step'
 import type { Vec2 } from '../src/view/vec'
+import { mkGeomMorph } from '../src/view/morph'
 
-boot('Round 7 — motion', 'βη conversion ANIMATES (a → a′ → b, speed under ⚙); erasures fade out, fresh bodies pulse; hover eases — every layer toggleable', (lab) => {
+boot('Round 7 — motion', 'βη conversion MORPHS continuously (a → a′ → b, speed under ⚙); erasures fade out, fresh bodies pulse; hover eases — every layer toggleable', (lab) => {
   const motion = { convAnim: true, speed: 1, ghosts: true }
   motionPrefs.hoverEaseMs = 120
 
-  // ---- βη playback: the node's anatomy DISSOLVES between the certificate's
-  // reduction states while its port anchors LERP — wires read anchors live,
-  // so they glide with the morph instead of disconnecting. rAF-driven,
-  // smoothstep-eased, view-only; the real step commits after the last frame.
+  // ---- βη playback: one interpolated anatomy per frame (mkGeomMorph); the
+  // body's anchors are read off the interpolated geometry itself, so wires
+  // stay pinned to the drawn rail tips throughout. rAF-driven, smoothstep-
+  // eased, view-only; the real step commits after the last frame.
   let playing = false
-  type Stage = { geom: NodeGeometry; anchors: Map<string, Vec2>; discR: number }
-  const stageOf = (t: Term): Stage => {
-    const geom = bendGrid(trompGrid(t))
-    const anchors = new Map<string, Vec2>()
-    const ascale = ascaleOf('term')
-    let anatomyR = 3
-    const ports: Port[] = [{ kind: 'output' }, ...freePorts(t).map((name): Port => ({ kind: 'freeVar', name }))]
-    for (const port of ports) {
-      const a0 = anchorOf(geom, { x: 0, y: 0 }, port)
-      const a = { x: a0.x * ascale, y: a0.y * ascale }
-      anchors.set(pkey(port), a)
-      anatomyR = Math.max(anatomyR, Math.hypot(a.x, a.y))
-    }
-    for (const arc of geom.arcs) anatomyR = Math.max(anatomyR, arc.r)
-    return { geom, anchors, discR: anatomyR + 2 }
-  }
-  let play: { nodeId: string; stages: Stage[]; oldGeom: NodeGeometry; alpha: number } | null = null
   const playConversion = (step: Extract<ProofStep, { rule: 'conversion' }>, commit: () => void): void => {
     const node = lab.d.nodes[step.node]
     if (node === undefined || node.kind !== 'term') { commit(); return }
@@ -59,70 +43,44 @@ boot('Round 7 — motion', 'βη conversion ANIMATES (a → a′ → b, speed un
     frames.push(...right.slice(1))
     if (frames.length <= 1) { commit(); return }
     playing = true
-    const stages = frames.map(stageOf)
-    play = { nodeId: step.node, stages, oldGeom: stages[0]!.geom, alpha: 0 }
+    const geoms = frames.map((f) => bendGrid(trompGrid(f)))
+    const morphs = geoms.slice(1).map((g, i) => mkGeomMorph(geoms[i]!, g))
+    const ascale = ascaleOf('term')
     const t0 = performance.now()
     const smooth = (p: number): number => p * p * (3 - 2 * p) // C¹ ease
-    const lerp = (a: Vec2, b2: Vec2, f: number): Vec2 => ({ x: a.x + (b2.x - a.x) * f, y: a.y + (b2.y - a.y) * f })
     const driver = () => {
-      if (play === null) return
+      if (!playing) return
       const stepMs = 520 / motion.speed
       const el = performance.now() - t0
       const k = Math.floor(el / stepMs)
-      if (k >= stages.length - 1) {
-        play = null
+      if (k >= morphs.length) {
         playing = false
         commit()
         lab.toast(`converted — played ${frames.length - 1} reduction step(s)`)
         return
       }
       const p = smooth((el - k * stepMs) / stepMs)
-      const from = stages[k]!, to = stages[k + 1]!
+      const g = morphs[k]!(p)
       const b = lab.engine.bodies.get(step.node)
       if (b !== undefined) {
-        // anchors: lerp shared keys; dying keys hold (they fade with the old
-        // arcs); new keys sit at their destination — wires follow live
+        // anchors derive FROM the interpolated geometry — rail tips exactly
         const anchors = new Map(b.localAnchor)
-        for (const [key, av] of from.anchors) {
-          const bv = to.anchors.get(key)
-          anchors.set(key, bv === undefined ? av : lerp(av, bv, p))
+        let anatomyR = 3
+        const setA = (key: string, v: Vec2): void => {
+          const a = { x: v.x * ascale, y: v.y * ascale }
+          anchors.set(key, a)
+          anatomyR = Math.max(anatomyR, Math.hypot(a.x, a.y))
         }
-        for (const [key, bv] of to.anchors) if (!from.anchors.has(key)) anchors.set(key, bv)
-        lab.engine.bodies.set(step.node, {
-          ...b,
-          geometry: to.geom,
-          localAnchor: anchors,
-          discR: from.discR + (to.discR - from.discR) * p,
-        })
+        setA(pkey({ kind: 'output' }), g.outputAnchor)
+        for (const [name, v] of Object.entries(g.portAnchors)) setA(pkey({ kind: 'freeVar', name }), v)
+        for (const arc of g.arcs) anatomyR = Math.max(anatomyR, arc.r)
+        lab.engine.bodies.set(step.node, { ...b, geometry: g, localAnchor: anchors, discR: anatomyR + 2 })
       }
-      play.oldGeom = from.geom
-      play.alpha = 1 - p
       requestAnimationFrame(driver)
     }
     lab.toast('playing the evaluation…')
     requestAnimationFrame(driver)
   }
-  // the outgoing state's anatomy dissolves over the incoming one
-  lab.overlay((out) => {
-    if (play === null) return
-    const b = lab.engine.bodies.get(play.nodeId)
-    if (b === undefined) return
-    const a = Math.max(0, Math.min(1, play.alpha))
-    const hex = Math.round(a * 0xb0).toString(16).padStart(2, '0')
-    const stroke = `#1c2a33${hex}`
-    const ascale = ascaleOf('term')
-    for (const arc of play.oldGeom.arcs) {
-      out.push({ kind: 'arc', center: b.pos, r: arc.r * ascale, a0: arc.a0 + b.theta, a1: arc.a1 + b.theta, stroke, width: 0.9, glow: null })
-    }
-    for (const r of play.oldGeom.radials) {
-      out.push({
-        kind: 'segment',
-        from: localToWorld(b, { x: Math.cos(r.angle) * r.r0, y: Math.sin(r.angle) * r.r0 }),
-        to: localToWorld(b, { x: Math.cos(r.angle) * r.r1, y: Math.sin(r.angle) * r.r1 }),
-        stroke, width: 0.9, glow: null,
-      })
-    }
-  })
   // input holds while the evaluation plays — it is a look, not a state
   const guard = (e: Event) => { if (playing) { e.stopImmediatePropagation(); e.preventDefault() } }
   lab.canvas.addEventListener('pointerdown', guard, { capture: true })
