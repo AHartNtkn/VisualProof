@@ -62,17 +62,7 @@ boot('Round 6h · D — scrubber = undo/redo', 'drag the bar: real time travel, 
       const isCur = k === cur
       const future = k > cur
       t.style.cssText = `position:absolute;top:${isCur ? 4 : 7}px;width:${isCur ? 12 : 8}px;height:${isCur ? 18 : 12}px;border-radius:4px;transform:translateX(-50%);left:${frac * 100}%;background:${isCur ? '#d97706' : future ? '#d6d3d1' : '#a8a29e'};${future ? 'border:1px dashed #a8a29e;' : ''}`
-      t.addEventListener('pointerenter', (e) => {
-        if (dragging) return
-        pop.replaceChildren(
-          k === 0 ? stateThumb(states[0]!, bd, 220, 154) : zoomThumb(states[k - 1]!, states[k]!, bd),
-          Object.assign(document.createElement('div'), { textContent: k === 0 ? 'origin' : `${labels[k - 1]}${future ? ' (future — redo reaches it)' : ''}` }),
-        )
-        pop.style.display = 'block'
-        pop.style.left = `${Math.min(Math.max(8, e.clientX - 110), innerWidth - 240)}px`
-        pop.style.bottom = '74px'
-      })
-      t.addEventListener('pointerleave', () => { pop.style.display = 'none' })
+      t.style.pointerEvents = 'none' // the BAR drives hover — no dead zones
       bar.append(t)
     }
     caption.style.display = 'block'
@@ -83,6 +73,26 @@ boot('Round 6h · D — scrubber = undo/redo', 'drag the bar: real time travel, 
     const n = app.track()!.states().length
     return Math.max(0, Math.min(n - 1, Math.round(((clientX - r.left) / r.width) * (n - 1))))
   }
+  // hover ANYWHERE on the bar previews the nearest tick — wherever the
+  // resize cursor shows, the preview comes (no feedback without payoff)
+  bar.addEventListener('pointermove', (e) => {
+    if (dragging) return
+    const track = app.track()
+    if (track === null || track.direction() === null) return
+    const states = track.states()
+    const labels = track.labels()
+    const bd = track.boundary()
+    const k = kAt(e.clientX)
+    const future = k > track.cursor()
+    pop.replaceChildren(
+      k === 0 ? stateThumb(states[0]!, bd, 220, 154) : zoomThumb(states[k - 1]!, states[k]!, bd),
+      Object.assign(document.createElement('div'), { textContent: k === 0 ? 'origin' : `${labels[k - 1]}${future ? ' (future — redo reaches it)' : ''}` }),
+    )
+    pop.style.display = 'block'
+    pop.style.left = `${Math.min(Math.max(8, e.clientX - 110), innerWidth - 240)}px`
+    pop.style.bottom = '74px'
+  })
+  bar.addEventListener('pointerleave', () => { if (!dragging) pop.style.display = 'none' })
   bar.addEventListener('pointerdown', (e) => {
     const track = app.track()
     if (track === null) return

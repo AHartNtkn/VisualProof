@@ -50,13 +50,13 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink, opts: { active?
   let rightDown: { sx: number; sy: number } | null = null
   let menu: HTMLDivElement | null = null
   const closeMenu = () => { menu?.remove(); menu = null }
-  let iterDrag: { sel: SubgraphSelection; targets: RegionId[]; cursor: Vec2; over: RegionId | null } | null = null
+  let iterDrag: { nid: string; sel: SubgraphSelection; targets: RegionId[]; cursor: Vec2; over: RegionId | null; moved: boolean } | null = null
   const brush = installBrush(lab, (h, e) => {
     if (e.button === 2) { rightDown = { sx: e.clientX, sy: e.clientY }; return true }
     if (e.button === 0 && h?.kind === 'node' && brush.isSelected(h)) {
       const disc = discover(lab, brush.selected, ctx, mode() === 'backward')
       if (disc === null || !disc.actions.some((a) => a.kind === 'iterate')) return false
-      iterDrag = { sel: disc.sel, targets: iterationTargets(lab, disc.sel), cursor: lab.toWorld(e.clientX, e.clientY), over: null }
+      iterDrag = { nid: h.id, sel: disc.sel, targets: iterationTargets(lab, disc.sel), cursor: lab.toWorld(e.clientX, e.clientY), over: null, moved: false }
       return true
     }
     return false
@@ -84,19 +84,28 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink, opts: { active?
     if (iterDrag !== null) {
       const it = iterDrag
       iterDrag = null
+      if (!it.moved) {
+        // a still click on a selected node is the brush's toggle-OFF —
+        // iteration is the DRAG, never the click
+        const i = brush.selected.findIndex((s) => s.kind === 'node' && s.id === it.nid)
+        if (i >= 0) brush.selected.splice(i, 1)
+        return
+      }
       if (it.over === null) { sink.refuse('release inside a glowing region to iterate'); return }
       if (guarded(() => sink.apply({ rule: 'iteration', sel: it.sel, target: it.over! }))) brush.clear()
     }
   })
   lab.canvas.addEventListener('pointermove', (e) => {
     if (!act() || iterDrag === null) return
-    iterDrag.cursor = lab.toWorld(e.clientX, e.clientY)
-    const r = lab.regionAt(iterDrag.cursor)
+    const w = lab.toWorld(e.clientX, e.clientY)
+    if (Math.hypot(w.x - iterDrag.cursor.x, w.y - iterDrag.cursor.y) > 0.8) iterDrag.moved = true
+    iterDrag.cursor = w
+    const r = lab.regionAt(w)
     iterDrag.over = iterDrag.targets.includes(r) ? r : null
   })
   lab.overlay((out) => {
     if (!act()) return
-    if (iterDrag !== null) {
+    if (iterDrag !== null && iterDrag.moved) {
       for (const r of iterDrag.targets) {
         if (lab.d.regions[r]!.kind === 'sheet') continue
         const g = lab.engine.regions.get(r)
