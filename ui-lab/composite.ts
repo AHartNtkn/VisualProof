@@ -33,12 +33,14 @@ export function installComposite(lab: LabCtx, opts: CompositeOpts = {}): { brush
       slash = { a: w, b: w, sx: e.clientX, sy: e.clientY }
       return true
     }
-    if (h?.kind === 'node' && brush.isSelected(h)) {
+    // shift is the SELECTION modifier: no gesture claims while it is held —
+    // shift+drag is always the (de)selection brush
+    if (h?.kind === 'node' && !e.shiftKey && brush.isSelected(h)) {
       moveDrag = { nid: h.id, cursor: lab.toWorld(e.clientX, e.clientY), moved: false }
       lab.freeze(true)
       return true
     }
-    if (h?.kind === 'wire') {
+    if (h?.kind === 'wire' && !e.shiftKey) {
       const w = lab.toWorld(e.clientX, e.clientY)
       joinDrag = { wid: h.id, from: w, cursor: w, target: null, moved: false }
       return true

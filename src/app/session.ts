@@ -136,8 +136,13 @@ function promotedSelection(before: Diagram, after: Diagram, parent: RegionId, fr
 function inverseStep(g: Diagram, step: ProofStep, gPrime: Diagram, ctx: ProofContext): ProofStep {
   switch (step.rule) {
     case 'erasure': {
-      const { pattern, attachments } = extractSubgraph(g, step.sel)
-      return { rule: 'insertion', region: step.sel.region, pattern, attachments, binders: {} }
+      const { pattern, attachments, binderStubs, binderAttachments } = extractSubgraph(g, step.sel)
+      // externally-bound atoms extract with binder STUBS — the inverse
+      // insertion must rebind each stub to its host bubble or the atom
+      // cannot reconstruct
+      const binders: Record<RegionId, RegionId> = {}
+      binderStubs.forEach((stub, i) => { binders[stub] = binderAttachments[i]! })
+      return { rule: 'insertion', region: step.sel.region, pattern, attachments, binders }
     }
     case 'insertion':
       return { rule: 'erasure', sel: freshSelection(g, gPrime, step.region) }

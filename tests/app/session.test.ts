@@ -488,3 +488,35 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     expect(() => applyBackward(s, { rule: 'fusion', wire: wa })).toThrowError(/no backward inverse/)
   })
 })
+
+describe('backward erasure of externally-bound atoms (binder stubs)', () => {
+  it('the inverse insertion rebinds the atom to its bubble (user bug: iterate a bound predicate, delete it)', () => {
+    const c = verifyTheory(buildFregeTheory())
+    // goal: cut > bubble(1) > two bound atoms sharing a line
+    const r = new DiagramBuilder()
+    const cut = r.cut(r.root)
+    const bub = r.bubble(cut, 1)
+    const a1 = r.atom(bub, bub)
+    const a2 = r.atom(bub, bub)
+    const w = r.wire(bub, [
+      { node: a1, port: { kind: 'arg', index: 0 } },
+      { node: a2, port: { kind: 'arg', index: 0 } },
+    ])
+    const rhs = mkDiagramWithBoundary(r.build(), [])
+    // lhs: the same shape with a2 gone (the wire keeps a1)
+    const l = new DiagramBuilder()
+    const lcut = l.cut(l.root)
+    const lbub = l.bubble(lcut, 1)
+    const b1 = l.atom(lbub, lbub)
+    l.wire(lbub, [{ node: b1, port: { kind: 'arg', index: 0 } }])
+    const lhs = mkDiagramWithBoundary(l.build(), [])
+    let s = startSession(lhs, rhs, c)
+    void w
+    // the bubble sits inside a cut: NEGATIVE — backward erasure's gate
+    s = applyBackward(s, { rule: 'erasure', sel: { region: bub, regions: [], nodes: [a2], wires: [] } })
+    expect(s.backward.steps[0]!.rule).toBe('insertion')
+    expect(meet(s)).toBe(true)
+    const thm = assembleTheorem(s, 'boundAtomErased')
+    expect(() => checkTheorem(thm, c)).not.toThrow()
+  })
+})

@@ -53,7 +53,9 @@ export function installVerdictMoves(lab: LabCtx, sink: MoveSink, opts: { active?
   let iterDrag: { nid: string; sel: SubgraphSelection; targets: RegionId[]; cursor: Vec2; over: RegionId | null; moved: boolean } | null = null
   const brush = installBrush(lab, (h, e) => {
     if (e.button === 2) { rightDown = { sx: e.clientX, sy: e.clientY }; return true }
-    if (e.button === 0 && h?.kind === 'node' && brush.isSelected(h)) {
+    // shift is the SELECTION modifier (USER ruling): with it held, a drag on
+    // a selected node is the deselection brush, never iteration
+    if (e.button === 0 && !e.shiftKey && h?.kind === 'node' && brush.isSelected(h)) {
       const disc = discover(lab, brush.selected, ctx, mode() === 'backward')
       if (disc === null || !disc.actions.some((a) => a.kind === 'iterate')) return false
       iterDrag = { nid: h.id, sel: disc.sel, targets: iterationTargets(lab, disc.sel), cursor: lab.toWorld(e.clientX, e.clientY), over: null, moved: false }
