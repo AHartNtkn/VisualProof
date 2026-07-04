@@ -55,7 +55,13 @@ export function installMinimalChrome(lab: LabCtx, app: ChromeApp): void {
   })
 }
 
-export function mkChromeApp(lab: LabCtx): ChromeApp {
+export type ChromeOpts = {
+  /** Motion layers may intercept a step (e.g., play the βη evaluation before
+      committing). Return true to OWN the commit; `commit` applies the step. */
+  interceptStep?: (step: ProofStep, commit: () => void) => boolean
+}
+
+export function mkChromeApp(lab: LabCtx, opts: ChromeOpts = {}): ChromeApp {
   const ctx = fregeCtx()
   let track: TrackLab | null = null
   let trackSink: MoveSink | null = null
@@ -73,7 +79,9 @@ export function mkChromeApp(lab: LabCtx): ChromeApp {
     ctx,
     apply: (step: ProofStep) => {
       if (trackSink === null) throw new Error('start proving first (F forward, B backward)')
-      trackSink.apply(step)
+      const commit = () => trackSink!.apply(step)
+      if (opts.interceptStep?.(step, commit)) return
+      commit()
     },
     refuse,
     mode: () => track?.direction() ?? 'forward',

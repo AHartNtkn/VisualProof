@@ -56,6 +56,13 @@ export function emptyStart(): { d: Diagram; boundary: WireId[] } {
   return { d: new DiagramBuilder().build(), boundary: [] }
 }
 
+/** Round-7 motion preferences (view-only, never semantic — layer law).
+    Pages toggle these; the shared layers read them live. */
+export const motionPrefs = {
+  /** Hover tint ease-in duration (ms); 0 = instant (today's behavior). */
+  hoverEaseMs: 0,
+}
+
 export type LabCtx = {
   engine: Engine
   d: Diagram
@@ -100,6 +107,9 @@ export type LabCtx = {
   toast(text: string): void
   /** Pause/resume settling — while placing something, the world holds still. */
   freeze(on: boolean): void
+  /** Observe diagram swaps (motion layers): dying bodies' last geometry and
+      the ids born in the new engine. View-only. */
+  onMutate(fn: (died: { pos: Vec2; discR: number }[], born: string[]) => void): void
 }
 
 export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, mk: () => { d: Diagram; boundary: WireId[] } = showcase): void {
@@ -131,13 +141,19 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
   const overlays: ((out: Shape[]) => void)[] = []
   const frameHooks: (() => void)[] = []
   let frozen = false
+  const mutateHooks: ((died: { pos: Vec2; discR: number }[], born: string[]) => void)[] = []
   const swap = (d2: Diagram, boundary2: WireId[]): void => {
     const next = mkEngine(d2, boundary2)
     carryOver(lab.engine, next)
     settleStep(next) // paint requires a settled engine — same discipline as the shell
+    const died: { pos: Vec2; discR: number }[] = []
+    for (const [id, b] of lab.engine.bodies) if (!next.bodies.has(id) && b.kind !== 'anchor') died.push({ pos: b.pos, discR: b.discR })
+    const born: string[] = []
+    for (const id of next.bodies.keys()) if (!lab.engine.bodies.has(id)) born.push(id)
     lab.d = d2
     lab.boundary = boundary2
     lab.engine = next
+    for (const fn of mutateHooks) fn(died, born)
   }
   const lab: LabCtx = {
     engine: mkEngine(start.d, start.boundary), d: start.d, boundary: start.boundary, canvas, view, toWorld,
@@ -232,6 +248,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
       : lab.d.wires[h.id] !== undefined),
     toast: (text) => { msg.textContent = text },
     freeze: (on) => { frozen = on },
+    onMutate: (fn) => { mutateHooks.push(fn) },
   }
   const frame = () => {
     if (canvas.width !== innerWidth || canvas.height !== innerHeight) { canvas.width = innerWidth; canvas.height = innerHeight }
@@ -367,16 +384,23 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
       if (g) out.push({ kind: 'circle', center: g.center, r: g.radius, fill: color, stroke: null, width: 0, insetColor: null, glow: null })
     }
   }
+  let hoverSince = 0
+  let lastHoverKey = ''
   lab.overlay((out) => {
     if (!active()) return
     for (const s of selected) out.push(...hitShapes(lab, s, '#d97706', 2.5))
-    if (hover === null) return
+    if (hover === null) { lastHoverKey = ''; return }
+    const key = `${hover.kind}:${hover.id}`
+    if (key !== lastHoverKey) { lastHoverKey = key; hoverSince = performance.now() }
+    // motion pref: the tint eases in instead of snapping (E3)
+    const f = motionPrefs.hoverEaseMs > 0 ? Math.min(1, (performance.now() - hoverSince) / motionPrefs.hoverEaseMs) : 1
+    const a2 = (base: number): string => Math.round(base * f).toString(16).padStart(2, '0')
     if (isSelected(hover)) {
       out.push(...hitShapes(lab, hover, '#92400e', 3.4))
-      tint(hover, '#92400e26', out)
+      tint(hover, `#92400e${a2(0x26)}`, out)
     } else {
       out.push(...hitShapes(lab, hover, '#2563eb', 1.8))
-      tint(hover, '#2563eb1c', out)
+      tint(hover, `#2563eb${a2(0x1c)}`, out)
     }
   })
   ;(window as unknown as { __labSel: Hit[] }).__labSel = selected
