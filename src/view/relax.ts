@@ -27,11 +27,14 @@ export const WIREP = {
   /** ∃-tip standoff radius (the dot never sinks into its own wire) */
   standoffR: 8,
   /** boundary-exit pull: the constant force drawing a boundary wire's exit hub
-      to its frame slot. Above the leg tension so the exit rests AT the slot
-      (perpendicular frame exit, canonical order), yet a soft pull on a FREE
-      hub — never the node — so the layout stays compact (a rigid slot pulling
-      the node to the moving frame is a measured runaway). */
-  exitPull: 4,
+      toward its frame slot. The global-rotation DOF (relax.ts) turns the content
+      so each boundary port faces its slot, so a SOFT pull (12) lands the exit hub
+      at the slot without re-exciting a coil: a briefly-misaligned port can relax
+      instead of being forced into a blind cone. Measured sweet spot — at 30 the
+      hard pinning re-coils and the layout oscillates (drift 10.8); at 12
+      succShiftS@24 rests at drift 0.65, exit residual 0.89, stable E. Never pulls
+      the NODE (a rigid slot pulling the node to the moving frame is a runaway). */
+  exitPull: 12,
   /** trust region: max per-tick motion of any wire DOF (continuity law) */
   travelCap: 0.55,
 }
@@ -225,6 +228,11 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
     const discs: Disc[] = []
     for (const mid of e.membersOf.get(rid)!) {
       const b = e.bodies.get(mid)!
+      // a boundary exit hub (`e:<wid>`) rides ON the frame, which the CONTENT
+      // defines — counting it in the enclosing circle would make the frame
+      // chase the very slot the hub is drawn to (a runaway). It is a boundary
+      // terminal, not content, so it is excluded from region geometry.
+      if (mid.startsWith('e:')) continue
       discs.push({ c: b.pos, r: b.discR, mid })
     }
     for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8, sub: c })
@@ -475,8 +483,19 @@ function tipStandoffE(e: Engine, w: WireView): number {
 
 /** Total wire energy of the engine — the monotonicity pin's observable and the
     demo's energy() (bodies-clearance/spacing excepted: that is the content
-    integrator's job, kept separate). */
-export function wireEnergy(e: Engine): number {
+    integrator's job, kept separate).
+
+    `warmInterior` is the global-rotation gate's OPTIONAL fast path (default OFF —
+    the shipped gate uses the full memoryless grid). When on, every NON-boundary
+    leg is WARM-solved from its cached solution (one Newton at the base turning)
+    instead of the full grid scan: a rigid content rotation leaves an interior
+    leg's relative geometry unchanged, so its solution transforms rigidly and the
+    warm solve is exact — EXCEPT at a near-tie, where the full grid would FLIP the
+    interior leg to a lower-E branch and warm holds the old one. That flip is what
+    lets a strained scene REST (plusComm@20: full-grid drift 0.44 vs warm 3.13, E
+    swinging), so warm is NOT the default; it is ~2× faster and bit-identical on
+    non-near-tie scenes, kept for iteration (see `ROT_GATE_WARM`). */
+export function wireEnergy(e: Engine, warmInterior = false): number {
   const discs: DiscRec[] = [...e.bodies.values()]
     .filter((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')
     .map((b) => ({ id: b.id, body: b, r: b.discR }))
@@ -487,7 +506,8 @@ export function wireEnergy(e: Engine): number {
   let E = 0
   for (const [wid, w] of e.wires) {
     for (const leg of w.legs) {
-      const shape = resolveLeg(e, w, leg)
+      const warm = warmInterior && w.slot === null ? leg.cache.s : null
+      const shape = resolveLeg(e, w, leg, leg.cache, warm)
       const samples: Vec2[] = []
       traceLeg(shape, samples, QN)
       const near = discs.filter((D) => bboxNear(samples, D.body.pos, D.r + WIREP.clearMargin))
@@ -496,9 +516,9 @@ export function wireEnergy(e: Engine): number {
     }
     // junction spread over this wire's hub arrival angles
     if (w.hub !== null) E += spreadE(w.legs.filter((l) => l.b.kind === 'hub').map((l) => l.hubAngle))
-    // boundary exit point attracted to its frame slot
-    if (w.exit !== null && w.slot !== null && slots !== null && slots[w.slot] !== undefined) {
-      E += exitAttractE(w.exit.pos, slots[w.slot]!.point)
+    // boundary exit hub (the slot-attracted junction body) drawn to its slot
+    if (w.slot !== null && w.hub !== null && w.hub.kind === 'body' && slots !== null && slots[w.slot] !== undefined) {
+      E += exitAttractE(e.bodies.get(w.hub.bodyId)!.pos, slots[w.slot]!.point)
     }
     E += tipStandoffE(e, w)
   }
@@ -564,6 +584,12 @@ type LegRec = { readonly wid: string; readonly w: WireView; readonly leg: WireLe
     ridge is crossed by momentum). */
 const HX = 0.02
 const MU = 0.1
+/** Global-rotation gate fast path: OFF ships (full memoryless grid — correct
+    minima on strained near-tie scenes, ~40 ms/tick on a 16-node framed scene
+    during free settling). Flip to true for ~2× faster iteration (warm-solve the
+    rotation-invariant interior legs); bit-identical except at near-ties, where it
+    fails to rest — see wireEnergy's `warmInterior`. */
+const ROT_GATE_WARM = false
 /** Descent step of the demo (backtracking line search + long-shot ladder +
     expanding search): capped, strictly E-gated per visit, so every move lowers
     the DOF's local energy — the guarantee pure momentum lacked (it conveyored
@@ -669,8 +695,8 @@ function wireForcePass(e: Engine, slots: FrameSlot[] | null, force: Map<string, 
     if (spreadWire !== null) E += spreadE(spreadWire.legs.filter((l) => l.b.kind === 'hub').map((l) => l.hubAngle))
     if (tipWire !== null) E += tipStandoffE(e, tipWire)
     if (scopeBody !== null) E += homedScopeE(e, scopeBody)
-    if (exitWire !== null && exitWire.exit !== null && slots !== null && exitWire.slot !== null && slots[exitWire.slot] !== undefined) {
-      E += exitAttractE(exitWire.exit.pos, slots[exitWire.slot]!.point)
+    if (exitWire !== null && exitWire.hub !== null && exitWire.hub.kind === 'body' && slots !== null && exitWire.slot !== null && slots[exitWire.slot] !== undefined) {
+      E += exitAttractE(e.bodies.get(exitWire.hub.bodyId)!.pos, slots[exitWire.slot]!.point)
     }
     return E
   }
@@ -715,12 +741,19 @@ function wireForcePass(e: Engine, slots: FrameSlot[] | null, force: Map<string, 
     const wLegs = legsOfWire.get(b.id.slice(2))!
     let touched: LegRec[]
     let tipWire: WireView | null = null
+    let exitWire: WireView | null = null
     if (w.tipBodyId === b.id) { touched = wLegs.filter((r) => r.leg.b.kind === 'tip'); tipWire = w }
-    else if (w.hub !== null && w.hub.kind === 'body' && w.hub.bodyId === b.id) touched = wLegs.filter((r) => r.leg.b.kind === 'hub')
+    else if (w.hub !== null && w.hub.kind === 'body' && w.hub.bodyId === b.id) {
+      touched = wLegs.filter((r) => r.leg.b.kind === 'hub')
+      // a BOUNDARY exit hub is the same body: it carries the slot attraction
+      if (w.slot !== null) exitWire = w
+    }
     else continue
-    const en = (): number => localE(touched, null, null, tipWire, b, null)
-    const isTip = w.tipBodyId === b.id
-    gatedPoint(b, en, isTip ? 3 * MU : MU, isTip ? 0.55 : 0.28)
+    const en = (): number => localE(touched, null, null, tipWire, b, exitWire)
+    // ∃ tips and boundary exit hubs are light + mobile — they float to a rest
+    // (a scope standoff, a frame slot); a ∀ via-body is heavier and slower
+    const light = w.tipBodyId === b.id || exitWire !== null
+    gatedPoint(b, en, light ? 3 * MU : MU, light ? 0.55 : 0.28)
     b.vel = { x: 0, y: 0 }
   }
   // hub points (branch junctions)
@@ -728,12 +761,6 @@ function wireForcePass(e: Engine, slots: FrameSlot[] | null, force: Map<string, 
     if (w.hub === null || w.hub.kind !== 'point') continue
     const touched = legsOfWire.get(wid)!.filter((r) => r.leg.b.kind === 'hub')
     gatedPoint(w.hub, () => localE(touched, null, null, null, null, null), MU, 0.28)
-  }
-  // boundary exit points (free-end legs + slot attraction; light like a tip)
-  for (const [wid, w] of e.wires) {
-    if (w.exit === null) continue
-    const touched = legsOfWire.get(wid)!.filter((r) => r.leg.b.kind === 'exit')
-    gatedPoint(w.exit, () => localE(touched, null, null, null, null, w), 3 * MU, 0.55)
   }
   // per-leg arrival angles (stiff/slow: MU/64, cap 0.06)
   for (const [wid, w] of e.wires) {
@@ -754,9 +781,12 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   recomputeRegions(e)
   // snapshot every body position: the end-of-tick quotient of the global
   // rotation zero mode is fitted against this
-  const carrierStart: { get(): Vec2; set(p: Vec2): void; p0: Vec2 }[] = []
+  const carrierStart: { get(): Vec2; set(p: Vec2): void; p0: Vec2; content: boolean }[] = []
   for (const b of e.bodies.values()) {
-    carrierStart.push({ get: () => b.pos, set: (p) => { b.pos = p }, p0: b.pos })
+    // CONTENT bodies (nodes + region anchors) move rigidly under the layout's
+    // translation/rotation zero modes; wire-owned junctions (∃ tips, ∀/boundary
+    // hubs) creep relative to them, so they are not part of the zero-mode fit
+    carrierStart.push({ get: () => b.pos, set: (p) => { b.pos = p }, p0: b.pos, content: b.kind !== 'junction' })
   }
   // force accumulator: mutable points, not the readonly Vec2 used for state
   const force = new Map<string, { x: number; y: number }>()
@@ -896,11 +926,11 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
         b.vel = { x: b.vel.x * cs - b.vel.y * sn, y: b.vel.x * sn + b.vel.y * cs }
         b.theta -= dth
       }
-      // the quotient is a rigid transform of the WHOLE state: wire hub AND exit
-      // points (and their velocities) rotate with the bodies, and the world-
-      // frame arrival angles shift by dθ. Rotating bodies alone would twist
-      // every leg against its hub/exit each tick — a slow self-propelled
-      // conveyor.
+      // the quotient is a rigid transform of the WHOLE state: a wire-owned hub
+      // POINT (and its velocity) rotates with the bodies, and the world-frame
+      // arrival angles shift by dθ. (A boundary exit HUB is a body, already
+      // rotated by the body loop above.) Rotating bodies alone would twist every
+      // leg against its hub each tick — a slow self-propelled conveyor.
       const rot = (pt: { pos: Vec2; vel: Vec2 }): void => {
         const rx = pt.pos.x - c1x, ry = pt.pos.y - c1y
         pt.pos = { x: c1x + rx * cs - ry * sn, y: c1y + rx * sn + ry * cs }
@@ -908,9 +938,92 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       }
       for (const w of e.wires.values()) {
         if (w.hub !== null && w.hub.kind === 'point') rot(w.hub)
-        if (w.exit !== null) rot(w.exit)
         for (const leg of w.legs) if (leg.b.kind === 'hub') leg.hubAngle -= dth
       }
+      recomputeRegions(e)
+    }
+  }
+
+  // Quotient the global-TRANSLATION zero mode. A boundary exit's slot attraction
+  // is an EXTERNAL force (a frame slot is a fixed point, not a body), so the sum
+  // over the boundary wires is a small NET force that slowly conveys the whole
+  // layout across the sheet (measured ~0.026 wu/tick on plusComm step 0 — every
+  // body drifting rigidly, centroid included). A rigid translation preserves
+  // every pairwise distance and every constraint, so removing the tick's net
+  // CONTENT-centroid shift restores the anchor without touching the relative
+  // geometry. A dragged pin already anchors translation, so this runs only in
+  // free relaxation.
+  if (pinned === null && carrierStart.length > 1) {
+    let s0x = 0, s0y = 0, s1x = 0, s1y = 0, cn = 0
+    for (const c of carrierStart) {
+      if (!c.content) continue
+      s0x += c.p0.x; s0y += c.p0.y
+      const p = c.get(); s1x += p.x; s1y += p.y; cn++
+    }
+    if (cn > 0) {
+      const dx = (s1x - s0x) / cn, dy = (s1y - s0y) / cn
+      if (Math.abs(dx) > 1e-12 || Math.abs(dy) > 1e-12) {
+        for (const b of e.bodies.values()) b.pos = { x: b.pos.x - dx, y: b.pos.y - dy }
+        for (const w of e.wires.values()) if (w.hub !== null && w.hub.kind === 'point') w.hub.pos = { x: w.hub.pos.x - dx, y: w.hub.pos.y - dy }
+        recomputeRegions(e)
+      }
+    }
+  }
+
+  // GATED GLOBAL-ROTATION DOF (framed alignment). The rotation quotient above
+  // removes the overlap projection's spurious injected spin (a genuine zero-mode
+  // artifact); this then spins the content — every body EXCEPT the boundary exit
+  // hubs (pos + theta + vel), plus wire hub points and world-frame arrival angles
+  // — about the content centroid by the angle that most lowers the BOUNDARY LEG
+  // energy. The boundary exit hubs are held fixed (they belong to the frame, not
+  // the content), so rotating a node turns its port RELATIVE to its exit hub:
+  // when the port faces away, the port→hub leg is a blind-cone coil with an
+  // enormous tension·L, and rotating the port to face the hub dissolves it. That
+  // is exactly the coherent motion the unconditional quotient was erasing — on a
+  // FRAMED diagram the fixed slots make it a real gradient; on a frameless layout
+  // there are no boundary legs, so this is skipped. Interior/∃/∀ legs rotate with
+  // both their ends (rigid ⇒ invariant), so only the boundary legs move the gate.
+  // It runs AFTER the quotient so its INTENTIONAL rotation becomes next tick's
+  // snapshot baseline rather than being removed as net spin — the two never fight.
+  if (pinned === null && e.boundary.length > 0 && carrierStart.length > 1) {
+    let gcx = 0, gcy = 0, gn = 0
+    for (const b of e.bodies.values()) if (b.kind !== 'junction') { gcx += b.pos.x; gcy += b.pos.y; gn++ }
+    if (gn > 0) {
+      gcx /= gn; gcy /= gn
+      // snapshot every rotatable piece (boundary exit hubs `e:` excluded — they
+      // are the fixed frame terminals) so each probe rotates from one base
+      const bodySnap = [...e.bodies.values()].filter((b) => !b.id.startsWith('e:')).map((b) => ({ b, pos: b.pos, vel: b.vel, theta: b.theta }))
+      const hubSnap = [...e.wires.values()].filter((w) => w.hub !== null && w.hub.kind === 'point').map((w) => { const h = w.hub as { pos: Vec2; vel: Vec2 }; return { h, pos: h.pos, vel: h.vel } })
+      const angSnap: { leg: WireLeg; a: number }[] = []
+      for (const w of e.wires.values()) for (const leg of w.legs) if (leg.b.kind === 'hub') angSnap.push({ leg, a: leg.hubAngle })
+      const applyRot = (d: number): void => {
+        const cs = Math.cos(d), sn = Math.sin(d)
+        for (const s of bodySnap) {
+          const rx = s.pos.x - gcx, ry = s.pos.y - gcy
+          s.b.pos = { x: gcx + rx * cs - ry * sn, y: gcy + rx * sn + ry * cs }
+          s.b.vel = { x: s.vel.x * cs - s.vel.y * sn, y: s.vel.x * sn + s.vel.y * cs }
+          s.b.theta = s.theta + d
+        }
+        for (const s of hubSnap) {
+          const rx = s.pos.x - gcx, ry = s.pos.y - gcy
+          s.h.pos = { x: gcx + rx * cs - ry * sn, y: gcy + rx * sn + ry * cs }
+          s.h.vel = { x: s.vel.x * cs - s.vel.y * sn, y: s.vel.x * sn + s.vel.y * cs }
+        }
+        for (const s of angSnap) s.leg.hubAngle = s.a + d
+      }
+      // gate: the whole wire energy (frame recomputed each probe). It MUST be the
+      // full functional — a rigid content rotation with the exit hubs held changes
+      // only the boundary legs and the slot terms, but a gate that drops the
+      // "invariant" interior terms was measured to leak a small non-constant amount
+      // (~32 on succShiftS@24) — a spurious gradient that pumps the total to drift
+      // 11.6. It uses the FULL memoryless grid solve for every leg, not the warm
+      // fast path: on a near-tie scene (plusComm@20) the grid FLIPS an interior
+      // leg's branch under the probe rotation and reaches a lower-E, aligned rest
+      // (drift 0.44), where the warm solve holds the old branch and does NOT rest
+      // (drift 3.13, E swinging) — the corpus settles-and-stays law needs the flip.
+      const totalE = (): number => { recomputeRegions(e); return wireEnergy(e, ROT_GATE_WARM) }
+      let applied = 0
+      gatedStep(() => applied, (v) => { applyRot(v); applied = v }, totalE, HX, MU, 0.28)
       recomputeRegions(e)
     }
   }

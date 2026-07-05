@@ -36,15 +36,15 @@ describe('mkEngine', () => {
     for (const r of refs) expect(r.discR).toBeCloseTo(DISC_R + 1.5, 10)
   })
 
-  it('law 4: every ref/atom port is bound by exactly one chain (PLAN 21: chains own connectivity)', () => {
+  it('law 4: every ref/atom port is bound by exactly one wire leg (PLAN 22: wire binds own connectivity)', () => {
     const { d, boundary } = nat()
     const e = mkEngine(d, boundary)
     for (const [id, node] of Object.entries(d.nodes)) {
       if (node.kind === 'term') continue // term outputs may exit; law 4 is about refs/atoms
       for (const port of requiredPorts(d, node)) {
         let count = 0
-        for (const ch of e.chains.values()) {
-          count += ch.binds.filter((b) => b.body === id && b.key === pkey(port)).length
+        for (const w of e.wires.values()) {
+          count += w.binds.filter((b) => b.body === id && b.key === pkey(port)).length
         }
         expect(count, `port ${id}|${pkey(port)}`).toBe(1)
       }

@@ -65,14 +65,12 @@ export type Leg = { readonly wid: WireId; readonly from: LegEnd; readonly to: Le
 export type WireBind = { readonly body: string; readonly key: string }
 
 /** A leg terminal. `bind i` = binds[i] (port rim + normal); `tip` = the ∃ free
-    end (a body); `exit` = a boundary wire's wire-owned exit point, a FREE end
-    softly attracted to its frame slot; `hub` = the branch point (a wire-owned
-    point or the ∀ body), reached along the leg's arrival angle. Every leg
-    starts at a `bind`. */
+    end (a body); `hub` = the branch point (a wire-owned point, the ∀ body, or a
+    boundary wire's slot-attracted exit body), reached along the leg's arrival
+    angle. Every leg starts at a `bind`. */
 export type WireLegEnd =
   | { readonly kind: 'bind'; readonly i: number }
   | { readonly kind: 'tip' }
-  | { readonly kind: 'exit' }
   | { readonly kind: 'hub' }
 
 /** One leg of a wire: the massless θ-quadratic from terminal `a` (a port bind,
@@ -94,23 +92,23 @@ export type WireHub =
   | { readonly kind: 'point'; pos: Vec2; vel: Vec2 }
   | { readonly kind: 'body'; readonly bodyId: string }
 
-/** A boundary wire's exit: a wire-owned movable point (2 DOF, its own momentum)
-    that free-end legs reach and that is softly attracted to the wire's fixed
-    frame slot (relax.ts). Unlike a rigid slot it never pulls the NODE to the
-    frame, and unlike an arrival-angle hub its legs are FREE ends (zero moment)
-    that are always representable — so there is no >pi cliff and no runaway. At
-    rest it sits AT the slot, so the drawn boundary exit is gapless. */
-export type WireExit = { pos: Vec2; vel: Vec2 }
-
 /** A wire's complete view-state (plan 22): the port binds, an optional branch
-    hub (>= 3 terminals or a ∀ via-body), an optional ∃ tip body, an optional
-    boundary exit (+ its frame slot number), and the derived leg list (each leg
-    carries only a memo cache — no shape state). */
+    hub, an optional ∃ tip body, an optional boundary frame-slot number, and the
+    derived leg list (each leg carries only a memo cache — no shape state).
+
+    A BOUNDARY wire (slot !== null) merges its hub and its frame exit: its ports
+    meet at ONE junction body (`hub.kind === 'body'`, id `e:<wid>`) that is
+    itself softly attracted to the fixed frame slot (relax.ts). The legs arrive
+    at it with per-leg arrival angles + finite spread energy, exactly like an
+    interior hub — so the boundary carries the tributary look — and the drawn
+    frame connector runs that hub to the slot along the slot normal. There is no
+    separate exit point and no stiff hub→exit leg (that pair was measured to
+    destabilize). Because the exit hub rides ON the frame, it is excluded from
+    the region enclosing circles (it is a boundary terminal, not content). */
 export type WireView = {
   readonly binds: WireBind[]
   hub: WireHub | null
   readonly tipBodyId: string | null
-  exit: WireExit | null
   readonly slot: number | null
   readonly legs: WireLeg[]
 }
@@ -291,20 +289,23 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
 
     let hub: WireHub | null = null
     let tipBodyId: string | null = null
-    let exit: WireExit | null = null
     let slot: number | null = null
     const legs: WireLeg[] = []
     if (isBoundary) {
-      // A boundary wire exits the sheet to a fixed frame slot via a wire-owned
-      // EXIT point softly attracted to the slot (relax.ts). Each port reaches it
-      // with a FREE-END leg (zero moment) — always representable, so there is no
-      // >pi cliff — and the exit, not the node, floats to the frame, so the
-      // layout stays compact (a rigid slot pulls the node to the moving frame:
-      // measured runaway). At rest the exit sits AT the slot, so the drawn
-      // boundary exit is gapless.
+      // A boundary wire exits the sheet to a fixed frame slot. Its ports meet at
+      // ONE junction body (`e:<wid>`) that is softly slot-attracted (relax.ts):
+      // the hub and the exit are the SAME body, so there is no stiff hub→exit
+      // pair (measured to destabilize). Each port reaches it with a hub leg
+      // carrying its own arrival angle + finite spread energy (the tributary
+      // look, as at an interior hub); the drawn frame connector runs the hub to
+      // the slot. The exit hub, not the node, floats to the frame, so the layout
+      // stays compact (a rigid slot pulling the node to the moving frame is a
+      // measured runaway), and it is kept OUT of the region circles (it rides on
+      // the frame, which the content defines) so the frame never chases it.
       slot = slotOf.get(wid)!
-      exit = { pos: { x: anchorPos[0]!.x, y: anchorPos[0]!.y - 10 }, vel: { x: 0, y: 0 } }
-      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'exit' }, 0))
+      const b = mkWireBody(`e:${wid}`, w.scope, centroid())
+      hub = { kind: 'body', bodyId: b.id }
+      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, b.pos)))
     } else if (binds.length === 1) {
       // dangling ∃: a free-end leg reaching a scope-homed tip body
       const b = mkWireBody(`j:${wid}`, w.scope, anchorPos[0]!)
@@ -324,7 +325,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       hub = { kind: 'point', pos: h, vel: { x: 0, y: 0 } }
       for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, h)))
     }
-    wires.set(wid, { binds, hub, tipBodyId, exit, slot, legs })
+    wires.set(wid, { binds, hub, tipBodyId, slot, legs })
   }
 
   return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), tick: 0 }
@@ -352,17 +353,13 @@ export function carryOver(prev: Engine, next: Engine): void {
   // hub/exit position+velocity and per-leg arrival angles instead of re-seeding.
   // The legs' geometry is memoryless (recomputed), so only the DOF carry.
   const sig = (v: WireView): string =>
-    [...v.binds.map((b) => `${b.body}:${b.key}`), v.hub === null ? '-' : v.hub.kind, v.tipBodyId ?? '-', v.exit === null ? '-' : 'e', v.slot ?? '-'].join('|')
+    [...v.binds.map((b) => `${b.body}:${b.key}`), v.hub === null ? '-' : v.hub.kind, v.tipBodyId ?? '-', v.slot ?? '-'].join('|')
   for (const [wid, nv] of next.wires) {
     const pv = prev.wires.get(wid)
     if (pv === undefined || sig(pv) !== sig(nv)) continue
     if (nv.hub !== null && nv.hub.kind === 'point' && pv.hub !== null && pv.hub.kind === 'point') {
       nv.hub.pos = pv.hub.pos
       nv.hub.vel = pv.hub.vel
-    }
-    if (nv.exit !== null && pv.exit !== null) {
-      nv.exit.pos = pv.exit.pos
-      nv.exit.vel = pv.exit.vel
     }
     for (let k = 0; k < nv.legs.length && k < pv.legs.length; k++) {
       nv.legs[k]!.hubAngle = pv.legs[k]!.hubAngle
@@ -519,9 +516,12 @@ export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache
   let p1: Vec2, th1: number, freeEnd = false
   let ownB: string | null = null
   switch (leg.b.kind) {
-    case 'hub': { p1 = hubPos(); th1 = leg.hubAngle; break }
+    // a BOUNDARY exit hub leg is a FREE end (zero moment): the global-rotation
+    // DOF (relax.ts) spins the content so the port faces its slot, so the leg
+    // needs no arrival well to reach the slot-attracted hub, and a free end never
+    // charges a blind-cone well that would fight the alignment.
+    case 'hub': { p1 = hubPos(); th1 = leg.hubAngle; if (w.slot !== null) freeEnd = true; break }
     case 'tip': { p1 = e.bodies.get(w.tipBodyId!)!.pos; th1 = 0; freeEnd = true; break }
-    case 'exit': { p1 = w.exit!.pos; th1 = 0; freeEnd = true; break }
     default: {
       const bd = w.binds[leg.b.i]!
       const b = e.bodies.get(bd.body)!

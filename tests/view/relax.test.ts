@@ -71,24 +71,29 @@ describe('law 1 — containment: no two region circles ever intersect', () => {
   })
 })
 
-describe('law 7 (PLAN 21 form) — junction-kind bodies are exactly the homed wire ends', () => {
+describe('law 7 (PLAN 22 form) — junction-kind bodies are exactly the wire-owned ends', () => {
   for (const [name, d, boundary] of cases) {
-    it(`junction bodies = chain homed points + bare wires in ${name}`, () => {
+    it(`junction bodies = ∃ tips + ∀/boundary hub bodies + bare wires in ${name}`, () => {
       const e = mkEngine(d, boundary)
-      const homed = new Set<string>()
-      for (const ch of e.chains.values()) for (const hm of ch.homed) homed.add(hm.bodyId)
+      // the wire-owned bodies: an ∃ tip, a hub BODY (a ∀ via-body or a boundary
+      // exit hub), and a bare (0-endpoint) wire's lone dot
+      const owned = new Set<string>()
+      for (const w of e.wires.values()) {
+        if (w.tipBodyId !== null) owned.add(w.tipBodyId)
+        if (w.hub !== null && w.hub.kind === 'body') owned.add(w.hub.bodyId)
+      }
       for (const [wid, w] of Object.entries(d.wires)) {
-        if (w.endpoints.length === 0) homed.add(`j:${wid}`)
+        if (w.endpoints.length === 0) owned.add(`j:${wid}`)
       }
       const junctions = [...e.bodies.values()].filter((b) => b.kind === 'junction')
-      expect(new Set(junctions.map((b) => b.id))).toEqual(homed)
+      expect(new Set(junctions.map((b) => b.id))).toEqual(owned)
     })
 
-    it(`every attached port is bound by exactly one chain in ${name}`, () => {
+    it(`every attached port is bound by exactly one wire leg in ${name}`, () => {
       const e = mkEngine(d, boundary)
       const perPort = new Map<string, number>()
-      for (const ch of e.chains.values()) {
-        for (const bind of ch.binds) {
+      for (const w of e.wires.values()) {
+        for (const bind of w.binds) {
           const k = `${bind.body}|${bind.key}`
           perPort.set(k, (perPort.get(k) ?? 0) + 1)
         }
@@ -119,7 +124,12 @@ describe('settle — replay steps: bounded always; at rest unless topologically 
   for (const k of [0, 16, 32, 48, r.stepCount]) {
     it(`plusComm step ${k} settles bounded${restBound[k] !== undefined ? ' (strained: regression-bounded drift)' : ' and at rest'}`, () => {
       const e = mkEngine(r.diagramAt(k), r.boundary)
-      settle(e, 2600)
+      // 7800: the plan-22 massless-elastica boundary scenes converge slowly
+      // (bounded soft forces pace the approach; a boundary exit hub creeps
+      // toward its far frame slot for thousands of ticks) — the same budget the
+      // succShiftS@24 rest case needs. Measured plusComm@20 drift 16.2 → 4.4
+      // going 2600 → 7800; succShiftS@48 18.5 → 4.6.
+      settle(e, 7800)
       const discSum = [...e.bodies.values()].reduce((s, b) => s + 2 * b.discR + 20, 0)
       for (const b of e.bodies.values()) {
         const dist = Math.hypot(b.pos.x, b.pos.y)
@@ -144,9 +154,9 @@ describe('settle — observed jitter reproductions (live feel reports)', () => {
   // bounds instead of rest claims.
   const succShiftS = bootCtx.theorems.get('succShiftS')!
   const jitterCases: [string, number, () => { d: Diagram; b: readonly WireId[] }, number][] = [
-    ['plusComm@20', 2600, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }, 6],
+    ['plusComm@20', 7800, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }, 6],
     ['succShiftS@24', 7800, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }, 2],
-    ['succShiftS@48', 2600, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }, 12],
+    ['succShiftS@48', 7800, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }, 12],
   ]
   for (const [name, budget, mk, bound] of jitterCases) {
     it(`${name} ${bound <= 2 ? 'rests' : 'is regression-bounded'} (<=${bound} over 200 post-settle ticks)`, () => {

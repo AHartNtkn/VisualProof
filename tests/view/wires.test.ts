@@ -5,33 +5,18 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { vec } from '../../src/view/vec'
 import { settle, recomputeRegions } from '../../src/view/relax'
-import { computeLegs, hobbyBezier, boundaryExits } from '../../src/view/wires'
+import { computeLegs, boundaryExits } from '../../src/view/wires'
+import { worldBindAnchor } from '../../src/view/engine'
 
 const p = (s: string) => parseTerm(s)
 
 const wrap = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
 
-describe('hobbyBezier — Metafont velocity control arms', () => {
-  it('control points leave the endpoints along the given tangents, forward', () => {
-    const ta = 0.4, tb = Math.PI - 0.3
-    const path = hobbyBezier({ x: 0, y: 0 }, ta, { x: 20, y: 5 }, tb)
-    // c1 - from must be a positive multiple of (cos ta, sin ta)
-    const d1x = path.c1.x - path.from.x, d1y = path.c1.y - path.from.y
-    const len1 = Math.hypot(d1x, d1y)
-    expect(len1).toBeGreaterThan(0)
-    expect(wrap(Math.atan2(d1y, d1x) - ta)).toBeCloseTo(0, 6)
-    const d2x = path.c2.x - path.to.x, d2y = path.c2.y - path.to.y
-    const len2 = Math.hypot(d2x, d2y)
-    expect(len2).toBeGreaterThan(0)
-    expect(wrap(Math.atan2(d2y, d2x) - tb)).toBeCloseTo(0, 6)
-  })
-})
-
-describe('computeLegs — chains draw tangent-continuously (PLAN 21 form)', () => {
-  it('a 3-endpoint wire settles a degree-3 tree point; degree-2 points draw C1', () => {
-    // three nodes sharing one line of identity => a tree chain with a
-    // free Plateau junction (junction BODIES are gone — the junction is
-    // the chain's own degree-3 point)
+describe('computeLegs — the traced θ-quadratic legs ARE the wire (PLAN 22)', () => {
+  it('a 3-endpoint wire yields three legs meeting at the hub, each leaving its port rim perpendicular', () => {
+    // three nodes sharing one line of identity => three hub legs into a single
+    // wire-owned branch point (there is no polyline chain — each leg IS the
+    // minimum-energy Euler-spiral interpolant of its live boundary data)
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('x'))
     const b = h.termNode(h.root, p('x'))
@@ -43,24 +28,24 @@ describe('computeLegs — chains draw tangent-continuously (PLAN 21 form)', () =
     ])
     const e = mkEngine(h.build(), [])
     settle(e, 2600)
-    const ch = e.chains.get(w)!
-    const junctions = ch.pts.map((_, i) => i).filter((i) => ch.adj[i]!.length >= 3)
-    expect(junctions.length, 'the tree has a junction point').toBeGreaterThanOrEqual(1)
-    // tangent continuity at degree-2 interior points: the drawn tangents of
-    // the two incident segments at the point are the SAME through-direction
     const legged = computeLegs(e).filter((g) => g.leg.wid === w)
-    for (let v = 0; v < ch.pts.length; v++) {
-      if (ch.adj[v]!.length !== 2) continue
-      const tangentsAtV: number[] = []
-      for (const g of legged) {
-        // interior ends carry wire-local ids w:<wid>:<idx>
-        if (g.leg.from.body === `w:${w}:${v}`) tangentsAtV.push(g.ta)
-        if (g.leg.to.body === `w:${w}:${v}`) tangentsAtV.push(g.tb)
-      }
-      if (tangentsAtV.length === 2) {
-        const diff = wrap(tangentsAtV[0]! - tangentsAtV[1]!)
-        // same through-direction read from either side: 0 or pi
-        expect(Math.min(Math.abs(diff), Math.abs(Math.abs(diff) - Math.PI))).toBeLessThan(1e-6)
+    expect(legged, 'a 3-endpoint wire draws three legs').toHaveLength(3)
+    for (const g of legged) {
+      // every leg starts ON its port's disc rim and leaves along the port
+      // normal (the perpendicular exit is a boundary condition of the solve)
+      const bind = e.wires.get(w)!.binds.find((bd) => bd.body === g.leg.from.body)!
+      const body = e.bodies.get(bind.body)!
+      const anchor = worldBindAnchor(body, bind.key)
+      expect(Math.hypot(g.pts[0]!.x - anchor.x, g.pts[0]!.y - anchor.y), 'leg starts on the rim').toBeLessThan(1e-6)
+      const la = body.localAnchor.get(bind.key)!
+      const normal = Math.atan2(la.y, la.x) + body.theta
+      const dir = Math.atan2(g.pts[1]!.y - g.pts[0]!.y, g.pts[1]!.x - g.pts[0]!.x)
+      expect(Math.abs(wrap(dir - normal)), 'leg leaves the port perpendicular').toBeLessThan(0.05)
+      // the traced polyline turns smoothly — no kink between adjacent segments
+      for (let k = 1; k < g.pts.length - 1; k++) {
+        const d0 = Math.atan2(g.pts[k]!.y - g.pts[k - 1]!.y, g.pts[k]!.x - g.pts[k - 1]!.x)
+        const d1 = Math.atan2(g.pts[k + 1]!.y - g.pts[k]!.y, g.pts[k + 1]!.x - g.pts[k]!.x)
+        expect(Math.abs(wrap(d1 - d0)), `kink at segment ${k}`).toBeLessThan(Math.PI / 4)
       }
     }
   })
@@ -92,13 +77,14 @@ describe('boundary exits are continuous around frame corners', () => {
       nb.pos = { x: Math.cos(a) * 25, y: Math.sin(a) * 25 }
       recomputeRegions(e)
       const ex = boundaryExits(e).find((x) => x.wid === w)!
+      const slotPt = ex.pts[ex.pts.length - 1]! // the connector terminates AT the slot
       if (prev !== null) {
-        maxStep = Math.max(maxStep, Math.hypot(ex.path.to.x - prev.x, ex.path.to.y - prev.y))
+        maxStep = Math.max(maxStep, Math.hypot(slotPt.x - prev.x, slotPt.y - prev.y))
         let dth = Math.abs(ex.tick.angle - prevTick!)
         while (dth > Math.PI) dth = Math.abs(dth - 2 * Math.PI)
         maxTickStep = Math.max(maxTickStep, dth)
       }
-      prev = { x: ex.path.to.x, y: ex.path.to.y }
+      prev = { x: slotPt.x, y: slotPt.y }
       prevTick = ex.tick.angle
     }
     // node moves ~1.3 units per sweep step; a continuous exit moves the same
@@ -148,8 +134,9 @@ describe('boundary exits are order-faithful: slot assignment never changes as bo
       const byWid = new Map(exits.map((x) => [x.wid, x]))
       boundary.forEach((wid, i) => {
         const ex = byWid.get(wid)!
-        expect(ex.path.to.x, `boundary ${i} (${wid}) x at slot ${i}`).toBeCloseTo(slots[i]!.point.x, 6)
-        expect(ex.path.to.y, `boundary ${i} (${wid}) y at slot ${i}`).toBeCloseTo(slots[i]!.point.y, 6)
+        const slotPt = ex.pts[ex.pts.length - 1]! // the connector terminates AT the slot
+        expect(slotPt.x, `boundary ${i} (${wid}) x at slot ${i}`).toBeCloseTo(slots[i]!.point.x, 6)
+        expect(slotPt.y, `boundary ${i} (${wid}) y at slot ${i}`).toBeCloseTo(slots[i]!.point.y, 6)
       })
     }
   })

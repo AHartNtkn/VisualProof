@@ -29,7 +29,6 @@ function endId(wid: WireId, w: WireView, end: WireLegEnd): LegEnd {
   switch (end.kind) {
     case 'bind': return { body: w.binds[end.i]!.body, key: w.binds[end.i]!.key }
     case 'tip': return { body: w.tipBodyId!, key: null }
-    case 'exit': return { body: `w:${wid}:exit`, key: null }
     case 'hub': { const h = w.hub!; return h.kind === 'body' ? { body: h.bodyId, key: null } : { body: `w:${wid}:hub`, key: null } }
   }
 }
@@ -69,13 +68,13 @@ export function boundaryExits(e: Engine): BoundaryExit[] {
   const slots = frameSlots(fbb, e.boundary.length)
   const out: BoundaryExit[] = []
   for (const [wid, w] of e.wires) {
-    if (w.slot === null || w.exit === null) continue
+    if (w.slot === null || w.hub === null || w.hub.kind !== 'body') continue
     const slot = slots[w.slot]
     if (slot === undefined) continue
-    // a short quadratic from the exit point into the slot along the slot normal
-    // (a straight join at rest when the exit sits at the slot; a smooth
-    // perpendicular meeting under transient offset)
-    const ex = w.exit.pos, sp = slot.point
+    // a short quadratic from the exit HUB (the slot-attracted junction body)
+    // into the slot along the slot normal (a straight join at rest when the hub
+    // sits at the slot; a smooth perpendicular meeting under transient offset)
+    const ex = e.bodies.get(w.hub.bodyId)!.pos, sp = slot.point
     const handle = Math.hypot(sp.x - ex.x, sp.y - ex.y) * 0.5
     const cx = sp.x + Math.cos(slot.normal) * handle, cy = sp.y + Math.sin(slot.normal) * handle
     const pts: Vec2[] = []
@@ -98,7 +97,9 @@ export function existentialStubs(e: Engine): ExStub[] {
   for (const [wid, w] of e.wires) {
     let dotId: string | null = null
     if (w.tipBodyId !== null) dotId = w.tipBodyId
-    else if (w.hub !== null && w.hub.kind === 'body') dotId = w.hub.bodyId
+    // a ∀ via-body hub is an ∃ dot; a BOUNDARY exit hub (slot !== null) is not —
+    // it rides the frame and is drawn by boundaryExits, never as a dangling dot
+    else if (w.hub !== null && w.hub.kind === 'body' && w.slot === null) dotId = w.hub.bodyId
     if (dotId === null) continue
     const b = e.bodies.get(dotId)!
     out.push({ wid, from: b.pos, to: b.pos, dot: b.pos })

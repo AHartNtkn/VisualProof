@@ -2,21 +2,17 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine, recomputeRegions, legPaths, settle, boundaryExits, existentialStubs } from '../../src/view/index'
-import type { WirePath } from '../../src/view/index'
+import type { Vec2 } from '../../src/view/index'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
 import { hitTest, dragTarget, buildSelection } from '../../src/app/hittest'
 
 const p = (s: string) => parseTerm(s)
 
-/** Point on a cubic Bézier at parameter t. */
-function bezierAt(path: WirePath, t: number): { x: number; y: number } {
-  const u = 1 - t
-  const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t
-  return {
-    x: a * path.from.x + b * path.c1.x + c * path.c2.x + d * path.to.x,
-    y: a * path.from.y + b * path.c1.y + c * path.c2.y + d * path.to.y,
-  }
+/** A point ON a traced leg polyline (plan 22: the polyline IS the wire), its
+    midpoint sample — guaranteed on the drawn curve, clear of the end discs. */
+function midOf(pts: readonly Vec2[]): { x: number; y: number } {
+  return pts[Math.floor(pts.length / 2)]!
 }
 
 function setup() {
@@ -65,8 +61,8 @@ describe('hitTest', () => {
     e2.bodies.get(a)!.pos = vec(0, 0)
     e2.bodies.get(b)!.pos = vec(80, 0)
     recomputeRegions(e2)
-    const path = legPaths(e2).find((l) => l.wid === w)!.path
-    const mid = bezierAt(path, 0.5) // guaranteed on the spline, clear of both discs
+    const pts = legPaths(e2).find((l) => l.wid === w)!.pts
+    const mid = midOf(pts) // guaranteed on the traced leg, clear of both discs
     expect(hitTest(e2, mid)).toEqual({ kind: 'wire', id: w })
   })
 
@@ -91,7 +87,7 @@ describe('dragTarget — what a press-and-drag grabs', () => {
     const w = h2.wire(h2.root, [{ node: a, port: { kind: 'output' } }])
     const e2 = mkEngine(h2.build(), [])
     settle(e2, 2600) // the ∃ dot parks just outside the disc's clearance once settled
-    const j = e2.bodies.get(e2.chains.get(w)!.homed[0]!.bodyId)!
+    const j = e2.bodies.get(e2.wires.get(w)!.tipBodyId!)!
     expect(hitTest(e2, j.pos)).toEqual({ kind: 'wire', id: w })
     expect(dragTarget(e2, j.pos)).toEqual({ kind: 'body', id: j.id })
   })
@@ -126,7 +122,7 @@ describe('buildSelection', () => {
 })
 
 describe('engine hit targets (junctions, frame exits → existing vocabulary)', () => {
-  it('a click on a branch junction resolves to its wire (the junction is the chain\'s own point)', () => {
+  it('a click on a branch junction resolves to its wire (the hub is the wire\'s own point)', () => {
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('x'))
     const b = h.termNode(h.root, p('x'))
@@ -139,9 +135,11 @@ describe('engine hit targets (junctions, frame exits → existing vocabulary)', 
     const e = mkEngine(h.build(), [])
     settle(e, 2600)
     recomputeRegions(e)
-    const ch = e.chains.get(w)!
-    const ji = ch.pts.map((_, i) => i).find((i) => ch.adj[i]!.length >= 3)!
-    expect(hitTest(e, ch.pts[ji]!)).toEqual({ kind: 'wire', id: w })
+    // a same-scope k-ary junction is a wire-owned hub POINT; every leg ends on
+    // it, so a click there lands on the traced legs and resolves to the wire
+    const hub = e.wires.get(w)!.hub!
+    expect(hub.kind).toBe('point')
+    expect(hitTest(e, hub.kind === 'point' ? hub.pos : e.bodies.get(hub.bodyId)!.pos)).toEqual({ kind: 'wire', id: w })
   })
 
   it('a click on an existential stub resolves to its internal wire', () => {

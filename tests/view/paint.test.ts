@@ -132,7 +132,7 @@ describe('frame pip — a rim dot marks boundary slot 0 when >= 2 boundary wires
 })
 
 describe('law 5 — linework coherence: wires and lambda-anatomy share stroke and width', () => {
-  it('every wire bezier and every term-anatomy arc uses theme.wire at theme.wireW', () => {
+  it('every wire polyline and every term-anatomy arc uses theme.wire at theme.wireW', () => {
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('\\f. \\x. f (f x)'))
     const b = h.termNode(h.root, p('y'))
@@ -144,10 +144,11 @@ describe('law 5 — linework coherence: wires and lambda-anatomy share stroke an
     const e = mkEngine(d, [])
     settle(e, 600)
     const shapes = paint(e, LIGHT)
-    const beziers = shapes.filter((s) => s.kind === 'bezier')
-    expect(beziers.length).toBeGreaterThan(0)
-    for (const s of beziers) {
-      if (s.kind !== 'bezier') continue
+    // plan 22: a wire leg IS its traced θ-quadratic polyline (no spline fit)
+    const wires = shapes.filter((s) => s.kind === 'polyline')
+    expect(wires.length).toBeGreaterThan(0)
+    for (const s of wires) {
+      if (s.kind !== 'polyline') continue
       expect(s.stroke).toBe(LIGHT.wire)
       expect(s.width).toBe(LIGHT.wireW)
     }
@@ -224,13 +225,13 @@ describe('theme toggle', () => {
     ])
     const e = mkEngine(h.build(), [])
     settle(e, 400)
-    const lightWire = paint(e, LIGHT).find((s) => s.kind === 'bezier')!
-    const darkWire = paint(e, DARK).find((s) => s.kind === 'bezier')!
+    const lightWire = paint(e, LIGHT).find((s) => s.kind === 'polyline')!
+    const darkWire = paint(e, DARK).find((s) => s.kind === 'polyline')!
     expect(LIGHT.wire).not.toBe(DARK.wire)
-    expect(lightWire.kind === 'bezier' && lightWire.stroke).toBe(LIGHT.wire)
-    expect(darkWire.kind === 'bezier' && darkWire.stroke).toBe(DARK.wire)
-    expect(lightWire.kind === 'bezier' && lightWire.glow).toBeNull()
-    expect(darkWire.kind === 'bezier' && darkWire.glow).toBe(DARK.wire)
+    expect(lightWire.kind === 'polyline' && lightWire.stroke).toBe(LIGHT.wire)
+    expect(darkWire.kind === 'polyline' && darkWire.stroke).toBe(DARK.wire)
+    expect(lightWire.kind === 'polyline' && lightWire.glow).toBeNull()
+    expect(darkWire.kind === 'polyline' && darkWire.glow).toBe(DARK.wire)
   })
 })
 

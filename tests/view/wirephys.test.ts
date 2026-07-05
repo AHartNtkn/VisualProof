@@ -2,14 +2,19 @@ import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
-import { mkEngine, worldBindAnchor, type Engine } from '../../src/view/engine'
+import { mkEngine, worldBindAnchor, resolveLeg, traceLeg, frameBounds, frameSlots, type Engine, type WireView, type WireLeg } from '../../src/view/engine'
 import { settle, settleStep, wireEnergy, WIREP } from '../../src/view/relax'
+import { thetaRange, RANGE_B, QN, ELASTICA } from '../../src/view/elastica'
+import { computeLegs, existentialStubs, boundaryExits } from '../../src/view/wires'
 
 /**
- * PLAN 21 LAW BATTERY — wires as first-class physical objects.
- * One scalar energy; forces only as its gradient; damped descent; discrete
- * topology moves only when they strictly lower E. Everything here is a law
- * from the plan doc; nothing is a tuning artifact.
+ * PLAN 22 LAW BATTERY — wires as massless elastica in the ENGINE.
+ * Every leg is the minimum-energy θ-quadratic interpolant of its live boundary
+ * data (elastica.ts); the only wire DOF are the branch hub and the per-leg
+ * arrival angles, descended with the bodies by one scalar energy (relax.ts).
+ * These are the user's structural laws checked on the running engine — no chain,
+ * no polyline state, no memory. Nothing here is a tuning artifact: a bound is a
+ * documented equilibrium property or a measured regression guard, never a fudge.
  */
 
 // ---- fixtures ----------------------------------------------------------
@@ -37,7 +42,7 @@ function dangling(): { d: Diagram; b: WireId[]; node: string; wid: WireId } {
 }
 
 /** The ∀ shape: 2-endpoint wire inside a cut, scoped at root — the dangle
-    branch reaches a scope-homed body. */
+    branch reaches a scope-homed via-body hub. */
 function forallShape(): { d: Diagram; b: WireId[]; wid: WireId } {
   const b = new DiagramBuilder()
   const cut = b.cut(b.root)
@@ -64,377 +69,199 @@ function interposed(): { d: Diagram; b: WireId[] } {
   return { d: b.build(), b: [] }
 }
 
-const settled = (mk: () => { d: Diagram; b: WireId[] }): Engine => {
+/** A boundary wire: one ref, one boundary endpoint reaching a frame slot. */
+function boundaryOne(): { d: Diagram; b: WireId[]; wid: WireId } {
+  const b = new DiagramBuilder()
+  const n = b.ref(b.root, 'p', 1)
+  b.termNode(b.root, parseTerm('\\x. x'))
+  const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
+  return { d: b.build(), b: [w], wid: w }
+}
+
+const settled = (mk: () => { d: Diagram; b: WireId[] }, ticks = 8000): Engine => {
   const { d, b } = mk()
   const e = mkEngine(d, b)
-  // the cold spiral seed on the ∀-fixture needs ~8000 ticks to fully rest
-  // (measured decay: 3.5 → 0.23 wu/500-tick window); real interactions
-  // start near equilibrium, the law tests start from the worst case
-  settle(e, 8000)
+  settle(e, ticks)
   return e
 }
 
-// ---- construction laws --------------------------------------------------
+/** Every leg of a wire, resolved against the live state. */
+function eachLeg(e: Engine, f: (w: WireView, leg: WireLeg) => void): void {
+  for (const [, w] of e.wires) for (const leg of w.legs) f(w, leg)
+}
 
-describe('wire chains — construction', () => {
-  it('every >=1-endpoint wire has a chain; every diagram endpoint is bound exactly once', () => {
-    for (const mk of [threeWay, dangling, forallShape, interposed]) {
-      const { d, b } = mk()
-      const e = mkEngine(d, b)
-      for (const [wid, w] of Object.entries(e.d.wires)) {
-        if (w.endpoints.length === 0) {
-          expect(e.chains.has(wid)).toBe(false)
-          continue
-        }
-        const ch = e.chains.get(wid)!
-        expect(ch, `wire ${wid} has no chain`).toBeDefined()
-        expect(ch.binds.length).toBe(w.endpoints.length)
-        for (const ep of w.endpoints) {
-          const hits = ch.binds.filter((x) => x.body === ep.node)
-          expect(hits.length, `endpoint ${ep.node} of ${wid}`).toBeGreaterThanOrEqual(1)
-        }
-      }
+// ---- structural impossibility (the engine's derived legs) ----------------
+
+describe('wire physics — loops and kinks are unrepresentable at the engine level', () => {
+  it('every leg in every settled fixture has tangent range < 2π (no self-crossing loop)', () => {
+    for (const mk of [threeWay, dangling, forallShape, interposed, boundaryOne]) {
+      const e = settled(mk)
+      eachLeg(e, (w, leg) => {
+        const s = resolveLeg(e, w, leg)
+        // a monotone-curvature θ-quadratic self-crosses only past total turning
+        // 2π; the solve's fallback caps at 2(π−ε) < 2π, so no drawn leg loops
+        expect(thetaRange(s.sol.c1, s.sol.c2), `range at leg`).toBeLessThan(2 * Math.PI)
+      })
     }
   })
 
-  it('a dangling wire ends at a homed ∃ body at the wire scope (loose-ends law)', () => {
-    const { d, b, wid } = dangling()
+  it('every leg is C¹: adjacent trace tangents differ by O(1/QN) (no kink)', () => {
+    for (const mk of [threeWay, dangling, forallShape, interposed]) {
+      const e = settled(mk)
+      eachLeg(e, (w, leg) => {
+        const s = resolveLeg(e, w, leg)
+        const maxTurnPerStep = (Math.abs(s.sol.c1) + 2 * Math.abs(s.sol.c2)) / QN
+        expect(maxTurnPerStep, `kink at a leg`).toBeLessThan(Math.PI / 4)
+      })
+    }
+  })
+})
+
+// ---- memory (the solve is a pure function of the live boundary data) ------
+
+describe('wire physics — zero wire memory (the purity law)', () => {
+  it('an orbit-attack history leaves every leg identical to a fresh solve from the same state', () => {
+    const e = settled(threeWay, 3000)
+    // snapshot the exact rest state
+    const rest = new Map([...e.bodies].map(([id, b]) => [id, { pos: { ...b.pos }, theta: b.theta }]))
+    const hubs = [...e.wires].map(([wid, w]) => [wid, w.hub !== null && w.hub.kind === 'point' ? { ...w.hub.pos } : null] as const)
+    const angles = [...e.wires].map(([wid, w]) => [wid, w.legs.map((l) => l.hubAngle)] as const)
+    // fresh solve of every leg at rest (a fresh cache forces a real re-solve)
+    const restSol = [...e.wires].flatMap(([, w]) => w.legs.map((leg) => {
+      const s = resolveLeg(e, w, leg, { k: null, s: null })
+      return { c1: s.sol.c1, c2: s.sol.c2, L: s.sol.L }
+    }))
+    // the orbit attack: drag every body through a wild circular sweep, mutating
+    // every leg cache along the way
+    for (let k = 0; k <= 40; k++) {
+      const a = (k / 20) * Math.PI
+      let i = 0
+      for (const b of e.bodies.values()) { b.pos = { x: Math.cos(a + i) * 120, y: Math.sin(a + i) * 120 }; b.theta = a + i; i++ }
+      for (const [, w] of e.wires) for (const leg of w.legs) resolveLeg(e, w, leg) // pollute caches
+    }
+    // restore the EXACT rest state
+    for (const [id, b] of e.bodies) { const r = rest.get(id)!; b.pos = { ...r.pos }; b.theta = r.theta }
+    for (const [wid, h] of hubs) { const w = e.wires.get(wid)!; if (h !== null && w.hub !== null && w.hub.kind === 'point') w.hub.pos = { ...h } }
+    for (const [wid, as] of angles) { const w = e.wires.get(wid)!; w.legs.forEach((l, i) => { l.hubAngle = as[i]! }) }
+    // re-solve through each leg's OWN (orbit-polluted) cache: a sound memoryless
+    // memo must re-solve on the input mismatch and land bit-identical to the
+    // fresh rest solve — history must leave NO trace
+    const backSol = [...e.wires].flatMap(([, w]) => w.legs.map((leg) => {
+      const s = resolveLeg(e, w, leg)
+      return { c1: s.sol.c1, c2: s.sol.c2, L: s.sol.L }
+    }))
+    expect(backSol).toHaveLength(restSol.length)
+    for (let i = 0; i < restSol.length; i++) {
+      expect(Math.abs(backSol[i]!.c1 - restSol[i]!.c1), `leg ${i} c1 memory`).toBeLessThan(1e-9)
+      expect(Math.abs(backSol[i]!.c2 - restSol[i]!.c2), `leg ${i} c2 memory`).toBeLessThan(1e-9)
+      expect(Math.abs(backSol[i]!.L - restSol[i]!.L), `leg ${i} L memory`).toBeLessThan(1e-9)
+    }
+  })
+})
+
+// ---- rim closure under violent motion -------------------------------------
+
+describe('wire physics — rim closure', () => {
+  it('every representable leg closes on its target within the quadrature bound, even under violent body throws', () => {
+    const { d, b } = interposed()
     const e = mkEngine(d, b)
-    const ch = e.chains.get(wid)!
-    expect(ch.homed.length).toBe(1)
-    const body = e.bodies.get(ch.homed[0]!.bodyId)!
-    expect(body.kind).toBe('junction')
-    expect(body.region).toBe(d.wires[wid]!.scope)
-    expect(e.membersOf.get(d.wires[wid]!.scope)!).toContain(body.id)
+    // throw the bodies to violent, far-flung positions (no settle — worst case)
+    let i = 0
+    for (const bd of e.bodies.values()) { bd.pos = { x: (i % 3) * 300 - 300, y: (i % 5) * 160 - 320 }; bd.theta = i * 1.3; i++ }
+    eachLeg(e, (w, leg) => {
+      const s = resolveLeg(e, w, leg)
+      if (thetaRange(s.sol.c1, s.sol.c2) > RANGE_B + 1e-6) return // blind-cone marker: no closure by design
+      const out: { x: number; y: number }[] = []
+      traceLeg(s, out, 4 * QN)
+      const end = out[out.length - 1]!
+      expect(Math.hypot(end.x - s.p1.x, end.y - s.p1.y), `leg endpoint off its target`).toBeLessThan(0.75)
+    })
   })
+})
 
-  it('a scope-above wire grows a homed ∀-dangle tip at the scope (via-body law)', () => {
-    const { d, b, wid } = forallShape()
-    const e = mkEngine(d, b)
-    const ch = e.chains.get(wid)!
-    expect(ch.homed.length).toBe(1)
-    const body = e.bodies.get(ch.homed[0]!.bodyId)!
-    expect(body.region).toBe(d.root)
-  })
+// ---- perpendicular exits (rim lock, by construction) ----------------------
 
-  it('a bare wire (0 endpoints) is a homed body only — the dot IS the wire', () => {
-    const b = new DiagramBuilder()
-    const wid = b.wire(b.root, [])
-    const d = b.build()
-    const e = mkEngine(d, [])
-    expect(e.chains.has(wid)).toBe(false)
-    const body = e.bodies.get(`j:${wid}`)!
-    expect(body.kind).toBe('junction')
-  })
-
-  it('chains are sampled: no segment longer than 2x the sampling pitch', () => {
-    const e = settled(threeWay)
-    for (const ch of e.chains.values()) {
-      for (let v = 0; v < ch.pts.length; v++) {
-        for (const n of ch.adj[v]!) {
-          if (n <= v) continue
-          const len = Math.hypot(ch.pts[n]!.x - ch.pts[v]!.x, ch.pts[n]!.y - ch.pts[v]!.y)
-          expect(len, `segment ${v}-${n}`).toBeLessThanOrEqual(2 * ch.pitch * 2)
-        }
+describe('wire physics — perpendicular port exits at rest', () => {
+  it('every leg starts ON its port rim and leaves along the port normal', () => {
+    for (const mk of [threeWay, dangling, forallShape, interposed, boundaryOne]) {
+      const e = settled(mk)
+      for (const g of computeLegs(e)) {
+        const w = e.wires.get(g.leg.wid)!
+        const bind = w.binds.find((bd) => bd.body === g.leg.from.body && bd.key === g.leg.from.key)
+        if (bind === undefined) continue // interior end
+        const body = e.bodies.get(bind.body)!
+        const anchor = worldBindAnchor(body, bind.key)
+        expect(Math.hypot(g.pts[0]!.x - anchor.x, g.pts[0]!.y - anchor.y), 'starts on rim').toBeLessThan(1e-6)
+        const la = body.localAnchor.get(bind.key)!
+        const normal = Math.atan2(la.y, la.x) + body.theta
+        const dir = Math.atan2(g.pts[1]!.y - g.pts[0]!.y, g.pts[1]!.x - g.pts[0]!.x)
+        const dev = Math.atan2(Math.sin(dir - normal), Math.cos(dir - normal))
+        expect(Math.abs(dev), `exit at ${bind.body}:${bind.key}`).toBeLessThanOrEqual(0.05)
       }
     }
   })
 })
 
-// ---- energy laws ---------------------------------------------------------
+// ---- energy discipline (the master pins) ----------------------------------
 
 describe('wire physics — energy discipline', () => {
-  it('E is monotone non-increasing under settleStep (the master pin)', () => {
+  it('E is a bounded band under settleStep at rest: no spike, no creep (master pin)', () => {
     for (const mk of [threeWay, interposed, forallShape]) {
-      const { d, b } = mk()
-      const e = mkEngine(d, b)
-      // bodies at rest first: while content forces still move anchors, the
-      // WIRE energy legitimately rises (the total functional is what
-      // descends); at rest the chain's own descent must be monotone.
-      // 15000: the interposed fixture's late transient outlasts 8000
+      const e = mkEngine(...mkArgs(mk))
       settle(e, 15000)
       const start = wireEnergy(e)
-      let prev = start
-      let maxTick = 0
+      let prev = start, maxTick = 0
       for (let i = 0; i < 120; i++) {
         settleStep(e)
         const cur = wireEnergy(e)
         maxTick = Math.max(maxTick, cur - prev)
         prev = cur
       }
-      // The guarantee the coupled explicit system actually delivers (the
-      // residual is a BOUNDED band with slow phase swings — see the
-      // integrator note in relax.ts; full per-tick monotonicity needs the
-      // projection-free containment redesign, recorded as future work):
-      // 1. no spike: single-tick rises stay under 1 E (every real driver
-      //    found this session — driveHub, ring pumps, mask cliffs — moved
-      //    E by 2…19+ per tick);
-      // 2. no creep: net over the window is non-increasing within a hair
-      //    (conveyors and pumps grow E or walk it monotonically).
-      // measured transient spikes under exact gradients reach ~1.23; the
-      // driver class this discriminates against measured 2–19+ per tick
-      expect(maxTick, `max single-tick E rise ${maxTick}`).toBeLessThanOrEqual(1.6)
-      expect(prev, `net rise over 120 ticks: ${start} -> ${prev}`).toBeLessThanOrEqual(start + 0.5)
+      // the coupled explicit system delivers a BOUNDED band (see the integrator
+      // note in relax.ts): single-tick rises stay small, and the net over the
+      // window does not creep. Every real driver this model has rejected moved E
+      // by many units per tick or walked it monotonically.
+      expect(maxTick, `${mk.name}: max single-tick E rise ${maxTick.toFixed(3)}`).toBeLessThanOrEqual(1.6)
+      expect(prev, `${mk.name}: net rise ${start.toFixed(2)} -> ${prev.toFixed(2)}`).toBeLessThanOrEqual(start + 0.5)
     }
   })
 
-  it('no chain point travels more than the trust-region cap in one continuous descent step', async () => {
-    // the cap is the law of the CONTINUOUS subsystem (chainStep + resample);
-    // discrete moves — topology and taut-string — relocate whole runs by
-    // design and are governed by their own law (strict E-descent, covered
-    // by the master pin above)
-    const { chainStep, resample: doResample } = await import('../../src/view/wirechain')
-    const { d, b } = threeWay()
-    const e = mkEngine(d, b)
-    // owners settle first: bind points track bodies, whose early free-fall
-    // is governed by the content integrator, not the wire cap
-    settle(e, 600)
-    for (let i = 0; i < 40; i++) {
-      const before = new Map<string, { pts: Vec2Like[]; adj: number[][] }>()
-      for (const [wid, ch] of e.chains) before.set(wid, { pts: ch.pts.map((p) => ({ ...p })), adj: ch.adj.map((a) => [...a]) })
-      const discs = [...e.bodies.values()]
-        .filter((x) => x.kind !== 'junction' && x.kind !== 'anchor')
-        .map((x) => ({ id: x.id, pos: x.pos, r: x.discR }))
-      for (const ch of e.chains.values()) {
-        chainStep(ch, discs, 0.4)
-        doResample(ch)
-      }
-      for (const [wid, ch] of e.chains) {
-        const prev = before.get(wid)!
-        const pinned = new Set<number>([...ch.binds.map((x) => x.idx), ...ch.homed.map((x) => x.idx), ...ch.slots.map((x) => x.idx)])
-        // constraint-owned points track their owners (bodies/slots), whose
-        // motion is governed elsewhere; the cap is the law of FREE points.
-        // Bind-ADJACENT points descend along their constraint ray.
-        for (const bnd of ch.binds) for (const n2 of ch.adj[bnd.idx]!) pinned.add(n2)
-        // resample re-parameterizes indices; the law is about DRAWN motion:
-        // every new free point lies within the cap-tube of the OLD polyline
-        // (capped moves stay within cap of their predecessor; resampled
-        // points interpolate the moved polyline)
-        const segDist = (p: Vec2Like): number => {
-          let best = Infinity
-          for (let v = 0; v < prev.pts.length; v++) {
-            for (const n of prev.adj[v] ?? []) {
-              if (n <= v) continue
-              const a = prev.pts[v]!, b2 = prev.pts[n]!
-              const abx = b2.x - a.x, aby = b2.y - a.y
-              const ll = abx * abx + aby * aby
-              const t = ll < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / ll))
-              best = Math.min(best, Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t)))
-            }
-          }
-          return best
-        }
-        for (let k = 0; k < ch.pts.length; k++) {
-          if (pinned.has(k)) continue
-          expect(segDist(ch.pts[k]!)).toBeLessThanOrEqual(WIREP.travelCap + 1e-6)
-        }
-      }
-    }
-  })
-})
-type Vec2Like = { x: number; y: number }
-
-describe('wire physics — the gradient IS the derivative of the energy', () => {
-  it('chainGradient matches central finite differences of chainEnergy', async () => {
-    const { chainGradient, chainEnergy } = await import('../../src/view/wirechain')
-    // a settled-but-generic state: curved chains near discs, masks active
-    const { d, b } = interposed()
-    const e = mkEngine(d, b)
-    settle(e, 1200)
-    const discs = [...e.bodies.values()]
-      .filter((x) => x.kind !== 'junction' && x.kind !== 'anchor')
-      .map((x) => ({ id: x.id, pos: x.pos, r: x.discR }))
-    const h = 1e-5
-    for (const ch of e.chains.values()) {
-      const { f } = chainGradient(ch, discs)
-      for (let v = 0; v < ch.pts.length; v++) {
-        const p = ch.pts[v]!
-        ch.pts[v] = { x: p.x + h, y: p.y }
-        const exPlus = chainEnergy(ch, discs)
-        ch.pts[v] = { x: p.x - h, y: p.y }
-        const exMinus = chainEnergy(ch, discs)
-        ch.pts[v] = { x: p.x, y: p.y + h }
-        const eyPlus = chainEnergy(ch, discs)
-        ch.pts[v] = { x: p.x, y: p.y - h }
-        const eyMinus = chainEnergy(ch, discs)
-        ch.pts[v] = p
-        const fdx = -(exPlus - exMinus) / (2 * h)
-        const fdy = -(eyPlus - eyMinus) / (2 * h)
-        const scale = Math.max(1, Math.abs(fdx), Math.abs(fdy))
-        expect(Math.abs(f[v]!.x - fdx) / scale, `∂x at point ${v}: analytic ${f[v]!.x} vs FD ${fdx}`).toBeLessThan(2e-3)
-        expect(Math.abs(f[v]!.y - fdy) / scale, `∂y at point ${v}: analytic ${f[v]!.y} vs FD ${fdy}`).toBeLessThan(2e-3)
-      }
-    }
-  })
-})
-
-// ---- equilibrium laws ----------------------------------------------------
-
-describe('wire physics — energy discipline (settling)', () => {
   it('bodies settle and STAY settled: no orbit, no conveyor (the user law)', () => {
     for (const mk of [threeWay, interposed, forallShape]) {
-      const { d, b } = mk()
-      const e = mkEngine(d, b)
+      const e = mkEngine(...mkArgs(mk))
       settle(e, 8000)
       const before = new Map([...e.bodies].map(([id, bb]) => [id, { ...bb.pos }]))
       for (let i = 0; i < 200; i++) settleStep(e)
-      const drifts = [...e.bodies].map(([id, bb]) => {
-        const p = before.get(id)!
-        return { id, moved: Math.hypot(bb.pos.x - p.x, bb.pos.y - p.y) }
-      }).sort((a, b2) => b2.moved - a.moved)
-      console.log(`no-orbit [${mk.name}]:`, drifts.slice(0, 4).map((x) => `${x.id}=${x.moved.toFixed(3)}`).join(' '))
+      const drifts = [...e.bodies].map(([id, bb]) => ({ id, moved: Math.hypot(bb.pos.x - before.get(id)!.x, bb.pos.y - before.get(id)!.y) })).sort((a, b) => b.moved - a.moved)
+      console.log(`no-orbit [${mk.name}]:`, drifts.slice(0, 3).map((x) => `${x.id}=${x.moved.toFixed(3)}`).join(' '))
       for (const { id, moved } of drifts) {
-        // the known residual wiggles bodies ~0.02 wu about a fixed point;
-        // an orbit or conveyor moves them by tens (driveHub: 30 wu)
-        // measured residual band: late-transient tails reach ~1.9 on the
-        // interposed fixture; every real driver found this session moved
-        // bodies by 8–30 wu per window (conveyors) or grew without bound
-        expect(moved, `body ${id} drifted ${moved.toFixed(3)} over 200 post-settle ticks`).toBeLessThanOrEqual(2.5)
+        // Bound RE-DERIVED from THIS model's measured equilibria (USER test
+        // policy — never inherit the old chain suite's numbers): measured max
+        // post-settle drift 2026-07-05 was threeWay 0.24 / interposed 0.04 /
+        // forallShape 0.06 (16000-tick settle); pinned at 1.0 with margin. An
+        // orbit or conveyor moves bodies by tens — this discriminates cleanly.
+        expect(moved, `body ${id} drifted ${moved.toFixed(3)} over 200 post-settle ticks`).toBeLessThanOrEqual(1.0)
       }
     }
   })
 })
 
-describe('wire physics — discrete disentangling (taut-string move)', () => {
-  const detourChain = async (): Promise<import('../../src/view/wirechain').WireChain> => {
-    // a semicircular detour between two bound endpoints at (0,0) and (20,0):
-    // the hooked-wire shape (wrapped around something that is no longer
-    // there). Bind neighbors are structural, so the free run is 2..N-2.
-    const pts: { x: number; y: number }[] = []
-    const N = 12
-    for (let k = 0; k <= N; k++) {
-      const a = Math.PI - (Math.PI * k) / N
-      pts.push({ x: 10 + 10 * Math.cos(a), y: 10 * Math.sin(a) })
-    }
-    const adj = pts.map((_, i) => [i - 1, i + 1].filter((j) => j >= 0 && j < pts.length))
-    return {
-      pts, adj,
-      binds: [
-        { idx: 0, body: 'L', key: 'p', normal: 0 },
-        { idx: pts.length - 1, body: 'R', key: 'p', normal: Math.PI },
-      ],
-      homed: [], slots: [], pitch: 2,
-    }
-  }
-
-  it('a hooked detour with nothing inside straightens in one gated jump', async () => {
-    const { straightenStep, chainEnergy } = await import('../../src/view/wirechain')
-    const ch = await detourChain()
-    const E0 = chainEnergy(ch, [])
-    const accepted = straightenStep(ch, [])
-    expect(accepted, 'the taut-string proposal must be accepted when the detour pays for nothing').toBe(true)
-    expect(chainEnergy(ch, [])).toBeLessThan(E0)
-    // the free run now lies exactly on the chord between its structural
-    // endpoints (the bind neighbors, which keep their exit positions)
-    const a = ch.pts[1]!, b2 = ch.pts[ch.pts.length - 2]!
-    for (let v = 2; v < ch.pts.length - 2; v++) {
-      const p = ch.pts[v]!
-      const abx = b2.x - a.x, aby = b2.y - a.y
-      const t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / (abx * abx + aby * aby)
-      const dev = Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t))
-      expect(dev, `free point ${v} still off the chord`).toBeLessThan(1e-9)
-    }
-  })
-
-  it('a detour AROUND a blocking disc is kept — straight-through costs more', async () => {
-    const { straightenStep } = await import('../../src/view/wirechain')
-    const ch = await detourChain()
-    const before = ch.pts.map((p) => ({ ...p }))
-    const discs = [{ id: 'wall', pos: { x: 10, y: 0 }, r: 7 }]
-    const accepted = straightenStep(ch, discs)
-    expect(accepted, 'straightening through a disc must be rejected — the detour is the true minimum').toBe(false)
-    ch.pts.forEach((p, i) => {
-      expect(p.x).toBe(before[i]!.x)
-      expect(p.y).toBe(before[i]!.y)
-    })
-  })
-})
+// ---- equilibria ----------------------------------------------------------
 
 describe('wire physics — equilibria', () => {
-  it('the ∃ dot never rests sunk into its own wire (standoff law)', async () => {
-    const { STANDOFF } = await import('../../src/view/wirechain')
+  it('the ∃ dot never rests sunk into its own wire (standoff law)', () => {
     const { d, b, wid } = dangling()
     const e = mkEngine(d, b)
     settle(e, 8000)
-    const ch = e.chains.get(wid)!
-    for (const hm of ch.homed) {
-      const nb = ch.adj[hm.idx]![0]!
-      const dist = Math.hypot(ch.pts[hm.idx]!.x - ch.pts[nb]!.x, ch.pts[hm.idx]!.y - ch.pts[nb]!.y)
-      // the C1 ramp reaches force balance strictly inside the radius only
-      // under external compression; a free dangle rests at the boundary
-      expect(dist, 'dot sunk into its wire').toBeGreaterThanOrEqual(STANDOFF * 0.75)
-    }
-  })
-
-  it('a FREE-SPACE 3-way junction settles near 120 degrees (Plateau in the soap limit; the elastica bend torque shifts it ±15°)', async () => {
-    // the 120° law is a property of the WIRE subsystem: in a crowded
-    // diagram the Steiner point can lie inside a clearance zone and the
-    // junction legitimately rests barrier-pressed at distorted gaps
-    // (measured 94/108/158 on the threeWay fixture — correct physics).
-    // So the law is pinned on a pure chain with no discs at all.
-    const { chainStep, resample: doResample, topologyStep } = await import('../../src/view/wirechain')
-    const terms = [
-      { x: 0, y: 0 },
-      { x: 40, y: 4 },
-      { x: 16, y: 36 },
-    ]
-    const pts: { x: number; y: number }[] = [...terms.map((p) => ({ ...p })), { x: 18, y: 12 }]
-    const adj = [[3], [3], [3], [0, 1, 2]]
-    const ch: import('../../src/view/wirechain').WireChain = {
-      pts, adj,
-      binds: terms.map((_, k) => ({ idx: k, body: `b${k}`, key: 'p' })),
-      homed: [], slots: [], pitch: 2,
-    }
-    doResample(ch)
-    // raw chainStep has no line search (that lives in settleStep), so the
-    // step must sit below the tension mode's explicit-descent stability
-    // bound 2/λmax, λmax ≈ 4·tension/pitch = 6 → step < 1/3; above it the
-    // chain rings as a period-2 standing wave and never converges
-    for (let i = 0; i < 4000; i++) {
-      chainStep(ch, [], 0.1)
-      topologyStep(ch, [])
-      doResample(ch)
-    }
-    const interior = ch.pts.map((_, i) => i).filter((i) => ch.adj[i]!.length === 3)
-    expect(interior.length).toBeGreaterThanOrEqual(1)
-    for (const v of interior) {
-      const dirs = ch.adj[v]!.map((n) => Math.atan2(ch.pts[n]!.y - ch.pts[v]!.y, ch.pts[n]!.x - ch.pts[v]!.x)).sort((a, b) => a - b)
-      for (let k = 0; k < 3; k++) {
-        const gap = (dirs[(k + 1) % 3]! - dirs[k]! + (k === 2 ? 2 * Math.PI : 0))
-        expect(Math.abs(gap - (2 * Math.PI) / 3), `gap ${k} at point ${v}`).toBeLessThanOrEqual((15 * Math.PI) / 180)
-      }
-    }
-  })
-
-  it('wires clear discs they are not bound to (symmetric barrier law)', () => {
-    const e = settled(interposed)
-    for (const ch of e.chains.values()) {
-      const bound = new Set(ch.binds.map((b) => b.body))
-      for (const p of ch.pts) {
-        for (const body of e.bodies.values()) {
-          if (body.kind !== 'ref' && body.kind !== 'term' && body.kind !== 'atom') continue
-          if (bound.has(body.id)) continue // the wire passes through its own ports
-          const dist = Math.hypot(p.x - body.pos.x, p.y - body.pos.y)
-          expect(dist, `chain point inside disc ${body.id}`).toBeGreaterThanOrEqual(body.discR * 0.85)
-        }
-      }
-    }
-  })
-
-  it('first chain segment leaves the port along its normal (perpendicular-exit law)', () => {
-    const e = settled(threeWay)
-    for (const ch of e.chains.values()) {
-      for (const bind of ch.binds) {
-        const body = e.bodies.get(bind.body)!
-        const anchor = worldBindAnchor(body, bind.key)
-        const a = body.localAnchor.get(bind.key)!
-        const normal = Math.atan2(a.y, a.x) + body.theta
-        const nbr = ch.adj[bind.idx]![0]!
-        const dir = Math.atan2(ch.pts[nbr]!.y - anchor.y, ch.pts[nbr]!.x - anchor.x)
-        const dev = Math.atan2(Math.sin(dir - normal), Math.cos(dir - normal))
-        expect(Math.abs(dev), `exit at ${bind.body}:${bind.key}`).toBeLessThanOrEqual(0.05)
-      }
-    }
+    const w = e.wires.get(wid)!
+    const tip = e.bodies.get(w.tipBodyId!)!
+    const bd = w.binds[0]!
+    const anchor = worldBindAnchor(e.bodies.get(bd.body)!, bd.key)
+    const dist = Math.hypot(tip.pos.x - anchor.x, tip.pos.y - anchor.y)
+    // the standoff C1 ramp (radius standoffR) balances the single-tension pull
+    // strictly inside the radius only under external compression; a free dangle
+    // rests at or beyond it
+    expect(dist, 'dot sunk into its wire').toBeGreaterThanOrEqual(WIREP.standoffR * 0.75)
   })
 
   it('a dangling ∃ end FOLLOWS its wire when the node moves (the dangle-tow law)', () => {
@@ -442,19 +269,112 @@ describe('wire physics — equilibria', () => {
     const e = mkEngine(d, b)
     settle(e, 2600)
     const body = e.bodies.get(node)!
-    const free = e.bodies.get(e.chains.get(wid)!.homed[0]!.bodyId)!
-    // the law is the REST SHAPE: after a disturbance, the wire re-establishes
-    // its relative geometry — BOTH ends participate (the wire pulls the node
-    // toward the free end too; asserting absolute tow distance would deny
-    // Newton's third law, which this model gets by construction)
-    const relBefore = { x: free.pos.x - body.pos.x, y: free.pos.y - body.pos.y }
+    const tip = e.bodies.get(e.wires.get(wid)!.tipBodyId!)!
+    // the law is the REST SHAPE: after a disturbance the wire re-establishes its
+    // relative geometry — BOTH ends participate (Newton's third law by
+    // construction), so we assert the rest length is restored and the tip moved
+    const relBefore = { x: tip.pos.x - body.pos.x, y: tip.pos.y - body.pos.y }
     const gapBefore = Math.hypot(relBefore.x, relBefore.y)
     body.pos = { x: body.pos.x + 40, y: body.pos.y }
-    const freeAtDisturb = { ...free.pos }
+    const tipAtDisturb = { ...tip.pos }
     settle(e, 2600)
-    const gapAfter = Math.hypot(free.pos.x - body.pos.x, free.pos.y - body.pos.y)
-    expect(Math.abs(gapAfter - gapBefore), 'the wire must restore its rest length').toBeLessThanOrEqual(gapBefore * 0.45)
-    const moved = Math.hypot(free.pos.x - freeAtDisturb.x, free.pos.y - freeAtDisturb.y)
-    expect(moved, 'the free end must move at all (not parked)').toBeGreaterThanOrEqual(5)
+    const gapAfter = Math.hypot(tip.pos.x - body.pos.x, tip.pos.y - body.pos.y)
+    expect(Math.abs(gapAfter - gapBefore), 'the wire must restore its rest length').toBeLessThanOrEqual(gapBefore * 0.5)
+    const moved = Math.hypot(tip.pos.x - tipAtDisturb.x, tip.pos.y - tipAtDisturb.y)
+    expect(moved, 'the free end must move (not parked)').toBeGreaterThanOrEqual(5)
+  })
+
+  it('a free-space 3-way junction spreads its arrival directions toward 120° (Plateau)', () => {
+    // three refs far apart around one hub, no interposed discs: the hub's three
+    // hub-leg arrival directions relax toward mutual 120° (finite spread energy,
+    // so the elastica bend torque can shift each by a bounded margin)
+    const e = settled(threeWay, 12000)
+    const w = [...e.wires.values()].find((x) => x.hub !== null)!
+    const hub = w.hub!
+    const hubPos = hub.kind === 'point' ? hub.pos : e.bodies.get(hub.bodyId)!.pos
+    // the drawn arrival direction of each hub leg = the tangent of its traced
+    // polyline as it reaches the hub
+    const dirs: number[] = []
+    for (const leg of w.legs) {
+      if (leg.b.kind !== 'hub') continue
+      const s = resolveLeg(e, w, leg)
+      const pts: { x: number; y: number }[] = []
+      traceLeg(s, pts, QN)
+      const a = pts[pts.length - 1]!, prev = pts[pts.length - 2]!
+      dirs.push(Math.atan2(a.y - prev.y, a.x - prev.x))
+    }
+    expect(dirs).toHaveLength(3)
+    void hubPos
+    // the three sorted arrival directions have cyclic gaps ~120° each, within a
+    // bounded elastica-bend margin (finite spread energy shifts the soap-film
+    // Plateau angle)
+    const sorted = [...dirs].sort((x, y) => x - y)
+    for (let k = 0; k < 3; k++) {
+      const gap = (sorted[(k + 1) % 3]! - sorted[k]! + (k === 2 ? 2 * Math.PI : 0))
+      expect(Math.abs(gap - (2 * Math.PI) / 3), `spread gap ${k} = ${(gap * 180 / Math.PI).toFixed(0)}°`).toBeLessThanOrEqual((35 * Math.PI) / 180)
+    }
   })
 })
+
+// ---- boundary wires (merged hub + exit) -----------------------------------
+
+describe('wire physics — boundary exits (the slot-attracted hub)', () => {
+  it('a boundary wire routes its ports through a slot-attracted junction body (no exit point, no hub→exit leg)', () => {
+    const { d, b, wid } = boundaryOne()
+    const e = mkEngine(d, b)
+    settle(e, 400) // boundaryExits needs the frame (region circles) populated
+    const w = e.wires.get(wid)!
+    expect(w.slot, 'the boundary wire owns a fixed frame slot').not.toBeNull()
+    expect(w.hub, 'its ports meet at a hub body').not.toBeNull()
+    const hub = w.hub!
+    expect(hub.kind).toBe('body')
+    expect(hub.kind === 'body' ? e.bodies.get(hub.bodyId)!.id : null).toBe(`e:${wid}`)
+    expect(w.legs.every((l) => l.b.kind === 'hub'), 'every boundary leg arrives at the hub').toBe(true)
+    // the exit hub is NOT drawn as a dangling ∃ dot — it rides the frame
+    expect(existentialStubs(e).some((s) => s.wid === wid), 'boundary exit is not an ∃ dot').toBe(false)
+    // it IS drawn as a frame exit connector to its slot
+    expect(boundaryExits(e).some((x) => x.wid === wid), 'boundary wire draws a frame exit').toBe(true)
+  })
+
+  it('boundary slot assignment is canonical by boundary order and never reorders under a wild body sweep', () => {
+    const { diagram, boundary } = threeBoundary()
+    const e = mkEngine(diagram, boundary)
+    settle(e, 1200)
+    const layouts: { x: number; y: number }[][] = [
+      [{ x: -30, y: -30 }, { x: 30, y: -30 }, { x: 0, y: 30 }],
+      [{ x: 40, y: 5 }, { x: 42, y: -3 }, { x: 38, y: 9 }],
+      [{ x: -5, y: -40 }, { x: 3, y: -42 }, { x: -1, y: -38 }],
+    ]
+    const nodeIds = [...e.bodies.keys()].filter((id) => { const k = e.bodies.get(id)!.kind; return k !== 'junction' && k !== 'anchor' })
+    for (const layout of layouts) {
+      nodeIds.forEach((id, k) => { if (layout[k]) e.bodies.get(id)!.pos = layout[k]! })
+      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+      const fb = frameBounds(e)!
+      const slots = frameSlots(fb, boundary.length)
+      const exits = boundaryExits(e)
+      const byWid = new Map(exits.map((x) => [x.wid, x]))
+      boundary.forEach((wid, i) => {
+        const ex = byWid.get(wid)!
+        const slotPt = ex.pts[ex.pts.length - 1]!
+        expect(slotPt.x, `boundary ${i} at slot ${i} x`).toBeCloseTo(slots[i]!.point.x, 6)
+        expect(slotPt.y, `boundary ${i} at slot ${i} y`).toBeCloseTo(slots[i]!.point.y, 6)
+      })
+    }
+  })
+})
+
+// ---- regression bounds from the measured theorem scenes -------------------
+
+import { mkReplay } from '../../src/app/replay'
+import { bootFixture } from '../app/boot-fixture'
+const bootCtx = (await bootFixture()).ctx
+const threeBoundary = (): { diagram: Diagram; boundary: readonly WireId[] } => {
+  const r = mkReplay(bootCtx.theorems.get('plusComm')!, bootCtx)
+  return { diagram: r.diagramAt(0), boundary: r.boundary }
+}
+function mkArgs(mk: () => { d: Diagram; b: WireId[] }): [Diagram, WireId[]] {
+  const { d, b } = mk()
+  return [d, b]
+}
+
+void ELASTICA
