@@ -1131,10 +1131,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     const out: Shape[] = []
     for (const l of legPaths(engine)) {
-      if (l.wid === hit.id) out.push({ kind: 'bezier', from: l.path.from, c1: l.path.c1, c2: l.path.c2, to: l.path.to, stroke, width: 3, glow: null })
+      if (l.wid === hit.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: 3, glow: null })
     }
     for (const ex of boundaryExits(engine)) {
-      if (ex.wid === hit.id) out.push({ kind: 'bezier', from: ex.path.from, c1: ex.path.c1, c2: ex.path.c2, to: ex.path.to, stroke, width: 3, glow: null })
+      if (ex.wid === hit.id) out.push({ kind: 'polyline', pts: ex.pts, stroke, width: 3, glow: null })
     }
     for (const s of existentialStubs(engine)) {
       if (s.wid === hit.id) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width: 3, glow: null })
@@ -1433,12 +1433,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // point is confirmed by the real hitTest to resolve back to its wire, so a
       // returned entry is guaranteed clickable; unhittable wires are omitted.
       wires(): { id: string; x: number; y: number }[] {
-        const bez = (t: number, p: { from: Vec2; c1: Vec2; c2: Vec2; to: Vec2 }): Vec2 => {
-          const u = 1 - t
-          return vec(
-            u * u * u * p.from.x + 3 * u * u * t * p.c1.x + 3 * u * t * t * p.c2.x + t * t * t * p.to.x,
-            u * u * u * p.from.y + 3 * u * u * t * p.c1.y + 3 * u * t * t * p.c2.y + t * t * t * p.to.y,
-          )
+        // sample a traced polyline near its middle (where a leg is most
+        // clickable — away from disc rims and slots)
+        const mids = (pts: Vec2[]): Vec2[] => {
+          const n = pts.length
+          if (n === 0) return []
+          const at = (f: number): Vec2 => pts[Math.max(0, Math.min(n - 1, Math.round(f * (n - 1))))]!
+          return [at(0.5), at(0.4), at(0.6)]
         }
         const out: { id: string; x: number; y: number }[] = []
         const take = (id: WireId, samples: Vec2[]): void => {
@@ -1450,8 +1451,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             }
           }
         }
-        for (const l of legPaths(engine)) take(l.wid, [bez(0.5, l.path), bez(0.4, l.path), bez(0.6, l.path)])
-        for (const ex of boundaryExits(engine)) take(ex.wid, [bez(0.5, ex.path), bez(0.4, ex.path), bez(0.6, ex.path)])
+        for (const l of legPaths(engine)) take(l.wid, mids(l.pts))
+        for (const ex of boundaryExits(engine)) take(ex.wid, mids(ex.pts))
         for (const st of existentialStubs(engine)) {
           take(st.wid, [vec((st.from.x + st.to.x) / 2, (st.from.y + st.to.y) / 2), st.dot, vec(st.from.x * 0.4 + st.to.x * 0.6, st.from.y * 0.4 + st.to.y * 0.6)])
         }

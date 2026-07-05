@@ -2,7 +2,6 @@ import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagra
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 import type { Engine } from '../view/engine'
-import type { WirePath } from '../view/wires'
 import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
@@ -14,9 +13,6 @@ export type Hit =
 
 /** UI pick tolerance around wire strokes, world units. Visual only. */
 const WIRE_TOLERANCE = 1.5
-/** Samples along a Bézier leg when measuring pick distance. */
-const WIRE_SAMPLES = 16
-
 function segmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
   const ab = sub(b, a)
   const ap = sub(p, a)
@@ -25,23 +21,10 @@ function segmentDistance(p: Vec2, a: Vec2, b: Vec2): number {
   return length(sub(p, { x: a.x + ab.x * t, y: a.y + ab.y * t }))
 }
 
-function bezierPoint(path: WirePath, t: number): Vec2 {
-  const u = 1 - t
-  const a = u * u * u, b = 3 * u * u * t, c = 3 * u * t * t, d = t * t * t
-  return {
-    x: a * path.from.x + b * path.c1.x + c * path.c2.x + d * path.to.x,
-    y: a * path.from.y + b * path.c1.y + c * path.c2.y + d * path.to.y,
-  }
-}
-
-function bezierDistance(p: Vec2, path: WirePath): number {
+/** Nearest distance from a point to a traced-leg polyline. */
+function polylineDistance(p: Vec2, pts: readonly Vec2[]): number {
   let best = Infinity
-  let prev = bezierPoint(path, 0)
-  for (let i = 1; i <= WIRE_SAMPLES; i++) {
-    const cur = bezierPoint(path, i / WIRE_SAMPLES)
-    best = Math.min(best, segmentDistance(p, prev, cur))
-    prev = cur
-  }
+  for (let i = 1; i < pts.length; i++) best = Math.min(best, segmentDistance(p, pts[i - 1]!, pts[i]!))
   return best
 }
 
@@ -68,11 +51,11 @@ export function hitTest(e: Engine, point: Vec2): Hit | null {
     if (b.kind === 'junction' || b.kind === 'anchor') continue
     if (length(sub(point, b.pos)) <= b.discR) return { kind: 'node', id: b.id }
   }
-  for (const { wid, path } of legPaths(e)) {
-    if (bezierDistance(point, path) <= WIRE_TOLERANCE) return { kind: 'wire', id: wid }
+  for (const { wid, pts } of legPaths(e)) {
+    if (polylineDistance(point, pts) <= WIRE_TOLERANCE) return { kind: 'wire', id: wid }
   }
   for (const ex of boundaryExits(e)) {
-    if (bezierDistance(point, ex.path) <= WIRE_TOLERANCE) return { kind: 'wire', id: ex.wid }
+    if (polylineDistance(point, ex.pts) <= WIRE_TOLERANCE) return { kind: 'wire', id: ex.wid }
   }
   for (const s of existentialStubs(e)) {
     if (segmentDistance(point, s.from, s.to) <= WIRE_TOLERANCE) return { kind: 'wire', id: s.wid }

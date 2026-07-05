@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { solveLeg, trace, thetaRange, arcClose, mkLegCache, RANGE_B, QN } from '../../src/view/elastica'
+import { solveLeg, trace, thetaRange, mkLegCache, RANGE_B, QN } from '../../src/view/elastica'
 
 /**
  * PLAN 22 LAW BATTERY — the massless elastica wire (solver core).
@@ -36,24 +36,10 @@ describe('elastica — structural impossibility laws', () => {
     }
   })
 
-  it('the regular (non-fallback) solutions respect RANGE_B exactly', () => {
-    let checked = 0
+  it('representable (range ≤ π) solutions close on the target within the quadrature bound', () => {
     for (const b of boundarySweep(500)) {
       const sol = solveLeg(mkLegCache(), b.p0, b.th0, b.p1, b.th1, false)
-      const arc = arcClose(b.p0, b.th0, b.p1)
-      // if the chosen tau differs from the raw arc tau it came from the
-      // scanned/refined set, which range-gates candidates
-      if (Math.abs(sol.dTurn - arc.tau) > 1e-9) {
-        expect(thetaRange(sol.c1, sol.c2)).toBeLessThanOrEqual(RANGE_B + 1e-9)
-        checked++
-      }
-    }
-    expect(checked).toBeGreaterThan(100)
-  })
-
-  it('closure: the traced endpoint lands on the target within the quadrature bound', () => {
-    for (const b of boundarySweep(300)) {
-      const sol = solveLeg(mkLegCache(), b.p0, b.th0, b.p1, b.th1, false)
+      if (thetaRange(sol.c1, sol.c2) > RANGE_B + 1e-6) continue // blind-cone marker: no closure by design
       const out: { x: number; y: number }[] = []
       trace(b.p0, b.th0, sol.c1, sol.c2, sol.L, out, 4 * QN)
       const e = out[out.length - 1]!

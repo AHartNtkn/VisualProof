@@ -43,8 +43,10 @@ export type Shape =
   | { readonly kind: 'circle'; readonly center: Vec2; readonly r: number; readonly fill: string | null; readonly stroke: string | null; readonly width: number; readonly insetColor: string | null; readonly glow: string | null }
   | { readonly kind: 'arc'; readonly center: Vec2; readonly r: number; readonly a0: number; readonly a1: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'segment'; readonly from: Vec2; readonly to: Vec2; readonly stroke: string; readonly width: number; readonly glow: string | null }
-  | { readonly kind: 'bezier'; readonly from: Vec2; readonly c1: Vec2; readonly c2: Vec2; readonly to: Vec2; readonly stroke: string; readonly width: number; readonly glow: string | null }
-  | { readonly kind: 'exit'; readonly from: Vec2; readonly c1: Vec2; readonly c2: Vec2; readonly to: Vec2; readonly tick: { readonly center: Vec2; readonly angle: number }; readonly stroke: string; readonly width: number; readonly glow: string | null }
+  /** A traced wire leg: the massless-elastica θ-quadratic sampled at paint
+      resolution (plan 22 — the polyline IS the wire, not a spline fit). */
+  | { readonly kind: 'polyline'; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
+  | { readonly kind: 'exit'; readonly pts: readonly Vec2[]; readonly tick: { readonly center: Vec2; readonly angle: number }; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'stub'; readonly from: Vec2; readonly to: Vec2; readonly dot: Vec2; readonly dotRpx: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   /** A filled disc whose radius is fixed DEVICE pixels (junction dots): stays a
       constant size under zoom, unlike world-scaled circles. */
@@ -120,9 +122,9 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   if (fb === null) throw new Error('paintWires requires a settled engine: call settleStep/settle first')
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
   const shapes: Shape[] = []
-  // wires
-  for (const { path } of legPaths(e)) {
-    shapes.push({ kind: 'bezier', from: path.from, c1: path.c1, c2: path.c2, to: path.to, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+  // wires (traced elastica legs)
+  for (const { pts } of legPaths(e)) {
+    shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
   // existential stubs (genuine internal loose ends)
   for (const s of existentialStubs(e)) {
@@ -130,7 +132,7 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   }
   // boundary frame exits
   for (const ex of boundaryExits(e)) {
-    shapes.push({ kind: 'exit', from: ex.path.from, c1: ex.path.c1, c2: ex.path.c2, to: ex.path.to, tick: ex.tick, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+    shapes.push({ kind: 'exit', pts: ex.pts, tick: ex.tick, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
   // The frame pip: a device-pixel dot at slot 0 (the top-edge midpoint) marks
   // boundary position 0, from which slots read clockwise. Shown only when >= 2

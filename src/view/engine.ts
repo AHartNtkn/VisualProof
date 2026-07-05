@@ -6,8 +6,8 @@ import { add } from './vec'
 import type { NodeGeometry } from './bend'
 import { bendGrid, atomGeometry } from './bend'
 import { trompGrid } from './tromp'
-import type { WireChain } from './wirechain'
-import { mkChain, PITCH } from './wirechain'
+import type { LegCache, Sol } from './elastica'
+import { mkLegCache, solveLeg, closeAt, trace, QN, WELL_S } from './elastica'
 
 /**
  * The converged render engine (round-8 lab spec). A Diagram-plus-boundary is
@@ -16,6 +16,13 @@ import { mkChain, PITCH } from './wirechain'
  * anatomy geometry and an enclosing disc radius. Positions/rotations are
  * relaxed by `relax.ts`; geometry is emitted by `wires.ts`/`paint.ts`. Nothing
  * here is semantic and nothing is serialized.
+ *
+ * PLAN 22: wires are MASSLESS ELASTICA (see elastica.ts). A wire has no shape
+ * state — each leg is the minimum-energy theta-quadratic interpolant of its
+ * CURRENT boundary data, recomputed per evaluation and memoized on the exact
+ * boundary tuple. The only wire DOF are the branch hub (a wire-owned point,
+ * or the ∀ body) and the per-leg arrival angles; ∃/∀ ends stay first-class
+ * bodies. Loops and kinks are UNREPRESENTABLE (tangent range <= pi).
  */
 
 /** Standard named-disc radius (world units) — one size for every named disc. */
@@ -41,11 +48,72 @@ export type Body = {
   pos: Vec2
   vel: Vec2
   theta: number
+  /** angular velocity (plan 22): rotation carries momentum so a wrenched node
+      can glide across a torque ridge rather than stall in a distorted minimum
+      (the demo's documented small-step limitation). */
+  omega: number
 }
 
 /** key null = the body's centre (junctions have no ports). */
 export type LegEnd = { readonly body: string; readonly key: string | null }
 export type Leg = { readonly wid: WireId; readonly from: LegEnd; readonly to: LegEnd }
+
+// ---- the massless-elastica wire view-state (plan 22) -----------------------
+
+/** A wire endpoint bound to a node port (the disc-edge rim anchor + the port
+    normal are DERIVED from the body each evaluation — never stored). */
+export type WireBind = { readonly body: string; readonly key: string }
+
+/** A leg terminal. `bind i` = binds[i] (port rim + normal); `tip` = the ∃ free
+    end (a body); `exit` = a boundary wire's wire-owned exit point, a FREE end
+    softly attracted to its frame slot; `hub` = the branch point (a wire-owned
+    point or the ∀ body), reached along the leg's arrival angle. Every leg
+    starts at a `bind`. */
+export type WireLegEnd =
+  | { readonly kind: 'bind'; readonly i: number }
+  | { readonly kind: 'tip' }
+  | { readonly kind: 'exit' }
+  | { readonly kind: 'hub' }
+
+/** One leg of a wire: the massless θ-quadratic from terminal `a` (a port bind,
+    exiting along its normal) to terminal `b` (hub / another bind / ∃ tip /
+    boundary exit). `hubAngle` is the arrival DIRECTION at a hub end (a wire
+    DOF with its own momentum); `cache` memoizes the solve on the exact
+    boundary tuple. */
+export type WireLeg = {
+  readonly a: WireLegEnd
+  readonly b: WireLegEnd
+  hubAngle: number
+  hubAngleVel: number
+  readonly cache: LegCache
+}
+
+/** The branch point of a k-ary wire: a wire-owned relaxation POINT (pure
+    junction), or the homed ∀ body (the via-body shape). */
+export type WireHub =
+  | { readonly kind: 'point'; pos: Vec2; vel: Vec2 }
+  | { readonly kind: 'body'; readonly bodyId: string }
+
+/** A boundary wire's exit: a wire-owned movable point (2 DOF, its own momentum)
+    that free-end legs reach and that is softly attracted to the wire's fixed
+    frame slot (relax.ts). Unlike a rigid slot it never pulls the NODE to the
+    frame, and unlike an arrival-angle hub its legs are FREE ends (zero moment)
+    that are always representable — so there is no >pi cliff and no runaway. At
+    rest it sits AT the slot, so the drawn boundary exit is gapless. */
+export type WireExit = { pos: Vec2; vel: Vec2 }
+
+/** A wire's complete view-state (plan 22): the port binds, an optional branch
+    hub (>= 3 terminals or a ∀ via-body), an optional ∃ tip body, an optional
+    boundary exit (+ its frame slot number), and the derived leg list (each leg
+    carries only a memo cache — no shape state). */
+export type WireView = {
+  readonly binds: WireBind[]
+  hub: WireHub | null
+  readonly tipBodyId: string | null
+  exit: WireExit | null
+  readonly slot: number | null
+  readonly legs: WireLeg[]
+}
 
 /** A region's drawn circle. `support` lists the direct items (member body or
     child region) ON the rim — the only content the circle's geometry depends
@@ -58,9 +126,10 @@ export type Engine = {
   readonly childrenOf: Map<RegionId, RegionId[]>
   /** node/junction body ids per region. */
   readonly membersOf: Map<RegionId, string[]>
-  /** PLAN 21: each wire is a physical CHAIN (a tree for multiport wires) —
-      see wirechain.ts for the energy model. Replaces legs + hub bodies. */
-  readonly chains: Map<WireId, WireChain>
+  /** PLAN 22: each >= 1-endpoint wire is a massless-elastica view (binds +
+      optional hub/tip + derived legs) — see elastica.ts + relax.ts for the
+      energy model. Bare (0-endpoint) wires are a homed body only, no entry. */
+  readonly wires: Map<WireId, WireView>
   readonly boundary: readonly WireId[]
   regions: Map<RegionId, RegionCircle>
   /** relaxation tick counter (drives overlap-projection cadence, determinism). */
@@ -133,7 +202,13 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     bodies.set(id, {
       id, kind: n.kind, node: n, geometry: g, localAnchor, discR,
       region: n.region,
-      pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, vel: { x: 0, y: 0 }, theta: 0,
+      // seed a DISTINCT orientation per node (the same golden angle as the
+      // position spiral): absolute orientation is a quotiented zero mode, but
+      // starting every node at theta = 0 is a measure-zero degenerate config —
+      // a port pointing exactly away from its fixed boundary slot then sits at
+      // the energy's unstable maximum with a symmetric (zero) rotation
+      // gradient and cannot roll off. A generic seed breaks the symmetry.
+      pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, vel: { x: 0, y: 0 }, theta: (i + 1) * 2.399963, omega: 0,
     })
     i++
   }
@@ -160,77 +235,99 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       bodies.set(aid, {
         id: aid, kind: 'anchor', node: null, geometry: null,
         localAnchor: new Map(), discR: 5, region: rid,
-        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, vel: { x: 0, y: 0 }, theta: 0,
+        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, vel: { x: 0, y: 0 }, theta: 0, omega: 0,
       })
       membersOf.get(rid)!.push(aid)
       i++
     }
   }
 
-  const chains = new Map<WireId, WireChain>()
+  const wires = new Map<WireId, WireView>()
   const bset = new Set(boundary)
   const slotOf = new Map(boundary.map((w, k) => [w, k] as const))
-  for (const [wid, w] of Object.entries(d.wires)) {
-    const ends = w.endpoints.map((ep): LegEnd => ({ body: ep.node, key: pkey(ep.port) }))
-    // The line's OUTERMOST POINT is where its individual is quantified, and
-    // it must be a body homed at the wire's SCOPE (USER LAW: dangling ends
-    // are their own nodes — the ∃ is manipulable independently of what it
-    // attaches to). A dangling wire's free chain end IS that body. When the
-    // scope sits ABOVE the dca (the ∀ shape) a dangling branch reaches a
-    // scope-homed body, so the line never contorts through its scope.
-    // Boundary wires get a frame-slot terminal instead of an ∃ end.
-    const isBoundary = bset.has(wid)
-    const mkWireBody = (id: string, region: RegionId, near?: Vec2): Body => {
-      // seed NEAR the wire's own anchors, not on the global spiral: after a
-      // rewrite, spiral-seeded ends left wires stretched wildly across the
-      // sheet (USER report)
-      const seed = near !== undefined
-        ? { x: near.x + 4 + (i % 3), y: near.y - 3 - (i % 2) }
-        : { x: (i++) * 3, y: -(i * 2) }
-      i++
-      const b: Body = {
-        id, kind: 'junction', node: null, geometry: null,
-        localAnchor: new Map(), discR: 4.5, region,
-        pos: seed, vel: { x: 0, y: 0 }, theta: 0,
-      }
-      bodies.set(id, b)
-      membersOf.get(region)!.push(id)
-      return b
+  // The line's OUTERMOST POINT is where its individual is quantified, and it
+  // must be a body homed at the wire's SCOPE (USER LAW: dangling ends are
+  // their own nodes — the ∃ is manipulable independently of what it attaches
+  // to). A dangling wire's free tip IS that body; the ∀ via-body shape (scope
+  // above the dca) grows a scope-homed branch body so the line never contorts
+  // through its scope. Boundary wires get a frame-slot terminal instead.
+  const mkWireBody = (id: string, region: RegionId, near: Vec2 | null): Body => {
+    // seed NEAR the wire's own anchors, not on the global spiral: after a
+    // rewrite, spiral-seeded ends left wires stretched wildly across the sheet
+    const seed = near !== null
+      ? { x: near.x + 4 + (i % 3), y: near.y - 3 - (i % 2) }
+      : { x: (i++) * 3, y: -(i * 2) }
+    i++
+    const b: Body = {
+      id, kind: 'junction', node: null, geometry: null,
+      localAnchor: new Map(), discR: 4.5, region,
+      pos: seed, vel: { x: 0, y: 0 }, theta: 0, omega: 0,
     }
-    if (ends.length === 0) {
+    bodies.set(id, b)
+    membersOf.get(region)!.push(id)
+    return b
+  }
+  const mkLeg = (a: WireLegEnd, b: WireLegEnd, angle: number): WireLeg =>
+    ({ a, b, hubAngle: angle, hubAngleVel: 0, cache: mkLegCache() })
+  const seedAngle = (p: Vec2, h: Vec2): number => Math.atan2(h.y - p.y, h.x - p.x)
+
+  for (const [wid, w] of Object.entries(d.wires)) {
+    const binds: WireBind[] = w.endpoints.map((ep) => ({ body: ep.node, key: pkey(ep.port) }))
+    const isBoundary = bset.has(wid)
+    if (binds.length === 0) {
       // a bare ∃ — the wire asserts only that an individual exists: one
-      // scope-homed body, no chain (its dot is the whole rendering)
-      mkWireBody(`j:${wid}`, w.scope)
+      // scope-homed body, no legs (its dot is the whole rendering)
+      mkWireBody(`j:${wid}`, w.scope, null)
       continue
     }
-    // terminals: port anchors first (in endpoint order), then homed/slot ends
-    const terminalPos: Vec2[] = ends.map((en) => worldBindAnchor(bodies.get(en.body)!, en.key!))
-    const binds = ends.map((en, k) => ({ idx: k, body: en.body, key: en.key! }))
-    const homed: { idx: number; bodyId: string }[] = []
-    const slots: { idx: number; slot: number }[] = []
+    const anchorPos = binds.map((bd) => worldBindAnchor(bodies.get(bd.body)!, bd.key))
+    const centroid = (): Vec2 => ({
+      x: anchorPos.reduce((s, p) => s + p.x, 0) / anchorPos.length,
+      y: anchorPos.reduce((s, p) => s + p.y, 0) / anchorPos.length,
+    })
     const dca = w.endpoints
       .map((ep) => d.nodes[ep.node]!.region)
       .reduce((a, b) => deepestCommonAncestor(d, a, b))
+
+    let hub: WireHub | null = null
+    let tipBodyId: string | null = null
+    let exit: WireExit | null = null
+    let slot: number | null = null
+    const legs: WireLeg[] = []
     if (isBoundary) {
-      // slot position is derived per tick; seed near the first anchor
-      slots.push({ idx: terminalPos.length, slot: slotOf.get(wid)! })
-      terminalPos.push({ x: terminalPos[0]!.x, y: terminalPos[0]!.y - 6 })
-    } else if (ends.length === 1) {
-      const b = mkWireBody(`j:${wid}`, w.scope, terminalPos[0])
-      homed.push({ idx: terminalPos.length, bodyId: b.id })
-      terminalPos.push(b.pos)
+      // A boundary wire exits the sheet to a fixed frame slot via a wire-owned
+      // EXIT point softly attracted to the slot (relax.ts). Each port reaches it
+      // with a FREE-END leg (zero moment) — always representable, so there is no
+      // >pi cliff — and the exit, not the node, floats to the frame, so the
+      // layout stays compact (a rigid slot pulls the node to the moving frame:
+      // measured runaway). At rest the exit sits AT the slot, so the drawn
+      // boundary exit is gapless.
+      slot = slotOf.get(wid)!
+      exit = { pos: { x: anchorPos[0]!.x, y: anchorPos[0]!.y - 10 }, vel: { x: 0, y: 0 } }
+      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'exit' }, 0))
+    } else if (binds.length === 1) {
+      // dangling ∃: a free-end leg reaching a scope-homed tip body
+      const b = mkWireBody(`j:${wid}`, w.scope, anchorPos[0]!)
+      tipBodyId = b.id
+      legs.push(mkLeg({ kind: 'bind', i: 0 }, { kind: 'tip' }, 0))
     } else if (w.scope !== dca) {
-      const cx = terminalPos.reduce((s, p) => s + p.x, 0) / terminalPos.length
-      const cy = terminalPos.reduce((s, p) => s + p.y, 0) / terminalPos.length
-      const b = mkWireBody(`x:${wid}`, w.scope, { x: cx, y: cy })
-      homed.push({ idx: terminalPos.length, bodyId: b.id })
-      terminalPos.push(b.pos)
+      // the ∀ via-body: the scope-homed body IS the branch hub
+      const b = mkWireBody(`x:${wid}`, w.scope, centroid())
+      hub = { kind: 'body', bodyId: b.id }
+      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, b.pos)))
+    } else if (binds.length === 2) {
+      // a direct port-to-port leg (same scope, no branch)
+      legs.push(mkLeg({ kind: 'bind', i: 0 }, { kind: 'bind', i: 1 }, 0))
+    } else {
+      // a pure k-ary junction: a wire-owned hub point
+      const h = centroid()
+      hub = { kind: 'point', pos: h, vel: { x: 0, y: 0 } }
+      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, h)))
     }
-    const built = mkChain(terminalPos, PITCH)
-    chains.set(wid, { pts: built.pts, adj: built.adj, binds, homed, slots, pitch: PITCH })
+    wires.set(wid, { binds, hub, tipBodyId, exit, slot, legs })
   }
 
-  return { d, bodies, childrenOf, membersOf, chains, boundary, regions: new Map(), tick: 0 }
+  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), tick: 0 }
 }
 
 /**
@@ -249,20 +346,28 @@ export function carryOver(prev: Engine, next: Engine): void {
     nb.pos = pb.pos
     nb.vel = pb.vel
     nb.theta = pb.theta
+    nb.omega = pb.omega
   }
-  // chains glide too: a surviving wire with the same terminal signature
-  // keeps its relaxed shape (pts/adj) instead of re-seeding a star
-  for (const [wid, nc] of next.chains) {
-    const pc = prev.chains.get(wid)
-    if (pc === undefined) continue
-    const sig = (c: WireChain): string =>
-      [...c.binds.map((b) => `${b.body}:${b.key}`), `h${c.homed.length}`, `s${c.slots.length}`].join('|')
-    if (sig(pc) !== sig(nc)) continue
-    nc.pts = pc.pts.map((p) => ({ ...p }))
-    nc.adj = pc.adj.map((a) => [...a])
-    nc.binds = pc.binds.map((b) => ({ ...b }))
-    nc.homed = pc.homed.map((h) => ({ ...h }))
-    nc.slots = pc.slots.map((s) => ({ ...s }))
+  // wires glide too: a surviving wire with the same bind signature keeps its
+  // hub/exit position+velocity and per-leg arrival angles instead of re-seeding.
+  // The legs' geometry is memoryless (recomputed), so only the DOF carry.
+  const sig = (v: WireView): string =>
+    [...v.binds.map((b) => `${b.body}:${b.key}`), v.hub === null ? '-' : v.hub.kind, v.tipBodyId ?? '-', v.exit === null ? '-' : 'e', v.slot ?? '-'].join('|')
+  for (const [wid, nv] of next.wires) {
+    const pv = prev.wires.get(wid)
+    if (pv === undefined || sig(pv) !== sig(nv)) continue
+    if (nv.hub !== null && nv.hub.kind === 'point' && pv.hub !== null && pv.hub.kind === 'point') {
+      nv.hub.pos = pv.hub.pos
+      nv.hub.vel = pv.hub.vel
+    }
+    if (nv.exit !== null && pv.exit !== null) {
+      nv.exit.pos = pv.exit.pos
+      nv.exit.vel = pv.exit.vel
+    }
+    for (let k = 0; k < nv.legs.length && k < pv.legs.length; k++) {
+      nv.legs[k]!.hubAngle = pv.legs[k]!.hubAngle
+      nv.legs[k]!.hubAngleVel = pv.legs[k]!.hubAngleVel
+    }
   }
 }
 
@@ -369,4 +474,82 @@ export function frameSlots(fb: FrameBounds, n: number): FrameSlot[] {
   const out: FrameSlot[] = []
   for (let i = 0; i < n; i++) out.push(slotAt((i / n) * P))
   return out
+}
+
+/** A leg's resolved boundary data + its minimum-energy solution. The endpoints
+    are DERIVED from the live bodies/hub/slot every call (never stored); `sol`
+    is the memoized θ-quadratic. `ownA`/`ownB` name the discs a bind end sits
+    on (exempt near their rim in the clearance integral). */
+export type LegShape = {
+  readonly sol: Sol
+  readonly p0: Vec2; readonly th0: number
+  readonly p1: Vec2; readonly th1: number
+  readonly freeEnd: boolean
+  readonly ownA: string | null
+  readonly ownB: string | null
+}
+/** Width of the escape ramp ABOVE π (radians). */
+export const STRESS_BAND = Math.PI / 3
+
+/** Resolve + solve one leg against the live state. Terminal `a` is a port bind
+    leaving along its outward normal (rim-locked, perpendicular exit BY
+    CONSTRUCTION — the solve fixes θ(0)=normal); terminal `b` arrives with
+    travel direction th1: the hub arrival angle, INTO a far port (normal+π), or
+    a free end at an ∃ tip (no arrival tangent).
+
+    `warm` = a base solution to WARM-solve against (gradient probes): rather
+    than the full memoryless grid scan, close the endpoints at the base's total
+    turning (a single Newton). The base is the tau-minimizer, so by the
+    envelope theorem the fixed-tau energy has the same first-order DOF gradient
+    — correct for central differences, ~15× cheaper. Otherwise the full
+    memoryless solve runs, memoized on `cache`. */
+export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache = leg.cache, warm: Sol | null = null): LegShape {
+  const hubPos = (): Vec2 => {
+    const h = w.hub!
+    return h.kind === 'point' ? h.pos : e.bodies.get(h.bodyId)!.pos
+  }
+  // terminal A is always a port bind (leaves along its outward normal — the
+  // rim-locked perpendicular exit BY CONSTRUCTION)
+  const bd0 = w.binds[leg.a.kind === 'bind' ? leg.a.i : 0]!
+  const b0 = e.bodies.get(bd0.body)!
+  const p0 = worldBindAnchor(b0, bd0.key)
+  const la0 = b0.localAnchor.get(bd0.key)!
+  const th0 = Math.atan2(la0.y, la0.x) + b0.theta
+  const ownA: string | null = bd0.body
+  let p1: Vec2, th1: number, freeEnd = false
+  let ownB: string | null = null
+  switch (leg.b.kind) {
+    case 'hub': { p1 = hubPos(); th1 = leg.hubAngle; break }
+    case 'tip': { p1 = e.bodies.get(w.tipBodyId!)!.pos; th1 = 0; freeEnd = true; break }
+    case 'exit': { p1 = w.exit!.pos; th1 = 0; freeEnd = true; break }
+    default: {
+      const bd = w.binds[leg.b.i]!
+      const b = e.bodies.get(bd.body)!
+      p1 = worldBindAnchor(b, bd.key)
+      const la = b.localAnchor.get(bd.key)!
+      th1 = Math.atan2(la.y, la.x) + b.theta + Math.PI
+      ownB = bd.body
+    }
+  }
+  let sol: Sol
+  if (warm !== null) {
+    const r = closeAt(p0, th0, p1, warm.dTurn, warm.c1, warm.L)
+    const c1 = r.ok ? r.c1 : warm.c1
+    const L = r.ok ? r.L : warm.L
+    sol = { c1, c2: warm.dTurn - c1, L, dTurn: warm.dTurn, well: freeEnd ? 0 : WELL_S * (1 - Math.cos(th0 + warm.dTurn - th1)) }
+  } else {
+    sol = solveLeg(cache, p0, th0, p1, th1, freeEnd)
+  }
+  // NO length cap here: a blind-cone leg (target > ~138° behind the port — no
+  // range ≤ π solution) must keep its true, steeply-increasing fallback length
+  // so it stays energetically REPULSIVE — that is the gradient a movable hub/tip
+  // needs to migrate OUT of the cone and the node needs to rotate to face its
+  // target. The tau → 2π singularity is regularized inside solveLeg (finite but
+  // steep), so L is bounded without flattening the gradient.
+  return { sol, p0, th0, p1, th1, freeEnd, ownA, ownB }
+}
+
+/** Trace a resolved leg into world-space sample points (n segments). */
+export function traceLeg(s: LegShape, out: Vec2[], n: number = QN): void {
+  trace(s.p0, s.th0, s.sol.c1, s.sol.c2, s.sol.L, out, n)
 }

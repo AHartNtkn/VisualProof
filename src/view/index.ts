@@ -10,8 +10,8 @@ export {
   localToWorld, DISC_R, FRAME_MARGIN,
 } from './engine'
 export { settle, settleStep, recomputeRegions, resolveOverlaps, REGION_PAD, SIB_GAP } from './relax'
-export type { WirePath, LegGeom, BoundaryExit, ExStub } from './wires'
-export { computeLegs, hobbyBezier, legPaths, boundaryExits, existentialStubs } from './wires'
+export type { LegGeom, BoundaryExit, ExStub } from './wires'
+export { computeLegs, legPaths, boundaryExits, existentialStubs } from './wires'
 export type { Theme, Shape } from './paint'
 export { paint, bubbleHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from './paint'
 export { drawShapes } from './canvas'

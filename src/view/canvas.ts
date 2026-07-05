@@ -83,12 +83,13 @@ export function drawShapes(
         ctx.shadowBlur = 0
         break
       }
-      case 'bezier': {
+      case 'polyline': {
+        if (s.pts.length < 2) break
         setGlow(s.glow)
-        const a = P(s.from), c1 = P(s.c1), c2 = P(s.c2), b = P(s.to)
         ctx.beginPath()
-        ctx.moveTo(a.x, a.y)
-        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
+        const p0 = P(s.pts[0]!)
+        ctx.moveTo(p0.x, p0.y)
+        for (let i = 1; i < s.pts.length; i++) { const q = P(s.pts[i]!); ctx.lineTo(q.x, q.y) }
         ctx.strokeStyle = s.stroke
         ctx.lineWidth = s.width
         ctx.stroke()
@@ -97,13 +98,15 @@ export function drawShapes(
       }
       case 'exit': {
         setGlow(s.glow)
-        const a = P(s.from), c1 = P(s.c1), c2 = P(s.c2), b = P(s.to)
         ctx.strokeStyle = s.stroke
         ctx.lineWidth = s.width
-        ctx.beginPath()
-        ctx.moveTo(a.x, a.y)
-        ctx.bezierCurveTo(c1.x, c1.y, c2.x, c2.y, b.x, b.y)
-        ctx.stroke()
+        if (s.pts.length >= 2) {
+          ctx.beginPath()
+          const p0 = P(s.pts[0]!)
+          ctx.moveTo(p0.x, p0.y)
+          for (let i = 1; i < s.pts.length; i++) { const q = P(s.pts[i]!); ctx.lineTo(q.x, q.y) }
+          ctx.stroke()
+        }
         const q = P(s.tick.center)
         const tx = Math.cos(s.tick.angle) * EXIT_TICK_HALF, ty = Math.sin(s.tick.angle) * EXIT_TICK_HALF
         ctx.beginPath()

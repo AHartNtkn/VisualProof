@@ -7,8 +7,8 @@
  */
 import { boot, labPace, type LabCtx } from './shared'
 import { mkMultiportStart, installDrag } from './multiport'
-import { WIREP } from '../src/view/wirechain'
-import { PACE } from '../src/view/relax'
+import { WIREP, PACE } from '../src/view/relax'
+import { ELASTICA } from '../src/view/elastica'
 import { DiagramBuilder } from '../src/kernel/diagram/builder'
 import type { Diagram, WireId } from '../src/kernel/diagram/diagram'
 import { parseTerm } from '../src/kernel/term/parse'
@@ -55,19 +55,19 @@ type Knob = {
 
 boot('Wire-physics tuning board', 'every live constant on a slider — dial the feel, then COPY VALUES and report the numbers; drag nodes / kick to test settling', (lab: LabCtx) => {
   installDrag(lab)
-  ;(window as unknown as { __tune: { WIREP: typeof WIREP; PACE: typeof PACE } }).__tune = { WIREP, PACE }
+  ;(window as unknown as { __tune: { WIREP: typeof WIREP; PACE: typeof PACE; ELASTICA: typeof ELASTICA } }).__tune = { WIREP, PACE, ELASTICA }
 
   const defaults = new Map<string, number>()
   const knobs: (Knob | string)[] = [
-    'WIRE',
-    { label: 'tension (wants short)', obj: WIREP, key: 'tension', min: 0.2, max: 8, step: 0.1 },
-    { label: 'bend (wants straight)', obj: WIREP, key: 'bend', min: 0, max: 1.5, step: 0.05 },
-    { label: 'barrier (pushes discs)', obj: WIREP, key: 'barrierSlope', min: 0, max: 20, step: 0.5 },
-    { label: 'clearance margin', obj: WIREP, key: 'clearanceMargin', min: 0, max: 5, step: 0.25 },
+    'WIRE (elastica)',
+    { label: 'tension (wants short)', obj: ELASTICA, key: 'tension', min: 0.2, max: 8, step: 0.1 },
+    { label: 'bend (wants straight)', obj: ELASTICA, key: 'bend', min: 5, max: 120, step: 5 },
+    { label: 'clearance slope (pushes discs)', obj: WIREP, key: 'clearSlope', min: 0, max: 8, step: 0.2 },
+    { label: 'clearance margin', obj: WIREP, key: 'clearMargin', min: 0, max: 12, step: 0.5 },
+    { label: 'wire↔wire sep slope', obj: WIREP, key: 'sepSlope', min: 0, max: 5, step: 0.1 },
+    { label: 'junction spread', obj: WIREP, key: 'junctionSpread', min: 0, max: 30, step: 1 },
     { label: 'wire speed cap', obj: WIREP, key: 'travelCap', min: 0.1, max: 1.5, step: 0.05 },
     'PACING',
-    { label: 'wire step (responsiveness)', obj: PACE, key: 'chainStep', min: 0.02, max: 0.8, step: 0.01 },
-    { label: '∃-dot step', obj: PACE, key: 'homedStep', min: 0.01, max: 0.4, step: 0.01 },
     { label: 'body timestep', obj: PACE, key: 'dt', min: 0.02, max: 0.15, step: 0.005 },
     { label: 'body damping (syrup)', obj: PACE, key: 'damp', min: 1, max: 10, step: 0.25 },
     { label: 'rotation drag', obj: PACE, key: 'rotDrag', min: 0.3, max: 4, step: 0.1 },

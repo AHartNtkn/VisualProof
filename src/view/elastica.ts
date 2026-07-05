@@ -109,10 +109,14 @@ export function arcClose(p0: V, th0: number, p1: V): { tau: number; L: number } 
   const s = Math.abs(delta) < 1e-6 ? 1 : delta / Math.sin(delta)
   return { tau: 2 * delta, L: Math.max(chord * s, 0.01) }
 }
+/** Regularize the fallback turning just short of a full loop (tau → 2pi is the
+    L → infinity singularity of arcClose): 2·(pi − DELTA_EPS). Beyond this the
+    length is essentially unbounded; below it the length grows steeply but
+    finitely, which is what preserves the gradient across the blind cone. */
+const DELTA_EPS = 0.05
 export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number, freeEnd: boolean): Sol {
   const k = cache.k
   if (k !== null && k[0] === p0.x && k[1] === p0.y && k[2] === th0 && k[3] === p1.x && k[4] === p1.y && k[5] === th1) return cache.s!
-  const D0 = wrapA(th1 - th0)
   const arc = arcClose(p0, th0, p1)
   let best: { c1: number; L: number; tau: number; E: number } | null = null
   const tryTau = (tau: number): void => {
@@ -127,25 +131,18 @@ export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number
     const E = legInnerE({ c1: arc.tau, L: arc.L }, arc.tau, freeEnd ? 0 : th0 + arc.tau - th1)
     best = { c1: arc.tau, L: arc.L, tau: arc.tau, E }
   }
-  // canonical grid over the feasible turn interval, then refinement. For a
-  // WELLED leg, D0 = wrapA(th1 − th0) anchors the total turning (the arrival
-  // well pulls tau toward D0), so a D0-centered scan is the principled
-  // candidate set. For a FREE-END leg th1 is a dummy (the well is off), so D0
-  // is meaningless; the principled candidate set is the WHOLE feasible turn
-  // interval [−π, π]. Missing that made a free-end leg to a target BEHIND its
-  // port fall to the giant-arc fallback (range 2π) even though the semicircle
-  // (tau = ±π, range = π, L ≈ 1.57·chord) exists and is feasible. A
-  // directly-behind target has an energy tie between tau = +π and tau = −π;
-  // the scan order (−π first) makes the pick deterministic — the memoryless
-  // law depends on it.
-  if (freeEnd) {
-    for (let k2 = -4; k2 <= 4; k2++) tryTau((k2 * Math.PI) / 4)
-  } else {
-    for (let g = -3; g <= 3; g++) {
-      const tau = D0 + g * 0.9
-      if (tau >= -Math.PI - 0.01 && tau <= Math.PI + 0.01) tryTau(tau)
-    }
-  }
+  // UNIFORM scan over the WHOLE feasible turn interval [−π, π] for EVERY leg,
+  // then refinement. The arrival condition is soft or absent for the two leg
+  // kinds that need this: a hub leg's arrival angle is a RELAXING DOF (finite
+  // spread energy), and a free-end leg's th1 is a dummy — so a D0 = wrapA(th1 −
+  // th0)-centered scan can EXCLUDE the tau ≈ ±π solution a port facing away from
+  // its target needs, and coordinate descent cannot walk the soft angle and tau
+  // jointly past the gap. A port→port leg's well merely makes distant-tau
+  // candidates expensive, which the energy selection already discards — so one
+  // policy, the whole family always in view. The tau = +π/−π tie for a
+  // directly-behind target is broken by scan order (−π first): the memoryless
+  // law depends on this determinism.
+  for (let k2 = -4; k2 <= 4; k2++) tryTau((k2 * Math.PI) / 4)
   if (best !== null) {
     let w = 0.55
     for (let r = 0; r < 4; r++) {
@@ -156,10 +153,21 @@ export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number
     }
   }
   if (best === null) {
-    // nothing feasible converged (extreme transient): the arc still
-    // closes exactly — deterministic, no residual, possibly range > pi
-    // for a moment under violent drags
-    best = { c1: arc.tau, L: arc.L, tau: arc.tau, E: 0 }
+    // NO representable candidate: the target is in the blind cone behind the
+    // port (a > pi turn is needed — no range ≤ π θ-quadratic closes it). Take
+    // the exact arc, but regularize ONLY the tau → 2pi singularity so the length
+    // stays finite yet STEEPLY, MONOTONICALLY increasing with blind-cone depth:
+    // the leg must remain energetically REPULSIVE in proportion to how deep its
+    // target sits, or a movable hub/tip has no gradient to migrate OUT of the
+    // cone (and the node no torque to rotate to face it). Capping the LENGTH
+    // instead flattens that gradient and lets the leg REST in the cone — the
+    // dead-zone-from-clamping failure. Only the last sliver (delta within
+    // DELTA_EPS of π) is bounded, where the length is already enormous.
+    const delta = wrapA(Math.atan2(p1.y - p0.y, p1.x - p0.x) - th0)
+    const dc = Math.abs(delta) > Math.PI - DELTA_EPS ? Math.sign(delta || 1) * (Math.PI - DELTA_EPS) : delta
+    const s = Math.abs(dc) < 1e-6 ? 1 : dc / Math.sin(dc)
+    const L = Math.max(hyp(p1.x - p0.x, p1.y - p0.y) * s, 0.01)
+    best = { c1: 2 * dc, L, tau: 2 * dc, E: 0 }
   }
   const b = best as { c1: number; L: number; tau: number }
   const sol = { c1: b.c1, c2: b.tau - b.c1, L: b.L, dTurn: b.tau, well: freeEnd ? 0 : WELL_S * (1 - Math.cos(th0 + b.tau - th1)) }
