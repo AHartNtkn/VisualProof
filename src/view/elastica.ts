@@ -127,10 +127,24 @@ export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number
     const E = legInnerE({ c1: arc.tau, L: arc.L }, arc.tau, freeEnd ? 0 : th0 + arc.tau - th1)
     best = { c1: arc.tau, L: arc.L, tau: arc.tau, E }
   }
-  // canonical grid over the feasible turn interval, then refinement
-  for (let g = -3; g <= 3; g++) {
-    const tau = D0 + g * 0.9
-    if (tau >= -Math.PI - 0.01 && tau <= Math.PI + 0.01) tryTau(tau)
+  // canonical grid over the feasible turn interval, then refinement. For a
+  // WELLED leg, D0 = wrapA(th1 − th0) anchors the total turning (the arrival
+  // well pulls tau toward D0), so a D0-centered scan is the principled
+  // candidate set. For a FREE-END leg th1 is a dummy (the well is off), so D0
+  // is meaningless; the principled candidate set is the WHOLE feasible turn
+  // interval [−π, π]. Missing that made a free-end leg to a target BEHIND its
+  // port fall to the giant-arc fallback (range 2π) even though the semicircle
+  // (tau = ±π, range = π, L ≈ 1.57·chord) exists and is feasible. A
+  // directly-behind target has an energy tie between tau = +π and tau = −π;
+  // the scan order (−π first) makes the pick deterministic — the memoryless
+  // law depends on it.
+  if (freeEnd) {
+    for (let k2 = -4; k2 <= 4; k2++) tryTau((k2 * Math.PI) / 4)
+  } else {
+    for (let g = -3; g <= 3; g++) {
+      const tau = D0 + g * 0.9
+      if (tau >= -Math.PI - 0.01 && tau <= Math.PI + 0.01) tryTau(tau)
+    }
   }
   if (best !== null) {
     let w = 0.55

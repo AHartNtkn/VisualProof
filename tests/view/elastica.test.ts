@@ -102,4 +102,38 @@ describe('elastica — structural impossibility laws', () => {
     const s3 = solveLeg(cache, b.p0, b.th0, { x: 41, y: 10 }, b.th1, false)
     expect(s3).not.toBe(s1)
   })
+
+  // FREE-END REPRESENTABILITY (the candidate-grid law). A free-end leg's scan
+  // covers the WHOLE feasible turn interval [−π, π] (its th1 is a dummy — the
+  // well is off — so a D0-centered scan is meaningless). Consequence: a free-end
+  // leg reaches a target in ANY direction within the reachable CONE — up to
+  // ~138° behind the port heading — with a genuine range ≤ π solution (worst
+  // case ~L=1.4·chord). Beyond ~138° the target is directly behind and NO
+  // range ≤ π θ-quadratic closes it (reaching directly behind needs ∫sin θ = 0
+  // with θ(0)=0, forcing θ past π): that ~84° wedge is outside the family by
+  // construction, so it is NOT asserted representable here.
+  it('free-end legs reach every target in the ±135° cone with range <= pi and L <= 2·chord', () => {
+    for (const dist of [40, 100, 250]) {
+      for (let deg = -135; deg <= 135; deg += 15) {
+        const phi = (deg * Math.PI) / 180
+        const p1 = { x: Math.cos(phi) * dist, y: Math.sin(phi) * dist }
+        const sol = solveLeg(mkLegCache(), { x: 0, y: 0 }, 0, p1, 0, true)
+        const label = `free-end to ${deg}° at ${dist}`
+        expect(thetaRange(sol.c1, sol.c2), `${label}: range`).toBeLessThanOrEqual(Math.PI + 1e-6)
+        expect(sol.L, `${label}: L`).toBeLessThanOrEqual(2 * dist)
+      }
+    }
+  })
+
+  it('a directly-behind free-end target is deterministic (the τ=±π energy tie is broken by scan order)', () => {
+    // reaching directly behind needs a > pi turn (no representable leg); the
+    // memoryless law still demands a deterministic pick from the τ = +π / −π
+    // tie — the −π-first scan order fixes it, so identical inputs match.
+    const p1 = { x: -100, y: 0 }
+    const a = solveLeg(mkLegCache(), { x: 0, y: 0 }, 0, p1, 0, true)
+    const b = solveLeg(mkLegCache(), { x: 0, y: 0 }, 0, p1, 0, true)
+    expect(a.c1).toBe(b.c1)
+    expect(a.c2).toBe(b.c2)
+    expect(a.L).toBe(b.L)
+  })
 })
