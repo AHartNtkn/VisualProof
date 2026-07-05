@@ -29,13 +29,21 @@ import type { Vec2 } from './vec'
     content soft cap (≈11.7) or attracted discs plow through wires
     (measured); travelCap bounds drawn per-tick motion (continuity law). */
 export const WIREP = {
-  /** wire shortness: unit pull along the chain */
-  tension: 1.0,
+  /** wire shortness: unit pull along the chain (USER: strong is right —
+      layouts settle to the same shape, faster) */
+  tension: 3.0,
   /** straightness stiffness (∫κ²ds weight); junction angles deviate from
-      120° in proportion (soap limit at 0) */
-  bend: 0.6,
-  /** disc↔wire push, saturated slope (see constraint above) */
-  barrierSlope: 18,
+      120° in proportion (soap limit at 0). USER: near-minimum is best. */
+  bend: 0.15,
+  /** disc↔wire push. Wire↔node collision has NO semantic meaning (USER
+      ruling): plowing through to disentangle is good, and only AT-REST
+      overlap is forbidden. The mechanism split: SATURATION (finite depth)
+      is what lets stressed geometry pass through, and straightenStep is
+      what removes wrap/tangle minima — the slope itself must DOMINATE
+      tension, because a slope near the tension scale made detouring
+      break-even and wires settled under nodes (measured: slope 3 vs
+      tension 3 left the showcase cluster resting on its own wires). */
+  barrierSlope: 12,
   /** how far beyond a disc's radius wires keep clear */
   clearanceMargin: 1.5,
   /** trust region: max drawn wire motion per tick */
@@ -78,6 +86,17 @@ export type WireChain = {
   /** boundary terminals pinned to canonical frame slots (constraint). */
   slots: { idx: number; slot: number }[]
   pitch: number
+  /** Per-edge barrier quadrature resolution (keyed by edgeKey), FROZEN at
+      resample time. Deriving K from the live edge length made the energy
+      DISCONTINUOUS in the point positions (K = ceil(L) jumps at integer L,
+      and resample parks segments exactly at pitch/2 = 1) — the analytic
+      gradient can only equal the derivative of a smooth energy, so the
+      quadrature resolution is discretization state owned by the discrete
+      events, exactly like the sample points themselves. */
+  q?: Map<number, number>
+  /** RENDER STATE (view-only, round-8 D): per-junction through-axis with
+      inertia, so the trunk pairing cannot flip frame to frame. */
+  phis?: Map<number, number>
 }
 
 export type ChainDisc = { id: string; pos: Vec2; r: number }
@@ -145,6 +164,45 @@ export function barrierG(d: number, r: number): number {
   const half = r / 2
   if (d >= half) return (WIREP.barrierSlope * (r - d)) / half
   return WIREP.barrierSlope
+}
+
+/** ∃-TIP STANDOFF: the dot at a dangling end must never sink into its own
+    wire and vanish (USER law). A finite-depth repulsion between the homed
+    tip and its chain neighbor, same C1 shape as the disc barrier, radius
+    one PITCH (the wire's own geometric unit — the dot stands one sample
+    clear). Slope 2·tension: the attractive pull on an endpoint is exactly
+    the single-segment tension T (bend vanishes at an endpoint), so slope
+    2T dominates outward with margin T. An energy term, NOT a projection —
+    a post-hoc position clamp here was measured as a permanent pump
+    (straighten-kick-recreep limit cycle, +2.3 E spikes forever). */
+export const STANDOFF = PITCH
+export function standoffU(d: number): number {
+  if (d >= STANDOFF) return 0
+  const slope = 2 * WIREP.tension
+  const half = STANDOFF / 2
+  if (d >= half) {
+    const t = (STANDOFF - d) / half
+    return (slope * half * t * t) / 2
+  }
+  return (slope * half) / 2 + slope * (half - d)
+}
+export function standoffG(d: number): number {
+  if (d >= STANDOFF) return 0
+  const half = STANDOFF / 2
+  const slope = 2 * WIREP.tension
+  if (d >= half) return (slope * (STANDOFF - d)) / half
+  return slope
+}
+export function localStandoff(ch: WireChain, v: number): number {
+  let E = 0
+  for (const hm of ch.homed) {
+    if (hm.idx !== v && !ch.adj[hm.idx]!.includes(v)) continue
+    const nb = ch.adj[hm.idx]![0]
+    if (nb === undefined) continue
+    if (hm.idx !== v && nb !== v) continue
+    E += standoffU(len(sub(ch.pts[nb]!, ch.pts[hm.idx]!)))
+  }
+  return E
 }
 
 /** The barrier clearance radius of a disc for wire points. */
@@ -237,8 +295,8 @@ export function exitMaskAt(ch: WireChain, disc: ChainDisc, p: Vec2): { m: number
 }
 
 /** Component split of one chain's energy (debug/trace). */
-export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { tension: number; spacing: number; bend: number; barrier: number } {
-  const parts = { tension: 0, spacing: 0, bend: 0, barrier: 0 }
+export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { tension: number; spacing: number; bend: number; barrier: number; standoff: number } {
+  const parts = { tension: 0, spacing: 0, bend: 0, barrier: 0, standoff: 0 }
   for (let v = 0; v < ch.pts.length; v++) {
     for (const n of ch.adj[v]!) {
       if (n <= v) continue
@@ -246,6 +304,10 @@ export function chainEnergyParts(ch: WireChain, discs: readonly ChainDisc[]): { 
     }
     parts.bend += localBend(ch, v)
     parts.barrier += localBarrier(ch, discs, v)
+  }
+  for (const hm of ch.homed) {
+    const nb = ch.adj[hm.idx]![0]
+    if (nb !== undefined) parts.standoff += standoffU(len(sub(ch.pts[nb]!, ch.pts[hm.idx]!)))
   }
   return parts
 }
@@ -329,7 +391,7 @@ export function edgeBarrier(ch: WireChain, discs: readonly ChainDisc[], v: numbe
     if (scratchNear.length === 0) return 0
     near = scratchNear
   }
-  const K = Math.max(1, Math.ceil(L))
+  const K = ch.q?.get(edgeKey(v, n)) ?? Math.max(1, Math.ceil(L))
   let E = 0
   for (let k = 0; k <= K; k++) {
     const t = k / K
@@ -365,7 +427,7 @@ export function localBarrier(ch: WireChain, discs: readonly ChainDisc[], v: numb
     them is pure waste, measured at ~3× the barrier cost.) Tension is
     handled analytically by the caller. */
 export function pointLocalE(ch: WireChain, discs: readonly ChainDisc[], v: number, near?: EdgeNear): number {
-  let s = localBend(ch, v)
+  let s = localBend(ch, v) + localStandoff(ch, v)
   for (const n of ch.adj[v]!) {
     s += localBend(ch, n)
     s += edgeBarrier(ch, discs, Math.min(v, n), Math.max(v, n), near?.get(edgeKey(v, n)))
@@ -374,7 +436,7 @@ export function pointLocalE(ch: WireChain, discs: readonly ChainDisc[], v: numbe
 }
 
 export function localStencilE(ch: WireChain, discs: readonly ChainDisc[], v: number): number {
-  let s = 0
+  let s = localStandoff(ch, v)
   for (const k of [v, ...ch.adj[v]!]) {
     s += localBend(ch, k)
     s += localBarrier(ch, discs, k)
@@ -394,6 +456,10 @@ export function chainEnergy(ch: WireChain, allDiscs: readonly ChainDisc[]): numb
     }
     E += localBend(ch, v)
     E += localBarrier(ch, discs, v)
+  }
+  for (const hm of ch.homed) {
+    const nb = ch.adj[hm.idx]![0]
+    if (nb !== undefined) E += standoffU(len(sub(ch.pts[nb]!, ch.pts[hm.idx]!)))
   }
   return E
 }
@@ -487,7 +553,7 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nea
       const L = Math.hypot(ex2, ey2)
       if (L < 1e-9) continue
       const ehx = ex2 / L, ehy = ey2 / L
-      const K = Math.max(1, Math.ceil(L))
+      const K = ch.q?.get(edgeKey(v, n)) ?? Math.max(1, Math.ceil(L))
       for (let k = 0; k <= K; k++) {
         const t = k / K
         scratchP.x = a.x + ex2 * t
@@ -530,6 +596,19 @@ export function chainGradient(ch: WireChain, allDiscs: readonly ChainDisc[], nea
         }
       }
     }
+  }
+  // ---- ∃-tip standoff: equal-and-opposite pair along the tip segment ----
+  for (const hm of ch.homed) {
+    const nb = ch.adj[hm.idx]![0]
+    if (nb === undefined) continue
+    const dx = ch.pts[hm.idx]!.x - ch.pts[nb]!.x, dy = ch.pts[hm.idx]!.y - ch.pts[nb]!.y
+    const d = Math.hypot(dx, dy)
+    if (d < 1e-9 || d >= STANDOFF) continue
+    const g = standoffG(d)
+    f[hm.idx]!.x += (dx / d) * g
+    f[hm.idx]!.y += (dy / d) * g
+    f[nb]!.x -= (dx / d) * g
+    f[nb]!.y -= (dy / d) * g
   }
   return { f, onDiscs, bindTorque }
 }
@@ -622,13 +701,18 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
     if (dl < 1e-9) continue
     const w2 = ch.pts.length
     const child: Vec2 = { x: ch.pts[v]!.x + (dir.x / dl) * 0.5, y: ch.pts[v]!.y + (dir.y / dl) * 0.5 }
+    // BASELINE BEFORE MUTATING: the lazy cache filling from the mutated
+    // state compared the trial against itself and silently rejected every
+    // topology move — 5-way wires stayed degree-5 stars forever (USER
+    // caught it: no branching ever appeared)
+    const E0 = E0v()
     // try the move, keep only if E strictly drops
     ch.pts.push(child)
     ch.adj.push([a, b, v])
     ch.adj[v] = nbrs.filter((n) => n !== a && n !== b)
     ch.adj[v]!.push(w2)
     for (const x of [a, b]) ch.adj[x] = ch.adj[x]!.map((n) => (n === v ? w2 : n))
-    if (chainEnergy(ch, discs) < E0v() - TOPO_MARGIN) return
+    if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) return
     // reject: undo
     for (const x of [a, b]) ch.adj[x] = ch.adj[x]!.map((n) => (n === w2 ? v : n))
     ch.adj[v] = nbrs
@@ -645,16 +729,82 @@ export function topologyStep(ch: WireChain, discs: readonly ChainDisc[]): void {
     for (const w of [...ch.adj[v]!]) {
       if (w <= v || pinnedIdx.has(w) || ch.adj[w]!.length < 3) continue
       if (len(sub(ch.pts[w]!, ch.pts[v]!)) > 0.6) continue
+      const E0m = E0v()
       const savedV = [...ch.adj[v]!], savedW = [...ch.adj[w]!]
       ch.adj[v] = [...savedV.filter((n) => n !== w), ...savedW.filter((n) => n !== v)]
       for (const n of savedW) if (n !== v) ch.adj[n] = ch.adj[n]!.map((m) => (m === w ? v : m))
       ch.adj[w] = []
-      if (chainEnergy(ch, discs) < E0v() - TOPO_MARGIN) return
+      if (chainEnergy(ch, discs) < E0m - TOPO_MARGIN) return
       for (const n of savedW) if (n !== v) ch.adj[n] = ch.adj[n]!.map((m) => (m === v ? w : m))
       ch.adj[v] = savedV
       ch.adj[w] = savedW
     }
   }
+}
+
+/**
+ * Discrete taut-string descent: for each structural-to-structural run of
+ * free points, propose the STRAIGHT path (same point count, linear
+ * interpolation) and accept only on strict energy descent. This is the
+ * disentangling move (USER ruling: wires must NEVER stay wrapped/tangled
+ * around nodes — things should pass through to disentangle): a hooked
+ * detour is a LOCAL minimum the gradient cannot leave, because unhooking
+ * means sweeping across the barrier hill; the gated jump crosses the hill
+ * in one step exactly when the unhooked state is energetically better.
+ * At most one accepted move per call.
+ */
+export function straightenStep(ch: WireChain, discs: readonly ChainDisc[]): boolean {
+  const structural = new Set<number>()
+  for (const b of ch.binds) {
+    structural.add(b.idx)
+    const nbr = ch.adj[b.idx]![0]
+    if (nbr !== undefined) structural.add(nbr)
+  }
+  for (const hm of ch.homed) structural.add(hm.idx)
+  for (const s of ch.slots) structural.add(s.idx)
+  for (let v = 0; v < ch.pts.length; v++) if (ch.adj[v]!.length >= 3) structural.add(v)
+  let E0cache: number | null = null
+  const E0v = (): number => {
+    if (E0cache === null) E0cache = chainEnergy(ch, discs)
+    return E0cache
+  }
+  for (const s of structural) {
+    if ((ch.adj[s] ?? []).length === 0) continue
+    for (const first of ch.adj[s]!) {
+      const run: number[] = []
+      let prev = s, cur = first
+      while (!structural.has(cur)) {
+        run.push(cur)
+        const next = ch.adj[cur]!.find((n) => n !== prev)
+        if (next === undefined) break
+        prev = cur
+        cur = next
+      }
+      if (run.length === 0) continue
+      if (cur < s || cur === s) continue // one trial per structural pair
+      const a = ch.pts[s]!, b = ch.pts[cur]!
+      // already straight? (max deviation from the chord below the accept
+      // margin's reach — no energy to gain)
+      let dev = 0
+      const abx = b.x - a.x, aby = b.y - a.y
+      const ll = abx * abx + aby * aby
+      for (const idx of run) {
+        const p = ch.pts[idx]!
+        const t = ll < 1e-12 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / ll))
+        dev = Math.max(dev, Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t)))
+      }
+      if (dev < 0.25) continue
+      const E0 = E0v()
+      const saved = run.map((idx) => ch.pts[idx]!)
+      run.forEach((idx, i) => {
+        const t = (i + 1) / (run.length + 1)
+        ch.pts[idx] = { x: a.x + abx * t, y: a.y + aby * t }
+      })
+      if (chainEnergy(ch, discs) < E0 - TOPO_MARGIN) return true
+      run.forEach((idx, i) => { ch.pts[idx] = saved[i]! })
+    }
+  }
+  return false
 }
 
 /** Resample every degree-≤2 path of the tree whose segment lengths drifted
@@ -689,7 +839,17 @@ export function resample(ch: WireChain): void {
       if (d > 2 * ch.pitch || (d < ch.pitch / 2 && !structural.has(v) && !structural.has(n))) { needs = true; break }
     }
   }
-  if (!needs) return
+  const freezeQ = (): void => {
+    const q = new Map<number, number>()
+    for (let v = 0; v < ch.pts.length; v++) {
+      for (const n of ch.adj[v]!) {
+        if (n <= v) continue
+        q.set(edgeKey(v, n), Math.max(1, Math.ceil(len(sub(ch.pts[n]!, ch.pts[v]!)))))
+      }
+    }
+    ch.q = q
+  }
+  if (!needs) { freezeQ(); return }
   // walk structure-to-structure paths, rebuild each at pitch
   const oldPts = ch.pts, oldAdj = ch.adj
   const map = new Map<number, number>() // old structural idx -> new idx
@@ -758,5 +918,14 @@ export function resample(ch: WireChain): void {
   ch.binds = ch.binds.map((b) => ({ ...b, idx: remap(b.idx) }))
   ch.homed = ch.homed.map((h) => ({ ...h, idx: remap(h.idx) }))
   ch.slots = ch.slots.map((s) => ({ ...s, idx: remap(s.idx) }))
+  if (ch.phis !== undefined) {
+    const phis = new Map<number, number>()
+    for (const [idx, phi] of ch.phis) {
+      const ni = map.get(idx)
+      if (ni !== undefined) phis.set(ni, phi)
+    }
+    ch.phis = phis
+  }
+  freezeQ()
 }
 

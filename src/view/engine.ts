@@ -180,11 +180,18 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     // scope-homed body, so the line never contorts through its scope.
     // Boundary wires get a frame-slot terminal instead of an ∃ end.
     const isBoundary = bset.has(wid)
-    const mkWireBody = (id: string, region: RegionId): Body => {
+    const mkWireBody = (id: string, region: RegionId, near?: Vec2): Body => {
+      // seed NEAR the wire's own anchors, not on the global spiral: after a
+      // rewrite, spiral-seeded ends left wires stretched wildly across the
+      // sheet (USER report)
+      const seed = near !== undefined
+        ? { x: near.x + 4 + (i % 3), y: near.y - 3 - (i % 2) }
+        : { x: (i++) * 3, y: -(i * 2) }
+      i++
       const b: Body = {
         id, kind: 'junction', node: null, geometry: null,
         localAnchor: new Map(), discR: 4.5, region,
-        pos: { x: (i++) * 3, y: -(i * 2) }, vel: { x: 0, y: 0 }, theta: 0,
+        pos: seed, vel: { x: 0, y: 0 }, theta: 0,
       }
       bodies.set(id, b)
       membersOf.get(region)!.push(id)
@@ -197,7 +204,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       continue
     }
     // terminals: port anchors first (in endpoint order), then homed/slot ends
-    const terminalPos: Vec2[] = ends.map((en) => worldAnchor(bodies.get(en.body)!, en.key))
+    const terminalPos: Vec2[] = ends.map((en) => worldBindAnchor(bodies.get(en.body)!, en.key!))
     const binds = ends.map((en, k) => ({ idx: k, body: en.body, key: en.key! }))
     const homed: { idx: number; bodyId: string }[] = []
     const slots: { idx: number; slot: number }[] = []
@@ -209,11 +216,13 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       slots.push({ idx: terminalPos.length, slot: slotOf.get(wid)! })
       terminalPos.push({ x: terminalPos[0]!.x, y: terminalPos[0]!.y - 6 })
     } else if (ends.length === 1) {
-      const b = mkWireBody(`j:${wid}`, w.scope)
+      const b = mkWireBody(`j:${wid}`, w.scope, terminalPos[0])
       homed.push({ idx: terminalPos.length, bodyId: b.id })
       terminalPos.push(b.pos)
     } else if (w.scope !== dca) {
-      const b = mkWireBody(`x:${wid}`, w.scope)
+      const cx = terminalPos.reduce((s, p) => s + p.x, 0) / terminalPos.length
+      const cy = terminalPos.reduce((s, p) => s + p.y, 0) / terminalPos.length
+      const b = mkWireBody(`x:${wid}`, w.scope, { x: cx, y: cy })
       homed.push({ idx: terminalPos.length, bodyId: b.id })
       terminalPos.push(b.pos)
     }
@@ -272,6 +281,23 @@ export function worldAnchor(b: Body, key: string | null): Vec2 {
   const a = b.localAnchor.get(key)!
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
+}
+
+/** Where a WIRE attaches to a body: the point on the DISC EDGE in the
+    port's direction. The interior anchor is node anatomy (the port dot);
+    a wire pinned there begins inside the node and must escape the disc
+    through a corridor that exempts a swath of it (USER report: edges
+    beginning on the interior, exiting at non-perpendicular angles). The
+    edge attachment makes the perpendicular exit a boundary condition. */
+export function worldBindAnchor(b: Body, key: string): Vec2 {
+  const a = b.localAnchor.get(key)!
+  const la = Math.hypot(a.x, a.y)
+  const ux = la < 1e-9 ? 1 : a.x / la, uy = la < 1e-9 ? 0 : a.y / la
+  const c = Math.cos(b.theta), s = Math.sin(b.theta)
+  return {
+    x: b.pos.x + (ux * c - uy * s) * b.discR,
+    y: b.pos.y + (ux * s + uy * c) * b.discR,
+  }
 }
 
 /** The outward normal at (body, port key), in world radians. Junctions have no

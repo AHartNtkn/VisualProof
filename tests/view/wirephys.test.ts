@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
-import { mkEngine, worldAnchor, type Engine } from '../../src/view/engine'
+import { mkEngine, worldBindAnchor, type Engine } from '../../src/view/engine'
 import { settle, settleStep, wireEnergy, WIREP } from '../../src/view/relax'
 
 /**
@@ -178,7 +178,12 @@ describe('wire physics — energy discipline', () => {
     }
   })
 
-  it('no chain point travels more than the trust-region cap in one tick', () => {
+  it('no chain point travels more than the trust-region cap in one continuous descent step', async () => {
+    // the cap is the law of the CONTINUOUS subsystem (chainStep + resample);
+    // discrete moves — topology and taut-string — relocate whole runs by
+    // design and are governed by their own law (strict E-descent, covered
+    // by the master pin above)
+    const { chainStep, resample: doResample } = await import('../../src/view/wirechain')
     const { d, b } = threeWay()
     const e = mkEngine(d, b)
     // owners settle first: bind points track bodies, whose early free-fall
@@ -187,7 +192,13 @@ describe('wire physics — energy discipline', () => {
     for (let i = 0; i < 40; i++) {
       const before = new Map<string, { pts: Vec2Like[]; adj: number[][] }>()
       for (const [wid, ch] of e.chains) before.set(wid, { pts: ch.pts.map((p) => ({ ...p })), adj: ch.adj.map((a) => [...a]) })
-      settleStep(e)
+      const discs = [...e.bodies.values()]
+        .filter((x) => x.kind !== 'junction' && x.kind !== 'anchor')
+        .map((x) => ({ id: x.id, pos: x.pos, r: x.discR }))
+      for (const ch of e.chains.values()) {
+        chainStep(ch, discs, 0.4)
+        doResample(ch)
+      }
       for (const [wid, ch] of e.chains) {
         const prev = before.get(wid)!
         const pinned = new Set<number>([...ch.binds.map((x) => x.idx), ...ch.homed.map((x) => x.idx), ...ch.slots.map((x) => x.idx)])
@@ -284,11 +295,106 @@ describe('wire physics — energy discipline (settling)', () => {
   })
 })
 
+describe('wire physics — discrete disentangling (taut-string move)', () => {
+  const detourChain = async (): Promise<import('../../src/view/wirechain').WireChain> => {
+    // a semicircular detour between two bound endpoints at (0,0) and (20,0):
+    // the hooked-wire shape (wrapped around something that is no longer
+    // there). Bind neighbors are structural, so the free run is 2..N-2.
+    const pts: { x: number; y: number }[] = []
+    const N = 12
+    for (let k = 0; k <= N; k++) {
+      const a = Math.PI - (Math.PI * k) / N
+      pts.push({ x: 10 + 10 * Math.cos(a), y: 10 * Math.sin(a) })
+    }
+    const adj = pts.map((_, i) => [i - 1, i + 1].filter((j) => j >= 0 && j < pts.length))
+    return {
+      pts, adj,
+      binds: [
+        { idx: 0, body: 'L', key: 'p', normal: 0 },
+        { idx: pts.length - 1, body: 'R', key: 'p', normal: Math.PI },
+      ],
+      homed: [], slots: [], pitch: 2,
+    }
+  }
+
+  it('a hooked detour with nothing inside straightens in one gated jump', async () => {
+    const { straightenStep, chainEnergy } = await import('../../src/view/wirechain')
+    const ch = await detourChain()
+    const E0 = chainEnergy(ch, [])
+    const accepted = straightenStep(ch, [])
+    expect(accepted, 'the taut-string proposal must be accepted when the detour pays for nothing').toBe(true)
+    expect(chainEnergy(ch, [])).toBeLessThan(E0)
+    // the free run now lies exactly on the chord between its structural
+    // endpoints (the bind neighbors, which keep their exit positions)
+    const a = ch.pts[1]!, b2 = ch.pts[ch.pts.length - 2]!
+    for (let v = 2; v < ch.pts.length - 2; v++) {
+      const p = ch.pts[v]!
+      const abx = b2.x - a.x, aby = b2.y - a.y
+      const t = ((p.x - a.x) * abx + (p.y - a.y) * aby) / (abx * abx + aby * aby)
+      const dev = Math.hypot(p.x - (a.x + abx * t), p.y - (a.y + aby * t))
+      expect(dev, `free point ${v} still off the chord`).toBeLessThan(1e-9)
+    }
+  })
+
+  it('a detour AROUND a blocking disc is kept — straight-through costs more', async () => {
+    const { straightenStep } = await import('../../src/view/wirechain')
+    const ch = await detourChain()
+    const before = ch.pts.map((p) => ({ ...p }))
+    const discs = [{ id: 'wall', pos: { x: 10, y: 0 }, r: 7 }]
+    const accepted = straightenStep(ch, discs)
+    expect(accepted, 'straightening through a disc must be rejected — the detour is the true minimum').toBe(false)
+    ch.pts.forEach((p, i) => {
+      expect(p.x).toBe(before[i]!.x)
+      expect(p.y).toBe(before[i]!.y)
+    })
+  })
+})
+
 describe('wire physics — equilibria', () => {
-  it('a 3-way junction settles near 120 degrees (Plateau in the soap limit; the elastica bend torque of one-pitch arms shifts it ±15°)', () => {
-    const e = settled(threeWay)
-    const ch = [...e.chains.values()][0]!
-    // interior points of degree 3
+  it('the ∃ dot never rests sunk into its own wire (standoff law)', async () => {
+    const { STANDOFF } = await import('../../src/view/wirechain')
+    const { d, b, wid } = dangling()
+    const e = mkEngine(d, b)
+    settle(e, 8000)
+    const ch = e.chains.get(wid)!
+    for (const hm of ch.homed) {
+      const nb = ch.adj[hm.idx]![0]!
+      const dist = Math.hypot(ch.pts[hm.idx]!.x - ch.pts[nb]!.x, ch.pts[hm.idx]!.y - ch.pts[nb]!.y)
+      // the C1 ramp reaches force balance strictly inside the radius only
+      // under external compression; a free dangle rests at the boundary
+      expect(dist, 'dot sunk into its wire').toBeGreaterThanOrEqual(STANDOFF * 0.75)
+    }
+  })
+
+  it('a FREE-SPACE 3-way junction settles near 120 degrees (Plateau in the soap limit; the elastica bend torque shifts it ±15°)', async () => {
+    // the 120° law is a property of the WIRE subsystem: in a crowded
+    // diagram the Steiner point can lie inside a clearance zone and the
+    // junction legitimately rests barrier-pressed at distorted gaps
+    // (measured 94/108/158 on the threeWay fixture — correct physics).
+    // So the law is pinned on a pure chain with no discs at all.
+    const { chainStep, resample: doResample, topologyStep } = await import('../../src/view/wirechain')
+    const terms = [
+      { x: 0, y: 0 },
+      { x: 40, y: 4 },
+      { x: 16, y: 36 },
+    ]
+    const pts: { x: number; y: number }[] = [...terms.map((p) => ({ ...p })), { x: 18, y: 12 }]
+    const adj = [[3], [3], [3], [0, 1, 2]]
+    const ch: import('../../src/view/wirechain').WireChain = {
+      pts, adj,
+      binds: terms.map((_, k) => ({ idx: k, body: `b${k}`, key: 'p' })),
+      homed: [], slots: [], pitch: 2,
+    }
+    doResample(ch)
+    // raw chainStep has no line search (that lives in settleStep), so the
+    // step must sit below the tension mode's explicit-descent stability
+    // bound 2/λmax, λmax ≈ 4·tension/pitch = 6 → step < 1/3; above it the
+    // chain rings as a period-2 standing wave and never converges
+    for (let i = 0; i < 4000; i++) {
+      chainStep(ch, [], 0.1)
+      topologyStep(ch, [])
+      doResample(ch)
+    }
     const interior = ch.pts.map((_, i) => i).filter((i) => ch.adj[i]!.length === 3)
     expect(interior.length).toBeGreaterThanOrEqual(1)
     for (const v of interior) {
@@ -320,7 +426,7 @@ describe('wire physics — equilibria', () => {
     for (const ch of e.chains.values()) {
       for (const bind of ch.binds) {
         const body = e.bodies.get(bind.body)!
-        const anchor = worldAnchor(body, bind.key)
+        const anchor = worldBindAnchor(body, bind.key)
         const a = body.localAnchor.get(bind.key)!
         const normal = Math.atan2(a.y, a.x) + body.theta
         const nbr = ch.adj[bind.idx]![0]!

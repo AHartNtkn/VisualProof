@@ -76,6 +76,28 @@ export function installDrag(lab: LabCtx): void {
     b.pos.y = w.y + grab.dy
     b.vel.x = 0
     b.vel.y = 0
+    // EXTENT LEASH (USER): components must never be dragged so far apart
+    // that the fit-to-view zoom makes the diagram imperceivably small.
+    // The grabbed body is held within 110% of the rest's bounding radius.
+    let cx = 0, cy = 0, n = 0
+    for (const [id, ob] of lab.engine.bodies) {
+      if (id === grab.id) continue
+      cx += ob.pos.x; cy += ob.pos.y; n++
+    }
+    if (n > 0) {
+      cx /= n; cy /= n
+      let rad = 0
+      for (const [id, ob] of lab.engine.bodies) {
+        if (id === grab.id) continue
+        rad = Math.max(rad, Math.hypot(ob.pos.x - cx, ob.pos.y - cy) + ob.discR)
+      }
+      const leash = Math.max(20, rad * 1.1)
+      const d = Math.hypot(b.pos.x - cx, b.pos.y - cy)
+      if (d > leash) {
+        b.pos.x = cx + ((b.pos.x - cx) / d) * leash
+        b.pos.y = cy + ((b.pos.y - cy) / d) * leash
+      }
+    }
   })
   lab.canvas.addEventListener('pointerup', () => { grab = null })
 }

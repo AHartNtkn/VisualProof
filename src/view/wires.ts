@@ -1,7 +1,7 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg } from './engine'
-import { frameBounds, frameSlots, worldAnchor } from './engine'
+import { frameBounds, frameSlots, worldBindAnchor } from './engine'
 
 /**
  * Wire geometry over the PLAN-21 chains, pure — returns paths, paints
@@ -46,8 +46,37 @@ export function hobbyBezier(pa: Vec2, ta: number, pb: Vec2, tb: number): WirePat
 }
 
 /** Per-chain outward tangents for the edge (v -> n): port normal at binds,
-    Catmull through-direction at degree-2 interior points, plain segment
-    direction elsewhere (junctions, homed ends). */
+    Catmull through-direction at degree-2 interior points, and at junctions
+    the round-8 TRIBUTARY rule — the two most-opposite branches flow through
+    as one stream along a RELAXED axis (phi, low-passed orientation tensor:
+    inertia prevents the pairing flips that made junctions jump), side
+    branches merge tangent to it with a weight that vanishes exactly where
+    the side choice would flip. Tangents are clamped inside the Hobby
+    no-loop bound against the chord. */
+const wrapAxis = (x: number): number => Math.atan2(Math.sin(2 * x), Math.cos(2 * x)) / 2
+
+function junctionPhi(ch: NonNullable<ReturnType<Engine['chains']['get']>>, v: number): number {
+  if (ch.phis === undefined) ch.phis = new Map()
+  let c2 = 0, s2 = 0
+  for (const n of ch.adj[v]!) {
+    const a = Math.atan2(ch.pts[n]!.y - ch.pts[v]!.y, ch.pts[n]!.x - ch.pts[v]!.x)
+    c2 += Math.cos(2 * a)
+    s2 += Math.sin(2 * a)
+  }
+  const anis = Math.hypot(c2, s2) / ch.adj[v]!.length
+  const prev = ch.phis.get(v)
+  if (prev === undefined) {
+    const phi0 = anis < 1e-9 ? 0 : Math.atan2(s2, c2) / 2
+    ch.phis.set(v, phi0)
+    return phi0
+  }
+  if (anis < 1e-9) return prev
+  const target = Math.atan2(s2, c2) / 2
+  const next = wrapAxis(prev + wrapAxis(target - prev) * Math.min(1, anis) * 0.2)
+  ch.phis.set(v, next)
+  return next
+}
+
 function chainTangent(e: Engine, wid: WireId, v: number, n: number): number {
   const ch = e.chains.get(wid)!
   const seg = Math.atan2(ch.pts[n]!.y - ch.pts[v]!.y, ch.pts[n]!.x - ch.pts[v]!.x)
@@ -60,6 +89,15 @@ function chainTangent(e: Engine, wid: WireId, v: number, n: number): number {
   if (ch.adj[v]!.length === 2) {
     const other = ch.adj[v]!.find((x) => x !== n)!
     return Math.atan2(ch.pts[n]!.y - ch.pts[other]!.y, ch.pts[n]!.x - ch.pts[other]!.x)
+  }
+  if (ch.adj[v]!.length >= 3) {
+    const phi = junctionPhi(ch, v)
+    const axisSide = Math.abs(wrap(phi - seg)) <= Math.PI / 2 ? phi : phi + Math.PI
+    const wgt = Math.abs(Math.cos(seg - phi))
+    const t = seg + wrap(axisSide - seg) * wgt
+    // Hobby no-loop clamp against the chord
+    const MAXDEV = Math.PI / 2 - 0.15
+    return seg + Math.max(-MAXDEV, Math.min(MAXDEV, wrap(t - seg)))
   }
   return seg
 }
@@ -79,15 +117,26 @@ export function computeLegs(e: Engine): LegGeom[] {
       if (hm !== undefined) return { body: hm.bodyId, key: null }
       return { body: `w:${wid}:${idx}`, key: null }
     }
+    // terminal endpoints are DERIVED from their owning bodies at draw time
+    // — never read from the chain, so a drawn wire cannot float off its
+    // node no matter what the physics/pin ordering did this tick: the
+    // attachment IS the disc-edge point of the body being painted
+    const drawnAt = (idx: number): Vec2 => {
+      const bind = ch.binds.find((b) => b.idx === idx)
+      if (bind !== undefined) return worldBindAnchor(e.bodies.get(bind.body)!, bind.key)
+      const hm = ch.homed.find((h) => h.idx === idx)
+      if (hm !== undefined) return e.bodies.get(hm.bodyId)!.pos
+      return ch.pts[idx]!
+    }
     for (let v = 0; v < ch.pts.length; v++) {
       for (const n of ch.adj[v]!) {
         if (n <= v) continue
         if (slotIdx.has(v) || slotIdx.has(n)) continue
         out.push({
           leg: { wid, from: endOf(v), to: endOf(n) },
-          pa: ch.pts[v]!,
+          pa: drawnAt(v),
           ta: chainTangent(e, wid, v, n),
-          pb: ch.pts[n]!,
+          pb: drawnAt(n),
           tb: chainTangent(e, wid, n, v),
         })
       }
@@ -143,8 +192,8 @@ export function existentialStubs(e: Engine): ExStub[] {
   return out
 }
 
-/** The world anchor a wire meets a node at — re-exported convenience for
-    endpoint-level consumers. */
+/** The world anchor a wire meets a node at (the disc-edge attachment) —
+    re-exported convenience for endpoint-level consumers. */
 export function bindAnchor(e: Engine, body: string, key: string): Vec2 {
-  return worldAnchor(e.bodies.get(body)!, key)
+  return worldBindAnchor(e.bodies.get(body)!, key)
 }

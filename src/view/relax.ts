@@ -1,9 +1,9 @@
 import type { RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine } from './engine'
-import { frameBounds, frameSlots, subtreeCarriers, worldAnchor } from './engine'
+import { frameBounds, frameSlots, subtreeCarriers, worldBindAnchor } from './engine'
 import type { ChainDisc } from './wirechain'
-import { buildEdgeNear, chainEnergy, chainGradient, pointLocalE, resample, topologyStep, WIREP } from './wirechain'
+import { buildEdgeNear, chainEnergy, chainGradient, pointLocalE, resample, straightenStep, topologyStep, WIREP } from './wirechain'
 
 /** Tension of a point's incident edges (analytic in the gradient; the local
     line-search energies need it explicitly). */
@@ -45,10 +45,11 @@ export const PACE = {
   rep: 900,
   /** sibling gap (spacing between discs/regions) */
   sibGap: 5,
-  /** wire descent step (wire responsiveness) */
-  chainStep: 0.15,
+  /** wire descent step (USER: max responsiveness is right — the line
+      searches guard stability, so big steps just settle faster) */
+  chainStep: 0.4,
   /** ∃-dot descent step */
-  homedStep: 0.08,
+  homedStep: 0.15,
   /** scope-ring containment on ∃ tips: slope must exceed wire pull (1–2) */
   ringSlope: 8,
   ringBand: 4,
@@ -286,7 +287,16 @@ export function resolveOverlaps(e: Engine): boolean {
         const ca = centerOf(A), cb = centerOf(B)
         const dx = cb.x - ca.x, dy = cb.y - ca.y
         const dist = Math.hypot(dx, dy)
-        const need = A.r + B.r + PACE.sibGap
+        // a wire-owned dot vs a REGION: legality is center-outside-circle
+        // only — the ∀ tip LIVES in the ring annulus (loose-ends law), and
+        // demanding content spacing (disc + sibGap) put the projection wall
+        // inside the territory the ring energy owns: tension pressed the
+        // tip into the wall every tick and the reaction walked the whole
+        // assembly across the sheet forever (measured 0.05 wu/tick, E
+        // oscillating, never resting)
+        const need = aOwned && B.sub !== null ? B.r
+          : bOwned && A.sub !== null ? A.r
+          : A.r + B.r + PACE.sibGap
         if (dist >= need) continue
 
         // coincident centers have no separation direction; any fixed unit
@@ -339,7 +349,7 @@ export function resolveOverlaps(e: Engine): boolean {
 function pinChain(e: Engine, ch: { pts: Vec2[]; adj: number[][]; binds: { idx: number; body: string; key: string; normal?: number }[]; homed: { idx: number; bodyId: string }[]; slots: { idx: number; slot: number }[] }, slotPts: { point: Vec2 }[] | null): void {
   for (const bind of ch.binds) {
     const b = e.bodies.get(bind.body)!
-    const anchor = worldAnchor(b, bind.key)
+    const anchor = worldBindAnchor(b, bind.key)
     ch.pts[bind.idx] = anchor
     const a = b.localAnchor.get(bind.key)!
     const normal = Math.atan2(a.y, a.x) + b.theta
@@ -347,7 +357,9 @@ function pinChain(e: Engine, ch: { pts: Vec2[]; adj: number[][]; binds: { idx: n
     const nbr = ch.adj[bind.idx]![0]
     if (nbr !== undefined) {
       const p = ch.pts[nbr]!
-      const dist = Math.max(0.5, Math.hypot(p.x - anchor.x, p.y - anchor.y))
+      // the exit run is VISIBLE (≥ one pitch): with a sub-pixel run the
+      // wire visually left the node at an arbitrary angle (USER report)
+      const dist = Math.max(2, Math.hypot(p.x - anchor.x, p.y - anchor.y))
       ch.pts[nbr] = { x: anchor.x + Math.cos(normal) * dist, y: anchor.y + Math.sin(normal) * dist }
     }
   }
@@ -641,6 +653,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       if (scale === 0) ch.pts[v] = p0
     }
     topologyStep(ch, discs)
+    straightenStep(ch, discs)
     resample(ch)
   }
 

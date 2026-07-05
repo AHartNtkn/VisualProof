@@ -14,6 +14,7 @@ boot(
   'plan 21: wires want to be short and straight, push nodes and are pushed; junctions settle at 120°; ∃ dots ride their wires; drag anything',
   (lab) => {
     installDrag(lab)
+    ;(window as unknown as { __lab: unknown }).__lab = lab
     lab.toast('drag any node — wires bend around discs, junctions re-balance, dangles follow')
   },
   mkMultiportStart,
