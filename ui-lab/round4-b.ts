@@ -64,7 +64,7 @@ boot('Round 4 · B — in-place picking', 'the diagram is the form: numbered bad
       // badge: the pick order, drawn at the wire's ∃/junction body when it has
       // one, else at the first leg end
       const b = lab.engine.bodies.get(`x:${w}`) ?? lab.engine.bodies.get(`j:${w}`)
-      const at = b?.pos ?? lab.legs().find((g) => g.leg.wid === w)?.pa
+      const at = b?.pos ?? lab.legs().find((g) => g.leg.wid === w)?.pts[0]
       if (at) {
         out.push({ kind: 'circle', center: at, r: 3.6, fill: '#ede9fe', stroke: '#7c3aed', width: 1.4, insetColor: null, glow: null })
         out.push({ kind: 'label', center: at, text: String(i + 1), color: '#7c3aed', r: 3.6, font: '600 4px system-ui' })

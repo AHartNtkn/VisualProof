@@ -14,7 +14,7 @@ import type { Vec2 } from '../src/view/vec'
 import { settleStep } from '../src/view/relax'
 import { paint, LIGHT, type Shape, type Theme } from '../src/view/paint'
 import { drawShapes } from '../src/view/canvas'
-import { computeLegs, hobbyBezier, legPaths, boundaryExits, existentialStubs, type ExStub, type LegGeom, type WirePath } from '../src/view/wires'
+import { computeLegs, legPaths, boundaryExits, existentialStubs, type ExStub, type LegGeom } from '../src/view/wires'
 import { buildSelection, dragTarget, hitTest, type Hit } from '../src/app/hittest'
 import { addBubble, addCut, addRefNode, addTermNode, deleteSelection } from '../src/app/edit'
 import { mkSelection } from '../src/kernel/diagram/subgraph/selection'
@@ -218,7 +218,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
     legAt: (w, tol = 2.5) => {
       let best: { g: LegGeom; dist: number } | null = null
       for (const g of computeLegs(lab.engine)) {
-        const dist = pathDistance(w, hobbyBezier(g.pa, g.ta, g.pb, g.tb))
+        const dist = polylineDistance(w, g.pts)
         if (dist <= tol && (best === null || dist < best.dist)) best = { g, dist }
       }
       return best?.g ?? null
@@ -228,8 +228,8 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
       const consider = (wid: WireId, dist: number) => {
         if (dist <= tol && (best === null || dist < best.dist)) best = { wid, dist }
       }
-      for (const g of computeLegs(lab.engine)) consider(g.leg.wid, pathDistance(w, hobbyBezier(g.pa, g.ta, g.pb, g.tb)))
-      for (const x of boundaryExits(lab.engine)) consider(x.wid, pathDistance(w, x.path))
+      for (const g of computeLegs(lab.engine)) consider(g.leg.wid, polylineDistance(w, g.pts))
+      for (const x of boundaryExits(lab.engine)) consider(x.wid, polylineDistance(w, x.pts))
       for (const s of existentialStubs(lab.engine)) {
         consider(s.wid, Math.min(Math.hypot(w.x - s.from.x, w.y - s.from.y), Math.hypot(w.x - s.to.x, w.y - s.to.y)))
       }
@@ -238,9 +238,8 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
     legsCrossing: (a, b) => {
       const out: LegGeom[] = []
       for (const g of computeLegs(lab.engine)) {
-        const pts = samplePath(hobbyBezier(g.pa, g.ta, g.pb, g.tb))
-        for (let i = 0; i + 1 < pts.length; i++) {
-          if (segmentsIntersect(a, b, pts[i]!, pts[i + 1]!)) { out.push(g); break }
+        for (let i = 0; i + 1 < g.pts.length; i++) {
+          if (segmentsIntersect(a, b, g.pts[i]!, g.pts[i + 1]!)) { out.push(g); break }
         }
       }
       return out
@@ -271,21 +270,18 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
 
 // ---- path geometry (sampling mirrors hittest's tolerance approach) ----
 
-function samplePath(p: WirePath, n = 16): Vec2[] {
-  const out: Vec2[] = []
-  for (let i = 0; i <= n; i++) {
-    const t = i / n, u = 1 - t
-    out.push({
-      x: u * u * u * p.from.x + 3 * u * u * t * p.c1.x + 3 * u * t * t * p.c2.x + t * t * t * p.to.x,
-      y: u * u * u * p.from.y + 3 * u * u * t * p.c1.y + 3 * u * t * t * p.c2.y + t * t * t * p.to.y,
-    })
-  }
-  return out
-}
-
-function pathDistance(w: Vec2, p: WirePath): number {
+/** Distance from a point to a traced polyline (plan 22: the polyline IS the
+    wire — no spline fit). Point-to-segment over the traced samples. */
+function polylineDistance(w: Vec2, pts: readonly Vec2[]): number {
   let best = Infinity
-  for (const q of samplePath(p)) best = Math.min(best, Math.hypot(w.x - q.x, w.y - q.y))
+  for (let i = 0; i + 1 < pts.length; i++) {
+    const a = pts[i]!, b = pts[i + 1]!
+    const abx = b.x - a.x, aby = b.y - a.y
+    const ll = abx * abx + aby * aby
+    const t = ll < 1e-12 ? 0 : Math.max(0, Math.min(1, ((w.x - a.x) * abx + (w.y - a.y) * aby) / ll))
+    best = Math.min(best, Math.hypot(w.x - (a.x + abx * t), w.y - (a.y + aby * t)))
+  }
+  if (pts.length === 1) best = Math.hypot(w.x - pts[0]!.x, w.y - pts[0]!.y)
   return best
 }
 
@@ -547,10 +543,9 @@ export function promptAt(sx: number, sy: number, placeholder: string, commit: (t
   setTimeout(() => inp.focus(), 0)
 }
 
-/** Stroke shape for one leg (strand) of a wire. */
+/** Stroke shape for one leg (strand) of a wire — the traced θ-quadratic polyline. */
 export function legShape(g: LegGeom, stroke: string, width: number): Shape {
-  const p = hobbyBezier(g.pa, g.ta, g.pb, g.tb)
-  return { kind: 'bezier', from: p.from, c1: p.c1, c2: p.c2, to: p.to, stroke, width, glow: null }
+  return { kind: 'polyline', pts: g.pts, stroke, width, glow: null }
 }
 
 /** Merge every listed wire into one (N-ary join — selecting three lines and
@@ -703,8 +698,8 @@ export function hitShapes(lab: LabCtx, h: Hit, stroke: string, width = 2.5): Sha
     return g === undefined ? [] : [{ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke, width, insetColor: null, glow: null }]
   }
   const out: Shape[] = []
-  for (const l of legPaths(e)) if (l.wid === h.id) out.push({ kind: 'bezier', from: l.path.from, c1: l.path.c1, c2: l.path.c2, to: l.path.to, stroke, width: width + 0.5, glow: null })
-  for (const x of boundaryExits(e)) if (x.wid === h.id) out.push({ kind: 'bezier', from: x.path.from, c1: x.path.c1, c2: x.path.c2, to: x.path.to, stroke, width: width + 0.5, glow: null })
+  for (const l of legPaths(e)) if (l.wid === h.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: width + 0.5, glow: null })
+  for (const x of boundaryExits(e)) if (x.wid === h.id) out.push({ kind: 'polyline', pts: x.pts, stroke, width: width + 0.5, glow: null })
   for (const s of existentialStubs(e)) if (s.wid === h.id) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width: width + 0.5, glow: null })
   return out
 }
