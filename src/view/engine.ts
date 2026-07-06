@@ -375,21 +375,26 @@ export function worldAnchor(b: Body, key: string | null): Vec2 {
   return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
 }
 
-/** Where a WIRE attaches to a body: the point on the DISC EDGE in the
-    port's direction. The interior anchor is node anatomy (the port dot);
-    a wire pinned there begins inside the node and must escape the disc
-    through a corridor that exempts a swath of it (USER report: edges
-    beginning on the interior, exiting at non-perpendicular angles). The
-    edge attachment makes the perpendicular exit a boundary condition. */
+/** Where a WIRE attaches to a body: the point on the DRAWN node outline in the
+    port's direction, so the wire touches the surface the user sees (USER LAW:
+    wire endpoints locked to the node rim, perpendicular exit BY CONSTRUCTION).
+    `discR` is the padded CLEARANCE disc, not the drawing — attaching there floats
+    the wire a pad-width off the rendered rim (USER report: floating attachments).
+
+    A ref discards its anatomy for a readable labelled disc drawn at DISC_R, so
+    its wire meets that drawn rim at DISC_R along the port direction. An atom or a
+    term draws its real anatomy with a radial port stub whose TIP is the port
+    anchor (bend.ts / atomGeometry), so the wire meets that drawn stub tip
+    directly — the port anchor is already on the drawing (ascale folded in). */
 export function worldBindAnchor(b: Body, key: string): Vec2 {
   const a = b.localAnchor.get(key)!
-  const la = Math.hypot(a.x, a.y)
-  const ux = la < 1e-9 ? 1 : a.x / la, uy = la < 1e-9 ? 0 : a.y / la
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
-  return {
-    x: b.pos.x + (ux * c - uy * s) * b.discR,
-    y: b.pos.y + (ux * s + uy * c) * b.discR,
+  if (b.kind === 'ref') {
+    const la = Math.hypot(a.x, a.y)
+    const ux = la < 1e-9 ? 1 : a.x / la, uy = la < 1e-9 ? 0 : a.y / la
+    return { x: b.pos.x + (ux * c - uy * s) * DISC_R, y: b.pos.y + (ux * s + uy * c) * DISC_R }
   }
+  return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
 }
 
 /** The outward normal at (body, port key), in world radians. Junctions have no
