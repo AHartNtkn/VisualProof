@@ -1000,9 +1000,15 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     dofs.push(() => {
       gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap)
       if (touched.length > 0) {
-        // rotation crosses the wrench ridge via the long-shot ladder and settles on
-        // the strict gate; rotational mobility scales with 1/area.
-        gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / b.discR, (4 * MU) / (b.discR * b.discR), 0.28)
+        // Node angle is FREE and UNLIMITED (USER RULING 2026-07-06: "Node angle is
+        // ARBITRARY. It encodes NO information and is FREE in the physics"). The
+        // no-snapping law governs WIRE SHAPES, never node angles — a node may whip
+        // around most of a turn in one step to shed wire tension, which is DESIRED.
+        // So the rotation DOF has NO rate cap: the gated step (long-shot ladder +
+        // expanding search) descends its wire energy by the full step every tick,
+        // bounded only at π (an angle wraps, so a larger cap is meaningless). Strict
+        // E-gating still forbids any move that does not lower energy, so it settles.
+        gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / b.discR, (4 * MU) / (b.discR * b.discR), Math.PI)
       }
       for (const r of touched) refresh(r)
     })

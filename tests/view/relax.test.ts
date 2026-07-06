@@ -4,9 +4,10 @@ import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { mkEngine } from '../../src/view/engine'
+import { mkEngine, resolveLeg } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { settle, settleStep, totalEnergy, clampDragToFeasible } from '../../src/view/relax'
+import { thetaRange } from '../../src/view/elastica'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
 
@@ -229,6 +230,80 @@ describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => 
       }
       expect(e.frame!.half, `${name}: the drag grew the frame`).toBe(half0)
     }
+  })
+})
+
+describe('free node rotation + local-only motion (plan 24, Subsystem 4)', () => {
+  const wrapAng = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
+
+  it('a single-port node ROTATES to face its wire (rotation reaches facing, no cap)', () => {
+    // A node with one port can point that port at its wire's destination by
+    // rotating — free rotation (no rate cap) reaches that facing at rest. (A
+    // multi-port node cannot face all its ports at once; that is geometry, not a
+    // rotation failure, so this law is scoped to single-port nodes.)
+    for (const [name, diagram, boundary] of cases) {
+      const e = mkEngine(diagram, boundary)
+      settle(e, 800)
+      for (const [, w] of e.wires) for (const leg of w.legs) {
+        if (leg.a.kind !== 'bind') continue
+        const b = e.bodies.get(w.binds[leg.a.i]!.body)!
+        if (b.localAnchor.size > 1) continue // multi-port node: geometric compromise
+        const sh = resolveLeg(e, w, leg)
+        const toTarget = Math.atan2(sh.p1.y - sh.p0.y, sh.p1.x - sh.p0.x)
+        const err = Math.abs(wrapAng(sh.th0 - toTarget)) * 180 / Math.PI
+        expect(err, `${name}: single-port node ${b.id} faces ${err.toFixed(0)}° off its wire`).toBeLessThan(90)
+      }
+    }
+  })
+
+  it('no leg wraps the diagram: every settled leg has tangent range < π (blind cone unoccupied)', () => {
+    // Free rotation keeps every port within a representable turn of its target, so
+    // no leg falls into the >π blind cone that would draw a diagram-wrapping arc.
+    for (const [name, diagram, boundary] of cases) {
+      const e = mkEngine(diagram, boundary)
+      settle(e, 800)
+      for (const [, w] of e.wires) for (const leg of w.legs) {
+        const sh = resolveLeg(e, w, leg)
+        // the elastica enforces range ≤ π by construction; assert the resting
+        // solution stays inside it (no >π blind-cone coil drawn at rest)
+        const rng = Math.abs(thetaRange(sh.sol.c1, sh.sol.c2))
+        expect(rng, `${name}: a settled leg tangent range ${(rng / Math.PI).toFixed(2)}π ≥ π (wrap)`).toBeLessThan(Math.PI)
+      }
+    }
+  })
+
+  it('motion is LOCAL: twisting one node does not move a distant non-wired node (no action at a distance)', () => {
+    const e = mkEngine(cases[0]![1], cases[0]![2])
+    settle(e, 800)
+    const nodes = [...e.bodies.values()].filter((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')
+    const twisted = nodes[0]!
+    // a node that shares no wire with `twisted` and is not touching it
+    const wiredToTwisted = new Set<string>()
+    for (const [, w] of e.wires) { const ids = w.binds.map((bd) => bd.body); if (ids.includes(twisted.id)) ids.forEach((i) => wiredToTwisted.add(i)) }
+    const distant = nodes.find((b) => b.id !== twisted.id && !wiredToTwisted.has(b.id)
+      && Math.hypot(b.pos.x - twisted.pos.x, b.pos.y - twisted.pos.y) > b.discR + twisted.discR + 10)
+    if (distant !== undefined) {
+      const before = { x: distant.pos.x, y: distant.pos.y }
+      twisted.theta += 2.0 // a big twist
+      settleStep(e)
+      const moved = Math.hypot(distant.pos.x - before.x, distant.pos.y - before.y)
+      expect(moved, `a distant non-wired node moved ${moved.toFixed(3)} when another was twisted`).toBeLessThan(0.6)
+    }
+  })
+
+  it('node angular speed is UNBOUNDED: a mis-faced node turns more than the old 0.28 rad/tick cap in one tick', () => {
+    // The node-rotation cap is gone (USER LAW: node angle is free). A node parked
+    // far from its facing minimum crosses well past the old per-tick bound in a
+    // single tick to shed wire tension — desired behaviour, not snapping.
+    const [, diagram, boundary] = cases[0]!
+    const e = mkEngine(diagram, boundary)
+    settle(e, 800)
+    const node = [...e.bodies.values()].find((b) => (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') && [...e.wires.values()].some((w) => w.binds.some((bd) => bd.body === b.id)))!
+    node.theta += 2.5 // knock it far from its faced rest orientation
+    const before = node.theta
+    settleStep(e)
+    const turned = Math.abs(node.theta - before)
+    expect(turned, `a mis-faced node turned only ${turned.toFixed(3)} rad — the cap is not gone`).toBeGreaterThan(0.28)
   })
 })
 
