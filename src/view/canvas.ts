@@ -11,8 +11,6 @@ import type { Vec2 } from './vec'
 
 /** Device-pixel blur of the theme glow. */
 const GLOW_BLUR = 5
-/** Half-length (device px) of a boundary-exit tick. */
-const EXIT_TICK_HALF = 5
 
 export function drawShapes(
   ctx: CanvasRenderingContext2D,
@@ -92,26 +90,6 @@ export function drawShapes(
         for (let i = 1; i < s.pts.length; i++) { const q = P(s.pts[i]!); ctx.lineTo(q.x, q.y) }
         ctx.strokeStyle = s.stroke
         ctx.lineWidth = s.width
-        ctx.stroke()
-        ctx.shadowBlur = 0
-        break
-      }
-      case 'exit': {
-        setGlow(s.glow)
-        ctx.strokeStyle = s.stroke
-        ctx.lineWidth = s.width
-        if (s.pts.length >= 2) {
-          ctx.beginPath()
-          const p0 = P(s.pts[0]!)
-          ctx.moveTo(p0.x, p0.y)
-          for (let i = 1; i < s.pts.length; i++) { const q = P(s.pts[i]!); ctx.lineTo(q.x, q.y) }
-          ctx.stroke()
-        }
-        const q = P(s.tick.center)
-        const tx = Math.cos(s.tick.angle) * EXIT_TICK_HALF, ty = Math.sin(s.tick.angle) * EXIT_TICK_HALF
-        ctx.beginPath()
-        ctx.moveTo(q.x - tx, q.y - ty)
-        ctx.lineTo(q.x + tx, q.y + ty)
         ctx.stroke()
         ctx.shadowBlur = 0
         break

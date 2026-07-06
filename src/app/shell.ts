@@ -15,7 +15,7 @@ import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
 import { settleStep, recomputeRegions, resolveOverlaps, establishFrame, clampDragToFeasible } from '../view/relax'
-import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
+import { legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
@@ -1141,9 +1141,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     for (const l of legPaths(engine)) {
       if (l.wid === hit.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: 3, glow: null })
     }
-    for (const ex of boundaryExits(engine)) {
-      if (ex.wid === hit.id) out.push({ kind: 'polyline', pts: ex.pts, stroke, width: 3, glow: null })
-    }
     for (const s of existentialStubs(engine)) {
       if (s.wid === hit.id) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width: 3, glow: null })
     }
@@ -1471,7 +1468,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           }
         }
         for (const l of legPaths(engine)) take(l.wid, mids(l.pts))
-        for (const ex of boundaryExits(engine)) take(ex.wid, mids(ex.pts))
         for (const st of existentialStubs(engine)) {
           take(st.wid, [vec((st.from.x + st.to.x) / 2, (st.from.y + st.to.y) / 2), st.dot, vec(st.from.x * 0.4 + st.to.x * 0.6, st.from.y * 0.4 + st.to.y * 0.6)])
         }

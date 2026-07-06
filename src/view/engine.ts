@@ -60,13 +60,16 @@ export type Leg = { readonly wid: WireId; readonly from: LegEnd; readonly to: Le
 export type WireBind = { readonly body: string; readonly key: string }
 
 /** A leg terminal. `bind i` = binds[i] (port rim + normal); `tip` = the ∃ free
-    end (a body); `hub` = the branch point (a wire-owned point, the ∀ body, or a
-    boundary wire's slot-attracted exit body), reached along the leg's arrival
-    angle. Every leg starts at a `bind`. */
+    end (a body); `hub` = the branch point (a wire-owned point or the ∀ body),
+    reached along the leg's arrival angle; `slot` = a boundary wire's FIXED frame
+    terminal — a point on the inner frame edge with the inward-normal arrival
+    tangent (no body, no dot, no DOF). A leg starts at a `bind` or, for the slot
+    arm of a k≥2 boundary junction, at a `slot`. */
 export type WireLegEnd =
   | { readonly kind: 'bind'; readonly i: number }
   | { readonly kind: 'tip' }
   | { readonly kind: 'hub' }
+  | { readonly kind: 'slot' }
 
 /** One leg of a wire: the massless θ-quadratic from terminal `a` (a port bind,
     exiting along its normal) to terminal `b` (hub / another bind / ∃ tip /
@@ -86,19 +89,19 @@ export type WireHub =
   | { readonly kind: 'point'; pos: Vec2 }
   | { readonly kind: 'body'; readonly bodyId: string }
 
-/** A wire's complete view-state (plan 22): the port binds, an optional branch
+/** A wire's complete view-state (plan 22/24): the port binds, an optional branch
     hub, an optional ∃ tip body, an optional boundary frame-slot number, and the
     derived leg list (each leg carries only a memo cache — no shape state).
 
-    A BOUNDARY wire (slot !== null) merges its hub and its frame exit: its ports
-    meet at ONE junction body (`hub.kind === 'body'`, id `e:<wid>`) that is
-    itself softly attracted to the fixed frame slot (relax.ts). The legs arrive
-    at it with per-leg arrival angles + finite spread energy, exactly like an
-    interior hub — so the boundary carries the tributary look — and the drawn
-    frame connector runs that hub to the slot along the slot normal. There is no
-    separate exit point and no stiff hub→exit leg (that pair was measured to
-    destabilize). Because the exit hub rides ON the frame, it is excluded from
-    the region enclosing circles (it is a boundary terminal, not content). */
+    A BOUNDARY wire (slot !== null) attaches to a FIXED slot on the INNER frame
+    edge (plan 24 — a terminal, not a body): no exit hub body, no exterior
+    connector, no dot on a plain wire. A 1-interior-port boundary wire is ONE
+    elastica leg from the port rim to the slot (arriving along the inward frame
+    normal). A k≥2-interior-port boundary wire is an interior-style junction (a
+    wire-owned hub point) whose arms are the k ports PLUS one arm to the fixed
+    slot — a body appears exactly when the wire genuinely branches (k≥2), never on
+    a plain 2-point wire. The slot's world position comes from `frameSlots`, so it
+    is never a body and takes no DOF. */
 export type WireView = {
   readonly binds: WireBind[]
   hub: WireHub | null
@@ -315,20 +318,23 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     let slot: number | null = null
     const legs: WireLeg[] = []
     if (isBoundary) {
-      // A boundary wire exits the sheet to a fixed frame slot. Its ports meet at
-      // ONE junction body (`e:<wid>`) that is softly slot-attracted (relax.ts):
-      // the hub and the exit are the SAME body, so there is no stiff hub→exit
-      // pair (measured to destabilize). Each port reaches it with a hub leg
-      // carrying its own arrival angle + finite spread energy (the tributary
-      // look, as at an interior hub); the drawn frame connector runs the hub to
-      // the slot. The exit hub, not the node, floats to the frame, so the layout
-      // stays compact (a rigid slot pulling the node to the moving frame is a
-      // measured runaway), and it is kept OUT of the region circles (it rides on
-      // the frame, which the content defines) so the frame never chases it.
+      // A boundary wire attaches to a FIXED slot on the inner frame edge (plan 24
+      // — a terminal, not a body). A SINGLE interior port is one leg straight to
+      // the slot (no hub, no body). k≥2 interior ports genuinely branch: a
+      // wire-owned hub point with one arm per port PLUS one arm from the slot, the
+      // same junction structure as an interior branch. No exit hub body, no
+      // exterior connector.
       slot = slotOf.get(wid)!
-      const b = mkWireBody(`e:${wid}`, w.scope, centroid())
-      hub = { kind: 'body', bodyId: b.id }
-      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, b.pos)))
+      if (binds.length === 1) {
+        legs.push(mkLeg({ kind: 'bind', i: 0 }, { kind: 'slot' }, 0))
+      } else {
+        const h = centroid()
+        hub = { kind: 'point', pos: h }
+        for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, h)))
+        // the slot arm: a fixed frame terminal reaching the hub, arriving along
+        // the hub's arrival angle like any other arm
+        legs.push(mkLeg({ kind: 'slot' }, { kind: 'hub' }, 0))
+      }
     } else if (binds.length === 1) {
       // dangling ∃: a free-end leg reaching a scope-homed tip body
       const b = mkWireBody(`j:${wid}`, w.scope, anchorPos[0]!)
@@ -539,23 +545,44 @@ export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache
     const h = w.hub!
     return h.kind === 'point' ? h.pos : e.bodies.get(h.bodyId)!.pos
   }
-  // terminal A is always a port bind (leaves along its outward normal — the
-  // rim-locked perpendicular exit BY CONSTRUCTION)
-  const bd0 = w.binds[leg.a.kind === 'bind' ? leg.a.i : 0]!
-  const b0 = e.bodies.get(bd0.body)!
-  const p0 = worldBindAnchor(b0, bd0.key)
-  const la0 = b0.localAnchor.get(bd0.key)!
-  const th0 = Math.atan2(la0.y, la0.x) + b0.theta
-  const ownA: string | null = bd0.body
+  // The fixed frame slot of a boundary wire: a point on the inner frame edge with
+  // the OUTWARD frame normal (perpendicular meeting). A leg arriving at the slot
+  // travels outward (+normal); a leg leaving the slot (the k≥2 slot arm) heads
+  // inward (normal + π). Never a body, never a DOF.
+  const slotAt = (): FrameSlot | null => {
+    if (w.slot === null) return null
+    const fb = frameBounds(e)
+    if (fb === null) return null
+    return frameSlots(fb, e.boundary.length)[w.slot] ?? null
+  }
+  // terminal A: a port bind (leaves along its outward normal — the rim-locked
+  // perpendicular exit BY CONSTRUCTION) or a fixed frame slot (leaves inward).
+  let p0: Vec2, th0: number, ownA: string | null = null
+  if (leg.a.kind === 'slot') {
+    const s = slotAt()
+    p0 = s !== null ? s.point : hubPos()
+    th0 = (s !== null ? s.normal : 0) + Math.PI // leave the slot heading inward
+  } else {
+    const bd0 = w.binds[leg.a.kind === 'bind' ? leg.a.i : 0]!
+    const b0 = e.bodies.get(bd0.body)!
+    p0 = worldBindAnchor(b0, bd0.key)
+    const la0 = b0.localAnchor.get(bd0.key)!
+    th0 = Math.atan2(la0.y, la0.x) + b0.theta
+    ownA = bd0.body
+  }
   let p1: Vec2, th1: number, freeEnd = false
   let ownB: string | null = null
   switch (leg.b.kind) {
-    // a BOUNDARY exit hub leg is a FREE end (zero moment): the global-rotation
-    // DOF (relax.ts) spins the content so the port faces its slot, so the leg
-    // needs no arrival well to reach the slot-attracted hub, and a free end never
-    // charges a blind-cone well that would fight the alignment.
-    case 'hub': { p1 = hubPos(); th1 = leg.hubAngle; if (w.slot !== null) freeEnd = true; break }
+    case 'hub': { p1 = hubPos(); th1 = leg.hubAngle; break }
     case 'tip': { p1 = e.bodies.get(w.tipBodyId!)!.pos; th1 = 0; freeEnd = true; break }
+    case 'slot': {
+      // arrive at the fixed frame slot along the outward normal — a welled
+      // arrival (perpendicular meeting, USER LAW), exactly like a port anchor.
+      const s = slotAt()
+      p1 = s !== null ? s.point : p0
+      th1 = s !== null ? s.normal : th0 + Math.PI
+      break
+    }
     default: {
       const bd = w.binds[leg.b.i]!
       const b = e.bodies.get(bd.body)!

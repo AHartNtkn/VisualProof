@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkEngine, recomputeRegions, legPaths, settle, boundaryExits, existentialStubs } from '../../src/view/index'
+import { mkEngine, recomputeRegions, legPaths, settle, computeLegs, existentialStubs } from '../../src/view/index'
 import type { Vec2 } from '../../src/view/index'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
@@ -159,14 +159,16 @@ describe('engine hit targets (junctions, frame exits → existing vocabulary)', 
     expect(hitTest(e, stub.dot)).toEqual({ kind: 'wire', id: stub.wid })
   })
 
-  it('a click on a frame exit resolves to its boundary wire', () => {
+  it('a click on a boundary wire (its leg near the frame slot) resolves to that wire', () => {
     const nat = buildFregeTheory().relations.nat!
     const e = mkEngine(nat.diagram, nat.boundary)
     settle(e, 1200)
-    const ex = boundaryExits(e)[0]!
-    expect(ex).toBeDefined()
-    // the tick sits at the frame edge, on the exit spline, clear of nodes/regions
-    expect(hitTest(e, ex.tick.center)).toEqual({ kind: 'wire', id: ex.wid })
+    const wid = nat.boundary[0]!
+    const leg = computeLegs(e).find((g) => g.leg.wid === wid)!
+    expect(leg).toBeDefined()
+    // a point partway along the boundary leg (toward the frame), clear of the node
+    const pt = leg.pts[Math.floor(leg.pts.length * 0.75)]!
+    expect(hitTest(e, pt)).toEqual({ kind: 'wire', id: wid })
   })
 })
 

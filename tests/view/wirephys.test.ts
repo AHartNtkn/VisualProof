@@ -3,9 +3,9 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine, worldBindAnchor, resolveLeg, traceLeg, frameBounds, frameSlots, type Engine, type WireView, type WireLeg } from '../../src/view/engine'
-import { settle, settleStep, wireEnergy, WIREP, trunkTarget } from '../../src/view/relax'
+import { settle, settleStep, wireEnergy, WIREP, trunkTarget, recomputeRegions } from '../../src/view/relax'
 import { thetaRange, RANGE_B, QN, ELASTICA } from '../../src/view/elastica'
-import { computeLegs, existentialStubs, boundaryExits } from '../../src/view/wires'
+import { computeLegs, existentialStubs } from '../../src/view/wires'
 
 /**
  * PLAN 22 LAW BATTERY — wires as massless elastica in the ENGINE.
@@ -363,46 +363,53 @@ describe('wire physics — equilibria', () => {
 
 // ---- boundary wires (merged hub + exit) -----------------------------------
 
-describe('wire physics — boundary exits (the slot-attracted hub)', () => {
-  it('a boundary wire routes its ports through a slot-attracted junction body (no exit point, no hub→exit leg)', () => {
+describe('wire physics — bodyless boundary attachment (plan 24, the reset ruling)', () => {
+  it('a 1-port boundary wire is ONE bodyless leg to the fixed inner-frame slot (no exit body, no dot)', () => {
     const { d, b, wid } = boundaryOne()
     const e = mkEngine(d, b)
-    settle(e, 400) // boundaryExits needs the frame (region circles) populated
+    settle(e, 400) // establishes the fixed frame; the boundary leg closes on its slot
     const w = e.wires.get(wid)!
     expect(w.slot, 'the boundary wire owns a fixed frame slot').not.toBeNull()
-    expect(w.hub, 'its ports meet at a hub body').not.toBeNull()
-    const hub = w.hub!
-    expect(hub.kind).toBe('body')
-    expect(hub.kind === 'body' ? e.bodies.get(hub.bodyId)!.id : null).toBe(`e:${wid}`)
-    expect(w.legs.every((l) => l.b.kind === 'hub'), 'every boundary leg arrives at the hub').toBe(true)
-    // the exit hub is NOT drawn as a dangling ∃ dot — it rides the frame
-    expect(existentialStubs(e).some((s) => s.wid === wid), 'boundary exit is not an ∃ dot').toBe(false)
-    // it IS drawn as a frame exit connector to its slot
-    expect(boundaryExits(e).some((x) => x.wid === wid), 'boundary wire draws a frame exit').toBe(true)
+    expect(w.hub, 'a 1-port boundary wire has NO hub').toBeNull()
+    // NO exit body (the reset's "there's an edge node for some reason") — e:<wid>
+    // exit hubs are abolished; the boundary attaches to a fixed slot, not a body
+    expect([...e.bodies.keys()].some((id) => id.startsWith('e:')), 'no exit body exists').toBe(false)
+    expect(existentialStubs(e).some((s) => s.wid === wid), 'no ∃ dot on a boundary wire').toBe(false)
+    // exactly one leg, from the port to the slot on the inner frame edge
+    const legs = computeLegs(e).filter((g) => g.leg.wid === wid)
+    expect(legs, 'exactly one leg').toHaveLength(1)
+    const pts = legs[0]!.pts
+    const slot = frameSlots(frameBounds(e)!, 1)[0]!
+    const end = pts[pts.length - 1]!
+    expect(Math.hypot(end.x - slot.point.x, end.y - slot.point.y), 'leg far end sits on the slot').toBeLessThan(1.0)
+    // meets the frame perpendicular (final tangent ≈ the slot normal)
+    const pen = pts[pts.length - 2]!
+    const off = Math.atan2(Math.sin(Math.atan2(end.y - pen.y, end.x - pen.x) - slot.normal), Math.cos(Math.atan2(end.y - pen.y, end.x - pen.x) - slot.normal))
+    expect(Math.abs(off), `perpendicular meeting: off-normal ${off.toFixed(3)}`).toBeLessThan(0.35)
   })
 
   it('boundary slot assignment is canonical by boundary order and never reorders under a wild body sweep', () => {
     const { diagram, boundary } = threeBoundary()
     const e = mkEngine(diagram, boundary)
     settle(e, 1200)
+    const slots = frameSlots(frameBounds(e)!, boundary.length) // fixed frame → fixed slots
     const layouts: { x: number; y: number }[][] = [
-      [{ x: -30, y: -30 }, { x: 30, y: -30 }, { x: 0, y: 30 }],
-      [{ x: 40, y: 5 }, { x: 42, y: -3 }, { x: 38, y: 9 }],
-      [{ x: -5, y: -40 }, { x: 3, y: -42 }, { x: -1, y: -38 }],
+      [{ x: -20, y: -20 }, { x: 20, y: -20 }, { x: 0, y: 20 }],
+      [{ x: 18, y: 5 }, { x: 20, y: -3 }, { x: 16, y: 9 }],
+      [{ x: -5, y: -18 }, { x: 3, y: -20 }, { x: -1, y: -16 }],
     ]
     const nodeIds = [...e.bodies.keys()].filter((id) => { const k = e.bodies.get(id)!.kind; return k !== 'junction' && k !== 'anchor' })
     for (const layout of layouts) {
       nodeIds.forEach((id, k) => { if (layout[k]) e.bodies.get(id)!.pos = layout[k]! })
-      // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-      const fb = frameBounds(e)!
-      const slots = frameSlots(fb, boundary.length)
-      const exits = boundaryExits(e)
-      const byWid = new Map(exits.map((x) => [x.wid, x]))
+      recomputeRegions(e)
+      const legsByWid = new Map<string, { x: number; y: number }[][]>()
+      for (const g of computeLegs(e)) { const a = legsByWid.get(g.leg.wid) ?? []; a.push(g.pts); legsByWid.set(g.leg.wid, a) }
       boundary.forEach((wid, i) => {
-        const ex = byWid.get(wid)!
-        const slotPt = ex.pts[ex.pts.length - 1]!
-        expect(slotPt.x, `boundary ${i} at slot ${i} x`).toBeCloseTo(slots[i]!.point.x, 6)
-        expect(slotPt.y, `boundary ${i} at slot ${i} y`).toBeCloseTo(slots[i]!.point.y, 6)
+        let best = Infinity
+        for (const pts of legsByWid.get(wid)!) for (const end of [pts[0]!, pts[pts.length - 1]!]) {
+          best = Math.min(best, Math.hypot(end.x - slots[i]!.point.x, end.y - slots[i]!.point.y))
+        }
+        expect(best, `boundary ${i} reaches slot ${i}`).toBeLessThan(1.5)
       })
     }
   })

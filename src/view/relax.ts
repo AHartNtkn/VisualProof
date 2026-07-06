@@ -1,7 +1,7 @@
 import type { RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, LegShape, WireLeg, WireView } from './engine'
-import { frameBounds, frameSlots, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, FRAME_MARGIN } from './engine'
+import { subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, FRAME_MARGIN } from './engine'
 import { ELASTICA, QN, mkLegCache } from './elastica'
 import type { LegCache } from './elastica'
 
@@ -33,15 +33,6 @@ export const WIREP = {
   trunkAxis: 8,
   /** ∃-tip standoff radius (the dot never sinks into its own wire) */
   standoffR: 8,
-  /** boundary-exit pull: the constant force drawing a boundary wire's exit hub
-      toward its frame slot. The global-rotation DOF (relax.ts) turns the content
-      so each boundary port faces its slot, so a SOFT pull (12) lands the exit hub
-      at the slot without re-exciting a coil: a briefly-misaligned port can relax
-      instead of being forced into a blind cone. Measured sweet spot — at 30 the
-      hard pinning re-coils and the layout oscillates (drift 10.8); at 12
-      succShiftS@24 rests at drift 0.65, exit residual 0.89, stable E. Never pulls
-      the NODE (a rigid slot pulling the node to the moving frame is a runaway). */
-  exitPull: 12,
   /** trust region: max per-tick motion of any wire DOF (continuity law) */
   travelCap: 0.55,
 }
@@ -229,11 +220,6 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
     const discs: Disc[] = []
     for (const mid of e.membersOf.get(rid)!) {
       const b = e.bodies.get(mid)!
-      // a boundary exit hub (`e:<wid>`) rides ON the frame, which the CONTENT
-      // defines — counting it in the enclosing circle would make the frame
-      // chase the very slot the hub is drawn to (a runaway). It is a boundary
-      // terminal, not content, so it is excluded from region geometry.
-      if (mid.startsWith('e:')) continue
       discs.push({ c: b.pos, r: b.discR, mid })
     }
     for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8, sub: c })
@@ -295,7 +281,7 @@ export function establishFrame(e: Engine): void {
     are exempt; no frame yet → no wall. */
 function clampToFrame(e: Engine, b: Body, p: Vec2): Vec2 {
   const f = e.frame
-  if (f === null || b.id.startsWith('e:')) return p
+  if (f === null) return p
   const lim = Math.max(f.half - b.discR, 0)
   return {
     x: Math.max(f.center.x - lim, Math.min(f.center.x + lim, p.x)),
@@ -343,11 +329,6 @@ export function resolveOverlaps(e: Engine): boolean {
     for (const rid of e.regions.keys()) {
       const items: { sub: RegionId | null; id: string; r: number }[] = []
       for (const mid of e.membersOf.get(rid)!) {
-        // boundary exit hubs (`e:`) are FRAME terminals, not content: they are
-        // excluded from region circles and positioned solely by their slot
-        // attraction, so region legality never applies (projecting one — e.g. out
-        // of a cut its slot sits behind — shoves it 166 wu and wrecks the layout).
-        if (mid.startsWith('e:')) continue
         items.push({ sub: null, id: mid, r: e.bodies.get(mid)!.discR })
       }
       for (const c of e.childrenOf.get(rid)!) {
@@ -554,16 +535,6 @@ function trunkAxisE(e: Engine, w: WireView): number {
   return E
 }
 
-/** Boundary-exit attraction: a Huber pull (constant force exitPull, softened to
-    a quadratic within the core) drawing a boundary wire's exit point to its
-    frame slot. Bounded so it never destabilizes; on the FREE exit point so the
-    node stays put (a rigid slot pulling the node is a runaway). */
-function exitAttractE(exit: Vec2, slot: Vec2): number {
-  const d = Math.hypot(exit.x - slot.x, exit.y - slot.y)
-  const core = 2
-  return d > core ? WIREP.exitPull * (d - core / 2) : (WIREP.exitPull * d * d) / (2 * core)
-}
-
 /** The homed-body position of a leg terminal, or null (a bind has no body of
     its own; a hub POINT is wire-owned, not a body). */
 function tipStandoffE(e: Engine, w: WireView): number {
@@ -577,16 +548,16 @@ function tipStandoffE(e: Engine, w: WireView): number {
   return standoffU(Math.hypot(tip.pos.x - a.x, tip.pos.y - a.y))
 }
 
-/** Total WIRE energy of the engine (leg intrinsic + clearance, junction spread,
-    boundary exit→slot attraction, ∃-tip standoff, wire↔wire separation) — one
-    half of `totalEnergy`; `contentEnergy` is the other. Uses the full memoryless
+/** Total WIRE energy of the engine (leg intrinsic + clearance, junction trunk
+    alignment, ∃-tip standoff, wire↔wire separation) — one half of `totalEnergy`;
+    `contentEnergy` is the other. A boundary leg reaches its FIXED frame slot as an
+    ordinary leg endpoint (the slot is a fixed point, resolved inside resolveLeg),
+    so there is no separate exit→slot attraction term. Uses the full memoryless
     grid solve for every leg (a near-tie scene needs the branch flip it finds). */
 export function wireEnergy(e: Engine): number {
   const discs: DiscRec[] = [...e.bodies.values()]
     .filter((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')
     .map((b) => ({ id: b.id, body: b, r: b.discR }))
-  const fb = frameBounds(e)
-  const slots = fb === null ? null : frameSlots(fb, e.boundary.length)
   // resolve + trace every leg once
   const legSamples: { wid: string; samples: Vec2[] }[] = []
   let E = 0
@@ -601,10 +572,6 @@ export function wireEnergy(e: Engine): number {
     }
     // junction trunk alignment + trunk-axis anchoring over this wire's hub
     E += trunkAlignE(e, w) + trunkAxisE(e, w)
-    // boundary exit hub (the slot-attracted junction body) drawn to its slot
-    if (w.slot !== null && w.hub !== null && w.hub.kind === 'body' && slots !== null && slots[w.slot] !== undefined) {
-      E += exitAttractE(e.bodies.get(w.hub.bodyId)!.pos, slots[w.slot]!.point)
-    }
     E += tipStandoffE(e, w)
   }
   // wire↔wire separation (different wires only)
@@ -719,27 +686,8 @@ export function contentEnergy(e: Engine): number {
       E += sibU(dist - A.r - B.r)
     }
   }
-  // scope-ring confines ∃ tips / ∀ hubs to their scope; boundary exit hubs (`e:`)
-  // are frame terminals (drawn to a slot outside the content), so they take no
-  // scope-ring — it would fight the slot attraction and trap them inside a cut.
-  for (const b of e.bodies.values()) if (b.kind === 'junction' && !b.id.startsWith('e:')) E += homedScopeE(e, b)
-  return E
-}
-
-/** The sum of every boundary wire's exit-hub→slot attraction. Isolated as a
-    LOCALIZATION helper for the per-body gates: moving ANY content body changes
-    the derived sheet circle → the frame → every slot, so this whole term must be
-    added to a translation gate's local energy (localE omits it). It is NOT added
-    to `totalEnergy` — `wireEnergy` already contains it. */
-function boundaryExitE(e: Engine): number {
-  const fb = frameBounds(e)
-  if (fb === null) return 0
-  const slots = frameSlots(fb, e.boundary.length)
-  let E = 0
-  for (const w of e.wires.values()) {
-    if (w.slot !== null && w.hub !== null && w.hub.kind === 'body' && slots[w.slot] !== undefined)
-      E += exitAttractE(e.bodies.get(w.hub.bodyId)!.pos, slots[w.slot]!.point)
-  }
+  // scope-ring confines ∃ tips / ∀ via-body hubs to their scope
+  for (const b of e.bodies.values()) if (b.kind === 'junction') E += homedScopeE(e, b)
   return E
 }
 
@@ -758,7 +706,6 @@ export function totalEnergy(e: Engine): number {
     if lower); moving just the proposed body keeps the single-DOF gate monotone.
     Global legality across all bodies is the discrete-event `resolveOverlaps`. */
 function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
-  if (b.id.startsWith('e:')) return p // frame terminal — no region legality
   const owned = b.kind === 'junction'
   let x = p.x, y = p.y
   const push = (cx: number, cy: number, need: number): void => {
@@ -795,7 +742,6 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
     cuts it IS inside) are exempt, as is a wire-owned dot's disc clearance (the wire
     barrier owns that) — a dot only clears the circle itself. */
 export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
-  if (b.id.startsWith('e:')) return p // frame terminal — no region legality
   const ancestors = new Set<RegionId>()
   for (let r = b.region; ;) {
     ancestors.add(r)
@@ -1030,11 +976,12 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     return E
   }
 
-  // The full content + frame-coupling energy a TRANSLATION gate must add to its
-  // local wire energy: moving any body changes the derived region circles (its
-  // sibling gaps) and the derived sheet frame (every boundary slot), so the whole
-  // content functional and every exit-hub→slot term are re-evaluated per probe.
-  const contentFrame = (): number => contentEnergy(e) + boundaryExitE(e)
+  // The full content energy a TRANSLATION gate must add to its local wire energy:
+  // moving any body changes the derived region circles (its sibling gaps), so the
+  // whole content functional is re-evaluated per probe. The frame is FIXED (plan
+  // 24) and its slots do not move with content, so there is no frame-coupling term
+  // — a boundary leg's slot dependence is already in its own leg energy (localE).
+  const contentFrame = (): number => contentEnergy(e)
 
   // ---- NODE-body DOF (nodes + empty-region anchors): TRANSLATION by the
   // strict gated candidate step (with legality projection + content/frame
@@ -1060,9 +1007,10 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
       for (const r of touched) refresh(r)
     })
   }
-  // ---- wire-owned TRANSLATION DOF: ∃ tips, ∀ via-body hubs, boundary exit hubs.
-  // Same strict gated candidate step; ∃ tips + exit hubs are light and mobile
-  // (float to a scope standoff / frame slot), a ∀ via-body is heavier/slower. ----
+  // ---- wire-owned TRANSLATION DOF: ∃ tips and ∀ via-body hubs (boundary slots
+  // are fixed frame terminals, not bodies — plan 24). Same strict gated candidate
+  // step; an ∃ tip is light and mobile (floats to a scope standoff), a ∀ via-body
+  // is heavier/slower. ----
   for (const b of e.bodies.values()) {
     if (b.kind !== 'junction') continue
     if (pinned !== null && pinned.has(b.id)) continue
@@ -1074,7 +1022,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     if (w.tipBodyId === b.id) { touched = wLegs.filter((r) => r.leg.b.kind === 'tip'); light = true }
     else if (w.hub !== null && w.hub.kind === 'body' && w.hub.bodyId === b.id) {
       touched = wLegs.filter((r) => r.leg.b.kind === 'hub')
-      light = w.slot !== null // a boundary exit hub is light + slot-drawn; a ∀ via-body is heavy
+      light = false // a ∀ via-body is heavy
     }
     else continue
     const dirty = new Set<RegionId>([b.region])

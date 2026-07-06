@@ -7,6 +7,7 @@ import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, bubbleHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
+import { computeLegs } from '../../src/view/wires'
 
 const p = (s: string) => parseTerm(s)
 
@@ -61,8 +62,8 @@ describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
   })
 })
 
-describe('law 3 — boundary honesty: boundary wires exit the frame, internal singletons get an exists-stub', () => {
-  it('a lone internal identity gets one exists-stub, no frame exit', () => {
+describe('law 3 — boundary honesty: boundary wires connect INSIDE the frame, internal singletons get an exists-stub', () => {
+  it('a lone internal identity gets one exists-stub and nothing at the frame', () => {
     const h = new DiagramBuilder()
     h.termNode(h.root, p('\\x. x')) // its output is an internal singleton wire
     const d = h.build()
@@ -70,16 +71,35 @@ describe('law 3 — boundary honesty: boundary wires exit the frame, internal si
     settle(e, 400)
     const shapes = paint(e, LIGHT)
     expect(shapes.filter((s) => s.kind === 'stub')).toHaveLength(1)
-    expect(shapes.filter((s) => s.kind === 'exit')).toHaveLength(0)
   })
 
-  it('a bundled side emits exactly one frame exit per boundary wire', () => {
+  it("a bundled side's boundary wires each reach a slot on the INSIDE of the frame — no shape outside it", () => {
     const nat = buildFregeTheory().relations.nat!
     const e = mkEngine(nat.diagram, nat.boundary)
     settle(e, 1200)
-    const shapes = paint(e, LIGHT)
-    expect(shapes.filter((s) => s.kind === 'exit')).toHaveLength(nat.boundary.length)
     expect(nat.boundary.length).toBeGreaterThan(0)
+    const fb = frameBounds(e)!
+    const slots = frameSlots(fb, nat.boundary.length)
+    // every boundary wire's leg reaches its slot on the inner frame edge
+    const legsByWid = new Map<string, { x: number; y: number }[][]>()
+    for (const g of computeLegs(e)) { const a = legsByWid.get(g.leg.wid) ?? []; a.push(g.pts); legsByWid.set(g.leg.wid, a) }
+    nat.boundary.forEach((wid, i) => {
+      let best = Infinity
+      for (const pts of legsByWid.get(wid)!) for (const end of [pts[0]!, pts[pts.length - 1]!]) {
+        best = Math.min(best, Math.hypot(end.x - slots[i]!.point.x, end.y - slots[i]!.point.y))
+      }
+      expect(best, `boundary ${i} reaches slot ${i} on the inner frame edge`).toBeLessThan(1.5)
+    })
+    // NOTHING is drawn outside the frame: every painted point stays within the box
+    for (const s of paint(e, LIGHT)) {
+      const pts = s.kind === 'polyline' ? s.pts : s.kind === 'stub' ? [s.from, s.to] : []
+      for (const pt of pts) {
+        expect(pt.x, 'no painted wire point past the frame').toBeGreaterThanOrEqual(fb.minX - 1)
+        expect(pt.x).toBeLessThanOrEqual(fb.maxX + 1)
+        expect(pt.y).toBeGreaterThanOrEqual(fb.minY - 1)
+        expect(pt.y).toBeLessThanOrEqual(fb.maxY + 1)
+      }
+    }
   })
 })
 

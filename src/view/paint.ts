@@ -3,7 +3,7 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
-import { boundaryExits, existentialStubs, legPaths } from './wires'
+import { hubPoints, existentialStubs, legPaths } from './wires'
 
 /**
  * The display list (round-8 lab spec), pure — `paint(engine, theme)` returns
@@ -46,7 +46,6 @@ export type Shape =
   /** A traced wire leg: the massless-elastica θ-quadratic sampled at paint
       resolution (plan 22 — the polyline IS the wire, not a spline fit). */
   | { readonly kind: 'polyline'; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
-  | { readonly kind: 'exit'; readonly pts: readonly Vec2[]; readonly tick: { readonly center: Vec2; readonly angle: number }; readonly stroke: string; readonly width: number; readonly glow: string | null }
   | { readonly kind: 'stub'; readonly from: Vec2; readonly to: Vec2; readonly dot: Vec2; readonly dotRpx: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   /** A filled disc whose radius is fixed DEVICE pixels (junction dots): stays a
       constant size under zoom, unlike world-scaled circles. */
@@ -130,10 +129,6 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   for (const s of existentialStubs(e)) {
     shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
-  // boundary frame exits
-  for (const ex of boundaryExits(e)) {
-    shapes.push({ kind: 'exit', pts: ex.pts, tick: ex.tick, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
-  }
   // The frame pip: a device-pixel dot at slot 0 (the top-edge midpoint) marks
   // boundary position 0, from which slots read clockwise. Shown only when >= 2
   // boundary wires need distinguishing — the same "arity >= 2" rule as disc pips.
@@ -141,11 +136,18 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     const s0 = frameSlots(fb, e.boundary.length)[0]!.point
     shapes.push({ kind: 'dot', center: s0, rPx: PIP_R, fill: st.ink })
   }
-  // junction dots (ring: paper halo + wire core), fixed device size
+  // junction dots (ring: paper halo + wire core), fixed device size — at every
+  // wire-owned junction: first-class bodies (∀ via-body, ∃ tip) and hub POINTS
+  // (an interior k-ary junction, a k≥2 boundary junction). A dot marks a genuine
+  // branch, never a plain 2-point wire (plan 24).
   for (const b of e.bodies.values()) {
     if (b.kind !== 'junction') continue
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: st.wire })
+  }
+  for (const { pos } of hubPoints(e)) {
+    shapes.push({ kind: 'dot', center: pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
+    shapes.push({ kind: 'dot', center: pos, rPx: JUNCTION_INNER_R, fill: st.wire })
   }
   return shapes
 }

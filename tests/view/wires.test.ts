@@ -3,9 +3,8 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, frameBounds, frameSlots, DISC_R } from '../../src/view/engine'
-import { vec } from '../../src/view/vec'
 import { settle, recomputeRegions } from '../../src/view/relax'
-import { computeLegs, boundaryExits } from '../../src/view/wires'
+import { computeLegs } from '../../src/view/wires'
 import { worldBindAnchor } from '../../src/view/engine'
 
 const p = (s: string) => parseTerm(s)
@@ -95,91 +94,74 @@ describe('computeLegs — the traced θ-quadratic legs ARE the wire (PLAN 22)', 
 })
 
 
-describe('boundary exits are continuous around frame corners', () => {
-  // Regression for the original side-snap report. The exit now terminates at a
-  // fixed perimeter slot (assigned by boundary order), so a single boundary
-  // wire's exit sits at slot 0 and only drifts as the frame itself grows with
-  // the layout — continuity is trivial, and the sweep guards that it stays so.
-  it('sweeping a boundary node through a corner sector moves the exit smoothly', () => {
+describe('a single boundary wire is ONE bodyless leg to the fixed frame slot (plan 24)', () => {
+  // The reset ruling: a simple boundary wire must be a single smooth curve from
+  // the node to the INSIDE of the frame edge, with NOTHING at the frame end (no
+  // exit body, no dot, no exterior connector). The slot is a fixed terminal.
+  it('one interior port → one leg whose far end sits on the inner frame edge, no body', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('x'))
-    const m = h.termNode(h.root, p('\\z. z'))
     const w = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'x' } }])
-    const d = h.build()
-    const e = mkEngine(d, [w])
-    // park the second body at the center so the sheet circle stays put
-    e.bodies.get(m)!.pos = vec(0, 0)
-    const nb = e.bodies.get(n)!
-    let prev: { x: number; y: number } | null = null
-    let prevTick: number | null = null
-    let maxStep = 0
-    let maxTickStep = 0
-    // sweep through the north-east corner sector in fine steps
-    for (let i = 0; i <= 60; i++) {
-      const a = Math.PI / 4 - Math.PI / 6 + (i / 60) * (Math.PI / 3)
-      nb.pos = { x: Math.cos(a) * 25, y: Math.sin(a) * 25 }
-      recomputeRegions(e)
-      const ex = boundaryExits(e).find((x) => x.wid === w)!
-      const slotPt = ex.pts[ex.pts.length - 1]! // the connector terminates AT the slot
-      if (prev !== null) {
-        maxStep = Math.max(maxStep, Math.hypot(slotPt.x - prev.x, slotPt.y - prev.y))
-        let dth = Math.abs(ex.tick.angle - prevTick!)
-        while (dth > Math.PI) dth = Math.abs(dth - 2 * Math.PI)
-        maxTickStep = Math.max(maxTickStep, dth)
-      }
-      prev = { x: slotPt.x, y: slotPt.y }
-      prevTick = ex.tick.angle
-    }
-    // node moves ~1.3 units per sweep step; a continuous exit moves the same
-    // order — a side-snap teleports it tens of units in one step
-    expect(maxStep, `max exit-point step ${maxStep.toFixed(2)}`).toBeLessThan(6)
-    expect(maxTickStep, `max tick rotation step ${maxTickStep.toFixed(3)} rad`).toBeLessThan(0.3)
+    const e = mkEngine(h.build(), [w])
+    settle(e, 400) // establishes the fixed frame; the boundary leg closes on its slot
+    // no exit body anywhere (the reset's "there's an edge node for some reason") —
+    // e:<wid> exit hubs are abolished; the boundary wire has no hub of its own
+    expect([...e.bodies.keys()].some((id) => id.startsWith('e:')), 'no exit body exists').toBe(false)
+    expect(e.wires.get(w)!.hub, 'a 1-port boundary wire has no hub').toBeNull()
+    const legs = computeLegs(e).filter((g) => g.leg.wid === w)
+    expect(legs, 'exactly one leg').toHaveLength(1)
+    const pts = legs[0]!.pts
+    const slot = frameSlots(frameBounds(e)!, 1)[0]!
+    const end = pts[pts.length - 1]!
+    // the far end sits ON the slot (inner frame edge), within the quadrature bound
+    expect(Math.hypot(end.x - slot.point.x, end.y - slot.point.y), 'leg far end at the slot').toBeLessThan(1.0)
+    // and it meets the frame perpendicular (final tangent ≈ the slot normal)
+    const pen = pts[pts.length - 2]!
+    const arr = wrap(Math.atan2(end.y - pen.y, end.x - pen.x) - slot.normal)
+    expect(Math.abs(arr), `perpendicular meeting: arrival off-normal ${arr.toFixed(3)} rad`).toBeLessThan(0.35)
   })
 })
 
-describe('boundary exits are order-faithful: slot assignment never changes as bodies move', () => {
+describe('boundary slots are order-faithful: leg i ends at slot i, and cannot swap', () => {
   // The boundary is ordered data; each wire owns a fixed perimeter slot (slot i
-  // for boundary index i, clockwise from the pip). No matter where the bodies
-  // are dragged, boundary wire i's exit terminates at slot i — exits cannot
-  // slip past each other, so the drawing keeps carrying the boundary order.
+  // for boundary index i, clockwise from the pip) on the FIXED frame. No matter
+  // where the bodies are dragged, boundary wire i's leg terminates at slot i —
+  // the assignment is the boundary index, structurally, so exits cannot swap.
   const thy = buildFregeTheory()
   const plusComm = thy.theorems.find((t) => t.name === 'plusComm')!
 
-  it('a 3-boundary diagram: exit i sits at slot i for every layout in a wild sweep', () => {
+  it('a 3-boundary diagram: leg i ends at fixed slot i for every layout in a wild sweep', () => {
     const { diagram, boundary } = plusComm.lhs
     expect(boundary.length).toBe(3)
     const e = mkEngine(diagram, boundary)
-    settle(e, 1200)
+    settle(e, 1200) // establishes the fixed frame + slots
+    const slots = frameSlots(frameBounds(e)!, boundary.length)
     const nodeIds = [...e.bodies.keys()].filter((id) => e.bodies.get(id)!.kind !== 'junction' && e.bodies.get(id)!.kind !== 'anchor')
-
-    // Six deliberately different layouts, including ones that would make a
-    // radial/nearest-edge scheme reorder the exits (bodies pushed to a single
-    // quadrant so their radials bunch on one frame side).
     const layouts: { x: number; y: number }[][] = [
-      [{ x: -30, y: -30 }, { x: 30, y: -30 }, { x: 0, y: 30 }],
-      [{ x: 40, y: 5 }, { x: 42, y: -3 }, { x: 38, y: 9 }], // all crammed east
-      [{ x: -5, y: -40 }, { x: 3, y: -42 }, { x: -1, y: -38 }], // all crammed north
-      [{ x: 20, y: 20 }, { x: -25, y: 5 }, { x: 5, y: -25 }],
-      [{ x: -40, y: -40 }, { x: -38, y: -42 }, { x: -42, y: -39 }], // all crammed north-west
+      [{ x: -20, y: -20 }, { x: 20, y: -20 }, { x: 0, y: 20 }],
+      [{ x: 18, y: 5 }, { x: 20, y: -3 }, { x: 16, y: 9 }], // crammed east
+      [{ x: -5, y: -18 }, { x: 3, y: -20 }, { x: -1, y: -16 }], // crammed north
+      [{ x: -18, y: -18 }, { x: -16, y: -20 }, { x: -20, y: -17 }], // crammed north-west
       [{ x: 12, y: -3 }, { x: -8, y: 14 }, { x: 2, y: -11 }],
     ]
-    // The invariant across every layout: boundary index -> slot index is the
-    // identity, checked against the freshly recomputed slots (the frame grows
-    // and shrinks with the layout, so the absolute points move — the ASSIGNMENT
-    // does not).
+    // the frame is FIXED (established once), so the slots do not move as bodies
+    // are dragged — leg i ends at the SAME slot i regardless of the layout
     for (const layout of layouts) {
       nodeIds.forEach((id, k) => { if (layout[k]) e.bodies.get(id)!.pos = layout[k]! })
       recomputeRegions(e)
-      const fb = frameBounds(e)!
-      const slots = frameSlots(fb, boundary.length)
-      const exits = boundaryExits(e)
-      expect(exits).toHaveLength(3)
-      const byWid = new Map(exits.map((x) => [x.wid, x]))
+      const legsByWid = new Map<string, { x: number; y: number }[][]>()
+      for (const g of computeLegs(e)) { const a = legsByWid.get(g.leg.wid) ?? []; a.push(g.pts); legsByWid.set(g.leg.wid, a) }
       boundary.forEach((wid, i) => {
-        const ex = byWid.get(wid)!
-        const slotPt = ex.pts[ex.pts.length - 1]! // the connector terminates AT the slot
-        expect(slotPt.x, `boundary ${i} (${wid}) x at slot ${i}`).toBeCloseTo(slots[i]!.point.x, 6)
-        expect(slotPt.y, `boundary ${i} (${wid}) y at slot ${i}`).toBeCloseTo(slots[i]!.point.y, 6)
+        // the slot is an endpoint of exactly one of wire i's legs (its last point
+        // for a 1-port wire, its first point for the k≥2 slot arm) — check the
+        // nearest leg endpoint to slot i, direction-agnostic
+        let best = Infinity
+        for (const pts of legsByWid.get(wid)!) {
+          for (const end of [pts[0]!, pts[pts.length - 1]!]) {
+            best = Math.min(best, Math.hypot(end.x - slots[i]!.point.x, end.y - slots[i]!.point.y))
+          }
+        }
+        expect(best, `boundary ${i} (${wid}) reaches slot ${i}`).toBeLessThan(1.5)
       })
     }
   })

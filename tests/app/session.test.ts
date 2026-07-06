@@ -10,7 +10,7 @@ import { termEq } from '../../src/kernel/term/term'
 import { bootFixture } from './boot-fixture'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary } from '../../src/app/session'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
-import { mkEngine, settle, paint, LIGHT } from '../../src/view/index'
+import { mkEngine, settle, frameBounds, frameSlots, computeLegs } from '../../src/view/index'
 
 const p = (s: string) => parseTerm(s)
 // pure λ fixtures for the citation demos (no term constants)
@@ -367,7 +367,7 @@ describe('sideBoundary — prove-mode sides render their statement boundary', ()
     expect(sideBoundary(s, 'backward')).toBe(s.rhs.boundary)
   })
 
-  it('an engine built for a side renders exactly one frame exit per boundary wire', () => {
+  it("an engine built for a side connects every boundary wire to a fixed frame slot (plan 24)", () => {
     const theory = buildFregeTheory()
     const ctx = verifyTheory(theory)
     const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
@@ -376,7 +376,16 @@ describe('sideBoundary — prove-mode sides render their statement boundary', ()
     expect(boundary.length).toBeGreaterThan(0)
     const e = mkEngine(s.backward.current, boundary)
     settle(e, 1200)
-    expect(paint(e, LIGHT).filter((sh) => sh.kind === 'exit')).toHaveLength(boundary.length)
+    const slots = frameSlots(frameBounds(e)!, boundary.length)
+    const legsByWid = new Map<string, { x: number; y: number }[][]>()
+    for (const g of computeLegs(e)) { const a = legsByWid.get(g.leg.wid) ?? []; a.push(g.pts); legsByWid.set(g.leg.wid, a) }
+    boundary.forEach((wid, i) => {
+      let best = Infinity
+      for (const pts of legsByWid.get(wid)!) for (const end of [pts[0]!, pts[pts.length - 1]!]) {
+        best = Math.min(best, Math.hypot(end.x - slots[i]!.point.x, end.y - slots[i]!.point.y))
+      }
+      expect(best, `boundary ${i} reaches slot ${i}`).toBeLessThan(1.5)
+    })
   })
 })
 

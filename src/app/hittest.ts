@@ -2,7 +2,7 @@ import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagra
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 import type { Engine } from '../view/engine'
-import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
+import { legPaths, existentialStubs } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
 
@@ -53,9 +53,6 @@ export function hitTest(e: Engine, point: Vec2): Hit | null {
   }
   for (const { wid, pts } of legPaths(e)) {
     if (polylineDistance(point, pts) <= WIRE_TOLERANCE) return { kind: 'wire', id: wid }
-  }
-  for (const ex of boundaryExits(e)) {
-    if (polylineDistance(point, ex.pts) <= WIRE_TOLERANCE) return { kind: 'wire', id: ex.wid }
   }
   for (const s of existentialStubs(e)) {
     if (segmentDistance(point, s.from, s.to) <= WIRE_TOLERANCE) return { kind: 'wire', id: s.wid }
