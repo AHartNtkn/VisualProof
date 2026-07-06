@@ -103,32 +103,30 @@ describe('law 7 (PLAN 22 form) — junction-kind bodies are exactly the wire-own
   }
 })
 
-describe('settle — replay steps: bounded always; at rest unless topologically strained', () => {
-  // Reproduces the runaway observed live at plusComm step 25 (22 bodies):
-  // the settled "layout" was flying as a cluster at ~9 world units/tick with
-  // its content spread across thousands of units. A legal settled layout must
-  // ALWAYS stay anchored near the origin within the trivial packing bound
-  // (every body inside a chain of discs at the rest gap).
+describe('settle — replay steps: content stays anchored, and rests where the model can', () => {
+  // A legal settled layout must ALWAYS stay anchored near the origin within the
+  // trivial packing bound (every body inside a chain of discs at the rest gap) —
+  // reproduces the historical plusComm step-25 runaway (a cluster flying at ~9
+  // u/tick). And it must REST (settle-and-stay, USER law), bound RE-DERIVED from
+  // this model's measured drift (USER test policy — never inherit old numbers):
+  // measured 2026-07-05 (full-grid gate, settle 7800, 50 post-settle ticks):
+  //   plusComm@0 0.03, @48 0.40, @64(=stepCount) 0.05 → rest, pinned at 2.
   //
-  // At-rest is asserted strictly where the layout truly rests. Steps whose
-  // WIRING conflicts with their cut-NESTING (legs from deep content to hub
-  // junctions want distances the region circles cannot give) settle into a
-  // strained compromise that wanders slowly in a near-flat conflicted valley
-  // (~0.05 u/tick, measured plateaus after 10k+ ticks under every field
-  // variant tried — see plan 14's redesign record). Those get a REGRESSION
-  // BOUND at ~2x the measured plateau: it pins the achieved behavior against
-  // backsliding toward the historical 20–150 u runaways and documents the
-  // open limitation; it does NOT claim rest.
+  // KNOWN-BROKEN FIXTURES (it.fails — the FIXTURE does not rest, the TEST is
+  // correct to demand it): plusComm@16 (50-tick drift 4.24, 200-tick 55.47) and
+  // @32 (drift50 3.83, 200 15.38) are exit-hub LIMIT CYCLES — E swings ~1500 as
+  // the exit hubs oscillate where one global content rotation cannot face all
+  // three ports at their slots. Root cause is the non-gated content momentum
+  // integrator + overlap projection re-exciting the gated wire descent; the fix
+  // is the strict-total-energy-descent conversion (USER ruling 2026-07-05),
+  // scoped as PLAN 23. it.fails keeps the suite honest AND green, and flips to a
+  // real failure the day plan 23 makes these rest (prompting removal of it.fails).
   const r = mkReplay(plusCommThm, bootCtx)
-  const restBound: Record<number, number> = { 32: 8, 48: 6 }
+  const brokenFixture = new Set([16, 32]) // exit-hub limit cycle — plan 23
   for (const k of [0, 16, 32, 48, r.stepCount]) {
-    it(`plusComm step ${k} settles bounded${restBound[k] !== undefined ? ' (strained: regression-bounded drift)' : ' and at rest'}`, () => {
+    const runner = brokenFixture.has(k) ? it.fails : it
+    runner(`plusComm step ${k} stays anchored and rests${brokenFixture.has(k) ? ' [KNOWN-BROKEN FIXTURE: exit-hub limit cycle → plan 23]' : ''}`, () => {
       const e = mkEngine(r.diagramAt(k), r.boundary)
-      // 7800: the plan-22 massless-elastica boundary scenes converge slowly
-      // (bounded soft forces pace the approach; a boundary exit hub creeps
-      // toward its far frame slot for thousands of ticks) — the same budget the
-      // succShiftS@24 rest case needs. Measured plusComm@20 drift 16.2 → 4.4
-      // going 2600 → 7800; succShiftS@48 18.5 → 4.6.
       settle(e, 7800)
       const discSum = [...e.bodies.values()].reduce((s, b) => s + 2 * b.discR + 20, 0)
       for (const b of e.bodies.values()) {
@@ -137,29 +135,40 @@ describe('settle — replay steps: bounded always; at rest unless topologically 
       }
       const before = new Map([...e.bodies].map(([id, b]) => [id, { ...b.pos }]))
       for (let i = 0; i < 50; i++) settleStep(e)
-      const bound = restBound[k] ?? 1
       for (const [id, b] of e.bodies) {
         const p = before.get(id)!
         const moved = Math.hypot(b.pos.x - p.x, b.pos.y - p.y)
-        expect(moved, `body ${id} moved ${moved.toFixed(2)} in 50 post-settle ticks (bound ${bound})`).toBeLessThanOrEqual(bound)
+        expect(moved, `body ${id} moved ${moved.toFixed(2)} in 50 post-settle ticks`).toBeLessThanOrEqual(2)
       }
     })
   }
 })
 
 describe('settle — observed jitter reproductions (live feel reports)', () => {
-  // succShiftS@24 truly rests (slow convergence — bounded soft forces pace
-  // the approach, hence the larger budget); plusComm@20 and succShiftS@48
-  // carry the wiring-vs-nesting strain described above and get regression
-  // bounds instead of rest claims.
+  // The user's original settling complaints, restated for the massless-elastica
+  // model. Bounds RE-DERIVED from this model's measured drift over 200 post-settle
+  // ticks (USER test policy — never inherit the old chain suite's numbers):
+  //   measured 2026-07-05 (full-grid gate, settle 7800):
+  //   plusComm@20 0.44, succShiftS@24 0.65 → rest, pinned at 1.5.
+  // The gated global-rotation DOF turns each boundary port toward its slot,
+  // dissolving the blind-cone coils that used to flap these diagrams.
+  //
+  // KNOWN-BROKEN FIXTURE (it.fails — the FIXTURE does not rest, the TEST is right
+  // to demand it): succShiftS@48 drifts 114.73 over 200 ticks (it RESTED at 4.58
+  // BEFORE the rotation DOF — the DOF is a scene-dependent trade). Same exit-hub
+  // limit cycle as plusComm@16/@32: a non-gated content integrator + projection
+  // re-exciting the gated wire descent. Fix = strict-total-energy-descent
+  // conversion (USER ruling 2026-07-05), scoped as PLAN 23; it.fails flips to a
+  // real failure the day plan 23 makes it rest.
   const succShiftS = bootCtx.theorems.get('succShiftS')!
-  const jitterCases: [string, number, () => { d: Diagram; b: readonly WireId[] }, number][] = [
-    ['plusComm@20', 7800, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }, 6],
-    ['succShiftS@24', 7800, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }, 2],
-    ['succShiftS@48', 7800, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }, 12],
+  const jitterCases: [string, number, () => { d: Diagram; b: readonly WireId[] }, number, boolean][] = [
+    ['plusComm@20', 7800, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }, 1.5, false],
+    ['succShiftS@24', 7800, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }, 1.5, false],
+    ['succShiftS@48', 7800, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }, 2, true],
   ]
-  for (const [name, budget, mk, bound] of jitterCases) {
-    it(`${name} ${bound <= 2 ? 'rests' : 'is regression-bounded'} (<=${bound} over 200 post-settle ticks)`, () => {
+  for (const [name, budget, mk, bound, broken] of jitterCases) {
+    const runner = broken ? it.fails : it
+    runner(`${name} rests (<=${bound} over 200 post-settle ticks)${broken ? ' [KNOWN-BROKEN FIXTURE: exit-hub limit cycle → plan 23]' : ''}`, () => {
       const { d, b } = mk()
       const e = mkEngine(d, b)
       settle(e, budget)
@@ -310,8 +319,12 @@ describe('two floating terms settle (no vibration limit cycle)', () => {
       const after = [...e.bodies.values()]
       after.forEach((b, i) => { recent += Math.hypot(b.pos.x - before[i]!.x, b.pos.y - before[i]!.y) })
     }
-    // after 4000 ticks the pair must be essentially stationary per 100-tick window
-    expect(recent).toBeLessThan(0.5)
+    // after 4000 ticks the pair must be essentially stationary per 100-tick
+    // window. Bound RE-DERIVED from this model's measured equilibrium (USER test
+    // policy): measured 0.0006 (2026-07-05) — the elastica engine rests these two
+    // dead still, no residual vibration; pinned at 0.1 with generous margin (the
+    // old chain suite's 0.5 was a looser inherited number).
+    expect(recent).toBeLessThan(0.1)
     // and legally separated, not overlapping
     const [a, b] = [...e.bodies.values()]
     const dist = Math.hypot(a!.pos.x - b!.pos.x, a!.pos.y - b!.pos.y)

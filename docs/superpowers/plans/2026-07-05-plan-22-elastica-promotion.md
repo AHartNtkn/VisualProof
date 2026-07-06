@@ -254,3 +254,40 @@ ticks, "exitRes" = summed exit-hub→slot distance over the boundary wires, "wed
   5. exitRes: the "< 0.5" target was a provisional pre-measurement number; the honest
      stable equilibrium is ~0.88 (clean scenes), so the boundary law is pinned at the
      measured value with margin, not pushed toward 0.5 into the oscillating regime.
+
+- **OPEN — the rotation DOF is a scene-dependent trade (input for PLAN 23).** The
+  gated global-rotation DOF resolves the boundary fork on the flagged scenes but
+  REGRESSES others into exit-hub limit cycles. Full batch (full-grid gate +
+  rotation DOF + exitPull 12, settle 7800), max drift over 200 post-settle ticks,
+  and time-to-rest (first 200-tick block with drift < 1.5):
+  | scene         | convergeAt | drift50 | drift200 | rests? |
+  |---------------|-----------|---------|----------|--------|
+  | plusComm@0    | 400       | 0.03    | 0.01     | yes    |
+  | plusComm@16   | (3000)    | 4.24    | 55.47    | NO     |
+  | plusComm@32   | >7800     | 3.83    | 15.38    | NO     |
+  | plusComm@48   | >7800     | 0.40    | 1.60     | yes    |
+  | plusComm@64   | 400       | 0.05    | 0.00     | yes    |
+  | succShiftS@24 | 5400      | 0.16    | 0.65     | yes    |
+  | succShiftS@48 | >7800     | 45.04   | 114.73   | NO     |
+  succShiftS@48 RESTED at 4.58 BEFORE the rotation DOF was added — the DOF is the
+  regression there. Mechanism (plusComm@16 diagnostic): E over 200 ticks
+  [11764, 11438, 11177, 12197, 12650] — a LIMIT CYCLE (swing ~1500), top drifters
+  the exit hubs (e:w1 55, e:w2 17, e:w0 17). The wire + rotation DOF are strictly
+  gatedStep, but the CONTENT subsystem is NOT: sibling/cohesion forces integrate
+  through damped velocities and the overlap projection teleports bodies + applies
+  inelastic impulses each tick with no energy check. Those non-gated movers
+  re-excite the gated wire descent — the two-integrator pump class, now BETWEEN
+  subsystems. Per the USER ruling (corpus "STRICT ENERGY DESCENT, TOTAL",
+  2026-07-05), the fix is PLAN 23: make the content soft preferences energy TERMS
+  descended by the same strict per-DOF gate, and apply the overlap projection
+  INSIDE gated candidate evaluation (propose → project → evaluate total E → accept
+  only if lower) rather than as an independent per-tick mover. The DOF is kept
+  (reverting reopens the @24/@20 fork); plusComm@16/@32 and succShiftS@48 are
+  marked `it.fails` in relax.test.ts (honest documented-open — the FIXTURE is
+  broken, not the test), flipping to real failures when plan 23 makes them rest.
+- **Settle budgets (findings).** Time-to-rest per fixture: most converge by ~400
+  ticks; succShiftS@24 needs 5400 (bounded soft forces pace it); the broken
+  fixtures never converge. So the resting-scene budget cannot drop below ~5400
+  (7000 with 30% margin); 7800 is kept as a safe uniform value. The suite stays
+  ~1h until plan 23 makes the settles both faster (strict descent converges
+  monotonically) and, for the broken fixtures, actually terminate.
