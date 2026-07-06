@@ -14,7 +14,7 @@ import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
-import { settleStep, recomputeRegions, resolveOverlaps, clampDragToFeasible } from '../view/relax'
+import { settleStep, recomputeRegions, resolveOverlaps, establishFrame, clampDragToFeasible } from '../view/relax'
 import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
@@ -68,7 +68,7 @@ const ZOOM_PER_WHEEL_PX = 0.001
     dense-overlap coordinate-descent trap. This is the plan-23 leading projection,
     which mkEngine cannot run itself (relax.ts imports engine.ts — circular); the
     shell already imports relax.ts, so it runs it after every seed. */
-const seedProject = (e: Engine): void => { recomputeRegions(e); resolveOverlaps(e) }
+const seedProject = (e: Engine): void => { recomputeRegions(e); resolveOverlaps(e); establishFrame(e) }
 
 const SELECT_STROKE = '#d97706'
 const HOVER_STROKE = '#2563eb'
@@ -242,7 +242,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // the pure `fitCamera` math, no fork. The companion passes zoom 1 (view-only,
   // no wheel input reaches it).
   const applyFit = (eng: Engine, w: number, h: number, zoom: number, out: { scale: number; offsetX: number; offsetY: number }): void => {
-    const cam = fitCamera(eng.regions.get(eng.d.root), w, h, zoom)
+    // Plan 24: fit the FIXED frame, not the breathing sheet circle — the viewport
+    // is rock-steady while content settles inside a constant box (no jitter).
+    const fit = eng.frame === null ? undefined : { center: eng.frame.center, radius: eng.frame.half }
+    const cam = fitCamera(fit, w, h, zoom)
     out.scale = cam.scale
     out.offsetX = cam.offsetX
     out.offsetY = cam.offsetY

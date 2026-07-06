@@ -6,7 +6,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
-import { settle, settleStep, totalEnergy } from '../../src/view/relax'
+import { settle, settleStep, totalEnergy, clampDragToFeasible } from '../../src/view/relax'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
 
@@ -183,6 +183,53 @@ describe('settle — observed jitter reproductions (live feel reports)', () => {
       assertRestsLegalMonotone(name, e, bound)
     })
   }
+})
+
+describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => {
+  // The frame is ABSOLUTE state set once at establishment and CONSTANT between
+  // rewrites — it never grows/shrinks/shifts from motion. A HARD edge the content
+  // lives within: a settling trial or a drag past the inner edge is projected back.
+  it('the frame is byte-identical across 500 settle ticks — it never breathes', () => {
+    for (const [name, diagram, boundary] of cases) {
+      const e = mkEngine(diagram, boundary)
+      settle(e, 300) // establishes the frame from the legal seed, settles to rest
+      const f0 = e.frame
+      expect(f0, `${name}: frame must be established after settle`).not.toBeNull()
+      const snap = JSON.stringify(f0)
+      for (let t = 0; t < 500; t++) settleStep(e)
+      expect(JSON.stringify(e.frame), `${name}: frame breathed during settling`).toBe(snap)
+    }
+  })
+
+  it('every content disc rests INSIDE the fixed frame (the hard edge holds it in)', () => {
+    for (const [name, diagram, boundary] of cases) {
+      const e = mkEngine(diagram, boundary)
+      settle(e, 800)
+      const f = e.frame!
+      for (const b of e.bodies.values()) {
+        if (b.id.startsWith('e:')) continue // frame terminals ride ON the edge
+        const over = Math.max(Math.abs(b.pos.x - f.center.x), Math.abs(b.pos.y - f.center.y)) + b.discR - f.half
+        expect(over, `${name}: body ${b.id} pokes ${over.toFixed(3)} wu past the frame`).toBeLessThanOrEqual(0.5)
+      }
+    }
+  })
+
+  it('a drag toward the edge is clamped inside and NEVER grows the frame', () => {
+    for (const [name, diagram, boundary] of cases) {
+      const e = mkEngine(diagram, boundary)
+      settle(e, 300)
+      const f = e.frame!
+      const half0 = f.half
+      const node = [...e.bodies.values()].find((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')!
+      // a wild cursor target far outside every edge, in all four diagonal directions
+      for (const [sx, sy] of [[1, 1], [-1, 1], [1, -1], [-1, -1]] as const) {
+        const clamped = clampDragToFeasible(e, node, { x: f.center.x + sx * 1e4, y: f.center.y + sy * 1e4 })
+        const over = Math.max(Math.abs(clamped.x - f.center.x), Math.abs(clamped.y - f.center.y)) + node.discR - f.half
+        expect(over, `${name}: drag (${sx},${sy}) clamped ${over.toFixed(3)} past the edge`).toBeLessThanOrEqual(0.5)
+      }
+      expect(e.frame!.half, `${name}: the drag grew the frame`).toBe(half0)
+    }
+  })
 })
 
 describe('settleStep — deterministic incremental relaxation', () => {

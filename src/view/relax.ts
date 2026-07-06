@@ -1,7 +1,7 @@
 import type { RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, LegShape, WireLeg, WireView } from './engine'
-import { frameBounds, frameSlots, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg } from './engine'
+import { frameBounds, frameSlots, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, FRAME_MARGIN } from './engine'
 import { ELASTICA, QN, mkLegCache } from './elastica'
 import type { LegCache } from './elastica'
 
@@ -249,6 +249,57 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
       radius: Math.max(mec.radius + REGION_PAD, 10),
       support: mec.support.map((m) => (m.mid !== undefined ? { mid: m.mid } : { sub: m.sub! })),
     })
+  }
+}
+
+/** Establish the fixed near-square proof frame from the current content extent
+    (plan 24, USER RULING 2026-07-06). A DISCRETE-EVENT write, called at a spawn /
+    rewrite AFTER the leading construction projection has made the seed legal —
+    never during settling, so the frame is CONSTANT as content relaxes inside it
+    (it does not breathe). The box is centered on the content bounding box and
+    sized to the LARGER content half-extent + margin (near-square: all four
+    boundaries on equal footing, a wide proof gets a bigger square, never a
+    letterbox), tighter than the old enclosing-CIRCLE-derived box. Excludes the
+    root sheet circle (which encloses everything — using it would re-inflate the
+    box to the circle's corners, the "way too spaced out" the reset rejected) and
+    the boundary exit terminals (`e:`, which ride ON the frame). Reads live region
+    circles, so the caller must recomputeRegions first (settle / settleStep /
+    seedProject do). */
+export function establishFrame(e: Engine): void {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
+  const grow = (x: number, y: number, r: number): void => {
+    if (x - r < minX) minX = x - r
+    if (y - r < minY) minY = y - r
+    if (x + r > maxX) maxX = x + r
+    if (y + r > maxY) maxY = y + r
+  }
+  for (const b of e.bodies.values()) {
+    if (b.id.startsWith('e:')) continue
+    grow(b.pos.x, b.pos.y, b.discR)
+  }
+  for (const [rid, g] of e.regions) {
+    if (rid === e.d.root) continue
+    grow(g.center.x, g.center.y, g.radius)
+  }
+  if (!Number.isFinite(minX)) { e.frame = { center: { x: 0, y: 0 }, half: 10 + FRAME_MARGIN }; return }
+  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
+  const half = Math.max((maxX - minX) / 2, (maxY - minY) / 2) + FRAME_MARGIN
+  e.frame = { center: { x: cx, y: cy }, half }
+}
+
+/** Clamp a body centre inside the fixed frame's HARD WALL (plan 24, USER RULING:
+    the boundary is a HARD edge, not a soft tether). Projects the trial position so
+    the whole disc stays within the near-square box — a settling trial or a drag
+    target past the edge is pushed back, never accepted past it, and the frame
+    never grows to chase it. Boundary exit terminals (`e:`) ride ON the frame and
+    are exempt; no frame yet → no wall. */
+function clampToFrame(e: Engine, b: Body, p: Vec2): Vec2 {
+  const f = e.frame
+  if (f === null || b.id.startsWith('e:')) return p
+  const lim = Math.max(f.half - b.discR, 0)
+  return {
+    x: Math.max(f.center.x - lim, Math.min(f.center.x + lim, p.x)),
+    y: Math.max(f.center.y - lim, Math.min(f.center.y + lim, p.y)),
   }
 }
 
@@ -726,7 +777,9 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
     const g = e.regions.get(cId)!
     push(g.center.x, g.center.y, owned ? g.radius : b.discR + g.radius + PACE.sibGap)
   }
-  return { x, y }
+  // the fixed frame is a hard wall (plan 24): a trial past the inner edge is
+  // projected back in, so no content disc is ever accepted outside the frame
+  return clampToFrame(e, b, { x, y })
 }
 
 /** Project a DRAGGED body's target position onto the SEMANTIC-feasible set: the
@@ -760,7 +813,9 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
     const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
     x = g.center.x + ux * need; y = g.center.y + uy * need
   }
-  return { x, y }
+  // the fixed frame is a hard wall (plan 24): a drag meets the edge and stops —
+  // the node never crosses out and the frame never grows to chase the cursor
+  return clampToFrame(e, b, { x, y })
 }
 
 /** One resolved leg at its base (warm-cache) state, plus what it needs for the
@@ -1093,6 +1148,11 @@ function descentSweep(e: Engine, pinned: ReadonlySet<string> | null): void {
     full sweep every frame — plan 24 motion policy). */
 export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): void {
   recomputeRegions(e)
+  // establish the fixed frame once, on first display (a raw settleStep loop with
+  // no construction projection); the app/settle paths establish it from the LEGAL
+  // seed beforehand (seedProject / settle's leading projection), so this is a
+  // no-op there. Never re-established during settling — the frame is constant.
+  if (e.frame === null) establishFrame(e)
   descentSweep(e, pinned)
   recomputeRegions(e)
   e.tick++
@@ -1123,6 +1183,7 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
 export function settle(e: Engine, ticks: number): void {
   recomputeRegions(e)
   resolveOverlaps(e)
+  establishFrame(e) // fix the frame from the legal seed, before any settling
   for (let t = 0; t < ticks; t++) settleStep(e)
   recomputeRegions(e)
   resolveOverlaps(e)

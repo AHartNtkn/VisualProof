@@ -131,9 +131,21 @@ export type Engine = {
   readonly wires: Map<WireId, WireView>
   readonly boundary: readonly WireId[]
   regions: Map<RegionId, RegionCircle>
+  /** The fixed near-square proof frame (plan 24): the statement boundary box, an
+      ABSOLUTE stored state — established ONCE from the content extent at a discrete
+      spawn/rewrite event (after the leading construction projection makes the seed
+      legal) and CONSTANT between such events (USER RULING 2026-07-06). It never
+      grows/shrinks from motion: settling, dragging, and free relaxation read it but
+      never write it. Null until the first establishment. `half` is the half-extent
+      of both axes (near-square: sized to the larger content half-extent + margin),
+      so a wide proof gets a bigger square, never a letterbox. */
+  frame: StoredFrame | null
   /** relaxation tick counter (drives overlap-projection cadence, determinism). */
   tick: number
 }
+
+/** The fixed proof frame: centre + half-extent of a near-square rounded box. */
+export type StoredFrame = { readonly center: Vec2; readonly half: number }
 
 /** Local anatomy scale per node kind — atoms and terms are drawn larger so
     their structure is legible against the wire rhythm. */
@@ -346,7 +358,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     wires.set(wid, { binds, hub, tipBodyId, slot, legs, phi })
   }
 
-  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), tick: 0 }
+  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), frame: null, tick: 0 }
 }
 
 /**
@@ -432,16 +444,18 @@ export function portNormal(b: Body, key: string | null, toward: Vec2): number {
 
 export type FrameBounds = { minX: number; maxX: number; minY: number; maxY: number; frameR: number; center: Vec2 }
 
-/** The sheet frame box (sheet region radius + margin). Null before the first
-    settle populates region circles. */
+/** The fixed near-square proof frame box, read from the stored frame state (plan
+    24). Null before the frame is established (the leading construction projection
+    at each spawn/rewrite establishes it — see relax.ts `establishFrame`). It is a
+    CONSTANT between rewrites: never derived from per-tick region geometry, so the
+    box does not breathe as content settles. `frameR` is the square half-extent. */
 export function frameBounds(e: Engine): FrameBounds | null {
-  const sheet = e.regions.get(e.d.root)
-  if (sheet === undefined) return null
-  const frameR = sheet.radius + FRAME_MARGIN
+  const f = e.frame
+  if (f === null) return null
   return {
-    minX: sheet.center.x - frameR, maxX: sheet.center.x + frameR,
-    minY: sheet.center.y - frameR, maxY: sheet.center.y + frameR,
-    frameR, center: sheet.center,
+    minX: f.center.x - f.half, maxX: f.center.x + f.half,
+    minY: f.center.y - f.half, maxY: f.center.y + f.half,
+    frameR: f.half, center: f.center,
   }
 }
 
