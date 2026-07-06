@@ -138,3 +138,16 @@ count; net faster settles.
    8 ms loop) against the new per-tick cost so interaction stays ~60fps — the drag
    path is cheap (pinned bodies + rotation DOF skip), but free-settling a fresh
    big scene now costs more per tick.
+3. WIRE FRAME-CONTAINMENT (corpus review of settled plusComm@16/@32, 2026-07-06):
+   nothing penalizes a wire CURVE bulging outside the frame boundary. Content
+   bodies are inside the frame by construction (the frame is derived from their
+   bounding circle), but a wire's traced θ-quadratic is not — long boundary-leg
+   arcs visibly escape the rounded rectangle, and one exits the canvas. Needs a
+   containment energy term on wire GEOMETRY (a soft barrier on leg samples past
+   the frame perimeter), so the settled wires stay inside the drawn frame.
+4. HUB-APPROACH LEGIBILITY (same review): at 17–29 bodies many wires converge into
+   a dense weave near the big junction hubs. The wire↔wire separation term keeps
+   them from coinciding but the corpus's DISTINGUISHABILITY concern ("intersections
+   vs wires that simply overlap") is visibly back at that density near hubs. Needs
+   a hub-locality legibility term (e.g. angular fanning / lane spreading on the
+   arrival bundle) beyond the current pairwise separation.
