@@ -127,7 +127,47 @@ terminals — projecting one shoved it 166 wu). (e) Both zero-mode quotients rem
 (16–32 nodes) — up per-tick (grid gate + cap-limited separation), down in tick
 count; net faster settles.
 
-**NEXT-plan items (NOT done here):**
+## Correction (2026-07-06 — the Resolution's rest claim was a mismeasurement)
+
+The Resolution above claimed plusComm@20/@48 and succShiftS@24/@48 "measured 0.0000
+drift / rest." The committed build contradicts it: on those four replay steps the
+suite measured post-settle drift 22 / 117 / 35 / 381. The discrepancy is NOT a
+pre-commit build — `relax.ts`/`relax.test.ts` at HEAD are byte-identical to f18988f
+(only this doc changed since). It was a genuine mismeasurement, and its mechanism
+sharpens the Resolution's own "load-bearing find":
+
+The uncapped barrier does NOT separate a dense-overlap SEED by gated descent — it
+TRAPS it. The mkEngine spiral seeds nodes deeply overlapping, and against an
+uncapped barrier a dense overlap is a coordinate-descent wedge: every single-DOF
+axis step out of one overlap lands in another, so the strict gate finds no downhill
+move and the descent FALSE-RESTS at a high-energy stall (measured pc20: total E flat
+at 3.92e6 / cE 3.90e6 from tick ~700, n0 stationary — looks converged). The
+`settle()` trailing `resolveOverlaps` then drops it to 6.7e4 in one discrete step
+(proof the flat state was a stall, not a minimum), and the 200-tick drift window
+starts from that unconverged point and keeps descending — the "drift." No tick
+budget fixes it: the descent is wedged the whole settle; only the final projection
+moves anything. The plan-23 close-out's "rest" was almost certainly read on a build
+or window where this was masked; on the committed code it is not.
+
+**Fix (2026-07-06):** move the sanctioned construction projection to run BEFORE the
+descent as well as after — `settle()` now brackets the tick loop with
+`recomputeRegions + resolveOverlaps`. The leading projection gives the gate a legal
+start (pc20 cE 2.9e4) it descends smoothly from; measured time-to-rest with the
+legal start is ~200 ticks for BOTH the smallest (pc20) and largest (ss48, 32 bodies)
+of the four, so the committed budgets (1100/1100/1100/2500) and drift bounds
+(1.5/1.5/1.5/3) are honest as-committed and need no change — they were only ever
+red because the descent never reached them. No `it.fails`, no loosened bound.
+
+**Live-app gap (NOT fixed here — flagged):** the shell (`src/app/shell.ts`) seeds via
+`mkEngine` and drives per-frame `settleStep`; it never calls `settle()`, so it shares
+the dense-seed wedge. The clean fix is a construction projection at the seed, but
+`mkEngine` (engine.ts) cannot import `resolveOverlaps` (relax.ts imports engine.ts —
+circular); shell.ts already imports from relax.ts and could call
+`recomputeRegions + resolveOverlaps` after each `mkEngine`. Left as a follow-up
+because the app path is untested here.
+
+## NEXT-plan items (from the original f18988f Resolution)
+
 1. Framed tick cost 250–450 ms wants the rotation-gate interior-invariance
    optimization (interior legs are rotation-invariant, so hold them constant and
    re-solve only boundary legs under the probe) — but the plan-22 "changing-terms

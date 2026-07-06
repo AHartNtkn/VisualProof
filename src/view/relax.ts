@@ -1002,10 +1002,31 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
   e.tick++
 }
 
-/** Run a tick budget of strict descent, then the DISCRETE construction-time
-    legality projection (the only place `resolveOverlaps` runs) so the at-rest
-    hard law holds even for an externally-constructed overlapping layout. */
+/** Run a tick budget of strict descent, bracketed by the DISCRETE construction-
+    time legality projection (the only place `resolveOverlaps` runs).
+
+    The LEADING projection is load-bearing, not decorative. The spiral seed
+    (mkEngine, radial spacing 5 wu against ~6.5 wu disc radii) lands nodes deeply
+    overlapping, and under the plan-23 UNCAPPED sibling barrier a dense-overlap
+    configuration is a coordinate-descent TRAP: every single-DOF axis step out of
+    one overlap lands in another, so the strict gate can find no downhill move and
+    the descent FALSE-RESTS at a high-energy stalled state instead of separating
+    the discs (measured plusComm@20: the un-projected descent flatlines at total E
+    3.92e6 / cE 3.90e6 by tick ~700 and never recovers; the trailing projection
+    then drops it to 6.7e4 in one discrete step — proof the flat state was a
+    coordinate-descent stall, not an energy minimum). Projecting the SEED onto the
+    feasible set BEFORE the descent — plan 23's sanctioned "one-time projection at
+    construction, a discrete event outside the descent" — gives the gate a legal
+    start (cE 2.9e4) from which it descends smoothly and rests by ~200 ticks
+    (measured), drift → 0. Without it, no tick budget converges: the descent is
+    wedged the whole time and only the final projection moves anything, leaving an
+    unconverged tail (the drift the plan-23 close-out mismeasured as rest).
+
+    The TRAILING projection remains the at-rest guarantee for a layout an external
+    rewrite constructs overlapping after the descent has run. */
 export function settle(e: Engine, ticks: number): void {
+  recomputeRegions(e)
+  resolveOverlaps(e)
   for (let t = 0; t < ticks; t++) settleStep(e)
   recomputeRegions(e)
   resolveOverlaps(e)
