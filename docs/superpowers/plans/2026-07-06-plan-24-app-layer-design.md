@@ -37,44 +37,52 @@ minimal-enclosing-circle of ALL content, **recomputed every tick** (`frameBounds
 reads `e.regions.get(e.d.root)`). So it breathes with every body that moves — the
 reset ruling's first named defect: "the rounded square shrinks to fit them. Insane."
 
-**Design: the frame is fixed state, set by a discrete event, never a function of
-per-tick motion.** The engine gains a stored frame `{ center, halfW, halfH }`. It
-is established ONCE, when a diagram is first displayed (a seed or a rewrite — the
-same discrete events that rebuild the engine), sized from the content's bounding
-box AFTER the leading construction projection has made the seed legal, plus a
-fixed margin. Between those events it is a constant. Settling, dragging, and free
-relaxation never change it.
+**Design: the frame is fixed ABSOLUTE state, set by a discrete event, never a
+function of per-tick motion** (USER RULING 2026-07-06, Q-A: "Sizes are absolute:
+computed at spawn from contents, never grow/shrink from motion, recalculated only
+at a rewrite. Boundary is a hard edge"). The engine gains a stored frame
+`{ center, half }`. It is established ONCE, when a diagram is first displayed (a
+spawn/seed or a rewrite — the same discrete events that rebuild the engine), sized
+from the content's extent AFTER the leading construction projection has made the
+seed legal, plus a fixed margin. Between those events it is a CONSTANT. Settling,
+dragging, and free relaxation never change it — a resize is triggered ONLY by a
+rewrite, never by motion.
 
-- **Why a box from the bounding box, not the enclosing circle + margin as now?**
-  The content is not a disc; a circle-derived frame wastes the corners and forces
-  the slots onto a perimeter whose size tracks a radius. A box sized to the actual
-  content extent is tighter (corpus: "way too fucking spaced out" is rejected) and
-  its four straight edges are where boundary slots naturally live.
+- **Near-square** (USER RULING Q-A). The frame is a near-square rounded rectangle
+  — the proof's FOOTPRINT, with all four boundaries on equal footing — not an
+  aspect-ratio hug of the content's bounding box. Sized so the settled content
+  fits (side = the larger content half-extent + margin, applied to both axes), so
+  a wide proof gets a bigger square, never a wide letterbox. Tighter than the
+  current circle-derived box (corpus: "way too fucking spaced out" is rejected),
+  and its four equal straight edges are where boundary slots evenly live.
 - **What the frame must NEVER respond to**: the position of any individual body
   during motion; the centroid of the content; the settling process; a drag. These
   are exactly the couplings the reset banned. It responds ONLY to the discrete
-  re-seed/rewrite event.
+  spawn/rewrite event.
 - **Position**: fixed in world space at establishment. It does not re-center on
   the content as the content settles (re-centering IS centroid coupling).
 
-### Content staying inside a fixed frame
+### Content staying inside a fixed frame — the frame is a HARD EDGE
 
 A fixed frame raises the question the current breathing frame dodged: what keeps
-content in? Two mechanisms, both already required by the corpus and neither a new
-hack:
+content in? USER RULING Q-A/Q-D: **the boundary is a HARD EDGE with no
+motion-triggered resize.** So containment is a hard legality constraint, exactly
+like HARD SEMANTIC CONTAINMENT (a cut a node isn't in), not a soft preference:
 
-1. **The extent limit** (corpus: "Diagram extent limited (~110% of starting
-   size)"). This is currently UNIMPLEMENTED (grep confirms no extent term exists).
-   It becomes a soft energy term: content bodies past a radius are pulled back, so
-   free relaxation cannot inflate the layout past the frame it was sized to. This
-   is content reacting to a field, not the frame chasing content.
-2. **HARD SEMANTIC CONTAINMENT already clamps drags** (`clampDragToFeasible`), and
-   the frame is sized to the settled content, so a drag that pushes a node toward
-   the edge meets the extent field before the frame. If the user drags hard enough
-   to genuinely need more room, the frame does NOT grow mid-drag (that is the
-   banned behavior); the content is held by the extent field instead.
+1. **The frame edge is a hard wall on content bodies.** A content disc may not
+   cross the inner frame edge — during settling (a gated trial that would put a
+   disc past the edge is projected back, so it is never accepted) and during a drag
+   (`clampDragToFeasible` gains the frame edge as one more surface the cursor
+   target is projected onto, alongside the non-member region circles). This
+   supersedes the corpus's older SOFT "~110% extent limit" idea: the ruling is a
+   hard edge, so the wall is a projection, not a field.
+2. **A drag against the edge does NOT grow the frame.** The frame resizes only at a
+   rewrite (Q-A); a drag is motion, so the node meets the wall and stops — the
+   frame never grows mid-drag (the banned behavior). Item 13's "the frame does not
+   grow to chase it" is this ruling.
 
-The frame is a fixed proscenium the content settles WITHIN, not a shrink-wrap.
+The frame is a fixed proscenium with hard walls the content lives WITHIN, not a
+shrink-wrap and not a soft tether.
 
 ### Camera consequence (a free win)
 
@@ -112,12 +120,12 @@ carries no disc, no dot, no DOF.
   inside of the frame edge. This is the exact shape a simple port-to-port interior
   wire already has; the slot is just a fixed second endpoint.
 - **A multi-endpoint boundary wire (k ≥ 2 interior ports that share one line of
-  identity which also crosses the boundary)** is a genuine k-ary junction: the k
-  port legs converge into a trunk, and the trunk's far end is the slot. Here a
-  junction DOES exist because the wire genuinely branches — but it is the SAME
-  junction structure as an interior branch (Subsystem 3), with one of its arms
-  pinned to the fixed slot instead of a node. The trunk reaches the frame; the
-  tributaries merge into it. No separate exit body, no exterior connector.
+  identity which also crosses the boundary)** is a genuine k-ary junction with one
+  arm pinned to the fixed slot instead of a node. It is the SAME junction structure
+  as an interior branch (Subsystem 3): where the geometry gives a trunk, one arm of
+  that trunk reaches the frame and the others merge into it; where it does not
+  (a near-symmetric junction, Q-B), the legs simply meet and one continues to the
+  slot — no trunk is forced. No separate exit body, no exterior connector.
 
 The distinction is structural and honest: a body appears at a boundary attachment
 exactly when the wire actually branches there (k ≥ 2), never for a plain 2-point
@@ -177,6 +185,22 @@ trunk with branches — never a single point. A 2-leg junction degenerates corre
 to just the trunk (one through-curve), which is why a simple interior wire and a
 simple boundary wire need no junction body at all.
 
+**A trunk is EMERGENT, never enforced** (USER RULING 2026-07-06, Q-B: "trunks need
+not exist; near-symmetric junctions may have no trunk; never enforce one — the
+tributary reading emerges only where geometry gives it"). The trunk-pair look is
+what the geometry PRODUCES when two legs happen to be near-antiparallel; it is not
+a structure the junction is forced into. Mechanically this means the "trunk" is not
+a distinguished stored pair at all — there is a single continuous quantity (the
+trunk axis with its alignment weight `|cos(dir−axis)|`) that is STRONG only when a
+near-in-line pair exists and FADES SMOOTHLY TO ZERO as the junction approaches
+symmetry. At a symmetric junction (e.g. three legs at 120°) the weight is small for
+every leg, no pair reads as a through-trunk, and the legs simply meet — which is
+CORRECT here, because there is no trunk to see. The design must never contain a
+step that picks a mandatory trunk pair; the through-line appears only as the
+continuous consequence of two legs being aligned, and dissolves continuously when
+they aren't. (This also guarantees Failure B's no-swap property in the symmetric
+case: with no distinguished pair, there is nothing to swap.)
+
 ### Failure B — identity must be carried state, changed only continuously
 
 The reset's "swap redraws legs on new trajectories" is the fatal one. The current
@@ -190,20 +214,25 @@ snapping law.**
 **Design: the branch structure is PERSISTENT STATE, and it can only change by
 continuous sliding, never by re-assignment.** Concretely:
 
-- The junction stores its **trunk-end identities** (which two ports are the trunk)
-  and each tributary's **merge parameter** as STATE, seeded once and carried across
-  rebuilds by `carryOver` (by bind signature, as DOF already are).
+- The carried STATE is CONTINUOUS, never a discrete pair (per Q-B — there is no
+  stored "which two are the trunk"): the junction stores its **trunk axis** (one
+  angle, an inertial DOF) and each leg's **merge parameter** t (where along the
+  through-line it joins). Both are seeded once and carried across rebuilds by
+  `carryOver` (by bind signature, as DOF already are). Which legs "are the trunk"
+  is never recorded — it is only ever the continuous readout `|cos(dir−axis)|` of
+  the axis against each leg, which is exactly why it can fade to nothing at a
+  symmetric junction.
 - These evolve by the SAME strictly-gated descent as every other DOF: the merge
   parameters are DOF; the trunk axis is a DOF with inertia (travel-capped, so it
   cannot flip frame-to-frame).
-- A genuine trunk-pair swap (geometry evolves so a tributary is now more in-line
-  than a trunk end) happens as a CONTINUOUS event: the tributary's merge parameter
-  slides to the trunk END (t → 1), the two curves become tangent there, and the
-  roles exchange THROUGH that tangency — the picture passes smoothly through the
-  configuration where three legs are momentarily colinear, and no curve is ever
-  redrawn on a discontinuous new path. This is the identity-preserving blend the
-  mandate asked for, made precise: identity lives in state, and the state only ever
-  slides.
+- A genuine role change (geometry evolves so a different leg becomes the most
+  in-line) happens as a CONTINUOUS event: the axis rotates slowly (inertial) and
+  each leg's merge parameter slides, so a leg transitions trunk→tributary by its
+  alignment weight fading through zero and its merge point sliding along the
+  through-line — the picture passes smoothly through the momentary configuration,
+  and no curve is ever redrawn on a discontinuous new path. This is the
+  identity-preserving blend the mandate asked for, made precise: identity lives in
+  continuous state, and the state only ever slides.
 
 The guarantee is structural: because there is no per-frame role re-derivation and
 every governing quantity is a gated DOF or an inertial axis, a discontinuous jump
@@ -248,6 +277,28 @@ rotation gate ALREADY has that ladder (`gatedStep`'s long-shot + expanding searc
 so a single node CAN turn to face its slot without the global spin — this must be
 re-measured on the framed scenes, not assumed. (Flagged, not hand-waved.)
 
+### Node rotation is FREE and UNLIMITED (USER RULING 2026-07-06)
+
+Verbatim: **"Node angle is ARBITRARY. It encodes NO information and is FREE in the
+physics."** This resolves a wrong assumption baked into the earlier draft (and into
+the current code): that node rotation, like every DOF, should be smoothed by a
+per-frame rate bound. It should NOT. **The no-snapping law governs WIRE SHAPES,
+never node angles.** A node carries no orientation meaning (ports are found by the
+pip, not by absolute angle — corpus: port names/order are not orientation), so a
+node may spin as fast as the energy dictates, including whipping around most of a
+turn in a single frame to shed wire tension. This is DESIRED behavior the user
+complains about when it is MISSING (a node that should rotate to relieve a twisted
+wire but instead sits stuck).
+
+**Design consequence**: the node-rotation DOF has NO rate cap of any kind — not
+`FRAME_CAP`, not the `rotCap(0.28, ·)` per-tick bound, not the small-step-per-frame
+policy below. It descends its wire energy by the full gated step (long-shot ladder
++ expanding search) every frame, uncapped. The small-step smoothness policy applies
+to LAYOUT DOF (body TRANSLATION, hub/tip positions, merge parameters, trunk axis) —
+the things whose fast motion would read as the layout jumping — and explicitly NOT
+to node angle, which is free to move as far as it wants. (The `~0.3 rad/frame`
+class of bounds was the wrong assumption; it is deleted, not tuned.)
+
 ### Fast settling WITH smooth animation — no global slowdown cap
 
 The reset: edges settle at a "snail's pace"; the global `FRAME_CAP` slowdown was a
@@ -264,14 +315,19 @@ Two distinct current mechanisms are BOTH wrong for this:
 2. **`FRAME_CAP` capping every DOF's per-visit magnitude**: slows all motion
    globally to hide the lurch — the snail's-pace hack.
 
-**Design: every frame runs a FULL sweep of SMALL gated steps over ALL DOF.** Each
-DOF is touched every frame and moves a little (a bounded gated micro-step), so the
-whole diagram eases toward rest together and smoothly. Smoothness comes from
-frequency (all DOF, every frame), not from a magnitude cap; speed comes from every
-DOF making progress every frame rather than once per second.
+**Design: every frame runs a FULL sweep over ALL DOF; the LAYOUT DOF take small
+gated steps, node angle is uncapped.** Every DOF is touched every frame so the
+whole diagram eases toward rest together — but "small step" bounds only the layout
+DOF (translation, hub/tip positions, merge parameters, trunk axis), whose fast
+motion would read as the layout jumping. Node rotation is exempt and free (previous
+subsection). Smoothness of the LAYOUT comes from frequency (all layout DOF, every
+frame), not from a global magnitude cap; speed comes from every DOF making progress
+every frame rather than once per second.
 
-**DELETED**: `FRAME_CAP`; `descentCursor` and the sweep-slicing in `descentSweep` /
-`settleStepBudget`; the whole "resume a sliced sweep across frames" apparatus.
+**DELETED**: `FRAME_CAP` (both the layout slowdown and its rotation cap);
+`rotCap`'s per-tick 0.28 rotation bound; `descentCursor` and the sweep-slicing in
+`descentSweep` / `settleStepBudget`; the whole "resume a sliced sweep across
+frames" apparatus.
 
 **The load-bearing constraint this creates (honestly flagged)**: plan 23 measured
 a full sweep at ~250–450 ms on a 16–32-node framed scene. A full sweep per frame
@@ -281,8 +337,9 @@ inside each gated step (dominated by the grid leg solve). This design does NOT
 authorize a magnitude cap or slicing to fake smoothness; it requires the sweep to
 become cheap enough to run whole. Whether that is reachable (cheaper localized
 energy, fewer evals per gated step, coarser paint-vs-solve resolution split) is the
-principal implementation risk and is called out in Open Questions — I am NOT
-inventing the specific speedup, per the "never take algorithmic advice" law; I am
+principal implementation risk and is the whole of Task 6 in the implementation plan
+below — I am NOT inventing the specific speedup, per the "never take algorithmic
+advice" law; I am
 fixing the DESIGN (all DOF, every frame, no cap) and flagging that its feasibility
 rests on evaluation cost.
 
@@ -360,8 +417,10 @@ snap anywhere.
    pieces moving.
 2. **The camera / viewport is steady** — no more background jitter while a scene
    relaxes, because the view fits the fixed frame, not the breathing content.
-3. **The frame is a tight rounded rectangle sized to the content** (not a big
-   circle-derived box), re-sized only when the diagram itself changes.
+3. **The frame is a tight, near-SQUARE rounded box sized to the content** (not a
+   big circle-derived box, not a wide letterbox), at an ABSOLUTE size computed when
+   the diagram spawns and re-sized ONLY when the diagram itself changes — never from
+   motion.
 4. **A simple boundary wire is a single smooth curve from the node to the inside of
    the frame edge, with NOTHING at the frame end** — no dot, no little edge node,
    no line poking outside the frame.
@@ -370,21 +429,26 @@ snap anywhere.
 6. **A dot appears at a boundary attachment ONLY when the wire genuinely branches
    there** (three or more things sharing one line that also exits) — never on a
    plain two-point wire.
-7. **A branching wire looks like a river with tributaries**: two arms form one
-   continuous line flowing straight through, and side arms merge into it smoothly at
-   different points along it — NOT a bundle of lines all meeting at one dot.
-8. **When a branch reorganizes, it morphs** — a side branch slides along the trunk
-   and the shape flows through the change; branches never jump to a new position or
-   get redrawn on a different path.
+7. **Where the geometry gives a trunk, a branching wire looks like a river with
+   tributaries**: two near-opposite arms form one continuous line flowing straight
+   through, and side arms merge into it smoothly at different points along it — NOT
+   a bundle of lines all meeting at one dot. Where the branch is near-symmetric
+   (e.g. three even arms) there is NO forced trunk — the arms simply meet; the
+   through-line appears only when two arms actually line up.
+8. **When a branch reorganizes, it morphs** — the through-line and its side arms
+   slide, and the shape flows through the change; branches never jump to a new
+   position or get redrawn on a different path.
 9. **Nothing moves "by itself at a distance."** Rotating or dragging one node never
    counter-moves another node that it isn't touching or wired to; things interact
    only by touching or by the wires between them.
 10. **The whole diagram eases toward rest together and quickly** — every part
     inching a little every frame — instead of one part clicking to a new spot, then
     another, in slow lurches.
-11. **You never see a wire loop around the diagram.** If a node's connection point
-    is briefly pointing the wrong way, you see the NODE turn to face its wire, while
-    the wire stays short — you never see the wire grow a big arc to reach around.
+11. **You never see a wire loop around the diagram — and nodes spin FREELY to
+    prevent it.** A node whips around to face its wire and shed tension (as fast as
+    it needs to, a whole turn in a moment if the energy calls for it — this is
+    desired, an angle carries no meaning); the wire stays short. You see the NODE
+    spin, never the WIRE grow a big arc to reach around.
 12. **On a rewrite / proof step, the picture morphs continuously**: the parts that
     survive glide to their new spots, new parts grow in right at their connection
     points, and the frame eases smoothly to its new size — no popping or snapping
@@ -394,29 +458,160 @@ snap anywhere.
 
 ---
 
-## OPEN QUESTIONS for the user
+## RESOLVED — user rulings 2026-07-06
 
-These are the few places the corpus is silent and the choice is visibly
-consequential. I am not guessing them into the design.
+All four open questions were ruled on by the user (recorded in the corpus memory)
+and folded into the design above. Recorded here so the executor treats them as
+hard constraints, not choices:
 
-- **A. Frame shape and proportions.** The corpus fixes "rounded square/rectangle"
-  and "tight, not spaced out," but not the aspect ratio or margin. Should the frame
-  hug the content's actual bounding box (so a wide proof gets a wide frame), or be
-  a more regular near-square regardless of content shape? (Affects items 1, 3.)
-- **B. Where a branch's trunk points.** For a three-or-more-way branch, the two
-  "trunk" arms are the most in-line pair, but when several are near-equally in-line
-  the initial choice is a visible aesthetic call. Do you have a preference for how
-  the trunk orients when the branch is nearly symmetric (e.g., align to the longest
-  arm, or to the boundary/slot direction if one arm is a boundary exit), or is any
-  smooth choice acceptable so long as it never snaps thereafter? (Affects items 7, 8.)
-- **C. Transient rotation you may briefly see.** Designing the wrap away means, on a
-  fresh scene or a big drag, you may briefly watch a node SPIN to face its
-  connection before the wire straightens. Is a visible short spin acceptable as the
-  honest cost of never wrapping, or should the initial seed pre-orient ports so even
-  that brief spin is rare? (Affects items 10, 11.)
-- **D. What a hard drag against the frame does.** With a fixed frame and the extent
-  limit, dragging a node hard toward the edge is resisted by the extent field rather
-  than the frame growing. Should the node feel a soft wall as it nears the edge
-  (held in), or should the frame be allowed to grow on a DELIBERATE drag (a discrete
-  user action, not motion) while still never breathing during settling? (Affects
-  items 1, 13.)
+- **1. Node angle is free and unlimited.** "Node angle is ARBITRARY. It encodes NO
+  information and is FREE in the physics." No rotation-rate cap of any kind (the
+  `~0.3 rad/frame` class of bounds was a wrong assumption); the no-snap law governs
+  WIRE SHAPES, never node angles. A node spinning fast to shed wire tension is
+  DESIRED behavior, complained about when missing. → Subsystem 4 "Node rotation is
+  FREE"; item 11.
+- **2. Q-A — Frame: near-square, absolute, hard edge.** Near-square (the proof
+  footprint, boundaries on equal footing). Sizes are ABSOLUTE, computed at spawn
+  from contents, never grow/shrink from motion, recalculated ONLY at a rewrite. The
+  boundary is a HARD edge. → Subsystem 1; items 1, 3, 13.
+- **3. Q-B — Trunks need not exist.** Near-symmetric junctions may have no trunk;
+  never enforce one — the tributary reading emerges only where the geometry gives
+  it. → Subsystem 3 "A trunk is EMERGENT, never enforced"; item 7.
+- **4. Q-C and Q-D are answered by 1 and 2.** The transient spin (Q-C) is a FEATURE
+  (rule 1: spin freely), not a cost to minimize. The hard-drag question (Q-D) is
+  settled by rule 2: hard edge, no motion-triggered resize — a drag meets the wall,
+  the frame never grows.
+
+The ONE thing still not de-risked is not a preference but an engineering fact: item
+10's "all layout DOF, every frame" needs the per-sweep cost to fall ~15–25× from
+the plan-23 measurement (see Subsystem 4). It is called out in the implementation
+plan's Task 6 as the gating risk, to be MEASURED, never faked with a cap.
+
+---
+
+## IMPLEMENTATION PLAN
+
+Branch: continue on `plan-21-wire-physics`. **Acceptance is measured ONLY in the
+user's live use of the app** (mandate: "acceptance measured ONLY in the user's live
+use; no demo-loop resets"). Every task below carries a live-app gate — the change
+is not done until it is verified in the running app, not just in a demo or a unit
+test (corpus "APP PARITY IS PART OF EVERY FIX"). Tests pin the structural laws so
+regressions are caught, but green tests are NOT acceptance.
+
+### Task 0 — the deletion list (do this FIRST, as one demolition pass)
+
+The accreted mechanisms the reset rejected are deleted BEFORE the new subsystems
+land, so nothing is built on top of them and no "dual system" survives (CLAUDE.md:
+no legacy, no compatibility layer). Delete, and fix the resulting type errors by
+building the replacements:
+
+- `globalRotationDof` (relax.ts) and every call — the centroid coupling (rule 9).
+- `FRAME_CAP` (relax.ts) and `rotCap`; the `frameCap` parameter threaded through
+  `descentDofs` / `descentSweep` / `settleStepBudget`; `e.descentCursor` and the
+  sweep-slicing. (Motion policy — small-step is per-frame full sweep, not slicing.)
+- The `e:<wid>` exit-hub body for boundary wires in `mkEngine`; `WireHub`'s use as
+  the single shared hub point where all legs meet; `trunkTarget`'s discrete
+  `axisSide` branch; `trunkAlignE` in its spoke form.
+- `boundaryExits` (wires.ts) exterior connector + frame tick; `exitAttractE` /
+  `WIREP.exitPull` / `boundaryExitE`; the `e:`-body special-cases scattered through
+  `recomputeRegions` / `resolveOverlaps` / `projectBodyPos` / `clampDragToFeasible`
+  / `contentEnergy`.
+- The junction-dot draw for `e:` bodies in `paintWires`.
+- `frameBounds`'s derivation from the sheet circle (replaced by stored frame state).
+
+**Law**: after Task 0 the project compiles and every surviving test that does not
+depend on a deleted mechanism passes; deleted-mechanism tests are removed with
+their mechanism (not ported — corpus test-policy directive). **Live gate**: the app
+still boots and renders a settled diagram (degraded — no frame/boundary rework yet).
+
+### Task 1 — the fixed frame + hard edge (Subsystem 1)
+
+Stored frame `{ center, half }` on the Engine, established at `mkEngine` /
+`carryOver` from the projected content extent (near-square, absolute). `frameBounds`
+returns it verbatim. Camera fits to it. Frame edge becomes a hard wall in
+`projectBodyPos` (settling) and `clampDragToFeasible` (drag).
+
+**Laws (tests)**: frame dimensions are byte-identical across 500 settle ticks on
+every bundled scene (absolute, no breathing); every content disc is inside the frame
+at rest on every scene; a scripted drag toward the edge never puts a disc past it and
+never changes the frame size. **Live gate**: user sees the frame hold still while a
+scene settles (items 1–3); the viewport does not jitter.
+
+### Task 2 — bodyless boundary attachment (Subsystem 2)
+
+Slot = fixed anchor point on the inner frame edge with the inward-normal arrival
+tangent. A 1-interior-port boundary wire is ONE elastica leg port→slot, no body. A
+k≥2 boundary wire is an interior-style junction (Task 4) with one arm pinned to the
+slot. Slots placed by the existing `frameSlots` on the fixed frame, canonical order.
+
+**Laws**: a 1-port boundary wire produces exactly one leg and zero junction bodies;
+its far end sits on the inner frame edge, tangent = inward normal, ≤ quadrature
+residual, under violent motion; slot order = boundary index (cannot swap). **Live
+gate**: user sees simple boundary wires as a single curve meeting the inside of the
+frame with NO dot and nothing outside (items 4–6).
+
+### Task 3 — free node rotation + local-only motion (Subsystem 4, part 1)
+
+Node-rotation DOF uncapped (no rate bound; full gated step every frame). All motion
+is local: node translation from contact (sibling barrier) + wire pull; rotation from
+its own wires; no global operators. This is mostly a consequence of Task 0's
+deletions plus removing the rotation cap.
+
+**Laws**: on a framed scene at rest, no port faces >90° from its wire's first
+segment (rotation reached facing); a scripted twist of one node relaxes with NO
+other non-contacting, non-wired node moving (locality); node angular speed is
+unbounded (a stuck-facing fixture that needed `globalRotationDof` now self-corrects
+by local spin — re-measured, not assumed, per Subsystem 4's flagged consequence).
+**Live gate**: user sees nodes spin freely to unwind wires (item 11); nothing
+action-at-a-distance (item 9).
+
+### Task 4 — trunk-as-emergent junction (Subsystem 3)
+
+Replace the shared hub point with the trunk-curve + merge-parameter model: a
+continuous trunk axis (inertial DOF) + per-leg merge parameter (DOF), carried by
+`carryOver`. NO stored trunk pair, NO argmax; the through-line is the continuous
+readout of the axis and fades to nothing at symmetry. Tributary legs are free-end
+elastica arriving tangent at their merge point on the through-line.
+
+**Laws**: zero per-frame role re-derivation (a fixture that slowly rotates a
+junction's ports produces a drawn-polyline path with NO jump > 1 wu on any leg
+across the whole rotation — the anti-snap law, the reset's core complaint); a
+symmetric 3-way junction rests with all three merge weights small and no through-line
+(trunk not enforced); a 2-leg "junction" is exactly the one through-curve.
+**Live gate**: user sees the river-with-tributaries where arms align and a plain
+meeting where they don't (item 7), and morphing (never jumping) on reorganization
+(item 8).
+
+### Task 5 — continuous transitions (Subsystem 5)
+
+`carryOver` extended to the trunk axis + merge parameters. New frame eases from old
+to new over the settle (stored frame interpolated), slots ride it. Leading
+construction projection runs once off-screen. New bodies seed near ports (already
+done — verify no regression).
+
+**Laws**: across a scripted rewrite, every surviving body's first drawn position is
+within `carryOver` tolerance of its last (glide, no teleport); the drawn frame
+dimensions interpolate monotonically old→new with no single-frame jump > bound; new
+wires' first drawn samples start near their ports (no wild spawn). **Live gate**:
+user steps a proof/replay and sees continuous morph — content glides, new parts grow
+at their ports, frame eases (item 12).
+
+### Task 6 — full-sweep-per-frame at 60 fps (Subsystem 4, part 2) — THE RISK
+
+Replace the sliced budget with a full small-step sweep every frame. This REQUIRES
+the per-sweep cost to fall ~15–25× (plan-23: 250–450 ms → ~16 ms). This task is
+MEASUREMENT-FIRST: profile the sweep, attribute the cost (expected: the grid leg
+solve inside every gated energy eval), and reduce it by PRINCIPLED means (cheaper
+localized energy, fewer evals per gated step, a solve/paint resolution split) — NOT
+by reinstating a magnitude cap or slicing (both deleted, both banned as the
+snail's-pace / hard-click hacks). If the cost cannot be brought under budget
+honestly, that is a FAILING, REPORTED state (a documented open problem), never a
+green suite hiding a cap.
+
+**Laws**: total E monotone non-increasing across every settleStep on every fixture
+(the plan-23 theorem, preserved); measured per-frame sweep cost recorded per scene;
+all previously-resting fixtures still rest. **Live gate (the acceptance gate for the
+whole plan)**: the user drives the live app on the largest bundled proof and sees
+the diagram ease to rest smoothly and quickly at interactive frame rate — no lurching
+(item 10), no snail's pace. This is the gate the mandate names; nothing is "done"
+until the user confirms it in live use.
