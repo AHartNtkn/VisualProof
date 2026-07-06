@@ -84,3 +84,57 @@ ONE energy over ALL state; ONE mover: the gated candidate step.
   sets that miss legal solutions (scan the whole feasible interval), equality-
   accepting gates (strict `<` only), aliased verification (measure per frame,
   windows longer than suspected periods, deliverable fixtures only).
+
+## Resolution (executed 2026-07-06, committed f18988f)
+
+Delivered. plusComm@16/@32 and succShiftS@48 rest legally with monotone total E
+(the three `it.fails` removed); every previously-resting fixture still rests. New
+laws (relax.test.ts `assertRestsLegalMonotone`): anchored + no region-circle
+intersection at rest + drift ≤ bound over 200 post-settle ticks + total E
+non-increasing across each of those ticks (≤1e-3; measured 0.0000). Budgets
+re-derived from time-to-rest (7800 → ~1100; ss48 2500).
+
+**The load-bearing find — legality is an UNCAPPED barrier, not a per-tick
+projection.** Removing the plan-22 per-tick `resolveOverlaps` exposed that a
+FINITE sibling barrier loses the tug-of-war with the leg tension tying two
+connected sibling cuts: MEASURED on plusComm@16, the cuts r3(102)/r5(80) rested at
+centre distance 36.8 — an overlap of ~150 wu past the needed ~192 separation —
+because the barrier force capped at BARRIER_MAX=35 while the leg pull exceeded it.
+The construction projection then "fixed" it by shoving the exit hub / a node
+~118–166 wu and raising total E ~16000 — itself a strict-descent violation. The
+cap's ONLY justification (plan-22) was that momentum could sling content into an
+unbounded barrier and exile it; that rationale died with the momentum. Uncapping
+the barrier (domain-clamped at gap+8 ≥ 0.5 so the log stays defined) makes it
+DOMINATE — the plan's "steep overlap energy term that dominates everything" — and
+per-node coordinate descent then separates the cuts (pc16 overlap ~150 → 0).
+`resolveOverlaps` survives ONLY as the construction-time discrete-event backstop
+(externally-constructed overlapping rewrites); it is never a per-tick mover.
+
+**Other execution decisions.** (a) The value-gated accept MUST use the true
+memoryless GRID leg solve — a warm fixed-turn solve UNDERCUTS the grid minimum
+(the scan is not a guaranteed global optimizer; a far-moved warm closeAt need not
+close), so a warm-lowering accept raises the true total (pc0 drift 0→37). Warm is
+used ONLY for the ±HX gradient probes (envelope-exact at the base). (b) A node's
+gate must sum the standoff of ALL its dangling ∃ tips (a `plus/3` node has two) —
+accounting for one orbits the omitted tips (threeWay conveyored an ∃ dot 24 wu).
+(c) Touched-leg samples refresh mid-sweep + `crossNear` widened by 2·travelCap
+(stale wire↔wire separation pumped a small limit cycle). (d) Boundary exit hubs
+(`e:`) excluded from region circles AND scope-ring AND both projections (frame
+terminals — projecting one shoved it 166 wu). (e) Both zero-mode quotients removed
+(injectors dead: no per-tick projection spin, no momentum net thrust).
+
+**Tick cost (uncontended):** ~25 ms/tick frameless, ~250–450 ms/tick framed
+(16–32 nodes) — up per-tick (grid gate + cap-limited separation), down in tick
+count; net faster settles.
+
+**NEXT-plan items (NOT done here):**
+1. Framed tick cost 250–450 ms wants the rotation-gate interior-invariance
+   optimization (interior legs are rotation-invariant, so hold them constant and
+   re-solve only boundary legs under the probe) — but the plan-22 "changing-terms
+   gate leaked ~32 wu" attribution must be RE-VERIFIED under this architecture
+   before trusting it (the earlier rejection may have been an implementation bug,
+   since the reference energy was proven isotropic).
+2. Re-check the live app's anytime frame budget (`SETTLE_STEPS_PER_FRAME`, the
+   8 ms loop) against the new per-tick cost so interaction stays ~60fps — the drag
+   path is cheap (pinned bodies + rotation DOF skip), but free-settling a fresh
+   big scene now costs more per tick.
