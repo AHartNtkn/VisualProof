@@ -22,9 +22,15 @@ export const WIREP = {
   sepSlope: 1.4,
   /** wire↔wire separation radius */
   sepR: 5,
-  /** junction angular-spacing weight (Plateau 120° at rest, finite height so
-      legs can swap by passing through) */
-  junctionSpread: 10,
+  /** junction TRUNK-alignment weight: pulls each hub leg's arrival direction to
+      its trunk-tangent target (the two most-opposite legs flow through the hub
+      as one continuous trunk, side legs merge tangentially — the tributary look,
+      USER LAW). Finite height so the elastica bend can shade the merge angle. */
+  junctionTrunk: 10,
+  /** trunk-axis nematic weight: how strongly a hub's trunk axis `phi` aligns to
+      its leg chord directions (the anchor that keeps `phi` tracking the geometry
+      rather than drifting; its travel cap gives the no-flip inertia). */
+  trunkAxis: 8,
   /** ∃-tip standoff radius (the dot never sinks into its own wire) */
   standoffR: 8,
   /** boundary-exit pull: the constant force drawing a boundary wire's exit hub
@@ -430,13 +436,69 @@ function sepPair(sa: readonly Vec2[], sb: readonly Vec2[]): number {
   return E
 }
 
-/** Junction angular-spacing (Plateau): pairwise, minimum when arrival
-    directions are opposite (three legs → 120° apart), FINITE height so legs
-    can swap by passing through. */
-function spreadE(angles: readonly number[]): number {
+/** Shortest signed angle to `x` (radians, in (−π, π]). */
+function wrapAngle(x: number): number { return Math.atan2(Math.sin(x), Math.cos(x)) }
+
+/** The TRUNK-TANGENT target for a hub leg (USER LAW — the round-8-D tributary
+    rule): given the leg's chord direction `dir` (hub → its port) and the hub's
+    trunk axis `phi`, the leg's arrival TRAVEL direction at the hub. Each leg is
+    pulled from its own radial direction toward the nearer end of the trunk axis
+    (`phi` or `phi+π`) by weight |cos(dir−phi)| — which is 1 for a leg lying along
+    the axis (it becomes the trunk, arriving antiparallel to the leg on the far
+    side) and 0 for a leg perpendicular to it (it stays radial). The weight
+    vanishing exactly at the perpendicular is what makes the merge CONTINUOUS: no
+    side leg can jump between axis ends. The returned value is the travel
+    direction INTO the hub (port→hub→beyond), i.e. the outgoing tangent + π. */
+export function trunkTarget(dir: number, phi: number): number {
+  const axisSide = Math.abs(wrapAngle(phi - dir)) <= Math.PI / 2 ? phi : phi + Math.PI
+  const wgt = Math.abs(Math.cos(dir - phi))
+  const outward = dir + wrapAngle(axisSide - dir) * wgt // tangent leaving the hub toward the port
+  return wrapAngle(outward + Math.PI)
+}
+
+/** The world hub point of a wire with a hub. */
+function hubPoint(e: Engine, w: WireView): Vec2 {
+  const h = w.hub!
+  return h.kind === 'point' ? h.pos : e.bodies.get(h.bodyId)!.pos
+}
+
+/** Chord direction (hub → port) of one hub leg. */
+function legChordDir(e: Engine, w: WireView, leg: WireLeg, hp: Vec2): number {
+  const bd = w.binds[leg.a.kind === 'bind' ? leg.a.i : 0]!
+  const p = worldBindAnchor(e.bodies.get(bd.body)!, bd.key)
+  return Math.atan2(p.y - hp.y, p.x - hp.x)
+}
+
+/** Junction TRUNK alignment (replaces the symmetric 120° spread): each hub leg's
+    arrival direction `hubAngle` is pulled to its `trunkTarget`, so the two
+    most-opposite legs arrive antiparallel (one continuous trunk through the hub)
+    and the rest merge tangentially. Interior hubs only — a boundary exit leg is a
+    free end (its arrival tangent is solved, not a DOF), so it takes no trunk term. */
+function trunkAlignE(e: Engine, w: WireView): number {
+  if (w.hub === null || w.slot !== null) return 0
+  const hp = hubPoint(e, w)
   let E = 0
-  for (let i = 0; i < angles.length; i++) for (let j = i + 1; j < angles.length; j++) {
-    E += (WIREP.junctionSpread * (1 + Math.cos(angles[i]! - angles[j]!))) / 2
+  for (const leg of w.legs) {
+    if (leg.b.kind !== 'hub') continue
+    const target = trunkTarget(legChordDir(e, w, leg, hp), w.phi)
+    E += (WIREP.junctionTrunk * (1 - Math.cos(leg.hubAngle - target))) / 2
+  }
+  return E
+}
+
+/** Trunk-AXIS nematic alignment: the hub axis `phi` is pulled to the nematic
+    director of its leg chord directions. This is the ONLY term `phi` appears in
+    besides `trunkAlignE`, and it is what anchors `phi` to the geometry (so it
+    tracks the layout instead of drifting); its gated travel cap gives the
+    no-flip inertia. Interior hubs only. */
+function trunkAxisE(e: Engine, w: WireView): number {
+  if (w.hub === null || w.slot !== null) return 0
+  const hp = hubPoint(e, w)
+  let E = 0
+  for (const leg of w.legs) {
+    if (leg.b.kind !== 'hub') continue
+    const dir = legChordDir(e, w, leg, hp)
+    E += (WIREP.trunkAxis * (1 - Math.cos(2 * (dir - w.phi)))) / 2
   }
   return E
 }
@@ -486,8 +548,8 @@ export function wireEnergy(e: Engine): number {
       E += legIntrinsicE(shape, samples, near)
       legSamples.push({ wid, samples })
     }
-    // junction spread over this wire's hub arrival angles
-    if (w.hub !== null) E += spreadE(w.legs.filter((l) => l.b.kind === 'hub').map((l) => l.hubAngle))
+    // junction trunk alignment + trunk-axis anchoring over this wire's hub
+    E += trunkAlignE(e, w) + trunkAxisE(e, w)
     // boundary exit hub (the slot-attracted junction body) drawn to its slot
     if (w.slot !== null && w.hub !== null && w.hub.kind === 'body' && slots !== null && slots[w.slot] !== undefined) {
       E += exitAttractE(e.bodies.get(w.hub.bodyId)!.pos, slots[w.slot]!.point)
@@ -875,10 +937,11 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     traceLeg(shape, r.samples, QN)
   }
   // The localized WIRE energy of a set of touched legs (leg intrinsic +
-  // clearance, cross-wire separation, optional junction spread + ∃-tip standoff).
+  // clearance, cross-wire separation, optional junction trunk alignment + ∃-tip
+  // standoff).
   // Content (sibling + scope-ring) and the boundary exit→slot terms are added by
   // the translation gates via contentEnergy + boundaryExitE, never here.
-  const localE = (touched: readonly LegRec[], farBody: Body | null, spreadWire: WireView | null, warm = false): number => {
+  const localE = (touched: readonly LegRec[], farBody: Body | null, hubWire: WireView | null, warm = false): number => {
     let E = 0
     const touchedSet = new Set(touched.map((r) => r.gi))
     const probeSamples = new Map<number, Vec2[]>()
@@ -903,7 +966,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
         E += legClearance(r.samples, r.shape.sol.L, r.shape.ownA, r.shape.ownB, near1)
       }
     }
-    if (spreadWire !== null) E += spreadE(spreadWire.legs.filter((l) => l.b.kind === 'hub').map((l) => l.hubAngle))
+    if (hubWire !== null) E += trunkAlignE(e, hubWire)
     // ∃-tip standoff for EVERY touched tip leg: a node with several dangling ∃
     // ports moves ALL their port anchors at once, so its gate must see all their
     // standoffs — accounting for only one lowers a wrong proxy and orbits the
@@ -968,6 +1031,18 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     dofs.push(() => {
       gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, light ? 0.55 : 0.28)
       for (const r of touched) refresh(r)
+    })
+  }
+  // trunk-AXIS DOF (interior hubs): the hub orientation `phi` is a stiff/slow
+  // gated angle (cap 0.06 = the no-flip inertia) over the ONLY terms it enters —
+  // trunk-axis nematic anchoring + trunk alignment. Cheap: no leg re-solve, since
+  // `phi` shapes no leg directly (it only moves each leg's arrival TARGET, which
+  // the per-leg angle DOF then chases).
+  for (const [wid, w] of e.wires) {
+    void wid
+    if (w.hub === null || w.slot !== null) continue
+    dofs.push(() => {
+      gatedStep(() => w.phi, (v) => { w.phi = v }, () => trunkAxisE(e, w) + trunkAlignE(e, w), HX / 8, MU / 64, 0.06)
     })
   }
   // hub points (branch junctions)

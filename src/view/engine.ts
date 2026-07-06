@@ -105,6 +105,13 @@ export type WireView = {
   readonly tipBodyId: string | null
   readonly slot: number | null
   readonly legs: WireLeg[]
+  /** The hub's TRUNK AXIS (radians): the relaxed orientation along which the two
+      most-opposite legs flow through as one continuous trunk while side legs
+      merge tangentially (the tributary look, USER LAW). A DOF with inertia
+      (gated descent + travel cap, so it never flips frame-to-frame), driven by
+      the nematic alignment of the leg chord directions (relax.ts). Meaningful
+      only for an interior hub (hub !== null && slot === null); 0 otherwise. */
+  phi: number
 }
 
 /** A region's drawn circle. `support` lists the direct items (member body or
@@ -176,6 +183,16 @@ export function subtreeCarriers(e: Engine, rid: RegionId): string[] {
   const out = [...e.membersOf.get(rid)!]
   for (const c of e.childrenOf.get(rid)!) out.push(...subtreeCarriers(e, c))
   return out
+}
+
+/** The nematic director of a set of directions: the axis (mod π) best aligned
+    with them, `½·atan2(Σ sin2θ, Σ cos2θ)`. Degenerate (returns 0) only for a
+    perfectly isotropic set, where every axis is equally good. Used to seed and
+    anchor a hub's trunk axis to its leg chord directions. */
+export function nematicDir(dirs: readonly number[]): number {
+  let sc = 0, ss = 0
+  for (const a of dirs) { sc += Math.cos(2 * a); ss += Math.sin(2 * a) }
+  return 0.5 * Math.atan2(ss, sc)
 }
 
 export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
@@ -323,7 +340,14 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       hub = { kind: 'point', pos: h }
       for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, h)))
     }
-    wires.set(wid, { binds, hub, tipBodyId, slot, legs })
+    // seed the trunk axis at the nematic director of the interior hub's chord
+    // directions (so the trunk lands aligned instead of swinging in from 0)
+    let phi = 0
+    if (hub !== null && !isBoundary) {
+      const hp = hub.kind === 'point' ? hub.pos : bodies.get(hub.bodyId)!.pos
+      phi = nematicDir(anchorPos.map((p) => Math.atan2(p.y - hp.y, p.x - hp.x)))
+    }
+    wires.set(wid, { binds, hub, tipBodyId, slot, legs, phi })
   }
 
   return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), tick: 0, descentCursor: 0 }
@@ -359,6 +383,7 @@ export function carryOver(prev: Engine, next: Engine): void {
     for (let k = 0; k < nv.legs.length && k < pv.legs.length; k++) {
       nv.legs[k]!.hubAngle = pv.legs[k]!.hubAngle
     }
+    nv.phi = pv.phi
   }
 }
 

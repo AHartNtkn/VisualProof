@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine, worldBindAnchor, resolveLeg, traceLeg, frameBounds, frameSlots, type Engine, type WireView, type WireLeg } from '../../src/view/engine'
-import { settle, settleStep, wireEnergy, WIREP } from '../../src/view/relax'
+import { settle, settleStep, wireEnergy, WIREP, trunkTarget } from '../../src/view/relax'
 import { thetaRange, RANGE_B, QN, ELASTICA } from '../../src/view/elastica'
 import { computeLegs, existentialStubs, boundaryExits } from '../../src/view/wires'
 
@@ -309,16 +309,41 @@ describe('wire physics — equilibria', () => {
     expect(moved, 'the free end must move (not parked)').toBeGreaterThanOrEqual(5)
   })
 
-  it('a free-space 3-way junction spreads its arrival directions toward 120° (Plateau)', () => {
-    // three refs far apart around one hub, no interposed discs: the hub's three
-    // hub-leg arrival directions relax toward mutual 120° (finite spread energy,
-    // so the elastica bend torque can shift each by a bounded margin)
-    const e = settled(threeWay, 12000)
+  it('the trunk-tangent rule (round-8-D): two most-opposite legs flow through as one trunk, side legs merge tangentially', () => {
+    // The USER LAW ruled 2026-07-06: a k-way junction must NOT read as a
+    // 120°-symmetric star ("everything just going to a single point"). Each hub
+    // leg's arrival direction is pulled to its trunkTarget along the hub's trunk
+    // axis phi. Directly on the pure rule (no settling): two collinear legs
+    // (chord dirs 0 and π) on axis phi=0 must arrive ANTIPARALLEL — one
+    // continuous trunk straight through the hub.
+    const deg = (r: number) => (r * 180) / Math.PI
+    const between = (a: number, b: number): number => { let d = Math.abs(deg(a) - deg(b)) % 360; if (d > 180) d = 360 - d; return d }
+    const tTrunkA = trunkTarget(0, 0)
+    const tTrunkB = trunkTarget(Math.PI, 0)
+    expect(between(tTrunkA, tTrunkB), 'two on-axis legs arrive antiparallel (a continuous trunk)').toBeGreaterThanOrEqual(179)
+    // a leg perpendicular to the axis takes NO pull (weight |cos|=0) — its
+    // outgoing tangent (target+π) stays exactly radial, so a side branch crossing
+    // the axis can never jump between ends (the merge is continuous)
+    const outPerp = trunkTarget(Math.PI / 2, 0) + Math.PI
+    expect(between(Math.atan2(Math.sin(outPerp), Math.cos(outPerp)), Math.PI / 2), 'a perpendicular leg is not pulled (continuity at the flip)').toBeLessThan(1)
+    // an OFF-axis side leg (60° off) is pulled TOWARD the axis but not all the way
+    // (partial weight) — the tributary merge. Its outgoing tangent (target+π) sits
+    // between its radial chord and the axis.
+    const dirSide = (60 * Math.PI) / 180
+    const outSide = trunkTarget(dirSide, 0) + Math.PI // outgoing tangent from hub toward port
+    expect(deg(Math.atan2(Math.sin(outSide), Math.cos(outSide))), 'side leg merges tangentially (pulled toward the 0 axis, not left radial)').toBeLessThan(60)
+    expect(deg(Math.atan2(Math.sin(outSide), Math.cos(outSide))), 'side leg is not pulled all the way to the axis').toBeGreaterThan(0)
+  })
+
+  it('a settled junction pulls two legs past the 120° star toward a trunk', () => {
+    // Wired into the physics (not just the pure rule): the symmetric threeWay has
+    // no geometrically-preferred trunk, yet the trunk energy still pulls its two
+    // nearest-axis legs BEYOND the 120° a Plateau star would rest at — the most-
+    // opposite arrival pair exceeds 120°, so the junction no longer reads as a
+    // symmetric point-star. (Asymmetric junctions form a far stronger trunk; see
+    // the pure-rule test and the app screenshots.)
+    const e = settled(threeWay, 6000)
     const w = [...e.wires.values()].find((x) => x.hub !== null)!
-    const hub = w.hub!
-    const hubPos = hub.kind === 'point' ? hub.pos : e.bodies.get(hub.bodyId)!.pos
-    // the drawn arrival direction of each hub leg = the tangent of its traced
-    // polyline as it reaches the hub
     const dirs: number[] = []
     for (const leg of w.legs) {
       if (leg.b.kind !== 'hub') continue
@@ -329,15 +354,10 @@ describe('wire physics — equilibria', () => {
       dirs.push(Math.atan2(a.y - prev.y, a.x - prev.x))
     }
     expect(dirs).toHaveLength(3)
-    void hubPos
-    // the three sorted arrival directions have cyclic gaps ~120° each, within a
-    // bounded elastica-bend margin (finite spread energy shifts the soap-film
-    // Plateau angle)
-    const sorted = [...dirs].sort((x, y) => x - y)
-    for (let k = 0; k < 3; k++) {
-      const gap = (sorted[(k + 1) % 3]! - sorted[k]! + (k === 2 ? 2 * Math.PI : 0))
-      expect(Math.abs(gap - (2 * Math.PI) / 3), `spread gap ${k} = ${(gap * 180 / Math.PI).toFixed(0)}°`).toBeLessThanOrEqual((35 * Math.PI) / 180)
-    }
+    const between = (a: number, b: number): number => { let d = Math.abs((a - b) * 180 / Math.PI) % 360; if (d > 180) d = 360 - d; return d }
+    let mostOpp = 0
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) mostOpp = Math.max(mostOpp, between(dirs[i]!, dirs[j]!))
+    expect(mostOpp, `most-opposite pair ${mostOpp.toFixed(0)}° must exceed the 120° star`).toBeGreaterThan(128)
   })
 })
 
