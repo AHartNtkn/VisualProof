@@ -191,3 +191,17 @@ because the app path is untested here.
    vs wires that simply overlap") is visibly back at that density near hubs. Needs
    a hub-locality legibility term (e.g. angular fanning / lane spreading on the
    arrival bundle) beyond the current pairwise separation.
+5. CONSTRUCTION-TIME LEG BRANCH FLIP (measured 2026-07-06, during the FRAME_CAP
+   smoothness fix): the frame-granular trust region (`FRAME_CAP`, per-frame DOF
+   caps) makes free settling glide sub-pixel, BUT it cannot bound a discontinuity
+   in the leg SOLVE itself. Measured on plusComm.rhs via settleStepBudget + a
+   per-drawn-point diff: exactly ONE ~10 wu jump of a single leg's traced polyline
+   at ~frame 9 — a branch flip in the memoryless elastica grid (elastica.ts) as the
+   dense spiral seed reorganizes and a leg's minimum-energy θ-branch changes
+   discretely. It is a ONE-TIME construction transient: zero drawn-leg jumps > 1 wu
+   after ~frame 120, free settling stays ≤0.45 wu/frame. A visible click only when a
+   scene FIRST appears, not during ongoing interaction. Fix needs a principled
+   continuous treatment of the energy-tie neighborhood in the leg solve (e.g. a
+   branch-continuation/hysteresis on the grid argmin so the shape morphs through the
+   tie instead of snapping), NOT a DOF cap — the flip is in the solve, not a DOF.
+   Deliberately NOT patched blind (USER: report energy-tie flips before inventing).
