@@ -14,7 +14,7 @@ import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
-import { settleStepBudget, recomputeRegions, resolveOverlaps } from '../view/relax'
+import { settleStepBudget, recomputeRegions, resolveOverlaps, clampDragToFeasible } from '../view/relax'
 import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
@@ -1242,11 +1242,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (pin !== null) {
       // a drag pins the grabbed carriers: hold them at their grab offsets from the
       // cursor (they are excluded from every gate, so the layout relaxes around
-      // them); the offsets are the drag CONSTRAINT, projected to legality below.
+      // them). The pinned position is a CONSTRAINT projected onto the semantic-
+      // feasible set — HARD SEMANTIC CONTAINMENT (USER LAW): a dragged node can
+      // never cross into a cut it isn't part of, not even transiently, because that
+      // would change what the diagram MEANS. clampDragToFeasible keeps each body
+      // outside every region circle it is not a member of, every frame.
       const at = toWorld(pin.screen)
       for (const [id, off] of pin.drag.bodies) {
         const b = engine.bodies.get(id)
-        if (b !== undefined) b.pos = { x: at.x + off.x, y: at.y + off.y }
+        if (b !== undefined) b.pos = clampDragToFeasible(engine, b, { x: at.x + off.x, y: at.y + off.y })
       }
     }
     fitView()
@@ -1438,8 +1442,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       view(): { scale: number; offsetX: number; offsetY: number } {
         return { ...view }
       },
-      bodies(): { id: string; kind: string; x: number; y: number; r: number }[] {
-        return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR }))
+      bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[] {
+        return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region }))
+      },
+      // Derived region circles (the drawn cut/bubble outlines) — the e2e uses these
+      // to assert HARD SEMANTIC CONTAINMENT (a dragged node never enters a cut
+      // circle it is not a member of).
+      regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[] {
+        return [...engine.regions.entries()].map(([id, g]) => {
+          const reg = displayed.regions[id]
+          return { id, kind: reg?.kind ?? '?', parent: reg !== undefined && reg.kind !== 'sheet' ? reg.parent : null, x: g.center.x, y: g.center.y, r: g.radius }
+        })
       },
       // Verified-hittable world points for every rendered wire — the locator the
       // e2e uses to click argument wires, exactly as bodies() locates nodes. Each

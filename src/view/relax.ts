@@ -667,6 +667,40 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
   return { x, y }
 }
 
+/** Project a DRAGGED body's target position onto the SEMANTIC-feasible set: the
+    body must stay OUTSIDE every region circle it is not a member of. This is HARD
+    SEMANTIC CONTAINMENT (USER LAW): a node crossing into a cut it isn't part of
+    CHANGES WHAT THE DIAGRAM MEANS, so it must not happen even transiently during a
+    drag. The body is already inside its OWN region by construction — region circles
+    are DERIVED to contain their members, so the region follows the dragged body —
+    hence only the "outside non-member circles" half needs projecting. `p` is the
+    unguarded cursor target; every non-ancestor cut/bubble circle pushes the body's
+    disc fully clear with the sibling gap (the same bound the settling projection
+    uses, so releasing the drag adds no jump). Ancestors of the body's region (the
+    cuts it IS inside) are exempt, as is a wire-owned dot's disc clearance (the wire
+    barrier owns that) — a dot only clears the circle itself. */
+export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
+  if (b.id.startsWith('e:')) return p // frame terminal — no region legality
+  const ancestors = new Set<RegionId>()
+  for (let r = b.region; ;) {
+    ancestors.add(r)
+    const reg = e.d.regions[r]!
+    if (reg.kind === 'sheet') break
+    r = reg.parent
+  }
+  const owned = b.kind === 'junction'
+  let x = p.x, y = p.y
+  for (const [rid, g] of e.regions) {
+    if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
+    const need = owned ? g.radius : b.discR + g.radius + PACE.sibGap
+    const dx = x - g.center.x, dy = y - g.center.y, d = Math.hypot(dx, dy)
+    if (d >= need) continue
+    const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
+    x = g.center.x + ux * need; y = g.center.y + uy * need
+  }
+  return { x, y }
+}
+
 /** One resolved leg at its base (warm-cache) state, plus what it needs for the
     localized gradient: its samples, the discs near it, and its wire. */
 type LegRec = { readonly wid: string; readonly w: WireView; readonly leg: WireLeg; readonly gi: number; readonly shape: LegShape; readonly samples: Vec2[]; readonly near: DiscRec[] }
