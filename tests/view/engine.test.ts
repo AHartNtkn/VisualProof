@@ -171,14 +171,13 @@ describe('frameSlots — canonical boundary slots on the rounded-rect perimeter'
 })
 
 describe('carryOver', () => {
-  it('shared body ids inherit pos/vel/theta from the previous engine', () => {
+  it('shared body ids inherit pos/theta from the previous engine', () => {
     const { d, boundary } = nat()
     const prev = mkEngine(d, boundary)
     // perturb prev so the carried state is unmistakably NOT a fresh seed
     let t = 0
     for (const b of prev.bodies.values()) {
       b.pos = { x: 42 + t, y: -7 - t }
-      b.vel = { x: 1 + t, y: 2 }
       b.theta = 0.5 + t
       t++
     }
@@ -188,7 +187,6 @@ describe('carryOver', () => {
     for (const [id, nb] of next.bodies) {
       const pb = prev.bodies.get(id)!
       expect(nb.pos).toEqual(pb.pos)
-      expect(nb.vel).toEqual(pb.vel)
       expect(nb.theta).toBe(pb.theta)
     }
   })
@@ -202,7 +200,6 @@ describe('carryOver', () => {
     for (const [id, nb] of next.bodies) {
       const rb = reference.bodies.get(id)!
       expect(nb.pos).toEqual(rb.pos)
-      expect(nb.vel).toEqual(rb.vel)
       expect(nb.theta).toBe(rb.theta)
     }
   })

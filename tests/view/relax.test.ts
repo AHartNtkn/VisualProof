@@ -5,7 +5,8 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
-import { settle, settleStep } from '../../src/view/relax'
+import type { Engine } from '../../src/view/engine'
+import { settle, settleStep, totalEnergy } from '../../src/view/relax'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
 
@@ -43,30 +44,63 @@ function anyOverlap(e: { regions: Map<string, { center: { x: number; y: number }
   return false
 }
 
+/**
+ * The plan-23 strict-descent contract on a settled fixture, all four properties
+ * from ONE settle (each framed settle is expensive):
+ *   (a) ANCHORED — every body inside the trivial packing bound (no runaway).
+ *   (b) LEGAL — no two region circles partially intersect (the USER hard law).
+ *   (c) RESTS — max body drift over 200 further ticks ≤ `driftBound` (settle-and-
+ *       stay). Bounds RE-DERIVED from THIS model's measured drift (USER policy),
+ *       measured 2026-07-06: ~0.0 on every fixture; pinned at 1.5 with margin.
+ *   (d) MONOTONE — total energy is non-increasing across every one of those 200
+ *       post-settle ticks (the USER's "the system does not change if it doesn't
+ *       lower energy", now a THEOREM of the one-gated-mover architecture; measured
+ *       post-settle max single-step rise 0.0000, pinned at 1e-3 for float noise).
+ *       This is the pin that catches any un-gated mover sneaking back in — a limit
+ *       cycle shows as a sustained rise. (It is asserted at rest, where the derived
+ *       enclosing-circle/frame geometry is stationary; during the seed transient a
+ *       minimal-enclosing-circle support switch is a legitimate re-fit, not a
+ *       mover, so strict per-step monotonicity there is not the claim.)
+ */
+function assertRestsLegalMonotone(name: string, e: Engine, driftBound: number): void {
+  const discSum = [...e.bodies.values()].reduce((s, b) => s + 2 * b.discR + 20, 0)
+  for (const b of e.bodies.values()) {
+    const dist = Math.hypot(b.pos.x, b.pos.y)
+    expect(dist, `${name}: body ${b.id} at ${dist.toFixed(0)} — content flew away (packing bound ${discSum.toFixed(0)})`).toBeLessThanOrEqual(discSum)
+  }
+  expect(anyOverlap(e), `${name}: region circles partially overlap at rest`).toBe(false)
+  const before = new Map([...e.bodies].map(([id, b]) => [id, { ...b.pos }]))
+  let prevE = totalEnergy(e), maxRise = 0
+  for (let i = 0; i < 200; i++) { settleStep(e); const cur = totalEnergy(e); maxRise = Math.max(maxRise, cur - prevE); prevE = cur }
+  for (const [id, b] of e.bodies) {
+    const moved = Math.hypot(b.pos.x - before.get(id)!.x, b.pos.y - before.get(id)!.y)
+    expect(moved, `${name}: body ${id} moved ${moved.toFixed(2)} over 200 post-settle ticks`).toBeLessThanOrEqual(driftBound)
+  }
+  expect(maxRise, `${name}: total E rose ${maxRise.toFixed(4)} in a post-settle tick (un-gated mover?)`).toBeLessThanOrEqual(1e-3)
+}
+
 describe('law 1 — containment: no two region circles ever intersect', () => {
   for (const [name, d, boundary] of cases) {
     it(`holds after settle for ${name}`, () => {
       const e = mkEngine(d, boundary)
-      settle(e, 2600)
+      settle(e, 1100)
       expect(anyOverlap(e), `regions overlap in ${name}`).toBe(false)
     })
   }
 
-  // The bundled theorem sides are sparse enough that soft repulsion alone keeps
-  // their region circles legal, so they do NOT exercise the hard overlap
-  // projection. This dense case DOES: many sibling cuts are pulled together by
-  // cohesion until, at the soft-force equilibrium, their circles partially
-  // overlap — only resolveOverlaps (the projection in settleStep/settle) makes
-  // the drawing legal. Removing that projection makes THIS assertion fail, which
-  // is what pins law 1 to its mechanism.
-  it('holds for a dense sheet of sibling cuts (requires overlap projection)', () => {
+  // The legality STRESS case: ten sibling cuts pulled together by cohesion. Under
+  // plan 23 the UNCAPPED sibling barrier (sibU) dominates that pull, so the strict
+  // descent rests them disjoint on its own, and `settle`'s construction-time
+  // projection is the discrete-event backstop for any externally-constructed
+  // overlap. Either way the drawing must be legal at rest.
+  it('holds for a dense sheet of sibling cuts', () => {
     const h = new DiagramBuilder()
     for (let c = 0; c < 10; c++) {
       const cut = h.cut(h.root)
       for (let i = 0; i < 3; i++) h.termNode(cut, idp('\\x. x'))
     }
     const e = mkEngine(h.build(), [])
-    settle(e, 2600)
+    settle(e, 1100)
     expect(anyOverlap(e), 'dense sibling cuts must not partially overlap').toBe(false)
   })
 })
@@ -103,82 +137,50 @@ describe('law 7 (PLAN 22 form) — junction-kind bodies are exactly the wire-own
   }
 })
 
-describe('settle — replay steps: content stays anchored, and rests where the model can', () => {
-  // A legal settled layout must ALWAYS stay anchored near the origin within the
-  // trivial packing bound (every body inside a chain of discs at the rest gap) —
-  // reproduces the historical plusComm step-25 runaway (a cluster flying at ~9
-  // u/tick). And it must REST (settle-and-stay, USER law), bound RE-DERIVED from
-  // this model's measured drift (USER test policy — never inherit old numbers):
-  // measured 2026-07-05 (full-grid gate, settle 7800, 50 post-settle ticks):
-  //   plusComm@0 0.03, @48 0.40, @64(=stepCount) 0.05 → rest, pinned at 2.
-  //
-  // KNOWN-BROKEN FIXTURES (it.fails — the FIXTURE does not rest, the TEST is
-  // correct to demand it): plusComm@16 (50-tick drift 4.24, 200-tick 55.47) and
-  // @32 (drift50 3.83, 200 15.38) are exit-hub LIMIT CYCLES — E swings ~1500 as
-  // the exit hubs oscillate where one global content rotation cannot face all
-  // three ports at their slots. Root cause is the non-gated content momentum
-  // integrator + overlap projection re-exciting the gated wire descent; the fix
-  // is the strict-total-energy-descent conversion (USER ruling 2026-07-05),
-  // scoped as PLAN 23. it.fails keeps the suite honest AND green, and flips to a
-  // real failure the day plan 23 makes these rest (prompting removal of it.fails).
+describe('settle — replay steps: content stays anchored, legal, rests, and E is monotone', () => {
+  // Every replayed plusComm step must stay anchored (no runaway — reproduces the
+  // historical step-25 cluster flying at ~9 u/tick), rest legally, and descend
+  // total E monotonically at rest. plusComm@16 and @32 were plan-22 exit-hub LIMIT
+  // CYCLES (documented it.fails, drift 55/15 over 200 ticks); the plan-23 strict-
+  // total-energy-descent conversion (USER ruling) makes them genuine rests — the
+  // it.fails are GONE. Budget RE-DERIVED from this model's measured time-to-rest
+  // (USER policy): measured 2026-07-06, the slowest plusComm step rests by ~640
+  // ticks; settled at 1100 with margin (was 7800 for the non-converging cycles).
   const r = mkReplay(plusCommThm, bootCtx)
-  const brokenFixture = new Set([16, 32]) // exit-hub limit cycle — plan 23
   for (const k of [0, 16, 32, 48, r.stepCount]) {
-    const runner = brokenFixture.has(k) ? it.fails : it
-    runner(`plusComm step ${k} stays anchored and rests${brokenFixture.has(k) ? ' [KNOWN-BROKEN FIXTURE: exit-hub limit cycle → plan 23]' : ''}`, () => {
+    it(`plusComm step ${k} stays anchored, rests legally, E monotone`, () => {
       const e = mkEngine(r.diagramAt(k), r.boundary)
-      settle(e, 7800)
-      const discSum = [...e.bodies.values()].reduce((s, b) => s + 2 * b.discR + 20, 0)
-      for (const b of e.bodies.values()) {
-        const dist = Math.hypot(b.pos.x, b.pos.y)
-        expect(dist, `body ${b.id} at distance ${dist.toFixed(0)} — content flew away (packing bound ${discSum.toFixed(0)})`).toBeLessThanOrEqual(discSum)
-      }
-      const before = new Map([...e.bodies].map(([id, b]) => [id, { ...b.pos }]))
-      for (let i = 0; i < 50; i++) settleStep(e)
-      for (const [id, b] of e.bodies) {
-        const p = before.get(id)!
-        const moved = Math.hypot(b.pos.x - p.x, b.pos.y - p.y)
-        expect(moved, `body ${id} moved ${moved.toFixed(2)} in 50 post-settle ticks`).toBeLessThanOrEqual(2)
-      }
+      settle(e, 1100)
+      assertRestsLegalMonotone(`plusComm@${k}`, e, 1.5)
     })
   }
 })
 
 describe('settle — observed jitter reproductions (live feel reports)', () => {
   // The user's original settling complaints, restated for the massless-elastica
-  // model. Bounds RE-DERIVED from this model's measured drift over 200 post-settle
-  // ticks (USER test policy — never inherit the old chain suite's numbers):
-  //   measured 2026-07-05 (full-grid gate, settle 7800):
-  //   plusComm@20 0.44, succShiftS@24 0.65 → rest, pinned at 1.5.
-  // The gated global-rotation DOF turns each boundary port toward its slot,
-  // dissolving the blind-cone coils that used to flap these diagrams.
-  //
-  // KNOWN-BROKEN FIXTURE (it.fails — the FIXTURE does not rest, the TEST is right
-  // to demand it): succShiftS@48 drifts 114.73 over 200 ticks (it RESTED at 4.58
-  // BEFORE the rotation DOF — the DOF is a scene-dependent trade). Same exit-hub
-  // limit cycle as plusComm@16/@32: a non-gated content integrator + projection
-  // re-exciting the gated wire descent. Fix = strict-total-energy-descent
-  // conversion (USER ruling 2026-07-05), scoped as PLAN 23; it.fails flips to a
-  // real failure the day plan 23 makes it rest.
+  // model under strict total-energy descent. succShiftS@48 was a plan-22
+  // documented it.fails (drifted 114.73 over 200 ticks — it RESTED before the
+  // rotation DOF, which was a scene-dependent trade); the plan-23 conversion makes
+  // it a genuine rest and the it.fails is GONE.
   const succShiftS = bootCtx.theorems.get('succShiftS')!
-  const jitterCases: [string, number, () => { d: Diagram; b: readonly WireId[] }, number, boolean][] = [
-    ['plusComm@20', 7800, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }, 1.5, false],
-    ['succShiftS@24', 7800, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }, 1.5, false],
-    ['succShiftS@48', 7800, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }, 2, true],
+  // budget per fixture = measured time-to-rest + margin (2026-07-06): the uncapped
+  // sibling barrier separates the connected cuts by cap-limited gated steps, so a
+  // large diagram (succShiftS@48, 32 bodies) settles slower than the small ones.
+  // [name, settle budget, drift bound, builder]. succShiftS@48 (32 bodies, the
+  // largest scene) has a slower residual tail — its content descends monotonically
+  // but a few nodes make ~1-wu discrete descents late; its drift bound is measured
+  // (2026-07-06) at that larger settled value with margin, per USER test policy.
+  const jitterCases: [string, number, number, () => { d: Diagram; b: readonly WireId[] }][] = [
+    ['plusComm@20', 1100, 1.5, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }],
+    ['succShiftS@24', 1100, 1.5, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }],
+    ['succShiftS@48', 2500, 3, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }],
   ]
-  for (const [name, budget, mk, bound, broken] of jitterCases) {
-    const runner = broken ? it.fails : it
-    runner(`${name} rests (<=${bound} over 200 post-settle ticks)${broken ? ' [KNOWN-BROKEN FIXTURE: exit-hub limit cycle → plan 23]' : ''}`, () => {
+  for (const [name, budget, bound, mk] of jitterCases) {
+    it(`${name} rests legally with monotone E over 200 post-settle ticks`, () => {
       const { d, b } = mk()
       const e = mkEngine(d, b)
       settle(e, budget)
-      const before = new Map([...e.bodies].map(([id, bb]) => [id, { ...bb.pos }]))
-      for (let i = 0; i < 200; i++) settleStep(e)
-      for (const [id, bb] of e.bodies) {
-        const p = before.get(id)!
-        const moved = Math.hypot(bb.pos.x - p.x, bb.pos.y - p.y)
-        expect(moved, `body ${id} moved ${moved.toFixed(2)} over 200 post-settle ticks`).toBeLessThanOrEqual(bound)
-      }
+      assertRestsLegalMonotone(name, e, bound)
     })
   }
 })
@@ -213,7 +215,6 @@ describe('settleStep — drag pin', () => {
       settleStep(e, new Set([a]))
       const pa = e.bodies.get(a)!
       pa.pos = { ...pinPos }
-      pa.vel = { x: 0, y: 0 }
     }
     const pinned = e.bodies.get(a)!
     expect(pinned.pos).toEqual(pinPos) // held exactly at the cursor
@@ -276,7 +277,6 @@ describe('settleStep — live-loop safety (bounded, non-diverging energy)', () =
         settleStep(e, new Set([a]))
         const pa = e.bodies.get(a)!
         pa.pos = { ...pinPos }
-        pa.vel = { x: 0, y: 0 }
       }
       let total = 0
       for (const id of free) {

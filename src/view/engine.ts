@@ -46,12 +46,7 @@ export type Body = {
   readonly discR: number
   readonly region: RegionId
   pos: Vec2
-  vel: Vec2
   theta: number
-  /** angular velocity (plan 22): rotation carries momentum so a wrenched node
-      can glide across a torque ridge rather than stall in a distorted minimum
-      (the demo's documented small-step limitation). */
-  omega: number
 }
 
 /** key null = the body's centre (junctions have no ports). */
@@ -76,20 +71,19 @@ export type WireLegEnd =
 /** One leg of a wire: the massless θ-quadratic from terminal `a` (a port bind,
     exiting along its normal) to terminal `b` (hub / another bind / ∃ tip /
     boundary exit). `hubAngle` is the arrival DIRECTION at a hub end (a wire
-    DOF with its own momentum); `cache` memoizes the solve on the exact
+    DOF descended by the gated step); `cache` memoizes the solve on the exact
     boundary tuple. */
 export type WireLeg = {
   readonly a: WireLegEnd
   readonly b: WireLegEnd
   hubAngle: number
-  hubAngleVel: number
   readonly cache: LegCache
 }
 
 /** The branch point of a k-ary wire: a wire-owned relaxation POINT (pure
     junction), or the homed ∀ body (the via-body shape). */
 export type WireHub =
-  | { readonly kind: 'point'; pos: Vec2; vel: Vec2 }
+  | { readonly kind: 'point'; pos: Vec2 }
   | { readonly kind: 'body'; readonly bodyId: string }
 
 /** A wire's complete view-state (plan 22): the port binds, an optional branch
@@ -206,7 +200,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       // a port pointing exactly away from its fixed boundary slot then sits at
       // the energy's unstable maximum with a symmetric (zero) rotation
       // gradient and cannot roll off. A generic seed breaks the symmetry.
-      pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, vel: { x: 0, y: 0 }, theta: (i + 1) * 2.399963, omega: 0,
+      pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: (i + 1) * 2.399963,
     })
     i++
   }
@@ -233,7 +227,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       bodies.set(aid, {
         id: aid, kind: 'anchor', node: null, geometry: null,
         localAnchor: new Map(), discR: 5, region: rid,
-        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, vel: { x: 0, y: 0 }, theta: 0, omega: 0,
+        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: 0,
       })
       membersOf.get(rid)!.push(aid)
       i++
@@ -259,14 +253,14 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     const b: Body = {
       id, kind: 'junction', node: null, geometry: null,
       localAnchor: new Map(), discR: 4.5, region,
-      pos: seed, vel: { x: 0, y: 0 }, theta: 0, omega: 0,
+      pos: seed, theta: 0,
     }
     bodies.set(id, b)
     membersOf.get(region)!.push(id)
     return b
   }
   const mkLeg = (a: WireLegEnd, b: WireLegEnd, angle: number): WireLeg =>
-    ({ a, b, hubAngle: angle, hubAngleVel: 0, cache: mkLegCache() })
+    ({ a, b, hubAngle: angle, cache: mkLegCache() })
   const seedAngle = (p: Vec2, h: Vec2): number => Math.atan2(h.y - p.y, h.x - p.x)
 
   for (const [wid, w] of Object.entries(d.wires)) {
@@ -322,7 +316,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     } else {
       // a pure k-ary junction: a wire-owned hub point
       const h = centroid()
-      hub = { kind: 'point', pos: h, vel: { x: 0, y: 0 } }
+      hub = { kind: 'point', pos: h }
       for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, h)))
     }
     wires.set(wid, { binds, hub, tipBodyId, slot, legs })
@@ -332,9 +326,9 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
 }
 
 /**
- * Transplant the physics state of every body shared between two engines. When a
+ * Transplant the layout state of every body shared between two engines. When a
  * new engine is built for the next diagram in a replay, bodies whose id survives
- * (nodes keyed by NodeId, junctions by `j:<wireId>`) keep their pos/vel/theta so
+ * (nodes keyed by NodeId, junctions by `j:<wireId>`) keep their pos/theta so
  * the layout glides from where it was rather than re-seeding from the spiral.
  * Bodies present only in `next` keep their deterministic mkEngine seeds. Vec2 is
  * treated as an immutable value here, matching relax.ts's replace-not-mutate
@@ -345,12 +339,10 @@ export function carryOver(prev: Engine, next: Engine): void {
     const pb = prev.bodies.get(id)
     if (pb === undefined) continue
     nb.pos = pb.pos
-    nb.vel = pb.vel
     nb.theta = pb.theta
-    nb.omega = pb.omega
   }
   // wires glide too: a surviving wire with the same bind signature keeps its
-  // hub/exit position+velocity and per-leg arrival angles instead of re-seeding.
+  // hub/exit position and per-leg arrival angles instead of re-seeding.
   // The legs' geometry is memoryless (recomputed), so only the DOF carry.
   const sig = (v: WireView): string =>
     [...v.binds.map((b) => `${b.body}:${b.key}`), v.hub === null ? '-' : v.hub.kind, v.tipBodyId ?? '-', v.slot ?? '-'].join('|')
@@ -359,11 +351,9 @@ export function carryOver(prev: Engine, next: Engine): void {
     if (pv === undefined || sig(pv) !== sig(nv)) continue
     if (nv.hub !== null && nv.hub.kind === 'point' && pv.hub !== null && pv.hub.kind === 'point') {
       nv.hub.pos = pv.hub.pos
-      nv.hub.vel = pv.hub.vel
     }
     for (let k = 0; k < nv.legs.length && k < pv.legs.length; k++) {
       nv.legs[k]!.hubAngle = pv.legs[k]!.hubAngle
-      nv.legs[k]!.hubAngleVel = pv.legs[k]!.hubAngleVel
     }
   }
 }

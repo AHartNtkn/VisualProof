@@ -1231,7 +1231,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           const b = engine.bodies.get(id)
           if (b !== undefined) {
             b.pos = { x: at.x + off.x, y: at.y + off.y }
-            b.vel = vec(0, 0)
           }
         }
       }
