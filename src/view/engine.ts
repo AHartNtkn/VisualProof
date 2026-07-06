@@ -126,6 +126,10 @@ export type Engine = {
   regions: Map<RegionId, RegionCircle>
   /** relaxation tick counter (drives overlap-projection cadence, determinism). */
   tick: number
+  /** resume index into a time-sliced descent sweep (the app's anytime frame
+      budget): the next DOF the budgeted stepper processes. 0 between sweeps and
+      for the un-sliced full `settleStep`. */
+  descentCursor: number
 }
 
 /** Local anatomy scale per node kind — atoms and terms are drawn larger so
@@ -322,7 +326,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     wires.set(wid, { binds, hub, tipBodyId, slot, legs })
   }
 
-  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), tick: 0 }
+  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), tick: 0, descentCursor: 0 }
 }
 
 /**

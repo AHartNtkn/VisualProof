@@ -45,7 +45,7 @@ export const WIREP = {
  * USER's ruling "the system does not change if it doesn't lower energy"). ONE
  * energy over ALL state — the wires (`wireEnergy`) plus the content (`sibling
  * spacing + scope-ring, `contentEnergy`) — and ONE mover: a strictly E-gated
- * per-DOF coordinate step (`descentPass` + the global-rotation DOF). No velocity,
+ * per-DOF coordinate step (the `descentDofs` sweep + the global-rotation DOF). No velocity,
  * no force accumulator, no per-tick projection, no zero-mode quotient — so a
  * limit cycle is impossible by theorem and total E is monotone non-increasing at
  * rest. Regions are true minimal enclosing circles recomputed as bodies move, so
@@ -750,21 +750,29 @@ function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) =
 }
 
 /**
- * The PLAN-23 strict-descent pass: the ONLY dynamics. Every DOF — node
+ * The PLAN-23 strict-descent pass, as a WORKLIST: one thunk per DOF — node
  * translation and rotation, ∃-tip / ∀-hub / boundary-exit-hub translation, wire
- * hub points, per-leg arrival angles — descends the ONE total energy (wires +
- * content) by a strictly E-GATED coordinate step (backtracking + expanding
- * search; a move is taken only when it strictly lowers the localized total).
- * There is no velocity, no force accumulator, no independent overlap mover:
- * cycles are impossible by theorem, wander impossible by theorem — the USER's
- * ruling as a structural property. TRANSLATION gates fold in the legality
- * projection (propose → project the moved body onto the feasible set → evaluate
- * → accept only if lower) and the full content + frame-coupling energy that the
- * per-leg localization omits. `pinned` bodies are hard CONSTRAINTS: all their
- * DOF are skipped (the caller holds them at the cursor), and everything relaxes
- * around them.
+ * hub points, per-leg arrival angles — each a strictly E-GATED coordinate step
+ * (backtracking + expanding search; a move is taken only when it strictly lowers
+ * the localized total) over the ONE total energy (wires + content). There is no
+ * velocity, no force accumulator, no independent overlap mover: cycles are
+ * impossible by theorem, wander impossible by theorem — the USER's ruling as a
+ * structural property. TRANSLATION gates fold in the legality projection (propose
+ * → project the moved body onto the feasible set → evaluate → accept only if
+ * lower) and the full content + frame-coupling energy the per-leg localization
+ * omits. `pinned` bodies are hard CONSTRAINTS: all their DOF are skipped (the
+ * caller holds them at the cursor), and everything relaxes around them.
+ *
+ * Returning the DOFs as a worklist (rather than running them inline) lets the app
+ * frame loop TIME-SLICE one sweep across frames (the anytime budget): the snapshot
+ * this builds is cheap (~5 ms at 28 bodies) versus the gate loop (~230 ms), and
+ * each thunk's move is applied in place, so resuming a sliced sweep against a
+ * freshly rebuilt snapshot is equivalent to one continuous sweep. The DOF order is
+ * deterministic (Map insertion order over bodies/wires) and stable across frames
+ * for a fixed diagram, so a persistent integer cursor resumes correctly.
  */
-function descentPass(e: Engine, pinned: ReadonlySet<string> | null): void {
+function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void)[] {
+  const dofs: (() => void)[] = []
   const discs: DiscRec[] = []
   for (const b of e.bodies.values()) if (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') discs.push({ id: b.id, body: b, r: b.discR })
 
@@ -890,13 +898,15 @@ function descentPass(e: Engine, pinned: ReadonlySet<string> | null): void {
     const dirty = new Set<RegionId>([b.region])
     const gradE = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null, true) + contentFrame() }
     const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null) + contentFrame() }
-    gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap)
-    if (touched.length > 0) {
-      // rotation crosses the wrench ridge via the long-shot ladder and settles on
-      // the strict gate; rotational mobility scales with 1/area.
-      gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / b.discR, (4 * MU) / (b.discR * b.discR), 0.28)
-    }
-    for (const r of touched) refresh(r)
+    dofs.push(() => {
+      gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap)
+      if (touched.length > 0) {
+        // rotation crosses the wrench ridge via the long-shot ladder and settles on
+        // the strict gate; rotational mobility scales with 1/area.
+        gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / b.discR, (4 * MU) / (b.discR * b.discR), 0.28)
+      }
+      for (const r of touched) refresh(r)
+    })
   }
   // ---- wire-owned TRANSLATION DOF: ∃ tips, ∀ via-body hubs, boundary exit hubs.
   // Same strict gated candidate step; ∃ tips + exit hubs are light and mobile
@@ -921,15 +931,20 @@ function descentPass(e: Engine, pinned: ReadonlySet<string> | null): void {
     // where the fixed-turn warm gradient points wrong and fights the grid accept
     // into a small limit cycle (measured: an ∃ tip cycling E ±0.4 forever).
     const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, null, null) + contentFrame() }
-    gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, light ? 0.55 : 0.28)
-    for (const r of touched) refresh(r)
+    dofs.push(() => {
+      gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, light ? 0.55 : 0.28)
+      for (const r of touched) refresh(r)
+    })
   }
   // hub points (branch junctions)
   for (const [wid, w] of e.wires) {
     if (w.hub === null || w.hub.kind !== 'point') continue
+    const hub = w.hub
     const touched = legsOfWire.get(wid)!.filter((r) => r.leg.b.kind === 'hub')
-    gatedPoint(w.hub, () => localE(touched, null, null), MU, 0.28)
-    for (const r of touched) refresh(r)
+    dofs.push(() => {
+      gatedPoint(hub, () => localE(touched, null, null), MU, 0.28)
+      for (const r of touched) refresh(r)
+    })
   }
   // per-leg arrival angles (stiff/slow: MU/64, cap 0.06)
   for (const [wid, w] of e.wires) {
@@ -937,40 +952,28 @@ function descentPass(e: Engine, pinned: ReadonlySet<string> | null): void {
     for (const rec of legsOfWire.get(wid)!) {
       if (rec.leg.b.kind !== 'hub') continue
       const leg = rec.leg
-      gatedStep(() => leg.hubAngle, (v) => { leg.hubAngle = v }, () => localE([rec], null, w), HX / 8, MU / 64, 0.06)
-      refresh(rec)
+      dofs.push(() => {
+        gatedStep(() => leg.hubAngle, (v) => { leg.hubAngle = v }, () => localE([rec], null, w), HX / 8, MU / 64, 0.06)
+        refresh(rec)
+      })
     }
   }
+  return dofs
 }
 
-/** One relaxation tick — STRICT TOTAL-ENERGY DESCENT (plan 23), the USER's
-    ruling made structural: the system changes only when the change lowers the
-    one total energy. Every DOF is a strictly E-gated candidate step (descentPass
-    + the global-rotation DOF); there is no velocity integration, no independent
-    overlap mover, and no zero-mode quotient — the injectors those quotients
-    corrected (the per-tick projection's spurious spin, the slot pull's net
-    thrust) are gone with the un-gated movers, so total E is monotone
-    non-increasing across the whole tick. Deterministic: no randomness, seed from
-    mkEngine's spiral. `pinned` bodies are held by the caller and skipped by every
-    gate; the layout relaxes around them. */
-export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): void {
-  recomputeRegions(e)
-
-  // The ONLY dynamics: strict per-DOF gated descent over the total energy.
-  descentPass(e, pinned)
-  recomputeRegions(e)
-
-  // GATED GLOBAL-ROTATION DOF (framed alignment). Absolute orientation IS
-  // observable on a framed diagram (the slots are world-anchored compass points),
-  // so it is a live DOF, not a zero mode: rotate the content — every body EXCEPT
-  // the boundary exit hubs (`e:`, the fixed frame terminals), plus wire hub points
-  // and world-frame arrival angles — about the content centroid by the strictly
-  // E-lowering angle. Holding the exit hubs fixed turns each port RELATIVE to its
-  // hub, dissolving a blind-cone coil when a port faces away from its slot. On a
-  // frameless layout there are no boundary legs, so the gate is a no-op and skips.
-  // It gates on the FULL total energy with the memoryless grid solve (a near-tie
-  // scene needs the interior branch flip the grid finds; content energy is
-  // rotation-invariant about the centroid, so it only sharpens the same argmin).
+// GATED GLOBAL-ROTATION DOF (framed alignment). Absolute orientation IS
+// observable on a framed diagram (the slots are world-anchored compass points),
+// so it is a live DOF, not a zero mode: rotate the content — every body EXCEPT
+// the boundary exit hubs (`e:`, the fixed frame terminals), plus wire hub points
+// and world-frame arrival angles — about the content centroid by the strictly
+// E-lowering angle. Holding the exit hubs fixed turns each port RELATIVE to its
+// hub, dissolving a blind-cone coil when a port faces away from its slot. On a
+// frameless layout there are no boundary legs, so the gate is a no-op and skips.
+// It gates on the FULL total energy with the memoryless grid solve (a near-tie
+// scene needs the interior branch flip the grid finds; content energy is
+// rotation-invariant about the centroid, so it only sharpens the same argmin).
+// Runs once per completed sweep (a full tick), never mid-slice.
+function globalRotationDof(e: Engine, pinned: ReadonlySet<string> | null): void {
   if (pinned === null && e.boundary.length > 0 && e.bodies.size > 1) {
     let gcx = 0, gcy = 0, gn = 0
     for (const b of e.bodies.values()) if (b.kind !== 'junction') { gcx += b.pos.x; gcy += b.pos.y; gn++ }
@@ -999,7 +1002,63 @@ export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null)
       recomputeRegions(e)
     }
   }
+}
+
+/** Advance one strict-descent SWEEP over the DOF worklist, optionally time-sliced.
+    Resumes at `e.descentCursor` and stops when `deadline` (a performance.now() ms
+    stamp) is reached; `deadline === null` runs the sweep to completion. Returns
+    true iff the sweep COMPLETED this call (the caller's cue to run the
+    once-per-tick global-rotation DOF and count the tick). */
+function descentSweep(e: Engine, pinned: ReadonlySet<string> | null, deadline: number | null): boolean {
+  const dofs = descentDofs(e, pinned)
+  let i = e.descentCursor
+  if (i >= dofs.length) i = 0 // DOF count shrank (a pin toggled) — restart the sweep
+  for (; i < dofs.length; i++) {
+    dofs[i]!()
+    if (deadline !== null && i + 1 < dofs.length && performance.now() >= deadline) {
+      e.descentCursor = i + 1
+      return false
+    }
+  }
+  e.descentCursor = 0
+  return true
+}
+
+/** One relaxation tick — STRICT TOTAL-ENERGY DESCENT (plan 23), the USER's
+    ruling made structural: the system changes only when the change lowers the
+    one total energy. Every DOF is a strictly E-gated candidate step (the descent
+    sweep + the global-rotation DOF); there is no velocity integration, no
+    independent overlap mover, and no zero-mode quotient — the injectors those
+    quotients corrected (the per-tick projection's spurious spin, the slot pull's
+    net thrust) are gone with the un-gated movers, so total E is monotone
+    non-increasing across the whole tick. Deterministic: no randomness, seed from
+    mkEngine's spiral. `pinned` bodies are held by the caller and skipped by every
+    gate; the layout relaxes around them. Runs a COMPLETE sweep every call (the
+    headless/settle/test contract); the app uses `settleStepBudget` to time-slice. */
+export function settleStep(e: Engine, pinned: ReadonlySet<string> | null = null): void {
+  e.descentCursor = 0 // a full tick is always a fresh complete sweep
+  recomputeRegions(e)
+  descentSweep(e, pinned, null)
+  recomputeRegions(e)
+  globalRotationDof(e, pinned)
   e.tick++
+}
+
+/** One BUDGETED relaxation step for the app frame loop (the anytime frame budget):
+    advance the descent sweep only until `deadline` (performance.now() ms), resuming
+    across frames via `e.descentCursor`, so an interactive frame pays a bounded slice
+    of a sweep instead of the whole 200–450 ms tick. When a sweep COMPLETES, run the
+    global-rotation DOF and count the tick; a mid-sweep frame defers both to the frame
+    the sweep finishes on. Every accepted move still strictly lowers total E, so
+    slicing changes only WHEN work happens, never the monotone-descent law. */
+export function settleStepBudget(e: Engine, pinned: ReadonlySet<string> | null, deadline: number): void {
+  recomputeRegions(e)
+  const done = descentSweep(e, pinned, deadline)
+  recomputeRegions(e)
+  if (done) {
+    globalRotationDof(e, pinned)
+    e.tick++
+  }
 }
 
 /** Run a tick budget of strict descent, bracketed by the DISCRETE construction-

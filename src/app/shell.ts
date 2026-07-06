@@ -14,7 +14,7 @@ import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
-import { settleStep } from '../view/relax'
+import { settleStepBudget, recomputeRegions, resolveOverlaps } from '../view/relax'
 import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
@@ -62,8 +62,22 @@ export type ShellOptions = {
 const CLICK_SLOP_PX = 3
 const ZOOM_PER_WHEEL_PX = 0.001
 
-/** Relaxation ticks advanced per animation frame (visual pacing only). */
-const SETTLE_STEPS_PER_FRAME = 4
+/** Interactive frame budgets — milliseconds of strictly-gated descent per
+    animation frame (the anytime budget). A single settle TICK costs 200–450 ms on
+    a 16–32-node scene, so running whole ticks per frame froze the app; the
+    budgeted stepper (settleStepBudget) instead advances a bounded SLICE of a sweep
+    and resumes across frames, keeping interaction ~60 fps while the scene relaxes.
+    Split so main + companion + paint fit one 60 fps frame (~16 ms). */
+const MAIN_SETTLE_BUDGET_MS = 8
+const COMPANION_SETTLE_BUDGET_MS = 3
+
+/** The construction-time legality projection (a discrete event, not a mover):
+    seed the region circles, then separate the dense mkEngine spiral seed onto the
+    feasible set so the budgeted descent starts LEGAL instead of wedging in a
+    dense-overlap coordinate-descent trap. This is the plan-23 leading projection,
+    which mkEngine cannot run itself (relax.ts imports engine.ts — circular); the
+    shell already imports relax.ts, so it runs it after every seed. */
+const seedProject = (e: Engine): void => { recomputeRegions(e); resolveOverlaps(e) }
 
 const SELECT_STROKE = '#d97706'
 const HOVER_STROKE = '#2563eb'
@@ -171,7 +185,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let theme: Theme = LIGHT
   let displayed: Diagram = editDiagram
   let engine: Engine = mkEngine(displayed, [])
-  settleStep(engine)
+  seedProject(engine)
   // The pin stores the cursor in SCREEN space: the camera refits every frame,
   // so a world-space pin would drift off the cursor whenever the fit moves.
   let pin: { readonly drag: Drag; screen: Vec2 } | null = null
@@ -563,7 +577,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // drop selection/pending/pin — their ids belong to the old diagram
       displayed = d
       engine = mkEngine(d, currentBoundary())
-      settleStep(engine)
+      seedProject(engine)
       pin = null
       hits = []
       kernelSel = null
@@ -695,7 +709,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     mode = 'replay'
     displayed = replay.diagramAt(0)
     engine = mkEngine(displayed, replay.boundary)
-    settleStep(engine)
+    seedProject(engine)
     pin = null
     hits = []
     kernelSel = null
@@ -715,7 +729,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     displayed = replay.diagramAt(replayK)
     const next = mkEngine(displayed, replay.boundary)
     carryOver(prevEngine, next)
-    settleStep(next)
+    seedProject(next)
     engine = next
     pin = null
     hits = []
@@ -1196,11 +1210,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const prev = companionEngine
       const next = mkEngine(comp.diagram, comp.boundary)
       if (prev !== null) carryOver(prev, next)
+      seedProject(next)
       companionEngine = next
       companionShownDiagram = comp.diagram
       companionRebuilds++
     }
-    for (let i = 0; i < SETTLE_STEPS_PER_FRAME; i++) settleStep(companionEngine)
+    settleStepBudget(companionEngine, null, performance.now() + COMPANION_SETTLE_BUDGET_MS)
     applyFit(companionEngine, companionCanvas.width, companionCanvas.height, 1, companionView)
     const shapes = paint(companionEngine, theme)
     cctx.clearRect(0, 0, companionCanvas.width, companionCanvas.height)
@@ -1220,19 +1235,18 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       canvas.height = window.innerHeight
     }
     const pinnedIds = pin === null ? null : new Set(pin.drag.bodies.keys())
-    for (let i = 0; i < SETTLE_STEPS_PER_FRAME; i++) {
-      // a drag pins the grabbed carriers: hold them at their grab offsets from
-      // the cursor and relax everything else around them (pinned bodies are
-      // excluded from cohesion so the drag feels direct)
-      settleStep(engine, pinnedIds)
-      if (pin !== null) {
-        const at = toWorld(pin.screen)
-        for (const [id, off] of pin.drag.bodies) {
-          const b = engine.bodies.get(id)
-          if (b !== undefined) {
-            b.pos = { x: at.x + off.x, y: at.y + off.y }
-          }
-        }
+    // The anytime budget: advance a bounded SLICE of a settle sweep this frame
+    // (settleStepBudget resumes across frames via the engine's descent cursor),
+    // keeping interaction responsive instead of freezing on a whole 200–450 ms tick.
+    settleStepBudget(engine, pinnedIds, performance.now() + MAIN_SETTLE_BUDGET_MS)
+    if (pin !== null) {
+      // a drag pins the grabbed carriers: hold them at their grab offsets from the
+      // cursor (they are excluded from every gate, so the layout relaxes around
+      // them); the offsets are the drag CONSTRAINT, projected to legality below.
+      const at = toWorld(pin.screen)
+      for (const [id, off] of pin.drag.bodies) {
+        const b = engine.bodies.get(id)
+        if (b !== undefined) b.pos = { x: at.x + off.x, y: at.y + off.y }
       }
     }
     fitView()
