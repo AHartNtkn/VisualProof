@@ -1,7 +1,7 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireLegEnd, WireView } from './engine'
-import { resolveLeg, traceLeg } from './engine'
+import { resolveLeg, traceLeg, trunkPoint, trunkSpan } from './engine'
 
 /**
  * Wire geometry over the PLAN-22 massless elastica, pure — returns traced
@@ -53,6 +53,30 @@ export function computeLegs(e: Engine): LegGeom[] {
     its fixed frame slot directly, plan 24). */
 export function legPaths(e: Engine): { wid: WireId; pts: Vec2[] }[] {
   return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts }))
+}
+
+/** The traced TRUNK CURVE of every k-ary junction (plan 24, USER RULING: the trunk
+    is a CURVED elastica between its two most-aligned connections). The trunk is the
+    constant-curvature arc through the hub spanning the extreme leg merges; the
+    tributary legs meet it TANGENT at distributed points, so the whole junction reads
+    as a river with tributaries — never k lines meeting at one dot (Failure A). A
+    junction whose legs all merge at one point (a near-symmetric junction, USER Q-B:
+    no forced trunk) has a zero-span trunk and draws nothing here — the arms simply
+    meet. */
+const TRUNK_PAINT_N = 24
+export function trunkPaths(e: Engine): { wid: WireId; pts: Vec2[] }[] {
+  const out: { wid: WireId; pts: Vec2[] }[] = []
+  for (const [wid, w] of e.wires) {
+    if (w.hub === null) continue
+    const span = trunkSpan(w)
+    if (span === null || span.tmax - span.tmin < 0.5) continue
+    const H = w.hub.kind === 'point' ? w.hub.pos : e.bodies.get(w.hub.bodyId)!.pos
+    const pts: Vec2[] = []
+    const L = span.tmax - span.tmin
+    for (let i = 0; i <= TRUNK_PAINT_N; i++) pts.push(trunkPoint(H, w.phi, w.curv, span.tmin + (L * i) / TRUNK_PAINT_N))
+    out.push({ wid, pts })
+  }
+  return out
 }
 
 /** The world position of every wire-owned branch HUB POINT (plan 24: an interior

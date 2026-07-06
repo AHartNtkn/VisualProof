@@ -20,9 +20,10 @@ import { mkLegCache, solveLeg, closeAt, trace, QN, WELL_S } from './elastica'
  * PLAN 22: wires are MASSLESS ELASTICA (see elastica.ts). A wire has no shape
  * state — each leg is the minimum-energy theta-quadratic interpolant of its
  * CURRENT boundary data, recomputed per evaluation and memoized on the exact
- * boundary tuple. The only wire DOF are the branch hub (a wire-owned point,
- * or the ∀ body) and the per-leg arrival angles; ∃/∀ ends stay first-class
- * bodies. Loops and kinks are UNREPRESENTABLE (tangent range <= pi).
+ * boundary tuple. The wire DOF are the branch hub (a wire-owned point, or the ∀
+ * body), the hub's emergent TRUNK axis + curvature, and each hub leg's TRUNK MERGE
+ * position (plan 24); ∃/∀ ends stay first-class bodies. Loops and kinks are
+ * UNREPRESENTABLE (tangent range <= pi).
  */
 
 /** Standard named-disc radius (world units) — one size for every named disc. */
@@ -60,8 +61,9 @@ export type Leg = { readonly wid: WireId; readonly from: LegEnd; readonly to: Le
 export type WireBind = { readonly body: string; readonly key: string }
 
 /** A leg terminal. `bind i` = binds[i] (port rim + normal); `tip` = the ∃ free
-    end (a body); `hub` = the branch point (a wire-owned point or the ∀ body),
-    reached along the leg's arrival angle; `slot` = a boundary wire's FIXED frame
+    end (a body); `hub` = the branch: the leg reaches the emergent TRUNK CURVE at
+    its own merge position (plan 24), arriving tangent to the trunk there;
+    `slot` = a boundary wire's FIXED frame
     terminal — a point on the inner frame edge with the inward-normal arrival
     tangent (no body, no dot, no DOF). A leg starts at a `bind` or, for the slot
     arm of a k≥2 boundary junction, at a `slot`. */
@@ -73,13 +75,19 @@ export type WireLegEnd =
 
 /** One leg of a wire: the massless θ-quadratic from terminal `a` (a port bind,
     exiting along its normal) to terminal `b` (hub / another bind / ∃ tip /
-    boundary exit). `hubAngle` is the arrival DIRECTION at a hub end (a wire
-    DOF descended by the gated step); `cache` memoizes the solve on the exact
-    boundary tuple. */
+    boundary slot). For a HUB end (an interior/boundary k-ary junction) `merge` is
+    the leg's signed arc-length position along the emergent TRUNK CURVE where it
+    joins (a wire DOF descended by the gated step): the leg reaches the trunk point
+    `trunkPoint(merge)` and merges TANGENT to the trunk there. A leg aligned with
+    the trunk axis slides its merge to an extreme (extending the through-line); a
+    perpendicular leg rests near merge≈0 (a tributary near the junction centre) —
+    the river-with-tributaries look emerges from each leg's own energy, with NO
+    argmax and NO distinguished trunk pair (USER LAW). `cache` memoizes the solve
+    on the exact boundary tuple. */
 export type WireLeg = {
   readonly a: WireLegEnd
   readonly b: WireLegEnd
-  hubAngle: number
+  merge: number
   readonly cache: LegCache
 }
 
@@ -108,13 +116,19 @@ export type WireView = {
   readonly tipBodyId: string | null
   readonly slot: number | null
   readonly legs: WireLeg[]
-  /** The hub's TRUNK AXIS (radians): the relaxed orientation along which the two
-      most-opposite legs flow through as one continuous trunk while side legs
-      merge tangentially (the tributary look, USER LAW). A DOF with inertia
-      (gated descent + travel cap, so it never flips frame-to-frame), driven by
-      the nematic alignment of the leg chord directions (relax.ts). Meaningful
-      only for an interior hub (hub !== null && slot === null); 0 otherwise. */
+  /** The hub's TRUNK AXIS (radians): the tangent of the emergent trunk curve AT
+      the hub point. The two most-aligned legs flow through as one continuous trunk
+      while side legs merge tangentially (the tributary look, USER LAW). A DOF with
+      inertia (gated descent + travel cap, so it never flips frame-to-frame),
+      anchored by the nematic alignment of the leg chord directions (relax.ts).
+      Meaningful for a k-ary hub (hub !== null); 0 otherwise. */
   phi: number
+  /** The hub's TRUNK CURVATURE (1/wu, signed): the trunk is a constant-curvature
+      arc through the hub point tangent to `phi`, so it can BOW around nodes (USER
+      RULING 2026-07-06: "the trunk is CURVED — greater ability to avoid nodes and
+      aesthetically better"). A gated DOF descending the trunk's own clearance/bend.
+      0 = a straight trunk axis. */
+  curv: number
 }
 
 /** A region's drawn circle. `support` lists the direct items (member body or
@@ -206,6 +220,37 @@ export function nematicDir(dirs: readonly number[]): number {
   return 0.5 * Math.atan2(ss, sc)
 }
 
+/** A point on the emergent TRUNK CURVE at signed arc-length `t` from the hub. The
+    trunk is the constant-curvature arc through `H` tangent to `phi` with curvature
+    `curv` (USER RULING: the trunk is CURVED, bowing around nodes). Closed form of
+    ∫₀ᵗ (cos, sin)(phi + curv·u) du; the straight axis is the curv→0 limit. */
+export function trunkPoint(H: Vec2, phi: number, curv: number, t: number): Vec2 {
+  if (Math.abs(curv) < 1e-6) return { x: H.x + t * Math.cos(phi), y: H.y + t * Math.sin(phi) }
+  return {
+    x: H.x + (Math.sin(phi + curv * t) - Math.sin(phi)) / curv,
+    y: H.y - (Math.cos(phi + curv * t) - Math.cos(phi)) / curv,
+  }
+}
+
+/** The trunk tangent direction (radians) at signed arc-length `t`: phi + curv·t. */
+export function trunkTangent(phi: number, curv: number, t: number): number {
+  return phi + curv * t
+}
+
+/** The trunk's live arc-length span [tmin, tmax] = the extreme leg merge positions
+    of a hub wire (a max/min of continuous merge DOF, so the span — and the drawn
+    trunk endpoints — slide continuously, never snap, when the extreme leg changes).
+    Null if the wire has no hub legs. */
+export function trunkSpan(w: WireView): { tmin: number; tmax: number } | null {
+  let tmin = Infinity, tmax = -Infinity
+  for (const leg of w.legs) {
+    if (leg.b.kind !== 'hub') continue
+    if (leg.merge < tmin) tmin = leg.merge
+    if (leg.merge > tmax) tmax = leg.merge
+  }
+  return Number.isFinite(tmin) ? { tmin, tmax } : null
+}
+
 export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
   const bodies = new Map<string, Body>()
   let i = 0
@@ -291,9 +336,14 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     membersOf.get(region)!.push(id)
     return b
   }
-  const mkLeg = (a: WireLegEnd, b: WireLegEnd, angle: number): WireLeg =>
-    ({ a, b, hubAngle: angle, cache: mkLegCache() })
-  const seedAngle = (p: Vec2, h: Vec2): number => Math.atan2(h.y - p.y, h.x - p.x)
+  const mkLeg = (a: WireLegEnd, b: WireLegEnd, merge: number): WireLeg =>
+    ({ a, b, merge, cache: mkLegCache() })
+  // Seed a hub leg's merge by projecting its chord (hub→port) onto the trunk axis
+  // `phi`, so aligned legs start already extended along the trunk (rather than all
+  // stacked at merge 0 = the spoke seed) and the tributary look settles from a
+  // near-correct start instead of unfolding from a single point.
+  const seedMerge = (p: Vec2, h: Vec2, phi: number): number =>
+    Math.hypot(p.x - h.x, p.y - h.y) * Math.cos(Math.atan2(p.y - h.y, p.x - h.x) - phi)
 
   for (const [wid, w] of Object.entries(d.wires)) {
     const binds: WireBind[] = w.endpoints.map((ep) => ({ body: ep.node, key: pkey(ep.port) }))
@@ -316,7 +366,20 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     let hub: WireHub | null = null
     let tipBodyId: string | null = null
     let slot: number | null = null
+    let phi = 0
     const legs: WireLeg[] = []
+    // Build a k-ary hub's legs: seed the trunk axis `phi` at the nematic director
+    // of the hub→endpoint chords (so the trunk lands aligned), then seed each leg's
+    // merge by projecting its chord onto `phi` (aligned legs start extended along
+    // the trunk, the tributary look settling from a near-correct start). `extra`
+    // is the slot arm's fixed anchor for a k≥2 boundary wire (null otherwise).
+    const buildHub = (h: Vec2, extra: Vec2 | null): void => {
+      const chords = anchorPos.map((p) => Math.atan2(p.y - h.y, p.x - h.x))
+      if (extra !== null) chords.push(Math.atan2(extra.y - h.y, extra.x - h.x))
+      phi = nematicDir(chords)
+      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedMerge(anchorPos[k]!, h, phi)))
+      if (extra !== null) legs.push(mkLeg({ kind: 'slot' }, { kind: 'hub' }, seedMerge(extra, h, phi)))
+    }
     if (isBoundary) {
       // A boundary wire attaches to a FIXED slot on the inner frame edge (plan 24
       // — a terminal, not a body). A SINGLE interior port is one leg straight to
@@ -330,10 +393,9 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       } else {
         const h = centroid()
         hub = { kind: 'point', pos: h }
-        for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, h)))
-        // the slot arm: a fixed frame terminal reaching the hub, arriving along
-        // the hub's arrival angle like any other arm
-        legs.push(mkLeg({ kind: 'slot' }, { kind: 'hub' }, 0))
+        // the slot arm's fixed anchor is the frame slot; seed it from the slot's
+        // current fixed point if the frame exists, else the hub (frame set later)
+        buildHub(h, h)
       }
     } else if (binds.length === 1) {
       // dangling ∃: a free-end leg reaching a scope-homed tip body
@@ -344,7 +406,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       // the ∀ via-body: the scope-homed body IS the branch hub
       const b = mkWireBody(`x:${wid}`, w.scope, centroid())
       hub = { kind: 'body', bodyId: b.id }
-      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, b.pos)))
+      buildHub(b.pos, null)
     } else if (binds.length === 2) {
       // a direct port-to-port leg (same scope, no branch)
       legs.push(mkLeg({ kind: 'bind', i: 0 }, { kind: 'bind', i: 1 }, 0))
@@ -352,16 +414,9 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       // a pure k-ary junction: a wire-owned hub point
       const h = centroid()
       hub = { kind: 'point', pos: h }
-      for (let k = 0; k < binds.length; k++) legs.push(mkLeg({ kind: 'bind', i: k }, { kind: 'hub' }, seedAngle(anchorPos[k]!, h)))
+      buildHub(h, null)
     }
-    // seed the trunk axis at the nematic director of the interior hub's chord
-    // directions (so the trunk lands aligned instead of swinging in from 0)
-    let phi = 0
-    if (hub !== null && !isBoundary) {
-      const hp = hub.kind === 'point' ? hub.pos : bodies.get(hub.bodyId)!.pos
-      phi = nematicDir(anchorPos.map((p) => Math.atan2(p.y - hp.y, p.x - hp.x)))
-    }
-    wires.set(wid, { binds, hub, tipBodyId, slot, legs, phi })
+    wires.set(wid, { binds, hub, tipBodyId, slot, legs, phi, curv: 0 })
   }
 
   return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), frame: null, tick: 0 }
@@ -395,9 +450,10 @@ export function carryOver(prev: Engine, next: Engine): void {
       nv.hub.pos = pv.hub.pos
     }
     for (let k = 0; k < nv.legs.length && k < pv.legs.length; k++) {
-      nv.legs[k]!.hubAngle = pv.legs[k]!.hubAngle
+      nv.legs[k]!.merge = pv.legs[k]!.merge
     }
     nv.phi = pv.phi
+    nv.curv = pv.curv
   }
 }
 
@@ -573,7 +629,18 @@ export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache
   let p1: Vec2, th1: number, freeEnd = false
   let ownB: string | null = null
   switch (leg.b.kind) {
-    case 'hub': { p1 = hubPos(); th1 = leg.hubAngle; break }
+    case 'hub': {
+      // reach the emergent TRUNK CURVE at this leg's merge position, arriving TANGENT
+      // to the trunk there (plan 24). The arrival direction is the trunk tangent
+      // ψ(merge) = phi + curv·merge — the trunk flows one way, so every leg (both
+      // trunk-end legs AND tributaries) merges heading DOWNSTREAM: the two aligned
+      // legs continue the flow (one continuous through-line), side legs curl in to
+      // join it. A single directed tangent (not a free-end whole-interval scan) keeps
+      // the solve continuous as ports move — no branch-flip snap (the anti-snap law).
+      p1 = trunkPoint(hubPos(), w.phi, w.curv, leg.merge)
+      th1 = trunkTangent(w.phi, w.curv, leg.merge)
+      break
+    }
     case 'tip': { p1 = e.bodies.get(w.tipBodyId!)!.pos; th1 = 0; freeEnd = true; break }
     case 'slot': {
       // arrive at the fixed frame slot along the outward normal — a welled
