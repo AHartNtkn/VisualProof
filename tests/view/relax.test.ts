@@ -6,8 +6,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
-import { settle, settleStep, settleStepBudget, totalEnergy, FRAME_CAP } from '../../src/view/relax'
-import { legPaths } from '../../src/view/wires'
+import { settle, settleStep, totalEnergy } from '../../src/view/relax'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
 
@@ -301,64 +300,6 @@ describe('settleStep — live-loop safety (bounded, non-diverging energy)', () =
       const p = e.bodies.get(id)!.pos
       expect(Math.hypot(p.x - pinPos.x, p.y - pinPos.y)).toBeGreaterThan(0)
     }
-  })
-})
-
-describe('settleStepBudget — per-frame smoothness (NO SNAPPING, ruled 2026-07-06)', () => {
-  it('during free settling every DOF glides ≤ FRAME_CAP per frame — no hard click', () => {
-    // The app time-slices a sweep across many frames (the anytime budget), so
-    // each DOF is visited once per sweep. At the full per-tick travelCap that
-    // single visit lands a ~0.55 wu jump ONCE PER SWEEP — a hard click. The
-    // frame-granular trust region caps every DOF's per-VISIT motion in the
-    // budgeted path, so a settling layout GLIDES sub-pixel each frame instead.
-    // Measured on real theorem sides: a body moves ≤ FRAME_CAP; a drawn wire
-    // point ≤ ~0.45 (FRAME_CAP + bounded leg leverage). Excludes the one-time
-    // construction reorganization (this settles to rest first, then perturbs and
-    // measures FREE settling).
-    for (const [name, diagram, boundary] of cases) {
-      const e = mkEngine(diagram, boundary)
-      settle(e, 2000) // to rest, past any construction transient
-      // a small drag-like nudge, then release and re-settle via the APP path
-      const node = [...e.bodies.values()].find((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')!
-      node.pos = { x: node.pos.x + 6, y: node.pos.y - 4 }
-      const bodyPos = () => [...e.bodies.values()].map((b) => ({ x: b.pos.x, y: b.pos.y }))
-      const drawnPts = () => legPaths(e).flatMap((l) => l.pts)
-      let pb = bodyPos(), pd = drawnPts()
-      let maxBody = 0, maxDrawn = 0
-      for (let f = 0; f < 160; f++) {
-        settleStepBudget(e, null, performance.now() + 8)
-        const cb = bodyPos(), cd = drawnPts()
-        for (let i = 0; i < cb.length; i++) maxBody = Math.max(maxBody, Math.hypot(cb[i]!.x - pb[i]!.x, cb[i]!.y - pb[i]!.y))
-        const n = Math.min(pd.length, cd.length)
-        for (let i = 0; i < n; i++) maxDrawn = Math.max(maxDrawn, Math.hypot(cd[i]!.x - pd[i]!.x, cd[i]!.y - pd[i]!.y))
-        pb = cb; pd = cd
-      }
-      // the hard guarantee: no body outruns the frame trust region (a tiny slack
-      // for the projection nudging a body already at the cap)
-      expect(maxBody, `${name}: max per-frame body move ${maxBody.toFixed(3)} > FRAME_CAP`).toBeLessThanOrEqual(FRAME_CAP * 1.06)
-      // drawn wire points stay well under the click threshold (the old per-frame
-      // body jump was 0.55; here every drawn point is bounded far below it)
-      expect(maxDrawn, `${name}: max per-frame drawn move ${maxDrawn.toFixed(3)}`).toBeLessThan(0.7)
-    }
-  })
-
-  it('the same free settling under the un-budgeted settleStep is NOT frame-capped (the test/headless contract is unchanged)', () => {
-    // The frame cap is app-only: settleStep (headless/tests) keeps the full
-    // per-tick travelCap so a single tick can move a DOF the whole trust region.
-    // This guards the contract — a change that leaked the frame cap into
-    // settleStep would slow every headless settle and silently alter the battery.
-    const [, diagram, boundary] = cases[0]!
-    const e = mkEngine(diagram, boundary)
-    settle(e, 2000)
-    const node = [...e.bodies.values()].find((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')!
-    node.pos = { x: node.pos.x + 20, y: node.pos.y - 15 }
-    const before = [...e.bodies.values()].map((b) => ({ x: b.pos.x, y: b.pos.y }))
-    settleStep(e) // one un-budgeted tick
-    let maxBody = 0
-    const after = [...e.bodies.values()].map((b) => ({ x: b.pos.x, y: b.pos.y }))
-    for (let i = 0; i < after.length; i++) maxBody = Math.max(maxBody, Math.hypot(after[i]!.x - before[i]!.x, after[i]!.y - before[i]!.y))
-    // at least one body moved more than the frame cap in a single un-budgeted tick
-    expect(maxBody, `un-budgeted tick moved ${maxBody.toFixed(3)}, must exceed FRAME_CAP`).toBeGreaterThan(FRAME_CAP)
   })
 })
 

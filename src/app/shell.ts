@@ -14,7 +14,7 @@ import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
-import { settleStepBudget, recomputeRegions, resolveOverlaps, clampDragToFeasible } from '../view/relax'
+import { settleStep, recomputeRegions, resolveOverlaps, clampDragToFeasible } from '../view/relax'
 import { legPaths, boundaryExits, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
@@ -61,15 +61,6 @@ export type ShellOptions = {
  */
 const CLICK_SLOP_PX = 3
 const ZOOM_PER_WHEEL_PX = 0.001
-
-/** Interactive frame budgets — milliseconds of strictly-gated descent per
-    animation frame (the anytime budget). A single settle TICK costs 200–450 ms on
-    a 16–32-node scene, so running whole ticks per frame froze the app; the
-    budgeted stepper (settleStepBudget) instead advances a bounded SLICE of a sweep
-    and resumes across frames, keeping interaction ~60 fps while the scene relaxes.
-    Split so main + companion + paint fit one 60 fps frame (~16 ms). */
-const MAIN_SETTLE_BUDGET_MS = 8
-const COMPANION_SETTLE_BUDGET_MS = 3
 
 /** The construction-time legality projection (a discrete event, not a mover):
     seed the region circles, then separate the dense mkEngine spiral seed onto the
@@ -1215,7 +1206,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       companionShownDiagram = comp.diagram
       companionRebuilds++
     }
-    settleStepBudget(companionEngine, null, performance.now() + COMPANION_SETTLE_BUDGET_MS)
+    settleStep(companionEngine, null)
     applyFit(companionEngine, companionCanvas.width, companionCanvas.height, 1, companionView)
     const shapes = paint(companionEngine, theme)
     cctx.clearRect(0, 0, companionCanvas.width, companionCanvas.height)
@@ -1235,10 +1226,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       canvas.height = window.innerHeight
     }
     const pinnedIds = pin === null ? null : new Set(pin.drag.bodies.keys())
-    // The anytime budget: advance a bounded SLICE of a settle sweep this frame
-    // (settleStepBudget resumes across frames via the engine's descent cursor),
-    // keeping interaction responsive instead of freezing on a whole 200–450 ms tick.
-    settleStepBudget(engine, pinnedIds, performance.now() + MAIN_SETTLE_BUDGET_MS)
+    // Plan 24 motion policy: a FULL strict-descent sweep over every DOF each
+    // frame (no time-slicing) — the whole diagram eases toward rest together.
+    settleStep(engine, pinnedIds)
     if (pin !== null) {
       // a drag pins the grabbed carriers: hold them at their grab offsets from the
       // cursor (they are excluded from every gate, so the layout relaxes around
