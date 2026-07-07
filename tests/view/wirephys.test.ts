@@ -194,28 +194,22 @@ describe('wire physics — perpendicular port exits at rest', () => {
         expect(Math.hypot(g.pts[0]!.x - anchor.x, g.pts[0]!.y - anchor.y), 'starts on rim').toBeLessThan(1e-6)
         const la = body.localAnchor.get(bind.key)!
         const normal = Math.atan2(la.y, la.x) + body.theta
-        const dir = Math.atan2(g.pts[1]!.y - g.pts[0]!.y, g.pts[1]!.x - g.pts[0]!.x)
-        const dev = Math.atan2(Math.sin(dir - normal), Math.cos(dir - normal))
-        // BLIND-CONE EXEMPTION (same class the rim-closure test above skips with
-        // "no closure by design"): when a free-end ∃ tip rests angularly BEHIND
-        // its own port — reachable only in the max-crowd threeWay stress fixture,
-        // where routing a tip to the port's FRONT would cost more in wire↔wire
-        // separation against the co-running dangles than the ~100-unit leg-energy
-        // penalty of curling behind it — the leg has no representable ≤π-range
-        // closure and falls back to a >π-turn arc (thetaRange > RANGE_B). Its port
-        // exit tangent is STILL exactly the normal (rim-lock: the solve fixes
-        // θ(0)=normal), but the fallback curls hard immediately, so the coarse
-        // first-QN-chord `dir` over-reports the drawn direction by ≈ c1/(2·QN).
-        // The perpendicularity LAW holds (measured worst NON-blind-cone exit across
-        // all five fixtures under this model: 0.0094 rad, 0.5° — well inside 0.05);
-        // the coarse-chord proxy is simply not a valid tangent estimate for a
-        // sub-representable fallback arc, exactly as it is not a valid closure test
-        // for one. A lone dangle (dangling fixture) rests with its tip in FRONT and
-        // exits at 0.0°.
+        // Measure the exit direction from a FINE trace of the leg's first segment,
+        // NOT the coarse computeLegs chord (g.pts). The exit tangent θ(0) is the
+        // port normal EXACTLY by rim-lock construction; the drawn first-segment
+        // chord deviates from it by ≈ c1/(2·QN), i.e. in proportion to the leg's
+        // CURVATURE, not its true exit angle. The coarse QN over-reports a hard-
+        // curving leg (a near-blind-cone ∃ tip in the max-crowd threeWay, c1≈5,
+        // reads ~0.055) even though it leaves perpendicular; the fine trace
+        // isolates the real exit direction (that same leg: 0.0125), so the tight
+        // 0.05 bound measures the LAW instead of the sampler.
         const leg = w.legs.find((l) => l.a.kind === 'bind' && w.binds[l.a.i]?.body === bind.body && w.binds[l.a.i]?.key === bind.key)!
         const sol = resolveLeg(e, w, leg)
-        if (thetaRange(sol.sol.c1, sol.sol.c2) > RANGE_B + 1e-6) continue
-        expect(Math.abs(dev), `exit at ${bind.body}:${bind.key}`).toBeLessThanOrEqual(0.05)
+        const fine: { x: number; y: number }[] = []
+        traceLeg(sol, fine, 200)
+        const dirFine = Math.atan2(fine[1]!.y - fine[0]!.y, fine[1]!.x - fine[0]!.x)
+        const dev = Math.atan2(Math.sin(dirFine - normal), Math.cos(dirFine - normal))
+        expect(Math.abs(dev), `exit at ${bind.body}:${bind.key} (range ${thetaRange(sol.sol.c1, sol.sol.c2).toFixed(2)})`).toBeLessThanOrEqual(0.05)
       }
     }
   })
@@ -295,18 +289,27 @@ describe('wire physics — equilibria', () => {
     settle(e, 2600)
     const body = e.bodies.get(node)!
     const tip = e.bodies.get(e.wires.get(wid)!.tipBodyId!)!
-    // the law is the REST SHAPE: after a disturbance the wire re-establishes its
-    // relative geometry — BOTH ends participate (Newton's third law by
-    // construction), so we assert the rest length is restored and the tip moved
-    const relBefore = { x: tip.pos.x - body.pos.x, y: tip.pos.y - body.pos.y }
-    const gapBefore = Math.hypot(relBefore.x, relBefore.y)
-    body.pos = { x: body.pos.x + 40, y: body.pos.y }
-    const tipAtDisturb = { ...tip.pos }
-    settle(e, 2600)
+    const gapBefore = Math.hypot(tip.pos.x - body.pos.x, tip.pos.y - body.pos.y)
+    const tipStart = { ...tip.pos }
+    // move the node a MODEST, in-regime amount and PIN it there — the real drag
+    // path (settleStep's pinned set). An UNPINNED move is not a tow test: an
+    // unanchored node relaxes back toward its own rest, so the tip barely moves;
+    // and an over-large shove (≫ the rest gap) drives the pinned node against its
+    // containment wall (which the live app's drag clamp prevents), a degenerate
+    // regime. Held at a sane displacement, the wire's tension must TOW the free
+    // end along so the rest length re-establishes at the node's new position.
+    const DISP = 8 // < the 11.5 rest gap: comfortably in-regime
+    body.pos = { x: body.pos.x + DISP, y: body.pos.y }
+    const pin = new Set([node])
+    for (let i = 0; i < 4000; i++) settleStep(e, pin)
+    // (1) the free end FOLLOWED the node (not parked): measured tow ≈ DISP (8.0);
+    //     pinned well below with margin for future dynamics drift.
+    const towed = Math.hypot(tip.pos.x - tipStart.x, tip.pos.y - tipStart.y)
+    expect(towed, `the free end must be towed along (moved ${towed.toFixed(2)} of the ${DISP} displacement)`).toBeGreaterThanOrEqual(DISP * 0.6)
+    // (2) the REST SHAPE restored: the wire re-establishes its rest length at the
+    //     node's new location (both ends participate — Newton's third law).
     const gapAfter = Math.hypot(tip.pos.x - body.pos.x, tip.pos.y - body.pos.y)
-    expect(Math.abs(gapAfter - gapBefore), 'the wire must restore its rest length').toBeLessThanOrEqual(gapBefore * 0.5)
-    const moved = Math.hypot(tip.pos.x - tipAtDisturb.x, tip.pos.y - tipAtDisturb.y)
-    expect(moved, 'the free end must move (not parked)').toBeGreaterThanOrEqual(5)
+    expect(Math.abs(gapAfter - gapBefore), `rest length must restore (${gapAfter.toFixed(2)} vs ${gapBefore.toFixed(2)})`).toBeLessThanOrEqual(gapBefore * 0.2)
   })
 
   it('the trunk-tangent rule (round-8-D): two most-opposite legs flow through as one trunk, side legs merge tangentially', () => {
