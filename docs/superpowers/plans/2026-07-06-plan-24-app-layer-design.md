@@ -420,6 +420,26 @@ snap anywhere.
 > cannot fit inside the fixed border, that is a FORK to report, never a silent
 > resize. Items 1/3/12 below are updated to this ruling; the region circles (CUTS)
 > are held inside the border by the same hard wall as the discs (bug fixed).
+>
+> **Sizing (option a, team-lead-approved 2026-07-06):** a REPLAY's border is sized
+> ONCE from the PROOF-WIDE MAX content extent — a replay's contents are ALL its
+> steps, known at spawn, so one absolute size fits every step and never varies.
+> Rationale (vs the alternatives): (b) size-to-final breaks growing proofs (a
+> mid-proof step overflows); (c) rescale-to-fit would vary visible node sizes
+> mid-proof, contradicting the absolute-node-size law. Each step's extent is measured
+> on its CONSTRUCTION-PROJECTED seed (mkEngine → resolveOverlaps), not a full settle:
+> the whole-proof scan is then ~150 ms (measured, plusComm 65 steps), and the
+> projected extent SAFELY over-bounds the settled extent at the binding (largest)
+> steps because settling COMPACTS them (measured plusComm step 42: proj 402.8 →
+> settled 340.5); the only steps whose settled extent exceeds their projection are
+> tiny ones far below the max, so max-proj-extent fits every step's RESTING content.
+> `establishProofFrame` (relax.ts) does the scan; the shell's `enterReplay` calls it
+> once; `carryOver` propagates the same frame to every step (byte-identical, tested).
+> KNOWN transient: right after a rewrite the CARRIED+projected seed can spread past
+> the border (measured ~58 wu at plusComm step 42) before settling compacts it in;
+> `clampContentToFrame` pulls the seed's discs inside at construction and the cut
+> barrier + wall contain the rest as it settles — a post-rewrite settling artifact,
+> not a persistent violation (the resting state fits, verified).
 
 1. **The frame (rounded boundary box) holds completely still — for the whole
    lifetime of the diagram.** It never shrinks, grows, or shifts — not while the

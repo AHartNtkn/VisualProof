@@ -1,7 +1,7 @@
-import type { RegionId } from '../kernel/diagram/diagram'
+import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, LegShape, WireLeg, WireView } from './engine'
-import { subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, trunkPoint, trunkSpan, FRAME_MARGIN } from './engine'
+import { mkEngine, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, trunkPoint, trunkSpan, FRAME_MARGIN } from './engine'
 import { ELASTICA, QN, mkLegCache } from './elastica'
 import type { LegCache } from './elastica'
 
@@ -248,12 +248,11 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
     the boundary exit terminals (`e:`, which ride ON the frame). Reads live region
     circles, so the caller must recomputeRegions first (settle / settleStep /
     seedProject do). */
-export function establishFrame(e: Engine): void {
-  // The border is established ONCE and NEVER resizes for the diagram's lifetime
-  // (USER RULING 2026-07-06 — supersedes "recalculated at rewrite"): a rewrite
-  // carries the SAME frame (carryOver), so an already-set frame is kept and content
-  // reflows inside it. Only a fresh engine with no carried frame establishes one.
-  if (e.frame !== null) return
+/** Bounding box of an engine's CONTENT (node/junction discs + region circles,
+    excluding the root sheet and boundary exit terminals) — the extent the frame is
+    sized to. Null if there is no content. Reads live region circles (recompute
+    first). */
+function contentBBox(e: Engine): { minX: number; minY: number; maxX: number; maxY: number } | null {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   const grow = (x: number, y: number, r: number): void => {
     if (x - r < minX) minX = x - r
@@ -269,10 +268,50 @@ export function establishFrame(e: Engine): void {
     if (rid === e.d.root) continue
     grow(g.center.x, g.center.y, g.radius)
   }
-  if (!Number.isFinite(minX)) { e.frame = { center: { x: 0, y: 0 }, half: 10 + FRAME_MARGIN }; return }
-  const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2
-  const half = Math.max((maxX - minX) / 2, (maxY - minY) / 2) + FRAME_MARGIN
+  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null
+}
+
+export function establishFrame(e: Engine): void {
+  // The border is established ONCE and NEVER resizes for the diagram's lifetime
+  // (USER RULING 2026-07-06 — supersedes "recalculated at rewrite"): a rewrite
+  // carries the SAME frame (carryOver), so an already-set frame is kept and content
+  // reflows inside it. Only a fresh engine with no carried frame establishes one.
+  if (e.frame !== null) return
+  const bb = contentBBox(e)
+  if (bb === null) { e.frame = { center: { x: 0, y: 0 }, half: 10 + FRAME_MARGIN }; return }
+  const cx = (bb.minX + bb.maxX) / 2, cy = (bb.minY + bb.maxY) / 2
+  const half = Math.max((bb.maxX - bb.minX) / 2, (bb.maxY - bb.minY) / 2) + FRAME_MARGIN
   e.frame = { center: { x: cx, y: cy }, half }
+}
+
+/** Establish the fixed border for a REPLAY from the PROOF-WIDE max content extent
+    (USER RULING 2026-07-06, option (a)): a replay's "contents" are ALL its steps —
+    known at spawn — so one absolute border sized to the largest step fits EVERY step
+    and never varies. The extent of each step is measured on its construction-
+    projected seed (mkEngine → recomputeRegions → resolveOverlaps), NOT a full settle:
+    a whole-proof scan is then ~150 ms (measured, plusComm's 65 steps), and the
+    projected extent SAFELY over-bounds the settled extent at the binding (largest)
+    steps (settling COMPACTS them — measured plusComm step 42 proj 402.8 → settled
+    340.5), while the only steps whose settled extent exceeds their projection are
+    tiny ones far below the max. The border is centered on the largest step's content
+    (so it sits centered, not the tiny first step). No-ops if a frame already exists
+    (established once, then carried). */
+export function establishProofFrame(e: Engine, steps: readonly { diagram: Diagram; boundary: readonly WireId[] }[]): void {
+  if (e.frame !== null) return
+  let bestHalf = -1, bestCx = 0, bestCy = 0
+  for (const s of steps) {
+    const se = mkEngine(s.diagram, s.boundary)
+    recomputeRegions(se)
+    resolveOverlaps(se)
+    recomputeRegions(se)
+    const bb = contentBBox(se)
+    if (bb === null) continue
+    const half = Math.max((bb.maxX - bb.minX) / 2, (bb.maxY - bb.minY) / 2)
+    if (half > bestHalf) { bestHalf = half; bestCx = (bb.minX + bb.maxX) / 2; bestCy = (bb.minY + bb.maxY) / 2 }
+  }
+  e.frame = bestHalf < 0
+    ? { center: { x: 0, y: 0 }, half: 10 + FRAME_MARGIN }
+    : { center: { x: bestCx, y: bestCy }, half: bestHalf + FRAME_MARGIN }
 }
 
 /** Clamp a body centre inside the fixed frame's HARD WALL (plan 24, USER RULING:
@@ -289,6 +328,21 @@ function clampToFrame(e: Engine, b: Body, p: Vec2): Vec2 {
     x: Math.max(f.center.x - lim, Math.min(f.center.x + lim, p.x)),
     y: Math.max(f.center.y - lim, Math.min(f.center.y + lim, p.y)),
   }
+}
+
+/** Pull every content body inside the fixed border, a one-time CONSTRUCTION-EVENT
+    projection (plan 24): after a rewrite, carryOver + resolveOverlaps can seed the
+    carried content spread PAST the (proof-wide-sized) border, and the seed would flash
+    outside for one frame before settling pulls it in. Clamping the seed here removes
+    that transient — the content starts inside the border and settles within it (the
+    cut barrier + wall keep it there). No-op with no frame. */
+export function clampContentToFrame(e: Engine): void {
+  if (e.frame === null) return
+  for (const b of e.bodies.values()) {
+    if (b.kind === 'junction') continue
+    b.pos = clampToFrame(e, b, b.pos)
+  }
+  recomputeRegions(e)
 }
 
 function shiftSubtree(e: Engine, rid: RegionId, dx: number, dy: number): void {

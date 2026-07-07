@@ -3,9 +3,25 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
-import { recomputeRegions, resolveOverlaps, clampDragToFeasible, settle } from '../../src/view/relax'
+import { carryOver } from '../../src/view/engine'
+import { recomputeRegions, resolveOverlaps, clampDragToFeasible, settle, establishProofFrame, establishFrame } from '../../src/view/relax'
 
 const p = (s: string) => parseTerm(s)
+
+/** The worst overshoot of any content item (node disc or region circle) past the
+    frame wall — >0 ⇒ something is outside the border. */
+function worstContentOvershoot(e: Engine): number {
+  const f = e.frame!
+  let worst = 0
+  const check = (cx: number, cy: number, r: number): void => {
+    const o = Math.max(cx + r - (f.center.x + f.half), (f.center.x - f.half) - (cx - r),
+      cy + r - (f.center.y + f.half), (f.center.y - f.half) - (cy - r))
+    if (o > worst) worst = o
+  }
+  for (const b of e.bodies.values()) if (!b.id.startsWith('e:')) check(b.pos.x, b.pos.y, b.discR)
+  for (const [rid, g] of e.regions) if (rid !== e.d.root) check(g.center.x, g.center.y, g.radius)
+  return worst
+}
 
 /** The worst signed overshoot of any non-root region circle past the fixed frame
     wall (>0 ⇒ a cut escapes the border). */
@@ -93,6 +109,42 @@ describe('clampDragToFeasible — HARD SEMANTIC CONTAINMENT (USER LAW: a drag ca
       worst = Math.max(worst, worstRegionOvershoot(e))
     }
     expect(worst, `mid-drag: the cut circle must not cross the border (worst overshoot ${worst.toFixed(1)} wu)`).toBeLessThan(0.5)
+  })
+
+  it('the border is sized ONCE from the proof-wide max extent: byte-identical across ALL steps, every step fits (USER RULING 2026-07-06 option a)', () => {
+    // A synthetic "replay": three diagrams of increasing size (the largest is the
+    // binding step). The border is sized ONCE from the proof-wide max content extent,
+    // is byte-identical no matter which step is displayed, and EVERY step's content
+    // fits inside it.
+    const mk = (n: number): { d: ReturnType<DiagramBuilder['build']>; b: string[] } => {
+      const h = new DiagramBuilder()
+      for (let i = 0; i < n; i++) { const t = h.termNode(h.root, p(`x${i}`)); h.wire(h.root, [{ node: t, port: { kind: 'freeVar', name: `x${i}` } }]) }
+      return { d: h.build(), b: [] }
+    }
+    const steps = [mk(1), mk(4), mk(9)].map((s) => ({ diagram: s.d, boundary: s.b }))
+    const e0 = mkEngine(steps[0]!.diagram, steps[0]!.boundary)
+    establishProofFrame(e0, steps)
+    const f = e0.frame!
+    expect(f.half).toBeGreaterThan(0)
+    // every step: build, project, and confirm all content is inside the fixed border
+    for (const s of steps) {
+      const se = mkEngine(s.diagram, s.boundary)
+      recomputeRegions(se); resolveOverlaps(se); recomputeRegions(se)
+      se.frame = f // the fixed border (as carryOver would supply)
+      expect(worstContentOvershoot(se), 'every step fits the fixed border (projected)').toBeLessThan(0.5)
+    }
+    // the binding (largest) step also fits when fully SETTLED (settling compacts, so
+    // the projected-extent border is a safe over-bound)
+    const eL = mkEngine(steps[2]!.diagram, steps[2]!.boundary)
+    eL.frame = f
+    settle(eL, 200)
+    expect(worstContentOvershoot(eL), 'the largest step fits the border when settled').toBeLessThan(0.5)
+    // byte-identical border across a rewrite: a rebuilt engine that carries the frame
+    // keeps it exactly, and establishFrame does NOT recompute it
+    const e1 = mkEngine(steps[1]!.diagram, steps[1]!.boundary)
+    carryOver(e0, e1)
+    recomputeRegions(e1); resolveOverlaps(e1); establishFrame(e1)
+    expect(e1.frame).toEqual(f)
   })
 
   it('a node dragged within its OWN region is never clamped (its region follows it)', () => {

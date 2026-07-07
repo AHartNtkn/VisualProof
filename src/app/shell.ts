@@ -14,7 +14,7 @@ import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
-import { settleStep, recomputeRegions, resolveOverlaps, establishFrame, clampDragToFeasible } from '../view/relax'
+import { settleStep, recomputeRegions, resolveOverlaps, establishFrame, establishProofFrame, clampContentToFrame, clampDragToFeasible } from '../view/relax'
 import { legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
@@ -68,7 +68,7 @@ const ZOOM_PER_WHEEL_PX = 0.001
     dense-overlap coordinate-descent trap. This is the plan-23 leading projection,
     which mkEngine cannot run itself (relax.ts imports engine.ts — circular); the
     shell already imports relax.ts, so it runs it after every seed. */
-const seedProject = (e: Engine): void => { recomputeRegions(e); resolveOverlaps(e); establishFrame(e) }
+const seedProject = (e: Engine): void => { recomputeRegions(e); resolveOverlaps(e); establishFrame(e); clampContentToFrame(e) }
 
 const SELECT_STROKE = '#d97706'
 const HOVER_STROKE = '#2563eb'
@@ -703,6 +703,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     mode = 'replay'
     displayed = replay.diagramAt(0)
     engine = mkEngine(displayed, replay.boundary)
+    // Size the fixed border ONCE from the PROOF-WIDE max content extent (USER RULING
+    // 2026-07-06, option (a)): a replay's contents are ALL its steps, so one absolute
+    // border fits every step and never resizes as the proof is stepped. Cheap
+    // (~150 ms whole-proof scan). Established before seedProject, whose establishFrame
+    // then no-ops; every later step carries this same frame via carryOver.
+    const steps = Array.from({ length: replay.stepCount + 1 }, (_, k) => ({ diagram: replay!.diagramAt(k), boundary: replay!.boundary }))
+    establishProofFrame(engine, steps)
     seedProject(engine)
     pin = null
     hits = []
