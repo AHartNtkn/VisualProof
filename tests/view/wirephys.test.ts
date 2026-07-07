@@ -2,8 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
-import { mkEngine, worldBindAnchor, resolveLeg, traceLeg, trunkSpan, frameBounds, frameSlots, type Engine, type WireView, type WireLeg } from '../../src/view/engine'
-import { settle, settleStep, wireEnergy, WIREP, recomputeRegions } from '../../src/view/relax'
+import { mkEngine, worldBindAnchor, resolveLeg, traceLeg, frameBounds, frameSlots, type Engine, type WireView, type WireLeg } from '../../src/view/engine'
+import { settle, settleStep, wireEnergy, WIREP, trunkTarget, recomputeRegions } from '../../src/view/relax'
 import { thetaRange, RANGE_B, QN, ELASTICA } from '../../src/view/elastica'
 import { computeLegs, existentialStubs } from '../../src/view/wires'
 
@@ -125,7 +125,7 @@ describe('wire physics — zero wire memory (the purity law)', () => {
     // snapshot the exact rest state
     const rest = new Map([...e.bodies].map(([id, b]) => [id, { pos: { ...b.pos }, theta: b.theta }]))
     const hubs = [...e.wires].map(([wid, w]) => [wid, w.hub !== null && w.hub.kind === 'point' ? { ...w.hub.pos } : null] as const)
-    const angles = [...e.wires].map(([wid, w]) => [wid, w.legs.map((l) => l.merge)] as const)
+    const angles = [...e.wires].map(([wid, w]) => [wid, w.legs.map((l) => l.hubAngle)] as const)
     // fresh solve of every leg at rest (a fresh cache forces a real re-solve)
     const restSol = [...e.wires].flatMap(([, w]) => w.legs.map((leg) => {
       const s = resolveLeg(e, w, leg, { k: null, s: null })
@@ -142,7 +142,7 @@ describe('wire physics — zero wire memory (the purity law)', () => {
     // restore the EXACT rest state
     for (const [id, b] of e.bodies) { const r = rest.get(id)!; b.pos = { ...r.pos }; b.theta = r.theta }
     for (const [wid, h] of hubs) { const w = e.wires.get(wid)!; if (h !== null && w.hub !== null && w.hub.kind === 'point') w.hub.pos = { ...h } }
-    for (const [wid, as] of angles) { const w = e.wires.get(wid)!; w.legs.forEach((l, i) => { l.merge = as[i]! }) }
+    for (const [wid, as] of angles) { const w = e.wires.get(wid)!; w.legs.forEach((l, i) => { l.hubAngle = as[i]! }) }
     // re-solve through each leg's OWN (orbit-polluted) cache: a sound memoryless
     // memo must re-solve on the input mismatch and land bit-identical to the
     // fresh rest solve — history must leave NO trace
@@ -309,72 +309,55 @@ describe('wire physics — equilibria', () => {
     expect(moved, 'the free end must move (not parked)').toBeGreaterThanOrEqual(5)
   })
 
-  it('a symmetric 3-way junction forms NO forced trunk (USER Q-B: trunks need not exist)', () => {
-    // USER RULING 2026-07-06 (Q-B): a near-symmetric junction may have NO trunk —
-    // never enforce one; the through-line emerges only where geometry gives it. The
-    // symmetric threeWay has no aligned pair, so the emergent trunk (the span of the
-    // leg merge positions along the axis) must stay SMALL relative to a leg's own
-    // reach — the three arms simply meet near the hub, they are not forced onto a
-    // long through-line. (Continuity of that outcome under motion is the anti-snap
-    // law, checked by the drawn-jump test below.)
+  it('the trunk-tangent rule (round-8-D): two most-opposite legs flow through as one trunk, side legs merge tangentially', () => {
+    // The USER LAW ruled 2026-07-06: a k-way junction must NOT read as a
+    // 120°-symmetric star ("everything just going to a single point"). Each hub
+    // leg's arrival direction is pulled to its trunkTarget along the hub's trunk
+    // axis phi. Directly on the pure rule (no settling): two collinear legs
+    // (chord dirs 0 and π) on axis phi=0 must arrive ANTIPARALLEL — one
+    // continuous trunk straight through the hub.
+    const deg = (r: number) => (r * 180) / Math.PI
+    const between = (a: number, b: number): number => { let d = Math.abs(deg(a) - deg(b)) % 360; if (d > 180) d = 360 - d; return d }
+    const tTrunkA = trunkTarget(0, 0)
+    const tTrunkB = trunkTarget(Math.PI, 0)
+    expect(between(tTrunkA, tTrunkB), 'two on-axis legs arrive antiparallel (a continuous trunk)').toBeGreaterThanOrEqual(179)
+    // a leg perpendicular to the axis takes NO pull (weight |cos|=0) — its
+    // outgoing tangent (target+π) stays exactly radial, so a side branch crossing
+    // the axis can never jump between ends (the merge is continuous)
+    const outPerp = trunkTarget(Math.PI / 2, 0) + Math.PI
+    expect(between(Math.atan2(Math.sin(outPerp), Math.cos(outPerp)), Math.PI / 2), 'a perpendicular leg is not pulled (continuity at the flip)').toBeLessThan(1)
+    // an OFF-axis side leg (60° off) is pulled TOWARD the axis but not all the way
+    // (partial weight) — the tributary merge. Its outgoing tangent (target+π) sits
+    // between its radial chord and the axis.
+    const dirSide = (60 * Math.PI) / 180
+    const outSide = trunkTarget(dirSide, 0) + Math.PI // outgoing tangent from hub toward port
+    expect(deg(Math.atan2(Math.sin(outSide), Math.cos(outSide))), 'side leg merges tangentially (pulled toward the 0 axis, not left radial)').toBeLessThan(60)
+    expect(deg(Math.atan2(Math.sin(outSide), Math.cos(outSide))), 'side leg is not pulled all the way to the axis').toBeGreaterThan(0)
+  })
+
+  it('a settled junction pulls two legs past the 120° star toward a trunk', () => {
+    // Wired into the physics (not just the pure rule): the symmetric threeWay has
+    // no geometrically-preferred trunk, yet the trunk energy still pulls its two
+    // nearest-axis legs BEYOND the 120° a Plateau star would rest at — the most-
+    // opposite arrival pair exceeds 120°, so the junction no longer reads as a
+    // symmetric point-star. (Asymmetric junctions form a far stronger trunk; see
+    // the pure-rule test and the app screenshots.)
     const e = settled(threeWay, 6000)
     const w = [...e.wires.values()].find((x) => x.hub !== null)!
-    const span = trunkSpan(w)!
-    const trunkLen = span.tmax - span.tmin
-    // a leg's reach = hub → port distance (the scale a real trunk would span)
-    const hp = w.hub!.kind === 'point' ? w.hub!.pos : e.bodies.get(w.hub!.bodyId)!.pos
-    let reach = 0
+    const dirs: number[] = []
     for (const leg of w.legs) {
       if (leg.b.kind !== 'hub') continue
       const s = resolveLeg(e, w, leg)
-      reach = Math.max(reach, Math.hypot(s.p0.x - hp.x, s.p0.y - hp.y))
+      const pts: { x: number; y: number }[] = []
+      traceLeg(s, pts, QN)
+      const a = pts[pts.length - 1]!, prev = pts[pts.length - 2]!
+      dirs.push(Math.atan2(a.y - prev.y, a.x - prev.x))
     }
-    expect(trunkLen, `symmetric trunk span ${trunkLen.toFixed(1)} must stay small vs leg reach ${reach.toFixed(1)} (no forced trunk)`).toBeLessThan(reach)
-  })
-
-  it('a slowly rotating junction never snaps a leg (anti-snap, the reset core complaint)', () => {
-    // The reset's angriest complaint: "the swap causes the edge to be completely
-    // redrawn in a completely different position." Branch identity is continuous
-    // state (phi inertial + per-leg merge), so rotating one arm of a junction
-    // through a full turn must MORPH the drawing — no drawn-leg polyline point may
-    // jump more than the travel cap between adjacent frames.
-    const e = settled(threeWay, 4000)
-    const w = [...e.wires.values()].find((x) => x.hub !== null)!
-    // grab the body of the first hub leg's port and orbit it slowly around the hub
-    const leg0 = w.legs.find((l) => l.b.kind === 'hub')!
-    const bd = w.binds[leg0.a.kind === 'bind' ? leg0.a.i : 0]!
-    const body = e.bodies.get(bd.body)!
-    const hp = w.hub!.kind === 'point' ? w.hub!.pos : e.bodies.get(w.hub!.bodyId)!.pos
-    const rad = Math.hypot(body.pos.x - hp.x, body.pos.y - hp.y)
-    let a0 = Math.atan2(body.pos.y - hp.y, body.pos.x - hp.x)
-    const drawn = (): { x: number; y: number }[][] => [...e.wires.values()].flatMap((wv) => wv.legs.map((leg) => {
-      const s = resolveLeg(e, wv, leg); const pts: { x: number; y: number }[] = []; traceLeg(s, pts, QN); return pts
-    }))
-    let prev = drawn()
-    let maxJump = 0
-    // GENUINELY slow (the law says "slowly rotating"): a small angular step the
-    // inertial trunk DOF (phi/curv/merge, all gated + travel-capped) fully track,
-    // and small enough to stay OUT of the elastica blind cone (a >π-turn target,
-    // where the memoryless solve branch-flips — a pre-existing solver limitation,
-    // plan-23 next-item #5, independent of the trunk model). In this regime the
-    // trunk identity is continuous state that only slides, so the drawing morphs.
-    const STEP = 0.005 // rad/frame
-    for (let k = 0; k < 60; k++) {
-      a0 += STEP
-      body.pos = { x: hp.x + Math.cos(a0) * rad, y: hp.y + Math.sin(a0) * rad }
-      settleStep(e)
-      const cur = drawn()
-      for (let li = 0; li < Math.min(cur.length, prev.length); li++) {
-        const a = cur[li]!, b = prev[li]!
-        for (let pi = 0; pi < Math.min(a.length, b.length); pi++) {
-          maxJump = Math.max(maxJump, Math.hypot(a[pi]!.x - b[pi]!.x, a[pi]!.y - b[pi]!.y))
-        }
-      }
-      prev = cur
-    }
-    // a drawn point moves only by settling + the tiny imposed step (rad·STEP),
-    // never by a discontinuous branch swap of the trunk identity
-    expect(maxJump, `max drawn-leg jump ${maxJump.toFixed(2)} wu/frame must stay small (no snap)`).toBeLessThan(1.5)
+    expect(dirs).toHaveLength(3)
+    const between = (a: number, b: number): number => { let d = Math.abs((a - b) * 180 / Math.PI) % 360; if (d > 180) d = 360 - d; return d }
+    let mostOpp = 0
+    for (let i = 0; i < 3; i++) for (let j = i + 1; j < 3; j++) mostOpp = Math.max(mostOpp, between(dirs[i]!, dirs[j]!))
+    expect(mostOpp, `most-opposite pair ${mostOpp.toFixed(0)}° must exceed the 120° star`).toBeGreaterThan(128)
   })
 })
 
@@ -449,7 +432,6 @@ describe('wire physics — nothing is ever drawn outside the frame at rest (USER
         p.x - fb.maxX, fb.minX - p.x, p.y - fb.maxY, fb.minY - p.y)
       let worst = 0
       for (const { pts } of legPaths(e)) for (const p of pts) worst = Math.max(worst, outside(p))
-      for (const { pts } of trunkPaths(e)) for (const p of pts) worst = Math.max(worst, outside(p))
       // a small tolerance for the paint-resolution polyline vs the sample grid
       expect(worst, `a wire escaped the frame by ${worst.toFixed(1)} wu`).toBeLessThan(1.0)
     }
@@ -460,7 +442,7 @@ describe('wire physics — nothing is ever drawn outside the frame at rest (USER
 
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
-import { legPaths, trunkPaths } from '../../src/view/wires'
+import { legPaths } from '../../src/view/wires'
 const bootCtx = (await bootFixture()).ctx
 const threeBoundary = (): { diagram: Diagram; boundary: readonly WireId[] } => {
   const r = mkReplay(bootCtx.theorems.get('plusComm')!, bootCtx)

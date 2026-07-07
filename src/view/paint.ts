@@ -3,7 +3,7 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
-import { hubPoints, existentialStubs, legPaths, trunkPaths } from './wires'
+import { hubPoints, existentialStubs, legPaths } from './wires'
 
 /**
  * The display list (round-8 lab spec), pure — `paint(engine, theme)` returns
@@ -123,11 +123,6 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   const shapes: Shape[] = []
   // wires (traced elastica legs)
   for (const { pts } of legPaths(e)) {
-    shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
-  }
-  // the emergent trunk curve of each k-ary junction (the through-line the
-  // tributary legs merge into — plan 24)
-  for (const { pts } of trunkPaths(e)) {
     shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
   // existential stubs (genuine internal loose ends)
