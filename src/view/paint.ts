@@ -85,7 +85,7 @@ export function bubbleHues(d: Diagram, lightness: number): Map<RegionId, string>
     Shared by the base paint and the hover-group highlight; the term-only
     output run is added by the caller. */
 function anatomyOutline(b: Body, g: NodeGeometry, stroke: string, width: number, glow: string | null): Shape[] {
-  const ascale = ascaleOf(b.kind)
+  const ascale = ascaleOf(b.kind) * b.scale
   const out: Shape[] = []
   for (const a of g.arcs) {
     out.push({ kind: 'arc', center: b.pos, r: a.r * ascale, a0: a.a0 + b.theta, a1: a.a1 + b.theta, stroke, width, glow })
@@ -205,13 +205,14 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     if (b.kind === 'junction' || b.kind === 'anchor') continue
     const node = b.node!
     if (node.kind === 'ref') {
-      shapes.push({ kind: 'circle', center: b.pos, r: DISC_R, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
-      shapes.push({ kind: 'label', center: b.pos, text: node.defId.slice(0, LABEL_MAX), color: st.discText, r: DISC_R, font: st.font })
-      if (pipArity(b) >= 2) shapes.push(pipAt(b, DISC_R, st.ink))
+      const discR = DISC_R * b.scale
+      shapes.push({ kind: 'circle', center: b.pos, r: discR, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
+      shapes.push({ kind: 'label', center: b.pos, text: node.defId.slice(0, LABEL_MAX), color: st.discText, r: discR, font: st.font })
+      if (pipArity(b) >= 2) shapes.push(pipAt(b, discR, st.ink))
       continue
     }
     const g = b.geometry!
-    const ascale = ascaleOf(b.kind)
+    const ascale = ascaleOf(b.kind) * b.scale
     const atomHue = node.kind === 'atom' ? hues.get(node.binder)! : null
     const stroke = atomHue ?? st.wire
     shapes.push(...anatomyOutline(b, g, stroke, st.wireW, glow(atomHue ?? st.wire)))

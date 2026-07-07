@@ -98,8 +98,8 @@ const SOFT_MAX = (): number => 0.65 * PACE.softScale
     REST_HI(). The interval's width (3·PACE.sibGap) is the noise budget — derived
     circle geometry breathes well under one unit at rest, so content parked
     mid-zone is never re-excited from either edge. */
-const REST_LO = (): number => 2 * PACE.sibGap
-const REST_HI = (): number => 4 * PACE.sibGap
+const REST_LO = (sc: number): number => 2 * PACE.sibGap * sc
+const REST_HI = (sc: number): number => 4 * PACE.sibGap * sc
 /** Per-call sweep budget for the construction-time legality projection. */
 const PROJECTION_PASSES = 60
 
@@ -227,7 +227,7 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
     const discs: Disc[] = []
     for (const mid of e.membersOf.get(rid)!) {
       const b = e.bodies.get(mid)!
-      discs.push({ c: b.pos, r: b.discR, mid })
+      discs.push({ c: b.pos, r: b.discR * e.scale, mid })
     }
     for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8, sub: c })
     if (discs.length === 0) {
@@ -274,7 +274,7 @@ function contentBBox(e: Engine): { minX: number; minY: number; maxX: number; max
   }
   for (const b of e.bodies.values()) {
     if (b.id.startsWith('e:')) continue
-    grow(b.pos.x, b.pos.y, b.discR)
+    grow(b.pos.x, b.pos.y, b.discR * e.scale)
   }
   for (const [rid, g] of e.regions) {
     if (rid === e.d.root) continue
@@ -335,7 +335,7 @@ export function establishProofFrame(e: Engine, steps: readonly { diagram: Diagra
 function clampToFrame(e: Engine, b: Body, p: Vec2): Vec2 {
   const f = e.frame
   if (f === null) return p
-  const lim = Math.max(f.half - b.discR, 0)
+  const lim = Math.max(f.half - b.discR * e.scale, 0)
   return {
     x: Math.max(f.center.x - lim, Math.min(f.center.x + lim, p.x)),
     y: Math.max(f.center.y - lim, Math.min(f.center.y + lim, p.y)),
@@ -354,6 +354,50 @@ export function clampContentToFrame(e: Engine): void {
     if (b.kind === 'junction') continue
     b.pos = clampToFrame(e, b, b.pos)
   }
+  recomputeRegions(e)
+}
+
+/** Target fraction of the fixed frame half-extent a step's content should fill
+    (plan 24, USER RULING 2026-07-07 "content must be sized to the space available"):
+    the binding (largest) step already fills ~this by construction (the proof frame
+    was sized to it), and every SMALLER step is scaled UP to the same band so a
+    two-node step is never tiny. Below 1 so content clears the border with a rim of
+    air (never pressed against the wall). */
+const CONTENT_FILL = 0.82
+
+/** Size THIS step's content to fill the FIXED proof-wide border (plan 24, USER
+    RULING 2026-07-07). The border NEVER resizes — the CONTENT does, per rewrite:
+    every world-space length of the diagram (disc/anatomy radii, packing gaps, wire
+    clearance, drawn geometry) is a uniform multiple `Engine.scale` of its natural
+    (scale-1) value, chosen so this step's projected extent reaches CONTENT_FILL of
+    the frame. A DISCRETE-EVENT recalc at seed time (allowed by the ruling — sizes
+    recalculated after a rewrite), never during settling.
+
+    Runs on a NORMALIZED engine: every body/hub already sits at its NATURAL position
+    (carryOver un-scales the carried layout to scale 1), so the natural extent is
+    read directly, the fill scale is solved, and the whole layout is scaled about the
+    frame centre. Requires an established frame and a recomputeRegions first (seedProject
+    does both). No-op with no frame or no content. */
+export function applyContentScale(e: Engine): void {
+  if (e.frame === null) return
+  const bb = contentBBox(e) // natural extent (engine is normalized to scale 1 here)
+  if (bb === null) return
+  const half = Math.max((bb.maxX - bb.minX) / 2, (bb.maxY - bb.minY) / 2)
+  if (half < 1e-6) return
+  const s = Math.max(1, (CONTENT_FILL * e.frame.half) / half)
+  // scale ABOUT the content's own centroid and place that centroid at the frame
+  // centre — a small step's natural content sits at its own centre (not the
+  // proof-wide frame centre, which was fixed to the LARGEST step), so scaling
+  // about the frame centre would fling it off to the wall. Centroid-scale +
+  // recentre grows each step in place and centres it in the fixed border.
+  const cx = (bb.minX + bb.maxX) / 2, cy = (bb.minY + bb.maxY) / 2
+  const fc = e.frame.center
+  const map = (p: Vec2): Vec2 => ({ x: fc.x + (p.x - cx) * s, y: fc.y + (p.y - cy) * s })
+  for (const b of e.bodies.values()) { b.pos = map(b.pos); b.scale = s }
+  for (const w of e.wires.values()) {
+    if (w.hub !== null && w.hub.kind === 'point') w.hub.pos = map(w.hub.pos)
+  }
+  e.scale = s
   recomputeRegions(e)
 }
 
@@ -397,7 +441,7 @@ export function resolveOverlaps(e: Engine): boolean {
     for (const rid of e.regions.keys()) {
       const items: { sub: RegionId | null; id: string; r: number }[] = []
       for (const mid of e.membersOf.get(rid)!) {
-        items.push({ sub: null, id: mid, r: e.bodies.get(mid)!.discR })
+        items.push({ sub: null, id: mid, r: e.bodies.get(mid)!.discR * e.scale })
       }
       for (const c of e.childrenOf.get(rid)!) {
         items.push({ sub: c, id: c, r: e.regions.get(c)!.radius })
@@ -423,7 +467,7 @@ export function resolveOverlaps(e: Engine): boolean {
         // oscillating, never resting)
         const need = aOwned && B.sub !== null ? B.r
           : bOwned && A.sub !== null ? A.r
-          : A.r + B.r + PACE.sibGap
+          : A.r + B.r + PACE.sibGap * e.scale
         if (dist >= need) continue
 
         // coincident centers have no separation direction; any fixed unit
@@ -474,8 +518,8 @@ function clearU(d: number, R: number): number {
 /** ∃-tip standoff potential (C1, radius standoffR, slope 2·tension — dominates
     the single-tension pull on an endpoint so the dot never sinks into its own
     wire; an energy term, never a position clamp). */
-function standoffU(d: number): number {
-  const R = WIREP.standoffR
+function standoffU(d: number, sc: number): number {
+  const R = WIREP.standoffR * sc
   if (d >= R) return 0
   const h = R / 2, slope = 2 * ELASTICA.tension
   if (d >= h) { const t = (R - d) / h; return (slope * h * t * t) / 2 }
@@ -489,14 +533,14 @@ type DiscRec = { readonly id: string; readonly body: Body; readonly r: number }
 /** The node clearance line integral of one leg's samples against near discs —
     the own end discs exempt near their rim by an arc-distance ramp (the wire
     starts ON the rim heading outward and legitimately passes through there). */
-function legClearance(samples: readonly Vec2[], L: number, ownA: string | null, ownB: string | null, near: readonly DiscRec[]): number {
+function legClearance(samples: readonly Vec2[], L: number, ownA: string | null, ownB: string | null, near: readonly DiscRec[], sc: number): number {
   if (near.length === 0) return 0
   const ds = L / QN
   let E = 0
   for (let k = 1; k < samples.length; k++) {
     const s = samples[k]!
     for (const D of near) {
-      const R = D.r + WIREP.clearMargin
+      const R = D.r + WIREP.clearMargin * sc
       const dx = s.x - D.body.pos.x, dy = s.y - D.body.pos.y
       const d = Math.hypot(dx, dy)
       if (d >= R) continue
@@ -533,22 +577,25 @@ function legFrameE(samples: readonly Vec2[], f: Engine['frame']): number {
     (the free-end candidate grid keeps free-end legs representable up to ~144°
     behind; the only bound is the numerical L-cap in resolveLeg). NO blend/second
     shape family — the demo shipped without one and it is strictly preferable. */
-function legIntrinsicE(shape: LegShape, samples: readonly Vec2[], near: readonly DiscRec[]): number {
+function legIntrinsicE(shape: LegShape, samples: readonly Vec2[], near: readonly DiscRec[], sc: number): number {
   const { c1, c2, L, well } = shape.sol
   return ELASTICA.tension * L
     + (ELASTICA.bend * (c1 * c1 + 2 * c1 * c2 + (4 / 3) * c2 * c2)) / L
     + well
-    + legClearance(samples, L, shape.ownA, shape.ownB, near)
+    + legClearance(samples, L, shape.ownA, shape.ownB, near, sc)
 }
 
 /** Wire↔wire separation between two legs' samples (every 3rd point: transverse
-    crossings spend almost no arc in the band, co-running legs pay). */
-function sepPair(sa: readonly Vec2[], sb: readonly Vec2[]): number {
+    crossings spend almost no arc in the band, co-running legs pay). The band
+    radius scales with the content-fill scale so co-routed wires stay separated in
+    proportion to the drawn size. */
+function sepPair(sa: readonly Vec2[], sb: readonly Vec2[], sc: number): number {
+  const R = WIREP.sepR * sc
   let E = 0
   for (let k = 0; k < sa.length; k += 3) for (let l = 0; l < sb.length; l += 3) {
     const dx = sa[k]!.x - sb[l]!.x, dy = sa[k]!.y - sb[l]!.y
     const d = Math.hypot(dx, dy)
-    if (d < WIREP.sepR) E += (WIREP.sepSlope * (WIREP.sepR - d) * (WIREP.sepR - d)) / WIREP.sepR
+    if (d < R) E += (WIREP.sepSlope * (R - d) * (R - d)) / R
   }
   return E
 }
@@ -630,7 +677,7 @@ function tipStandoffE(e: Engine, w: WireView): number {
   const bd = w.binds[0]
   if (bd === undefined) return 0
   const a = worldBindAnchor(e.bodies.get(bd.body)!, bd.key)
-  return standoffU(Math.hypot(tip.pos.x - a.x, tip.pos.y - a.y))
+  return standoffU(Math.hypot(tip.pos.x - a.x, tip.pos.y - a.y), e.scale)
 }
 
 /** Total WIRE energy of the engine (leg intrinsic + clearance, junction trunk
@@ -640,9 +687,10 @@ function tipStandoffE(e: Engine, w: WireView): number {
     so there is no separate exit→slot attraction term. Uses the full memoryless
     grid solve for every leg (a near-tie scene needs the branch flip it finds). */
 export function wireEnergy(e: Engine): number {
+  const sc = e.scale
   const discs: DiscRec[] = [...e.bodies.values()]
     .filter((b) => b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom')
-    .map((b) => ({ id: b.id, body: b, r: b.discR }))
+    .map((b) => ({ id: b.id, body: b, r: b.discR * sc }))
   // resolve + trace every leg once
   const legSamples: { wid: string; samples: Vec2[] }[] = []
   let E = 0
@@ -651,8 +699,8 @@ export function wireEnergy(e: Engine): number {
       const shape = resolveLeg(e, w, leg, leg.cache)
       const samples: Vec2[] = []
       traceLeg(shape, samples, QN)
-      const near = discs.filter((D) => bboxNear(samples, D.body.pos, D.r + WIREP.clearMargin))
-      E += legIntrinsicE(shape, samples, near) + legFrameE(samples, e.frame)
+      const near = discs.filter((D) => bboxNear(samples, D.body.pos, D.r + WIREP.clearMargin * sc))
+      E += legIntrinsicE(shape, samples, near, sc) + legFrameE(samples, e.frame)
       legSamples.push({ wid, samples })
     }
     // junction trunk alignment + trunk-axis anchoring over this wire's hub
@@ -663,7 +711,7 @@ export function wireEnergy(e: Engine): number {
   for (let a = 0; a < legSamples.length; a++) {
     for (let b = a + 1; b < legSamples.length; b++) {
       if (legSamples[a]!.wid === legSamples[b]!.wid) continue
-      E += sepPair(legSamples[a]!.samples, legSamples[b]!.samples)
+      E += sepPair(legSamples[a]!.samples, legSamples[b]!.samples, sc)
     }
   }
   return E
@@ -696,15 +744,16 @@ function bboxOverlap(sa: readonly Vec2[], sb: readonly Vec2[], r: number): boole
     projection; this is the field that parks the dot in the annulus without a
     standing contact cycle. */
 function homedScopeE(e: Engine, body: Body): number {
+  const band = PACE.ringBand * e.scale
   let E = 0
   for (const child of e.childrenOf.get(body.region) ?? []) {
     const g = e.regions.get(child)
     if (g === undefined) continue
-    const rr = g.radius + body.discR
+    const rr = g.radius + body.discR * e.scale
     const dd = Math.hypot(body.pos.x - g.center.x, body.pos.y - g.center.y)
-    if (dd >= rr + PACE.ringBand) continue
-    const pen = rr + PACE.ringBand - dd
-    E += (PACE.ringSlope / 2) * Math.min(pen, PACE.ringBand) * pen
+    if (dd >= rr + band) continue
+    const pen = rr + band - dd
+    E += (PACE.ringSlope / 2) * Math.min(pen, band) * pen
   }
   return E
 }
@@ -734,8 +783,8 @@ function homedScopeE(e: Engine, body: Body): number {
     domain-clamped at gap+8 ≥ 0.5 (as the plan-22 force already was) so the log
     is never taken of a non-positive argument; below the clamp it grows linearly
     at the (enormous) clamp-floor force. */
-function sibU(gap: number): number {
-  const LO = REST_LO(), HI = REST_HI(), g = PACE.sibGap
+function sibU(gap: number, sc: number): number {
+  const LO = REST_LO(sc), HI = REST_HI(sc), g = PACE.sibGap * sc
   if (gap >= HI) {
     // cohesion: force ramps 0→SOFT_MAX over [HI, HI+g], constant beyond
     const over = gap - HI
@@ -779,19 +828,20 @@ function frameContainE(e: Engine): number {
     read live, so a probe that moved a body must `recomputeRegions` first (the
     gates do). */
 export function contentEnergy(e: Engine): number {
+  const sc = e.scale
   let E = frameContainE(e)
   for (const rid of e.regions.keys()) {
     const items: { r: number; c: Vec2 }[] = []
     for (const mid of e.membersOf.get(rid)!) {
       const b = e.bodies.get(mid)!
       if (b.kind === 'junction') continue
-      items.push({ r: b.discR, c: b.pos })
+      items.push({ r: b.discR * sc, c: b.pos })
     }
     for (const cId of e.childrenOf.get(rid)!) { const g = e.regions.get(cId)!; items.push({ r: g.radius, c: g.center }) }
     for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
       const A = items[i]!, B = items[j]!
       const dist = Math.max(Math.hypot(A.c.x - B.c.x, A.c.y - B.c.y), 1)
-      E += sibU(dist - A.r - B.r)
+      E += sibU(dist - A.r - B.r, sc)
     }
   }
   // scope-ring confines ∃ tips / ∀ via-body hubs to their scope
@@ -822,15 +872,16 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
     const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
     x = cx + ux * need; y = cy + uy * need
   }
+  const sc = e.scale
   for (const mid of e.membersOf.get(b.region)!) {
     if (mid === b.id) continue
     const o = e.bodies.get(mid)!
     if (owned || o.kind === 'junction') continue // disc-vs-dot pairs: wire barrier's job
-    push(o.pos.x, o.pos.y, b.discR + o.discR + PACE.sibGap)
+    push(o.pos.x, o.pos.y, (b.discR + o.discR) * sc + PACE.sibGap * sc)
   }
   for (const cId of e.childrenOf.get(b.region)!) {
     const g = e.regions.get(cId)!
-    push(g.center.x, g.center.y, owned ? g.radius : b.discR + g.radius + PACE.sibGap)
+    push(g.center.x, g.center.y, owned ? g.radius : b.discR * sc + g.radius + PACE.sibGap * sc)
   }
   // the fixed frame is a hard wall (plan 24): a trial past the inner edge is
   // projected back in, so no content disc is ever accepted outside the frame
@@ -861,7 +912,7 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
   let x = p.x, y = p.y
   for (const [rid, g] of e.regions) {
     if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
-    const need = owned ? g.radius : b.discR + g.radius + PACE.sibGap
+    const need = owned ? g.radius : b.discR * e.scale + g.radius + PACE.sibGap * e.scale
     const dx = x - g.center.x, dy = y - g.center.y, d = Math.hypot(dx, dy)
     if (d >= need) continue
     const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
@@ -1010,12 +1061,13 @@ function gatedMove(get: () => Vec2, set: (p: Vec2) => void, project: (p: Vec2) =
  */
 function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void)[] {
   const dofs: (() => void)[] = []
+  const sc = e.scale
   const discs: DiscRec[] = []
-  for (const b of e.bodies.values()) if (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') discs.push({ id: b.id, body: b, r: b.discR })
+  for (const b of e.bodies.values()) if (b.kind === 'ref' || b.kind === 'term' || b.kind === 'atom') discs.push({ id: b.id, body: b, r: b.discR * sc })
 
   const legRecs: LegRec[] = []
   const legsOfWire = new Map<string, LegRec[]>()
-  const cullR = WIREP.clearMargin + WIREP.travelCap
+  const cullR = (WIREP.clearMargin + WIREP.travelCap) * sc
   for (const [wid, w] of e.wires) {
     const arr: LegRec[] = []
     for (const leg of w.legs) {
@@ -1040,7 +1092,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
   // (2·travelCap) so a leg that swings INTO range mid-sweep is already listed —
   // otherwise its rising sep term is invisible to the gate and pumps a limit
   // cycle (the same reason clearance uses cullR).
-  const sepCull = WIREP.sepR + 2 * WIREP.travelCap
+  const sepCull = (WIREP.sepR + 2 * WIREP.travelCap) * sc
   const crossNear = new Map<number, LegRec[]>()
   for (const r of legRecs) crossNear.set(r.gi, legRecs.filter((o) => o.wid !== r.wid && bboxOverlap(r.samples, o.samples, sepCull)))
 
@@ -1091,20 +1143,20 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
       const samp = scratchSamples[idx] ?? (scratchSamples[idx] = [])
       traceLeg(shape, samp, QN)
       probeSamples.set(r.gi, samp)
-      E += legIntrinsicE(shape, samp, r.near) + legFrameE(samp, e.frame)
+      E += legIntrinsicE(shape, samp, r.near, sc) + legFrameE(samp, e.frame)
     })
     for (const r of touched) {
       const samp = probeSamples.get(r.gi)!
       for (const o of crossNear.get(r.gi)!) {
         if (touchedSet.has(o.gi) && r.gi >= o.gi) continue
-        E += sepPair(samp, touchedSet.has(o.gi) ? probeSamples.get(o.gi)! : o.samples)
+        E += sepPair(samp, touchedSet.has(o.gi) ? probeSamples.get(o.gi)! : o.samples, sc)
       }
     }
     if (farBody !== null) {
-      const near1: DiscRec[] = [{ id: farBody.id, body: farBody, r: farBody.discR }]
+      const near1: DiscRec[] = [{ id: farBody.id, body: farBody, r: farBody.discR * sc }]
       for (const r of discNearLegs.get(farBody.id)!) {
         if (touchedSet.has(r.gi)) continue
-        E += legClearance(r.samples, r.shape.sol.L, r.shape.ownA, r.shape.ownB, near1)
+        E += legClearance(r.samples, r.shape.sol.L, r.shape.ownA, r.shape.ownB, near1, sc)
       }
     }
     if (hubWire !== null) E += trunkAlignE(e, hubWire)
@@ -1138,7 +1190,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     const gradE = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null, true) + contentFrame() }
     const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null) + contentFrame() }
     dofs.push(() => {
-      gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap)
+      gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap * sc)
       if (touched.length > 0) {
         // Node angle is FREE and UNLIMITED (USER RULING 2026-07-06: "Node angle is
         // ARBITRARY. It encodes NO information and is FREE in the physics"). The
@@ -1148,7 +1200,8 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
         // expanding search) descends its wire energy by the full step every tick,
         // bounded only at π (an angle wraps, so a larger cap is meaningless). Strict
         // E-gating still forbids any move that does not lower energy, so it settles.
-        gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / b.discR, (4 * MU) / (b.discR * b.discR), Math.PI)
+        const rW = b.discR * sc // world radius: the rotation probe/mobility scale with the drawn node
+        gatedStep(() => b.theta, (v) => { b.theta = v }, () => localE(touched, null, null), HX / rW, (4 * MU) / (rW * rW), Math.PI)
       }
       for (const r of touched) refresh(r)
     })
@@ -1178,7 +1231,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     // into a small limit cycle (measured: an ∃ tip cycling E ±0.4 forever).
     const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, null, null) + contentFrame() }
     dofs.push(() => {
-      gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, light ? 0.55 : 0.28)
+      gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), energy, energy, light ? 3 * MU : MU, (light ? 0.55 : 0.28) * sc)
       for (const r of touched) refresh(r)
     })
   }
@@ -1200,7 +1253,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     const hub = w.hub
     const touched = legsOfWire.get(wid)!.filter((r) => r.leg.b.kind === 'hub')
     dofs.push(() => {
-      gatedPoint(hub, () => localE(touched, null, null), MU, 0.28)
+      gatedPoint(hub, () => localE(touched, null, null), MU, 0.28 * sc)
       for (const r of touched) refresh(r)
     })
   }

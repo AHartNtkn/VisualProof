@@ -6,7 +6,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, resolveLeg } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
-import { settle, settleStep, totalEnergy, clampDragToFeasible } from '../../src/view/relax'
+import { settle, settleStep, totalEnergy, clampDragToFeasible, recomputeRegions, resolveOverlaps, establishFrame, establishProofFrame, applyContentScale, clampContentToFrame } from '../../src/view/relax'
 import { thetaRange } from '../../src/view/elastica'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
@@ -230,6 +230,64 @@ describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => 
       }
       expect(e.frame!.half, `${name}: the drag grew the frame`).toBe(half0)
     }
+  })
+})
+
+describe('content-fill scaling — a step is sized to the fixed border (plan 24, USER RULING 2026-07-07)', () => {
+  // The border is fixed proof-wide; each step's CONTENT is scaled (uniform
+  // Engine.scale) so it FILLS the border instead of rendering tiny. The seed path
+  // (app seedProject): proof-wide frame, then applyContentScale sizes THIS step.
+  const r = mkReplay(plusCommThm, bootCtx)
+  const steps = Array.from({ length: r.stepCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundary }))
+  // one fixed proof-wide frame, established once (as enterReplay does)
+  const probe = mkEngine(r.diagramAt(0), r.boundary)
+  establishProofFrame(probe, steps)
+  const frame = probe.frame!
+
+  // build a step through the app seed path and settle it
+  const seedStep = (k: number, ticks: number): Engine => {
+    const e = mkEngine(r.diagramAt(k), r.boundary)
+    e.frame = frame
+    recomputeRegions(e); resolveOverlaps(e); establishFrame(e); applyContentScale(e); clampContentToFrame(e)
+    settle(e, ticks)
+    return e
+  }
+  // BOX half-extent (the frame is a near-square, not a circle): the max per-axis
+  // reach from the frame centre. A disc in a corner is inside the box even though
+  // its RADIAL distance exceeds the half — measure the wall the clamp enforces.
+  const contentHalf = (e: Engine): number => {
+    let h = 0
+    const box = (cx: number, cy: number, r: number): void => { h = Math.max(h, Math.abs(cx - frame.center.x) + r, Math.abs(cy - frame.center.y) + r) }
+    for (const b of e.bodies.values()) { if (b.id.startsWith('e:')) continue; box(b.pos.x, b.pos.y, b.discR * e.scale) }
+    for (const [rid, g] of e.regions) { if (rid === e.d.root) continue; box(g.center.x, g.center.y, g.radius) }
+    return h
+  }
+
+  // A SMALL step (few nodes) must fill the fixed border, not render tiny — the
+  // whole point of the ruling. Measured occupancy 0.74–0.96 across plusComm
+  // steps; pinned ≥ 0.6 with margin. It also must not spill past the border.
+  for (const k of [0, r.stepCount]) {
+    it(`small step ${k} fills the border (occupancy in band) and stays inside`, () => {
+      const e = seedStep(k, 700)
+      const occ = contentHalf(e) / frame.half
+      expect(e.scale, `step ${k}: a small step must scale UP to fill (scale ${e.scale.toFixed(1)})`).toBeGreaterThan(1.5)
+      expect(occ, `step ${k}: content fills only ${(occ * 100).toFixed(0)}% of the border — too tiny`).toBeGreaterThan(0.6)
+      expect(occ, `step ${k}: content spills past the border (${(occ * 100).toFixed(0)}%)`).toBeLessThanOrEqual(1.02)
+    })
+  }
+
+  // A scaled-up step must still REST (the motion caps scale with content, so
+  // settling is scale-invariant — same tick-count, drift → 0) and descend E
+  // monotonically. Reproduces the pre-cap-scaling residual drift (7.7 wu) that
+  // a fixed cap left on a 17× step.
+  it('a scaled-up step rests legally with monotone E (caps scale with content)', () => {
+    const e = seedStep(0, 700)
+    const before = new Map([...e.bodies].map(([id, b]) => [id, { ...b.pos }]))
+    let prevE = totalEnergy(e), maxRise = 0, maxDrift = 0
+    for (let i = 0; i < 100; i++) { settleStep(e); const cur = totalEnergy(e); maxRise = Math.max(maxRise, cur - prevE); prevE = cur }
+    for (const [id, b] of e.bodies) maxDrift = Math.max(maxDrift, Math.hypot(b.pos.x - before.get(id)!.x, b.pos.y - before.get(id)!.y))
+    expect(maxDrift, `scaled step drifted ${maxDrift.toFixed(2)} wu (cap scaling should make it rest)`).toBeLessThanOrEqual(1.5)
+    expect(maxRise, `scaled step E rose ${maxRise.toFixed(4)} (un-gated mover?)`).toBeLessThanOrEqual(1e-3)
   })
 })
 

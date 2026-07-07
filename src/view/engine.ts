@@ -43,10 +43,22 @@ export type Body = {
   readonly geometry: NodeGeometry | null
   /** Port key (pkey) -> anatomy-local anchor, ascale already folded in. */
   readonly localAnchor: Map<string, Vec2>
+  /** NATURAL clearance-disc radius (scale 1). The world radius is `discR * scale`
+      — the content-fill scale (plan 24) is a read-time MULTIPLIER, never baked
+      into this field, so a rebuilt/carried body always holds the same natural
+      geometry and only `scale` + `pos` carry the per-step size. */
   readonly discR: number
   readonly region: RegionId
   pos: Vec2
   theta: number
+  /** Per-step CONTENT-FILL scale (plan 24, USER RULING 2026-07-07): the border is
+      fixed proof-wide, so each rewrite sizes its content to fill it by this uniform
+      length multiplier (all bodies of an engine share one value = `Engine.scale`).
+      Applied to every world-space length materialized from this body — the drawn
+      disc/anatomy (paint, localToWorld), the wire rim attach (worldBindAnchor), and
+      the clearance/packing radii (relax) — so a small step's few nodes render large
+      instead of tiny. 1 = natural size. */
+  scale: number
 }
 
 /** key null = the body's centre (junctions have no ports). */
@@ -145,6 +157,12 @@ export type Engine = {
       (near-square: sized to the larger content half-extent + margin), so a wide
       proof gets a bigger square, never a letterbox. */
   frame: StoredFrame | null
+  /** Per-step CONTENT-FILL scale (plan 24): the uniform length multiplier that
+      sizes this step's content to fill the FIXED proof-wide border (the border
+      never resizes — USER LAW; the CONTENT does, per rewrite). Every body carries
+      the same value in `Body.scale`; relax reads it for the packing/clearance
+      length params, engine + paint read it for the drawn geometry. 1 = natural. */
+  scale: number
   /** relaxation tick counter (drives overlap-projection cadence, determinism). */
   tick: number
 }
@@ -234,7 +252,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       // a port pointing exactly away from its fixed boundary slot then sits at
       // the energy's unstable maximum with a symmetric (zero) rotation
       // gradient and cannot roll off. A generic seed breaks the symmetry.
-      pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: (i + 1) * 2.399963,
+      pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: (i + 1) * 2.399963, scale: 1,
     })
     i++
   }
@@ -261,7 +279,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       bodies.set(aid, {
         id: aid, kind: 'anchor', node: null, geometry: null,
         localAnchor: new Map(), discR: 5, region: rid,
-        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: 0,
+        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: 0, scale: 1,
       })
       membersOf.get(rid)!.push(aid)
       i++
@@ -287,7 +305,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     const b: Body = {
       id, kind: 'junction', node: null, geometry: null,
       localAnchor: new Map(), discR: 4.5, region,
-      pos: seed, theta: 0,
+      pos: seed, theta: 0, scale: 1,
     }
     bodies.set(id, b)
     membersOf.get(region)!.push(id)
@@ -366,7 +384,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     wires.set(wid, { binds, hub, tipBodyId, slot, legs, phi })
   }
 
-  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), frame: null, tick: 0 }
+  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), frame: null, scale: 1, tick: 0 }
 }
 
 /**
@@ -385,11 +403,22 @@ export function carryOver(prev: Engine, next: Engine): void {
   // rebuilt engine (it only establishes when frame === null), so the drawn border is
   // byte-identical across every step of a proof.
   next.frame = prev.frame
+  // Carry prev's layout NORMALIZED to natural scale (plan 24): prev was displayed at
+  // its own content-fill scale, so un-scale every carried position about the frame
+  // centre back to scale 1. The rebuilt engine is then a clean natural (scale-1)
+  // layout — new bodies are already seeded natural — and `applyContentScale`
+  // (seedProject) re-solves THIS step's fill scale and scales the whole thing up
+  // uniformly. The relative layout GLIDES (positions are prev's, just re-sized); the
+  // size change is the sanctioned discrete-event recalc at the rewrite.
+  next.scale = 1
+  const c = prev.frame === null ? { x: 0, y: 0 } : prev.frame.center
+  const denorm = (p: Vec2, sc: number): Vec2 => ({ x: c.x + (p.x - c.x) / sc, y: c.y + (p.y - c.y) / sc })
   for (const [id, nb] of next.bodies) {
     const pb = prev.bodies.get(id)
     if (pb === undefined) continue
-    nb.pos = pb.pos
+    nb.pos = denorm(pb.pos, pb.scale)
     nb.theta = pb.theta
+    nb.scale = 1
   }
   // wires glide too: a surviving wire with the same bind signature keeps its
   // hub/exit position and per-leg arrival angles instead of re-seeding.
@@ -400,7 +429,7 @@ export function carryOver(prev: Engine, next: Engine): void {
     const pv = prev.wires.get(wid)
     if (pv === undefined || sig(pv) !== sig(nv)) continue
     if (nv.hub !== null && nv.hub.kind === 'point' && pv.hub !== null && pv.hub.kind === 'point') {
-      nv.hub.pos = pv.hub.pos
+      nv.hub.pos = denorm(pv.hub.pos, prev.scale)
     }
     for (let k = 0; k < nv.legs.length && k < pv.legs.length; k++) {
       nv.legs[k]!.hubAngle = pv.legs[k]!.hubAngle
@@ -412,7 +441,7 @@ export function carryOver(prev: Engine, next: Engine): void {
 /** Map an anatomy-local point (before ascale) into world space through the
     body's scale, rotation, and position. Shared by paint and hit-testing. */
 export function localToWorld(b: Body, lp: Vec2): Vec2 {
-  const ascale = ascaleOf(b.kind)
+  const ascale = ascaleOf(b.kind) * b.scale
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   const x = lp.x * ascale, y = lp.y * ascale
   return { x: b.pos.x + x * c - y * s, y: b.pos.y + x * s + y * c }
@@ -421,7 +450,8 @@ export function localToWorld(b: Body, lp: Vec2): Vec2 {
 /** World anchor of (body, port key); key null returns the body centre. */
 export function worldAnchor(b: Body, key: string | null): Vec2 {
   if (key === null) return b.pos
-  const a = b.localAnchor.get(key)!
+  const a0 = b.localAnchor.get(key)!
+  const a = { x: a0.x * b.scale, y: a0.y * b.scale }
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
 }
@@ -438,13 +468,15 @@ export function worldAnchor(b: Body, key: string | null): Vec2 {
     anchor (bend.ts / atomGeometry), so the wire meets that drawn stub tip
     directly — the port anchor is already on the drawing (ascale folded in). */
 export function worldBindAnchor(b: Body, key: string): Vec2 {
-  const a = b.localAnchor.get(key)!
+  const a0 = b.localAnchor.get(key)!
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   if (b.kind === 'ref') {
-    const la = Math.hypot(a.x, a.y)
-    const ux = la < 1e-9 ? 1 : a.x / la, uy = la < 1e-9 ? 0 : a.y / la
-    return { x: b.pos.x + (ux * c - uy * s) * DISC_R, y: b.pos.y + (ux * s + uy * c) * DISC_R }
+    const la = Math.hypot(a0.x, a0.y)
+    const ux = la < 1e-9 ? 1 : a0.x / la, uy = la < 1e-9 ? 0 : a0.y / la
+    const R = DISC_R * b.scale
+    return { x: b.pos.x + (ux * c - uy * s) * R, y: b.pos.y + (ux * s + uy * c) * R }
   }
+  const a = { x: a0.x * b.scale, y: a0.y * b.scale }
   return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
 }
 
