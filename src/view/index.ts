@@ -11,7 +11,7 @@ export {
 } from './engine'
 export { settle, settleStep, recomputeRegions, resolveOverlaps, REGION_PAD, SIB_GAP } from './relax'
 export type { LegGeom, ExStub } from './wires'
-export { computeLegs, legPaths, hubPoints, existentialStubs } from './wires'
+export { computeLegs, legPaths, existentialStubs } from './wires'
 export type { Theme, Shape } from './paint'
 export { paint, bubbleHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from './paint'
 export { drawShapes } from './canvas'

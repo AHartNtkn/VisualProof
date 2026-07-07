@@ -3,7 +3,8 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
-import { hubPoints, existentialStubs, legPaths } from './wires'
+import { existentialStubs, legPaths } from './wires'
+import { junctionShapes, junctionWids } from './junction'
 
 /**
  * The display list (round-8 lab spec), pure — `paint(engine, theme)` returns
@@ -121,11 +122,19 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   if (fb === null) throw new Error('paintWires requires a settled engine: call settleStep/settle first')
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
   const shapes: Shape[] = []
-  // wires (traced elastica legs)
-  for (const { pts } of legPaths(e)) {
+  // ≥3-leg interior junctions are drawn as a soap-film Steiner tree with tangential
+  // tributary merging (round-8 · D, the user-approved look), NOT as a star of legs
+  // meeting at one hub point — so those wires' star legs are skipped here and the
+  // hub-point branch dot is NOT drawn (USER 2026-07-07: branch points are unmarked).
+  const juncWids = junctionWids(e)
+  // wires (traced elastica legs) — every wire EXCEPT the soap junctions
+  for (const { wid, pts } of legPaths(e)) {
+    if (juncWids.has(wid)) continue
     shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
-  // existential stubs (genuine internal loose ends)
+  // the soap-tributary curves for those junctions (no branch dots)
+  for (const s of junctionShapes(e, st)) shapes.push(s)
+  // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
   for (const s of existentialStubs(e)) {
     shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
@@ -136,18 +145,14 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     const s0 = frameSlots(fb, e.boundary.length)[0]!.point
     shapes.push({ kind: 'dot', center: s0, rPx: PIP_R, fill: st.ink })
   }
-  // junction dots (ring: paper halo + wire core), fixed device size — at every
-  // wire-owned junction: first-class bodies (∀ via-body, ∃ tip) and hub POINTS
-  // (an interior k-ary junction, a k≥2 boundary junction). A dot marks a genuine
-  // branch, never a plain 2-point wire (plan 24).
+  // SEMANTIC junction-body dots only: a first-class ∀ via-body / ∃ tip is a loose
+  // end of a line of identity (the existential dot is semantic — USER LAW, stays).
+  // A STRUCTURAL interior hub-POINT branch is NOT dotted — the soap tree's branching
+  // curves are the only visual there (USER 2026-07-07: branch-point dots removed).
   for (const b of e.bodies.values()) {
     if (b.kind !== 'junction') continue
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: st.wire })
-  }
-  for (const { pos } of hubPoints(e)) {
-    shapes.push({ kind: 'dot', center: pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
-    shapes.push({ kind: 'dot', center: pos, rPx: JUNCTION_INNER_R, fill: st.wire })
   }
   return shapes
 }
