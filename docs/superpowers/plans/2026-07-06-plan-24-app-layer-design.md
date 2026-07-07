@@ -741,3 +741,41 @@ across evals within a sweep when its exact boundary tuple is unchanged, with an
 explicit invalidation guarantee so the gate never accepts on a stale shape) — a
 designed option with a guarantees analysis, to be weighed by the user against the
 measured ~7 fps stakes, not a tuning lever to be slipped in.
+
+**RESULTS 2026-07-07 (impl24d — the two authorized pure levers, measured on clean cores):**
+
+- **EXACT CROSS-EVAL SOLVE REUSE (the frontier above) — LANDED, output-identical, commit
+  4cf55de.** The leg memo was a SINGLE slot, so a gated step re-solved its base value
+  after EVERY rejected trial (backtracking + long-shot return to base, slot overwritten
+  by the intervening trial). Widened to a 16-entry FIFO ring keyed on the exact tuple so
+  the base stays resident across a gate's probes. Reuse is by EXACT tuple equality —
+  the exact-key match IS the invalidation (a changed tuple misses and solves fresh; a
+  stale shape can never be returned), so output is BIT-IDENTICAL to the single-slot memo.
+  Law (relax.test.ts): plusComm@20 settles bit-identically with the memo on vs off
+  (`legCache.enabled`), maxDiff exactly 0. Measured real leg-solves/tick 1087→850 (pc20)
+  / 842→660 (ss24) / 1060→835 (ss48) = ~22–25% fewer; paired ms/tick (same-process, same
+  contention) 1.14× / 1.34× / 1.15×. **Honest fps: pc20 ~3, ss24 ~5** — reuse alone is
+  far short of 20/60 fps. Diminishing returns past ring N=8 (measured N∈{1,2,4,8,16,32}:
+  hit-rate 4.7%→9.8%→22.4%→23.4%→25.5%→25.9%); N=16 chosen. This is the frontier's
+  exact-tuple ceiling: the residual ~850 solves are GENUINELY-DISTINCT probe tuples
+  (every gradient/line-search trial moves the DOF, changing its legs' tuples), which no
+  exact-reuse can serve.
+
+- **ANALYTIC/ENVELOPE GATE GRADIENTS (2nd authorized lever) — TRIED, REVERTED (breaks a
+  HARD law, reproduced).** The three grid-FD gate gradients that dominate the solve count
+  (profiled pc20: hubPoint 33%, nodeRot 29%, hubAngle 25% — nodeXlate is only 13% because
+  it ALREADY uses the warm gradient) were switched to the warm/envelope gradient (fixed
+  base turning via `closeAt`, no grid scan) for the ±h probes only, accept still grid.
+  Grid-solves dropped ~21% (pc20 850→672). But the warm gradient reaches a DIFFERENT
+  valid rest state that VIOLATES HARD SEMANTIC CONTAINMENT: drag-clamp mid-drag cut
+  overshoot 1.31 wu vs the 0.5 bound — an EXACT reproduction of the prior warm-gradient
+  revert. A hard USER law (a cut crossing the border changes what the diagram MEANS)
+  cannot be traded for a modest solve cut, so reverted. The only alternative — an EXACT
+  analytic gradient of the FULL localE — is intractable in closed form (the clearance/
+  separation terms are repulsion integrals over the traced polyline of a
+  constraint-optimized elastica). **Conclusion: BOTH authorized pure levers are now
+  spent. The lawful ceiling stands at the analytic-Jacobian × ring-reuse ≈ 3–4× (~3–5
+  fps).** 20+ fps still requires the descent-architecture change beyond exact-tuple reuse
+  (fewer PROBES per gate, or approximate-but-provably-safe evals) — a design the user
+  must weigh, not a lever, and the warm-gradient reproduction is fresh evidence that any
+  probe-value change shifts basins into law violations.
