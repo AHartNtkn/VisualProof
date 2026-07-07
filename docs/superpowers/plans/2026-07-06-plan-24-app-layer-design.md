@@ -675,3 +675,69 @@ after the perf work. The Task-4 laws were instead verified INDIVIDUALLY in node
 0.30 wu/frame at slow rotation; the pre-existing blind-cone flip reduced 22.99→8.75
 wu, reported not patched). Those individual node checks are the honest interim record;
 the full battery must run (likely with reduced budgets) once perf is addressed.
+
+**RESULTS 2026-07-07 (perf actually done; the trunk was reverted to the demo method,
+so the ~1.85× trunk cost is gone). Profiled: the sweep is ~957 grid leg-solves, each
+a ~17-`tryTau` memoryless global search × Newton; ≈300K trace-passes/sweep. Leg-solve
+IS ~85% of the sweep. Levers, measured:**
+
+- **Analytic Jacobian in the leg-solve Newton (`closeAt`) — LANDED, ~2.8×** (pc20 813→268
+  ms/tick, measure-sweep gate). `closeAt` did 3 traces/iter (endpoint + 2 finite-diff
+  perturbations); replaced by ONE pass computing endpoint + exact Jacobian (∂θ/∂c1 =
+  t(1−t); ∂end/∂L = (end−p0)/L). Output-identical (same root), so all laws hold trivially.
+- **Warm gradient probes in gatedStep — TRIED, REVERTED.** ~7% (within noise) but the
+  warm gradient reached a DIFFERENT valid rest state that broke the drag-clamp cut-
+  containment law (overshoot 1.3 vs 0.5 mid-drag). LESSON: "OUTPUT-pure" (monotone
+  preserved) ≠ same rest; a different descent PATH → different basin → tuned law tests
+  break. Verify the FULL suite before committing a gradient-direction change.
+- **Branch-and-bound τ-scan pruning — TRIED, REVERTED (net ~0).** Tight joint bound
+  (min over feasible L of tension·L + bend·τ²/L + exact well) + best-first order only
+  pruned 29%: the 8 refinement candidates sit AT the argmin (lowest bound) and
+  structurally cannot prune; the bound's cos+sqrt + sort offset the ~5 closeAt saved.
+- **REFINEMENT cut (kept the full scan, cut 4 cold rounds → 3 WARM-seeded) — TRIED,
+  REVERTED.** 29% fewer Newton iters/sweep (121,503→86,618, ~1.2×) and continuity-
+  matched, BUT the coarser ±0.069 τ precision left a slower residual tail: the full
+  battery flagged succShiftS@24 drifting 1.70 wu over 200 post-settle ticks vs the 1.5
+  rest bound (E still monotone — a "settle and stay" regression, not a monotonicity
+  break). Loosening the rest bound to keep it would mean content rests LESS precisely
+  (the wrong direction for the user's jitter complaint), so reverted.
+
+**KEY NEGATIVE FINDING — the τ-scan DENSITY is the no-snap law's floor, not just a
+correctness knob.** The USER dropped output-identity 2026-07-07 ("I never saw what you
+are trying to preserve"), authorizing a cheaper deterministic search returning
+different-but-lawful curves. But a coarser candidate set tracks the argmin's basin
+choice less smoothly through the energy landscape's phase transitions, adding
+basin-flip SNAPS the shipped full 9-scan does not have — a TIME-CONTINUITY (no-snap)
+violation. Measured max drawn-shape jump / port-motion over a slow boundary sweep,
+counting jumps > 20× as snaps:
+
+| welled leg th1 | full 9-scan (shipped) | narrow (arc+D0, 3-6 probes) | 5-pt uniform |
+|---|---|---|---|
+| 0.5  | 0 snaps | 0 | 0 |
+| 1.5  | 0 snaps | **1 (new)** | 0 |
+| 2.5  | 1 (inherent) | 1 | 1 |
+| 3.0  | 1 (inherent) | 1 | 1 |
+| −1.0 | 1 (inherent) | **4 (new)** | 1 |
+| −2.5 | 1 (inherent) | 1 | 1 |
+
+The 1-snap entries are INHERENT argmin phase transitions (present in the shipped
+solver — accepted). The narrow set ADDS snaps (th1=1.5, −1.0); a 5-point uniform scan
+recovers the shipped snap-count but its far-τ candidates fail `closeAt` fast (cheap),
+so cutting them saves ~nothing. Conclusion: the whole-interval scan STAYS; and every
+OUTPUT-CHANGING leg-solve lever tried (warm gradient, branch-and-bound, refinement cut)
+either nets ~0 or shifts rest states into a law violation. The ONLY lawful gain is the
+OUTPUT-IDENTICAL analytic Jacobian (2.8×). **Honest ceiling of lawful LOCAL optimization:
+~2.8× from baseline (~6 fps), NOT 60 fps.** The lesson is sharp: the strict-descent laws
+are tuned to the solver's exact output, so only output-identical changes are safe — the
+next real gains must be EXACT (see the frontier).
+
+**NAMED NEXT FRONTIER (architecture, not a lever): the GATE-EVAL COUNT.** Even after
+the cuts the descent demands ~957 leg re-solves / ≈86K Newton iters per sweep, because
+every gate's energy eval re-solves its touched legs from scratch (the strict gate's
+honesty rests on consistent, non-stale energy evaluation — the warm-gradient revert is
+the cautionary tale of stale-shape evals shifting rest states into law violations).
+Breaking past ~7 fps means a DESCENT-ARCHITECTURE change (e.g. reusing a leg's solve
+across evals within a sweep when its exact boundary tuple is unchanged, with an
+explicit invalidation guarantee so the gate never accepts on a stale shape) — a
+designed option with a guarantees analysis, to be weighed by the user against the
+measured ~7 fps stakes, not a tuning lever to be slipped in.
