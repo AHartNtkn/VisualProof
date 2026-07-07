@@ -55,15 +55,16 @@ export function legPaths(e: Engine): { wid: WireId; pts: Vec2[] }[] {
   return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts }))
 }
 
-/** The world position of every wire-owned branch HUB POINT (plan 24: an interior
-    k-ary junction or a k≥2 boundary junction). These are where the wire genuinely
-    branches, so they carry a drawn junction dot — a dot appears at a branch, never
-    on a plain 2-point wire. (A ∀ via-body / ∃ tip is a first-class body, drawn by
-    existentialStubs; a hub POINT is wire-owned and drawn here.) */
+/** The world position of every INTERIOR wire-owned branch HUB POINT (plan 24: an
+    interior k-ary junction) — these carry a drawn junction dot (a dot appears at a
+    genuine interior branch, never on a plain 2-point wire). A BOUNDARY wire's hub
+    (slot !== null) is EXCLUDED: no visible node/dot ever appears at a boundary
+    attachment, including a k≥2 boundary wire's hub (USER RULING 2026-07-07). (A ∀
+    via-body / ∃ tip is a first-class body, drawn by existentialStubs.) */
 export function hubPoints(e: Engine): { wid: WireId; pos: Vec2 }[] {
   const out: { wid: WireId; pos: Vec2 }[] = []
   for (const [wid, w] of e.wires) {
-    if (w.hub !== null && w.hub.kind === 'point') out.push({ wid, pos: w.hub.pos })
+    if (w.hub !== null && w.hub.kind === 'point' && w.slot === null) out.push({ wid, pos: w.hub.pos })
   }
   return out
 }
