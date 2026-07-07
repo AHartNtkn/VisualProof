@@ -432,10 +432,35 @@ describe('wire physics — bodyless boundary attachment (plan 24, the reset ruli
   })
 })
 
+// ---- wire↔FRAME containment (USER STANDING LAW: nothing drawn outside the frame)
+
+describe('wire physics — nothing is ever drawn outside the frame at rest (USER STANDING LAW)', () => {
+  it('no leg or trunk sample sits outside the fixed border on any settled fixture', () => {
+    // The reset + plan-23 follow-ups ruled it repeatedly: a wire arcing outside the
+    // frame (a blind-cone fallback that wraps, a boundary leg reaching a far slot) is
+    // a VIOLATION, not a preference. The frame-containment energy (uncapped, same
+    // class as the cut barrier) pulls every leg AND the emergent trunk inside; the
+    // escape is the node rotating / the hub migrating (Task-3/4 dynamics), never a
+    // diagram-wrapping arc.
+    for (const mk of [threeWay, boundaryOne, forallShape, interposed]) {
+      const e = settled(mk, 2000)
+      const fb = frameBounds(e)!
+      const outside = (p: { x: number; y: number }): number => Math.max(
+        p.x - fb.maxX, fb.minX - p.x, p.y - fb.maxY, fb.minY - p.y)
+      let worst = 0
+      for (const { pts } of legPaths(e)) for (const p of pts) worst = Math.max(worst, outside(p))
+      for (const { pts } of trunkPaths(e)) for (const p of pts) worst = Math.max(worst, outside(p))
+      // a small tolerance for the paint-resolution polyline vs the sample grid
+      expect(worst, `a wire escaped the frame by ${worst.toFixed(1)} wu`).toBeLessThan(1.0)
+    }
+  })
+})
+
 // ---- regression bounds from the measured theorem scenes -------------------
 
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
+import { legPaths, trunkPaths } from '../../src/view/wires'
 const bootCtx = (await bootFixture()).ctx
 const threeBoundary = (): { diagram: Diagram; boundary: readonly WireId[] } => {
   const r = mkReplay(bootCtx.theorems.get('plusComm')!, bootCtx)

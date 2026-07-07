@@ -28,6 +28,13 @@ export const WIREP = {
   trunkAxis: 8,
   /** ∃-tip standoff radius (the dot never sinks into its own wire) */
   standoffR: 8,
+  /** wire↔FRAME containment stiffness: an UNCAPPED quadratic penalty on any wire
+      sample OUTSIDE the border (USER STANDING LAW — nothing is ever drawn outside
+      the frame). Uncapped so under gated descent it dominates a leg's tension·L,
+      including a blind-cone fallback arc: a wire that would arc outside is instead
+      pulled in — the escape is the NODE rotating / the hub migrating so the leg
+      stays a short curve inside (Task-3/4 dynamics), never a diagram-wrapping arc. */
+  frameContain: 30,
   /** trust region: max per-tick motion of any wire DOF (continuity law) */
   travelCap: 0.55,
 }
@@ -499,6 +506,23 @@ function legClearance(samples: readonly Vec2[], L: number, ownA: string | null, 
   return E
 }
 
+/** Wire↔FRAME containment: the summed squared overshoot of a leg/trunk's samples
+    past the fixed border (USER STANDING LAW — nothing drawn outside the frame).
+    Uncapped so the gate never rests with a wire arcing outside; 0 with no frame. */
+function legFrameE(samples: readonly Vec2[], f: Engine['frame']): number {
+  if (f === null) return 0
+  const maxX = f.center.x + f.half, minX = f.center.x - f.half
+  const maxY = f.center.y + f.half, minY = f.center.y - f.half
+  let E = 0
+  for (const s of samples) {
+    let o = 0
+    if (s.x > maxX) o += s.x - maxX; else if (s.x < minX) o += minX - s.x
+    if (s.y > maxY) o += s.y - maxY; else if (s.y < minY) o += minY - s.y
+    if (o > 0) E += o * o
+  }
+  return WIREP.frameContain * E
+}
+
 /** A leg's own energy: tension·L + bend closed form + arrival well (all inside
     the solve) + its clearance line integral. Every leg is the true θ-quadratic
     (the free-end candidate grid keeps free-end legs representable up to ~144°
@@ -557,7 +581,7 @@ function trunkCurveE(e: Engine, w: WireView, discs: readonly DiscRec[]): number 
   const pts: Vec2[] = []
   for (let i = 0; i <= TRUNK_N; i++) pts.push(trunkPoint(H, w.phi, w.curv, span.tmin + (L * i) / TRUNK_N))
   const near = discs.filter((D) => bboxNear(pts, D.body.pos, D.r + WIREP.clearMargin))
-  return ELASTICA.tension * L + ELASTICA.bend * w.curv * w.curv * L + legClearance(pts, L, null, null, near)
+  return ELASTICA.tension * L + ELASTICA.bend * w.curv * w.curv * L + legClearance(pts, L, null, null, near) + legFrameE(pts, e.frame)
 }
 
 /** Trunk-AXIS nematic alignment: the hub axis `phi` is pulled to the nematic
@@ -609,7 +633,7 @@ export function wireEnergy(e: Engine): number {
       const samples: Vec2[] = []
       traceLeg(shape, samples, QN)
       const near = discs.filter((D) => bboxNear(samples, D.body.pos, D.r + WIREP.clearMargin))
-      E += legIntrinsicE(shape, samples, near)
+      E += legIntrinsicE(shape, samples, near) + legFrameE(samples, e.frame)
       legSamples.push({ wid, samples })
     }
     // the emergent trunk curve + its axis anchoring, and the ∃-tip standoff
@@ -1048,7 +1072,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
       const samp = scratchSamples[idx] ?? (scratchSamples[idx] = [])
       traceLeg(shape, samp, QN)
       probeSamples.set(r.gi, samp)
-      E += legIntrinsicE(shape, samp, r.near)
+      E += legIntrinsicE(shape, samp, r.near) + legFrameE(samp, e.frame)
     })
     for (const r of touched) {
       const samp = probeSamples.get(r.gi)!
