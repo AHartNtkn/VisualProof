@@ -646,13 +646,36 @@ function sibU(gap: number): number {
   return gap >= gFloor ? F(LO) - F(gap) : (F(LO) - F(gFloor)) + Bmax * (gFloor - gap)
 }
 
+/** The CUT hard-wall barrier: an UNCAPPED penalty on a region circle exceeding the
+    fixed frame (USER 2026-07-06 — the border is a hard wall on CUTS, not just discs).
+    Uncapped (like the sibling barrier) so under strict gated descent it DOMINATES the
+    wire tension and the gate never accepts a member move that pushes the region past
+    the border — the cut stays fully inside. The root sheet is exempt (it is not a
+    drawn cut and encloses everything). Sums the overshoot on all four walls. */
+function frameContainE(e: Engine): number {
+  const f = e.frame
+  if (f === null) return 0
+  let E = 0
+  for (const [rid, g] of e.regions) {
+    if (rid === e.d.root) continue
+    let pen = 0
+    const rt = g.center.x + g.radius - (f.center.x + f.half); if (rt > 0) pen += rt
+    const lf = (f.center.x - f.half) - (g.center.x - g.radius); if (lf > 0) pen += lf
+    const bt = g.center.y + g.radius - (f.center.y + f.half); if (bt > 0) pen += bt
+    const tp = (f.center.y - f.half) - (g.center.y - g.radius); if (tp > 0) pen += tp
+    if (pen > 0) E += PACE.rep * pen * pen
+  }
+  return E
+}
+
 /** Total CONTENT energy: sibling spacing over every region's sibling pairs
     (content discs + child region circles; wire-owned dots take no sibling term —
-    the wire barrier owns their clearance) plus the scope-ring containment of
-    every wire-owned dot. Region circles are read live, so a probe that moved a
-    body must `recomputeRegions` first (the gates do). */
+    the wire barrier owns their clearance), the scope-ring containment of every
+    wire-owned dot, and the CUT frame-containment hard wall. Region circles are
+    read live, so a probe that moved a body must `recomputeRegions` first (the
+    gates do). */
 export function contentEnergy(e: Engine): number {
-  let E = 0
+  let E = frameContainE(e)
   for (const rid of e.regions.keys()) {
     const items: { r: number; c: Vec2 }[] = []
     for (const mid of e.membersOf.get(rid)!) {
@@ -742,7 +765,39 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
   }
   // the fixed frame is a hard wall (plan 24): a drag meets the edge and stops —
   // the node never crosses out and the frame never grows to chase the cursor
-  return clampToFrame(e, b, { x, y })
+  const c0 = clampToFrame(e, b, { x, y })
+  x = c0.x; y = c0.y
+  // CUT hard wall (USER 2026-07-06): the border contains the CUTS too, not just the
+  // discs. The dragged body is PINNED (the settle gate cannot relax it), so if its
+  // own cut's circle would exit the border, pull the body in until every ancestor
+  // region circle fits — the cut stops at the wall, so the dragged node stops with
+  // it. Iterated because moving the body in shrinks/shifts the derived circle.
+  const f = e.frame
+  if (f !== null && b.kind !== 'junction') {
+    const saved = b.pos
+    const dirty = new Set<RegionId>([b.region])
+    for (let it = 0; it < 8; it++) {
+      b.pos = { x, y }
+      recomputeRegions(e, dirty)
+      let rt = 0, lf = 0, bt = 0, tp = 0
+      for (const rid of ancestors) {
+        if (e.d.regions[rid]!.kind === 'sheet') continue
+        const g = e.regions.get(rid)
+        if (g === undefined) continue
+        rt = Math.max(rt, g.center.x + g.radius - (f.center.x + f.half))
+        lf = Math.max(lf, (f.center.x - f.half) - (g.center.x - g.radius))
+        bt = Math.max(bt, g.center.y + g.radius - (f.center.y + f.half))
+        tp = Math.max(tp, (f.center.y - f.half) - (g.center.y - g.radius))
+      }
+      const dx = rt > lf ? -rt : lf, dy = bt > tp ? -bt : tp
+      if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) break
+      const c = clampToFrame(e, b, { x: x + dx, y: y + dy })
+      x = c.x; y = c.y
+    }
+    b.pos = saved
+    recomputeRegions(e, dirty)
+  }
+  return { x, y }
 }
 
 /** One resolved leg at its base (warm-cache) state, plus what it needs for the

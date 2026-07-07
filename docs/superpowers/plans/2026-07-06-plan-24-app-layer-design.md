@@ -412,15 +412,24 @@ snap anywhere.
 
 ## WHAT YOU WILL SEE — the list for your ruling
 
-1. **The frame (rounded boundary box) holds completely still while the diagram
-   settles inside it.** It never shrinks, grows, or shifts in response to the
-   pieces moving.
+> **USER RULING 2026-07-06 (SUPERSEDES the "recalculated at rewrite" wording
+> below):** the border NEVER varies in size, EVER — one fixed frame size for the
+> diagram's lifetime; rewrites do NOT resize it; CONTENTS adapt/reflow within the
+> fixed border. Verbatim: "there's no benefit — it just creates ambiguity over
+> what needs to change whenever things need to be resized." If a rewrite genuinely
+> cannot fit inside the fixed border, that is a FORK to report, never a silent
+> resize. Items 1/3/12 below are updated to this ruling; the region circles (CUTS)
+> are held inside the border by the same hard wall as the discs (bug fixed).
+
+1. **The frame (rounded boundary box) holds completely still — for the whole
+   lifetime of the diagram.** It never shrinks, grows, or shifts — not while the
+   pieces move, and not at a rewrite. Content settles and reflows INSIDE it.
 2. **The camera / viewport is steady** — no more background jitter while a scene
    relaxes, because the view fits the fixed frame, not the breathing content.
-3. **The frame is a tight, near-SQUARE rounded box sized to the content** (not a
-   big circle-derived box, not a wide letterbox), at an ABSOLUTE size computed when
-   the diagram spawns and re-sized ONLY when the diagram itself changes — never from
-   motion.
+3. **The frame is a tight, near-SQUARE rounded box** (not a big circle-derived box,
+   not a wide letterbox), at an ABSOLUTE size fixed ONCE for the diagram's lifetime —
+   never from motion AND never from a rewrite (USER RULING 2026-07-06). The CUTS
+   (region circles) are held fully inside it by the same hard wall as the discs.
 4. **A simple boundary wire is a single smooth curve from the node to the inside of
    the frame edge, with NOTHING at the frame end** — no dot, no little edge node,
    no line poking outside the frame.
@@ -450,9 +459,10 @@ snap anywhere.
     desired, an angle carries no meaning); the wire stays short. You see the NODE
     spin, never the WIRE grow a big arc to reach around.
 12. **On a rewrite / proof step, the picture morphs continuously**: the parts that
-    survive glide to their new spots, new parts grow in right at their connection
-    points, and the frame eases smoothly to its new size — no popping or snapping
-    anywhere in the transition.
+    survive glide to their new spots and new parts grow in right at their connection
+    points — all INSIDE the unchanged fixed border (the frame does NOT resize at a
+    rewrite; content reflows within it — USER RULING 2026-07-06). No popping or
+    snapping anywhere in the transition.
 13. **A dragged node stays inside its own region and never crosses into a cut it
     isn't part of**, even for an instant, and the frame does not grow to chase it.
 
@@ -537,6 +547,13 @@ at rest on every scene; a scripted drag toward the edge never puts a disc past i
 never changes the frame size. **Live gate**: user sees the frame hold still while a
 scene settles (items 1–3); the viewport does not jitter.
 
+**BUG (USER 2026-07-06) — cuts escape the border:** the Task-1 wall clamped DISCS
+but not REGION CIRCLES (cuts), so a cut's enclosing circle (members + `REGION_PAD`)
+bulges past the frame. FIX: the hard wall applies to region circles identically —
+every region circle stays fully inside the border, settled AND mid-drag. Added law
+test (reproduced first): no region circle crosses the frame on any settled bundled
+scene, nor during a scripted drag toward the edge.
+
 ### Task 2 — bodyless boundary attachment (Subsystem 2)
 
 Slot = fixed anchor point on the inner frame edge with the inward-normal arrival
@@ -584,17 +601,24 @@ meeting where they don't (item 7), and morphing (never jumping) on reorganizatio
 
 ### Task 5 — continuous transitions (Subsystem 5)
 
-`carryOver` extended to the trunk axis + merge parameters. New frame eases from old
-to new over the settle (stored frame interpolated), slots ride it. Leading
-construction projection runs once off-screen. New bodies seed near ports (already
-done — verify no regression).
+`carryOver` extended to the trunk axis + merge parameters (DONE, commit 699bac7).
+New bodies seed near ports (already done — verify no regression). Leading
+construction projection runs once off-screen.
+
+**REVISED by USER RULING 2026-07-06 (border never resizes):** the frame-morph is
+DELETED — there is no old→new frame interpolation because the frame does NOT change
+size at a rewrite. The frame is established ONCE (first spawn) and is constant for
+the diagram's lifetime; a rewrite carries over the SAME frame, and the new content
+reflows INSIDE it. `establishFrame` must therefore run only when there is no prior
+frame (or be carried by `carryOver`), NOT at every rewrite. If a rewrite's content
+genuinely cannot fit the fixed border, that is a FORK to report to the user, not a
+silent resize.
 
 **Laws**: across a scripted rewrite, every surviving body's first drawn position is
-within `carryOver` tolerance of its last (glide, no teleport); the drawn frame
-dimensions interpolate monotonically old→new with no single-frame jump > bound; new
-wires' first drawn samples start near their ports (no wild spawn). **Live gate**:
-user steps a proof/replay and sees continuous morph — content glides, new parts grow
-at their ports, frame eases (item 12).
+within `carryOver` tolerance of its last (glide, no teleport); the frame `{center,
+half}` is BYTE-IDENTICAL across the rewrite (never resizes); new wires' first drawn
+samples start near their ports (no wild spawn). **Live gate**: user steps a
+proof/replay and sees continuous morph inside the unchanged border (item 12).
 
 ### Task 6 — full-sweep-per-frame at 60 fps (Subsystem 4, part 2) — THE RISK
 
@@ -615,3 +639,19 @@ whole plan)**: the user drives the live app on the largest bundled proof and see
 the diagram ease to rest smoothly and quickly at interactive frame rate — no lurching
 (item 10), no snail's pace. This is the gate the mandate names; nothing is "done"
 until the user confirms it in live use.
+
+**STATUS 2026-07-06 (measured, HELD pending Task-4 aesthetic verdict):** the sweep
+cost was measured (20-tick-settle, comparable): baseline pc20 245 / ss24 187 / ss48
+265 ms; AFTER Task 4's curved trunk pc20 459 / ss24 433 / ss48 493 ms (~1.85× — the
+`phi`+`curv` DOF re-solve every hub leg per eval + `trunkCurveE` per probe). So the
+gap is now ~26–30× the 16.7 ms budget. Task 6 is HELD (team-lead decision): the
+aesthetic (Task 4) is validated FIRST, since a ~30× grind on a possibly-revisable
+trunk is waste. Only design-INDEPENDENT prep that survives any trunk revision may
+proceed (cached region circles, localized `contentEnergy`) — no gradient-machinery
+work yet. **INTERIM VERIFICATION RECORD:** the settle-heavy `wirephys.test.ts` +
+`relax.test.ts` battery (~2 h, and slower now under Task 4's cost) is DEFERRED until
+after the perf work. The Task-4 laws were instead verified INDIVIDUALLY in node
+(strict total-E descent E-rise 0.0/30 ticks; no NaN; distributed merges; anti-snap
+0.30 wu/frame at slow rotation; the pre-existing blind-cone flip reduced 22.99→8.75
+wu, reported not patched). Those individual node checks are the honest interim record;
+the full battery must run (likely with reduced budgets) once perf is addressed.
