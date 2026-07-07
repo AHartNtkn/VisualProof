@@ -234,10 +234,12 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
 }
 
 /** Establish the fixed near-square proof frame from the current content extent
-    (plan 24, USER RULING 2026-07-06). A DISCRETE-EVENT write, called at a spawn /
-    rewrite AFTER the leading construction projection has made the seed legal —
-    never during settling, so the frame is CONSTANT as content relaxes inside it
-    (it does not breathe). The box is centered on the content bounding box and
+    (plan 24, USER RULING 2026-07-06). A DISCRETE-EVENT write at first SPAWN only
+    (after the leading construction projection makes the seed legal); it no-ops once
+    a frame exists, so the box is established ONCE for the diagram's LIFETIME and a
+    rewrite (which carries the SAME frame via carryOver) never resizes it — content
+    reflows inside the unchanged border. The box is centered on the content bounding
+    box and
     sized to the LARGER content half-extent + margin (near-square: all four
     boundaries on equal footing, a wide proof gets a bigger square, never a
     letterbox), tighter than the old enclosing-CIRCLE-derived box. Excludes the
@@ -247,6 +249,11 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
     circles, so the caller must recomputeRegions first (settle / settleStep /
     seedProject do). */
 export function establishFrame(e: Engine): void {
+  // The border is established ONCE and NEVER resizes for the diagram's lifetime
+  // (USER RULING 2026-07-06 — supersedes "recalculated at rewrite"): a rewrite
+  // carries the SAME frame (carryOver), so an already-set frame is kept and content
+  // reflows inside it. Only a fresh engine with no carried frame establishes one.
+  if (e.frame !== null) return
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity
   const grow = (x: number, y: number, r: number): void => {
     if (x - r < minX) minX = x - r

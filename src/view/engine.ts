@@ -149,13 +149,15 @@ export type Engine = {
   readonly boundary: readonly WireId[]
   regions: Map<RegionId, RegionCircle>
   /** The fixed near-square proof frame (plan 24): the statement boundary box, an
-      ABSOLUTE stored state — established ONCE from the content extent at a discrete
-      spawn/rewrite event (after the leading construction projection makes the seed
-      legal) and CONSTANT between such events (USER RULING 2026-07-06). It never
-      grows/shrinks from motion: settling, dragging, and free relaxation read it but
-      never write it. Null until the first establishment. `half` is the half-extent
-      of both axes (near-square: sized to the larger content half-extent + margin),
-      so a wide proof gets a bigger square, never a letterbox. */
+      ABSOLUTE stored state — established ONCE from the content extent at first spawn
+      (after the leading construction projection makes the seed legal) and CONSTANT
+      for the diagram's ENTIRE LIFETIME (USER RULING 2026-07-06: the border NEVER
+      resizes — a rewrite carries the SAME frame via carryOver, content reflows
+      inside). It never grows/shrinks from motion OR from a rewrite: settling,
+      dragging, free relaxation, and proof steps read it but never write it. Null
+      until the first establishment. `half` is the half-extent of both axes
+      (near-square: sized to the larger content half-extent + margin), so a wide
+      proof gets a bigger square, never a letterbox. */
   frame: StoredFrame | null
   /** relaxation tick counter (drives overlap-projection cadence, determinism). */
   tick: number
@@ -432,6 +434,12 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
  * discipline, so copying the reference cannot alias `prev` into `next`'s motion.
  */
 export function carryOver(prev: Engine, next: Engine): void {
+  // The border NEVER resizes for the diagram's lifetime (USER RULING 2026-07-06):
+  // a rewrite keeps the SAME frame — content reflows inside the unchanged box, the
+  // box is not recomputed. Carrying prev.frame makes `establishFrame` a no-op on the
+  // rebuilt engine (it only establishes when frame === null), so the drawn border is
+  // byte-identical across every step of a proof.
+  next.frame = prev.frame
   for (const [id, nb] of next.bodies) {
     const pb = prev.bodies.get(id)
     if (pb === undefined) continue
