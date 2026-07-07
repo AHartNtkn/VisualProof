@@ -1,7 +1,7 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Body, Engine, LegShape, WireLeg, WireView } from './engine'
-import { mkEngine, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, FRAME_MARGIN } from './engine'
+import type { Body, Engine, LegShape, WireLeg, WireView, StoredFrame } from './engine'
+import { mkEngine, subtreeCarriers, worldBindAnchor, resolveLeg, traceLeg, frameSlots, FRAME_MARGIN } from './engine'
 import { ELASTICA, QN, mkLegCache } from './elastica'
 import type { LegCache } from './elastica'
 
@@ -324,6 +324,45 @@ export function establishProofFrame(e: Engine, steps: readonly { diagram: Diagra
   e.frame = bestHalf < 0
     ? { center: { x: 0, y: 0 }, half: 10 + FRAME_MARGIN }
     : { center: { x: bestCx, y: bestCy }, half: bestHalf + FRAME_MARGIN }
+}
+
+/** The PROOF-WIDE boundary slot-shift (plan 24 legibility, USER 2026-07-07): the
+    single cyclic wire→slot rotation that minimizes the TOTAL port→slot chord summed
+    over EVERY step's construction-projected seed (the same all-steps scan the border
+    is sized by). Boundary wire i is assigned slot (i + shift) mod n; only cyclic
+    shifts are legal (they preserve the canonical cyclic order — no port ever slips
+    past another), and the pip stays at slot 0. Chosen ONCE at enterReplay and carried
+    across the proof, so slots never move or reorder mid-proof. Scale-invariant (a
+    rotation of the assignment), so the natural seed suffices. 0 for < 2 boundary
+    wires (nothing to align). */
+export function establishProofSlotShift(frame: StoredFrame, steps: readonly { diagram: Diagram; boundary: readonly WireId[] }[]): number {
+  const n = steps.length > 0 ? steps[0]!.boundary.length : 0
+  if (n < 2) return 0
+  const fb = { minX: frame.center.x - frame.half, maxX: frame.center.x + frame.half, minY: frame.center.y - frame.half, maxY: frame.center.y + frame.half, frameR: frame.half, center: frame.center }
+  const slots = frameSlots(fb, n)
+  // per-step boundary-port positions (index by boundary order); null = no bind
+  const stepPorts: (Vec2 | null)[][] = []
+  for (const s of steps) {
+    const se = mkEngine(s.diagram, s.boundary)
+    recomputeRegions(se); resolveOverlaps(se)
+    stepPorts.push(se.boundary.map((wid) => {
+      const w = se.wires.get(wid); const bd = w?.binds[0]
+      return bd === undefined ? null : worldBindAnchor(se.bodies.get(bd.body)!, bd.key)
+    }))
+  }
+  let bestShift = 0, bestTotal = Infinity
+  for (let shift = 0; shift < n; shift++) {
+    let total = 0
+    for (const ports of stepPorts) {
+      for (let i = 0; i < ports.length; i++) {
+        const p = ports[i]; if (p === null || p === undefined) continue
+        const slot = slots[(i + shift) % n]!
+        total += Math.hypot(slot.point.x - p.x, slot.point.y - p.y)
+      }
+    }
+    if (total < bestTotal) { bestTotal = total; bestShift = shift }
+  }
+  return bestShift
 }
 
 /** Clamp a body centre inside the fixed frame's HARD WALL (plan 24, USER RULING:

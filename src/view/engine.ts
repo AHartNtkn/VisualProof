@@ -163,6 +163,16 @@ export type Engine = {
       the same value in `Body.scale`; relax reads it for the packing/clearance
       length params, engine + paint read it for the drawn geometry. 1 = natural. */
   scale: number
+  /** Boundary SLOT-SHIFT (plan 24 legibility, USER 2026-07-07): a single cyclic
+      rotation of the wire→slot assignment (boundary wire i attaches to slot
+      (i + slotShift) mod n) chosen ONCE to minimize the total port→slot chord — the
+      even-spaced slots start at an arbitrary top-centre phase, so without this a
+      port near one edge can be assigned a slot on the far edge and its wire sweeps
+      the whole frame (then hugs the inside border). Only CYCLIC shifts are used
+      (they preserve the canonical cyclic order / no-slipping law); the pip stays at
+      slot 0 (fixed reading origin). Computed proof-wide (min total chord over all
+      steps' seeds), carried across the proof, never changed mid-proof. 0 = unshifted. */
+  slotShift: number
   /** relaxation tick counter (drives overlap-projection cadence, determinism). */
   tick: number
 }
@@ -384,7 +394,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     wires.set(wid, { binds, hub, tipBodyId, slot, legs, phi })
   }
 
-  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), frame: null, scale: 1, tick: 0 }
+  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), frame: null, scale: 1, slotShift: 0, tick: 0 }
 }
 
 /**
@@ -411,6 +421,9 @@ export function carryOver(prev: Engine, next: Engine): void {
   // uniformly. The relative layout GLIDES (positions are prev's, just re-sized); the
   // size change is the sanctioned discrete-event recalc at the rewrite.
   next.scale = 1
+  // the boundary slot-shift is a proof-wide constant (chosen once at enterReplay) —
+  // carry it so slots never reorder mid-proof.
+  next.slotShift = prev.slotShift
   const c = prev.frame === null ? { x: 0, y: 0 } : prev.frame.center
   const denorm = (p: Vec2, sc: number): Vec2 => ({ x: c.x + (p.x - c.x) / sc, y: c.y + (p.y - c.y) / sc })
   for (const [id, nb] of next.bodies) {
@@ -593,7 +606,11 @@ export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache
     if (w.slot === null) return null
     const fb = frameBounds(e)
     if (fb === null) return null
-    return frameSlots(fb, e.boundary.length)[w.slot] ?? null
+    const n = e.boundary.length
+    // cyclic slot-shift (legibility): wire's slot index rotated by e.slotShift so
+    // the fixed even-spaced slots align to where the ports actually sit. Cyclic →
+    // canonical order preserved; slot 0 (pip) unchanged as a perimeter position.
+    return frameSlots(fb, n)[(w.slot + e.slotShift) % n] ?? null
   }
   // terminal A: a port bind (leaves along its outward normal — the rim-locked
   // perpendicular exit BY CONSTRUCTION) or a fixed frame slot (leaves inward).

@@ -14,7 +14,7 @@ import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
-import { settleStep, recomputeRegions, resolveOverlaps, establishFrame, establishProofFrame, applyContentScale, clampContentToFrame, clampDragToFeasible } from '../view/relax'
+import { settleStep, recomputeRegions, resolveOverlaps, establishFrame, establishProofFrame, establishProofSlotShift, applyContentScale, clampContentToFrame, clampDragToFeasible } from '../view/relax'
 import { legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
@@ -710,6 +710,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // then no-ops; every later step carries this same frame via carryOver.
     const steps = Array.from({ length: replay.stepCount + 1 }, (_, k) => ({ diagram: replay!.diagramAt(k), boundary: replay!.boundary }))
     establishProofFrame(engine, steps)
+    // proof-wide boundary slot-shift: align the fixed slots to where the ports sit,
+    // once, so boundary wires take short exits instead of sweeping the frame. Carried
+    // across steps by carryOver (slots never reorder mid-proof).
+    engine.slotShift = establishProofSlotShift(engine.frame!, steps)
     seedProject(engine)
     pin = null
     hits = []

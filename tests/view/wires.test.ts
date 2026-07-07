@@ -3,9 +3,9 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, frameBounds, frameSlots, DISC_R } from '../../src/view/engine'
-import { settle, recomputeRegions } from '../../src/view/relax'
+import { settle, recomputeRegions, resolveOverlaps, establishProofFrame, establishProofSlotShift } from '../../src/view/relax'
 import { computeLegs } from '../../src/view/wires'
-import { worldBindAnchor } from '../../src/view/engine'
+import { worldBindAnchor, carryOver } from '../../src/view/engine'
 
 const p = (s: string) => parseTerm(s)
 
@@ -164,6 +164,63 @@ describe('boundary slots are order-faithful: leg i ends at slot i, and cannot sw
         expect(best, `boundary ${i} (${wid}) reaches slot ${i}`).toBeLessThan(1.5)
       })
     }
+  })
+})
+
+describe('boundary slot-shift: exits are chosen to minimize total port→slot chord (plan 24 legibility, USER 2026-07-07)', () => {
+  // The even-spaced slots start at an arbitrary top-centre phase, so wire i → slot i
+  // can send a port to a far-edge slot (a chord that sweeps the whole frame, then
+  // hugs the inside border). A single CYCLIC shift — the only reassignment that
+  // preserves the canonical cyclic order — is chosen once, proof-wide, to minimize
+  // the total port→slot chord. Here: the chosen shift is a legal index and its total
+  // chord is no worse than (and, for plusComm, strictly better than) the unshifted.
+  const thy = buildFregeTheory()
+  const plusComm = thy.theorems.find((t) => t.name === 'plusComm')!
+
+  const totalChord = (steps: { diagram: typeof plusComm.lhs.diagram; boundary: readonly string[] }[], frame: { center: { x: number; y: number }; half: number }, shift: number): number => {
+    const n = steps[0]!.boundary.length
+    const fb = { minX: frame.center.x - frame.half, maxX: frame.center.x + frame.half, minY: frame.center.y - frame.half, maxY: frame.center.y + frame.half, frameR: frame.half, center: frame.center }
+    const slots = frameSlots(fb, n)
+    let tot = 0
+    for (const s of steps) {
+      const se = mkEngine(s.diagram, s.boundary); recomputeRegions(se); resolveOverlaps(se)
+      se.boundary.forEach((wid, i) => {
+        const bd = se.wires.get(wid)?.binds[0]; if (bd === undefined) return
+        const pp = worldBindAnchor(se.bodies.get(bd.body)!, bd.key)
+        const slot = slots[(i + shift) % n]!
+        tot += Math.hypot(slot.point.x - pp.x, slot.point.y - pp.y)
+      })
+    }
+    return tot
+  }
+
+  it('the chosen shift is a legal cyclic index and shortens the total boundary chord', () => {
+    const steps = [{ diagram: plusComm.lhs.diagram, boundary: plusComm.lhs.boundary }]
+    const probe = mkEngine(steps[0]!.diagram, steps[0]!.boundary)
+    establishProofFrame(probe, steps)
+    const frame = probe.frame!
+    const shift = establishProofSlotShift(frame, steps)
+    const n = steps[0]!.boundary.length
+    expect(shift, 'shift is a cyclic index in [0, n)').toBeGreaterThanOrEqual(0)
+    expect(shift, 'shift is a cyclic index in [0, n)').toBeLessThan(n)
+    // it minimizes, so it is ≤ every other shift including 0
+    const chosen = totalChord(steps, frame, shift)
+    for (let s = 0; s < n; s++) {
+      expect(chosen, `chosen shift ${shift} total ≤ shift ${s} total`).toBeLessThanOrEqual(totalChord(steps, frame, s) + 1e-6)
+    }
+    // for plusComm the unshifted phase is a bad fit, so the chosen shift is a real win
+    expect(chosen, 'chosen beats the arbitrary top-centre phase').toBeLessThan(totalChord(steps, frame, 0))
+  })
+
+  it('the shift is carried across a rewrite (slots never reorder mid-proof)', () => {
+    const a = mkEngine(plusComm.lhs.diagram, plusComm.lhs.boundary)
+    a.frame = { center: { x: 0, y: 0 }, half: 50 }
+    a.slotShift = 2
+    const b = mkEngine(plusComm.rhs.diagram, plusComm.rhs.boundary)
+    carryOver(a, b)
+    // the extended slot-order law: carryOver propagates the proof-wide shift, so the
+    // slot assignment is a proof-wide constant — slots never reorder step to step
+    expect(b.slotShift, 'carryOver carries the proof-wide slot-shift').toBe(2)
   })
 })
 
