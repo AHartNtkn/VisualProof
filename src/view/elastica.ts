@@ -15,8 +15,26 @@ import type { Vec2 } from './vec'
 type V = Vec2
 const hyp = Math.hypot
 const wrapA = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
-export type LegCache = { k: number[] | null; s: Sol | null }
-export const mkLegCache = (): LegCache => ({ k: null, s: null })
+// The leg solve is a PURE function of its exact boundary tuple (p0, th0, p1, th1);
+// the cache is a small FIFO ring of recent (tuple → solution) entries. A strict
+// gated step probes a DOF away from its base and returns to that base after every
+// rejected trial (backtracking + long-shot), so the base tuple recurs many times
+// within one sweep; a single slot is overwritten by the intervening trial and
+// re-solves the base each return. The ring holds enough recent tuples that the base
+// stays resident across one gate's probes. Reuse is by EXACT tuple equality, so a
+// returned solution always matches its own inputs — a changed tuple simply misses
+// and solves fresh; a stale shape can never be returned (the exact-key match IS the
+// invalidation). Output is therefore bit-identical to the single-slot memo.
+const CACHE_N = 16
+export type LegCache = { keys: (number[] | null)[]; sols: (Sol | null)[]; next: number }
+export const mkLegCache = (): LegCache => ({ keys: new Array(CACHE_N).fill(null), sols: new Array(CACHE_N).fill(null), next: 0 })
+// Cache control + instrumentation. `enabled` (default on) exists ONLY so a law test
+// can settle a fixture with the memo off and confirm the layout is bit-identical to
+// settling with it on — the executable proof that the memo is output-neutral (a hit
+// returns a solution whose stored key exactly equals the query, which by the
+// memoryless purity of the solve equals a fresh solve). `calls`/`hits` are the
+// hit-rate counters read by the measure-sweep perf gate.
+export const legCache = { enabled: true, calls: 0, hits: 0 }
 
 // P-analogues bound at solve time by the engine energy module:
 export const ELASTICA = { tension: 1.0, bend: 60 }
@@ -125,8 +143,15 @@ export function arcClose(p0: V, th0: number, p1: V): { tau: number; L: number } 
     finitely, which is what preserves the gradient across the blind cone. */
 const DELTA_EPS = 0.05
 export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number, freeEnd: boolean): Sol {
-  const k = cache.k
-  if (k !== null && k[0] === p0.x && k[1] === p0.y && k[2] === th0 && k[3] === p1.x && k[4] === p1.y && k[5] === th1) return cache.s!
+  legCache.calls++
+  const { keys, sols } = cache
+  if (legCache.enabled) for (let i = 0; i < CACHE_N; i++) {
+    const k = keys[i]
+    if (k != null && k[0] === p0.x && k[1] === p0.y && k[2] === th0 && k[3] === p1.x && k[4] === p1.y && k[5] === th1) {
+      legCache.hits++
+      return sols[i]!
+    }
+  }
   const arc = arcClose(p0, th0, p1)
   let best: { c1: number; L: number; tau: number; E: number } | null = null
   const tryTau = (tau: number): void => {
@@ -181,8 +206,12 @@ export function solveLeg(cache: LegCache, p0: V, th0: number, p1: V, th1: number
   }
   const b = best as { c1: number; L: number; tau: number }
   const sol = { c1: b.c1, c2: b.tau - b.c1, L: b.L, dTurn: b.tau, well: freeEnd ? 0 : WELL_S * (1 - Math.cos(th0 + b.tau - th1)) }
-  cache.k = [p0.x, p0.y, th0, p1.x, p1.y, th1]
-  cache.s = sol
+  const slot = cache.next
+  const ex = keys[slot]
+  if (ex == null) keys[slot] = [p0.x, p0.y, th0, p1.x, p1.y, th1]
+  else { ex[0] = p0.x; ex[1] = p0.y; ex[2] = th0; ex[3] = p1.x; ex[4] = p1.y; ex[5] = th1 }
+  sols[slot] = sol
+  cache.next = (slot + 1) % CACHE_N
   return sol
 }
 

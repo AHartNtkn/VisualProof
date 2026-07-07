@@ -4,7 +4,7 @@ import type { Diagram, WireId } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine, worldBindAnchor, resolveLeg, traceLeg, frameBounds, frameSlots, type Engine, type WireView, type WireLeg } from '../../src/view/engine'
 import { settle, settleStep, wireEnergy, WIREP, trunkTarget, recomputeRegions } from '../../src/view/relax'
-import { thetaRange, RANGE_B, QN, ELASTICA } from '../../src/view/elastica'
+import { thetaRange, RANGE_B, QN, ELASTICA, mkLegCache } from '../../src/view/elastica'
 import { computeLegs, existentialStubs } from '../../src/view/wires'
 
 /**
@@ -128,7 +128,7 @@ describe('wire physics — zero wire memory (the purity law)', () => {
     const angles = [...e.wires].map(([wid, w]) => [wid, w.legs.map((l) => l.hubAngle)] as const)
     // fresh solve of every leg at rest (a fresh cache forces a real re-solve)
     const restSol = [...e.wires].flatMap(([, w]) => w.legs.map((leg) => {
-      const s = resolveLeg(e, w, leg, { k: null, s: null })
+      const s = resolveLeg(e, w, leg, mkLegCache())
       return { c1: s.sol.c1, c2: s.sol.c2, L: s.sol.L }
     }))
     // the orbit attack: drag every body through a wild circular sweep, mutating

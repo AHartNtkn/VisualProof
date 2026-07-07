@@ -7,7 +7,7 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, resolveLeg } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { settle, settleStep, totalEnergy, clampDragToFeasible, recomputeRegions, resolveOverlaps, establishFrame, establishProofFrame, applyContentScale, clampContentToFrame } from '../../src/view/relax'
-import { thetaRange } from '../../src/view/elastica'
+import { thetaRange, legCache } from '../../src/view/elastica'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
 
@@ -184,6 +184,41 @@ describe('settle — observed jitter reproductions (live feel reports)', () => {
       assertRestsLegalMonotone(name, e, bound)
     })
   }
+})
+
+describe('the leg-solve memo is output-neutral (plan 24 — exact cross-eval solve reuse)', () => {
+  // The leg solve is a pure function of its boundary tuple; the sweep memoizes it in
+  // a ring keyed on that exact tuple so a gate returning to its base after a rejected
+  // trial reuses the base solve instead of recomputing it. Because a hit returns a
+  // solution whose stored key EXACTLY equals the query, it equals a fresh solve, so
+  // the memo cannot change any energy value, any accept/reject, or the settled layout.
+  // Proof: settle the same fixture with the memo ON and OFF (legCache.enabled) and
+  // require the two settled layouts to be BIT-IDENTICAL. Anything but 0 means the
+  // reuse read a stale shape — the failure the explicit exact-key match forbids.
+  function layoutSnapshot(e: Engine): number[] {
+    const out: number[] = [e.slotShift]
+    for (const b of e.bodies.values()) out.push(b.pos.x, b.pos.y, b.theta)
+    for (const [, w] of e.wires) {
+      out.push(w.phi)
+      if (w.hub !== null && w.hub.kind === 'point') out.push(w.hub.pos.x, w.hub.pos.y)
+      for (const leg of w.legs) out.push(leg.hubAngle)
+    }
+    return out
+  }
+  it('plusComm@20 settles BIT-IDENTICALLY with the leg-solve cache on vs off', () => {
+    const build = (): Engine => { const r = mkReplay(plusCommThm, bootCtx); return mkEngine(r.diagramAt(20), r.boundary) }
+    let on: number[], off: number[]
+    try {
+      legCache.enabled = true
+      const eOn = build(); settle(eOn, 400); on = layoutSnapshot(eOn)
+      legCache.enabled = false
+      const eOff = build(); settle(eOff, 400); off = layoutSnapshot(eOff)
+    } finally { legCache.enabled = true }
+    expect(off.length).toBe(on.length)
+    let maxDiff = 0
+    for (let i = 0; i < on.length; i++) maxDiff = Math.max(maxDiff, Math.abs(on[i]! - off[i]!))
+    expect(maxDiff, `the cache changed the settled layout by ${maxDiff} (must be exactly 0 — a pure memo)`).toBe(0)
+  })
 })
 
 describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => {
