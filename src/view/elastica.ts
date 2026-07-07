@@ -39,7 +39,6 @@ export function trace(p0: V, th0: number, c1: number, c2: number, L: number, out
     out.push({ x, y })
   }
 }
-const tr: V[] = []
 export type Sol = { c1: number; c2: number; L: number; dTurn: number; well: number }
 
 /** RANGE of theta(t) = c1 t + c2 t^2 over [0,1] (relative to th0). */
@@ -57,23 +56,34 @@ export function thetaRange(c1: number, c2: number): number {
   return hi - lo
 }
 
-/** Newton (c1, L) closing the endpoint for a FIXED total turn tau. */
+/** Newton (c1, L) closing the endpoint for a FIXED total turn tau. The 2×2
+    Jacobian of the endpoint w.r.t. (c1, L) is ANALYTIC, accumulated in the SAME
+    quadrature pass that computes the endpoint (no finite-difference perturbation
+    traces): with θ(t) = th0 + c1·t + (tau−c1)·t² the c1-sensitivity of the heading
+    is ∂θ/∂c1 = t(1−t), and since θ is L-independent the endpoint's L-sensitivity is
+    just (endpoint − p0)/L. One pass replaces the former three (endpoint + two
+    perturbed), and the exact derivative sharpens Newton — same root, fewer traces. */
 export function closeAt(p0: V, th0: number, p1: V, tau: number, c1Init: number, LInit: number): { c1: number; L: number; ok: boolean } {
   const chord = hyp(p1.x - p0.x, p1.y - p0.y)
   let c1 = c1Init, L = LInit
   let ok = false
   for (let it = 0; it < 8; it++) {
-    trace(p0, th0, c1, tau - c1, L, tr)
-    const e = tr[tr.length - 1]!
-    const rx = e.x - p1.x, ry = e.y - p1.y
+    // endpoint (midpoint quadrature, matching `trace`) + analytic ∂endpoint/∂c1
+    const c2 = tau - c1
+    let x = p0.x, y = p0.y, dxc = 0, dyc = 0
+    const h = L / QN
+    for (let k = 0; k < QN; k++) {
+      const tm = (k + 0.5) / QN
+      const th = th0 + c1 * tm + c2 * tm * tm
+      const ct = Math.cos(th), st = Math.sin(th)
+      x += ct * h; y += st * h
+      const wgt = tm * (1 - tm) // ∂θ/∂c1 at fixed tau
+      dxc += -st * wgt * h; dyc += ct * wgt * h
+    }
+    const rx = x - p1.x, ry = y - p1.y
     if (rx * rx + ry * ry < 1e-6) { ok = true; break }
-    const h1 = 1e-4, h2 = Math.max(1e-4, L * 1e-4)
-    trace(p0, th0, c1 + h1, tau - c1 - h1, L, tr)
-    const e1 = tr[tr.length - 1]!
-    trace(p0, th0, c1, tau - c1, L + h2, tr)
-    const e2 = tr[tr.length - 1]!
-    const a11 = (e1.x - e.x) / h1, j21 = (e1.y - e.y) / h1
-    const j12 = (e2.x - e.x) / h2, j22 = (e2.y - e.y) / h2
+    const a11 = dxc, j21 = dyc
+    const j12 = (x - p0.x) / L, j22 = (y - p0.y) / L
     const det = a11 * j22 - j12 * j21
     if (Math.abs(det) < 1e-12) break
     c1 += Math.max(-1.5, Math.min(1.5, (-rx * j22 + ry * j12) / det))
