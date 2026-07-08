@@ -3,7 +3,7 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
-import { existentialStubs, legPaths } from './wires'
+import { existentialStubs, legPaths, routeAroundNodes, nodeDiscs } from './wires'
 import { junctionShapes, junctionWids, junctionHubBodies } from './junction'
 
 /**
@@ -127,13 +127,16 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // meeting at one hub point — so those wires' star legs are skipped here and the
   // hub-point branch dot is NOT drawn (USER 2026-07-07: branch points are unmarked).
   const juncWids = junctionWids(e)
+  // Drawn wires skim AROUND the nodes they pass (never under them) — a purely
+  // visual reroute of each traced polyline; the node it attaches to is left alone.
+  const discs = nodeDiscs(e)
   // wires (traced elastica legs) — every wire EXCEPT the soap junctions
   for (const { wid, pts } of legPaths(e)) {
     if (juncWids.has(wid)) continue
-    shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+    shapes.push({ kind: 'polyline', pts: routeAroundNodes(pts, discs), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
   // the soap-tributary curves for those junctions (no branch dots)
-  for (const s of junctionShapes(e, st)) shapes.push(s)
+  for (const s of junctionShapes(e, st)) shapes.push(s.kind === 'polyline' ? { ...s, pts: routeAroundNodes(s.pts, discs) } : s)
   // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
   for (const s of existentialStubs(e)) {
     shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
