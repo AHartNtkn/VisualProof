@@ -75,6 +75,12 @@ function mkSoapTree(terminals: readonly Terminal[], hubPos: Vec2): SoapTree {
   pts.push({ ...hubPos })
   return { pts, adj: [...terminals.map(() => [terminals.length]), terminals.map((_, i) => i)], nT: terminals.length }
 }
+/** Closest point on segment a→b to p, and its parameter t∈[0,1]. */
+function closestOnSeg(p: Vec2, a: Vec2, b: Vec2): { q: Vec2; t: number } {
+  const abx = b.x - a.x, aby = b.y - a.y
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * abx + (p.y - a.y) * aby) / (abx * abx + aby * aby || 1)))
+  return { q: { x: a.x + t * abx, y: a.y + t * aby }, t }
+}
 function relaxSoap(t: SoapTree, obstacles: readonly Obstacle[]): void {
   for (let iter = 0; iter < 6; iter++) {
     for (let v = t.nT; v < t.pts.length; v++) {
@@ -91,6 +97,20 @@ function relaxSoap(t: SoapTree, obstacles: readonly Obstacle[]): void {
         if (d >= o.r || d < 1e-9) continue
         const push = (o.r - d) / o.r
         fx += (dx / d) * push * 2; fy += (dy / d) * push * 2
+      }
+      // the film FLOWS AROUND obstacles: if any EDGE incident to v crosses an
+      // obstacle, push v perpendicular so the edge bends around it (a soap film
+      // never sits ON a peg). This is what keeps a trunk from running behind a node.
+      for (const n of t.adj[v]!) {
+        for (const o of obstacles) {
+          const { q } = closestOnSeg(o.pos, t.pts[v]!, t.pts[n]!)
+          const dx = q.x - o.pos.x, dy = q.y - o.pos.y
+          const d = Math.hypot(dx, dy)
+          if (d >= o.r) continue
+          const push = (o.r - d) / o.r
+          const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
+          fx += ux * push * 3; fy += uy * push * 3
+        }
       }
       t.pts[v] = { x: t.pts[v]!.x + fx * TENSION_STEP, y: t.pts[v]!.y + fy * TENSION_STEP }
     }
