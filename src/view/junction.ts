@@ -172,22 +172,32 @@ function tangentsFromAxis(pts: readonly Vec2[], adj: readonly number[][], v: num
 }
 
 // ---- terminal extraction from the current plan-24 engine -------------------------
-type MJunction = { wid: WireId; hubPos: Vec2; terminals: Terminal[] }
-/** A ≥3-leg interior junction is a hub POINT (w.hub.kind==='point', slot===null);
-    each hub leg's PORT end (p0, th0) is a terminal and the hub point seeds the tree.
-    Boundary (slot) wires and 1–2 leg wires keep the base elastica rendering. */
+type MJunction = { wid: WireId; hubPos: Vec2; terminals: Terminal[]; hubBodyId: string | null }
+/** EVERY ≥3-arm junction is drawn as a soap tributary tree — whatever its hub
+    representation. The hub center is a POINT (a pure interior k-ary junction, or a
+    k≥2 boundary junction) or a BODY (a ∀ via-body whose scope-homed body IS the
+    branch hub — plan-24 engine.ts). Each hub arm is a terminal: a bind arm gives
+    its PORT end (p0, th0, port key); a boundary SLOT arm gives its frame-edge end
+    with the frame-normal tangent (a non-null sentinel key so terminalTangent uses
+    it, not a radial guess). 1–2-arm wires keep the base elastica rendering.
+    Before this fix a body-hub (∀) or boundary junction fell through to the star
+    render — "an edge node with everything attached" (USER 2026-07-07). */
 function extractJunctions(e: Engine): MJunction[] {
   const out: MJunction[] = []
   for (const [wid, w] of e.wires) {
-    if (w.hub === null || w.hub.kind !== 'point' || w.slot !== null) continue
+    if (w.hub === null) continue
     const hubLegs = w.legs.filter((l) => l.b.kind === 'hub')
     if (hubLegs.length < 3) continue
+    const hubBodyId = w.hub.kind === 'body' ? w.hub.bodyId : null
+    const hubPos = w.hub.kind === 'point' ? { ...w.hub.pos } : { ...e.bodies.get(w.hub.bodyId)!.pos }
     const terminals: Terminal[] = hubLegs.map((leg) => {
       const s = resolveLeg(e, w, leg)
-      const key = leg.a.kind === 'bind' ? w.binds[leg.a.i]!.key : null
+      // a bind arm carries its port key (fixed exit normal); a slot arm carries the
+      // frame normal via th0 (sentinel key so it is honoured, not radialised).
+      const key = leg.a.kind === 'bind' ? w.binds[leg.a.i]!.key : leg.a.kind === 'slot' ? 'slot' : null
       return { p: { ...s.p0 }, tangent: s.th0, key }
     })
-    out.push({ wid, hubPos: { ...w.hub.pos }, terminals })
+    out.push({ wid, hubPos, terminals, hubBodyId })
   }
   return out
 }
@@ -195,6 +205,15 @@ function extractJunctions(e: Engine): MJunction[] {
 /** The wids drawn as a soap junction (paintWires skips their star legs). */
 export function junctionWids(e: Engine): Set<WireId> {
   return new Set(extractJunctions(e).map((m) => m.wid))
+}
+
+/** The junction-hub BODY ids (∀ via-bodies) that are now soap trees — paint must
+    NOT draw a structural dot on these (only genuine degree-1 ∃ loose ends keep a
+    dot). A boundary/interior POINT hub has no body, so it contributes nothing. */
+export function junctionHubBodies(e: Engine): Set<string> {
+  const out = new Set<string>()
+  for (const m of extractJunctions(e)) if (m.hubBodyId !== null) out.add(m.hubBodyId)
+  return out
 }
 
 // Persistent per-engine soap trees (VIEW-layer state, not physics): the hysteresis
@@ -215,18 +234,47 @@ const soapCache = new WeakMap<Engine, Map<WireId, { tree: SoapTree; nT: number; 
 // frames instead of snapping. The terminal (port) ends are never eased — they stay exact.
 const DRAW_CAP = 0.55 // = WIREP.travelCap, the physics per-frame continuity bound (× scale)
 
-/** The soap-tributary Shape[] for every ≥3-leg interior junction — sampled Hobby
-    curves only, NO branch-point dots (USER 2026-07-07: branch points are unmarked).
-    Persistent trees: a junction converges from its star seed on first sight, then
-    tracks its terminals smoothly (flap-free continuity). */
+// Per-FRAME memo of the computed tributary geometry, keyed on e.tick. The drawn
+// branch points EASE once per frame (DRAW_CAP), so the geometry must be computed
+// exactly ONCE per frame — but BOTH the base painter AND the hover/select
+// highlight need it (the highlight must trace the SAME tributary curves, not the
+// old star legs — USER 2026-07-07: "why are there two different ways to calculate
+// that shape?"). Memoising per tick lets both callers share one computation with
+// no double-ease. Geometry is theme-free; the stroke is applied by the wrappers.
+const polyMemo = new WeakMap<Engine, { tick: number; byWid: Map<WireId, Vec2[][]> }>()
+
+/** The tributary POLYLINES per junction wire (theme-free geometry) — the SINGLE
+    source of junction shape. Computed once per frame (memoised on e.tick); the
+    per-frame ease of the drawn branch points happens on the first call each tick. */
+export function junctionPolylines(e: Engine): Map<WireId, Vec2[][]> {
+  const memo = polyMemo.get(e)
+  if (memo !== undefined && memo.tick === e.tick) return memo.byWid
+  const byWid = computeJunctionPolylines(e)
+  polyMemo.set(e, { tick: e.tick, byWid })
+  return byWid
+}
+
+/** The soap-tributary Shape[] for every ≥3-arm junction — sampled Hobby curves
+    only, NO branch-point dots (USER 2026-07-07). Wraps junctionPolylines with the
+    theme stroke; the hover highlight wraps the same geometry with its own stroke. */
 export function junctionShapes(e: Engine, st: Theme): Shape[] {
+  const glow = st.wireGlow ? st.wire : null
+  const shapes: Shape[] = []
+  for (const polys of junctionPolylines(e).values()) {
+    for (const pts of polys) shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow })
+  }
+  return shapes
+}
+
+function computeJunctionPolylines(e: Engine): Map<WireId, Vec2[][]> {
   let trees = soapCache.get(e)
   if (trees === undefined) { trees = new Map(); soapCache.set(e, trees) }
-  const glow = st.wireGlow ? st.wire : null
   const obstacles = nodeObstacles(e)
-  const shapes: Shape[] = []
+  const byWid = new Map<WireId, Vec2[][]>()
   const cap = DRAW_CAP * e.scale
   for (const m of extractJunctions(e)) {
+    const polys: Vec2[][] = []
+    byWid.set(m.wid, polys)
     let entry = trees.get(m.wid)
     let fresh = false
     if (entry === undefined || entry.nT !== m.terminals.length) {
@@ -295,9 +343,9 @@ export function junctionShapes(e: Engine, st: Theme): Shape[] {
         const tn = n < t.nT ? terminalTangent(m.terminals[n]!, dpts[v]!) : clampTo(tangents.get(n)!.get(v)!, chord + Math.PI)
         const pts: Vec2[] = []
         sampleBezier(hobbyBezier(dpts[v]!, tv, dpts[n]!, tn), pts)
-        shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow })
+        polys.push(pts)
       }
     }
   }
-  return shapes
+  return byWid
 }

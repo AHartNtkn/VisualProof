@@ -16,6 +16,7 @@ import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
 import { settleStep, recomputeRegions, resolveOverlaps, establishFrame, establishProofFrame, establishProofSlotShift, applyContentScale, clampContentToFrame, clampDragToFeasible } from '../view/relax'
 import { legPaths, existentialStubs } from '../view/wires'
+import { junctionPolylines } from '../view/junction'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
 import { drawShapes } from '../view/canvas'
@@ -1149,8 +1150,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return g === undefined ? [] : [{ kind: 'circle', center: g.center, r: g.radius, fill: null, stroke, width: 2, insetColor: null, glow: null }]
     }
     const out: Shape[] = []
-    for (const l of legPaths(engine)) {
-      if (l.wid === hit.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: 3, glow: null })
+    // A junction wire is drawn as its soap tributary tree — the highlight must
+    // trace the SAME geometry (junctionPolylines), NOT the old star legs, or the
+    // hover outline diverges from what's drawn (USER 2026-07-07). junctionPolylines
+    // is the single source both paint and this share (memoised per frame).
+    const juncPolys = junctionPolylines(engine).get(hit.id)
+    if (juncPolys !== undefined) {
+      for (const pts of juncPolys) out.push({ kind: 'polyline', pts, stroke, width: 3, glow: null })
+    } else {
+      for (const l of legPaths(engine)) {
+        if (l.wid === hit.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: 3, glow: null })
+      }
     }
     for (const s of existentialStubs(engine)) {
       if (s.wid === hit.id) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width: 3, glow: null })

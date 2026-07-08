@@ -54,6 +54,32 @@ describe('round-8 D junction rendering (promoted, USER-approved 2026-07-07)', ()
     expect(dotAtHub, 'NO structural branch-point dot at the interior hub (USER 2026-07-07)').toBe(false)
   })
 
+  it('a ∀ (scope-above) k≥3 junction — a hub BODY — also branches, with NO body dot', () => {
+    // REGRESSION (USER 2026-07-07 "an edge node was drawn, everything attached to
+    // it"): a scope-above wire's hub is a via-BODY (x:wid), not a point. It used to
+    // fall through to the star render + a junction-body dot. It must now branch
+    // (soap tributaries) like an interior junction, with the structural dot gone.
+    const bld = new DiagramBuilder()
+    const cut = bld.cut(bld.root)
+    const cr = ['plus', 'times', 'succ', 'lt'].map((n, i) => bld.ref(cut, n, 2 + (i % 3)))
+    const wid = bld.wire(bld.root, cr.map((node) => ({ node, port: { kind: 'arg' as const, index: 0 } })))
+    const e = mkEngine(bld.build(), [])
+    recomputeRegions(e); resolveOverlaps(e); establishFrame(e); applyContentScale(e); clampContentToFrame(e)
+    settle(e, 400)
+    const w = e.wires.get(wid)!
+    expect(w.hub?.kind, 'this fixture is the hub-BODY case').toBe('body')
+    // it is treated as a soap junction (branches, not a star)
+    expect(junctionWids(e).has(wid), '∀ hub-body junction must be a soap junction').toBe(true)
+    // and NO dot is drawn at the via-body (the branching curves are the only visual)
+    const hubBody = e.bodies.get((w.hub as { bodyId: string }).bodyId)!
+    junctionShapes(e, LIGHT); junctionShapes(e, LIGHT)
+    const shapes = paint(e, LIGHT)
+    const dotAtHub = shapes.some((s) => s.kind === 'dot' && Math.hypot(s.center.x - hubBody.pos.x, s.center.y - hubBody.pos.y) < 3 * e.scale)
+    expect(dotAtHub, 'NO structural dot at the ∀ via-body hub (USER 2026-07-07)').toBe(false)
+    // the tributary tree has interior branch points (more curves than a bare star's arms)
+    expect(junctionShapes(e, LIGHT).length, 'branches into a tree, not one hub').toBeGreaterThanOrEqual(5)
+  })
+
   it('NO SNAP: a slowly swept terminal moves the drawn tributaries smoothly (no frame-to-frame jump)', () => {
     const e = synth(4)
     settle(e, 400)

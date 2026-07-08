@@ -1220,7 +1220,12 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
   // centre is fixed, so content and frame are rotation-invariant). ----
   for (const b of e.bodies.values()) {
     if (b.kind !== 'ref' && b.kind !== 'term' && b.kind !== 'atom' && b.kind !== 'anchor') continue
-    if (pinned !== null && pinned.has(b.id)) continue
+    // A dragged (pinned) node pins its POSITION only — the caller holds b.pos at
+    // the cursor. Its ROTATION stays a FREE DOF (USER 2026-07-07: a dragged node
+    // must keep rotating to relieve its wires, or edges go wild as it moves and
+    // can't turn to compensate). So a pinned body skips the translation gate but
+    // still runs the rotation gate below.
+    const posPinned = pinned !== null && pinned.has(b.id)
     const touched = bindLegs.get(b.id) ?? []
     // anchors carry no disc in the clearance integral (invisible carriers), so
     // they pass no farBody; their only energy is the sibling term via contentFrame
@@ -1229,7 +1234,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
     const gradE = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null, true) + contentFrame() }
     const energy = (): number => { recomputeRegions(e, dirty); return localE(touched, far, null) + contentFrame() }
     dofs.push(() => {
-      gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap * sc)
+      if (!posPinned) gatedMove(() => b.pos, (p) => { b.pos = p }, (p) => projectBodyPos(e, b, p), gradE, energy, MU, WIREP.travelCap * sc)
       if (touched.length > 0) {
         // Node angle is FREE and UNLIMITED (USER RULING 2026-07-06: "Node angle is
         // ARBITRARY. It encodes NO information and is FREE in the physics"). The

@@ -4,7 +4,7 @@ import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
 import { existentialStubs, legPaths } from './wires'
-import { junctionShapes, junctionWids } from './junction'
+import { junctionShapes, junctionWids, junctionHubBodies } from './junction'
 
 /**
  * The display list (round-8 lab spec), pure — `paint(engine, theme)` returns
@@ -145,12 +145,15 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     const s0 = frameSlots(fb, e.boundary.length)[0]!.point
     shapes.push({ kind: 'dot', center: s0, rPx: PIP_R, fill: st.ink })
   }
-  // SEMANTIC junction-body dots only: a first-class ∀ via-body / ∃ tip is a loose
-  // end of a line of identity (the existential dot is semantic — USER LAW, stays).
-  // A STRUCTURAL interior hub-POINT branch is NOT dotted — the soap tree's branching
-  // curves are the only visual there (USER 2026-07-07: branch-point dots removed).
+  // SEMANTIC junction-body dots only: a genuine degree-1 loose end of a line of
+  // identity — an ∃ tip or a bare wire (the existential dot is semantic, USER LAW).
+  // A ≥3-arm hub BODY (a ∀ via-body) is now a soap tributary tree like any other
+  // branch, so it is NOT dotted — the branching curves are the only visual (USER
+  // 2026-07-07: "an edge node with everything attached" was the wrong render). A
+  // hub POINT never had a body, so it was never dotted.
+  const hubBodies = junctionHubBodies(e)
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'junction') continue
+    if (b.kind !== 'junction' || hubBodies.has(b.id)) continue
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: st.wire })
   }
