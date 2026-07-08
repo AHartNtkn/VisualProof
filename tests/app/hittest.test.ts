@@ -6,6 +6,7 @@ import type { Vec2 } from '../../src/view/index'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
 import { hitTest, dragTarget, buildSelection } from '../../src/app/hittest'
+import { junctionPolylines } from '../../src/view/junction'
 
 const p = (s: string) => parseTerm(s)
 
@@ -122,7 +123,7 @@ describe('buildSelection', () => {
 })
 
 describe('engine hit targets (junctions, frame exits → existing vocabulary)', () => {
-  it('a click on a branch junction resolves to its wire (the hub is the wire\'s own point)', () => {
+  it('a click on a branch junction resolves to its wire — hit-tested on the DRAWN tributary curves', () => {
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('x'))
     const b = h.termNode(h.root, p('x'))
@@ -135,11 +136,16 @@ describe('engine hit targets (junctions, frame exits → existing vocabulary)', 
     const e = mkEngine(h.build(), [])
     settle(e, 2600)
     recomputeRegions(e)
-    // a same-scope k-ary junction is a wire-owned hub POINT; every leg ends on
-    // it, so a click there lands on the traced legs and resolves to the wire
-    const hub = e.wires.get(w)!.hub!
-    expect(hub.kind).toBe('point')
-    expect(hitTest(e, hub.kind === 'point' ? hub.pos : e.bodies.get(hub.bodyId)!.pos)).toEqual({ kind: 'wire', id: w })
+    // a k-ary junction is DRAWN as a soap tributary tree, so a click must hit-test
+    // against those drawn curves (junctionPolylines) — NOT the invisible star legs
+    // (which the hit used to test, diverging from what's drawn). Pick a point on a
+    // drawn tributary curve and assert paint/hit parity resolves it to the wire.
+    junctionPolylines(e); junctionPolylines(e) // warm the persistent tree
+    const polys = junctionPolylines(e).get(w)!
+    expect(polys, 'the junction is drawn as tributary curves').toBeDefined()
+    const curve = polys.find((pl) => pl.length > 2)!
+    const mid = curve[Math.floor(curve.length / 2)]!
+    expect(hitTest(e, mid)).toEqual({ kind: 'wire', id: w })
   })
 
   it('a click on an existential stub resolves to its internal wire', () => {

@@ -3,6 +3,7 @@ import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 import type { Engine } from '../view/engine'
 import { legPaths, existentialStubs } from '../view/wires'
+import { junctionPolylines, junctionWids } from '../view/junction'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
 
@@ -49,10 +50,22 @@ export function hitTest(e: Engine, point: Vec2): Hit | null {
   }
   for (const b of e.bodies.values()) {
     if (b.kind === 'junction' || b.kind === 'anchor') continue
-    if (length(sub(point, b.pos)) <= b.discR) return { kind: 'node', id: b.id }
+    // the drawn disc is scaled by e.scale (paint) — the hit radius must match, or
+    // a content-scaled node is clicked at a different size than it is drawn
+    if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'node', id: b.id }
   }
+  // A junction wire is DRAWN as its soap tributary tree — hit-test the SAME curves
+  // (junctionPolylines), not the invisible star legs (legPaths), or clicks land off
+  // the drawn shape. Non-junction wires stay on legPaths. Single geometry source
+  // shared with paint (USER 2026-07-07 dual-implementation sweep).
+  const juncWids = junctionWids(e)
+  const juncPolys = junctionPolylines(e)
   for (const { wid, pts } of legPaths(e)) {
+    if (juncWids.has(wid)) continue
     if (polylineDistance(point, pts) <= WIRE_TOLERANCE) return { kind: 'wire', id: wid }
+  }
+  for (const [wid, polys] of juncPolys) {
+    for (const pts of polys) if (polylineDistance(point, pts) <= WIRE_TOLERANCE) return { kind: 'wire', id: wid }
   }
   for (const s of existentialStubs(e)) {
     if (segmentDistance(point, s.from, s.to) <= WIRE_TOLERANCE) return { kind: 'wire', id: s.wid }
@@ -87,7 +100,7 @@ export function dragTarget(e: Engine, point: Vec2): DragTarget | null {
   }
   for (const b of e.bodies.values()) {
     if (b.kind === 'anchor') continue // an empty cut is grabbed by its region circle
-    if (length(sub(point, b.pos)) <= b.discR) return { kind: 'body', id: b.id }
+    if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'body', id: b.id }
   }
   let best: { id: RegionId; radius: number } | null = null
   for (const [rid, g] of e.regions) {

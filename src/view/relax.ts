@@ -1198,7 +1198,24 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
         E += legClearance(r.samples, r.shape.sol.L, r.shape.ownA, r.shape.ownB, near1, sc)
       }
     }
-    if (hubWire !== null) E += trunkAlignE(e, hubWire)
+    // TRUNK terms for every DISTINCT hub wire a touched leg belongs to. Moving a
+    // node (translate OR rotate) or a hub changes the touched hub leg's port
+    // anchor, which feeds trunkAlignE/trunkAxisE (weights 10/8) via legChordDir —
+    // so a gate that omits them can lower the leg's own tension/bend while raising
+    // the hub alignment, RAISING the true total (a strict-descent violation of the
+    // same class as warm/grid; MEASURED: a pinned-drag rotation rose total E
+    // 0.0014/tick until this was added). The dedicated phi gate optimises phi
+    // against these same terms; here we score them so the port-anchor movers see
+    // the full wire energy the global does. Deduped per wire.
+    if (hubWire !== null) { E += trunkAlignE(e, hubWire) + trunkAxisE(e, hubWire) }
+    else {
+      const seen = new Set<string>()
+      for (const r of touched) {
+        if (r.leg.b.kind !== 'hub' || seen.has(r.wid)) continue
+        seen.add(r.wid)
+        E += trunkAlignE(e, r.w) + trunkAxisE(e, r.w)
+      }
+    }
     // ∃-tip standoff for EVERY touched tip leg: a node with several dangling ∃
     // ports moves ALL their port anchors at once, so its gate must see all their
     // standoffs — accounting for only one lowers a wrong proxy and orbits the

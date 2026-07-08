@@ -1143,7 +1143,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const itemShapes = (hit: Hit, stroke: string): Shape[] => {
     if (hit.kind === 'node') {
       const b = engine.bodies.get(hit.id)
-      return b === undefined ? [] : [{ kind: 'circle', center: b.pos, r: b.discR, fill: null, stroke, width: 2, insetColor: null, glow: null }]
+      // scale the highlight ring by e.scale to match the drawn/hit disc size
+      return b === undefined ? [] : [{ kind: 'circle', center: b.pos, r: b.discR * engine.scale, fill: null, stroke, width: 2, insetColor: null, glow: null }]
     }
     if (hit.kind === 'region') {
       const g = engine.regions.get(hit.id)
