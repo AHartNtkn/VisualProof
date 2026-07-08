@@ -1153,11 +1153,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // trace the SAME geometry (junctionPolylines), NOT the old star legs, or the
     // hover outline diverges from what's drawn (USER 2026-07-07). junctionPolylines
     // is the single source both paint and this share (memoised per frame).
-    const wireDiscs = nodeDiscs(engine)
     const juncPolys = junctionPolylines(engine).get(hit.id)
     if (juncPolys !== undefined) {
-      for (const pts of juncPolys) out.push({ kind: 'polyline', pts: routeAroundNodes(pts, wireDiscs, engine.scale), stroke, width: 3, glow: null })
+      // junctionPolylines is already node-routed at source
+      for (const pts of juncPolys) out.push({ kind: 'polyline', pts, stroke, width: 3, glow: null })
     } else {
+      const wireDiscs = nodeDiscs(engine)
       for (const l of legPaths(engine)) {
         if (l.wid === hit.id) out.push({ kind: 'polyline', pts: routeAroundNodes(l.pts, wireDiscs, engine.scale), stroke, width: 3, glow: null })
       }

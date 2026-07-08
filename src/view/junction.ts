@@ -20,7 +20,7 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine } from './engine'
-import { resolveLeg } from './engine'
+import { resolveLeg, ascaleOf, DISC_R } from './engine'
 import type { Shape, Theme } from './paint'
 
 const wrap = (x: number): number => Math.atan2(Math.sin(x), Math.cos(x))
@@ -55,7 +55,70 @@ function sampleBezier(p: WirePath, out: Vec2[], n = 24): void {
 // ---- soap-film Steiner machinery (ui-lab/multiport.ts @ bfddd17, VERBATIM) --------
 type SoapTree = { pts: Vec2[]; adj: number[][]; nT: number }
 type Obstacle = { pos: Vec2; r: number }
-type Terminal = { p: Vec2; tangent: number; key: string | null }
+type Terminal = { p: Vec2; tangent: number; key: string | null; bodyId: string | null }
+/** A node to route drawn edges AROUND: its VISIBLE radius plus a margin, keyed by
+    body id so an edge that ATTACHES to it (an incident terminal) is exempt. */
+type DrawObstacle = { id: string; pos: Vec2; avoidR: number }
+/** Visible gap a passing junction edge keeps outside a node it does not attach to. */
+const EDGE_ROUTE_MARGIN = 4
+function drawObstacles(e: Engine): DrawObstacle[] {
+  const sc = e.scale
+  const out: DrawObstacle[] = []
+  for (const b of e.bodies.values()) {
+    if (b.kind !== 'ref' && b.kind !== 'atom' && b.kind !== 'term') continue
+    let drawn = DISC_R * sc
+    if (b.kind !== 'ref' && b.geometry !== null) {
+      let maxArc = 0
+      for (const a of b.geometry.arcs) maxArc = Math.max(maxArc, a.r)
+      drawn = maxArc * ascaleOf(b.kind) * sc
+    }
+    out.push({ id: b.id, pos: b.pos, avoidR: drawn + EDGE_ROUTE_MARGIN * sc })
+  }
+  return out
+}
+/** Point on circle (C,R) between an inside and an outside sample. */
+function circleHit(inside: Vec2, outside: Vec2, C: Vec2, R: number): Vec2 {
+  const dx = outside.x - inside.x, dy = outside.y - inside.y
+  const fx = inside.x - C.x, fy = inside.y - C.y
+  const a = dx * dx + dy * dy, b = 2 * (fx * dx + fy * dy), c = fx * fx + fy * fy - R * R
+  const t = a < 1e-9 ? 0 : Math.min(1, Math.max(0, (-b + Math.sqrt(Math.max(0, b * b - 4 * a * c))) / (2 * a)))
+  return { x: inside.x + dx * t, y: inside.y + dy * t }
+}
+/** Reroute one drawn edge polyline so it arcs AROUND every node disc it crosses
+    except the (at most two) nodes it attaches to. Interior penetration runs are
+    replaced by an arc along `avoidR`, so the trunk visibly bends around a node it
+    passes instead of running behind it. */
+function avoidEdge(pts: Vec2[], obs: readonly DrawObstacle[], incident: ReadonlySet<string>): Vec2[] {
+  let cur = pts
+  for (const o of obs) {
+    if (incident.has(o.id)) continue
+    const n = cur.length
+    if (n < 3) continue
+    const din = (p: Vec2): boolean => Math.hypot(p.x - o.pos.x, p.y - o.pos.y) < o.avoidR
+    const runs: [number, number][] = []
+    for (let i = 0; i < n; i++) { if (!din(cur[i]!)) continue; const s = i; while (i + 1 < n && din(cur[i + 1]!)) i++; runs.push([s, i]) }
+    let out = cur
+    for (let r = runs.length - 1; r >= 0; r--) {
+      const [i0, i1] = runs[r]!
+      // This node is NOT a terminal of this edge (incident nodes were skipped
+      // above), so a run touching an endpoint is a branch point sitting near the
+      // node, not an attachment — route it too, taking the endpoint itself as the
+      // arc boundary when there is no outside neighbour to cross.
+      const A = i0 > 0 ? circleHit(cur[i0]!, cur[i0 - 1]!, o.pos, o.avoidR) : cur[i0]!
+      const B = i1 < n - 1 ? circleHit(cur[i1]!, cur[i1 + 1]!, o.pos, o.avoidR) : cur[i1]!
+      const a0 = Math.atan2(A.y - o.pos.y, A.x - o.pos.x)
+      let d = Math.atan2(B.y - o.pos.y, B.x - o.pos.x) - a0
+      while (d > Math.PI) d -= 2 * Math.PI
+      while (d < -Math.PI) d += 2 * Math.PI
+      const steps = Math.max(6, Math.round(Math.abs(d) / 0.15))
+      const arc: Vec2[] = []
+      for (let k = 0; k <= steps; k++) { const a = a0 + d * (k / steps); arc.push({ x: o.pos.x + Math.cos(a) * o.avoidR, y: o.pos.y + Math.sin(a) * o.avoidR }) }
+      out = [...out.slice(0, i0), ...arc, ...out.slice(i1 + 1)]
+    }
+    cur = out
+  }
+  return cur
+}
 const SPAWN_DIST = 1.0, MERGE_DIST = 0.3, TENSION_STEP = 0.25, COS120 = Math.cos((2 * Math.PI) / 3)
 
 function nodeObstacles(e: Engine): Obstacle[] {
@@ -195,7 +258,8 @@ function extractJunctions(e: Engine): MJunction[] {
       // a bind arm carries its port key (fixed exit normal); a slot arm carries the
       // frame normal via th0 (sentinel key so it is honoured, not radialised).
       const key = leg.a.kind === 'bind' ? w.binds[leg.a.i]!.key : leg.a.kind === 'slot' ? 'slot' : null
-      return { p: { ...s.p0 }, tangent: s.th0, key }
+      const bodyId = leg.a.kind === 'bind' ? w.binds[leg.a.i]!.body : null
+      return { p: { ...s.p0 }, tangent: s.th0, key, bodyId }
     })
     out.push({ wid, hubPos, terminals, hubBodyId })
   }
@@ -270,6 +334,7 @@ function computeJunctionPolylines(e: Engine): Map<WireId, Vec2[][]> {
   let trees = soapCache.get(e)
   if (trees === undefined) { trees = new Map(); soapCache.set(e, trees) }
   const obstacles = nodeObstacles(e)
+  const drawObs = drawObstacles(e)
   const byWid = new Map<WireId, Vec2[][]>()
   const cap = DRAW_CAP * e.scale
   for (const m of extractJunctions(e)) {
@@ -300,6 +365,18 @@ function computeJunctionPolylines(e: Engine): Map<WireId, Vec2[][]> {
       if (cur === undefined) { dpts[v] = { ...tgt }; continue }
       const dx = tgt.x - cur.x, dy = tgt.y - cur.y, d = Math.hypot(dx, dy)
       dpts[v] = d <= cap || d < 1e-9 ? { ...tgt } : { x: cur.x + (dx / d) * cap, y: cur.y + (dy / d) * cap }
+    }
+    // keep every internal (Steiner) branch point OUTSIDE the visible node discs, so
+    // no drawn edge ORIGINATES inside a node (which would leave its penetration run
+    // fused to the endpoint and un-routable by avoidEdge). Projected before caching
+    // so next frame eases from the legal position (continuity preserved).
+    for (let v = t.nT; v < dpts.length; v++) {
+      for (const o of drawObs) {
+        const dx = dpts[v]!.x - o.pos.x, dy = dpts[v]!.y - o.pos.y, dd = Math.hypot(dx, dy)
+        if (dd >= o.avoidR) continue
+        const ux = dd < 1e-9 ? 1 : dx / dd, uy = dd < 1e-9 ? 0 : dy / dd
+        dpts[v] = { x: o.pos.x + ux * o.avoidR, y: o.pos.y + uy * o.avoidR }
+      }
     }
     entry.drawn = dpts.map((p) => ({ ...p }))
     // tangents + curves are built from the DRAWN points, so the whole junction is
@@ -343,7 +420,15 @@ function computeJunctionPolylines(e: Engine): Map<WireId, Vec2[][]> {
         const tn = n < t.nT ? terminalTangent(m.terminals[n]!, dpts[v]!) : clampTo(tangents.get(n)!.get(v)!, chord + Math.PI)
         const pts: Vec2[] = []
         sampleBezier(hobbyBezier(dpts[v]!, tv, dpts[n]!, tn), pts)
-        polys.push(pts)
+        // this edge attaches only to its terminal endpoints — route it AROUND any
+        // OTHER node disc it crosses (so the trunk bends around a mid-span port
+        // instead of running behind it); its own terminals stay exempt.
+        const incident = new Set<string>()
+        const bv = v < t.nT ? m.terminals[v]!.bodyId : null
+        const bn = n < t.nT ? m.terminals[n]!.bodyId : null
+        if (bv !== null) incident.add(bv)
+        if (bn !== null) incident.add(bn)
+        polys.push(avoidEdge(pts, drawObs, incident))
       }
     }
   }

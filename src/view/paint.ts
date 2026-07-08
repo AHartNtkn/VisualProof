@@ -135,8 +135,9 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     if (juncWids.has(wid)) continue
     shapes.push({ kind: 'polyline', pts: routeAroundNodes(pts, discs, e.scale), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
-  // the soap-tributary curves for those junctions (no branch dots)
-  for (const s of junctionShapes(e, st)) shapes.push(s.kind === 'polyline' ? { ...s, pts: routeAroundNodes(s.pts, discs, e.scale) } : s)
+  // the soap-tributary curves for those junctions (already routed around nodes at
+  // source in junctionPolylines, so paint/hover/hit all get the same clean geometry)
+  for (const s of junctionShapes(e, st)) shapes.push(s)
   // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
   for (const s of existentialStubs(e)) {
     shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
@@ -190,12 +191,12 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
 
   for (const s of wires(e, st)) shapes.push(s) // no spread: big diagrams overflow the arg stack
 
-  // The port-order pip: nodes with two or more ORDERED ports (refs by arity,
-  // atoms by their binder's arity) get a filled dot on their rim at port a0's
-  // angle; ports read clockwise from it (canvas y-down). Device-pixel sized
-  // like junction dots so it survives every zoom, drawn in the node's own
-  // stroke, rotating with the body. Without it a featureless rotating disc
-  // gives no way to tell which leg is which.
+  // The port pip: a filled dot on the rim at port a0's angle. For a single-port
+  // node it marks WHERE the wire attaches (so the attachment is visible even when
+  // the wire routes around the disc); for >= 2 ports it also fixes port order
+  // (ports read clockwise from a0, canvas y-down). Device-pixel sized like junction
+  // dots so it survives every zoom, drawn in the node's own stroke, rotating with
+  // the body.
   const pipArity = (b: Body): number => {
     const node = b.node
     if (node === null) return 0
@@ -219,7 +220,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
       const discR = DISC_R * b.scale
       shapes.push({ kind: 'circle', center: b.pos, r: discR, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
       shapes.push({ kind: 'label', center: b.pos, text: node.defId.slice(0, LABEL_MAX), color: st.discText, r: discR, font: st.font })
-      if (pipArity(b) >= 2) shapes.push(pipAt(b, discR, st.ink))
+      if (pipArity(b) >= 1) shapes.push(pipAt(b, discR, st.ink))
       continue
     }
     const g = b.geometry!
@@ -227,7 +228,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     const atomHue = node.kind === 'atom' ? hues.get(node.binder)! : null
     const stroke = atomHue ?? st.wire
     shapes.push(...anatomyOutline(b, g, stroke, st.wireW, glow(atomHue ?? st.wire)))
-    if (node.kind === 'atom' && pipArity(b) >= 2) {
+    if (node.kind === 'atom' && pipArity(b) >= 1) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
     }
     if (node.kind === 'term') {
