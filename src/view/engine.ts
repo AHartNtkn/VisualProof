@@ -476,10 +476,10 @@ export function worldAnchor(b: Body, key: string | null): Vec2 {
     the wire a pad-width off the rendered rim (USER report: floating attachments).
 
     A ref discards its anatomy for a readable labelled disc drawn at DISC_R, so
-    its wire meets that drawn rim at DISC_R along the port direction. An atom or a
-    term draws its real anatomy with a radial port stub whose TIP is the port
-    anchor (bend.ts / atomGeometry), so the wire meets that drawn stub tip
-    directly — the port anchor is already on the drawing (ascale folded in). */
+    its wire meets that drawn rim at DISC_R along the port direction. An atom's
+    ports sit on its rail rim and a term's ports sit on its drawn anatomy, so the
+    wire meets that point directly — the port anchor is already on the drawing
+    (ascale folded in). */
 export function worldBindAnchor(b: Body, key: string): Vec2 {
   const a0 = b.localAnchor.get(key)!
   const c = Math.cos(b.theta), s = Math.sin(b.theta)

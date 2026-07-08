@@ -122,19 +122,18 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
  */
 export function atomGeometry(arity: number): NodeGeometry {
   const r = 2
-  const pierce = r + 1
+  // A predicate node is a bare rail circle. Its ports sit on the rim, so a wire
+  // meets the drawn circle directly; the port-order pip marks a0's direction.
   const portAnchors: Record<string, Vec2> = {}
-  const radials: NodeRadial[] = []
   for (let i = 0; i < arity; i++) {
     const angle = Math.PI / 2 + (i * 2 * Math.PI) / Math.max(arity, 1)
-    portAnchors[`a${i}`] = polar(angle, pierce)
-    radials.push({ angle, r0: r, r1: pierce, kind: 'port', hueRow: null })
+    portAnchors[`a${i}`] = polar(angle, r)
   }
   return {
-    outerRadius: pierce + 0.5,
+    outerRadius: r + 0.5,
     arcs: [{ r, a0: 0, a1: 2 * Math.PI, kind: 'rail', hueRow: 0 }],
-    radials,
-    outputAnchor: polar(0, pierce),
+    radials: [],
+    outputAnchor: polar(0, r),
     portAnchors,
     exitArc: null,
     exitLine: null,
