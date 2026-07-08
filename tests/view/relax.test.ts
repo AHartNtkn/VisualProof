@@ -173,7 +173,13 @@ describe('settle — observed jitter reproductions (live feel reports)', () => {
   // (2026-07-06) at that larger settled value with margin, per USER test policy.
   const jitterCases: [string, number, number, () => { d: Diagram; b: readonly WireId[] }][] = [
     ['plusComm@20', 1100, 1.5, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }],
-    ['succShiftS@24', 1100, 1.5, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }],
+    // budget raised 1100→2500: folding the junction trunk terms into the node
+    // gates (the strict-descent dual fix) is correct — E stays perfectly monotone
+    // (0.00000 rise/tick) — but it lengthens this fixture's transient. MEASURED:
+    // drift decays 4.49→0.52 over ticks 1100→2100 monotonically, resting under the
+    // 1.5 bound by ~2100; pinned at 2500 with margin. The BOUND is unchanged — an
+    // unconverged tail gets a longer budget, never a looser bound (plan-23 policy).
+    ['succShiftS@24', 2500, 1.5, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }],
     ['succShiftS@48', 2500, 3, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }],
   ]
   for (const [name, budget, bound, mk] of jitterCases) {
