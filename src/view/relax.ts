@@ -440,6 +440,25 @@ export function applyContentScale(e: Engine): void {
   recomputeRegions(e)
 }
 
+/** THE construction-time seed projection for a SINGLE diagram — the one canonical
+    pipeline the live app, every render harness, and every settle-based test must
+    share (it was copy-pasted across ~10 sites; a change to the order silently left
+    the copies validating a layout the app no longer produced). A discrete event,
+    not a mover: seed the region circles, separate the dense mkEngine spiral onto
+    the feasible set (so the budgeted descent starts LEGAL, not wedged in a
+    dense-overlap trap — the plan-23 leading projection), fix the frame, then
+    content-fill scale + clamp inside it. Lives here (not in the shell or mkEngine)
+    because it calls ONLY relax.ts functions — no circular import. The REPLAY path
+    is a variant (establishProofFrame + establishProofSlotShift over all steps);
+    see seedProjectReplay. `noScale` skips the content scale for scale-invariant
+    measurements (frame box / slots) that must read natural geometry. */
+export function seedProject(e: Engine, noScale = false): void {
+  recomputeRegions(e)
+  resolveOverlaps(e)
+  establishFrame(e)
+  if (!noScale) { applyContentScale(e); clampContentToFrame(e) }
+}
+
 function shiftSubtree(e: Engine, rid: RegionId, dx: number, dy: number): void {
   // a rigid translation moves the region's circle exactly — keep the stored
   // geometry consistent mid-pass without a recompute

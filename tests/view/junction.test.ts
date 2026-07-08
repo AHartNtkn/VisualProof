@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
-import { settle, recomputeRegions, resolveOverlaps, establishFrame, applyContentScale, clampContentToFrame } from '../../src/view/relax'
+import { settle, seedProject } from '../../src/view/relax'
 import { paint, LIGHT } from '../../src/view/paint'
 import { junctionShapes, junctionWids } from '../../src/view/junction'
 import type { Vec2 } from '../../src/view/vec'
@@ -13,7 +13,7 @@ function synth(n: number): ReturnType<typeof mkEngine> {
   const refs = Array.from({ length: n }, (_, i) => bld.ref(bld.root, names[i % names.length]!, 2 + (i % 3)))
   bld.wire(bld.root, refs.map((node) => ({ node, port: { kind: 'arg' as const, index: 0 } })))
   const e = mkEngine(bld.build(), [])
-  recomputeRegions(e); resolveOverlaps(e); establishFrame(e); applyContentScale(e); clampContentToFrame(e)
+  seedProject(e)
   return e
 }
 
@@ -64,7 +64,7 @@ describe('round-8 D junction rendering (promoted, USER-approved 2026-07-07)', ()
     const cr = ['plus', 'times', 'succ', 'lt'].map((n, i) => bld.ref(cut, n, 2 + (i % 3)))
     const wid = bld.wire(bld.root, cr.map((node) => ({ node, port: { kind: 'arg' as const, index: 0 } })))
     const e = mkEngine(bld.build(), [])
-    recomputeRegions(e); resolveOverlaps(e); establishFrame(e); applyContentScale(e); clampContentToFrame(e)
+    seedProject(e)
     settle(e, 400)
     const w = e.wires.get(wid)!
     expect(w.hub?.kind, 'this fixture is the hub-BODY case').toBe('body')

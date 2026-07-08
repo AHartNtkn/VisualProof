@@ -6,7 +6,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, resolveLeg } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
-import { settle, settleStep, totalEnergy, clampDragToFeasible, recomputeRegions, resolveOverlaps, establishFrame, establishProofFrame, applyContentScale, clampContentToFrame } from '../../src/view/relax'
+import { settle, settleStep, totalEnergy, clampDragToFeasible, seedProject, establishProofFrame } from '../../src/view/relax'
 import { thetaRange, legCache } from '../../src/view/elastica'
 import { mkReplay } from '../../src/app/replay'
 import { bootFixture } from '../app/boot-fixture'
@@ -283,7 +283,7 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   const seedStep = (k: number, ticks: number): Engine => {
     const e = mkEngine(r.diagramAt(k), r.boundary)
     e.frame = frame
-    recomputeRegions(e); resolveOverlaps(e); establishFrame(e); applyContentScale(e); clampContentToFrame(e)
+    seedProject(e)
     settle(e, ticks)
     return e
   }

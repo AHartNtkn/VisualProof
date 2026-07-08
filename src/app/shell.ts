@@ -14,7 +14,7 @@ import type { Vec2 } from '../view/vec'
 import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
-import { settleStep, recomputeRegions, resolveOverlaps, establishFrame, establishProofFrame, establishProofSlotShift, applyContentScale, clampContentToFrame, clampDragToFeasible } from '../view/relax'
+import { settleStep, establishProofFrame, establishProofSlotShift, clampDragToFeasible, seedProject } from '../view/relax'
 import { legPaths, existentialStubs } from '../view/wires'
 import { junctionPolylines } from '../view/junction'
 import type { Shape, Theme } from '../view/paint'
@@ -69,8 +69,6 @@ const ZOOM_PER_WHEEL_PX = 0.001
     dense-overlap coordinate-descent trap. This is the plan-23 leading projection,
     which mkEngine cannot run itself (relax.ts imports engine.ts — circular); the
     shell already imports relax.ts, so it runs it after every seed. */
-const seedProject = (e: Engine): void => { recomputeRegions(e); resolveOverlaps(e); establishFrame(e); applyContentScale(e); clampContentToFrame(e) }
-
 const SELECT_STROKE = '#d97706'
 const HOVER_STROKE = '#2563eb'
 
