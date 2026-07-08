@@ -133,10 +133,10 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // wires (traced elastica legs) — every wire EXCEPT the soap junctions
   for (const { wid, pts } of legPaths(e)) {
     if (juncWids.has(wid)) continue
-    shapes.push({ kind: 'polyline', pts: routeAroundNodes(pts, discs), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+    shapes.push({ kind: 'polyline', pts: routeAroundNodes(pts, discs, e.scale), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
   // the soap-tributary curves for those junctions (no branch dots)
-  for (const s of junctionShapes(e, st)) shapes.push(s.kind === 'polyline' ? { ...s, pts: routeAroundNodes(s.pts, discs) } : s)
+  for (const s of junctionShapes(e, st)) shapes.push(s.kind === 'polyline' ? { ...s, pts: routeAroundNodes(s.pts, discs, e.scale) } : s)
   // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
   for (const s of existentialStubs(e)) {
     shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
