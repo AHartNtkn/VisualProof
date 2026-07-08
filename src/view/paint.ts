@@ -3,7 +3,7 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
-import { existentialStubs, legPaths, routeAroundNodes, nodeDiscs } from './wires'
+import { existentialStubs, legPaths } from './wires'
 import { junctionShapes, junctionWids, junctionHubBodies } from './junction'
 
 /**
@@ -127,16 +127,12 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // meeting at one hub point — so those wires' star legs are skipped here and the
   // hub-point branch dot is NOT drawn (USER 2026-07-07: branch points are unmarked).
   const juncWids = junctionWids(e)
-  // Drawn wires skim AROUND the nodes they pass (never under them) — a purely
-  // visual reroute of each traced polyline; the node it attaches to is left alone.
-  const discs = nodeDiscs(e)
   // wires (traced elastica legs) — every wire EXCEPT the soap junctions
   for (const { wid, pts } of legPaths(e)) {
     if (juncWids.has(wid)) continue
-    shapes.push({ kind: 'polyline', pts: routeAroundNodes(pts, discs, e.scale), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+    shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
-  // the soap-tributary curves for those junctions (already routed around nodes at
-  // source in junctionPolylines, so paint/hover/hit all get the same clean geometry)
+  // the soap-tributary curves for those junctions (no branch dots)
   for (const s of junctionShapes(e, st)) shapes.push(s)
   // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
   for (const s of existentialStubs(e)) {
@@ -191,12 +187,12 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
 
   for (const s of wires(e, st)) shapes.push(s) // no spread: big diagrams overflow the arg stack
 
-  // The port pip: a filled dot on the rim at port a0's angle. For a single-port
-  // node it marks WHERE the wire attaches (so the attachment is visible even when
-  // the wire routes around the disc); for >= 2 ports it also fixes port order
-  // (ports read clockwise from a0, canvas y-down). Device-pixel sized like junction
-  // dots so it survives every zoom, drawn in the node's own stroke, rotating with
-  // the body.
+  // The port-order pip: nodes with two or more ORDERED ports (refs by arity,
+  // atoms by their binder's arity) get a filled dot on their rim at port a0's
+  // angle; ports read clockwise from it (canvas y-down). Device-pixel sized
+  // like junction dots so it survives every zoom, drawn in the node's own
+  // stroke, rotating with the body. Without it a featureless rotating disc
+  // gives no way to tell which leg is which.
   const pipArity = (b: Body): number => {
     const node = b.node
     if (node === null) return 0
@@ -220,7 +216,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
       const discR = DISC_R * b.scale
       shapes.push({ kind: 'circle', center: b.pos, r: discR, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
       shapes.push({ kind: 'label', center: b.pos, text: node.defId.slice(0, LABEL_MAX), color: st.discText, r: discR, font: st.font })
-      if (pipArity(b) >= 1) shapes.push(pipAt(b, discR, st.ink))
+      if (pipArity(b) >= 2) shapes.push(pipAt(b, discR, st.ink))
       continue
     }
     const g = b.geometry!
@@ -228,7 +224,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     const atomHue = node.kind === 'atom' ? hues.get(node.binder)! : null
     const stroke = atomHue ?? st.wire
     shapes.push(...anatomyOutline(b, g, stroke, st.wireW, glow(atomHue ?? st.wire)))
-    if (node.kind === 'atom' && pipArity(b) >= 1) {
+    if (node.kind === 'atom' && pipArity(b) >= 2) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
     }
     if (node.kind === 'term') {

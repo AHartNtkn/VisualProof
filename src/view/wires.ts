@@ -1,7 +1,7 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, Leg, LegEnd, WireLegEnd, WireView } from './engine'
-import { resolveLeg, traceLeg, ascaleOf, DISC_R } from './engine'
+import { resolveLeg, traceLeg } from './engine'
 
 /**
  * Wire geometry over the PLAN-22 massless elastica, pure — returns traced
@@ -53,107 +53,6 @@ export function computeLegs(e: Engine): LegGeom[] {
     its fixed frame slot directly, plan 24). */
 export function legPaths(e: Engine): { wid: WireId; pts: Vec2[] }[] {
   return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts }))
-}
-
-/** The node discs a drawn wire must skim AROUND (never cross): every ref/atom/term
-    body at its clearance radius. A wire that ends ON a node attaches there — that
-    node is excluded per-polyline in `routeAroundNodes` (an endpoint inside it). */
-export function nodeDiscs(e: Engine): { c: Vec2; r: number }[] {
-  const sc = e.scale
-  const out: { c: Vec2; r: number }[] = []
-  for (const b of e.bodies.values()) {
-    if (b.kind !== 'ref' && b.kind !== 'atom' && b.kind !== 'term') continue
-    // the DRAWN radius (what the eye sees), not the padded clearance disc: a wire
-    // skims just outside the visible node. Refs draw at DISC_R; atoms/terms at
-    // their outermost anatomy arc. A small margin keeps the arc off the ink.
-    let drawn = DISC_R * sc
-    if (b.kind !== 'ref' && b.geometry !== null) {
-      let maxArc = 0
-      for (const a of b.geometry.arcs) maxArc = Math.max(maxArc, a.r)
-      drawn = maxArc * ascaleOf(b.kind) * sc
-    }
-    out.push({ c: b.pos, r: drawn })
-  }
-  return out
-}
-
-/** Point where segment p→q crosses circle (C,R) (q outside, p inside). */
-function circleCross(inside: Vec2, outside: Vec2, C: Vec2, R: number): Vec2 {
-  const dx = outside.x - inside.x, dy = outside.y - inside.y
-  const fx = inside.x - C.x, fy = inside.y - C.y
-  const a = dx * dx + dy * dy
-  const b = 2 * (fx * dx + fy * dy)
-  const c = fx * fx + fy * fy - R * R
-  const disc = Math.max(0, b * b - 4 * a * c)
-  const t = a < 1e-9 ? 0 : Math.min(1, Math.max(0, (-b + Math.sqrt(disc)) / (2 * a)))
-  return { x: inside.x + dx * t, y: inside.y + dy * t }
-}
-
-/** Visible skim gap: a wire that PASSES a node arcs this far OUTSIDE its drawn
-    rim, so the arc is not hidden under the node fill (nodes paint over wires). */
-const ROUTE_MARGIN = 4
-
-/** Reroute one polyline so no visible node sits ON it. Two cases per node:
-    - INCIDENT (the wire ends at/near this node): it must TOUCH the node, but on
-      the side it approaches from — clip the near end to the drawn rim so a curve
-      that dips through the node to attach on the far side is cut back to the near
-      rim (fixes a boundary trunk drawn under its own mid-span port).
-    - PASSING (neither end is at this node): replace each interior run with an arc
-      at drawn+MARGIN, clearly OUTSIDE the node so it reads as going around it. */
-function routeOne(pts: readonly Vec2[], C: Vec2, drawn: number, margin: number): readonly Vec2[] {
-  const n = pts.length
-  if (n < 3) return pts
-  const dist = (p: Vec2): number => Math.hypot(p.x - C.x, p.y - C.y)
-  const R1 = drawn + margin
-  const endAtC = dist(pts[n - 1]!) <= R1
-  const startAtC = dist(pts[0]!) <= R1
-  if (endAtC || startAtC) {
-    let out: readonly Vec2[] = pts
-    if (endAtC) {
-      // attaches at the END: from the start, cut at the FIRST entry into the drawn disc
-      let i = 0; while (i < out.length && dist(out[i]!) >= drawn) i++
-      if (i > 0 && i < out.length) out = [...out.slice(0, i), circleCross(out[i]!, out[i - 1]!, C, drawn)]
-    }
-    if (startAtC) {
-      // attaches at the START: from the end, cut at the LAST entry into the drawn disc
-      let i = out.length - 1; while (i >= 0 && dist(out[i]!) >= drawn) i--
-      if (i >= 0 && i < out.length - 1) out = [circleCross(out[i]!, out[i + 1]!, C, drawn), ...out.slice(i + 1)]
-    }
-    return out
-  }
-  // PASSING: arc every interior penetration of the drawn disc, at radius R1.
-  const runs: [number, number][] = []
-  for (let i = 0; i < n; i++) {
-    if (dist(pts[i]!) >= drawn) continue
-    const start = i
-    while (i + 1 < n && dist(pts[i + 1]!) < drawn) i++
-    runs.push([start, i])
-  }
-  let out: Vec2[] = pts.slice()
-  for (let r = runs.length - 1; r >= 0; r--) {
-    const [i0, i1] = runs[r]!
-    if (i0 === 0 || i1 === n - 1) continue
-    const A = circleCross(pts[i0]!, pts[i0 - 1]!, C, R1)
-    const B = circleCross(pts[i1]!, pts[i1 + 1]!, C, R1)
-    const a0 = Math.atan2(A.y - C.y, A.x - C.x)
-    let d = Math.atan2(B.y - C.y, B.x - C.x) - a0
-    while (d > Math.PI) d -= 2 * Math.PI
-    while (d < -Math.PI) d += 2 * Math.PI
-    const steps = Math.max(6, Math.round(Math.abs(d) / 0.15))
-    const arc: Vec2[] = []
-    for (let k = 0; k <= steps; k++) { const a = a0 + d * (k / steps); arc.push({ x: C.x + Math.cos(a) * R1, y: C.y + Math.sin(a) * R1 }) }
-    out = [...out.slice(0, i0), ...arc, ...out.slice(i1 + 1)]
-  }
-  return out
-}
-
-/** Deform a drawn wire polyline so it never sits under a node: it TOUCHES the
-    nodes it attaches to (on the near side) and ARCS around any it merely passes.
-    Applied at PAINT time to every wire polyline. */
-export function routeAroundNodes(pts: readonly Vec2[], discs: { c: Vec2; r: number }[], sc: number): readonly Vec2[] {
-  let cur: readonly Vec2[] = pts
-  for (const D of discs) cur = routeOne(cur, D.c, D.r, ROUTE_MARGIN * sc)
-  return cur
 }
 
 /** Existential dots: a dangling wire end is its own body (USER LAW — the loose

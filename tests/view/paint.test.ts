@@ -316,17 +316,17 @@ describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports
     const pips = shapes.filter((s) => s.kind === 'dot' && Math.hypot(s.center.x - expected.x, s.center.y - expected.y) < 1e-6)
     expect(pips).toHaveLength(1)
   })
-  it('a unary ref carries one pip marking its single port at the a0 angle', () => {
-    // A single-port node still gets a pip: it marks WHERE the wire attaches, so the
-    // attachment is visible even when the wire routes around the disc (USER report:
-    // the port marker was missing and the connection point was ambiguous).
+  it('a unary ref carries no pip (nothing to disambiguate)', () => {
     const { e, ref } = build(1)
     const b = e.bodies.get(ref)!
     const shapes = paint(e, LIGHT)
-    const rim = 5.5
-    const expected = { x: b.pos.x + Math.cos(b.theta + Math.PI / 2) * rim, y: b.pos.y + Math.sin(b.theta + Math.PI / 2) * rim }
-    const pips = shapes.filter((s) => s.kind === 'dot' && Math.hypot(s.center.x - expected.x, s.center.y - expected.y) < 1e-6)
-    expect(pips).toHaveLength(1)
+    // ∃ dots (junction bodies) are wire geometry, not pips — exclude them
+    const jpos = [...e.bodies.values()].filter((x) => x.kind === 'junction').map((x) => x.pos)
+    const near = shapes.filter((s) =>
+      s.kind === 'dot'
+      && Math.hypot(s.center.x - b.pos.x, s.center.y - b.pos.y) < 8
+      && !jpos.some((jp) => Math.hypot(s.center.x - jp.x, s.center.y - jp.y) < 1e-9))
+    expect(near).toHaveLength(0)
   })
   it('an atom bound to an arity-2 bubble carries a pip in its own stroke', () => {
     const h = new DiagramBuilder()

@@ -15,7 +15,7 @@ import { vec, length, sub } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
 import { settleStep, establishProofFrame, establishProofSlotShift, clampDragToFeasible, seedProject } from '../view/relax'
-import { legPaths, existentialStubs, routeAroundNodes, nodeDiscs } from '../view/wires'
+import { legPaths, existentialStubs } from '../view/wires'
 import { junctionPolylines } from '../view/junction'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
@@ -1155,12 +1155,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // is the single source both paint and this share (memoised per frame).
     const juncPolys = junctionPolylines(engine).get(hit.id)
     if (juncPolys !== undefined) {
-      // junctionPolylines is already node-routed at source
       for (const pts of juncPolys) out.push({ kind: 'polyline', pts, stroke, width: 3, glow: null })
     } else {
-      const wireDiscs = nodeDiscs(engine)
       for (const l of legPaths(engine)) {
-        if (l.wid === hit.id) out.push({ kind: 'polyline', pts: routeAroundNodes(l.pts, wireDiscs, engine.scale), stroke, width: 3, glow: null })
+        if (l.wid === hit.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: 3, glow: null })
       }
     }
     for (const s of existentialStubs(engine)) {
