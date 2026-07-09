@@ -3,7 +3,6 @@ import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 import type { Engine } from '../view/engine'
 import { legPaths, existentialStubs } from '../view/wires'
-import { junctionPolylines, junctionWids } from '../view/junction'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
 
@@ -54,18 +53,10 @@ export function hitTest(e: Engine, point: Vec2): Hit | null {
     // a content-scaled node is clicked at a different size than it is drawn
     if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'node', id: b.id }
   }
-  // A junction wire is DRAWN as its soap tributary tree — hit-test the SAME curves
-  // (junctionPolylines), not the invisible star legs (legPaths), or clicks land off
-  // the drawn shape. Non-junction wires stay on legPaths. Single geometry source
-  // shared with paint (USER 2026-07-07 dual-implementation sweep).
-  const juncWids = junctionWids(e)
-  const juncPolys = junctionPolylines(e)
+  // Every wire — junctions included — is DRAWN as its elastica legs (the junction
+  // is a tree of legs), so hit-test those same legs (paint and this share legPaths).
   for (const { wid, pts } of legPaths(e)) {
-    if (juncWids.has(wid)) continue
     if (polylineDistance(point, pts) <= WIRE_TOLERANCE) return { kind: 'wire', id: wid }
-  }
-  for (const [wid, polys] of juncPolys) {
-    for (const pts of polys) if (polylineDistance(point, pts) <= WIRE_TOLERANCE) return { kind: 'wire', id: wid }
   }
   for (const s of existentialStubs(e)) {
     if (segmentDistance(point, s.from, s.to) <= WIRE_TOLERANCE) return { kind: 'wire', id: s.wid }

@@ -343,22 +343,26 @@ describe('wire physics — equilibria', () => {
     expect(deg(Math.atan2(Math.sin(outSide), Math.cos(outSide))), 'side leg is not pulled all the way to the axis').toBeGreaterThan(0)
   })
 
-  it('a settled junction pulls two legs past the 120° star toward a trunk', () => {
+  it('a settled branch junction pulls two legs past the 120° star toward a trunk', () => {
     // Wired into the physics (not just the pure rule): the symmetric threeWay has
-    // no geometrically-preferred trunk, yet the trunk energy still pulls its two
-    // nearest-axis legs BEYOND the 120° a Plateau star would rest at — the most-
-    // opposite arrival pair exceeds 120°, so the junction no longer reads as a
-    // symmetric point-star. (Asymmetric junctions form a far stronger trunk; see
-    // the pure-rule test and the app screenshots.)
+    // no geometrically-preferred trunk, yet the branch-tree physics still pulls
+    // its two nearest-axis legs BEYOND the 120° a Plateau star would rest at —
+    // the most-opposite arrival pair exceeds 120°, so the junction no longer
+    // reads as a symmetric point-star. (Asymmetric junctions form a far stronger
+    // trunk; see the pure-rule test and the app screenshots.)
     const e = settled(threeWay, 6000)
-    const w = [...e.wires.values()].find((x) => x.hub !== null)!
+    const w = [...e.wires.values()].find((x) => x.branches.length > 0)!
+    expect(w.branches, 'the three-way interior junction is a branch tree').toHaveLength(1)
     const dirs: number[] = []
     for (const leg of w.legs) {
-      if (leg.b.kind !== 'hub') continue
+      const branchAtB = leg.b.kind === 'branch' && leg.b.i === 0
+      const branchAtA = leg.a.kind === 'branch' && leg.a.i === 0
+      if (!branchAtA && !branchAtB) continue
       const s = resolveLeg(e, w, leg)
       const pts: { x: number; y: number }[] = []
       traceLeg(s, pts, QN)
-      const a = pts[pts.length - 1]!, prev = pts[pts.length - 2]!
+      const a = branchAtB ? pts[pts.length - 1]! : pts[0]!
+      const prev = branchAtB ? pts[pts.length - 2]! : pts[1]!
       dirs.push(Math.atan2(a.y - prev.y, a.x - prev.x))
     }
     expect(dirs).toHaveLength(3)

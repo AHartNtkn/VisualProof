@@ -423,13 +423,20 @@ test('a node drags under the cursor, the rearrangement persists, and the backgro
 
   const grab = await page.evaluate(() => {
     const v = window.__vpaDebug!.view()
-    const b = window.__vpaDebug!.bodies()[0]!
-    return { id: b.id, sx: b.x * v.scale + v.offsetX, sy: b.y * v.scale + v.offsetY }
+    const terms = window.__vpaDebug!.bodies()
+      .filter((b) => b.kind === 'term')
+      .map((b) => ({ id: b.id, x: b.x, y: b.y, sx: b.x * v.scale + v.offsetX, sy: b.y * v.scale + v.offsetY }))
+      .sort((a, b) => a.x - b.x)
+    const left = terms[0]!
+    const right = terms[terms.length - 1]!
+    return { ...right, target: { sx: left.sx + 6, sy: right.sy }, dir: -1 }
   })
   const canvas = page.locator('#c')
   const box = (await canvas.boundingBox())!
-  // drag toward +x: the grabbed body must end up on the +x side of its sibling
-  const target = { sx: grab.sx + 220, sy: grab.sy }
+  // Drag inward, inside the fixed frame's hard wall. An outward fixed-pixel
+  // target can legitimately clamp at the border instead of staying under the
+  // cursor, which is frame behavior rather than drag failure.
+  const target = grab.target
   await page.mouse.move(box.x + grab.sx, box.y + grab.sy)
   await page.mouse.down()
   // several intermediate moves: the drag engages after the click slop
@@ -457,13 +464,13 @@ test('a node drags under the cursor, the rearrangement persists, and the backgro
     w.__lastBodies = now
     return (w.__stable ?? 0) >= 3
   }, undefined, { polling: 250, timeout: 30000 })
-  const rel = await page.evaluate((id) => {
+  const rel = await page.evaluate(({ id, startX, dir }) => {
     const bs = window.__vpaDebug!.bodies()
     const a = bs.find((x) => x.id === id)!
     const o = bs.find((x) => x.id !== id)!
-    return { dx: a.x - o.x, dist: Math.hypot(a.x - o.x, a.y - o.y) }
-  }, grab.id)
-  expect(rel.dx).toBeGreaterThan(0)
+    return { moved: (a.x - startX) * dir, dist: Math.hypot(a.x - o.x, a.y - o.y) }
+  }, { id: grab.id, startX: grab.x, dir: grab.dir })
+  expect(rel.moved).toBeGreaterThan(5)
   expect(rel.dist).toBeGreaterThan(1)
 
   // background fixed: dragging from empty space changes no view offset and

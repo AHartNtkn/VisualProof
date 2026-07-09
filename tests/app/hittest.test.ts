@@ -6,7 +6,6 @@ import type { Vec2 } from '../../src/view/index'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
 import { hitTest, dragTarget, buildSelection } from '../../src/app/hittest'
-import { junctionPolylines } from '../../src/view/junction'
 
 const p = (s: string) => parseTerm(s)
 
@@ -136,14 +135,12 @@ describe('engine hit targets (junctions, frame exits → existing vocabulary)', 
     const e = mkEngine(h.build(), [])
     settle(e, 2600)
     recomputeRegions(e)
-    // a k-ary junction is DRAWN as a soap tributary tree, so a click must hit-test
-    // against those drawn curves (junctionPolylines) — NOT the invisible star legs
-    // (which the hit used to test, diverging from what's drawn). Pick a point on a
-    // drawn tributary curve and assert paint/hit parity resolves it to the wire.
-    junctionPolylines(e); junctionPolylines(e) // warm the persistent tree
-    const polys = junctionPolylines(e).get(w)!
-    expect(polys, 'the junction is drawn as tributary curves').toBeDefined()
-    const curve = polys.find((pl) => pl.length > 2)!
+    // a k-ary junction is DRAWN as a tree of elastica legs (the branching IS the
+    // physics wire, one geometry), so a click must hit-test against those legs —
+    // paint and hit share legPaths. Pick a point on a drawn leg and assert parity.
+    const legs = legPaths(e).filter((l) => l.wid === w)
+    expect(legs.length, 'the junction is drawn as its legs').toBeGreaterThan(0)
+    const curve = legs.map((l) => l.pts).find((pl) => pl.length > 2)!
     const mid = curve[Math.floor(curve.length / 2)]!
     expect(hitTest(e, mid)).toEqual({ kind: 'wire', id: w })
   })

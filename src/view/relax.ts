@@ -1327,7 +1327,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
       gatedStep(() => w.phi, (v) => { w.phi = v }, () => trunkAxisE(e, w) + trunkAlignE(e, w), HX / 8, MU / 64, 0.06)
     })
   }
-  // hub points (branch junctions)
+  // hub points (∀ via-body / legacy point hub)
   for (const [wid, w] of e.wires) {
     if (w.hub === null || w.hub.kind !== 'point') continue
     const hub = w.hub
@@ -1336,6 +1336,28 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
       gatedPoint(hub, () => localE(touched, null, null), MU, 0.28 * sc)
       for (const r of touched) refresh(r)
     })
+  }
+  // junction BRANCH points: the soap-film Steiner TREE is the physics. Each branch
+  // point relaxes to the Plateau (120°) minimum of its incident legs' tension, and
+  // its trunk axis so the two most-opposite legs flow through and the rest merge
+  // tangentially (the tributary look, emergent from the physics — no separate
+  // renderer). The edges ARE elastica legs, so they bend around nodes via the leg
+  // clearance already in localE.
+  for (const [wid, w] of e.wires) {
+    if (w.branches.length === 0) continue
+    const recs = legsOfWire.get(wid)!
+    for (let bi = 0; bi < w.branches.length; bi++) {
+      const touched = recs.filter((r) => (r.leg.a.kind === 'branch' && r.leg.a.i === bi) || (r.leg.b.kind === 'branch' && r.leg.b.i === bi))
+      const holder = { get pos(): Vec2 { return w.branches[bi]! }, set pos(p: Vec2) { w.branches[bi] = p } }
+      dofs.push(() => {
+        gatedPoint(holder, () => localE(touched, null, null), MU, 0.28 * sc)
+        for (const r of touched) refresh(r)
+      })
+      dofs.push(() => {
+        gatedStep(() => w.branchPhi[bi]!, (v) => { w.branchPhi[bi] = v }, () => localE(touched, null, null), HX / 8, MU / 64, 0.06)
+        for (const r of touched) refresh(r)
+      })
+    }
   }
   // per-leg arrival angles (stiff/slow: MU/64, cap 0.06)
   for (const [wid, w] of e.wires) {

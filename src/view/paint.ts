@@ -4,7 +4,6 @@ import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
 import { existentialStubs, legPaths } from './wires'
-import { junctionShapes, junctionWids, junctionHubBodies } from './junction'
 
 /**
  * The display list (round-8 lab spec), pure — `paint(engine, theme)` returns
@@ -126,14 +125,11 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // tributary merging (round-8 · D, the user-approved look), NOT as a star of legs
   // meeting at one hub point — so those wires' star legs are skipped here and the
   // hub-point branch dot is NOT drawn (USER 2026-07-07: branch points are unmarked).
-  const juncWids = junctionWids(e)
-  // wires (traced elastica legs) — every wire EXCEPT the soap junctions
+  // wires (traced elastica legs) — the ACTUAL physics wire, junctions included
   for (const { wid, pts } of legPaths(e)) {
-    if (juncWids.has(wid)) continue
+    void wid
     shapes.push({ kind: 'polyline', pts, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
-  // the soap-tributary curves for those junctions (no branch dots)
-  for (const s of junctionShapes(e, st)) shapes.push(s)
   // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
   for (const s of existentialStubs(e)) {
     shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
@@ -147,11 +143,11 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   }
   // SEMANTIC junction-body dots only: a genuine degree-1 loose end of a line of
   // identity — an ∃ tip or a bare wire (the existential dot is semantic, USER LAW).
-  // A ≥3-arm hub BODY (a ∀ via-body) is now a soap tributary tree like any other
-  // branch, so it is NOT dotted — the branching curves are the only visual (USER
-  // 2026-07-07: "an edge node with everything attached" was the wrong render). A
-  // hub POINT never had a body, so it was never dotted.
-  const hubBodies = junctionHubBodies(e)
+  // A ∀ via-body (a body that IS a branch hub) carries branching arms, so it is not
+  // dotted — the branch legs are the only visual. Wire-owned Steiner branch points
+  // are not bodies and are never dotted.
+  const hubBodies = new Set<string>()
+  for (const w of e.wires.values()) if (w.hub !== null && w.hub.kind === 'body') hubBodies.add(w.hub.bodyId)
   for (const b of e.bodies.values()) {
     if (b.kind !== 'junction' || hubBodies.has(b.id)) continue
     shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })

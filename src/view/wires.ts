@@ -28,6 +28,7 @@ function endId(wid: WireId, w: WireView, end: WireLegEnd): LegEnd {
     case 'bind': return { body: w.binds[end.i]!.body, key: w.binds[end.i]!.key }
     case 'tip': return { body: w.tipBodyId!, key: null }
     case 'slot': return { body: `w:${wid}:slot`, key: null }
+    case 'branch': return { body: `w:${wid}:b${end.i}`, key: null }
     case 'hub': { const h = w.hub!; return h.kind === 'body' ? { body: h.bodyId, key: null } : { body: `w:${wid}:hub`, key: null } }
   }
 }
