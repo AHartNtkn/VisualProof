@@ -2,7 +2,7 @@ import type { Diagram, RegionId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
-import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, frameSlots, localToWorld } from './engine'
+import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, localToWorld, resolvedFrameSlot } from './engine'
 import { existentialStubs, legPaths } from './wires'
 
 /**
@@ -36,6 +36,17 @@ export type Theme = {
   readonly insetColor: string
   readonly wireGlow: boolean
   readonly bubbleLightness: number
+  readonly interaction: InteractionPalette
+}
+
+export type InteractionPalette = {
+  readonly selection: string
+  readonly hover: string
+  readonly selectedHover: string
+  readonly pin: string
+  readonly valid: string
+  readonly validWash: string
+  readonly refusal: string
 }
 
 export type Shape =
@@ -60,11 +71,18 @@ const JUNCTION_INNER_R = 2.6
 const STUB_DOT_R = 2.6
 /** Device-pixel radius of the port-order pip (junction-dot family). */
 const PIP_R = 3.2
-/** Disc labels truncate to this many glyphs. */
-const LABEL_MAX = 5
+/** The sheet's port-0 origin must dominate ordinary existential-sized ports. */
+const FRAME_ORIGIN_R = 5.2
 /** Hover-group highlight: lightness bump and extra stroke width over the base. */
 const HL_BRIGHT = 18
 const HL_WIDTH = 0.8
+
+/** Full user-facing name of a reference. Namespace qualification identifies the
+    definition semantically; the disc displays its complete final path segment. */
+export function referenceDisplayLabel(defId: string): string {
+  const slash = defId.lastIndexOf('/')
+  return slash < 0 ? defId : defId.slice(slash + 1)
+}
 
 /** Per-bubble hue (golden-angle spread from binder violet); the ONLY node
     colour code (law 6/8). Same map feeds atom strokes and the bubble ring. */
@@ -84,8 +102,8 @@ export function bubbleHues(d: Diagram, lightness: number): Map<RegionId, string>
 /** The disc/port outline of a body (arcs + radials) in one stroke/width/glow.
     Shared by the base paint and the hover-group highlight; the term-only
     output run is added by the caller. */
-function anatomyOutline(b: Body, g: NodeGeometry, stroke: string, width: number, glow: string | null): Shape[] {
-  const ascale = ascaleOf(b.kind) * b.scale
+function anatomyOutline(e: Engine, b: Body, g: NodeGeometry, stroke: string, width: number, glow: string | null): Shape[] {
+  const ascale = ascaleOf(b.kind) * e.scale
   const out: Shape[] = []
   for (const a of g.arcs) {
     out.push({ kind: 'arc', center: b.pos, r: a.r * ascale, a0: a.a0 + b.theta, a1: a.a1 + b.theta, stroke, width, glow })
@@ -93,8 +111,8 @@ function anatomyOutline(b: Body, g: NodeGeometry, stroke: string, width: number,
   for (const r of g.radials) {
     out.push({
       kind: 'segment',
-      from: localToWorld(b, { x: Math.cos(r.angle) * r.r0, y: Math.sin(r.angle) * r.r0 }),
-      to: localToWorld(b, { x: Math.cos(r.angle) * r.r1, y: Math.sin(r.angle) * r.r1 }),
+      from: localToWorld(e, b, { x: Math.cos(r.angle) * r.r0, y: Math.sin(r.angle) * r.r0 }),
+      to: localToWorld(e, b, { x: Math.cos(r.angle) * r.r1, y: Math.sin(r.angle) * r.r1 }),
       stroke, width, glow,
     })
   }
@@ -134,12 +152,23 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   for (const s of existentialStubs(e)) {
     shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
   }
-  // The frame pip: a device-pixel dot at slot 0 (the top-edge midpoint) marks
-  // boundary position 0, from which slots read clockwise. Shown only when >= 2
-  // boundary wires need distinguishing — the same "arity >= 2" rule as disc pips.
-  if (e.boundary.length >= 2) {
-    const s0 = frameSlots(fb, e.boundary.length)[0]!.point
-    shapes.push({ kind: 'dot', center: s0, rPx: PIP_R, fill: st.ink })
+  // An unattached boundary wire is already a formal port: paint it exactly at
+  // its canonical frame slot rather than inventing a floating existential body.
+  // The origin slot gets only the larger origin marker below, never a stacked
+  // second dot.
+  for (const [position, wid] of e.boundary.entries()) {
+    const w = e.wires.get(wid)
+    if (w === undefined || w.binds.length !== 0) continue
+    const slot = resolvedFrameSlot(e, position)
+    if (slot === null) continue
+    if (position !== 0) shapes.push({ kind: 'dot', center: slot.point, rPx: STUB_DOT_R, fill: st.wire })
+  }
+  // Port 0 is always the single prominent reading origin whenever the sheet has
+  // a boundary. All remaining ports are read clockwise from this logical port,
+  // including after a proof-wide cyclic slot shift.
+  if (e.boundary.length > 0 && e.wires.has(e.boundary[0]!)) {
+    const origin = resolvedFrameSlot(e, 0)
+    if (origin !== null) shapes.push({ kind: 'dot', center: origin.point, rPx: FRAME_ORIGIN_R, fill: st.ink })
   }
   // SEMANTIC junction-body dots only: a genuine degree-1 loose end of a line of
   // identity — an ∃ tip or a bare wire (the existential dot is semantic, USER LAW).
@@ -209,17 +238,17 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     if (b.kind === 'junction' || b.kind === 'anchor') continue
     const node = b.node!
     if (node.kind === 'ref') {
-      const discR = DISC_R * b.scale
+      const discR = DISC_R * e.scale
       shapes.push({ kind: 'circle', center: b.pos, r: discR, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
-      shapes.push({ kind: 'label', center: b.pos, text: node.defId.slice(0, LABEL_MAX), color: st.discText, r: discR, font: st.font })
+      shapes.push({ kind: 'label', center: b.pos, text: referenceDisplayLabel(node.defId), color: st.discText, r: discR, font: st.font })
       if (pipArity(b) >= 2) shapes.push(pipAt(b, discR, st.ink))
       continue
     }
     const g = b.geometry!
-    const ascale = ascaleOf(b.kind) * b.scale
+    const ascale = ascaleOf(b.kind) * e.scale
     const atomHue = node.kind === 'atom' ? hues.get(node.binder)! : null
     const stroke = atomHue ?? st.wire
-    shapes.push(...anatomyOutline(b, g, stroke, st.wireW, glow(atomHue ?? st.wire)))
+    shapes.push(...anatomyOutline(e, b, g, stroke, st.wireW, glow(atomHue ?? st.wire)))
     if (node.kind === 'atom' && pipArity(b) >= 2) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
     }
@@ -230,7 +259,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
         shapes.push({ kind: 'arc', center: b.pos, r: g.exitArc.r * ascale, a0: g.exitArc.a0 + b.theta, a1: g.exitArc.a1 + b.theta, stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
       }
       if (g.exitLine !== null) {
-        shapes.push({ kind: 'segment', from: localToWorld(b, g.exitLine[0]), to: localToWorld(b, g.exitLine[1]), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
+        shapes.push({ kind: 'segment', from: localToWorld(e, b, g.exitLine[0]), to: localToWorld(e, b, g.exitLine[1]), stroke: st.wire, width: st.wireW, glow: glow(st.wire) })
       }
     }
   }
@@ -259,7 +288,7 @@ export function highlightGroup(e: Engine, st: Theme, binderRid: RegionId): Shape
   }
   for (const b of e.bodies.values()) {
     if (b.node?.kind !== 'atom' || b.node.binder !== binderRid) continue
-    out.push(...anatomyOutline(b, b.geometry!, hue, st.wireW + HL_WIDTH, st.wireGlow ? hue : null))
+    out.push(...anatomyOutline(e, b, b.geometry!, hue, st.wireW + HL_WIDTH, st.wireGlow ? hue : null))
   }
   return out
 }
@@ -269,6 +298,10 @@ export const LIGHT: Theme = {
   wire: '#26343a', wireW: 2.2, negFill: 'rgba(90, 78, 58, 0.12)', rimW: 1.3,
   discFill: '#fffdf6', discText: '#2a2118', font: 'Georgia, serif',
   insetColor: 'rgba(58, 48, 32, 0.13)', wireGlow: false, bubbleLightness: 46,
+  interaction: {
+    selection: '#d97706', hover: '#2563eb', selectedHover: '#92400e', pin: '#dc2626',
+    valid: '#16a34a', validWash: '#16a34a10', refusal: '#dc2626',
+  },
 }
 
 export const DARK: Theme = {
@@ -276,6 +309,10 @@ export const DARK: Theme = {
   wire: '#5bd2de', wireW: 2.2, negFill: 'rgba(255, 255, 255, 0.06)', rimW: 1.2,
   discFill: '#262c33', discText: '#eae5da', font: 'Georgia, serif',
   insetColor: 'rgba(0, 0, 0, 0.32)', wireGlow: true, bubbleLightness: 64,
+  interaction: {
+    selection: '#f59e0b', hover: '#60a5fa', selectedHover: '#fbbf24', pin: '#fb7185',
+    valid: '#4ade80', validWash: '#4ade8018', refusal: '#fb7185',
+  },
 }
 
 export const THEMES: readonly Theme[] = [LIGHT, DARK]

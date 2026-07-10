@@ -58,7 +58,7 @@ export const WIREP = {
  * then applies the discrete-event legality projection.
  */
 
-/** Region padding beyond the minimal enclosing circle of its contents. */
+/** Natural (scale-1) region padding beyond the minimal enclosing circle. */
 export const REGION_PAD = 5
 /** Minimum gap enforced between sibling discs/regions by overlap projection. */
 export const SIB_GAP = 5 // structural fallback; live value is PACE.sibGap
@@ -229,17 +229,17 @@ export function recomputeRegions(e: Engine, dirty: ReadonlySet<RegionId> | null 
       const b = e.bodies.get(mid)!
       discs.push({ c: b.pos, r: b.discR * e.scale, mid })
     }
-    for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8, sub: c })
+    for (const c of e.childrenOf.get(rid)!) discs.push({ c: e.regions.get(c)!.center, r: e.regions.get(c)!.radius + REGION_PAD * 0.8 * e.scale, sub: c })
     if (discs.length === 0) {
       // only a contentless sheet reaches here (empty leaf regions carry an
       // anchor body)
-      e.regions.set(rid, { center: { x: 0, y: 0 }, radius: 10, support: [] })
+      e.regions.set(rid, { center: { x: 0, y: 0 }, radius: 10 * e.scale, support: [] })
       continue
     }
     const mec = minimalEnclosingCircle(discs)
     e.regions.set(rid, {
       center: mec.center,
-      radius: Math.max(mec.radius + REGION_PAD, 10),
+      radius: Math.max(mec.radius + REGION_PAD * e.scale, 10 * e.scale),
       support: mec.support.map((m) => (m.mid !== undefined ? { mid: m.mid } : { sub: m.sub! })),
     })
   }
@@ -331,7 +331,8 @@ export function establishProofFrame(e: Engine, steps: readonly { diagram: Diagra
     over EVERY step's construction-projected seed (the same all-steps scan the border
     is sized by). Boundary wire i is assigned slot (i + shift) mod n; only cyclic
     shifts are legal (they preserve the canonical cyclic order — no port ever slips
-    past another), and the pip stays at slot 0. Chosen ONCE at enterReplay and carried
+    past another), and logical port 0's origin marker follows its assigned slot.
+    Chosen ONCE at enterReplay and carried
     across the proof, so slots never move or reorder mid-proof. Scale-invariant (a
     rotation of the assignment), so the natural seed suffices. 0 for < 2 boundary
     wires (nothing to align). */
@@ -347,7 +348,7 @@ export function establishProofSlotShift(frame: StoredFrame, steps: readonly { di
     recomputeRegions(se); resolveOverlaps(se)
     stepPorts.push(se.boundary.map((wid) => {
       const w = se.wires.get(wid); const bd = w?.binds[0]
-      return bd === undefined ? null : worldBindAnchor(se.bodies.get(bd.body)!, bd.key)
+      return bd === undefined ? null : worldBindAnchor(se, se.bodies.get(bd.body)!, bd.key)
     }))
   }
   let bestShift = 0, bestTotal = Infinity
@@ -398,10 +399,10 @@ export function clampContentToFrame(e: Engine): void {
 
 /** Target fraction of the fixed frame half-extent a step's content should fill
     (plan 24, USER RULING 2026-07-07 "content must be sized to the space available"):
-    the binding (largest) step already fills ~this by construction (the proof frame
-    was sized to it), and every SMALLER step is scaled UP to the same band so a
-    two-node step is never tiny. Below 1 so content clears the border with a rim of
-    air (never pressed against the wall). */
+    every step is uniformly scaled in either direction to this same band. Sparse
+    content grows and dense content shrinks; the frame itself never participates in
+    that sizing decision. Below 1 so content clears the border with a rim of air
+    (never pressed against the wall). */
 const CONTENT_FILL = 0.82
 
 /** Size THIS step's content to fill the FIXED proof-wide border (plan 24, USER
@@ -416,14 +417,15 @@ const CONTENT_FILL = 0.82
     (carryOver un-scales the carried layout to scale 1), so the natural extent is
     read directly, the fill scale is solved, and the whole layout is scaled about the
     frame centre. Requires an established frame and a recomputeRegions first (seedProject
-    does both). No-op with no frame or no content. */
+    does both). No-op with no frame, no content, or a degenerate/non-finite extent. */
 export function applyContentScale(e: Engine): void {
   if (e.frame === null) return
   const bb = contentBBox(e) // natural extent (engine is normalized to scale 1 here)
   if (bb === null) return
   const half = Math.max((bb.maxX - bb.minX) / 2, (bb.maxY - bb.minY) / 2)
   if (half < 1e-6) return
-  const s = Math.max(1, (CONTENT_FILL * e.frame.half) / half)
+  const s = (CONTENT_FILL * e.frame.half) / half
+  if (!Number.isFinite(s) || s <= 0) return
   // scale ABOUT the content's own centroid and place that centroid at the frame
   // centre — a small step's natural content sits at its own centre (not the
   // proof-wide frame centre, which was fixed to the LARGEST step), so scaling
@@ -432,9 +434,10 @@ export function applyContentScale(e: Engine): void {
   const cx = (bb.minX + bb.maxX) / 2, cy = (bb.minY + bb.maxY) / 2
   const fc = e.frame.center
   const map = (p: Vec2): Vec2 => ({ x: fc.x + (p.x - cx) * s, y: fc.y + (p.y - cy) * s })
-  for (const b of e.bodies.values()) { b.pos = map(b.pos); b.scale = s }
+  for (const b of e.bodies.values()) b.pos = map(b.pos)
   for (const w of e.wires.values()) {
     if (w.hub !== null && w.hub.kind === 'point') w.hub.pos = map(w.hub.pos)
+    for (let k = 0; k < w.branches.length; k++) w.branches[k] = map(w.branches[k]!)
   }
   e.scale = s
   recomputeRegions(e)
@@ -687,7 +690,7 @@ function hubPoint(e: Engine, w: WireView): Vec2 {
 /** Chord direction (hub → port) of one hub leg. */
 function legChordDir(e: Engine, w: WireView, leg: WireLeg, hp: Vec2): number {
   const bd = w.binds[leg.a.kind === 'bind' ? leg.a.i : 0]!
-  const p = worldBindAnchor(e.bodies.get(bd.body)!, bd.key)
+  const p = worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key)
   return Math.atan2(p.y - hp.y, p.x - hp.x)
 }
 
@@ -697,7 +700,7 @@ function legChordDir(e: Engine, w: WireView, leg: WireLeg, hp: Vec2): number {
     and the rest merge tangentially. Interior hubs only — a boundary exit leg is a
     free end (its arrival tangent is solved, not a DOF), so it takes no trunk term. */
 function trunkAlignE(e: Engine, w: WireView): number {
-  if (w.hub === null || w.slot !== null) return 0
+  if (w.hub === null || w.slots.length > 0) return 0
   const hp = hubPoint(e, w)
   let E = 0
   for (const leg of w.legs) {
@@ -714,7 +717,7 @@ function trunkAlignE(e: Engine, w: WireView): number {
     tracks the layout instead of drifting); its gated travel cap gives the
     no-flip inertia. Interior hubs only. */
 function trunkAxisE(e: Engine, w: WireView): number {
-  if (w.hub === null || w.slot !== null) return 0
+  if (w.hub === null || w.slots.length > 0) return 0
   const hp = hubPoint(e, w)
   let E = 0
   for (const leg of w.legs) {
@@ -734,7 +737,7 @@ function tipStandoffE(e: Engine, w: WireView): number {
   // first — and only — bind of a dangling ∃)
   const bd = w.binds[0]
   if (bd === undefined) return 0
-  const a = worldBindAnchor(e.bodies.get(bd.body)!, bd.key)
+  const a = worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key)
   return standoffU(Math.hypot(tip.pos.x - a.x, tip.pos.y - a.y), e.scale)
 }
 
@@ -1322,7 +1325,7 @@ function descentDofs(e: Engine, pinned: ReadonlySet<string> | null): (() => void
   // the per-leg angle DOF then chases).
   for (const [wid, w] of e.wires) {
     void wid
-    if (w.hub === null || w.slot !== null) continue
+    if (w.hub === null || w.slots.length > 0) continue
     dofs.push(() => {
       gatedStep(() => w.phi, (v) => { w.phi = v }, () => trunkAxisE(e, w) + trunkAlignE(e, w), HX / 8, MU / 64, 0.06)
     })

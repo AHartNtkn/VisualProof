@@ -123,10 +123,13 @@ describe('exploreForm', () => {
     expect(() => exploreForm(b.build(), ['ghost'])).toThrowError(/pinned wire 'ghost' does not exist/)
   })
 
-  it('throws on duplicate pinned wires', () => {
+  it('records the full ordered incidence vector for an aliased boundary', () => {
     const b = new DiagramBuilder()
     const n = b.termNode(b.root, p('\\x. x'))
     const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
-    expect(() => exploreForm(b.build(), [w, w])).toThrowError(/duplicate pinned wire 'w0'/)
+    const u = b.wire(b.root, [])
+    const d = b.build()
+    expect(exploreForm(d, [w, w, u])).not.toBe(exploreForm(d, [w, u, w]))
+    expect(exploreForm(d, [w, w, u])).not.toBe(exploreForm(d, [w, u, u]))
   })
 })

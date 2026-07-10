@@ -497,16 +497,21 @@ export function findOccurrences(
     const attachments: WireId[] = []
     for (const [i, b] of pattern.boundary.entries()) {
       const stub = pd.wires[b]!
+      const priorImage = wireMap.get(b)
       if (stub.endpoints.length === 0) {
         // Bare boundary: the seed IS the attachment (unseeded bare threw up
-        // front). It passes the same visibility gate and the same used-images
-        // seam rule as every other attachment — one host wire cannot serve
-        // two boundary positions (diagonal instantiation is a deliberate
-        // future design, not matcher improvisation).
+        // front). Repeated positions for the SAME boundary identity must repeat
+        // its host image. Different boundary identities may share one host image:
+        // the seam is an ordered attachment vector and splice accepts that
+        // call-site quotient. Only internal copied wires remain injective.
         const hw = opts.attachments![i]!
         if (!isAncestorOrEqual(host, host.wires[hw]!.scope, R)) return
+        if (priorImage !== undefined) {
+          if (priorImage !== hw) return
+          attachments.push(hw)
+          continue
+        }
         if (usedImages.has(hw)) return
-        usedImages.add(hw)
         wireMap.set(b, hw)
         attachments.push(hw)
         continue
@@ -517,6 +522,11 @@ export function findOccurrences(
       if (hw === undefined) return
       // seeded: an endpointful boundary wire's discovered attachment is pinned
       if (opts.attachments !== undefined && hw !== opts.attachments[i]) return
+      if (priorImage !== undefined) {
+        if (priorImage !== hw) return
+        attachments.push(hw)
+        continue
+      }
       if (usedImages.has(hw)) return
       const hostWire = host.wires[hw]!
       const hostSet = new Set(hostWire.endpoints.map((ep) => `${ep.node} ${posKey(host, ep)}`))

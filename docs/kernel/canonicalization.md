@@ -32,7 +32,7 @@ Wire endpoints also use positional keys. `positionalPortKey` in `shape.ts` maps 
 
 `initialColors` in `canonical.ts` assigns each object an integer color based solely on its local, isomorphism-invariant content, with no reference to ids or neighbors.
 
-Regions are tagged with their kind key: `"R|sheet"`, `"R|cut"`, or `"R|bubble/{arity}"`. Nodes are tagged with their content key: `"N|atom"` for atom nodes, `"N|term:{shapeKey}"` for term nodes. Wires that are boundary-pinned are tagged `"W|pin{i}"` (distinct per pin position); all other wires are tagged `"W|w"`.
+Regions are tagged with their kind key: `"R|sheet"`, `"R|cut"`, or `"R|bubble/{arity}"`. Nodes are tagged with their content key: `"N|atom"` for atom nodes, `"N|term:{shapeKey}"` for term nodes. A boundary-pinned wire is tagged with the ordered vector of every boundary position exposing that identity, `"W|pins[i,…]"`; all other wires are tagged `"W|w"`.
 
 The function `rankSignatures` collects all these signature strings, sorts them lexicographically, and assigns rank integers 0, 1, 2, … in order. Every object's color is the rank of its signature. Objects with identical local content receive the same initial color; objects with different content receive different ones.
 
@@ -83,7 +83,7 @@ No member of the first tied class is skipped. This is what makes the form exact 
 The serialized lines are:
 - One line per region: `r{ord}:{kindKey}:p={parentOrdStr}` where parent is `-` for the root or `r{parentOrd}` otherwise.
 - One line per node: `n{ord}:{contentKey}:r=r{regionOrd}` optionally followed by `:b=r{binderOrd}` for atom nodes.
-- One line per wire: `w{ord}:{pinPrefix}s=r{scopeOrd}:e={sortedEndpointStrings}` where pin prefix is `pin{i}:` for boundary-pinned wires and empty otherwise, and endpoint strings are `n{nodeOrd}.{portKey}` sorted lexicographically.
+- One line per wire: `w{ord}:{pinPrefix}s=r{scopeOrd}:e={sortedEndpointStrings}` where pin prefix is `pins[i,…]:` for boundary-pinned wires and empty otherwise, and endpoint strings are `n{nodeOrd}.{portKey}` sorted lexicographically.
 
 All five uses of `regionOrd.get(...)` — a region's own ordinal, a region's parent, a node's region, an atom's binder, and a wire's scope — are guarded with explicit error throws (`DiagramError`) rather than `!` non-null assertions, because those are the internal consistency properties we want to verify loudly rather than silently corrupt.
 
@@ -91,9 +91,9 @@ All five uses of `regionOrd.get(...)` — a region's own ordinal, a region's par
 
 ## Boundary pinning
 
-`canonicalForm` accepts an optional `pinnedWires: readonly WireId[]`. Before calling `buildIndex`, it validates that every wire id in the list exists in the diagram and that there are no duplicates.
+`canonicalForm` accepts an optional `pinnedWires: readonly WireId[]`. The list is an ordered list of boundary incidences, not a set: every id must exist, and repeated ids mean those positions expose the same line of identity.
 
-`buildIndex` calls `pinned.forEach((w, i) => pinOf.set(w, i))` — each pinned wire records its index in `pinOf`. `initialColors` then uses `pinOf` to assign each pinned wire the distinct signature `"W|pin{i}"` instead of the generic `"W|w"`. Boundary wires at distinct positions receive distinct initial colors, so boundary order is significant; the rank order among pins is lexicographic in the signature string (e.g. `"W|pin10"` ranks below `"W|pin2"`), which is irrelevant — only distinctness matters.
+`buildIndex` accumulates every incidence index in `pinOf: WireId → number[]`. `initialColors` uses the full vector, so `[w,w,u]`, `[w,u,w]`, and `[w,u,u]` are distinct interfaces even when the underlying diagram is unchanged. Boundary order and the alias relation are therefore both canonical content.
 
 This ensures boundary order is significant: two diagrams with the same wiring but different boundary orderings get different canonical forms. With an empty boundary the canonical form equals `diagramFingerprint`, intentionally — a 0-ary relation is a sentence.
 

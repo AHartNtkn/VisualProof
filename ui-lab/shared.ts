@@ -14,7 +14,7 @@ import type { Vec2 } from '../src/view/vec'
 import { settleStep } from '../src/view/relax'
 import { paint, LIGHT, type Shape, type Theme } from '../src/view/paint'
 import { drawShapes } from '../src/view/canvas'
-import { computeLegs, legPaths, boundaryExits, existentialStubs, type ExStub, type LegGeom } from '../src/view/wires'
+import { computeLegs, legPaths, existentialStubs, type ExStub, type LegGeom } from '../src/view/wires'
 import { buildSelection, dragTarget, hitTest, type Hit } from '../src/app/hittest'
 import { addBubble, addCut, addRefNode, addTermNode, deleteSelection } from '../src/app/edit'
 import { mkSelection } from '../src/kernel/diagram/subgraph/selection'
@@ -160,7 +160,7 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
   }
   const lab: LabCtx = {
     engine: mkEngine(start.d, start.boundary), d: start.d, boundary: start.boundary, canvas, view, toWorld,
-    hitAt: (sx, sy) => { const w = toWorld(sx, sy); return hitTest(lab.engine, w) },
+    hitAt: (sx, sy) => { const w = toWorld(sx, sy); return hitTest(lab.engine, w, { scale: view.scale }) },
     subtreeHits: (r) => {
       const out: Hit[] = [{ kind: 'region', id: r }]
       const walk = (rr: RegionId) => {
@@ -229,7 +229,6 @@ export function boot(title: string, blurb: string, run: (ctx: LabCtx) => void, m
         if (dist <= tol && (best === null || dist < best.dist)) best = { wid, dist }
       }
       for (const g of computeLegs(lab.engine)) consider(g.leg.wid, polylineDistance(w, g.pts))
-      for (const x of boundaryExits(lab.engine)) consider(x.wid, polylineDistance(w, x.pts))
       for (const s of existentialStubs(lab.engine)) {
         consider(s.wid, Math.min(Math.hypot(w.x - s.from.x, w.y - s.from.y), Math.hypot(w.x - s.to.x, w.y - s.to.y)))
       }
@@ -340,7 +339,7 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
   lab.onFrame(() => {
     if (physDrag === null) return
     const b = lab.engine.bodies.get(physDrag.id)
-    if (b) { b.pos = { x: physDrag.cursor.x, y: physDrag.cursor.y }; b.vel = { x: 0, y: 0 } }
+    if (b) b.pos = { x: physDrag.cursor.x, y: physDrag.cursor.y }
   })
   lab.canvas.addEventListener('pointermove', (e) => {
     if (physDrag) { physDrag.cursor = lab.toWorld(e.clientX, e.clientY); return }
@@ -354,7 +353,7 @@ export function installBrush(lab: LabCtx, claim?: (h: Hit | null, e: PointerEven
     // Ctrl+drag physics is mode-independent (it means nothing, everywhere)
     if (e.ctrlKey && e.button === 0) {
       const w = lab.toWorld(e.clientX, e.clientY)
-      const t = dragTarget(lab.engine, w)
+      const t = dragTarget(lab.engine, w, { scale: lab.view.scale })
       if (t?.kind === 'body') physDrag = { id: t.id, cursor: w }
       return
     }
@@ -699,7 +698,6 @@ export function hitShapes(lab: LabCtx, h: Hit, stroke: string, width = 2.5): Sha
   }
   const out: Shape[] = []
   for (const l of legPaths(e)) if (l.wid === h.id) out.push({ kind: 'polyline', pts: l.pts, stroke, width: width + 0.5, glow: null })
-  for (const x of boundaryExits(e)) if (x.wid === h.id) out.push({ kind: 'polyline', pts: x.pts, stroke, width: width + 0.5, glow: null })
   for (const s of existentialStubs(e)) if (s.wid === h.id) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width: width + 0.5, glow: null })
   return out
 }

@@ -125,6 +125,16 @@ describe('verifyTheory — relation references', () => {
     expect(ctx.relations.has('R')).toBe(true)
   })
 
+  it('verifies and reloads a relation whose two boundary positions share one identity', () => {
+    const b = new DiagramBuilder()
+    const node = b.termNode(b.root, p('y'))
+    const shared = b.wire(b.root, [{ node, port: { kind: 'output' } }])
+    const alias = mkDiagramWithBoundary(b.build(), [shared, shared])
+    const json = theoryToJson({ relations: { Alias: alias }, theorems: [] })
+    const { ctx } = loadTheory(JSON.parse(JSON.stringify(json)))
+    expect(ctx.relations.get('Alias')?.boundary).toEqual([shared, shared])
+  })
+
   it('refuses a theorem side whose reference names an unknown relation', () => {
     expect(() => verifyTheory({ relations: {}, theorems: [refTheorem('ghost')] }))
       .toThrowError(/left-hand side: reference node .* names unknown relation 'ghost'/)

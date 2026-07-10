@@ -3,7 +3,20 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import {
-  addTermNode, addRefNode, addCut, addBubble, joinPorts, deleteSelection, emptyDiagram,
+  absorbHits,
+  addTermNode,
+  addRefNode,
+  addCut,
+  addBubble,
+  deleteHits,
+  deleteSelection,
+  dissolveRegion,
+  emptyDiagram,
+  joinPorts,
+  joinWires,
+  orphanedWires,
+  reparentNode,
+  severEndpoint,
 } from '../../src/app/edit'
 
 const p = (s: string) => parseTerm(s)
@@ -138,5 +151,278 @@ describe('addRefNode', () => {
     const { diagram: d1, node: t } = addTermNode(d0, d0.root, parseTerm('\\x. x'))
     const { diagram: d2 } = addRefNode(d1, d1.root, 'r', 1)
     expect(d2.nodes[t]).toEqual(d1.nodes[t])
+  })
+
+  it('spawns terms and exact qualified refs with every fresh wire in the chosen nested region', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const start = b.build()
+    const term = addTermNode(start, cut, p('x'))
+    const ref = addRefNode(term.diagram, cut, 'arith/reallyLongRelation', 2)
+
+    expect(ref.diagram.nodes[term.node]?.region).toBe(cut)
+    expect(ref.diagram.nodes[ref.node]).toMatchObject({ kind: 'ref', region: cut, defId: 'arith/reallyLongRelation', arity: 2 })
+    for (const wire of Object.values(ref.diagram.wires)) expect(wire.scope).toBe(cut)
+  })
+})
+
+describe('wire construction primitives', () => {
+  it('joins endpointful and endpointless wires n-arily at their DCA with a deterministic survivor', () => {
+    const b = new DiagramBuilder()
+    const outer = b.cut(b.root)
+    const left = b.cut(outer)
+    const right = b.cut(outer)
+    const l = b.ref(left, 'L', 1)
+    const r = b.ref(right, 'R', 1)
+    const wl = b.wire(left, [{ node: l, port: { kind: 'arg', index: 0 } }])
+    const wr = b.wire(right, [{ node: r, port: { kind: 'arg', index: 0 } }])
+    const bare = b.wire(right, [])
+    const d = b.build()
+    const ids = [wl, wr, bare].sort()
+
+    const out = joinWires(d, [wr, bare, wl])
+    expect(Object.keys(out.wires)).toEqual([ids[0]])
+    expect(out.wires[ids[0]!]!.scope).toBe(outer)
+    expect(out.wires[ids[0]!]!.endpoints.map((endpoint) => endpoint.node).sort()).toEqual([l, r].sort())
+    expect(joinWires(d, [wl, wr, bare])).toEqual(out)
+  })
+
+  it('joins two endpointless wires and refuses incomplete, duplicate, or unknown requests', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const rootBare = b.wire(b.root, [])
+    const cutBare = b.wire(cut, [])
+    const d = b.build()
+    const survivor = [rootBare, cutBare].sort()[0]!
+    const out = joinWires(d, [cutBare, rootBare])
+    expect(Object.keys(out.wires)).toEqual([survivor])
+    expect(out.wires[survivor]).toEqual({ scope: d.root, endpoints: [] })
+    expect(() => joinWires(d, [rootBare])).toThrow(/at least two wires/)
+    expect(() => joinWires(d, [rootBare, rootBare])).toThrow(/more than once/)
+    expect(() => joinWires(d, [rootBare, 'ghost'])).toThrow(/unknown wire 'ghost'/)
+  })
+
+  it('severs one endpoint onto a fresh singleton and preserves both scopes', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const a = b.ref(cut, 'A', 1)
+    const c = b.ref(cut, 'B', 1)
+    const wire = b.wire(cut, [
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: c, port: { kind: 'arg', index: 0 } },
+    ])
+    const d = b.build()
+    const out = severEndpoint(d, wire, { node: c, port: { kind: 'arg', index: 0 } })
+    const fresh = Object.keys(out.wires).find((id) => id !== wire)!
+    expect(out.wires[wire]).toEqual({ scope: cut, endpoints: [{ node: a, port: { kind: 'arg', index: 0 } }] })
+    expect(out.wires[fresh]).toEqual({ scope: cut, endpoints: [{ node: c, port: { kind: 'arg', index: 0 } }] })
+    expect(() => severEndpoint(out, fresh, out.wires[fresh]!.endpoints[0]!)).toThrow(/single loose end/)
+    expect(() => severEndpoint(d, wire, { node: a, port: { kind: 'arg', index: 9 } })).toThrow(/not on wire/)
+  })
+})
+
+describe('construction wrapping', () => {
+  it('moves wholly enclosed endpointful wires and an explicitly selected bare wire, but not crossing or unrelated bare wires', () => {
+    const b = new DiagramBuilder()
+    const inside = b.termNode(b.root, p('x'))
+    const outside = b.termNode(b.root, p('y'))
+    const privateWire = b.wire(b.root, [{ node: inside, port: { kind: 'output' } }])
+    const crossing = b.wire(b.root, [
+      { node: inside, port: { kind: 'freeVar', name: 'x' } },
+      { node: outside, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    const selectedBare = b.wire(b.root, [])
+    const unrelatedBare = b.wire(b.root, [])
+    const d = b.build()
+    const selection = mkSelection(d, { region: d.root, regions: [], nodes: [inside], wires: [selectedBare] })
+    const { diagram, region } = addCut(d, selection)
+
+    expect(diagram.nodes[inside]?.region).toBe(region)
+    expect(diagram.nodes[outside]?.region).toBe(d.root)
+    expect(diagram.wires[privateWire]?.scope).toBe(region)
+    expect(diagram.wires[selectedBare]?.scope).toBe(region)
+    expect(diagram.wires[crossing]?.scope).toBe(d.root)
+    expect(diagram.wires[unrelatedBare]?.scope).toBe(d.root)
+  })
+
+  it('moves a parent-scoped wire whose endpoints lie in a selected child subtree', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const node = b.ref(cut, 'P', 1)
+    const enclosed = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
+    const d = b.build()
+    const selection = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
+    const { diagram, region } = addBubble(d, selection, 0)
+    expect((diagram.regions[cut] as { parent: string }).parent).toBe(region)
+    expect(diagram.wires[enclosed]?.scope).toBe(region)
+  })
+
+  it('absorb-normalizes selected subtrees without swallowing parent-scoped touching wires', () => {
+    const b = new DiagramBuilder()
+    const outer = b.cut(b.root)
+    const inner = b.cut(outer)
+    const nested = b.ref(inner, 'nested', 2)
+    const rootNode = b.ref(b.root, 'root', 1)
+    const internal = b.wire(inner, [{ node: nested, port: { kind: 'arg', index: 0 } }])
+    const touching = b.wire(b.root, [
+      { node: nested, port: { kind: 'arg', index: 1 } },
+      { node: rootNode, port: { kind: 'arg', index: 0 } },
+    ])
+    const d = b.build()
+    expect(absorbHits(d, [
+      { kind: 'region', id: outer },
+      { kind: 'region', id: inner },
+      { kind: 'node', id: nested },
+      { kind: 'wire', id: internal },
+      { kind: 'wire', id: touching },
+      { kind: 'region', id: outer },
+    ])).toEqual([
+      { kind: 'region', id: outer },
+      { kind: 'wire', id: touching },
+    ])
+  })
+})
+
+describe('construction deletion and dissolution', () => {
+  it('dissolves a boundary and promotes its direct contents, child regions, and scoped wires', () => {
+    const b = new DiagramBuilder()
+    const outer = b.cut(b.root)
+    const child = b.cut(outer)
+    const direct = b.ref(outer, 'direct', 1)
+    const nested = b.ref(child, 'nested', 1)
+    const directWire = b.wire(outer, [{ node: direct, port: { kind: 'arg', index: 0 } }])
+    const nestedWire = b.wire(child, [{ node: nested, port: { kind: 'arg', index: 0 } }])
+    const d = b.build()
+    const out = dissolveRegion(d, outer)
+    expect(out.regions[outer]).toBeUndefined()
+    expect((out.regions[child] as { parent: string }).parent).toBe(d.root)
+    expect(out.nodes[direct]?.region).toBe(d.root)
+    expect(out.nodes[nested]?.region).toBe(child)
+    expect(out.wires[directWire]?.scope).toBe(d.root)
+    expect(out.wires[nestedWire]?.scope).toBe(child)
+  })
+
+  it('dissolving a bubble removes its binder-dependent atoms and their orphaned endpoints', () => {
+    const b = new DiagramBuilder()
+    const bubble = b.bubble(b.root, 2)
+    const atom = b.atom(bubble, bubble)
+    const survivor = b.ref(b.root, 'survivor', 1)
+    const privateWire = b.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 0 } }])
+    const sharedWire = b.wire(b.root, [
+      { node: atom, port: { kind: 'arg', index: 1 } },
+      { node: survivor, port: { kind: 'arg', index: 0 } },
+    ])
+    const out = deleteHits(b.build(), [{ kind: 'region', id: bubble }])
+    expect(out.regions[bubble]).toBeUndefined()
+    expect(out.nodes[atom]).toBeUndefined()
+    expect(out.nodes[survivor]).toBeDefined()
+    expect(out.wires[privateWire]).toBeUndefined()
+    expect(out.wires[sharedWire]?.endpoints).toEqual([{ node: survivor, port: { kind: 'arg', index: 0 } }])
+  })
+
+  it('deletes node-only wires, trims shared wires, and retains unrelated pre-existing bare wires', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const doomed = b.ref(cut, 'doomed', 2)
+    const survivor = b.ref(b.root, 'survivor', 1)
+    const privateWire = b.wire(cut, [{ node: doomed, port: { kind: 'arg', index: 0 } }])
+    const sharedWire = b.wire(b.root, [
+      { node: doomed, port: { kind: 'arg', index: 1 } },
+      { node: survivor, port: { kind: 'arg', index: 0 } },
+    ])
+    const bare = b.wire(b.root, [])
+    const d = b.build()
+    expect(orphanedWires(d, new Set([doomed]))).toEqual([privateWire])
+    const out = deleteHits(d, [{ kind: 'node', id: doomed }])
+    expect(out.nodes[doomed]).toBeUndefined()
+    expect(out.nodes[survivor]).toBeDefined()
+    expect(out.wires[privateWire]).toBeUndefined()
+    expect(out.wires[sharedWire]?.endpoints).toEqual([{ node: survivor, port: { kind: 'arg', index: 0 } }])
+    expect(out.wires[bare]).toEqual({ scope: d.root, endpoints: [] })
+  })
+
+  it('deletes nodes across anchors and takes a shared wire when all of its endpoints die', () => {
+    const b = new DiagramBuilder()
+    const left = b.cut(b.root)
+    const right = b.cut(b.root)
+    const a = b.ref(left, 'A', 1)
+    const z = b.ref(right, 'Z', 1)
+    const shared = b.wire(b.root, [
+      { node: a, port: { kind: 'arg', index: 0 } },
+      { node: z, port: { kind: 'arg', index: 0 } },
+    ])
+    const d = b.build()
+    const out = deleteHits(d, [{ kind: 'node', id: a }, { kind: 'node', id: z }])
+    expect(out.nodes[a]).toBeUndefined()
+    expect(out.nodes[z]).toBeUndefined()
+    expect(out.wires[shared]).toBeUndefined()
+    expect(out.regions[left]).toBeDefined()
+    expect(out.regions[right]).toBeDefined()
+  })
+
+  it('deletes selected interior content while dissolving nested boundaries deepest-first', () => {
+    const b = new DiagramBuilder()
+    const outer = b.cut(b.root)
+    const inner = b.cut(outer)
+    const doomed = b.ref(inner, 'doomed', 1)
+    const kept = b.ref(inner, 'kept', 1)
+    const doomedWire = b.wire(inner, [{ node: doomed, port: { kind: 'arg', index: 0 } }])
+    const keptWire = b.wire(inner, [{ node: kept, port: { kind: 'arg', index: 0 } }])
+    const d = b.build()
+    const out = deleteHits(d, [
+      { kind: 'region', id: outer },
+      { kind: 'region', id: inner },
+      { kind: 'node', id: doomed },
+    ])
+    expect(out.regions[outer]).toBeUndefined()
+    expect(out.regions[inner]).toBeUndefined()
+    expect(out.nodes[doomed]).toBeUndefined()
+    expect(out.wires[doomedWire]).toBeUndefined()
+    expect(out.nodes[kept]?.region).toBe(d.root)
+    expect(out.wires[keptWire]?.scope).toBe(d.root)
+  })
+})
+
+describe('node reparenting', () => {
+  it('moves private wires, preserves valid shared scopes, and widens invalid shared scopes to the DCA', () => {
+    const b = new DiagramBuilder()
+    const outer = b.cut(b.root)
+    const source = b.cut(outer)
+    const target = b.cut(outer)
+    const moving = b.termNode(source, p('a b'))
+    const peerOuter = b.ref(outer, 'outerPeer', 1)
+    const peerSource = b.ref(source, 'sourcePeer', 1)
+    const privateWire = b.wire(source, [{ node: moving, port: { kind: 'output' } }])
+    const validShared = b.wire(outer, [
+      { node: moving, port: { kind: 'freeVar', name: 'a' } },
+      { node: peerOuter, port: { kind: 'arg', index: 0 } },
+    ])
+    const invalidShared = b.wire(source, [
+      { node: moving, port: { kind: 'freeVar', name: 'b' } },
+      { node: peerSource, port: { kind: 'arg', index: 0 } },
+    ])
+    const d = b.build()
+    const out = reparentNode(d, moving, target)
+    expect(out.nodes[moving]?.region).toBe(target)
+    expect(out.wires[privateWire]?.scope).toBe(target)
+    expect(out.wires[validShared]?.scope).toBe(outer)
+    expect(out.wires[invalidShared]?.scope).toBe(outer)
+  })
+
+  it('keeps a shared outer scope when moving inward and refuses unknown destinations', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const moving = b.ref(b.root, 'moving', 1)
+    const inside = b.ref(cut, 'inside', 1)
+    const shared = b.wire(b.root, [
+      { node: moving, port: { kind: 'arg', index: 0 } },
+      { node: inside, port: { kind: 'arg', index: 0 } },
+    ])
+    const d = b.build()
+    const out = reparentNode(d, moving, cut)
+    expect(out.nodes[moving]?.region).toBe(cut)
+    expect(out.wires[shared]?.scope).toBe(d.root)
+    expect(() => reparentNode(d, moving, 'ghost')).toThrow(/unknown region 'ghost'/)
+    expect(() => reparentNode(d, 'ghost', cut)).toThrow(/unknown node 'ghost'/)
   })
 })

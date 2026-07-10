@@ -52,7 +52,8 @@ export function applyRelUnfold(
  * Fold: replace an exact occurrence of the relation body by a single reference
  * node on `args`. Mirrors comprehension abstraction's occurrence check —
  * extract the selection, refuse if it binds atoms outside itself, require
- * `args` to be a distinct permutation of the occurrence's attachment wires, and
+ * `args` to give one host wire per relation boundary position (including
+ * intrinsic repeats) and use every occurrence attachment, then
  * demand the boundary-pinned fingerprint (boundary reordered by `args`) equal
  * the relation body's. That fingerprint equality is what keeps the fold exact.
  */
@@ -69,11 +70,13 @@ export function applyRelFold(
   if (binderStubs.length > 0) {
     throw new RuleError(`relation fold: an occurrence with atoms bound outside it cannot be folded`)
   }
-  if (args.length !== attachments.length) {
-    throw new RuleError(`relation fold: the occurrence has ${attachments.length} attachment wires but ${args.length} argument positions`)
+  if (args.length !== body.boundary.length) {
+    throw new RuleError(`relation fold: relation '${defId}' has ${body.boundary.length} boundary positions but ${args.length} arguments were given`)
   }
-  if (new Set(args).size !== args.length) {
-    throw new RuleError(`relation fold: argument wires are not distinct`)
+  for (const attachment of attachments) {
+    if (!args.includes(attachment)) {
+      throw new RuleError(`relation fold: attachment wire '${attachment}' is not used by any argument position`)
+    }
   }
   const reordered = args.map((a) => {
     const j = attachments.indexOf(a)

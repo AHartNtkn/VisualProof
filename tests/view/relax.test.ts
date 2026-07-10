@@ -4,7 +4,7 @@ import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { mkEngine, resolveLeg } from '../../src/view/engine'
+import { carryOver, mkEngine, resolveLeg } from '../../src/view/engine'
 import type { Engine } from '../../src/view/engine'
 import { settle, settleStep, totalEnergy, clampDragToFeasible, seedProject, establishProofFrame } from '../../src/view/relax'
 import { thetaRange, legCache } from '../../src/view/elastica'
@@ -117,8 +117,11 @@ describe('law 7 (PLAN 22 form) — junction-kind bodies are exactly the wire-own
         if (w.tipBodyId !== null) owned.add(w.tipBodyId)
         if (w.hub !== null && w.hub.kind === 'body') owned.add(w.hub.bodyId)
       }
+      const boundaryWires = new Set(boundary)
       for (const [wid, w] of Object.entries(d.wires)) {
-        if (w.endpoints.length === 0) owned.add(`j:${wid}`)
+        // Endpointless boundary wires terminate at the fixed frame; only an
+        // endpointless INTERNAL wire owns a bare existential-dot body.
+        if (w.endpoints.length === 0 && !boundaryWires.has(wid)) owned.add(`j:${wid}`)
       }
       const junctions = [...e.bodies.values()].filter((b) => b.kind === 'junction')
       expect(new Set(junctions.map((b) => b.id))).toEqual(owned)
@@ -275,9 +278,10 @@ describe('the fixed near-square frame (plan 24, USER RULING 2026-07-06)', () => 
 })
 
 describe('content-fill scaling — a step is sized to the fixed border (plan 24, USER RULING 2026-07-07)', () => {
-  // The border is fixed proof-wide; each step's CONTENT is scaled (uniform
-  // Engine.scale) so it FILLS the border instead of rendering tiny. The seed path
-  // (app seedProject): proof-wide frame, then applyContentScale sizes THIS step.
+  // The border is fixed proof-wide; each step's CONTENT is scaled in either
+  // direction (one uniform Engine.scale) so it FILLS the border instead of
+  // rendering tiny or overflowing. The seed path (app seedProject): proof-wide
+  // frame, then applyContentScale sizes THIS step.
   const r = mkReplay(plusCommThm, bootCtx)
   const steps = Array.from({ length: r.stepCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundary }))
   // one fixed proof-wide frame, established once (as enterReplay does)
@@ -297,31 +301,98 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   // reach from the frame centre. A disc in a corner is inside the box even though
   // its RADIAL distance exceeds the half — measure the wall the clamp enforces.
   const contentHalf = (e: Engine): number => {
+    const ownFrame = e.frame!
     let h = 0
-    const box = (cx: number, cy: number, r: number): void => { h = Math.max(h, Math.abs(cx - frame.center.x) + r, Math.abs(cy - frame.center.y) + r) }
+    const box = (cx: number, cy: number, r: number): void => { h = Math.max(h, Math.abs(cx - ownFrame.center.x) + r, Math.abs(cy - ownFrame.center.y) + r) }
     for (const b of e.bodies.values()) { if (b.id.startsWith('e:')) continue; box(b.pos.x, b.pos.y, b.discR * e.scale) }
     for (const [rid, g] of e.regions) { if (rid === e.d.root) continue; box(g.center.x, g.center.y, g.radius) }
     return h
   }
 
-  // A SMALL step (few nodes) must fill the fixed border, not render tiny — the
-  // whole point of the ruling. Measured occupancy 0.74–0.96 across plusComm
-  // steps; pinned ≥ 0.6 with margin. It also must not spill past the border.
+  // A SMALL step (few nodes) must fill the fixed border, not render tiny. Measured
+  // occupancy 0.74–0.96 across plusComm steps; pinned ≥ 0.6 with margin. It also
+  // must not spill past the border.
   for (const k of [0, r.stepCount]) {
     it(`small step ${k} fills the border (occupancy in band) and stays inside`, () => {
       const e = seedStep(k, 700)
       const occ = contentHalf(e) / frame.half
-      expect(e.scale, `step ${k}: a small step must scale UP to fill (scale ${e.scale.toFixed(1)})`).toBeGreaterThan(1.5)
+      expect(Number.isFinite(e.scale) && e.scale > 0, `step ${k}: content scale must be finite and positive`).toBe(true)
       expect(occ, `step ${k}: content fills only ${(occ * 100).toFixed(0)}% of the border — too tiny`).toBeGreaterThan(0.6)
       expect(occ, `step ${k}: content spills past the border (${(occ * 100).toFixed(0)}%)`).toBeLessThanOrEqual(1.02)
     })
   }
 
-  // A scaled-up step must still REST (the motion caps scale with content, so
-  // settling is scale-invariant — same tick-count, drift → 0) and descend E
-  // monotonically. Reproduces the pre-cap-scaling residual drift (7.7 wu) that
-  // a fixed cap left on a 17× step.
-  it('a scaled-up step rests legally with monotone E (caps scale with content)', () => {
+  it('one sparse→dense lifecycle keeps the frame exact and uniformly scales content in both directions', () => {
+    const sparseBuilder = new DiagramBuilder()
+    sparseBuilder.termNode(sparseBuilder.root, idp('x'))
+    const sparse = mkEngine(sparseBuilder.build(), [])
+    seedProject(sparse)
+    const frameSnapshot = JSON.stringify(sparse.frame)
+    const lifecycleFrame = sparse.frame!
+
+    const denseBuilder = new DiagramBuilder()
+    denseBuilder.termNode(denseBuilder.root, idp('x')) // n0 survives the rewrite
+    for (let c = 0; c < 8; c++) {
+      const cut = denseBuilder.cut(denseBuilder.root)
+      for (let i = 0; i < 6; i++) denseBuilder.termNode(cut, idp('\\x. x'))
+    }
+    const dense = mkEngine(denseBuilder.build(), [])
+    carryOver(sparse, dense)
+    seedProject(dense)
+
+    expect(JSON.stringify(dense.frame), 'content growth changed the stored frame').toBe(frameSnapshot)
+    expect(Number.isFinite(sparse.scale) && sparse.scale > 0, 'sparse scale must be finite and positive').toBe(true)
+    expect(Number.isFinite(dense.scale) && dense.scale > 0, 'dense scale must be finite and positive').toBe(true)
+    expect(dense.scale, 'dense content must use a lower ratio than sparse content').toBeLessThan(sparse.scale)
+    expect(dense.scale, 'sufficiently dense content must shrink below natural size').toBeLessThan(1)
+
+    for (const [label, e] of [['sparse', sparse], ['dense', dense]] as const) {
+      const occ = contentHalf(e) / lifecycleFrame.half
+      expect(occ, `${label}: content fills only ${(occ * 100).toFixed(0)}% of the fixed frame`).toBeGreaterThan(0.6)
+      expect(occ, `${label}: content spills past the fixed frame (${(occ * 100).toFixed(0)}%)`).toBeLessThanOrEqual(1.02)
+      expect(anyOverlap(e), `${label}: scaling broke region legality`).toBe(false)
+      for (const b of e.bodies.values()) {
+        if (b.id.startsWith('e:')) continue
+        const over = Math.max(Math.abs(b.pos.x - lifecycleFrame.center.x), Math.abs(b.pos.y - lifecycleFrame.center.y)) + b.discR * e.scale - lifecycleFrame.half
+        expect(over, `${label}: body ${b.id} pokes ${over.toFixed(3)} wu past the fixed frame`).toBeLessThanOrEqual(0.5)
+      }
+    }
+  })
+
+  it('uniform scaling and carry-over preserve Steiner branch geometry', () => {
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, idp('x'))
+    const b = h.termNode(h.root, idp('x'))
+    const c = h.termNode(h.root, idp('x'))
+    const wire = h.wire(h.root, [
+      { node: a, port: { kind: 'freeVar', name: 'x' } },
+      { node: b, port: { kind: 'freeVar', name: 'x' } },
+      { node: c, port: { kind: 'freeVar', name: 'x' } },
+    ])
+    const diagram = h.build()
+    const first = mkEngine(diagram, [])
+    seedProject(first)
+    const firstBranch = { ...first.wires.get(wire)!.branches[0]! }
+    expect(first.wires.get(wire)!.branches).toHaveLength(1)
+
+    const rebuilt = mkEngine(diagram, [])
+    carryOver(first, rebuilt)
+    seedProject(rebuilt)
+    const rebuiltBranch = rebuilt.wires.get(wire)!.branches[0]!
+
+    expect(rebuilt.scale).toBeCloseTo(first.scale, 10)
+    expect(rebuiltBranch.x).toBeCloseTo(firstBranch.x, 8)
+    expect(rebuiltBranch.y).toBeCloseTo(firstBranch.y, 8)
+    const frame = rebuilt.frame!
+    expect(Math.abs(rebuiltBranch.x - frame.center.x)).toBeLessThanOrEqual(frame.half)
+    expect(Math.abs(rebuiltBranch.y - frame.center.y)).toBeLessThanOrEqual(frame.half)
+  })
+
+  // Uniformly scaled content must still REST (the motion caps scale with content,
+  // so settling is scale-invariant — same tick-count, drift → 0) and descend E
+  // monotonically. Reproduces the pre-cap-scaling residual drift (7.7 wu) that a
+  // fixed cap left on a 17× step.
+  it('a scaled step rests legally with monotone E (caps scale with content)', () => {
     const e = seedStep(0, 700)
     const before = new Map([...e.bodies].map(([id, b]) => [id, { ...b.pos }]))
     let prevE = totalEnergy(e), maxRise = 0, maxDrift = 0

@@ -30,8 +30,13 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
 }
 
 /**
- * Insert a pattern into a host region, merging each boundary stub's endpoints
- * into the index-aligned host attachment wire. Boundary stubs MUST be scoped
+ * Insert a pattern into a host region. Its ordered boundary incidences are
+ * glued to the index-aligned host attachments. When several incidences expose
+ * the SAME pattern wire, gluing identifies their host wires: this is the
+ * pushout of the two interfaces, not repeated copying of the same endpoints.
+ * The quotient keeps the outermost attachment scope and a deterministic
+ * survivor id, then copies each boundary stub's endpoints exactly once.
+ * Boundary stubs MUST be scoped
  * at the pattern root (the connection seam's quantifier location after the
  * splice IS the attachment wire's scope — a non-root stub scope would assert
  * a location the splice cannot honor; see boundary.ts). Pattern content gets
@@ -69,6 +74,52 @@ export function spliceSubgraph(
     }
   }
 
+  // Boundary alias classes induce a quotient on host attachments. Use a tiny
+  // union-find over attachment ids: two host wires are identified exactly when
+  // two positions exposing the same pattern wire attach to them. Distinct
+  // pattern wires may still intentionally attach to one host wire (diagonal
+  // instantiation); that does not add another equivalence edge.
+  const parent = new Map<WireId, WireId>()
+  const find = (w: WireId): WireId => {
+    const p = parent.get(w)
+    if (p === undefined) { parent.set(w, w); return w }
+    if (p === w) return w
+    const root = find(p)
+    parent.set(w, root)
+    return root
+  }
+  const unite = (a: WireId, b: WireId): void => {
+    const ra = find(a), rb = find(b)
+    if (ra !== rb) parent.set(rb, ra)
+  }
+  const firstAttachmentOfStub = new Map<WireId, WireId>()
+  pattern.boundary.forEach((stub, i) => {
+    const attachment = attachments[i]!
+    const first = firstAttachmentOfStub.get(stub)
+    if (first === undefined) firstAttachmentOfStub.set(stub, attachment)
+    else unite(first, attachment)
+  })
+  const component = new Map<WireId, WireId[]>()
+  for (const attachment of attachments) {
+    const root = find(attachment)
+    const members = component.get(root)
+    if (members === undefined) component.set(root, [attachment])
+    else if (!members.includes(attachment)) members.push(attachment)
+  }
+  const hostImage = new Map<WireId, WireId>()
+  for (const members of component.values()) {
+    // All attachment scopes enclose atRegion, hence lie on one ancestor chain.
+    // Start with first incidence for stable equal-scope tie-breaking and replace
+    // it only with a strictly outer scope.
+    let survivor = members[0]!
+    for (const id of members.slice(1)) {
+      const candidate = host.wires[id]!
+      const current = host.wires[survivor]!
+      if (candidate.scope !== current.scope && isAncestorOrEqual(host, candidate.scope, current.scope)) survivor = id
+    }
+    for (const id of members) hostImage.set(id, survivor)
+  }
+
   for (const [stub, hb] of binderMap) {
     const ps = pd.regions[stub]
     if (ps === undefined) throw new DiagramError(`binder map stub '${stub}' is not a pattern region`)
@@ -103,6 +154,8 @@ export function spliceSubgraph(
     takenNodes.add(fresh)
     nodeMap.set(id, fresh)
   }
+  // Mint against the full PRE-QUOTIENT namespace: a wire removed by the
+  // pushout must never be resurrected as unrelated copied content.
   const takenWires = new Set(Object.keys(host.wires))
   const wireMap = new Map<WireId, WireId>()
   for (const id of Object.keys(pd.wires)) {
@@ -138,7 +191,17 @@ export function spliceSubgraph(
   const mapEndpoints = (eps: readonly Endpoint[]): Endpoint[] =>
     eps.map((ep) => ({ node: nodeMap.get(ep.node)!, port: ep.port }))
 
-  const wires: Record<WireId, Wire> = { ...host.wires }
+  const wires: Record<WireId, Wire> = {}
+  for (const [id, w] of Object.entries(host.wires)) {
+    const image = hostImage.get(id) ?? id
+    if (image !== id) continue
+    const merged = Object.entries(host.wires)
+      .filter(([candidate]) => (hostImage.get(candidate) ?? candidate) === id)
+      .flatMap(([, candidate]) => candidate.endpoints)
+    wires[id] = merged.length === w.endpoints.length
+      ? w
+      : { scope: w.scope, endpoints: merged }
+  }
   for (const [id, w] of Object.entries(pd.wires)) {
     if (boundarySet.has(id)) continue
     wires[wireMap.get(id)!] = {
@@ -146,8 +209,11 @@ export function spliceSubgraph(
       endpoints: mapEndpoints(w.endpoints),
     }
   }
+  const copiedBoundary = new Set<WireId>()
   pattern.boundary.forEach((stubId, i) => {
-    const hostWireId = attachments[i]!
+    if (copiedBoundary.has(stubId)) return
+    copiedBoundary.add(stubId)
+    const hostWireId = hostImage.get(attachments[i]!) ?? attachments[i]!
     const stub = pd.wires[stubId]!
     const existing = wires[hostWireId]!
     wires[hostWireId] = {

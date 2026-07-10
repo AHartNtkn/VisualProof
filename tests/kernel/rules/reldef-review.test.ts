@@ -115,8 +115,8 @@ describe('fold is defId-directed — no ref is canonicalized by its body', () =>
   })
 })
 
-describe('relFold args discipline — the diagonal is refused', () => {
-  it('folding with a repeated argument wire is refused (distinctness gate)', () => {
+describe('relFold args discipline — intrinsic aliases only', () => {
+  it('does not invent an alias between distinct relation boundary identities', () => {
     const relations = new Map([['S', bodyS()]])
     const { d, node, c0, c1, w0, w1, region } = refHost2('S')
     const un = applyRelUnfold(d, node, relations)
@@ -124,8 +124,9 @@ describe('relFold args discipline — the diagonal is refused', () => {
 
     // the honest fold with two distinct arg wires is accepted
     expect(() => applyRelFold(un, sel, 'S', [w0, w1], relations)).not.toThrow()
-    // the diagonal (one host wire as both args) is refused before any fingerprint work
-    expect(() => applyRelFold(un, sel, 'S', [w0, w0], relations)).toThrow(/not distinct/)
+    // A repeated call-site argument cannot silently alias S's two distinct
+    // boundary identities; it also leaves the second crossing wire unused.
+    expect(() => applyRelFold(un, sel, 'S', [w0, w0], relations)).toThrow(/attachment wire .* is not used/)
   })
 })
 

@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
 import type { ProofStep } from '../../../src/kernel/proof/step'
-import { stepToJson, stepFromJson, theoremToJson, theoremFromJson, dwbFromJson } from '../../../src/kernel/proof/json'
+import { stepToJson, stepFromJson, theoremToJson, theoremFromJson, dwbToJson, dwbFromJson } from '../../../src/kernel/proof/json'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 
 const p = (s: string) => parseTerm(s)
@@ -119,6 +119,17 @@ describe('dwbFromJson validates boundary wire existence', () => {
     const patJson = j['pattern'] as { boundary: string[] }
     patJson.boundary = ['nonexistent_wire_id']
     expect(() => stepFromJson(j)).toThrow()
+  })
+})
+
+describe('diagram-with-boundary JSON preserves ordered alias incidences', () => {
+  it('round-trips repeated boundary positions without collapsing arity', () => {
+    const b = new DiagramBuilder()
+    const n = b.termNode(b.root, p('\\x. x'))
+    const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
+    const aliased = mkDiagramWithBoundary(b.build(), [w, w])
+    const back = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(aliased))))
+    expect(back.boundary).toEqual([w, w])
   })
 })
 

@@ -15,8 +15,9 @@ import { termShapeKey, positionalPortKey } from './shape'
  * that isomorphic diagrams receive corresponding ordinals.
  *
  * Mechanically the exploration is individualization-refinement seeded by the
- * anchor: pinned boundary wires get distinct start colors (their order is the
- * open-diagram anchor); every object otherwise starts colored by its
+ * anchor: each pinned boundary wire gets the ordered vector of positions at
+ * which it occurs (their order and aliasing are the open-diagram anchor);
+ * every object otherwise starts colored by its
  * isomorphism-invariant local content (kind, arity, exact term shape). A
  * refinement round replaces each color by the rank of its neighborhood
  * signature — the ordered-port keys make a node's signature order-sensitive,
@@ -67,11 +68,8 @@ export function boundaryForm(dwb: DiagramWithBoundary): string {
  * basis for isomorphism extraction and proof composition.
  */
 export function exploreLabeling(d: Diagram, pinnedWires: readonly WireId[] = []): ExploreLabeling {
-  const seenPins = new Set<string>()
   for (const w of pinnedWires) {
     if (d.wires[w] === undefined) throw new DiagramError(`pinned wire '${w}' does not exist`)
-    if (seenPins.has(w)) throw new DiagramError(`duplicate pinned wire '${w}'`)
-    seenPins.add(w)
   }
   const idx = buildExploreIndex(d, pinnedWires)
   const { form, colors } = search(idx, refine(idx, initialColors(idx)))
@@ -99,11 +97,8 @@ export type RefinedColors = {
  * assignments to the one canonical representative.
  */
 export function refinedColors(d: Diagram, pinnedWires: readonly WireId[] = []): RefinedColors {
-  const seenPins = new Set<string>()
   for (const w of pinnedWires) {
     if (d.wires[w] === undefined) throw new DiagramError(`pinned wire '${w}' does not exist`)
-    if (seenPins.has(w)) throw new DiagramError(`duplicate pinned wire '${w}'`)
-    seenPins.add(w)
   }
   const idx = buildExploreIndex(d, pinnedWires)
   const c = refine(idx, initialColors(idx))
@@ -126,7 +121,8 @@ export type ExploreIndex = {
   readonly nodePortWire: ReadonlyMap<NodeId, ReadonlyMap<string, WireId>>
   readonly wireScope: ReadonlyMap<WireId, RegionId>
   readonly wireEndpoints: ReadonlyMap<WireId, readonly { node: NodeId; pkey: string }[]>
-  readonly pinOf: ReadonlyMap<WireId, number>
+  /** Every ordered boundary position exposing this wire. */
+  readonly pinOf: ReadonlyMap<WireId, readonly number[]>
 }
 
 /** Positional port key of a wire endpoint (name-blind). */
@@ -230,8 +226,12 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
     wireEndpoints.set(id, eps)
   }
 
-  const pinOf = new Map<WireId, number>()
-  pinned.forEach((w, i) => pinOf.set(w, i))
+  const pinOf = new Map<WireId, number[]>()
+  pinned.forEach((w, i) => {
+    const positions = pinOf.get(w)
+    if (positions === undefined) pinOf.set(w, [i])
+    else positions.push(i)
+  })
 
   return {
     regionIds, nodeIds, wireIds, regionKindKey, parentOf, childrenOf, nodesIn,
@@ -263,8 +263,8 @@ function initialColors(idx: ExploreIndex): Colors {
   for (const id of idx.regionIds) entries.push([`R${id}`, `R|${idx.regionKindKey.get(id)!}`])
   for (const id of idx.nodeIds) entries.push([`N${id}`, `N|${idx.nodeContentKey.get(id)!}`])
   for (const id of idx.wireIds) {
-    const pin = idx.pinOf.get(id)
-    entries.push([`W${id}`, `W|${pin === undefined ? 'w' : `pin${pin}`}`])
+    const pins = idx.pinOf.get(id)
+    entries.push([`W${id}`, `W|${pins === undefined ? 'w' : `pins${JSON.stringify(pins)}`}`])
   }
   const ranked = rankSignatures(entries)
   return {
@@ -388,9 +388,9 @@ function serializeWith(idx: ExploreIndex, c: Colors): string {
     lines.push(`n${nodeOrd.get(id)!}:${idx.nodeContentKey.get(id)!}:r=r${regionOrd.get(idx.nodeRegion.get(id)!)!}${binderStr}`)
   }
   for (const id of sortByOrd(idx.wireIds, wireOrd)) {
-    const pin = idx.pinOf.get(id)
+    const pins = idx.pinOf.get(id)
     const eps = idx.wireEndpoints.get(id)!.map((ep) => `n${nodeOrd.get(ep.node)!}.${ep.pkey}`).sort()
-    const pinStr = pin === undefined ? '' : `pin${pin}:`
+    const pinStr = pins === undefined ? '' : `pins${JSON.stringify(pins)}:`
     lines.push(`w${wireOrd.get(id)!}:${pinStr}s=r${regionOrd.get(idx.wireScope.get(id)!)!}:e=${eps.join(',')}`)
   }
   return lines.join('\n')

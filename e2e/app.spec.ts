@@ -1,5 +1,28 @@
 import { test, expect } from '@playwright/test'
 
+async function spawnTerm(page: import('@playwright/test').Page, source: string): Promise<void> {
+  const box = await page.locator('#c').boundingBox()
+  if (box === null) throw new Error('the main canvas has no bounding box')
+  const count = await page.evaluate(() => window.__vpaDebug!.nodeCount())
+  const x = box.x + box.width * (0.38 + (count % 3) * 0.12)
+  const y = box.y + box.height * (0.42 + (Math.floor(count / 3) % 2) * 0.14)
+  await page.mouse.click(x, y, { button: 'right' })
+  const menu = page.getByRole('menu')
+  await menu.getByRole('button', { name: 'λ term…', exact: true }).click()
+  const input = page.getByLabel('Lambda term to spawn')
+  await input.fill(source)
+  await input.press('Enter')
+}
+
+async function spawnRelation(page: import('@playwright/test').Page, defId: string): Promise<void> {
+  const box = await page.locator('#c').boundingBox()
+  if (box === null) throw new Error('the main canvas has no bounding box')
+  await page.mouse.click(box.x + box.width * 0.7, box.y + box.height * 0.65, { button: 'right' })
+  const input = page.getByLabel('Search relations to spawn')
+  await input.fill(defId)
+  await input.press('Enter')
+}
+
 declare global {
   interface Window {
     __vpaDebug?: {
@@ -10,8 +33,10 @@ declare global {
       view(): { scale: number; offsetX: number; offsetY: number }
       bodies(): { id: string; kind: string; x: number; y: number; r: number }[]
       wires(): { id: string; x: number; y: number }[]
+      interaction(): { selected: readonly { kind: 'node' | 'region' | 'wire'; id: string }[]; pins: string[]; userZoom: number }
       theoryJson(): string
       editForm(): string
+      dispose(): void
     }
   }
 }
@@ -50,8 +75,7 @@ test('term entry adds a node to the edit diagram', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   const before = await page.evaluate(() => window.__vpaDebug!.nodeCount())
-  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
-  await page.getByRole('button', { name: /add term/i }).click()
+  await spawnTerm(page, '\\x. x')
   const after = await page.evaluate(() => window.__vpaDebug!.nodeCount())
   expect(after).toBe(before + 1)
 })
@@ -61,8 +85,7 @@ test('a goal proves end to end through the chrome', async ({ page }) => {
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   // build lhs: one identity node; snapshot as lhs (no citations, so this proves
   // against the empty boot context)
-  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
-  await page.getByRole('button', { name: /add term/i }).click()
+  await spawnTerm(page, '\\x. x')
   await page.getByRole('button', { name: /set goal lhs/i }).click()
   // set rhs = same diagram, prove with zero steps (met immediately)
   await page.getByRole('button', { name: /set goal rhs/i }).click()
@@ -83,8 +106,7 @@ test('the companion pane targets the other side, survives a forward step, and to
   const box = (await canvas.boundingBox())!
 
   // A goal with a node on each side, so the backward-side companion has a body.
-  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
-  await page.getByRole('button', { name: /add term/i }).click()
+  await spawnTerm(page, '\\x. x')
   await page.getByRole('button', { name: /set goal lhs/i }).click()
   await page.getByRole('button', { name: /set goal rhs/i }).click()
 
@@ -140,10 +162,10 @@ test('the companion pane targets the other side, survives a forward step, and to
   const sn = await page.evaluate(() => {
     const v = window.__vpaDebug!.view()
     const b = window.__vpaDebug!.bodies().find((x) => x.kind === 'term')!
-    return { x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
+    return { id: b.id, x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
   })
   await page.mouse.click(splitBox.x + sn.x, splitBox.y + sn.y)
-  await expect(page.locator('#status')).toContainText("node '")
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: sn.id }])
 
   await companionBtn.click()
   await expect(page.locator('#companion')).toBeHidden()
@@ -166,8 +188,7 @@ test('the companion canvas is inert: a click, drag, and wheel on it change nothi
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
 
   // A goal with a node on each side, then enter PROVE — companion visible (PiP).
-  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
-  await page.getByRole('button', { name: /add term/i }).click()
+  await spawnTerm(page, '\\x. x')
   await page.getByRole('button', { name: /set goal lhs/i }).click()
   await page.getByRole('button', { name: /set goal rhs/i }).click()
   await page.getByRole('button', { name: /switch to prove/i }).click()
@@ -257,6 +278,25 @@ test('a relational theorem replays step by step through the live shell', async (
   expect(start.bodies).toBeGreaterThan(0)
   const lhsNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
 
+  // Replay is diagram-read-only, not physics-frozen: Ctrl remains the global
+  // layout handle while ordinary/Shift gestures cannot create a selection.
+  await page.waitForTimeout(500)
+  const replayGrab = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'ref' || candidate.kind === 'term')!
+    return { id: body.id, x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  const replayBox = (await page.locator('#c').boundingBox())!
+  const replayTarget = { x: replayGrab.x + 8, y: replayGrab.y + 28 }
+  await page.mouse.move(replayBox.x + replayGrab.x, replayBox.y + replayGrab.y)
+  await page.keyboard.down('Control')
+  await page.mouse.down()
+  await page.mouse.move(replayBox.x + replayTarget.x, replayBox.y + replayTarget.y, { steps: 8 })
+  await page.keyboard.up('Control')
+  await page.mouse.up()
+  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.interaction().pins)).toContain(replayGrab.id)
+  expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([])
+
   // The companion pane shows the theorem's final state (the goal) while stepping.
   await expect.poll(async () => (await page.evaluate(() => window.__vpaDebug!.companion()))?.bodies ?? 0).toBeGreaterThan(0)
   const compStart = await page.evaluate(() => window.__vpaDebug!.companion())
@@ -323,13 +363,14 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
 
   // A closed lambda has only an output line, so the whole-node selection has a
   // single crossing wire → an arity-1 relation.
-  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
-  await page.getByRole('button', { name: /add term/i }).click()
+  await spawnTerm(page, '\\x. x')
   await page.waitForTimeout(400) // let the layout settle so seam coords are current
 
   // Select the term node (click its body), then the EDIT menu offers Define.
   await clickTerm()
-  await expect(page.locator('#status')).toContainText("node '")
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([
+    expect.objectContaining({ kind: 'node' }),
+  ])
   // Structural fingerprint of the sheet BEFORE defining: a conservative
   // definitional extension must leave it byte-identical (not just node-count).
   const sheetBefore = await page.evaluate(() => window.__vpaDebug!.editForm())
@@ -339,9 +380,9 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
 
   // No wire picking needed: name it in the DEDICATED field and commit with the
   // canonical argument order. (Picking crossing wires remains an override.)
-  await page.locator('#relation-name').fill('R')
+  await page.locator('#relation-name').fill('logic/R')
   await page.locator('#action-menu').getByRole('button', { name: /Commit relation definition \(canonical argument order\)/ }).click()
-  await expect(page.locator('#status')).toContainText("defined 'R' (arity 1)")
+  await expect(page.locator('#status')).toContainText("defined 'logic/R' (arity 1)")
   // The whole define flow (defineRelation + defineEntry) changed nothing on the
   // sheet — the canonical form is identical to the pre-define snapshot.
   expect(await page.evaluate(() => window.__vpaDebug!.editForm())).toBe(sheetBefore)
@@ -349,27 +390,28 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   // The Session group lists the new relation beside adopted theorems.
   const lib = page.locator('#library')
   await lib.getByRole('button', { name: /Session/, exact: false }).click()
-  await expect(lib).toContainText('relations: R')
+  await expect(lib).toContainText('relations: logic/R')
 
   // Folding is a CONSTRUCTION operation — no goals, no PROVE — and the
   // argument wires are INFERRED by occurrence matching: choose the relation,
   // done. No text box, no wire picking.
   await clickEmpty()
   await clickTerm()
-  await expect(page.locator('#status')).toContainText("node '")
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([
+    expect.objectContaining({ kind: 'node' }),
+  ])
   await page.locator('#action-menu').getByRole('button', { name: 'Fold into a relation…', exact: true }).click()
-  await page.locator('#action-menu').getByRole('button', { name: "Fold into 'R'", exact: true }).click()
-  await expect(page.locator('#status')).toContainText("folded into 'R'")
+  await page.locator('#action-menu').getByRole('button', { name: "Fold into 'logic/R'", exact: true }).click()
+  await expect(page.locator('#status')).toContainText("folded into 'logic/R'")
   await expect
     .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).some((b) => b.kind === 'ref'))
     .toBe(true)
 
-  // Spawning: "Add relation" lists the known relations — one click drops a
-  // fresh R reference with bare argument wires.
+  // The contextual cascade searches the live relation library and drops a
+  // fresh qualified relation reference at the invocation point with bare argument wires.
   const refsBefore = await page.evaluate(() => window.__vpaDebug!.bodies().filter((b) => b.kind === 'ref').length)
-  await page.getByRole('button', { name: 'Add relation', exact: true }).click()
-  await page.locator('#action-menu').getByRole('button', { name: "Add 'R'", exact: true }).click()
-  await expect(page.locator('#status')).toContainText("added relation node")
+  await spawnRelation(page, 'logic/R')
+  await expect(page.locator('#status')).toContainText("relation 'logic/R' placed")
   await expect
     .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).filter((b) => b.kind === 'ref').length)
     .toBe(refsBefore + 1)
@@ -382,10 +424,10 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
     const v = window.__vpaDebug!.view()
     const refs = window.__vpaDebug!.bodies().filter((b) => b.kind === 'ref')
     const r = refs[refs.length - 1]!
-    return { x: r.x * v.scale + v.offsetX, y: r.y * v.scale + v.offsetY }
+    return { id: r.id, x: r.x * v.scale + v.offsetX, y: r.y * v.scale + v.offsetY }
   })
   await page.mouse.click(box.x + refPos.x, box.y + refPos.y)
-  await expect(page.locator('#status')).toContainText("node '")
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: refPos.id }])
   await page.locator('#action-menu').getByRole('button', { name: 'Unfold relation', exact: true }).click()
   await expect(page.locator('#status')).toContainText('relation unfolded')
   await expect
@@ -393,31 +435,29 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
     .toBe(termsBefore + 1)
 
   // Save serializes the relation. Capture the live theory JSON (the same object
-  // Save theory writes) and confirm it carries R.
+  // Save theory writes) and confirm it carries the exact qualified id.
   const json = await page.evaluate(() => window.__vpaDebug!.theoryJson())
   const theory = JSON.parse(json) as { relations: Record<string, unknown> }
-  expect(theory.relations.R).toBeDefined()
+  expect(theory.relations['logic/R']).toBeDefined()
 
   // Reload round-trip: a FRESH empty app loads the saved JSON through the real
-  // #open-file-input; the loaded group lists R again.
+  // #open-file-input; the loaded group lists the qualified relation again.
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await page.locator('#open-file-input').setInputFiles({ name: 'saved.json', mimeType: 'application/json', buffer: Buffer.from(json) })
   const lib2 = page.locator('#library')
   await expect(lib2.getByRole('button', { name: 'Unload saved.json', exact: true })).toBeVisible()
   await lib2.getByRole('button', { name: '▸ saved.json', exact: true }).click()
-  await expect(lib2).toContainText('relations: R')
+  await expect(lib2).toContainText('relations: logic/R')
 })
 
-// The user's core interaction: nodes are draggable and STAY where dropped;
-// the background is fixed (a drag on empty sheet space moves nothing).
-test('a node drags under the cursor, the rearrangement persists, and the background never pans', async ({ page }) => {
+// Physics is an explicit Ctrl gesture. Releasing Ctrl before pointer-up pins a
+// node where it was dropped; plain empty-space dragging never pans the frame.
+test('a Ctrl-drag follows the cursor, release order pins it, and the background never pans', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
-  await page.getByPlaceholder(/term, e\.g/).fill('\\x. x')
-  await page.getByRole('button', { name: /add term/i }).click()
-  await page.getByPlaceholder(/term, e\.g/).fill('\\y. y')
-  await page.getByRole('button', { name: /add term/i }).click()
+  await spawnTerm(page, '\\x. x')
+  await spawnTerm(page, '\\y. y')
   // let the two-body layout settle so the grab point is current
   await page.waitForTimeout(500)
 
@@ -438,6 +478,7 @@ test('a node drags under the cursor, the rearrangement persists, and the backgro
   // cursor, which is frame behavior rather than drag failure.
   const target = grab.target
   await page.mouse.move(box.x + grab.sx, box.y + grab.sy)
+  await page.keyboard.down('Control')
   await page.mouse.down()
   // several intermediate moves: the drag engages after the click slop
   for (let i = 1; i <= 8; i++) {
@@ -452,11 +493,11 @@ test('a node drags under the cursor, the rearrangement persists, and the backgro
     return { sx: b.x * v.scale + v.offsetX, sy: b.y * v.scale + v.offsetY }
   }, grab.id)
   expect(Math.hypot(held.sx - target.sx, held.sy - target.sy)).toBeLessThan(30)
+  await page.keyboard.up('Control')
   await page.mouse.up()
-  // after release the layout re-compacts (sibling attraction is a design
-  // force), but the REARRANGEMENT persists: the dragged body settles on the
-  // side it was dragged toward, relative to its sibling. Wait for actual
-  // rest (bounded soft forces pace the return, so a fixed delay races).
+  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.interaction().pins)).toContain(grab.id)
+  // The moved node is now an explicit solver constraint. Wait for the remaining
+  // bodies to settle before checking the durable rearrangement.
   await page.waitForFunction(() => {
     const w = window as unknown as { __lastBodies?: string; __stable?: number }
     const now = JSON.stringify(window.__vpaDebug!.bodies().map((b) => [Math.round(b.x * 5), Math.round(b.y * 5)]))

@@ -173,6 +173,45 @@ describe('applyTheorem', () => {
     expect(caught).toBeInstanceOf(RuleError)
     expect((caught as Error).message).toMatch(/reverse requires a negative region/)
   })
+
+  it('maps repeated theorem boundary incidences to one intrinsic host identity', () => {
+    const sideBuilder = new DiagramBuilder()
+    const sideNode = sideBuilder.termNode(sideBuilder.root, p('\\x. x'))
+    const sideWire = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'output' } }])
+    const side = mkDiagramWithBoundary(sideBuilder.build(), [sideWire, sideWire])
+    const theorem: Theorem = { name: 'aliasId', lhs: side, rhs: side, steps: [] }
+    expect(() => checkTheorem(theorem, ctx)).not.toThrow()
+
+    const host = new DiagramBuilder()
+    const node = host.termNode(host.root, p('\\x. x'))
+    const wire = host.wire(host.root, [{ node, port: { kind: 'output' } }])
+    const diagram = host.build()
+    expect(() => applyTheorem(diagram, theorem, {
+      sel: { region: diagram.root, regions: [], nodes: [node], wires: [] },
+      args: [wire, wire],
+    }, 'forward')).not.toThrow()
+  })
+
+  it('does not invent a call-site alias between distinct theorem boundary identities', () => {
+    const sideBuilder = new DiagramBuilder()
+    const sideNode = sideBuilder.ref(sideBuilder.root, 'Pair', 2)
+    const a = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 0 } }])
+    const b = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 1 } }])
+    const side = mkDiagramWithBoundary(sideBuilder.build(), [a, b])
+    const theorem: Theorem = { name: 'pairId', lhs: side, rhs: side, steps: [] }
+
+    const host = new DiagramBuilder()
+    const node = host.ref(host.root, 'Pair', 2)
+    const shared = host.wire(host.root, [
+      { node, port: { kind: 'arg', index: 0 } },
+      { node, port: { kind: 'arg', index: 1 } },
+    ])
+    const diagram = host.build()
+    expect(() => applyTheorem(diagram, theorem, {
+      sel: { region: diagram.root, regions: [], nodes: [node], wires: [] },
+      args: [shared, shared],
+    }, 'forward')).toThrowError(/not an occurrence of theorem 'pairId'/)
+  })
 })
 
 describe('theorem steps inside proofs (derived rules used natively)', () => {

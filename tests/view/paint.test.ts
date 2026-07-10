@@ -4,12 +4,31 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { buildLambdaTheory } from '../../src/theories/lambda'
 import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
+import { mkEngine, frameBounds, frameSlots, DISC_R } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, bubbleHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
+import { drawShapes } from '../../src/view/canvas'
 import { computeLegs } from '../../src/view/wires'
 
 const p = (s: string) => parseTerm(s)
+
+describe('authoritative content scale', () => {
+  it('paint derives node size directly from Engine.scale', () => {
+    const h = new DiagramBuilder()
+    const ref = h.ref(h.root, 'R', 0)
+    const e = mkEngine(h.build(), [])
+    settle(e, 1)
+    e.scale = 2
+
+    const body = e.bodies.get(ref)!
+    const disc = paint(e, LIGHT).find((shape) =>
+      shape.kind === 'circle'
+      && shape.center.x === body.pos.x
+      && shape.center.y === body.pos.y
+      && shape.r === 2 * DISC_R)
+    expect(disc, 'rendering must read the engine-owned scale without body state').toBeDefined()
+  })
+})
 
 describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
   it('emits exactly one label per ref, at the ref disc, and none over term anatomy', () => {
@@ -60,6 +79,54 @@ describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
       }
     }
   })
+
+  it('emits complete long namespace leaves and complete unqualified labels', () => {
+    const h = new DiagramBuilder()
+    h.ref(h.root, 'arithmetic/VeryLongQualifiedRelation', 0)
+    h.ref(h.root, 'VeryLongUnqualifiedRelation', 0)
+    const e = mkEngine(h.build(), [])
+    settle(e, 400)
+
+    const labels = paint(e, LIGHT)
+      .filter((shape): shape is Extract<ReturnType<typeof paint>[number], { kind: 'label' }> => shape.kind === 'label')
+      .map((shape) => shape.text)
+
+    expect(labels).toContain('VeryLongQualifiedRelation')
+    expect(labels).toContain('VeryLongUnqualifiedRelation')
+  })
+
+  it('fits the complete label at the canvas boundary without substring truncation', () => {
+    const drawn: { text: string; maxWidth: number; font: string }[] = []
+    let currentFont = ''
+    const context = {
+      lineJoin: '',
+      lineCap: '',
+      get font() { return currentFont },
+      set font(value: string) { currentFont = value },
+      textAlign: '',
+      textBaseline: '',
+      fillStyle: '',
+      measureText(text: string) {
+        const size = Number(/ ([0-9.]+)px /.exec(currentFont)?.[1] ?? 10)
+        return { width: text.length * size * 0.7 } as TextMetrics
+      },
+      fillText(text: string, _x: number, _y: number, maxWidth: number) {
+        drawn.push({ text, maxWidth, font: currentFont })
+      },
+    } as unknown as CanvasRenderingContext2D
+    const text = 'VeryLongUnqualifiedRelation'
+
+    drawShapes(context, [{ kind: 'label', center: { x: 0, y: 0 }, text, color: '#000', r: 9, font: 'serif' }], {
+      scale: 2,
+      offsetX: 0,
+      offsetY: 0,
+    })
+
+    expect(drawn).toHaveLength(1)
+    expect(drawn[0]!.text).toBe(text)
+    expect(drawn[0]!.maxWidth).toBeLessThan(2 * 9 * 2)
+    expect(Number(/ ([0-9.]+)px /.exec(drawn[0]!.font)?.[1])).toBeLessThan(14)
+  })
 })
 
 describe('law 3 — boundary honesty: boundary wires connect INSIDE the frame, internal singletons get an exists-stub', () => {
@@ -103,15 +170,14 @@ describe('law 3 — boundary honesty: boundary wires connect INSIDE the frame, i
   })
 })
 
-describe('frame pip — a rim dot marks boundary slot 0 when >= 2 boundary wires', () => {
-  // The frame is the sheet's node; like a disc with >= 2 ordered ports it earns
-  // a pip. The pip sits at slot 0 (the top-edge midpoint), from which the
-  // boundary slots read clockwise. A 0/1-boundary sheet has nothing to order,
-  // so it carries no pip. Device-pixel dot, drawn in the ink stroke.
+describe('frame ports — a prominent origin marks port 0 and unattached ports stay on the rim', () => {
+  // The origin sits at slot 0 (the top-edge midpoint), from which boundary
+  // ports read clockwise. It is present for every nonempty boundary and larger
+  // than the ordinary existential-sized dot used by unattached later ports.
   const dotsAt = (shapes: ReturnType<typeof paint>, pt: { x: number; y: number }) =>
     shapes.filter((s) => s.kind === 'dot' && Math.hypot(s.center.x - pt.x, s.center.y - pt.y) < 1e-6)
 
-  it('two boundary wires: exactly one pip dot at slot 0 (the top-edge midpoint)', () => {
+  it('two attached boundary wires: exactly one prominent origin at slot 0', () => {
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('x'))
     const b = h.termNode(h.root, p('y'))
@@ -126,9 +192,10 @@ describe('frame pip — a rim dot marks boundary slot 0 when >= 2 boundary wires
     const pip = dotsAt(shapes, s0)
     expect(pip).toHaveLength(1)
     expect(pip[0]!.kind === 'dot' && pip[0]!.fill).toBe(LIGHT.ink)
+    expect(pip[0]!.kind === 'dot' && pip[0]!.rPx).toBeGreaterThan(3.6)
   })
 
-  it('one boundary wire: no pip (nothing to order)', () => {
+  it('one boundary wire: port 0 still carries the prominent origin', () => {
     const h = new DiagramBuilder()
     const a = h.termNode(h.root, p('x'))
     const w1 = h.wire(h.root, [{ node: a, port: { kind: 'freeVar', name: 'x' } }])
@@ -136,7 +203,52 @@ describe('frame pip — a rim dot marks boundary slot 0 when >= 2 boundary wires
     settle(e, 800)
     const shapes = paint(e, LIGHT)
     const s0 = frameSlots(frameBounds(e)!, e.boundary.length)[0]!.point
-    expect(dotsAt(shapes, s0)).toHaveLength(0)
+    const dots = dotsAt(shapes, s0)
+    expect(dots).toHaveLength(1)
+    expect(dots[0]!.kind === 'dot' && dots[0]!.rPx).toBeGreaterThan(3.6)
+  })
+
+  it('endpointless boundary wires render at their ordered slots, with only port 0 prominent', () => {
+    const h = new DiagramBuilder()
+    const w0 = h.wire(h.root, [])
+    const w1 = h.wire(h.root, [])
+    const w2 = h.wire(h.root, [])
+    const e = mkEngine(h.build(), [w0, w1, w2])
+    settle(e, 20)
+    e.slotShift = 1
+    const shapes = paint(e, LIGHT)
+    const slots = frameSlots(frameBounds(e)!, 3)
+    const at0 = dotsAt(shapes, slots[0]!.point)
+    const at1 = dotsAt(shapes, slots[1]!.point)
+    const at2 = dotsAt(shapes, slots[2]!.point)
+
+    expect(at0).toHaveLength(1)
+    expect(at1).toHaveLength(1)
+    expect(at2).toHaveLength(1)
+    if (at0[0]!.kind !== 'dot' || at1[0]!.kind !== 'dot' || at2[0]!.kind !== 'dot') throw new Error('frame ports must paint as dots')
+    expect(at1[0]!.rPx).toBeGreaterThan(at0[0]!.rPx)
+    expect(at0[0]!.rPx).toBe(at2[0]!.rPx)
+    expect(e.bodies.has(`j:${w0}`) || e.bodies.has(`j:${w1}`) || e.bodies.has(`j:${w2}`)).toBe(false)
+  })
+
+  it('one wire occupying two boundary positions paints both ports and the connecting line', () => {
+    const h = new DiagramBuilder()
+    const shared = h.wire(h.root, [])
+    const e = mkEngine(h.build(), [shared, shared])
+    settle(e, 20)
+    e.slotShift = 1
+    const shapes = paint(e, LIGHT)
+    const slots = frameSlots(frameBounds(e)!, 2)
+    const logical0 = dotsAt(shapes, slots[1]!.point)
+    const logical1 = dotsAt(shapes, slots[0]!.point)
+
+    expect(logical0).toHaveLength(1)
+    expect(logical1).toHaveLength(1)
+    if (logical0[0]!.kind !== 'dot' || logical1[0]!.kind !== 'dot') throw new Error('frame ports must paint as dots')
+    expect(logical0[0]!.rPx).toBeGreaterThan(logical1[0]!.rPx)
+    const path = computeLegs(e).filter((leg) => leg.leg.wid === shared)
+    expect(path).toHaveLength(1)
+    expect(shapes.some((shape) => shape.kind === 'polyline')).toBe(true)
   })
 
   it('no boundary wires: no pip', () => {

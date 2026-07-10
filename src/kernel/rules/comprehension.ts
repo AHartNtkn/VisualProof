@@ -128,8 +128,9 @@ export function applyComprehensionInstantiate(
 
 /**
  * A copy of `comp` whose boundary wires are merged per `aliasPattern`: boundary
- * positions carrying the same pattern label share one root-scoped wire (their
- * endpoint sets unioned; scope unchanged — both were root-scoped stubs). This
+ * positions carrying the same pattern label OR already exposing the same
+ * intrinsic boundary identity share one root-scoped wire (their endpoint sets
+ * unioned once; scope unchanged — all are root-scoped stubs). This
  * is the diagonalized relation R := λx⃗. G(x⃗ aliased): where argument positions
  * i and j ride one occurrence wire, the standard the occurrence must meet is G
  * with b_i and b_j fused. `aliasPattern` has one label per comp boundary wire;
@@ -144,31 +145,49 @@ export function diagonalize(comp: DiagramWithBoundary, aliasPattern: readonly nu
       `alias pattern length ${aliasPattern.length} does not match comprehension arity ${comp.boundary.length}`,
     )
   }
-  // Renumber labels by first appearance so classes are 0..groupCount-1 and the
-  // result boundary comes out in first-appearance order regardless of input labels.
-  const classOf = new Map<number, number>()
-  const norm = aliasPattern.map((label) => {
-    if (!classOf.has(label)) classOf.set(label, classOf.size)
-    return classOf.get(label)!
-  })
-  const groupCount = classOf.size
-  const repPos = Array.from({ length: groupCount }, (_, g) => norm.indexOf(g))
+  // Union positions by call-site alias label and by intrinsic wire identity.
+  // This makes diagonalization total on an already-aliased comprehension and
+  // never self-deletes a representative or copies one endpoint set twice.
+  const parent = aliasPattern.map((_, i) => i)
+  const find = (i: number): number => parent[i] === i ? i : (parent[i] = find(parent[i]!))
+  const unite = (a: number, b: number): void => {
+    const ra = find(a), rb = find(b)
+    if (ra !== rb) parent[rb] = ra
+  }
+  const firstLabel = new Map<number, number>()
+  const firstWire = new Map<WireId, number>()
+  for (let i = 0; i < aliasPattern.length; i++) {
+    const label = aliasPattern[i]!
+    const wire = comp.boundary[i]!
+    const lp = firstLabel.get(label)
+    if (lp === undefined) firstLabel.set(label, i); else unite(lp, i)
+    const wp = firstWire.get(wire)
+    if (wp === undefined) firstWire.set(wire, i); else unite(wp, i)
+  }
+  const classes: number[][] = []
+  const classIndex = new Map<number, number>()
+  for (let i = 0; i < aliasPattern.length; i++) {
+    const root = find(i)
+    let k = classIndex.get(root)
+    if (k === undefined) { k = classes.length; classIndex.set(root, k); classes.push([]) }
+    classes[k]!.push(i)
+  }
   const d = comp.diagram
   const endpointsOf: Record<WireId, Endpoint[]> = {}
   for (const [id, w] of Object.entries(d.wires)) endpointsOf[id] = [...w.endpoints]
-  for (let g = 0; g < groupCount; g++) {
-    const repWire = comp.boundary[repPos[g]!]!
-    for (let i = 0; i < norm.length; i++) {
-      if (norm[i] === g && i !== repPos[g]) {
-        const memberWire = comp.boundary[i]!
-        endpointsOf[repWire]!.push(...endpointsOf[memberWire]!)
-        delete endpointsOf[memberWire]
-      }
+  const newBoundary: WireId[] = []
+  for (const positions of classes) {
+    const repWire = comp.boundary[positions[0]!]!
+    newBoundary.push(repWire)
+    const members = [...new Set(positions.map((i) => comp.boundary[i]!))]
+    for (const memberWire of members) {
+      if (memberWire === repWire) continue
+      endpointsOf[repWire]!.push(...endpointsOf[memberWire]!)
+      delete endpointsOf[memberWire]
     }
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, eps] of Object.entries(endpointsOf)) wires[id] = { scope: d.wires[id]!.scope, endpoints: eps }
-  const newBoundary = repPos.map((p) => comp.boundary[p]!)
   const diagram = mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
   return mkDiagramWithBoundary(diagram, newBoundary)
 }

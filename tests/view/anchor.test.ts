@@ -44,13 +44,13 @@ describe('anchor bodies are invisible and unselectable', () => {
 
   it('a hit-test on the anchor position resolves to its region, never to a node', () => {
     const { e, cut, anchor } = emptyCut()
-    const hit = hitTest(e, anchor!.pos)
+    const hit = hitTest(e, anchor!.pos, { scale: 1 })
     expect(hit).toEqual({ kind: 'region', id: cut })
   })
 
   it('a drag on the anchor position grabs the region subtree, never the anchor directly', () => {
     const { e, cut, anchor } = emptyCut()
-    const t = dragTarget(e, anchor!.pos)
+    const t = dragTarget(e, anchor!.pos, { scale: 1 })
     expect(t).toEqual({ kind: 'region', id: cut })
   })
 })

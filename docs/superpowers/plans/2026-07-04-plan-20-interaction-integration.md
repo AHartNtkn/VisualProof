@@ -20,9 +20,9 @@
 *Construction, EDIT mode (rounds 2/2b + round-7 report):*
 6. **Join:** drag a loose end onto another line joins them; J joins ALL selected lines (n-ary).
 7. **Sever:** right-drag slash severs immediately (no second phase); double-click sever exists behind an options toggle, slash the default.
-8. **Wraps:** W = double cut around the selection, Shift+W = bubble; selecting a cut plus its contents wraps the subtree ONCE (absorb-normalized); wholly-enclosed wires rescope INTO the new cut (the `edit.ts wrap()` fix — drawing a circle around a thing must mean the thing is inside).
+8. **Wraps:** W = one construction cut around the selection, Shift+W = bubble; selecting a cut plus its contents wraps the subtree ONCE (absorb-normalized); wholly-enclosed wires rescope INTO the new cut (the `edit.ts wrap()` fix — drawing a circle around a thing must mean the thing is inside). Proof-mode double-cut introduction remains a distinct rule mechanic.
 9. **Delete (EDIT):** selected boundaries DISSOLVE (unselected contents propagate to the parent), selected contents die, multi-region selections work, and wires left with no endpoints are deleted along.
-10. **Move:** dragging a selected node between regions reparents with wire-scope correction (wholly-owned wires travel; shared wires keep scope when valid, else tightest common ancestor); settling FREEZES during placement drags.
+10. **Move:** dragging a selected node between regions reparents with wire-scope correction (wholly-owned wires travel; shared wires keep scope when valid, else tightest common ancestor); connected-wire physics continues live during placement while region boundaries retain their semantic membership.
 11. **Spawn cascade:** right-STILL-click opens the cascade at the point (search row, λ-term entry, recents, namespace submenus); spawns land where clicked, inside cuts included; right-drag still slashes; the selection is untouched; Escape and any press outside close it without spawning.
 12. **Disc labels:** a relation node's disc shows its name sans namespace (no arbitrary truncation of long defIds).
 
@@ -57,14 +57,14 @@
 **Files:** Create `src/app/interact/` — `brush.ts` (laws 1–5, ported from `ui-lab/shared.ts installBrush`: void-start painting, ring-band gate, shift purity, ctrl physics drag, hover-ease hook), `ctx.ts` (the InteractCtx seam the lab called LabCtx: mutate/undo-cursor/freeze/regionAt/legs/toast — backed by the real shell engine loop). Rebuild the shell's pointer routing on it; DELETE the shell's current click-selection code. `src/app/hittest.ts` gains the ring-band query (moving-brush hit ≠ click hit) — the disc-claims-everything behavior stays for CLICKS only.
 **Test:** unit — selection arithmetic, ring-band predicate, shift/ctrl claim gates; e2e — laws 1, 2, 3, 4, 5 as pointer scripts (the plan-19 probe scripts are the reference; they become `tests/e2e` cases).
 
-- [ ] Battery written first and observed failing; core ported; battery green; suite + tsc + e2e green. Commit.
+- [x] Battery written first and observed failing; core ported; battery green; suite + tsc + e2e green. Commit.
 
 ### Task 2: EDIT vocabulary (construction gestures, spawn cascade, real library)
 
 **Files:** `src/app/interact/construct.ts` (laws 6–10 from `ui-lab/composite.ts` + `shared.ts deleteHits/orphanedWires`), `src/app/interact/spawn.ts` (law 11 from `ui-lab/spawn.ts`, browsing the REAL loaded library — `src/app/library.ts` relations + namespaces, not the synthetic 140); label rule (law 12) lands in paint's disc-label source. Fix `src/app/edit.ts wrap()` wire rescoping (law 8) — kernel-side edit helper, test-first. DELETE the shell's button-driven join/sever/wrap/delete UI.
 **Test:** unit — wrap rescoping (the exact wholly-enclosed-wire case), deleteHits dissolve/orphan matrix; e2e — slash sever, drag join, W/Shift+W, cascade open/spawn-in-cut/Escape/click-away, reparent drag.
 
-- [ ] Failing battery → port → green everywhere. Commit.
+- [x] Failing battery → port → green everywhere. Commit.
 
 ### Task 3: PROVE vocabulary (dedicated mechanics, infer-first citation, tracks)
 
@@ -96,7 +96,5 @@
 ---
 
 **Queued design items (recorded, NOT in scope — each needs its own user round):**
-- Both-interactive split fronts: two live viewports for a-priori statements, declare-time isomorphism check (the round-5 dual-front ruling; camera/viewport work).
 - Anonymous-comprehension construction box: instantiate without a name via a miniaturized EDIT canvas (round-4 ruling).
-- Dropped-node position stickiness (physics feel item, round 2 observation).
 - History-display placement refinements beyond the scrubber, if large proofs demand more than zoom-thumbs (round 6h left the door open).

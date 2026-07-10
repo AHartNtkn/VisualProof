@@ -11,6 +11,46 @@ import type { Vec2 } from './vec'
 
 /** Device-pixel blur of the theme glow. */
 const GLOW_BLUR = 5
+const LABEL_MAX_FONT_PX = 14
+const LABEL_MIN_FONT_PX = 6
+const LABEL_WIDTH_TO_RADIUS = 1.65
+
+export type CanvasAdapter = {
+  readonly size: () => { readonly width: number; readonly height: number }
+  readonly syncSize: () => boolean
+  readonly render: (
+    shapes: readonly Shape[],
+    transform: { readonly scale: number; readonly offsetX: number; readonly offsetY: number },
+  ) => void
+}
+
+/**
+ * Owns context acquisition, backing-store sizing, clearing, and drawing so the
+ * app layer handles a canvas as an input surface without reaching through the
+ * view adapter into browser drawing state.
+ */
+export function adaptCanvas(canvas: HTMLCanvasElement): CanvasAdapter {
+  const ctx = canvas.getContext('2d')
+  if (ctx === null) throw new Error('canvas has no 2d context')
+  const size = (): { readonly width: number; readonly height: number } => ({ width: canvas.width, height: canvas.height })
+  return {
+    size,
+    syncSize(): boolean {
+      const width = canvas.clientWidth
+      const height = canvas.clientHeight
+      if (width <= 0 || height <= 0) return false
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width
+        canvas.height = height
+      }
+      return true
+    },
+    render(shapes, transform): void {
+      ctx.clearRect(0, 0, canvas.width, canvas.height)
+      drawShapes(ctx, shapes, transform)
+    },
+  }
+}
 
 export function drawShapes(
   ctx: CanvasRenderingContext2D,
@@ -119,12 +159,21 @@ export function drawShapes(
         break
       }
       case 'label': {
-        const size = Math.max(8.5, Math.min(14, s.r * transform.scale * 0.5))
+        const radiusPx = s.r * transform.scale
+        const maxWidth = Math.max(1, radiusPx * LABEL_WIDTH_TO_RADIUS)
+        let size = Math.max(8.5, Math.min(LABEL_MAX_FONT_PX, radiusPx * 0.5))
         ctx.font = `600 ${size}px ${s.font}`
+        const measuredWidth = ctx.measureText(s.text).width
+        if (measuredWidth > maxWidth && measuredWidth > 0) {
+          size = Math.max(LABEL_MIN_FONT_PX, size * maxWidth / measuredWidth)
+          ctx.font = `600 ${size}px ${s.font}`
+        }
         ctx.textAlign = 'center'
         ctx.textBaseline = 'middle'
         ctx.fillStyle = s.color
-        ctx.fillText(s.text, X(s.center.x), Y(s.center.y))
+        // maxWidth is a final guard for exceptionally long leaves after the
+        // readable font-size floor; Canvas scales the complete string to fit.
+        ctx.fillText(s.text, X(s.center.x), Y(s.center.y), maxWidth)
         break
       }
     }

@@ -43,7 +43,7 @@ export function verifyTheory(t: Theory): ProofContext {
   const relArity = new Map<string, number>()
   for (const [name, rel] of Object.entries(t.relations)) {
     try {
-      mkDiagramWithBoundary(rel.diagram, rel.boundary) // re-validates boundary existence/uniqueness
+      mkDiagramWithBoundary(rel.diagram, rel.boundary) // re-validates every boundary incidence
     } catch (e) {
       throw new ProofError(`relation '${name}': ${e instanceof Error ? e.message : String(e)}`)
     }

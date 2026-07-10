@@ -127,11 +127,7 @@ describe('findOccurrences basics', () => {
     expect(r.matches[0]?.wireMap.get(bare)).toBe(anchor)
   })
 
-  it('SEEDED bare boundary attachments may not alias: one host wire cannot serve two boundary positions', () => {
-    // Two bare boundary lines supplied the SAME host wire must refuse, exactly
-    // as endpointful attachments do (the used-images seam rule). Diagonal
-    // instantiation (a = b) is a deliberate future design (the queued diagonal
-    // abstraction work), not something the matcher may improvise.
+  it('SEEDED distinct bare boundary identities may share one call-site attachment', () => {
     const b = new DiagramBuilder()
     b.termNode(b.root, p('\\x. x'))
     const bare0 = b.wire(b.root, [])
@@ -142,8 +138,48 @@ describe('findOccurrences basics', () => {
     const anchor = h.wire(h.root, [])
     const other = h.wire(h.root, [])
     const host = h.build()
-    expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, anchor] }).matches).toHaveLength(0)
+    expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, anchor] }).matches).toHaveLength(1)
     expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, other] }).matches).toHaveLength(1)
+  })
+
+  it('repeats the host image for repeated incidences of one intrinsic boundary identity', () => {
+    const b = new DiagramBuilder()
+    const pn = b.termNode(b.root, p('y'))
+    const shared = b.wire(b.root, [{ node: pn, port: { kind: 'output' } }])
+    const pattern = mkDiagramWithBoundary(b.build(), [shared, shared])
+    const h = new DiagramBuilder()
+    const hn = h.termNode(h.root, p('y'))
+    const anchor = h.wire(h.root, [{ node: hn, port: { kind: 'output' } }])
+    const other = h.wire(h.root, [])
+    const host = h.build()
+
+    const found = findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, anchor] })
+    expect(found.matches).toHaveLength(1)
+    expect(found.matches[0]?.attachments).toEqual([anchor, anchor])
+    expect(found.matches[0]?.wireMap.get(shared)).toBe(anchor)
+    expect(findOccurrences(host, pattern, { fuel: 100, attachments: [anchor, other] }).matches).toHaveLength(0)
+  })
+
+  it('recognizes distinct endpointful boundary identities quotiented onto one host wire', () => {
+    const b = new DiagramBuilder()
+    const pn0 = b.termNode(b.root, p('y'))
+    const pn1 = b.termNode(b.root, p('y'))
+    const boundary0 = b.wire(b.root, [{ node: pn0, port: { kind: 'output' } }])
+    const boundary1 = b.wire(b.root, [{ node: pn1, port: { kind: 'output' } }])
+    const pattern = mkDiagramWithBoundary(b.build(), [boundary0, boundary1])
+
+    const h = new DiagramBuilder()
+    const hn0 = h.termNode(h.root, p('y'))
+    const hn1 = h.termNode(h.root, p('y'))
+    const shared = h.wire(h.root, [
+      { node: hn0, port: { kind: 'output' } },
+      { node: hn1, port: { kind: 'output' } },
+    ])
+    const host = h.build()
+
+    const found = findOccurrences(host, pattern, { fuel: 100, attachments: [shared, shared] })
+    expect(found.matches).toHaveLength(1)
+    expect(found.matches[0]?.attachments).toEqual([shared, shared])
   })
 
   it('SEEDED bare boundary wire is refused when the supplied wire is not in scope', () => {

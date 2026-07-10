@@ -41,9 +41,22 @@ export function startSession(lhs: DiagramWithBoundary, rhs: DiagramWithBoundary,
   }
 }
 
+/** Live proof interfaces are fixed statement identities. A kernel operation
+    that quotients one of them cannot leave the renderer/session holding a
+    stale id; until proof steps carry an explicit boundary remap, refuse the
+    step atomically and name the destroyed identity. */
+function assertStatementBoundarySurvives(d: Diagram, boundary: readonly WireId[], side: 'forward' | 'backward'): void {
+  for (const wire of new Set(boundary)) {
+    if (d.wires[wire] === undefined) {
+      throw new Error(`${side} step destroyed fixed statement-boundary wire '${wire}'; boundary-changing steps require an explicit interface remap`)
+    }
+  }
+}
+
 /** Apply a forward step through the kernel; refusals propagate untouched. */
 export function applyForward(s: ProofSession, step: ProofStep): ProofSession {
   const next = applyStep(s.forward.current, step, s.ctx)
+  assertStatementBoundarySurvives(next, s.lhs.boundary, 'forward')
   return {
     ...s,
     forward: {
@@ -85,6 +98,7 @@ export function undoForward(s: ProofSession): ProofSession {
 export function applyBackward(s: ProofSession, step: ProofStep): ProofSession {
   const g = s.backward.current
   const gPrime = applyStep(g, step, s.ctx, 'backward')
+  assertStatementBoundarySurvives(gPrime, s.rhs.boundary, 'backward')
   return {
     ...s,
     backward: {

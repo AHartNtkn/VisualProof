@@ -1,0 +1,405 @@
+import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
+import { pkey, type Engine, type Leg } from '../../view/engine'
+import type { Shape, Theme } from '../../view/paint'
+import {
+  beginBodyPlacement,
+  cancelBodyPlacement,
+  previewBodyPlacement,
+  type BodyPlacement,
+} from '../../view/placement'
+import type { Vec2 } from '../../view/vec'
+import { computeLegs, existentialStubs, legPaths, type LegGeom } from '../../view/wires'
+import {
+  absorbHits,
+  addBubble,
+  addCut,
+  deleteHits,
+  joinWires,
+  reparentNode,
+  severEndpoint,
+} from '../edit'
+import { buildSelection, wireHitTest, type Hit } from '../hittest'
+import type { FeedbackAnchor, FeedbackInput, FeedbackKind } from '../feedback'
+import type { KeySample, PointerClaim, PointerSample } from './viewport'
+
+type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
+
+type Preview =
+  | { readonly kind: 'join'; readonly source: WireId; readonly from: Vec2; at: Vec2; target: WireId | null }
+  | { readonly kind: 'slash'; readonly from: Vec2; at: Vec2 }
+  | { readonly kind: 'placement'; readonly state: PlacementState }
+
+export type ConstructOptions = {
+  readonly host: HTMLElement
+  readonly active: () => boolean
+  readonly engine: () => Engine
+  readonly viewScale: () => number
+  readonly diagram: () => Diagram
+  readonly selection: () => readonly Hit[]
+  readonly setSelection: (selection: readonly Hit[]) => void
+  readonly commit: (diagram: Diagram) => void
+  readonly status: (feedback: FeedbackInput) => void
+  readonly clearProblem: (problemId: string) => void
+  readonly openSpawn: (sample: PointerSample, region: RegionId) => void
+  readonly theme: () => Theme
+}
+
+function sameHit(a: Hit, b: Hit): boolean {
+  return a.kind === b.kind && a.id === b.id
+}
+
+function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
+  let best: { readonly id: RegionId; readonly radius: number } | null = null
+  for (const [id, region] of engine.regions) {
+    if (diagram.regions[id]?.kind === 'sheet') continue
+    if (Math.hypot(point.x - region.center.x, point.y - region.center.y) <= region.radius
+      && (best === null || region.radius < best.radius)) best = { id, radius: region.radius }
+  }
+  return best?.id ?? diagram.root
+}
+
+function pointSegmentDistance(point: Vec2, from: Vec2, to: Vec2): number {
+  const dx = to.x - from.x
+  const dy = to.y - from.y
+  const length2 = dx * dx + dy * dy
+  const t = length2 === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / length2))
+  return Math.hypot(point.x - (from.x + dx * t), point.y - (from.y + dy * t))
+}
+
+function polylineDistance(point: Vec2, points: readonly Vec2[]): number {
+  let best = Infinity
+  for (let i = 1; i < points.length; i++) best = Math.min(best, pointSegmentDistance(point, points[i - 1]!, points[i]!))
+  return best
+}
+
+function crosses(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
+  const orient = (p: Vec2, q: Vec2, r: Vec2): number => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x)
+  const abC = orient(a, b, c)
+  const abD = orient(a, b, d)
+  const cdA = orient(c, d, a)
+  const cdB = orient(c, d, b)
+  const overlaps = (a0: number, a1: number, b0: number, b1: number): boolean =>
+    Math.max(Math.min(a0, a1), Math.min(b0, b1)) <= Math.min(Math.max(a0, a1), Math.max(b0, b1))
+  return abC * abD <= 0 && cdA * cdB <= 0
+    && overlaps(a.x, b.x, c.x, d.x)
+    && overlaps(a.y, b.y, c.y, d.y)
+}
+
+function crossedLegs(engine: Engine, from: Vec2, to: Vec2): LegGeom[] {
+  return computeLegs(engine).filter((geometry) => {
+    for (let i = 1; i < geometry.pts.length; i++) {
+      if (crosses(from, to, geometry.pts[i - 1]!, geometry.pts[i]!)) return true
+    }
+    return false
+  })
+}
+
+function endpointAt(diagram: Diagram, leg: Leg): Endpoint | null {
+  for (const end of [leg.to, leg.from]) {
+    if (diagram.nodes[end.body] === undefined) continue
+    const endpoint = diagram.wires[leg.wid]?.endpoints.find((candidate) =>
+      candidate.node === end.body && pkey(candidate.port) === end.key)
+    if (endpoint !== undefined) return endpoint
+  }
+  return null
+}
+
+function wireShapes(engine: Engine, wire: WireId, stroke: string, width: number): Shape[] {
+  const out: Shape[] = []
+  for (const path of legPaths(engine)) {
+    if (path.wid === wire) out.push({ kind: 'polyline', pts: path.pts, stroke, width, glow: null })
+  }
+  for (const stub of existentialStubs(engine)) {
+    if (stub.wid === wire) out.push({ kind: 'segment', from: stub.from, to: stub.to, stroke, width, glow: null })
+  }
+  return out
+}
+
+export class ConstructController {
+  readonly #options: ConstructOptions
+  readonly optionsElement: HTMLButtonElement
+  #preview: Preview | null = null
+  #severMode: 'slash' | 'double-click' = 'slash'
+  #prompt: HTMLInputElement | null = null
+
+  constructor(options: ConstructOptions) {
+    this.#options = options
+    this.optionsElement = options.host.ownerDocument.createElement('button')
+    this.optionsElement.type = 'button'
+    this.optionsElement.className = 'vpa-sever-option'
+    this.optionsElement.addEventListener('click', this.#toggleSever)
+    this.#syncOptionLabel()
+  }
+
+  claim(sample: PointerSample): PointerClaim | null {
+    if (!this.#options.active()) return null
+    if (sample.button === 2) return this.#slashClaim(sample)
+    if (sample.button !== 0) return null
+
+    if (sample.hit?.kind === 'node' && this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) {
+      return this.#placementClaim(sample.hit.id)
+    }
+    const wire = wireHitTest(this.#options.engine(), sample.world, { scale: this.#options.viewScale() })
+    if (wire !== null) return this.#joinClaim(wire.id, sample.world)
+    return null
+  }
+
+  doubleClick(sample: PointerSample): boolean {
+    if (!this.#options.active() || this.#severMode !== 'double-click') return false
+    let nearest: { readonly leg: LegGeom; readonly distance: number } | null = null
+    for (const leg of computeLegs(this.#options.engine())) {
+      const distance = polylineDistance(sample.world, leg.pts)
+      if (distance <= 2.5 && (nearest === null || distance < nearest.distance)) nearest = { leg, distance }
+    }
+    if (nearest === null) return false
+    const endpoint = endpointAt(this.#options.diagram(), nearest.leg.leg)
+    if (endpoint === null) {
+      this.#report('refusal', 'that strand runs between junctions; sever nearer a port', { kind: 'point', point: sample.world })
+      return true
+    }
+    this.#tryCommit(() => severEndpoint(this.#options.diagram(), nearest!.leg.leg.wid, endpoint), 'strand severed')
+    return true
+  }
+
+  keyDown(sample: KeySample): boolean {
+    if (!this.#options.active() || sample.repeat) return false
+    if (sample.key === 'w' || sample.key === 'W') {
+      const selected = absorbHits(this.#options.diagram(), this.#options.selection())
+      if (selected.length === 0) {
+        this.#report('guidance', 'select what the cut should go around first')
+        return true
+      }
+      if (sample.shiftKey) this.#openBubblePrompt(selected)
+      else this.#tryCommit(() => addCut(this.#options.diagram(), buildSelection(this.#options.diagram(), selected)).diagram, 'cut drawn around the selection')
+      return true
+    }
+    if (sample.key === 'j' || sample.key === 'J') {
+      const wires = this.#options.selection().filter((hit): hit is Extract<Hit, { kind: 'wire' }> => hit.kind === 'wire').map((hit) => hit.id)
+      this.#tryCommit(() => joinWires(this.#options.diagram(), wires), `joined ${wires.length} lines — one individual now`)
+      return true
+    }
+    if (sample.key === 'Delete' || sample.key === 'Backspace') {
+      const selected = this.#options.selection()
+      if (selected.length === 0) this.#report('guidance', 'nothing selected to delete')
+      else this.#tryCommit(() => deleteHits(this.#options.diagram(), selected), 'deleted; selected boundaries dissolved and unselected contents propagated')
+      return true
+    }
+    if (sample.key === 'Escape' && this.#prompt !== null) {
+      this.#closePrompt()
+      return true
+    }
+    return false
+  }
+
+  overlay(): readonly Shape[] {
+    const preview = this.#preview
+    if (preview === null) return []
+    const colors = this.#options.theme().interaction
+    if (preview.kind === 'slash') {
+      return [{ kind: 'segment', from: preview.from, to: preview.at, stroke: colors.refusal, width: 2, glow: null }]
+    }
+    if (preview.kind === 'join') {
+      const out: Shape[] = [{ kind: 'segment', from: preview.from, to: preview.at, stroke: colors.valid, width: 1.6, glow: null }]
+      if (preview.target !== null) out.push(...wireShapes(this.#options.engine(), preview.target, colors.valid, 3.2))
+      return out
+    }
+    const destination = regionAt(this.#options.engine(), this.#options.diagram(), preview.state.at)
+    const home = this.#options.diagram().nodes[preview.state.node]?.region
+    const geometry = this.#options.engine().regions.get(destination)
+    return geometry === undefined || destination === home || this.#options.diagram().regions[destination]?.kind === 'sheet'
+      ? []
+      : [{ kind: 'circle', center: geometry.center, r: geometry.radius, fill: colors.validWash, stroke: colors.valid, width: 1.6, insetColor: null, glow: null }]
+  }
+
+  dispose(): void {
+    this.#closePrompt()
+    this.optionsElement.removeEventListener('click', this.#toggleSever)
+    this.optionsElement.remove()
+  }
+
+  #joinClaim(source: WireId, from: Vec2): PointerClaim {
+    const preview: Extract<Preview, { kind: 'join' }> = { kind: 'join', source, from, at: from, target: null }
+    this.#preview = preview
+    return {
+      still: 'selection',
+      blocksPassiveRelaxation: true,
+      move: (sample) => {
+        preview.at = sample.world
+        const target = wireHitTest(this.#options.engine(), sample.world, { scale: this.#options.viewScale() })
+        preview.target = target !== null && target.id !== source ? target.id : null
+      },
+      release: (_sample, moved) => {
+        this.#preview = null
+        if (!moved) return
+        if (preview.target === null) this.#report('guidance', 'release on another line to join', { kind: 'point', point: preview.at })
+        else this.#tryCommit(() => joinWires(this.#options.diagram(), [source, preview.target!]), 'lines joined — one individual now')
+      },
+      cancel: () => { this.#preview = null },
+    }
+  }
+
+  #slashClaim(start: PointerSample): PointerClaim {
+    const preview: Extract<Preview, { kind: 'slash' }> = { kind: 'slash', from: start.world, at: start.world }
+    this.#preview = preview
+    return {
+      still: 'claim',
+      blocksPassiveRelaxation: true,
+      move: (sample) => { preview.at = sample.world },
+      release: (sample, moved) => {
+        this.#preview = null
+        if (!moved) {
+          this.#options.openSpawn(start, regionAt(this.#options.engine(), this.#options.diagram(), start.world))
+          return
+        }
+        if (this.#severMode !== 'slash') {
+          this.#report('guidance', 'sever is set to double-click', { kind: 'point', point: sample.world })
+          return
+        }
+        const crossings = crossedLegs(this.#options.engine(), preview.from, sample.world)
+        if (crossings.length === 0) {
+          this.#report('guidance', 'the slash crossed no strand', { kind: 'point', point: sample.world })
+          return
+        }
+        let next = this.#options.diagram()
+        let severed = 0
+        let junctionOnly = false
+        for (const crossing of crossings) {
+          const endpoint = endpointAt(next, crossing.leg)
+          if (endpoint === null) { junctionOnly = true; continue }
+          try {
+            next = severEndpoint(next, crossing.leg.wid, endpoint)
+            severed++
+          } catch (error) {
+            this.#report('refusal', error instanceof Error ? error.message : String(error), { kind: 'point', point: sample.world })
+          }
+        }
+        if (severed > 0) {
+          this.#options.commit(next)
+          this.#report('success', `severed ${severed} strand${severed === 1 ? '' : 's'}`, { kind: 'point', point: sample.world })
+        } else if (junctionOnly) this.#report('refusal', 'that strand runs between junctions; sever nearer a port', { kind: 'point', point: sample.world })
+      },
+      cancel: () => { this.#preview = null },
+    }
+  }
+
+  #placementClaim(node: NodeId): PointerClaim {
+    const state: PlacementState = {
+      node,
+      placement: beginBodyPlacement(this.#options.engine(), node),
+      at: { ...this.#options.engine().bodies.get(node)!.pos },
+    }
+    this.#preview = { kind: 'placement', state }
+    return {
+      still: 'selection',
+      blocksPassiveRelaxation: false,
+      relaxationPins: () => [node],
+      move: (sample) => {
+        state.at = sample.world
+        previewBodyPlacement(this.#options.engine(), state.placement, sample.world)
+      },
+      release: (_sample, moved) => {
+        this.#preview = null
+        if (!moved) {
+          cancelBodyPlacement(this.#options.engine(), state.placement)
+          return
+        }
+        const destination = regionAt(this.#options.engine(), this.#options.diagram(), state.at)
+        const home = this.#options.diagram().nodes[node]?.region
+        if (home === destination) return
+        if (!this.#tryCommit(() => reparentNode(this.#options.diagram(), node, destination), `moved into '${destination}'`)) {
+          cancelBodyPlacement(this.#options.engine(), state.placement)
+        }
+      },
+      cancel: () => {
+        this.#preview = null
+        cancelBodyPlacement(this.#options.engine(), state.placement)
+      },
+    }
+  }
+
+  #tryCommit(make: () => Diagram, success: string): boolean {
+    const affected = [...this.#options.selection()]
+    try {
+      this.#options.commit(make())
+      this.#options.setSelection([])
+      this.#options.status({
+        kind: 'success',
+        text: success,
+        owner: affected.length > 0 ? { kind: 'selection', hits: affected } : { kind: 'viewport' },
+        persistence: 'transient',
+        affected,
+      })
+      return true
+    } catch (error) {
+      this.#report('refusal', error instanceof Error ? error.message : String(error))
+      return false
+    }
+  }
+
+  #openBubblePrompt(selected: readonly Hit[]): void {
+    this.#closePrompt()
+    const input = this.#options.host.ownerDocument.createElement('input')
+    input.className = 'vpa-bubble-arity'
+    input.type = 'number'
+    input.min = '0'
+    input.step = '1'
+    input.placeholder = 'bubble arity'
+    input.setAttribute('aria-label', 'Bubble arity')
+    const theme = this.#options.theme()
+    input.style.cssText = `position:fixed;left:50%;top:56px;z-index:31;width:9rem;transform:translateX(-50%);padding:5px 8px;border:1.5px solid ${theme.interaction.selection};border-radius:6px;background:${theme.paper};color:${theme.ink}`
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation()
+      if (event.key === 'Escape') this.#closePrompt()
+      if (event.key !== 'Enter') return
+      const arity = Number(input.value)
+      if (!Number.isInteger(arity) || arity < 0) {
+        this.#options.status({
+          kind: 'problem',
+          text: `'${input.value}' is not a valid arity`,
+          owner: { kind: 'control', id: 'bubble-arity' },
+          persistence: 'problem',
+          problemId: 'bubble-arity',
+        })
+        return
+      }
+      if (this.#tryCommit(
+        () => addBubble(this.#options.diagram(), buildSelection(this.#options.diagram(), selected), arity).diagram,
+        'wrapped in a bubble',
+      )) this.#closePrompt()
+    })
+    input.addEventListener('input', () => {
+      const value = Number(input.value)
+      if (Number.isInteger(value) && value >= 0) this.#options.clearProblem('bubble-arity')
+    })
+    input.addEventListener('blur', () => this.#closePrompt())
+    this.#prompt = input
+    this.#options.host.append(input)
+    queueMicrotask(() => input.focus())
+  }
+
+  #closePrompt(): void {
+    this.#options.clearProblem('bubble-arity')
+    this.#prompt?.remove()
+    this.#prompt = null
+  }
+
+  #report(kind: FeedbackKind, text: string, owner?: FeedbackAnchor): void {
+    const hits = this.#options.selection()
+    this.#options.status({
+      kind,
+      text,
+      owner: owner ?? (hits.length > 0 ? { kind: 'selection', hits } : { kind: 'viewport' }),
+      persistence: kind === 'guidance' ? 'interaction' : 'transient',
+      ...(kind === 'success' ? { affected: hits } : {}),
+    })
+  }
+
+  #toggleSever = (): void => {
+    this.#severMode = this.#severMode === 'slash' ? 'double-click' : 'slash'
+    this.#syncOptionLabel()
+  }
+
+  #syncOptionLabel(): void {
+    this.optionsElement.textContent = this.#severMode === 'slash' ? '⚙ sever: right-drag slash' : '⚙ sever: double-click strand'
+  }
+}

@@ -44,22 +44,13 @@ export type Body = {
   readonly geometry: NodeGeometry | null
   /** Port key (pkey) -> anatomy-local anchor, ascale already folded in. */
   readonly localAnchor: Map<string, Vec2>
-  /** NATURAL clearance-disc radius (scale 1). The world radius is `discR * scale`
-      — the content-fill scale (plan 24) is a read-time MULTIPLIER, never baked
-      into this field, so a rebuilt/carried body always holds the same natural
-      geometry and only `scale` + `pos` carry the per-step size. */
+  /** NATURAL clearance-disc radius (scale 1). The world radius is
+      `discR * Engine.scale`: content scale belongs to the engine, never to an
+      individual body, so every body always contains only natural geometry. */
   readonly discR: number
   readonly region: RegionId
   pos: Vec2
   theta: number
-  /** Per-step CONTENT-FILL scale (plan 24, USER RULING 2026-07-07): the border is
-      fixed proof-wide, so each rewrite sizes its content to fill it by this uniform
-      length multiplier (all bodies of an engine share one value = `Engine.scale`).
-      Applied to every world-space length materialized from this body — the drawn
-      disc/anatomy (paint, localToWorld), the wire rim attach (worldBindAnchor), and
-      the clearance/packing radii (relax) — so a small step's few nodes render large
-      instead of tiny. 1 = natural size. */
-  scale: number
 }
 
 /** key null = the body's centre (junctions have no ports). */
@@ -74,10 +65,9 @@ export type WireBind = { readonly body: string; readonly key: string }
 
 /** A leg terminal. `bind i` = binds[i] (port rim + normal); `tip` = the ∃ free
     end (a body); `hub` = the branch point (a wire-owned point or the ∀ body),
-    reached along the leg's arrival angle; `slot` = a boundary wire's FIXED frame
-    terminal — a point on the inner frame edge with the inward-normal arrival
-    tangent (no body, no dot, no DOF). A leg starts at a `bind` or, for the slot
-    arm of a k≥2 boundary junction, at a `slot`. */
+    reached along the leg's arrival angle; `slot i` = the i-th incidence in the
+    wire's `slots` list — a fixed point on the inner frame edge with the
+    inward-normal arrival tangent (no body and no DOF). */
 export type WireLegEnd =
   | { readonly kind: 'bind'; readonly i: number }
   | { readonly kind: 'tip' }
@@ -85,7 +75,7 @@ export type WireLegEnd =
   /** a wire-owned Steiner BRANCH point (index into `WireView.branches`): a k-ary
       junction is a TREE of these, its edges the ordinary elastica legs. */
   | { readonly kind: 'branch'; readonly i: number }
-  | { readonly kind: 'slot' }
+  | { readonly kind: 'slot'; readonly i: number }
 
 /** One leg of a wire: the massless θ-quadratic from terminal `a` (a port bind,
     exiting along its normal) to terminal `b` (hub / another bind / ∃ tip /
@@ -105,27 +95,22 @@ export type WireHub =
   | { readonly kind: 'point'; pos: Vec2 }
   | { readonly kind: 'body'; readonly bodyId: string }
 
-/** A wire's complete view-state (plan 22/24): the port binds, an optional branch
-    hub, an optional ∃ tip body, an optional boundary frame-slot number, and the
-    derived leg list (each leg carries only a memo cache — no shape state).
+/** A wire's complete view-state (plan 22/24): node-port binds, zero or more
+    ordered boundary incidences, optional hub/tip state, and its derived legs.
 
-    A BOUNDARY wire (slot !== null) attaches to a FIXED slot on the INNER frame
-    edge (plan 24 — a terminal, not a body): no exit hub body, no exterior
-    connector, no dot on a plain wire. A 1-interior-port boundary wire is ONE
-    elastica leg from the port rim to the slot (arriving along the inward frame
-    normal). A k≥2-interior-port boundary wire is an interior-style junction (a
-    wire-owned hub point) whose arms are the k ports PLUS one arm to the fixed
-    slot — a body appears exactly when the wire genuinely branches (k≥2), never on
-    a plain 2-point wire. The slot's world position comes from `frameSlots`, so it
-    is never a body and takes no DOF. */
+    Boundary incidence is positional, not a property unique to a wire: one line
+    of identity may occupy several boundary positions. `slots[i]` is the logical
+    boundary index named by a `{ kind: 'slot', i }` leg terminal. Topology is
+    uniform over binds + slots: one terminal needs no leg, two terminals form one
+    direct elastica, and three or more terminals form a Steiner tree. */
 export type WireView = {
   readonly binds: WireBind[]
   hub: WireHub | null
   readonly tipBodyId: string | null
-  readonly slot: number | null
+  readonly slots: readonly number[]
   readonly legs: WireLeg[]
   /** A k-ary junction is a soap-film Steiner TREE: these are its wire-owned branch
-      points (DOFs), the terminals are the port binds / slot, and the tree edges are
+      points (DOFs), the terminals are the port binds / slots, and the tree edges are
       the ordinary elastica `legs` (`branch`/`bind`/`slot` ends). Empty for a plain
       2-point wire, a ∃ tip, or the ∀ via-body (which branches at its scope body). */
   readonly branches: Vec2[]
@@ -148,9 +133,11 @@ export type Engine = {
   readonly childrenOf: Map<RegionId, RegionId[]>
   /** node/junction body ids per region. */
   readonly membersOf: Map<RegionId, string[]>
-  /** PLAN 22: each >= 1-endpoint wire is a massless-elastica view (binds +
-      optional hub/tip + derived legs) — see elastica.ts + relax.ts for the
-      energy model. Bare (0-endpoint) wires are a homed body only, no entry. */
+  /** PLAN 22: every boundary wire and each >= 1-endpoint internal wire is a
+      massless-elastica view (binds + optional hub/tip + derived legs) — see
+      elastica.ts + relax.ts for the energy model. A bare boundary wire is a
+      bodyless, zero-leg view at its fixed slot; only a bare internal wire is a
+      homed body with no entry. */
   readonly wires: Map<WireId, WireView>
   readonly boundary: readonly WireId[]
   regions: Map<RegionId, RegionCircle>
@@ -167,9 +154,10 @@ export type Engine = {
   frame: StoredFrame | null
   /** Per-step CONTENT-FILL scale (plan 24): the uniform length multiplier that
       sizes this step's content to fill the FIXED proof-wide border (the border
-      never resizes — USER LAW; the CONTENT does, per rewrite). Every body carries
-      the same value in `Body.scale`; relax reads it for the packing/clearance
-      length params, engine + paint read it for the drawn geometry. 1 = natural. */
+      never resizes — USER LAW; the CONTENT does, per rewrite). This is the sole
+      content-scale authority: relax reads it for packing/clearance lengths and
+      engine + paint read it for world geometry. Bodies retain natural geometry.
+      1 = natural size. */
   scale: number
   /** Boundary SLOT-SHIFT (plan 24 legibility, USER 2026-07-07): a single cyclic
       rotation of the wire→slot assignment (boundary wire i attaches to slot
@@ -177,9 +165,11 @@ export type Engine = {
       even-spaced slots start at an arbitrary top-centre phase, so without this a
       port near one edge can be assigned a slot on the far edge and its wire sweeps
       the whole frame (then hugs the inside border). Only CYCLIC shifts are used
-      (they preserve the canonical cyclic order / no-slipping law); the pip stays at
-      slot 0 (fixed reading origin). Computed proof-wide (min total chord over all
-      steps' seeds), carried across the proof, never changed mid-proof. 0 = unshifted. */
+      (they preserve the canonical cyclic order / no-slipping law); the prominent
+      origin marker stays with logical port 0 and follows it to the assigned shifted
+      slot. Computed
+      proof-wide (min total chord over all steps' seeds), carried across the proof,
+      never changed mid-proof. 0 = unshifted. */
   slotShift: number
   /** relaxation tick counter (drives overlap-projection cadence, determinism). */
   tick: number
@@ -291,7 +281,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       // a port pointing exactly away from its fixed boundary slot then sits at
       // the energy's unstable maximum with a symmetric (zero) rotation
       // gradient and cannot roll off. A generic seed breaks the symmetry.
-      pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: (i + 1) * 2.399963, scale: 1,
+      pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: (i + 1) * 2.399963,
     })
     i++
   }
@@ -318,7 +308,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       bodies.set(aid, {
         id: aid, kind: 'anchor', node: null, geometry: null,
         localAnchor: new Map(), discR: 5, region: rid,
-        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: 0, scale: 1,
+        pos: { x: Math.cos(ang) * rad, y: Math.sin(ang) * rad }, theta: 0,
       })
       membersOf.get(rid)!.push(aid)
       i++
@@ -326,8 +316,19 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
   }
 
   const wires = new Map<WireId, WireView>()
-  const bset = new Set(boundary)
-  const slotOf = new Map(boundary.map((w, k) => [w, k] as const))
+  // Construct the engine before deriving any wire geometry. Even the natural
+  // scale-1 seed path uses the same engine-aware geometry helpers as live
+  // rendering and physics, so there is no second raw-scale geometry path.
+  const engine: Engine = {
+    d, bodies, childrenOf, membersOf, wires, boundary,
+    regions: new Map(), frame: null, scale: 1, slotShift: 0, tick: 0,
+  }
+  const slotsOf = new Map<WireId, number[]>()
+  boundary.forEach((wid, position) => {
+    const positions = slotsOf.get(wid)
+    if (positions === undefined) slotsOf.set(wid, [position])
+    else positions.push(position)
+  })
   // The line's OUTERMOST POINT is where its individual is quantified, and it
   // must be a body homed at the wire's SCOPE (USER LAW: dangling ends are
   // their own nodes — the ∃ is manipulable independently of what it attaches
@@ -344,7 +345,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     const b: Body = {
       id, kind: 'junction', node: null, geometry: null,
       localAnchor: new Map(), discR: 4.5, region,
-      pos: seed, theta: 0, scale: 1,
+      pos: seed, theta: 0,
     }
     bodies.set(id, b)
     membersOf.get(region)!.push(id)
@@ -356,58 +357,62 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
 
   for (const [wid, w] of Object.entries(d.wires)) {
     const binds: WireBind[] = w.endpoints.map((ep) => ({ body: ep.node, key: pkey(ep.port) }))
-    const isBoundary = bset.has(wid)
-    if (binds.length === 0) {
-      // a bare ∃ — the wire asserts only that an individual exists: one
-      // scope-homed body, no legs (its dot is the whole rendering)
+    const slots = slotsOf.get(wid) ?? []
+    const isBoundary = slots.length > 0
+    if (!isBoundary && binds.length === 0) {
+      // A bare INTERNAL ∃ — the wire asserts only that an individual exists:
+      // one scope-homed body, no legs (its dot is the whole rendering).
       mkWireBody(`j:${wid}`, w.scope, null)
       continue
     }
-    const anchorPos = binds.map((bd) => worldBindAnchor(bodies.get(bd.body)!, bd.key))
-    const centroid = (): Vec2 => ({
-      x: anchorPos.reduce((s, p) => s + p.x, 0) / anchorPos.length,
-      y: anchorPos.reduce((s, p) => s + p.y, 0) / anchorPos.length,
-    })
-    const dca = w.endpoints
-      .map((ep) => d.nodes[ep.node]!.region)
-      .reduce((a, b) => deepestCommonAncestor(d, a, b))
+    const anchorPos = binds.map((bd) => worldBindAnchor(engine, bodies.get(bd.body)!, bd.key))
+    const centroid = (): Vec2 => binds.length === 0
+      ? { x: 0, y: 0 }
+      : {
+          x: anchorPos.reduce((s, p) => s + p.x, 0) / anchorPos.length,
+          y: anchorPos.reduce((s, p) => s + p.y, 0) / anchorPos.length,
+        }
 
     let hub: WireHub | null = null
     let tipBodyId: string | null = null
-    let slot: number | null = null
     let legs: WireLeg[] = []
     let branches: Vec2[] = []
     // A k-ary junction is a soap-film Steiner TREE: wire-owned branch-point DOFs,
-    // the terminals are the port binds (+ the boundary slot), and the tree edges
+    // the terminals are the port binds plus every boundary incidence, and the tree edges
     // are ordinary elastica legs (which bend around nodes via the leg clearance —
     // the branching IS the physics). buildJunctionTree returns the branch points +
     // edges over tree-node indices (0..k-1 terminals, k.. branch points).
-    const treeLegs = (terms: Vec2[], hasSlot: boolean): WireLeg[] => {
+    const terminalEnd = (index: number): WireLegEnd => index < binds.length
+      ? { kind: 'bind', i: index }
+      : { kind: 'slot', i: index - binds.length }
+    const treeLegs = (terms: Vec2[]): WireLeg[] => {
       const built = buildJunctionTree(terms)
       branches = built.branchPts
       const nT = terms.length
       const end = (node: number): WireLegEnd =>
-        node < binds.length ? { kind: 'bind', i: node }
-          : (hasSlot && node === binds.length) ? { kind: 'slot' }
-            : { kind: 'branch', i: node - nT }
+        node < nT ? terminalEnd(node) : { kind: 'branch', i: node - nT }
       return built.edges.map(([a, b]) => mkLeg(end(a), end(b), 0))
     }
     if (isBoundary) {
-      slot = slotOf.get(wid)!
-      if (binds.length === 1) {
-        legs.push(mkLeg({ kind: 'bind', i: 0 }, { kind: 'slot' }, 0))
-      } else {
-        // k≥2 boundary junction: tree over the ports PLUS the slot terminal (seeded
-        // outward toward the frame edge; the leg to the slot reads frameSlots live).
-        const c = centroid()
-        legs = treeLegs([...anchorPos, { x: c.x, y: c.y - 30 }], true)
+      const c = centroid()
+      const slotSeeds = slots.map((position) => {
+        const angle = -Math.PI / 2 + (2 * Math.PI * position) / boundary.length
+        return { x: c.x + 30 * Math.cos(angle), y: c.y + 30 * Math.sin(angle) }
+      })
+      const terminalCount = binds.length + slots.length
+      if (terminalCount === 2) {
+        legs.push(mkLeg(terminalEnd(0), terminalEnd(1), 0))
+      } else if (terminalCount >= 3) {
+        legs = treeLegs([...anchorPos, ...slotSeeds])
       }
     } else if (binds.length === 1) {
       // dangling ∃: a free-end leg reaching a scope-homed tip body
       const b = mkWireBody(`j:${wid}`, w.scope, anchorPos[0]!)
       tipBodyId = b.id
       legs.push(mkLeg({ kind: 'bind', i: 0 }, { kind: 'tip' }, 0))
-    } else if (w.scope !== dca) {
+    } else if (w.scope !== w.endpoints
+      .map((ep) => d.nodes[ep.node]!.region)
+      .reduce((a, b) => deepestCommonAncestor(d, a, b))) {
       // the ∀ via-body: the scope-homed body IS the branch hub
       const b = mkWireBody(`x:${wid}`, w.scope, centroid())
       hub = { kind: 'body', bodyId: b.id }
@@ -417,7 +422,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       legs.push(mkLeg({ kind: 'bind', i: 0 }, { kind: 'bind', i: 1 }, 0))
     } else {
       // a pure k≥3 interior junction: a Steiner tree over the ports
-      legs = treeLegs(anchorPos, false)
+      legs = treeLegs(anchorPos)
     }
     // ∀ via-body single trunk axis; tree branches seed their axis at 0 (relaxed).
     let phi = 0
@@ -426,10 +431,10 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       phi = nematicDir(anchorPos.map((p) => Math.atan2(p.y - hp.y, p.x - hp.x)))
     }
     const branchPhi = branches.map(() => 0)
-    wires.set(wid, { binds, hub, tipBodyId, slot, legs, branches, branchPhi, phi })
+    wires.set(wid, { binds, hub, tipBodyId, slots, legs, branches, branchPhi, phi })
   }
 
-  return { d, bodies, childrenOf, membersOf, wires, boundary, regions: new Map(), frame: null, scale: 1, slotShift: 0, tick: 0 }
+  return engine
 }
 
 /**
@@ -464,15 +469,14 @@ export function carryOver(prev: Engine, next: Engine): void {
   for (const [id, nb] of next.bodies) {
     const pb = prev.bodies.get(id)
     if (pb === undefined) continue
-    nb.pos = denorm(pb.pos, pb.scale)
+    nb.pos = denorm(pb.pos, prev.scale)
     nb.theta = pb.theta
-    nb.scale = 1
   }
   // wires glide too: a surviving wire with the same bind signature keeps its
   // hub/exit position and per-leg arrival angles instead of re-seeding.
   // The legs' geometry is memoryless (recomputed), so only the DOF carry.
   const sig = (v: WireView): string =>
-    [...v.binds.map((b) => `${b.body}:${b.key}`), v.hub === null ? '-' : v.hub.kind, v.tipBodyId ?? '-', v.slot ?? '-', `br${v.branches.length}`].join('|')
+    [...v.binds.map((b) => `${b.body}:${b.key}`), v.hub === null ? '-' : v.hub.kind, v.tipBodyId ?? '-', `slots:${v.slots.join(',')}`, `br${v.branches.length}`].join('|')
   for (const [wid, nv] of next.wires) {
     const pv = prev.wires.get(wid)
     if (pv === undefined || sig(pv) !== sig(nv)) continue
@@ -495,19 +499,19 @@ export function carryOver(prev: Engine, next: Engine): void {
 }
 
 /** Map an anatomy-local point (before ascale) into world space through the
-    body's scale, rotation, and position. Shared by paint and hit-testing. */
-export function localToWorld(b: Body, lp: Vec2): Vec2 {
-  const ascale = ascaleOf(b.kind) * b.scale
+    engine's authoritative content scale and the body's pose. */
+export function localToWorld(e: Engine, b: Body, lp: Vec2): Vec2 {
+  const ascale = ascaleOf(b.kind) * e.scale
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   const x = lp.x * ascale, y = lp.y * ascale
   return { x: b.pos.x + x * c - y * s, y: b.pos.y + x * s + y * c }
 }
 
 /** World anchor of (body, port key); key null returns the body centre. */
-export function worldAnchor(b: Body, key: string | null): Vec2 {
+export function worldAnchor(e: Engine, b: Body, key: string | null): Vec2 {
   if (key === null) return b.pos
   const a0 = b.localAnchor.get(key)!
-  const a = { x: a0.x * b.scale, y: a0.y * b.scale }
+  const a = { x: a0.x * e.scale, y: a0.y * e.scale }
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
 }
@@ -523,16 +527,16 @@ export function worldAnchor(b: Body, key: string | null): Vec2 {
     ports sit on its rail rim and a term's ports sit on its drawn anatomy, so the
     wire meets that point directly — the port anchor is already on the drawing
     (ascale folded in). */
-export function worldBindAnchor(b: Body, key: string): Vec2 {
+export function worldBindAnchor(e: Engine, b: Body, key: string): Vec2 {
   const a0 = b.localAnchor.get(key)!
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   if (b.kind === 'ref') {
     const la = Math.hypot(a0.x, a0.y)
     const ux = la < 1e-9 ? 1 : a0.x / la, uy = la < 1e-9 ? 0 : a0.y / la
-    const R = DISC_R * b.scale
+    const R = DISC_R * e.scale
     return { x: b.pos.x + (ux * c - uy * s) * R, y: b.pos.y + (ux * s + uy * c) * R }
   }
-  const a = { x: a0.x * b.scale, y: a0.y * b.scale }
+  const a = { x: a0.x * e.scale, y: a0.y * e.scale }
   return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
 }
 
@@ -566,12 +570,13 @@ export type FrameSlot = { readonly point: Vec2; readonly normal: number }
 
 /**
  * The n boundary slots: points spaced evenly BY ARC LENGTH around the frame's
- * rounded-rectangle perimeter, slot 0 at the top-edge midpoint (the pip origin)
+ * rounded-rectangle perimeter, physical slot 0 at the top-edge midpoint
  * and proceeding CLOCKWISE (canvas y-down). `normal` is the outward frame normal
  * — axis-aligned on a straight edge, radial from the corner centre on a corner
  * (the same rounded rect paint draws, so a slot rides the visible frame line).
- * Slot i is the fixed frame-relative target of boundary wire i, so exits carry
- * the boundary order and structurally cannot swap.
+ * Logical boundary wire i is assigned through `resolvedFrameSlot`, which applies
+ * the proof-wide cyclic shift while preserving order; wires structurally cannot
+ * pass one another.
  */
 export function frameSlots(fb: FrameBounds, n: number): FrameSlot[] {
   const cx = fb.center.x, cy = fb.center.y
@@ -607,6 +612,15 @@ export function frameSlots(fb: FrameBounds, n: number): FrameSlot[] {
   const out: FrameSlot[] = []
   for (let i = 0; i < n; i++) out.push(slotAt((i / n) * P))
   return out
+}
+
+/** The live frame slot assigned to one logical boundary position. This is the
+    single geometry authority used by leg solving, painting, and hit testing. */
+export function resolvedFrameSlot(e: Engine, boundaryPosition: number): FrameSlot | null {
+  if (boundaryPosition < 0 || boundaryPosition >= e.boundary.length) return null
+  const fb = frameBounds(e)
+  if (fb === null) return null
+  return frameSlots(fb, e.boundary.length)[(boundaryPosition + e.slotShift) % e.boundary.length] ?? null
 }
 
 /** A leg's resolved boundary data + its minimum-energy solution. The endpoints
@@ -645,24 +659,16 @@ export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache
   // the OUTWARD frame normal (perpendicular meeting). A leg arriving at the slot
   // travels outward (+normal); a leg leaving the slot (the k≥2 slot arm) heads
   // inward (normal + π). Never a body, never a DOF.
-  const slotAt = (): FrameSlot | null => {
-    if (w.slot === null) return null
-    const fb = frameBounds(e)
-    if (fb === null) return null
-    const n = e.boundary.length
-    // cyclic slot-shift (legibility): wire's slot index rotated by e.slotShift so
-    // the fixed even-spaced slots align to where the ports actually sit. Cyclic →
-    // canonical order preserved; slot 0 (pip) unchanged as a perimeter position.
-    return frameSlots(fb, n)[(w.slot + e.slotShift) % n] ?? null
-  }
+  const slotAt = (end: Extract<WireLegEnd, { kind: 'slot' }>): FrameSlot | null =>
+    resolvedFrameSlot(e, w.slots[end.i]!)
   // ENDPOINT POSITIONS + ownership first (a branch tangent needs the far position).
   const posOf = (end: WireLegEnd): { p: Vec2; own: string | null } => {
     switch (end.kind) {
-      case 'slot': { const s = slotAt(); return { p: s !== null ? s.point : hubPos(), own: null } }
+      case 'slot': { const s = slotAt(end); return { p: s !== null ? s.point : hubPos(), own: null } }
       case 'hub': return { p: hubPos(), own: null }
       case 'branch': return { p: w.branches[end.i]!, own: null }
       case 'tip': return { p: e.bodies.get(w.tipBodyId!)!.pos, own: null }
-      case 'bind': { const bd = w.binds[end.i]!; return { p: worldBindAnchor(e.bodies.get(bd.body)!, bd.key), own: bd.body } }
+      case 'bind': { const bd = w.binds[end.i]!; return { p: worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key), own: bd.body } }
     }
   }
   const A = posOf(leg.a), B = posOf(leg.b)
@@ -670,7 +676,7 @@ export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache
   // LEAVING tangent at terminal a (θ(0)): a port leaves along its rim normal; a
   // slot leaves inward; a branch leaves toward b along its trunk-tributary tangent.
   let th0: number
-  if (leg.a.kind === 'slot') { const s = slotAt(); th0 = (s !== null ? s.normal : 0) + Math.PI }
+  if (leg.a.kind === 'slot') { const s = slotAt(leg.a); th0 = (s !== null ? s.normal : 0) + Math.PI }
   else if (leg.a.kind === 'bind') { const bd = w.binds[leg.a.i]!; const b0 = e.bodies.get(bd.body)!; const la = b0.localAnchor.get(bd.key)!; th0 = Math.atan2(la.y, la.x) + b0.theta }
   else if (leg.a.kind === 'branch') { th0 = wrapAngle(trunkTarget(Math.atan2(p1.y - p0.y, p1.x - p0.x), w.branchPhi[leg.a.i]!) + Math.PI) }
   else { th0 = Math.atan2(p1.y - p0.y, p1.x - p0.x) }
@@ -680,7 +686,7 @@ export function resolveLeg(e: Engine, w: WireView, leg: WireLeg, cache: LegCache
   switch (leg.b.kind) {
     case 'hub': th1 = leg.hubAngle; break
     case 'tip': th1 = 0; freeEnd = true; break
-    case 'slot': { const s = slotAt(); th1 = s !== null ? s.normal : th0 + Math.PI; break }
+    case 'slot': { const s = slotAt(leg.b); th1 = s !== null ? s.normal : th0 + Math.PI; break }
     case 'branch': th1 = trunkTarget(Math.atan2(p0.y - p1.y, p0.x - p1.x), w.branchPhi[leg.b.i]!); break
     case 'bind': { const bd = w.binds[leg.b.i]!; const b = e.bodies.get(bd.body)!; const la = b.localAnchor.get(bd.key)!; th1 = Math.atan2(la.y, la.x) + b.theta + Math.PI; break }
   }

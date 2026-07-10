@@ -31,11 +31,12 @@ describe('mkDiagramWithBoundary', () => {
       .toThrowError(/boundary wire 'ghost' does not exist/)
   })
 
-  it('rejects duplicate boundary wires', () => {
+  it('treats repeated wire ids as ordered boundary incidences without collapsing arity', () => {
     const b = new DiagramBuilder()
     const t = b.termNode(b.root, p('\\x. x'))
     const w = b.wire(b.root, [{ node: t, port: { kind: 'output' } }])
-    expect(() => mkDiagramWithBoundary(b.build(), [w, w]))
-      .toThrowError(/duplicate boundary wire 'w0'/)
+    const rel = mkDiagramWithBoundary(b.build(), [w, w])
+    expect(rel.boundary).toEqual([w, w])
+    expect(boundaryArity(rel)).toBe(2)
   })
 })

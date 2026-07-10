@@ -25,10 +25,15 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
     const e = mkEngine(h.build(), [])
     const b = e.bodies.get(r)!
     for (const key of b.localAnchor.keys()) {
-      const a = worldBindAnchor(b, key)
+      const a = worldBindAnchor(e, b, key)
       const d = Math.hypot(a.x - b.pos.x, a.y - b.pos.y)
       expect(d, 'ref wire starts on the DISC_R rim').toBeCloseTo(DISC_R, 6)
       expect(d, 'and strictly inside the padded clearance disc (no float)').toBeLessThan(b.discR - 1e-6)
+    }
+    e.scale = 2
+    for (const key of b.localAnchor.keys()) {
+      const a = worldBindAnchor(e, b, key)
+      expect(Math.hypot(a.x - b.pos.x, a.y - b.pos.y), 'Engine.scale alone controls the live wire rim').toBeCloseTo(2 * DISC_R, 6)
     }
   })
   it('an atom/term binds on its port anchor (the drawn stub tip), strictly inside the padded clearance disc', () => {
@@ -43,7 +48,7 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
     for (const id of [t, at]) {
       const b = e.bodies.get(id)!
       for (const [key, la] of b.localAnchor) {
-        const a = worldBindAnchor(b, key)
+        const a = worldBindAnchor(e, b, key)
         const c = Math.cos(b.theta), s = Math.sin(b.theta)
         // the drawn port anchor: localAnchor (ascale already folded) rotated by theta
         const want = { x: b.pos.x + la.x * c - la.y * s, y: b.pos.y + la.x * s + la.y * c }
@@ -77,7 +82,7 @@ describe('computeLegs — the traced θ-quadratic legs ARE the wire (PLAN 22)', 
       // normal (the perpendicular exit is a boundary condition of the solve)
       const bind = e.wires.get(w)!.binds.find((bd) => bd.body === g.leg.from.body)!
       const body = e.bodies.get(bind.body)!
-      const anchor = worldBindAnchor(body, bind.key)
+      const anchor = worldBindAnchor(e, body, bind.key)
       expect(Math.hypot(g.pts[0]!.x - anchor.x, g.pts[0]!.y - anchor.y), 'leg starts on the rim').toBeLessThan(1e-6)
       const la = body.localAnchor.get(bind.key)!
       const normal = Math.atan2(la.y, la.x) + body.theta
@@ -186,7 +191,7 @@ describe('boundary slot-shift: exits are chosen to minimize total port→slot ch
       const se = mkEngine(s.diagram, s.boundary); recomputeRegions(se); resolveOverlaps(se)
       se.boundary.forEach((wid, i) => {
         const bd = se.wires.get(wid)?.binds[0]; if (bd === undefined) return
-        const pp = worldBindAnchor(se.bodies.get(bd.body)!, bd.key)
+        const pp = worldBindAnchor(se, se.bodies.get(bd.body)!, bd.key)
         const slot = slots[(i + shift) % n]!
         tot += Math.hypot(slot.point.x - pp.x, slot.point.y - pp.y)
       })

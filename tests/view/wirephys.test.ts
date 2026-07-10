@@ -190,7 +190,7 @@ describe('wire physics — perpendicular port exits at rest', () => {
         const bind = w.binds.find((bd) => bd.body === g.leg.from.body && bd.key === g.leg.from.key)
         if (bind === undefined) continue // interior end
         const body = e.bodies.get(bind.body)!
-        const anchor = worldBindAnchor(body, bind.key)
+        const anchor = worldBindAnchor(e, body, bind.key)
         expect(Math.hypot(g.pts[0]!.x - anchor.x, g.pts[0]!.y - anchor.y), 'starts on rim').toBeLessThan(1e-6)
         const la = body.localAnchor.get(bind.key)!
         const normal = Math.atan2(la.y, la.x) + body.theta
@@ -269,7 +269,7 @@ describe('wire physics — equilibria', () => {
     const w = e.wires.get(wid)!
     const tip = e.bodies.get(w.tipBodyId!)!
     const bd = w.binds[0]!
-    const anchor = worldBindAnchor(e.bodies.get(bd.body)!, bd.key)
+    const anchor = worldBindAnchor(e, e.bodies.get(bd.body)!, bd.key)
     const dist = Math.hypot(tip.pos.x - anchor.x, tip.pos.y - anchor.y)
     // the standoff C1 ramp (radius standoffR) balances the single-tension pull
     // strictly inside the radius only under external compression; a free dangle
@@ -381,7 +381,7 @@ describe('wire physics — bodyless boundary attachment (plan 24, the reset ruli
     const e = mkEngine(d, b)
     settle(e, 400) // establishes the fixed frame; the boundary leg closes on its slot
     const w = e.wires.get(wid)!
-    expect(w.slot, 'the boundary wire owns a fixed frame slot').not.toBeNull()
+    expect(w.slots, 'the boundary wire owns its fixed frame incidence').toEqual([0])
     expect(w.hub, 'a 1-port boundary wire has NO hub').toBeNull()
     // NO exit body (the reset's "there's an edge node for some reason") — e:<wid>
     // exit hubs are abolished; the boundary attaches to a fixed slot, not a body
@@ -424,6 +424,40 @@ describe('wire physics — bodyless boundary attachment (plan 24, the reset ruli
         expect(best, `boundary ${i} reaches slot ${i}`).toBeLessThan(1.5)
       })
     }
+  })
+
+  it('a repeated boundary identity traces one line between both shifted frame incidences', () => {
+    const h = new DiagramBuilder()
+    const shared = h.wire(h.root, [])
+    const other = h.wire(h.root, [])
+    const e = mkEngine(h.build(), [shared, other, shared])
+    settle(e, 20)
+    e.slotShift = 1
+
+    const leg = computeLegs(e).filter((g) => g.leg.wid === shared)
+    expect(leg).toHaveLength(1)
+    const physical = frameSlots(frameBounds(e)!, 3)
+    const ends = [leg[0]!.pts[0]!, leg[0]!.pts[leg[0]!.pts.length - 1]!]
+    for (const logical of [0, 2]) {
+      const target = physical[(logical + e.slotShift) % 3]!.point
+      expect(Math.min(...ends.map((point) => Math.hypot(point.x - target.x, point.y - target.y)))).toBeLessThan(1)
+    }
+  })
+
+  it('an attached repeated-boundary wire reaches both slots and its node port', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, parseTerm('\\x. x'))
+    const shared = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
+    const e = mkEngine(h.build(), [shared, shared])
+    settle(e, 200)
+
+    const legs = computeLegs(e).filter((g) => g.leg.wid === shared)
+    const endpoints = legs.flatMap((leg) => [leg.pts[0]!, leg.pts[leg.pts.length - 1]!])
+    for (const slot of frameSlots(frameBounds(e)!, 2)) {
+      expect(Math.min(...endpoints.map((point) => Math.hypot(point.x - slot.point.x, point.y - slot.point.y)))).toBeLessThan(1)
+    }
+    const port = worldBindAnchor(e, e.bodies.get(n)!, 'out')
+    expect(Math.min(...endpoints.map((point) => Math.hypot(point.x - port.x, point.y - port.y)))).toBeLessThan(1)
   })
 })
 

@@ -79,6 +79,37 @@ describe('proof session', () => {
     void n
   })
 
+  it('refuses a step that would leave a stale fixed statement-boundary id', () => {
+    const bodyBuilder = new DiagramBuilder()
+    const bodyNode = bodyBuilder.termNode(bodyBuilder.root, p('y'))
+    const shared = bodyBuilder.wire(bodyBuilder.root, [{ node: bodyNode, port: { kind: 'output' } }])
+    const aliasBody = mkDiagramWithBoundary(bodyBuilder.build(), [shared, shared])
+
+    const host = new DiagramBuilder()
+    const ref = host.ref(host.root, 'Alias', 2)
+    const c0 = host.termNode(host.root, p('a'))
+    const c1 = host.termNode(host.root, p('b'))
+    const w0 = host.wire(host.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+      { node: c0, port: { kind: 'freeVar', name: 'a' } },
+    ])
+    const w1 = host.wire(host.root, [
+      { node: ref, port: { kind: 'arg', index: 1 } },
+      { node: c1, port: { kind: 'freeVar', name: 'b' } },
+    ])
+    const side = mkDiagramWithBoundary(host.build(), [w1])
+    const ctx = { theorems: new Map(), relations: new Map([['Alias', aliasBody]]) }
+    const session = startSession(side, side, ctx)
+
+    expect(() => applyForward(session, { rule: 'relUnfold', node: ref }))
+      .toThrowError(new RegExp(`forward step destroyed fixed statement-boundary wire '${w1}'`))
+    expect(() => applyBackward(session, { rule: 'relUnfold', node: ref }))
+      .toThrowError(new RegExp(`backward step destroyed fixed statement-boundary wire '${w1}'`))
+    expect(session.forward.current.wires[w0]).toBeDefined()
+    expect(session.forward.current.wires[w1]).toBeDefined()
+    expect(session.forward.steps).toHaveLength(0)
+  })
+
   it('undo pops exactly one step and restores the prior diagram', () => {
     const theory = buildFregeTheory()
     const ctx = verifyTheory(theory)
@@ -349,8 +380,8 @@ describe('unCite refusals', () => {
         name: 'onePlusOne',
         direction: 'reverse',
         at: {
-          sel: { region: g.root, regions: [], nodes: [nz], wires: [] },
-          args: [wz],
+          sel: { region: g.root, regions: [], nodes: [nz], wires: [wz] },
+          args: [],
         },
       })
     ).toThrowError(/not an occurrence/)

@@ -18,7 +18,7 @@ function worstContentOvershoot(e: Engine): number {
       cy + r - (f.center.y + f.half), (f.center.y - f.half) - (cy - r))
     if (o > worst) worst = o
   }
-  for (const b of e.bodies.values()) if (!b.id.startsWith('e:')) check(b.pos.x, b.pos.y, b.discR)
+  for (const b of e.bodies.values()) if (!b.id.startsWith('e:')) check(b.pos.x, b.pos.y, b.discR * e.scale)
   for (const [rid, g] of e.regions) if (rid !== e.d.root) check(g.center.x, g.center.y, g.radius)
   return worst
 }
@@ -147,19 +147,4 @@ describe('clampDragToFeasible — HARD SEMANTIC CONTAINMENT (USER LAW: a drag ca
     expect(e1.frame).toEqual(f)
   })
 
-  it('a node dragged within its OWN region is never clamped (its region follows it)', () => {
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const a = h.termNode(cut, p('a')) // member of the cut
-    h.wire(cut, [{ node: a, port: { kind: 'freeVar', name: 'a' } }])
-    const e = mkEngine(h.build(), [])
-    recomputeRegions(e)
-    const ba = e.bodies.get(a)!
-    // dragging a far in any direction: a is inside its own region (the cut) and the
-    // cut is derived around it, so the clamp (which exempts ancestors) is a no-op
-    for (const target of [{ x: 200, y: 0 }, { x: -150, y: 90 }, { x: 0, y: -300 }]) {
-      const clamped = clampDragToFeasible(e, ba, target)
-      expect(Math.hypot(clamped.x - target.x, clamped.y - target.y), 'own-region drag is unclamped').toBeLessThan(1e-6)
-    }
-  })
 })

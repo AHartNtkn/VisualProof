@@ -128,4 +128,25 @@ describe('spliceSubgraph', () => {
     const out = spliceSubgraph(hb.build(), 'r0', pattern, [hw, hw])
     expect(out.wires[hw]?.endpoints).toHaveLength(3) // hn.out + spliced y + spliced x
   })
+
+  it('pushes an intrinsically aliased boundary out by identifying its host attachments once', () => {
+    const pb = new DiagramBuilder()
+    const pn = pb.termNode(pb.root, p('y'))
+    const shared = pb.wire(pb.root, [{ node: pn, port: { kind: 'output' } }])
+    const pattern = mkDiagramWithBoundary(pb.build(), [shared, shared])
+
+    const hb = new DiagramBuilder()
+    const cut = hb.cut(hb.root)
+    const outerNode = hb.termNode(cut, p('\\x. x'))
+    const innerNode = hb.termNode(cut, p('\\x. \\y. x'))
+    const outer = hb.wire(hb.root, [{ node: outerNode, port: { kind: 'output' } }])
+    const inner = hb.wire(cut, [{ node: innerNode, port: { kind: 'output' } }])
+    const out = spliceSubgraph(hb.build(), cut, pattern, [inner, outer])
+
+    expect(out.wires[inner]).toBeUndefined()
+    expect(out.wires[outer]?.scope).toBe(out.root)
+    // Both host endpoints plus the pattern endpoint exactly once. Repeating
+    // the boundary incidence must not copy the same pattern endpoint twice.
+    expect(out.wires[outer]?.endpoints).toHaveLength(3)
+  })
 })

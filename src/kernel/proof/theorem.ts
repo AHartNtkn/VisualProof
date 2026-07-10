@@ -108,14 +108,20 @@ export function applyTheorem(
       `theorem '${thm.name}' cannot be applied at an occurrence with atoms bound outside it (open theorem sides are not supported)`,
     )
   }
-  if (at.args.length !== attachments.length) {
+  if (at.args.length !== from.boundary.length) {
     throw new RuleError(
-      `the selection has ${attachments.length} attachment wires but theorem '${thm.name}' takes ${at.args.length} arguments here`,
+      `theorem '${thm.name}' has ${from.boundary.length} boundary positions but ${at.args.length} arguments were given`,
     )
   }
-  if (new Set(at.args).size !== at.args.length) {
-    throw new RuleError(`theorem argument wires are not distinct`)
+  for (const attachment of attachments) {
+    if (!at.args.includes(attachment)) {
+      throw new RuleError(`attachment wire '${attachment}' is not used by any theorem argument position`)
+    }
   }
+  // Positional arguments may repeat only when the theorem side has the same
+  // intrinsic boundary alias. Repeating an argument for two distinct theorem
+  // identities changes the pinned incidence form and is refused by this exact
+  // comparison; theorem-call diagonalization is deliberately not inferred.
   const reordered = at.args.map((a) => {
     const j = attachments.indexOf(a)
     if (j === -1) throw new RuleError(`argument wire '${a}' is not an attachment wire of the selection`)

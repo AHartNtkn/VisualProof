@@ -51,6 +51,51 @@ describe('mkEngine', () => {
     }
   })
 
+  it('classifies an endpointless boundary as a bodyless fixed-slot wire before bare existential handling', () => {
+    const h = new DiagramBuilder()
+    const external = h.wire(h.root, [])
+    const internal = h.wire(h.root, [])
+    const e = mkEngine(h.build(), [external])
+
+    expect(e.bodies.has(`j:${external}`), 'a formal port must not float as an existential body').toBe(false)
+    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0], legs: [], tipBodyId: null, hub: null })
+    expect(e.bodies.has(`j:${internal}`), 'an internal bare wire remains a semantic existential body').toBe(true)
+    expect(e.wires.has(internal)).toBe(false)
+  })
+
+  it('keeps every repeated boundary incidence and connects two slots as one bodyless wire', () => {
+    const h = new DiagramBuilder()
+    const shared = h.wire(h.root, [])
+    const other = h.wire(h.root, [])
+    const e = mkEngine(h.build(), [shared, other, shared])
+    const w = e.wires.get(shared)!
+
+    expect(w.slots).toEqual([0, 2])
+    expect(w.binds).toEqual([])
+    expect(w.legs).toHaveLength(1)
+    expect([w.legs[0]!.a, w.legs[0]!.b]).toEqual([
+      { kind: 'slot', i: 0 },
+      { kind: 'slot', i: 1 },
+    ])
+    expect(e.bodies.has(`j:${shared}`), 'a multi-slot boundary identity must not gain an existential body').toBe(false)
+    expect(e.wires.get(other)).toMatchObject({ slots: [1], legs: [] })
+  })
+
+  it('builds one junction topology over an attached port and every repeated boundary incidence', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('\\x. x'))
+    const shared = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
+    const e = mkEngine(h.build(), [shared, shared])
+    const w = e.wires.get(shared)!
+    const ends = w.legs.flatMap((leg) => [leg.a, leg.b])
+
+    expect(w.slots).toEqual([0, 1])
+    expect(w.binds).toHaveLength(1)
+    expect(new Set(ends.filter((end) => end.kind === 'slot').map((end) => end.i))).toEqual(new Set([0, 1]))
+    expect(ends.some((end) => end.kind === 'bind' && end.i === 0)).toBe(true)
+    expect(w.branches.length).toBeGreaterThan(0)
+  })
+
   it('worldAnchor rotates the local anchor about the body centre by theta', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('\\x. x'))
@@ -59,15 +104,23 @@ describe('mkEngine', () => {
     const b = e.bodies.get(n)!
     b.pos = { x: 10, y: -3 }
     b.theta = 0
-    const a0 = worldAnchor(b, 'out')
+    const a0 = worldAnchor(e, b, 'out')
     b.theta = Math.PI / 2
-    const a1 = worldAnchor(b, 'out')
+    const a1 = worldAnchor(e, b, 'out')
     // rotating the frame by +90° maps a local (lx,ly) to (-ly, lx) around pos
     const lx = a0.x - 10, ly = a0.y - -3
     expect(a1.x).toBeCloseTo(10 - ly, 9)
     expect(a1.y).toBeCloseTo(-3 + lx, 9)
     // the port normal tracks theta too
     expect(portNormal(b, 'out', { x: 100, y: -3 })).toBeCloseTo(Math.atan2(0, 1) + Math.PI / 2, 9)
+
+    // Engine.scale is the sole content-scale authority: bodies carry only
+    // natural geometry, and world geometry reads the engine on every call.
+    b.theta = 0
+    e.scale = 2
+    const a2 = worldAnchor(e, b, 'out')
+    expect(a2.x - b.pos.x).toBeCloseTo(2 * (a0.x - b.pos.x), 9)
+    expect(a2.y - b.pos.y).toBeCloseTo(2 * (a0.y - b.pos.y), 9)
   })
 })
 
@@ -202,5 +255,19 @@ describe('carryOver', () => {
       expect(nb.pos).toEqual(rb.pos)
       expect(nb.theta).toBe(rb.theta)
     }
+  })
+
+  it('normalizes carried poses using only the previous engine scale', () => {
+    const { d, boundary } = nat()
+    const prev = mkEngine(d, boundary)
+    const first = prev.bodies.values().next().value!
+    first.pos = { x: 24, y: -10 }
+    prev.scale = 2
+
+    const next = mkEngine(d, boundary)
+    carryOver(prev, next)
+
+    expect(next.scale).toBe(1)
+    expect(next.bodies.get(first.id)!.pos).toEqual({ x: 12, y: -5 })
   })
 })

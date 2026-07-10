@@ -86,6 +86,33 @@ describe('relFold — round-trips to fingerprint equality with the original refe
   })
 })
 
+describe('relUnfold / relFold — intrinsic boundary aliases', () => {
+  it('preserves one shared host identity across two relation positions', () => {
+    const bodyBuilder = new DiagramBuilder()
+    const bodyNode = bodyBuilder.termNode(bodyBuilder.root, pc('y'))
+    const sharedBoundary = bodyBuilder.wire(bodyBuilder.root, [{ node: bodyNode, port: { kind: 'output' } }])
+    const body = mkDiagramWithBoundary(bodyBuilder.build(), [sharedBoundary, sharedBoundary])
+    const relations = new Map([['Alias', body]])
+
+    const host = new DiagramBuilder()
+    const ref = host.ref(host.root, 'Alias', 2)
+    const carrier = host.termNode(host.root, pc('a'))
+    const sharedHost = host.wire(host.root, [
+      { node: ref, port: { kind: 'arg', index: 0 } },
+      { node: ref, port: { kind: 'arg', index: 1 } },
+      { node: carrier, port: { kind: 'freeVar', name: 'a' } },
+    ])
+    const original = host.build()
+    const unfolded = applyRelUnfold(original, ref, relations)
+    const landed = unfolded.wires[sharedHost]!.endpoints.filter((ep) => ep.node !== carrier)
+    expect(landed).toHaveLength(1)
+
+    const sel = bodySelection(unfolded, carrier, unfolded.root)
+    const folded = applyRelFold(unfolded, sel, 'Alias', [sharedHost, sharedHost], relations)
+    expect(exploreForm(folded)).toBe(exploreForm(original))
+  })
+})
+
 describe('relUnfold — refusals', () => {
   it('refuses an unknown defId', () => {
     const { d, node } = refHost('R')

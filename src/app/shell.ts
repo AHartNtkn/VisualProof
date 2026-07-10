@@ -1,4 +1,4 @@
-import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { Term } from '../kernel/term/term'
@@ -11,29 +11,35 @@ import { applyRelFold, applyRelUnfold } from '../kernel/rules/reldef'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
-import { vec, length, sub } from '../view/vec'
+import { vec } from '../view/vec'
 import type { Engine } from '../view/engine'
-import { mkEngine, carryOver, subtreeCarriers } from '../view/engine'
-import { settleStep, establishProofFrame, establishProofSlotShift, clampDragToFeasible, seedProject } from '../view/relax'
-import { legPaths, existentialStubs } from '../view/wires'
+import { mkEngine, carryOver } from '../view/engine'
+import { settleStep, establishProofFrame, establishProofSlotShift, seedProject } from '../view/relax'
+import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
-import { paint, highlightGroup, nextTheme, LIGHT } from '../view/paint'
+import { paint, highlightGroup, LIGHT, THEMES } from '../view/paint'
 import { drawShapes } from '../view/canvas'
-import { fitCamera, DESIGN_SCALE } from '../view/camera'
+import { fitCamera } from '../view/camera'
+import { seedBodyPlacement } from '../view/placement'
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
 import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
-import { emptyDiagram, addTermNode, addRefNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
+import { emptyDiagram, addTermNode, addRefNode } from './edit'
 import type { ProofSession } from './session'
 import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
 import { sessionTheory } from './persist'
 import { theoryToJson } from '../kernel/proof/store'
-import type { DragTarget, Hit } from './hittest'
-import { hitTest, dragTarget, buildSelection } from './hittest'
+import type { Hit } from './hittest'
+import { hitTest, wireHitTest, buildSelection } from './hittest'
+import { isHitSelected } from './interact/brush'
+import { ConstructController } from './interact/construct'
+import { SpawnCascade } from './interact/spawn'
+import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
+import { FeedbackController, type FeedbackInput, type FeedbackState } from './feedback'
 import type { ActionDescriptor } from './actions'
 import { applicableActions } from './actions'
 
@@ -42,25 +48,43 @@ import { applicableActions } from './actions'
  * hittest, actions) and the view layer. Every decision branch here calls a
  * tested function; the shell itself owns only browser concerns — mode state,
  * the displayed diagram, selection, pending two-phase actions, physics
- * seeding + pin-while-drag, the viewport transform, and chrome wiring.
+ * seeding, domain operations, and chrome wiring. The viewport controller owns
+ * every canvas gesture and all transient interaction state.
  * Behavioral coverage is Plan 10d's E2E.
  */
 
 export type ShellOptions = {
   readonly canvas: HTMLCanvasElement
   readonly chrome: HTMLElement
+  readonly initialDiagram?: Diagram
+  readonly themes?: readonly Theme[]
+  readonly initialLibrary?: Library
+  readonly initialDirectoryHandle?: FileSystemDirectoryHandle
+  readonly initialLibraryErrors?: ReadonlyMap<string, string>
+  readonly libraryRenderer?: LibraryRenderer
 }
 
-/**
- * UI input tolerances, CSS pixels. Like WIRE_TOLERANCE these are documented
- * interaction constants, not correctness heuristics: pointer coordinates
- * quantize to whole pixels and hands tremble 1–2px during a click, so a
- * zero movement threshold would misclassify ordinary clicks as drags; wheel
- * deltas arrive in pixel units and map exponentially to zoom so equal wheel
- * travel gives equal zoom RATIO at any scale.
- */
-const CLICK_SLOP_PX = 3
-const ZOOM_PER_WHEEL_PX = 0.001
+export type LibraryViewState = {
+  readonly library: Library
+  readonly folderName: string | null
+  readonly errors: ReadonlyMap<string, string>
+  readonly theme: Theme
+}
+
+export type LibraryViewActions = {
+  readonly openFolder: () => void
+  readonly rescanFolder: () => void
+  readonly openFile: () => void
+  readonly load: (file: string) => void
+  readonly unload: (file: string) => void
+  readonly replay: (theorem: string) => void
+}
+
+export type LibraryRenderer = (
+  host: HTMLElement,
+  state: LibraryViewState,
+  actions: LibraryViewActions,
+) => void
 
 /** The construction-time legality projection (a discrete event, not a mover):
     seed the region circles, then separate the dense mkEngine spiral seed onto the
@@ -68,20 +92,12 @@ const ZOOM_PER_WHEEL_PX = 0.001
     dense-overlap coordinate-descent trap. This is the plan-23 leading projection,
     which mkEngine cannot run itself (relax.ts imports engine.ts — circular); the
     shell already imports relax.ts, so it runs it after every seed. */
-const SELECT_STROKE = '#d97706'
-const HOVER_STROKE = '#2563eb'
-
 type Pending =
   | { readonly kind: 'iterate'; readonly sel: SubgraphSelection }
   | { readonly kind: 'cite'; readonly name: string; readonly direction: 'forward' | 'reverse'; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'unCite'; readonly name: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'defineRelation'; readonly sel: SubgraphSelection; readonly args: WireId[]; name: string }
   | { readonly kind: 'foldChoose'; readonly sel: SubgraphSelection }
-  | { readonly kind: 'addRelChoose' }
-
-/** A grab: the bodies moved by this drag, each with its offset from the
-    cursor's world position at grab time (so a drag moves, never teleports). */
-type Drag = { readonly bodies: ReadonlyMap<string, Vec2> }
 
 /**
  * Backward menu entry: a labelled action that commits at button-click time,
@@ -140,13 +156,15 @@ function backwardEntries(d: Diagram, sel: SubgraphSelection, ctx: ProofContext):
 
 export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void }> {
   const { canvas, chrome } = opts
+  const themeCycle = opts.themes ?? THEMES
+  if (themeCycle.length === 0) throw new Error('mountShell requires at least one theme')
   const ctx2d = canvas.getContext('2d')
   if (ctx2d === null) throw new Error('the canvas has no 2d context')
 
   // ---- boot: nothing. The app has ZERO built-in knowledge of any theory file
   // and fetches nothing. The working context is empty until the user opens
   // files/folders through the Library panel. rebuild(empty) is the empty ctx. ----
-  let library: Library = emptyLibrary()
+  let library: Library = opts.initialLibrary ?? emptyLibrary()
   const boot = rebuild(library)
   let ctx: ProofContext = boot.ctx
   let relations: Readonly<Record<string, DiagramWithBoundary>> = boot.relations
@@ -160,29 +178,39 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let replay: Replay | null = null
   let replayK = 0
   let replayReturnMode: 'edit' | 'prove' = 'edit'
-  let editDiagram = emptyDiagram()
+  let editDiagram = opts.initialDiagram ?? emptyDiagram()
   const editHistory: Diagram[] = []
   let goalLhs: DiagramWithBoundary | null = null
   let goalRhs: DiagramWithBoundary | null = null
   let session: ProofSession | null = null
-  let hits: Hit[] = []
   let kernelSel: SubgraphSelection | null = null
   let pending: Pending | null = null
   // The render engine is rebuilt whenever the displayed diagram identity
   // changes (layout never persists). Boundary wiring for proof sides is Task 2;
   // an edit sheet has no boundary, so [] is correct here.
-  let theme: Theme = LIGHT
+  let themeIndex = 0
+  let theme: Theme = themeCycle[themeIndex] ?? LIGHT
   let displayed: Diagram = editDiagram
   let engine: Engine = mkEngine(displayed, [])
   seedProject(engine)
-  // The pin stores the cursor in SCREEN space: the camera refits every frame,
-  // so a world-space pin would drift off the cursor whenever the fit moves.
-  let pin: { readonly drag: Drag; screen: Vec2 } | null = null
-  let message = 'EDIT mode: type a term (\\ is λ) and Add, click to select, wrap/delete/join'
-  let drag: Drag | null = null
-  let downScreen: Vec2 | null = null
-  let dragMoved = false
-  let hoverWorld: Vec2 | null = null
+  let interaction!: InteractiveViewport
+  let construct!: ConstructController
+  let spawnCascade!: SpawnCascade
+  const feedback = new FeedbackController()
+  feedback.report({
+    kind: 'ambient',
+    text: 'right-click to place, drag lines to join, W wraps, Delete removes',
+    owner: { kind: 'control', id: 'mode' },
+    persistence: 'state',
+  })
+  const reportFeedback = (next: FeedbackInput): void => {
+    feedback.report(next)
+    refreshChrome()
+  }
+  const clearFeedbackProblem = (problemId: string): void => {
+    feedback.clearProblem(problemId)
+    refreshChrome()
+  }
   let disposed = false
   let raf = 0
 
@@ -199,7 +227,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // diagram identity unchanged must NOT bump this (no reseed); a step that
   // changes the target bumps it by exactly one (a single carryOver warm-start).
   let companionRebuilds = 0
-  const companionView = { scale: DESIGN_SCALE, offsetX: 0, offsetY: 0 }
+  const companionView = { scale: 1, offsetX: 0, offsetY: 0 }
   let companionStyleKey = ''
 
   const companionWrap = document.createElement('div')
@@ -227,14 +255,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   canvas.width = window.innerWidth
   canvas.height = window.innerHeight
-  canvas.style.background = theme.canvas
+  const applyThemeBackdrop = (): void => {
+    canvas.style.background = theme.canvas
+    canvas.ownerDocument.documentElement.style.background = theme.canvas
+    canvas.ownerDocument.body.style.background = theme.canvas
+  }
+  applyThemeBackdrop()
   // There is NO pan: the camera is a fit — centered on the sheet circle with
-  // a scale that keeps the whole sheet on screen (never past the design's
-  // unit scale, so small sheets don't blow up) times the user's wheel-zoom
-  // factor. It is recomputed every frame and STABILIZES because settled
+  // a scale that keeps the whole fixed sheet frame on screen, times the user's
+  // bounded wheel-zoom factor. It is recomputed every frame and STABILIZES because settled
   // layouts are at rest; the user cannot move the background, only zoom it.
-  const view = { scale: DESIGN_SCALE, offsetX: canvas.width / 2, offsetY: canvas.height / 2 }
-  let userZoom = 1
+  const view = { scale: 1, offsetX: canvas.width / 2, offsetY: canvas.height / 2 }
   // Fit a camera onto an engine's sheet circle for a given viewport, writing the
   // transform into `out`. The one fit both the main view and the companion use —
   // the pure `fitCamera` math, no fork. The companion passes zoom 1 (view-only,
@@ -248,11 +279,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     out.offsetX = cam.offsetX
     out.offsetY = cam.offsetY
   }
-  const fitView = (): void => applyFit(engine, canvas.width, canvas.height, userZoom, view)
-
-  const toWorld = (screen: Vec2): Vec2 =>
-    vec((screen.x - view.offsetX) / view.scale, (screen.y - view.offsetY) / view.scale)
-
   const currentDiagram = (): Diagram => {
     if (mode === 'replay' && replay !== null) return replay.diagramAt(replayK)
     if (mode === 'prove' && session !== null) {
@@ -321,8 +347,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let libraryOpen = true
   const expandedGroups = new Set<string>()
   const SESSION_GROUP = 'session' // sentinel; file groups are keyed 'file:<name>' so this cannot collide
-  const loadErrors = new Map<string, string>()
-  let dirHandle: FileSystemDirectoryHandle | null = null
+  const loadErrors = new Map<string, string>(opts.initialLibraryErrors)
+  let dirHandle: FileSystemDirectoryHandle | null = opts.initialDirectoryHandle ?? null
 
   // ---- context rebinding ----
   // Called after every library change (load/unload/adopt): refreshes the live
@@ -335,7 +361,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   // Adopt a library change: rebuild the merged context from it and rebind live.
-  // A rebuild conflict propagates through guard() to the status line, leaving
+  // A rebuild conflict propagates through guard() to typed refusal feedback, leaving
   // the prior library untouched.
   const applyLibrary = (next: Library): void => {
     library = next
@@ -361,13 +387,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const handle = await window.showDirectoryPicker()
         dirHandle = handle
         library = reconcile(library, await listJsonFiles(handle))
-        message = `opened workspace folder '${handle.name}' (${library.folder.length} .json file(s))`
         renderLibrary()
-        refreshChrome()
       } catch (e) {
         if (e instanceof DOMException && e.name === 'AbortError') return
-        message = e instanceof Error ? e.message : String(e)
-        refreshChrome()
+        loadErrors.set('', e instanceof Error ? e.message : String(e))
+        renderLibrary()
       }
     })()
   }
@@ -379,12 +403,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     void (async () => {
       try {
         library = reconcile(library, await listJsonFiles(handle))
-        message = `refreshed workspace folder '${handle.name}'`
         renderLibrary()
-        refreshChrome()
       } catch (e) {
-        message = e instanceof Error ? e.message : String(e)
-        refreshChrome()
+        loadErrors.set('', e instanceof Error ? e.message : String(e))
+        renderLibrary()
       }
     })()
   }
@@ -423,14 +445,25 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         if (typeof text !== 'string') throw new Error('file read failed')
         applyLibrary(loadEntry(library, file.name, JSON.parse(text)))
         loadErrors.delete('')
-        message = `loaded '${file.name}' into the library`
-        refreshChrome()
+        renderLibrary()
       } catch (e) {
         loadErrors.set('', e instanceof Error ? e.message : String(e))
         renderLibrary()
       }
     })
     reader.readAsText(file)
+  }
+
+  const onUnloadFile = (file: string): void => {
+    try {
+      applyLibrary(unloadEntry(library, file))
+      loadErrors.delete(file)
+      expandedGroups.delete(`file:${file}`)
+      renderLibrary()
+    } catch (error) {
+      loadErrors.set(file, error instanceof Error ? error.message : String(error))
+      renderLibrary()
+    }
   }
 
   // A collapsible detail group listing one loaded entry's (or the session's)
@@ -478,6 +511,26 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // file list (Load/Unload per file — no origin distinction), a detail group per
   // loaded entry, and the Session group for adopted theorems.
   const renderLibrary = (): void => {
+    if (opts.libraryRenderer !== undefined) {
+      libraryDiv.replaceChildren()
+      opts.libraryRenderer(libraryDiv, {
+        library,
+        folderName: dirHandle?.name ?? null,
+        errors: new Map(loadErrors),
+        theme,
+      }, {
+        openFolder: onOpenFolder,
+        rescanFolder: onRefreshFolder,
+        openFile: () => openFileInput.click(),
+        load: loadFolderFile,
+        unload: onUnloadFile,
+        replay: (name) => {
+          enterReplay(name)
+          libraryDiv.dispatchEvent(new CustomEvent('vpa-library-replay', { bubbles: true }))
+        },
+      })
+      return
+    }
     libraryDiv.replaceChildren()
     libraryDiv.append(button(`${libraryOpen ? '▾' : '▸'} Library`, () => {
       libraryOpen = !libraryOpen
@@ -507,11 +560,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       if (e.status === 'available') {
         row.append(button(`Load ${e.file}`, () => loadFolderFile(e.file)))
       } else {
-        row.append(button(`Unload ${e.file}`, guard(() => {
-          applyLibrary(unloadEntry(library, e.file))
-          loadErrors.delete(e.file)
-          expandedGroups.delete(`file:${e.file}`)
-        })))
+        row.append(button(`Unload ${e.file}`, () => onUnloadFile(e.file)))
       }
       const err = errorSpan(e.file)
       if (err !== null) row.append(err)
@@ -546,9 +595,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     try {
       fn()
     } catch (e) {
-      // the kernel's refusal message IS the UX copy — verbatim into the status line
-      message = e instanceof Error ? e.message : String(e)
-      refreshChrome()
+      // The kernel's refusal message IS the UX copy — verbatim, with explicit ownership.
+      const hits = interaction.selection
+      reportFeedback({
+        kind: 'refusal',
+        text: e instanceof Error ? e.message : String(e),
+        owner: hits.length > 0 ? { kind: 'selection', hits } : { kind: 'viewport' },
+        persistence: 'transient',
+      })
     }
   }
 
@@ -562,126 +616,73 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     return parseTerm(termInput.value)
   }
 
-  const sync = (): void => {
+  const sync = (surfaceChanged = false, preserveSelection = false): void => {
     const d = currentDiagram()
-    if (d !== displayed) {
-      // diagram identity changed: rebuild the engine (layout never persists),
-      // drop selection/pending/pin — their ids belong to the old diagram
+    if (d !== displayed || surfaceChanged) {
+      const priorSelection = preserveSelection ? interaction.selection : []
+      interaction.cancelActiveGesture()
+      // Diagram identity changed: preserve the transaction's fixed frame and
+      // surviving layout, then re-solve THIS diagram's content scale inside it.
+      const previous = engine
       displayed = d
       engine = mkEngine(d, currentBoundary())
+      carryOver(previous, engine)
       seedProject(engine)
-      pin = null
-      hits = []
+      if (surfaceChanged) interaction.resetSurface()
+      else interaction.reconcileDiagram()
       kernelSel = null
       pending = null
+      if (preserveSelection) {
+        interaction.setSelection(priorSelection.filter((hit) =>
+          hit.kind === 'node' ? displayed.nodes[hit.id] !== undefined
+            : hit.kind === 'region' ? displayed.regions[hit.id] !== undefined
+              : displayed.wires[hit.id] !== undefined))
+      }
     }
     refreshChrome()
   }
 
-  const setHits = (next: Hit[]): void => {
-    hits = next
-    if (hits.length === 0) {
+  const selectionChanged = (next: readonly Hit[]): void => {
+    if (next.length === 0) {
       kernelSel = null
     } else {
       try {
-        kernelSel = buildSelection(displayed, hits)
-        message = `selected ${hits.map((h) => `${h.kind} '${h.id}'`).join(', ')}`
+        kernelSel = buildSelection(displayed, next)
       } catch (e) {
         kernelSel = null
-        message = e instanceof Error ? e.message : String(e)
+        reportFeedback({
+          kind: 'refusal',
+          text: e instanceof Error ? e.message : String(e),
+          owner: { kind: 'selection', hits: next },
+          persistence: 'transient',
+        })
       }
     }
     refreshChrome()
   }
 
   // ---- edit operations (mkDiagram-validated surgery via edit.ts) ----
-  const pushEdit = (d: Diagram): void => {
+  const pushEdit = (d: Diagram, placement?: { readonly node: NodeId; readonly at: Vec2 }, preserveSelection = false): void => {
     editHistory.push(editDiagram)
     editDiagram = d
-    sync()
+    sync(false, preserveSelection)
+    if (placement !== undefined) seedBodyPlacement(engine, placement.node, placement.at)
   }
   const requireEdit = (): void => {
     if (mode !== 'edit') throw new Error('construction is an EDIT-mode operation; switch modes first')
   }
-  const requireSel = (): SubgraphSelection => {
-    if (kernelSel === null) throw new Error('no valid selection: click nodes/regions/wires of one region first')
-    return kernelSel
-  }
-
-  const onAddTerm = guard(() => {
-    requireEdit()
-    const region = hits.length === 1 && hits[0]!.kind === 'region' ? hits[0]!.id : editDiagram.root
-    const { diagram, node } = addTermNode(editDiagram, region, parseInput())
-    pushEdit(diagram)
-    message = `added term node '${node}' in region '${region}'`
-    refreshChrome()
-  })
-  const onAddRelation = guard(() => {
-    requireEdit()
-    if (ctx.relations.size === 0) throw new Error('no relations to add — define one or load a theory first')
-    pending = { kind: 'addRelChoose' }
-    message = 'add relation: choose one (spawns with fresh argument wires)'
-    refreshChrome()
-  })
-  const spawnRelation = (name: string): void => {
-    const body = ctx.relations.get(name)!
-    const region = hits.length === 1 && hits[0]!.kind === 'region' ? hits[0]!.id : editDiagram.root
-    const { diagram, node } = addRefNode(editDiagram, region, name, body.boundary.length)
-    pending = null
-    pushEdit(diagram)
-    message = `added relation node '${node}' (${name}/${body.boundary.length}) in region '${region}'`
-    refreshChrome()
-  }
-  const onWrapCut = guard(() => {
-    requireEdit()
-    const { diagram, region } = addCut(editDiagram, requireSel())
-    pushEdit(diagram)
-    message = `wrapped selection in cut '${region}'`
-    refreshChrome()
-  })
-  const onWrapBubble = guard(() => {
-    requireEdit()
-    const { diagram, region } = addBubble(editDiagram, requireSel(), readCount(arity.input, 'bubble arity'))
-    pushEdit(diagram)
-    message = `wrapped selection in bubble '${region}'`
-    refreshChrome()
-  })
-  const onDelete = guard(() => {
-    requireEdit()
-    pushEdit(deleteSelection(editDiagram, requireSel()))
-    message = 'deleted the selection'
-    refreshChrome()
-  })
-  const onJoinWires = guard(() => {
-    requireEdit()
-    const wires = hits.filter((h): h is Hit & { kind: 'wire' } => h.kind === 'wire')
-    if (wires.length !== 2) throw new Error(`joining needs exactly two selected wires, got ${wires.length}`)
-    const repr = (id: WireId): Endpoint => {
-      const w = editDiagram.wires[id]
-      if (w === undefined) throw new Error(`unknown wire '${id}'`)
-      const ep = w.endpoints[0]
-      if (ep === undefined) throw new Error(`wire '${id}' has no endpoints to join through`)
-      return ep
-    }
-    pushEdit(joinPorts(editDiagram, repr(wires[0]!.id), repr(wires[1]!.id)))
-    message = `joined wires '${wires[0]!.id}' and '${wires[1]!.id}'`
-    refreshChrome()
-  })
-
   // ---- goal + session ----
   const onSetLhs = guard(() => {
     requireEdit()
     goalLhs = mkDiagramWithBoundary(editDiagram, [])
     session = null
-    message = 'goal LHS snapshotted from the sheet'
-    refreshChrome()
+    reportFeedback({ kind: 'success', text: 'goal LHS snapshotted from the sheet', owner: { kind: 'control', id: 'lifecycle' }, persistence: 'transient' })
   })
   const onSetRhs = guard(() => {
     requireEdit()
     goalRhs = mkDiagramWithBoundary(editDiagram, [])
     session = null
-    message = 'goal RHS snapshotted from the sheet'
-    refreshChrome()
+    reportFeedback({ kind: 'success', text: 'goal RHS snapshotted from the sheet', owner: { kind: 'control', id: 'lifecycle' }, persistence: 'transient' })
   })
 
   const meetStatus = (): string => {
@@ -699,6 +700,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     replay = mkReplay(thm, ctx)
     replayK = 0
     mode = 'replay'
+    interaction.cancelActiveGesture()
     displayed = replay.diagramAt(0)
     engine = mkEngine(displayed, replay.boundary)
     // Size the fixed border ONCE from the PROOF-WIDE max content extent (USER RULING
@@ -713,12 +715,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // across steps by carryOver (slots never reorder mid-proof).
     engine.slotShift = establishProofSlotShift(engine.frame!, steps)
     seedProject(engine)
-    pin = null
-    hits = []
+    interaction.resetSurface()
     kernelSel = null
     pending = null
-    message = `replay '${name}'`
-    refreshChrome()
+    reportFeedback({ kind: 'mode', text: `replay '${name}'`, owner: { kind: 'control', id: 'mode' }, persistence: 'state' })
   }
 
   // Move to step k (clamped). The new engine carries over shared bodies' physics
@@ -727,6 +727,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // cached diagram object, so an incidental sync() will not rebuild and scramble.
   const gotoReplayStep = (k: number): void => {
     if (replay === null) return
+    interaction.cancelActiveGesture()
     replayK = Math.max(0, Math.min(replay.stepCount, k))
     const prevEngine = engine
     displayed = replay.diagramAt(replayK)
@@ -734,20 +735,28 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     carryOver(prevEngine, next)
     seedProject(next)
     engine = next
-    pin = null
-    hits = []
+    interaction.reconcileDiagram()
     kernelSel = null
     pending = null
-    message = `step ${replayK}/${replay.stepCount}${replayK > 0 ? ` — ${replay.labelAt(replayK)}` : ''}`
-    refreshChrome()
+    reportFeedback({
+      kind: 'history',
+      text: `step ${replayK}/${replay.stepCount}${replayK > 0 ? ` — ${replay.labelAt(replayK)}` : ''}`,
+      owner: { kind: 'control', id: 'history' },
+      persistence: 'state',
+    })
   }
 
   const exitReplay = (): void => {
     mode = replayReturnMode
     replay = null
     replayK = 0
-    message = mode === 'edit' ? 'EDIT mode' : `PROVE mode: ${meetStatus()}`
-    sync() // rebuilds the engine for the restored mode's diagram
+    feedback.report({
+      kind: 'mode',
+      text: mode === 'edit' ? 'EDIT mode' : `PROVE mode: ${meetStatus()}`,
+      owner: { kind: 'control', id: 'mode' },
+      persistence: 'state',
+    })
+    sync(true) // rebuilds the engine for the restored mode's diagram
   }
 
   const onToggleMode = guard(() => {
@@ -761,31 +770,31 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
       if (session === null) session = startSession(goalLhs, goalRhs, ctx)
       mode = 'prove'
-      message = `PROVE mode: ${meetStatus()}`
+      feedback.report({ kind: 'mode', text: `PROVE mode: ${meetStatus()}`, owner: { kind: 'control', id: 'mode' }, persistence: 'state' })
     } else {
       mode = 'edit'
-      message = 'EDIT mode'
+      feedback.report({ kind: 'mode', text: 'EDIT mode', owner: { kind: 'control', id: 'mode' }, persistence: 'state' })
     }
-    sync()
+    sync(true)
   })
   const onToggleSide = guard(() => {
     if (mode !== 'prove') throw new Error('the forward/backward toggle applies in PROVE mode')
     side = side === 'forward' ? 'backward' : 'forward'
-    message = `working ${side} — ${meetStatus()}`
-    sync()
+    feedback.report({ kind: 'mode', text: `working ${side} — ${meetStatus()}`, owner: { kind: 'control', id: 'mode' }, persistence: 'state' })
+    sync(true)
   })
   const onUndo = guard(() => {
     if (mode === 'edit') {
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
       editDiagram = prev
-      message = 'edit undone'
+      feedback.report({ kind: 'history', text: 'edit undone', owner: { kind: 'control', id: 'history' }, persistence: 'transient' })
       sync()
       return
     }
     if (session === null) throw new Error('no active proof session')
     session = side === 'forward' ? undoForward(session) : undoBackward(session)
-    message = `undone — ${meetStatus()}`
+    feedback.report({ kind: 'history', text: `undone — ${meetStatus()}`, owner: { kind: 'control', id: 'history' }, persistence: 'transient' })
     sync()
   })
   const onAssemble = guard(() => {
@@ -799,15 +808,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // all see the new theorem.
     session = adoptTheorem(session, thm)
     applyLibrary(adoptEntry(library, thm))
-    message = `theorem '${name}' assembled, CHECKED, and ADOPTED (${thm.steps.length} step(s))`
-    refreshChrome()
+    reportFeedback({ kind: 'success', text: `theorem '${name}' assembled, CHECKED, and ADOPTED (${thm.steps.length} step(s))`, owner: { kind: 'control', id: 'theorem-name' }, persistence: 'transient' })
   })
 
   // ---- proof actions ----
   const applyF = (s: ProofStep): void => {
     if (session === null) throw new Error('no active proof session')
     session = applyForward(session, s)
-    message = meetStatus()
+    feedback.report({ kind: 'success', text: meetStatus(), owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
     sync()
   }
 
@@ -857,11 +865,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       case 'unCite':
         // Collect args by clicking wires, then Commit dispatches applyBackward
         pending = { kind: 'unCite', name: e.name, sel: e.sel, args: [] }
-        message = `un-cite '${e.name}': click the argument wires in boundary order, then Commit`
-        refreshChrome()
+        reportFeedback({ kind: 'guidance', text: `un-cite '${e.name}': click the argument wires in boundary order, then Commit`, owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
         return
     }
-    message = meetStatus()
+    feedback.report({ kind: 'success', text: meetStatus(), owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
     sync()
   }
 
@@ -891,8 +898,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return
       case 'iterate':
         pending = { kind: 'iterate', sel }
-        message = 'iterate: click the target region (empty space is the sheet)'
-        refreshChrome()
+        reportFeedback({ kind: 'guidance', text: 'iterate: click the target region (empty space is the sheet)', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
         return
       case 'deiterate':
         applyF({ rule: 'deiteration', sel, fuel: readCount(fuel.input, 'fuel') })
@@ -919,14 +925,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       case 'relFold': {
         if (ctx.relations.size === 0) throw new Error('no relations to fold into — define one or load a theory first')
         pending = { kind: 'foldChoose', sel }
-        message = 'fold: choose the relation — its argument wires are inferred by matching'
-        refreshChrome()
+        reportFeedback({ kind: 'guidance', text: 'fold: choose the relation — its argument wires are inferred by matching', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
         return
       }
       case 'citeTheorem':
         pending = { kind: 'cite', name: a.name, direction: a.direction, sel, args: [] }
-        message = `cite '${a.name}': click the argument wires in boundary order, then Commit`
-        refreshChrome()
+        reportFeedback({ kind: 'guidance', text: `cite '${a.name}': click the argument wires in boundary order, then Commit`, owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
         return
     }
   }
@@ -936,15 +940,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // relation's argument boundary. Defining never mutates the sheet.
   const enterDefineRelation = (sel: SubgraphSelection): void => {
     pending = { kind: 'defineRelation', sel, args: [], name: '' }
-    message = 'define relation: name it, then Commit — the argument order is canonical unless you pick the crossing wires yourself'
-    refreshChrome()
+    reportFeedback({ kind: 'guidance', text: 'define relation: name it, then Commit — the argument order is canonical unless you pick the crossing wires yourself', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
   }
 
-  // ---- clicks (selection + two-phase completion) ----
-  const handleClick = (world: Vec2): void => {
-    // Replay is read-only: canvas clicks select nothing and dispatch no rule.
-    if (mode === 'replay') return
-    const hit = hitTest(engine, world)
+  // ---- domain pointer claims (selection is owned by InteractiveViewport) ----
+  const handleClaimedClick = (world: Vec2): void => {
+    const hit = hitTest(engine, world, { scale: view.scale })
     if (pending !== null && pending.kind === 'iterate') {
       const p = pending
       pending = null
@@ -961,24 +962,33 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         : 'define relation'
       if (hit !== null && hit.kind === 'wire') {
         pending.args.push(hit.id)
-        message = `${what}: ${pending.args.length} argument wire(s) picked`
-        refreshChrome()
+        reportFeedback({ kind: 'guidance', text: `${what}: ${pending.args.length} argument wire(s) picked`, owner: { kind: 'hit', hit }, persistence: 'interaction' })
       } else {
-        message = `${what}: click wires only (or Commit/Cancel in the menu)`
-        refreshChrome()
+        reportFeedback({ kind: 'guidance', text: `${what}: click wires only (or Commit/Cancel in the menu)`, owner: { kind: 'point', point: world }, persistence: 'interaction' })
       }
       return
     }
-    if (hit === null) {
-      setHits([])
-      return
-    }
-    const idx = hits.findIndex((h) => h.kind === hit.kind && h.id === hit.id)
-    setHits(idx >= 0 ? hits.filter((_, i) => i !== idx) : [...hits, hit])
+  }
+
+  const claimPointer = (sample: PointerSample): PointerClaim | null => {
+    const pendingClaim: PointerClaim | null = sample.button === 0 && pending !== null && (
+      pending.kind === 'iterate'
+      || pending.kind === 'cite'
+      || pending.kind === 'unCite'
+      || pending.kind === 'defineRelation'
+    ) ? {
+        still: 'claim',
+        blocksPassiveRelaxation: false,
+        move: () => {},
+        release: (at, moved) => { if (!moved) handleClaimedClick(at.world) },
+        cancel: () => {},
+      } : null
+    return pendingClaim ?? construct.claim(sample)
   }
 
   // ---- chrome refresh ----
   const refreshChrome = (): void => {
+    const message = feedback.snapshot().current?.text ?? ''
     const goal = `goal ${goalLhs === null ? 'LHS unset' : 'LHS set'}/${goalRhs === null ? 'RHS unset' : 'RHS set'}`
     if (mode === 'replay' && replay !== null) {
       const rule = replayK === 0 ? '(start)' : replay.labelAt(replayK)
@@ -1012,7 +1022,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           if (session === null) throw new Error('no active proof session')
           pending = null
           session = applyBackward(session, { rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: 'reverse' })
-          message = meetStatus()
+          feedback.report({ kind: 'success', text: meetStatus(), owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
           sync()
         })))
       }
@@ -1028,18 +1038,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
               const next = applyRelFold(editDiagram, psel, name, args, ctx.relations)
               pending = null
               pushEdit(next)
-              message = `folded into '${name}'`
-              refreshChrome()
+              reportFeedback({ kind: 'success', text: `folded into '${name}'`, owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
               return
             }
             pending = null
             applyF({ rule: 'relFold', sel: psel, defId: name, args })
           })))
-        }
-      }
-      if (p.kind === 'addRelChoose') {
-        for (const name of ctx.relations.keys()) {
-          menuDiv.append(button(`Add '${name}'`, guard(() => spawnRelation(name))))
         }
       }
       if (p.kind === 'defineRelation') {
@@ -1060,20 +1064,18 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           // No picks = the canonical explorer order; picking the crossing
           // wires yourself overrides it. defineRelation gates the
           // name/pick/extraction; defineEntry re-checks against the whole
-          // library. A refusal lands in the status line, pending intact.
+          // library. A refusal stays attached to this pending interaction.
           const order = p.args.length > 0 ? [...p.args] : canonicalArgOrder(editDiagram, p.sel)
           const { relation } = defineRelation(editDiagram, p.sel, order, name, ctx, relations)
           const next = defineEntry(library, name, relation)
           pending = null
           applyLibrary(next)
-          message = `defined '${name}' (arity ${relation.boundary.length})`
-          refreshChrome()
+          reportFeedback({ kind: 'success', text: `defined '${name}' (arity ${relation.boundary.length})`, owner: { kind: 'control', id: 'relation-name' }, persistence: 'transient' })
         })))
       }
       menuDiv.append(button('Cancel pending action', () => {
         pending = null
-        message = 'pending action cancelled'
-        refreshChrome()
+        reportFeedback({ kind: 'history', text: 'pending action cancelled', owner: { kind: 'control', id: 'action-menu' }, persistence: 'transient' })
       }))
       return
     }
@@ -1090,15 +1092,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         menuDiv.append(button('Fold into a relation…', guard(() => {
           if (ctx.relations.size === 0) throw new Error('no relations to fold into — define one or load a theory first')
           pending = { kind: 'foldChoose', sel }
-          message = 'fold: choose the relation — its argument wires are inferred by matching'
-          refreshChrome()
+          reportFeedback({ kind: 'guidance', text: 'fold: choose the relation — its argument wires are inferred by matching', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
         })))
         if (sel.nodes.length === 1 && sel.regions.length === 0 && sel.wires.length === 0
           && displayed.nodes[sel.nodes[0]!]?.kind === 'ref') {
           menuDiv.append(button('Unfold relation', guard(() => {
             pushEdit(applyRelUnfold(editDiagram, sel.nodes[0]!, ctx.relations))
-            message = 'relation unfolded'
-            refreshChrome()
+            reportFeedback({ kind: 'success', text: 'relation unfolded', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
           })))
         }
       }
@@ -1222,10 +1222,18 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     applyFit(companionEngine, companionCanvas.width, companionCanvas.height, 1, companionView)
     const shapes = paint(companionEngine, theme)
     cctx.clearRect(0, 0, companionCanvas.width, companionCanvas.height)
+    cctx.fillStyle = theme.canvas
+    cctx.fillRect(0, 0, companionCanvas.width, companionCanvas.height)
     drawShapes(cctx, shapes, companionView)
     companionLabel.textContent = comp.label
   }
 
+  const markerAt = (id: string): Vec2 | null => {
+    const b = engine.bodies.get(id)
+    if (b === undefined) return null
+    const r = b.discR * engine.scale
+    return { x: b.pos.x + r * 0.72, y: b.pos.y - r * 0.72 }
+  }
   const frame = (): void => {
     if (disposed) return
     const comp = companionFor({ mode, session, side, replay })
@@ -1237,97 +1245,51 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       canvas.width = mainW
       canvas.height = window.innerHeight
     }
-    const pinnedIds = pin === null ? null : new Set(pin.drag.bodies.keys())
     // Plan 24 motion policy: a FULL strict-descent sweep over every DOF each
     // frame (no time-slicing) — the whole diagram eases toward rest together.
-    settleStep(engine, pinnedIds)
-    if (pin !== null) {
-      // a drag pins the grabbed carriers: hold them at their grab offsets from the
-      // cursor (they are excluded from every gate, so the layout relaxes around
-      // them). The pinned position is a CONSTRAINT projected onto the semantic-
-      // feasible set — HARD SEMANTIC CONTAINMENT (USER LAW): a dragged node can
-      // never cross into a cut it isn't part of, not even transiently, because that
-      // would change what the diagram MEANS. clampDragToFeasible keeps each body
-      // outside every region circle it is not a member of, every frame.
-      const at = toWorld(pin.screen)
-      for (const [id, off] of pin.drag.bodies) {
-        const b = engine.bodies.get(id)
-        if (b !== undefined) b.pos = clampDragToFeasible(engine, b, { x: at.x + off.x, y: at.y + off.y })
-      }
-    }
-    fitView()
+    // InteractiveViewport supplies the exact persistent and active pin set.
+    interaction.advance()
     const shapes: Shape[] = paint(engine, theme)
-    for (const h of hits) shapes.push(...itemShapes(h, SELECT_STROKE))
-    if (hoverWorld !== null) {
-      const hov = hitTest(engine, hoverWorld)
-      if (hov !== null) {
-        const binder = hoverGroupBinder(hov)
-        if (binder !== null) shapes.push(...highlightGroup(engine, theme, binder))
-        else shapes.push(...itemShapes(hov, HOVER_STROKE))
-      }
+    for (const id of interaction.pins) {
+      const b = engine.bodies.get(id)
+      if (b === undefined) continue
+      shapes.push({ kind: 'circle', center: b.pos, r: b.discR * engine.scale + 1.2, fill: null, stroke: theme.interaction.pin, width: 1.5, insetColor: null, glow: null })
+      const at = markerAt(id)
+      if (at !== null) shapes.push({ kind: 'dot', center: at, rPx: 5.5, fill: theme.interaction.pin })
     }
+    const pinPreview = interaction.pinPreviewId
+    const pinPreviewAt = pinPreview === null ? null : markerAt(pinPreview)
+    if (pinPreviewAt !== null) shapes.push({ kind: 'dot', center: pinPreviewAt, rPx: 8, fill: theme.interaction.pin })
+    for (const h of interaction.selection) shapes.push(...itemShapes(h, theme.interaction.selection))
+    const hov = interaction.hover
+    if (hov !== null) {
+      const binder = hoverGroupBinder(hov)
+      if (binder !== null) shapes.push(...highlightGroup(engine, theme, binder))
+      else shapes.push(...itemShapes(hov, isHitSelected(interaction.selection, hov) ? theme.interaction.selectedHover : theme.interaction.hover))
+    }
+    shapes.push(...construct.overlay())
     ctx2d.clearRect(0, 0, canvas.width, canvas.height)
+    ctx2d.fillStyle = theme.canvas
+    ctx2d.fillRect(0, 0, canvas.width, canvas.height)
     drawShapes(ctx2d, shapes, view)
     renderCompanion(comp, companionVisible)
     raf = requestAnimationFrame(frame)
   }
 
-  // ---- pointer + wheel ----
-  const screenOf = (e: PointerEvent | WheelEvent): Vec2 => {
-    const r = canvas.getBoundingClientRect()
-    return vec(e.clientX - r.left, e.clientY - r.top)
-  }
-  const grabAt = (world: Vec2): Drag | null => {
-    const t: DragTarget | null = dragTarget(engine, world)
-    if (t === null) return null
-    const bodies = new Map<string, Vec2>()
-    const ids = t.kind === 'body' ? [t.id] : subtreeCarriers(engine, t.id)
-    for (const id of ids) {
-      const b = engine.bodies.get(id)!
-      bodies.set(id, vec(b.pos.x - world.x, b.pos.y - world.y))
-    }
-    return { bodies }
-  }
-  const onPointerDown = (e: PointerEvent): void => {
-    const screen = screenOf(e)
-    downScreen = screen
-    dragMoved = false
-    drag = grabAt(toWorld(screen))
-    canvas.setPointerCapture(e.pointerId)
-  }
-  const onPointerMove = (e: PointerEvent): void => {
-    const screen = screenOf(e)
-    hoverWorld = toWorld(screen)
-    if (downScreen === null || drag === null) return
-    if (!dragMoved && length(sub(screen, downScreen)) > CLICK_SLOP_PX) dragMoved = true
-    if (!dragMoved) return
-    pin = { drag, screen }
-  }
-  const onPointerUp = (e: PointerEvent): void => {
-    const screen = screenOf(e)
-    if (downScreen !== null && !dragMoved) handleClick(toWorld(screen))
-    drag = null
-    downScreen = null
-    dragMoved = false
-    pin = null // release: the pin lifts, physics resettles
-  }
   // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
   // a text/number input is focused so typing a term is never hijacked.
-  const onKeyDown = (e: KeyboardEvent): void => {
-    if (mode !== 'replay' || replay === null) return
-    const el = document.activeElement
-    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return
-    if (e.key === 'ArrowRight') { gotoReplayStep(replayK + 1); e.preventDefault() }
-    else if (e.key === 'ArrowLeft') { gotoReplayStep(replayK - 1); e.preventDefault() }
+  const onKeyDown = (e: KeySample): boolean => {
+    if (e.key === 'Escape' && spawnCascade.escape()) return true
+    if (construct.keyDown(e)) return true
+    if (e.key === 'Home') {
+      interaction.resetZoom()
+      return true
+    }
+    if (mode !== 'replay' || replay === null) return false
+    if (e.key === 'ArrowRight') { gotoReplayStep(replayK + 1); return true }
+    if (e.key === 'ArrowLeft') { gotoReplayStep(replayK - 1); return true }
+    return false
   }
-  const onWheel = (e: WheelEvent): void => {
-    e.preventDefault()
-    // zoom about the fixed background origin (the canvas center) — the only
-    // view DOF; cursor-anchored zoom would let the offsets drift with no pan
-    // to recover them
-    userZoom *= Math.exp(-e.deltaY * ZOOM_PER_WHEEL_PX)
-  }
-
   // ---- persistence ----
   // Save the live theory. With a workspace folder open, write it INTO that
   // folder (File System Access writable) and refresh the listing so the new file
@@ -1347,11 +1309,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           await w.close()
           library = reconcile(library, await listJsonFiles(handle))
           renderLibrary()
-          message = `saved '${fname}' into workspace folder '${handle.name}'`
-          refreshChrome()
+          clearFeedbackProblem('save')
+          reportFeedback({ kind: 'success', text: `saved '${fname}' into workspace folder '${handle.name}'`, owner: { kind: 'control', id: 'save' }, persistence: 'transient' })
         } catch (e) {
-          message = e instanceof Error ? e.message : String(e)
-          refreshChrome()
+          reportFeedback({
+            kind: 'problem',
+            text: e instanceof Error ? e.message : String(e),
+            owner: { kind: 'control', id: 'save' },
+            persistence: 'problem',
+            problemId: 'save',
+          })
         }
       })()
       return
@@ -1365,8 +1332,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    message = 'theory downloaded (open a workspace folder to save into it)'
-    refreshChrome()
+    reportFeedback({ kind: 'success', text: 'theory downloaded (open a workspace folder to save into it)', owner: { kind: 'control', id: 'save' }, persistence: 'transient' })
   }
 
   // ---- assemble the chrome ----
@@ -1383,16 +1349,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (file !== undefined) handleOpenedFile(file)
     openFileInput.value = ''
   })
-  editRow.append(
-    termInput,
-    button('Add term', onAddTerm),
-    button('Add relation', onAddRelation),
-    button('Wrap in cut', onWrapCut),
-    button('Wrap in bubble', onWrapBubble),
-    arity.wrap,
-    button('Delete selection', onDelete),
-    button('Join two wires', onJoinWires),
-  )
   goalRow.append(
     button('Set goal LHS', onSetLhs),
     button('Set goal RHS', onSetRhs),
@@ -1402,9 +1358,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Theme toggle: view-only, persists for the session; paint reads `theme`
   // every frame, so flipping it re-styles the next frame with no rebuild.
   const themeBtn = button(`Theme: ${theme.name}`, () => {
-    theme = nextTheme(theme)
-    canvas.style.background = theme.canvas
+    themeIndex = (themeIndex + 1) % themeCycle.length
+    theme = themeCycle[themeIndex]!
+    applyThemeBackdrop()
     themeBtn.textContent = `Theme: ${theme.name}`
+    renderLibrary()
   })
   // Cycle the companion pane hidden → PiP → split. Session-lifetime, like the
   // theme toggle; the next frame reads companionMode and re-lays-out.
@@ -1413,15 +1371,86 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     companionBtn.textContent = `Companion: ${companionMode}`
   })
   goalRow.append(modeBtn, sideBtn, themeBtn, companionBtn, button('Undo', onUndo))
-  proveRow.append(fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave))
-  chrome.append(statusDiv, editRow, goalRow, proveRow, menuDiv, libraryDiv, openFileInput)
+  proveRow.append(termInput, arity.wrap, fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave))
+  chrome.append(statusDiv)
+  chrome.append(editRow, goalRow, proveRow, menuDiv, libraryDiv, openFileInput)
+  spawnCascade = new SpawnCascade({
+    host: document.body,
+    spawnTerm: ({ source, invocation }) => {
+      try {
+        const added = addTermNode(editDiagram, invocation.region, parseTerm(source))
+        pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
+        reportFeedback({ kind: 'success', text: 'term placed', owner: { kind: 'node', id: added.node }, affected: [{ kind: 'node', id: added.node }], persistence: 'transient' })
+        return true
+      } catch (error) {
+        reportFeedback({ kind: 'refusal', text: error instanceof Error ? error.message : String(error), owner: { kind: 'point', point: invocation.world }, persistence: 'transient' })
+        return false
+      }
+    },
+    spawnRelation: ({ defId, arity: relationArity, invocation }) => {
+      try {
+        const relation = ctx.relations.get(defId)
+        if (relation === undefined) throw new Error(`relation '${defId}' is no longer loaded`)
+        if (relation.boundary.length !== relationArity) throw new Error(`relation '${defId}' changed while the spawn menu was open`)
+        const added = addRefNode(editDiagram, invocation.region, defId, relationArity)
+        pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
+        reportFeedback({ kind: 'success', text: `relation '${defId}' placed`, owner: { kind: 'node', id: added.node }, affected: [{ kind: 'node', id: added.node }], persistence: 'transient' })
+        return true
+      } catch (error) {
+        reportFeedback({ kind: 'refusal', text: error instanceof Error ? error.message : String(error), owner: { kind: 'point', point: invocation.world }, persistence: 'transient' })
+        return false
+      }
+    },
+  })
+  construct = new ConstructController({
+    host: document.body,
+    active: () => mode === 'edit',
+    engine: () => engine,
+    viewScale: () => view.scale,
+    diagram: () => editDiagram,
+    selection: () => interaction.selection,
+    setSelection: (selection) => interaction.setSelection(selection),
+    commit: (diagram) => pushEdit(diagram),
+    status: reportFeedback,
+    clearProblem: clearFeedbackProblem,
+    openSpawn: (sample, region) => spawnCascade.open({
+      screen: sample.client,
+      world: sample.world,
+      region,
+    }, ctx.relations),
+    theme: () => theme,
+  })
+  editRow.append(construct.optionsElement)
+  interaction = new InteractiveViewport({
+    canvas,
+    view,
+    engine: () => engine,
+    diagram: () => displayed,
+    selectionEnabled: () => mode !== 'replay',
+    claim: claimPointer,
+    doubleClick: (sample) => construct.doubleClick(sample),
+    keyDown: onKeyDown,
+    selectionChanged,
+    selectionCommitted: () => {
+      pending = null
+      feedback.clearInteraction()
+      refreshChrome()
+    },
+    statusChanged: reportFeedback,
+  })
   renderLibrary()
 
-  canvas.addEventListener('pointerdown', onPointerDown)
-  canvas.addEventListener('pointermove', onPointerMove)
-  canvas.addEventListener('pointerup', onPointerUp)
-  canvas.addEventListener('wheel', onWheel, { passive: false })
-  window.addEventListener('keydown', onKeyDown)
+  const dispose = (): void => {
+    if (disposed) return
+    disposed = true
+    cancelAnimationFrame(raf)
+    interaction.dispose()
+    construct.dispose()
+    spawnCascade.dispose()
+    chrome.replaceChildren()
+    companionWrap.remove()
+    if ((window as any).__vpaDebug !== undefined) delete (window as any).__vpaDebug
+  }
 
   // ---- E2E debug seam: window.__vpaDebug hook when ?debug in URL ----
   if (new URLSearchParams(location.search).has('debug')) {
@@ -1430,7 +1459,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return Object.keys(displayed.nodes).length
       },
       status(): string {
-        return message
+        return feedback.snapshot().current?.text ?? ''
+      },
+      feedback(): FeedbackState {
+        return feedback.snapshot()
       },
       replay(): { mode: string; k: number; n: number; label: string; bodies: number } {
         return {
@@ -1444,8 +1476,35 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       view(): { scale: number; offsetX: number; offsetY: number } {
         return { ...view }
       },
+      interaction(): { selected: readonly Hit[]; pins: string[]; userZoom: number } {
+        return {
+          selected: interaction.selection,
+          pins: [...interaction.pins],
+          userZoom: interaction.userZoom,
+        }
+      },
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[] {
         return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region }))
+      },
+      diagram(): {
+        nodes: { id: string; kind: string; region: string; defId: string | null }[]
+        wires: { id: string; scope: string; endpoints: number }[]
+        regions: { id: string; kind: string; parent: string | null }[]
+      } {
+        return {
+          nodes: Object.entries(displayed.nodes).map(([id, node]) => ({
+            id,
+            kind: node.kind,
+            region: node.region,
+            defId: node.kind === 'ref' ? node.defId : null,
+          })),
+          wires: Object.entries(displayed.wires).map(([id, wire]) => ({ id, scope: wire.scope, endpoints: wire.endpoints.length })),
+          regions: Object.entries(displayed.regions).map(([id, region]) => ({
+            id,
+            kind: region.kind,
+            parent: region.kind === 'sheet' ? null : region.parent,
+          })),
+        }
       },
       // Derived region circles (the drawn cut/bubble outlines) — the e2e uses these
       // to assert HARD SEMANTIC CONTAINMENT (a dragged node never enters a cut
@@ -1460,28 +1519,56 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // e2e uses to click argument wires, exactly as bodies() locates nodes. Each
       // point is confirmed by the real hitTest to resolve back to its wire, so a
       // returned entry is guaranteed clickable; unhittable wires are omitted.
-      wires(): { id: string; x: number; y: number }[] {
+      wires(): { id: string; x: number; y: number; dx: number; dy: number }[] {
         // sample a traced polyline near its middle (where a leg is most
         // clickable — away from disc rims and slots)
-        const mids = (pts: Vec2[]): Vec2[] => {
+        const mids = (pts: Vec2[]): { point: Vec2; direction: Vec2 }[] => {
           const n = pts.length
           if (n === 0) return []
-          const at = (f: number): Vec2 => pts[Math.max(0, Math.min(n - 1, Math.round(f * (n - 1))))]!
+          const at = (f: number): { point: Vec2; direction: Vec2 } => {
+            const i = Math.max(0, Math.min(n - 1, Math.round(f * (n - 1))))
+            const before = pts[Math.max(0, i - 1)]!
+            const after = pts[Math.min(n - 1, i + 1)]!
+            return { point: pts[i]!, direction: { x: after.x - before.x, y: after.y - before.y } }
+          }
           return [at(0.5), at(0.4), at(0.6)]
         }
-        const out: { id: string; x: number; y: number }[] = []
-        const take = (id: WireId, samples: Vec2[]): void => {
+        const out: { id: string; x: number; y: number; dx: number; dy: number }[] = []
+        const take = (id: WireId, samples: { point: Vec2; direction: Vec2 }[]): void => {
           for (const s of samples) {
-            const h = hitTest(engine, s)
+            const h = hitTest(engine, s.point, { scale: view.scale })
             if (h !== null && h.kind === 'wire' && h.id === id) {
-              out.push({ id, x: s.x, y: s.y })
+              out.push({ id, x: s.point.x, y: s.point.y, dx: s.direction.x, dy: s.direction.y })
               return
             }
           }
         }
         for (const l of legPaths(engine)) take(l.wid, mids(l.pts))
         for (const st of existentialStubs(engine)) {
-          take(st.wid, [vec((st.from.x + st.to.x) / 2, (st.from.y + st.to.y) / 2), st.dot, vec(st.from.x * 0.4 + st.to.x * 0.6, st.from.y * 0.4 + st.to.y * 0.6)])
+          const direction = { x: st.to.x - st.from.x, y: st.to.y - st.from.y }
+          take(st.wid, [
+            { point: vec((st.from.x + st.to.x) / 2, (st.from.y + st.to.y) / 2), direction },
+            { point: st.dot, direction },
+            { point: vec(st.from.x * 0.4 + st.to.x * 0.6, st.from.y * 0.4 + st.to.y * 0.6), direction },
+          ])
+        }
+        return out
+      },
+      wireBinds(): { id: string; node: string; x: number; y: number }[] {
+        const out: { id: string; node: string; x: number; y: number }[] = []
+        for (const geometry of computeLegs(engine)) {
+          const candidates = [
+            { end: geometry.leg.from, point: geometry.pts[0] },
+            { end: geometry.leg.to, point: geometry.pts.at(-1) },
+          ]
+          for (const candidate of candidates) {
+            if (candidate.point === undefined || displayed.nodes[candidate.end.body] === undefined) continue
+            const general = hitTest(engine, candidate.point, { scale: view.scale })
+            const wire = wireHitTest(engine, candidate.point, { scale: view.scale })
+            if (general?.kind === 'node' && general.id === candidate.end.body && wire?.id === geometry.leg.wid) {
+              out.push({ id: geometry.leg.wid, node: candidate.end.body, x: candidate.point.x, y: candidate.point.y })
+            }
+          }
         }
         return out
       },
@@ -1512,24 +1599,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       editForm(): string {
         return exploreForm(editDiagram)
       },
+      dispose,
     }
   }
 
   refreshChrome()
   raf = requestAnimationFrame(frame)
 
-  return {
-    dispose(): void {
-      disposed = true
-      cancelAnimationFrame(raf)
-      canvas.removeEventListener('pointerdown', onPointerDown)
-      canvas.removeEventListener('pointermove', onPointerMove)
-      canvas.removeEventListener('pointerup', onPointerUp)
-      canvas.removeEventListener('wheel', onWheel)
-      window.removeEventListener('keydown', onKeyDown)
-      chrome.replaceChildren()
-      companionWrap.remove()
-      if ((window as any).__vpaDebug !== undefined) delete (window as any).__vpaDebug
-    },
-  }
+  return { dispose }
 }
