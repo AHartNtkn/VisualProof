@@ -32,15 +32,15 @@ async function canvasBox(page: Page) {
   return box
 }
 
-async function spawnTerm(page: Page, source: string): Promise<void> {
+async function spawnTerm(page: Page, source: string, at?: { x: number; y: number }): Promise<void> {
   const box = await canvasBox(page)
   const count = await page.evaluate(() => window.__vpaDebug!.nodeCount())
-  await page.mouse.click(
-    box.x + box.width * (0.35 + (count % 3) * 0.15),
-    box.y + box.height * (0.40 + (Math.floor(count / 3) % 2) * 0.16),
-    { button: 'right' },
-  )
-  await page.getByRole('menu').getByRole('button', { name: 'λ term…', exact: true }).click()
+  const invocation = at ?? {
+    x: box.x + box.width * (0.35 + (count % 3) * 0.15),
+    y: box.y + box.height * (0.40 + (Math.floor(count / 3) % 2) * 0.16),
+  }
+  await page.mouse.click(invocation.x, invocation.y, { button: 'right' })
+  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
   const input = page.getByLabel('Lambda term to spawn')
   await input.fill(source)
   await input.press('Enter')
@@ -89,16 +89,16 @@ test('the contextual spawn cascade is disposable and preserves the construction 
   const box = await canvasBox(page)
   const invoke = { x: box.x + box.width * 0.72, y: box.y + box.height * 0.68 }
   await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
-  await expect(page.getByRole('menu')).toBeVisible()
+  await expect(page.locator('.vpa-spawn-column')).toBeVisible()
   expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: node }])
   await page.keyboard.press('Escape')
-  await expect(page.getByRole('menu')).toHaveCount(0)
+  await expect(page.locator('.vpa-spawn-column')).toHaveCount(0)
 
   await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
   await page.locator('.vpa-spawn-backdrop').click({ position: { x: 4, y: 4 } })
-  await expect(page.getByRole('menu')).toHaveCount(0)
+  await expect(page.locator('.vpa-spawn-column')).toHaveCount(0)
 
-  await spawnTerm(page, '\\y. y')
+  await spawnTerm(page, '\\y. y', invoke)
   await waitForNodes(page, 2)
   expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: node }])
 
@@ -106,7 +106,7 @@ test('the contextual spawn cascade is disposable and preserves the construction 
   await expect.poll(async () => page.evaluate(() => window.__vpaDebug === undefined)).toBe(true)
   await expect(page.locator('#chrome')).toBeEmpty()
   await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
-  await expect(page.getByRole('menu')).toHaveCount(0)
+  await expect(page.locator('.vpa-spawn-column')).toHaveCount(0)
 })
 
 test('selected-node placement holds the pointer while connected physics remains live', async ({ page }) => {
@@ -285,7 +285,7 @@ test('a contextual spawn inside a cut belongs to that cut', async ({ page }) => 
   const cut = await page.evaluate(() => window.__vpaDebug!.regions().find((region) => region.kind === 'cut')!)
   const center = await pagePoint(page, cut)
   await page.mouse.click(center.x, center.y, { button: 'right' })
-  await page.getByRole('menu').getByRole('button', { name: 'λ term…', exact: true }).click()
+  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
   const input = page.getByLabel('Lambda term to spawn')
   await input.fill('\\y. y')
   await input.press('Enter')

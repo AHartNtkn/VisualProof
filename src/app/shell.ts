@@ -39,7 +39,7 @@ import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
 import { SpawnCascade } from './interact/spawn'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
-import { FeedbackController, type FeedbackInput, type FeedbackState } from './feedback'
+import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
 import type { ActionDescriptor } from './actions'
 import { applicableActions } from './actions'
 
@@ -197,19 +197,43 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let construct!: ConstructController
   let spawnCascade!: SpawnCascade
   const feedback = new FeedbackController()
-  feedback.report({
-    kind: 'ambient',
-    text: 'right-click to place, drag lines to join, W wraps, Delete removes',
-    owner: { kind: 'control', id: 'mode' },
-    persistence: 'state',
-  })
-  const reportFeedback = (next: FeedbackInput): void => {
-    feedback.report(next)
-    refreshChrome()
+  let lastPointerClient: Vec2 = { x: window.innerWidth / 2, y: window.innerHeight / 2 }
+  let refusalElement: HTMLOutputElement | null = null
+  let refusalTimer = 0
+  const rememberPointer = (pointer: Vec2): void => {
+    lastPointerClient = pointer
+  }
+  const clearRefusalPresentation = (sequence?: number): void => {
+    feedback.clearRefusal(sequence)
+    refusalElement?.remove()
+    refusalElement = null
+  }
+  const refuse = (text: string, pointer: Vec2 = lastPointerClient): void => {
+    window.clearTimeout(refusalTimer)
+    const refusal = feedback.refuse({ text, pointer })
+    refusalElement?.remove()
+    const output = document.createElement('output')
+    output.className = 'vpa-refusal'
+    output.setAttribute('role', 'alert')
+    output.setAttribute('aria-live', 'assertive')
+    output.value = text
+    const left = pointer.x + 334 <= window.innerWidth ? pointer.x + 14 : Math.max(8, pointer.x - 334)
+    const top = pointer.y + 72 <= window.innerHeight ? pointer.y + 14 : Math.max(8, pointer.y - 72)
+    output.style.cssText = [
+      'position:fixed', 'z-index:60', `left:${left}px`, `top:${top}px`, 'max-width:320px',
+      'padding:6px 8px', 'border-radius:6px', `border:1px solid ${theme.interaction.refusal}`,
+      `background:${theme.paper}`, `color:${theme.interaction.refusal}`, 'font:11px/1.35 system-ui',
+      'box-shadow:0 5px 18px rgba(40,20,20,.18)', 'pointer-events:none',
+    ].join(';')
+    document.body.append(output)
+    refusalElement = output
+    refusalTimer = window.setTimeout(() => clearRefusalPresentation(refusal.sequence), REFUSAL_LIFETIME_MS)
+  }
+  const setFeedbackProblem = (problemId: string, text: string): void => {
+    feedback.setProblem(problemId, text)
   }
   const clearFeedbackProblem = (problemId: string): void => {
     feedback.clearProblem(problemId)
-    refreshChrome()
   }
   let disposed = false
   let raf = 0
@@ -306,7 +330,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const b = document.createElement('button')
     b.textContent = label
     b.type = 'button'
-    b.addEventListener('click', onClick)
+    b.addEventListener('click', (event) => {
+      rememberPointer({ x: event.clientX, y: event.clientY })
+      onClick()
+    })
     return b
   }
   const textInput = (id: string, placeholder: string): HTMLInputElement => {
@@ -335,6 +362,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const proveRow = div('vpa-row')
   const menuDiv = div('vpa-menu')
   menuDiv.id = 'action-menu'
+  menuDiv.hidden = true
+  menuDiv.setAttribute('role', 'menu')
+  let palettePoint: Vec2 | null = null
+  const replayNav = div('vpa-replay-nav')
+  replayNav.id = 'replay-nav'
+  replayNav.hidden = true
   const libraryDiv = div('vpa-library')
   libraryDiv.id = 'library'
 
@@ -596,13 +629,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       fn()
     } catch (e) {
       // The kernel's refusal message IS the UX copy — verbatim, with explicit ownership.
-      const hits = interaction.selection
-      reportFeedback({
-        kind: 'refusal',
-        text: e instanceof Error ? e.message : String(e),
-        owner: hits.length > 0 ? { kind: 'selection', hits } : { kind: 'viewport' },
-        persistence: 'transient',
-      })
+      refuse(e instanceof Error ? e.message : String(e))
     }
   }
 
@@ -643,6 +670,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const selectionChanged = (next: readonly Hit[]): void => {
+    palettePoint = null
     if (next.length === 0) {
       kernelSel = null
     } else {
@@ -650,12 +678,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         kernelSel = buildSelection(displayed, next)
       } catch (e) {
         kernelSel = null
-        reportFeedback({
-          kind: 'refusal',
-          text: e instanceof Error ? e.message : String(e),
-          owner: { kind: 'selection', hits: next },
-          persistence: 'transient',
-        })
+        refuse(e instanceof Error ? e.message : String(e))
       }
     }
     refreshChrome()
@@ -676,13 +699,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     requireEdit()
     goalLhs = mkDiagramWithBoundary(editDiagram, [])
     session = null
-    reportFeedback({ kind: 'success', text: 'goal LHS snapshotted from the sheet', owner: { kind: 'control', id: 'lifecycle' }, persistence: 'transient' })
   })
   const onSetRhs = guard(() => {
     requireEdit()
     goalRhs = mkDiagramWithBoundary(editDiagram, [])
     session = null
-    reportFeedback({ kind: 'success', text: 'goal RHS snapshotted from the sheet', owner: { kind: 'control', id: 'lifecycle' }, persistence: 'transient' })
   })
 
   const meetStatus = (): string => {
@@ -718,7 +739,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     interaction.resetSurface()
     kernelSel = null
     pending = null
-    reportFeedback({ kind: 'mode', text: `replay '${name}'`, owner: { kind: 'control', id: 'mode' }, persistence: 'state' })
+    refreshChrome()
   }
 
   // Move to step k (clamped). The new engine carries over shared bodies' physics
@@ -738,24 +759,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     interaction.reconcileDiagram()
     kernelSel = null
     pending = null
-    reportFeedback({
-      kind: 'history',
-      text: `step ${replayK}/${replay.stepCount}${replayK > 0 ? ` — ${replay.labelAt(replayK)}` : ''}`,
-      owner: { kind: 'control', id: 'history' },
-      persistence: 'state',
-    })
+    refreshChrome()
   }
 
   const exitReplay = (): void => {
     mode = replayReturnMode
     replay = null
     replayK = 0
-    feedback.report({
-      kind: 'mode',
-      text: mode === 'edit' ? 'EDIT mode' : `PROVE mode: ${meetStatus()}`,
-      owner: { kind: 'control', id: 'mode' },
-      persistence: 'state',
-    })
     sync(true) // rebuilds the engine for the restored mode's diagram
   }
 
@@ -770,17 +780,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
       if (session === null) session = startSession(goalLhs, goalRhs, ctx)
       mode = 'prove'
-      feedback.report({ kind: 'mode', text: `PROVE mode: ${meetStatus()}`, owner: { kind: 'control', id: 'mode' }, persistence: 'state' })
     } else {
       mode = 'edit'
-      feedback.report({ kind: 'mode', text: 'EDIT mode', owner: { kind: 'control', id: 'mode' }, persistence: 'state' })
     }
     sync(true)
   })
   const onToggleSide = guard(() => {
     if (mode !== 'prove') throw new Error('the forward/backward toggle applies in PROVE mode')
     side = side === 'forward' ? 'backward' : 'forward'
-    feedback.report({ kind: 'mode', text: `working ${side} — ${meetStatus()}`, owner: { kind: 'control', id: 'mode' }, persistence: 'state' })
     sync(true)
   })
   const onUndo = guard(() => {
@@ -788,13 +795,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
       editDiagram = prev
-      feedback.report({ kind: 'history', text: 'edit undone', owner: { kind: 'control', id: 'history' }, persistence: 'transient' })
       sync()
       return
     }
     if (session === null) throw new Error('no active proof session')
     session = side === 'forward' ? undoForward(session) : undoBackward(session)
-    feedback.report({ kind: 'history', text: `undone — ${meetStatus()}`, owner: { kind: 'control', id: 'history' }, persistence: 'transient' })
     sync()
   })
   const onAssemble = guard(() => {
@@ -808,14 +813,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // all see the new theorem.
     session = adoptTheorem(session, thm)
     applyLibrary(adoptEntry(library, thm))
-    reportFeedback({ kind: 'success', text: `theorem '${name}' assembled, CHECKED, and ADOPTED (${thm.steps.length} step(s))`, owner: { kind: 'control', id: 'theorem-name' }, persistence: 'transient' })
   })
 
   // ---- proof actions ----
   const applyF = (s: ProofStep): void => {
     if (session === null) throw new Error('no active proof session')
     session = applyForward(session, s)
-    feedback.report({ kind: 'success', text: meetStatus(), owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
     sync()
   }
 
@@ -865,10 +868,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       case 'unCite':
         // Collect args by clicking wires, then Commit dispatches applyBackward
         pending = { kind: 'unCite', name: e.name, sel: e.sel, args: [] }
-        reportFeedback({ kind: 'guidance', text: `un-cite '${e.name}': click the argument wires in boundary order, then Commit`, owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
+        refreshChrome()
         return
     }
-    feedback.report({ kind: 'success', text: meetStatus(), owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
     sync()
   }
 
@@ -898,7 +900,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return
       case 'iterate':
         pending = { kind: 'iterate', sel }
-        reportFeedback({ kind: 'guidance', text: 'iterate: click the target region (empty space is the sheet)', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
+        refreshChrome()
         return
       case 'deiterate':
         applyF({ rule: 'deiteration', sel, fuel: readCount(fuel.input, 'fuel') })
@@ -925,12 +927,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       case 'relFold': {
         if (ctx.relations.size === 0) throw new Error('no relations to fold into — define one or load a theory first')
         pending = { kind: 'foldChoose', sel }
-        reportFeedback({ kind: 'guidance', text: 'fold: choose the relation — its argument wires are inferred by matching', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
+        refreshChrome()
         return
       }
       case 'citeTheorem':
         pending = { kind: 'cite', name: a.name, direction: a.direction, sel, args: [] }
-        reportFeedback({ kind: 'guidance', text: `cite '${a.name}': click the argument wires in boundary order, then Commit`, owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
+        refreshChrome()
         return
     }
   }
@@ -940,12 +942,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // relation's argument boundary. Defining never mutates the sheet.
   const enterDefineRelation = (sel: SubgraphSelection): void => {
     pending = { kind: 'defineRelation', sel, args: [], name: '' }
-    reportFeedback({ kind: 'guidance', text: 'define relation: name it, then Commit — the argument order is canonical unless you pick the crossing wires yourself', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
+    refreshChrome()
   }
 
   // ---- domain pointer claims (selection is owned by InteractiveViewport) ----
-  const handleClaimedClick = (world: Vec2): void => {
-    const hit = hitTest(engine, world, { scale: view.scale })
+  const handleClaimedClick = (sample: PointerSample): void => {
+    const hit = hitTest(engine, sample.world, { scale: view.scale })
     if (pending !== null && pending.kind === 'iterate') {
       const p = pending
       pending = null
@@ -962,9 +964,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         : 'define relation'
       if (hit !== null && hit.kind === 'wire') {
         pending.args.push(hit.id)
-        reportFeedback({ kind: 'guidance', text: `${what}: ${pending.args.length} argument wire(s) picked`, owner: { kind: 'hit', hit }, persistence: 'interaction' })
+        refreshChrome()
       } else {
-        reportFeedback({ kind: 'guidance', text: `${what}: click wires only (or Commit/Cancel in the menu)`, owner: { kind: 'point', point: world }, persistence: 'interaction' })
+        refuse(`${what}: click wires only (or Commit/Cancel in the palette)`, sample.client)
       }
       return
     }
@@ -980,7 +982,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         still: 'claim',
         blocksPassiveRelaxation: false,
         move: () => {},
-        release: (at, moved) => { if (!moved) handleClaimedClick(at.world) },
+        release: (at, moved) => { if (!moved) handleClaimedClick(at) },
         cancel: () => {},
       } : null
     return pendingClaim ?? construct.claim(sample)
@@ -988,29 +990,47 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   // ---- chrome refresh ----
   const refreshChrome = (): void => {
-    const message = feedback.snapshot().current?.text ?? ''
     const goal = `goal ${goalLhs === null ? 'LHS unset' : 'LHS set'}/${goalRhs === null ? 'RHS unset' : 'RHS set'}`
     if (mode === 'replay' && replay !== null) {
       const rule = replayK === 0 ? '(start)' : replay.labelAt(replayK)
-      statusDiv.textContent = `[REPLAY] step ${replayK}/${replay.stepCount} — ${rule} | ${message}`
+      statusDiv.textContent = `[REPLAY] step ${replayK}/${replay.stepCount} — ${rule}`
     } else {
       const head = mode === 'edit' ? 'EDIT' : `PROVE·${side}`
-      statusDiv.textContent = `[${head}] ${goal} | ${session === null ? 'no session' : meetStatus()} | ${message}`
+      statusDiv.textContent = `[${head}] ${goal} | ${session === null ? 'no session' : meetStatus()}`
     }
     modeBtn.textContent = mode === 'edit' ? 'Switch to PROVE' : mode === 'prove' ? 'Switch to EDIT' : 'Exit replay'
     sideBtn.textContent = side === 'forward' ? 'Side: forward (toggle)' : 'Side: backward (toggle)'
 
     menuDiv.replaceChildren()
+    menuDiv.hidden = true
+    replayNav.replaceChildren()
+    replayNav.hidden = true
     if (mode === 'replay' && replay !== null) {
       const prev = button('◀ Prev', () => gotoReplayStep(replayK - 1))
       const next = button('Next ▶', () => gotoReplayStep(replayK + 1))
       prev.disabled = replayK === 0
       next.disabled = replayK === replay.stepCount
-      menuDiv.append(prev, next, button('Exit replay', exitReplay))
+      replayNav.append(prev, next, button('Exit replay', exitReplay))
+      replayNav.hidden = false
       return
     }
+    if (palettePoint === null && pending === null) return
+    const point = palettePoint ?? lastPointerClient
+    menuDiv.style.position = 'fixed'
+    menuDiv.style.left = `${Math.max(8, Math.min(window.innerWidth - 360, point.x + 10))}px`
+    menuDiv.style.top = `${Math.max(8, Math.min(window.innerHeight - 280, point.y + 10))}px`
+    menuDiv.hidden = false
     if (pending !== null) {
       const p = pending
+      const instruction = document.createElement('p')
+      instruction.className = 'vpa-action-instruction'
+      instruction.textContent = p.kind === 'iterate'
+        ? 'Click the target region; empty canvas means the sheet.'
+        : p.kind === 'cite' ? `Click argument wires for '${p.name}' in boundary order (${p.args.length} picked).`
+          : p.kind === 'unCite' ? `Click argument wires for un-citing '${p.name}' in boundary order (${p.args.length} picked).`
+            : p.kind === 'defineRelation' ? `Name the relation; optionally click crossing wires to override canonical order (${p.args.length} picked).`
+              : 'Choose the relation whose definition matches the selection.'
+      menuDiv.append(instruction)
       if (p.kind === 'cite') {
         menuDiv.append(button(`Commit citation of '${p.name}' (${p.args.length} arg(s))`, guard(() => {
           pending = null
@@ -1022,7 +1042,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           if (session === null) throw new Error('no active proof session')
           pending = null
           session = applyBackward(session, { rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: 'reverse' })
-          feedback.report({ kind: 'success', text: meetStatus(), owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
           sync()
         })))
       }
@@ -1038,7 +1057,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
               const next = applyRelFold(editDiagram, psel, name, args, ctx.relations)
               pending = null
               pushEdit(next)
-              reportFeedback({ kind: 'success', text: `folded into '${name}'`, owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
               return
             }
             pending = null
@@ -1070,12 +1088,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           const next = defineEntry(library, name, relation)
           pending = null
           applyLibrary(next)
-          reportFeedback({ kind: 'success', text: `defined '${name}' (arity ${relation.boundary.length})`, owner: { kind: 'control', id: 'relation-name' }, persistence: 'transient' })
         })))
       }
       menuDiv.append(button('Cancel pending action', () => {
         pending = null
-        reportFeedback({ kind: 'history', text: 'pending action cancelled', owner: { kind: 'control', id: 'action-menu' }, persistence: 'transient' })
+        refreshChrome()
       }))
       return
     }
@@ -1092,13 +1109,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         menuDiv.append(button('Fold into a relation…', guard(() => {
           if (ctx.relations.size === 0) throw new Error('no relations to fold into — define one or load a theory first')
           pending = { kind: 'foldChoose', sel }
-          reportFeedback({ kind: 'guidance', text: 'fold: choose the relation — its argument wires are inferred by matching', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'interaction' })
+          refreshChrome()
         })))
         if (sel.nodes.length === 1 && sel.regions.length === 0 && sel.wires.length === 0
           && displayed.nodes[sel.nodes[0]!]?.kind === 'ref') {
           menuDiv.append(button('Unfold relation', guard(() => {
             pushEdit(applyRelUnfold(editDiagram, sel.nodes[0]!, ctx.relations))
-            reportFeedback({ kind: 'success', text: 'relation unfolded', owner: { kind: 'selection', hits: interaction.selection }, persistence: 'transient', affected: interaction.selection })
           })))
         }
       }
@@ -1117,6 +1133,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     for (const a of all) {
       menuDiv.append(button(a.label, guard(() => commitAction(a, sel))))
     }
+    if (menuDiv.childElementCount === 0) menuDiv.hidden = true
   }
 
   // ---- rendering ----
@@ -1280,6 +1297,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // a text/number input is focused so typing a term is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
     if (e.key === 'Escape' && spawnCascade.escape()) return true
+    if (e.key === 'Escape' && pending !== null) {
+      pending = null
+      palettePoint = null
+      refreshChrome()
+      return true
+    }
+    if (e.key === 'Escape' && palettePoint !== null) {
+      palettePoint = null
+      refreshChrome()
+      return true
+    }
     if (construct.keyDown(e)) return true
     if (e.key === 'Home') {
       interaction.resetZoom()
@@ -1310,15 +1338,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           library = reconcile(library, await listJsonFiles(handle))
           renderLibrary()
           clearFeedbackProblem('save')
-          reportFeedback({ kind: 'success', text: `saved '${fname}' into workspace folder '${handle.name}'`, owner: { kind: 'control', id: 'save' }, persistence: 'transient' })
         } catch (e) {
-          reportFeedback({
-            kind: 'problem',
-            text: e instanceof Error ? e.message : String(e),
-            owner: { kind: 'control', id: 'save' },
-            persistence: 'problem',
-            problemId: 'save',
-          })
+          refuse(e instanceof Error ? e.message : String(e))
         }
       })()
       return
@@ -1332,7 +1353,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     a.click()
     document.body.removeChild(a)
     URL.revokeObjectURL(url)
-    reportFeedback({ kind: 'success', text: 'theory downloaded (open a workspace folder to save into it)', owner: { kind: 'control', id: 'save' }, persistence: 'transient' })
   }
 
   // ---- assemble the chrome ----
@@ -1373,17 +1393,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   goalRow.append(modeBtn, sideBtn, themeBtn, companionBtn, button('Undo', onUndo))
   proveRow.append(termInput, arity.wrap, fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave))
   chrome.append(statusDiv)
-  chrome.append(editRow, goalRow, proveRow, menuDiv, libraryDiv, openFileInput)
+  chrome.append(editRow, goalRow, proveRow, replayNav, menuDiv, libraryDiv, openFileInput)
   spawnCascade = new SpawnCascade({
     host: document.body,
     spawnTerm: ({ source, invocation }) => {
       try {
         const added = addTermNode(editDiagram, invocation.region, parseTerm(source))
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
-        reportFeedback({ kind: 'success', text: 'term placed', owner: { kind: 'node', id: added.node }, affected: [{ kind: 'node', id: added.node }], persistence: 'transient' })
         return true
       } catch (error) {
-        reportFeedback({ kind: 'refusal', text: error instanceof Error ? error.message : String(error), owner: { kind: 'point', point: invocation.world }, persistence: 'transient' })
+        refuse(error instanceof Error ? error.message : String(error), invocation.screen)
         return false
       }
     },
@@ -1394,10 +1413,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         if (relation.boundary.length !== relationArity) throw new Error(`relation '${defId}' changed while the spawn menu was open`)
         const added = addRefNode(editDiagram, invocation.region, defId, relationArity)
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
-        reportFeedback({ kind: 'success', text: `relation '${defId}' placed`, owner: { kind: 'node', id: added.node }, affected: [{ kind: 'node', id: added.node }], persistence: 'transient' })
         return true
       } catch (error) {
-        reportFeedback({ kind: 'refusal', text: error instanceof Error ? error.message : String(error), owner: { kind: 'point', point: invocation.world }, persistence: 'transient' })
+        refuse(error instanceof Error ? error.message : String(error), invocation.screen)
         return false
       }
     },
@@ -1411,13 +1429,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     selection: () => interaction.selection,
     setSelection: (selection) => interaction.setSelection(selection),
     commit: (diagram) => pushEdit(diagram),
-    status: reportFeedback,
+    refuse,
+    setProblem: setFeedbackProblem,
     clearProblem: clearFeedbackProblem,
-    openSpawn: (sample, region) => spawnCascade.open({
-      screen: sample.client,
-      world: sample.world,
-      region,
-    }, ctx.relations),
+    openSpawn: (sample, region) => {
+      if (isHitSelected(interaction.selection, sample.hit)) {
+        palettePoint = sample.client
+        refreshChrome()
+      } else {
+        spawnCascade.open({ screen: sample.client, world: sample.world, region }, ctx.relations)
+      }
+    },
     theme: () => theme,
   })
   editRow.append(construct.optionsElement)
@@ -1429,15 +1451,34 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     selectionEnabled: () => mode !== 'replay',
     claim: claimPointer,
     doubleClick: (sample) => construct.doubleClick(sample),
+    contextMenu: (sample) => {
+      if (!isHitSelected(interaction.selection, sample.hit)) return
+      palettePoint = sample.client
+      refreshChrome()
+    },
+    pointerChanged: rememberPointer,
     keyDown: onKeyDown,
     selectionChanged,
     selectionCommitted: () => {
       pending = null
-      feedback.clearInteraction()
       refreshChrome()
     },
-    statusChanged: reportFeedback,
   })
+  const closePaletteAfterAction = (event: MouseEvent): void => {
+    if (!(event.target instanceof HTMLButtonElement)) return
+    queueMicrotask(() => {
+      if (pending !== null) return
+      palettePoint = null
+      refreshChrome()
+    })
+  }
+  const closePaletteOutside = (event: MouseEvent): void => {
+    if (palettePoint === null || pending !== null || menuDiv.contains(event.target as Node)) return
+    palettePoint = null
+    refreshChrome()
+  }
+  menuDiv.addEventListener('click', closePaletteAfterAction)
+  document.addEventListener('click', closePaletteOutside, true)
   renderLibrary()
 
   const dispose = (): void => {
@@ -1447,6 +1488,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     interaction.dispose()
     construct.dispose()
     spawnCascade.dispose()
+    window.clearTimeout(refusalTimer)
+    clearRefusalPresentation()
+    menuDiv.removeEventListener('click', closePaletteAfterAction)
+    document.removeEventListener('click', closePaletteOutside, true)
     chrome.replaceChildren()
     companionWrap.remove()
     if ((window as any).__vpaDebug !== undefined) delete (window as any).__vpaDebug
@@ -1459,7 +1504,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return Object.keys(displayed.nodes).length
       },
       status(): string {
-        return feedback.snapshot().current?.text ?? ''
+        return statusDiv.textContent ?? ''
       },
       feedback(): FeedbackState {
         return feedback.snapshot()

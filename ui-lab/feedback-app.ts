@@ -9,10 +9,6 @@ if (!(canvas instanceof HTMLCanvasElement) || !(chrome instanceof HTMLElement)) 
   throw new Error('the feedback app surface is incomplete')
 }
 
-const value = new URLSearchParams(location.search).get('feedback')
-if (value !== 'field' && value !== 'ribbon' && value !== 'chronicle') {
-  throw new Error(`unknown feedback variant '${value ?? ''}'`)
-}
 const fixture = await loadLibraryFixture()
 await mountShell({
   canvas,
@@ -24,5 +20,3 @@ await mountShell({
   initialLibraryErrors: fixture.errors,
   libraryRenderer: createLibraryPrototype('ledger'),
 })
-
-;(window as Window & { __feedbackDemo?: { readonly variant: string } }).__feedbackDemo = { variant: value }

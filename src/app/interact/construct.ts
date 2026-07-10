@@ -19,7 +19,6 @@ import {
   severEndpoint,
 } from '../edit'
 import { buildSelection, wireHitTest, type Hit } from '../hittest'
-import type { FeedbackAnchor, FeedbackInput, FeedbackKind } from '../feedback'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
@@ -38,7 +37,8 @@ export type ConstructOptions = {
   readonly selection: () => readonly Hit[]
   readonly setSelection: (selection: readonly Hit[]) => void
   readonly commit: (diagram: Diagram) => void
-  readonly status: (feedback: FeedbackInput) => void
+  readonly refuse: (text: string, pointer?: Vec2) => void
+  readonly setProblem: (problemId: string, text: string) => void
   readonly clearProblem: (problemId: string) => void
   readonly openSpawn: (sample: PointerSample, region: RegionId) => void
   readonly theme: () => Theme
@@ -120,7 +120,7 @@ export class ConstructController {
   readonly optionsElement: HTMLButtonElement
   #preview: Preview | null = null
   #severMode: 'slash' | 'double-click' = 'slash'
-  #prompt: HTMLInputElement | null = null
+  #prompt: HTMLDivElement | null = null
 
   constructor(options: ConstructOptions) {
     this.#options = options
@@ -154,7 +154,7 @@ export class ConstructController {
     if (nearest === null) return false
     const endpoint = endpointAt(this.#options.diagram(), nearest.leg.leg)
     if (endpoint === null) {
-      this.#report('refusal', 'that strand runs between junctions; sever nearer a port', { kind: 'point', point: sample.world })
+      this.#options.refuse('that strand runs between junctions; sever nearer a port', sample.client)
       return true
     }
     this.#tryCommit(() => severEndpoint(this.#options.diagram(), nearest!.leg.leg.wid, endpoint), 'strand severed')
@@ -166,7 +166,7 @@ export class ConstructController {
     if (sample.key === 'w' || sample.key === 'W') {
       const selected = absorbHits(this.#options.diagram(), this.#options.selection())
       if (selected.length === 0) {
-        this.#report('guidance', 'select what the cut should go around first')
+        this.#options.refuse('select what the cut should go around first')
         return true
       }
       if (sample.shiftKey) this.#openBubblePrompt(selected)
@@ -180,7 +180,7 @@ export class ConstructController {
     }
     if (sample.key === 'Delete' || sample.key === 'Backspace') {
       const selected = this.#options.selection()
-      if (selected.length === 0) this.#report('guidance', 'nothing selected to delete')
+      if (selected.length === 0) this.#options.refuse('nothing selected to delete')
       else this.#tryCommit(() => deleteHits(this.#options.diagram(), selected), 'deleted; selected boundaries dissolved and unselected contents propagated')
       return true
     }
@@ -231,7 +231,7 @@ export class ConstructController {
       release: (_sample, moved) => {
         this.#preview = null
         if (!moved) return
-        if (preview.target === null) this.#report('guidance', 'release on another line to join', { kind: 'point', point: preview.at })
+        if (preview.target === null) this.#options.refuse('release on another line to join', _sample.client)
         else this.#tryCommit(() => joinWires(this.#options.diagram(), [source, preview.target!]), 'lines joined — one individual now')
       },
       cancel: () => { this.#preview = null },
@@ -252,12 +252,12 @@ export class ConstructController {
           return
         }
         if (this.#severMode !== 'slash') {
-          this.#report('guidance', 'sever is set to double-click', { kind: 'point', point: sample.world })
+          this.#options.refuse('sever is set to double-click', sample.client)
           return
         }
         const crossings = crossedLegs(this.#options.engine(), preview.from, sample.world)
         if (crossings.length === 0) {
-          this.#report('guidance', 'the slash crossed no strand', { kind: 'point', point: sample.world })
+          this.#options.refuse('the slash crossed no strand', sample.client)
           return
         }
         let next = this.#options.diagram()
@@ -270,13 +270,12 @@ export class ConstructController {
             next = severEndpoint(next, crossing.leg.wid, endpoint)
             severed++
           } catch (error) {
-            this.#report('refusal', error instanceof Error ? error.message : String(error), { kind: 'point', point: sample.world })
+            this.#options.refuse(error instanceof Error ? error.message : String(error), sample.client)
           }
         }
         if (severed > 0) {
           this.#options.commit(next)
-          this.#report('success', `severed ${severed} strand${severed === 1 ? '' : 's'}`, { kind: 'point', point: sample.world })
-        } else if (junctionOnly) this.#report('refusal', 'that strand runs between junctions; sever nearer a port', { kind: 'point', point: sample.world })
+        } else if (junctionOnly) this.#options.refuse('that strand runs between junctions; sever nearer a port', sample.client)
       },
       cancel: () => { this.#preview = null },
     }
@@ -317,27 +316,21 @@ export class ConstructController {
     }
   }
 
-  #tryCommit(make: () => Diagram, success: string): boolean {
-    const affected = [...this.#options.selection()]
+  #tryCommit(make: () => Diagram, _success: string): boolean {
     try {
       this.#options.commit(make())
       this.#options.setSelection([])
-      this.#options.status({
-        kind: 'success',
-        text: success,
-        owner: affected.length > 0 ? { kind: 'selection', hits: affected } : { kind: 'viewport' },
-        persistence: 'transient',
-        affected,
-      })
       return true
     } catch (error) {
-      this.#report('refusal', error instanceof Error ? error.message : String(error))
+      this.#options.refuse(error instanceof Error ? error.message : String(error))
       return false
     }
   }
 
   #openBubblePrompt(selected: readonly Hit[]): void {
     this.#closePrompt()
+    const prompt = this.#options.host.ownerDocument.createElement('div')
+    prompt.className = 'vpa-bubble-prompt'
     const input = this.#options.host.ownerDocument.createElement('input')
     input.className = 'vpa-bubble-arity'
     input.type = 'number'
@@ -346,20 +339,26 @@ export class ConstructController {
     input.placeholder = 'bubble arity'
     input.setAttribute('aria-label', 'Bubble arity')
     const theme = this.#options.theme()
-    input.style.cssText = `position:fixed;left:50%;top:56px;z-index:31;width:9rem;transform:translateX(-50%);padding:5px 8px;border:1.5px solid ${theme.interaction.selection};border-radius:6px;background:${theme.paper};color:${theme.ink}`
+    prompt.style.cssText = 'position:fixed;left:50%;top:56px;z-index:31;transform:translateX(-50%);display:grid;gap:4px'
+    input.style.cssText = `width:9rem;padding:5px 8px;border:1.5px solid ${theme.interaction.selection};border-radius:6px;background:${theme.paper};color:${theme.ink}`
+    const problem = this.#options.host.ownerDocument.createElement('output')
+    problem.id = 'bubble-arity-problem'
+    problem.className = 'vpa-field-problem'
+    problem.style.cssText = `max-width:14rem;color:${theme.interaction.refusal};font:11px system-ui`
+    problem.hidden = true
+    prompt.append(input, problem)
     input.addEventListener('keydown', (event) => {
       event.stopPropagation()
       if (event.key === 'Escape') this.#closePrompt()
       if (event.key !== 'Enter') return
       const arity = Number(input.value)
       if (!Number.isInteger(arity) || arity < 0) {
-        this.#options.status({
-          kind: 'problem',
-          text: `'${input.value}' is not a valid arity`,
-          owner: { kind: 'control', id: 'bubble-arity' },
-          persistence: 'problem',
-          problemId: 'bubble-arity',
-        })
+        const text = `'${input.value}' is not a valid arity`
+        this.#options.setProblem('bubble-arity', text)
+        problem.value = text
+        problem.hidden = false
+        input.setAttribute('aria-invalid', 'true')
+        input.setAttribute('aria-describedby', problem.id)
         return
       }
       if (this.#tryCommit(
@@ -369,11 +368,17 @@ export class ConstructController {
     })
     input.addEventListener('input', () => {
       const value = Number(input.value)
-      if (Number.isInteger(value) && value >= 0) this.#options.clearProblem('bubble-arity')
+      if (Number.isInteger(value) && value >= 0) {
+        this.#options.clearProblem('bubble-arity')
+        problem.hidden = true
+        problem.value = ''
+        input.removeAttribute('aria-invalid')
+        input.removeAttribute('aria-describedby')
+      }
     })
     input.addEventListener('blur', () => this.#closePrompt())
-    this.#prompt = input
-    this.#options.host.append(input)
+    this.#prompt = prompt
+    this.#options.host.append(prompt)
     queueMicrotask(() => input.focus())
   }
 
@@ -381,17 +386,6 @@ export class ConstructController {
     this.#options.clearProblem('bubble-arity')
     this.#prompt?.remove()
     this.#prompt = null
-  }
-
-  #report(kind: FeedbackKind, text: string, owner?: FeedbackAnchor): void {
-    const hits = this.#options.selection()
-    this.#options.status({
-      kind,
-      text,
-      owner: owner ?? (hits.length > 0 ? { kind: 'selection', hits } : { kind: 'viewport' }),
-      persistence: kind === 'guidance' ? 'interaction' : 'transient',
-      ...(kind === 'success' ? { affected: hits } : {}),
-    })
   }
 
   #toggleSever = (): void => {

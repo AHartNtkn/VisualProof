@@ -7,7 +7,7 @@ async function spawnTerm(page: import('@playwright/test').Page, source: string):
   const x = box.x + box.width * (0.38 + (count % 3) * 0.12)
   const y = box.y + box.height * (0.42 + (Math.floor(count / 3) % 2) * 0.14)
   await page.mouse.click(x, y, { button: 'right' })
-  const menu = page.getByRole('menu')
+  const menu = page.locator('.vpa-spawn-column')
   await menu.getByRole('button', { name: 'λ term…', exact: true }).click()
   const input = page.getByLabel('Lambda term to spawn')
   await input.fill(source)
@@ -91,8 +91,10 @@ test('a goal proves end to end through the chrome', async ({ page }) => {
   await page.getByRole('button', { name: /set goal rhs/i }).click()
   await page.getByRole('button', { name: /switch to prove/i }).click()
   await page.getByRole('button', { name: /assemble/i }).click()
-  const status = await page.evaluate(() => window.__vpaDebug!.status())
-  expect(status).toMatch(/assembled|checked|adopted/i)
+  const sessionGroup = page.locator('#library').getByRole('button', { name: /Session \(adopted \+ defined\)/ })
+  await sessionGroup.click()
+  await expect(page.locator('#library')).toContainText('untitled')
+  await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
 // Plan 17: the PiP companion. Entering PROVE surfaces a view-only pane showing
@@ -132,6 +134,8 @@ test('the companion pane targets the other side, survives a forward step, and to
     return { x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
   })
   await page.mouse.click(box.x + s.x, box.y + s.y)
+  await expect(page.locator('#action-menu')).toBeHidden()
+  await page.mouse.click(box.x + s.x, box.y + s.y, { button: 'right' })
   await page.locator('#action-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true }).click()
   await expect(page.locator('#status')).toContainText('forward 1 step')
   const c1 = await page.evaluate(() => window.__vpaDebug!.companion())
@@ -324,14 +328,14 @@ test('a relational theorem replays step by step through the live shell', async (
   expect(compMid!.rebuilds).toBe(compStart!.rebuilds)
 
   // The menu Prev/Next buttons drive the same stepper (carryOver path).
-  await page.getByRole('button', { name: 'Next ▶', exact: true }).click()
+  await page.locator('#replay-nav').getByRole('button', { name: 'Next ▶', exact: true }).click()
   expect(await page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(21)
-  await page.getByRole('button', { name: '◀ Prev', exact: true }).click()
+  await page.locator('#replay-nav').getByRole('button', { name: '◀ Prev', exact: true }).click()
   expect(await page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(20)
 
   // Exiting replay returns to EDIT mode with the sheet restored. (The mode
   // button also relabels to "Exit replay"; scope to the action menu's button.)
-  await page.locator('#action-menu').getByRole('button', { name: 'Exit replay', exact: true }).click()
+  await page.locator('#replay-nav').getByRole('button', { name: 'Exit replay', exact: true }).click()
   expect(await page.evaluate(() => window.__vpaDebug!.replay().mode)).toBe('edit')
   await expect(page.locator('#status')).toContainText('EDIT')
 })
@@ -375,14 +379,19 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   // definitional extension must leave it byte-identical (not just node-count).
   const sheetBefore = await page.evaluate(() => window.__vpaDebug!.editForm())
   expect(sheetBefore.length).toBeGreaterThan(0) // a real fingerprint, not a vacuous empty string
+  const selectedTerm = await page.evaluate(() => {
+    const v = window.__vpaDebug!.view()
+    const b = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
+  })
+  await page.mouse.click(box.x + selectedTerm.x, box.y + selectedTerm.y, { button: 'right' })
   await page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true }).click()
-  await expect(page.locator('#status')).toContainText('argument order is canonical')
+  await expect(page.locator('.vpa-action-instruction')).toContainText('canonical order')
 
   // No wire picking needed: name it in the DEDICATED field and commit with the
   // canonical argument order. (Picking crossing wires remains an override.)
   await page.locator('#relation-name').fill('logic/R')
   await page.locator('#action-menu').getByRole('button', { name: /Commit relation definition \(canonical argument order\)/ }).click()
-  await expect(page.locator('#status')).toContainText("defined 'logic/R' (arity 1)")
   // The whole define flow (defineRelation + defineEntry) changed nothing on the
   // sheet — the canonical form is identical to the pre-define snapshot.
   expect(await page.evaluate(() => window.__vpaDebug!.editForm())).toBe(sheetBefore)
@@ -400,9 +409,14 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([
     expect.objectContaining({ kind: 'node' }),
   ])
+  const foldTerm = await page.evaluate(() => {
+    const v = window.__vpaDebug!.view()
+    const b = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
+  })
+  await page.mouse.click(box.x + foldTerm.x, box.y + foldTerm.y, { button: 'right' })
   await page.locator('#action-menu').getByRole('button', { name: 'Fold into a relation…', exact: true }).click()
   await page.locator('#action-menu').getByRole('button', { name: "Fold into 'logic/R'", exact: true }).click()
-  await expect(page.locator('#status')).toContainText("folded into 'logic/R'")
   await expect
     .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).some((b) => b.kind === 'ref'))
     .toBe(true)
@@ -411,7 +425,6 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   // fresh qualified relation reference at the invocation point with bare argument wires.
   const refsBefore = await page.evaluate(() => window.__vpaDebug!.bodies().filter((b) => b.kind === 'ref').length)
   await spawnRelation(page, 'logic/R')
-  await expect(page.locator('#status')).toContainText("relation 'logic/R' placed")
   await expect
     .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).filter((b) => b.kind === 'ref').length)
     .toBe(refsBefore + 1)
@@ -428,8 +441,8 @@ test('name a selection as a relation, fold with it, save it, and round-trip on r
   })
   await page.mouse.click(box.x + refPos.x, box.y + refPos.y)
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: refPos.id }])
+  await page.mouse.click(box.x + refPos.x, box.y + refPos.y, { button: 'right' })
   await page.locator('#action-menu').getByRole('button', { name: 'Unfold relation', exact: true }).click()
-  await expect(page.locator('#status')).toContainText('relation unfolded')
   await expect
     .poll(async () => (await page.evaluate(() => window.__vpaDebug!.bodies())).filter((b) => b.kind === 'term').length)
     .toBe(termsBefore + 1)

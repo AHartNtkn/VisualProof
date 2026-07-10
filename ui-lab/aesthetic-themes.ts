@@ -54,7 +54,7 @@ export const AESTHETIC_THEMES: Readonly<Record<AestheticId, readonly [Theme, The
       discFill: '#fffefa', discText: '#20262b', font: 'IBM Plex Mono, ui-monospace, monospace',
       insetColor: 'rgba(38, 51, 57, .11)', wireGlow: false, bubbleLightness: 47,
       interaction: {
-        selection: '#2457a7', hover: '#5a7fbd', selectedHover: '#183c77', pin: '#7a5600',
+        selection: '#d97706', hover: '#5a7fbd', selectedHover: '#92400e', pin: '#7a5600',
         valid: '#08796b', validWash: '#08796b12', refusal: '#ac3038',
       },
     },
@@ -64,7 +64,7 @@ export const AESTHETIC_THEMES: Readonly<Record<AestheticId, readonly [Theme, The
       discFill: '#22292d', discText: '#edf0ea', font: 'IBM Plex Mono, ui-monospace, monospace',
       insetColor: 'rgba(0, 0, 0, .32)', wireGlow: false, bubbleLightness: 67,
       interaction: {
-        selection: '#88aaff', hover: '#adc2ff', selectedHover: '#dce5ff', pin: '#e4bb63',
+        selection: '#f59e0b', hover: '#adc2ff', selectedHover: '#fbbf24', pin: '#e4bb63',
         valid: '#51cebb', validWash: '#51cebb16', refusal: '#ff8b86',
       },
     },

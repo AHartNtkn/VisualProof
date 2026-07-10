@@ -10,7 +10,6 @@ import {
   type PhysicsDrag,
 } from '../../view/physics-drag'
 import { length, sub, type Vec2 } from '../../view/vec'
-import type { FeedbackInput } from '../feedback'
 import { brushHitTest, dragTarget, hitTest, type Hit } from '../hittest'
 import {
   choosePointerPhase,
@@ -65,10 +64,11 @@ export type InteractiveViewportOptions = {
   readonly selectionEnabled: () => boolean
   readonly claim: (sample: PointerSample) => PointerClaim | null
   readonly doubleClick: (sample: PointerSample) => boolean
+  readonly contextMenu: (sample: PointerSample) => void
+  readonly pointerChanged: (client: Vec2) => void
   readonly keyDown: (sample: KeySample) => boolean
   readonly selectionChanged: (selected: readonly Hit[]) => void
   readonly selectionCommitted: () => void
-  readonly statusChanged: (feedback: FeedbackInput) => void
 }
 
 const CLICK_SLOP_PX = 3
@@ -239,10 +239,12 @@ export class InteractiveViewport {
   #sample(event: PointerEvent | MouseEvent): PointerSample {
     const screen = this.#screen(event)
     const world = this.#world(screen)
+    const client = this.#client(event)
+    this.#opts.pointerChanged(client)
     return {
       pointerId: event instanceof PointerEvent ? event.pointerId : 1,
       button: event.button,
-      client: this.#client(event),
+      client,
       screen,
       world,
       hit: hitTest(this.#opts.engine(), world, { scale: this.#opts.view.scale }),
@@ -372,29 +374,6 @@ export class InteractiveViewport {
       if (wantsPin && pointer.physics.pinNode !== null) {
         const id = pointer.physics.pinNode
         this.#pins.add(id)
-        this.#opts.statusChanged({
-          kind: 'success',
-          text: `pinned node '${id}'; ${this.#pins.size} independent ${this.#pins.size === 1 ? 'pin' : 'pins'} active`,
-          owner: { kind: 'node', id },
-          affected: [{ kind: 'node', id }],
-          persistence: 'transient',
-        })
-      } else if (wantsPin) {
-        this.#opts.statusChanged({
-          kind: 'guidance',
-          text: 'not pinned: cuts, regions, loose ends, and groups are derived or compound; pin diagram nodes individually',
-          owner: { kind: 'selection', hits: this.#selected },
-          persistence: 'transient',
-        })
-      } else if (pointer.releasedPins.length > 0) {
-        const affected = pointer.releasedPins.map((id) => ({ kind: 'node' as const, id }))
-        this.#opts.statusChanged({
-          kind: 'success',
-          text: `${pointer.releasedPins.length === 1 ? `node '${pointer.releasedPins[0]}'` : 'moved nodes'} left unpinned; unrelated pins remain`,
-          owner: { kind: 'selection', hits: affected },
-          affected,
-          persistence: 'transient',
-        })
       }
     }
     this.#finishCommittedPointer(true)
@@ -417,6 +396,7 @@ export class InteractiveViewport {
 
   #contextMenu = (event: MouseEvent): void => {
     event.preventDefault()
+    this.#opts.contextMenu(this.#sample(event))
   }
 
   #doubleClick = (event: MouseEvent): void => {
@@ -444,24 +424,6 @@ export class InteractiveViewport {
       for (const id of pointer.physics.drag.bodies.keys()) {
         if (this.#pins.delete(id)) pointer.releasedPins.push(id)
       }
-      if (pointer.releasedPins.length > 0) {
-        const affected = pointer.releasedPins.map((id) => ({ kind: 'node' as const, id }))
-        this.#opts.statusChanged({
-          kind: 'guidance',
-          text: `moving released ${pointer.releasedPins.length === 1
-            ? `pin '${pointer.releasedPins[0]}'`
-            : `${pointer.releasedPins.length} pins on the moved group`}; other pins remain`,
-          owner: { kind: 'selection', hits: affected },
-          persistence: 'interaction',
-        })
-      } else if (pointer.physics.pinNode !== null) {
-        this.#opts.statusChanged({
-          kind: 'guidance',
-          text: 'release Ctrl before pointer-up to pin this node; keep Ctrl held to leave it unpinned',
-          owner: { kind: 'node', id: pointer.physics.pinNode },
-          persistence: 'interaction',
-        })
-      }
     }
   }
 
@@ -483,12 +445,6 @@ export class InteractiveViewport {
       for (const id of pointer.releasedPins) this.#pins.add(id)
     }
     if (pointer.phase === 'claimed') pointer.claim?.cancel()
-    if (pointer.moved) this.#opts.statusChanged({
-      kind: 'history',
-      text: 'gesture cancelled; prior selection, positions, and pins restored',
-      owner: { kind: 'selection', hits: this.#selected },
-      persistence: 'transient',
-    })
     this.#finishCommittedPointer(releaseCapture)
   }
 
@@ -499,16 +455,6 @@ export class InteractiveViewport {
     pointer.pinOnRelease = event.type === 'keyup'
       && pointer.physics !== null
       && pointer.physics.pinNode !== null
-    if (pointer.physics?.pinNode !== null && pointer.physics?.pinNode !== undefined) {
-      this.#opts.statusChanged({
-        kind: 'guidance',
-        text: event.type === 'keyup'
-          ? 'release the pointer to pin this node'
-          : 'keep Ctrl held through pointer-up to leave this node unpinned',
-        owner: { kind: 'node', id: pointer.physics.pinNode },
-        persistence: 'interaction',
-      })
-    }
   }
 
   #keyDown = (event: KeyboardEvent): void => {

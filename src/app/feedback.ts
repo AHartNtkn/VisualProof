@@ -1,78 +1,69 @@
-import type { NodeId } from '../kernel/diagram/diagram'
 import type { Vec2 } from '../view/vec'
-import type { Hit } from './hittest'
 
-export type FeedbackKind =
-  | 'ambient'
-  | 'guidance'
-  | 'success'
-  | 'refusal'
-  | 'mode'
-  | 'history'
-  | 'problem'
+export const REFUSAL_LIFETIME_MS = 3_200
 
-export type FeedbackPersistence = 'transient' | 'interaction' | 'state' | 'problem'
-
-export type FeedbackAnchor =
-  | { readonly kind: 'selection'; readonly hits: readonly Hit[] }
-  | { readonly kind: 'hit'; readonly hit: Hit }
-  | { readonly kind: 'node'; readonly id: NodeId }
-  | { readonly kind: 'point'; readonly point: Vec2 }
-  | { readonly kind: 'control'; readonly id: string }
-  | { readonly kind: 'viewport' }
-
-export type FeedbackInput = {
-  readonly kind: FeedbackKind
+export type RefusalInput = {
   readonly text: string
-  readonly owner: FeedbackAnchor
-  readonly persistence: FeedbackPersistence
-  readonly affected?: readonly Hit[]
-  readonly problemId?: string
+  /** Client-space pointer coordinates at the instant the attempt failed. */
+  readonly pointer: Vec2
 }
 
-export type FeedbackNotice = FeedbackInput & {
+export type RefusalNotice = RefusalInput & {
   readonly sequence: number
+  readonly expiresAt: number
+}
+
+export type FieldProblem = {
+  readonly id: string
+  readonly text: string
 }
 
 export type FeedbackState = {
-  readonly current: FeedbackNotice | null
-  readonly problems: readonly FeedbackNotice[]
+  readonly refusal: RefusalNotice | null
+  readonly problems: readonly FieldProblem[]
 }
 
 /**
- * The single semantic authority for application feedback. Presentation may
- * retain a notice briefly for animation, but it may not invent event identity,
- * ownership, persistence, or problem lifetime outside this controller.
+ * Error-only semantic authority. Successful actions and ordinary interaction
+ * state never enter this controller; the resulting UI state is their complete
+ * presentation. Field problems remain keyed state while one transient refusal
+ * replaces the previous refusal.
  */
 export class FeedbackController {
   #sequence = 0
-  #current: FeedbackNotice | null = null
-  readonly #problems = new Map<string, FeedbackNotice>()
+  #refusal: RefusalNotice | null = null
+  readonly #problems = new Map<string, FieldProblem>()
+  readonly #now: () => number
 
-  report(input: FeedbackInput): FeedbackNotice {
-    if (input.persistence === 'problem' && input.problemId === undefined) {
-      throw new Error('persistent feedback requires a stable problemId')
-    }
-    if (input.persistence !== 'problem' && input.problemId !== undefined) {
-      throw new Error('only persistent feedback may carry a problemId')
-    }
-    const notice: FeedbackNotice = { ...input, sequence: ++this.#sequence }
-    this.#current = notice
-    if (notice.problemId !== undefined) this.#problems.set(notice.problemId, notice)
-    return notice
+  constructor(now: () => number = Date.now) {
+    this.#now = now
   }
 
-  clearProblem(problemId: string): void {
-    const removed = this.#problems.get(problemId)
-    this.#problems.delete(problemId)
-    if (removed !== undefined && this.#current?.sequence === removed.sequence) this.#current = null
+  refuse(input: RefusalInput): RefusalNotice {
+    const refusal: RefusalNotice = {
+      ...input,
+      sequence: ++this.#sequence,
+      expiresAt: this.#now() + REFUSAL_LIFETIME_MS,
+    }
+    this.#refusal = refusal
+    return refusal
   }
 
-  clearInteraction(): void {
-    if (this.#current?.persistence === 'interaction') this.#current = null
+  clearRefusal(sequence?: number): void {
+    if (sequence === undefined || this.#refusal?.sequence === sequence) this.#refusal = null
+  }
+
+  setProblem(id: string, text: string): FieldProblem {
+    const problem = { id, text }
+    this.#problems.set(id, problem)
+    return problem
+  }
+
+  clearProblem(id: string): void {
+    this.#problems.delete(id)
   }
 
   snapshot(): FeedbackState {
-    return { current: this.#current, problems: [...this.#problems.values()] }
+    return { refusal: this.#refusal, problems: [...this.#problems.values()] }
   }
 }

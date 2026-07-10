@@ -44,7 +44,7 @@ async function addTerm(page: Page, source: string): Promise<void> {
     box.y + box.height * (0.42 + (Math.floor(count / 3) % 2) * 0.14),
     { button: 'right' },
   )
-  await page.getByRole('menu').getByRole('button', { name: 'λ term…', exact: true }).click()
+  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
   const input = page.getByLabel('Lambda term to spawn')
   await input.fill(source)
   await input.press('Enter')
@@ -229,6 +229,7 @@ test('changing visible selection cancels a pending operation with an older sourc
   const right = await pagePointForBody(page, rightId)
 
   await page.mouse.click(left.x, left.y)
+  await page.mouse.click(left.x, left.y, { button: 'right' })
   await page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true }).click()
   await expect(page.locator('#relation-name')).toBeVisible()
 
@@ -253,11 +254,13 @@ test('changing visible selection cancels a pending operation with an older sourc
   await page.keyboard.up('Shift')
 
   await expect(page.locator('#relation-name')).toHaveCount(0)
-  await expect(page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true })).toBeVisible()
+  await expect(page.locator('#action-menu')).toBeHidden()
   await expect.poll(async () => (await selected(page))
     .filter((hit) => hit.kind === 'node')
     .map((hit) => hit.id)
     .sort()).toEqual([leftId, rightId].sort())
+  await page.mouse.click(right.x, right.y, { button: 'right' })
+  await expect(page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true })).toBeVisible()
 })
 
 test('release order controls a node pin and moving it preserves unrelated pins', async ({ page }) => {
@@ -338,7 +341,7 @@ test('moving brush uses the cut ring and a cut drag can never create a node pin'
   // Releasing Ctrl before pointer-up now produces the explicit refusal instead.
   await physicsDrag(page, ring, { x: ring.x + 35, y: ring.y + 10 }, true)
   await expect.poll(async () => pins(page)).toEqual([])
-  await expect(page.locator('#status')).toContainText('not pinned')
+  await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
 test('pointer-up is an authoritative physics sample without an intermediate move event', async ({ page }) => {
@@ -418,6 +421,7 @@ test('a logical surface change resets interaction even when it reuses the same d
   await expect.poll(async () => pins(page)).toEqual([id])
   node = await pagePointForBody(page, id)
   await page.mouse.click(node.x, node.y)
+  await page.mouse.click(node.x, node.y, { button: 'right' })
   await page.locator('#action-menu').getByRole('button', { name: 'Define relation…', exact: true }).click()
   await expect(page.locator('#relation-name')).toBeVisible()
 

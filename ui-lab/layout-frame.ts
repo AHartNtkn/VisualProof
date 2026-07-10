@@ -3,7 +3,6 @@ export type AestheticVariant = 'carbon' | 'basalt' | 'porcelain'
 
 type DebugApi = {
   status(): string
-  feedback(): { readonly current: { readonly sequence: number; readonly text: string } | null }
   replay(): { mode: string; k: number; n: number; label: string }
 }
 
@@ -46,7 +45,6 @@ export const mountLayoutFrame = async (
   variant: LayoutVariant,
   aesthetic?: AestheticVariant,
   appSource?: string,
-  options: { readonly mirrorFeedback?: boolean } = {},
 ): Promise<void> => {
   host.className = 'layout-lab'
   host.dataset.variant = variant
@@ -139,10 +137,6 @@ export const mountLayoutFrame = async (
   temporal.hidden = true
   temporal.innerHTML = '<button type="button" class="layout-undo" title="Previous">↶</button><input class="layout-time-range" type="range" min="0" max="0" value="0" disabled aria-label="History position"><span class="layout-time-label">Current state</span><button type="button" class="layout-redo" title="Next">↷</button>'
 
-  const feedback = document.createElement('output')
-  feedback.className = 'layout-feedback'
-  feedback.hidden = true
-
   const demoSwitch = document.createElement('nav')
   demoSwitch.className = 'layout-demo-switch'
   demoSwitch.setAttribute('aria-label', aesthetic === undefined ? 'Compare layout variants' : 'Compare aesthetic variants')
@@ -150,7 +144,7 @@ export const mountLayoutFrame = async (
     ? '<span>COMPARE</span><a href="/ui-lab/round14-a.html" data-variant-link="compass">A</a><a href="/ui-lab/round14-b.html" data-variant-link="bookmark">B</a><a href="/ui-lab/round14-c.html" data-variant-link="workbench">C</a>'
     : '<span>COMPARE</span><a href="/ui-lab/round15-a.html" data-aesthetic-link="carbon">A</a><a href="/ui-lab/round15-b.html" data-aesthetic-link="basalt">B</a><a href="/ui-lab/round15-c.html" data-aesthetic-link="porcelain">C</a>'
 
-  host.append(stage, north, libraryButton, librarySurface, temporal, feedback, demoSwitch)
+  host.append(stage, north, libraryButton, librarySurface, temporal, demoSwitch)
 
   const currentLink = aesthetic === undefined
     ? demoSwitch.querySelector<HTMLAnchorElement>(`[data-variant-link="${variant}"]`)
@@ -188,10 +182,9 @@ export const mountLayoutFrame = async (
   appStyle.textContent = `
     #chrome { display: contents !important; }
     #chrome > .vpa-row, #chrome > .vpa-status { display: none !important; }
-    #action-menu:empty { display: none !important; }
-    #action-menu:not(:empty) {
-      position: fixed !important; left: 50% !important; bottom: 18px !important; top: auto !important;
-      transform: translateX(-50%); display: flex !important; gap: 5px !important;
+    #action-menu[hidden], #action-menu:empty { display: none !important; }
+    #action-menu:not([hidden]):not(:empty) {
+      display: flex !important; gap: 5px !important; flex-wrap: wrap;
       max-width: min(720px, calc(100vw - 32px)); padding: 6px !important;
       border: 1px solid #948b7c; border-radius: 999px; background: rgba(255,255,252,.96); color: #282621;
       box-shadow: 0 8px 28px rgba(48,42,33,.16); pointer-events: auto !important;
@@ -200,7 +193,7 @@ export const mountLayoutFrame = async (
     #action-menu button:hover { background: #ece8df; }
     html[data-layout-mode="replay"] #action-menu { display: none !important; }
     html[data-layout-theme="dark"] { color-scheme: dark; }
-    html[data-layout-theme="dark"] #action-menu:not(:empty) { border-color: #59616b; background: rgba(31,35,41,.97); color: #e6e1d6; box-shadow: 0 8px 28px rgba(0,0,0,.42); }
+    html[data-layout-theme="dark"] #action-menu:not([hidden]):not(:empty) { border-color: #59616b; background: rgba(31,35,41,.97); color: #e6e1d6; box-shadow: 0 8px 28px rgba(0,0,0,.42); }
     html[data-layout-theme="dark"] #action-menu button { color: #e6e1d6; }
     html[data-layout-theme="dark"] #action-menu button:hover { background: #343a43; }
     html[data-layout-theme="dark"] #companion-label { background: rgba(31,35,41,.9) !important; color: #e6e1d6 !important; }
@@ -287,8 +280,6 @@ export const mountLayoutFrame = async (
     if (win.__vpaDebug?.replay().mode === 'edit') modeButton.click()
   })
 
-  let previousFeedbackSequence = win.__vpaDebug.feedback().current?.sequence ?? 0
-  let feedbackTimer = 0
   const synchronize = (): void => {
     const debug = win.__vpaDebug
     if (debug === undefined) return
@@ -318,16 +309,6 @@ export const mountLayoutFrame = async (
     ;(replay.mode === 'edit' ? editStep : replay.mode === 'prove' ? proveStep : replayStep).classList.add('is-current')
     replayStep.disabled = replay.mode !== 'replay'
 
-    const currentFeedback = debug.feedback().current
-    if ((options.mirrorFeedback ?? true) && currentFeedback !== null && currentFeedback.sequence !== previousFeedbackSequence) {
-      previousFeedbackSequence = currentFeedback.sequence
-      if (currentFeedback.text !== '') {
-        feedback.value = currentFeedback.text
-        feedback.hidden = false
-        window.clearTimeout(feedbackTimer)
-        feedbackTimer = window.setTimeout(() => { feedback.hidden = true }, 3200)
-      }
-    }
     requestAnimationFrame(synchronize)
   }
   synchronize()
