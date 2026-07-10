@@ -3,7 +3,7 @@ import { mountLayoutFrame } from './layout-frame'
 export async function mountFeedbackRound(host: HTMLElement): Promise<void> {
   await mountLayoutFrame(
     host,
-    'compass',
+    'aperture',
     'porcelain',
     '/ui-lab/feedback-app.html?debug',
   )

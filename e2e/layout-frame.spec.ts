@@ -10,33 +10,49 @@ async function openVariant(page: Page, variant: 'a' | 'b' | 'c'): Promise<void> 
   expect(await page.locator('.layout-app').evaluate((frame: HTMLIFrameElement) =>
     typeof (frame.contentWindow as Window & { __vpaDebug?: unknown } | null)?.__vpaDebug,
   )).toBe('object')
+  expect(await page.locator('.layout-app').evaluate((frame: HTMLIFrameElement) =>
+    (frame.contentWindow as Window & { __libraryDemo?: { variant: string } } | null)?.__libraryDemo?.variant,
+  )).toBe('ledger')
 }
 
-test('every layout uses the real shell library and follows its authoritative mode', async ({ page }) => {
+const variantName = {
+  a: 'aperture',
+  b: 'phase',
+  c: 'margin',
+} as const
+
+test('the three new projections use one real app without obsolete competing chrome', async ({ page }) => {
   for (const variant of ['a', 'b', 'c'] as const) {
     await openVariant(page, variant)
+    await expect(page.locator('#layout-root')).toHaveAttribute('data-variant', variantName[variant])
+    await expect(page.locator('.layout-mode')).toHaveText(/EDIT/)
+    await expect(page.locator('.layout-trail')).toHaveCount(0)
+    await expect(page.locator('.layout-identity')).toHaveCount(0)
+    await expect(page.locator('.layout-workflow-kicker')).toHaveCount(0)
+    await expect(page.locator('.layout-utilities a')).toHaveCount(0)
+    await expect(page.locator('.layout-utilities > button')).toHaveCount(1)
+    await expect(page.locator('.layout-utilities')).not.toContainText(/Undo|Companion/)
 
     await page.locator('.layout-library-button').click()
     await expect(page.locator('.layout-library')).toBeVisible()
-    await expect(page.locator('.layout-library #library')).toContainText('No workspace folder open')
+    await expect(page.locator('.layout-surface-head small')).toHaveText('Browse verified knowledge or manage sources')
+    await expect(page.locator('.layout-library #library')).toContainText('Browse')
+    await expect(page.locator('.layout-library #library')).toContainText('Sources')
     await expect(page.locator('.layout-library #library > button')).toBeHidden()
 
-    const app = page.frameLocator('.layout-app')
-    await app.locator('#open-file-input').setInputFiles('examples/frege.json')
-    await expect(page.locator('.layout-library #library')).toContainText('Unload frege.json')
-
     await page.locator('.layout-close').click()
-    await page.locator(variant === 'b' ? '.layout-trail-step:nth-child(2)' : '.layout-mode').click()
+    await page.locator('.layout-mode').click()
     await page.locator('.layout-lifecycle button').nth(0).click()
     await page.locator('.layout-lifecycle button').nth(1).click()
     await page.locator('.layout-lifecycle button').nth(2).click()
 
-    await expect(page.locator(variant === 'b' ? '.layout-trail-step:nth-child(2)' : '.layout-mode')).toContainText('PROVE')
+    await expect(page.locator('#layout-root')).toHaveAttribute('data-mode', 'prove')
+    await expect(page.locator('.layout-mode')).toContainText('PROVE')
     await expect(page.locator('.layout-temporal')).toBeVisible()
   }
 })
 
-test('only the Workbench library bay resizes the real application viewport', async ({ page }) => {
+test('every Library overlays without resizing or shifting the real application', async ({ page }) => {
   for (const variant of ['a', 'b', 'c'] as const) {
     await openVariant(page, variant)
     const before = await page.locator('.layout-app').boundingBox()
@@ -45,13 +61,32 @@ test('only the Workbench library bay resizes the real application viewport', asy
     await page.waitForTimeout(220)
     const after = await page.locator('.layout-app').boundingBox()
     expect(after).not.toBeNull()
-    if (variant === 'c') {
-      expect(after!.x).toBeGreaterThan(before!.x + 250)
-      expect(after!.width).toBeLessThan(before!.width - 250)
-    } else {
-      expect(after).toEqual(before)
-    }
+    expect(after).toEqual(before)
   }
+})
+
+test('Phase Compass changes emphasis by phase while keeping one mode authority', async ({ page }) => {
+  await openVariant(page, 'b')
+  await expect(page.locator('#layout-root')).toHaveAttribute('data-mode', 'edit')
+  await expect(page.locator('.layout-temporal')).toBeHidden()
+  await expect(page.locator('.layout-phase-note')).toContainText('Construct')
+
+  await page.locator('.layout-mode').click()
+  await page.locator('.layout-lifecycle button').nth(0).click()
+  await page.locator('.layout-lifecycle button').nth(1).click()
+  await page.locator('.layout-lifecycle button').nth(2).click()
+
+  await expect(page.locator('#layout-root')).toHaveAttribute('data-mode', 'prove')
+  await expect(page.locator('.layout-phase-note')).toContainText('Transform')
+  await expect(page.locator('.layout-temporal')).toBeVisible()
+  await expect(page.frameLocator('.layout-app').locator('#companion')).toBeHidden()
+})
+
+test('Readable Margin Compass labels its persistent global controls', async ({ page }) => {
+  await openVariant(page, 'c')
+  await expect(page.locator('.layout-library-button')).toHaveCSS('writing-mode', 'horizontal-tb')
+  await expect(page.locator('.layout-utilities-button')).toContainText('View')
+  await expect(page.locator('.layout-north')).toContainText('Workspace')
 })
 
 test('all three frames remain operable at a constrained desktop width', async ({ page }) => {
@@ -78,7 +113,7 @@ test('the Compass frame and real app share one theme state', async ({ page }) =>
   expect(await page.locator('.layout-app').evaluate((frame: HTMLIFrameElement) => ({
     canvas: frame.contentDocument?.querySelector<HTMLCanvasElement>('#c')?.style.background,
     rootTheme: frame.contentDocument?.documentElement.dataset.layoutTheme,
-  }))).toEqual({ canvas: 'rgb(14, 16, 19)', rootTheme: 'dark' })
+  }))).toEqual({ canvas: 'rgb(18, 23, 25)', rootTheme: 'dark' })
 
   await page.locator('.layout-library-button').click()
   await expect(page.locator('.layout-library')).toHaveCSS('color-scheme', 'dark')
@@ -90,9 +125,8 @@ test('the Compass frame and real app share one theme state', async ({ page }) =>
 test('the Compass replay timeline scrubs the real replay cursor', async ({ page }) => {
   await openVariant(page, 'a')
   await page.locator('.layout-library-button').click()
-  await page.frameLocator('.layout-app').locator('#open-file-input').setInputFiles('examples/frege.json')
-  await page.locator('.layout-library .vpa-lib-group > button').filter({ hasText: 'frege.json' }).click()
-  await page.locator('.layout-library .vpa-lib-detail button').filter({ hasText: 'Replay' }).first().click()
+  await page.locator('.lib-item-row[data-item-name="plusAssoc"]').click()
+  await page.locator('.lib-replay').click()
 
   const range = page.locator('.layout-time-range')
   await expect(page.locator('.layout-temporal')).toBeVisible()

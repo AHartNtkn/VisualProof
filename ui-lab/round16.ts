@@ -4,7 +4,7 @@ import type { LibraryPrototypeVariant } from './library-prototype'
 const pageFor: Readonly<Record<LibraryPrototypeVariant, string>> = { ledger: 'a', prism: 'b', shelf: 'c' }
 
 export async function mountLibraryRound(host: HTMLElement, variant: LibraryPrototypeVariant): Promise<void> {
-  await mountLayoutFrame(host, 'compass', 'porcelain', `/ui-lab/library-app.html?debug&library=${variant}`)
+  await mountLayoutFrame(host, 'aperture', 'porcelain', `/ui-lab/library-app.html?debug&library=${variant}`)
   host.dataset.libraryPrototype = variant
   const switcher = host.querySelector<HTMLElement>('.layout-demo-switch')
   if (switcher === null) throw new Error('the comparison switch is missing')

@@ -1,4 +1,4 @@
-export type LayoutVariant = 'compass' | 'bookmark' | 'workbench'
+export type LayoutVariant = 'aperture' | 'phase' | 'margin'
 export type AestheticVariant = 'carbon' | 'basalt' | 'porcelain'
 
 type DebugApi = {
@@ -58,7 +58,7 @@ export const mountLayoutFrame = async (
   frame.className = 'layout-app'
   frame.title = 'Real Visual Proof Assistant'
   frame.src = appSource ?? (aesthetic === undefined
-    ? '/app/index.html?debug'
+    ? '/ui-lab/library-app.html?debug&library=ledger'
     : `/ui-lab/aesthetic-app.html?debug&aesthetic=${aesthetic}`)
   stage.append(frame)
 
@@ -66,19 +66,16 @@ export const mountLayoutFrame = async (
   north.className = 'layout-north'
   north.setAttribute('aria-label', 'Proof lifecycle')
 
-  const identity = document.createElement('div')
-  identity.className = 'layout-identity'
-  identity.innerHTML = '<span class="layout-mark" aria-hidden="true">VPA</span><span class="layout-document">Proof workspace</span>'
-
-  const trail = document.createElement('div')
-  trail.className = 'layout-trail'
-  const editStep = button('EDIT', 'layout-trail-step is-current')
-  const proveStep = button('PROVE', 'layout-trail-step')
-  const replayStep = button('REPLAY', 'layout-trail-step')
-  trail.append(editStep, proveStep, replayStep)
+  const frameLabel = document.createElement('span')
+  frameLabel.className = 'layout-frame-label'
+  frameLabel.textContent = 'Workspace'
 
   const modeButton = button('EDIT', 'layout-mode')
   modeButton.setAttribute('aria-expanded', 'false')
+
+  const phaseNote = document.createElement('span')
+  phaseNote.className = 'layout-phase-note'
+  phaseNote.textContent = 'Construct the diagram'
 
   const lifecycle = document.createElement('section')
   lifecycle.className = 'layout-popover layout-lifecycle'
@@ -92,7 +89,7 @@ export const mountLayoutFrame = async (
   lifecycleActions.append(setLhs, setRhs, toggleMode)
   lifecycle.append(lifecycleActions)
 
-  const utilitiesButton = button('•••', 'layout-utilities-button')
+  const utilitiesButton = button(variant === 'margin' ? 'View' : '•••', 'layout-utilities-button')
   utilitiesButton.title = 'View and session utilities'
   utilitiesButton.setAttribute('aria-expanded', 'false')
   const utilities = document.createElement('section')
@@ -100,21 +97,9 @@ export const mountLayoutFrame = async (
   utilities.hidden = true
   utilities.innerHTML = '<p class="layout-kicker">View & session</p>'
   const theme = button('Theme')
-  const companion = button('Companion view')
-  const undo = button('Undo')
-  utilities.append(theme, companion, undo)
-  const workflowKicker = document.createElement('p')
-  workflowKicker.className = 'layout-kicker layout-workflow-kicker'
-  workflowKicker.textContent = 'Real workflow references'
-  const dualLink = document.createElement('a')
-  dualLink.href = '/ui-lab/round12-b.html'
-  dualLink.textContent = 'Dual-front proving ↗'
-  const formulaLink = document.createElement('a')
-  formulaLink.href = '/ui-lab/round13-a.html?debug'
-  formulaLink.textContent = 'Formula editor ↗'
-  utilities.append(workflowKicker, dualLink, formulaLink)
+  utilities.append(theme)
 
-  north.append(identity, trail, modeButton, utilitiesButton, lifecycle, utilities)
+  north.append(frameLabel, modeButton, phaseNote, utilitiesButton, lifecycle, utilities)
 
   const libraryButton = button('Library', 'layout-library-button')
   libraryButton.setAttribute('aria-expanded', 'false')
@@ -124,7 +109,7 @@ export const mountLayoutFrame = async (
   librarySurface.hidden = true
   const libraryHead = document.createElement('div')
   libraryHead.className = 'layout-surface-head'
-  libraryHead.innerHTML = '<span><b>Library</b><small>Theories, relations, and saved proofs</small></span>'
+  libraryHead.innerHTML = '<span><b>Library</b><small>Browse verified knowledge or manage sources</small></span>'
   const closeLibrary = button('×', 'layout-close')
   closeLibrary.title = 'Close library'
   libraryHead.append(closeLibrary)
@@ -141,7 +126,7 @@ export const mountLayoutFrame = async (
   demoSwitch.className = 'layout-demo-switch'
   demoSwitch.setAttribute('aria-label', aesthetic === undefined ? 'Compare layout variants' : 'Compare aesthetic variants')
   demoSwitch.innerHTML = aesthetic === undefined
-    ? '<span>COMPARE</span><a href="/ui-lab/round14-a.html" data-variant-link="compass">A</a><a href="/ui-lab/round14-b.html" data-variant-link="bookmark">B</a><a href="/ui-lab/round14-c.html" data-variant-link="workbench">C</a>'
+    ? '<span>COMPARE</span><a href="/ui-lab/round14-a.html" data-variant-link="aperture" title="Compass Aperture">A</a><a href="/ui-lab/round14-b.html" data-variant-link="phase" title="Phase Compass">B</a><a href="/ui-lab/round14-c.html" data-variant-link="margin" title="Readable Margin Compass">C</a>'
     : '<span>COMPARE</span><a href="/ui-lab/round15-a.html" data-aesthetic-link="carbon">A</a><a href="/ui-lab/round15-b.html" data-aesthetic-link="basalt">B</a><a href="/ui-lab/round15-c.html" data-aesthetic-link="porcelain">C</a>'
 
   host.append(stage, north, libraryButton, librarySurface, temporal, demoSwitch)
@@ -182,6 +167,7 @@ export const mountLayoutFrame = async (
   appStyle.textContent = `
     #chrome { display: contents !important; }
     #chrome > .vpa-row, #chrome > .vpa-status { display: none !important; }
+    #companion { display: none !important; }
     #action-menu[hidden], #action-menu:empty { display: none !important; }
     #action-menu:not([hidden]):not(:empty) {
       display: flex !important; gap: 5px !important; flex-wrap: wrap;
@@ -247,8 +233,6 @@ export const mountLayoutFrame = async (
     setOpen('lifecycle', false)
   })
   theme.addEventListener('click', () => clickActual('Theme:'))
-  companion.addEventListener('click', () => clickActual('Companion:'))
-  undo.addEventListener('click', () => clickActual('Undo'))
   const replayRange = temporal.querySelector<HTMLInputElement>('.layout-time-range')
   const temporalBack = temporal.querySelector<HTMLButtonElement>('.layout-undo')
   const temporalForward = temporal.querySelector<HTMLButtonElement>('.layout-redo')
@@ -272,14 +256,6 @@ export const mountLayoutFrame = async (
     for (let step = 0; step < Math.abs(delta); step++) dispatchAppKey(key)
   })
 
-  editStep.addEventListener('click', () => {
-    const mode = win.__vpaDebug?.replay().mode
-    if (mode !== 'edit') findButton(doc, mode === 'replay' ? 'Exit replay' : 'Switch to EDIT')?.click()
-  })
-  proveStep.addEventListener('click', () => {
-    if (win.__vpaDebug?.replay().mode === 'edit') modeButton.click()
-  })
-
   const synchronize = (): void => {
     const debug = win.__vpaDebug
     if (debug === undefined) return
@@ -289,12 +265,17 @@ export const mountLayoutFrame = async (
     if (actualThemeLabel === undefined || actualThemeLabel === null) throw new Error('the real shell no longer exposes its theme state')
     const themeToken = actualThemeLabel.toLowerCase().includes('dark') ? 'dark' : 'light'
     host.dataset.theme = themeToken
+    host.dataset.mode = replay.mode
     doc.documentElement.dataset.layoutTheme = themeToken
     doc.documentElement.dataset.layoutMode = replay.mode
     if (aesthetic !== undefined) doc.documentElement.dataset.layoutAesthetic = aesthetic
     modeButton.textContent = mode
+    phaseNote.textContent = replay.mode === 'edit'
+      ? 'Construct the diagram'
+      : replay.mode === 'prove'
+        ? 'Transform the active front'
+        : 'Read the proof through time'
     theme.textContent = actualThemeLabel
-    companion.textContent = findButton(doc, 'Companion:')?.textContent ?? 'Companion view'
     toggleMode.textContent = replay.mode === 'edit' ? 'Enter proving' : replay.mode === 'prove' ? 'Return to editing' : 'Exit replay'
     temporal.hidden = replay.mode === 'edit'
     temporal.querySelector<HTMLElement>('.layout-time-label')!.textContent = replay.mode === 'replay'
@@ -305,10 +286,6 @@ export const mountLayoutFrame = async (
     replayRange.disabled = replay.mode !== 'replay' || replay.n === 0
     temporalBack.disabled = replay.mode === 'replay' && replay.k === 0
     temporalForward.disabled = replay.mode === 'replay' && replay.k === replay.n
-    for (const step of [editStep, proveStep, replayStep]) step.classList.remove('is-current')
-    ;(replay.mode === 'edit' ? editStep : replay.mode === 'prove' ? proveStep : replayStep).classList.add('is-current')
-    replayStep.disabled = replay.mode !== 'replay'
-
     requestAnimationFrame(synchronize)
   }
   synchronize()
