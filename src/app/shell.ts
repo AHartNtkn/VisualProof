@@ -27,8 +27,11 @@ import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addRefNode } from './edit'
-import type { ProofSession } from './session'
-import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary } from './session'
+import type { ProofSession, TrackDirection, TrackSession } from './session'
+import {
+  startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary,
+  startTrack, applyTrack, undoTrack, declareTrack, adoptTrackTheorem, trackBoundary,
+} from './session'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
 import { sessionTheory } from './persist'
@@ -171,7 +174,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   // ---- state ----
   let mode: 'edit' | 'prove' | 'replay' = 'edit'
-  let side: 'forward' | 'backward' = 'forward'
   // Replay mode: step through a bundled theorem's recorded derivation. `replay`
   // caches every intermediate diagram; `replayK` is the displayed step; the
   // mode we came from is restored on exit. Read-only — no rule dispatches.
@@ -182,7 +184,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const editHistory: Diagram[] = []
   let goalLhs: DiagramWithBoundary | null = null
   let goalRhs: DiagramWithBoundary | null = null
-  let session: ProofSession | null = null
+  type ActiveProof =
+    | { readonly kind: 'track'; track: TrackSession }
+    | { readonly kind: 'dual'; session: ProofSession; side: 'forward' | 'backward' }
+  let proof: ActiveProof | null = null
   let kernelSel: SubgraphSelection | null = null
   let pending: Pending | null = null
   // The render engine is rebuilt whenever the displayed diagram identity
@@ -305,8 +310,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
   const currentDiagram = (): Diagram => {
     if (mode === 'replay' && replay !== null) return replay.diagramAt(replayK)
-    if (mode === 'prove' && session !== null) {
-      return side === 'forward' ? session.forward.current : session.backward.current
+    if (mode === 'prove' && proof !== null) {
+      if (proof.kind === 'track') return proof.track.current
+      return proof.side === 'forward' ? proof.session.forward.current : proof.session.backward.current
     }
     return editDiagram
   }
@@ -316,7 +322,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // current diagram, so a stale id simply draws no exit.
   const currentBoundary = (): readonly WireId[] => {
     if (mode === 'replay' && replay !== null) return replay.boundary
-    if (mode === 'prove' && session !== null) return sideBoundary(session, side)
+    if (mode === 'prove' && proof !== null) {
+      return proof.kind === 'track' ? trackBoundary(proof.track) : sideBoundary(proof.session, proof.side)
+    }
     return []
   }
 
@@ -698,16 +706,21 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const onSetLhs = guard(() => {
     requireEdit()
     goalLhs = mkDiagramWithBoundary(editDiagram, [])
-    session = null
   })
   const onSetRhs = guard(() => {
     requireEdit()
     goalRhs = mkDiagramWithBoundary(editDiagram, [])
-    session = null
   })
 
-  const meetStatus = (): string => {
-    if (session === null) return 'no session'
+  const proofDirection = (): TrackDirection | null => {
+    if (proof === null) return null
+    return proof.kind === 'track' ? proof.track.direction : proof.side
+  }
+
+  const proofStatus = (): string => {
+    if (proof === null) return 'no proof'
+    if (proof.kind === 'track') return `${proof.track.steps.length} step(s) · declare when ready`
+    const session = proof.session
     return `forward ${session.forward.steps.length} step(s) · backward ${session.backward.steps.length} step(s) · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
   }
 
@@ -769,25 +782,30 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     sync(true) // rebuilds the engine for the restored mode's diagram
   }
 
-  const onToggleMode = guard(() => {
+  const leaveProof = guard(() => {
     if (mode === 'replay') {
       exitReplay()
       return
     }
-    if (mode === 'edit') {
-      if (goalLhs === null || goalRhs === null) {
-        throw new Error('set both goal sides (LHS and RHS snapshots) before proving')
-      }
-      if (session === null) session = startSession(goalLhs, goalRhs, ctx)
-      mode = 'prove'
-    } else {
-      mode = 'edit'
-    }
+    mode = 'edit'
+    sync(true)
+  })
+  const beginTrack = (direction: TrackDirection): void => guard(() => {
+    requireEdit()
+    proof = { kind: 'track', track: startTrack(mkDiagramWithBoundary(editDiagram, []), direction, ctx) }
+    mode = 'prove'
+    sync(true)
+  })()
+  const beginDual = guard(() => {
+    requireEdit()
+    if (goalLhs === null || goalRhs === null) throw new Error('set both fixed sides before dual proving')
+    proof = { kind: 'dual', session: startSession(goalLhs, goalRhs, ctx), side: 'forward' }
+    mode = 'prove'
     sync(true)
   })
   const onToggleSide = guard(() => {
-    if (mode !== 'prove') throw new Error('the forward/backward toggle applies in PROVE mode')
-    side = side === 'forward' ? 'backward' : 'forward'
+    if (mode !== 'prove' || proof?.kind !== 'dual') throw new Error('side switching applies only in fixed-side dual proving')
+    proof = { ...proof, side: proof.side === 'forward' ? 'backward' : 'forward' }
     sync(true)
   })
   const onUndo = guard(() => {
@@ -798,39 +816,42 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       sync()
       return
     }
-    if (session === null) throw new Error('no active proof session')
-    session = side === 'forward' ? undoForward(session) : undoBackward(session)
+    if (proof === null) throw new Error('no active proof')
+    if (proof.kind === 'track') proof = { kind: 'track', track: undoTrack(proof.track) }
+    else proof = { ...proof, session: proof.side === 'forward' ? undoForward(proof.session) : undoBackward(proof.session) }
     sync()
   })
   const onAssemble = guard(() => {
-    if (session === null) throw new Error('no active proof session')
+    if (proof === null) throw new Error('no active proof')
     const name = nameInput.value.trim() === '' ? 'untitled' : nameInput.value.trim()
-    const thm = assembleTheorem(session, name)
+    const thm = proof.kind === 'track' ? declareTrack(proof.track, name) : assembleTheorem(proof.session, name)
     checkTheorem(thm, ctx)
     // Adopt into the session context (so this session can keep citing it) AND
     // into the library's Session group; applyLibrary rebuilds the merged context
     // and rebinds the shell's live ctx so saves, future citations, and the panel
     // all see the new theorem.
-    session = adoptTheorem(session, thm)
+    proof = proof.kind === 'track'
+      ? { kind: 'track', track: adoptTrackTheorem(proof.track, thm) }
+      : { ...proof, session: adoptTheorem(proof.session, thm) }
     applyLibrary(adoptEntry(library, thm))
   })
 
   // ---- proof actions ----
-  const applyF = (s: ProofStep): void => {
-    if (session === null) throw new Error('no active proof session')
-    session = applyForward(session, s)
+  const applyProofStep = (step: ProofStep): void => {
+    if (proof === null) throw new Error('no active proof')
+    if (proof.kind === 'track') proof = { kind: 'track', track: applyTrack(proof.track, step) }
+    else proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, step) : applyBackward(proof.session, step) }
     sync()
   }
 
   // ---- backward commit (reads inputs at click time) ----
   const commitBackward = (e: BackwardEntry): void => {
-    if (session === null) throw new Error('no active proof session')
     switch (e.kind) {
       case 'unDoubleCut':
-        session = applyBackward(session, { rule: 'doubleCutElim', region: e.outer })
+        applyProofStep({ rule: 'doubleCutElim', region: e.outer })
         break
       case 'unVacuousBubble':
-        session = applyBackward(session, { rule: 'vacuousElim', region: e.bubble })
+        applyProofStep({ rule: 'vacuousElim', region: e.bubble })
         break
       case 'unErase': {
         // Pattern read from the term input at commit time
@@ -838,7 +859,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         if (termVal === '') throw new Error('the term input is empty: type the pattern term first (\\ is λ)')
         const e0 = emptyDiagram()
         const { diagram } = addTermNode(e0, e0.root, parseTerm(termVal))
-        session = applyBackward(session, {
+        applyProofStep({
           rule: 'insertion',
           region: e.region,
           pattern: mkDiagramWithBoundary(diagram, []),
@@ -854,9 +875,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const fuelVal = readCount(fuel.input, 'fuel')
         // conversion is direction-free: build the certificate with the same
         // fueled search the forward flow uses, then submit the ordinary step
-        const goal = session.backward.current
+        const goal = currentDiagram()
         const conv = applyConversion(goal, e.node, parseTerm(termVal), fuelVal)
-        session = applyBackward(session, {
+        applyProofStep({
           rule: 'conversion',
           node: e.node,
           term: parseTerm(termVal),
@@ -871,45 +892,44 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         refreshChrome()
         return
     }
-    sync()
   }
 
   const commitAction = (a: ActionDescriptor, sel: SubgraphSelection): void => {
-    if (session === null) throw new Error('no active proof session')
+    if (proof === null) throw new Error('no active proof')
     switch (a.kind) {
       case 'erase':
-        applyF({ rule: 'erasure', sel })
+        applyProofStep({ rule: 'erasure', sel })
         return
       case 'insert': {
         const e0 = emptyDiagram()
         const { diagram } = addTermNode(e0, e0.root, parseInput())
-        applyF({ rule: 'insertion', region: sel.region, pattern: mkDiagramWithBoundary(diagram, []), attachments: [], binders: {} })
+        applyProofStep({ rule: 'insertion', region: sel.region, pattern: mkDiagramWithBoundary(diagram, []), attachments: [], binders: {} })
         return
       }
       case 'doubleCutWrap':
-        applyF({ rule: 'doubleCutIntro', sel })
+        applyProofStep({ rule: 'doubleCutIntro', sel })
         return
       case 'doubleCutElim':
-        applyF({ rule: 'doubleCutElim', region: sel.regions[0]! })
+        applyProofStep({ rule: 'doubleCutElim', region: sel.regions[0]! })
         return
       case 'vacuousWrap':
-        applyF({ rule: 'vacuousIntro', sel, arity: readCount(arity.input, 'bubble arity') })
+        applyProofStep({ rule: 'vacuousIntro', sel, arity: readCount(arity.input, 'bubble arity') })
         return
       case 'vacuousElim':
-        applyF({ rule: 'vacuousElim', region: sel.regions[0]! })
+        applyProofStep({ rule: 'vacuousElim', region: sel.regions[0]! })
         return
       case 'iterate':
         pending = { kind: 'iterate', sel }
         refreshChrome()
         return
       case 'deiterate':
-        applyF({ rule: 'deiteration', sel, fuel: readCount(fuel.input, 'fuel') })
+        applyProofStep({ rule: 'deiteration', sel, fuel: readCount(fuel.input, 'fuel') })
         return
       case 'convert': {
         const node = sel.nodes[0]!
         const term = parseInput()
         const conv = applyConversion(currentDiagram(), node, term, readCount(fuel.input, 'fuel'))
-        applyF({ rule: 'conversion', node, term, certificate: conv.certificate, attachments: {} })
+        applyProofStep({ rule: 'conversion', node, term, certificate: conv.certificate, attachments: {} })
         return
       }
       case 'instantiate': {
@@ -918,11 +938,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         if (comp === undefined) {
           throw new Error(`unknown relation '${name}' — type a loaded relation name in the term input (loaded: ${Object.keys(relations).join(', ') || 'none'})`)
         }
-        applyF({ rule: 'comprehensionInstantiate', bubble: sel.regions[0]!, comp, attachments: [], binders: {} })
+        applyProofStep({ rule: 'comprehensionInstantiate', bubble: sel.regions[0]!, comp, attachments: [], binders: {} })
         return
       }
       case 'relUnfold':
-        applyF({ rule: 'relUnfold', node: sel.nodes[0]! })
+        applyProofStep({ rule: 'relUnfold', node: sel.nodes[0]! })
         return
       case 'relFold': {
         if (ctx.relations.size === 0) throw new Error('no relations to fold into — define one or load a theory first')
@@ -954,7 +974,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       guard(() => {
         const target = hit === null ? displayed.root : hit.kind === 'region' ? hit.id : null
         if (target === null) throw new Error('iteration targets a region: click a cut/bubble or empty space for the sheet')
-        applyF({ rule: 'iteration', sel: p.sel, target })
+        applyProofStep({ rule: 'iteration', sel: p.sel, target })
       })()
       return
     }
@@ -995,11 +1015,19 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const rule = replayK === 0 ? '(start)' : replay.labelAt(replayK)
       statusDiv.textContent = `[REPLAY] step ${replayK}/${replay.stepCount} — ${rule}`
     } else {
-      const head = mode === 'edit' ? 'EDIT' : `PROVE·${side}`
-      statusDiv.textContent = `[${head}] ${goal} | ${session === null ? 'no session' : meetStatus()}`
+      const direction = proofDirection()
+      const head = mode === 'edit' ? 'EDIT' : `PROVE · ${direction?.toUpperCase() ?? 'UNKNOWN'}`
+      statusDiv.textContent = proof?.kind === 'dual'
+        ? `[${head} · FIXED SIDES] ${goal} | ${proofStatus()}`
+        : `[${head}] ${proofStatus()}`
     }
-    modeBtn.textContent = mode === 'edit' ? 'Switch to PROVE' : mode === 'prove' ? 'Switch to EDIT' : 'Exit replay'
-    sideBtn.textContent = side === 'forward' ? 'Side: forward (toggle)' : 'Side: backward (toggle)'
+    backwardBtn.hidden = mode !== 'edit'
+    forwardBtn.hidden = mode !== 'edit'
+    dualBtn.hidden = mode !== 'edit'
+    leaveBtn.hidden = mode === 'edit'
+    leaveBtn.textContent = mode === 'replay' ? 'Exit replay' : 'Return to editing'
+    sideBtn.hidden = mode !== 'prove' || proof?.kind !== 'dual'
+    sideBtn.textContent = proof?.kind === 'dual' && proof.side === 'forward' ? 'Side: forward (toggle)' : 'Side: backward (toggle)'
 
     menuDiv.replaceChildren()
     menuDiv.hidden = true
@@ -1034,15 +1062,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       if (p.kind === 'cite') {
         menuDiv.append(button(`Commit citation of '${p.name}' (${p.args.length} arg(s))`, guard(() => {
           pending = null
-          applyF({ rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: p.direction })
+          applyProofStep({ rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: p.direction })
         })))
       }
       if (p.kind === 'unCite') {
         menuDiv.append(button(`Commit un-citation of '${p.name}' (${p.args.length} arg(s))`, guard(() => {
-          if (session === null) throw new Error('no active proof session')
           pending = null
-          session = applyBackward(session, { rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: 'reverse' })
-          sync()
+          applyProofStep({ rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: 'reverse' })
         })))
       }
       if (p.kind === 'foldChoose') {
@@ -1060,7 +1086,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
               return
             }
             pending = null
-            applyF({ rule: 'relFold', sel: psel, defId: name, args })
+            applyProofStep({ rule: 'relFold', sel: psel, defId: name, args })
           })))
         }
       }
@@ -1120,9 +1146,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
       return
     }
-    if (mode !== 'prove' || session === null || kernelSel === null) return
+    if (mode !== 'prove' || proof === null || kernelSel === null) return
     const sel = kernelSel
-    if (side === 'backward') {
+    if (proofDirection() === 'backward') {
       const entries = backwardEntries(currentDiagram(), sel, ctx)
       for (const e of entries) {
         menuDiv.append(button(e.label, guard(() => commitBackward(e))))
@@ -1251,9 +1277,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const r = b.discR * engine.scale
     return { x: b.pos.x + r * 0.72, y: b.pos.y - r * 0.72 }
   }
+  const dualProofState = (): { session: ProofSession | null; side: 'forward' | 'backward' } => proof?.kind === 'dual'
+    ? { session: proof.session, side: proof.side }
+    : { session: null, side: 'backward' }
   const frame = (): void => {
     if (disposed) return
-    const comp = companionFor({ mode, session, side, replay })
+    const dual = dualProofState()
+    const comp = companionFor({ mode, session: dual.session, side: dual.side, replay })
     const companionVisible = comp !== null && companionMode !== 'hidden'
     // Split gives the companion the right half, so the main view fits the left
     // half; PiP/hidden leave the main view full-width (PiP overlays a corner).
@@ -1369,11 +1399,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (file !== undefined) handleOpenedFile(file)
     openFileInput.value = ''
   })
-  goalRow.append(
-    button('Set goal LHS', onSetLhs),
-    button('Set goal RHS', onSetRhs),
-  )
-  const modeBtn = button('Switch to PROVE', onToggleMode)
+  const backwardBtn = button('Prove backward', () => beginTrack('backward'))
+  const forwardBtn = button('Prove forward', () => beginTrack('forward'))
+  const dualBtn = button('Prove fixed sides', beginDual)
+  const leaveBtn = button('Return to editing', leaveProof)
   const sideBtn = button('Side: forward (toggle)', onToggleSide)
   // Theme toggle: view-only, persists for the session; paint reads `theme`
   // every frame, so flipping it re-styles the next frame with no rebuild.
@@ -1390,8 +1419,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     companionMode = companionMode === 'hidden' ? 'pip' : companionMode === 'pip' ? 'split' : 'hidden'
     companionBtn.textContent = `Companion: ${companionMode}`
   })
-  goalRow.append(modeBtn, sideBtn, themeBtn, companionBtn, button('Undo', onUndo))
-  proveRow.append(termInput, arity.wrap, fuel.wrap, nameInput, button('Assemble + check', onAssemble), button('Save theory', onSave))
+  goalRow.append(backwardBtn, forwardBtn, button('Set goal LHS', onSetLhs), button('Set goal RHS', onSetRhs), dualBtn, leaveBtn, sideBtn, themeBtn, companionBtn, button('Undo', onUndo))
+  proveRow.append(termInput, arity.wrap, fuel.wrap, nameInput, button('Declare / assemble + check', onAssemble), button('Save theory', onSave))
   chrome.append(statusDiv)
   chrome.append(editRow, goalRow, proveRow, replayNav, menuDiv, libraryDiv, openFileInput)
   spawnCascade = new SpawnCascade({
@@ -1518,6 +1547,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           bodies: engine.bodies.size,
         }
       },
+      proof(): null | { kind: 'track'; direction: TrackDirection } | { kind: 'dual'; side: 'forward' | 'backward' } {
+        if (proof === null) return null
+        return proof.kind === 'track'
+          ? { kind: 'track', direction: proof.track.direction }
+          : { kind: 'dual', side: proof.side }
+      },
       view(): { scale: number; offsetX: number; offsetY: number } {
         return { ...view }
       },
@@ -1621,7 +1656,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // companion is not applicable (EDIT / no session / no replay), else the
       // label, whether it is on-screen, and its engine body count.
       companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null {
-        const c = companionFor({ mode, session, side, replay })
+        const dual = dualProofState()
+        const c = companionFor({ mode, session: dual.session, side: dual.side, replay })
         if (c === null) return null
         return {
           visible: companionMode !== 'hidden',

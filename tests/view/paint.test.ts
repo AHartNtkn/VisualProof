@@ -9,6 +9,8 @@ import { settle } from '../../src/view/relax'
 import { paint, bubbleHues, highlightGroup, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
 import { drawShapes } from '../../src/view/canvas'
 import { computeLegs } from '../../src/view/wires'
+import { addBubble } from '../../src/app/edit'
+import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 
 const p = (s: string) => parseTerm(s)
 
@@ -314,6 +316,21 @@ describe('law 6 — colour codes binder identity, and Dark glows the bubble ring
     expect(ring).toHaveLength(1)
     const atomArcs = shapes.filter((s) => s.kind === 'arc' && s.stroke === hue)
     expect(atomArcs.length).toBeGreaterThan(0)
+  })
+
+  it('a directly wrapped predicate changes to the new bubble hue atomically', () => {
+    const b = new DiagramBuilder()
+    const oldBinder = b.bubble(b.root, 1)
+    const atom = b.atom(oldBinder, oldBinder)
+    const d = b.build()
+    const selection = mkSelection(d, { region: oldBinder, regions: [], nodes: [atom], wires: [] })
+    const wrapped = addBubble(d, selection, 1)
+    const e = mkEngine(wrapped.diagram, [])
+    settle(e, 400)
+    const hue = bubbleHues(wrapped.diagram, LIGHT.bubbleLightness).get(wrapped.region)!
+    const shapes = paint(e, LIGHT)
+    expect(shapes.some((shape) => shape.kind === 'circle' && shape.fill === null && shape.stroke === hue)).toBe(true)
+    expect(shapes.some((shape) => shape.kind === 'arc' && shape.stroke === hue)).toBe(true)
   })
 
   it('Dark: bubble ring AND atom anatomy glow in the binder hue; Light does not glow', () => {

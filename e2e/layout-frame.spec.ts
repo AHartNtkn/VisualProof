@@ -42,12 +42,15 @@ test('the three new projections use one real app without obsolete competing chro
 
     await page.locator('.layout-close').click()
     await page.locator('.layout-mode').click()
-    await page.locator('.layout-lifecycle button').nth(0).click()
-    await page.locator('.layout-lifecycle button').nth(1).click()
-    await page.locator('.layout-lifecycle button').nth(2).click()
+    const lifecycleButtons = page.locator('.layout-lifecycle button')
+    await expect(lifecycleButtons.nth(0)).toHaveText('Prove backward')
+    await expect(lifecycleButtons.nth(1)).toHaveText('Prove forward')
+    await expect(page.locator('.layout-fixed-proof')).toContainText('Fixed statement')
+    await expect(page.locator('.layout-fixed-proof')).toContainText('Prove fixed sides')
+    await lifecycleButtons.nth(0).click()
 
     await expect(page.locator('#layout-root')).toHaveAttribute('data-mode', 'prove')
-    await expect(page.locator('.layout-mode')).toContainText('PROVE')
+    await expect(page.locator('.layout-mode')).toContainText('PROVE · BACKWARD')
     await expect(page.locator('.layout-temporal')).toBeVisible()
   }
 })
@@ -65,6 +68,29 @@ test('every Library overlays without resizing or shifting the real application',
   }
 })
 
+test('Round 14 composes the approved Indexed Ledger presentation', async ({ page }) => {
+  await openVariant(page, 'a')
+  await expect(page.locator('link[href="/ui-lab/library-prototype.css"]')).toHaveCount(1)
+  await page.locator('.layout-library-button').click()
+
+  const drawer = await page.locator('.layout-library-body').boundingBox()
+  const tabs = page.locator('.lib-mode-tabs button')
+  const browse = await tabs.nth(0).boundingBox()
+  const sources = await tabs.nth(1).boundingBox()
+  const row = await page.locator('.lib-item-row').first().boundingBox()
+  expect(drawer).not.toBeNull()
+  expect(browse).not.toBeNull()
+  expect(sources).not.toBeNull()
+  expect(row).not.toBeNull()
+  expect(Math.abs(browse!.width - sources!.width)).toBeLessThan(2)
+  expect(row!.width).toBeGreaterThan(drawer!.width * 0.85)
+
+  await page.locator('.lib-item-row[data-item-name="plusAssoc"]').click()
+  const inspector = await page.locator('.lib-inspector-heading').boundingBox()
+  expect(inspector).not.toBeNull()
+  expect(inspector!.width).toBeGreaterThan(drawer!.width * 0.85)
+})
+
 test('Phase Compass changes emphasis by phase while keeping one mode authority', async ({ page }) => {
   await openVariant(page, 'b')
   await expect(page.locator('#layout-root')).toHaveAttribute('data-mode', 'edit')
@@ -73,8 +99,6 @@ test('Phase Compass changes emphasis by phase while keeping one mode authority',
 
   await page.locator('.layout-mode').click()
   await page.locator('.layout-lifecycle button').nth(0).click()
-  await page.locator('.layout-lifecycle button').nth(1).click()
-  await page.locator('.layout-lifecycle button').nth(2).click()
 
   await expect(page.locator('#layout-root')).toHaveAttribute('data-mode', 'prove')
   await expect(page.locator('.layout-phase-note')).toContainText('Transform')

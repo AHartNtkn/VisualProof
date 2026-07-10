@@ -111,14 +111,17 @@ button { color: inherit; }
 .layout-kicker { margin: 0 0 8px; color: var(--ink-soft); font-size: 10px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
 .layout-help { margin: 0 0 11px; color: var(--ink-soft); line-height: 1.4; }
 .layout-action-row { display: flex; flex-wrap: wrap; gap: 5px; }
-.layout-popover button, .layout-library button {
+.layout-fixed-proof { margin-top: 12px; padding-top: 11px; border-top: 1px solid var(--line-soft); }
+.layout-fixed-proof > button { margin-right: 5px; }
+.layout-leave-proof { width: 100%; }
+.layout-popover button, .layout-surface-head button {
   border: 1px solid var(--line);
   border-radius: 7px;
   padding: 6px 9px;
   background: var(--button);
   cursor: pointer;
 }
-.layout-popover button:hover, .layout-library button:hover { border-color: var(--ink-soft); background: var(--button-hover); }
+.layout-popover button:hover, .layout-surface-head button:hover { border-color: var(--ink-soft); background: var(--button-hover); }
 .layout-popover button.is-primary { border-color: var(--accent-dark); background: var(--accent); color: white; }
 .layout-utilities > button { display: block; width: 100%; margin-top: 5px; text-align: left; }
 

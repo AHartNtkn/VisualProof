@@ -4,6 +4,7 @@ export type AestheticVariant = 'carbon' | 'basalt' | 'porcelain'
 type DebugApi = {
   status(): string
   replay(): { mode: string; k: number; n: number; label: string }
+  proof(): null | { kind: 'track'; direction: 'forward' | 'backward' } | { kind: 'dual'; side: 'forward' | 'backward' }
 }
 
 type AppWindow = Window & { __vpaDebug?: DebugApi }
@@ -80,14 +81,22 @@ export const mountLayoutFrame = async (
   const lifecycle = document.createElement('section')
   lifecycle.className = 'layout-popover layout-lifecycle'
   lifecycle.hidden = true
-  lifecycle.innerHTML = '<p class="layout-kicker">Proof lifecycle</p><p class="layout-help">Use the current sheet as either side of a fixed statement, then enter proving.</p>'
+  lifecycle.innerHTML = '<p class="layout-kicker">Proof lifecycle</p><p class="layout-help">Reason from the current diagram. Backward is the usual starting direction.</p>'
   const lifecycleActions = document.createElement('div')
   lifecycleActions.className = 'layout-action-row'
+  const proveBackward = button('Prove backward', 'is-primary')
+  const proveForward = button('Prove forward')
+  lifecycleActions.append(proveBackward, proveForward)
+  const fixedProof = document.createElement('section')
+  fixedProof.className = 'layout-fixed-proof'
+  fixedProof.innerHTML = '<p class="layout-kicker">Fixed statement</p><p class="layout-help">Use two explicit sides only when comparing them directly.</p>'
   const setLhs = button('Use as left side')
   const setRhs = button('Use as right side')
-  const toggleMode = button('Enter proving', 'is-primary')
-  lifecycleActions.append(setLhs, setRhs, toggleMode)
-  lifecycle.append(lifecycleActions)
+  const proveFixed = button('Prove fixed sides')
+  fixedProof.append(setLhs, setRhs, proveFixed)
+  const leaveProof = button('Return to editing', 'layout-leave-proof')
+  leaveProof.hidden = true
+  lifecycle.append(lifecycleActions, fixedProof, leaveProof)
 
   const utilitiesButton = button(variant === 'margin' ? 'View' : '•••', 'layout-utilities-button')
   utilitiesButton.title = 'View and session utilities'
@@ -226,12 +235,14 @@ export const mountLayoutFrame = async (
   }
   setLhs.addEventListener('click', () => clickActual('Set goal LHS'))
   setRhs.addEventListener('click', () => clickActual('Set goal RHS'))
-  toggleMode.addEventListener('click', () => {
-    const actual = findButton(doc, 'Switch to') ?? findButton(doc, 'Exit replay')
-    if (actual === null) throw new Error('the real shell no longer exposes a mode transition')
-    actual.click()
+  const enter = (label: string): void => {
+    clickActual(label)
     setOpen('lifecycle', false)
-  })
+  }
+  proveBackward.addEventListener('click', () => enter('Prove backward'))
+  proveForward.addEventListener('click', () => enter('Prove forward'))
+  proveFixed.addEventListener('click', () => enter('Prove fixed sides'))
+  leaveProof.addEventListener('click', () => enter(win.__vpaDebug?.replay().mode === 'replay' ? 'Exit replay' : 'Return to editing'))
   theme.addEventListener('click', () => clickActual('Theme:'))
   const replayRange = temporal.querySelector<HTMLInputElement>('.layout-time-range')
   const temporalBack = temporal.querySelector<HTMLButtonElement>('.layout-undo')
@@ -260,7 +271,10 @@ export const mountLayoutFrame = async (
     const debug = win.__vpaDebug
     if (debug === undefined) return
     const replay = debug.replay()
-    const mode = replay.mode.toUpperCase()
+    const proofState = debug.proof()
+    const mode = replay.mode === 'prove' && proofState !== null
+      ? `PROVE · ${(proofState.kind === 'track' ? proofState.direction : proofState.side).toUpperCase()}`
+      : replay.mode.toUpperCase()
     const actualThemeLabel = findButton(doc, 'Theme:')?.textContent
     if (actualThemeLabel === undefined || actualThemeLabel === null) throw new Error('the real shell no longer exposes its theme state')
     const themeToken = actualThemeLabel.toLowerCase().includes('dark') ? 'dark' : 'light'
@@ -276,7 +290,10 @@ export const mountLayoutFrame = async (
         ? 'Transform the active front'
         : 'Read the proof through time'
     theme.textContent = actualThemeLabel
-    toggleMode.textContent = replay.mode === 'edit' ? 'Enter proving' : replay.mode === 'prove' ? 'Return to editing' : 'Exit replay'
+    lifecycleActions.hidden = replay.mode !== 'edit'
+    fixedProof.hidden = replay.mode !== 'edit'
+    leaveProof.hidden = replay.mode === 'edit'
+    leaveProof.textContent = replay.mode === 'replay' ? 'Exit replay' : 'Return to editing'
     temporal.hidden = replay.mode === 'edit'
     temporal.querySelector<HTMLElement>('.layout-time-label')!.textContent = replay.mode === 'replay'
       ? `${replay.k} / ${replay.n} · ${replay.label || 'start'}`

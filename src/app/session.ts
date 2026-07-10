@@ -22,6 +22,68 @@ export type ProofSession = {
   readonly backward: Side
 }
 
+export type TrackDirection = 'forward' | 'backward'
+
+/** One-origin proving: the current sheet is the fixed end and the other end is
+    derived by the user's track. This is the ordinary proof workflow; a
+    two-ended ProofSession is reserved for an explicitly fixed statement. */
+export type TrackSession = {
+  readonly origin: DiagramWithBoundary
+  readonly direction: TrackDirection
+  readonly ctx: ProofContext
+  readonly current: Diagram
+  readonly steps: readonly ProofStep[]
+  readonly history: readonly Diagram[]
+}
+
+export function startTrack(origin: DiagramWithBoundary, direction: TrackDirection, ctx: ProofContext): TrackSession {
+  return { origin, direction, ctx, current: origin.diagram, steps: [], history: [] }
+}
+
+export function trackBoundary(track: TrackSession): readonly WireId[] {
+  return track.origin.boundary.filter((wire) => track.current.wires[wire] !== undefined)
+}
+
+export function applyTrack(track: TrackSession, step: ProofStep): TrackSession {
+  const next = track.direction === 'forward'
+    ? applyStep(track.current, step, track.ctx)
+    : applyStep(track.current, step, track.ctx, 'backward')
+  return {
+    ...track,
+    current: next,
+    steps: [...track.steps, step],
+    history: [...track.history, track.current],
+  }
+}
+
+export function undoTrack(track: TrackSession): TrackSession {
+  const previous = track.history.at(-1)
+  if (previous === undefined) throw new Error(`nothing to undo on the ${track.direction} track`)
+  return {
+    ...track,
+    current: previous,
+    steps: track.steps.slice(0, -1),
+    history: track.history.slice(0, -1),
+  }
+}
+
+export function declareTrack(track: TrackSession, name: string): Theorem {
+  const current = { diagram: track.current, boundary: trackBoundary(track) }
+  const theorem: Theorem = track.direction === 'forward'
+    ? { name, lhs: track.origin, rhs: current, steps: [...track.steps] }
+    : { name, lhs: current, rhs: track.origin, steps: [], backSteps: [...track.steps] }
+  checkTheorem(theorem, track.ctx)
+  return theorem
+}
+
+export function adoptTrackTheorem(track: TrackSession, theorem: Theorem): TrackSession {
+  if (track.ctx.theorems.has(theorem.name)) throw new Error(`'${theorem.name}' already names a theorem in this session`)
+  checkTheorem(theorem, track.ctx)
+  const theorems = new Map(track.ctx.theorems)
+  theorems.set(theorem.name, theorem)
+  return { ...track, ctx: { theorems, relations: track.ctx.relations } }
+}
+
 /**
  * The boundary wires of a side's statement: the forward side proves from the
  * lhs, the backward side from the rhs, so each renders its own boundary as

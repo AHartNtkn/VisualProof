@@ -29,6 +29,7 @@ declare global {
       nodeCount(): number
       status(): string
       replay(): { mode: string; k: number; n: number; label: string; bodies: number }
+      proof(): null | { kind: 'track'; direction: 'forward' | 'backward' } | { kind: 'dual'; side: 'forward' | 'backward' }
       companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null
       view(): { scale: number; offsetX: number; offsetY: number }
       bodies(): { id: string; kind: string; x: number; y: number; r: number }[]
@@ -80,6 +81,33 @@ test('term entry adds a node to the edit diagram', async ({ page }) => {
   expect(after).toBe(before + 1)
 })
 
+test('ordinary proving is backward-first, forward is direct, and only fixed-side proving needs snapshots', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '\\x. x')
+
+  const backward = page.getByRole('button', { name: 'Prove backward', exact: true })
+  const forward = page.getByRole('button', { name: 'Prove forward', exact: true })
+  const fixed = page.getByRole('button', { name: 'Prove fixed sides', exact: true })
+  await expect(backward).toBeVisible()
+  await expect(forward).toBeVisible()
+  await expect(fixed).toBeVisible()
+
+  await backward.click()
+  await expect(page.locator('#status')).toContainText('[PROVE · BACKWARD]')
+  expect(await page.evaluate(() => window.__vpaDebug!.proof())).toEqual({ kind: 'track', direction: 'backward' })
+  await page.getByRole('button', { name: 'Return to editing', exact: true }).click()
+
+  await forward.click()
+  await expect(page.locator('#status')).toContainText('[PROVE · FORWARD]')
+  expect(await page.evaluate(() => window.__vpaDebug!.proof())).toEqual({ kind: 'track', direction: 'forward' })
+  await page.getByRole('button', { name: 'Return to editing', exact: true }).click()
+
+  await fixed.click()
+  await expect(page.locator('#status')).toContainText('[EDIT]')
+  await expect(page.locator('.vpa-refusal')).toContainText('set both fixed sides before dual proving')
+})
+
 test('a goal proves end to end through the chrome', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
@@ -89,7 +117,7 @@ test('a goal proves end to end through the chrome', async ({ page }) => {
   await page.getByRole('button', { name: /set goal lhs/i }).click()
   // set rhs = same diagram, prove with zero steps (met immediately)
   await page.getByRole('button', { name: /set goal rhs/i }).click()
-  await page.getByRole('button', { name: /switch to prove/i }).click()
+  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
   await page.getByRole('button', { name: /assemble/i }).click()
   const sessionGroup = page.locator('#library').getByRole('button', { name: /Session \(adopted \+ defined\)/ })
   await sessionGroup.click()
@@ -115,7 +143,7 @@ test('the companion pane targets the other side, survives a forward step, and to
   // EDIT: nothing to walk toward — the companion is not applicable.
   expect(await page.evaluate(() => window.__vpaDebug!.companion())).toBeNull()
 
-  await page.getByRole('button', { name: /switch to prove/i }).click()
+  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
 
   // The pane appears (default PiP) showing the BACKWARD side, with a real body.
   await expect.poll(async () => (await page.evaluate(() => window.__vpaDebug!.companion()))?.bodies ?? 0).toBeGreaterThan(0)
@@ -195,7 +223,7 @@ test('the companion canvas is inert: a click, drag, and wheel on it change nothi
   await spawnTerm(page, '\\x. x')
   await page.getByRole('button', { name: /set goal lhs/i }).click()
   await page.getByRole('button', { name: /set goal rhs/i }).click()
-  await page.getByRole('button', { name: /switch to prove/i }).click()
+  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
   await expect.poll(async () => (await page.evaluate(() => window.__vpaDebug!.companion()))?.bodies ?? 0).toBeGreaterThan(0)
   await expect(page.locator('#companion')).toBeVisible()
   await page.waitForTimeout(300) // let both engines settle so positions are at rest

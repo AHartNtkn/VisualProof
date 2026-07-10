@@ -104,7 +104,23 @@ export function addCut(d: Diagram, sel: SubgraphSelection): { diagram: Diagram; 
 }
 
 export function addBubble(d: Diagram, sel: SubgraphSelection, arity: number): { diagram: Diagram; region: RegionId } {
-  return wrap(d, sel, (parent) => ({ kind: 'bubble', parent, arity }), 'bub')
+  const wrapped = wrap(d, sel, (parent) => ({ kind: 'bubble', parent, arity }), 'bub')
+  const directlyWrapped = new Set(sel.nodes)
+  const nodes: Record<NodeId, DiagramNode> = {}
+  for (const [id, node] of Object.entries(wrapped.diagram.nodes)) {
+    nodes[id] = directlyWrapped.has(id) && node.kind === 'atom'
+      ? { kind: 'atom', region: wrapped.region, binder: wrapped.region }
+      : node
+  }
+  return {
+    region: wrapped.region,
+    diagram: mkDiagram({
+      root: wrapped.diagram.root,
+      regions: { ...wrapped.diagram.regions },
+      nodes,
+      wires: { ...wrapped.diagram.wires },
+    }),
+  }
 }
 
 /** Identify any number of semantic wires directly. The lexicographically first

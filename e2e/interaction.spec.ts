@@ -431,7 +431,7 @@ test('a logical surface change resets interaction even when it reuses the same d
   await page.mouse.wheel(0, -400)
   const focused = await page.evaluate(() => (window as DebugWindow).__vpaDebug!.view())
 
-  await page.getByRole('button', { name: 'Switch to PROVE', exact: true }).click()
+  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
 
   await expect(page.locator('#status')).toContainText('[PROVE')
   await expect.poll(async () => pins(page)).toEqual([])

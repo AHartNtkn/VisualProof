@@ -8,7 +8,10 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { termEq } from '../../src/kernel/term/term'
 import { bootFixture } from './boot-fixture'
-import { startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary } from '../../src/app/session'
+import {
+  startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary,
+  startTrack, applyTrack, undoTrack, declareTrack, trackBoundary,
+} from '../../src/app/session'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 import { mkEngine, settle, frameBounds, frameSlots, computeLegs } from '../../src/view/index'
 
@@ -18,6 +21,57 @@ const YF = p('(\\g. (\\x. g (x x)) (\\x. g (x x))) f')
 const FYF = p('s0 ((\\g. (\\x. g (x x)) (\\x. g (x x))) s0)')
 const TWOc = p('\\f. \\x. f (f x)')
 const ZEROc = p('\\f. \\x. x')
+
+describe('single-track proving', () => {
+  it('proves forward from the current diagram, undoes, and declares a checked theorem', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    const b = new DiagramBuilder()
+    b.termNode(b.root, p('\\x. x'))
+    const origin = mkDiagramWithBoundary(b.build(), [])
+    const s0 = startTrack(origin, 'forward', ctx)
+    const step = {
+      rule: 'doubleCutIntro' as const,
+      sel: mkSelection(s0.current, { region: s0.current.root, regions: [], nodes: [], wires: [] }),
+    }
+    const s1 = applyTrack(s0, step)
+    expect(s1.direction).toBe('forward')
+    expect(s1.steps).toEqual([step])
+    expect(undoTrack(s1).current).toBe(s0.current)
+    const theorem = declareTrack(s1, 'forwardTrack')
+    expect(theorem.lhs).toBe(origin)
+    expect(theorem.rhs.diagram).toBe(s1.current)
+    expect(theorem.steps).toEqual([step])
+    expect(() => checkTheorem(theorem, ctx)).not.toThrow()
+  })
+
+  it('proves backward from the current diagram and declares current-to-origin', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    const b = new DiagramBuilder()
+    b.termNode(b.root, p('\\x. x'))
+    const outer = b.cut(b.root)
+    b.cut(outer)
+    const origin = mkDiagramWithBoundary(b.build(), [])
+    const s0 = startTrack(origin, 'backward', ctx)
+    const step = { rule: 'doubleCutElim' as const, region: outer }
+    const s1 = applyTrack(s0, step)
+    expect(s1.direction).toBe('backward')
+    const theorem = declareTrack(s1, 'backwardTrack')
+    expect(theorem.lhs.diagram).toBe(s1.current)
+    expect(theorem.rhs).toBe(origin)
+    expect(theorem.steps).toEqual([])
+    expect(theorem.backSteps).toEqual([step])
+    expect(() => checkTheorem(theorem, ctx)).not.toThrow()
+  })
+
+  it('retains only origin boundary wires that survive the track', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    const b = new DiagramBuilder()
+    const node = b.termNode(b.root, p('x'))
+    const boundary = b.wire(b.root, [{ node, port: { kind: 'freeVar', name: 'x' } }])
+    const origin = mkDiagramWithBoundary(b.build(), [boundary])
+    expect(trackBoundary(startTrack(origin, 'backward', ctx))).toEqual([boundary])
+  })
+})
 
 function goalPair() {
   // goal: an identity node ⟹ the same node double-cut-wrapped (a toy goal)

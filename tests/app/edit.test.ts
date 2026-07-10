@@ -222,6 +222,27 @@ describe('wire construction primitives', () => {
 })
 
 describe('construction wrapping', () => {
+  it('makes a new bubble the binder of directly wrapped predicate atoms', () => {
+    const b = new DiagramBuilder()
+    const oldBinder = b.bubble(b.root, 1)
+    const atom = b.atom(oldBinder, oldBinder)
+    const d = b.build()
+    const selection = mkSelection(d, { region: oldBinder, regions: [], nodes: [atom], wires: [] })
+    const { diagram, region } = addBubble(d, selection, 1)
+    expect(diagram.nodes[atom]).toEqual({ kind: 'atom', region, binder: region })
+  })
+
+  it('preserves inner binder identity when an existing bubble subtree is wrapped', () => {
+    const b = new DiagramBuilder()
+    const inner = b.bubble(b.root, 1)
+    const atom = b.atom(inner, inner)
+    const d = b.build()
+    const selection = mkSelection(d, { region: d.root, regions: [inner], nodes: [], wires: [] })
+    const { diagram, region: outer } = addBubble(d, selection, 1)
+    expect(diagram.nodes[atom]).toEqual({ kind: 'atom', region: inner, binder: inner })
+    expect(diagram.regions[inner]).toEqual({ kind: 'bubble', parent: outer, arity: 1 })
+  })
+
   it('moves wholly enclosed endpointful wires and an explicitly selected bare wire, but not crossing or unrelated bare wires', () => {
     const b = new DiagramBuilder()
     const inside = b.termNode(b.root, p('x'))
