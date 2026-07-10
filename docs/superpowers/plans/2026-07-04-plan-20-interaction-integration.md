@@ -24,6 +24,7 @@
 9. **Delete (EDIT):** selected boundaries DISSOLVE (unselected contents propagate to the parent), selected contents die, multi-region selections work, and wires left with no endpoints are deleted along.
 10. **Move:** dragging a selected node between regions reparents with wire-scope correction (wholly-owned wires travel; shared wires keep scope when valid, else tightest common ancestor); connected-wire physics continues live during placement while region boundaries retain their semantic membership.
 11. **Spawn cascade:** right-STILL-click opens the cascade at the point (search row, λ-term entry, recents, namespace submenus); spawns land where clicked, inside cuts included; right-drag still slashes; the selection is untouched; Escape and any press outside close it without spawning.
+11a. **Bound-predicate spawn:** the same contextual cascade exposes predicate atoms separately from named relation references whenever an existing bubble can bind them. The chosen binder is explicit when several enclosing bubbles are available; the atom's arity is derived from that binder, it is created inside the binder, and binder identity supplies its semantic color. No free arity field, invented relation name, or renderer-only color assignment is permitted.
 12. **Disc labels:** a relation node's disc shows its name sans namespace (no arbitrary truncation of long defIds).
 
 *Rule application, PROVE mode (rounds 3/4):*
@@ -61,10 +62,10 @@
 
 ### Task 2: EDIT vocabulary (construction gestures, spawn cascade, real library)
 
-**Files:** `src/app/interact/construct.ts` (laws 6–10 from `ui-lab/composite.ts` + `shared.ts deleteHits/orphanedWires`), `src/app/interact/spawn.ts` (law 11 from `ui-lab/spawn.ts`, browsing the REAL loaded library — `src/app/library.ts` relations + namespaces, not the synthetic 140); label rule (law 12) lands in paint's disc-label source. Fix `src/app/edit.ts wrap()` wire rescoping (law 8) — kernel-side edit helper, test-first. DELETE the shell's button-driven join/sever/wrap/delete UI.
-**Test:** unit — wrap rescoping (the exact wholly-enclosed-wire case), deleteHits dissolve/orphan matrix; e2e — slash sever, drag join, W/Shift+W, cascade open/spawn-in-cut/Escape/click-away, reparent drag.
+**Files:** `src/app/interact/construct.ts` (laws 6–10 from `ui-lab/composite.ts` + `shared.ts deleteHits/orphanedWires`), `src/app/interact/spawn.ts` (laws 11/11a from `ui-lab/spawn.ts`, browsing the REAL loaded library and the invocation point's real enclosing binders — named relations and bound predicates remain distinct semantic entries); label rule (law 12) lands in paint's disc-label source. Fix `src/app/edit.ts wrap()` wire rescoping (law 8) — kernel-side edit helper, test-first. DELETE the shell's button-driven join/sever/wrap/delete UI.
+**Test:** unit — wrap rescoping (the exact wholly-enclosed-wire case), deleteHits dissolve/orphan matrix, binder-option derivation and atom arity; e2e — slash sever, drag join, W/Shift+W, cascade open/spawn-in-cut/Escape/click-away, spawn a predicate bound to the only enclosing bubble, choose the intended binder when bubbles nest, and reparent drag.
 
-- [x] Failing battery → port → green everywhere. Commit.
+- [ ] **REOPENED by user observation (2026-07-10):** the named-relation cascade shipped, but bound predicates are absent. Add law 11a's failing unit/e2e battery, implement against the real binder context, then rerun the Task 2 validation and commit.
 
 ### Task 3: PROVE vocabulary (dedicated mechanics, infer-first citation, tracks)
 
