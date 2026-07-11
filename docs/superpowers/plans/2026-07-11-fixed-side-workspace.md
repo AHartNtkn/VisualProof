@@ -32,21 +32,21 @@
 - Produces: `MIN_FIXED_WORKSPACE_WIDTH`, `clampDividerRatio(ratio)`, `dividerRatioAt(clientX, left, width)`, `paneGeometry(width, height, ratio, seamWidth)`, and `otherSide(side)`.
 - Consumes: no DOM, session, engine, or physics state.
 
-- [ ] **Step 1: Write failing layout tests**
+- [x] **Step 1: Write failing layout tests**
 
   Test exact 30%/70% clamping, pointer-coordinate conversion, 50/50 equality, pane widths accounting for the seam, and side switching. Include a width below the two-320-pixel minimum and assert it is identified as unsupported.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run: `npx vitest run tests/app/fixed-side-layout.test.ts`
 
   Expected: FAIL because `fixed-side-layout.ts` does not exist.
 
-- [ ] **Step 3: Implement deterministic layout helpers**
+- [x] **Step 3: Implement deterministic layout helpers**
 
   Define the minimum as two 320-pixel panes plus an 8-pixel seam. Geometry returns left/right pane rectangles in workspace-local CSS pixels; no component may recompute the clamp independently.
 
-- [ ] **Step 4: Verify and commit**
+- [x] **Step 4: Verify and commit**
 
   Run: `npx vitest run tests/app/fixed-side-layout.test.ts`
 
@@ -67,25 +67,25 @@
 - Produces: `ProofFrontViewport` with `canvas`, `side`, `view`, `engine`, `interaction`, `rebuilds`, `setFocused`, `reconcileDiagram`, `cancelActiveGesture`, `resize`, `frame`, `debugState`, and `dispose`.
 - `InteractiveViewport` gains no semantic owner; it only exposes the existing view state needed for focused tests and continues to dispose every canvas/window listener.
 
-- [ ] **Step 1: Write failing front-state tests**
+- [x] **Step 1: Write failing front-state tests**
 
   Add pure tests around exported `frontKeyRoute(focused, sample)` and `retainedFrontIds(diagram, selection, pins)` helpers. Prove an unfocused front handles no keyboard command and pruning keeps only identities present in its own diagram.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run: `npx vitest run tests/app/proof-front.test.ts`
 
   Expected: FAIL because the production front module is absent.
 
-- [ ] **Step 3: Extract the production proof pane**
+- [x] **Step 3: Extract the production proof pane**
 
   Build `ProofFrontViewport` with one canvas/context, engine, mutable view, `InteractiveViewport`, and `ProofMoveController`. Port the real proof-only paint overlays: pins, pin-on-release preview, orange selection, hover, wire geometry, and controller overlays. The controller emits ordinary `ProofStep`s through `model.apply`; it never owns session or timeline state.
 
-- [ ] **Step 4: Gate input and preserve continuity**
+- [x] **Step 4: Gate input and preserve continuity**
 
   Capture pointer-down/context-menu/wheel to focus the pane before `InteractiveViewport` dispatch. Return false from the pane key handler unless focused. `reconcileDiagram` uses carry-over and resets only invalid local identities; `resize` changes canvas backing size and refits without reconstructing the engine. `frame` advances and paints but schedules no animation frame.
 
-- [ ] **Step 5: Verify focused helpers and types**
+- [x] **Step 5: Verify focused helpers and types**
 
   Run: `npx vitest run tests/app/proof-front.test.ts tests/app/moves.test.ts tests/app/brush.test.ts`
 
@@ -93,7 +93,7 @@
 
   Expected: PASS without a second proof-move vocabulary.
 
-- [ ] **Step 6: Commit the shared front**
+- [x] **Step 6: Commit the shared front**
 
   ```bash
   git add src/app/proof-front.ts src/app/interact/viewport.ts tests/app/proof-front.test.ts
@@ -115,7 +115,7 @@
 - `FixedSideWorkspace` produces `focusedSide`, `setFocusedSide`, `reconcile(side)`, `moveFocusedCursor(cursor)`, `cancelGestures`, `frame`, `layout`, `debugState`, and `dispose`.
 - `shell.ts` remains sole owner of the `ActiveProof` union and passes the focused side to the existing temporal `TimelineView`.
 
-- [ ] **Step 1: Write failing production browser coverage**
+- [x] **Step 1: Write failing production browser coverage**
 
   Add one focused Playwright scenario that creates distinct explicit LHS/RHS snapshots, enters fixed-side mode, and proves:
 
@@ -130,33 +130,33 @@
   - exit removes both canvases/seam and restores the Edit canvas;
   - no side-toggle or fixed-side companion is present.
 
-- [ ] **Step 2: Verify RED**
+- [x] **Step 2: Verify RED**
 
   Run: `npx playwright test e2e/app.spec.ts --grep "fixed-side two-front workspace"`
 
   Expected: FAIL because production still has one toggled main canvas and companion.
 
-- [ ] **Step 3: Build `FixedSideWorkspace` composition**
+- [x] **Step 3: Build `FixedSideWorkspace` composition**
 
   Create a fixed full-bleed root containing forward pane, seam, and backward pane. Create exactly two `ProofFrontViewport`s over the same session callbacks. The workspace applies steps with `applyForward`/`applyBackward`, calls `commit`, reconciles only the changed front, updates seam meet state, and never stores a diagram or timeline.
 
-- [ ] **Step 4: Implement divider, focus, and declaration routing**
+- [x] **Step 4: Implement divider, focus, and declaration routing**
 
   Use the Task 1 geometry helpers for CSS grid widths and backing sizes. Seam pointer capture cancels both gestures, closes pane palettes, adjusts only ratio, and preserves focus. The seam button is disabled unless `meet(session)` and calls the shell declaration callback. Pane focus updates headers and shell temporal binding only.
 
-- [ ] **Step 5: Replace the production fixed-side path**
+- [x] **Step 5: Replace the production fixed-side path**
 
   In `shell.ts`, create the workspace only for `proof.kind === 'dual'`, hide the single canvas while it is active, and make the main `InteractiveViewport`, engine frame, `ProofMoveController`, and companion inert for that mode. Route focused cursor movement, Undo/Redo, Home, status, and temporal copy through the workspace focus. Hide the lifecycle declaration control in dual mode because the seam owns it. Dispose the workspace on exit and restore the Edit canvas without retaining dual-only view state.
 
-- [ ] **Step 6: Delete obsolete fixed-side presentation**
+- [x] **Step 6: Delete obsolete fixed-side presentation**
 
   Remove the side-toggle button and all shell calls that ask `companionFor` to represent the opposite fixed side. Narrow `companionFor` to theorem replay if no independently valid consumer remains. Do not import `dual-front-prototype.ts` or lab CSS.
 
-- [ ] **Step 7: Style the approved production layout**
+- [x] **Step 7: Style the approved production layout**
 
   Add Porcelain/Basalt pane headers, orange focused treatment, full-height canvases, the 8-pixel seam, `DISTINCT`/`MEET` declaration affordance, and dark-theme parity. Compass/Library/utility surfaces retain fixed overlay positioning above the workspace.
 
-- [ ] **Step 8: Verify focused production behavior**
+- [x] **Step 8: Verify focused production behavior**
 
   Run: `npx playwright test e2e/app.spec.ts --grep "fixed-side two-front workspace|ordinary proving|Compass production chrome"`
 
@@ -164,7 +164,7 @@
 
   Expected: PASS; no physics-heavy browser scenario is included.
 
-- [ ] **Step 9: Commit production integration**
+- [x] **Step 9: Commit production integration**
 
   ```bash
   git add src/app/fixed-side-workspace.ts src/app/shell.ts src/app/companion.ts src/app/index.ts app/style.css e2e/app.spec.ts
@@ -181,13 +181,13 @@
 **Interfaces:**
 - Produces: a checked durable integration record and immutable `<conformance>` receipt.
 
-- [ ] **Step 1: Prove displaced models are absent**
+- [x] **Step 1: Prove displaced models are absent**
 
   Run: `rg -n "Side: .*toggle|proof\.kind === 'dual'.*companion|dual-front-prototype|ui-lab/dual-front|requestAnimationFrame" src/app/proof-front.ts src/app/fixed-side-workspace.ts src/app/shell.ts`
 
   Expected: no side-toggle, fixed-side companion path, prototype/lab import, or per-front animation loop; the shell alone retains the global `requestAnimationFrame` owner.
 
-- [ ] **Step 2: Run fresh non-physics validation**
+- [x] **Step 2: Run fresh non-physics validation**
 
   Run: `npx vitest run tests/app/fixed-side-layout.test.ts tests/app/proof-front.test.ts tests/app/session-history.test.ts tests/app/scrubber.test.ts tests/app/moves.test.ts tests/app/companion.test.ts`
 
@@ -197,11 +197,11 @@
 
   Expected: every focused check passes. Do not run physics sources or physics-heavy suites.
 
-- [ ] **Step 3: Append conformance and durable status**
+- [x] **Step 3: Append conformance and durable status**
 
   Append `<conformance>` to the foundation record with owners, deleted structures, migrated surfaces, validation output, and evidence that no parallel fixed-side authority remains. Add the completed fixed-side workspace integration receipt to Plan 20.
 
-- [ ] **Step 4: Commit and confirm cleanliness**
+- [x] **Step 4: Commit and confirm cleanliness**
 
   ```bash
   git add docs/superpowers/plans/2026-07-04-plan-20-interaction-integration.md docs/superpowers/plans/2026-07-11-fixed-side-workspace.md
