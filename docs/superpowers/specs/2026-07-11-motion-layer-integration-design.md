@@ -1,6 +1,6 @@
 # Motion Layer Integration Design
 
-**Status:** Approved for written review  
+**Status:** Implemented and validated (`5d0a70c`, `9951668`)
 **Date:** 2026-07-11
 
 ## Outcome

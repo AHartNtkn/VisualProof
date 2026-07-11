@@ -1,7 +1,7 @@
 # Anonymous Comprehension Editor — Production Integration Design
 
 **Date:** 2026-07-11  
-**Status:** User-approved design; written-spec review pending  
+**Status:** Implemented and validated (`791ea19`, `c672ead`)
 **Scope:** Production integration of the approved anonymous relation-construction editor
 
 ## Outcome
