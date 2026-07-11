@@ -1,0 +1,48 @@
+import { describe, expect, it } from 'vitest'
+import { campaignId, puzzleId, type PuzzleDefinition } from '../../src/game/types'
+import { applyGameStep, currentDiagram, moveCursor, startPuzzle } from '../../src/game/session'
+import { isBlank } from '../../src/game/blank'
+import { fourVeils } from './fixtures'
+
+const fixture = fourVeils()
+const puzzle: PuzzleDefinition = {
+  id: puzzleId('four-veils'), campaign: campaignId('apprenticeship'), title: 'Four Veils',
+  goal: fixture.goal, prerequisites: [], grantsVellum: true,
+  witness: fixture.eliminations.map((region) => ({ rule: 'doubleCutElim' as const, region })),
+}
+const authority = {
+  context: { relations: new Map() },
+  puzzle(id: string) { if (id !== puzzle.id) throw new Error('unknown fixture puzzle'); return puzzle },
+  canUseVellum() { return false },
+}
+
+describe('backward game session', () => {
+  it('applies only backward kernel moves and completes on canonical blank', () => {
+    const start = startPuzzle(puzzle)
+    const first = applyGameStep(start, puzzle.witness[0]!, authority)
+    expect(first.completedNow).toBe(false)
+    const second = applyGameStep(first.session, puzzle.witness[1]!, authority)
+    expect(second.completedNow).toBe(true)
+    expect(isBlank(currentDiagram(second.session))).toBe(true)
+  })
+
+  it('retains future while scrubbing and truncates it on a new continuation', () => {
+    const first = applyGameStep(startPuzzle(puzzle), puzzle.witness[0]!, authority).session
+    const solved = applyGameStep(first, puzzle.witness[1]!, authority).session
+    const rewound = moveCursor(solved, 0)
+    expect(rewound.timeline.states).toHaveLength(3)
+    const branched = applyGameStep(rewound, puzzle.witness[0]!, authority).session
+    expect(branched.timeline.states).toHaveLength(2)
+    expect(branched.timeline.steps).toHaveLength(1)
+    expect(branched.timeline.cursor).toBe(1)
+  })
+
+  it('fails atomically when a general theorem reference is unavailable in game content', () => {
+    const start = startPuzzle(puzzle)
+    expect(() => applyGameStep(start, {
+      rule: 'theorem', name: 'unavailable', direction: 'forward',
+      at: { sel: { region: puzzle.goal.diagram.root, regions: [], nodes: [], wires: [] }, args: [] },
+    }, authority)).toThrow(/unknown theorem/)
+    expect(currentDiagram(start)).toBe(puzzle.goal.diagram)
+  })
+})
