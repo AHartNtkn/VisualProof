@@ -96,6 +96,14 @@ The existing comprehension construction workflow remains behaviorally authoritat
 - Escape or Backspace closes it without committing.
 - Construction, selection, connection planning, local history, cancellation, and atomic commit retain their established semantics.
 
+### 5.4 Visual-direction review
+
+Layout mockups establish composition, scale, hierarchy, and interaction geometry only. They are not production visual targets and must not be promoted into the game merely because their formatting was approved.
+
+Before adopting a material aesthetic direction, present a small set of coherent options as representative in-game demos and discuss them with the user. Each demo must show the real interface at realistic content density—including the main lens, artifact diagram, surrounding papers or vellums, and any affected loupe, teacher, or thought treatment—rather than isolated swatches or ornamental fragments. The options should make meaningful differences in materials, lighting, typography, ornament, animation, and atmosphere visible without changing approved interaction semantics.
+
+Production styling begins only after the user selects or refines a demonstrated direction. Acceptance requires a unified, intentionally crafted result that looks appropriate for a polished puzzle game; a functional wireframe, lightly decorated utility interface, or direct rendering of the formatting mockups is insufficient.
+
 ## 6. Content and progression authority
 
 One immutable bundled catalog is the only source of game content. Every artifact contains:
