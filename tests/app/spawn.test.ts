@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import {
   SpawnCascade,
   SpawnRecents,
   UNQUALIFIED_GROUP_LABEL,
   buildSpawnCatalog,
+  boundPredicateOptions,
   searchSpawnCatalog,
   snapshotSpawnInvocation,
 } from '../../src/app/interact/spawn'
@@ -76,6 +78,28 @@ describe('real relation spawn catalog', () => {
   })
 })
 
+describe('bound predicate spawn options', () => {
+  it('returns none outside bubbles and every enclosing bubble innermost first', () => {
+    const b = new DiagramBuilder()
+    const outer = b.bubble(b.root, 1)
+    const cut = b.cut(outer)
+    const inner = b.bubble(cut, 3)
+    const leaf = b.cut(inner)
+    const d = b.build()
+
+    expect(boundPredicateOptions(d, b.root)).toEqual([])
+    expect(boundPredicateOptions(d, leaf)).toEqual([
+      { binder: inner, arity: 3, position: 1, total: 2 },
+      { binder: outer, arity: 1, position: 2, total: 2 },
+    ])
+  })
+
+  it('rejects an unknown invocation region instead of silently returning no options', () => {
+    const d = new DiagramBuilder().build()
+    expect(() => boundPredicateOptions(d, 'missing')).toThrow(/unknown region 'missing'/)
+  })
+})
+
 describe('spawn recents', () => {
   it('is session-local, most-recent-first, deduped, capped, and filtered through the current catalog', () => {
     const catalog = buildSpawnCatalog(relations([
@@ -122,7 +146,13 @@ describe('spawn invocation lifecycle value', () => {
 
   it('has idempotent closed/disposed lifecycle methods without installing a DOM listener', () => {
     const host = { ownerDocument: {} } as HTMLElement
-    const cascade = new SpawnCascade({ host, spawnTerm: () => {}, spawnRelation: () => {} })
+    const cascade = new SpawnCascade({
+      host,
+      spawnTerm: () => {},
+      spawnRelation: () => {},
+      spawnBoundPredicate: () => {},
+      binderColor: () => 'rgb(1, 2, 3)',
+    })
 
     expect(cascade.isOpen).toBe(false)
     expect(cascade.close()).toBe(false)
@@ -133,6 +163,7 @@ describe('spawn invocation lifecycle value', () => {
     expect(() => cascade.open(
       { screen: { x: 0, y: 0 }, world: { x: 0, y: 0 }, region: 'r0' },
       relations([]),
+      [],
     )).toThrow(/disposed/)
   })
 })

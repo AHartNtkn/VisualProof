@@ -1,4 +1,4 @@
-import type { RegionId } from '../../kernel/diagram/diagram'
+import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { Vec2 } from '../../view/vec'
 
 export const UNQUALIFIED_GROUP_LABEL = 'Unqualified'
@@ -28,6 +28,30 @@ export type SpawnCatalog = {
   readonly byId: ReadonlyMap<string, SpawnRelation>
 }
 
+export type SpawnBoundPredicateOption = {
+  readonly binder: RegionId
+  readonly arity: number
+  readonly position: number
+  readonly total: number
+}
+
+export function boundPredicateOptions(d: Diagram, region: RegionId): readonly SpawnBoundPredicateOption[] {
+  const found: { binder: RegionId; arity: number }[] = []
+  let current = region
+  for (;;) {
+    const value = d.regions[current]
+    if (value === undefined) throw new Error(`unknown region '${current}'`)
+    if (value.kind === 'bubble') found.push({ binder: current, arity: value.arity })
+    if (value.kind === 'sheet') break
+    current = value.parent
+  }
+  return Object.freeze(found.map((option, index) => Object.freeze({
+    ...option,
+    position: index + 1,
+    total: found.length,
+  })))
+}
+
 export type SpawnInvocation = {
   readonly screen: Vec2
   readonly world: Vec2
@@ -45,12 +69,23 @@ export type SpawnRelationRequest = {
   readonly invocation: SpawnInvocation
 }
 
+export type SpawnBoundPredicateRequest = {
+  readonly binder: RegionId
+  readonly invocation: SpawnInvocation
+}
+
 export type SpawnCascadeOptions = {
   readonly host: HTMLElement
   /** Return false to keep the cascade open after a refused edit. */
   readonly spawnTerm: (request: SpawnTermRequest) => boolean | void
   /** Return false to keep the cascade open after a refused edit. */
   readonly spawnRelation: (request: SpawnRelationRequest) => boolean | void
+  /** Return false to keep the cascade open after a refused edit. */
+  readonly spawnBoundPredicate: (request: SpawnBoundPredicateRequest) => boolean | void
+  /** Presentation color derived from the renderer's authoritative binder hue. */
+  readonly binderColor: (binder: RegionId) => string
+  /** View-only binder emphasis. Null clears every cascade-owned emphasis. */
+  readonly hoverBinder?: (binder: RegionId | null) => void
   readonly openChanged?: (open: boolean) => void
   readonly recentsLimit?: number
 }
@@ -162,6 +197,9 @@ export class SpawnCascade {
   readonly #document: Document
   readonly #spawnTerm: SpawnCascadeOptions['spawnTerm']
   readonly #spawnRelation: SpawnCascadeOptions['spawnRelation']
+  readonly #spawnBoundPredicate: SpawnCascadeOptions['spawnBoundPredicate']
+  readonly #binderColor: SpawnCascadeOptions['binderColor']
+  readonly #hoverBinder: SpawnCascadeOptions['hoverBinder']
   readonly #openChanged: SpawnCascadeOptions['openChanged']
   readonly #recents: SpawnRecents
   #menu: HTMLDivElement | null = null
@@ -174,6 +212,9 @@ export class SpawnCascade {
     this.#document = options.host.ownerDocument
     this.#spawnTerm = options.spawnTerm
     this.#spawnRelation = options.spawnRelation
+    this.#spawnBoundPredicate = options.spawnBoundPredicate
+    this.#binderColor = options.binderColor
+    this.#hoverBinder = options.hoverBinder
     this.#openChanged = options.openChanged
     this.#recents = new SpawnRecents(options.recentsLimit)
   }
@@ -181,10 +222,15 @@ export class SpawnCascade {
   get isOpen(): boolean { return this.#menu !== null }
   get invocation(): SpawnInvocation | null { return this.#invocation }
 
-  open(invocation: SpawnInvocation, relations: SpawnRelationSource): void {
+  open(
+    invocation: SpawnInvocation,
+    relations: SpawnRelationSource,
+    boundPredicates: readonly SpawnBoundPredicateOption[],
+  ): void {
     if (this.#disposed) throw new Error('spawn cascade is disposed')
     const snapshot = snapshotSpawnInvocation(invocation)
     const catalog = buildSpawnCatalog(relations)
+    const predicates = Object.freeze([...boundPredicates])
     this.close()
     this.#invocation = snapshot
 
@@ -273,6 +319,39 @@ export class SpawnCascade {
       return item
     }
 
+    const binderLabel = (entry: SpawnBoundPredicateOption): string => entry.total === 1
+      ? 'Bound predicate'
+      : entry.position === 1
+        ? 'Binder 1 (innermost)'
+        : entry.position === entry.total
+          ? `Binder ${entry.position} (outermost)`
+          : `Binder ${entry.position}`
+
+    const pickBoundPredicate = (entry: SpawnBoundPredicateOption): void => {
+      if (!current()) return
+      const accepted = this.#spawnBoundPredicate({ binder: entry.binder, invocation: snapshot })
+      if (accepted === false) return
+      if (current()) this.close()
+    }
+
+    const boundPredicateRow = (entry: SpawnBoundPredicateOption): HTMLElement => {
+      const item = row(binderLabel(entry), `/${entry.arity}`, () => pickBoundPredicate(entry))
+      item.classList.add('vpa-spawn-bound-predicate')
+      item.dataset.binder = entry.binder
+      const swatch = this.#document.createElement('span')
+      swatch.className = 'vpa-spawn-binder-swatch'
+      swatch.setAttribute('aria-hidden', 'true')
+      swatch.style.cssText = `display:inline-block;width:9px;height:9px;margin-right:7px;border-radius:50%;background-color:${this.#binderColor(entry.binder)};box-shadow:0 0 0 1px #0002`
+      item.firstElementChild?.prepend(swatch)
+      item.addEventListener('pointerenter', () => {
+        if (current()) this.#setHoveredBinder(entry.binder)
+      })
+      item.addEventListener('pointerleave', () => {
+        if (current()) this.#setHoveredBinder(null)
+      })
+      return item
+    }
+
     const showNamespace = (group: SpawnNamespaceGroup): void => {
       if (!current()) return
       submenu.replaceChildren(
@@ -297,6 +376,9 @@ export class SpawnCascade {
     const renderTree = (): void => {
       submenu.style.display = 'none'
       const nodes: HTMLElement[] = [row('λ term…', '', enterTermMode)]
+      if (predicates.length > 0) {
+        nodes.push(heading('Bound predicates'), ...predicates.map(boundPredicateRow))
+      }
       const recent = this.#recents.list(catalog)
       if (recent.length > 0) nodes.push(heading('Recent'), ...recent.map((entry) => relationRow(entry, true)))
       if (catalog.groups.length > 0) nodes.push(heading('Namespaces'))
@@ -353,7 +435,12 @@ export class SpawnCascade {
     queueMicrotask(() => { if (current()) search.focus() })
   }
 
+  #setHoveredBinder(binder: RegionId | null): void {
+    this.#hoverBinder?.(binder)
+  }
+
   close(): boolean {
+    this.#setHoveredBinder(null)
     if (this.#menu === null) return false
     this.#menu.remove()
     this.#backdrop?.remove()

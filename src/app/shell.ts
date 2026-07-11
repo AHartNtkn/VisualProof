@@ -17,7 +17,7 @@ import { mkEngine, carryOver } from '../view/engine'
 import { settleStep, establishProofFrame, establishProofSlotShift, seedProject } from '../view/relax'
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
-import { paint, highlightGroup, LIGHT, THEMES } from '../view/paint'
+import { paint, bubbleHues, highlightGroup, LIGHT, THEMES } from '../view/paint'
 import { drawShapes } from '../view/canvas'
 import { fitCamera } from '../view/camera'
 import { seedBodyPlacement } from '../view/placement'
@@ -26,7 +26,7 @@ import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntr
 import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
-import { emptyDiagram, addTermNode, addRefNode } from './edit'
+import { emptyDiagram, addTermNode, addRefNode, addAtomNode } from './edit'
 import type { ProofSession, TrackDirection, TrackSession } from './session'
 import {
   startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary,
@@ -40,7 +40,7 @@ import type { Hit } from './hittest'
 import { hitTest, wireHitTest, buildSelection } from './hittest'
 import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
-import { SpawnCascade } from './interact/spawn'
+import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
 import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
 import type { ActionDescriptor } from './actions'
@@ -201,6 +201,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let interaction!: InteractiveViewport
   let construct!: ConstructController
   let spawnCascade!: SpawnCascade
+  let spawnHoverBinder: RegionId | null = null
   const feedback = new FeedbackController()
   let lastPointerClient: Vec2 = { x: window.innerWidth / 2, y: window.innerHeight / 2 }
   let refusalElement: HTMLOutputElement | null = null
@@ -1308,11 +1309,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const pinPreviewAt = pinPreview === null ? null : markerAt(pinPreview)
     if (pinPreviewAt !== null) shapes.push({ kind: 'dot', center: pinPreviewAt, rPx: 8, fill: theme.interaction.pin })
     for (const h of interaction.selection) shapes.push(...itemShapes(h, theme.interaction.selection))
-    const hov = interaction.hover
-    if (hov !== null) {
-      const binder = hoverGroupBinder(hov)
-      if (binder !== null) shapes.push(...highlightGroup(engine, theme, binder))
-      else shapes.push(...itemShapes(hov, isHitSelected(interaction.selection, hov) ? theme.interaction.selectedHover : theme.interaction.hover))
+    if (spawnHoverBinder !== null) {
+      shapes.push(...highlightGroup(engine, theme, spawnHoverBinder))
+    } else {
+      const hov = interaction.hover
+      if (hov !== null) {
+        const binder = hoverGroupBinder(hov)
+        if (binder !== null) shapes.push(...highlightGroup(engine, theme, binder))
+        else shapes.push(...itemShapes(hov, isHitSelected(interaction.selection, hov) ? theme.interaction.selectedHover : theme.interaction.hover))
+      }
     }
     shapes.push(...construct.overlay())
     ctx2d.clearRect(0, 0, canvas.width, canvas.height)
@@ -1448,6 +1453,22 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return false
       }
     },
+    spawnBoundPredicate: ({ binder, invocation }) => {
+      try {
+        const added = addAtomNode(editDiagram, invocation.region, binder)
+        pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
+        return true
+      } catch (error) {
+        refuse(error instanceof Error ? error.message : String(error), invocation.screen)
+        return false
+      }
+    },
+    binderColor: (binder) => {
+      const color = bubbleHues(editDiagram, theme.bubbleLightness).get(binder)
+      if (color === undefined) throw new Error(`bound-predicate option references missing bubble '${binder}'`)
+      return color
+    },
+    hoverBinder: (binder) => { spawnHoverBinder = binder },
   })
   construct = new ConstructController({
     host: document.body,
@@ -1466,7 +1487,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         palettePoint = sample.client
         refreshChrome()
       } else {
-        spawnCascade.open({ screen: sample.client, world: sample.world, region }, ctx.relations)
+        spawnCascade.open(
+          { screen: sample.client, world: sample.world, region },
+          ctx.relations,
+          boundPredicateOptions(editDiagram, region),
+        )
       }
     },
     theme: () => theme,
@@ -1563,11 +1588,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           userZoom: interaction.userZoom,
         }
       },
+      spawnBinderHover(): string | null {
+        return spawnHoverBinder
+      },
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[] {
         return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region }))
       },
       diagram(): {
-        nodes: { id: string; kind: string; region: string; defId: string | null }[]
+        nodes: { id: string; kind: string; region: string; defId: string | null; binder: string | null }[]
         wires: { id: string; scope: string; endpoints: number }[]
         regions: { id: string; kind: string; parent: string | null }[]
       } {
@@ -1577,6 +1605,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             kind: node.kind,
             region: node.region,
             defId: node.kind === 'ref' ? node.defId : null,
+            binder: node.kind === 'atom' ? node.binder : null,
           })),
           wires: Object.entries(displayed.wires).map(([id, wire]) => ({ id, scope: wire.scope, endpoints: wire.endpoints.length })),
           regions: Object.entries(displayed.regions).map(([id, region]) => ({

@@ -5,15 +5,16 @@ type Debug = {
   nodeCount(): number
   view(): { scale: number; offsetX: number; offsetY: number }
   bodies(): { id: string; kind: string; x: number; y: number; region: string }[]
-  regions(): { id: string; kind: string; x: number; y: number; r: number }[]
+  regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[]
   wires(): { id: string; x: number; y: number; dx: number; dy: number }[]
   wireBinds(): { id: string; node: string; x: number; y: number }[]
   interaction(): { selected: readonly Hit[] }
   diagram(): {
-    nodes: { id: string; kind: string; region: string; defId: string | null }[]
+    nodes: { id: string; kind: string; region: string; defId: string | null; binder: string | null }[]
     wires: { id: string; scope: string; endpoints: number }[]
     regions: { id: string; kind: string; parent: string | null }[]
   }
+  spawnBinderHover(): string | null
   dispose(): void
 }
 
@@ -107,6 +108,95 @@ test('the contextual spawn cascade is disposable and preserves the construction 
   await expect(page.locator('#chrome')).toBeEmpty()
   await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
   await expect(page.locator('.vpa-spawn-column')).toHaveCount(0)
+})
+
+test('spawns, identifies, highlights, and undoes a predicate bound to the enclosing bubble', async ({ page }) => {
+  await openApp(page)
+  await spawnTerm(page, '\\x. x')
+  await waitForNodes(page, 1)
+  const term = await page.evaluate(() => window.__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
+  const termAt = await bodyPoint(page, term)
+  await page.mouse.click(termAt.x, termAt.y)
+  await page.keyboard.press('Shift+w')
+  await page.getByLabel('Bubble arity').fill('2')
+  await page.getByLabel('Bubble arity').press('Enter')
+  await waitForRest(page)
+  const bubble = await page.evaluate(() => window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!)
+  const openAt = await pagePoint(page, { x: bubble.x + bubble.r * 0.55, y: bubble.y })
+  await page.mouse.click(openAt.x, openAt.y, { button: 'right' })
+
+  const option = page.locator('.vpa-spawn-bound-predicate')
+  await expect(option).toHaveCount(1)
+  await expect(option).toContainText('Bound predicate')
+  await expect(option).toContainText('/2')
+  await expect(page.locator('.vpa-spawn-binder-swatch')).toHaveCSS('background-color', /rgb/)
+  await option.hover()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBe(bubble.id)
+  await option.click()
+
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.diagram().nodes.filter((node) => node.kind === 'atom'))).toEqual([
+    expect.objectContaining({ kind: 'atom', region: bubble.id, binder: bubble.id }),
+  ])
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBeNull()
+  expect((await page.evaluate(() => window.__vpaDebug!.diagram())).wires.filter((wire) =>
+    wire.scope === bubble.id && wire.endpoints === 1,
+  )).toHaveLength(3)
+
+  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await expect.poll(() => page.evaluate(() =>
+    window.__vpaDebug!.diagram().nodes.some((node) => node.kind === 'atom'),
+  )).toBe(false)
+})
+
+test('nested bound-predicate choices identify their bubbles by order, color, and hover', async ({ page }) => {
+  await openApp(page)
+  await spawnTerm(page, '\\x. x')
+  await waitForNodes(page, 1)
+  const term = await page.evaluate(() => window.__vpaDebug!.bodies().find((body) => body.kind === 'term')!.id)
+  const termAt = await bodyPoint(page, term)
+  await page.mouse.click(termAt.x, termAt.y)
+  await page.keyboard.press('Shift+w')
+  await page.getByLabel('Bubble arity').fill('1')
+  await page.getByLabel('Bubble arity').press('Enter')
+  await waitForRest(page)
+
+  const innerBefore = await page.evaluate(() => window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!)
+  const innerInterior = await pagePoint(page, { x: innerBefore.x + innerBefore.r * 0.8, y: innerBefore.y })
+  await page.mouse.click(innerInterior.x, innerInterior.y)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([
+    { kind: 'region', id: innerBefore.id },
+  ])
+  await page.keyboard.press('Shift+w')
+  await page.getByLabel('Bubble arity').fill('2')
+  await page.getByLabel('Bubble arity').press('Enter')
+  await waitForRest(page)
+
+  const bubbles = await page.evaluate(() => window.__vpaDebug!.regions().filter((region) => region.kind === 'bubble'))
+  const inner = bubbles.find((bubble) => bubble.parent !== 'r0')!
+  const outer = bubbles.find((bubble) => bubble.parent === 'r0')!
+  const invoke = await pagePoint(page, { x: inner.x + inner.r * 0.55, y: inner.y })
+  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+
+  const rows = page.locator('.vpa-spawn-bound-predicate')
+  await expect(rows).toHaveCount(2)
+  await expect(rows.nth(0)).toContainText('Binder 1 (innermost)')
+  await expect(rows.nth(0)).toContainText('/1')
+  await expect(rows.nth(1)).toContainText('Binder 2 (outermost)')
+  await expect(rows.nth(1)).toContainText('/2')
+  const swatches = page.locator('.vpa-spawn-binder-swatch')
+  expect(await swatches.nth(0).evaluate((element) => getComputedStyle(element).backgroundColor))
+    .not.toBe(await swatches.nth(1).evaluate((element) => getComputedStyle(element).backgroundColor))
+
+  await rows.nth(0).hover()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBe(inner.id)
+  await rows.nth(1).hover()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBe(outer.id)
+  await page.getByLabel('Search relations to spawn').hover()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBeNull()
+  await rows.nth(0).hover()
+  await page.keyboard.press('Escape')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).toBeNull()
+  await expect(rows).toHaveCount(0)
 })
 
 test('selected-node placement holds the pointer while connected physics remains live', async ({ page }) => {
