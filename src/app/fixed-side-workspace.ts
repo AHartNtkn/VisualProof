@@ -20,6 +20,7 @@ import {
 } from './fixed-side-layout'
 import { ProofFrontViewport, type ProofFrontDebugState } from './proof-front'
 import type { KeySample } from './interact/viewport'
+import type { MotionPreferences } from './interact/motion'
 
 export type FixedSideWorkspaceOptions = {
   readonly host: HTMLElement
@@ -27,6 +28,7 @@ export type FixedSideWorkspaceOptions = {
   commit(session: ProofSession, changedSide: FixedSide): void
   context(): ProofContext
   theme(): Theme
+  motionPreferences(): MotionPreferences
   fuel(): number
   focusChanged(side: FixedSide): void
   declare(): void
@@ -94,7 +96,9 @@ export class FixedSideWorkspace {
       context: options.context,
       theme: options.theme,
       fuel: options.fuel,
-      apply: (step: ProofStep) => this.#apply(side, step),
+      prepare: (step: ProofStep) => this.#prepare(side, step),
+      motionPreferences: options.motionPreferences,
+      workspaceInputAllowed: () => !this.playing,
       focused: () => this.#focused === side,
       focus: () => this.setFocusedSide(side),
       keyCommand: (sample: KeySample) => this.#keyCommand(side, sample),
@@ -118,6 +122,7 @@ export class FixedSideWorkspace {
 
   get focusedSide(): FixedSide { return this.#focused }
   get ratio(): number { return this.#ratio }
+  get playing(): boolean { return this.forward.playing || this.backward.playing }
 
   setFocusedSide(side: FixedSide): void {
     if (side === this.#focused) return
@@ -134,6 +139,7 @@ export class FixedSideWorkspace {
   }
 
   moveFocusedCursor(cursor: number): void {
+    if (this.playing) return
     const next = moveSide(this.#options.session(), this.#focused, cursor)
     this.#options.commit(next, this.#focused)
     this.reconcile(this.#focused)
@@ -144,11 +150,11 @@ export class FixedSideWorkspace {
     this.backward.cancelActiveGesture()
   }
 
-  frame(): void {
+  frame(now = performance.now()): void {
     if (this.#disposed) return
     this.#layout()
-    this.forward.frame()
-    this.backward.frame()
+    this.forward.frame(now)
+    this.backward.frame(now)
   }
 
   layout(): FixedSideGeometry {
@@ -193,14 +199,17 @@ export class FixedSideWorkspace {
     return side === 'forward' ? this.forward : this.backward
   }
 
-  #apply(side: FixedSide, step: ProofStep): void {
+  #prepare(side: FixedSide, step: ProofStep): () => void {
     const session = this.#options.session()
     const next = side === 'forward' ? applyForward(session, step) : applyBackward(session, step)
-    this.#options.commit(next, side)
-    this.reconcile(side)
+    return () => {
+      this.#options.commit(next, side)
+      this.reconcile(side)
+    }
   }
 
   #keyCommand(side: FixedSide, sample: KeySample): boolean {
+    if (this.playing) return true
     if (this.#focused !== side || !(sample.ctrlKey || sample.metaKey) || sample.key.toLowerCase() !== 'z') return false
     const session = this.#options.session()
     const timeline = session[side]
@@ -299,7 +308,7 @@ export class FixedSideWorkspace {
   }
 
   #declare = (): void => {
-    if (!meet(this.#options.session())) return
+    if (this.playing || !meet(this.#options.session())) return
     this.#options.declare()
     this.#refresh()
   }

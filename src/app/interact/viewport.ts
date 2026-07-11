@@ -69,6 +69,7 @@ export type InteractiveViewportOptions = {
   readonly keyDown: (sample: KeySample) => boolean
   readonly selectionChanged: (selected: readonly Hit[]) => void
   readonly selectionCommitted: () => void
+  readonly inputAllowed?: () => boolean
 }
 
 const CLICK_SLOP_PX = 3
@@ -298,6 +299,7 @@ export class InteractiveViewport {
   }
 
   #pointerDown = (event: PointerEvent): void => {
+    if (this.#opts.inputAllowed?.() === false) { event.preventDefault(); return }
     if ((event.button !== 0 && event.button !== 2) || this.#pointer !== null) return
     this.#opts.canvas.focus({ preventScroll: true })
     const sample = this.#sample(event)
@@ -332,6 +334,7 @@ export class InteractiveViewport {
   }
 
   #pointerMove = (event: PointerEvent): void => {
+    if (this.#opts.inputAllowed?.() === false) return
     const sample = this.#sample(event)
     const pointer = this.#pointer
     if (pointer === null || pointer.id !== event.pointerId) {
@@ -399,10 +402,12 @@ export class InteractiveViewport {
 
   #contextMenu = (event: MouseEvent): void => {
     event.preventDefault()
+    if (this.#opts.inputAllowed?.() === false) return
     this.#opts.contextMenu(this.#sample(event))
   }
 
   #doubleClick = (event: MouseEvent): void => {
+    if (this.#opts.inputAllowed?.() === false) { event.preventDefault(); return }
     if (this.#opts.doubleClick(this.#sample(event))) event.preventDefault()
   }
 
@@ -464,6 +469,7 @@ export class InteractiveViewport {
     this.#modifierChanged(event)
     const target = event.target
     if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return
+    if (this.#opts.inputAllowed?.() === false) { event.preventDefault(); return }
     const consumed = this.#opts.keyDown({
       key: event.key,
       shiftKey: event.shiftKey,
@@ -477,6 +483,7 @@ export class InteractiveViewport {
 
   #wheel = (event: WheelEvent): void => {
     event.preventDefault()
+    if (this.#opts.inputAllowed?.() === false) return
     const screen = this.#screen(event)
     const world = this.#world(screen)
     const delta = event.deltaMode === WheelEvent.DOM_DELTA_LINE

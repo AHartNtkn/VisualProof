@@ -42,8 +42,8 @@ declare global {
         ratio: number
         focused: 'forward' | 'backward'
         met: boolean
-        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[] }
-        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[] }
+        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; motion: { playing: boolean; morph: string | null } }
+        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; motion: { playing: boolean; morph: string | null } }
       }
       dispose(): void
     }
@@ -369,6 +369,41 @@ test('fixed-side two-front workspace keeps both proof fronts live and independen
   await expect(page.locator('.vpa-fixed-side-workspace')).toHaveCount(0)
   await expect(page.locator('#c')).toBeVisible()
   expect(await page.evaluate(() => window.__vpaDebug!.fixed())).toBeNull()
+})
+
+test('fixed-side motion guard defers one front and blocks shared-session mutation on the other', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '(\\x. x) y')
+  await page.getByRole('button', { name: /Mode: Edit/ }).click()
+  await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
+  await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
+  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
+
+  const point = async (side: 'forward' | 'backward') => {
+    const canvas = (await page.locator(`.vpa-proof-front-${side} canvas`).boundingBox())!
+    const local = await page.evaluate((which) => {
+      const front = window.__vpaDebug!.fixed()![which]
+      const body = front.bodies.find((candidate) => candidate.kind === 'term')!
+      return { x: body.x * front.view.scale + front.view.offsetX, y: body.y * front.view.scale + front.view.offsetY }
+    }, side)
+    return { x: canvas.x + local.x, y: canvas.y + local.y }
+  }
+
+  const forward = await point('forward')
+  await page.mouse.dblclick(forward.x, forward.y)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.motion.playing)).toBe(true)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(0)
+
+  const backward = await point('backward')
+  await page.mouse.dblclick(backward.x, backward.y)
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(80)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.motion.playing)).toBe(false)
+
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor), { timeout: 2000 }).toBe(1)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
 })
 
 // The plan-14 deliverable: a relational theorem replays step-by-step through the

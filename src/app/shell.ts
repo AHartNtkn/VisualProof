@@ -45,6 +45,7 @@ import { mountCompass } from './compass'
 import { mountScrubber, type MountedScrubber, type TimelineView } from './interact/scrubber'
 import { previewTransition } from './history-preview'
 import { FixedSideWorkspace } from './fixed-side-workspace'
+import { defaultMotionPreferences } from './interact/motion'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -138,6 +139,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // an edit sheet has no boundary, so [] is correct here.
   let themeIndex = 0
   let theme: Theme = themeCycle[themeIndex] ?? LIGHT
+  const motionPreferences = defaultMotionPreferences(window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false)
   let displayed: Diagram = editDiagram
   let engine: Engine = mkEngine(displayed, [])
   seedProject(engine)
@@ -763,6 +765,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         },
         context: () => ctx,
         theme: () => theme,
+        motionPreferences: () => motionPreferences,
         fuel: () => readCount(fuel.input, 'fuel'),
         focusChanged: (side) => {
           if (proof?.kind === 'dual') proof = { ...proof, side }

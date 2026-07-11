@@ -13,6 +13,8 @@ import { isHitSelected } from './interact/brush'
 import { ProofMoveController } from './interact/moves'
 import { InteractiveViewport, type KeySample, type MutableView } from './interact/viewport'
 import type { FixedSide } from './fixed-side-layout'
+import { MotionCoordinator, type MotionPreferences } from './interact/motion'
+import type { MotionDebugState } from './interact/motion'
 
 export type ProofFrontModel = {
   readonly side: FixedSide
@@ -21,7 +23,9 @@ export type ProofFrontModel = {
   context(): ProofContext
   theme(): Theme
   fuel(): number
-  apply(step: ProofStep): void
+  prepare(step: ProofStep): () => void
+  motionPreferences(): MotionPreferences
+  workspaceInputAllowed(): boolean
   focused(): boolean
   focus(): void
   keyCommand(sample: KeySample): boolean
@@ -37,10 +41,15 @@ export type ProofFrontDebugState = {
   readonly selection: readonly Hit[]
   readonly pins: readonly string[]
   readonly bodies: readonly { id: string; kind: string; x: number; y: number; r: number }[]
+  readonly motion: MotionDebugState
 }
 
 export function frontKeyRoute(focused: boolean, sample: KeySample): KeySample | null {
   return focused ? sample : null
+}
+
+export function frontInputAllowed(focused: boolean, playing: boolean, workspaceAllowed: boolean): boolean {
+  return focused && !playing && workspaceAllowed
 }
 
 export function retainedFrontIds(
@@ -71,6 +80,7 @@ export class ProofFrontViewport {
   readonly canvas: HTMLCanvasElement
   readonly view: MutableView = { scale: 1, offsetX: 0, offsetY: 0 }
   readonly interaction: InteractiveViewport
+  readonly motion: MotionCoordinator
   #engine: Engine
   #moves: ProofMoveController
   #context: CanvasRenderingContext2D
@@ -87,17 +97,23 @@ export class ProofFrontViewport {
     this.#context = context
     this.#engine = mkEngine(model.diagram(), model.boundary())
     seedProject(this.#engine)
+    this.motion = new MotionCoordinator({
+      preferences: model.motionPreferences,
+      diagram: model.diagram,
+      engine: () => this.#engine,
+      theme: model.theme,
+    })
 
     this.#moves = new ProofMoveController({
       host: document.body,
-      active: model.focused,
+      active: () => frontInputAllowed(model.focused(), this.motion.playing, model.workspaceInputAllowed()),
       diagram: model.diagram,
       engine: () => this.#engine,
       selection: () => this.interaction.selection,
       setSelection: (selection) => this.interaction.setSelection(selection),
       context: model.context,
       orientation: () => model.side,
-      apply: model.apply,
+      apply: (step) => this.motion.run(step, model.prepare(step), performance.now()),
       refuse: model.refuse,
       theme: model.theme,
       fuel: model.fuel,
@@ -128,6 +144,7 @@ export class ProofFrontViewport {
         model.changed()
       },
       selectionCommitted: model.changed,
+      inputAllowed: () => frontInputAllowed(model.focused(), this.motion.playing, model.workspaceInputAllowed()),
     })
 
     canvas.addEventListener('pointerdown', this.#focus, true)
@@ -137,6 +154,7 @@ export class ProofFrontViewport {
 
   get engine(): Engine { return this.#engine }
   get rebuilds(): number { return this.#rebuilds }
+  get playing(): boolean { return this.motion.playing }
 
   setFocused(focused: boolean): void {
     this.canvas.closest('.vpa-proof-front')?.classList.toggle('is-focused', focused)
@@ -151,6 +169,7 @@ export class ProofFrontViewport {
     const next = mkEngine(nextDiagram, this.#model.boundary())
     carryOver(this.#engine, next)
     seedProject(next)
+    this.motion.observeSwap(this.#engine, next, performance.now())
     this.#engine = next
     this.#rebuilds++
     this.interaction.reconcileDiagram(true)
@@ -171,9 +190,10 @@ export class ProofFrontViewport {
     this.interaction.fit()
   }
 
-  frame(): void {
+  frame(now = performance.now()): void {
     if (this.#disposed) return
-    this.interaction.advance()
+    this.motion.frame(now)
+    if (!this.motion.playing) this.interaction.advance()
     const theme = this.#model.theme()
     const shapes: Shape[] = paint(this.#engine, theme)
     for (const id of this.interaction.pins) {
@@ -188,16 +208,23 @@ export class ProofFrontViewport {
     if (previewAt !== null) shapes.push({ kind: 'dot', center: previewAt, rPx: 8, fill: theme.interaction.pin })
     for (const hit of this.interaction.selection) shapes.push(...this.#itemShapes(hit, theme.interaction.selection))
     const hover = this.interaction.hover
+    this.motion.setHover(hover === null ? null : `${hover.kind}:${hover.id}`, now)
+    const hoverShapes: Shape[] = []
     if (hover !== null) {
       const binder = hoverBinder(this.#model.diagram(), hover)
-      if (binder !== null) shapes.push(...highlightGroup(this.#engine, theme, binder))
-      else shapes.push(...this.#itemShapes(hover, isHitSelected(this.interaction.selection, hover) ? theme.interaction.selectedHover : theme.interaction.hover))
+      if (binder !== null) hoverShapes.push(...highlightGroup(this.#engine, theme, binder))
+      else hoverShapes.push(...this.#itemShapes(hover, isHitSelected(this.interaction.selection, hover) ? theme.interaction.selectedHover : theme.interaction.hover))
     }
     shapes.push(...this.#moves.overlay())
     this.#context.clearRect(0, 0, this.canvas.width, this.canvas.height)
     this.#context.fillStyle = theme.canvas
     this.#context.fillRect(0, 0, this.canvas.width, this.canvas.height)
     drawShapes(this.#context, shapes, this.view)
+    this.#context.save()
+    this.#context.globalAlpha = this.motion.hoverFraction(now)
+    drawShapes(this.#context, hoverShapes, this.view)
+    this.#context.restore()
+    drawShapes(this.#context, this.motion.overlays(now), this.view)
   }
 
   debugState(): ProofFrontDebugState {
@@ -211,6 +238,7 @@ export class ProofFrontViewport {
       bodies: [...this.#engine.bodies.values()].map((body) => ({
         id: body.id, kind: body.kind, x: body.pos.x, y: body.pos.y, r: body.discR * this.#engine.scale,
       })),
+      motion: this.motion.debugState(performance.now()),
     }
   }
 
@@ -221,6 +249,7 @@ export class ProofFrontViewport {
     this.canvas.removeEventListener('contextmenu', this.#focus, true)
     this.canvas.removeEventListener('wheel', this.#focus, true)
     this.#moves.dispose()
+    this.motion.dispose()
     this.interaction.dispose()
   }
 
