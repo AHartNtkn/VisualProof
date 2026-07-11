@@ -23,6 +23,11 @@ async function spawnRelation(page: import('@playwright/test').Page, defId: strin
   await input.press('Enter')
 }
 
+async function openMode(page: import('@playwright/test').Page): Promise<void> {
+  const trigger = page.getByRole('button', { name: /Mode:/ })
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click()
+}
+
 declare global {
   interface Window {
     __vpaDebug?: {
@@ -183,6 +188,7 @@ test('proof actions require right-click and forward/backward share direct labels
     return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
   })
 
+  await openMode(page)
   await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
   let at = await point()
   await page.mouse.click(canvas.x + at.x, canvas.y + at.y)
@@ -210,6 +216,7 @@ test('Delete is a direct contextual proof gesture', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await spawnTerm(page, '\\x. x')
+  await openMode(page)
   await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
   const canvas = (await page.locator('#c').boundingBox())!
   const at = await page.evaluate(() => {
@@ -238,6 +245,7 @@ test('dragging a selected proof node into a legal region iterates it', async ({ 
   const wrappedAt = await toPage(terms[1]!)
   await page.mouse.click(wrappedAt.x, wrappedAt.y)
   await page.keyboard.press('w')
+  await openMode(page)
   await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
 
   const outside = await page.evaluate(() => window.__vpaDebug!.bodies().find((body) => body.kind === 'term' && body.region === 'r0')!)

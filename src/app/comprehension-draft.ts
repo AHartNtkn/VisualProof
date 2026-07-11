@@ -15,6 +15,31 @@ export type ExternalWireBinding = {
   readonly hostWire: WireId
 }
 
+export type ExternalReferencePresentation = {
+  readonly markedDraft: ReadonlySet<WireId>
+  readonly markedHost: ReadonlySet<WireId>
+  readonly glowingDraft: ReadonlySet<WireId>
+  readonly glowingHost: ReadonlySet<WireId>
+}
+
+/** Derive the complete visual identity relation from canonical bindings.
+    Each host has one draft representative; one draft may identify several
+    distinct host wires, and activation of any member highlights that star. */
+export function deriveExternalReferencePresentation(
+  bindings: readonly ExternalWireBinding[],
+  activeDraft: ReadonlySet<WireId>,
+  activeHost: ReadonlySet<WireId>,
+): ExternalReferencePresentation {
+  const markedDraft = new Set(bindings.map((binding) => binding.draftWire))
+  const markedHost = new Set(bindings.map((binding) => binding.hostWire))
+  const glowingDraft = new Set([...activeDraft].filter((wire) => markedDraft.has(wire)))
+  for (const binding of bindings) if (activeHost.has(binding.hostWire)) glowingDraft.add(binding.draftWire)
+  const glowingHost = new Set(bindings
+    .filter((binding) => glowingDraft.has(binding.draftWire))
+    .map((binding) => binding.hostWire))
+  return { markedDraft, markedHost, glowingDraft, glowingHost }
+}
+
 export type ComprehensionSnapshot = {
   /** The fixed formal interface only. External parameter incidences are
       materialized from `externalWires` when the kernel or renderer needs the

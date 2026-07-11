@@ -13,12 +13,12 @@ import {
   comprehensionFixture,
   currentComprehensionDraft,
   deleteComprehensionNode,
+  deriveExternalReferencePresentation,
   materializeComprehensionSnapshot,
   moveComprehensionHistory,
   planComprehensionConnection,
   ungraftComprehensionWire,
 } from '../../src/app/comprehension-draft'
-import { deriveExternalReferencePresentation } from '../../src/app/comprehension-prototype'
 
 const draftWire = (wire: string) => ({ kind: 'draft' as const, wire })
 const hostWire = (wire: string) => ({ kind: 'host' as const, wire })

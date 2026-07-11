@@ -111,6 +111,8 @@ describe('motion coordinator', () => {
     const afterDiagram = new DiagramBuilder().build()
     const before = mkEngine(beforeDiagram, [])
     const after = mkEngine(afterDiagram, [])
+    const beforeDiagramValue = JSON.stringify(beforeDiagram)
+    const afterDiagramValue = JSON.stringify(afterDiagram)
     let current = after
     const preferences = defaultMotionPreferences(false)
     const coordinator = new MotionCoordinator({ preferences: () => preferences, diagram: () => afterDiagram, engine: () => current, theme: () => LIGHT })
@@ -122,6 +124,8 @@ describe('motion coordinator', () => {
     expect(coordinator.overlays(101).length).toBeGreaterThan(0)
     expect([...before.bodies.keys()]).toEqual(beforeKeys)
     expect([...after.bodies.keys()]).toEqual(afterKeys)
+    expect(JSON.stringify(beforeDiagram)).toBe(beforeDiagramValue)
+    expect(JSON.stringify(afterDiagram)).toBe(afterDiagramValue)
     expect(before.bodies.has(removed)).toBe(true)
     expect(coordinator.overlays(551)).toEqual([])
   })

@@ -35,6 +35,11 @@ async function openApp(page: Page): Promise<void> {
   })
 }
 
+async function openMode(page: Page): Promise<void> {
+  const trigger = page.getByRole('button', { name: /Mode:/ })
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click()
+}
+
 async function addTerm(page: Page, source: string): Promise<void> {
   const box = await page.locator('#c').boundingBox()
   if (box === null) throw new Error('the main canvas has no bounding box')
@@ -412,6 +417,7 @@ test('a logical surface change resets interaction even when it reuses the same d
   await openApp(page)
   await addTerm(page, '\\x. x')
   await waitForRest(page)
+  await openMode(page)
   await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
   await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
 

@@ -27,6 +27,11 @@ async function openApp(page: Page): Promise<void> {
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
 }
 
+async function openMode(page: Page): Promise<void> {
+  const trigger = page.getByRole('button', { name: /Mode:/ })
+  if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click()
+}
+
 async function canvasBox(page: Page) {
   const box = await page.locator('#c').boundingBox()
   if (box === null) throw new Error('the main canvas has no bounding box')
@@ -142,7 +147,7 @@ test('spawns, identifies, highlights, and undoes a predicate bound to the enclos
     wire.scope === bubble.id && wire.endpoints === 1,
   )).toHaveLength(3)
 
-  await page.getByRole('button', { name: 'Undo', exact: true }).click()
+  await page.keyboard.press('Control+z')
   await expect.poll(() => page.evaluate(() =>
     window.__vpaDebug!.diagram().nodes.some((node) => node.kind === 'atom'),
   )).toBe(false)
@@ -330,6 +335,7 @@ test('direct EDIT gestures wrap, reparent, join, sever, and dissolve semantic ob
 
   // The options toggle exposes the accepted double-click alternative without
   // changing the default slash gesture.
+  await openMode(page)
   await page.getByRole('button', { name: /⚙ sever: right-drag slash/ }).click()
   await waitForRest(page)
   const remainingJoined = await page.evaluate(() => {

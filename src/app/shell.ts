@@ -790,8 +790,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       mode = 'edit'
       throw error
     }
-    interaction.cancelActiveGesture()
+    interaction.resetSurface()
     proofMoves.cancel()
+    kernelSel = null
+    pending = null
+    palettePoint = null
     restyleCompanion(false)
     canvas.hidden = true
     refreshChrome()
@@ -1209,7 +1212,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // a text/number input is focused so typing a term is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
     if (mode === 'prove' && proof?.kind === 'dual') return false
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && mode !== 'edit') {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       if (e.shiftKey) onRedo()
       else onUndo()
       return true
