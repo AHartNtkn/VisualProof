@@ -66,7 +66,7 @@ The game presents one orderly working curator's desk with slight physical asymme
 
 - A rounded-square brass lens dominates the center and fills nearly the full viewport height.
 - The active artifact diagram remains crisp and visually primary beneath the glass.
-- The left folio owns campaign and artifact navigation.
+- The left folio owns culture and artifact navigation.
 - The right-side vellums own solved seals and their organization.
 - Papers may be slightly skewed, but interaction positions remain predictable.
 - At compact widths, side papers collapse into edge stacks or drawers while the main lens remains dominant.
@@ -113,7 +113,7 @@ Production styling begins only after the user selects or refines a demonstrated 
 
 One immutable bundled catalog is the only source of game content. Every artifact contains:
 
-- stable puzzle identity and campaign identity;
+- stable artifact identity and culture identity;
 - exact closed theorem diagram;
 - verified backward solution witness;
 - content fingerprint;
@@ -138,7 +138,9 @@ Progress derives unlocked artifacts and available vellums solely from the catalo
 
 ## 7. Mastery-learning content contract
 
-The curriculum is a prerequisite DAG of small observable performances, not a chapter list or theorem-name checklist. Broad campaigns are authoring groups; each is later decomposed into knowledge nodes containing two to five knowledge points.
+The curriculum is a prerequisite DAG of small observable performances, not a chapter list or theorem-name checklist. Player-visible groupings are the sealing traditions of different cultures, not linear campaigns. Each culture contains a required mastery spine plus elective practice, retrieval, remediation, and challenge artifacts.
+
+The tutorial spans several cultures and continues through approximately the fixed-point theorem. Unlocking a later culture does not close an earlier one or require every artifact in it; only artifacts in the prerequisite closure of later content are progression requirements.
 
 Every retained performance requires:
 
@@ -150,7 +152,7 @@ Every retained performance requires:
 6. Mixed use with older skills.
 7. An unprompted transfer artifact.
 
-After initial proficiency, ordinary content should target approximately 50–60% current-campaign skills, 25–35% recent skills, and 10–20% distant retrieval. Campaign advancement depends on transfer artifacts rather than raw puzzle count, completion speed, or move count.
+After initial proficiency, ordinary content should target approximately 50–60% current-culture skills, 25–35% recent skills, and 10–20% distant retrieval. Culture advancement depends on transfer artifacts rather than raw puzzle count, completion speed, or move count.
 
 Repeated categorized errors may offer one concise teacher observation and unlock an optional contrast/remediation artifact. Returning from remediation preserves the original puzzle timeline.
 
@@ -170,9 +172,9 @@ The roadmap deliberately introduces one new representational ontology at a time:
 
 Exact artifact lists remain deferred until the prerequisite graph, mechanic matrix, and representative feasibility proofs are validated.
 
-### 8.1 Curator's Apprenticeship — bounded tutorial
+### 8.1 Oldest propositional culture — initial instruction
 
-This teaches how to play, not propositional mastery.
+The oldest surviving sealing tradition is structurally primitive. Its simplicity makes it the opening instructional culture, but it is only the beginning of the tutorial rather than a bounded tutorial of its own.
 
 Must include:
 
@@ -187,9 +189,9 @@ Must include:
 
 Exit evidence: independently read a small seal, use the timeline, understand atomic refusals, and complete a simple outer-quantified proposition puzzle.
 
-### 8.2 Outer-quantified propositional campaign
+### 8.2 Oldest propositional culture — outer-universal development
 
-This is the first substantial campaign. Nearly every theorem has outer closure of the form `∀P,Q,R,…`.
+This is the substantial continuation of the same pure-propositional culture. Nearly every theorem has outer closure of the form `∀P,Q,R,…`. Non-universal proposition quantification belongs to the next culture.
 
 Required theorem families:
 
@@ -208,9 +210,9 @@ Required theorem families:
 
 Exit evidence: solve unfamiliar multi-proposition seals through polarity and structural reasoning without stepwise dialogue or silhouette matching.
 
-### 8.3 Nested proposition-binder campaign
+### 8.3 Later proposition-binder culture
 
-This remains proposition-only. Individual wires and equality are absent.
+This remains proposition-only. It begins with non-universal proposition quantification and later develops nested binders. Individual wires and equality are absent.
 
 Required families:
 
@@ -248,7 +250,7 @@ Fusion/fission, congruence joining, endpoint transport, and head stripping are e
 
 ### 8.5 Relational systems and definitions
 
-This may become its own campaign or the advanced half of the preceding campaign after representative playtests.
+This may become its own culture or the advanced half of the preceding culture after representative playtests.
 
 Required families:
 
@@ -329,7 +331,7 @@ Required progression:
 
 The game must not assign Y the unsupported relational type `∀X.(X→X)→X`. The operational equation alone does not establish that claim for arbitrary predicates.
 
-### 8.9 Boolean theory — first synthesis campaign
+### 8.9 Boolean theory — first synthesis culture
 
 Core representations:
 
@@ -351,9 +353,9 @@ Required families:
 - De Morgan laws;
 - selected distributive laws.
 
-The campaign progresses from operational equations to proofs using Boolean case analysis. Its capstone combines several operational and closure vellums rather than reproducing a truth table.
+The culture progresses from operational equations to proofs using Boolean case analysis. Its capstone combines several operational and closure vellums rather than reproducing a truth table.
 
-### 8.10 Natural-number theory — final synthesis campaign
+### 8.10 Natural-number theory — final synthesis culture
 
 Core representations:
 
@@ -382,7 +384,7 @@ The final artifact is a newly authored closed theorem:
 
 Its intended proof is genuinely inductive and requires earlier lemma vellums. Commutativity is never exposed as a general replacement rule.
 
-This campaign reconnects proposition structure, nested second-order comprehension, first-order wires, equality, named definitions, explicit lambda terms, βη conversion, term-specific equality mechanics, relational typing, fixed points, vellum planning, and timeline exploration. It is the readiness gate for future cultures involving lists, trees, order, algorithms, or algebraic structures.
+This culture reconnects proposition structure, nested second-order comprehension, first-order wires, equality, named definitions, explicit lambda terms, βη conversion, term-specific equality mechanics, relational typing, fixed points, vellum planning, and timeline exploration. It is the readiness gate for future cultures involving lists, trees, order, algorithms, or algebraic structures.
 
 ## 9. Mechanic coverage contract
 
@@ -410,7 +412,7 @@ Before content freeze, the implemented player-action surface must be mechanicall
 
 ## 10. First implementation slice
 
-The approved first deliverable is a polished vertical slice, not immediate authorship of the entire roadmap.
+The approved development order is a permanent seven-artifact opening batch, then completion of the overall game interface, then most remaining artifact authorship. It is not immediate authorship of the entire roadmap.
 
 It includes:
 
@@ -418,12 +420,12 @@ It includes:
 - backward-only puzzle sessions and blank completion;
 - progression, local save, and exact vellum authority;
 - the curator's desk, main lens, timeline lever, teacher dialogue, red thoughts, and clean construction loupe;
-- the complete Curator's Apprenticeship;
-- one polished opening folio from the outer-quantified propositional campaign;
-- enough solved-vellum dependency and delayed practice to validate the complete loop;
+- six permanent artifacts beginning the oldest pure-propositional culture;
+- one permanent gateway artifact beginning the next proposition-binder culture;
+- a required mastery spine alongside at least one elective artifact, so the interface proves non-linear progression;
 - the full curriculum and mechanic graph as the durable authoring roadmap.
 
-Later campaign content must not appear as placeholder, locked empty panels, or unverifiable scaffolding in the shipped slice.
+Later cultural content must not appear as placeholder, locked empty panels, or unverifiable scaffolding in the shipped slice. Non-shipping development fixtures may exercise interface surfaces whose instructional culture has not yet been authored.
 
 ## 11. Validation
 
