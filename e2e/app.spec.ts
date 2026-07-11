@@ -45,6 +45,7 @@ declare global {
         forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; motion: { playing: boolean; morph: string | null } }
         backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; motion: { playing: boolean; morph: string | null } }
       }
+      motion(): { playing: boolean; morph: string | null; ghosts: number; pulses: number; hover: number; preferences: { conversionAnimation: boolean; connectedMorph: boolean; speed: number; transitionGhosts: boolean; hoverEaseMs: number } }
       dispose(): void
     }
   }
@@ -404,6 +405,41 @@ test('fixed-side motion guard defers one front and blocks shared-session mutatio
 
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor), { timeout: 2000 }).toBe(1)
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
+})
+
+test('production motion layers defer conversion and expose the five approved controls', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '(\\x. x) y')
+  await page.getByRole('button', { name: /Mode: Edit/ }).click()
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+  const canvas = (await page.locator('#c').boundingBox())!
+  const point = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  await page.mouse.dblclick(canvas.x + point.x, canvas.y + point.y)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.motion().playing)).toBe(true)
+  await expect(page.locator('#status')).toContainText('0 step(s)')
+  await page.keyboard.press('Control+z')
+  await page.waitForTimeout(80)
+  await expect(page.locator('#status')).toContainText('0 step(s)')
+  await expect.poll(() => page.locator('#status').textContent(), { timeout: 2000 }).toContain('1 step(s)')
+  expect(await page.evaluate(() => window.__vpaDebug!.motion().playing)).toBe(false)
+
+  await page.getByRole('button', { name: 'Utilities', exact: true }).click()
+  await expect(page.locator('.vpa-motion-conversion')).toBeChecked()
+  await expect(page.locator('.vpa-motion-connected')).toBeChecked()
+  await expect(page.locator('.vpa-motion-ghosts')).toBeChecked()
+  await expect(page.locator('.vpa-motion-hover')).toBeChecked()
+  await expect(page.locator('.vpa-motion-speed')).toHaveValue('1')
+  await page.locator('.vpa-motion-connected').uncheck()
+  await page.locator('.vpa-motion-speed').fill('3')
+  await expect(page.locator('.vpa-motion-speed-value')).toHaveText('3×')
+  expect(await page.evaluate(() => window.__vpaDebug!.motion().preferences.connectedMorph)).toBe(false)
+  expect(await page.evaluate(() => window.__vpaDebug!.motion().preferences.speed)).toBe(3)
+  await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
 // The plan-14 deliverable: a relational theorem replays step-by-step through the

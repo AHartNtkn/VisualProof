@@ -45,7 +45,7 @@ import { mountCompass } from './compass'
 import { mountScrubber, type MountedScrubber, type TimelineView } from './interact/scrubber'
 import { previewTransition } from './history-preview'
 import { FixedSideWorkspace } from './fixed-side-workspace'
-import { defaultMotionPreferences } from './interact/motion'
+import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -143,6 +143,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let displayed: Diagram = editDiagram
   let engine: Engine = mkEngine(displayed, [])
   seedProject(engine)
+  const mainMotion = new MotionCoordinator({
+    preferences: () => motionPreferences,
+    diagram: () => displayed,
+    engine: () => engine,
+    theme: () => theme,
+  })
   let interaction!: InteractiveViewport
   let construct!: ConstructController
   let proofMoves!: ProofMoveController
@@ -591,9 +597,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // surviving layout, then re-solve THIS diagram's content scale inside it.
       const previous = engine
       displayed = d
-      engine = mkEngine(d, currentBoundary())
-      carryOver(previous, engine)
-      seedProject(engine)
+      const next = mkEngine(d, currentBoundary())
+      carryOver(previous, next)
+      seedProject(next)
+      mainMotion.observeSwap(previous, next, performance.now())
+      engine = next
       if (surfaceChanged) interaction.resetSurface()
       else interaction.reconcileDiagram()
       kernelSel = null
@@ -663,6 +671,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const thm = ctx.theorems.get(name)
     if (thm === undefined) throw new Error(`unknown theorem '${name}'`)
     if (mode !== 'replay') replayReturnMode = mode
+    mainMotion.cancel()
     replay = mkReplay(thm, ctx)
     replayK = 0
     mode = 'replay'
@@ -727,6 +736,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   const leaveProof = guard(() => {
     proofMoves.cancel()
+    mainMotion.cancel()
     if (mode === 'replay') {
       exitReplay()
       return
@@ -787,6 +797,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     refreshChrome()
   })
   const onUndo = guard(() => {
+    if (mainMotion.playing || fixedWorkspace?.playing) return
     if (mode === 'edit') {
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
@@ -809,6 +820,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     sync()
   })
   const onRedo = guard(() => {
+    if (mainMotion.playing || fixedWorkspace?.playing) return
     if (mode === 'replay' && replay !== null) {
       if (replayK === replay.stepCount) throw new Error('nothing to redo in replay')
       gotoReplayStep(replayK + 1)
@@ -841,13 +853,19 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // ---- proof actions ----
   const applyProofStep = (step: ProofStep): void => {
     if (proof === null) throw new Error('no active proof')
-    if (proof.kind === 'track') proof = { kind: 'track', track: applyTrack(proof.track, step) }
-    else {
+    if (proof.kind === 'track') {
+      const next = applyTrack(proof.track, step)
+      mainMotion.run(step, () => {
+        proof = { kind: 'track', track: next }
+        sync()
+      }, performance.now())
+      refreshChrome()
+      return
+    } else {
       proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, step) : applyBackward(proof.session, step) }
       fixedWorkspace?.reconcile(proof.side)
       return
     }
-    sync()
   }
 
   // ---- define relation (EDIT mode, two-phase like relFold) ----
@@ -909,6 +927,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       : mode === 'replay'
         ? 'Drag the temporal rail or use Arrow keys to inspect the verified derivation.'
         : 'Select diagram structure, then right-click for legal proof moves. Drag the temporal rail to undo or redo.'
+    for (const control of motionControls) control.disabled = mainMotion.playing || fixedWorkspace?.playing === true
     temporal?.refresh()
 
     menuDiv.replaceChildren()
@@ -1122,12 +1141,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const r = b.discR * engine.scale
     return { x: b.pos.x + r * 0.72, y: b.pos.y - r * 0.72 }
   }
-  const frame = (): void => {
+  const frame = (now = performance.now()): void => {
     if (disposed) return
     if (mode === 'prove' && proof?.kind === 'dual' && fixedWorkspace !== null) {
       canvas.hidden = true
       restyleCompanion(false)
-      fixedWorkspace.frame()
+      fixedWorkspace.frame(now)
       raf = requestAnimationFrame(frame)
       return
     }
@@ -1144,7 +1163,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // Plan 24 motion policy: a FULL strict-descent sweep over every DOF each
     // frame (no time-slicing) — the whole diagram eases toward rest together.
     // InteractiveViewport supplies the exact persistent and active pin set.
-    interaction.advance()
+    mainMotion.frame(now)
+    if (!mainMotion.playing) interaction.advance()
     const shapes: Shape[] = paint(engine, theme)
     for (const id of interaction.pins) {
       const b = engine.bodies.get(id)
@@ -1157,14 +1177,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const pinPreviewAt = pinPreview === null ? null : markerAt(pinPreview)
     if (pinPreviewAt !== null) shapes.push({ kind: 'dot', center: pinPreviewAt, rPx: 8, fill: theme.interaction.pin })
     for (const h of interaction.selection) shapes.push(...itemShapes(h, theme.interaction.selection))
+    const hoverShapes: Shape[] = []
     if (spawnHoverBinder !== null) {
-      shapes.push(...highlightGroup(engine, theme, spawnHoverBinder))
+      mainMotion.setHover(`region:${spawnHoverBinder}`, now)
+      hoverShapes.push(...highlightGroup(engine, theme, spawnHoverBinder))
     } else {
       const hov = interaction.hover
+      mainMotion.setHover(hov === null ? null : `${hov.kind}:${hov.id}`, now)
       if (hov !== null) {
         const binder = hoverGroupBinder(hov)
-        if (binder !== null) shapes.push(...highlightGroup(engine, theme, binder))
-        else shapes.push(...itemShapes(hov, isHitSelected(interaction.selection, hov) ? theme.interaction.selectedHover : theme.interaction.hover))
+        if (binder !== null) hoverShapes.push(...highlightGroup(engine, theme, binder))
+        else hoverShapes.push(...itemShapes(hov, isHitSelected(interaction.selection, hov) ? theme.interaction.selectedHover : theme.interaction.hover))
       }
     }
     shapes.push(...construct.overlay())
@@ -1173,6 +1196,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     ctx2d.fillStyle = theme.canvas
     ctx2d.fillRect(0, 0, canvas.width, canvas.height)
     drawShapes(ctx2d, shapes, view)
+    ctx2d.save()
+    ctx2d.globalAlpha = mainMotion.hoverFraction(now)
+    drawShapes(ctx2d, hoverShapes, view)
+    ctx2d.restore()
+    drawShapes(ctx2d, mainMotion.overlays(now), view)
     renderCompanion(comp, companionVisible)
     raf = requestAnimationFrame(frame)
   }
@@ -1289,6 +1317,43 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   keyboardMap.textContent = 'Ctrl+Z undo · Ctrl+Shift+Z redo · Home fit · Esc cancel · Delete contextual erase'
   keyboardMap.hidden = true
   const keyboardBtn = button('Keyboard map', () => { keyboardMap.hidden = !keyboardMap.hidden })
+  const motionGroup = div('vpa-motion-controls')
+  const motionCheck = (label: string, className: string, checked: () => boolean, update: (value: boolean) => void): HTMLInputElement => {
+    const row = document.createElement('label')
+    const input = document.createElement('input')
+    input.type = 'checkbox'
+    input.className = className
+    input.checked = checked()
+    input.addEventListener('change', () => update(input.checked))
+    row.append(input, label)
+    motionGroup.append(row)
+    return input
+  }
+  const conversionMotion = motionCheck('βη animation', 'vpa-motion-conversion', () => motionPreferences.conversionAnimation, (value) => { motionPreferences.conversionAnimation = value })
+  const connectedMotion = motionCheck('connected morph (off = pinned v1)', 'vpa-motion-connected', () => motionPreferences.connectedMorph, (value) => { motionPreferences.connectedMorph = value })
+  const ghostMotion = motionCheck('transition ghosts', 'vpa-motion-ghosts', () => motionPreferences.transitionGhosts, (value) => { motionPreferences.transitionGhosts = value })
+  const hoverMotion = motionCheck('hover ease', 'vpa-motion-hover', () => motionPreferences.hoverEaseMs > 0, (value) => { motionPreferences.hoverEaseMs = value ? 120 : 0 })
+  const speedRow = document.createElement('label')
+  speedRow.append('speed ')
+  const motionSpeed = document.createElement('input')
+  motionSpeed.type = 'range'
+  motionSpeed.className = 'vpa-motion-speed'
+  motionSpeed.min = '0.25'
+  motionSpeed.max = '3'
+  motionSpeed.step = '0.25'
+  motionSpeed.value = String(motionPreferences.speed)
+  const motionSpeedValue = document.createElement('output')
+  motionSpeedValue.className = 'vpa-motion-speed-value'
+  motionSpeedValue.value = `${motionPreferences.speed}×`
+  motionSpeed.addEventListener('input', () => {
+    setMotionSpeed(motionPreferences, Number(motionSpeed.value))
+    motionSpeed.value = String(motionPreferences.speed)
+    motionSpeedValue.value = `${motionPreferences.speed}×`
+  })
+  speedRow.append(motionSpeed, motionSpeedValue)
+  motionGroup.prepend(Object.assign(document.createElement('b'), { textContent: 'Motion' }))
+  motionGroup.append(speedRow)
+  const motionControls = [conversionMotion, connectedMotion, ghostMotion, hoverMotion, motionSpeed]
   compass.lifecycle.append(backwardBtn, forwardBtn, setLhsBtn, setRhsBtn, dualBtn, leaveBtn, nameInput, declareBtn, helpBtn, helpText)
   compass.utilities.append(
     themeBtn,
@@ -1299,6 +1364,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     button('Save theory', onSave),
     keyboardBtn,
     keyboardMap,
+    motionGroup,
   )
   chrome.append(menuDiv, openFileInput)
   spawnCascade = new SpawnCascade({
@@ -1345,7 +1411,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   construct = new ConstructController({
     host: document.body,
-    active: () => mode === 'edit',
+    active: () => mode === 'edit' && !mainMotion.playing,
     engine: () => engine,
     viewScale: () => view.scale,
     diagram: () => editDiagram,
@@ -1371,7 +1437,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   proofMoves = new ProofMoveController({
     host: document.body,
-    active: () => mode === 'prove' && proof?.kind === 'track',
+    active: () => mode === 'prove' && proof?.kind === 'track' && !mainMotion.playing,
     diagram: currentDiagram,
     engine: () => engine,
     selection: () => interaction.selection,
@@ -1408,6 +1474,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       pending = null
       refreshChrome()
     },
+    inputAllowed: () => !mainMotion.playing,
   })
   const timelineView = (): TimelineView | null => {
     if (mode === 'replay' && replay !== null) {
@@ -1416,6 +1483,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         steps: replay.steps,
         cursor: replayK,
         boundary: replay.boundary,
+        inputAllowed: () => true,
         moveTo: gotoReplayStep,
       }
     }
@@ -1425,6 +1493,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return {
         ...active.timeline,
         boundary: trackBoundary(active),
+        inputAllowed: () => !mainMotion.playing,
         moveTo: (cursor) => {
           if (proof?.kind !== 'track') return
           proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
@@ -1438,6 +1507,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       ...active,
       name: activeProof.side,
       boundary: sideBoundary(activeProof.session, activeProof.side),
+      inputAllowed: () => fixedWorkspace?.playing !== true,
       moveTo: (cursor) => {
         fixedWorkspace?.moveFocusedCursor(cursor)
       },
@@ -1540,6 +1610,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     construct.dispose()
     spawnCascade.dispose()
     proofMoves.dispose()
+    mainMotion.dispose()
     fixedWorkspace?.dispose()
     fixedWorkspace = null
     temporal?.dispose()
@@ -1592,6 +1663,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       },
       fixed() {
         return fixedWorkspace?.debugState() ?? null
+      },
+      motion() {
+        return { ...mainMotion.debugState(performance.now()), preferences: { ...motionPreferences } }
       },
       spawnBinderHover(): string | null {
         return spawnHoverBinder

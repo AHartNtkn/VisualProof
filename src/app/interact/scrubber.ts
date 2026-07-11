@@ -7,6 +7,7 @@ export type TimelineView = {
   readonly steps: readonly ProofStep[]
   readonly cursor: number
   readonly boundary: readonly WireId[]
+  readonly inputAllowed?: () => boolean
   moveTo(cursor: number): void
 }
 
@@ -88,13 +89,13 @@ export function mountScrubber(
   }
   const moveFromPointer = (event: PointerEvent): void => {
     const view = getView()
-    if (view === null) return
+    if (view === null || view.inputAllowed?.() === false) return
     const rect = rail.getBoundingClientRect()
     view.moveTo(nearestTimelineCursor(event.clientX, rect.left, rect.width, view.states.length))
   }
   const command = (kind: CursorCommand): void => {
     const view = getView()
-    if (view === null) return
+    if (view === null || view.inputAllowed?.() === false) return
     const next = cursorCommand(view.cursor, view.states.length, kind)
     if (next === null) actions.unavailable?.(kind)
     else view.moveTo(next)
@@ -103,6 +104,7 @@ export function mountScrubber(
   listen(undo, 'click', () => command('undo'))
   listen(redo, 'click', () => command('redo'))
   listen(rail, 'pointerdown', ((event: PointerEvent) => {
+    if (getView()?.inputAllowed?.() === false) return
     dragging = true
     actions.closePreview?.()
     rail.setPointerCapture?.(event.pointerId)
