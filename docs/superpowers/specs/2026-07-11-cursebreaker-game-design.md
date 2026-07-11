@@ -12,6 +12,8 @@ Cursebreaker is a self-contained abstract puzzle game built from the visual proo
 
 The game is the sole product on its branch. The proof-assistant application remains on `main`; the game branch contains no sibling assistant, hidden assistant mode, feature flag, compatibility shell, theory editor, arbitrary theorem authoring, filesystem library, import, export, or save-theory path.
 
+These are catalog and product-surface constraints, not demands to narrow the reusable proof engine. The underlying kernel may retain general theorem, boundary, and proof capabilities when the bundled game content and player interface do not expose them.
+
 The intended player enjoys abstract puzzle games and may know no formal logic. The game must be enjoyable and learnable without referring to propositions, quantifiers, inference, lambda calculus, or its mathematical origin. Exact formal statements remain authoritative content metadata and validation evidence, not required player-facing language.
 
 ## 2. Non-negotiable game model
@@ -454,7 +456,7 @@ Kernel verification proves soundness, not learnability or fun. Novice playtests 
 - Forward proving.
 - Two-front or meet-in-the-middle proving.
 - Open or boundary-bearing game theorems.
-- General theorem rewrite rules.
+- General theorem-rewrite controls or bundled open/general theorem content.
 - User-authored goals, relations, theories, or theorem declarations.
 - Theory folder/file loading, saving, import, or export.
 - Proof-assistant shell, modes, compatibility adapters, or sibling application.
@@ -462,4 +464,3 @@ Kernel verification proves soundness, not learnability or fun. Novice playtests 
 - Forced cursor scripts or mandatory intentional mistakes.
 - Unproved relational typings for fixed-point combinators.
 - Conversion of the incumbent theorem corpus into game content.
-

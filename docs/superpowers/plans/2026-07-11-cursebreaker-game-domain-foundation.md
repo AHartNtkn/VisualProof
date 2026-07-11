@@ -4,7 +4,7 @@
 
 **Goal:** Build the headless game-native authority for closed backward puzzles, exact solved-seal vellums, immutable timelines, durable progression, catalog verification, and versioned active-session saves.
 
-**Architecture:** Add a new `src/game` package that depends only on `src/kernel`, never on the incumbent proof-assistant `src/app` or bundled `src/theories`. Kernel proof primitives remain the soundness authority, while the game package narrows them to non-theorem backward steps and owns exact closed-seal invocation. This plan intentionally does not integrate UI or author the apprenticeship catalog; those follow after the game domain and representative content spikes are validated.
+**Architecture:** Add a new `src/game` package that depends only on `src/kernel`, never on the incumbent proof-assistant `src/app` or bundled `src/theories`. The existing general proof-step executor remains the soundness authority. Game catalog validation supplies only closed puzzle goals and no external theorem content, while the game package separately owns exact solved-seal invocation. This plan intentionally does not integrate UI or author the apprenticeship catalog; those follow after the game domain and representative content spikes are validated.
 
 **Tech Stack:** TypeScript 5.5 strict mode, Vitest 2, existing immutable diagram kernel and canonical explorer.
 
@@ -12,7 +12,7 @@
 
 - The game is the sole eventual product on `game/cursebreaker`; this foundation must create no sibling entry point or feature flag.
 - Every game puzzle is one closed zero-boundary theorem whose implicit source is blank.
-- Runtime play is backward-only; no game API may accept forward orientation or a general theorem step.
+- Runtime play is backward-only. The shipped catalog and later game UI expose no generalized theorem content or theorem-rewrite controls; the reusable engine may retain that capability.
 - A vellum may only manifest one complete solved seal or dissolve one exact canonical occurrence.
 - Timeline rewind retains future states; applying from the past truncates the abandoned future.
 - First completion is durable and independent of the current timeline cursor.
@@ -157,7 +157,7 @@ export const campaignId = (value: string): CampaignId => {
 
 export class GameDomainError extends Error {}
 
-export type GameKernelStep = Exclude<ProofStep, { readonly rule: 'theorem' }>
+export type GameKernelStep = ProofStep
 
 export type VellumStep =
   | { readonly rule: 'vellumManifest'; readonly puzzle: PuzzleId; readonly region: RegionId }
@@ -401,9 +401,13 @@ describe('backward game session', () => {
     expect(branched.timeline.cursor).toBe(1)
   })
 
-  it('refuses a general theorem step at the type boundary', () => {
-    // @ts-expect-error game sessions do not accept proof-assistant theorem rewrites
-    applyGameStep(startPuzzle(puzzle), { rule: 'theorem', name: 'x', direction: 'forward', at: {} }, authority)
+  it('fails atomically when a general theorem reference is unavailable in game content', () => {
+    const start = startPuzzle(puzzle)
+    expect(() => applyGameStep(start, {
+      rule: 'theorem', name: 'unavailable', direction: 'forward',
+      at: { sel: { region: puzzle.goal.diagram.root, regions: [], nodes: [], wires: [] }, args: [] },
+    }, authority)).toThrow(/unknown theorem/)
+    expect(currentDiagram(start)).toBe(puzzle.goal.diagram)
   })
 })
 ```
@@ -998,7 +1002,7 @@ git commit -m "feat(game): add replayable local save format"
 
 **Interfaces:**
 - `src/game/index.ts` exports only the Task 1–5 public game APIs.
-- No `src/game` file imports `src/app`, `src/theories`, filesystem access, or proof-assistant theorem/store modules.
+- No `src/game` file imports `src/app`, `src/theories`, or filesystem access.
 
 - [ ] **Step 1: Write the failing architecture test**
 
@@ -1016,7 +1020,6 @@ describe('game package boundary', () => {
       const source = readFileSync(file, 'utf8')
       return /from ['"]\.\.\/app\//.test(source)
         || /from ['"]\.\.\/theories\//.test(source)
-        || /kernel\/proof\/(theorem|store)/.test(source)
         || /fsaccess/.test(source)
     })
     expect(offenders).toEqual([])
@@ -1077,8 +1080,8 @@ This plan is complete only when:
 - the headless game-domain tests pass;
 - strict typecheck passes;
 - no new full-suite failure appears beyond the recorded inherited baseline;
-- no game package import reaches proof-assistant product, theory-store, or general-theorem authority;
-- catalog witnesses replay strictly backward to blank;
+- no game package import reaches proof-assistant product, prototype theory, or filesystem authority;
+- catalog witnesses replay strictly backward to blank and unavailable general theorem references fail atomically;
 - vellum operations are exact whole-seal operations;
 - save load reconstructs retained future and cursor solely by replay.
 
