@@ -144,10 +144,17 @@ test('Compass production chrome overlays the canvas and exposes cursor history o
   await page.keyboard.press('Control+z')
   await expect(page.locator('.vpa-temporal-copy')).toContainText('0 / 1')
   await expect(page.locator('.vpa-temporal-tick.is-future')).toHaveCount(1)
+  const rail = (await page.locator('.vpa-temporal-rail').boundingBox())!
+  await page.mouse.move(rail.x, rail.y + rail.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(rail.x + rail.width, rail.y + rail.height / 2, { steps: 5 })
+  await page.mouse.up()
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+  await page.keyboard.press('Control+z')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('0 / 1')
   await page.keyboard.press('Control+Shift+z')
   await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
 
-  const rail = (await page.locator('.vpa-temporal-rail').boundingBox())!
   await page.mouse.move(rail.x + rail.width * 0.5, rail.y + rail.height * 0.5)
   await expect(page.locator('.vpa-history-preview')).toBeVisible()
   await page.mouse.move(rail.x, rail.y - 30)
