@@ -14,6 +14,11 @@ The game is the sole product on its branch. The proof-assistant application rema
 
 These are catalog and product-surface constraints, not demands to narrow the reusable proof engine. The underlying kernel may retain general theorem, boundary, and proof capabilities when the bundled game content and player interface do not expose them.
 
+The proof assistant on `main` is the sole owner of proof interactions. The game may
+decorate those interactions but must not define a proof gesture or command that is
+absent from the assistant. A missing interaction is implemented and validated on
+`main` first, then brought into the game through branch integration.
+
 The intended player enjoys abstract puzzle games and may know no formal logic. The game must be enjoyable and learnable without referring to propositions, quantifiers, inference, lambda calculus, or its mathematical origin. Exact formal statements remain authoritative content metadata and validation evidence, not required player-facing language.
 
 ## 2. Non-negotiable game model
