@@ -63,7 +63,7 @@ No existing production file is modified until Task 6 adds the package boundary t
 - Produces: `blankDiagram(): Diagram`, `isBlank(diagram: Diagram): boolean`, `assertClosedGoal(goal: DiagramWithBoundary): void`.
 - Consumes: kernel `Diagram`, `DiagramWithBoundary`, `ProofStep`, and relation definitions.
 
-- [ ] **Step 1: Write deterministic fixture builders**
+- [x] **Step 1: Write deterministic fixture builders**
 
 Create `tests/game/fixtures.ts`:
 
@@ -95,7 +95,7 @@ export function fourVeils(): VeilFixture {
 }
 ```
 
-- [ ] **Step 2: Write failing blank and closed-goal tests**
+- [x] **Step 2: Write failing blank and closed-goal tests**
 
 Create `tests/game/blank.test.ts`:
 
@@ -122,13 +122,13 @@ describe('game blank authority', () => {
 })
 ```
 
-- [ ] **Step 3: Run the focused test and verify the expected failure**
+- [x] **Step 3: Run the focused test and verify the expected failure**
 
 Run: `npx vitest run tests/game/blank.test.ts`
 
 Expected: FAIL because `src/game/blank.ts` does not exist.
 
-- [ ] **Step 4: Implement the game vocabulary**
+- [x] **Step 4: Implement the game vocabulary**
 
 Create `src/game/types.ts`:
 
@@ -189,7 +189,7 @@ export type GameCatalogSource = {
 }
 ```
 
-- [ ] **Step 5: Implement canonical blank comparison**
+- [x] **Step 5: Implement canonical blank comparison**
 
 Create `src/game/blank.ts`:
 
@@ -218,13 +218,13 @@ export function assertClosedGoal(goal: DiagramWithBoundary): void {
 }
 ```
 
-- [ ] **Step 6: Run focused tests and typecheck**
+- [x] **Step 6: Run focused tests and typecheck**
 
 Run: `npx vitest run tests/game/blank.test.ts && npm run typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/game/types.ts src/game/blank.ts tests/game/fixtures.ts tests/game/blank.test.ts
@@ -244,7 +244,7 @@ git commit -m "feat(game): define closed puzzle vocabulary"
 - Produces: `manifestSeal(host, region, puzzle): Diagram` and `dissolveSeal(host, selection, puzzle): Diagram`.
 - Guarantees: only zero-boundary goals; no host attachments; no external binder capture; exact canonical whole-seal equality.
 
-- [ ] **Step 1: Write failing exactness tests**
+- [x] **Step 1: Write failing exactness tests**
 
 Create `tests/game/vellum.test.ts`:
 
@@ -292,13 +292,13 @@ describe('exact solved-seal vellums', () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused test and verify the expected failure**
+- [x] **Step 2: Run the focused test and verify the expected failure**
 
 Run: `npx vitest run tests/game/vellum.test.ts`
 
 Expected: FAIL because `src/game/vellum.ts` does not exist.
 
-- [ ] **Step 3: Implement exact manifestation and dissolution**
+- [x] **Step 3: Implement exact manifestation and dissolution**
 
 Create `src/game/vellum.ts`:
 
@@ -331,13 +331,13 @@ export function dissolveSeal(
 }
 ```
 
-- [ ] **Step 4: Run focused and canonical-subgraph tests**
+- [x] **Step 4: Run focused and canonical-subgraph tests**
 
 Run: `npx vitest run tests/game/vellum.test.ts tests/kernel/diagram/extract.test.ts tests/kernel/diagram/splice.test.ts`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/vellum.ts tests/game/vellum.test.ts
@@ -357,7 +357,7 @@ git commit -m "feat(game): add exact solved-seal vellums"
 - Produces: `startPuzzle`, `currentDiagram`, `moveCursor`, `applyGameStep`.
 - Consumes: puzzle lookup and solved-vellum availability through `GameRuntimeAuthority`.
 
-- [ ] **Step 1: Write failing session tests**
+- [x] **Step 1: Write failing session tests**
 
 Create `tests/game/session.test.ts`:
 
@@ -412,13 +412,13 @@ describe('backward game session', () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused test and verify the expected failure**
+- [x] **Step 2: Run the focused test and verify the expected failure**
 
 Run: `npx vitest run tests/game/session.test.ts`
 
 Expected: FAIL because `src/game/session.ts` does not exist.
 
-- [ ] **Step 3: Implement the backward timeline**
+- [x] **Step 3: Implement the backward timeline**
 
 Create `src/game/session.ts`:
 
@@ -496,13 +496,13 @@ export function applyGameStep(
 }
 ```
 
-- [ ] **Step 4: Run focused tests and typecheck**
+- [x] **Step 4: Run focused tests and typecheck**
 
 Run: `npx vitest run tests/game/session.test.ts && npm run typecheck`
 
 Expected: PASS, including the `@ts-expect-error` assertion.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/session.ts tests/game/session.test.ts
@@ -524,7 +524,7 @@ git commit -m "feat(game): add backward retained timeline"
 - Produces: `GameProgress`, `emptyProgress`, `recordCompletion`, `isUnlocked`, `availableVellums`.
 - Catalog witness replay uses only prerequisite vellums and must finish at blank.
 
-- [ ] **Step 1: Write failing catalog tests**
+- [x] **Step 1: Write failing catalog tests**
 
 Create `tests/game/catalog.test.ts`:
 
@@ -568,7 +568,7 @@ describe('verified game catalog', () => {
 })
 ```
 
-- [ ] **Step 2: Write failing progression tests**
+- [x] **Step 2: Write failing progression tests**
 
 Create `tests/game/progress.test.ts`:
 
@@ -615,13 +615,13 @@ describe('durable game progression', () => {
 })
 ```
 
-- [ ] **Step 3: Run both tests and verify missing-module failures**
+- [x] **Step 3: Run both tests and verify missing-module failures**
 
 Run: `npx vitest run tests/game/catalog.test.ts tests/game/progress.test.ts`
 
 Expected: FAIL because catalog and progress modules do not exist.
 
-- [ ] **Step 4: Implement catalog validation**
+- [x] **Step 4: Implement catalog validation**
 
 Create `src/game/catalog.ts`:
 
@@ -743,7 +743,7 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
 }
 ```
 
-- [ ] **Step 5: Implement immutable progression**
+- [x] **Step 5: Implement immutable progression**
 
 Create `src/game/progress.ts`:
 
@@ -774,13 +774,13 @@ export function availableVellums(catalog: GameCatalog, progress: GameProgress): 
 }
 ```
 
-- [ ] **Step 6: Run focused tests and typecheck**
+- [x] **Step 6: Run focused tests and typecheck**
 
 Run: `npx vitest run tests/game/catalog.test.ts tests/game/progress.test.ts && npm run typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/game/catalog.ts src/game/progress.ts tests/game/catalog.test.ts tests/game/progress.test.ts
@@ -800,7 +800,7 @@ git commit -m "feat(game): verify catalog and progression"
 - Saves retained `steps` plus `cursor`, not redundant diagram states.
 - Load replay reconstructs all states and refuses catalog drift, unknown completions, malformed cursors, unavailable vellums, or invalid steps.
 
-- [ ] **Step 1: Write failing round-trip and refusal tests**
+- [x] **Step 1: Write failing round-trip and refusal tests**
 
 Create `tests/game/save.test.ts`:
 
@@ -866,13 +866,13 @@ describe('versioned game save', () => {
 })
 ```
 
-- [ ] **Step 2: Run the focused test and verify the missing-module failure**
+- [x] **Step 2: Run the focused test and verify the missing-module failure**
 
 Run: `npx vitest run tests/game/save.test.ts`
 
 Expected: FAIL because `src/game/save.ts` does not exist.
 
-- [ ] **Step 3: Implement the save schema and serializer**
+- [x] **Step 3: Implement the save schema and serializer**
 
 Create `src/game/save.ts`:
 
@@ -978,13 +978,13 @@ export function loadGame(catalog: GameCatalog, value: unknown): LoadedGame {
 }
 ```
 
-- [ ] **Step 4: Run focused tests, JSON kernel tests, and typecheck**
+- [x] **Step 4: Run focused tests, JSON kernel tests, and typecheck**
 
 Run: `npx vitest run tests/game/save.test.ts tests/kernel/proof/json.test.ts && npm run typecheck`
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/game/save.ts tests/game/save.test.ts
@@ -1004,7 +1004,7 @@ git commit -m "feat(game): add replayable local save format"
 - `src/game/index.ts` exports only the Task 1–5 public game APIs.
 - No `src/game` file imports `src/app`, `src/theories`, or filesystem access.
 
-- [ ] **Step 1: Write the failing architecture test**
+- [x] **Step 1: Write the failing architecture test**
 
 Create `tests/architecture/game-boundary.test.ts`:
 
@@ -1027,13 +1027,13 @@ describe('game package boundary', () => {
 })
 ```
 
-- [ ] **Step 2: Run the architecture test before adding the barrel**
+- [x] **Step 2: Run the architecture test before adding the barrel**
 
 Run: `npx vitest run tests/architecture/game-boundary.test.ts`
 
 Expected: PASS. The package currently has no forbidden imports; the next step establishes its deliberate public surface.
 
-- [ ] **Step 3: Create the public barrel**
+- [x] **Step 3: Create the public barrel**
 
 Create `src/game/index.ts` exporting:
 
@@ -1047,7 +1047,7 @@ export * from './catalog'
 export * from './save'
 ```
 
-- [ ] **Step 4: Run the full new foundation suite**
+- [x] **Step 4: Run the full new foundation suite**
 
 Run:
 
@@ -1058,13 +1058,13 @@ npm run typecheck
 
 Expected: every game-domain and boundary test passes with no warnings.
 
-- [ ] **Step 5: Run the complete existing unit suite and record the inherited baseline**
+- [x] **Step 5: Run the complete existing unit suite and record the inherited baseline**
 
 Run: `npm test`
 
 Expected: all new game tests pass. Compare existing failures with the recorded baseline of one `tests/architecture/layering.test.ts` failure and three `tests/app/session.test.ts` failures. This plan must introduce no additional failures; it does not repair product-layer failures scheduled for later replacement.
 
-- [ ] **Step 6: Mark this plan's checkboxes complete and commit**
+- [x] **Step 6: Mark this plan's checkboxes complete and commit**
 
 ```bash
 git add src/game/index.ts tests/architecture/game-boundary.test.ts docs/superpowers/plans/2026-07-11-cursebreaker-game-domain-foundation.md
