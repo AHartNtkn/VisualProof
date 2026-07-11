@@ -5,12 +5,15 @@ import {
   comprehensionFixture,
 } from '../../src/app/comprehension-draft'
 import {
+  applyEditorConnection,
+  comprehensionInstantiationStep,
   connectionTargets,
   formalBoundaryMarks,
   moveComprehensionEditor,
   placeComprehensionEditor,
   resizeComprehensionEditor,
 } from '../../src/app/comprehension-editor'
+import { currentComprehensionDraft } from '../../src/app/comprehension-draft'
 
 describe('comprehension editor window geometry', () => {
   it('opens to the right of the invocation when possible and falls back left', () => {
@@ -62,5 +65,33 @@ describe('comprehension editor boundary and connection presentation', () => {
     const fromDraft = connectionTargets(bound, draftSource)
     expect([...fromDraft.draft]).toContain('arg1')
     expect([...fromDraft.host]).toContain(fixture.parameter)
+  })
+
+  it('commits only the captured draft snapshot and builds one materialized proof step', () => {
+    const fixture = comprehensionFixture()
+    const start = beginComprehensionDraft(fixture.diagram, fixture.bubble)
+    const snapshot = currentComprehensionDraft(start)
+    const connected = applyEditorConnection(
+      start,
+      snapshot,
+      { kind: 'host', wire: fixture.parameter },
+      { kind: 'draft', wire: 'arg1' },
+    )
+    expect(currentComprehensionDraft(connected).externalWires).toEqual([
+      { draftWire: 'arg1', hostWire: fixture.parameter },
+    ])
+    expect(() => applyEditorConnection(
+      connected,
+      snapshot,
+      { kind: 'host', wire: fixture.parameter },
+      { kind: 'draft', wire: 'arg2' },
+    )).toThrow(/draft changed/)
+
+    expect(comprehensionInstantiationStep(connected)).toMatchObject({
+      rule: 'comprehensionInstantiate',
+      bubble: fixture.bubble,
+      attachments: [fixture.parameter],
+      binders: {},
+    })
   })
 })
