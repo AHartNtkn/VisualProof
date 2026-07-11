@@ -17,7 +17,22 @@ const authority = {
 }
 
 describe('backward game session', () => {
-  it('applies only backward kernel moves and completes on canonical blank', () => {
+  it('accepts positive-region insertion only in backward orientation', () => {
+    const step = {
+      rule: 'insertion' as const,
+      region: puzzle.goal.diagram.root,
+      pattern: puzzle.goal,
+      attachments: [],
+      binders: {},
+    }
+
+    const transition = applyGameStep(startPuzzle(puzzle), step, authority)
+
+    expect(transition.session.timeline.steps).toEqual([step])
+    expect(currentDiagram(transition.session)).not.toBe(puzzle.goal.diagram)
+  })
+
+  it('completes on canonical blank', () => {
     const start = startPuzzle(puzzle)
     const first = applyGameStep(start, puzzle.witness[0]!, authority)
     expect(first.completedNow).toBe(false)
