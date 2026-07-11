@@ -31,8 +31,8 @@
 13. **Dedicated mechanics, no consolidation:** Delete = contextual deletion — double-cut elim / vacuous dissolve / positive erasure / deiteration, chosen by the absorb-normalized selection; no "arbitrary secrets" (selecting both cuts of a double cut works).
 14. **Drag-to-iterate:** dragging a selection toward legal regions glows them; release commits; MOVEMENT is required (a still click on a selected item toggles it off instead).
 15. **Conversion:** double-click a term = quick normalize; head-normal and custom-target reachable from the same entry; the certificate plays as the connected grid morph (law 26).
-16. **Memory box:** after a move, the box shows what Ctrl+Z restores, labeled with the move (preview = do it, then undo).
-17. **Refusals:** kernel refusal text VERBATIM, in an anchored bubble at the selection, auto-fading. The kernel's message is the UX copy — no paraphrase layer.
+16. **No duplicate move feedback:** a successful move is visible in the diagram and the authoritative history surface; no memory box, success message, chronicle, or second step display is added.
+17. **Refusals:** kernel refusal text VERBATIM, beside the current pointer, auto-fading. The kernel's message is the UX copy — no paraphrase layer.
 18. **Infer-first citation:** the citation menu lists ONLY theorems whose from-side occurs in the diagram AND whose occurrence contains the selection; a unique occurrence applies instantly (sel + args derived by the matcher); several = highlighted Tab/click cycling + Enter; argument wires are never hand-picked; closed theorems cite as empty-selection insertions; citation direction = region sign XOR track orientation.
 19. **Instantiate:** named substitution stays FOLDED (the ref is spliced, never auto-expanded); only the relation is asked.
 
@@ -69,7 +69,7 @@
 
 ### Task 3: PROVE vocabulary (dedicated mechanics, infer-first citation, tracks)
 
-**Files:** `src/app/interact/moves.ts` (laws 13–17, 19 from `ui-lab/verdict.ts`: contextual Delete with orphan-riding erasure, drag-iterate, dbl-click normalize chain, memory box, anchored refusals, folded instantiate — steps emitted through a MoveSink over the real session), `src/app/interact/cite.ts` (law 18: occurrence matcher over the context's theorems, Tab-cycling), `src/app/tracks.ts` (laws 20–22 from `ui-lab/session5.ts` mkTrackLab: cursor-based state ring over `session.ts` applyForward/applyBackward, declare-at-cursor via assembleTheorem). The shell's goal-snapshot buttons, two-phase pickers, and any remaining directional special-casing are DELETED. `src/app/session.ts`/`actions.ts` stay semantically untouched (they already carry orientation).
+**Files:** `src/app/interact/moves.ts` (laws 13–17, 19 from `ui-lab/verdict.ts`, corrected by `docs/superpowers/specs/2026-07-10-proof-interaction-integration-design.md`: contextual Delete with orphan-riding erasure, drag-iterate, dbl-click normalize chain, pointer-local refusals, no duplicate feedback, folded instantiate — steps emitted through one orientation-aware sink over the real session), `src/app/interact/cite.ts` (law 18: occurrence matcher over the context's theorems, Tab-cycling). The existing `src/app/session.ts` track/dual application is retained as the sole step-history authority; the shell's two-phase proof pickers, `BackwardEntry`/`commitBackward`, manual citation-wire picking, click-target iteration, and any remaining directional special-casing are DELETED. Cursor-based history and declare-at-cursor remain Task 4.
 **Test:** unit — contextual-Delete resolution matrix, citation context filter (occurs + contains-selection + direction), declare-at-cursor step slicing; e2e — the round-4 "exact failing gesture" (brush everything, cite, must apply), Tab-cycle ambiguity, a backward track using the same gestures, refusal copy verbatim on a gated move.
 
 - [ ] Failing battery → port → green everywhere. Commit.
