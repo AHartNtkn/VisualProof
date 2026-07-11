@@ -4,6 +4,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import {
   absorbHits,
+  addAtomNode,
   addTermNode,
   addRefNode,
   addCut,
@@ -30,6 +31,32 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     // output + y singleton wires materialized
     const touching = Object.values(d1.wires).filter((w) => w.endpoints.some((ep) => ep.node === node))
     expect(touching).toHaveLength(2)
+  })
+
+  it('adds an atom bound to an enclosing bubble with one scoped singleton wire per derived argument', () => {
+    const b = new DiagramBuilder()
+    const bubble = b.bubble(b.root, 2)
+    const cut = b.cut(bubble)
+    const d = b.build()
+
+    const { diagram, node } = addAtomNode(d, cut, bubble)
+
+    expect(diagram.nodes[node]).toEqual({ kind: 'atom', region: cut, binder: bubble })
+    expect(Object.values(diagram.wires).filter((wire) =>
+      wire.endpoints.some((endpoint) => endpoint.node === node),
+    )).toEqual([
+      { scope: cut, endpoints: [{ node, port: { kind: 'arg', index: 0 } }] },
+      { scope: cut, endpoints: [{ node, port: { kind: 'arg', index: 1 } }] },
+    ])
+  })
+
+  it('rejects an atom whose chosen bubble does not enclose the invocation region', () => {
+    const b = new DiagramBuilder()
+    const left = b.bubble(b.root, 1)
+    const right = b.cut(b.root)
+    const d = b.build()
+
+    expect(() => addAtomNode(d, right, left)).toThrow(/must lie inside its binder bubble/)
   })
 
   it('wraps a selection in a single cut and in a bubble', () => {

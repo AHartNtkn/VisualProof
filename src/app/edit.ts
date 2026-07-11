@@ -46,6 +46,23 @@ export function addRefNode(d: Diagram, region: RegionId, defId: string, arity: n
   return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }), node }
 }
 
+export function addAtomNode(d: Diagram, region: RegionId, binder: RegionId): { diagram: Diagram; node: NodeId } {
+  const node = freshId(new Set(Object.keys(d.nodes)), 'n')
+  const atom: DiagramNode = { kind: 'atom', region, binder }
+  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: atom }
+  const wires: Record<WireId, Wire> = { ...d.wires }
+  const takenWires = new Set(Object.keys(d.wires))
+  for (const port of requiredPorts(d, atom)) {
+    const wire = freshId(takenWires, 'w')
+    takenWires.add(wire)
+    wires[wire] = { scope: region, endpoints: [{ node, port }] }
+  }
+  return {
+    node,
+    diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }),
+  }
+}
+
 export type ConstructionHit =
   | { readonly kind: 'node'; readonly id: NodeId }
   | { readonly kind: 'region'; readonly id: RegionId }
