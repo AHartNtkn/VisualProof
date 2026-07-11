@@ -68,6 +68,8 @@ button { color: inherit; }
 .vpa-fixed-side-declare:disabled { color: #777165; cursor: default; }
 .vpa-fixed-side-seam.is-met::before { background: #d17832; }
 .vpa-fixed-side-seam.is-met .vpa-fixed-side-declare { border-color: #d17832; color: #8a481c; font-weight: 700; }
+.vpa-fixed-side-too-narrow { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; padding: 32px; box-sizing: border-box; background: rgba(250,249,243,.97); color: #5f2c1b; font-size: 14px; text-align: center; }
+.vpa-fixed-side-too-narrow[hidden] { display: none; }
 .vpa-action-instruction { flex-basis: 100%; margin: 0 0 3px; }
 .vpa-mode-help, .vpa-keyboard-map { flex-basis: 100%; padding: 6px 8px; border-left: 2px solid #d17832; color: #666154; font-size: 11px; }
 .vpa-mode-help[hidden], .vpa-keyboard-map[hidden] { display: none; }

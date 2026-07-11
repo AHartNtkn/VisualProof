@@ -58,6 +58,7 @@ export class FixedSideWorkspace {
   #forwardStatus: HTMLOutputElement
   #backwardStatus: HTMLOutputElement
   #declareButton: HTMLButtonElement
+  #narrowNotice: HTMLDivElement
 
   constructor(options: FixedSideWorkspaceOptions) {
     if (window.innerWidth < MIN_FIXED_WORKSPACE_WIDTH) {
@@ -79,7 +80,11 @@ export class FixedSideWorkspace {
     this.#declareButton.type = 'button'
     this.#declareButton.className = 'vpa-fixed-side-declare'
     this.seam.append(this.#declareButton)
-    this.root.append(forwardDom.pane, this.seam, backwardDom.pane)
+    this.#narrowNotice = document.createElement('div')
+    this.#narrowNotice.className = 'vpa-fixed-side-too-narrow'
+    this.#narrowNotice.textContent = `Fixed-side proving requires a window at least ${MIN_FIXED_WORKSPACE_WIDTH}px wide. Widen the window to continue.`
+    this.#narrowNotice.hidden = true
+    this.root.append(forwardDom.pane, this.seam, backwardDom.pane, this.#narrowNotice)
     options.host.append(this.root)
 
     const model = (side: FixedSide) => ({
@@ -227,6 +232,9 @@ export class FixedSideWorkspace {
   }
 
   #layout(): void {
+    const tooNarrow = window.innerWidth < MIN_FIXED_WORKSPACE_WIDTH
+    this.#narrowNotice.hidden = !tooNarrow
+    if (tooNarrow) return
     const rect = this.root.getBoundingClientRect()
     const width = rect.width || window.innerWidth
     const height = rect.height || window.innerHeight
@@ -296,5 +304,8 @@ export class FixedSideWorkspace {
     this.#refresh()
   }
 
-  #windowResize = (): void => { this.#layout() }
+  #windowResize = (): void => {
+    if (window.innerWidth < MIN_FIXED_WORKSPACE_WIDTH) this.cancelGestures()
+    this.#layout()
+  }
 }

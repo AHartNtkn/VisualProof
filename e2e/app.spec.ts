@@ -358,6 +358,12 @@ test('fixed-side two-front workspace keeps both proof fronts live and independen
   ])).toEqual(beforeOverlay)
   await page.getByRole('button', { name: 'Close library', exact: true }).click()
 
+  await page.setViewportSize({ width: 600, height: 720 })
+  await expect(page.locator('.vpa-fixed-side-too-narrow')).toBeVisible()
+  await expect(page.locator('.vpa-fixed-side-too-narrow')).toContainText('at least 648px')
+  await page.setViewportSize({ width: 1280, height: 720 })
+  await expect(page.locator('.vpa-fixed-side-too-narrow')).toBeHidden()
+
   await page.getByRole('button', { name: /Mode: Prove/ }).click()
   await page.getByRole('button', { name: 'Return to editing', exact: true }).click()
   await expect(page.locator('.vpa-fixed-side-workspace')).toHaveCount(0)
