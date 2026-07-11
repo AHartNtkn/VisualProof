@@ -1058,13 +1058,13 @@ npm run typecheck
 
 Expected: every game-domain and boundary test passes with no warnings.
 
-- [ ] **Step 5: Run the complete existing unit suite and record the inherited baseline**
+- [x] **Step 5: Run the complete existing unit suite and record the inherited baseline**
 
 Run: `npm test`
 
 Expected: all new game tests pass. Compare existing failures with the recorded baseline of one `tests/architecture/layering.test.ts` failure and three `tests/app/session.test.ts` failures. This plan must introduce no additional failures; it does not repair product-layer failures scheduled for later replacement.
 
-- [ ] **Step 6: Mark this plan's checkboxes complete and commit**
+- [x] **Step 6: Mark this plan's checkboxes complete and commit**
 
 ```bash
 git add src/game/index.ts tests/architecture/game-boundary.test.ts docs/superpowers/plans/2026-07-11-cursebreaker-game-domain-foundation.md

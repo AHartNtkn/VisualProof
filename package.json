@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "vitest run",
+    "test:physics": "vitest run --config vitest.physics.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "emit:theories": "tsx scripts/emit-theories.ts",
