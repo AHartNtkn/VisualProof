@@ -56,4 +56,26 @@ describe('versioned game save', () => {
       },
     })).toThrow(/unknown theorem|invalid game step/)
   })
+
+  it('refuses an unknown rule before it can create an invalid timeline state', () => {
+    const encoded = saveGame(catalog, emptyProgress(), null)
+    expect(() => loadGame(catalog, {
+      ...encoded,
+      active: {
+        puzzle: puzzle.id, cursor: 1,
+        steps: [{ rule: 'unknown-rule' }],
+      },
+    })).toThrow(/invalid game step/)
+  })
+
+  it('refuses replay of an unavailable vellum', () => {
+    const encoded = saveGame(catalog, emptyProgress(), null)
+    expect(() => loadGame(catalog, {
+      ...encoded,
+      active: {
+        puzzle: puzzle.id, cursor: 1,
+        steps: [{ rule: 'vellumManifest', puzzle: puzzle.id, region: fixture.goal.diagram.root }],
+      },
+    })).toThrow(/solved seal .* is not available/)
+  })
 })

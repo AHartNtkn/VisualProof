@@ -1,7 +1,9 @@
 import type { GameCatalog } from './catalog'
+import { stepFromJson } from '../kernel/proof/json'
+import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { emptyProgress, isUnlocked, recordCompletion, type GameProgress } from './progress'
 import { applyGameStep, moveCursor, startPuzzle, type GameRuntimeAuthority, type GameSession } from './session'
-import { GameDomainError, type GameStep, type PuzzleId } from './types'
+import { GameDomainError, puzzleId, type GameStep, type PuzzleId } from './types'
 
 export type GameSaveV1 = {
   readonly format: 'cursebreaker-save'
@@ -25,6 +27,61 @@ const record = (value: unknown, label: string): Record<string, unknown> => {
     throw new GameDomainError(`${label} must be an object`)
   }
   return value as Record<string, unknown>
+}
+
+const onlyKeys = (value: Record<string, unknown>, allowed: readonly string[], label: string): void => {
+  for (const key of Object.keys(value)) {
+    if (!allowed.includes(key)) throw new GameDomainError(`${label} has unknown field '${key}'`)
+  }
+}
+
+const string = (value: unknown, label: string): string => {
+  if (typeof value !== 'string') throw new GameDomainError(`${label} must be a string`)
+  return value
+}
+
+const strings = (value: unknown, label: string): string[] => {
+  if (!Array.isArray(value)) throw new GameDomainError(`${label} must be an array`)
+  return value.map((item, index) => string(item, `${label}[${index}]`))
+}
+
+const selection = (value: unknown): SubgraphSelection => {
+  const decoded = record(value, 'vellum selection')
+  onlyKeys(decoded, ['region', 'regions', 'nodes', 'wires'], 'vellum selection')
+  return {
+    region: string(decoded.region, 'vellum selection.region'),
+    regions: strings(decoded.regions, 'vellum selection.regions'),
+    nodes: strings(decoded.nodes, 'vellum selection.nodes'),
+    wires: strings(decoded.wires, 'vellum selection.wires'),
+  }
+}
+
+const gameStepFromJson = (value: unknown, index: number): GameStep => {
+  try {
+    const step = record(value, 'game step')
+    const rule = string(step.rule, 'game step.rule')
+    if (rule === 'vellumManifest') {
+      onlyKeys(step, ['rule', 'puzzle', 'region'], 'vellumManifest step')
+      return {
+        rule,
+        puzzle: puzzleId(string(step.puzzle, 'vellumManifest step.puzzle')),
+        region: string(step.region, 'vellumManifest step.region'),
+      }
+    }
+    if (rule === 'vellumDissolve') {
+      onlyKeys(step, ['rule', 'puzzle', 'selection'], 'vellumDissolve step')
+      return {
+        rule,
+        puzzle: puzzleId(string(step.puzzle, 'vellumDissolve step.puzzle')),
+        selection: selection(step.selection),
+      }
+    }
+    return stepFromJson(value)
+  } catch (error) {
+    throw new GameDomainError(
+      `invalid game step at index ${index}: ${error instanceof Error ? error.message : String(error)}`,
+    )
+  }
 }
 
 export function saveGame(
@@ -76,13 +133,7 @@ export function loadGame(catalog: GameCatalog, value: unknown): LoadedGame {
   if (!isUnlocked(catalog, progress, puzzle.id)) {
     throw new GameDomainError(`active puzzle '${puzzle.id}' is locked by incomplete prerequisites`)
   }
-  const steps = active.steps.map((step, index) => {
-    if (typeof step !== 'object' || step === null || Array.isArray(step)
-      || typeof (step as Record<string, unknown>).rule !== 'string') {
-      throw new GameDomainError(`invalid game step at index ${index}`)
-    }
-    return step as GameStep
-  })
+  const steps = active.steps.map(gameStepFromJson)
   const authority: GameRuntimeAuthority = {
     context: catalog.source.context,
     puzzle: (id) => catalog.puzzle(id),
