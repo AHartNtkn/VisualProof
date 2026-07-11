@@ -1,16 +1,39 @@
 import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
-import { execFileSync } from 'node:child_process'
+import { gameBoundaryOffenders, tsFilesUnder } from './game-boundary-helpers'
+
+describe('game package boundary analyzer', () => {
+  const nestedFile = 'src/game/deep/nested/example.ts'
+
+  it.each([
+    ['static imports at arbitrary depth', "import product from '../../../app/product'", '../../../app/product'],
+    ['side-effect directory-root imports', "import '../../../theories'", '../../../theories'],
+    ['directory-root re-exports', "export * from '../../../app'", '../../../app'],
+    ['dynamic imports', "const catalog = import('../../../theories/catalog')", '../../../theories/catalog'],
+    ['Node filesystem imports', "import { readFileSync } from 'node:fs'", 'node:fs'],
+    ['unprefixed filesystem imports', "const fs = import('fs')", 'fs'],
+    ['project filesystem authority', "export { open } from '../../../fsaccess'", '../../../fsaccess'],
+  ])('detects %s', (_label, source, specifier) => {
+    expect(gameBoundaryOffenders(nestedFile, source)).toEqual([
+      `${nestedFile} imports '${specifier}'`,
+    ])
+  })
+
+  it('ignores allowed imports and import-shaped comments or strings', () => {
+    const source = `
+      import type { Diagram } from '../../../kernel/diagram/diagram'
+      // import forbidden from '../../../app/product'
+      const example = "import('../../../theories')"
+    `
+    expect(gameBoundaryOffenders(nestedFile, source)).toEqual([])
+  })
+})
 
 describe('game package boundary', () => {
-  it('never imports proof-assistant product or bundled prototype theories', () => {
-    const files = execFileSync('rg', ['--files', 'src/game'], { encoding: 'utf8' }).trim().split('\n')
-    const offenders = files.filter((file) => {
-      const source = readFileSync(file, 'utf8')
-      return /from ['"]\.\.\/app\//.test(source)
-        || /from ['"]\.\.\/theories\//.test(source)
-        || /fsaccess/.test(source)
-    })
-    expect(offenders).toEqual([])
+  it('never imports product, prototype-theory, or filesystem authority', () => {
+    const offenders = tsFilesUnder('src/game').flatMap((file) => (
+      gameBoundaryOffenders(file, readFileSync(file, 'utf8'))
+    ))
+    expect(offenders, offenders.join('\n')).toEqual([])
   })
 })
