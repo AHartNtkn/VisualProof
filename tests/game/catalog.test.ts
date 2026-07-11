@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildCatalog } from '../../src/game/catalog'
 import { campaignId, puzzleId } from '../../src/game/types'
-import { twoVeils } from './fixtures'
+import { fourVeils, twoVeils } from './fixtures'
 
 const fixture = twoVeils()
 const campaign = { id: campaignId('apprenticeship'), title: 'Curator’s Apprenticeship' }
@@ -33,5 +33,19 @@ describe('verified game catalog', () => {
       campaigns: [campaign], context: { relations: new Map() },
       puzzles: [{ ...puzzle, witness: [] }],
     })).toThrow(/witness does not reach blank/)
+  })
+
+  it('fingerprints canonical relation content independently of map insertion order', () => {
+    const other = fourVeils().goal
+    const withRelations = (relations: ReadonlyMap<string, typeof fixture.goal>) => buildCatalog({
+      campaigns: [campaign], puzzles: [puzzle], context: { relations },
+    })
+
+    const original = withRelations(new Map([['alpha', fixture.goal], ['beta', other]]))
+    const reordered = withRelations(new Map([['beta', other], ['alpha', fixture.goal]]))
+    const changed = withRelations(new Map([['alpha', fixture.goal], ['beta', fixture.goal]]))
+
+    expect(reordered.fingerprint).toBe(original.fingerprint)
+    expect(changed.fingerprint).not.toBe(original.fingerprint)
   })
 })

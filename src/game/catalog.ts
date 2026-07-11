@@ -1,4 +1,4 @@
-import { exploreForm } from '../kernel/diagram/canonical/explore'
+import { exploreForm, exploreLabeling } from '../kernel/diagram/canonical/explore'
 import { assertClosedGoal, isBlank } from './blank'
 import { applyGameStep, currentDiagram, startPuzzle } from './session'
 import { GameDomainError, type GameCatalogSource, type PuzzleDefinition, type PuzzleId } from './types'
@@ -95,6 +95,16 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
     campaigns: [...source.campaigns]
       .map((campaign) => ({ id: campaign.id, title: campaign.title }))
       .sort((a, b) => a.id.localeCompare(b.id)),
+    relations: [...source.context.relations]
+      .map(([name, relation]) => {
+        const canonical = exploreLabeling(relation.diagram, relation.boundary)
+        return {
+          name,
+          boundary: relation.boundary.map((wire) => canonical.wireOrd.get(wire)!),
+          diagram: canonical.form,
+        }
+      })
+      .sort((a, b) => a.name.localeCompare(b.name)),
     puzzles: [...source.puzzles]
       .map((puzzle) => ({
         id: puzzle.id, campaign: puzzle.campaign, title: puzzle.title,
