@@ -221,7 +221,12 @@ export class ProofMoveController {
 
   doubleClick(sample: PointerSample): boolean {
     this.#lastPointer = sample.client
-    if (!this.#options.active() || sample.hit?.kind !== 'node') return false
+    if (!this.#options.active()) return false
+    if (sample.hit?.kind === 'wire') {
+      this.#commit({ rule: 'fusion', wire: sample.hit.id })
+      return true
+    }
+    if (sample.hit?.kind !== 'node') return false
     const node = this.#options.diagram().nodes[sample.hit.id]
     if (node?.kind !== 'term') return false
     const fuel = this.#options.fuel()
@@ -254,6 +259,13 @@ export class ProofMoveController {
         this.#cycle = null
         return true
       }
+    }
+    if ((sample.key === 'f' || sample.key === 'F')
+      && !sample.ctrlKey && !sample.altKey && !sample.metaKey) {
+      const selection = this.#options.selection()
+      if (selection.length !== 1 || selection[0]?.kind !== 'wire') return false
+      this.#commit({ rule: 'fusion', wire: selection[0].id })
+      return true
     }
     if (sample.key !== 'Delete' && sample.key !== 'Backspace' && sample.key !== 'w' && sample.key !== 'W') return false
     const discovery = discoverProofActions(

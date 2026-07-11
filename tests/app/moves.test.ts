@@ -1,18 +1,85 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { buildFregeTheory } from '../../src/theories/frege'
+import { mkEngine } from '../../src/view/engine'
+import { LIGHT } from '../../src/view/paint'
 import {
   contextualDeleteStep,
   discoverProofActions,
   foldedComprehension,
   instantiationChoices,
   iterationTargets,
+  ProofMoveController,
 } from '../../src/app/interact/moves'
+import type { Hit } from '../../src/app/hittest'
+import type { KeySample, PointerSample } from '../../src/app/interact/viewport'
 
 const p = (source: string) => parseTerm(source)
 const ctx = () => verifyTheory(buildFregeTheory())
+
+const pointer = (hit: Hit): PointerSample => ({
+  pointerId: 1,
+  button: 0,
+  client: { x: 12, y: 18 },
+  screen: { x: 12, y: 18 },
+  world: { x: 0, y: 0 },
+  hit,
+  shiftKey: false,
+  ctrlKey: false,
+  altKey: false,
+  metaKey: false,
+})
+
+const key = (value: string): KeySample => ({
+  key: value,
+  shiftKey: value === value.toUpperCase() && value !== value.toLowerCase(),
+  ctrlKey: false,
+  altKey: false,
+  metaKey: false,
+  repeat: false,
+})
+
+function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' = 'none') {
+  const b = new DiagramBuilder()
+  const producer = b.termNode(b.root, p('\\x. x'))
+  const consumer = b.termNode(b.root, p('q y'))
+  const wire = b.wire(b.root, [
+    { node: producer, port: { kind: 'output' } },
+    { node: consumer, port: { kind: 'freeVar', name: 'q' } },
+  ])
+  let diagram = b.build()
+  let selection: Hit[] = initialSelection === 'wire'
+    ? [{ kind: 'wire', id: wire }]
+    : initialSelection === 'node'
+      ? [{ kind: 'node', id: producer }]
+      : initialSelection === 'mixed'
+        ? [{ kind: 'wire', id: wire }, { kind: 'node', id: producer }]
+        : []
+  const applied: ProofStep[] = []
+  const proof = ctx()
+  const controller = new ProofMoveController({
+    host: { ownerDocument: {} } as HTMLElement,
+    active: () => true,
+    diagram: () => diagram,
+    engine: () => mkEngine(diagram, []),
+    selection: () => selection,
+    setSelection: (next) => { selection = [...next] },
+    context: () => proof,
+    orientation: () => 'forward',
+    apply: (step) => {
+      applied.push(step)
+      diagram = applyStep(diagram, step, proof)
+    },
+    refuse: (text) => { throw new Error(text) },
+    theme: () => LIGHT,
+    fuel: () => 64,
+    openComprehension: () => {},
+  })
+  return { controller, producer, consumer, wire, applied, diagram: () => diagram }
+}
 
 describe('shared proof move discovery', () => {
   it('absorb-normalizes a selected double-cut subtree and chooses its elimination first', () => {
@@ -97,5 +164,35 @@ describe('proof move parameters', () => {
       { kind: 'arg', index: 0 },
       { kind: 'arg', index: 1 },
     ])
+  })
+})
+
+describe('fusion gesture dispatch', () => {
+  it('submits the existing fusion step when its wire is double-clicked', () => {
+    const fixture = fusionController()
+
+    expect(fixture.controller.doubleClick(pointer({ kind: 'wire', id: fixture.wire }))).toBe(true)
+    expect(fixture.applied).toEqual([{ rule: 'fusion', wire: fixture.wire }])
+    expect(fixture.diagram().nodes[fixture.producer]).toBeUndefined()
+    expect(fixture.diagram().wires[fixture.wire]).toBeUndefined()
+  })
+
+  it('submits the same fusion step when F is pressed with exactly its wire selected', () => {
+    const selected = fusionController('wire')
+
+    expect(selected.controller.keyDown(key('f'))).toBe(true)
+    expect(selected.applied).toEqual([{ rule: 'fusion', wire: selected.wire }])
+    expect(selected.diagram().nodes[selected.producer]).toBeUndefined()
+    expect(selected.diagram().wires[selected.wire]).toBeUndefined()
+  })
+
+  it('does not claim F for a node or a multi-item selection', () => {
+    const nodeOnly = fusionController('node')
+    expect(nodeOnly.controller.keyDown(key('f'))).toBe(false)
+    expect(nodeOnly.applied).toEqual([])
+
+    const mixed = fusionController('mixed')
+    expect(mixed.controller.keyDown(key('f'))).toBe(false)
+    expect(mixed.applied).toEqual([])
   })
 })
