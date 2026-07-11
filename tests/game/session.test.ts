@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { campaignId, puzzleId, type PuzzleDefinition } from '../../src/game/types'
+import { campaignId, GameDomainError, puzzleId, type PuzzleDefinition } from '../../src/game/types'
 import { applyGameStep, currentDiagram, moveCursor, startPuzzle } from '../../src/game/session'
 import { isBlank } from '../../src/game/blank'
 import { fourVeils } from './fixtures'
@@ -39,6 +39,19 @@ describe('backward game session', () => {
     const second = applyGameStep(first.session, puzzle.witness[1]!, authority)
     expect(second.completedNow).toBe(true)
     expect(isBlank(currentDiagram(second.session))).toBe(true)
+  })
+
+  it('rejects every move from canonical blank', () => {
+    const first = applyGameStep(startPuzzle(puzzle), puzzle.witness[0]!, authority).session
+    const solved = applyGameStep(first, puzzle.witness[1]!, authority).session
+    const blank = currentDiagram(solved)
+
+    expect(() => applyGameStep(solved, {
+      rule: 'doubleCutIntro',
+      sel: { region: blank.root, regions: [], nodes: [], wires: [] },
+    }, authority)).toThrow(GameDomainError)
+    expect(solved.timeline.states).toHaveLength(3)
+    expect(solved.timeline.steps).toHaveLength(2)
   })
 
   it('retains future while scrubbing and truncates it on a new continuation', () => {

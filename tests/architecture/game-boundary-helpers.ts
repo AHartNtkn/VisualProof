@@ -2,6 +2,8 @@ import { readdirSync, statSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import * as ts from 'typescript'
 
+const nonLiteralDynamicImport = '\u0000non-literal-dynamic-import'
+
 export function tsFilesUnder(dir: string): string[] {
   const files: string[] = []
   for (const entry of readdirSync(dir).sort()) {
@@ -25,7 +27,10 @@ export function importSpecifiers(file: string, source: string): string[] {
     if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
       addStringLiteral(node.moduleSpecifier)
     } else if (ts.isCallExpression(node) && node.expression.kind === ts.SyntaxKind.ImportKeyword) {
-      addStringLiteral(node.arguments[0])
+      const specifier = node.arguments[0]
+      specifiers.push(specifier !== undefined && ts.isStringLiteral(specifier)
+        ? specifier.text
+        : nonLiteralDynamicImport)
     } else if (ts.isImportEqualsDeclaration(node)
       && ts.isExternalModuleReference(node.moduleReference)) {
       addStringLiteral(node.moduleReference.expression)
@@ -57,6 +62,8 @@ function isForbiddenSpecifier(file: string, specifier: string): boolean {
 
 export function gameBoundaryOffenders(file: string, source: string): string[] {
   return importSpecifiers(file, source)
-    .filter((specifier) => isForbiddenSpecifier(resolve(file), specifier))
-    .map((specifier) => `${file} imports '${specifier}'`)
+    .flatMap((specifier) => {
+      if (specifier === nonLiteralDynamicImport) return [`${file} has a non-literal dynamic import`]
+      return isForbiddenSpecifier(resolve(file), specifier) ? [`${file} imports '${specifier}'`] : []
+    })
 }

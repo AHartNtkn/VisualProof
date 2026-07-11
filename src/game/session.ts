@@ -49,6 +49,9 @@ export function applyGameStep(
   authority: GameRuntimeAuthority,
 ): GameTransition {
   const current = currentDiagram(session)
+  if (isBlank(current)) {
+    throw new GameDomainError('cannot apply a game step from canonical blank')
+  }
   let next: Diagram
   if (step.rule === 'vellumManifest' || step.rule === 'vellumDissolve') {
     if (!authority.canUseVellum(step.puzzle)) {

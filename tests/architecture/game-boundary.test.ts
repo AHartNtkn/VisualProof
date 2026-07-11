@@ -27,6 +27,16 @@ describe('game package boundary analyzer', () => {
     `
     expect(gameBoundaryOffenders(nestedFile, source)).toEqual([])
   })
+
+  it.each([
+    ['an identifier', "const target = '../../../app/product'; import(target)"],
+    ['an interpolated template', "const area = 'app'; import(`../../../${area}/product`)"],
+    ['a static template', 'import(`../../../app/product`)'],
+  ])('rejects dynamic import from %s', (_label, source) => {
+    expect(gameBoundaryOffenders(nestedFile, source)).toEqual([
+      `${nestedFile} has a non-literal dynamic import`,
+    ])
+  })
 })
 
 describe('game package boundary', () => {

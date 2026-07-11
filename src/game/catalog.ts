@@ -26,12 +26,39 @@ const hash = (text: string): string => {
   return (value >>> 0).toString(16).padStart(8, '0')
 }
 
+const immutableCatalogMutation = (): never => {
+  throw new GameDomainError('catalog snapshot is immutable')
+}
+
+const ownedSnapshot = <T>(value: T): T => {
+  if (value === null || typeof value !== 'object') return value
+  if (Array.isArray(value)) {
+    return Object.freeze(value.map((entry) => ownedSnapshot(entry))) as T
+  }
+  if (value instanceof Map) {
+    const copy = new Map(
+      [...value].map(([key, entry]) => [ownedSnapshot(key), ownedSnapshot(entry)] as const),
+    )
+    Object.defineProperties(copy, {
+      set: { value: immutableCatalogMutation },
+      delete: { value: immutableCatalogMutation },
+      clear: { value: immutableCatalogMutation },
+    })
+    return Object.freeze(copy) as T
+  }
+  const copy = Object.fromEntries(
+    Object.entries(value).map(([key, entry]) => [key, ownedSnapshot(entry)]),
+  )
+  return Object.freeze(copy) as T
+}
+
 export function buildCatalog(source: GameCatalogSource): GameCatalog {
-  unique(source.campaigns.map((campaign) => campaign.id), 'campaign id')
-  unique(source.puzzles.map((puzzle) => puzzle.id), 'puzzle id')
-  const campaigns = new Set(source.campaigns.map((campaign) => campaign.id))
-  const byId = new Map(source.puzzles.map((puzzle) => [puzzle.id, puzzle] as const))
-  for (const puzzle of source.puzzles) {
+  const snapshot = ownedSnapshot(source)
+  unique(snapshot.campaigns.map((campaign) => campaign.id), 'campaign id')
+  unique(snapshot.puzzles.map((puzzle) => puzzle.id), 'puzzle id')
+  const campaigns = new Set(snapshot.campaigns.map((campaign) => campaign.id))
+  const byId = new Map(snapshot.puzzles.map((puzzle) => [puzzle.id, puzzle] as const))
+  for (const puzzle of snapshot.puzzles) {
     assertClosedGoal(puzzle.goal)
     if (!campaigns.has(puzzle.campaign)) {
       throw new GameDomainError(`puzzle '${puzzle.id}' names unknown campaign '${puzzle.campaign}'`)
@@ -57,7 +84,7 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
     visited.add(id)
     order.push(puzzle)
   }
-  for (const puzzle of source.puzzles) visit(puzzle.id)
+  for (const puzzle of snapshot.puzzles) visit(puzzle.id)
 
   const verified = new Set<PuzzleId>()
   const prerequisiteClosure = (puzzle: PuzzleDefinition): ReadonlySet<PuzzleId> => {
@@ -73,7 +100,7 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
   for (const puzzle of order) {
     const allowed = prerequisiteClosure(puzzle)
     const authority = {
-      context: source.context,
+      context: snapshot.context,
       puzzle(id: PuzzleId) {
         const found = byId.get(id)
         if (found === undefined) throw new GameDomainError(`unknown puzzle '${id}'`)
@@ -92,10 +119,10 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
   }
 
   const fingerprintInput = {
-    campaigns: [...source.campaigns]
+    campaigns: [...snapshot.campaigns]
       .map((campaign) => ({ id: campaign.id, title: campaign.title }))
       .sort((a, b) => a.id.localeCompare(b.id)),
-    relations: [...source.context.relations]
+    relations: [...snapshot.context.relations]
       .map(([name, relation]) => {
         const canonical = exploreLabeling(relation.diagram, relation.boundary)
         return {
@@ -105,7 +132,7 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
         }
       })
       .sort((a, b) => a.name.localeCompare(b.name)),
-    puzzles: [...source.puzzles]
+    puzzles: [...snapshot.puzzles]
       .map((puzzle) => ({
         id: puzzle.id, campaign: puzzle.campaign, title: puzzle.title,
         prerequisites: [...puzzle.prerequisites].sort(), grantsVellum: puzzle.grantsVellum,
@@ -114,7 +141,7 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
       .sort((a, b) => a.id.localeCompare(b.id)),
   }
   return {
-    source,
+    source: snapshot,
     fingerprint: hash(JSON.stringify(fingerprintInput)),
     puzzle(id: PuzzleId) {
       const puzzle = byId.get(id)
