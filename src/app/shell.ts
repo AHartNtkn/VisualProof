@@ -26,8 +26,8 @@ import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addRefNode, addAtomNode } from './edit'
 import type { ProofSession, TrackDirection, TrackSession } from './session'
 import {
-  startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary,
-  startTrack, applyTrack, undoTrack, declareTrack, adoptTrackTheorem, trackBoundary,
+  startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
+  startTrack, applyTrack, undoTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
 } from './session'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
@@ -251,8 +251,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const currentDiagram = (): Diagram => {
     if (mode === 'replay' && replay !== null) return replay.diagramAt(replayK)
     if (mode === 'prove' && proof !== null) {
-      if (proof.kind === 'track') return proof.track.current
-      return proof.side === 'forward' ? proof.session.forward.current : proof.session.backward.current
+      if (proof.kind === 'track') return currentTrack(proof.track)
+      return currentSide(proof.session, proof.side)
     }
     return editDiagram
   }
@@ -655,9 +655,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   const proofStatus = (): string => {
     if (proof === null) return 'no proof'
-    if (proof.kind === 'track') return `${proof.track.steps.length} step(s) · declare when ready`
+    if (proof.kind === 'track') return `${proof.track.timeline.cursor} step(s) · declare when ready`
     const session = proof.session
-    return `forward ${session.forward.steps.length} step(s) · backward ${session.backward.steps.length} step(s) · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
+    return `forward ${session.forward.cursor} step(s) · backward ${session.backward.cursor} step(s) · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
   }
 
   // ---- replay stepping ----

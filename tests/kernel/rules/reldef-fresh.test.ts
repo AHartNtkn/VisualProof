@@ -5,7 +5,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { applyRelFold, applyRelUnfold } from '../../../src/kernel/rules/reldef'
 import { findOccurrences, occurrenceSelection } from '../../../src/kernel/diagram/subgraph/match'
-import { startSession, applyBackward } from '../../../src/app/session'
+import { startSession, applyBackward, currentSide } from '../../../src/app/session'
 import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
 
 /**
@@ -33,17 +33,17 @@ describe('relFold id freshness', () => {
     s = applyBackward(s, { rule: 'relUnfold', node: n })
     // unfold the zero INSIDE what nat left... find any zero ref
     const zeros = (d: Diagram): NodeId[] => Object.entries(d.nodes).filter(([, x]) => x.kind === 'ref' && x.defId === 'zero').map(([id]) => id)
-    const innerZero = zeros(s.backward.current).find((id) => id !== z) ?? z
+    const innerZero = zeros(currentSide(s, 'backward')).find((id) => id !== z) ?? z
     s = applyBackward(s, { rule: 'relUnfold', node: innerZero })
     // fold the zero back: infer the occurrence of zero's body
-    const g1 = s.backward.current
+    const g1 = currentSide(s, 'backward')
     const zBody = c.relations.get('zero')!
     void zBody
     // the fold selection is what the zero unfold spliced: infer via the matcher
     const zOcc = findOccurrences(g1, c.relations.get('zero')!, { fuel: 64, mode: 'exact' }).matches[0]!
     s = applyBackward(s, { rule: 'relFold', sel: occurrenceSelection(c.relations.get('zero')!, zOcc, g1), defId: 'zero', args: [...zOcc.attachments] })
     // fold nat back — this is where the session-bug error fired
-    const g2 = s.backward.current
+    const g2 = currentSide(s, 'backward')
     const nOcc = findOccurrences(g2, c.relations.get('nat')!, { fuel: 64, mode: 'exact' }).matches[0]!
     expect(() => {
       s = applyBackward(s, { rule: 'relFold', sel: occurrenceSelection(c.relations.get('nat')!, nOcc, g2), defId: 'nat', args: [...nOcc.attachments] })

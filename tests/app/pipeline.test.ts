@@ -6,7 +6,7 @@ import { verifyTheory } from '../../src/kernel/proof/store'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { emptyDiagram, addTermNode, addCut } from '../../src/app/edit'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { startSession, applyForward, applyBackward, meet, assembleTheorem } from '../../src/app/session'
+import { startSession, applyForward, applyBackward, currentSide, meet, assembleTheorem } from '../../src/app/session'
 import { bootFixture } from './boot-fixture'
 import { adoptTheorem } from '../../src/app/session'
 import { sessionTheory } from '../../src/app/persist'
@@ -48,9 +48,9 @@ describe('edit → prove → assemble, end to end', () => {
     let s = startSession(lhs, lhs, ctx)
     s = applyForward(s, {
       rule: 'theorem', name: 'fixedPoint', direction: 'forward',
-      at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [node], wires: [] }), args: [wo, wf] },
+      at: { sel: mkSelection(currentSide(s, 'forward'), { region: currentSide(s, 'forward').root, regions: [], nodes: [node], wires: [] }), args: [wo, wf] },
     })
-    const rhs = mkDiagramWithBoundary(s.forward.current, [wo, wf])
+    const rhs = mkDiagramWithBoundary(currentSide(s, 'forward'), [wo, wf])
     const thm = { name: 'viaSession', lhs, rhs, steps: [...s.forward.steps] }
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
@@ -66,11 +66,11 @@ describe('the full story: prove, adopt, save, reload, cite', () => {
     let s = startSession(lhs, lhs, boot.ctx)
     s = applyForward(s, {
       rule: 'doubleCutIntro',
-      sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [], wires: [] }),
+      sel: mkSelection(currentSide(s, 'forward'), { region: currentSide(s, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
-    const rhs = mkDiagramWithBoundary(s.forward.current, [])
+    const rhs = mkDiagramWithBoundary(currentSide(s, 'forward'), [])
     // test-level state surgery to make a met session without re-running
-    s = { ...s, rhs, backward: { ...s.backward, current: rhs.diagram } }
+    s = { ...s, rhs, backward: { states: [rhs.diagram], steps: [], cursor: 0 } }
     const thm = assembleTheorem(s, 'wrapId')
     const s2 = adoptTheorem(s, thm)
     // save, reload, verify, cite

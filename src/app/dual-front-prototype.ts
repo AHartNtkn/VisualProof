@@ -18,8 +18,8 @@ import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { existentialStubs, legPaths } from '../view/wires'
 import type { Hit } from './hittest'
 import { dragTarget, hitTest } from './hittest'
-import type { ProofSession, Side } from './session'
-import { applyBackward, applyForward, assembleTheorem, meet, sideBoundary, startSession } from './session'
+import type { ProofSession, ProofTimeline } from './session'
+import { applyBackward, applyForward, assembleTheorem, meet, sideBoundary, startSession, timelineCurrent } from './session'
 
 type FrontId = 'forward' | 'backward'
 
@@ -56,7 +56,7 @@ type Front = {
   pinOnRelease: boolean
   suspendedPins: string[]
   projection: DragProjection | null
-  history: Side[]
+  history: ProofTimeline[]
   cursor: number
   message: string
 }
@@ -195,7 +195,7 @@ function pinEligible(front: Front, drag: Drag | null): drag is Drag {
   return id !== undefined && front.diagram.nodes[id] !== undefined
 }
 
-function sideOf(session: ProofSession, id: FrontId): Side {
+function sideOf(session: ProofSession, id: FrontId): ProofTimeline {
   return id === 'forward' ? session.forward : session.backward
 }
 
@@ -226,7 +226,7 @@ export function mountDualFrontPrototype(host: HTMLElement): DualFrontPrototype {
   const makeFront = (id: FrontId, dom: typeof forwardDom): Front => {
     const surface = adaptCanvas(dom.canvas)
     const side = sideOf(session, id)
-    const diagram = side.current
+    const diagram = timelineCurrent(side)
     const engine = mkEngine(diagram, sideBoundary(session, id))
     seedProject(engine)
     const front: Front = {
@@ -278,12 +278,12 @@ export function mountDualFrontPrototype(host: HTMLElement): DualFrontPrototype {
   const backward = makeFront('backward', backwardDom)
   fronts = { forward, backward }
 
-  const setSessionSide = (id: FrontId, side: Side): void => {
+  const setSessionSide = (id: FrontId, side: ProofTimeline): void => {
     session = id === 'forward' ? { ...session, forward: side } : { ...session, backward: side }
   }
 
   const syncDiagram = (front: Front): void => {
-    const diagram = sideOf(session, front.id).current
+    const diagram = timelineCurrent(sideOf(session, front.id))
     if (diagram === front.diagram) return
     const next = mkEngine(diagram, sideBoundary(session, front.id))
     carryOver(front.engine, next)
@@ -323,7 +323,7 @@ export function mountDualFrontPrototype(host: HTMLElement): DualFrontPrototype {
   const citationStep = (id: FrontId): ProofStep => {
     const direction = id === 'forward' ? 'forward' as const : 'reverse' as const
     const from = direction === 'forward' ? goal.lhs : goal.rhs
-    const hostDiagram = sideOf(session, id).current
+    const hostDiagram = timelineCurrent(sideOf(session, id))
     const matches = [...findOccurrences(hostDiagram, from, { fuel: FUEL, mode: 'exact' }).matches]
     if (matches.length !== 1) throw new Error(`expected one '${goal.name}' occurrence on the ${id} front, found ${matches.length}`)
     const occurrence = matches[0]!

@@ -1,6 +1,6 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import type { ProofSession } from './session'
-import { sideBoundary } from './session'
+import { currentSide, sideBoundary } from './session'
 import type { Replay } from './replay'
 
 /**
@@ -54,9 +54,9 @@ export function companionFor(state: CompanionState): Companion | null {
     const s = state.session
     if (s === null) return null
     if (state.side === 'forward') {
-      return { diagram: s.backward.current, boundary: sideBoundary(s, 'backward'), label: 'meeting: backward side' }
+      return { diagram: currentSide(s, 'backward'), boundary: sideBoundary(s, 'backward'), label: 'meeting: backward side' }
     }
-    return { diagram: s.forward.current, boundary: sideBoundary(s, 'forward'), label: 'meeting: forward side' }
+    return { diagram: currentSide(s, 'forward'), boundary: sideBoundary(s, 'forward'), label: 'meeting: forward side' }
   }
   return null
 }

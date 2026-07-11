@@ -9,8 +9,8 @@ import { verifyTheory } from '../../src/kernel/proof/store'
 import { termEq } from '../../src/kernel/term/term'
 import { bootFixture } from './boot-fixture'
 import {
-  startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary,
-  startTrack, applyTrack, undoTrack, declareTrack, trackBoundary,
+  startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary, currentSide,
+  startTrack, applyTrack, undoTrack, declareTrack, trackBoundary, currentTrack,
 } from '../../src/app/session'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 import { mkEngine, settle, frameBounds, frameSlots, computeLegs } from '../../src/view/index'
@@ -31,15 +31,15 @@ describe('single-track proving', () => {
     const s0 = startTrack(origin, 'forward', ctx)
     const step = {
       rule: 'doubleCutIntro' as const,
-      sel: mkSelection(s0.current, { region: s0.current.root, regions: [], nodes: [], wires: [] }),
+      sel: mkSelection(currentTrack(s0), { region: currentTrack(s0).root, regions: [], nodes: [], wires: [] }),
     }
     const s1 = applyTrack(s0, step)
     expect(s1.direction).toBe('forward')
-    expect(s1.steps).toEqual([step])
-    expect(undoTrack(s1).current).toBe(s0.current)
+    expect(s1.timeline.steps).toEqual([step])
+    expect(currentTrack(undoTrack(s1))).toBe(currentTrack(s0))
     const theorem = declareTrack(s1, 'forwardTrack')
     expect(theorem.lhs).toBe(origin)
-    expect(theorem.rhs.diagram).toBe(s1.current)
+    expect(theorem.rhs.diagram).toBe(currentTrack(s1))
     expect(theorem.steps).toEqual([step])
     expect(() => checkTheorem(theorem, ctx)).not.toThrow()
   })
@@ -56,7 +56,7 @@ describe('single-track proving', () => {
     const s1 = applyTrack(s0, step)
     expect(s1.direction).toBe('backward')
     const theorem = declareTrack(s1, 'backwardTrack')
-    expect(theorem.lhs.diagram).toBe(s1.current)
+    expect(theorem.lhs.diagram).toBe(currentTrack(s1))
     expect(theorem.rhs).toBe(origin)
     expect(theorem.steps).toEqual([])
     expect(theorem.backSteps).toEqual([step])
@@ -97,10 +97,10 @@ describe('proof session', () => {
     expect(s0.forward.steps).toHaveLength(0)
     const s1 = applyForward(s0, {
       rule: 'doubleCutIntro',
-      sel: mkSelection(s0.forward.current, { region: s0.forward.current.root, regions: [], nodes: [], wires: [] }),
+      sel: mkSelection(currentSide(s0, 'forward'), { region: currentSide(s0, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
     expect(s1.forward.steps).toHaveLength(1)
-    expect(Object.keys(s1.forward.current.regions).length).toBe(3)
+    expect(Object.keys(currentSide(s1, 'forward').regions).length).toBe(3)
   })
 
   it('meets when forward reaches the rhs and assembles a checkable theorem', () => {
@@ -111,7 +111,7 @@ describe('proof session', () => {
     expect(meet(s)).toBe(false)
     s = applyForward(s, {
       rule: 'doubleCutIntro',
-      sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [], wires: [] }),
+      sel: mkSelection(currentSide(s, 'forward'), { region: currentSide(s, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'toy')
@@ -126,7 +126,7 @@ describe('proof session', () => {
     const s0 = startSession(lhs, rhs, ctx)
     expect(() => applyForward(s0, {
       rule: 'insertion',
-      region: s0.forward.current.root,
+      region: currentSide(s0, 'forward').root,
       pattern: lhs, attachments: [], binders: {},
     })).toThrowError(/insertion requires a negative region/)
     expect(s0.forward.steps).toHaveLength(0)
@@ -159,8 +159,8 @@ describe('proof session', () => {
       .toThrowError(new RegExp(`forward step destroyed fixed statement-boundary wire '${w1}'`))
     expect(() => applyBackward(session, { rule: 'relUnfold', node: ref }))
       .toThrowError(new RegExp(`backward step destroyed fixed statement-boundary wire '${w1}'`))
-    expect(session.forward.current.wires[w0]).toBeDefined()
-    expect(session.forward.current.wires[w1]).toBeDefined()
+    expect(currentSide(session, 'forward').wires[w0]).toBeDefined()
+    expect(currentSide(session, 'forward').wires[w1]).toBeDefined()
     expect(session.forward.steps).toHaveLength(0)
   })
 
@@ -171,11 +171,11 @@ describe('proof session', () => {
     const s0 = startSession(lhs, rhs, ctx)
     const s1 = applyForward(s0, {
       rule: 'doubleCutIntro',
-      sel: mkSelection(s0.forward.current, { region: s0.forward.current.root, regions: [], nodes: [], wires: [] }),
+      sel: mkSelection(currentSide(s0, 'forward'), { region: currentSide(s0, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
     const s2 = undoForward(s1)
     expect(s2.forward.steps).toHaveLength(0)
-    expect(s2.forward.current).toBe(s0.forward.current)
+    expect(currentSide(s2, 'forward')).toBe(currentSide(s0, 'forward'))
     expect(() => undoForward(s2)).toThrowError(/nothing to undo/)
   })
 
@@ -190,9 +190,9 @@ describe('proof session', () => {
     let s = startSession(start, target, ctx)
     s = applyForward(s, {
       rule: 'theorem', name: 'fixedPoint', direction: 'forward',
-      at: { sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [n], wires: [] }), args: [wo, wf] },
+      at: { sel: mkSelection(currentSide(s, 'forward'), { region: currentSide(s, 'forward').root, regions: [], nodes: [n], wires: [] }), args: [wo, wf] },
     })
-    expect(Object.values(s.forward.current.nodes).some((nd) => nd.kind === 'term' && termEq(nd.term, FYF))).toBe(true)
+    expect(Object.values(currentSide(s, 'forward').nodes).some((nd) => nd.kind === 'term' && termEq(nd.term, FYF))).toBe(true)
   })
 })
 
@@ -206,13 +206,13 @@ describe('backward mode', () => {
     // is the inverse of forward INTRO... no: backward we REMOVE structure the
     // forward direction would ADD. Removing the goal's double cut backward
     // records the forward doubleCutIntro that re-creates it.
-    const outer = Object.entries(s.backward.current.regions).find(
-      ([, r]) => r.kind === 'cut' && r.parent === s.backward.current.root,
+    const outer = Object.entries(currentSide(s, 'backward').regions).find(
+      ([, r]) => r.kind === 'cut' && r.parent === currentSide(s, 'backward').root,
     )![0]
     s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
     expect(s.backward.steps).toHaveLength(1)
     expect(s.backward.steps[0]!.rule).toBe('doubleCutElim')
-    expect(Object.keys(s.backward.current.regions)).toHaveLength(1)
+    expect(Object.keys(currentSide(s, 'backward').regions)).toHaveLength(1)
     // and now the two sides meet: lhs ≅ unwrapped rhs
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'toy2')
@@ -225,13 +225,13 @@ describe('backward mode', () => {
     const ctx = verifyTheory(theory)
     const { lhs, rhs } = goalPair()
     let s = startSession(lhs, rhs, ctx)
-    const outer = Object.entries(s.backward.current.regions).find(
-      ([, r]) => r.kind === 'cut' && r.parent === s.backward.current.root,
+    const outer = Object.entries(currentSide(s, 'backward').regions).find(
+      ([, r]) => r.kind === 'cut' && r.parent === currentSide(s, 'backward').root,
     )![0]
-    const before = s.backward.current
+    const before = currentSide(s, 'backward')
     s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
     s = undoBackward(s)
-    expect(s.backward.current).toBe(before)
+    expect(currentSide(s, 'backward')).toBe(before)
     expect(s.backward.steps).toHaveLength(0)
   })
 })
@@ -323,7 +323,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     pat.termNode(pat.root, p('\\x. \\y. x'))
     s = applyBackward(s, {
       rule: 'insertion',
-      region: s.backward.current.root,
+      region: currentSide(s, 'backward').root,
       pattern: mkDiagramWithBoundary(pat.build(), []),
       attachments: [],
       binders: {},
@@ -345,7 +345,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     let s = startSession(lhs, rhs, ctx)
     // the goal node's source free 'y' is canonical s0; the backward target
     // must be spelled in the node's CURRENT port names
-    const conv = applyConversion(s.backward.current, m, p('(\\a. a) s0'), 32)
+    const conv = applyConversion(currentSide(s, 'backward'), m, p('(\\a. a) s0'), 32)
     s = applyBackward(s, { rule: 'conversion', node: m, term: p('(\\a. a) s0'), certificate: conv.certificate, attachments: {} })
     expect(s.backward.steps[0]!.rule).toBe('conversion')
     expect(meet(s)).toBe(true)
@@ -365,12 +365,12 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     let warm = startSession(lhs, lhs, ctx)
     warm = applyForward(warm, {
       rule: 'theorem', name: 'fixedPoint', direction: 'forward',
-      at: { sel: mkSelection(warm.forward.current, { region: warm.forward.current.root, regions: [], nodes: [n], wires: [] }), args: [wo, wf] },
+      at: { sel: mkSelection(currentSide(warm, 'forward'), { region: currentSide(warm, 'forward').root, regions: [], nodes: [n], wires: [] }), args: [wo, wf] },
     })
-    const rhs = mkDiagramWithBoundary(warm.forward.current, [wo, wf])
+    const rhs = mkDiagramWithBoundary(currentSide(warm, 'forward'), [wo, wf])
     let s = startSession(lhs, rhs, ctx)
     // pick the rhs occurrence in the GOAL: the f (Y f) node on the boundary lines
-    const g = s.backward.current
+    const g = currentSide(s, 'backward')
     const two = Object.entries(g.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, FYF))![0]
     s = applyBackward(s, {
       rule: 'theorem',
@@ -402,7 +402,7 @@ describe('unCite refusals', () => {
     const cut = r.cut(r.root)
     const rhs = mkDiagramWithBoundary(r.build(), [wz2])
     const s = startSession(lhs, rhs, ctx)
-    const g = s.backward.current
+    const g = currentSide(s, 'backward')
     const cutId = Object.entries(g.regions).find(([, reg]) => reg.kind === 'cut' && reg.parent === g.root)![0]
     void wz2; void cut
     expect(() =>
@@ -427,7 +427,7 @@ describe('unCite refusals', () => {
     const lhsD = h.build()
     const lhs = mkDiagramWithBoundary(lhsD, [wz])
     const s = startSession(lhs, lhs, ctx)
-    const g = s.backward.current
+    const g = currentSide(s, 'backward')
     expect(() =>
       applyBackward(s, {
         rule: 'theorem',
@@ -459,7 +459,7 @@ describe('sideBoundary — prove-mode sides render their statement boundary', ()
     const s = startSession(plusComm.lhs, plusComm.rhs, ctx)
     const boundary = sideBoundary(s, 'backward')
     expect(boundary.length).toBeGreaterThan(0)
-    const e = mkEngine(s.backward.current, boundary)
+    const e = mkEngine(currentSide(s, 'backward'), boundary)
     settle(e, 1200)
     const slots = frameSlots(frameBounds(e)!, boundary.length)
     const legsByWid = new Map<string, { x: number; y: number }[][]>()
@@ -506,7 +506,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const rhs = mkDiagramWithBoundary(r.build(), [])
     const s = startSession(rhs, rhs, ctx())
     expect(() =>
-      applyBackward(s, { rule: 'erasure', sel: { region: s.backward.current.root, regions: [], nodes: [t], wires: [wt] } }),
+      applyBackward(s, { rule: 'erasure', sel: { region: currentSide(s, 'backward').root, regions: [], nodes: [t], wires: [wt] } }),
     ).toThrowError(/backward erasure requires a negative region/)
   })
 
@@ -525,7 +525,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     l.wire(lcut, [{ node: a3, port: { kind: 'output' } }])
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
-    s = applyBackward(s, { rule: 'iteration', sel: { region: s.backward.current.root, regions: [], nodes: [a], wires: [wa] }, target: cut })
+    s = applyBackward(s, { rule: 'iteration', sel: { region: currentSide(s, 'backward').root, regions: [], nodes: [a], wires: [wa] }, target: cut })
     expect(s.backward.steps[0]!.rule).toBe('iteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardIterated')
@@ -568,7 +568,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     l.wire(l.root, [{ node: a2, port: { kind: 'output' } }])
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
-    s = applyBackward(s, { rule: 'doubleCutIntro', sel: { region: s.backward.current.root, regions: [], nodes: [a], wires: [wa] } })
+    s = applyBackward(s, { rule: 'doubleCutIntro', sel: { region: currentSide(s, 'backward').root, regions: [], nodes: [a], wires: [wa] } })
     expect(s.backward.steps[0]!.rule).toBe('doubleCutIntro')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardWrapped')

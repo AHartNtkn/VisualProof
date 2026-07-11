@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
-import { startSession, applyForward, meet, assembleTheorem, adoptTheorem } from '../../src/app/session'
+import { startSession, applyForward, currentSide, meet, assembleTheorem, adoptTheorem } from '../../src/app/session'
 import { sessionTheory } from '../../src/app/persist'
 import { bootFixture } from './boot-fixture'
 
@@ -24,7 +24,7 @@ async function provenToy() {
   let s = startSession(lhs, rhs, boot.ctx)
   s = applyForward(s, {
     rule: 'doubleCutIntro',
-    sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [], wires: [] }),
+    sel: mkSelection(currentSide(s, 'forward'), { region: currentSide(s, 'forward').root, regions: [], nodes: [], wires: [] }),
   })
   expect(meet(s)).toBe(true)
   return { s, boot }

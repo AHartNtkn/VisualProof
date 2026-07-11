@@ -11,7 +11,7 @@ import { DiagramBuilder } from '../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../src/kernel/diagram/boundary'
 import { applyStep, replayProof, type ProofContext, type ProofStep } from '../src/kernel/proof/step'
 import { checkTheorem, type Theorem } from '../src/kernel/proof/theorem'
-import { applyBackward, applyForward, assembleTheorem, meet, sideBoundary, startSession, undoBackward, undoForward, type ProofSession } from '../src/app/session'
+import { applyBackward, applyForward, assembleTheorem, currentSide, meet, sideBoundary, startSession, undoBackward, undoForward, type ProofSession } from '../src/app/session'
 import type { LabCtx } from './shared'
 import { fregeCtx } from './prove4'
 import type { MoveSink } from './verdict'
@@ -105,7 +105,7 @@ export function mkTrackLab(lab: LabCtx, ctx: ProofContext = fregeCtx()): TrackLa
   let cursor = 0
   const listeners: (() => void)[] = []
   const changed = () => { for (const fn of listeners) fn() }
-  const stateAt = (k: number): Diagram => dir === 'backward' ? bSessions[k]!.backward.current : fStates[k]!
+  const stateAt = (k: number): Diagram => dir === 'backward' ? currentSide(bSessions[k]!, 'backward') : fStates[k]!
   const current = (): Diagram => stateAt(cursor)
   const count = (): number => dir === 'backward' ? bSessions.length - 1 : fStates.length - 1
   const sync = () => {
@@ -188,7 +188,7 @@ export function mkSessionLab(lab: LabCtx): SessionLab {
   const listeners: (() => void)[] = []
   const changed = () => { for (const fn of listeners) fn() }
   const sync = () => {
-    const cur = side === 'forward' ? s.forward.current : s.backward.current
+    const cur = currentSide(s, side)
     lab.mutate(cur, undefined, sideBoundary(s, side))
     changed()
   }
@@ -213,16 +213,16 @@ export function mkSessionLab(lab: LabCtx): SessionLab {
       refuse,
       mode: () => side,
       undo: () => {
-        const before = side === 'forward' ? s.forward.steps.length : s.backward.steps.length
+        const before = s[side].cursor
         s = side === 'forward' ? undoForward(s) : undoBackward(s)
-        const after = side === 'forward' ? s.forward.steps.length : s.backward.steps.length
+        const after = s[side].cursor
         if (before === after) { refuse(`nothing to undo on the ${side} side`); return }
         sync()
       },
     }),
     states: (which) => {
       const sd = which === 'forward' ? s.forward : s.backward
-      return [...sd.history, sd.current]
+      return [...sd.states]
     },
     stepLabels: (which) => {
       const sd = which === 'forward' ? s.forward : s.backward

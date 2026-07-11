@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { parseTerm } from '../../src/kernel/term/parse'
-import { startSession, applyForward, sideBoundary } from '../../src/app/session'
+import { startSession, applyForward, currentSide, sideBoundary } from '../../src/app/session'
 import type { ProofSession } from '../../src/app/session'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { mkReplay } from '../../src/app/replay'
@@ -62,7 +62,7 @@ describe('companionFor decision table', () => {
     const s = goalSession()
     const c = companionFor(st({ mode: 'prove', session: s, side: 'forward' }))
     expect(c).not.toBeNull()
-    expect(c!.diagram).toBe(s.backward.current)
+    expect(c!.diagram).toBe(currentSide(s, 'backward'))
     expect(c!.boundary).toBe(sideBoundary(s, 'backward'))
     expect(c!.boundary).toBe(s.rhs.boundary)
     expect(c!.label).toBe('meeting: backward side')
@@ -72,7 +72,7 @@ describe('companionFor decision table', () => {
     const s = goalSession()
     const c = companionFor(st({ mode: 'prove', session: s, side: 'backward' }))
     expect(c).not.toBeNull()
-    expect(c!.diagram).toBe(s.forward.current)
+    expect(c!.diagram).toBe(currentSide(s, 'forward'))
     expect(c!.boundary).toBe(sideBoundary(s, 'forward'))
     expect(c!.boundary).toBe(s.lhs.boundary)
     expect(c!.label).toBe('meeting: forward side')
@@ -82,7 +82,7 @@ describe('companionFor decision table', () => {
     const s = goalSession()
     expect(s.backward.steps).toHaveLength(0)
     const c = companionFor(st({ mode: 'prove', session: s, side: 'forward' }))
-    expect(c!.diagram).toBe(s.backward.current) // the pristine rhs, shown from step 0
+    expect(c!.diagram).toBe(currentSide(s, 'backward')) // the pristine rhs, shown from step 0
   })
 
   it('PROVE·forward tracks the backward side as it advances (companion follows the live current)', () => {
@@ -91,11 +91,11 @@ describe('companionFor decision table', () => {
     const before = companionFor(st({ mode: 'prove', session: s, side: 'forward' }))!.diagram
     s = applyForward(s, {
       rule: 'doubleCutIntro',
-      sel: mkSelection(s.forward.current, { region: s.forward.current.root, regions: [], nodes: [], wires: [] }),
+      sel: mkSelection(currentSide(s, 'forward'), { region: currentSide(s, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
     const after = companionFor(st({ mode: 'prove', session: s, side: 'forward' }))!.diagram
     expect(after).toBe(before) // backward.current is untouched by a forward step
-    expect(after).toBe(s.backward.current)
+    expect(after).toBe(currentSide(s, 'backward'))
   })
 
   it('REPLAY with no active replay is null', () => {
