@@ -2,6 +2,7 @@ import type { Diagram, WireId } from '../../kernel/diagram/diagram'
 import type { ProofStep } from '../../kernel/proof/step'
 
 export type TimelineView = {
+  readonly name?: string
   readonly states: readonly Diagram[]
   readonly steps: readonly ProofStep[]
   readonly cursor: number
@@ -139,7 +140,8 @@ export function mountScrubber(
       return
     }
     const labels = view.steps.map(proofStepLabel)
-    copy.value = timelineCopy(view.cursor, view.states.length, labels)
+    const content = timelineCopy(view.cursor, view.states.length, labels)
+    copy.value = view.name === undefined ? content : `${view.name} · ${content}`
     undo.disabled = view.cursor === 0
     redo.disabled = view.cursor === view.states.length - 1
     rail.setAttribute('aria-valuemin', '0')

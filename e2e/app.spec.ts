@@ -38,6 +38,13 @@ declare global {
       interaction(): { selected: readonly { kind: 'node' | 'region' | 'wire'; id: string }[]; pins: string[]; userZoom: number }
       theoryJson(): string
       editForm(): string
+      fixed(): null | {
+        ratio: number
+        focused: 'forward' | 'backward'
+        met: boolean
+        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[] }
+        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[] }
+      }
       dispose(): void
     }
   }
@@ -253,173 +260,109 @@ test('a goal proves end to end through the chrome', async ({ page }) => {
   // build lhs: one identity node; snapshot as lhs (no citations, so this proves
   // against the empty boot context)
   await spawnTerm(page, '\\x. x')
+  await page.getByRole('button', { name: /Mode: Edit/ }).click()
   await page.getByRole('button', { name: /set goal lhs/i }).click()
   // set rhs = same diagram, prove with zero steps (met immediately)
   await page.getByRole('button', { name: /set goal rhs/i }).click()
   await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
-  await page.getByRole('button', { name: /assemble/i }).click()
+  await page.locator('.vpa-fixed-side-declare').click()
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
   const sessionGroup = page.locator('#library').getByRole('button', { name: /Session \(adopted \+ defined\)/ })
   await sessionGroup.click()
   await expect(page.locator('#library')).toContainText('untitled')
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
-// Plan 17: the PiP companion. Entering PROVE surfaces a view-only pane showing
-// the OTHER side (the meet target). A forward step moves the main view but not
-// the companion (its diagram identity — the backward side — is untouched). The
-// toggle cycles PiP → split → hidden → PiP.
-test('the companion pane targets the other side, survives a forward step, and toggles', async ({ page }) => {
+test('fixed-side two-front workspace keeps both proof fronts live and independent', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
-  const canvas = page.locator('#c')
-  const box = (await canvas.boundingBox())!
-
-  // A goal with a node on each side, so the backward-side companion has a body.
   await spawnTerm(page, '\\x. x')
-  await page.getByRole('button', { name: /set goal lhs/i }).click()
-  await page.getByRole('button', { name: /set goal rhs/i }).click()
-
-  // EDIT: nothing to walk toward — the companion is not applicable.
-  expect(await page.evaluate(() => window.__vpaDebug!.companion())).toBeNull()
-
+  await page.getByRole('button', { name: /Mode: Edit/ }).click()
+  await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
+  await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
   await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
 
-  // The pane appears (default PiP) showing the BACKWARD side, with a real body.
-  await expect.poll(async () => (await page.evaluate(() => window.__vpaDebug!.companion()))?.bodies ?? 0).toBeGreaterThan(0)
-  const c0 = await page.evaluate(() => window.__vpaDebug!.companion())
-  expect(c0!.visible).toBe(true)
-  expect(c0!.label).toBe('meeting: backward side')
-  await expect(page.locator('#companion')).toBeVisible()
-
-  // Apply a forward step: select the node, wrap it in a double cut. The forward
-  // side gains a step (main view changes) while the companion tracks the
-  // untouched backward side — same label, same body count, no reseed.
-  await page.waitForTimeout(300)
-  const s = await page.evaluate(() => {
-    const v = window.__vpaDebug!.view()
-    const b = window.__vpaDebug!.bodies().find((x) => x.kind === 'term')!
-    return { x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
-  })
-  await page.mouse.click(box.x + s.x, box.y + s.y)
-  await expect(page.locator('#action-menu')).toBeHidden()
-  await page.mouse.click(box.x + s.x, box.y + s.y, { button: 'right' })
-  await page.locator('.vpa-proof-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true }).click()
-  await expect(page.locator('#status')).toContainText('forward 1 step')
-  const c1 = await page.evaluate(() => window.__vpaDebug!.companion())
-  expect(c1!.label).toBe('meeting: backward side')
-  expect(c1!.bodies).toBe(c0!.bodies)
-  // Rebuild discipline: the forward step changed the MAIN diagram, not the
-  // companion's target (the backward side), so the companion engine was NOT
-  // reseeded — its reseed count is identical. (A per-frame rebuild would bump
-  // this by dozens of frames between c0 and c1.)
-  expect(c1!.rebuilds).toBe(c0!.rebuilds)
-
-  // Toggle: PiP → split (right half) → hidden → PiP.
-  const companionBtn = page.getByRole('button', { name: /^Companion:/ })
-  await companionBtn.click()
-  await expect(page.locator('#companion')).toBeVisible()
-  // The next frame restyles pip (28vw) → split (50vw); poll for the resize.
-  await expect.poll(async () => (await page.locator('#companion').boundingBox())!.width).toBeGreaterThan(box.width * 0.4)
-  expect((await page.evaluate(() => window.__vpaDebug!.companion()))!.visible).toBe(true)
-
-  // Split hit-testing: the MAIN camera fits the HALVED left half, so a node
-  // renders in the left half — a real click at its rendered position must still
-  // select it. (If the main camera ignored the halving, the node would render
-  // centered UNDER the companion pane and the click would miss.) Re-read the
-  // main box: it is now half-width.
-  await page.waitForTimeout(200)
-  const splitBox = (await canvas.boundingBox())!
-  expect(splitBox.width).toBeLessThan(box.width * 0.75)
-  const sn = await page.evaluate(() => {
-    const v = window.__vpaDebug!.view()
-    const b = window.__vpaDebug!.bodies().find((x) => x.kind === 'term')!
-    return { id: b.id, x: b.x * v.scale + v.offsetX, y: b.y * v.scale + v.offsetY }
-  })
-  await page.mouse.click(splitBox.x + sn.x, splitBox.y + sn.y)
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([{ kind: 'node', id: sn.id }])
-
-  await companionBtn.click()
+  await expect(page.locator('.vpa-fixed-side-workspace')).toBeVisible()
+  await expect(page.locator('.vpa-proof-front-canvas')).toHaveCount(2)
+  await expect(page.locator('.vpa-fixed-side-seam')).toBeVisible()
+  await expect(page.locator('#c')).toBeHidden()
   await expect(page.locator('#companion')).toBeHidden()
-  // Still applicable (we are in PROVE), just not on-screen.
-  const hidden = await page.evaluate(() => window.__vpaDebug!.companion())
-  expect(hidden).not.toBeNull()
-  expect(hidden!.visible).toBe(false)
+  await expect(page.getByRole('button', { name: /Side: .*toggle/ })).toHaveCount(0)
 
-  await companionBtn.click()
-  await expect(page.locator('#companion')).toBeVisible()
-})
+  const initial = await page.evaluate(() => window.__vpaDebug!.fixed()!)
+  expect(initial.ratio).toBe(0.5)
+  expect(initial.focused).toBe('forward')
+  expect(initial.met).toBe(true)
+  expect(initial.forward.cursor).toBe(0)
+  expect(initial.backward.cursor).toBe(0)
+  await expect(page.locator('.vpa-fixed-side-declare')).toBeEnabled()
 
-// Plan 17 HARD RULE: the companion is VIEW-ONLY. A real click, drag, and wheel
-// on the companion canvas must change NO state — no main-view zoom/pan, no
-// selection, no pending action, and the companion itself must neither reseed nor
-// change. (The companion canvas carries no pointer/wheel listeners; this pins
-// that a gesture on it is completely inert, seam-diffed before/after.)
-test('the companion canvas is inert: a click, drag, and wheel on it change nothing', async ({ page }) => {
-  await page.goto('/?debug')
-  await page.waitForFunction(() => window.__vpaDebug !== undefined)
-
-  // A goal with a node on each side, then enter PROVE — companion visible (PiP).
-  await spawnTerm(page, '\\x. x')
-  await page.getByRole('button', { name: /set goal lhs/i }).click()
-  await page.getByRole('button', { name: /set goal rhs/i }).click()
-  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
-  await expect.poll(async () => (await page.evaluate(() => window.__vpaDebug!.companion()))?.bodies ?? 0).toBeGreaterThan(0)
-  await expect(page.locator('#companion')).toBeVisible()
-  await page.waitForTimeout(300) // let both engines settle so positions are at rest
-
-  // Baseline: main camera, status, node count, and the companion's own state.
-  const before = await page.evaluate(() => ({
-    view: window.__vpaDebug!.view(),
-    status: window.__vpaDebug!.status(),
-    nodes: window.__vpaDebug!.nodeCount(),
-    comp: window.__vpaDebug!.companion(),
-  }))
-
-  // Aim every gesture at the CENTER of the companion pane (bottom-right in PiP).
-  const cbox = (await page.locator('#companion-canvas').boundingBox())!
-  const cx = cbox.x + cbox.width / 2
-  const cy = cbox.y + cbox.height / 2
-
-  // A real click on the companion.
-  await page.mouse.click(cx, cy)
-  // A real drag across the companion.
-  await page.mouse.move(cx, cy)
-  await page.mouse.down()
-  for (let i = 1; i <= 6; i++) await page.mouse.move(cx - i * 8, cy - i * 6)
-  await page.mouse.up()
-  // A real wheel over the companion (would zoom the MAIN view if it leaked).
-  await page.mouse.move(cx, cy)
-  await page.mouse.wheel(0, -400)
-  await page.waitForTimeout(150)
-
-  const after = await page.evaluate(() => ({
-    view: window.__vpaDebug!.view(),
-    status: window.__vpaDebug!.status(),
-    nodes: window.__vpaDebug!.nodeCount(),
-    comp: window.__vpaDebug!.companion(),
-  }))
-
-  // Main view unchanged: no wheel zoom (scale) and no drag pan (offsets).
-  expect(Math.abs(after.view.scale - before.view.scale)).toBeLessThan(0.01)
-  expect(Math.abs(after.view.offsetX - before.view.offsetX)).toBeLessThan(1)
-  expect(Math.abs(after.view.offsetY - before.view.offsetY)).toBeLessThan(1)
-  // No selection / pending action fired: the status message is byte-identical
-  // (no "selected node '...'") and no node was created or removed.
-  expect(after.status).toBe(before.status)
-  expect(after.nodes).toBe(before.nodes)
-  // The sheet has no selection — the action menu offers no node action.
-  await expect(page.locator('#action-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true })).toHaveCount(0)
-  // The companion itself neither reseeded nor changed its target, and its own
-  // layout did not move (a drag on it does NOT drag its bodies — same ids, each
-  // within rest micro-jitter of where it was).
-  expect(after.comp!.rebuilds).toBe(before.comp!.rebuilds)
-  expect(after.comp!.label).toBe(before.comp!.label)
-  expect(after.comp!.bodies).toBe(before.comp!.bodies)
-  expect(after.comp!.pos.map((p) => p.id).sort()).toEqual(before.comp!.pos.map((p) => p.id).sort())
-  for (const b of before.comp!.pos) {
-    const a = after.comp!.pos.find((p) => p.id === b.id)!
-    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeLessThan(1)
+  const clickFrontBody = async (side: 'forward' | 'backward', button: 'left' | 'right' = 'left') => {
+    const canvas = page.locator(`.vpa-proof-front-${side} .vpa-proof-front-canvas`)
+    const box = (await canvas.boundingBox())!
+    const point = await page.evaluate((which) => {
+      const front = window.__vpaDebug!.fixed()![which]
+      const body = front.bodies.find((candidate) => candidate.kind === 'term')!
+      return { x: body.x * front.view.scale + front.view.offsetX, y: body.y * front.view.scale + front.view.offsetY }
+    }, side)
+    await page.mouse.click(box.x + point.x, box.y + point.y, { button })
   }
+
+  await clickFrontBody('backward')
+  const backwardCanvas = (await page.locator('.vpa-proof-front-backward .vpa-proof-front-canvas').boundingBox())!
+  await page.mouse.move(backwardCanvas.x + backwardCanvas.width / 2, backwardCanvas.y + backwardCanvas.height / 2)
+  await page.mouse.wheel(0, -220)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.view.scale)).toBeGreaterThan(initial.backward.view.scale)
+  const preparedBackward = await page.evaluate(() => window.__vpaDebug!.fixed()!.backward)
+
+  await clickFrontBody('forward')
+  await clickFrontBody('forward', 'right')
+  await page.locator('.vpa-proof-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
+  const afterForward = await page.evaluate(() => window.__vpaDebug!.fixed()!)
+  expect(afterForward.backward.cursor).toBe(0)
+  expect(afterForward.backward.rebuilds).toBe(initial.backward.rebuilds)
+  expect(afterForward.backward.selected).toBe(1)
+  expect(afterForward.backward.view).toEqual(preparedBackward.view)
+  expect(afterForward.met).toBe(false)
+  await expect(page.locator('.vpa-fixed-side-declare')).toBeDisabled()
+
+  await clickFrontBody('backward', 'right')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.focused)).toBe('backward')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('backward')
+  await page.locator('.vpa-proof-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.met)).toBe(true)
+  await expect(page.locator('.vpa-fixed-side-declare')).toBeEnabled()
+
+  const seam = (await page.locator('.vpa-fixed-side-seam').boundingBox())!
+  const workspace = (await page.locator('.vpa-fixed-side-workspace').boundingBox())!
+  const seamY = seam.y + seam.height * 0.7
+  await page.mouse.move(seam.x + seam.width / 2, seamY)
+  await page.mouse.down()
+  await page.mouse.move(workspace.x + workspace.width * 0.9, seamY)
+  await page.mouse.up()
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.ratio)).toBe(0.7)
+  await page.locator('.vpa-fixed-side-seam').dblclick({ position: { x: 4, y: seam.height * 0.7 } })
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.ratio)).toBe(0.5)
+
+  const beforeOverlay = await Promise.all([
+    page.locator('.vpa-proof-front-forward').boundingBox(),
+    page.locator('.vpa-proof-front-backward').boundingBox(),
+  ])
+  await page.getByRole('button', { name: 'Library', exact: true }).click()
+  await expect(page.getByRole('complementary', { name: 'Library' })).toBeVisible()
+  expect(await Promise.all([
+    page.locator('.vpa-proof-front-forward').boundingBox(),
+    page.locator('.vpa-proof-front-backward').boundingBox(),
+  ])).toEqual(beforeOverlay)
+  await page.getByRole('button', { name: 'Close library', exact: true }).click()
+
+  await page.getByRole('button', { name: /Mode: Prove/ }).click()
+  await page.getByRole('button', { name: 'Return to editing', exact: true }).click()
+  await expect(page.locator('.vpa-fixed-side-workspace')).toHaveCount(0)
+  await expect(page.locator('#c')).toBeVisible()
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed())).toBeNull()
 })
 
 // The plan-14 deliverable: a relational theorem replays step-by-step through the

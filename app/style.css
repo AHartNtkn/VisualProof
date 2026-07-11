@@ -7,6 +7,7 @@
 
 html, body { margin: 0; height: 100%; overflow: hidden; }
 canvas { display: block; }
+canvas[hidden] { display: none; }
 button, input { font: inherit; }
 button { color: inherit; }
 
@@ -51,6 +52,22 @@ button { color: inherit; }
 .vpa-temporal-copy { min-width: 110px; font-size: 11px; color: #666154; }
 .vpa-history-preview { position: fixed; z-index: 55; width: 260px; height: 170px; padding: 5px; border: 1px solid rgba(69,66,55,.24); border-radius: 10px; background: rgba(250,249,243,.98); box-shadow: 0 12px 36px rgba(50,45,30,.18); pointer-events: none; }
 .vpa-history-preview canvas { width: 260px; height: 170px; border-radius: 6px; }
+.vpa-fixed-side-workspace { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #e8e4d8; }
+.vpa-fixed-side-workspace[hidden] { display: none; }
+.vpa-proof-front, .vpa-fixed-side-seam { position: absolute; box-sizing: border-box; }
+.vpa-proof-front { overflow: hidden; background: #e8e4d8; box-shadow: inset 0 0 0 1px rgba(69,66,55,.14); }
+.vpa-proof-front.is-focused { box-shadow: inset 0 0 0 3px #d17832; }
+.vpa-proof-front-canvas { width: 100%; height: 100%; }
+.vpa-proof-front-status { position: absolute; top: 68px; z-index: 2; padding: 4px 8px; border: 1px solid rgba(69,66,55,.22); border-radius: 7px; background: rgba(250,249,243,.9); color: #666154; font-size: 10px; letter-spacing: .08em; pointer-events: none; }
+.vpa-proof-front-forward .vpa-proof-front-status { left: 12px; }
+.vpa-proof-front-backward .vpa-proof-front-status { right: 12px; }
+.vpa-proof-front.is-focused .vpa-proof-front-status { border-color: #d17832; color: #8a481c; }
+.vpa-fixed-side-seam { z-index: 4; cursor: col-resize; background: rgba(75,70,59,.22); touch-action: none; }
+.vpa-fixed-side-seam::before { content: ""; position: absolute; inset: 0 3px; background: rgba(75,70,59,.58); }
+.vpa-fixed-side-declare { position: absolute; left: 50%; top: 50%; width: 116px; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; border: 1px solid rgba(69,66,55,.3); border-radius: 999px; padding: 5px 9px; background: rgba(250,249,243,.96); font-size: 10px; letter-spacing: .08em; cursor: pointer; }
+.vpa-fixed-side-declare:disabled { color: #777165; cursor: default; }
+.vpa-fixed-side-seam.is-met::before { background: #d17832; }
+.vpa-fixed-side-seam.is-met .vpa-fixed-side-declare { border-color: #d17832; color: #8a481c; font-weight: 700; }
 .vpa-action-instruction { flex-basis: 100%; margin: 0 0 3px; }
 .vpa-mode-help, .vpa-keyboard-map { flex-basis: 100%; padding: 6px 8px; border-left: 2px solid #d17832; color: #666154; font-size: 11px; }
 .vpa-mode-help[hidden], .vpa-keyboard-map[hidden] { display: none; }
@@ -66,3 +83,7 @@ button { color: inherit; }
 #chrome[data-color-mode="dark"] .vpa-status,
 #chrome[data-color-mode="dark"] .vpa-temporal-copy,
 #chrome[data-color-mode="dark"] .vpa-ledger > header small { color: #b8b3aa; }
+#chrome[data-color-mode="dark"] ~ .vpa-fixed-side-workspace,
+body:has(#chrome[data-color-mode="dark"]) .vpa-proof-front { background: #0e1013; }
+body:has(#chrome[data-color-mode="dark"]) .vpa-proof-front-status,
+body:has(#chrome[data-color-mode="dark"]) .vpa-fixed-side-declare { color-scheme: dark; background: rgba(28,32,38,.94); color: #d9d3c8; border-color: rgba(230,225,214,.24); }

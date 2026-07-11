@@ -1,6 +1,4 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
-import type { ProofSession } from './session'
-import { currentSide, sideBoundary } from './session'
 import type { Replay } from './replay'
 
 /**
@@ -12,8 +10,6 @@ import type { Replay } from './replay'
  */
 export type CompanionState = {
   readonly mode: 'edit' | 'prove' | 'replay'
-  readonly session: ProofSession | null
-  readonly side: 'forward' | 'backward'
   readonly replay: Replay | null
 }
 
@@ -33,11 +29,8 @@ export type Companion = {
  * `null` means "hide the companion".
  *
  * - EDIT: null (there is no target to walk toward).
- * - PROVE·forward: the backward side's current diagram — the meet target the
- *   forward derivation is climbing toward — with the rhs (backward) boundary.
- * - PROVE·backward: symmetrically, the forward side's current diagram with the
- *   lhs (forward) boundary.
- * - PROVE with no session yet: null.
+ * - PROVE: null. Fixed-side proving owns two equally interactive live fronts;
+ *   a companion must never substitute for either one.
  * - REPLAY: the theorem's final state (the replayed rhs) with the replay
  *   boundary, so the companion is the destination the stepper is heading to.
  *   Independent of the current step k, so at the last step the companion
@@ -49,14 +42,6 @@ export function companionFor(state: CompanionState): Companion | null {
     const r = state.replay
     if (r === null) return null
     return { diagram: r.diagramAt(r.stepCount), boundary: r.boundary, label: 'goal: final state' }
-  }
-  if (state.mode === 'prove') {
-    const s = state.session
-    if (s === null) return null
-    if (state.side === 'forward') {
-      return { diagram: currentSide(s, 'backward'), boundary: sideBoundary(s, 'backward'), label: 'meeting: backward side' }
-    }
-    return { diagram: currentSide(s, 'forward'), boundary: sideBoundary(s, 'forward'), label: 'meeting: forward side' }
   }
   return null
 }

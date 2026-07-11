@@ -26,7 +26,7 @@ import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addRefNode, addAtomNode } from './edit'
 import type { ProofSession, TrackDirection, TrackSession } from './session'
 import {
-  startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide, moveSide,
+  startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
   startTrack, applyTrack, undoTrack, redoTrack, moveTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
 } from './session'
 import type { Companion } from './companion'
@@ -44,6 +44,7 @@ import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './f
 import { mountCompass } from './compass'
 import { mountScrubber, type MountedScrubber, type TimelineView } from './interact/scrubber'
 import { previewTransition } from './history-preview'
+import { FixedSideWorkspace } from './fixed-side-workspace'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -129,6 +130,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     | { readonly kind: 'track'; track: TrackSession }
     | { readonly kind: 'dual'; session: ProofSession; side: 'forward' | 'backward' }
   let proof: ActiveProof | null = null
+  let fixedWorkspace: FixedSideWorkspace | null = null
   let kernelSel: SubgraphSelection | null = null
   let pending: Pending | null = null
   // The render engine is rebuilt whenever the displayed diagram identity
@@ -662,6 +664,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     replay = mkReplay(thm, ctx)
     replayK = 0
     mode = 'replay'
+    if (fixedWorkspace !== null) {
+      fixedWorkspace.root.hidden = true
+      canvas.hidden = false
+    }
     compass.setOpen('library', false)
     interaction.cancelActiveGesture()
     displayed = replay.diagramAt(0)
@@ -708,6 +714,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     mode = replayReturnMode
     replay = null
     replayK = 0
+    if (mode === 'prove' && proof?.kind === 'dual' && fixedWorkspace !== null) {
+      fixedWorkspace.root.hidden = false
+      canvas.hidden = true
+      refreshChrome()
+      return
+    }
     sync(true) // rebuilds the engine for the restored mode's diagram
   }
 
@@ -717,7 +729,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       exitReplay()
       return
     }
+    fixedWorkspace?.dispose()
+    fixedWorkspace = null
+    proof = null
     mode = 'edit'
+    canvas.hidden = false
     sync(true)
   })
   const beginTrack = (direction: TrackDirection): void => guard(() => {
@@ -731,14 +747,41 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     requireEdit()
     proofMoves.cancel()
     if (goalLhs === null || goalRhs === null) throw new Error('set both fixed sides before dual proving')
-    proof = { kind: 'dual', session: startSession(goalLhs, goalRhs, ctx), side: 'forward' }
+    const session = startSession(goalLhs, goalRhs, ctx)
+    proof = { kind: 'dual', session, side: 'forward' }
     mode = 'prove'
-    sync(true)
-  })
-  const onToggleSide = guard(() => {
-    if (mode !== 'prove' || proof?.kind !== 'dual') throw new Error('side switching applies only in fixed-side dual proving')
-    proof = { ...proof, side: proof.side === 'forward' ? 'backward' : 'forward' }
-    sync(true)
+    try {
+      fixedWorkspace = new FixedSideWorkspace({
+        host: document.body,
+        session: () => {
+          if (proof?.kind !== 'dual') throw new Error('fixed-side workspace has no active session')
+          return proof.session
+        },
+        commit: (next, changedSide) => {
+          if (proof?.kind !== 'dual') throw new Error('fixed-side workspace has no active session')
+          proof = { kind: 'dual', session: next, side: changedSide }
+        },
+        context: () => ctx,
+        theme: () => theme,
+        fuel: () => readCount(fuel.input, 'fuel'),
+        focusChanged: (side) => {
+          if (proof?.kind === 'dual') proof = { ...proof, side }
+          refreshChrome()
+        },
+        declare: () => onAssemble(),
+        refuse,
+        changed: refreshChrome,
+      })
+    } catch (error) {
+      proof = null
+      mode = 'edit'
+      throw error
+    }
+    interaction.cancelActiveGesture()
+    proofMoves.cancel()
+    restyleCompanion(false)
+    canvas.hidden = true
+    refreshChrome()
   })
   const onUndo = guard(() => {
     if (mode === 'edit') {
@@ -755,7 +798,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') proof = { kind: 'track', track: undoTrack(proof.track) }
-    else proof = { ...proof, session: proof.side === 'forward' ? undoForward(proof.session) : undoBackward(proof.session) }
+    else {
+      proof = { ...proof, session: proof.side === 'forward' ? undoForward(proof.session) : undoBackward(proof.session) }
+      fixedWorkspace?.reconcile(proof.side)
+      return
+    }
     sync()
   })
   const onRedo = guard(() => {
@@ -766,7 +813,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') proof = { kind: 'track', track: redoTrack(proof.track) }
-    else proof = { ...proof, session: proof.side === 'forward' ? redoForward(proof.session) : redoBackward(proof.session) }
+    else {
+      proof = { ...proof, session: proof.side === 'forward' ? redoForward(proof.session) : redoBackward(proof.session) }
+      fixedWorkspace?.reconcile(proof.side)
+      return
+    }
     sync()
   })
   const onAssemble = guard(() => {
@@ -788,7 +839,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const applyProofStep = (step: ProofStep): void => {
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') proof = { kind: 'track', track: applyTrack(proof.track, step) }
-    else proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, step) : applyBackward(proof.session, step) }
+    else {
+      proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, step) : applyBackward(proof.session, step) }
+      fixedWorkspace?.reconcile(proof.side)
+      return
+    }
     sync()
   }
 
@@ -844,10 +899,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     dualBtn.hidden = mode !== 'edit'
     leaveBtn.hidden = mode === 'edit'
     leaveBtn.textContent = mode === 'replay' ? 'Exit replay' : 'Return to editing'
-    sideBtn.hidden = mode !== 'prove' || proof?.kind !== 'dual'
-    sideBtn.textContent = proof?.kind === 'dual' && proof.side === 'forward' ? 'Side: forward (toggle)' : 'Side: backward (toggle)'
     nameInput.hidden = mode === 'edit'
-    declareBtn.hidden = mode !== 'prove'
+    declareBtn.hidden = mode !== 'prove' || proof?.kind === 'dual'
     helpText.textContent = mode === 'edit'
       ? 'Right-click the sheet to construct. Backward proving is the ordinary default; fixed sides use explicit snapshots.'
       : mode === 'replay'
@@ -1066,13 +1119,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const r = b.discR * engine.scale
     return { x: b.pos.x + r * 0.72, y: b.pos.y - r * 0.72 }
   }
-  const dualProofState = (): { session: ProofSession | null; side: 'forward' | 'backward' } => proof?.kind === 'dual'
-    ? { session: proof.session, side: proof.side }
-    : { session: null, side: 'backward' }
   const frame = (): void => {
     if (disposed) return
-    const dual = dualProofState()
-    const comp = companionFor({ mode, session: dual.session, side: dual.side, replay })
+    if (mode === 'prove' && proof?.kind === 'dual' && fixedWorkspace !== null) {
+      canvas.hidden = true
+      restyleCompanion(false)
+      fixedWorkspace.frame()
+      raf = requestAnimationFrame(frame)
+      return
+    }
+    canvas.hidden = false
+    const comp = companionFor({ mode, replay })
     const companionVisible = comp !== null && companionMode !== 'hidden'
     // Split gives the companion the right half, so the main view fits the left
     // half; PiP/hidden leave the main view full-width (PiP overlays a corner).
@@ -1120,6 +1177,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
   // a text/number input is focused so typing a term is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
+    if (mode === 'prove' && proof?.kind === 'dual') return false
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && mode !== 'edit') {
       if (e.shiftKey) onRedo()
       else onUndo()
@@ -1203,7 +1261,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const forwardBtn = button('Prove forward', () => beginTrack('forward'))
   const dualBtn = button('Prove fixed sides', beginDual)
   const leaveBtn = button('Return to editing', leaveProof)
-  const sideBtn = button('Side: forward (toggle)', onToggleSide)
   // Theme toggle: view-only, persists for the session; paint reads `theme`
   // every frame, so flipping it re-styles the next frame with no rebuild.
   const themeBtn = button(`Theme: ${theme.name}`, () => {
@@ -1229,7 +1286,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   keyboardMap.textContent = 'Ctrl+Z undo · Ctrl+Shift+Z redo · Home fit · Esc cancel · Delete contextual erase'
   keyboardMap.hidden = true
   const keyboardBtn = button('Keyboard map', () => { keyboardMap.hidden = !keyboardMap.hidden })
-  compass.lifecycle.append(backwardBtn, forwardBtn, setLhsBtn, setRhsBtn, dualBtn, leaveBtn, sideBtn, nameInput, declareBtn, helpBtn, helpText)
+  compass.lifecycle.append(backwardBtn, forwardBtn, setLhsBtn, setRhsBtn, dualBtn, leaveBtn, nameInput, declareBtn, helpBtn, helpText)
   compass.utilities.append(
     themeBtn,
     companionBtn,
@@ -1311,7 +1368,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   proofMoves = new ProofMoveController({
     host: document.body,
-    active: () => mode === 'prove' && proof !== null,
+    active: () => mode === 'prove' && proof?.kind === 'track',
     diagram: currentDiagram,
     engine: () => engine,
     selection: () => interaction.selection,
@@ -1376,11 +1433,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const active = activeProof.session[activeProof.side]
     return {
       ...active,
+      name: activeProof.side,
       boundary: sideBoundary(activeProof.session, activeProof.side),
       moveTo: (cursor) => {
-        if (proof?.kind !== 'dual') return
-        proof = { ...proof, session: moveSide(proof.session, proof.side, cursor) }
-        sync()
+        fixedWorkspace?.moveFocusedCursor(cursor)
       },
     }
   }
@@ -1481,6 +1537,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     construct.dispose()
     spawnCascade.dispose()
     proofMoves.dispose()
+    fixedWorkspace?.dispose()
+    fixedWorkspace = null
     temporal?.dispose()
     temporal = null
     window.clearTimeout(refusalTimer)
@@ -1496,7 +1554,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   if (new URLSearchParams(location.search).has('debug')) {
     ;(window as any).__vpaDebug = {
       nodeCount(): number {
-        return Object.keys(displayed.nodes).length
+        return Object.keys(currentDiagram().nodes).length
       },
       status(): string {
         return statusDiv.textContent ?? ''
@@ -1528,6 +1586,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           pins: [...interaction.pins],
           userZoom: interaction.userZoom,
         }
+      },
+      fixed() {
+        return fixedWorkspace?.debugState() ?? null
       },
       spawnBinderHover(): string | null {
         return spawnHoverBinder
@@ -1626,8 +1687,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       // companion is not applicable (EDIT / no session / no replay), else the
       // label, whether it is on-screen, and its engine body count.
       companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null {
-        const dual = dualProofState()
-        const c = companionFor({ mode, session: dual.session, side: dual.side, replay })
+        const c = companionFor({ mode, replay })
         if (c === null) return null
         return {
           visible: companionMode !== 'hidden',
