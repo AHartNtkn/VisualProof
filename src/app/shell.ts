@@ -26,8 +26,8 @@ import { mkReplay } from './replay'
 import { emptyDiagram, addTermNode, addRefNode, addAtomNode } from './edit'
 import type { ProofSession, TrackDirection, TrackSession } from './session'
 import {
-  startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
-  startTrack, applyTrack, undoTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
+  startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide, moveSide,
+  startTrack, applyTrack, undoTrack, redoTrack, moveTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
 } from './session'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
@@ -41,6 +41,9 @@ import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { ProofMoveController } from './interact/moves'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
 import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
+import { mountCompass } from './compass'
+import { mountScrubber, type MountedScrubber, type TimelineView } from './interact/scrubber'
+import { previewTransition } from './history-preview'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -228,6 +231,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     canvas.style.background = theme.canvas
     canvas.ownerDocument.documentElement.style.background = theme.canvas
     canvas.ownerDocument.body.style.background = theme.canvas
+    chrome.dataset.colorMode = theme.name.startsWith('Dark') ? 'dark' : 'light'
   }
   applyThemeBackdrop()
   // There is NO pan: the camera is a fit — centered on the sheet circle with
@@ -303,21 +307,19 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     return { wrap, input }
   }
 
-  const statusDiv = div('vpa-status')
-  statusDiv.id = 'status'
-  const editRow = div('vpa-row')
-  const goalRow = div('vpa-row')
-  const proveRow = div('vpa-row')
+  const compass = mountCompass(chrome)
+  const statusDiv = compass.status
+  let temporal: MountedScrubber | null = null
+  let historyPreview: HTMLDivElement | null = null
+  const previewCache = new WeakMap<Diagram, WeakMap<Diagram, Map<Theme, HTMLCanvasElement>>>()
   const menuDiv = div('vpa-menu')
   menuDiv.id = 'action-menu'
   menuDiv.hidden = true
   menuDiv.setAttribute('role', 'menu')
   let palettePoint: Vec2 | null = null
-  const replayNav = div('vpa-replay-nav')
-  replayNav.id = 'replay-nav'
-  replayNav.hidden = true
   const libraryDiv = div('vpa-library')
   libraryDiv.id = 'library'
+  compass.libraryBody.append(libraryDiv)
 
   // ---- Library panel state (browser-only view state) ----
   // The panel opens by default; each per-file detail group and the Session group
@@ -325,7 +327,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // keys the "Open file…" picker) and rendered inline, loudly, next to their
   // control. `dirHandle` is the session-lifetime workspace folder (no
   // persistence): opening or refreshing it re-lists its *.json files uniformly.
-  let libraryOpen = true
   const expandedGroups = new Set<string>()
   const SESSION_GROUP = 'session' // sentinel; file groups are keyed 'file:<name>' so this cannot collide
   const loadErrors = new Map<string, string>(opts.initialLibraryErrors)
@@ -487,8 +488,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     return s
   }
 
-  // Render the whole Library panel from `library`: a toggle header, then (when
-  // open) the workspace controls (Open folder…/Refresh/Open file…), the uniform
+  // Render the Indexed Ledger body from `library`: workspace controls, the uniform
   // file list (Load/Unload per file — no origin distinction), a detail group per
   // loaded entry, and the Session group for adopted theorems.
   const renderLibrary = (): void => {
@@ -513,12 +513,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return
     }
     libraryDiv.replaceChildren()
-    libraryDiv.append(button(`${libraryOpen ? '▾' : '▸'} Library`, () => {
-      libraryOpen = !libraryOpen
-      renderLibrary()
-    }))
-    if (!libraryOpen) return
-
     const controls = div('vpa-lib-row')
     controls.append(button('Open folder…', onOpenFolder))
     if (dirHandle !== null) controls.append(button('Refresh', onRefreshFolder))
@@ -567,9 +561,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
   }
 
-  const termInput = textInput('term-input', 'term, e.g. \\x. x y (also: insertion pattern / convert target / relation name)')
   const nameInput = textInput('theorem-name', 'theorem name')
-  const arity = numberInput('arity-input', 'arity', 1)
   const fuel = numberInput('fuel-input', 'fuel', 64)
 
   const guard = (fn: () => void) => (): void => {
@@ -670,6 +662,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     replay = mkReplay(thm, ctx)
     replayK = 0
     mode = 'replay'
+    compass.setOpen('library', false)
     interaction.cancelActiveGesture()
     displayed = replay.diagramAt(0)
     engine = mkEngine(displayed, replay.boundary)
@@ -755,9 +748,25 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       sync()
       return
     }
+    if (mode === 'replay' && replay !== null) {
+      if (replayK === 0) throw new Error('nothing to undo in replay')
+      gotoReplayStep(replayK - 1)
+      return
+    }
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') proof = { kind: 'track', track: undoTrack(proof.track) }
     else proof = { ...proof, session: proof.side === 'forward' ? undoForward(proof.session) : undoBackward(proof.session) }
+    sync()
+  })
+  const onRedo = guard(() => {
+    if (mode === 'replay' && replay !== null) {
+      if (replayK === replay.stepCount) throw new Error('nothing to redo in replay')
+      gotoReplayStep(replayK + 1)
+      return
+    }
+    if (proof === null) throw new Error('no active proof')
+    if (proof.kind === 'track') proof = { kind: 'track', track: redoTrack(proof.track) }
+    else proof = { ...proof, session: proof.side === 'forward' ? redoForward(proof.session) : redoBackward(proof.session) }
     sync()
   })
   const onAssemble = guard(() => {
@@ -829,6 +838,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         ? `[${head} · FIXED SIDES] ${goal} | ${proofStatus()}`
         : `[${head}] ${proofStatus()}`
     }
+    compass.setMode(mode === 'edit' ? 'Edit' : mode === 'replay' ? 'Replay' : `Prove ${proofDirection() ?? ''}`.trim())
     backwardBtn.hidden = mode !== 'edit'
     forwardBtn.hidden = mode !== 'edit'
     dualBtn.hidden = mode !== 'edit'
@@ -836,20 +846,18 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     leaveBtn.textContent = mode === 'replay' ? 'Exit replay' : 'Return to editing'
     sideBtn.hidden = mode !== 'prove' || proof?.kind !== 'dual'
     sideBtn.textContent = proof?.kind === 'dual' && proof.side === 'forward' ? 'Side: forward (toggle)' : 'Side: backward (toggle)'
+    nameInput.hidden = mode === 'edit'
+    declareBtn.hidden = mode !== 'prove'
+    helpText.textContent = mode === 'edit'
+      ? 'Right-click the sheet to construct. Backward proving is the ordinary default; fixed sides use explicit snapshots.'
+      : mode === 'replay'
+        ? 'Drag the temporal rail or use Arrow keys to inspect the verified derivation.'
+        : 'Select diagram structure, then right-click for legal proof moves. Drag the temporal rail to undo or redo.'
+    temporal?.refresh()
 
     menuDiv.replaceChildren()
     menuDiv.hidden = true
-    replayNav.replaceChildren()
-    replayNav.hidden = true
-    if (mode === 'replay' && replay !== null) {
-      const prev = button('◀ Prev', () => gotoReplayStep(replayK - 1))
-      const next = button('Next ▶', () => gotoReplayStep(replayK + 1))
-      prev.disabled = replayK === 0
-      next.disabled = replayK === replay.stepCount
-      replayNav.append(prev, next, button('Exit replay', exitReplay))
-      replayNav.hidden = false
-      return
-    }
+    if (mode === 'replay' && replay !== null) return
     if (palettePoint === null && pending === null) return
     const point = palettePoint ?? lastPointerClient
     menuDiv.style.position = 'fixed'
@@ -1112,6 +1120,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
   // a text/number input is focused so typing a term is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && mode !== 'edit') {
+      if (e.shiftKey) onRedo()
+      else onUndo()
+      return true
+    }
     if (e.key === 'Escape' && spawnCascade.escape()) return true
     if (e.key === 'Escape' && pending !== null) {
       pending = null
@@ -1206,10 +1219,28 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     companionMode = companionMode === 'hidden' ? 'pip' : companionMode === 'pip' ? 'split' : 'hidden'
     companionBtn.textContent = `Companion: ${companionMode}`
   })
-  goalRow.append(backwardBtn, forwardBtn, button('Set goal LHS', onSetLhs), button('Set goal RHS', onSetRhs), dualBtn, leaveBtn, sideBtn, themeBtn, companionBtn, button('Undo', onUndo))
-  proveRow.append(termInput, arity.wrap, fuel.wrap, nameInput, button('Declare / assemble + check', onAssemble), button('Save theory', onSave))
-  chrome.append(statusDiv)
-  chrome.append(editRow, goalRow, proveRow, replayNav, menuDiv, libraryDiv, openFileInput)
+  const setLhsBtn = button('Set goal LHS', onSetLhs)
+  const setRhsBtn = button('Set goal RHS', onSetRhs)
+  const declareBtn = button('Declare / assemble + check', onAssemble)
+  const helpText = div('vpa-mode-help')
+  helpText.hidden = true
+  const helpBtn = button('Help', () => { helpText.hidden = !helpText.hidden })
+  const keyboardMap = div('vpa-keyboard-map')
+  keyboardMap.textContent = 'Ctrl+Z undo · Ctrl+Shift+Z redo · Home fit · Esc cancel · Delete contextual erase'
+  keyboardMap.hidden = true
+  const keyboardBtn = button('Keyboard map', () => { keyboardMap.hidden = !keyboardMap.hidden })
+  compass.lifecycle.append(backwardBtn, forwardBtn, setLhsBtn, setRhsBtn, dualBtn, leaveBtn, sideBtn, nameInput, declareBtn, helpBtn, helpText)
+  compass.utilities.append(
+    themeBtn,
+    companionBtn,
+    fuel.wrap,
+    button('Open folder…', onOpenFolder),
+    button('Open file…', () => openFileInput.click()),
+    button('Save theory', onSave),
+    keyboardBtn,
+    keyboardMap,
+  )
+  chrome.append(menuDiv, openFileInput)
   spawnCascade = new SpawnCascade({
     host: document.body,
     spawnTerm: ({ source, invocation }) => {
@@ -1292,7 +1323,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     theme: () => theme,
     fuel: () => readCount(fuel.input, 'fuel'),
   })
-  editRow.append(construct.optionsElement)
+  compass.lifecycle.append(construct.optionsElement)
   interaction = new InteractiveViewport({
     canvas,
     view,
@@ -1317,6 +1348,113 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       pending = null
       refreshChrome()
     },
+  })
+  const timelineView = (): TimelineView | null => {
+    if (mode === 'replay' && replay !== null) {
+      return {
+        states: Array.from({ length: replay.stepCount + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
+        steps: replay.steps,
+        cursor: replayK,
+        boundary: replay.boundary,
+        moveTo: gotoReplayStep,
+      }
+    }
+    if (mode !== 'prove' || proof === null) return null
+    if (proof.kind === 'track') {
+      const active = proof.track
+      return {
+        ...active.timeline,
+        boundary: trackBoundary(active),
+        moveTo: (cursor) => {
+          if (proof?.kind !== 'track') return
+          proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
+          sync()
+        },
+      }
+    }
+    const activeProof = proof
+    const active = activeProof.session[activeProof.side]
+    return {
+      ...active,
+      boundary: sideBoundary(activeProof.session, activeProof.side),
+      moveTo: (cursor) => {
+        if (proof?.kind !== 'dual') return
+        proof = { ...proof, session: moveSide(proof.session, proof.side, cursor) }
+        sync()
+      },
+    }
+  }
+  const closeHistoryPreview = (): void => {
+    historyPreview?.remove()
+    historyPreview = null
+  }
+  const renderHistoryPreview = (cursor: number, anchor: { readonly x: number; readonly y: number }): void => {
+    const timeline = timelineView()
+    if (timeline === null) return
+    const transition = previewTransition(timeline.states, cursor)
+    let byAfter = previewCache.get(transition.before)
+    if (byAfter === undefined) {
+      byAfter = new WeakMap()
+      previewCache.set(transition.before, byAfter)
+    }
+    let byTheme = byAfter.get(transition.after)
+    if (byTheme === undefined) {
+      byTheme = new Map()
+      byAfter.set(transition.after, byTheme)
+    }
+    let previewCanvas = byTheme.get(theme)
+    if (previewCanvas === undefined) {
+      previewCanvas = document.createElement('canvas')
+      previewCanvas.width = 520
+      previewCanvas.height = 340
+      const previewContext = previewCanvas.getContext('2d')
+      if (previewContext === null) return
+      const previewEngine = mkEngine(transition.after, timeline.boundary)
+      seedProject(previewEngine)
+      for (let i = 0; i < 16; i++) settleStep(previewEngine, null)
+      const points: Vec2[] = []
+      if (transition.focus.kind === 'items') {
+        for (const id of transition.focus.nodes) {
+          const body = previewEngine.bodies.get(id)
+          if (body !== undefined) points.push(body.pos)
+        }
+        for (const id of transition.focus.wires) {
+          const hub = previewEngine.bodies.get(`j:${id}`)
+          if (hub !== undefined) points.push(hub.pos)
+          for (const endpoint of transition.after.wires[id]?.endpoints ?? []) {
+            const body = previewEngine.bodies.get(endpoint.node)
+            if (body !== undefined) points.push(body.pos)
+          }
+        }
+      }
+      const previewView = points.length === 0
+        ? fitCamera(previewEngine.frame === null ? undefined : { center: previewEngine.frame.center, radius: previewEngine.frame.half }, previewCanvas.width, previewCanvas.height, 1)
+        : (() => {
+            const minX = Math.min(...points.map((point) => point.x))
+            const maxX = Math.max(...points.map((point) => point.x))
+            const minY = Math.min(...points.map((point) => point.y))
+            const maxY = Math.max(...points.map((point) => point.y))
+            const scale = Math.min(previewCanvas!.width / Math.max(80, maxX - minX + 80), previewCanvas!.height / Math.max(80, maxY - minY + 80))
+            return { scale, offsetX: previewCanvas!.width / 2 - (minX + maxX) / 2 * scale, offsetY: previewCanvas!.height / 2 - (minY + maxY) / 2 * scale }
+          })()
+      previewContext.fillStyle = theme.canvas
+      previewContext.fillRect(0, 0, previewCanvas.width, previewCanvas.height)
+      drawShapes(previewContext, paint(previewEngine, theme), previewView)
+      byTheme.set(theme, previewCanvas)
+    }
+    closeHistoryPreview()
+    const popup = document.createElement('div')
+    popup.className = 'vpa-history-preview'
+    popup.style.left = `${Math.max(8, Math.min(window.innerWidth - 282, anchor.x - 130))}px`
+    popup.style.top = `${Math.max(8, anchor.y - 194)}px`
+    popup.append(previewCanvas)
+    document.body.append(popup)
+    historyPreview = popup
+  }
+  temporal = mountScrubber(compass.temporalHost, timelineView, {
+    preview: renderHistoryPreview,
+    closePreview: closeHistoryPreview,
+    unavailable: (command) => refuse(`nothing to ${command}`),
   })
   const closePaletteAfterAction = (event: MouseEvent): void => {
     if (!(event.target instanceof HTMLButtonElement)) return
@@ -1343,11 +1481,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     construct.dispose()
     spawnCascade.dispose()
     proofMoves.dispose()
+    temporal?.dispose()
+    temporal = null
     window.clearTimeout(refusalTimer)
     clearRefusalPresentation()
     menuDiv.removeEventListener('click', closePaletteAfterAction)
     document.removeEventListener('click', closePaletteOutside, true)
-    chrome.replaceChildren()
+    compass.dispose()
     companionWrap.remove()
     if ((window as any).__vpaDebug !== undefined) delete (window as any).__vpaDebug
   }

@@ -134,7 +134,10 @@ export function mountScrubber(
     if (disposed) return
     const view = getView()
     element.hidden = view === null
-    if (view === null) return
+    if (view === null) {
+      actions.closePreview?.()
+      return
+    }
     const labels = view.steps.map(proofStepLabel)
     copy.value = timelineCopy(view.cursor, view.states.length, labels)
     undo.disabled = view.cursor === 0

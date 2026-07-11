@@ -1,5 +1,5 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { replayProof } from '../kernel/proof/step'
 import type { Theorem } from '../kernel/proof/theorem'
 
@@ -16,6 +16,7 @@ import type { Theorem } from '../kernel/proof/theorem'
  */
 export type Replay = {
   readonly stepCount: number
+  readonly steps: readonly ProofStep[]
   /** Diagram after k steps (0 ≤ k ≤ stepCount). */
   diagramAt(k: number): Diagram
   /** Rule name of step k (1-based); '' at k=0, which applied no rule. */
@@ -43,6 +44,7 @@ export function mkReplay(thm: Theorem, ctx: ProofContext): Replay {
 
   return {
     stepCount: n,
+    steps: thm.steps,
     boundary: thm.lhs.boundary,
     diagramAt(k: number): Diagram {
       if (!inRange(k)) throw new Error(`replay step ${k} is out of range [0, ${n}]`)

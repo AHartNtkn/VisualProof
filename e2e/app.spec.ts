@@ -86,6 +86,7 @@ test('ordinary proving is backward-first, forward is direct, and only fixed-side
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await spawnTerm(page, '\\x. x')
+  await page.getByRole('button', { name: /Mode: Edit/ }).click()
 
   const backward = page.getByRole('button', { name: 'Prove backward', exact: true })
   const forward = page.getByRole('button', { name: 'Prove forward', exact: true })
@@ -107,6 +108,53 @@ test('ordinary proving is backward-first, forward is direct, and only fixed-side
   await fixed.click()
   await expect(page.locator('#status')).toContainText('[EDIT]')
   await expect(page.locator('.vpa-refusal')).toContainText('set both fixed sides before dual proving')
+})
+
+test('Compass production chrome overlays the canvas and exposes cursor history only while proving', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  const canvasBefore = await page.locator('#c').boundingBox()
+  expect(canvasBefore).not.toBeNull()
+
+  await expect(page.locator('.vpa-compass')).toBeVisible()
+  await expect(page.locator('.vpa-temporal')).toBeHidden()
+  await expect(page.locator('.vpa-row')).toHaveCount(0)
+
+  await expect(page.getByRole('complementary', { name: 'Library' })).toBeVisible()
+  expect(await page.locator('#c').boundingBox()).toEqual(canvasBefore)
+  await page.getByRole('button', { name: 'Close library', exact: true }).click()
+
+  await spawnTerm(page, '\\x. x')
+  await page.getByRole('button', { name: /Mode: Edit/ }).click()
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+  await expect(page.locator('.vpa-temporal')).toBeVisible()
+  await expect(page.locator('.vpa-temporal-copy')).toHaveText('0 / 0 · start')
+  await expect(page.locator('.vpa-temporal-redo')).toBeDisabled()
+  expect(await page.locator('#c').boundingBox()).toEqual(canvasBefore)
+
+  const at = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  await page.mouse.click(at.x, at.y)
+  await page.mouse.click(at.x, at.y, { button: 'right' })
+  await page.locator('.vpa-proof-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true }).click()
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+  await page.keyboard.press('Control+z')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('0 / 1')
+  await expect(page.locator('.vpa-temporal-tick.is-future')).toHaveCount(1)
+  await page.keyboard.press('Control+Shift+z')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+
+  const rail = (await page.locator('.vpa-temporal-rail').boundingBox())!
+  await page.mouse.move(rail.x + rail.width * 0.5, rail.y + rail.height * 0.5)
+  await expect(page.locator('.vpa-history-preview')).toBeVisible()
+  await page.mouse.move(rail.x, rail.y - 30)
+  await expect(page.locator('.vpa-history-preview')).toHaveCount(0)
+
+  await page.getByRole('button', { name: 'Return to editing', exact: true }).click()
+  await expect(page.locator('.vpa-temporal')).toBeHidden()
 })
 
 test('proof actions require right-click and forward/backward share direct labels and normalization', async ({ page }) => {
@@ -392,6 +440,7 @@ test('a relational theorem replays step by step through the live shell', async (
   expect(start.k).toBe(0)
   expect(start.n).toBeGreaterThanOrEqual(40)
   expect(start.bodies).toBeGreaterThan(0)
+  await expect(page.locator('.vpa-temporal')).toBeVisible()
   const lhsNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
 
   // Replay is diagram-read-only, not physics-frozen: Ctrl remains the global
@@ -439,15 +488,15 @@ test('a relational theorem replays step by step through the live shell', async (
   // final state) is identity-stable, so the companion engine was never reseeded.
   expect(compMid!.rebuilds).toBe(compStart!.rebuilds)
 
-  // The menu Prev/Next buttons drive the same stepper (carryOver path).
-  await page.locator('#replay-nav').getByRole('button', { name: 'Next ▶', exact: true }).click()
+  // The shared temporal rail drives the same replay cursor (carryOver path).
+  await page.locator('.vpa-temporal-redo').click()
   expect(await page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(21)
-  await page.locator('#replay-nav').getByRole('button', { name: '◀ Prev', exact: true }).click()
+  await page.locator('.vpa-temporal-undo').click()
   expect(await page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(20)
 
-  // Exiting replay returns to EDIT mode with the sheet restored. (The mode
-  // button also relabels to "Exit replay"; scope to the action menu's button.)
-  await page.locator('#replay-nav').getByRole('button', { name: 'Exit replay', exact: true }).click()
+  // Exiting replay returns to EDIT mode with the sheet restored.
+  await page.getByRole('button', { name: /Mode: Replay/ }).click()
+  await page.getByRole('button', { name: 'Exit replay', exact: true }).click()
   expect(await page.evaluate(() => window.__vpaDebug!.replay().mode)).toBe('edit')
   await expect(page.locator('#status')).toContainText('EDIT')
 })
