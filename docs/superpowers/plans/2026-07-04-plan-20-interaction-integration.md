@@ -98,6 +98,8 @@
 
 ---
 
-**Queued design items (recorded, NOT in scope — each needs its own user round):**
-- Anonymous-comprehension construction box: instantiate without a name via a miniaturized EDIT canvas (round-4 ruling).
+- [x] **Anonymous-comprehension construction integrated (2026-07-11):** `ComprehensionDraft` is the sole semantic transaction; one reusable production editor composes the established viewport, construction, spawn, paint, camera, and live-physics authorities in ordinary forward/backward proving and both fixed-side fronts. Formal positions remain fixed and port 0 carries the orientation dot; local and cross-surface wires use the checked planner, synchronized edge glow, and canonical host-wire reuse. Cancel is exact, Instantiate prepares one proof step, and either fixed-side editor guards the shared session. Commits: `ad3abd5`, `99c3e94`, `57d6821`, `791ea19`. Fresh validation: Vitest 93/93, TypeScript, production Playwright 17/17; no physics source or dedicated physics suite.
+
+**Remaining queued design items (recorded, NOT in scope — each needs its own user round):**
+
 - History-display placement refinements beyond the scrubber, if large proofs demand more than zoom-thumbs (round 6h left the door open).
