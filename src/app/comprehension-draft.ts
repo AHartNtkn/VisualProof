@@ -155,15 +155,22 @@ export function materializeComprehensionSnapshot(snapshot: ComprehensionSnapshot
   }
 }
 
-function replaceDiagram(draft: ComprehensionDraft, diagram: Diagram): ComprehensionDraft {
+export function replaceComprehensionDiagram(draft: ComprehensionDraft, diagram: Diagram): ComprehensionDraft {
   const current = currentComprehensionDraft(draft)
-  const snapshot = {
+  for (const wire of current.relation.boundary) {
+    if (diagram.wires[wire] === undefined) throw new Error(`formal boundary wire '${wire}' cannot be removed`)
+  }
+  const snapshot: ComprehensionSnapshot = {
     relation: mkDiagramWithBoundary(diagram, current.relation.boundary),
-    externalWires: current.externalWires,
+    externalWires: normalizeExternalWires(current.externalWires.filter(
+      (binding) => diagram.wires[binding.draftWire] !== undefined,
+    )),
   }
   validateSnapshot(draft, snapshot)
   return appendSnapshot(draft, snapshot)
 }
+
+const replaceDiagram = replaceComprehensionDiagram
 
 function validateSnapshot(draft: ComprehensionDraft, snapshot: ComprehensionSnapshot): void {
   if (snapshot.relation.boundary.length !== draft.arity) {

@@ -17,6 +17,7 @@ import {
   materializeComprehensionSnapshot,
   moveComprehensionHistory,
   planComprehensionConnection,
+  replaceComprehensionDiagram,
   ungraftComprehensionWire,
 } from '../../src/app/comprehension-draft'
 
@@ -33,6 +34,68 @@ function draftWithConstant() {
 }
 
 describe('anonymous comprehension draft transaction', () => {
+  it('accepts a validated whole-diagram edit while preserving formal positions', () => {
+    const { draft, node } = draftWithConstant()
+    const current = currentComprehensionDraft(draft)
+    const edited = mkDiagram({
+      root: current.relation.diagram.root,
+      regions: { ...current.relation.diagram.regions, r1: { kind: 'cut', parent: current.relation.diagram.root } },
+      nodes: { ...current.relation.diagram.nodes, [node]: { ...current.relation.diagram.nodes[node]!, region: 'r1' } },
+      wires: { ...current.relation.diagram.wires },
+    })
+
+    const changed = replaceComprehensionDiagram(draft, edited)
+    expect(currentComprehensionDraft(changed).relation.boundary).toEqual(['arg1', 'arg2'])
+    expect(changed.history).toHaveLength(draft.history.length + 1)
+    expect(currentComprehensionDraft(changed).relation.diagram.nodes[node]!.region).toBe('r1')
+  })
+
+  it('drops an external binding only when its non-formal draft identity disappears', () => {
+    const { fixture, draft, wire } = draftWithConstant()
+    const grafted = applyComprehensionConnection(draft, draftWire(wire), hostWire(fixture.parameter))
+    const current = currentComprehensionDraft(grafted)
+    const edited = mkDiagram({
+      root: current.relation.diagram.root,
+      regions: { ...current.relation.diagram.regions },
+      nodes: {},
+      wires: {
+        arg1: current.relation.diagram.wires.arg1!,
+        arg2: current.relation.diagram.wires.arg2!,
+      },
+    })
+
+    const changed = replaceComprehensionDiagram(grafted, edited)
+    expect(currentComprehensionDraft(changed).externalWires).toEqual([])
+    expect(currentComprehensionDraft(changed).relation.boundary).toEqual(['arg1', 'arg2'])
+  })
+
+  it('refuses deletion of a formal position and invalid external scope without appending history', () => {
+    const fixture = comprehensionFixture()
+    const draft = beginComprehensionDraft(fixture.diagram, fixture.bubble)
+    const current = currentComprehensionDraft(draft)
+    const missingFormal = mkDiagram({
+      root: current.relation.diagram.root,
+      regions: { ...current.relation.diagram.regions },
+      nodes: { ...current.relation.diagram.nodes },
+      wires: { arg1: current.relation.diagram.wires.arg1! },
+    })
+    expect(() => replaceComprehensionDiagram(draft, missingFormal)).toThrow(/formal boundary wire 'arg2' cannot be removed/)
+    expect(draft.history).toHaveLength(1)
+
+    const grafted = applyComprehensionConnection(draft, draftWire('arg1'), hostWire(fixture.parameter))
+    const withCut = mkDiagram({
+      root: current.relation.diagram.root,
+      regions: { ...current.relation.diagram.regions, r1: { kind: 'cut', parent: current.relation.diagram.root } },
+      nodes: { ...current.relation.diagram.nodes },
+      wires: {
+        ...current.relation.diagram.wires,
+        arg1: { ...current.relation.diagram.wires.arg1!, scope: 'r1' },
+      },
+    })
+    expect(() => replaceComprehensionDiagram(grafted, withCut)).toThrow(/not root-scoped/)
+    expect(grafted.history).toHaveLength(2)
+  })
+
   it('owns stable ordered formal positions and permits a diagonal wire between boundary ports', () => {
     const { draft, wire } = draftWithConstant()
     const joined = attachComprehensionSocket(draft, 1, wire)
