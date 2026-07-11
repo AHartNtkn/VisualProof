@@ -46,7 +46,7 @@
 24. **Zoom-to-change previews:** hovering anywhere on the bar pops the nearest tick's thumbnail, zoomed to the changed bodies (whole-diagram fallback for pure removals); no dead zones along the bar.
 
 *Chrome (round 6):*
-25. **Minimal sheet:** mode pill + '?' keyboard map; NO permanent panels; the scrubber appears only while a track is open; mode identity unmistakable (EDIT vs PROVING FORWARD vs PROVING BACKWARD).
+25. **Compass Aperture production chrome:** one compact north lifecycle capsule owns mode identity and entry; Indexed Ledger is an overlay that never resizes the canvas; view/session utilities are disclosed separately; the south temporal rail appears only outside Edit. Permanent generic button rows and the lab iframe compositor are not product chrome.
 
 *Motion (round 7):*
 26. **View-only, toggleable motion:** βη playback = `mkGridMorph` (the attachment invariant is already unit-pinned in `tests/view/morph.test.ts`; the pinned `mkGeomMorph` stays selectable per the user's instruction), input held during play, commit deferred to the final frame, speed 0.25–3×; transition ghosts (dying fade, born pulse); hover ease; each layer independently off-switchable; none of it ever touches diagram state (layer law).
@@ -74,10 +74,10 @@
 
 - [x] **Shared proving interaction integrated (2026-07-10):** one disposable `ProofMoveController` now owns explicit-right-click discovery, contextual Delete, proof wraps, drag-to-iterate targets, proof-mode normalization/conversion, matcher-filtered infer-first citation with inferred attachments and ambiguity cycling, folded named instantiation, relation folding, and transient overlays for both orientations. Deleted from production: `BackwardEntry`, `backwardEntries`, `commitBackward`, manual cite/un-cite wire pending states, click-target iteration pending state, and the shell's second proof palette builder. Existing track/dual session application remains the sole orientation-aware step/history authority. Fresh focused Vitest/architecture 27/27, TypeScript typecheck, and affected app Playwright 11/11 passed; the unrelated Ctrl-drag physics scenario and physics-heavy suites were deliberately excluded because no physics source changed.
 
-### Task 4: Chrome (mode machine, minimal sheet, scrubber)
+### Task 4: Cursor history and Compass Aperture production chrome
 
-**Files:** `src/app/shell.ts` rebuilt around the mode machine (`ui-lab/chrome.ts` mkChromeApp: EDIT ↔ track lifecycle, one persistent ProofContext, F/B/D/E keys, interceptStep hook) + minimal chrome (law 25) + `src/app/interact/scrubber.ts` (laws 23–24 from `ui-lab/history.ts`: installScrubber + zoomThumb over `renderPreview` focus). Replay/companion (`replay.ts`, `companion.ts`) reconcile with the scrubber (the scrubber IS the replay surface for tracks; theorem replay keeps its stepper). Library/file panel reduces to what the minimal-sheet verdict allows (summonable, not permanent). `mountShell` gets a real `dispose()` (listeners, rAF, observers) — the standing deferred item.
-**Test:** unit — mode-machine transitions, cursor truncate-on-new-move; e2e — full lifecycle (spawn → construct → F → cite → declare → E → construct → B → declare), scrubber drag + hover previews + redo reach, mode pill correctness.
+**Files:** `src/app/session.ts` rebuilt around the single timeline model in `docs/superpowers/specs/2026-07-10-history-chrome-integration-design.md`; `src/app/interact/scrubber.ts` owns the disposable temporal rail; focused preview derivation/rendering moves into production; `src/app/shell.ts` composes the real Compass Aperture lifecycle, Indexed Ledger overlay, utilities, and temporal rail. Track and fixed-side front cursors are independent; theorem `replay.ts` remains read-only but uses compatible temporal presentation. DELETE destructive past-only histories, permanent generic rows, and any production dependency on the lab iframe compositor. The already-landed `mountShell.dispose()` migrates every new listener/preview owner.
+**Test:** unit — timeline invariants, forward/backward application, independent fixed-side cursors, truncate-on-new-move, declare/assemble-at-cursor, scrubber mapping/disposal, change focus; e2e — full backward/forward/fixed lifecycle, scrubber drag + hover preview + redo reach + future truncation, replay coexistence, Compass mode/Library/utility ownership, stable canvas bounds.
 
 - [ ] Failing battery → port → green everywhere. Commit.
 
