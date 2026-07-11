@@ -32,7 +32,8 @@ declare global {
       proof(): null | { kind: 'track'; direction: 'forward' | 'backward' } | { kind: 'dual'; side: 'forward' | 'backward' }
       companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null
       view(): { scale: number; offsetX: number; offsetY: number }
-      bodies(): { id: string; kind: string; x: number; y: number; r: number }[]
+      bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[]
+      regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[]
       wires(): { id: string; x: number; y: number }[]
       interaction(): { selected: readonly { kind: 'node' | 'region' | 'wire'; id: string }[]; pins: string[]; userZoom: number }
       theoryJson(): string
@@ -108,6 +109,89 @@ test('ordinary proving is backward-first, forward is direct, and only fixed-side
   await expect(page.locator('.vpa-refusal')).toContainText('set both fixed sides before dual proving')
 })
 
+test('proof actions require right-click and forward/backward share direct labels and normalization', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '(\\x. x) y')
+  const canvas = (await page.locator('#c').boundingBox())!
+  const point = async () => page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+  let at = await point()
+  await page.mouse.click(canvas.x + at.x, canvas.y + at.y)
+  await expect(page.locator('.vpa-proof-menu')).toHaveCount(0)
+  await page.mouse.click(canvas.x + at.x, canvas.y + at.y, { button: 'right' })
+  await expect(page.locator('.vpa-proof-menu')).toBeVisible()
+  await expect(page.locator('.vpa-proof-menu')).toContainText('Wrap in a double cut')
+  await expect(page.locator('.vpa-proof-menu')).toContainText('Normalize (also: double-click)')
+  await expect(page.locator('.vpa-proof-menu')).not.toContainText('Un-')
+  await page.keyboard.press('Escape')
+  await page.mouse.dblclick(canvas.x + at.x, canvas.y + at.y)
+  await expect(page.locator('#status')).toContainText('1 step(s)')
+
+  await page.getByRole('button', { name: 'Return to editing', exact: true }).click()
+  await page.getByRole('button', { name: 'Prove backward', exact: true }).click()
+  at = await point()
+  await page.mouse.click(canvas.x + at.x, canvas.y + at.y)
+  await page.mouse.click(canvas.x + at.x, canvas.y + at.y, { button: 'right' })
+  await expect(page.locator('.vpa-proof-menu')).toContainText('Wrap in a double cut')
+  await expect(page.locator('.vpa-proof-menu')).toContainText('Normalize (also: double-click)')
+  await expect(page.locator('.vpa-proof-menu')).not.toContainText('Un-')
+})
+
+test('Delete is a direct contextual proof gesture', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '\\x. x')
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+  const canvas = (await page.locator('#c').boundingBox())!
+  const at = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  await page.mouse.click(canvas.x + at.x, canvas.y + at.y)
+  await page.keyboard.press('Delete')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(0)
+  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('.vpa-refusal')).toHaveCount(0)
+})
+
+test('dragging a selected proof node into a legal region iterates it', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '\\x. x')
+  await spawnTerm(page, '\\y. y')
+  const canvas = (await page.locator('#c').boundingBox())!
+  const toPage = async (world: { x: number; y: number }) => {
+    const view = await page.evaluate(() => window.__vpaDebug!.view())
+    return { x: canvas.x + world.x * view.scale + view.offsetX, y: canvas.y + world.y * view.scale + view.offsetY }
+  }
+  const terms = await page.evaluate(() => window.__vpaDebug!.bodies().filter((body) => body.kind === 'term'))
+  const wrappedAt = await toPage(terms[1]!)
+  await page.mouse.click(wrappedAt.x, wrappedAt.y)
+  await page.keyboard.press('w')
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+
+  const outside = await page.evaluate(() => window.__vpaDebug!.bodies().find((body) => body.kind === 'term' && body.region === 'r0')!)
+  const target = await page.evaluate(() => window.__vpaDebug!.regions().find((region) => region.kind === 'cut')!)
+  const from = await toPage(outside)
+  const to = await toPage(target)
+  await page.mouse.click(from.x, from.y)
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(to.x, to.y, { steps: 12 })
+  await page.mouse.up()
+
+  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(3)
+  await expect(page.locator('.vpa-refusal')).toHaveCount(0)
+})
+
 test('a goal proves end to end through the chrome', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
@@ -164,7 +248,7 @@ test('the companion pane targets the other side, survives a forward step, and to
   await page.mouse.click(box.x + s.x, box.y + s.y)
   await expect(page.locator('#action-menu')).toBeHidden()
   await page.mouse.click(box.x + s.x, box.y + s.y, { button: 'right' })
-  await page.locator('#action-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true }).click()
+  await page.locator('.vpa-proof-menu').getByRole('button', { name: 'Wrap in a double cut', exact: true }).click()
   await expect(page.locator('#status')).toContainText('forward 1 step')
   const c1 = await page.evaluate(() => window.__vpaDebug!.companion())
   expect(c1!.label).toBe('meeting: backward side')

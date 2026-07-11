@@ -1,12 +1,9 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
-import type { Term } from '../kernel/term/term'
 import { parseTerm } from '../kernel/term/parse'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import { polarity } from '../kernel/diagram/regions'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
-import { applyConversion } from '../kernel/rules/conversion'
 import { applyRelFold, applyRelUnfold } from '../kernel/rules/reldef'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { checkTheorem } from '../kernel/proof/theorem'
@@ -41,10 +38,9 @@ import { hitTest, wireHitTest, buildSelection } from './hittest'
 import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
+import { ProofMoveController } from './interact/moves'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
 import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
-import type { ActionDescriptor } from './actions'
-import { applicableActions } from './actions'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -96,66 +92,8 @@ export type LibraryRenderer = (
     which mkEngine cannot run itself (relax.ts imports engine.ts — circular); the
     shell already imports relax.ts, so it runs it after every seed. */
 type Pending =
-  | { readonly kind: 'iterate'; readonly sel: SubgraphSelection }
-  | { readonly kind: 'cite'; readonly name: string; readonly direction: 'forward' | 'reverse'; readonly sel: SubgraphSelection; readonly args: WireId[] }
-  | { readonly kind: 'unCite'; readonly name: string; readonly sel: SubgraphSelection; readonly args: WireId[] }
   | { readonly kind: 'defineRelation'; readonly sel: SubgraphSelection; readonly args: WireId[]; name: string }
   | { readonly kind: 'foldChoose'; readonly sel: SubgraphSelection }
-
-/**
- * Backward menu entry: a labelled action that commits at button-click time,
- * reading term/fuel from the live inputs. needsInput flags are advisory only —
- * the commit lambda reads the inputs directly when the button is clicked.
- */
-type BackwardEntry =
-  | { readonly kind: 'unDoubleCut'; readonly label: string; readonly outer: RegionId }
-  | { readonly kind: 'unVacuousBubble'; readonly label: string; readonly bubble: RegionId }
-  | { readonly kind: 'unErase'; readonly label: string; readonly region: RegionId; readonly needsInput: 'pattern' }
-  | { readonly kind: 'unConvert'; readonly label: string; readonly node: NodeId; readonly needsInput: 'term' }
-  | { readonly kind: 'unCite'; readonly label: string; readonly name: string; readonly sel: SubgraphSelection }
-
-/**
- * Enumerate the backward moves the UI offers for a selection. Commit-time
- * input reading means the entries do NOT depend on the current term/fuel
- * input values — they describe what the button will do when clicked.
- */
-function backwardEntries(d: Diagram, sel: SubgraphSelection, ctx: ProofContext): BackwardEntry[] {
-  const out: BackwardEntry[] = []
-  // doubleCutElim → unDoubleCut: exactly one selected region, must be an outer cut of a double-cut pair
-  if (sel.regions.length === 1 && sel.nodes.length === 0 && sel.wires.length === 0) {
-    const rid = sel.regions[0]!
-    const r = d.regions[rid]
-    if (r !== undefined && r.kind === 'cut') {
-      const children = Object.entries(d.regions).filter(([, x]) => x.kind !== 'sheet' && x.parent === rid)
-      const nodesIn = Object.values(d.nodes).some((n) => n.region === rid)
-      const wiresIn = Object.values(d.wires).some((w) => w.scope === rid)
-      if (children.length === 1 && children[0]![1].kind === 'cut' && !nodesIn && !wiresIn) {
-        out.push({ kind: 'unDoubleCut', label: 'Un-wrap double cut (backward)', outer: rid })
-      }
-    }
-    if (r !== undefined && r.kind === 'bubble') {
-      const bound = Object.values(d.nodes).some((n) => n.kind === 'atom' && n.binder === rid)
-      if (!bound) {
-        out.push({ kind: 'unVacuousBubble', label: 'Dissolve vacuous bubble (backward)', bubble: rid })
-      }
-    }
-  }
-  // unErase: selected region is positive — at commit time the term input provides the pattern
-  if (polarity(d, sel.region) === 'positive') {
-    out.push({ kind: 'unErase', label: 'Un-erase into region (term input → pattern)…', region: sel.region, needsInput: 'pattern' })
-  }
-  // unConvert: single term node selected — at commit time term input + fuel provide the target
-  if (sel.nodes.length === 1 && sel.regions.length === 0 && d.nodes[sel.nodes[0]!]?.kind === 'term') {
-    out.push({ kind: 'unConvert', label: 'Un-convert node (term input + fuel)…', node: sel.nodes[0]!, needsInput: 'term' })
-  }
-  // unCite <name>: per theorem, at positive selections
-  if (polarity(d, sel.region) === 'positive') {
-    for (const [name] of ctx.theorems) {
-      out.push({ kind: 'unCite', label: `Un-cite ${name} (backward)`, name, sel })
-    }
-  }
-  return out
-}
 
 export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void }> {
   const { canvas, chrome } = opts
@@ -200,6 +138,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   seedProject(engine)
   let interaction!: InteractiveViewport
   let construct!: ConstructController
+  let proofMoves!: ProofMoveController
   let spawnCascade!: SpawnCascade
   let spawnHoverBinder: RegionId | null = null
   const feedback = new FeedbackController()
@@ -647,11 +586,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (!Number.isInteger(n) || n < 1) throw new Error(`${what} must be a positive integer, got '${input.value}'`)
     return n
   }
-  const parseInput = (): Term => {
-    if (termInput.value.trim() === '') throw new Error('the term input is empty: type a term first (\\ is λ)')
-    return parseTerm(termInput.value)
-  }
-
   const sync = (surfaceChanged = false, preserveSelection = false): void => {
     const d = currentDiagram()
     if (d !== displayed || surfaceChanged) {
@@ -680,6 +614,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   const selectionChanged = (next: readonly Hit[]): void => {
     palettePoint = null
+    if (mode === 'prove') proofMoves.cancel()
     if (next.length === 0) {
       kernelSel = null
     } else {
@@ -784,6 +719,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const leaveProof = guard(() => {
+    proofMoves.cancel()
     if (mode === 'replay') {
       exitReplay()
       return
@@ -793,12 +729,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   const beginTrack = (direction: TrackDirection): void => guard(() => {
     requireEdit()
+    proofMoves.cancel()
     proof = { kind: 'track', track: startTrack(mkDiagramWithBoundary(editDiagram, []), direction, ctx) }
     mode = 'prove'
     sync(true)
   })()
   const beginDual = guard(() => {
     requireEdit()
+    proofMoves.cancel()
     if (goalLhs === null || goalRhs === null) throw new Error('set both fixed sides before dual proving')
     proof = { kind: 'dual', session: startSession(goalLhs, goalRhs, ctx), side: 'forward' }
     mode = 'prove'
@@ -845,119 +783,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     sync()
   }
 
-  // ---- backward commit (reads inputs at click time) ----
-  const commitBackward = (e: BackwardEntry): void => {
-    switch (e.kind) {
-      case 'unDoubleCut':
-        applyProofStep({ rule: 'doubleCutElim', region: e.outer })
-        break
-      case 'unVacuousBubble':
-        applyProofStep({ rule: 'vacuousElim', region: e.bubble })
-        break
-      case 'unErase': {
-        // Pattern read from the term input at commit time
-        const termVal = termInput.value.trim()
-        if (termVal === '') throw new Error('the term input is empty: type the pattern term first (\\ is λ)')
-        const e0 = emptyDiagram()
-        const { diagram } = addTermNode(e0, e0.root, parseTerm(termVal))
-        applyProofStep({
-          rule: 'insertion',
-          region: e.region,
-          pattern: mkDiagramWithBoundary(diagram, []),
-          attachments: [],
-          binders: {},
-        })
-        break
-      }
-      case 'unConvert': {
-        // Term and fuel read from inputs at commit time
-        const termVal = termInput.value.trim()
-        if (termVal === '') throw new Error('the term input is empty: type the target term first (\\ is λ)')
-        const fuelVal = readCount(fuel.input, 'fuel')
-        // conversion is direction-free: build the certificate with the same
-        // fueled search the forward flow uses, then submit the ordinary step
-        const goal = currentDiagram()
-        const conv = applyConversion(goal, e.node, parseTerm(termVal), fuelVal)
-        applyProofStep({
-          rule: 'conversion',
-          node: e.node,
-          term: parseTerm(termVal),
-          certificate: conv.certificate,
-          attachments: {},
-        })
-        break
-      }
-      case 'unCite':
-        // Collect args by clicking wires, then Commit dispatches applyBackward
-        pending = { kind: 'unCite', name: e.name, sel: e.sel, args: [] }
-        refreshChrome()
-        return
-    }
-  }
-
-  const commitAction = (a: ActionDescriptor, sel: SubgraphSelection): void => {
-    if (proof === null) throw new Error('no active proof')
-    switch (a.kind) {
-      case 'erase':
-        applyProofStep({ rule: 'erasure', sel })
-        return
-      case 'insert': {
-        const e0 = emptyDiagram()
-        const { diagram } = addTermNode(e0, e0.root, parseInput())
-        applyProofStep({ rule: 'insertion', region: sel.region, pattern: mkDiagramWithBoundary(diagram, []), attachments: [], binders: {} })
-        return
-      }
-      case 'doubleCutWrap':
-        applyProofStep({ rule: 'doubleCutIntro', sel })
-        return
-      case 'doubleCutElim':
-        applyProofStep({ rule: 'doubleCutElim', region: sel.regions[0]! })
-        return
-      case 'vacuousWrap':
-        applyProofStep({ rule: 'vacuousIntro', sel, arity: readCount(arity.input, 'bubble arity') })
-        return
-      case 'vacuousElim':
-        applyProofStep({ rule: 'vacuousElim', region: sel.regions[0]! })
-        return
-      case 'iterate':
-        pending = { kind: 'iterate', sel }
-        refreshChrome()
-        return
-      case 'deiterate':
-        applyProofStep({ rule: 'deiteration', sel, fuel: readCount(fuel.input, 'fuel') })
-        return
-      case 'convert': {
-        const node = sel.nodes[0]!
-        const term = parseInput()
-        const conv = applyConversion(currentDiagram(), node, term, readCount(fuel.input, 'fuel'))
-        applyProofStep({ rule: 'conversion', node, term, certificate: conv.certificate, attachments: {} })
-        return
-      }
-      case 'instantiate': {
-        const name = termInput.value.trim()
-        const comp = relations[name]
-        if (comp === undefined) {
-          throw new Error(`unknown relation '${name}' — type a loaded relation name in the term input (loaded: ${Object.keys(relations).join(', ') || 'none'})`)
-        }
-        applyProofStep({ rule: 'comprehensionInstantiate', bubble: sel.regions[0]!, comp, attachments: [], binders: {} })
-        return
-      }
-      case 'relUnfold':
-        applyProofStep({ rule: 'relUnfold', node: sel.nodes[0]! })
-        return
-      case 'relFold': {
-        if (ctx.relations.size === 0) throw new Error('no relations to fold into — define one or load a theory first')
-        pending = { kind: 'foldChoose', sel }
-        refreshChrome()
-        return
-      }
-      case 'citeTheorem':
-        pending = { kind: 'cite', name: a.name, direction: a.direction, sel, args: [] }
-        refreshChrome()
-        return
-    }
-  }
-
   // ---- define relation (EDIT mode, two-phase like relFold) ----
   // Enter the pending pick: the crossing wires clicked in order become the
   // relation's argument boundary. Defining never mutates the sheet.
@@ -969,44 +794,26 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // ---- domain pointer claims (selection is owned by InteractiveViewport) ----
   const handleClaimedClick = (sample: PointerSample): void => {
     const hit = hitTest(engine, sample.world, { scale: view.scale })
-    if (pending !== null && pending.kind === 'iterate') {
-      const p = pending
-      pending = null
-      guard(() => {
-        const target = hit === null ? displayed.root : hit.kind === 'region' ? hit.id : null
-        if (target === null) throw new Error('iteration targets a region: click a cut/bubble or empty space for the sheet')
-        applyProofStep({ rule: 'iteration', sel: p.sel, target })
-      })()
-      return
-    }
-    if (pending !== null && (pending.kind === 'cite' || pending.kind === 'unCite' || pending.kind === 'defineRelation')) {
-      const what = pending.kind === 'cite' ? `cite '${pending.name}'`
-        : pending.kind === 'unCite' ? `un-cite '${pending.name}'`
-        : 'define relation'
+    if (pending !== null && pending.kind === 'defineRelation') {
       if (hit !== null && hit.kind === 'wire') {
         pending.args.push(hit.id)
         refreshChrome()
       } else {
-        refuse(`${what}: click wires only (or Commit/Cancel in the palette)`, sample.client)
+        refuse('define relation: click wires only (or Commit/Cancel in the palette)', sample.client)
       }
       return
     }
   }
 
   const claimPointer = (sample: PointerSample): PointerClaim | null => {
-    const pendingClaim: PointerClaim | null = sample.button === 0 && pending !== null && (
-      pending.kind === 'iterate'
-      || pending.kind === 'cite'
-      || pending.kind === 'unCite'
-      || pending.kind === 'defineRelation'
-    ) ? {
+    const pendingClaim: PointerClaim | null = sample.button === 0 && pending?.kind === 'defineRelation' ? {
         still: 'claim',
         blocksPassiveRelaxation: false,
         move: () => {},
         release: (at, moved) => { if (!moved) handleClaimedClick(at) },
         cancel: () => {},
       } : null
-    return pendingClaim ?? construct.claim(sample)
+    return pendingClaim ?? (mode === 'prove' ? proofMoves.claim(sample) : construct.claim(sample))
   }
 
   // ---- chrome refresh ----
@@ -1053,25 +860,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const p = pending
       const instruction = document.createElement('p')
       instruction.className = 'vpa-action-instruction'
-      instruction.textContent = p.kind === 'iterate'
-        ? 'Click the target region; empty canvas means the sheet.'
-        : p.kind === 'cite' ? `Click argument wires for '${p.name}' in boundary order (${p.args.length} picked).`
-          : p.kind === 'unCite' ? `Click argument wires for un-citing '${p.name}' in boundary order (${p.args.length} picked).`
-            : p.kind === 'defineRelation' ? `Name the relation; optionally click crossing wires to override canonical order (${p.args.length} picked).`
-              : 'Choose the relation whose definition matches the selection.'
+      instruction.textContent = p.kind === 'defineRelation'
+        ? `Name the relation; optionally click crossing wires to override canonical order (${p.args.length} picked).`
+        : 'Choose the relation whose definition matches the selection.'
       menuDiv.append(instruction)
-      if (p.kind === 'cite') {
-        menuDiv.append(button(`Commit citation of '${p.name}' (${p.args.length} arg(s))`, guard(() => {
-          pending = null
-          applyProofStep({ rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: p.direction })
-        })))
-      }
-      if (p.kind === 'unCite') {
-        menuDiv.append(button(`Commit un-citation of '${p.name}' (${p.args.length} arg(s))`, guard(() => {
-          pending = null
-          applyProofStep({ rule: 'theorem', name: p.name, at: { sel: p.sel, args: [...p.args] }, direction: 'reverse' })
-        })))
-      }
       if (p.kind === 'foldChoose') {
         for (const name of ctx.relations.keys()) {
           menuDiv.append(button(`Fold into '${name}'`, guard(() => {
@@ -1147,20 +939,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
       return
     }
-    if (mode !== 'prove' || proof === null || kernelSel === null) return
-    const sel = kernelSel
-    if (proofDirection() === 'backward') {
-      const entries = backwardEntries(currentDiagram(), sel, ctx)
-      for (const e of entries) {
-        menuDiv.append(button(e.label, guard(() => commitBackward(e))))
-      }
-      return
-    }
-    const all = applicableActions(currentDiagram(), sel, ctx)
-    for (const a of all) {
-      menuDiv.append(button(a.label, guard(() => commitAction(a, sel))))
-    }
-    if (menuDiv.childElementCount === 0) menuDiv.hidden = true
+    // Proving actions are rendered by ProofMoveController only after an
+    // explicit still right-click; the shell retains this palette for EDIT.
   }
 
   // ---- rendering ----
@@ -1320,6 +1100,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
     }
     shapes.push(...construct.overlay())
+    shapes.push(...proofMoves.overlay())
     ctx2d.clearRect(0, 0, canvas.width, canvas.height)
     ctx2d.fillStyle = theme.canvas
     ctx2d.fillRect(0, 0, canvas.width, canvas.height)
@@ -1343,6 +1124,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       refreshChrome()
       return true
     }
+    if (proofMoves.keyDown(e)) return true
     if (construct.keyDown(e)) return true
     if (e.key === 'Home') {
       interaction.resetZoom()
@@ -1496,6 +1278,20 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     theme: () => theme,
   })
+  proofMoves = new ProofMoveController({
+    host: document.body,
+    active: () => mode === 'prove' && proof !== null,
+    diagram: currentDiagram,
+    engine: () => engine,
+    selection: () => interaction.selection,
+    setSelection: (selection) => interaction.setSelection(selection),
+    context: () => ctx,
+    orientation: () => proofDirection() ?? 'forward',
+    apply: applyProofStep,
+    refuse: (text, pointer) => refuse(text, pointer),
+    theme: () => theme,
+    fuel: () => readCount(fuel.input, 'fuel'),
+  })
   editRow.append(construct.optionsElement)
   interaction = new InteractiveViewport({
     canvas,
@@ -1504,8 +1300,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     diagram: () => displayed,
     selectionEnabled: () => mode !== 'replay',
     claim: claimPointer,
-    doubleClick: (sample) => construct.doubleClick(sample),
+    doubleClick: (sample) => mode === 'prove' ? proofMoves.doubleClick(sample) : construct.doubleClick(sample),
     contextMenu: (sample) => {
+      if (mode === 'prove') {
+        proofMoves.contextMenu(sample)
+        return
+      }
       if (!isHitSelected(interaction.selection, sample.hit)) return
       palettePoint = sample.client
       refreshChrome()
@@ -1542,6 +1342,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     interaction.dispose()
     construct.dispose()
     spawnCascade.dispose()
+    proofMoves.dispose()
     window.clearTimeout(refusalTimer)
     clearRefusalPresentation()
     menuDiv.removeEventListener('click', closePaletteAfterAction)

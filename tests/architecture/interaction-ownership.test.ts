@@ -5,6 +5,7 @@ const shellSource = readFileSync('src/app/shell.ts', 'utf8')
 const viewportSource = readFileSync('src/app/interact/viewport.ts', 'utf8')
 const constructSource = readFileSync('src/app/interact/construct.ts', 'utf8')
 const spawnSource = readFileSync('src/app/interact/spawn.ts', 'utf8')
+const movesSource = readFileSync('src/app/interact/moves.ts', 'utf8')
 
 const canvasInteractionEvents = [
   'pointerdown', 'pointermove', 'pointerup', 'pointercancel',
@@ -58,5 +59,18 @@ describe('production interaction ownership', () => {
       'Add term', 'Add relation', 'Wrap in cut', 'Wrap in bubble',
       'Delete selection', 'Join two wires',
     ]) expect(shellSource).not.toContain(`button('${label}'`)
+  })
+
+  it('has one shared proof controller and no backward/manual-picker interaction authority', () => {
+    expect(shellSource.match(/new ProofMoveController/g)).toHaveLength(1)
+    for (const displaced of [
+      'type BackwardEntry',
+      'backwardEntries',
+      'commitBackward',
+      "kind: 'unCite'",
+      "kind: 'cite'",
+      "kind: 'iterate'; readonly sel",
+    ]) expect(shellSource, `shell retains displaced proof path ${displaced}`).not.toContain(displaced)
+    expect(movesSource).not.toMatch(/window\.addEventListener|document\.addEventListener|canvas\.addEventListener/)
   })
 })

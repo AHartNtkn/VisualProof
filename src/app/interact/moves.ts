@@ -1,12 +1,21 @@
 import { DiagramBuilder } from '../../kernel/diagram/builder'
-import type { Diagram, RegionId, WireId } from '../../kernel/diagram/diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import { isAncestorOrEqual } from '../../kernel/diagram/regions'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { ProofContext, ProofStep } from '../../kernel/proof/step'
+import { parseTerm } from '../../kernel/term/parse'
+import { applyConversion } from '../../kernel/rules/conversion'
+import type { Engine } from '../../view/engine'
+import type { Shape, Theme } from '../../view/paint'
+import type { Vec2 } from '../../view/vec'
 import { applicableActions, type ActionDescriptor } from '../actions'
+import { inferFoldArgs } from '../define'
 import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, type Hit } from '../hittest'
+import { convertToHeadNormal, convertToWeakHeadNormal } from '../tactics'
+import { citationCandidates, citationStep, type CitationCandidate } from './cite'
+import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 export type ProofOrientation = 'forward' | 'backward'
 
@@ -37,6 +46,10 @@ function erasureSelection(d: Diagram, sel: SubgraphSelection): SubgraphSelection
   return riders.length === 0 ? sel : { ...sel, wires: [...sel.wires, ...riders] }
 }
 
+export function erasureStep(d: Diagram, sel: SubgraphSelection): ProofStep {
+  return { rule: 'erasure', sel: erasureSelection(d, sel) }
+}
+
 export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel: number): ProofStep | null {
   const byKind = (kind: ActionDescriptor['kind']): ActionDescriptor | undefined =>
     discovery.actions.find((action) => action.kind === kind)
@@ -45,7 +58,7 @@ export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel
   switch (action.kind) {
     case 'doubleCutElim': return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
     case 'vacuousElim': return { rule: 'vacuousElim', region: discovery.sel.regions[0]! }
-    case 'erase': return { rule: 'erasure', sel: erasureSelection(d, discovery.sel) }
+    case 'erase': return erasureStep(d, discovery.sel)
     case 'deiterate': return { rule: 'deiteration', sel: discovery.sel, fuel }
     default: throw new Error(`'${action.kind}' is not a contextual deletion`)
   }
@@ -76,4 +89,351 @@ export function foldedComprehension(ctx: ProofContext, name: string): DiagramWit
     boundary.push(builder.wire(builder.root, [{ node: ref, port: { kind: 'arg', index } }]))
   }
   return mkDiagramWithBoundary(builder.build(), boundary)
+}
+
+export type ProofMoveControllerOptions = {
+  readonly host: HTMLElement
+  readonly active: () => boolean
+  readonly diagram: () => Diagram
+  readonly engine: () => Engine
+  readonly selection: () => readonly Hit[]
+  readonly setSelection: (hits: readonly Hit[]) => void
+  readonly context: () => ProofContext
+  readonly orientation: () => ProofOrientation
+  readonly apply: (step: ProofStep) => void
+  readonly refuse: (text: string, pointer: Vec2) => void
+  readonly theme: () => Theme
+  readonly fuel: () => number
+}
+
+type IterationDrag = {
+  readonly sel: SubgraphSelection
+  readonly targets: readonly RegionId[]
+  over: RegionId | null
+  moved: boolean
+}
+
+type CitationCycle = { readonly candidate: CitationCandidate; index: number }
+
+function sameHit(a: Hit, b: Hit): boolean {
+  return a.kind === b.kind && a.id === b.id
+}
+
+function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
+  let best: { readonly id: RegionId; readonly radius: number } | null = null
+  for (const [id, geometry] of engine.regions) {
+    if (diagram.regions[id]?.kind === 'sheet') continue
+    if (Math.hypot(point.x - geometry.center.x, point.y - geometry.center.y) <= geometry.radius
+      && (best === null || geometry.radius < best.radius)) best = { id, radius: geometry.radius }
+  }
+  return best?.id ?? diagram.root
+}
+
+export class ProofMoveController {
+  readonly #options: ProofMoveControllerOptions
+  readonly #document: Document
+  #menu: HTMLDivElement | null = null
+  #prompt: HTMLDivElement | null = null
+  #drag: IterationDrag | null = null
+  #cycle: CitationCycle | null = null
+  #lastPointer: Vec2
+
+  constructor(options: ProofMoveControllerOptions) {
+    this.#options = options
+    this.#document = options.host.ownerDocument
+    this.#lastPointer = { x: 0, y: 0 }
+  }
+
+  claim(sample: PointerSample): PointerClaim | null {
+    this.#lastPointer = sample.client
+    if (!this.#options.active() || sample.button !== 0) return null
+    if (this.#cycle !== null && !sample.ctrlKey) {
+      const cycle = this.#cycle
+      return {
+        still: 'claim', blocksPassiveRelaxation: false, move: () => {},
+        release: (_next, moved) => {
+          if (!moved) cycle.index = (cycle.index + 1) % cycle.candidate.occurrences!.length
+        },
+        cancel: () => {},
+      }
+    }
+    if (this.#menu !== null) this.#closeMenu()
+    if (sample.shiftKey || sample.ctrlKey) return null
+    if (sample.hit?.kind !== 'node' || !this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) return null
+    const discovery = discoverProofActions(
+      this.#options.diagram(),
+      this.#options.selection(),
+      this.#options.context(),
+      this.#options.orientation(),
+    )
+    if (discovery === null || !discovery.actions.some((action) => action.kind === 'iterate')) return null
+    const drag: IterationDrag = { sel: discovery.sel, targets: iterationTargets(this.#options.diagram(), discovery.sel), over: null, moved: false }
+    this.#drag = drag
+    return {
+      still: 'selection',
+      blocksPassiveRelaxation: false,
+      move: (next) => {
+        drag.moved = true
+        const region = regionAt(this.#options.engine(), this.#options.diagram(), next.world)
+        drag.over = drag.targets.includes(region) ? region : null
+        this.#lastPointer = next.client
+      },
+      release: (next, moved) => {
+        this.#lastPointer = next.client
+        this.#drag = null
+        if (!moved) return
+        if (drag.over === null) {
+          this.#options.refuse('release inside a glowing region to iterate', next.client)
+          return
+        }
+        this.#commit({ rule: 'iteration', sel: drag.sel, target: drag.over })
+      },
+      cancel: () => { this.#drag = null },
+    }
+  }
+
+  contextMenu(sample: PointerSample): boolean {
+    this.#lastPointer = sample.client
+    if (!this.#options.active()) return false
+    this.#closeMenu()
+    const selection = this.#options.selection()
+    if (selection.length > 0 && (sample.hit === null || !selection.some((hit) => sameHit(hit, sample.hit!)))) return false
+    try {
+      this.#openMenu(sample, selection)
+    } catch (error) {
+      this.#options.refuse(error instanceof Error ? error.message : String(error), sample.client)
+    }
+    return true
+  }
+
+  doubleClick(sample: PointerSample): boolean {
+    this.#lastPointer = sample.client
+    if (!this.#options.active() || sample.hit?.kind !== 'node') return false
+    const node = this.#options.diagram().nodes[sample.hit.id]
+    if (node?.kind !== 'term') return false
+    const fuel = this.#options.fuel()
+    try {
+      this.#commit(convertToWeakHeadNormal(this.#options.diagram(), sample.hit.id, fuel).step)
+    } catch {
+      try {
+        this.#commit(convertToHeadNormal(this.#options.diagram(), sample.hit.id, fuel).step)
+      } catch {
+        this.#options.refuse('already in normal form — use Convert → custom target for a specific βη-equal shape', sample.client)
+      }
+    }
+    return true
+  }
+
+  keyDown(sample: KeySample): boolean {
+    if (!this.#options.active() || sample.repeat) return false
+    if (sample.key === 'Escape') {
+      const active = this.#menu !== null || this.#prompt !== null || this.#cycle !== null || this.#drag !== null
+      this.cancel()
+      return active
+    }
+    if (this.#cycle !== null) {
+      if (sample.key === 'Tab') {
+        this.#cycle.index = (this.#cycle.index + 1) % this.#cycle.candidate.occurrences!.length
+        return true
+      }
+      if (sample.key === 'Enter') {
+        this.#commit(citationStep(this.#options.diagram(), this.#cycle.candidate, this.#cycle.index))
+        this.#cycle = null
+        return true
+      }
+    }
+    if (sample.key !== 'Delete' && sample.key !== 'Backspace' && sample.key !== 'w' && sample.key !== 'W') return false
+    const discovery = discoverProofActions(
+      this.#options.diagram(),
+      this.#options.selection(),
+      this.#options.context(),
+      this.#options.orientation(),
+    )
+    if (discovery === null) {
+      this.#options.refuse(this.#options.selection().length === 0 ? 'select something first' : 'this selection spans several regions', this.#lastPointer)
+      return true
+    }
+    if (sample.key === 'Delete' || sample.key === 'Backspace') {
+      const step = contextualDeleteStep(this.#options.diagram(), discovery, this.#options.fuel())
+      if (step === null) this.#options.refuse('nothing here reads as a deletion', this.#lastPointer)
+      else this.#commit(step)
+      return true
+    }
+    if (sample.shiftKey) {
+      this.#openTextPrompt('Bubble arity', 'bubble arity', (value) => {
+        const arity = Number(value)
+        if (!Number.isInteger(arity) || arity < 0) throw new Error(`'${value}' is not a valid arity`)
+        this.#commit({ rule: 'vacuousIntro', sel: discovery.sel, arity })
+      })
+    } else this.#commit({ rule: 'doubleCutIntro', sel: discovery.sel })
+    return true
+  }
+
+  overlay(): readonly Shape[] {
+    const out: Shape[] = []
+    const drag = this.#drag
+    if (drag !== null && drag.moved) {
+      const color = this.#options.theme().interaction.valid
+      for (const region of drag.targets) {
+        if (this.#options.diagram().regions[region]?.kind === 'sheet') continue
+        const geometry = this.#options.engine().regions.get(region)
+        if (geometry !== undefined) out.push({
+          kind: 'circle', center: geometry.center, r: geometry.radius,
+          fill: region === drag.over ? `${color}22` : `${color}10`, stroke: color,
+          width: region === drag.over ? 2.4 : 1.4, insetColor: null, glow: null,
+        })
+      }
+    }
+    const cycle = this.#cycle
+    if (cycle !== null && cycle.candidate.occurrences !== null) {
+      const occurrence = cycle.candidate.occurrences[cycle.index]!
+      for (const node of occurrence.nodeMap.values()) {
+        const body = this.#options.engine().bodies.get(node)
+        if (body !== undefined) out.push({ kind: 'circle', center: body.pos, r: body.discR * this.#options.engine().scale + 1.5, fill: null, stroke: '#7c3aed', width: 2.6, insetColor: null, glow: null })
+      }
+    }
+    return out
+  }
+
+  cancel(): void {
+    this.#closeMenu()
+    this.#closePrompt()
+    this.#drag = null
+    this.#cycle = null
+  }
+
+  dispose(): void { this.cancel() }
+
+  #commit(step: ProofStep): void {
+    try {
+      this.#options.apply(step)
+      this.#options.setSelection([])
+      this.#closeMenu()
+      this.#closePrompt()
+    } catch (error) {
+      this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer)
+    }
+  }
+
+  #openMenu(sample: PointerSample, hits: readonly Hit[]): void {
+    const menu = this.#document.createElement('div')
+    menu.className = 'vpa-proof-menu'
+    menu.setAttribute('role', 'menu')
+    menu.style.cssText = `position:fixed;left:${sample.client.x + 10}px;top:${sample.client.y + 10}px;z-index:31;width:270px;max-height:380px;overflow:auto;border:1.5px solid #d97706;border-radius:8px;background:#fff;box-shadow:0 4px 16px #0003;font:13px system-ui`
+    const row = (label: string, run: (() => void) | null): void => {
+      const element = this.#document.createElement(run === null ? 'div' : 'button')
+      element.textContent = label
+      element.className = run === null ? 'vpa-proof-heading' : 'vpa-proof-action'
+      element.style.cssText = `display:block;width:100%;box-sizing:border-box;padding:6px 10px;border:0;background:#fff;text-align:left;${run === null ? 'color:#78716c;font-size:10px;text-transform:uppercase' : 'cursor:pointer'}`
+      if (run !== null) element.addEventListener('click', () => {
+        try { run() } catch (error) { this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer) }
+      })
+      menu.append(element)
+    }
+    const d = this.#options.diagram()
+    const region = regionAt(this.#options.engine(), d, sample.world)
+    const discovery = discoverProofActions(d, hits, this.#options.context(), this.#options.orientation())
+    if (discovery !== null) {
+      row('Actions', null)
+      for (const action of discovery.actions) this.#appendAction(row, action, discovery.sel)
+    }
+    const candidates = citationCandidates(d, hits, discovery?.sel.region ?? region, this.#options.context(), this.#options.orientation(), this.#options.fuel())
+    const citations = hits.length === 0 ? { applicable: [], closed: candidates.closed } : candidates
+    if (citations.applicable.length > 0) {
+      row('Applicable theorems', null)
+      for (const candidate of citations.applicable) row(`${candidate.name} (${candidate.occurrences!.length === 1 ? 'applies' : `${candidate.occurrences!.length} places`})`, () => this.#beginCitation(candidate))
+    }
+    if (citations.closed.length > 0) {
+      row('Closed theorems', null)
+      for (const candidate of citations.closed) row(candidate.name, () => this.#commit(citationStep(d, candidate, undefined, region)))
+    }
+    if (menu.childElementCount === 0) return
+    this.#menu = menu
+    this.#options.host.append(menu)
+  }
+
+  #appendAction(row: (label: string, run: (() => void) | null) => void, action: ActionDescriptor, sel: SubgraphSelection): void {
+    switch (action.kind) {
+      case 'erase': row(action.label, () => this.#commit(erasureStep(this.#options.diagram(), sel))); return
+      case 'insert': row(action.label, () => this.#openTermInsertion(sel.region)); return
+      case 'doubleCutWrap': row(action.label, () => this.#commit({ rule: 'doubleCutIntro', sel })); return
+      case 'doubleCutElim': row(action.label, () => this.#commit({ rule: 'doubleCutElim', region: sel.regions[0]! })); return
+      case 'vacuousWrap': row(action.label, () => this.#openTextPrompt('Bubble arity', 'bubble arity', (value) => {
+        const arity = Number(value); if (!Number.isInteger(arity) || arity < 0) throw new Error(`'${value}' is not a valid arity`)
+        this.#commit({ rule: 'vacuousIntro', sel, arity })
+      })); return
+      case 'vacuousElim': row(action.label, () => this.#commit({ rule: 'vacuousElim', region: sel.regions[0]! })); return
+      case 'iterate': row('Iterate by dragging the selection', null); return
+      case 'deiterate': row(action.label, () => this.#commit({ rule: 'deiteration', sel, fuel: this.#options.fuel() })); return
+      case 'convert': this.#appendConversions(row, sel.nodes[0]!); return
+      case 'instantiate': {
+        row('Instantiate with', null)
+        const bubble = sel.regions[0]!
+        const bubbleRegion = this.#options.diagram().regions[bubble]!
+        const arity = bubbleRegion.kind === 'bubble' ? bubbleRegion.arity : -1
+        for (const [name, relation] of this.#options.context().relations) if (relation.boundary.length === arity) {
+          row(name, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#options.context(), name), attachments: [], binders: {} }))
+        }
+        return
+      }
+      case 'relUnfold': row(action.label, () => this.#commit({ rule: 'relUnfold', node: sel.nodes[0]! })); return
+      case 'relFold': {
+        row('Fold into', null)
+        for (const name of this.#options.context().relations.keys()) row(name, () => this.#commit({ rule: 'relFold', sel, defId: name, args: inferFoldArgs(this.#options.diagram(), sel, name, this.#options.context()) }))
+        return
+      }
+      case 'citeTheorem': return
+    }
+  }
+
+  #appendConversions(row: (label: string, run: (() => void) | null) => void, node: NodeId): void {
+    row('Normalize (also: double-click)', () => this.doubleClick({ pointerId: 0, button: 0, client: this.#lastPointer, screen: this.#lastPointer, world: { x: 0, y: 0 }, hit: { kind: 'node', id: node }, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false }))
+    row('Convert → head normal', () => this.#commit(convertToHeadNormal(this.#options.diagram(), node, this.#options.fuel()).step))
+    row('Convert → custom target…', () => this.#openTextPrompt('Conversion target', 'target term', (value) => {
+      const term = parseTerm(value)
+      const conversion = applyConversion(this.#options.diagram(), node, term, this.#options.fuel())
+      this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, attachments: {} })
+    }))
+  }
+
+  #openTermInsertion(region: RegionId): void {
+    this.#openTextPrompt('Insertion term', 'λ-term pattern', (value) => {
+      const builder = new DiagramBuilder()
+      builder.termNode(builder.root, parseTerm(value))
+      this.#commit({ rule: 'insertion', region, pattern: mkDiagramWithBoundary(builder.build(), []), attachments: [], binders: {} })
+    })
+  }
+
+  #beginCitation(candidate: CitationCandidate): void {
+    if (candidate.occurrences === null) return
+    this.#closeMenu()
+    if (candidate.occurrences.length === 1) {
+      this.#commit(citationStep(this.#options.diagram(), candidate, 0))
+      return
+    }
+    this.#cycle = { candidate, index: 0 }
+  }
+
+  #openTextPrompt(label: string, placeholder: string, accept: (value: string) => void): void {
+    this.#closePrompt()
+    const wrap = this.#document.createElement('div')
+    wrap.className = 'vpa-proof-prompt'
+    wrap.style.cssText = `position:fixed;left:${this.#lastPointer.x + 10}px;top:${this.#lastPointer.y + 10}px;z-index:32`
+    const input = this.#document.createElement('input')
+    input.setAttribute('aria-label', label)
+    input.placeholder = placeholder
+    input.addEventListener('keydown', (event) => {
+      event.stopPropagation()
+      if (event.key === 'Escape') this.#closePrompt()
+      if (event.key !== 'Enter') return
+      try { accept(input.value) } catch (error) { this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer) }
+    })
+    wrap.append(input)
+    this.#prompt = wrap
+    this.#options.host.append(wrap)
+    queueMicrotask(() => input.focus())
+  }
+
+  #closeMenu(): void { this.#menu?.remove(); this.#menu = null }
+  #closePrompt(): void { this.#prompt?.remove(); this.#prompt = null }
 }
