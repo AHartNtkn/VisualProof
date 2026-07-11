@@ -151,7 +151,7 @@ export class InteractiveViewport {
 
   /** Reconcile a new diagram on the same surface. Surviving node pins and the
       user's camera focus remain authoritative; selection is operation-local. */
-  reconcileDiagram(): void {
+  reconcileDiagram(preserveSelection = false): void {
     this.cancelActiveGesture()
     const diagram = this.#opts.diagram()
     const engine = this.#opts.engine()
@@ -159,7 +159,10 @@ export class InteractiveViewport {
       if (diagram.nodes[id] === undefined || !engine.bodies.has(id)) this.#pins.delete(id)
     }
     this.#hover = null
-    this.setSelection([])
+    this.setSelection(preserveSelection ? this.#selected.filter((hit) =>
+      hit.kind === 'node' ? diagram.nodes[hit.id] !== undefined
+        : hit.kind === 'region' ? diagram.regions[hit.id] !== undefined
+          : diagram.wires[hit.id] !== undefined) : [])
     this.fit()
   }
 
