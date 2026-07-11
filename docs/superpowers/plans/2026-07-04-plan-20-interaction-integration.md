@@ -88,7 +88,7 @@
 **Files:** `src/app/interact/motion.ts` (law 26 from `ui-lab/round7.ts`: playConversion over mkGridMorph with the pinned-v1 toggle, ghosts via the engine mutate hook, hover ease through the brush's motionPrefs, the ⚙ panel). Input guard while playing; commit deferred.
 **Test:** unit already pinned in `tests/view/morph.test.ts`; e2e — mid-play sampling (geometry interpolating, wires d=0, commit deferred, toggle works, speed slider).
 
-- [ ] Failing e2e → port → green. Commit.
+- [x] **Production motion layers integrated (2026-07-11):** a reusable coordinator now drives certificate-derived βη conversion through the existing shell frame owner, defers each prepared proof commit exactly once, preserves connected-wire anchors through grid morphs, and offers pinned-v1 geometry morph as the independent alternative. Compass utilities own the five approved controls (βη animation, connected/pinned-v1 morph, 0.25–3× speed, transition ghosts, and hover ease); removed/introduced bodies remain paint-only overlays, and main/fixed-side input plus shared history are guarded during playback. Replay remains immediate. Reduced-motion initializes animation, ghosts, and hover ease off without creating a competing master setting. Focused non-physics validation passed: Vitest 35/35, TypeScript typecheck, and production Playwright 4/4, including deferred ordinary/fixed-side commits and workspace-wide mutation guarding. No physics source changed and no physics-heavy suite ran.
 
 ### Task 6: Teardown + adversarial review + merge
 
