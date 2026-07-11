@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   applyComprehensionConnection,
   beginComprehensionDraft,
-  comprehensionFixture,
 } from '../../src/app/comprehension-draft'
+import { comprehensionFixture } from './comprehension-fixture'
 import {
   applyEditorConnection,
   comprehensionInstantiationStep,

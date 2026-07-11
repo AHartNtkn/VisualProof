@@ -15,6 +15,7 @@ import { InteractiveViewport, type KeySample, type MutableView } from './interac
 import type { FixedSide } from './fixed-side-layout'
 import { MotionCoordinator, type MotionPreferences } from './interact/motion'
 import type { MotionDebugState } from './interact/motion'
+import { ComprehensionEditor, type ComprehensionEditorDebug } from './comprehension-editor'
 
 export type ProofFrontModel = {
   readonly side: FixedSide
@@ -41,7 +42,9 @@ export type ProofFrontDebugState = {
   readonly selection: readonly Hit[]
   readonly pins: readonly string[]
   readonly bodies: readonly { id: string; kind: string; x: number; y: number; r: number }[]
+  readonly regions: readonly { id: string; kind: string; x: number; y: number; r: number }[]
   readonly motion: MotionDebugState
+  readonly comprehension: ComprehensionEditorDebug | null
 }
 
 export function frontKeyRoute(focused: boolean, sample: KeySample): KeySample | null {
@@ -83,6 +86,7 @@ export class ProofFrontViewport {
   readonly motion: MotionCoordinator
   #engine: Engine
   #moves: ProofMoveController
+  #editor: ComprehensionEditor | null = null
   #context: CanvasRenderingContext2D
   #model: ProofFrontModel
   #disposed = false
@@ -106,7 +110,7 @@ export class ProofFrontViewport {
 
     this.#moves = new ProofMoveController({
       host: document.body,
-      active: () => frontInputAllowed(model.focused(), this.motion.playing, model.workspaceInputAllowed()),
+      active: () => this.#editor === null && frontInputAllowed(model.focused(), this.motion.playing, model.workspaceInputAllowed()),
       diagram: model.diagram,
       engine: () => this.#engine,
       selection: () => this.interaction.selection,
@@ -117,6 +121,7 @@ export class ProofFrontViewport {
       refuse: model.refuse,
       theme: model.theme,
       fuel: model.fuel,
+      openComprehension: (bubble, pointer) => this.#openComprehension(bubble, pointer),
     })
     this.interaction = new InteractiveViewport({
       canvas,
@@ -124,11 +129,12 @@ export class ProofFrontViewport {
       engine: () => this.#engine,
       diagram: model.diagram,
       selectionEnabled: () => true,
-      claim: (sample) => this.#moves.claim(sample),
-      doubleClick: (sample) => this.#moves.doubleClick(sample),
-      contextMenu: (sample) => this.#moves.contextMenu(sample),
-      pointerChanged: () => {},
+      claim: (sample) => this.#editor?.hostClaim(sample) ?? this.#moves.claim(sample),
+      doubleClick: (sample) => this.#editor === null && this.#moves.doubleClick(sample),
+      contextMenu: (sample) => { if (this.#editor === null) this.#moves.contextMenu(sample) },
+      pointerChanged: (client) => this.#editor?.hostPointerChanged(client),
       keyDown: (sample) => {
+        if (this.#editor !== null) return true
         const routed = frontKeyRoute(model.focused(), sample)
         if (routed === null) return false
         if (model.keyCommand(routed)) return true
@@ -155,6 +161,7 @@ export class ProofFrontViewport {
   get engine(): Engine { return this.#engine }
   get rebuilds(): number { return this.#rebuilds }
   get playing(): boolean { return this.motion.playing }
+  get editing(): boolean { return this.#editor !== null }
 
   setFocused(focused: boolean): void {
     this.canvas.closest('.vpa-proof-front')?.classList.toggle('is-focused', focused)
@@ -193,7 +200,7 @@ export class ProofFrontViewport {
   frame(now = performance.now()): void {
     if (this.#disposed) return
     this.motion.frame(now)
-    if (!this.motion.playing) this.interaction.advance()
+    if (!this.motion.playing) this.interaction.advance(this.#editor === null)
     const theme = this.#model.theme()
     const shapes: Shape[] = paint(this.#engine, theme)
     for (const id of this.interaction.pins) {
@@ -216,6 +223,7 @@ export class ProofFrontViewport {
       else hoverShapes.push(...this.#itemShapes(hover, isHitSelected(this.interaction.selection, hover) ? theme.interaction.selectedHover : theme.interaction.hover))
     }
     shapes.push(...this.#moves.overlay())
+    if (this.#editor !== null) shapes.push(...this.#editor.hostOverlays())
     this.#context.clearRect(0, 0, this.canvas.width, this.canvas.height)
     this.#context.fillStyle = theme.canvas
     this.#context.fillRect(0, 0, this.canvas.width, this.canvas.height)
@@ -225,6 +233,7 @@ export class ProofFrontViewport {
     drawShapes(this.#context, hoverShapes, this.view)
     this.#context.restore()
     drawShapes(this.#context, this.motion.overlays(now), this.view)
+    this.#editor?.frame(now)
   }
 
   debugState(): ProofFrontDebugState {
@@ -238,7 +247,11 @@ export class ProofFrontViewport {
       bodies: [...this.#engine.bodies.values()].map((body) => ({
         id: body.id, kind: body.kind, x: body.pos.x, y: body.pos.y, r: body.discR * this.#engine.scale,
       })),
+      regions: [...this.#engine.regions.entries()].map(([id, region]) => ({
+        id, kind: this.#model.diagram().regions[id]!.kind, x: region.center.x, y: region.center.y, r: region.radius,
+      })),
       motion: this.motion.debugState(performance.now()),
+      comprehension: this.#editor?.debugState() ?? null,
     }
   }
 
@@ -249,11 +262,39 @@ export class ProofFrontViewport {
     this.canvas.removeEventListener('contextmenu', this.#focus, true)
     this.canvas.removeEventListener('wheel', this.#focus, true)
     this.#moves.dispose()
+    this.#editor?.dispose()
+    this.#editor = null
     this.motion.dispose()
     this.interaction.dispose()
   }
 
   #focus = (): void => { this.#model.focus() }
+
+  #openComprehension(bubble: RegionId, pointer: Vec2): void {
+    if (this.#editor !== null) return
+    let editor: ComprehensionEditor
+    editor = new ComprehensionEditor({
+      mount: document.body,
+      canvas: this.canvas,
+      diagram: this.#model.diagram,
+      boundary: this.#model.boundary,
+      engine: () => this.#engine,
+      view: () => this.view,
+      context: this.#model.context,
+      theme: this.#model.theme,
+      fuel: this.#model.fuel,
+      apply: (step) => this.motion.run(step, this.#model.prepare(step), performance.now()),
+      refuse: this.#model.refuse,
+      changed: this.#model.changed,
+      openChanged: (open) => {
+        if (!open && this.#editor === editor) this.#editor = null
+        this.#model.changed()
+      },
+    }, bubble, pointer)
+    this.#editor = editor
+    this.#moves.cancel()
+    this.#model.changed()
+  }
 
   #markerAt(id: string): Vec2 | null {
     const body = this.#engine.bodies.get(id)

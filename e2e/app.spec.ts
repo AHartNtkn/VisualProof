@@ -47,10 +47,11 @@ declare global {
         ratio: number
         focused: 'forward' | 'backward'
         met: boolean
-        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; motion: { playing: boolean; morph: string | null } }
-        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; motion: { playing: boolean; morph: string | null } }
+        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null }
+        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null }
       }
       motion(): { playing: boolean; morph: string | null; ghosts: number; pulses: number; hover: number; preferences: { conversionAnimation: boolean; connectedMorph: boolean; speed: number; transitionGhosts: boolean; hoverEaseMs: number } }
+      comprehension(): null | { bubble: string; cursor: number; historyLength: number; formalBoundary: string[]; materializedBoundary: string[]; externalWires: { draftWire: string; hostWire: string }[]; rect: { left: number; top: number; width: number; height: number }; draftBodies: { node: string; kind: string; x: number; y: number; point: { x: number; y: number } }[]; draftWires: { wire: string; point: { x: number; y: number } | null }[]; hostWires: { wire: string; point: { x: number; y: number } | null }[] }
       dispose(): void
     }
   }
@@ -448,6 +449,260 @@ test('production motion layers defer conversion and expose the five approved con
   expect(await page.evaluate(() => window.__vpaDebug!.motion().preferences.connectedMorph)).toBe(false)
   expect(await page.evaluate(() => window.__vpaDebug!.motion().preferences.speed)).toBe(3)
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
+})
+
+test('anonymous comprehension opens from the real proof menu, cancels exactly, and commits one step', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '\\x. x')
+  const canvas = (await page.locator('#c').boundingBox())!
+  const term = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  await page.mouse.click(canvas.x + term.x, canvas.y + term.y)
+  await page.keyboard.press('Shift+w')
+  await page.getByLabel('Bubble arity').fill('2')
+  await page.getByLabel('Bubble arity').press('Enter')
+  const bubblePoint = async () => page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const bubble = window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!
+    return { x: bubble.x * view.scale + view.offsetX, y: bubble.y * view.scale + view.offsetY, r: bubble.r * view.scale }
+  })
+  let bubble = await bubblePoint()
+  await page.mouse.click(canvas.x + bubble.x + bubble.r * 0.55, canvas.y + bubble.y, { button: 'right' })
+  await page.locator('.vpa-spawn-bound-predicate').click()
+  bubble = await bubblePoint()
+  await page.mouse.click(canvas.x + bubble.x + bubble.r * 0.88, canvas.y + bubble.y)
+  await page.keyboard.press('w')
+  await page.mouse.click(canvas.x + canvas.width * 0.16, canvas.y + canvas.height * 0.78, { button: 'right' })
+  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
+  await page.getByLabel('Lambda term to spawn').fill('\\z. z')
+  await page.getByLabel('Lambda term to spawn').press('Enter')
+
+  await openMode(page)
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+  bubble = await bubblePoint()
+  const invoke = { x: canvas.x + bubble.x + bubble.r * 0.88, y: canvas.y + bubble.y }
+  await page.mouse.click(invoke.x, invoke.y)
+  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+  await page.getByRole('button', { name: 'New relation…', exact: true }).click()
+  await expect(page.locator('.vpa-comprehension-editor')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.formalBoundary.length)).toBe(2)
+  const editorCanvas = page.locator('.vpa-comprehension-canvas')
+  const editorBox = (await editorCanvas.boundingBox())!
+  await page.mouse.click(editorBox.x + editorBox.width * 0.55, editorBox.y + editorBox.height * 0.55, { button: 'right' })
+  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
+  await page.getByLabel('Lambda term to spawn').fill('\\u. u')
+  await page.getByLabel('Lambda term to spawn').press('Enter')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.historyLength)).toBe(2)
+  await page.keyboard.press('Control+z')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.cursor)).toBe(0)
+  await page.keyboard.press('Control+Shift+z')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.cursor)).toBe(1)
+
+  const editorBeforeSecond = (await editorCanvas.boundingBox())!
+  await page.mouse.click(editorBeforeSecond.x + editorBeforeSecond.width * 0.72, editorBeforeSecond.y + editorBeforeSecond.height * 0.62, { button: 'right' })
+  await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
+  await page.getByLabel('Lambda term to spawn').fill('\\v. v')
+  await page.getByLabel('Lambda term to spawn').press('Enter')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.draftBodies
+    .filter((body) => body.kind === 'term').length)).toBe(2)
+  const looseDraftWires = await page.evaluate(() => window.__vpaDebug!.comprehension()!.draftWires
+    .filter((wire) => !wire.wire.startsWith('arg') && wire.point !== null))
+  expect(looseDraftWires).toHaveLength(2)
+  await page.mouse.move(looseDraftWires[0]!.point!.x, looseDraftWires[0]!.point!.y)
+  await page.mouse.down()
+  await page.mouse.move(looseDraftWires[1]!.point!.x, looseDraftWires[1]!.point!.y, { steps: 4 })
+  const liveTarget = await page.evaluate((wire) => window.__vpaDebug!.comprehension()!.draftWires
+    .find((candidate) => candidate.wire === wire)!.point!, looseDraftWires[1]!.wire)
+  await page.mouse.move(liveTarget.x, liveTarget.y, { steps: 4 })
+  await page.mouse.up()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()!.draftWires
+    .filter((wire) => !wire.wire.startsWith('arg')).length)).toBe(1)
+  await page.waitForTimeout(250)
+  const draftBodies = await page.evaluate(() => window.__vpaDebug!.comprehension()!.draftBodies
+    .filter((body) => body.kind === 'term'))
+  const held = draftBodies[0]!
+  const neighbour = draftBodies[1]!
+  await page.mouse.click(held.point.x, held.point.y)
+  const neighbourBefore = await page.evaluate((node) => window.__vpaDebug!.comprehension()!.draftBodies.find((body) => body.node === node)!, neighbour.node)
+  await page.mouse.move(held.point.x, held.point.y)
+  await page.mouse.down()
+  await page.mouse.move(neighbour.point.x, neighbour.point.y)
+  const heldDuring = await page.evaluate((node) => window.__vpaDebug!.comprehension()!.draftBodies.find((body) => body.node === node)!, held.node)
+  await page.waitForTimeout(450)
+  const liveBodies = await page.evaluate(({ held, neighbour }) => ({
+    held: window.__vpaDebug!.comprehension()!.draftBodies.find((body) => body.node === held)!,
+    neighbour: window.__vpaDebug!.comprehension()!.draftBodies.find((body) => body.node === neighbour)!,
+  }), { held: held.node, neighbour: neighbour.node })
+  expect(Math.hypot(liveBodies.held.x - heldDuring.x, liveBodies.held.y - heldDuring.y)).toBeLessThan(0.01)
+  expect(Math.hypot(liveBodies.neighbour.x - neighbourBefore.x, liveBodies.neighbour.y - neighbourBefore.y)).toBeGreaterThan(0.01)
+  await page.mouse.up()
+
+  const title = (await page.locator('.vpa-comprehension-title').boundingBox())!
+  await page.mouse.move(title.x + title.width * 0.35, title.y + title.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(canvas.x + canvas.width - 260, canvas.y + 80, { steps: 8 })
+  await page.mouse.up()
+
+  const points = await page.evaluate(() => {
+    const debug = window.__vpaDebug!
+    const state = debug.comprehension()!
+    const rootWires = new Set(debug.diagram().wires.filter((wire) => wire.scope === 'r0').map((wire) => wire.id))
+    return {
+      host: state.hostWires.find((wire) => rootWires.has(wire.wire) && wire.point !== null)!,
+      arg1: state.draftWires.find((wire) => wire.wire === 'arg1')!,
+    }
+  })
+  expect(points.host.point).not.toBeNull()
+  expect(points.arg1.point).not.toBeNull()
+  await page.mouse.move(points.host.point!.x, points.host.point!.y)
+  await page.mouse.down()
+  await page.mouse.move(points.arg1.point!.x, points.arg1.point!.y, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.externalWires.length)).toBe(1)
+  const reused = await page.evaluate((hostWire) => {
+    const state = window.__vpaDebug!.comprehension()!
+    return {
+      host: state.hostWires.find((wire) => wire.wire === hostWire)!,
+      arg2: state.draftWires.find((wire) => wire.wire === 'arg2')!,
+    }
+  }, points.host.wire)
+  await page.mouse.move(reused.host.point!.x, reused.host.point!.y)
+  await page.mouse.down()
+  await page.mouse.move(reused.arg2.point!.x, reused.arg2.point!.y, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.formalBoundary)).toEqual(['arg1', 'arg1'])
+  expect(await page.evaluate(() => window.__vpaDebug!.comprehension()?.externalWires.length)).toBe(1)
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(page.locator('.vpa-comprehension-editor')).toHaveCount(0)
+  await expect(page.locator('#status')).toContainText('0 step(s)')
+
+  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+  await page.getByRole('button', { name: 'New relation…', exact: true }).click()
+  await page.getByRole('button', { name: 'Instantiate', exact: true }).click()
+  await expect(page.locator('.vpa-comprehension-editor')).toHaveCount(0)
+  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('.vpa-refusal')).toHaveCount(0)
+})
+
+test('anonymous comprehension uses the same transaction in backward proving', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '\\x. x')
+  const canvas = (await page.locator('#c').boundingBox())!
+  const term = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  await page.mouse.click(canvas.x + term.x, canvas.y + term.y)
+  await page.keyboard.press('Shift+w')
+  await page.getByLabel('Bubble arity').fill('1')
+  await page.getByLabel('Bubble arity').press('Enter')
+  const bubblePoint = async () => page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const bubble = window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!
+    return { x: bubble.x * view.scale + view.offsetX, y: bubble.y * view.scale + view.offsetY, r: bubble.r * view.scale }
+  })
+  let bubble = await bubblePoint()
+  await page.mouse.click(canvas.x + bubble.x + bubble.r * 0.55, canvas.y + bubble.y, { button: 'right' })
+  await page.locator('.vpa-spawn-bound-predicate').click()
+
+  await openMode(page)
+  await page.getByRole('button', { name: 'Prove backward', exact: true }).click()
+  bubble = await bubblePoint()
+  const invoke = { x: canvas.x + bubble.x + bubble.r * 0.88, y: canvas.y + bubble.y }
+  await page.mouse.click(invoke.x, invoke.y)
+  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+  await page.getByRole('button', { name: 'New relation…', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.formalBoundary)).toEqual(['arg1'])
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect(page.locator('#status')).toContainText('0 step(s)')
+
+  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+  await page.getByRole('button', { name: 'New relation…', exact: true }).click()
+  await page.getByRole('button', { name: 'Instantiate', exact: true }).click()
+  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('.vpa-refusal')).toHaveCount(0)
+})
+
+test('fixed-side anonymous comprehension guards the shared session and advances only its owning front', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '\\x. x')
+  const canvas = (await page.locator('#c').boundingBox())!
+  const term = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  await page.mouse.click(canvas.x + term.x, canvas.y + term.y)
+  await page.keyboard.press('Shift+w')
+  await page.getByLabel('Bubble arity').fill('1')
+  await page.getByLabel('Bubble arity').press('Enter')
+  const bubbleAt = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const bubble = window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!
+    return { x: bubble.x * view.scale + view.offsetX, y: bubble.y * view.scale + view.offsetY, r: bubble.r * view.scale }
+  })
+  await page.mouse.click(canvas.x + bubbleAt.x + bubbleAt.r * 0.55, canvas.y + bubbleAt.y, { button: 'right' })
+  await page.locator('.vpa-spawn-bound-predicate').click()
+  const wrappedAt = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const bubble = window.__vpaDebug!.regions().find((region) => region.kind === 'bubble')!
+    return { x: bubble.x * view.scale + view.offsetX, y: bubble.y * view.scale + view.offsetY, r: bubble.r * view.scale }
+  })
+  await page.mouse.click(canvas.x + wrappedAt.x + wrappedAt.r * 0.88, canvas.y + wrappedAt.y)
+  await page.keyboard.press('w')
+  await openMode(page)
+  await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
+  const cutAt = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const cut = window.__vpaDebug!.regions().find((region) => region.kind === 'cut')!
+    return { x: cut.x * view.scale + view.offsetX, y: cut.y * view.scale + view.offsetY, r: cut.r * view.scale }
+  })
+  await page.mouse.click(canvas.x + cutAt.x + cutAt.r * 0.92, canvas.y + cutAt.y)
+  await page.keyboard.press('Delete')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.regions().some((region) => region.kind === 'cut'))).toBe(false)
+  await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
+  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
+
+  const forwardCanvas = page.locator('.vpa-proof-front-forward canvas')
+  const box = (await forwardCanvas.boundingBox())!
+  const point = await page.evaluate(() => {
+    const front = window.__vpaDebug!.fixed()!.forward
+    const bubble = front.regions.find((region) => region.kind === 'bubble')!
+    return { x: bubble.x * front.view.scale + front.view.offsetX, y: bubble.y * front.view.scale + front.view.offsetY, r: bubble.r * front.view.scale }
+  })
+  const invoke = { x: box.x + point.x + point.r * 0.88, y: box.y + point.y }
+  await page.mouse.click(invoke.x, invoke.y)
+  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+  await page.getByRole('button', { name: 'New relation…', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.comprehension !== null)).toBe(true)
+  await page.keyboard.press('Control+z')
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
+  await page.getByRole('button', { name: 'Instantiate', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
+
+  const backwardCanvas = page.locator('.vpa-proof-front-backward canvas')
+  const backwardBox = (await backwardCanvas.boundingBox())!
+  const backwardPoint = await page.evaluate(() => {
+    const front = window.__vpaDebug!.fixed()!.backward
+    const bubble = front.regions.find((region) => region.kind === 'bubble')!
+    return { x: bubble.x * front.view.scale + front.view.offsetX, y: bubble.y * front.view.scale + front.view.offsetY, r: bubble.r * front.view.scale }
+  })
+  const backwardInvoke = { x: backwardBox.x + backwardPoint.x + backwardPoint.r * 0.88, y: backwardBox.y + backwardPoint.y }
+  await page.mouse.click(backwardInvoke.x, backwardInvoke.y)
+  await page.mouse.click(backwardInvoke.x, backwardInvoke.y, { button: 'right' })
+  await page.getByRole('button', { name: 'New relation…', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.comprehension !== null)).toBe(true)
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.comprehension)).toBeNull()
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
 })
 
 // The plan-14 deliverable: a relational theorem replays step-by-step through the

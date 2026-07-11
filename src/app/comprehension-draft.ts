@@ -1,6 +1,5 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
 import { DiagramError, mkDiagram, portKey } from '../kernel/diagram/diagram'
-import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { applyComprehensionInstantiate } from '../kernel/rules/comprehension'
 import { RuleError } from '../kernel/rules/error'
@@ -480,24 +479,4 @@ export function commitComprehensionDraft(draft: ComprehensionDraft): Diagram {
     materialized.relation,
     materialized.attachments,
   )
-}
-
-export type ComprehensionFixture = {
-  readonly diagram: Diagram
-  readonly bubble: RegionId
-  readonly parameter: WireId
-}
-
-export function comprehensionFixture(): ComprehensionFixture {
-  const builder = new DiagramBuilder()
-  const guard = builder.cut(builder.root)
-  const bubble = builder.bubble(guard, 2)
-  for (let copy = 0; copy < 2; copy++) {
-    const atom = builder.atom(bubble, bubble)
-    builder.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 0 } }])
-    builder.wire(bubble, [{ node: atom, port: { kind: 'arg', index: 1 } }])
-  }
-  const context = builder.ref(builder.root, 'context', 1)
-  const parameter = builder.wire(builder.root, [{ node: context, port: { kind: 'arg', index: 0 } }])
-  return { diagram: builder.build(), bubble, parameter }
 }

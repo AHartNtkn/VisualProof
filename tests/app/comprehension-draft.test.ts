@@ -10,7 +10,6 @@ import {
   beginComprehensionDraft,
   cancelComprehensionDraft,
   commitComprehensionDraft,
-  comprehensionFixture,
   currentComprehensionDraft,
   deleteComprehensionNode,
   deriveExternalReferencePresentation,
@@ -20,6 +19,7 @@ import {
   replaceComprehensionDiagram,
   ungraftComprehensionWire,
 } from '../../src/app/comprehension-draft'
+import { comprehensionFixture } from './comprehension-fixture'
 
 const draftWire = (wire: string) => ({ kind: 'draft' as const, wire })
 const hostWire = (wire: string) => ({ kind: 'host' as const, wire })

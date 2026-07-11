@@ -98,7 +98,7 @@ export class FixedSideWorkspace {
       fuel: options.fuel,
       prepare: (step: ProofStep) => this.#prepare(side, step),
       motionPreferences: options.motionPreferences,
-      workspaceInputAllowed: () => !this.playing,
+      workspaceInputAllowed: () => !this.playing && (!this.editing || this.#front(side).editing),
       focused: () => this.#focused === side,
       focus: () => this.setFocusedSide(side),
       keyCommand: (sample: KeySample) => this.#keyCommand(side, sample),
@@ -123,6 +123,8 @@ export class FixedSideWorkspace {
   get focusedSide(): FixedSide { return this.#focused }
   get ratio(): number { return this.#ratio }
   get playing(): boolean { return this.forward.playing || this.backward.playing }
+  get editing(): boolean { return this.forward.editing || this.backward.editing }
+  get busy(): boolean { return this.playing || this.editing }
 
   setFocusedSide(side: FixedSide): void {
     if (side === this.#focused) return
@@ -139,7 +141,7 @@ export class FixedSideWorkspace {
   }
 
   moveFocusedCursor(cursor: number): void {
-    if (this.playing) return
+    if (this.busy) return
     const next = moveSide(this.#options.session(), this.#focused, cursor)
     this.#options.commit(next, this.#focused)
     this.reconcile(this.#focused)
@@ -209,7 +211,7 @@ export class FixedSideWorkspace {
   }
 
   #keyCommand(side: FixedSide, sample: KeySample): boolean {
-    if (this.playing) return true
+    if (this.busy) return true
     if (this.#focused !== side || !(sample.ctrlKey || sample.metaKey) || sample.key.toLowerCase() !== 'z') return false
     const session = this.#options.session()
     const timeline = session[side]
@@ -308,7 +310,7 @@ export class FixedSideWorkspace {
   }
 
   #declare = (): void => {
-    if (this.playing || !meet(this.#options.session())) return
+    if (this.busy || !meet(this.#options.session())) return
     this.#options.declare()
     this.#refresh()
   }

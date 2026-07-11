@@ -19,6 +19,18 @@ import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 export type ProofOrientation = 'forward' | 'backward'
 
+export type InstantiationChoice =
+  | { readonly kind: 'anonymous'; readonly label: 'New relation…' }
+  | { readonly kind: 'named'; readonly label: string; readonly name: string }
+
+export function instantiationChoices(ctx: ProofContext, arity: number): readonly InstantiationChoice[] {
+  const choices: InstantiationChoice[] = [{ kind: 'anonymous', label: 'New relation…' }]
+  for (const [name, relation] of ctx.relations) {
+    if (relation.boundary.length === arity) choices.push({ kind: 'named', label: name, name })
+  }
+  return choices
+}
+
 export type ProofDiscovery = {
   readonly sel: SubgraphSelection
   readonly actions: readonly ActionDescriptor[]
@@ -104,6 +116,7 @@ export type ProofMoveControllerOptions = {
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
   readonly fuel: () => number
+  readonly openComprehension: (bubble: RegionId, pointer: Vec2) => void
 }
 
 type IterationDrag = {
@@ -371,8 +384,12 @@ export class ProofMoveController {
         const bubble = sel.regions[0]!
         const bubbleRegion = this.#options.diagram().regions[bubble]!
         const arity = bubbleRegion.kind === 'bubble' ? bubbleRegion.arity : -1
-        for (const [name, relation] of this.#options.context().relations) if (relation.boundary.length === arity) {
-          row(name, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#options.context(), name), attachments: [], binders: {} }))
+        for (const choice of instantiationChoices(this.#options.context(), arity)) {
+          if (choice.kind === 'anonymous') row(choice.label, () => {
+            this.#closeMenu()
+            this.#options.openComprehension(bubble, this.#lastPointer)
+          })
+          else row(choice.label, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#options.context(), choice.name), attachments: [], binders: {} }))
         }
         return
       }

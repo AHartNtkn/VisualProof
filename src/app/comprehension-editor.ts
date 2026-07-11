@@ -1,4 +1,4 @@
-import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { parseTerm } from '../kernel/term/parse'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { carryOver, mkEngine, resolvedFrameSlot, type Engine } from '../view/engine'
@@ -153,6 +153,9 @@ export type ComprehensionEditorDebug = {
   readonly materializedBoundary: readonly WireId[]
   readonly externalWires: readonly ExternalWireBinding[]
   readonly rect: EditorRect
+  readonly draftBodies: readonly { readonly node: NodeId; readonly kind: string; readonly x: number; readonly y: number; readonly point: Vec2 }[]
+  readonly draftWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
+  readonly hostWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
   readonly connection: null | {
     readonly source: ComprehensionConnectionEndpoint
     readonly draftTargets: readonly WireId[]
@@ -355,6 +358,15 @@ export class ComprehensionEditor {
       materializedBoundary: [...materialized.relation.boundary],
       externalWires: [...current.externalWires],
       rect: { ...this.#rect },
+      draftBodies: [...this.#engine.bodies].map(([node, body]) => ({
+        node,
+        kind: body.kind,
+        x: body.pos.x,
+        y: body.pos.y,
+        point: this.#worldToClient(this.#canvas, this.#view, body.pos),
+      })),
+      draftWires: Object.keys(current.relation.diagram.wires).map((wire) => ({ wire, point: this.#wireClientPoint('draft', wire) })),
+      hostWires: Object.keys(this.#host.diagram().wires).map((wire) => ({ wire, point: this.#wireClientPoint('host', wire) })),
       connection: source === null || targets === null ? null : {
         source, draftTargets: [...targets.draft], hostTargets: [...targets.host],
       },
@@ -496,6 +508,40 @@ export class ComprehensionEditor {
     const world = { x: (screen.x - view.offsetX) / view.scale, y: (screen.y - view.offsetY) / view.scale }
     const wire = wireHitTest(engine, world, { scale: view.scale })?.id
     return wire === undefined ? null : { kind, wire }
+  }
+
+  #wireClientPoint(surface: SurfaceKind, wire: WireId): Vec2 | null {
+    const canvas = surface === 'draft' ? this.#canvas : this.#host.canvas
+    const engine = surface === 'draft' ? this.#engine : this.#host.engine()
+    const view = surface === 'draft' ? this.#view : this.#host.view()
+    const points: Vec2[] = []
+    for (const leg of legPaths(engine)) if (leg.wid === wire) points.push(...leg.pts)
+    for (const stub of existentialStubs(engine)) if (stub.wid === wire) points.push(stub.dot, stub.from, stub.to)
+    const boundary = surface === 'draft'
+      ? materializeComprehensionSnapshot(currentComprehensionDraft(this.#draft)).relation.boundary
+      : this.#host.boundary()
+    boundary.forEach((id, position) => {
+      if (id !== wire) return
+      const slot = resolvedFrameSlot(engine, position)
+      if (slot !== null) points.push(slot.point)
+    })
+    const rect = canvas.getBoundingClientRect()
+    const clients = points.map((point) => ({
+      x: rect.left + (point.x * view.scale + view.offsetX) * rect.width / Math.max(1, canvas.width),
+      y: rect.top + (point.y * view.scale + view.offsetY) * rect.height / Math.max(1, canvas.height),
+    })).filter((point) => document.elementFromPoint(point.x, point.y) === canvas)
+    if (clients.length === 0) return null
+    const center = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+    return clients.reduce((best, point) =>
+      Math.hypot(point.x - center.x, point.y - center.y) < Math.hypot(best.x - center.x, best.y - center.y) ? point : best)
+  }
+
+  #worldToClient(canvas: HTMLCanvasElement, view: MutableView, world: Vec2): Vec2 {
+    const rect = canvas.getBoundingClientRect()
+    return {
+      x: rect.left + (world.x * view.scale + view.offsetX) * rect.width / Math.max(1, canvas.width),
+      y: rect.top + (world.y * view.scale + view.offsetY) * rect.height / Math.max(1, canvas.height),
+    }
   }
 
   #pointerChanged(surface: SurfaceKind, client: Vec2): void {

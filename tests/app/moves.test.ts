@@ -7,6 +7,7 @@ import {
   contextualDeleteStep,
   discoverProofActions,
   foldedComprehension,
+  instantiationChoices,
   iterationTargets,
 } from '../../src/app/interact/moves'
 
@@ -67,6 +68,13 @@ describe('shared proof move discovery', () => {
 })
 
 describe('proof move parameters', () => {
+  it('offers one anonymous relation before matching named folded relations', () => {
+    expect(instantiationChoices(ctx(), 2)).toEqual([
+      { kind: 'anonymous', label: 'New relation…' },
+      { kind: 'named', label: 'succ', name: 'succ' },
+    ])
+  })
+
   it('iterates only into descendants outside the selected subtree', () => {
     const b = new DiagramBuilder()
     const selected = b.cut(b.root)

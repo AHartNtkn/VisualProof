@@ -46,6 +46,7 @@ import { mountScrubber, type MountedScrubber, type TimelineView } from './intera
 import { previewTransition } from './history-preview'
 import { FixedSideWorkspace } from './fixed-side-workspace'
 import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
+import { ComprehensionEditor } from './comprehension-editor'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -152,6 +153,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let interaction!: InteractiveViewport
   let construct!: ConstructController
   let proofMoves!: ProofMoveController
+  let comprehensionEditor: ComprehensionEditor | null = null
   let spawnCascade!: SpawnCascade
   let spawnHoverBinder: RegionId | null = null
   const feedback = new FeedbackController()
@@ -160,6 +162,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let refusalTimer = 0
   const rememberPointer = (pointer: Vec2): void => {
     lastPointerClient = pointer
+    comprehensionEditor?.hostPointerChanged(pointer)
   }
   const clearRefusalPresentation = (sequence?: number): void => {
     feedback.clearRefusal(sequence)
@@ -735,6 +738,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const leaveProof = guard(() => {
+    if (comprehensionEditor !== null || fixedWorkspace?.editing) return
     proofMoves.cancel()
     mainMotion.cancel()
     if (mode === 'replay') {
@@ -800,7 +804,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     refreshChrome()
   })
   const onUndo = guard(() => {
-    if (mainMotion.playing || fixedWorkspace?.playing) return
+    if (mainMotion.playing || fixedWorkspace?.busy || comprehensionEditor !== null) return
     if (mode === 'edit') {
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
@@ -823,7 +827,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     sync()
   })
   const onRedo = guard(() => {
-    if (mainMotion.playing || fixedWorkspace?.playing) return
+    if (mainMotion.playing || fixedWorkspace?.busy || comprehensionEditor !== null) return
     if (mode === 'replay' && replay !== null) {
       if (replayK === replay.stepCount) throw new Error('nothing to redo in replay')
       gotoReplayStep(replayK + 1)
@@ -871,6 +875,32 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
   }
 
+  const openComprehension = (bubble: RegionId, pointer: Vec2): void => {
+    if (mode !== 'prove' || proof?.kind !== 'track' || comprehensionEditor !== null) return
+    let editor: ComprehensionEditor
+    editor = new ComprehensionEditor({
+      mount: document.body,
+      canvas,
+      diagram: currentDiagram,
+      boundary: () => proof?.kind === 'track' ? trackBoundary(proof.track) : [],
+      engine: () => engine,
+      view: () => view,
+      context: () => ctx,
+      theme: () => theme,
+      fuel: () => readCount(fuel.input, 'fuel'),
+      apply: applyProofStep,
+      refuse,
+      changed: refreshChrome,
+      openChanged: (open) => {
+        if (!open && comprehensionEditor === editor) comprehensionEditor = null
+        refreshChrome()
+      },
+    }, bubble, pointer)
+    comprehensionEditor = editor
+    proofMoves.cancel()
+    refreshChrome()
+  }
+
   // ---- define relation (EDIT mode, two-phase like relFold) ----
   // Enter the pending pick: the crossing wires clicked in order become the
   // relation's argument boundary. Defining never mutates the sheet.
@@ -894,6 +924,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const claimPointer = (sample: PointerSample): PointerClaim | null => {
+    const editorClaim = comprehensionEditor?.hostClaim(sample) ?? null
     const pendingClaim: PointerClaim | null = sample.button === 0 && pending?.kind === 'defineRelation' ? {
         still: 'claim',
         blocksPassiveRelaxation: false,
@@ -901,7 +932,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         release: (at, moved) => { if (!moved) handleClaimedClick(at) },
         cancel: () => {},
       } : null
-    return pendingClaim ?? (mode === 'prove' ? proofMoves.claim(sample) : construct.claim(sample))
+    return editorClaim ?? pendingClaim ?? (mode === 'prove' ? proofMoves.claim(sample) : construct.claim(sample))
   }
 
   // ---- chrome refresh ----
@@ -930,7 +961,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       : mode === 'replay'
         ? 'Drag the temporal rail or use Arrow keys to inspect the verified derivation.'
         : 'Select diagram structure, then right-click for legal proof moves. Drag the temporal rail to undo or redo.'
-    for (const control of motionControls) control.disabled = mainMotion.playing || fixedWorkspace?.playing === true
+    for (const control of motionControls) control.disabled = mainMotion.playing || fixedWorkspace?.busy === true
     temporal?.refresh()
 
     menuDiv.replaceChildren()
@@ -1167,7 +1198,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // frame (no time-slicing) — the whole diagram eases toward rest together.
     // InteractiveViewport supplies the exact persistent and active pin set.
     mainMotion.frame(now)
-    if (!mainMotion.playing) interaction.advance()
+    if (!mainMotion.playing) interaction.advance(comprehensionEditor === null)
     const shapes: Shape[] = paint(engine, theme)
     for (const id of interaction.pins) {
       const b = engine.bodies.get(id)
@@ -1195,6 +1226,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     shapes.push(...construct.overlay())
     shapes.push(...proofMoves.overlay())
+    if (comprehensionEditor !== null) shapes.push(...comprehensionEditor.hostOverlays())
     ctx2d.clearRect(0, 0, canvas.width, canvas.height)
     ctx2d.fillStyle = theme.canvas
     ctx2d.fillRect(0, 0, canvas.width, canvas.height)
@@ -1204,6 +1236,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     drawShapes(ctx2d, hoverShapes, view)
     ctx2d.restore()
     drawShapes(ctx2d, mainMotion.overlays(now), view)
+    comprehensionEditor?.frame(now)
     renderCompanion(comp, companionVisible)
     raf = requestAnimationFrame(frame)
   }
@@ -1211,6 +1244,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
   // a text/number input is focused so typing a term is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
+    if (comprehensionEditor !== null) return true
     if (mode === 'prove' && proof?.kind === 'dual') return false
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       if (e.shiftKey) onRedo()
@@ -1440,7 +1474,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   proofMoves = new ProofMoveController({
     host: document.body,
-    active: () => mode === 'prove' && proof?.kind === 'track' && !mainMotion.playing,
+    active: () => mode === 'prove' && proof?.kind === 'track' && !mainMotion.playing && comprehensionEditor === null,
     diagram: currentDiagram,
     engine: () => engine,
     selection: () => interaction.selection,
@@ -1451,6 +1485,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     refuse: (text, pointer) => refuse(text, pointer),
     theme: () => theme,
     fuel: () => readCount(fuel.input, 'fuel'),
+    openComprehension,
   })
   compass.lifecycle.append(construct.optionsElement)
   interaction = new InteractiveViewport({
@@ -1460,9 +1495,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     diagram: () => displayed,
     selectionEnabled: () => mode !== 'replay',
     claim: claimPointer,
-    doubleClick: (sample) => mode === 'prove' ? proofMoves.doubleClick(sample) : construct.doubleClick(sample),
+    doubleClick: (sample) => comprehensionEditor !== null ? false : mode === 'prove' ? proofMoves.doubleClick(sample) : construct.doubleClick(sample),
     contextMenu: (sample) => {
       if (mode === 'prove') {
+        if (comprehensionEditor !== null) return
         proofMoves.contextMenu(sample)
         return
       }
@@ -1496,7 +1532,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return {
         ...active.timeline,
         boundary: trackBoundary(active),
-        inputAllowed: () => !mainMotion.playing,
+        inputAllowed: () => !mainMotion.playing && comprehensionEditor === null,
         moveTo: (cursor) => {
           if (proof?.kind !== 'track') return
           proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
@@ -1510,7 +1546,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       ...active,
       name: activeProof.side,
       boundary: sideBoundary(activeProof.session, activeProof.side),
-      inputAllowed: () => fixedWorkspace?.playing !== true,
+      inputAllowed: () => fixedWorkspace?.busy !== true,
       moveTo: (cursor) => {
         fixedWorkspace?.moveFocusedCursor(cursor)
       },
@@ -1613,6 +1649,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     construct.dispose()
     spawnCascade.dispose()
     proofMoves.dispose()
+    comprehensionEditor?.dispose()
+    comprehensionEditor = null
     mainMotion.dispose()
     fixedWorkspace?.dispose()
     fixedWorkspace = null
@@ -1669,6 +1707,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       },
       motion() {
         return { ...mainMotion.debugState(performance.now()), preferences: { ...motionPreferences } }
+      },
+      comprehension() {
+        return comprehensionEditor?.debugState() ?? null
       },
       spawnBinderHover(): string | null {
         return spawnHoverBinder
