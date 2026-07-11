@@ -1,9 +1,11 @@
 import type { GameCatalog } from './catalog'
-import { stepFromJson } from '../kernel/proof/json'
+import { stepFromJson, stepToJson } from '../kernel/proof/json'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { emptyProgress, isUnlocked, recordCompletion, type GameProgress } from './progress'
 import { applyGameStep, moveCursor, startPuzzle, type GameRuntimeAuthority, type GameSession } from './session'
 import { GameDomainError, puzzleId, type GameStep, type PuzzleId } from './types'
+
+export type SerializedGameStep = Readonly<Record<string, unknown>>
 
 export type GameSaveV1 = {
   readonly format: 'cursebreaker-save'
@@ -12,7 +14,7 @@ export type GameSaveV1 = {
   readonly completed: readonly PuzzleId[]
   readonly active?: {
     readonly puzzle: PuzzleId
-    readonly steps: readonly GameStep[]
+    readonly steps: readonly SerializedGameStep[]
     readonly cursor: number
   }
 }
@@ -54,6 +56,25 @@ const selection = (value: unknown): SubgraphSelection => {
     nodes: strings(decoded.nodes, 'vellum selection.nodes'),
     wires: strings(decoded.wires, 'vellum selection.wires'),
   }
+}
+
+const gameStepToJson = (step: GameStep): SerializedGameStep => {
+  if (step.rule === 'vellumManifest') {
+    return { rule: step.rule, puzzle: step.puzzle, region: step.region }
+  }
+  if (step.rule === 'vellumDissolve') {
+    return {
+      rule: step.rule,
+      puzzle: step.puzzle,
+      selection: {
+        region: step.selection.region,
+        regions: [...step.selection.regions],
+        nodes: [...step.selection.nodes],
+        wires: [...step.selection.wires],
+      },
+    }
+  }
+  return record(stepToJson(step), 'serialized kernel step')
 }
 
 const gameStepFromJson = (value: unknown, index: number): GameStep => {
@@ -99,7 +120,7 @@ export function saveGame(
     ...base,
     active: {
       puzzle: active.puzzle,
-      steps: active.timeline.steps,
+      steps: active.timeline.steps.map(gameStepToJson),
       cursor: active.timeline.cursor,
     },
   }

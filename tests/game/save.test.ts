@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { parseTerm } from '../../src/kernel/term/parse'
 import { buildCatalog } from '../../src/game/catalog'
 import { recordCompletion, emptyProgress } from '../../src/game/progress'
 import { applyGameStep, moveCursor, startPuzzle } from '../../src/game/session'
@@ -32,6 +33,21 @@ describe('versioned game save', () => {
     expect([...loaded.progress.completed]).toEqual([puzzle.id])
     expect(loaded.active?.timeline.states).toHaveLength(3)
     expect(loaded.active?.timeline.cursor).toBe(1)
+  })
+
+  it('round-trips a term-bearing kernel step through its JSON wire format', () => {
+    const step = {
+      rule: 'closedTermIntro' as const,
+      region: fixture.goal.diagram.root,
+      term: parseTerm('\\x. x'),
+    }
+    const session = applyGameStep(startPuzzle(puzzle), step, authority).session
+    const encoded = saveGame(catalog, emptyProgress(), session)
+    expect(encoded.active?.steps[0]).toMatchObject({ rule: step.rule, term: expect.any(String) })
+    const loaded = loadGame(catalog, JSON.parse(JSON.stringify(encoded)))
+    expect(loaded.active?.timeline.steps).toEqual([step])
+    expect(loaded.active?.timeline.states).toHaveLength(2)
+    expect(loaded.active?.timeline.states[1]).toBeDefined()
   })
 
   it('refuses catalog drift and unknown completion ids', () => {
