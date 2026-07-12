@@ -8,26 +8,27 @@ import { termsMatchModuloBetaEta } from '../canonical/matchkey'
 import { refinedColors } from '../canonical/explore'
 import { mkSelection, type SubgraphSelection } from './selection'
 
-/** Visited-state counter (node-compatibility probes). Reset by callers that measure. */
-export const __benchCounter = { n: 0 }
+/** Production-neutral exploration counters. Reset by callers that measure. */
+export const __benchCounter = { n: 0, permutations: 0 }
 
-/** Every permutation of [0, m) except the identity — the fallback bijections of a run onto a fixed host subset. */
-function nonIdentityPermutations(m: number): number[][] {
-  const out: number[][] = []
+/** Lazily yield every permutation of [0, m) except the identity. */
+function* nonIdentityPermutations(m: number): Generator<readonly number[]> {
   const arr = Array.from({ length: m }, (_, i) => i)
-  const permute = (k: number): void => {
+  function* permute(k: number): Generator<readonly number[]> {
     if (k === m) {
-      if (arr.some((v, i) => v !== i)) out.push([...arr])
+      if (arr.some((v, i) => v !== i)) {
+        __benchCounter.permutations++
+        yield [...arr]
+      }
       return
     }
     for (let i = k; i < m; i++) {
       ;[arr[k], arr[i]] = [arr[i]!, arr[k]!]
-      permute(k + 1)
+      yield* permute(k + 1)
       ;[arr[k], arr[i]] = [arr[i]!, arr[k]!]
     }
   }
-  permute(0)
-  return out
+  yield* permute(0)
 }
 
 export type MatchMode = 'exact' | 'betaEta'
@@ -450,8 +451,13 @@ export function findOccurrences(
       const identity = indices.map((_, t) => t)
       const before = matches.length
       bindPerm(indices, identity)
-      if (m > 1 && matches.length === before) {
-        for (const perm of nonIdentityPermutations(m)) bindPerm(indices, perm)
+      if (m > 1 && matches.length === before && !explorationExhausted) {
+        const permutations = nonIdentityPermutations(m)
+        while (!explorationExhausted) {
+          const next = permutations.next()
+          if (next.done) break
+          bindPerm(indices, next.value)
+        }
       }
     }
     // increasing index combinations of size m (each host subset once)

@@ -65,6 +65,17 @@ describe('exploration matcher — explicit exploration fuel', () => {
     return mkDiagramWithBoundary(b.build(), [])
   }
 
+  function sharedWirePattern(count: number) {
+    const b = new DiagramBuilder()
+    const endpoints: Endpoint[] = []
+    for (let i = 0; i < count; i++) {
+      const node = b.termNode(b.root, p('\\x. x'))
+      endpoints.push({ node, port: { kind: 'output' } })
+    }
+    b.wire(b.root, endpoints)
+    return mkDiagramWithBoundary(b.build(), [])
+  }
+
   it('returns explicit exhaustion before exact backtracking completes', () => {
     const result = findOccurrences(identityNodes(4), identityPattern(2), {
       fuel: 50,
@@ -91,6 +102,38 @@ describe('exploration matcher — explicit exploration fuel', () => {
     expect(result.matches).toHaveLength(choose(4, 2))
     expect(result.undecided).toEqual([])
     expect(result.explorationSteps).toBeGreaterThan(1)
+  })
+
+  it('does not generate factorial fallback permutations after identity consumes the final probe', () => {
+    expect(__benchCounter.permutations).toBeTypeOf('number')
+    __benchCounter.permutations = 0
+
+    const result = findOccurrences(identityNodes(12), sharedWirePattern(12), {
+      fuel: 1,
+      explorationFuel: 1,
+      mode: 'exact',
+      inRegion: 'r0',
+    })
+
+    expect(result.status).toBe('exhausted')
+    expect(result.explorationSteps).toBe(1)
+    expect(__benchCounter.permutations).toBe(0)
+  })
+
+  it('exhaustively explores the small non-identity fallback with sufficient budget', () => {
+    expect(__benchCounter.permutations).toBeTypeOf('number')
+    __benchCounter.permutations = 0
+
+    const result = findOccurrences(identityNodes(3), sharedWirePattern(3), {
+      fuel: 1,
+      explorationFuel: 100,
+      mode: 'exact',
+      inRegion: 'r0',
+    })
+
+    expect(result.status).toBe('complete')
+    expect(result.matches).toEqual([])
+    expect(__benchCounter.permutations).toBe(5)
   })
 })
 
