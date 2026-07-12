@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkEngine, DISC_R, worldBindAnchor } from '../../src/view/engine'
+import { buildFregeTheory } from '../../src/theories/frege'
+import { mkEngine, DISC_R, worldBindAnchor, carryOver } from '../../src/view/engine'
 
 const p = (s: string) => parseTerm(s)
 
@@ -44,5 +45,36 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
         expect(Math.hypot(a.x - b.pos.x, a.y - b.pos.y), 'and strictly inside the padded clearance disc (no float)').toBeLessThan(b.discR - 1e-6)
       }
     }
+  })
+})
+
+describe('proof-wide boundary identity', () => {
+  const plusComm = buildFregeTheory().theorems.find((theorem) => theorem.name === 'plusComm')!
+
+  it('carries the slot shift across a rewrite', () => {
+    const before = mkEngine(plusComm.lhs.diagram, plusComm.lhs.boundary)
+    before.frame = { center: { x: 0, y: 0 }, half: 50 }
+    before.slotShift = 2
+    const after = mkEngine(plusComm.rhs.diagram, plusComm.rhs.boundary)
+    carryOver(before, after)
+    expect(after.slotShift, 'carryOver carries the proof-wide slot-shift').toBe(2)
+  })
+
+  it('maps the commuted boundary slots to different plus ports', () => {
+    const slotToPlusArg = (side: typeof plusComm.lhs): number[] => {
+      const plusId = Object.entries(side.diagram.nodes)
+        .find(([, node]) => node.kind === 'ref' && node.defId === 'plus')![0]
+      return side.boundary.map((wire) => {
+        const endpoint = side.diagram.wires[wire]!.endpoints.find((candidate) => candidate.node === plusId)!
+        if (endpoint.port.kind !== 'arg') throw new Error('expected an arg port on the plus disc')
+        return endpoint.port.index
+      })
+    }
+
+    const lhsMap = slotToPlusArg(plusComm.lhs)
+    const rhsMap = slotToPlusArg(plusComm.rhs)
+    expect(lhsMap).toEqual([0, 1, 2])
+    expect(rhsMap).toEqual([1, 0, 2])
+    expect(rhsMap).not.toEqual(lhsMap)
   })
 })

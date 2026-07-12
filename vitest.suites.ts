@@ -2,12 +2,6 @@ import type { InlineConfig } from 'vitest/node'
 
 export type TestSuite = 'ordinary' | 'physics' | 'all'
 
-export function testSuite(value = process.env.VPA_TEST_SUITE): TestSuite {
-  if (value === undefined || value === '') return 'ordinary'
-  if (value === 'ordinary' || value === 'physics' || value === 'all') return value
-  throw new Error(`unknown VPA_TEST_SUITE '${value}'; expected ordinary, physics, or all`)
-}
-
 export function suiteTestConfig(
   suite: TestSuite,
 ): Pick<InlineConfig, 'include' | 'exclude' | 'testTimeout' | 'hookTimeout'> {

@@ -1,9 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { suiteTestConfig, testSuite } from '../../vitest.suites'
+import { suiteTestConfig } from '../../vitest.suites'
 
 describe('Vitest suite ownership', () => {
   it('defaults to ordinary validation', () => {
-    expect(testSuite()).toBe('ordinary')
     expect(suiteTestConfig('ordinary')).toEqual({
       include: ['tests/**/*.test.ts'],
       exclude: ['tests/physics/**/*.test.ts'],
@@ -28,9 +27,5 @@ describe('Vitest suite ownership', () => {
       testTimeout: 1_800_000,
       hookTimeout: 1_800_000,
     })
-  })
-
-  it('refuses an unknown suite instead of silently changing coverage', () => {
-    expect(() => testSuite('slow')).toThrow(/unknown VPA_TEST_SUITE 'slow'/)
   })
 })

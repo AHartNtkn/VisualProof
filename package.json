@@ -7,10 +7,10 @@
     "node": ">=20"
   },
   "scripts": {
-    "test": "vitest run",
-    "test:physics": "VPA_TEST_SUITE=physics vitest run",
-    "test:all": "VPA_TEST_SUITE=all vitest run",
-    "test:watch": "vitest",
+    "test": "vitest run --config vitest.config.ts",
+    "test:physics": "vitest run --config vitest.physics.config.ts",
+    "test:all": "vitest run --config vitest.all.config.ts",
+    "test:watch": "vitest --config vitest.config.ts",
     "typecheck": "tsc --noEmit",
     "emit:theories": "tsx scripts/emit-theories.ts",
     "demo": "vite demo",

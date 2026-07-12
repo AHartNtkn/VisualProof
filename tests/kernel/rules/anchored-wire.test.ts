@@ -144,7 +144,7 @@ function redistributionFixture({ inCut = false, consumerInside = false }: {
   return { d: b.build(), evidenceRegion, a, b: bNode, first, second, aWire, bWire }
 }
 
-function shieldedTransportFixture() {
+function shieldedRedistributionFixture() {
   const b = new DiagramBuilder()
   const evidenceRegion = b.cut(b.root)
   const a = b.termNode(evidenceRegion, CLOSED)
@@ -406,7 +406,7 @@ describe('anchored redistribution capability', () => {
   })
 
   it('derives shielded local redistribution with root-scoped original wires', () => {
-    const s = shieldedTransportFixture()
+    const s = shieldedRedistributionFixture()
     const out = redistribute(s.d, s.a, s.b, [s.endpoint], s.evidenceRegion, s.certificate)
     expect(out.wires[s.aWire]!.scope).toBe(s.d.root)
     expect(out.wires[s.bWire]!.scope).toBe(s.d.root)

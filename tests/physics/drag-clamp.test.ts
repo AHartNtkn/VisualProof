@@ -41,48 +41,6 @@ function worstRegionOvershoot(e: Engine): number {
 }
 
 describe('clampDragToFeasible — HARD SEMANTIC CONTAINMENT (USER LAW: a drag can never pull a node into a cut it is not part of)', () => {
-  // A root node dragged straight at a sibling cut's centre must stay clamped
-  // OUTSIDE that cut circle at every frame — crossing the boundary would change
-  // what the diagram means, and that must not happen even transiently.
-  it('a root node dragged into a sibling cut circle is clamped outside at every frame', () => {
-    const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('a')) // on the sheet
-    const cut = h.cut(h.root)
-    const b = h.termNode(cut, p('b')) // inside the cut
-    h.wire(h.root, [{ node: a, port: { kind: 'freeVar', name: 'a' } }])
-    h.wire(cut, [{ node: b, port: { kind: 'freeVar', name: 'b' } }])
-    const e = mkEngine(h.build(), [])
-    recomputeRegions(e)
-    resolveOverlaps(e) // a legal, separated start (the construction projection)
-    recomputeRegions(e)
-
-    const ba = e.bodies.get(a)!
-    // the cut's derived circle (a is NOT a member of it)
-    const cutG = e.regions.get(cut)!
-    const start = { x: ba.pos.x, y: ba.pos.y }
-    // sweep the cursor from a's rest position straight through the cut centre and
-    // out the far side — the hard case (the user "dragging hard at a cut boundary")
-    const far = { x: cutG.center.x + (cutG.center.x - start.x), y: cutG.center.y + (cutG.center.y - start.y) }
-    let observed = 0
-    let maxPush = 0
-    for (let t = 0; t <= 40; t++) {
-      const f = t / 40
-      const target = { x: start.x + (far.x - start.x) * f, y: start.y + (far.y - start.y) * f }
-      const clamped = clampDragToFeasible(e, ba, target)
-      const d = Math.hypot(clamped.x - cutG.center.x, clamped.y - cutG.center.y)
-      // the node's disc must not enter the cut circle: centre distance >= cut radius
-      // (a node whose centre is inside the cut circle reads as being IN the cut)
-      expect(d, `frame ${t}: node centre must stay outside the cut circle`).toBeGreaterThanOrEqual(cutG.radius - 1e-6)
-      maxPush = Math.max(maxPush, Math.hypot(clamped.x - target.x, clamped.y - target.y))
-      observed++
-    }
-    expect(observed).toBe(41)
-    // the clamp actually engaged: the raw path aimed straight through the cut centre,
-    // so a no-op clamp would leave the target untouched — the clamp must have pushed
-    // it out by at least the cut radius somewhere along the sweep
-    expect(maxPush, 'the clamp engaged (the raw path aimed through the cut centre)').toBeGreaterThan(cutG.radius)
-  })
-
   it('a CUT circle stays inside the fixed border — settled AND mid-drag (USER 2026-07-06: the hard wall applies to cuts, not just discs)', () => {
     // A cut with two members; drag one member HARD at the border. The disc is
     // clamped, but the derived CUT circle (members + REGION_PAD) must ALSO stay

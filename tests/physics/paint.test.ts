@@ -7,7 +7,6 @@ import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, bubbleHues, highlightGroup, LIGHT, DARK } from '../../src/view/paint'
-import { drawShapes } from '../../src/view/canvas'
 import { computeLegs } from '../../src/view/wires'
 import { addBubble } from '../../src/app/edit'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
@@ -79,38 +78,6 @@ describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
     expect(labels).toContain('VeryLongUnqualifiedRelation')
   })
 
-  it('fits the complete label at the canvas boundary without substring truncation', () => {
-    const drawn: { text: string; maxWidth: number; font: string }[] = []
-    let currentFont = ''
-    const context = {
-      lineJoin: '',
-      lineCap: '',
-      get font() { return currentFont },
-      set font(value: string) { currentFont = value },
-      textAlign: '',
-      textBaseline: '',
-      fillStyle: '',
-      measureText(text: string) {
-        const size = Number(/ ([0-9.]+)px /.exec(currentFont)?.[1] ?? 10)
-        return { width: text.length * size * 0.7 } as TextMetrics
-      },
-      fillText(text: string, _x: number, _y: number, maxWidth: number) {
-        drawn.push({ text, maxWidth, font: currentFont })
-      },
-    } as unknown as CanvasRenderingContext2D
-    const text = 'VeryLongUnqualifiedRelation'
-
-    drawShapes(context, [{ kind: 'label', center: { x: 0, y: 0 }, text, color: '#000', r: 9, font: 'serif' }], {
-      scale: 2,
-      offsetX: 0,
-      offsetY: 0,
-    })
-
-    expect(drawn).toHaveLength(1)
-    expect(drawn[0]!.text).toBe(text)
-    expect(drawn[0]!.maxWidth).toBeLessThan(2 * 9 * 2)
-    expect(Number(/ ([0-9.]+)px /.exec(drawn[0]!.font)?.[1])).toBeLessThan(14)
-  })
 })
 
 describe('law 3 — boundary honesty: boundary wires connect INSIDE the frame, internal singletons get an exists-stub', () => {

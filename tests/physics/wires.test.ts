@@ -5,7 +5,7 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle, recomputeRegions, resolveOverlaps, establishProofFrame, establishProofSlotShift } from '../../src/view/relax'
 import { computeLegs } from '../../src/view/wires'
-import { worldBindAnchor, carryOver } from '../../src/view/engine'
+import { worldBindAnchor } from '../../src/view/engine'
 
 const p = (s: string) => parseTerm(s)
 
@@ -169,16 +169,6 @@ describe('boundary slot-shift: exits are chosen to minimize total port→slot ch
     expect(chosen, 'chosen beats the arbitrary top-centre phase').toBeLessThan(totalChord(steps, frame, 0))
   })
 
-  it('the shift is carried across a rewrite (slots never reorder mid-proof)', () => {
-    const a = mkEngine(plusComm.lhs.diagram, plusComm.lhs.boundary)
-    a.frame = { center: { x: 0, y: 0 }, half: 50 }
-    a.slotShift = 2
-    const b = mkEngine(plusComm.rhs.diagram, plusComm.rhs.boundary)
-    carryOver(a, b)
-    // the extended slot-order law: carryOver propagates the proof-wide shift, so the
-    // slot assignment is a proof-wide constant — slots never reorder step to step
-    expect(b.slotShift, 'carryOver carries the proof-wide slot-shift').toBe(2)
-  })
 })
 
 describe('plusComm acid test: the crossing is visible in the boundary-order wiring', () => {
@@ -190,29 +180,6 @@ describe('plusComm acid test: the crossing is visible in the boundary-order wiri
   // is now visible: the slot->plus-arg correspondence differs between the sides.
   const thy = buildFregeTheory()
   const plusComm = thy.theorems.find((t) => t.name === 'plusComm')!
-
-  /** For each boundary slot, the plus-node argument index its wire connects to. */
-  const slotToPlusArg = (side: { diagram: typeof plusComm.lhs.diagram; boundary: readonly string[] }): number[] => {
-    const plusId = Object.entries(side.diagram.nodes)
-      .find(([, n]) => n.kind === 'ref' && n.defId === 'plus')![0]
-    return side.boundary.map((wid) => {
-      const ep = side.diagram.wires[wid]!.endpoints.find((e) => e.node === plusId)!
-      if (ep.port.kind !== 'arg') throw new Error('expected an arg port on the plus disc')
-      return ep.port.index
-    })
-  }
-
-  it('lhs and rhs put their fixed slots into different plus ports (slots 0 and 1 cross)', () => {
-    const lhsMap = slotToPlusArg(plusComm.lhs)
-    const rhsMap = slotToPlusArg(plusComm.rhs)
-    expect(plusComm.lhs.boundary.length).toBe(plusComm.rhs.boundary.length)
-    // lhs: slot0->arg0, slot1->arg1, slot2->arg2 (uncrossed)
-    expect(lhsMap).toEqual([0, 1, 2])
-    // rhs: slot0->arg1, slot1->arg0, slot2->arg2 (a and b commuted)
-    expect(rhsMap).toEqual([1, 0, 2])
-    // the drawings genuinely differ — the crossing is not hidden
-    expect(rhsMap).not.toEqual(lhsMap)
-  })
 
   it('both sides draw their exits at the SAME canonical slots, so only the wiring differs', () => {
     const pos = (dwb: typeof plusComm.lhs) => {
