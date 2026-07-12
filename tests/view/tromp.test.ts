@@ -75,4 +75,24 @@ describe('trompGrid', () => {
       byRow.set(b.row, list)
     }
   })
+
+  it('retains one interaction occurrence for every exact syntactic path', () => {
+    const g = trompGrid(p('a ((\\x. x) b)'))
+    expect(g.occurrences.map((occurrence) => occurrence.path)).toEqual([
+      [],
+      ['fn'],
+      ['arg'],
+      ['arg', 'fn'],
+      ['arg', 'fn', 'body'],
+      ['arg', 'arg'],
+    ])
+  })
+
+  it('keeps repeated equal subterms distinct by occurrence path', () => {
+    const g = trompGrid(p('(\\x. x) (\\x. x)'))
+    expect(g.occurrences.map((occurrence) => occurrence.path)).toContainEqual(['fn'])
+    expect(g.occurrences.map((occurrence) => occurrence.path)).toContainEqual(['arg'])
+    expect(g.occurrences.find((occurrence) => occurrence.path.join('/') === 'fn')?.depth).toBe(1)
+    expect(g.occurrences.find((occurrence) => occurrence.path.join('/') === 'arg')?.depth).toBe(1)
+  })
 })

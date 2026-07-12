@@ -130,6 +130,7 @@ export function mkGeomMorph(from: NodeGeometry, to: NodeGeometry): (p: number) =
       portAnchors,
       exitLine,
       exitArc,
+      occurrences: [],
     }
   }
 }
@@ -341,6 +342,7 @@ export function mkGridMorph(gF: TrompGrid, gT: TrompGrid): (p: number) => NodeGe
       portAnchors,
       exitArc: { r: exitR, a0, a1: theta(outputCol) },
       exitLine: [polar(a0, exitR), outputAnchor],
+      occurrences: [],
     }
   }
 }
