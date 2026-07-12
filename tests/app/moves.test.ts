@@ -5,6 +5,7 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
+import { computeLegs, recomputeRegions } from '../../src/view/index'
 import { LIGHT } from '../../src/view/paint'
 import {
   contextualDeleteStep,
@@ -12,8 +13,10 @@ import {
   foldedComprehension,
   instantiationChoices,
   iterationTargets,
+  proofConnectionStep,
   ProofMoveController,
 } from '../../src/app/interact/moves'
+import type { ConnectionEnd } from '../../src/app/interact/connection'
 import type { Hit } from '../../src/app/hittest'
 import type { KeySample, PointerSample } from '../../src/app/interact/viewport'
 
@@ -65,6 +68,7 @@ function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' =
     active: () => true,
     diagram: () => diagram,
     engine: () => mkEngine(diagram, []),
+    viewScale: () => 1,
     selection: () => selection,
     setSelection: (next) => { selection = [...next] },
     context: () => proof,
@@ -164,6 +168,123 @@ describe('proof move parameters', () => {
       { kind: 'arg', index: 0 },
       { kind: 'arg', index: 1 },
     ])
+  })
+})
+
+const outputEnd = (wire: string, node: string): ConnectionEnd => ({
+  wire,
+  endpoint: { node, port: { kind: 'output' } },
+})
+
+describe('proof connection resolution', () => {
+  it('head-strips exactly the two output legs dragged on a three-output equality wire', () => {
+    const b = new DiagramBuilder()
+    const a = b.termNode(b.root, p('\\x. x y z'))
+    const ignored = b.termNode(b.root, p('\\x. x q r'))
+    const c = b.termNode(b.root, p('\\x. x m n'))
+    const wire = b.wire(b.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: ignored, port: { kind: 'output' } },
+      { node: c, port: { kind: 'output' } },
+    ])
+
+    expect(proofConnectionStep(b.build(), outputEnd(wire, a), outputEnd(wire, c), 'forward', 64))
+      .toEqual({ rule: 'headStrip', a, b: c })
+  })
+
+  it('does not guess a head-strip pair from a same-wire trunk', () => {
+    const b = new DiagramBuilder()
+    const a = b.termNode(b.root, p('\\x. x y'))
+    const c = b.termNode(b.root, p('\\x. x z'))
+    const wire = b.wire(b.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: c, port: { kind: 'output' } },
+    ])
+
+    expect(() => proofConnectionStep(b.build(), { wire, endpoint: null }, outputEnd(wire, c), 'forward', 64))
+      .toThrow(/another term's output strand/)
+  })
+
+  it('uses wireJoin for a legal different-wire proof connection', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const a = b.termNode(cut, p('x'))
+    const c = b.termNode(cut, p('y'))
+    const d = b.build()
+    const wa = Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((ep) => ep.node === a && ep.port.kind === 'output'))![0]
+    const wc = Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((ep) => ep.node === c && ep.port.kind === 'output'))![0]
+
+    expect(proofConnectionStep(d, outputEnd(wa, a), outputEnd(wc, c), 'forward', 64))
+      .toEqual({ rule: 'wireJoin', a: wa, b: wc })
+  })
+
+  it('uses congruenceJoin when equal output producers justify a polarity-blind connection', () => {
+    const b = new DiagramBuilder()
+    const a = b.termNode(b.root, p('\\x. x'))
+    const c = b.termNode(b.root, p('(\\z. z) (\\x. x)'))
+    const d = b.build()
+    const wa = Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((ep) => ep.node === a && ep.port.kind === 'output'))![0]
+    const wc = Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((ep) => ep.node === c && ep.port.kind === 'output'))![0]
+    const step = proofConnectionStep(d, outputEnd(wa, a), outputEnd(wc, c), 'forward', 64)
+
+    expect(step.rule).toBe('congruenceJoin')
+    expect(step).toMatchObject({ a, b: c })
+  })
+
+  it('uses anchored contraction for equal closed witnesses in different regions', () => {
+    const b = new DiagramBuilder()
+    const bubble = b.bubble(b.root, 0)
+    const redundant = b.termNode(b.root, p('\\x. x'))
+    const survivor = b.termNode(bubble, p('\\x. x'))
+    const d = b.build()
+    const drop = Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((ep) => ep.node === redundant && ep.port.kind === 'output'))![0]
+    const keep = Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((ep) => ep.node === survivor && ep.port.kind === 'output'))![0]
+    const step = proofConnectionStep(d, outputEnd(drop, redundant), outputEnd(keep, survivor), 'forward', 64)
+
+    expect(step.rule).toBe('anchoredWireContract')
+    expect(step).toMatchObject({ redundant, survivor })
+  })
+
+  it('authors headStrip by dragging between two output legs on the same wire', () => {
+    const b = new DiagramBuilder()
+    const a = b.termNode(b.root, p('\\x. x y'))
+    const c = b.termNode(b.root, p('\\x. x z'))
+    const wire = b.wire(b.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: c, port: { kind: 'output' } },
+    ])
+    let diagram = b.build()
+    const engine = mkEngine(diagram, [])
+    engine.bodies.get(a)!.pos = { x: -40, y: 0 }
+    engine.bodies.get(c)!.pos = { x: 40, y: 0 }
+    recomputeRegions(engine)
+    const geometry = computeLegs(engine).find(({ leg }) => leg.wid === wire)!
+    const pointFor = (node: string) => geometry.leg.from.body === node ? geometry.pts[0]! : geometry.pts.at(-1)!
+    const applied: ProofStep[] = []
+    const controller = new ProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => engine,
+      viewScale: () => 1,
+      selection: () => [],
+      setSelection: () => {},
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      orientation: () => 'forward',
+      apply: (step) => { applied.push(step); diagram = applyStep(diagram, step, { theorems: new Map(), relations: new Map() }) },
+      refuse: (text) => { throw new Error(text) },
+      theme: () => LIGHT,
+      fuel: () => 64,
+      openComprehension: () => {},
+    })
+    const from = { ...pointer({ kind: 'wire', id: wire }), world: pointFor(a), client: pointFor(a), screen: pointFor(a) }
+    const to = { ...pointer({ kind: 'wire', id: wire }), world: pointFor(c), client: pointFor(c), screen: pointFor(c) }
+    const claim = controller.claim(from)
+
+    expect(claim).not.toBeNull()
+    claim!.move(to)
+    claim!.release(to, true)
+    expect(applied).toEqual([{ rule: 'headStrip', a, b: c }])
   })
 })
 

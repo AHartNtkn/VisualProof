@@ -113,6 +113,7 @@ export class ProofFrontViewport {
       active: () => this.#editor === null && frontInputAllowed(model.focused(), this.motion.playing, model.workspaceInputAllowed()),
       diagram: model.diagram,
       engine: () => this.#engine,
+      viewScale: () => this.view.scale,
       selection: () => this.interaction.selection,
       setSelection: (selection) => this.interaction.setSelection(selection),
       context: model.context,

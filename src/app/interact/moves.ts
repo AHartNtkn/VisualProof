@@ -3,9 +3,11 @@ import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/dia
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import { isAncestorOrEqual } from '../../kernel/diagram/regions'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
-import type { ProofContext, ProofStep } from '../../kernel/proof/step'
+import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof/step'
+import { convertible } from '../../kernel/term/convert'
 import { parseTerm } from '../../kernel/term/parse'
 import { applyConversion } from '../../kernel/rules/conversion'
+import { termNodeAt } from '../../kernel/rules/access'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
@@ -15,6 +17,7 @@ import { absorbHits, orphanedWires } from '../edit'
 import { buildSelection, type Hit } from '../hittest'
 import { convertToHeadNormal, convertToWeakHeadNormal } from '../tactics'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
+import { ConnectionDragController, type ConnectionEnd } from './connection'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 export type ProofOrientation = 'forward' | 'backward'
@@ -103,11 +106,69 @@ export function foldedComprehension(ctx: ProofContext, name: string): DiagramWit
   return mkDiagramWithBoundary(builder.build(), boundary)
 }
 
+const connectionContext: ProofContext = { theorems: new Map(), relations: new Map() }
+
+function outputNodes(d: Diagram, wire: WireId): NodeId[] {
+  return d.wires[wire]!.endpoints
+    .filter((endpoint) => endpoint.port.kind === 'output' && d.nodes[endpoint.node]?.kind === 'term')
+    .map((endpoint) => endpoint.node)
+}
+
+/** Resolve the one graphical connection gesture to a replayable proof record.
+    Candidate choice is deterministic but intentionally invisible: every
+    accepted different-wire candidate has the same visible merged-wire result. */
+export function proofConnectionStep(
+  d: Diagram,
+  source: ConnectionEnd,
+  target: ConnectionEnd,
+  orientation: ProofOrientation,
+  fuel: number,
+): ProofStep {
+  if (source.wire === target.wire) {
+    const a = source.endpoint
+    const b = target.endpoint
+    if (a === null || b === null || a.port.kind !== 'output' || b.port.kind !== 'output'
+      || a.node === b.node || d.nodes[a.node]?.kind !== 'term' || d.nodes[b.node]?.kind !== 'term') {
+      throw new Error("release on another term's output strand to compare arguments")
+    }
+    const step: ProofStep = { rule: 'headStrip', a: a.node, b: b.node }
+    applyStep(d, step, connectionContext, orientation)
+    return step
+  }
+
+  const candidates: ProofStep[] = [{ rule: 'wireJoin', a: source.wire, b: target.wire }]
+  const left = outputNodes(d, source.wire)
+  const right = outputNodes(d, target.wire)
+  const convertiblePairs: Array<{ readonly a: NodeId; readonly b: NodeId; readonly certificate: ReturnType<typeof convertible> & { status: 'convertible' } }> = []
+  for (const a of left) {
+    for (const b of right) {
+      const result = convertible(termNodeAt(d, a).term, termNodeAt(d, b).term, fuel)
+      if (result.status !== 'convertible') continue
+      convertiblePairs.push({ a, b, certificate: result })
+      candidates.push({ rule: 'congruenceJoin', a, b, certificate: result.certificate })
+    }
+  }
+  for (const pair of convertiblePairs) {
+    candidates.push({ rule: 'anchoredWireContract', redundant: pair.a, survivor: pair.b, certificate: pair.certificate.certificate })
+    candidates.push({ rule: 'anchoredWireContract', redundant: pair.b, survivor: pair.a, certificate: pair.certificate.certificate })
+  }
+  for (const candidate of candidates) {
+    try {
+      applyStep(d, candidate, connectionContext, orientation)
+      return candidate
+    } catch {
+      // Another proof justification may license the same visible connection.
+    }
+  }
+  throw new Error(`no valid proof connection joins lines '${source.wire}' and '${target.wire}'`)
+}
+
 export type ProofMoveControllerOptions = {
   readonly host: HTMLElement
   readonly active: () => boolean
   readonly diagram: () => Diagram
   readonly engine: () => Engine
+  readonly viewScale: () => number
   readonly selection: () => readonly Hit[]
   readonly setSelection: (hits: readonly Hit[]) => void
   readonly context: () => ProofContext
@@ -145,6 +206,7 @@ function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
 export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
+  readonly #connection: ConnectionDragController
   #menu: HTMLDivElement | null = null
   #prompt: HTMLDivElement | null = null
   #drag: IterationDrag | null = null
@@ -155,6 +217,26 @@ export class ProofMoveController {
     this.#options = options
     this.#document = options.host.ownerDocument
     this.#lastPointer = { x: 0, y: 0 }
+    this.#connection = new ConnectionDragController({
+      active: options.active,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: (source, target, pointer) => {
+        this.#lastPointer = pointer
+        try {
+          this.#commit(proofConnectionStep(
+            this.#options.diagram(), source, target,
+            this.#options.orientation(), this.#options.fuel(),
+          ))
+          return true
+        } catch (error) {
+          this.#options.refuse(error instanceof Error ? error.message : String(error), pointer)
+          return false
+        }
+      },
+      refuse: options.refuse,
+    })
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -172,6 +254,8 @@ export class ProofMoveController {
     }
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
+    const connection = this.#connection.claim(sample)
+    if (connection !== null) return connection
     if (sample.hit?.kind !== 'node' || !this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) return null
     const discovery = discoverProofActions(
       this.#options.diagram(),
@@ -295,7 +379,7 @@ export class ProofMoveController {
   }
 
   overlay(): readonly Shape[] {
-    const out: Shape[] = []
+    const out: Shape[] = [...this.#connection.overlay()]
     const drag = this.#drag
     if (drag !== null && drag.moved) {
       const color = this.#options.theme().interaction.valid
@@ -325,6 +409,7 @@ export class ProofMoveController {
     this.#closePrompt()
     this.#drag = null
     this.#cycle = null
+    this.#connection.cancel()
   }
 
   dispose(): void { this.cancel() }

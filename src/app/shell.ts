@@ -1477,6 +1477,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     active: () => mode === 'prove' && proof?.kind === 'track' && !mainMotion.playing && comprehensionEditor === null,
     diagram: currentDiagram,
     engine: () => engine,
+    viewScale: () => view.scale,
     selection: () => interaction.selection,
     setSelection: (selection) => interaction.setSelection(selection),
     context: () => ctx,
