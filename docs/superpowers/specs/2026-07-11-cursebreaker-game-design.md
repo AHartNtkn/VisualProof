@@ -75,14 +75,36 @@ The game presents one orderly working curator's desk with slight physical asymme
 
 A teacher provides brief dialogue at authored instructional or story beats, then gets out of the way. Instruction explains an affordance or visible constraint, never a complete move sequence.
 
-Invalid actions appear as concise first-person thoughts near the attempted pointer location. Thought bubbles use a subtle red treatment and a non-color cue. Examples of the intended voice include:
+Invalid actions appear as concise first-person thoughts near the attempted
+pointer location. They belong exclusively to interaction refusal: the attempted
+move changes nothing, the kernel refusal remains authoritative, and the
+presentation layer translates that concrete refusal into character voice.
+Thought bubbles use a subtle red treatment and a non-color cue. Examples of the
+intended voice include:
 
 - “That mark is held from this side of the veil.”
 - “There’s no older twin supporting this copy.”
 - “That mark belongs to a different seal.”
 - “Those mechanisms don’t turn into the same shape.”
 
-Kernel refusals remain authoritative. The presentation layer translates them into diegetic copy without swallowing, weakening, or converting the failed action into a fallback.
+Content does not author these thoughts or classify them as misconceptions.
+
+Teacher interventions are a separate pedagogical channel. They may respond to
+an opening, completion, sustained lack of progress, or a valid committed move
+that reaches an explicitly recognized proof state. A recognized-state beat
+stores the exact closed diagram state that triggers it, teacher dialogue, and
+optional recovery guidance. It also carries a legal demonstration trace from
+the artifact's goal to that state, allowing catalog validation to prove the trap
+is reachable rather than trusting descriptive metadata. Canonical diagram
+comparison makes the runtime trigger independent of incidental identities or
+layout. It fires once unless explicitly authored otherwise. A legal move into a
+known dead end therefore receives no red thought, but may initiate teacher
+dialogue. For example, if an early valid deletion leaves a hopeless empty cut,
+the teacher may identify the common trap and point to the timeline lever.
+
+Repeated invalid attempts may contribute to a later general offer of help, but
+the individual refusal thoughts do not themselves become teacher or content
+events.
 
 ### 5.3 Construction loupe
 
@@ -121,8 +143,8 @@ One immutable bundled catalog is the only source of game content. Every artifact
 - mechanics introduced, practiced, retrieved, and assessed;
 - required vellum dependencies;
 - diegetic title and artifact description;
-- teacher beats and optional escalating hints;
-- misconception-specific feedback categories.
+- teacher interventions and optional escalating hints, including exact
+  recognized-state triggers where appropriate.
 
 A build-time verifier rejects:
 
@@ -132,6 +154,7 @@ A build-time verifier rejects:
 - unavailable or circular vellum dependencies;
 - duplicate identities or unstable fingerprints;
 - claimed mechanics absent from the verified trace;
+- invalid, open, or unreachable recognized-state teacher triggers;
 - references to proof-assistant-only content or actions.
 
 Progress derives unlocked artifacts and available vellums solely from the catalog plus completed puzzle identities. The versioned local save contains progress, settings, and the active puzzle timeline. It contains no external theory, arbitrary authored diagram, filesystem authority, or imported proof object.
@@ -154,7 +177,10 @@ Every retained performance requires:
 
 After initial proficiency, ordinary content should target approximately 50–60% current-culture skills, 25–35% recent skills, and 10–20% distant retrieval. Culture advancement depends on transfer artifacts rather than raw puzzle count, completion speed, or move count.
 
-Repeated categorized errors may offer one concise teacher observation and unlock an optional contrast/remediation artifact. Returning from remediation preserves the original puzzle timeline.
+Recognized dead ends or sustained lack of progress may offer one concise teacher
+observation and unlock an optional contrast or remediation artifact. Returning
+from remediation preserves the original puzzle timeline. Invalid actions retain
+their immediate local thoughts and never masquerade as proof-state diagnoses.
 
 Every candidate mechanic family must pass a representative feasibility spike before exact artifact counts are committed:
 
