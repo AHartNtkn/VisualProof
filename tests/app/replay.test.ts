@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { mkReplay } from '../../src/app/replay'
-import { replayProof } from '../../src/kernel/proof/step'
+import { replayActions } from '../../src/kernel/proof/action'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { bootFixture } from './boot-fixture'
@@ -16,10 +16,15 @@ const thm = (name: string): Theorem => {
 const plusComm = thm('plusComm')
 
 describe('mkReplay', () => {
-  it('stepCount is the theorem step count', () => {
+  it('scrubs by action while exposing the active action constituent steps', () => {
     const r = mkReplay(plusComm, ctx)
-    expect(r.stepCount).toBe(plusComm.steps.length)
-    expect(r.stepCount).toBeGreaterThan(0)
+    expect(r.actionCount).toBe(plusComm.actions.length)
+    expect(r.stepsAt(1)).toBe(plusComm.actions[0]!.steps)
+  })
+  it('actionCount is the theorem action count', () => {
+    const r = mkReplay(plusComm, ctx)
+    expect(r.actionCount).toBe(plusComm.actions.length)
+    expect(r.actionCount).toBeGreaterThan(0)
   })
 
   it('step 0 is the left-hand side; the boundary is the lhs boundary', () => {
@@ -30,22 +35,22 @@ describe('mkReplay', () => {
 
   it('the last step matches an independently replayed result', () => {
     const r = mkReplay(plusComm, ctx)
-    const independent = replayProof(plusComm.lhs.diagram, plusComm.steps, ctx)
-    expect(exploreForm(r.diagramAt(r.stepCount))).toBe(exploreForm(independent))
+    const independent = replayActions(plusComm.lhs.diagram, plusComm.actions, ctx)
+    expect(exploreForm(r.diagramAt(r.actionCount))).toBe(exploreForm(independent))
   })
 
   it('labels are the rule names, 1-based, with the empty string at 0', () => {
     const r = mkReplay(plusComm, ctx)
     expect(r.labelAt(0)).toBe('')
-    for (let k = 1; k <= r.stepCount; k++) {
-      expect(r.labelAt(k)).toBe(plusComm.steps[k - 1]!.rule)
+    for (let k = 1; k <= r.actionCount; k++) {
+      expect(r.labelAt(k)).toBe(plusComm.actions[k - 1]!.label)
     }
   })
 
   it('every intermediate matches a fresh prefix replay (correct diagram at each k)', () => {
     const r = mkReplay(plusComm, ctx)
-    for (let k = 0; k <= r.stepCount; k++) {
-      const fresh = replayProof(plusComm.lhs.diagram, plusComm.steps.slice(0, k), ctx)
+    for (let k = 0; k <= r.actionCount; k++) {
+      const fresh = replayActions(plusComm.lhs.diagram, plusComm.actions.slice(0, k), ctx)
       expect(exploreForm(r.diagramAt(k)), `step ${k}`).toBe(exploreForm(fresh))
     }
   })
@@ -67,9 +72,9 @@ describe('mkReplay', () => {
   it('rejects out-of-range steps loudly', () => {
     const r = mkReplay(plusComm, ctx)
     expect(() => r.diagramAt(-1)).toThrow(/out of range/)
-    expect(() => r.diagramAt(r.stepCount + 1)).toThrow(/out of range/)
+    expect(() => r.diagramAt(r.actionCount + 1)).toThrow(/out of range/)
     expect(() => r.diagramAt(1.5)).toThrow(/out of range/)
     expect(() => r.labelAt(-1)).toThrow(/out of range/)
-    expect(() => r.labelAt(r.stepCount + 1)).toThrow(/out of range/)
+    expect(() => r.labelAt(r.actionCount + 1)).toThrow(/out of range/)
   })
 })

@@ -10,6 +10,7 @@ import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { ProofStep } from './step'
+import type { PlacementHint, ProofAction } from './action'
 import type { Theorem, TheoremApplication } from './theorem'
 
 function fail(msg: string): never {
@@ -305,27 +306,70 @@ export function stepFromJson(j: unknown): ProofStep {
   }
 }
 
+function placementToJson(placement: PlacementHint): unknown {
+  return { introducedNode: placement.introducedNode, x: placement.x, y: placement.y }
+}
+
+function finiteNumber(v: unknown, what: string): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) fail(`${what} must be a finite number`)
+  return v
+}
+
+function placementFromJson(j: unknown, what: string): PlacementHint {
+  if (!isRecord(j)) fail(`${what} must be an object`)
+  assertOnlyKeys(j, ['introducedNode', 'x', 'y'], what)
+  const introducedNode = finiteNumber(j.introducedNode, `${what}.introducedNode`)
+  if (!Number.isInteger(introducedNode) || introducedNode < 0) {
+    fail(`${what}.introducedNode must be a non-negative integer`)
+  }
+  return {
+    introducedNode,
+    x: finiteNumber(j.x, `${what}.x`),
+    y: finiteNumber(j.y, `${what}.y`),
+  }
+}
+
+export function actionToJson(action: ProofAction): unknown {
+  return {
+    label: action.label,
+    steps: action.steps.map(stepToJson),
+    placements: action.placements.map(placementToJson),
+  }
+}
+
+export function actionFromJson(j: unknown, what = 'action'): ProofAction {
+  if (!isRecord(j)) fail(`${what} must be an object`)
+  assertOnlyKeys(j, ['label', 'steps', 'placements'], what)
+  if (!Array.isArray(j.steps)) fail(`${what}.steps must be an array`)
+  if (!Array.isArray(j.placements)) fail(`${what}.placements must be an array`)
+  return {
+    label: str(j.label, `${what}.label`),
+    steps: j.steps.map(stepFromJson),
+    placements: j.placements.map((placement, index) => placementFromJson(placement, `${what}.placements[${index}]`)),
+  }
+}
+
 export function theoremToJson(t: Theorem): unknown {
-  const backSteps = t.backSteps ?? []
+  const backActions = t.backActions ?? []
   return {
     name: t.name, lhs: dwbToJson(t.lhs), rhs: dwbToJson(t.rhs),
-    steps: t.steps.map(stepToJson),
-    // dual-replay form: backward-oriented steps, replayed from the rhs.
-    // Omitted when empty so classic all-forward files stay byte-identical.
-    ...(backSteps.length > 0 ? { backSteps: backSteps.map(stepToJson) } : {}),
+    actions: t.actions.map(actionToJson),
+    ...(backActions.length > 0 ? { backActions: backActions.map(actionToJson) } : {}),
   }
 }
 
 export function theoremFromJson(j: unknown): Theorem {
   if (!isRecord(j)) fail('theorem must be an object')
-  assertOnlyKeys(j, ['name', 'lhs', 'rhs', 'steps', 'backSteps'], 'theorem')
-  if (!Array.isArray(j.steps)) fail('theorem.steps must be an array')
-  if (j.backSteps !== undefined && !Array.isArray(j.backSteps)) fail('theorem.backSteps must be an array')
+  assertOnlyKeys(j, ['name', 'lhs', 'rhs', 'actions', 'backActions'], 'theorem')
+  if (!Array.isArray(j.actions)) fail('theorem.actions must be an array')
+  if (j.backActions !== undefined && !Array.isArray(j.backActions)) fail('theorem.backActions must be an array')
   return {
     name: str(j.name, 'theorem.name'),
     lhs: dwbFromJson(j.lhs, 'theorem.lhs'),
     rhs: dwbFromJson(j.rhs, 'theorem.rhs'),
-    steps: j.steps.map((s) => stepFromJson(s)),
-    ...(Array.isArray(j.backSteps) && j.backSteps.length > 0 ? { backSteps: j.backSteps.map((s) => stepFromJson(s)) } : {}),
+    actions: j.actions.map((action, index) => actionFromJson(action, `theorem.actions[${index}]`)),
+    ...(Array.isArray(j.backActions) && j.backActions.length > 0
+      ? { backActions: j.backActions.map((action, index) => actionFromJson(action, `theorem.backActions[${index}]`)) }
+      : {}),
   }
 }

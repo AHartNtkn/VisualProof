@@ -7,13 +7,18 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { emptyDiagram, addCut } from '../../src/app/edit'
 import { spawnTermNode } from '../../src/kernel/diagram/spawn'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { startSession, applyForward, applyBackward, currentSide, meet, assembleTheorem, timelineActiveSteps } from '../../src/app/session'
+import { startSession, applyForward as applyForwardAction, applyBackward as applyBackwardAction, currentSide, meet, assembleTheorem, timelineActiveActions, type ProofSession } from '../../src/app/session'
+import type { ProofStep } from '../../src/kernel/proof/step'
+import { singleStepAction } from '../../src/kernel/proof/action'
 import { bootFixture } from './boot-fixture'
 import { adoptTheorem } from '../../src/app/session'
 import { sessionTheory } from '../../src/app/persist'
 import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
 
 const p = (s: string) => parseTerm(s)
+const gesture = (step: ProofStep) => singleStepAction(step.rule, step)
+const applyForward = (session: ProofSession, step: ProofStep) => applyForwardAction(session, gesture(step))
+const applyBackward = (session: ProofSession, step: ProofStep) => applyBackwardAction(session, gesture(step))
 
 describe('edit → prove → assemble, end to end', () => {
   it('a user-constructed goal is proven bidirectionally and checks', () => {
@@ -52,7 +57,7 @@ describe('edit → prove → assemble, end to end', () => {
       at: { sel: mkSelection(currentSide(s, 'forward'), { region: currentSide(s, 'forward').root, regions: [], nodes: [node], wires: [] }), args: [wo, wf] },
     })
     const rhs = mkDiagramWithBoundary(currentSide(s, 'forward'), [wo, wf])
-    const thm = { name: 'viaSession', lhs, rhs, steps: [...timelineActiveSteps(s.forward)] }
+    const thm = { name: 'viaSession', lhs, rhs, actions: [...timelineActiveActions(s.forward)] }
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
 })
@@ -71,7 +76,7 @@ describe('the full story: prove, adopt, save, reload, cite', () => {
     })
     const rhs = mkDiagramWithBoundary(currentSide(s, 'forward'), [])
     // test-level state surgery to make a met session without re-running
-    s = { ...s, rhs, backward: { states: [rhs.diagram], transitions: [], cursor: 0 } }
+    s = { ...s, rhs, backward: { states: [rhs.diagram], actions: [], cursor: 0 } }
     const thm = assembleTheorem(s, 'wrapId')
     const s2 = adoptTheorem(s, thm)
     // save, reload, verify, cite

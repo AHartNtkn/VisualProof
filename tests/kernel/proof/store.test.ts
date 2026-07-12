@@ -7,6 +7,7 @@ import type { Theorem } from '../../../src/kernel/proof/theorem'
 import type { Theory } from '../../../src/kernel/proof/store'
 import { verifyTheory, theoryToJson, loadTheory } from '../../../src/kernel/proof/store'
 import { ProofError } from '../../../src/kernel/proof/error'
+import { singleStepAction } from '../../../src/kernel/proof/action'
 
 const p = (s: string) => parseTerm(s)
 
@@ -25,7 +26,7 @@ function dropQ(): Theorem {
   const rhs = mkDiagramWithBoundary(r.build(), [rb])
   return {
     name: 'dropQ', lhs, rhs,
-    steps: [{ rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } }],
+    actions: [singleStepAction('drop Q', { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } })],
   }
 }
 
@@ -34,6 +35,24 @@ function isIdentity() {
   const n = b.termNode(b.root, p('\\x. x'))
   const w = b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
   return mkDiagramWithBoundary(b.build(), [w])
+}
+
+function groupedNoop(): Theorem {
+  const b = new DiagramBuilder()
+  const side = mkDiagramWithBoundary(b.build(), [])
+  return {
+    name: 'groupedNoop',
+    lhs: side,
+    rhs: side,
+    actions: [{
+      label: 'introduce and eliminate a double cut',
+      steps: [
+        { rule: 'doubleCutIntro', sel: { region: side.diagram.root, regions: [], nodes: [], wires: [] } },
+        { rule: 'doubleCutElim', region: 'dc' },
+      ],
+      placements: [],
+    }],
+  }
 }
 
 describe('verifyTheory', () => {
@@ -50,7 +69,7 @@ describe('verifyTheory', () => {
     const t = dropQ()
     expect(() => verifyTheory({ relations: {}, theorems: [t, t] }))
       .toThrowError(/duplicate theorem name 'dropQ'/)
-    const broken: Theorem = { ...t, steps: [] }
+    const broken: Theorem = { ...t, actions: [] }
     let caught: unknown
     try { verifyTheory({ relations: {}, theorems: [broken] }) } catch (e) { caught = e }
     expect(caught).toBeInstanceOf(ProofError)
@@ -73,11 +92,11 @@ describe('verifyTheory', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     const derived: Theorem = {
       name: 'viaDropQ', lhs, rhs,
-      steps: [{
+      actions: [singleStepAction('cite drop Q', {
         rule: 'theorem', name: 'dropQ',
         at: { sel: { region: lhs.diagram.root, regions: [], nodes: [lp, lq], wires: [] }, args: [lb] },
         direction: 'forward',
-      }],
+      })],
     }
     expect(() => verifyTheory({ relations: {}, theorems: [base, derived] })).not.toThrow()
     expect(() => verifyTheory({ relations: {}, theorems: [derived, base] }))
@@ -100,7 +119,7 @@ describe('verifyTheory — relation references', () => {
     const node = b.ref(b.root, defId, arity)
     const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
     const side = mkDiagramWithBoundary(b.build(), [w])
-    return { name: 'refThm', lhs: side, rhs: side, steps: [] }
+    return { name: 'refThm', lhs: side, rhs: side, actions: [] }
   }
 
   it('verifies a theory whose theorem references a declared relation, exposing it in ctx', () => {
@@ -164,11 +183,11 @@ describe('check-before-register invariant', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     const selfCite: Theorem = {
       name: 'selfCite', lhs, rhs,
-      steps: [{
+      actions: [singleStepAction('self cite', {
         rule: 'theorem', name: 'selfCite',
         at: { sel: { region: lhs.diagram.root, regions: [], nodes: [lp, lq], wires: [] }, args: [lb] },
         direction: 'forward',
-      }],
+      })],
     }
     expect(() => verifyTheory({ relations: {}, theorems: [selfCite] }))
       .toThrowError(/unknown theorem 'selfCite'/)
@@ -179,11 +198,12 @@ describe('theory files', () => {
   it('round-trips through JSON with verification on load', () => {
     const theory: Theory = {
       relations: { isIdentity: isIdentity() },
-      theorems: [dropQ()],
+      theorems: [dropQ(), groupedNoop()],
     }
     const text = JSON.stringify(theoryToJson(theory))
     const { theory: back, ctx } = loadTheory(JSON.parse(text))
     expect(ctx.theorems.has('dropQ')).toBe(true)
+    expect(back.theorems[1]!.actions).toEqual(theory.theorems[1]!.actions)
     expect(JSON.stringify(theoryToJson(back))).toBe(text)
   })
 

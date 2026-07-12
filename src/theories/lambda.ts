@@ -2,7 +2,8 @@ import { app, lam, bvar, port, termEq, type Term } from '../kernel/term/term'
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { applyConversion } from '../kernel/rules/conversion'
-import { replayProof, type ProofContext, type ProofStep } from '../kernel/proof/step'
+import { type ProofContext, type ProofStep } from '../kernel/proof/step'
+import { replayActions, singleStepAction } from '../kernel/proof/action'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { Theory } from '../kernel/proof/store'
 import type { Diagram } from '../kernel/diagram/diagram'
@@ -30,7 +31,8 @@ function deriveOnePlusOne(): Theorem {
     { rule: 'closedTermIntro', region: lhsDiagram.root, term: poo },
     { rule: 'closedTermIntro', region: lhsDiagram.root, term: TWOp },
   ]
-  let cur = replayProof(lhsDiagram, steps, ctx)
+  const actions = steps.map((step, index) => singleStepAction(`one plus one ${index + 1}`, step))
+  let cur = replayActions(lhsDiagram, actions, ctx)
   const nodeWith = (t: Term): string => {
     const found = Object.entries(cur.nodes).find(([, nd]) => nd.kind === 'term' && termEq(nd.term, t))
     if (found === undefined) throw new Error('onePlusOne derivation: intro node not found')
@@ -44,8 +46,10 @@ function deriveOnePlusOne(): Theorem {
   const conv = applyConversion(scratch.build(), sn, TWOp, 4096)
   const join: ProofStep = { rule: 'congruenceJoin', a, b, certificate: conv.certificate }
   steps.push(join)
-  cur = replayProof(cur, [join], ctx)
-  return { name: 'onePlusOne', lhs, rhs: mkDiagramWithBoundary(cur, []), steps }
+  const joinAction = singleStepAction('join equal terms', join)
+  actions.push(joinAction)
+  cur = replayActions(cur, [joinAction], ctx)
+  return { name: 'onePlusOne', lhs, rhs: mkDiagramWithBoundary(cur, []), actions }
 }
 
 /**
@@ -71,8 +75,9 @@ function deriveFixedPoint(): Theorem {
     },
     attachments: {},
   }
-  const cur: Diagram = replayProof(lhsDiagram, [step], ctx)
-  return { name: 'fixedPoint', lhs, rhs: mkDiagramWithBoundary(cur, [wo, wf]), steps: [step] }
+  const action = singleStepAction('unfold fixed point', step)
+  const cur: Diagram = replayActions(lhsDiagram, [action], ctx)
+  return { name: 'fixedPoint', lhs, rhs: mkDiagramWithBoundary(cur, [wo, wf]), actions: [action] }
 }
 
 export function buildLambdaTheory(): Theory {

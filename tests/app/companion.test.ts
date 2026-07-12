@@ -21,7 +21,7 @@ describe('replay companion', () => {
     const builder = new DiagramBuilder()
     builder.termNode(builder.root, parseTerm('\\x. x'))
     const statement = mkDiagramWithBoundary(builder.build(), [])
-    const replay = mkReplay({ name: 'identity', lhs: statement, rhs: statement, steps: [] }, verifyTheory(buildFregeTheory()))
+    const replay = mkReplay({ name: 'identity', lhs: statement, rhs: statement, actions: [] }, verifyTheory(buildFregeTheory()))
     const companion = companionFor({ mode: 'replay', replay })
     expect(companion).toEqual({ diagram: statement.diagram, boundary: [], label: 'goal: final state' })
   })

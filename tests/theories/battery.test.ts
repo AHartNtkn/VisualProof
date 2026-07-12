@@ -80,18 +80,18 @@ describe('bundled theories as shipped artifacts', () => {
       for (const s of src.theorems) {
         const loaded = theory.theorems.find((t) => t.name === s.name)
         expect(loaded, `theorem '${s.name}' lost in the JSON round-trip`).toBeDefined()
-        expect(loaded!.steps.length, `theorem '${s.name}' step count changed`).toBe(s.steps.length)
+        expect(loaded!.actions.length, `theorem '${s.name}' action count changed`).toBe(s.actions.length)
       }
     })
 
-    it(`${label}: dropping a recorded proof step makes loadTheory reject the theory`, () => {
-      const json = theoryToJson(build()) as { theorems: { name: string; steps: unknown[] }[] }
+    it(`${label}: dropping a recorded proof action makes loadTheory reject the theory`, () => {
+      const json = theoryToJson(build()) as { theorems: { name: string; actions: unknown[] }[] }
       // corrupt the LAST theorem (the richest derivation of each theory) by
-      // dropping its final step: the recorded proof no longer reaches the rhs.
+      // dropping its final action: the recorded proof no longer reaches the rhs.
       const victim = json.theorems[json.theorems.length - 1]!
       const broken = JSON.parse(JSON.stringify(json)) as typeof json
-      broken.theorems[broken.theorems.length - 1]!.steps.pop()
-      expect(victim.steps.length).toBeGreaterThan(0)
+      broken.theorems[broken.theorems.length - 1]!.actions.pop()
+      expect(victim.actions.length).toBeGreaterThan(0)
       expect(() => loadTheory(broken)).toThrow()
     })
   }

@@ -19,7 +19,7 @@ describe('DerivationCursor', () => {
       sel: mkSelection(c.cur, { region: c.cur.root, regions: [], nodes: [], wires: [] }),
     })
     expect(Object.keys(c.cur.regions)).toHaveLength(Object.keys(d.regions).length + 2)
-    expect(c.steps).toHaveLength(1)
+    expect(c.actions).toHaveLength(1)
   })
 
   it('a failing step throws with the step named and leaves the cursor untouched', () => {
@@ -29,7 +29,7 @@ describe('DerivationCursor', () => {
     expect(() => c.push('bogus unwrap', { rule: 'doubleCutElim', region: d.root })).toThrowError(
       /bogus unwrap/,
     )
-    expect(c.steps).toHaveLength(0)
+    expect(c.actions).toHaveLength(0)
     expect(c.cur).toBe(d)
   })
 })
@@ -52,7 +52,7 @@ describe('intro', () => {
     expect(d.wires[w]).toBeUndefined()
     expect(c.cur.wires[w]!.endpoints).toEqual([{ node: made, port: { kind: 'output' } }])
     // one honest rule application, not expand + fission + restore
-    expect(c.steps).toHaveLength(1)
+    expect(c.actions).toHaveLength(1)
   })
 
   it('introduces inside a cut (negative region) — no polarity gate, no seed needed', () => {
@@ -77,7 +77,7 @@ describe('intro', () => {
     const c = new DerivationCursor(d, ctx)
     expect(() => c.intro('matFree', c.cur.root, p('\\x. q')))
       .toThrowError(/matFree.*closed-term introduction requires a closed term.*'q'/)
-    expect(c.steps).toHaveLength(0)
+    expect(c.actions).toHaveLength(0)
     expect(c.cur).toBe(d)
   })
 })

@@ -14,15 +14,15 @@ function unaryPattern(defId: string) {
 
 function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; second: string; firstWire: string; ctx: ProofContext } {
   const pattern = unaryPattern('p').side
-  const theorem: Theorem = { name: 'pRule', lhs: pattern, rhs: pattern, steps: [] }
+  const theorem: Theorem = { name: 'pRule', lhs: pattern, rhs: pattern, actions: [] }
   const unrelatedSide = unaryPattern('q').side
-  const unrelated: Theorem = { name: 'qRule', lhs: unrelatedSide, rhs: unrelatedSide, steps: [] }
+  const unrelated: Theorem = { name: 'qRule', lhs: unrelatedSide, rhs: unrelatedSide, actions: [] }
   const empty = new DiagramBuilder().build()
   const closed: Theorem = {
     name: 'closed',
     lhs: mkDiagramWithBoundary(empty, []),
     rhs: mkDiagramWithBoundary(empty, []),
-    steps: [],
+    actions: [],
   }
   const h = new DiagramBuilder()
   const first = h.ref(h.root, 'p', 1)

@@ -2,7 +2,8 @@ import type { Term } from '../kernel/term/term'
 import { termEq } from '../kernel/term/term'
 import { applyConversion } from '../kernel/rules/conversion'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import { replayProof, type ProofContext, type ProofStep } from '../kernel/proof/step'
+import { type ProofContext, type ProofStep } from '../kernel/proof/step'
+import { applyAction, singleStepAction, type ProofAction } from '../kernel/proof/action'
 
 /**
  * Interactive conversion fuel for derivation construction. Conversions made
@@ -21,7 +22,7 @@ const CONVERSION_FUEL = 8192
  */
 export class DerivationCursor {
   cur: Diagram
-  readonly steps: ProofStep[] = []
+  readonly actions: ProofAction[] = []
   readonly ctx: ProofContext
 
   constructor(d: Diagram, ctx: ProofContext) {
@@ -33,12 +34,12 @@ export class DerivationCursor {
   push(label: string, s: ProofStep): void {
     let next: Diagram
     try {
-      next = replayProof(this.cur, [s], this.ctx)
+      next = applyAction(this.cur, singleStepAction(label, s), this.ctx)
     } catch (e) {
       throw new Error(`step '${label}' (${s.rule}) failed: ${e instanceof Error ? e.message : String(e)}`)
     }
     this.cur = next
-    this.steps.push(s)
+    this.actions.push(singleStepAction(label, s))
   }
 
   /**

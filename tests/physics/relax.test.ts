@@ -151,7 +151,7 @@ describe('settle — replay steps: content stays anchored, legal, rests, and E i
   // (USER policy): measured 2026-07-06, the slowest plusComm step rests by ~640
   // ticks; settled at 1100 with margin (was 7800 for the non-converging cycles).
   const r = mkReplay(plusCommThm, bootCtx)
-  for (const k of [0, 16, 32, 48, r.stepCount]) {
+  for (const k of [0, 16, 32, 48, r.actionCount]) {
     it(`plusComm step ${k} stays anchored, rests legally, E monotone`, () => {
       const e = mkEngine(r.diagramAt(k), r.boundary)
       settle(e, 1100)
@@ -283,7 +283,7 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   // rendering tiny or overflowing. The seed path (app seedProject): proof-wide
   // frame, then applyContentScale sizes THIS step.
   const r = mkReplay(plusCommThm, bootCtx)
-  const steps = Array.from({ length: r.stepCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundary }))
+  const steps = Array.from({ length: r.actionCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundary }))
   // one fixed proof-wide frame, established once (as enterReplay does)
   const probe = mkEngine(r.diagramAt(0), r.boundary)
   establishProofFrame(probe, steps)
@@ -312,7 +312,7 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   // A SMALL step (few nodes) must fill the fixed border, not render tiny. Measured
   // occupancy 0.74–0.96 across plusComm steps; pinned ≥ 0.6 with margin. It also
   // must not spill past the border.
-  for (const k of [0, r.stepCount]) {
+  for (const k of [0, r.actionCount]) {
     it(`small step ${k} fills the border (occupancy in band) and stays inside`, () => {
       const e = seedStep(k, 700)
       const occ = contentHalf(e) / frame.half

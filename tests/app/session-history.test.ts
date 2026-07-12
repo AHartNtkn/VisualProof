@@ -6,9 +6,9 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import {
-  applyForward,
-  applyBackward,
-  applyTrack,
+  applyForward as applyForwardAction,
+  applyBackward as applyBackwardAction,
+  applyTrack as applyTrackAction,
   assembleTheorem,
   currentSide,
   currentTrack,
@@ -24,10 +24,18 @@ import {
   undoForward,
   undoBackward,
   undoTrack,
-  timelineActiveSteps,
+  timelineActiveActions,
+  type ProofSession,
+  type TrackSession,
 } from '../../src/app/session'
+import type { ProofStep } from '../../src/kernel/proof/step'
+import { singleStepAction } from '../../src/kernel/proof/action'
 
 const ctx = verifyTheory(buildFregeTheory())
+const gesture = (step: ProofStep) => singleStepAction(step.rule, step)
+const applyTrack = (track: TrackSession, step: ProofStep) => applyTrackAction(track, gesture(step))
+const applyForward = (session: ProofSession, step: ProofStep) => applyForwardAction(session, gesture(step))
+const applyBackward = (session: ProofSession, step: ProofStep) => applyBackwardAction(session, gesture(step))
 
 function bare() {
   const b = new DiagramBuilder()
@@ -45,19 +53,19 @@ function intro(diagram = bare().diagram) {
 describe('authoritative proof timeline', () => {
   it('starts with one state and moves undo/redo without deleting the future', () => {
     const s0 = startTrack(bare(), 'forward', ctx)
-    expect(s0.timeline).toEqual({ states: [s0.origin.diagram], transitions: [], cursor: 0 })
+    expect(s0.timeline).toEqual({ states: [s0.origin.diagram], actions: [], cursor: 0 })
 
     const s1 = applyTrack(s0, intro(currentTrack(s0)))
     const undone = undoTrack(s1)
     expect(undone.timeline.states).toBe(s1.timeline.states)
-    expect(undone.timeline.transitions).toBe(s1.timeline.transitions)
-    expect(timelineActiveSteps(undone.timeline)).toEqual([])
+    expect(undone.timeline.actions).toBe(s1.timeline.actions)
+    expect(timelineActiveActions(undone.timeline)).toEqual([])
     expect(undone.timeline.cursor).toBe(0)
     expect(currentTrack(undone)).toBe(s0.origin.diagram)
     const redone = redoTrack(undone)
     expect(redone.timeline.cursor).toBe(1)
     expect(currentTrack(redone)).toBe(currentTrack(s1))
-    expect(timelineActiveSteps(redone.timeline)).toEqual(redone.timeline.transitions)
+    expect(timelineActiveActions(redone.timeline)).toEqual(redone.timeline.actions)
   })
 
   it('moves to any retained state and truncates future when applying there', () => {
@@ -75,8 +83,8 @@ describe('authoritative proof timeline', () => {
     expect(s2.timeline).toMatchObject({ cursor: 2 })
     expect(rewound.timeline.states).toHaveLength(3)
     expect(replacement.timeline.states).toHaveLength(2)
-    expect(replacement.timeline.transitions).toHaveLength(1)
-    expect(replacement.timeline.transitions).toEqual([replacementStep])
+    expect(replacement.timeline.actions).toHaveLength(1)
+    expect(replacement.timeline.actions).toEqual([gesture(replacementStep)])
     expect(replacement.timeline.cursor).toBe(1)
     expect(() => redoTrack(replacement)).toThrow(/nothing to redo/)
   })
@@ -89,7 +97,7 @@ describe('authoritative proof timeline', () => {
     const theorem = declareTrack(rewound, 'prefix')
 
     expect(theorem.rhs.diagram).toBe(s1.timeline.states[1])
-    expect(theorem.steps).toEqual(timelineActiveSteps(rewound.timeline))
+    expect(theorem.actions).toEqual(timelineActiveActions(rewound.timeline))
   })
 
   it('keeps fixed-side cursors independent and meets/assembles at those cursors', () => {
@@ -109,7 +117,7 @@ describe('authoritative proof timeline', () => {
     expect(meet(undone)).toBe(false)
     expect(meet(redoForward(undone))).toBe(true)
     expect(moveSide(s1, 'backward', 0).forward.cursor).toBe(1)
-    expect(assembleTheorem(s1, 'fixed-prefix').steps).toEqual(timelineActiveSteps(s1.forward))
+    expect(assembleTheorem(s1, 'fixed-prefix').actions).toEqual(timelineActiveActions(s1.forward))
   })
 
   it('replaces an abandoned backward transition and leaves no redo tail', () => {
@@ -124,8 +132,8 @@ describe('authoritative proof timeline', () => {
     const abandoned = intro(currentSide(s1, 'backward'))
     const s2 = applyBackward(s1, abandoned)
     const rewound = undoBackward(s2)
-    expect(timelineActiveSteps(rewound.backward)).toEqual([first])
-    expect(timelineActiveSteps(redoBackward(rewound).backward)).toEqual([first, abandoned])
+    expect(timelineActiveActions(rewound.backward)).toEqual([gesture(first)])
+    expect(timelineActiveActions(redoBackward(rewound).backward)).toEqual([gesture(first), gesture(abandoned)])
 
     const replacement = {
       rule: 'vacuousIntro' as const,
@@ -134,8 +142,8 @@ describe('authoritative proof timeline', () => {
     }
     const diverged = applyBackward(rewound, replacement)
 
-    expect(diverged.backward.transitions).toEqual([first, replacement])
-    expect(timelineActiveSteps(diverged.backward)).toEqual([first, replacement])
+    expect(diverged.backward.actions).toEqual([gesture(first), gesture(replacement)])
+    expect(timelineActiveActions(diverged.backward)).toEqual([gesture(first), gesture(replacement)])
     expect(() => redoBackward(diverged)).toThrow(/nothing to redo/)
   })
 })

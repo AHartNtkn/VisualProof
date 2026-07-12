@@ -4,7 +4,8 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { loadTheory, theoryToJson } from '../../src/kernel/proof/store'
-import { startSession, applyForward, currentSide, meet, assembleTheorem, adoptTheorem } from '../../src/app/session'
+import { startSession, applyForward as applyForwardAction, currentSide, meet, assembleTheorem, adoptTheorem } from '../../src/app/session'
+import { singleStepAction } from '../../src/kernel/proof/action'
 import { sessionTheory } from '../../src/app/persist'
 import { bootFixture } from './boot-fixture'
 
@@ -22,10 +23,10 @@ async function provenToy() {
   void m
   const rhs = mkDiagramWithBoundary(r.build(), [])
   let s = startSession(lhs, rhs, boot.ctx)
-  s = applyForward(s, {
+  s = applyForwardAction(s, singleStepAction('introduce double cut', {
     rule: 'doubleCutIntro',
     sel: mkSelection(currentSide(s, 'forward'), { region: currentSide(s, 'forward').root, regions: [], nodes: [], wires: [] }),
-  })
+  }))
   expect(meet(s)).toBe(true)
   return { s, boot }
 }
@@ -44,7 +45,7 @@ describe('adoptTheorem', () => {
     const thm = assembleTheorem(s, 'toy')
     const s2 = adoptTheorem(s, thm)
     expect(() => adoptTheorem(s2, thm)).toThrowError(/already names a theorem/)
-    const forged = { ...thm, steps: [] }
+    const forged = { ...thm, actions: [] }
     expect(() => adoptTheorem(s, forged)).toThrowError(/does not arrive/)
   })
 })

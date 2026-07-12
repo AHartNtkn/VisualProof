@@ -5,7 +5,8 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { replayProof } from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
-import { composeProofs } from '../../../src/kernel/proof/compose'
+import { composeActions } from '../../../src/kernel/proof/compose'
+import { replayActions, singleStepAction } from '../../../src/kernel/proof/action'
 import { stepToJson, stepFromJson } from '../../../src/kernel/proof/json'
 
 const p = (s: string) => parseTerm(s)
@@ -55,7 +56,7 @@ describe('open and vacuous proof steps', () => {
     expect(() => stepFromJson({ rule: 'insertion', region: 'r1' })).toThrowError(/unknown rule 'insertion'/)
   })
 
-  it('composeProofs maps vacuous step ids through the iso', () => {
+  it('composeActions maps vacuous step ids through the iso', () => {
     const mk = () => {
       const h = new DiagramBuilder()
       const cut1 = h.cut(h.root)
@@ -67,13 +68,14 @@ describe('open and vacuous proof steps', () => {
     const tail: ProofStep[] = [
       { rule: 'vacuousIntro', sel: mkSelection(db, { region: bc, regions: [], nodes: [bn], wires: [] }), arity: 1 },
     ]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
+    const actions = tail.map((step) => singleStepAction(step.rule, step))
+    const composed = composeActions(da, db, actions, ctx)
+    const viaA = replayActions(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
     expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
-  it('composeProofs maps bound-spawn binder ids through a NON-IDENTITY iso', () => {
+  it('composeActions maps bound-spawn binder ids through a NON-IDENTITY iso', () => {
     // Isomorphic hosts with DIFFERENT ids for the host bubble: in da the
     // bubble is r2 and r3 is a bare cut; in db the bubble is r3 and r1 is the
     // bare cut. An unmapped binder VALUE ('r3') would point at da's CUT —
@@ -98,8 +100,8 @@ describe('open and vacuous proof steps', () => {
     const tail: ProofStep[] = [
       { rule: 'boundRelationSpawn', region: bBub, binder: bBub, arity: 1 },
     ]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
+    const composed = composeActions(da, db, tail.map((step) => singleStepAction(step.rule, step)), ctx)
+    const viaA = replayActions(da, composed, ctx)
     const viaB = replayProof(db, tail, ctx)
     expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })

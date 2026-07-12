@@ -114,7 +114,7 @@ describe('the bundled Frege theory', () => {
   it('zeroIsNat: the closed sentence ⟹ ∃z. Zero(z) ∧ nat(z); no boundary; nat and zero co-ride the existential z', () => {
     const theory = buildFregeTheory()
     const t = theory.theorems.find((x) => x.name === 'zeroIsNat')!
-    const rules = t.steps.map((step) => step.rule)
+    const rules = t.actions.flatMap((action) => action.steps).map((step) => step.rule)
     expect(rules).toContain('anchoredWireSplit')
     expect(rules).toContain('anchoredWireContract')
     expect(rules).toContain('relationSpawn')
@@ -124,7 +124,7 @@ describe('the bundled Frege theory', () => {
     const ctx = verifyTheory(theory)
     let replayed = t.lhs.diagram
     let observedSplit = false
-    for (const step of t.steps) {
+    for (const step of t.actions.flatMap((action) => action.steps)) {
       if (step.rule !== 'anchoredWireSplit') {
         replayed = applyStep(replayed, step, ctx)
         continue

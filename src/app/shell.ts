@@ -7,6 +7,7 @@ import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { applyRelFold, applyRelUnfold } from '../kernel/rules/reldef'
 import { applyFission } from '../kernel/rules/fusion'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import { singleStepAction } from '../kernel/proof/action'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec } from '../view/vec'
@@ -562,7 +563,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
     for (const e of library.entries) {
       if (e.status !== 'loaded') continue
-      const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, steps: t.steps.length }))
+      const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, steps: t.actions.length }))
       libraryDiv.append(renderGroup(
         `file:${e.file}`, e.file, thms,
         Object.keys(e.theory.relations),
@@ -572,7 +573,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (library.adopted.length > 0 || library.definedRelations.length > 0) {
       libraryDiv.append(renderGroup(
         SESSION_GROUP, 'Session (adopted + defined)',
-        library.adopted.map((t) => ({ name: t.name, steps: t.steps.length })),
+        library.adopted.map((t) => ({ name: t.name, steps: t.actions.length })),
         library.definedRelations.map((r) => r.name),
       ))
     }
@@ -696,7 +697,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // border fits every step and never resizes as the proof is stepped. Cheap
     // (~150 ms whole-proof scan). Established before seedProject, whose establishFrame
     // then no-ops; every later step carries this same frame via carryOver.
-    const steps = Array.from({ length: replay.stepCount + 1 }, (_, k) => ({ diagram: replay!.diagramAt(k), boundary: replay!.boundary }))
+    const steps = Array.from({ length: replay.actionCount + 1 }, (_, k) => ({ diagram: replay!.diagramAt(k), boundary: replay!.boundary }))
     establishProofFrame(engine, steps)
     // proof-wide boundary slot-shift: align the fixed slots to where the ports sit,
     // once, so boundary wires take short exits instead of sweeping the frame. Carried
@@ -716,7 +717,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const gotoReplayStep = (k: number): void => {
     if (replay === null) return
     interaction.cancelActiveGesture()
-    replayK = Math.max(0, Math.min(replay.stepCount, k))
+    replayK = Math.max(0, Math.min(replay.actionCount, k))
     const prevEngine = engine
     displayed = replay.diagramAt(replayK)
     const next = mkEngine(displayed, replay.boundary)
@@ -843,7 +844,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return
     }
     if (mode === 'replay' && replay !== null) {
-      if (replayK === replay.stepCount) throw new Error('nothing to redo in replay')
+      if (replayK === replay.actionCount) throw new Error('nothing to redo in replay')
       gotoReplayStep(replayK + 1)
       return
     }
@@ -874,8 +875,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // ---- proof actions ----
   const applyProofStep = (step: ProofStep): void => {
     if (proof === null) throw new Error('no active proof')
+    const action = singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step)
     if (proof.kind === 'track') {
-      const next = applyTrack(proof.track, step)
+      const next = applyTrack(proof.track, action)
       mainMotion.run(step, () => {
         proof = { kind: 'track', track: next }
         sync()
@@ -883,7 +885,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       refreshChrome()
       return
     } else {
-      proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, step) : applyBackward(proof.session, step) }
+      proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, action) : applyBackward(proof.session, action) }
       fixedWorkspace?.reconcile(proof.side)
       return
     }
@@ -954,7 +956,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const goal = `goal ${goalLhs === null ? 'LHS unset' : 'LHS set'}/${goalRhs === null ? 'RHS unset' : 'RHS set'}`
     if (mode === 'replay' && replay !== null) {
       const rule = replayK === 0 ? '(start)' : replay.labelAt(replayK)
-      statusDiv.textContent = `[REPLAY] step ${replayK}/${replay.stepCount} — ${rule}`
+      statusDiv.textContent = `[REPLAY] action ${replayK}/${replay.actionCount} — ${rule}`
     } else {
       const direction = proofDirection()
       const head = mode === 'edit' ? 'EDIT' : `PROVE · ${direction?.toUpperCase() ?? 'UNKNOWN'}`
@@ -1563,8 +1565,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const timelineView = (): TimelineView | null => {
     if (mode === 'replay' && replay !== null) {
       return {
-        states: Array.from({ length: replay.stepCount + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
-        transitions: replay.steps,
+        states: Array.from({ length: replay.actionCount + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
+        actions: replay.actions,
         cursor: replayK,
         boundary: replay.boundary,
         inputAllowed: () => true,
@@ -1723,7 +1725,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return {
           mode,
           k: replayK,
-          n: replay?.stepCount ?? 0,
+          n: replay?.actionCount ?? 0,
           label: replay === null ? '' : replayK === 0 ? '(start)' : replay.labelAt(replayK),
           bodies: engine.bodies.size,
         }

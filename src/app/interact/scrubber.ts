@@ -1,10 +1,10 @@
 import type { Diagram, WireId } from '../../kernel/diagram/diagram'
-import type { ProofStep } from '../../kernel/proof/step'
+import type { ProofAction } from '../../kernel/proof/action'
 
 export type TimelineView = {
   readonly name?: string
   readonly states: readonly Diagram[]
-  readonly transitions: readonly ProofStep[]
+  readonly actions: readonly ProofAction[]
   readonly cursor: number
   readonly boundary: readonly WireId[]
   readonly inputAllowed?: () => boolean
@@ -27,10 +27,6 @@ export function tickStatus(index: number, cursor: number): TickStatus {
 export function cursorCommand(cursor: number, stateCount: number, command: CursorCommand): number | null {
   const next = cursor + (command === 'undo' ? -1 : 1)
   return next < 0 || next >= stateCount ? null : next
-}
-
-export function proofStepLabel(step: ProofStep): string {
-  return step.rule === 'theorem' ? `cite ${step.name}` : step.rule
 }
 
 export function timelineCopy(cursor: number, stateCount: number, labels: readonly string[]): string {
@@ -141,7 +137,7 @@ export function mountScrubber(
       actions.closePreview?.()
       return
     }
-    const labels = view.transitions.map(proofStepLabel)
+    const labels = view.actions.map((action) => action.label)
     const content = timelineCopy(view.cursor, view.states.length, labels)
     copy.value = view.name === undefined ? content : `${view.name} · ${content}`
     undo.disabled = view.cursor === 0

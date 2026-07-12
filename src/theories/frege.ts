@@ -255,7 +255,7 @@ function derivePlusLeftUnit(ctx: ProofContext): Theorem {
   e.push('fuse plus program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, PLUSp), 'output') })
   e.push('fuse zero', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, ZEROp), 'output') })
   e.pushConv('reduce 0 + a to a', soleRootTerm(e), port('s0'))
-  return { name: 'plusLeftUnit', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wo]), steps: [...e.steps] }
+  return { name: 'plusLeftUnit', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wo]), actions: [...e.actions] }
 }
 
 /** plusRightUnit: Zero(z) ∧ Plus(a,z,o) ⟹ o = a. */
@@ -274,7 +274,7 @@ function derivePlusRightUnit(ctx: ProofContext): Theorem {
   e.push('fuse plus program', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, PLUSp), 'output') })
   e.push('fuse zero', { rule: 'fusion', wire: e.wireOf(e.nodeBy(e.cur.root, ZEROp), 'output') })
   e.pushConv('reduce a + 0 to a', soleRootTerm(e), port('s0'))
-  return { name: 'plusRightUnit', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wo]), steps: [...e.steps] }
+  return { name: 'plusRightUnit', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wo]), actions: [...e.actions] }
 }
 
 /** plusAssoc: Plus(a,b,t) ∧ Plus(t,c,o) ⟹ Plus(b,c,u) ∧ Plus(a,u,o). */
@@ -304,7 +304,7 @@ function derivePlusAssoc(ctx: ProofContext): Theorem {
   const wu = e.wireOf(inner, 'output')
   refoldPlus(e, inner, [wb, wc, wu])
   refoldPlus(e, merged, [wa, wu, wo])
-  return { name: 'plusAssoc', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wc, wo]), steps: [...e.steps] }
+  return { name: 'plusAssoc', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wc, wo]), actions: [...e.actions] }
 }
 
 // ─── succShiftS (genuine ℕ-induction on the FIRST addend) ───
@@ -493,7 +493,7 @@ function deriveSuccShiftS(ctx: ProofContext): Theorem {
   refoldSucc(e, r.A2, [wt, wo])
   e.push('cl erase base fact', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [r.M, r.Mp, r.Z1], wires: [r.wM, r.wZ] }) })
   e.push('cl erase Cl fact', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [r.cutA], nodes: [], wires: [] }) })
-  return { name: 'succShiftS', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wo]), steps: [...e.steps] }
+  return { name: 'succShiftS', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wo]), actions: [...e.actions] }
 }
 
 // ─── plusComm (ℕ-induction on a, citing succShiftS) ───
@@ -692,7 +692,7 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   e.push('rc cJ ab', { rule: 'congruenceJoin', a: ab[0]!, b: ab[1]!, certificate: idCert })
   e.push('rc erase ab', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [ab[0]!, ab[1]!], wires: [] }) })
   refoldPlus(e, ba[0]!, [wb, wa, wo])
-  return { name: 'plusComm', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wo]), steps: [...e.steps] }
+  return { name: 'plusComm', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wo]), actions: [...e.actions] }
 }
 
 // ─── guard-producing theorems (closed-evidence anchored sharing) ───
@@ -773,7 +773,7 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   const rzero = rl.ref(rl.root, 'zero', 1)
   rl.wire(rl.root, [{ node: rnat, port: { kind: 'arg', index: 0 } }, { node: rzero, port: { kind: 'arg', index: 0 } }])
   const rhs = mkDiagramWithBoundary(rl.build(), [])
-  return { name: 'zeroIsNat', lhs, rhs, steps: [...e.steps] }
+  return { name: 'zeroIsNat', lhs, rhs, actions: [...e.actions] }
 }
 
 /**
@@ -859,7 +859,7 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   const rwn = rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 0 } }])
   const rws = rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 1 } }, { node: rNat, port: { kind: 'arg', index: 0 } }])
   const rhs = mkDiagramWithBoundary(rl.build(), [rwn, rws])
-  return { name: 'succNat', lhs, rhs, steps: [...e.steps] }
+  return { name: 'succNat', lhs, rhs, actions: [...e.actions] }
 }
 
 /**
@@ -904,7 +904,7 @@ function deriveOneIsNat(ctx: ProofContext): Theorem {
   rl.wire(rl.root, [{ node: rZero, port: { kind: 'arg', index: 0 } }, { node: rSuc, port: { kind: 'arg', index: 0 } }])
   rl.wire(rl.root, [{ node: rSuc, port: { kind: 'arg', index: 1 } }, { node: rNat, port: { kind: 'arg', index: 0 } }])
   const rhs = mkDiagramWithBoundary(rl.build(), [])
-  return { name: 'oneIsNat', lhs, rhs, steps: [...e.steps] }
+  return { name: 'oneIsNat', lhs, rhs, actions: [...e.actions] }
 }
 
 export function buildFregeTheory(): Theory {

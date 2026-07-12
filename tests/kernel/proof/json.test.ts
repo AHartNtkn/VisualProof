@@ -6,6 +6,7 @@ import { applyConversion } from '../../../src/kernel/rules/conversion'
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import { stepToJson, stepFromJson, theoremToJson, theoremFromJson, dwbToJson, dwbFromJson } from '../../../src/kernel/proof/json'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
+import type { ProofAction } from '../../../src/kernel/proof/action'
 
 const p = (s: string) => parseTerm(s)
 
@@ -172,20 +173,47 @@ describe('dwbFromJson error context', () => {
 })
 
 describe('theorem round-trips through JSON', () => {
-  it('preserves sides, boundary order, and steps', () => {
+  it('persists gesture actions with labels, constituent steps, and placements', () => {
+    const b = new DiagramBuilder()
+    const side = mkDiagramWithBoundary(b.build(), [])
+    const action: ProofAction = {
+      label: 'introduce two cuts',
+      steps: [
+        { rule: 'doubleCutIntro', sel: { region: side.diagram.root, regions: [], nodes: [], wires: [] } },
+        { rule: 'doubleCutElim', region: 'dc' },
+      ],
+      placements: [{ introducedNode: 0, x: 12, y: -4 }],
+    }
+    const theorem: Theorem = { name: 'grouped', lhs: side, rhs: side, actions: [action], backActions: [] }
+    const json = theoremToJson(theorem) as Record<string, unknown>
+    expect(json).toMatchObject({ actions: [{ label: action.label, placements: action.placements }] })
+    expect(theoremFromJson(JSON.parse(JSON.stringify(json))).actions).toEqual([action])
+  })
+
+  it('rejects obsolete flat theorem step fields', () => {
+    const b = new DiagramBuilder()
+    const side = dwbToJson(mkDiagramWithBoundary(b.build(), []))
+    expect(() => theoremFromJson({ name: 'old', lhs: side, rhs: side, actions: [], steps: [] }))
+      .toThrowError(/unknown field 'steps'/)
+    expect(() => theoremFromJson({ name: 'old', lhs: side, rhs: side, actions: [], backSteps: [] }))
+      .toThrowError(/unknown field 'backSteps'/)
+  })
+  it('preserves sides, boundary order, and actions', () => {
     const l = new DiagramBuilder()
     const lp = l.termNode(l.root, p('\\a. a'))
     const lb = l.wire(l.root, [{ node: lp, port: { kind: 'output' } }])
     const side = mkDiagramWithBoundary(l.build(), [lb])
     const t: Theorem = {
       name: 'noop', lhs: side, rhs: side,
-      steps: [{ rule: 'doubleCutIntro', sel: { region: side.diagram.root, regions: [], nodes: [], wires: [] } },
-              { rule: 'doubleCutElim', region: 'dc' }],
+      actions: [{ label: 'round trip group', placements: [], steps: [
+        { rule: 'doubleCutIntro', sel: { region: side.diagram.root, regions: [], nodes: [], wires: [] } },
+        { rule: 'doubleCutElim', region: 'dc' },
+      ] }],
     }
     const j = JSON.parse(JSON.stringify(theoremToJson(t)))
     const back = theoremFromJson(j)
     expect(back.name).toBe('noop')
     expect(back.lhs.boundary).toEqual([lb])
-    expect(back.steps).toEqual(t.steps)
+    expect(back.actions).toEqual(t.actions)
   })
 })

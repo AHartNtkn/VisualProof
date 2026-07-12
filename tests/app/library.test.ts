@@ -27,7 +27,7 @@ function trivTheorem(name: string): Theorem {
   const e0 = emptyDiagram()
   const { diagram } = spawnTermNode(e0, e0.root, p('\\x. x'))
   const dwb = mkDiagramWithBoundary(diagram, [])
-  return { name, lhs: dwb, rhs: dwb, steps: [] }
+  return { name, lhs: dwb, rhs: dwb, actions: [] }
 }
 
 /** A closed arity-1 relation body (one term node, its free-var line the

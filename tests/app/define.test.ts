@@ -88,7 +88,7 @@ describe('defineRelation — refusals (each message observed)', () => {
   it('refuses a name that collides with a theorem (one namespace)', () => {
     const { d, sel, wY, wZ } = sheetBody()
     const empty = mkDiagramWithBoundary(emptyDiagram(), [])
-    const thm: Theorem = { name: 'T', lhs: empty, rhs: empty, steps: [] }
+    const thm: Theorem = { name: 'T', lhs: empty, rhs: empty, actions: [] }
     const ctx: ProofContext = { theorems: new Map([['T', thm]]), relations: new Map() }
     expect(() => defineRelation(d, sel, [wY, wZ], 'T', ctx, {})).toThrow(/already a theorem/)
   })

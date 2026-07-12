@@ -5,7 +5,9 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { applyRelFold, applyRelUnfold } from '../../../src/kernel/rules/reldef'
 import { findOccurrences, occurrenceSelection } from '../../../src/kernel/diagram/subgraph/match'
-import { startSession, applyBackward, currentSide } from '../../../src/app/session'
+import { startSession, applyBackward as applyBackwardAction, currentSide, type ProofSession } from '../../../src/app/session'
+import type { ProofStep } from '../../../src/kernel/proof/step'
+import { singleStepAction } from '../../../src/kernel/proof/action'
 import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
 
 /**
@@ -17,6 +19,7 @@ import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
  */
 describe('relFold id freshness', () => {
   const ctx = () => verifyTheory(buildFregeTheory())
+  const applyBackward = (session: ProofSession, step: ProofStep) => applyBackwardAction(session, singleStepAction(step.rule, step))
 
   it('the user sequence: backward unfold nat, unfold zero, fold zero, fold nat', () => {
     const c = ctx()

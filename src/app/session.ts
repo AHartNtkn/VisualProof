@@ -1,14 +1,15 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
-import type { ProofContext, ProofStep } from '../kernel/proof/step'
-import { applyStep } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/step'
+import type { ProofAction } from '../kernel/proof/action'
+import { applyAction } from '../kernel/proof/action'
 import type { Theorem } from '../kernel/proof/theorem'
 import { checkTheorem } from '../kernel/proof/theorem'
 
 export type ProofTimeline = {
   readonly states: readonly Diagram[]
-  readonly transitions: readonly ProofStep[]
+  readonly actions: readonly ProofAction[]
   readonly cursor: number
 }
 
@@ -35,7 +36,7 @@ export type TrackSession = {
 }
 
 function startTimeline(origin: Diagram): ProofTimeline {
-  return { states: [origin], transitions: [], cursor: 0 }
+  return { states: [origin], actions: [], cursor: 0 }
 }
 
 export function timelineCurrent(timeline: ProofTimeline): Diagram {
@@ -44,10 +45,10 @@ export function timelineCurrent(timeline: ProofTimeline): Diagram {
   return current
 }
 
-/** The proof currently selected by the cursor. Retained transitions beyond
+/** The proof currently selected by the cursor. Retained actions beyond
     the cursor belong to redo history and are not part of the active proof. */
-export function timelineActiveSteps(timeline: ProofTimeline): readonly ProofStep[] {
-  return timeline.transitions.slice(0, timeline.cursor)
+export function timelineActiveActions(timeline: ProofTimeline): readonly ProofAction[] {
+  return timeline.actions.slice(0, timeline.cursor)
 }
 
 export function moveTimeline(timeline: ProofTimeline, cursor: number): ProofTimeline {
@@ -57,10 +58,10 @@ export function moveTimeline(timeline: ProofTimeline, cursor: number): ProofTime
   return cursor === timeline.cursor ? timeline : { ...timeline, cursor }
 }
 
-function appendTimeline(timeline: ProofTimeline, step: ProofStep, next: Diagram): ProofTimeline {
+function appendTimeline(timeline: ProofTimeline, action: ProofAction, next: Diagram): ProofTimeline {
   const states = timeline.states.slice(0, timeline.cursor + 1)
-  const transitions = timeline.transitions.slice(0, timeline.cursor)
-  return { states: [...states, next], transitions: [...transitions, step], cursor: transitions.length + 1 }
+  const actions = timeline.actions.slice(0, timeline.cursor)
+  return { states: [...states, next], actions: [...actions, action], cursor: actions.length + 1 }
 }
 
 export function startTrack(origin: DiagramWithBoundary, direction: TrackDirection, ctx: ProofContext): TrackSession {
@@ -76,12 +77,12 @@ export function trackBoundary(track: TrackSession): readonly WireId[] {
   return track.origin.boundary.filter((wire) => current.wires[wire] !== undefined)
 }
 
-export function applyTrack(track: TrackSession, step: ProofStep): TrackSession {
+export function applyTrack(track: TrackSession, action: ProofAction): TrackSession {
   const current = currentTrack(track)
   const next = track.direction === 'forward'
-    ? applyStep(current, step, track.ctx)
-    : applyStep(current, step, track.ctx, 'backward')
-  return { ...track, timeline: appendTimeline(track.timeline, step, next) }
+    ? applyAction(current, action, track.ctx)
+    : applyAction(current, action, track.ctx, 'backward')
+  return { ...track, timeline: appendTimeline(track.timeline, action, next) }
 }
 
 export function moveTrack(track: TrackSession, cursor: number): TrackSession {
@@ -100,10 +101,10 @@ export function redoTrack(track: TrackSession): TrackSession {
 
 export function declareTrack(track: TrackSession, name: string): Theorem {
   const current = { diagram: currentTrack(track), boundary: trackBoundary(track) }
-  const steps = timelineActiveSteps(track.timeline)
+  const actions = timelineActiveActions(track.timeline)
   const theorem: Theorem = track.direction === 'forward'
-    ? { name, lhs: track.origin, rhs: current, steps }
-    : { name, lhs: current, rhs: track.origin, steps: [], backSteps: steps }
+    ? { name, lhs: track.origin, rhs: current, actions }
+    : { name, lhs: current, rhs: track.origin, actions: [], backActions: actions }
   checkTheorem(theorem, track.ctx)
   return theorem
 }
@@ -156,12 +157,13 @@ function assertStatementBoundarySurvives(d: Diagram, boundary: readonly WireId[]
 }
 
 /** Apply a forward step through the kernel; refusals propagate untouched. */
-export function applyForward(s: ProofSession, step: ProofStep): ProofSession {
-  const next = applyStep(currentSide(s, 'forward'), step, s.ctx)
-  assertStatementBoundarySurvives(next, s.lhs.boundary, 'forward')
+export function applyForward(s: ProofSession, action: ProofAction): ProofSession {
+  const next = applyAction(currentSide(s, 'forward'), action, s.ctx, 'forward', (diagram) => {
+    assertStatementBoundarySurvives(diagram, s.lhs.boundary, 'forward')
+  })
   return {
     ...s,
-    forward: appendTimeline(s.forward, step, next),
+    forward: appendTimeline(s.forward, action, next),
   }
 }
 
@@ -190,13 +192,14 @@ export function redoForward(s: ProofSession): ProofSession {
  * replay: the recorded backward steps replay from the RHS at declaration,
  * so a mistake here cannot certify anything.
  */
-export function applyBackward(s: ProofSession, step: ProofStep): ProofSession {
+export function applyBackward(s: ProofSession, action: ProofAction): ProofSession {
   const g = currentSide(s, 'backward')
-  const gPrime = applyStep(g, step, s.ctx, 'backward')
-  assertStatementBoundarySurvives(gPrime, s.rhs.boundary, 'backward')
+  const gPrime = applyAction(g, action, s.ctx, 'backward', (diagram) => {
+    assertStatementBoundarySurvives(diagram, s.rhs.boundary, 'backward')
+  })
   return {
     ...s,
-    backward: appendTimeline(s.backward, step, gPrime),
+    backward: appendTimeline(s.backward, action, gPrime),
   }
 }
 
@@ -222,8 +225,8 @@ export function assembleTheorem(s: ProofSession, name: string): Theorem {
     name,
     lhs: s.lhs,
     rhs: s.rhs,
-    steps: timelineActiveSteps(s.forward),
-    backSteps: timelineActiveSteps(s.backward),
+    actions: timelineActiveActions(s.forward),
+    backActions: timelineActiveActions(s.backward),
   }
 }
 

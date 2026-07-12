@@ -1,4 +1,5 @@
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import { singleStepAction } from '../kernel/proof/action'
 import type { Theme } from '../view/paint'
 import type { Vec2 } from '../view/vec'
 import {
@@ -203,7 +204,8 @@ export class FixedSideWorkspace {
 
   #prepare(side: FixedSide, step: ProofStep): () => void {
     const session = this.#options.session()
-    const next = side === 'forward' ? applyForward(session, step) : applyBackward(session, step)
+    const action = singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step)
+    const next = side === 'forward' ? applyForward(session, action) : applyBackward(session, action)
     return () => {
       this.#options.commit(next, side)
       this.reconcile(side)
