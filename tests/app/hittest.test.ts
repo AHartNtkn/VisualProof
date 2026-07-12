@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../src/kernel/diagram/diagram'
-import { mkEngine, recomputeRegions, legPaths, settle, existentialStubs, frameBounds, frameSlots } from '../../src/view/index'
+import { mkEngine, recomputeRegions, computeLegs, legPaths, settle, existentialStubs, frameBounds, frameSlots } from '../../src/view/index'
 import type { Vec2 } from '../../src/view/index'
 import { vec } from '../../src/view/vec'
-import { hitTest, wireHitTest, brushHitTest, dragTarget, buildSelection } from '../../src/app/hittest'
+import { hitTest, wireHitTest, wireManipulationHitTest, brushHitTest, dragTarget, buildSelection } from '../../src/app/hittest'
 
 const p = (s: string) => parseTerm(s)
 const viewport = (scale = 1) => ({ scale })
@@ -111,6 +111,32 @@ describe('hitTest', () => {
 
     expect(hitTest(e, bindPoint, viewport()), 'ordinary selection keeps node-first precedence').toEqual({ kind: 'node', id: zero })
     expect(wireHitTest(e, bindPoint, viewport()), 'wire manipulation sees every painted part of the line').toEqual({ kind: 'wire', id: wire })
+  })
+
+  it('distinguishes concrete endpoint legs from the trunk of one equality wire', () => {
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, p('f x'))
+    const b = h.termNode(h.root, p('f y'))
+    const wire = h.wire(h.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: b, port: { kind: 'output' } },
+    ])
+    const e = mkEngine(h.build(), [])
+    e.bodies.get(a)!.pos = vec(-40, 0)
+    e.bodies.get(b)!.pos = vec(40, 0)
+    recomputeRegions(e)
+    const path = computeLegs(e).find(({ leg }) => leg.wid === wire)!
+    const pointFor = (node: string): Vec2 => path.leg.from.body === node ? path.pts[0]! : path.pts.at(-1)!
+
+    expect(wireManipulationHitTest(e, pointFor(a), viewport())).toEqual({
+      wire,
+      endpoint: { node: a, port: { kind: 'output' } },
+    })
+    expect(wireManipulationHitTest(e, pointFor(b), viewport())).toEqual({
+      wire,
+      endpoint: { node: b, port: { kind: 'output' } },
+    })
+    expect(wireManipulationHitTest(e, midOf(path.pts), viewport())).toEqual({ wire, endpoint: null })
   })
 
   it('gives a painted semantic dot precedence over a coincident wire stroke', () => {
