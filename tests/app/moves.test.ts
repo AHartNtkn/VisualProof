@@ -245,6 +245,21 @@ describe('proof connection resolution', () => {
     expect(step).toMatchObject({ redundant, survivor })
   })
 
+  it('swaps the conversion certificate when only reverse anchored contraction is legal', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const shielded = b.termNode(cut, p('(\\z. z) (\\x. x)'))
+    const flat = b.termNode(b.root, p('\\x. x'))
+    const shieldedWire = b.wire(b.root, [{ node: shielded, port: { kind: 'output' } }])
+    const flatWire = b.wire(b.root, [{ node: flat, port: { kind: 'output' } }])
+    const step = proofConnectionStep(
+      b.build(), outputEnd(shieldedWire, shielded), outputEnd(flatWire, flat), 'forward', 64,
+    )
+
+    expect(step.rule).toBe('anchoredWireContract')
+    expect(step).toMatchObject({ redundant: flat, survivor: shielded })
+  })
+
   it('authors headStrip by dragging between two output legs on the same wire', () => {
     const b = new DiagramBuilder()
     const a = b.termNode(b.root, p('\\x. x y'))

@@ -5,6 +5,7 @@ import { isAncestorOrEqual } from '../../kernel/diagram/regions'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof/step'
 import { convertible } from '../../kernel/term/convert'
+import type { ConversionCertificate } from '../../kernel/term/certificate'
 import { parseTerm } from '../../kernel/term/parse'
 import { applyConversion } from '../../kernel/rules/conversion'
 import { termNodeAt } from '../../kernel/rules/access'
@@ -139,18 +140,21 @@ export function proofConnectionStep(
   const candidates: ProofStep[] = [{ rule: 'wireJoin', a: source.wire, b: target.wire }]
   const left = outputNodes(d, source.wire)
   const right = outputNodes(d, target.wire)
-  const convertiblePairs: Array<{ readonly a: NodeId; readonly b: NodeId; readonly certificate: ReturnType<typeof convertible> & { status: 'convertible' } }> = []
+  const convertiblePairs: Array<{ readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }> = []
   for (const a of left) {
     for (const b of right) {
       const result = convertible(termNodeAt(d, a).term, termNodeAt(d, b).term, fuel)
       if (result.status !== 'convertible') continue
-      convertiblePairs.push({ a, b, certificate: result })
+      convertiblePairs.push({ a, b, certificate: result.certificate })
       candidates.push({ rule: 'congruenceJoin', a, b, certificate: result.certificate })
     }
   }
   for (const pair of convertiblePairs) {
-    candidates.push({ rule: 'anchoredWireContract', redundant: pair.a, survivor: pair.b, certificate: pair.certificate.certificate })
-    candidates.push({ rule: 'anchoredWireContract', redundant: pair.b, survivor: pair.a, certificate: pair.certificate.certificate })
+    candidates.push({ rule: 'anchoredWireContract', redundant: pair.a, survivor: pair.b, certificate: pair.certificate })
+    candidates.push({
+      rule: 'anchoredWireContract', redundant: pair.b, survivor: pair.a,
+      certificate: { leftSteps: pair.certificate.rightSteps, rightSteps: pair.certificate.leftSteps },
+    })
   }
   for (const candidate of candidates) {
     try {
