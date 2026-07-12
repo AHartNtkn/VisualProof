@@ -11,6 +11,7 @@
     "test:physics": "vitest run --config vitest.physics.config.ts",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
+    "assets:validate": "tsx scripts/assets/validate-interface-assets.ts",
     "emit:theories": "tsx scripts/emit-theories.ts",
     "demo": "vite demo",
     "app": "vite app",
