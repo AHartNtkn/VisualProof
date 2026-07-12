@@ -14,8 +14,11 @@ export function minimalPuzzle(overrides: Partial<PuzzleDefinition> = {}): Puzzle
 }
 
 export function minimalSource(): GameCatalogSource {
+  const puzzle = minimalPuzzle()
   return {
-    cultures: [{ id: fixtureCultureId, name: 'Fixture culture' }],
-    puzzles: [minimalPuzzle()], context: { relations: new Map() },
+    cultures: [{
+      id: fixtureCultureId, name: 'Fixture culture', unlocksAfter: [], gateway: puzzle.id,
+    }],
+    puzzles: [puzzle], context: { relations: new Map() },
   }
 }

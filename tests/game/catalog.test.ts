@@ -13,8 +13,10 @@ import { fixtureCultureId, minimalPuzzle, minimalSource } from './catalog-fixtur
 import { fourVeils, twoVeils } from './fixtures'
 
 const fixture = twoVeils()
-const culture = { id: fixtureCultureId, name: 'Fixture culture' }
 const puzzle = minimalPuzzle({ title: 'Two Veils' })
+const culture = {
+  id: fixtureCultureId, name: 'Fixture culture', unlocksAfter: [], gateway: puzzle.id,
+}
 
 describe('verified game catalog', () => {
   it('accepts a closed puzzle whose backward witness reaches blank', () => {
@@ -32,6 +34,59 @@ describe('verified game catalog', () => {
       ...minimalSource(),
       puzzles: [{ ...puzzle, prerequisites: [puzzle.id] }],
     })).toThrow(/dependency cycle/)
+  })
+
+  it('rejects a missing culture gateway', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      cultures: [{ ...culture, gateway: puzzleId('missing') }],
+    })).toThrow(/missing gateway/)
+  })
+
+  it('rejects a culture gateway owned by another culture', () => {
+    const otherCulture = cultureId('other-tradition')
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      cultures: [culture, {
+        id: otherCulture, name: 'Other culture', unlocksAfter: [], gateway: puzzle.id,
+      }],
+    })).toThrow(/gateway.*belongs to culture/)
+  })
+
+  it('rejects missing and duplicate culture unlock artifacts', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      cultures: [{ ...culture, unlocksAfter: [puzzleId('missing')] }],
+    })).toThrow(/missing unlock artifact/)
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      cultures: [{ ...culture, unlocksAfter: [puzzle.id, puzzle.id] }],
+    })).toThrow(/duplicate unlock artifact/)
+  })
+
+  it('rejects culture dependency self-edges and cycles', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      cultures: [{ ...culture, unlocksAfter: [puzzle.id] }],
+    })).toThrow(/depends on itself/)
+
+    const otherCultureId = cultureId('other-tradition')
+    const otherPuzzle = minimalPuzzle({
+      id: puzzleId('other-gateway'), culture: otherCultureId, title: 'Other gateway',
+    })
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      cultures: [
+        { ...culture, unlocksAfter: [otherPuzzle.id] },
+        {
+          id: otherCultureId,
+          name: 'Other culture',
+          unlocksAfter: [puzzle.id],
+          gateway: otherPuzzle.id,
+        },
+      ],
+      puzzles: [puzzle, otherPuzzle],
+    })).toThrow(/culture dependency cycle/)
   })
 
   it('rejects a witness that does not reach blank', () => {
@@ -91,7 +146,9 @@ describe('verified game catalog', () => {
     const fingerprint = catalog.fingerprint
 
     mutableCulture.name = 'Mutated culture'
-    cultures.push({ id: cultureId('intruder'), name: 'Intruder' })
+    cultures.push({
+      id: cultureId('intruder'), name: 'Intruder', unlocksAfter: [], gateway: puzzle.id,
+    })
     mutablePuzzle.id = puzzleId('mutated-puzzle')
     mutablePuzzle.culture = cultureId('mutated-culture')
     mutablePuzzle.title = 'Mutated puzzle'

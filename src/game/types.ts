@@ -42,7 +42,12 @@ export type PuzzleDefinition = {
   readonly witness: readonly GameStep[]
 }
 
-export type CultureDefinition = { readonly id: CultureId; readonly name: string }
+export type CultureDefinition = {
+  readonly id: CultureId
+  readonly name: string
+  readonly unlocksAfter: readonly PuzzleId[]
+  readonly gateway: PuzzleId
+}
 
 export type GameCatalogSource = {
   readonly cultures: readonly CultureDefinition[]

@@ -13,7 +13,12 @@ const puzzle = minimalPuzzle({
   id: puzzleId('four-veils'), title: 'Four Veils', goal: fixture.goal,
   witness: fixture.eliminations.map((region) => ({ rule: 'doubleCutElim' as const, region })),
 })
-const catalog = buildCatalog({ ...minimalSource(), puzzles: [puzzle] })
+const source = minimalSource()
+const catalog = buildCatalog({
+  ...source,
+  cultures: [{ ...source.cultures[0]!, gateway: puzzle.id }],
+  puzzles: [puzzle],
+})
 const authority = {
   context: catalog.source.context,
   puzzle: (id: PuzzleId) => catalog.puzzle(id),

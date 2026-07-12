@@ -1,12 +1,20 @@
 import { exploreForm, exploreLabeling } from '../kernel/diagram/canonical/explore'
 import { assertClosedGoal, isBlank } from './blank'
 import { applyGameStep, currentDiagram, startPuzzle } from './session'
-import { GameDomainError, type GameCatalogSource, type PuzzleDefinition, type PuzzleId } from './types'
+import {
+  GameDomainError,
+  type CultureDefinition,
+  type CultureId,
+  type GameCatalogSource,
+  type PuzzleDefinition,
+  type PuzzleId,
+} from './types'
 
 export type GameCatalog = {
   readonly source: GameCatalogSource
   readonly fingerprint: string
   puzzle(id: PuzzleId): PuzzleDefinition
+  culture(id: CultureId): CultureDefinition
 }
 
 const unique = <T>(values: readonly T[], label: string): void => {
@@ -57,6 +65,7 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
   unique(snapshot.cultures.map((culture) => culture.id), 'culture id')
   unique(snapshot.puzzles.map((puzzle) => puzzle.id), 'puzzle id')
   const cultures = new Set(snapshot.cultures.map((culture) => culture.id))
+  const cultureById = new Map(snapshot.cultures.map((culture) => [culture.id, culture] as const))
   const byId = new Map(snapshot.puzzles.map((puzzle) => [puzzle.id, puzzle] as const))
   for (const puzzle of snapshot.puzzles) {
     assertClosedGoal(puzzle.goal)
@@ -70,6 +79,46 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
       }
     }
   }
+
+  const cultureDependencies = new Map<CultureId, CultureId[]>()
+  for (const culture of snapshot.cultures) {
+    unique(culture.unlocksAfter, `unlock artifact of culture '${culture.id}'`)
+    const gateway = byId.get(culture.gateway)
+    if (gateway === undefined) {
+      throw new GameDomainError(`culture '${culture.id}' has missing gateway '${culture.gateway}'`)
+    }
+    if (gateway.culture !== culture.id) {
+      throw new GameDomainError(
+        `culture '${culture.id}' gateway '${culture.gateway}' belongs to culture '${gateway.culture}'`,
+      )
+    }
+    const dependencies: CultureId[] = []
+    for (const id of culture.unlocksAfter) {
+      const artifact = byId.get(id)
+      if (artifact === undefined) {
+        throw new GameDomainError(`culture '${culture.id}' has missing unlock artifact '${id}'`)
+      }
+      if (artifact.culture === culture.id) {
+        throw new GameDomainError(`culture '${culture.id}' depends on itself through artifact '${id}'`)
+      }
+      dependencies.push(artifact.culture)
+    }
+    cultureDependencies.set(culture.id, dependencies)
+  }
+
+  const visitingCultures = new Set<CultureId>()
+  const visitedCultures = new Set<CultureId>()
+  const visitCulture = (id: CultureId): void => {
+    if (visitingCultures.has(id)) {
+      throw new GameDomainError(`culture dependency cycle includes '${id}'`)
+    }
+    if (visitedCultures.has(id)) return
+    visitingCultures.add(id)
+    for (const dependency of cultureDependencies.get(id)!) visitCulture(dependency)
+    visitingCultures.delete(id)
+    visitedCultures.add(id)
+  }
+  for (const culture of snapshot.cultures) visitCulture(culture.id)
 
   const visiting = new Set<PuzzleId>()
   const visited = new Set<PuzzleId>()
@@ -120,7 +169,12 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
 
   const fingerprintInput = {
     cultures: [...snapshot.cultures]
-      .map((culture) => ({ id: culture.id, name: culture.name }))
+      .map((culture) => ({
+        id: culture.id,
+        name: culture.name,
+        unlocksAfter: [...culture.unlocksAfter].sort(),
+        gateway: culture.gateway,
+      }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     relations: [...snapshot.context.relations]
       .map(([name, relation]) => {
@@ -147,6 +201,11 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
       const puzzle = byId.get(id)
       if (puzzle === undefined) throw new GameDomainError(`unknown puzzle '${id}'`)
       return puzzle
+    },
+    culture(id: CultureId) {
+      const culture = cultureById.get(id)
+      if (culture === undefined) throw new GameDomainError(`unknown culture '${id}'`)
+      return culture
     },
   }
 }
