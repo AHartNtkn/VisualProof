@@ -66,6 +66,8 @@ export type InteractiveViewportOptions = {
   readonly doubleClick: (sample: PointerSample) => boolean
   readonly contextMenu: (sample: PointerSample) => void
   readonly pointerChanged: (client: Vec2) => void
+  readonly passiveSample?: (sample: PointerSample) => void
+  readonly modifiersChanged?: (ctrlHeld: boolean) => void
   readonly keyDown: (sample: KeySample) => boolean
   readonly selectionChanged: (selected: readonly Hit[]) => void
   readonly selectionCommitted: () => void
@@ -245,7 +247,7 @@ export class InteractiveViewport {
     const world = this.#world(screen)
     const client = this.#client(event)
     this.#opts.pointerChanged(client)
-    return {
+    const sample: PointerSample = {
       pointerId: event instanceof PointerEvent ? event.pointerId : 1,
       button: event.button,
       client,
@@ -257,6 +259,8 @@ export class InteractiveViewport {
       altKey: event.altKey,
       metaKey: event.metaKey,
     }
+    this.#opts.passiveSample?.(sample)
+    return sample
   }
 
   #world(screen: Vec2): Vec2 {
@@ -458,6 +462,7 @@ export class InteractiveViewport {
 
   #modifierChanged = (event: KeyboardEvent): void => {
     if (event.key !== 'Control') return
+    this.#opts.modifiersChanged?.(event.ctrlKey)
     const pointer = this.#pointer
     if (pointer === null || pointer.phase !== 'physics' || !pointer.moved) return
     pointer.pinOnRelease = event.type === 'keyup'
