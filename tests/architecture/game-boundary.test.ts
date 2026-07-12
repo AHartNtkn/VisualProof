@@ -46,4 +46,12 @@ describe('game package boundary', () => {
     ))
     expect(offenders, offenders.join('\n')).toEqual([])
   })
+
+  it('contains neither displaced campaign nor content-authored thought models', () => {
+    const production = tsFilesUnder('src/game')
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
+    expect(production).not.toMatch(/CampaignId|CampaignDefinition|campaignId|\bcampaigns\b/)
+    expect(production).not.toMatch(/MisconceptionCue|misconceptions|\.thought\b/)
+  })
 })

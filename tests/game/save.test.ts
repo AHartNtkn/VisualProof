@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { buildCatalog } from '../../src/game/catalog'
+import { openingCatalog, openingCatalogSource } from '../../src/game/content'
 import { recordCompletion, emptyProgress } from '../../src/game/progress'
 import { applyGameStep, moveCursor, startPuzzle } from '../../src/game/session'
 import { loadGame, saveGame } from '../../src/game/save'
@@ -26,17 +27,42 @@ const authority = {
 }
 
 describe('versioned game save', () => {
-  it('round-trips sorted completion ids and a rewound retained timeline', () => {
-    let session = startPuzzle(puzzle)
-    for (const step of puzzle.witness) session = applyGameStep(session, step, authority).session
+  it('round-trips the permanent four-veils artifact with all retained states after rewind', () => {
+    const opening = openingCatalog()
+    const fourVeils = opening.puzzle(puzzleId('four-veils'))
+    const openingAuthority = {
+      context: opening.source.context,
+      puzzle: (id: PuzzleId) => opening.puzzle(id),
+      canUseVellum: () => false,
+    }
+    let session = startPuzzle(fourVeils)
+    for (const step of fourVeils.witness) {
+      session = applyGameStep(session, step, openingAuthority).session
+    }
     session = moveCursor(session, 1)
-    const progress = recordCompletion(emptyProgress(), puzzle.id)
-    const encoded = saveGame(catalog, progress, session)
-    expect(encoded.completed).toEqual([puzzle.id])
-    const loaded = loadGame(catalog, JSON.parse(JSON.stringify(encoded)))
-    expect([...loaded.progress.completed]).toEqual([puzzle.id])
+    const progress = recordCompletion(emptyProgress(), puzzleId('two-veils'))
+    const encoded = saveGame(opening, progress, session)
+    const loaded = loadGame(opening, JSON.parse(JSON.stringify(encoded)))
+    expect([...loaded.progress.completed]).toEqual([puzzleId('two-veils')])
+    expect(loaded.active?.timeline.states).toEqual(session.timeline.states)
     expect(loaded.active?.timeline.states).toHaveLength(3)
+    expect(loaded.active?.timeline.steps).toEqual(fourVeils.witness)
     expect(loaded.active?.timeline.cursor).toBe(1)
+  })
+
+  it('refuses a permanent opening save when only cultural history drifts', () => {
+    const opening = openingCatalog()
+    const encoded = saveGame(opening, emptyProgress(), null)
+    const source = openingCatalogSource()
+    const changed = buildCatalog({
+      ...source,
+      cultures: source.cultures.map((culture, index) => index === 0
+        ? { ...culture, historicalSummary: `${culture.historicalSummary} Changed.` }
+        : culture),
+    })
+
+    expect(changed.fingerprint).not.toBe(opening.fingerprint)
+    expect(() => loadGame(changed, encoded)).toThrow(/catalog fingerprint does not match/)
   })
 
   it('round-trips a term-bearing kernel step through its JSON wire format', () => {

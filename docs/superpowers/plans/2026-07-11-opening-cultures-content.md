@@ -786,7 +786,7 @@ git commit -m "feat(game): add opening cultural artifacts"
 **Interfaces:**
 - Validates: fingerprints include culture/content metadata; saves replay opening artifacts; content stays inside the game/kernel boundary; no campaign model remains.
 
-- [ ] **Step 1: Add save and architecture assertions**
+- [x] **Step 1: Add save and architecture assertions**
 
 Round-trip an active `four-veils` session from `openingCatalog()`, rewound after
 both steps, and assert all three states reconstruct. Change one culture history
@@ -803,13 +803,13 @@ expect(production).not.toMatch(/CampaignId|CampaignDefinition|campaignId|\bcampa
 expect(production).not.toMatch(/MisconceptionCue|misconceptions|\.thought\b/)
 ```
 
-- [ ] **Step 2: Run the new assertions**
+- [x] **Step 2: Run the new assertions**
 
 Run: `npx vitest run tests/game/save.test.ts tests/architecture/game-boundary.test.ts`
 
 Expected: PASS after Tasks 1–5. Repair any failure at its owning source.
 
-- [ ] **Step 3: Run decisive non-physics verification**
+- [x] **Step 3: Run decisive non-physics verification**
 
 Run:
 
@@ -825,15 +825,31 @@ git diff --check
 Expected: tests pass; typecheck and diff check exit 0; all scope greps have no
 output. Do not run the physics battery.
 
-- [ ] **Step 4: Append implementation evidence to this plan**
+- [x] **Step 4: Append implementation evidence to this plan**
 
 Mark completed checkboxes and append exact test counts, typecheck result, commit
 identities, the approved naming record, and confirmation that campaign and
 physics diffs are absent.
 
-- [ ] **Step 5: Commit conformance evidence**
+- [x] **Step 5: Commit conformance evidence**
 
 ```bash
 git add tests/game/save.test.ts tests/architecture/game-boundary.test.ts docs/superpowers/plans/2026-07-11-opening-cultures-content.md
 git commit -m "test(game): verify opening culture content"
 ```
+
+#### Task 6 implementation evidence
+
+- Focused save and architecture verification: 2 test files passed, 20 tests passed.
+- Decisive non-physics verification: 13 test files passed, 109 tests passed.
+- `npm run typecheck`: passed (`tsc --noEmit`, exit 0).
+- `git diff --check`: passed with no output.
+- Campaign-model absence scan passed with no output; neither production game code nor game tests contain `CampaignId`, `CampaignDefinition`, `campaignId`, `campaigns`, or `.campaign`.
+- Content-thought-model absence scan passed with no output; neither production game code nor game tests contain `MisconceptionCue`, `misconceptions`, or `.thought`.
+- Physics-scope diff scan passed with no output; no `src/view`, `physics`, `wirephys`, or `relax` path changed, and the physics battery was not run.
+- Task 1: `6520bf8..63eb0c3`; review clean.
+- Task 2: `63eb0c3..eff1aa5`; review clean.
+- Task 3: `eff1aa5..190dc2f`; review clean.
+- Task 4: `f0ae2f3..ed9565c`; review clean.
+- Task 5: `9f78922..f6a9833`; findings fixed and re-review clean.
+- Naming and copy were approved in `5b8fa49`; the required gate was recorded in `9f78922` before production content work.
