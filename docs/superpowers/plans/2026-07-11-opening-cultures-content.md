@@ -852,4 +852,7 @@ git commit -m "test(game): verify opening culture content"
 - Task 3: `eff1aa5..190dc2f`; review clean.
 - Task 4: `f0ae2f3..ed9565c`; review clean.
 - Task 5: `9f78922..f6a9833`; findings fixed and re-review clean.
+- Task 6: `f6a9833..34b24d1`; review clean. The root controller reran the
+  decisive 109-test suite, typecheck, displaced-model scans, and both Task 6
+  and full opening-plan physics-scope scans after review; all passed.
 - Naming and copy were approved in `5b8fa49`; the required gate was recorded in `9f78922` before production content work.
