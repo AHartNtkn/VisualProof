@@ -627,7 +627,7 @@ Run:
 
 ```bash
 npx vitest run tests/kernel/rules/anchored-wire.test.ts tests/kernel/proof
-rg -n "endpointTransport|applyEndpointTransport" src tests/kernel
+rg -n "endpointTransport|applyEndpointTransport" src/kernel tests/kernel
 ```
 
 Expected: tests PASS; `rg` returns no matches.
