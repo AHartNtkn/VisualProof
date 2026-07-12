@@ -4,13 +4,17 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { replayProof } from '../../../src/kernel/proof/step'
+import { replayActions } from '../../../src/kernel/proof/action'
+import type { ProofAction } from '../../../src/kernel/proof/action'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
-import { composeProofs, mapStepIds } from '../../../src/kernel/proof/compose'
+import { composeActions, mapStepIds } from '../../../src/kernel/proof/compose'
 import type { DiagramIso } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
 const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const action = (label: string, steps: readonly ProofStep[], placements: ProofAction['placements'] = []): ProofAction => ({
+  label, steps, placements,
+})
 
 /** Two independently built, differently-id'd copies of the same diagram. */
 function twoCopies() {
@@ -32,36 +36,66 @@ function twoCopies() {
   return { da: a.build(), db: b.build(), bn }
 }
 
-describe('composeProofs', () => {
+describe('composeActions', () => {
   it('rewrites a backward tail onto the forward meet and replays end to end', () => {
     const { da, db, bn } = twoCopies()
     // backward tail (recorded against db): wrap the y-node in a double cut
-    const tail: ProofStep[] = [{
+    const tail = [action('wrap y', [{
       rule: 'doubleCutIntro',
       sel: mkSelection(db, { region: db.root, regions: [], nodes: [bn], wires: [] }),
-    }]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
-    const viaB = replayProof(db, tail, ctx)
+    }])]
+    const composed = composeActions(da, db, tail, ctx)
+    const viaA = replayActions(da, composed, ctx)
+    const viaB = replayActions(db, tail, ctx)
     expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
   it('handles multi-step tails whose later steps reference ids created by earlier ones', () => {
     const { da, db, bn } = twoCopies()
-    const wrapped = replayProof(db, [{
+    const wrapped = replayActions(db, [action('wrap y', [{
       rule: 'doubleCutIntro',
       sel: mkSelection(db, { region: db.root, regions: [], nodes: [bn], wires: [] }),
-    }], ctx)
+    }])], ctx)
     // find the new outer cut in the b-side result, then eliminate it again
     const outer = Object.entries(wrapped.regions)
       .find(([id, r]) => r.kind === 'cut' && db.regions[id] === undefined && r.parent === db.root)![0]
-    const tail: ProofStep[] = [
+    const tail = [action('round trip wrapping', [
       { rule: 'doubleCutIntro', sel: mkSelection(db, { region: db.root, regions: [], nodes: [bn], wires: [] }) },
       { rule: 'doubleCutElim', region: outer },
-    ]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
+    ])]
+    const composed = composeActions(da, db, tail, ctx)
+    const viaA = replayActions(da, composed, ctx)
     expect(exploreForm(viaA)).toBe(exploreForm(da))
+  })
+
+  it('preserves action groups while later actions map ids minted by a constituent step', () => {
+    const { da, db, bn } = twoCopies()
+    const wrapStep: ProofStep = {
+      rule: 'doubleCutIntro',
+      sel: mkSelection(db, { region: db.root, regions: [], nodes: [bn], wires: [] }),
+    }
+    const wrapped = replayActions(db, [action('find minted ids', [wrapStep])], ctx)
+    const outer = Object.entries(wrapped.regions)
+      .find(([id, region]) => db.regions[id] === undefined && region.kind === 'cut' && region.parent === db.root)![0]
+    const inner = Object.entries(wrapped.regions)
+      .find(([id, region]) => db.regions[id] === undefined && region.kind === 'cut' && region.parent === outer)![0]
+    const tail = [
+      action('wrap and annotate', [
+        wrapStep,
+        { rule: 'closedTermIntro', region: inner, term: p('\\x. x') },
+      ], [{ introducedNode: 0, x: 12, y: 34 }]),
+      action('remove minted cuts', [{ rule: 'doubleCutElim', region: outer }]),
+    ]
+
+    const composed = composeActions(da, db, tail, ctx)
+
+    expect(composed.map(({ label, placements, steps }) => ({ label, placements, stepCount: steps.length })))
+      .toEqual([
+        { label: 'wrap and annotate', placements: [{ introducedNode: 0, x: 12, y: 34 }], stepCount: 2 },
+        { label: 'remove minted cuts', placements: [], stepCount: 1 },
+      ])
+    expect(exploreForm(replayActions(da, composed, ctx)))
+      .toBe(exploreForm(replayActions(db, tail, ctx)))
   })
 
   it('works across automorphic diagrams (two identical nodes)', () => {
@@ -73,12 +107,12 @@ describe('composeProofs', () => {
     }
     const { d: da } = mk()
     const { d: db, n1: bn1 } = mk()
-    const tail: ProofStep[] = [{
+    const tail = [action('erase one copy', [{
       rule: 'erasure',
       sel: mkSelection(db, { region: db.root, regions: [], nodes: [bn1], wires: [] }),
-    }]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
+    }])]
+    const composed = composeActions(da, db, tail, ctx)
+    const viaA = replayActions(da, composed, ctx)
     expect(Object.values(viaA.nodes)).toHaveLength(1)
   })
 
@@ -98,13 +132,13 @@ describe('composeProofs', () => {
     bB.termNode(bB.root, p('\\a. \\b. a'))              // constant gets 'n1' in db
     const db = bB.build()
 
-    const tail: ProofStep[] = [{
+    const tail = [action('erase identity', [{
       rule: 'erasure',
       sel: mkSelection(db, { region: db.root, regions: [], nodes: [bn1], wires: [] }),
-    }]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
-    const viaB = replayProof(db, tail, ctx)
+    }])]
+    const composed = composeActions(da, db, tail, ctx)
+    const viaA = replayActions(da, composed, ctx)
+    const viaB = replayActions(db, tail, ctx)
     // Both results should have the constant node only
     expect(Object.values(viaA.nodes)).toHaveLength(1)
     // Fingerprints must match — the same (constant) node survives on both sides
@@ -145,12 +179,12 @@ describe('composeProofs', () => {
     const bx = c.wire(c.root, [{ node: atom, port: { kind: 'arg', index: 0 } }])
     const comp = mkDiagramWithBoundary(c.build(), [bx])
 
-    const tail: ProofStep[] = [
+    const tail = [action('instantiate comprehension', [
       { rule: 'comprehensionInstantiate', bubble: bInner, comp, attachments: [], binders: { [stub]: bOuter } },
-    ]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
-    const viaB = replayProof(db, tail, ctx)
+    ])]
+    const composed = composeActions(da, db, tail, ctx)
+    const viaA = replayActions(da, composed, ctx)
+    const viaB = replayActions(db, tail, ctx)
     expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
@@ -186,12 +220,12 @@ describe('composeProofs', () => {
     const wq = c.wire(c.root, [{ node: n, port: { kind: 'freeVar', name: 'q' } }])
     const comp = mkDiagramWithBoundary(c.build(), [wx, wq])
 
-    const tail: ProofStep[] = [
+    const tail = [action('instantiate parameterized comprehension', [
       { rule: 'comprehensionInstantiate', bubble: bBub, comp, attachments: [bParam], binders: {} },
-    ]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
-    const viaB = replayProof(db, tail, ctx)
+    ])]
+    const composed = composeActions(da, db, tail, ctx)
+    const viaA = replayActions(da, composed, ctx)
+    const viaB = replayActions(db, tail, ctx)
     expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
@@ -211,10 +245,10 @@ describe('composeProofs', () => {
     }
     const { d: da } = mk(true)
     const { d: db, cut: bCut } = mk(false)
-    const tail: ProofStep[] = [{ rule: 'closedTermIntro', region: bCut, term: p('\\x. x') }]
-    const composed = composeProofs(da, db, tail, ctx)
-    const viaA = replayProof(da, composed, ctx)
-    const viaB = replayProof(db, tail, ctx)
+    const tail = [action('introduce identity', [{ rule: 'closedTermIntro', region: bCut, term: p('\\x. x') }])]
+    const composed = composeActions(da, db, tail, ctx)
+    const viaA = replayActions(da, composed, ctx)
+    const viaB = replayActions(db, tail, ctx)
     expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
@@ -222,7 +256,7 @@ describe('composeProofs', () => {
     const { da } = twoCopies()
     const other = new DiagramBuilder()
     other.termNode(other.root, p('y'))
-    expect(() => composeProofs(da, other.build(), [], ctx))
+    expect(() => composeActions(da, other.build(), [], ctx))
       .toThrowError(/do not meet/)
   })
 })

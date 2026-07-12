@@ -6,11 +6,13 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { checkTheorem, applyTheorem } from '../../../src/kernel/proof/theorem'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
-import type { ProofContext } from '../../../src/kernel/proof/step'
+import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import type { ProofAction } from '../../../src/kernel/proof/action'
 import { replayProof } from '../../../src/kernel/proof/step'
 
 const p = (s: string) => parseTerm(s)
 const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const action = (label: string, ...steps: ProofStep[]): ProofAction => ({ label, steps, placements: [] })
 
 /**
  * The running example: P(x) := x = λa.a, Q(x) := x = λa.λb.a.
@@ -31,7 +33,7 @@ function dropQ(): Theorem {
   const rhs = mkDiagramWithBoundary(r.build(), [rb])
   return {
     name: 'dropQ', lhs, rhs,
-    steps: [{ rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } }],
+    actions: [action('erase Q', { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } })],
   }
 }
 
@@ -42,7 +44,7 @@ describe('checkTheorem', () => {
 
   it('rejects proofs that do not arrive at the stated rhs', () => {
     const t = dropQ()
-    const broken: Theorem = { ...t, steps: [] }
+    const broken: Theorem = { ...t, actions: [] }
     expect(() => checkTheorem(broken, ctx))
       .toThrowError(/does not arrive at the stated right-hand side/)
   })
@@ -62,7 +64,7 @@ describe('checkTheorem', () => {
     const lhs = side(false)
     const rhs = side(true)
     expect(exploreForm(lhs.diagram)).toBe(exploreForm(rhs.diagram))
-    const forged: Theorem = { name: 'swap', lhs, rhs, steps: [] }
+    const forged: Theorem = { name: 'swap', lhs, rhs, actions: [] }
     expect(() => checkTheorem(forged, ctx))
       .toThrowError(/does not arrive at the stated right-hand side/)
   })
@@ -76,7 +78,7 @@ describe('checkTheorem', () => {
     const cut = n.cut(n.root)
     const nn = n.termNode(cut, p('\\a. a'))
     const nw = n.wire(cut, [{ node: nn, port: { kind: 'output' } }])
-    const nonRoot: Theorem = { ...t, lhs: mkDiagramWithBoundary(n.build(), [nw]), steps: [] }
+    const nonRoot: Theorem = { ...t, lhs: mkDiagramWithBoundary(n.build(), [nw]), actions: [] }
     expect(() => checkTheorem(nonRoot, ctx)).toThrowError(/not scoped at the diagram root/)
   })
 
@@ -88,14 +90,14 @@ describe('checkTheorem', () => {
     // explicitly as removal content:
     const destroying: Theorem = {
       ...t,
-      steps: [{
+      actions: [action('destroy boundary', {
         rule: 'erasure',
         sel: {
           region: t.lhs.diagram.root, regions: [],
           nodes: Object.keys(t.lhs.diagram.nodes),
           wires: [t.lhs.boundary[0]!],
         },
-      }],
+      })],
     }
     expect(() => checkTheorem(destroying, ctx)).toThrowError(/boundary wire .* was destroyed/)
   })
@@ -179,7 +181,7 @@ describe('applyTheorem', () => {
     const sideNode = sideBuilder.termNode(sideBuilder.root, p('\\x. x'))
     const sideWire = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'output' } }])
     const side = mkDiagramWithBoundary(sideBuilder.build(), [sideWire, sideWire])
-    const theorem: Theorem = { name: 'aliasId', lhs: side, rhs: side, steps: [] }
+    const theorem: Theorem = { name: 'aliasId', lhs: side, rhs: side, actions: [] }
     expect(() => checkTheorem(theorem, ctx)).not.toThrow()
 
     const host = new DiagramBuilder()
@@ -198,7 +200,7 @@ describe('applyTheorem', () => {
     const a = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 0 } }])
     const b = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 1 } }])
     const side = mkDiagramWithBoundary(sideBuilder.build(), [a, b])
-    const theorem: Theorem = { name: 'pairId', lhs: side, rhs: side, steps: [] }
+    const theorem: Theorem = { name: 'pairId', lhs: side, rhs: side, actions: [] }
 
     const host = new DiagramBuilder()
     const node = host.ref(host.root, 'Pair', 2)
@@ -245,7 +247,7 @@ describe('boundary-wire id resurrection is refused', () => {
     const n = b.termNode(b.root, p('\\a. a'))
     b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
     const side = mkDiagramWithBoundary(b.build(), [])
-    return { name: 'idT', lhs: side, rhs: side, steps: [] }
+    return { name: 'idT', lhs: side, rhs: side, actions: [] }
   }
 
   it('a proof that destroys the boundary wire and re-mints its id later is refused', () => {
@@ -265,14 +267,14 @@ describe('boundary-wire id resurrection is refused', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     const forged: Theorem = {
       name: 'forged', lhs, rhs,
-      steps: [
+      actions: [action('erase and replace',
         { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [k], wires: [w0] } },
         {
           rule: 'theorem', name: 'idT',
           at: { sel: { region: lhs.diagram.root, regions: [], nodes: [idn], wires: [w1] }, args: [] },
           direction: 'forward',
         },
-      ],
+      )],
     }
     const c: ProofContext = { theorems: new Map([[T.name, T]]), relations: new Map() }
     expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
@@ -293,11 +295,11 @@ describe('boundary-wire id resurrection is refused', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     const forged: Theorem = {
       name: 'forgedOneStep', lhs, rhs,
-      steps: [{
+      actions: [action('replace occurrence', {
         rule: 'theorem', name: 'idT',
         at: { sel: { region: lhs.diagram.root, regions: [], nodes: [idn], wires: [w0] }, args: [] },
         direction: 'forward',
-      }],
+      })],
     }
     const c: ProofContext = { theorems: new Map([[T.name, T]]), relations: new Map() }
     expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)

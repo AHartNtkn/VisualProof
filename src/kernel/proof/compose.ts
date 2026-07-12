@@ -5,6 +5,7 @@ import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { ProofContext, ProofStep } from './step'
 import { applyStep } from './step'
+import type { ProofAction } from './action'
 import { ProofError } from './error'
 
 function mapId<T extends string>(m: ReadonlyMap<string, string>, id: T, what: string): T {
@@ -111,36 +112,44 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
 }
 
 /**
- * Meet-in-the-middle: transplant a tail of steps recorded against
+ * Meet-in-the-middle: transplant a tail of actions recorded against
  * `meetSource` onto the isomorphic `meetTarget`. Fresh ids minted during
  * replay depend on the id environment, so a single up-front rewrite cannot
  * work — instead the isomorphism is re-derived from canonical labelings
  * after every step (appliers are iso-equivariant up to fresh-id choice).
  */
-export function composeProofs(
+export function composeActions(
   meetTarget: Diagram,
   meetSource: Diagram,
-  tail: readonly ProofStep[],
+  tail: readonly ProofAction[],
   ctx: ProofContext,
-): ProofStep[] {
+): ProofAction[] {
   let iso = exploreIso(meetSource, meetTarget)
   if (iso === null) throw new ProofError('the two sides do not meet: the diagrams are not isomorphic')
   let curTarget = meetTarget
   let curSource = meetSource
-  const out: ProofStep[] = []
-  for (const [i, step] of tail.entries()) {
-    const mapped = mapStepIds(step, iso)
-    out.push(mapped)
-    try {
-      curTarget = applyStep(curTarget, mapped, ctx)
-      curSource = applyStep(curSource, step, ctx)
-    } catch (e) {
-      throw new ProofError(`composing step ${i} (${step.rule}) failed: ${e instanceof Error ? e.message : String(e)}`)
+  const out: ProofAction[] = []
+  for (const [actionIndex, action] of tail.entries()) {
+    const mappedSteps: ProofStep[] = []
+    for (const [stepIndex, step] of action.steps.entries()) {
+      const mapped = mapStepIds(step, iso)
+      mappedSteps.push(mapped)
+      try {
+        curTarget = applyStep(curTarget, mapped, ctx)
+        curSource = applyStep(curSource, step, ctx)
+      } catch (e) {
+        throw new ProofError(
+          `composing action ${actionIndex} step ${stepIndex} (${step.rule}) failed: ${e instanceof Error ? e.message : String(e)}`,
+        )
+      }
+      iso = exploreIso(curSource, curTarget)
+      if (iso === null) {
+        throw new ProofError(
+          `composing action ${actionIndex} step ${stepIndex} (${step.rule}) diverged: the sides are no longer isomorphic`,
+        )
+      }
     }
-    iso = exploreIso(curSource, curTarget)
-    if (iso === null) {
-      throw new ProofError(`composing step ${i} (${step.rule}) diverged: the sides are no longer isomorphic`)
-    }
+    out.push({ label: action.label, steps: mappedSteps, placements: action.placements })
   }
   return out
 }
