@@ -105,7 +105,10 @@ test('proof term spawning reuses the edit cascade, refuses open terms, and recor
 
   const canvas = (await page.locator('#c').boundingBox())!
   const invoke = { x: canvas.x + canvas.width * 0.76, y: canvas.y + canvas.height * 0.72 }
-  const before = await page.evaluate(() => window.__vpaDebug!.bodies().map(({ id }) => id))
+  const before = await page.evaluate(() => ({
+    ids: window.__vpaDebug!.bodies().map(({ id }) => id),
+    nodeCount: window.__vpaDebug!.nodeCount(),
+  }))
   await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
 
   const cascade = page.locator('.vpa-spawn-column')
@@ -125,11 +128,18 @@ test('proof term spawning reuses the edit cascade, refuses open terms, and recor
   await expect(cascade).toHaveCount(0)
   await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
   const introduced = await page.evaluate((oldIds) => window.__vpaDebug!.bodies()
-    .find((body) => body.kind === 'term' && !oldIds.includes(body.id)), before)
+    .find((body) => body.kind === 'term' && !oldIds.includes(body.id)), before.ids)
   expect(introduced).toBeDefined()
   const view = await page.evaluate(() => window.__vpaDebug!.view())
   expect(Math.abs(introduced!.x * view.scale + view.offsetX - (invoke.x - canvas.x))).toBeLessThan(45)
   expect(Math.abs(introduced!.y * view.scale + view.offsetY - (invoke.y - canvas.y))).toBeLessThan(45)
+
+  await page.keyboard.press('Control+z')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('0 / 1')
+  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(before.nodeCount)
+  await page.keyboard.press('Control+Shift+z')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(before.nodeCount + 1)
 })
 
 test('fixed proof fronts expose the same closed-term spawn interaction on their owning side', async ({ page }) => {
