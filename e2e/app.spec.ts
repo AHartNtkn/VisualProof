@@ -47,8 +47,8 @@ declare global {
         ratio: number
         focused: 'forward' | 'backward'
         met: boolean
-        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null }
-        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null }
+        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null }
+        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null }
       }
       motion(): { playing: boolean; morph: string | null; ghosts: number; pulses: number; hover: number; preferences: { conversionAnimation: boolean; connectedMorph: boolean; speed: number; transitionGhosts: boolean; hoverEaseMs: number } }
       comprehension(): null | { bubble: string; cursor: number; historyLength: number; formalBoundary: string[]; materializedBoundary: string[]; externalWires: { draftWire: string; hostWire: string }[]; rect: { left: number; top: number; width: number; height: number }; draftBodies: { node: string; kind: string; x: number; y: number; point: { x: number; y: number } }[]; draftWires: { wire: string; point: { x: number; y: number } | null }[]; hostWires: { wire: string; point: { x: number; y: number } | null }[] }
@@ -150,12 +150,25 @@ test('both fixed proof fronts share closed-term spawn policy, placement, refusal
   await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
   await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
   await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()?.focused)).toBe('forward')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()?.forward.motion.playing)).toBe(false)
 
-  const invokeOn = async (side: 'forward' | 'backward', x = 0.76, y = 0.72) => {
+  const invokeOn = async (side: 'forward' | 'backward') => {
     const front = page.locator(`.vpa-proof-front-${side} .vpa-proof-front-canvas`)
     const box = (await front.boundingBox())!
-    const invoke = { x: box.x + box.width * x, y: box.y + box.height * y }
-    await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+    const local = await page.evaluate(({ which, width, height }) => {
+      const state = window.__vpaDebug!.fixed()![which]
+      const candidates = [0.16, 0.3, 0.5, 0.7, 0.84].flatMap((x) =>
+        [0.2, 0.38, 0.62, 0.8].map((y) => ({ x: width * x, y: height * y })))
+      const clearance = (point: { x: number; y: number }) => Math.min(...state.bodies.map((body) => {
+        const x = body.x * state.view.scale + state.view.offsetX
+        const y = body.y * state.view.scale + state.view.offsetY
+        return Math.hypot(point.x - x, point.y - y) - body.r
+      }))
+      return candidates.sort((a, b) => clearance(b) - clearance(a))[0]!
+    }, { which: side, width: box.width, height: box.height })
+    const invoke = { x: box.x + local.x, y: box.y + local.y }
+    await front.click({ button: 'right', position: local })
     return { box, invoke }
   }
 
@@ -202,7 +215,7 @@ test('both fixed proof fronts share closed-term spawn policy, placement, refusal
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.bodies.filter((body) => body.kind === 'term').length)).toBe(2)
 
-  await invokeOn('forward', 0.22, 0.72)
+  await invokeOn('forward')
   await expect(cascade).toBeVisible()
   await page.evaluate(() => window.__vpaDebug!.dispose())
   await expect(cascade).toHaveCount(0)
