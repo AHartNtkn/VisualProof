@@ -152,7 +152,7 @@ test('fission uses the same internal pull gesture in ordinary and both fixed-sid
   await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
 
   const canvas = (await page.locator('#c').boundingBox())!
-  const main = await page.evaluate(() => {
+  let main = await page.evaluate(() => {
     const target = window.__vpaDebug!.fissionTargets().find((candidate) => candidate.path.join('/') === 'arg')!
     return { target, view: window.__vpaDebug!.view() }
   })
@@ -160,7 +160,22 @@ test('fission uses the same internal pull gesture in ordinary and both fixed-sid
     x: canvas.x + x * main.view.scale + main.view.offsetX,
     y: canvas.y + y * main.view.scale + main.view.offsetY,
   })
-  const mainStart = mainPoint(main.target.x, main.target.y)
+  let mainStart = mainPoint(main.target.x, main.target.y)
+  await page.keyboard.down('Control')
+  await page.mouse.move(mainStart.x, mainStart.y)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays())).toEqual([])
+  await page.mouse.down()
+  await page.mouse.move(mainStart.x + 30, mainStart.y + 18, { steps: 5 })
+  await page.mouse.up()
+  await page.keyboard.up('Control')
+  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('0 / 0')
+
+  main = await page.evaluate(() => {
+    const target = window.__vpaDebug!.fissionTargets().find((candidate) => candidate.path.join('/') === 'arg')!
+    return { target, view: window.__vpaDebug!.view() }
+  })
+  mainStart = mainPoint(main.target.x, main.target.y)
   const mainDrop = mainPoint(main.target.dropX, main.target.dropY)
   await page.mouse.move(mainStart.x, mainStart.y)
   await expect.poll(() => page.evaluate(() => {
@@ -171,6 +186,45 @@ test('fission uses the same internal pull gesture in ordinary and both fixed-sid
   await page.mouse.move(mainDrop.x, mainDrop.y, { steps: 6 })
   await page.mouse.up()
   await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
+  const producer = await page.evaluate((source) => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term' && candidate.id !== source)!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  }, main.target.node)
+  expect(Math.hypot(canvas.x + producer.x - mainDrop.x, canvas.y + producer.y - mainDrop.y)).toBeLessThan(45)
+  await page.keyboard.press('Control+z')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('0 / 1')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
+  await page.keyboard.press('Control+Shift+z')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
+
+  await page.getByRole('button', { name: 'Return to editing', exact: true }).click()
+  await openMode(page)
+  await page.getByRole('button', { name: 'Prove backward', exact: true }).click()
+  const backward = await page.evaluate(() => {
+    const target = window.__vpaDebug!.fissionTargets().find((candidate) => candidate.path.join('/') === 'arg')!
+    return { target, view: window.__vpaDebug!.view() }
+  })
+  const backwardStart = {
+    x: canvas.x + backward.target.x * backward.view.scale + backward.view.offsetX,
+    y: canvas.y + backward.target.y * backward.view.scale + backward.view.offsetY,
+  }
+  await page.mouse.move(backwardStart.x, backwardStart.y)
+  await page.mouse.down()
+  const backwardNow = await page.evaluate(() => {
+    const target = window.__vpaDebug!.fissionTargets().find((candidate) => candidate.path.join('/') === 'arg')!
+    return { target, view: window.__vpaDebug!.view() }
+  })
+  await page.mouse.move(
+    canvas.x + backwardNow.target.dropX * backwardNow.view.scale + backwardNow.view.offsetX,
+    canvas.y + backwardNow.target.dropY * backwardNow.view.scale + backwardNow.view.offsetY,
+    { steps: 6 },
+  )
+  await page.mouse.up()
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+  expect(await page.evaluate(() => window.__vpaDebug!.proof())).toEqual({ kind: 'track', direction: 'backward' })
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
 
   await page.goto('/?debug')
@@ -240,6 +294,48 @@ test('fission uses the same internal pull gesture in ordinary and both fixed-sid
 
   await pullFront('forward')
   await pullFront('backward')
+})
+
+test('proof fission refuses a binder-dependent occurrence without recording history', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, '\\x. x y')
+  await openMode(page)
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+  const canvas = (await page.locator('#c').boundingBox())!
+  let previous = ''
+  let stable = 0
+  await expect.poll(async () => {
+    const signature = await page.evaluate(() => JSON.stringify(window.__vpaDebug!.bodies()
+      .map((body) => [body.id, Math.round(body.x * 2), Math.round(body.y * 2)])))
+    stable = signature === previous ? stable + 1 : 0
+    previous = signature
+    return stable
+  }, { timeout: 30_000, intervals: [150, 200, 250] }).toBeGreaterThanOrEqual(3)
+  const state = await page.evaluate(() => {
+    const target = window.__vpaDebug!.fissionTargets().find((candidate) => candidate.path.join('/') === 'body')!
+    return { target, view: window.__vpaDebug!.view() }
+  })
+  const start = {
+    x: canvas.x + state.target.x * state.view.scale + state.view.offsetX,
+    y: canvas.y + state.target.y * state.view.scale + state.view.offsetY,
+  }
+  await page.mouse.move(start.x, start.y)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays().includes('arc'))).toBe(true)
+  await page.mouse.down()
+  const current = await page.evaluate(() => {
+    const target = window.__vpaDebug!.fissionTargets().find((candidate) => candidate.path.join('/') === 'body')!
+    return { target, view: window.__vpaDebug!.view() }
+  })
+  await page.mouse.move(
+    canvas.x + current.target.dropX * current.view.scale + current.view.offsetX,
+    canvas.y + current.target.dropY * current.view.scale + current.view.offsetY,
+    { steps: 6 },
+  )
+  await page.mouse.up()
+  await expect(page.locator('.vpa-refusal')).toContainText('references binders above')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('0 / 0')
+  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
 })
 
 test('both fixed proof fronts share closed-term spawn policy, placement, refusal persistence, and disposal', async ({ page }) => {

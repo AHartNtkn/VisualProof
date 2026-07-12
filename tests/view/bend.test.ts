@@ -77,6 +77,19 @@ describe('bendGrid', () => {
     expect(argument.arcIndices.length + argument.radialIndices.length).toBeGreaterThan(0)
     const body = g.occurrences.find((occurrence) => occurrence.path.join('/') === 'arg/fn/body')!
     expect(body.hit.kind).toBe('arcPoint')
+    expect(body.arcIndices.length + body.radialIndices.length).toBeGreaterThan(0)
+    for (const occurrence of g.occurrences) {
+      expect(occurrence.arcIndices.length + occurrence.radialIndices.length + Number(occurrence.includeExit),
+        `painted carrier for [${occurrence.path.join(',')}]`).toBeGreaterThan(0)
+    }
+  })
+
+  it('gives a lambda leaf body a painted internal carrier to highlight', () => {
+    for (const source of ['\\x. a', '\\x. x']) {
+      const g = bendGrid(trompGrid(p(source)))
+      const body = g.occurrences.find((occurrence) => occurrence.path.join('/') === 'body')!
+      expect(body.arcIndices.length + body.radialIndices.length).toBeGreaterThan(0)
+    }
   })
 })
 

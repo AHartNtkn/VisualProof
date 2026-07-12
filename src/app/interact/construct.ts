@@ -165,9 +165,13 @@ export class ConstructController {
       else this.#tryCommit(() => deleteHits(this.#options.diagram(), selected), 'deleted; selected boundaries dissolved and unselected contents propagated')
       return true
     }
-    if (sample.key === 'Escape' && this.#prompt !== null) {
-      this.#closePrompt()
-      return true
+    if (sample.key === 'Escape') {
+      const cancelledFission = this.#fission.cancel()
+      if (this.#prompt !== null) {
+        this.#closePrompt()
+        return true
+      }
+      return cancelledFission
     }
     return false
   }

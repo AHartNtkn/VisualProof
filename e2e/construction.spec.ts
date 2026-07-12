@@ -127,6 +127,21 @@ test('fission pulls an exact internal subterm in Edit while Ctrl remains physics
   await page.mouse.up()
   await page.keyboard.up('Control')
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
+
+  await waitForRest(page)
+  const root = await page.evaluate(() => window.__vpaDebug!.fissionTargets()
+    .find((candidate) => candidate.path.length === 0)!)
+  const rootStart = await pagePoint(page, root)
+  const rootDrop = await pagePoint(page, { x: root.dropX, y: root.dropY })
+  await page.mouse.move(rootStart.x, rootStart.y)
+  await page.mouse.down()
+  await page.mouse.move(rootDrop.x, rootDrop.y, { steps: 5 })
+  await page.mouse.up()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
+  await page.keyboard.press('Control+z')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
+  await page.keyboard.press('Control+Shift+z')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
 })
 
 test('the contextual spawn cascade is disposable and preserves the construction selection', async ({ page }) => {

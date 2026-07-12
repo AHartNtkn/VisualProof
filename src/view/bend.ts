@@ -117,14 +117,10 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
   const outputAnchor = polar(0, pierceR)
   const exitLine: readonly [Vec2, Vec2] = [polar(a0, exitR), outputAnchor]
   const occurrences: TermOccurrenceGeometry[] = g.occurrences.map((occurrence) => {
-    const insideCols = (start: number, end: number): boolean =>
-      occurrence.colStart <= start && end <= occurrence.colEnd
-    const arcIndices = g.bars.flatMap((bar, index) =>
-      (occurrence.path.length === 0 || (bar.row >= occurrence.layoutDepth && bar.row <= occurrence.bottom
-        && insideCols(bar.colStart, bar.colEnd))) ? [index] : [])
-    const radialIndices = g.stems.flatMap((stem, index) =>
-      (occurrence.path.length === 0 || (stem.rowTop >= occurrence.layoutDepth && stem.rowBottom <= occurrence.bottom
-        && insideCols(stem.col, stem.col))) ? [index] : [])
+    const ownedByOccurrence = (owner: readonly PathSeg[] | null): boolean => owner !== null
+      && occurrence.path.every((segment, index) => owner[index] === segment)
+    const arcIndices = g.barOwners.flatMap((owner, index) => ownedByOccurrence(owner) ? [index] : [])
+    const radialIndices = g.stemOwners.flatMap((owner, index) => ownedByOccurrence(owner) ? [index] : [])
     const hit: TermOccurrenceHit = occurrence.hit.kind === 'exit'
       ? { kind: 'exit' }
       : occurrence.hit.kind === 'arcPoint'

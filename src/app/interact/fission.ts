@@ -27,6 +27,15 @@ export type FissionRequest = {
   readonly at: Vec2
 }
 
+function fissionValidity(diagram: Diagram, node: NodeId, path: readonly PathSeg[]): { valid: boolean; reason: string | null } {
+  try {
+    applyFission(diagram, node, path)
+    return { valid: true, reason: null }
+  } catch (error) {
+    return { valid: false, reason: error instanceof Error ? error.message : String(error) }
+  }
+}
+
 function segmentDistance(point: Vec2, a: Vec2, b: Vec2): number {
   const ab = sub(b, a)
   const ap = sub(point, a)
@@ -78,18 +87,8 @@ export function fissionHit(
     || a.body.id.localeCompare(b.body.id))
   const found = candidates[0]
   if (found === undefined || diagram.nodes[found.body.id]?.kind !== 'term') return null
-  try {
-    applyFission(diagram, found.body.id, found.occurrence.path)
-    return { node: found.body.id, path: found.occurrence.path, occurrence: found.occurrence, valid: true, reason: null }
-  } catch (error) {
-    return {
-      node: found.body.id,
-      path: found.occurrence.path,
-      occurrence: found.occurrence,
-      valid: false,
-      reason: error instanceof Error ? error.message : String(error),
-    }
-  }
+  const validity = fissionValidity(diagram, found.body.id, found.occurrence.path)
+  return { node: found.body.id, path: found.occurrence.path, occurrence: found.occurrence, ...validity }
 }
 
 function anatomyShapes(engine: Engine, body: Body, occurrence: TermOccurrenceGeometry, color: string): Shape[] {
@@ -220,6 +219,7 @@ export class FissionDragController {
   #hover: FissionTarget | null = null
   #drag: DragPreview | null = null
   #ctrlHeld = false
+  #generation = 0
 
   constructor(options: FissionDragOptions) { this.#options = options }
 
@@ -233,7 +233,7 @@ export class FissionDragController {
 
   modifiersChanged(ctrlHeld: boolean): void {
     this.#ctrlHeld = ctrlHeld
-    if (ctrlHeld) this.#hover = null
+    if (ctrlHeld) this.cancel()
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -241,37 +241,46 @@ export class FissionDragController {
     const target = fissionHit(this.#options.engine(), this.#options.diagram(), sample.world, this.#options.viewScale())
     if (target === null) return null
     const preview: DragPreview = { target, at: sample.world, placementValid: false, moved: false }
+    const generation = ++this.#generation
+    const current = (): boolean => this.#generation === generation && this.#drag === preview && this.#options.active()
     this.#drag = preview
     this.#hover = null
     return {
       still: 'selection',
       blocksPassiveRelaxation: true,
       move: (next) => {
+        if (!current()) return
         preview.at = next.world
         preview.moved = true
         preview.placementValid = this.#placementValid(preview)
       },
       release: (next, moved) => {
+        if (!current()) return
         this.#drag = null
+        this.#generation++
         if (!moved) return
-        if (!target.valid) {
-          this.#options.refuse(target.reason ?? 'this subterm cannot be split out', next.client)
+        const validity = fissionValidity(this.#options.diagram(), target.node, target.path)
+        if (!validity.valid) {
+          this.#options.refuse(validity.reason ?? 'this subterm cannot be split out', next.client)
           return
         }
-        if (!preview.placementValid) {
+        if (!placementValid(this.#options.engine(), this.#options.diagram(), target.node, next.world)) {
           this.#options.refuse('pull outside the node and release in its current region to fission', next.client)
           return
         }
-        this.#options.commit({ node: target.node, path: target.path, at: next.world })
+        try {
+          this.#options.commit({ node: target.node, path: target.path, at: next.world })
+        } catch (error) {
+          this.#options.refuse(error instanceof Error ? error.message : String(error), next.client)
+        }
       },
-      cancel: () => { this.#drag = null },
+      cancel: () => { if (current()) this.cancel() },
     }
   }
 
   overlay(): readonly Shape[] {
     if (!this.#options.active()) {
-      this.#hover = null
-      this.#drag = null
+      this.cancel()
       return []
     }
     const target = this.#drag?.target ?? this.#hover
@@ -279,22 +288,33 @@ export class FissionDragController {
     const body = this.#options.engine().bodies.get(target.node)
     if (body === undefined || body.geometry === null) return []
     const preview = this.#drag
-    const valid = target.valid && (preview === null || !preview.moved || preview.placementValid)
+    const validity = fissionValidity(this.#options.diagram(), target.node, target.path)
+    const valid = validity.valid && (preview === null || !preview.moved || preview.placementValid)
     const color = valid ? this.#options.theme().interaction.valid : this.#options.theme().interaction.refusal
     const shapes = anatomyShapes(this.#options.engine(), body, target.occurrence, color)
     if (preview !== null && preview.moved) {
       shapes.push({ kind: 'segment', from: hitPoint(this.#options.engine(), body, target.occurrence), to: preview.at,
         stroke: color, width: 1.8, glow: null })
       const node = this.#options.diagram().nodes[target.node]
-      if (node?.kind === 'term') {
-        const subterm = subtermAt(node.term, target.path)
-        shapes.push(...geometryShapesAt(this.#options.engine(), bendGrid(trompGrid(subterm)), preview.at, color))
+      if (validity.valid && node?.kind === 'term') {
+        try {
+          const subterm = subtermAt(node.term, target.path)
+          shapes.push(...geometryShapesAt(this.#options.engine(), bendGrid(trompGrid(subterm)), preview.at, color))
+        } catch {
+          // Current validity is the authority; a concurrent path change simply leaves the red drag trace.
+        }
       }
     }
     return shapes
   }
 
-  cancel(): void { this.#drag = null; this.#hover = null }
+  cancel(): boolean {
+    const hadState = this.#drag !== null || this.#hover !== null
+    this.#generation++
+    this.#drag = null
+    this.#hover = null
+    return hadState
+  }
   dispose(): void { this.cancel() }
 
   #placementValid(preview: DragPreview): boolean {

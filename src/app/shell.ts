@@ -128,6 +128,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let replayReturnMode: 'edit' | 'prove' = 'edit'
   let editDiagram = opts.initialDiagram ?? emptyDiagram()
   const editHistory: Diagram[] = []
+  const editFuture: Diagram[] = []
   let goalLhs: DiagramWithBoundary | null = null
   let goalRhs: DiagramWithBoundary | null = null
   type ActiveProof =
@@ -638,6 +639,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // ---- edit operations (mkDiagram-validated surgery via edit.ts) ----
   const pushEdit = (d: Diagram, placement?: { readonly node: NodeId; readonly at: Vec2 }, preserveSelection = false): void => {
     editHistory.push(editDiagram)
+    editFuture.length = 0
     editDiagram = d
     sync(false, preserveSelection)
     if (placement !== undefined) seedBodyPlacement(engine, placement.node, placement.at)
@@ -808,6 +810,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (mode === 'edit') {
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
+      editFuture.push(editDiagram)
       editDiagram = prev
       sync()
       return
@@ -828,6 +831,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   const onRedo = guard(() => {
     if (mainMotion.playing || fixedWorkspace?.busy || comprehensionEditor !== null) return
+    if (mode === 'edit') {
+      const next = editFuture.pop()
+      if (next === undefined) throw new Error('nothing to redo in edit mode')
+      editHistory.push(editDiagram)
+      editDiagram = next
+      sync()
+      return
+    }
     if (mode === 'replay' && replay !== null) {
       if (replayK === replay.stepCount) throw new Error('nothing to redo in replay')
       gotoReplayStep(replayK + 1)
