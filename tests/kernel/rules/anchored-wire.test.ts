@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import type { Diagram, Endpoint, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
+import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../../src/kernel/diagram/diagram'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { bvar, lam, port, termEq } from '../../../src/kernel/term/term'
+import { app, bvar, lam, port, termEq } from '../../../src/kernel/term/term'
+import type { ConversionCertificate } from '../../../src/kernel/term/certificate'
 import { portKey } from '../../../src/kernel/diagram/diagram'
 import {
   anchorAvailability,
@@ -12,7 +13,7 @@ import {
 
 const CLOSED = lam(bvar(0))
 const OTHER_CLOSED = lam(lam(bvar(1)))
-const EMPTY_CERT = { leftSteps: [], rightSteps: [] }
+const EMPTY_CERT: ConversionCertificate = { leftSteps: [], rightSteps: [] }
 
 const sameEndpoint = (left: Endpoint, right: Endpoint): boolean =>
   left.node === right.node && portKey(left.port) === portKey(right.port)
@@ -22,6 +23,20 @@ function outputWire(d: Diagram, node: NodeId): WireId {
     wire.endpoints.some((endpoint) => sameEndpoint(endpoint, { node, port: { kind: 'output' } })))
   if (found === undefined) throw new Error(`no output wire for '${node}'`)
   return found[0]
+}
+
+function redistribute(
+  d: Diagram,
+  sourceWitness: NodeId,
+  targetWitness: NodeId,
+  endpoints: readonly Endpoint[],
+  target: RegionId,
+  certificate: ConversionCertificate = EMPTY_CERT,
+): Diagram {
+  const wire = outputWire(d, sourceWitness)
+  const split = applyAnchoredWireSplit(d, wire, sourceWitness, endpoints, target)
+  const duplicate = Object.keys(split.nodes).find((id) => d.nodes[id] === undefined)!
+  return applyAnchoredWireContract(split, duplicate, targetWitness, certificate)
 }
 
 function splitFixture({ inCut = false }: { inCut?: boolean } = {}) {
@@ -105,6 +120,43 @@ function sharedAnchorFixture() {
     { node: bNode, port: { kind: 'output' } },
   ])
   return { d: b.build(), a, b: bNode }
+}
+
+function redistributionFixture({ inCut = false, consumerInside = false }: {
+  inCut?: boolean
+  consumerInside?: boolean
+} = {}) {
+  const b = new DiagramBuilder()
+  const evidenceRegion = inCut ? b.cut(b.root) : b.root
+  const consumerRegion = consumerInside ? b.cut(evidenceRegion) : evidenceRegion
+  const a = b.termNode(evidenceRegion, CLOSED)
+  const bNode = b.termNode(evidenceRegion, CLOSED)
+  const firstNode = b.termNode(consumerRegion, port('s0'))
+  const secondNode = b.termNode(consumerRegion, port('s0'))
+  const first = { node: firstNode, port: { kind: 'freeVar' as const, name: 's0' } }
+  const second = { node: secondNode, port: { kind: 'freeVar' as const, name: 's0' } }
+  const aWire = b.wire(evidenceRegion, [
+    { node: a, port: { kind: 'output' } },
+    first,
+    second,
+  ])
+  const bWire = b.wire(evidenceRegion, [{ node: bNode, port: { kind: 'output' } }])
+  return { d: b.build(), evidenceRegion, a, b: bNode, first, second, aWire, bWire }
+}
+
+function shieldedTransportFixture() {
+  const b = new DiagramBuilder()
+  const evidenceRegion = b.cut(b.root)
+  const a = b.termNode(evidenceRegion, CLOSED)
+  const bNode = b.termNode(evidenceRegion, CLOSED)
+  const consumer = b.termNode(evidenceRegion, port('s0'))
+  const endpoint = { node: consumer, port: { kind: 'freeVar' as const, name: 's0' } }
+  const aWire = b.wire(b.root, [{ node: a, port: { kind: 'output' } }, endpoint])
+  const bWire = b.wire(b.root, [{ node: bNode, port: { kind: 'output' } }])
+  return {
+    d: b.build(), evidenceRegion, a, b: bNode, endpoint, aWire, bWire,
+    certificate: EMPTY_CERT,
+  }
 }
 
 function newClosedWitness(after: Diagram, before: Diagram, target: string): NodeId {
@@ -248,5 +300,117 @@ describe('anchored wire split and contraction', () => {
       const duplicate = newClosedWitness(split, s.d, s.target)
       expect(() => applyAnchoredWireContract(split, duplicate, s.witness, EMPTY_CERT)).not.toThrow()
     }
+  })
+})
+
+describe('anchored redistribution capability', () => {
+  it.each([
+    ['positive', false],
+    ['negative', true],
+  ] as const)('moves an endpoint between equivalent witnesses in %s polarity', (_name, inCut) => {
+    const s = redistributionFixture({ inCut })
+    const out = redistribute(s.d, s.a, s.b, [s.first], s.evidenceRegion)
+    expect(out.wires[s.aWire]!.endpoints).not.toContainEqual(s.first)
+    expect(out.wires[s.bWire]!.endpoints).toContainEqual(s.first)
+  })
+
+  it('uses a real beta conversion certificate between distinct closed witnesses', () => {
+    const b = new DiagramBuilder()
+    const a = b.termNode(b.root, app(lam(bvar(0)), CLOSED))
+    const survivor = b.termNode(b.root, CLOSED)
+    const consumer = b.termNode(b.root, port('s0'))
+    const endpoint = { node: consumer, port: { kind: 'freeVar' as const, name: 's0' } }
+    const aWire = b.wire(b.root, [{ node: a, port: { kind: 'output' } }, endpoint])
+    const survivorWire = b.wire(b.root, [{ node: survivor, port: { kind: 'output' } }])
+    const d = b.build()
+    const certificate = { leftSteps: [{ kind: 'beta' as const, path: [] }], rightSteps: [] }
+    const out = redistribute(d, a, survivor, [endpoint], d.root, certificate)
+    expect(out.wires[aWire]!.endpoints).not.toContainEqual(endpoint)
+    expect(out.wires[survivorWire]!.endpoints).toContainEqual(endpoint)
+  })
+
+  it('preserves every node, region, wire id, and original wire scope while moving endpoints', () => {
+    const s = redistributionFixture()
+    const out = redistribute(s.d, s.a, s.b, [s.first], s.evidenceRegion)
+    expect(out.nodes).toEqual(s.d.nodes)
+    expect(out.regions).toEqual(s.d.regions)
+    expect(Object.keys(out.wires).sort()).toEqual(Object.keys(s.d.wires).sort())
+    for (const id of Object.keys(s.d.wires)) {
+      expect(out.wires[id]!.scope).toBe(s.d.wires[id]!.scope)
+    }
+  })
+
+  it('moves one endpoint or many endpoints as a single derived operation', () => {
+    const one = redistributionFixture()
+    const oneOut = redistribute(one.d, one.a, one.b, [one.first], one.evidenceRegion)
+    expect(oneOut.wires[one.bWire]!.endpoints).toContainEqual(one.first)
+    expect(oneOut.wires[one.aWire]!.endpoints).toContainEqual(one.second)
+
+    const many = redistributionFixture()
+    const manyOut = redistribute(many.d, many.a, many.b, [many.first, many.second], many.evidenceRegion)
+    expect(manyOut.wires[many.aWire]!.endpoints).not.toEqual(expect.arrayContaining([many.first, many.second]))
+    expect(manyOut.wires[many.bWire]!.endpoints).toEqual(expect.arrayContaining([many.first, many.second]))
+  })
+
+  it('allows a consumer strictly inside the evidence region', () => {
+    const s = redistributionFixture({ consumerInside: true })
+    const out = redistribute(s.d, s.a, s.b, [s.first], s.evidenceRegion)
+    expect(out.wires[s.bWire]!.endpoints).toContainEqual(s.first)
+  })
+
+  it.each([
+    ['outside', (b: DiagramBuilder) => b.root],
+    ['sibling', (b: DiagramBuilder) => b.cut(b.root)],
+  ] as const)('refuses a consumer %s the evidence region', (_name, consumerRegion) => {
+    const b = new DiagramBuilder()
+    const evidence = b.cut(b.root)
+    const a = b.termNode(evidence, CLOSED)
+    const survivor = b.termNode(evidence, CLOSED)
+    const consumer = b.termNode(consumerRegion(b), port('s0'))
+    const endpoint = { node: consumer, port: { kind: 'freeVar' as const, name: 's0' } }
+    const aWire = b.wire(b.root, [{ node: a, port: { kind: 'output' } }, endpoint])
+    b.wire(evidence, [{ node: survivor, port: { kind: 'output' } }])
+    const d = b.build()
+    expect(() => redistribute(d, a, survivor, [endpoint], evidence))
+      .toThrow(/endpoint .* outside target/)
+    expect(d.wires[aWire]!.endpoints).toContainEqual(endpoint)
+  })
+
+  it('refuses open evidence', () => {
+    const b = new DiagramBuilder()
+    const a = b.termNode(b.root, port('x'))
+    const survivor = b.termNode(b.root, port('x'))
+    const consumer = b.termNode(b.root, port('s0'))
+    const endpoint = { node: consumer, port: { kind: 'freeVar' as const, name: 's0' } }
+    b.wire(b.root, [{ node: a, port: { kind: 'output' } }, endpoint])
+    b.wire(b.root, [
+      { node: a, port: { kind: 'freeVar', name: 'x' } },
+      { node: survivor, port: { kind: 'freeVar', name: 'x' } },
+    ])
+    b.wire(b.root, [{ node: survivor, port: { kind: 'output' } }])
+    const d = b.build()
+    expect(() => redistribute(d, a, survivor, [endpoint], d.root)).toThrow(/closed witness/)
+  })
+
+  it('refuses a rejected conversion certificate', () => {
+    const b = new DiagramBuilder()
+    const a = b.termNode(b.root, CLOSED)
+    const survivor = b.termNode(b.root, OTHER_CLOSED)
+    const consumer = b.termNode(b.root, port('s0'))
+    const endpoint = { node: consumer, port: { kind: 'freeVar' as const, name: 's0' } }
+    b.wire(b.root, [{ node: a, port: { kind: 'output' } }, endpoint])
+    b.wire(b.root, [{ node: survivor, port: { kind: 'output' } }])
+    const d = b.build()
+    expect(() => redistribute(d, a, survivor, [endpoint], d.root, EMPTY_CERT))
+      .toThrow(/certificate rejected/)
+  })
+
+  it('derives shielded local redistribution with root-scoped original wires', () => {
+    const s = shieldedTransportFixture()
+    const out = redistribute(s.d, s.a, s.b, [s.endpoint], s.evidenceRegion, s.certificate)
+    expect(out.wires[s.aWire]!.scope).toBe(s.d.root)
+    expect(out.wires[s.bWire]!.scope).toBe(s.d.root)
+    expect(out.wires[s.aWire]!.endpoints).not.toContainEqual(s.endpoint)
+    expect(out.wires[s.bWire]!.endpoints).toContainEqual(s.endpoint)
   })
 })
