@@ -1,21 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import { buildCatalog } from '../../src/game/catalog'
 import { availableVellums, emptyProgress, isUnlocked, recordCompletion } from '../../src/game/progress'
-import { campaignId, puzzleId, type PuzzleDefinition } from '../../src/game/types'
-import { twoVeils } from './fixtures'
+import { puzzleId, type PuzzleDefinition } from '../../src/game/types'
+import { minimalPuzzle, minimalSource } from './catalog-fixture'
 
-const fixture = twoVeils()
-const campaign = { id: campaignId('apprenticeship'), title: 'Curator’s Apprenticeship' }
-const first: PuzzleDefinition = {
-  id: puzzleId('two-veils'), campaign: campaign.id, title: 'Two Veils', goal: fixture.goal,
-  prerequisites: [], grantsVellum: true,
-  witness: [{ rule: 'doubleCutElim', region: fixture.eliminations[0]! }],
-}
+const first = minimalPuzzle({ title: 'Two Veils' })
 const second: PuzzleDefinition = {
   ...first, id: puzzleId('veil-retrieval'), title: 'Veil Retrieval',
   prerequisites: [first.id], grantsVellum: false,
 }
-const catalog = buildCatalog({ campaigns: [campaign], puzzles: [first, second], context: { relations: new Map() } })
+const catalog = buildCatalog({ ...minimalSource(), puzzles: [first, second] })
 
 describe('durable game progression', () => {
   it('records first completion immutably and makes repetition idempotent', () => {

@@ -1,5 +1,10 @@
 # Cursebreaker Game Domain Foundation Implementation Plan
 
+> **Historical implementation record:** The title-only campaign vocabulary in
+> this completed plan was replaced by culture authority in
+> `2026-07-11-opening-cultures-content-design.md`. It is not a current API or
+> product model.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build the headless game-native authority for closed backward puzzles, exact solved-seal vellums, immutable timelines, durable progression, catalog verification, and versioned active-session saves.

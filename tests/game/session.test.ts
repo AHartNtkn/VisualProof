@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { campaignId, GameDomainError, puzzleId, type PuzzleDefinition } from '../../src/game/types'
+import { GameDomainError, puzzleId } from '../../src/game/types'
 import { applyGameStep, currentDiagram, moveCursor, startPuzzle } from '../../src/game/session'
 import { isBlank } from '../../src/game/blank'
+import { minimalPuzzle } from './catalog-fixture'
 import { fourVeils } from './fixtures'
 
 const fixture = fourVeils()
-const puzzle: PuzzleDefinition = {
-  id: puzzleId('four-veils'), campaign: campaignId('apprenticeship'), title: 'Four Veils',
-  goal: fixture.goal, prerequisites: [], grantsVellum: true,
+const puzzle = minimalPuzzle({
+  id: puzzleId('four-veils'), title: 'Four Veils', goal: fixture.goal,
   witness: fixture.eliminations.map((region) => ({ rule: 'doubleCutElim' as const, region })),
-}
+})
 const authority = {
   context: { relations: new Map() },
   puzzle(id: string) { if (id !== puzzle.id) throw new Error('unknown fixture puzzle'); return puzzle },

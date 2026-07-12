@@ -6,47 +6,44 @@ import { emptyProgress } from '../../src/game/progress'
 import { loadGame, saveGame } from '../../src/game/save'
 import { applyGameStep, currentDiagram, startPuzzle } from '../../src/game/session'
 import {
-  campaignId, GameDomainError, puzzleId,
-  type CampaignDefinition, type PuzzleDefinition, type PuzzleId,
+  cultureId, GameDomainError, puzzleId,
+  type CultureDefinition, type PuzzleDefinition, type PuzzleId,
 } from '../../src/game/types'
+import { fixtureCultureId, minimalPuzzle, minimalSource } from './catalog-fixture'
 import { fourVeils, twoVeils } from './fixtures'
 
 const fixture = twoVeils()
-const campaign = { id: campaignId('apprenticeship'), title: 'Curator’s Apprenticeship' }
-const puzzle = {
-  id: puzzleId('two-veils'), campaign: campaign.id, title: 'Two Veils', goal: fixture.goal,
-  prerequisites: [], grantsVellum: true,
-  witness: [{ rule: 'doubleCutElim' as const, region: fixture.eliminations[0]! }],
-}
+const culture = { id: fixtureCultureId, name: 'Fixture culture' }
+const puzzle = minimalPuzzle({ title: 'Two Veils' })
 
 describe('verified game catalog', () => {
   it('accepts a closed puzzle whose backward witness reaches blank', () => {
-    const catalog = buildCatalog({ campaigns: [campaign], puzzles: [puzzle], context: { relations: new Map() } })
+    const catalog = buildCatalog({ ...minimalSource(), puzzles: [puzzle] })
     expect(catalog.puzzle(puzzle.id)).toStrictEqual(puzzle)
     expect(catalog.puzzle(puzzle.id)).not.toBe(puzzle)
   })
 
   it('rejects missing prerequisites and dependency cycles', () => {
     expect(() => buildCatalog({
-      campaigns: [campaign], context: { relations: new Map() },
+      ...minimalSource(),
       puzzles: [{ ...puzzle, prerequisites: [puzzleId('missing')] }],
     })).toThrow(/missing prerequisite/)
     expect(() => buildCatalog({
-      campaigns: [campaign], context: { relations: new Map() },
+      ...minimalSource(),
       puzzles: [{ ...puzzle, prerequisites: [puzzle.id] }],
     })).toThrow(/dependency cycle/)
   })
 
   it('rejects a witness that does not reach blank', () => {
     expect(() => buildCatalog({
-      campaigns: [campaign], context: { relations: new Map() },
+      ...minimalSource(),
       puzzles: [{ ...puzzle, witness: [] }],
     })).toThrow(/witness does not reach blank/)
   })
 
   it('rejects a witness that passes through blank and continues', () => {
     expect(() => buildCatalog({
-      campaigns: [campaign], context: { relations: new Map() },
+      ...minimalSource(),
       puzzles: [{
         ...puzzle,
         witness: [
@@ -64,7 +61,7 @@ describe('verified game catalog', () => {
   it('fingerprints canonical relation content independently of map insertion order', () => {
     const other = fourVeils().goal
     const withRelations = (relations: ReadonlyMap<string, typeof fixture.goal>) => buildCatalog({
-      campaigns: [campaign], puzzles: [puzzle], context: { relations },
+      ...minimalSource(), context: { relations },
     })
 
     const original = withRelations(new Map([['alpha', fixture.goal], ['beta', other]]))
@@ -78,8 +75,8 @@ describe('verified game catalog', () => {
   it('owns one immutable snapshot independent of every caller alias', () => {
     const mutableGoalFixture = twoVeils()
     const mutableRelationFixture = fourVeils()
-    const mutableCampaign = { ...campaign }
-    const campaigns = [mutableCampaign]
+    const mutableCulture = { ...culture }
+    const cultures = [mutableCulture]
     const prerequisites: PuzzleId[] = []
     const witness = [{ rule: 'doubleCutElim' as const, region: mutableGoalFixture.eliminations[0]! }]
     const mutablePuzzle = { ...puzzle, goal: mutableGoalFixture.goal, prerequisites, witness }
@@ -87,16 +84,16 @@ describe('verified game catalog', () => {
     const relationDefinition = { diagram: mutableRelationFixture.goal.diagram, boundary: [] as string[] }
     const relations = new Map([['veil', relationDefinition]])
     const context = { relations }
-    const source = { campaigns, puzzles, context }
+    const source = { cultures, puzzles, context }
     const originalGoalForm = exploreForm(mutableGoalFixture.goal.diagram)
     const originalRelationForm = exploreForm(mutableRelationFixture.goal.diagram)
     const catalog = buildCatalog(source)
     const fingerprint = catalog.fingerprint
 
-    mutableCampaign.title = 'Mutated campaign'
-    campaigns.push({ id: campaignId('intruder'), title: 'Intruder' })
+    mutableCulture.name = 'Mutated culture'
+    cultures.push({ id: cultureId('intruder'), name: 'Intruder' })
     mutablePuzzle.id = puzzleId('mutated-puzzle')
-    mutablePuzzle.campaign = campaignId('mutated-campaign')
+    mutablePuzzle.culture = cultureId('mutated-culture')
     mutablePuzzle.title = 'Mutated puzzle'
     mutablePuzzle.grantsVellum = false
     mutablePuzzle.goal = fourVeils().goal
@@ -114,8 +111,8 @@ describe('verified game catalog', () => {
     context.relations = new Map([['replacement', { diagram: fourVeils().goal.diagram, boundary: [] }]])
 
     expect(catalog.fingerprint).toBe(fingerprint)
-    expect(catalog.source.campaigns).toHaveLength(1)
-    expect(catalog.source.campaigns[0]?.title).toBe(campaign.title)
+    expect(catalog.source.cultures).toHaveLength(1)
+    expect(catalog.source.cultures[0]?.name).toBe(culture.name)
     expect(catalog.source.puzzles).toHaveLength(1)
     expect(catalog.puzzle(puzzle.id)).toMatchObject({
       title: puzzle.title,
@@ -140,7 +137,7 @@ describe('verified game catalog', () => {
     expect(save.catalogFingerprint).toBe(fingerprint)
     expect(isBlank(currentDiagram(loadGame(catalog, save).active!))).toBe(true)
 
-    expect(() => (catalog.source.campaigns as CampaignDefinition[]).push(mutableCampaign)).toThrow()
+    expect(() => (catalog.source.cultures as CultureDefinition[]).push(mutableCulture)).toThrow()
     expect(() => (catalog.source.puzzles as PuzzleDefinition[]).push(mutablePuzzle)).toThrow()
     expect(() => (catalog.source.context.relations as Map<string, typeof fixture.goal>)
       .set('mutated', fixture.goal)).toThrow()

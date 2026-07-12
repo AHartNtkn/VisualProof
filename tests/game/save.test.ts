@@ -4,17 +4,16 @@ import { buildCatalog } from '../../src/game/catalog'
 import { recordCompletion, emptyProgress } from '../../src/game/progress'
 import { applyGameStep, moveCursor, startPuzzle } from '../../src/game/session'
 import { loadGame, saveGame } from '../../src/game/save'
-import { campaignId, puzzleId, type PuzzleDefinition, type PuzzleId } from '../../src/game/types'
+import { puzzleId, type PuzzleId } from '../../src/game/types'
+import { minimalPuzzle, minimalSource } from './catalog-fixture'
 import { fourVeils } from './fixtures'
 
 const fixture = fourVeils()
-const campaign = { id: campaignId('apprenticeship'), title: 'Curator’s Apprenticeship' }
-const puzzle: PuzzleDefinition = {
-  id: puzzleId('four-veils'), campaign: campaign.id, title: 'Four Veils', goal: fixture.goal,
-  prerequisites: [], grantsVellum: true,
+const puzzle = minimalPuzzle({
+  id: puzzleId('four-veils'), title: 'Four Veils', goal: fixture.goal,
   witness: fixture.eliminations.map((region) => ({ rule: 'doubleCutElim' as const, region })),
-}
-const catalog = buildCatalog({ campaigns: [campaign], puzzles: [puzzle], context: { relations: new Map() } })
+})
+const catalog = buildCatalog({ ...minimalSource(), puzzles: [puzzle] })
 const authority = {
   context: catalog.source.context,
   puzzle: (id: PuzzleId) => catalog.puzzle(id),

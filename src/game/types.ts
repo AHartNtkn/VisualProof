@@ -4,7 +4,7 @@ import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofStep, ProofContext } from '../kernel/proof/step'
 
 export type PuzzleId = string & { readonly __puzzleId: unique symbol }
-export type CampaignId = string & { readonly __campaignId: unique symbol }
+export type CultureId = string & { readonly __cultureId: unique symbol }
 
 export const puzzleId = (value: string): PuzzleId => {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
@@ -13,11 +13,11 @@ export const puzzleId = (value: string): PuzzleId => {
   return value as PuzzleId
 }
 
-export const campaignId = (value: string): CampaignId => {
+export const cultureId = (value: string): CultureId => {
   if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(value)) {
-    throw new GameDomainError(`invalid campaign id '${value}'`)
+    throw new GameDomainError(`invalid culture id '${value}'`)
   }
-  return value as CampaignId
+  return value as CultureId
 }
 
 export class GameDomainError extends Error {}
@@ -34,7 +34,7 @@ export type GameRuleContext = Pick<ProofContext, 'relations'>
 
 export type PuzzleDefinition = {
   readonly id: PuzzleId
-  readonly campaign: CampaignId
+  readonly culture: CultureId
   readonly title: string
   readonly goal: DiagramWithBoundary
   readonly prerequisites: readonly PuzzleId[]
@@ -42,13 +42,10 @@ export type PuzzleDefinition = {
   readonly witness: readonly GameStep[]
 }
 
-export type CampaignDefinition = {
-  readonly id: CampaignId
-  readonly title: string
-}
+export type CultureDefinition = { readonly id: CultureId; readonly name: string }
 
 export type GameCatalogSource = {
-  readonly campaigns: readonly CampaignDefinition[]
+  readonly cultures: readonly CultureDefinition[]
   readonly puzzles: readonly PuzzleDefinition[]
   readonly context: GameRuleContext
 }

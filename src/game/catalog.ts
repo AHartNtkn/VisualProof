@@ -54,14 +54,14 @@ const ownedSnapshot = <T>(value: T): T => {
 
 export function buildCatalog(source: GameCatalogSource): GameCatalog {
   const snapshot = ownedSnapshot(source)
-  unique(snapshot.campaigns.map((campaign) => campaign.id), 'campaign id')
+  unique(snapshot.cultures.map((culture) => culture.id), 'culture id')
   unique(snapshot.puzzles.map((puzzle) => puzzle.id), 'puzzle id')
-  const campaigns = new Set(snapshot.campaigns.map((campaign) => campaign.id))
+  const cultures = new Set(snapshot.cultures.map((culture) => culture.id))
   const byId = new Map(snapshot.puzzles.map((puzzle) => [puzzle.id, puzzle] as const))
   for (const puzzle of snapshot.puzzles) {
     assertClosedGoal(puzzle.goal)
-    if (!campaigns.has(puzzle.campaign)) {
-      throw new GameDomainError(`puzzle '${puzzle.id}' names unknown campaign '${puzzle.campaign}'`)
+    if (!cultures.has(puzzle.culture)) {
+      throw new GameDomainError(`puzzle '${puzzle.id}' names unknown culture '${puzzle.culture}'`)
     }
     unique(puzzle.prerequisites, `prerequisite of puzzle '${puzzle.id}'`)
     for (const prerequisite of puzzle.prerequisites) {
@@ -119,8 +119,8 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
   }
 
   const fingerprintInput = {
-    campaigns: [...snapshot.campaigns]
-      .map((campaign) => ({ id: campaign.id, title: campaign.title }))
+    cultures: [...snapshot.cultures]
+      .map((culture) => ({ id: culture.id, name: culture.name }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     relations: [...snapshot.context.relations]
       .map(([name, relation]) => {
@@ -134,7 +134,7 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
       .sort((a, b) => a.name.localeCompare(b.name)),
     puzzles: [...snapshot.puzzles]
       .map((puzzle) => ({
-        id: puzzle.id, campaign: puzzle.campaign, title: puzzle.title,
+        id: puzzle.id, culture: puzzle.culture, title: puzzle.title,
         prerequisites: [...puzzle.prerequisites].sort(), grantsVellum: puzzle.grantsVellum,
         goal: exploreForm(puzzle.goal.diagram), witness: puzzle.witness,
       }))

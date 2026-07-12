@@ -2,16 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { blankDiagram, isBlank } from '../../src/game/blank'
-import { campaignId, puzzleId, type PuzzleDefinition } from '../../src/game/types'
 import { manifestSeal, dissolveSeal } from '../../src/game/vellum'
-import { twoVeils } from './fixtures'
+import { minimalPuzzle } from './catalog-fixture'
 
-const fixture = twoVeils()
-const seal: PuzzleDefinition = {
-  id: puzzleId('two-veils'), campaign: campaignId('apprenticeship'), title: 'Two Veils',
-  goal: fixture.goal, prerequisites: [], grantsVellum: true,
-  witness: [{ rule: 'doubleCutElim', region: fixture.eliminations[0]! }],
-}
+const seal = minimalPuzzle({ title: 'Two Veils' })
 
 describe('exact solved-seal vellums', () => {
   it('manifests one whole closed seal in a chosen region', () => {
