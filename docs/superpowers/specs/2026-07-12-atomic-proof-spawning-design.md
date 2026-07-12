@@ -2,21 +2,20 @@
 
 ## Outcome
 
-General graphical insertion no longer exists in the kernel, proof model, serialization, application, bundled derivations, tests, or examples. Players construct proof diagrams through the same contextual spawn cascade used in Edit: terms, loaded named relations, and enclosing bound relations appear as atomic operations wherever the active proof orientation and region polarity permit them.
+General graphical insertion no longer exists in the kernel, proof model, serialization, application, bundled derivations, tests, or examples. Players construct proof diagrams through the same contextual spawn cascade used in Edit: closed terms, loaded named relations, and enclosing bound relations appear through their existing or atomic operations wherever each operation is valid.
 
 Named relation spawning and bound-relation spawning are available in the same Proof contexts. A bound relation additionally requires a compatible enclosing bubble and retains the previously approved colored-circle and complete binder-subtree hover treatment.
 
 ## Proof construction vocabulary
 
-Three atomic spawning operations replace arbitrary insertion:
+Two atomic spawning operations replace arbitrary insertion:
 
-1. **Term spawn** creates one term node in the invocation region with fresh singleton wires for its output and free ports. It is valid only in an insertion-polarity region: negative while proving forward and positive while proving backward.
-2. **Named relation spawn** creates one reference node for a currently loaded relation, with one fresh singleton argument wire per boundary position. It has the same orientation-sensitive polarity gate as term spawn and revalidates the relation id and arity at commit time.
-3. **Bound relation spawn** creates one atom node bound to a chosen enclosing bubble, with one fresh singleton argument wire per binder argument. It has the same polarity gate and additionally requires the chosen bubble to enclose the invocation region with matching live arity.
+1. **Named relation spawn** creates one reference node for a currently loaded relation, with one fresh singleton argument wire per boundary position. It is valid only in an insertion-polarity region: negative while proving forward and positive while proving backward, and revalidates the relation id and arity at commit time.
+2. **Bound relation spawn** creates one atom node bound to a chosen enclosing bubble, with one fresh singleton argument wire per binder argument. It has the same polarity gate and additionally requires the chosen bubble to enclose the invocation region with matching live arity.
 
-The existing `closedTermIntro` rule remains the polarity-blind route for a closed λ-term. The spawn cascade continues to route closed term input through `closedTermIntro`; open terms use the new polarity-gated term spawn. The distinction is semantic and replayable, while the text-entry interaction remains shared.
+The existing `closedTermIntro` rule remains the sole Proof spawning route for a λ-term. The spawn cascade continues to route closed term input through `closedTermIntro` and refuses open terms. Open term nodes are derived through the existing conversion/fission, iteration, relation, and wiring operations rather than a duplicate term-spawn rule.
 
-Each atomic step stores only its semantic input—region and term, region and relation id/arity, or region and binder—not an embedded `DiagramWithBoundary`. Appliers construct exactly one node plus required singleton wires and revalidate through `mkDiagram`. They do not accept preassembled subgraphs, attachments, binder maps, or arbitrary patterns.
+Each new atomic step stores only its semantic input—region and relation id/arity, or region and binder—not an embedded `DiagramWithBoundary`. Appliers construct exactly one node plus required singleton wires and revalidate through `mkDiagram`. They do not accept preassembled subgraphs, attachments, binder maps, or arbitrary patterns.
 
 ## Shared contextual interaction
 
@@ -24,7 +23,7 @@ Each atomic step stores only its semantic input—region and term, region and re
 
 The cascade presents:
 
-- `λ term…`;
+- `λ term…` for the existing closed-term introduction;
 - loaded named relations, grouped and searchable by namespace; and
 - every enclosing bound relation, ordered innermost to outermost.
 
@@ -53,7 +52,7 @@ Forward atomic spawning requires a negative invocation region. Backward atomic s
 
 At commit time:
 
-- term parsing and structural validity are rechecked;
+- closed-term parsing and structural validity are rechecked by `closedTermIntro`;
 - named relations must still exist and retain the displayed arity;
 - bound relation binders must still exist, be bubbles, retain their displayed arity, and enclose the invocation region; and
 - every new wire is scoped at the invocation region.
@@ -78,7 +77,7 @@ There is no alias, compatibility decoder, legacy step, private arbitrary-pattern
 
 ## Derivation migration
 
-Each existing bundled insertion is reconstructed with ordinary steps. Flat patterns become atomic term/reference/bound-relation spawns followed by wire joins. Open attachment positions are realized by joining the spawned singleton wire to the existing host wire under the same polarity gate.
+Each existing bundled insertion is reconstructed with ordinary steps. Flat term patterns use the existing closed-term-introduction plus conversion/fission construction path already embodied by the theory’s `kOpen` helper; references and bound relations use their atomic spawns, followed by wire joins. Open attachment positions are realized by joining the spawned singleton wire to the existing host wire under the same polarity gate.
 
 Nested guard and closure patterns are redesigned as actual derivations using the existing structural vocabulary: double-cut introduction/elimination, vacuous bubbles, atomic spawns, iteration/deiteration, comprehension abstraction/instantiation, relation fold/unfold, and wire operations. The migration must preserve each theorem’s declared boundary and final boundary-pinned canonical form; reproducing old intermediate ids or shapes is not required.
 
@@ -90,7 +89,7 @@ Generated `examples/frege.json` is regenerated from the migrated authoritative T
 
 Kernel and proof tests establish:
 
-- forward/backward polarity gates for all three atomic spawns;
+- forward/backward polarity gates for both new atomic spawns and unchanged polarity-blind closed-term introduction;
 - exact singleton-wire construction and binder-scope validation;
 - replay, composition-id mapping, undo/redo, and JSON round trips for atomic steps;
 - rejection of the removed insertion rule in JSON;
