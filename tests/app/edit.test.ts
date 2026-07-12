@@ -4,9 +4,6 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import {
   absorbHits,
-  addAtomNode,
-  addTermNode,
-  addRefNode,
   addCut,
   addBubble,
   deleteHits,
@@ -19,6 +16,7 @@ import {
   reparentNode,
   severEndpoint,
 } from '../../src/app/edit'
+import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../../src/kernel/diagram/spawn'
 
 const p = (s: string) => parseTerm(s)
 
@@ -26,7 +24,7 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
   it('starts from the empty sheet and adds parsed term nodes with auto wires', () => {
     const d0 = emptyDiagram()
     expect(Object.keys(d0.nodes)).toHaveLength(0)
-    const { diagram: d1, node } = addTermNode(d0, d0.root, p('\\x. x y'))
+    const { diagram: d1, node } = spawnTermNode(d0, d0.root, p('\\x. x y'))
     expect(d1.nodes[node]?.kind).toBe('term')
     // output + y singleton wires materialized
     const touching = Object.values(d1.wires).filter((w) => w.endpoints.some((ep) => ep.node === node))
@@ -39,7 +37,7 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const cut = b.cut(bubble)
     const d = b.build()
 
-    const { diagram, node } = addAtomNode(d, cut, bubble)
+    const { diagram, node } = spawnBoundRelationNode(d, cut, bubble)
 
     expect(diagram.nodes[node]).toEqual({ kind: 'atom', region: cut, binder: bubble })
     expect(Object.values(diagram.wires).filter((wire) =>
@@ -56,12 +54,12 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     const right = b.cut(b.root)
     const d = b.build()
 
-    expect(() => addAtomNode(d, right, left)).toThrow(/must lie inside its binder bubble/)
+    expect(() => spawnBoundRelationNode(d, right, left)).toThrow(/must lie inside its binder bubble/)
   })
 
   it('wraps a selection in a single cut and in a bubble', () => {
     const d0 = emptyDiagram()
-    const { diagram: d1, node } = addTermNode(d0, d0.root, p('y'))
+    const { diagram: d1, node } = spawnTermNode(d0, d0.root, p('y'))
     const sel = mkSelection(d1, { region: d1.root, regions: [], nodes: [node], wires: [] })
     const { diagram: d2, region: cut } = addCut(d1, sel)
     expect(d2.regions[cut]?.kind).toBe('cut')
@@ -74,8 +72,8 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
 
   it('joins two ports onto one wire (construction-level identification)', () => {
     const d0 = emptyDiagram()
-    const a = addTermNode(d0, d0.root, p('\\x. x'))
-    const b = addTermNode(a.diagram, a.diagram.root, p('y'))
+    const a = spawnTermNode(d0, d0.root, p('\\x. x'))
+    const b = spawnTermNode(a.diagram, a.diagram.root, p('y'))
     const d = b.diagram
     const out = joinPorts(d,
       { node: a.node, port: { kind: 'output' } },
@@ -116,8 +114,8 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
 
   it('deletes a selection, trimming touching wires', () => {
     const d0 = emptyDiagram()
-    const a = addTermNode(d0, d0.root, p('\\x. x'))
-    const b = addTermNode(a.diagram, a.diagram.root, p('y'))
+    const a = spawnTermNode(d0, d0.root, p('\\x. x'))
+    const b = spawnTermNode(a.diagram, a.diagram.root, p('y'))
     const joined = joinPorts(b.diagram,
       { node: a.node, port: { kind: 'output' } },
       { node: b.node, port: { kind: 'freeVar', name: 's0' } })
@@ -132,8 +130,8 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
     // still spelling 'y' is invalid input, rejected against the node's
     // CURRENT term rather than reported as a missing wire
     const d0 = emptyDiagram()
-    const a = addTermNode(d0, d0.root, p('\\x. x'))
-    const b = addTermNode(a.diagram, a.diagram.root, p('y'))
+    const a = spawnTermNode(d0, d0.root, p('\\x. x'))
+    const b = spawnTermNode(a.diagram, a.diagram.root, p('y'))
     expect(() => joinPorts(b.diagram,
       { node: a.node, port: { kind: 'output' } },
       { node: b.node, port: { kind: 'freeVar', name: 'y' } }))
@@ -142,17 +140,17 @@ describe('edit operations (construction mode, mkDiagram-validated surgery)', () 
 
   it('refuses joining a port to itself, loudly', () => {
     const d0 = emptyDiagram()
-    const a = addTermNode(d0, d0.root, p('\\x. x'))
+    const a = spawnTermNode(d0, d0.root, p('\\x. x'))
     expect(() => joinPorts(a.diagram,
       { node: a.node, port: { kind: 'output' } },
       { node: a.node, port: { kind: 'output' } })).toThrowError(/same port/)
   })
 })
 
-describe('addRefNode', () => {
+describe('spawnRelationNode', () => {
   it('spawns a ref node with one fresh bare-ended wire per argument, in the chosen region', () => {
     const d0 = emptyDiagram()
-    const { diagram, node } = addRefNode(d0, d0.root, 'plus', 3)
+    const { diagram, node } = spawnRelationNode(d0, d0.root, 'plus', 3)
     const n = diagram.nodes[node]!
     expect(n.kind).toBe('ref')
     if (n.kind === 'ref') {
@@ -175,8 +173,8 @@ describe('addRefNode', () => {
 
   it('does not disturb existing content', () => {
     const d0 = emptyDiagram()
-    const { diagram: d1, node: t } = addTermNode(d0, d0.root, parseTerm('\\x. x'))
-    const { diagram: d2 } = addRefNode(d1, d1.root, 'r', 1)
+    const { diagram: d1, node: t } = spawnTermNode(d0, d0.root, parseTerm('\\x. x'))
+    const { diagram: d2 } = spawnRelationNode(d1, d1.root, 'r', 1)
     expect(d2.nodes[t]).toEqual(d1.nodes[t])
   })
 
@@ -184,8 +182,8 @@ describe('addRefNode', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const start = b.build()
-    const term = addTermNode(start, cut, p('x'))
-    const ref = addRefNode(term.diagram, cut, 'arith/reallyLongRelation', 2)
+    const term = spawnTermNode(start, cut, p('x'))
+    const ref = spawnRelationNode(term.diagram, cut, 'arith/reallyLongRelation', 2)
 
     expect(ref.diagram.nodes[term.node]?.region).toBe(cut)
     expect(ref.diagram.nodes[ref.node]).toMatchObject({ kind: 'ref', region: cut, defId: 'arith/reallyLongRelation', arity: 2 })

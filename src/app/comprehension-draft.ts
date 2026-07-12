@@ -3,7 +3,8 @@ import { DiagramError, mkDiagram, portKey } from '../kernel/diagram/diagram'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { applyComprehensionInstantiate } from '../kernel/rules/comprehension'
 import { RuleError } from '../kernel/rules/error'
-import { addBubble, addCut, addRefNode, addTermNode } from './edit'
+import { addBubble, addCut } from './edit'
+import { spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 import type { Term } from '../kernel/term/term'
 import { deepestCommonAncestor } from '../kernel/diagram/regions'
@@ -206,12 +207,12 @@ function validateSnapshot(draft: ComprehensionDraft, snapshot: ComprehensionSnap
 
 export function addComprehensionTerm(draft: ComprehensionDraft, term: Term): ComprehensionDraft {
   const current = currentComprehensionDraft(draft)
-  return replaceDiagram(draft, addTermNode(current.relation.diagram, current.relation.diagram.root, term).diagram)
+  return replaceDiagram(draft, spawnTermNode(current.relation.diagram, current.relation.diagram.root, term).diagram)
 }
 
 export function addComprehensionRef(draft: ComprehensionDraft, defId: string, arity: number): ComprehensionDraft {
   const current = currentComprehensionDraft(draft)
-  return replaceDiagram(draft, addRefNode(current.relation.diagram, current.relation.diagram.root, defId, arity).diagram)
+  return replaceDiagram(draft, spawnRelationNode(current.relation.diagram, current.relation.diagram.root, defId, arity).diagram)
 }
 
 export function attachComprehensionSocket(

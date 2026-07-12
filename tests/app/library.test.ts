@@ -9,7 +9,8 @@ import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { applyRelFold } from '../../src/kernel/rules/reldef'
-import { emptyDiagram, addTermNode } from '../../src/app/edit'
+import { emptyDiagram } from '../../src/app/edit'
+import { spawnTermNode } from '../../src/kernel/diagram/spawn'
 import { defineRelation } from '../../src/app/define'
 import type { LibraryEntry } from '../../src/app/library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from '../../src/app/library'
@@ -24,7 +25,7 @@ const status = (entries: readonly LibraryEntry[]) => entries.map((e) => [e.file,
  *  against any context — the minimal adoptable object. */
 function trivTheorem(name: string): Theorem {
   const e0 = emptyDiagram()
-  const { diagram } = addTermNode(e0, e0.root, p('\\x. x'))
+  const { diagram } = spawnTermNode(e0, e0.root, p('\\x. x'))
   const dwb = mkDiagramWithBoundary(diagram, [])
   return { name, lhs: dwb, rhs: dwb, steps: [] }
 }
@@ -33,7 +34,7 @@ function trivTheorem(name: string): Theorem {
  *  boundary). No ref nodes, so its refs resolve against any context. */
 function trivRelation(): DiagramWithBoundary {
   const e0 = emptyDiagram()
-  const { diagram, node } = addTermNode(e0, e0.root, p('y'))
+  const { diagram, node } = spawnTermNode(e0, e0.root, p('y'))
   const bound = Object.keys(diagram.wires).find((w) =>
     diagram.wires[w]!.endpoints.some((ep) => ep.node === node && ep.port.kind === 'freeVar'),
   )!

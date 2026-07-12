@@ -8,7 +8,7 @@ import type { Vec2 } from '../view/vec'
 import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { seedProject } from '../view/relax'
 import { existentialStubs, legPaths } from '../view/wires'
-import { addAtomNode, addRefNode, addTermNode } from './edit'
+import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
 import { wireHitTest, type Hit } from './hittest'
 import { ConstructController } from './interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
@@ -253,9 +253,9 @@ export class ComprehensionEditor {
 
     this.#spawn = new SpawnCascade({
       host: host.mount,
-      spawnTerm: ({ source, invocation: at }) => this.#editAdd(() => addTermNode(this.#diagram(), at.region, parseTerm(source)), at.world),
-      spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => addRefNode(this.#diagram(), at.region, defId, arity), at.world),
-      spawnBoundPredicate: ({ binder, invocation: at }) => this.#editAdd(() => addAtomNode(this.#diagram(), at.region, binder), at.world),
+      spawnTerm: ({ source, invocation: at }) => this.#editAdd(() => spawnTermNode(this.#diagram(), at.region, parseTerm(source)), at.world),
+      spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => spawnRelationNode(this.#diagram(), at.region, defId, arity), at.world),
+      spawnBoundPredicate: ({ binder, invocation: at }) => this.#editAdd(() => spawnBoundRelationNode(this.#diagram(), at.region, binder), at.world),
       binderColor: (binder) => bubbleHues(this.#diagram(), host.theme().bubbleLightness).get(binder) ?? host.theme().interaction.hover,
       openChanged: host.changed,
     })

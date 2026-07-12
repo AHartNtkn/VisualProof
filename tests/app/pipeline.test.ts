@@ -4,7 +4,8 @@ import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { emptyDiagram, addTermNode, addCut } from '../../src/app/edit'
+import { emptyDiagram, addCut } from '../../src/app/edit'
+import { spawnTermNode } from '../../src/kernel/diagram/spawn'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { startSession, applyForward, applyBackward, currentSide, meet, assembleTheorem, timelineActiveSteps } from '../../src/app/session'
 import { bootFixture } from './boot-fixture'
@@ -19,9 +20,9 @@ describe('edit → prove → assemble, end to end', () => {
     const ctx = verifyTheory(buildFregeTheory())
     // EDIT: lhs = a single identity node; rhs = the same wrapped in two cuts
     const e0 = emptyDiagram()
-    const { diagram: lhsD } = addTermNode(e0, e0.root, p('\\x. x'))
+    const { diagram: lhsD } = spawnTermNode(e0, e0.root, p('\\x. x'))
     const lhs = mkDiagramWithBoundary(lhsD, [])
-    const r1 = addTermNode(e0, e0.root, p('\\x. x'))
+    const r1 = spawnTermNode(e0, e0.root, p('\\x. x'))
     const selR = mkSelection(r1.diagram, { region: r1.diagram.root, regions: [], nodes: [r1.node], wires: [] })
     const r2 = addCut(r1.diagram, selR)
     const selR2 = mkSelection(r2.diagram, { region: r2.diagram.root, regions: [r2.region], nodes: [], wires: [] })
@@ -39,7 +40,7 @@ describe('edit → prove → assemble, end to end', () => {
   it('forward citation sessions check too', async () => {
     const { ctx } = await bootFixture()
     const e0 = emptyDiagram()
-    const { diagram: startD, node } = addTermNode(e0, e0.root, p('(\\g. (\\x. g (x x)) (\\x. g (x x))) f'))
+    const { diagram: startD, node } = spawnTermNode(e0, e0.root, p('(\\g. (\\x. g (x x)) (\\x. g (x x))) f'))
     const wo = Object.entries(startD.wires).find(([, w]) =>
       w.endpoints.some((ep) => ep.node === node && ep.port.kind === 'output'))![0]
     const wf = Object.entries(startD.wires).find(([, w]) =>
@@ -61,7 +62,7 @@ describe('the full story: prove, adopt, save, reload, cite', () => {
     const boot = await bootFixture()
     // prove the toy double-cut theorem forward
     const l = emptyDiagram()
-    const { diagram: lhsD } = addTermNode(l, l.root, p('\\x. x'))
+    const { diagram: lhsD } = spawnTermNode(l, l.root, p('\\x. x'))
     const lhs = mkDiagramWithBoundary(lhsD, [])
     let s = startSession(lhs, lhs, boot.ctx)
     s = applyForward(s, {

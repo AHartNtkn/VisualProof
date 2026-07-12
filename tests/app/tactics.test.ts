@@ -3,7 +3,8 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { termEq } from '../../src/kernel/term/term'
 import type { ProofContext } from '../../src/kernel/proof/step'
 import { replayProof } from '../../src/kernel/proof/step'
-import { addTermNode, emptyDiagram } from '../../src/app/edit'
+import { emptyDiagram } from '../../src/app/edit'
+import { spawnTermNode } from '../../src/kernel/diagram/spawn'
 import { convertToHeadNormal, convertToWeakHeadNormal } from '../../src/app/tactics'
 
 const p = (s: string) => parseTerm(s)
@@ -12,7 +13,7 @@ const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
 
 const diagramWith = (s: string, parser: (x: string) => ReturnType<typeof p> = p) => {
   const d0 = emptyDiagram()
-  return addTermNode(d0, d0.root, parser(s))
+  return spawnTermNode(d0, d0.root, parser(s))
 }
 
 describe('convertToHeadNormal', () => {

@@ -24,7 +24,8 @@ import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntr
 import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
-import { emptyDiagram, addTermNode, addRefNode, addAtomNode } from './edit'
+import { emptyDiagram } from './edit'
+import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
 import type { ProofSession, TrackDirection, TrackSession } from './session'
 import {
   startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
@@ -1419,7 +1420,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           return true
         }
         requireEdit()
-        const added = addTermNode(editDiagram, invocation.region, parseTerm(source))
+        const added = spawnTermNode(editDiagram, invocation.region, parseTerm(source))
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
       } catch (error) {
@@ -1433,7 +1434,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         const relation = ctx.relations.get(defId)
         if (relation === undefined) throw new Error(`relation '${defId}' is no longer loaded`)
         if (relation.boundary.length !== relationArity) throw new Error(`relation '${defId}' changed while the spawn menu was open`)
-        const added = addRefNode(editDiagram, invocation.region, defId, relationArity)
+        const added = spawnRelationNode(editDiagram, invocation.region, defId, relationArity)
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
       } catch (error) {
@@ -1444,7 +1445,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     spawnBoundPredicate: ({ binder, invocation }) => {
       try {
         requireEdit()
-        const added = addAtomNode(editDiagram, invocation.region, binder)
+        const added = spawnBoundRelationNode(editDiagram, invocation.region, binder)
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
       } catch (error) {

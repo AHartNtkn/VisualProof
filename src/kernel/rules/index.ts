@@ -1,5 +1,6 @@
 export { RuleError } from './error'
 export { applyInsertion, applyWireJoin } from './insertion'
+export { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from './spawn'
 export { applyErasure, applyWireSever } from './erasure'
 export { applyIteration, applyDeiteration } from './iteration'
 export { applyDoubleCutIntro, applyDoubleCutElim } from './doublecut'

@@ -1,6 +1,4 @@
-import type { Term } from '../kernel/term/term'
-import { freePorts } from '../kernel/term/term'
-import type { Diagram, DiagramNode, Endpoint, NodeId, Port, Region, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
 import { mkDiagram, portKey, requiredPorts } from '../kernel/diagram/diagram'
 import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
@@ -17,50 +15,6 @@ import { freshId } from '../kernel/diagram/subgraph/freshId'
 
 export function emptyDiagram(): Diagram {
   return mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } } })
-}
-
-export function addTermNode(d: Diagram, region: RegionId, term: Term): { diagram: Diagram; node: NodeId } {
-  const node = freshId(new Set(Object.keys(d.nodes)), 'n')
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: { kind: 'term', region, term } }
-  const wires: Record<WireId, Wire> = { ...d.wires }
-  const takenWires = new Set(Object.keys(d.wires))
-  const ports: Port[] = [{ kind: 'output' }, ...freePorts(term).map((name): Port => ({ kind: 'freeVar', name }))]
-  for (const port of ports) {
-    const w = freshId(takenWires, 'w')
-    takenWires.add(w)
-    wires[w] = { scope: region, endpoints: [{ node, port }] }
-  }
-  return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }), node }
-}
-
-export function addRefNode(d: Diagram, region: RegionId, defId: string, arity: number): { diagram: Diagram; node: NodeId } {
-  const node = freshId(new Set(Object.keys(d.nodes)), 'n')
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: { kind: 'ref', region, defId, arity } }
-  const wires: Record<WireId, Wire> = { ...d.wires }
-  const takenWires = new Set(Object.keys(d.wires))
-  for (let i = 0; i < arity; i++) {
-    const w = freshId(takenWires, 'w')
-    takenWires.add(w)
-    wires[w] = { scope: region, endpoints: [{ node, port: { kind: 'arg', index: i } }] }
-  }
-  return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }), node }
-}
-
-export function addAtomNode(d: Diagram, region: RegionId, binder: RegionId): { diagram: Diagram; node: NodeId } {
-  const node = freshId(new Set(Object.keys(d.nodes)), 'n')
-  const atom: DiagramNode = { kind: 'atom', region, binder }
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: atom }
-  const wires: Record<WireId, Wire> = { ...d.wires }
-  const takenWires = new Set(Object.keys(d.wires))
-  for (const port of requiredPorts(d, atom)) {
-    const wire = freshId(takenWires, 'w')
-    takenWires.add(wire)
-    wires[wire] = { scope: region, endpoints: [{ node, port }] }
-  }
-  return {
-    node,
-    diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }),
-  }
 }
 
 export type ConstructionHit =
