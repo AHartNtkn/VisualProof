@@ -8,14 +8,15 @@ Named relation spawning and bound-relation spawning are available in the same Pr
 
 ## Proof construction vocabulary
 
-Two atomic spawning operations replace arbitrary insertion:
+Three non-overlapping atomic spawning operations replace arbitrary insertion:
 
-1. **Named relation spawn** creates one reference node for a currently loaded relation, with one fresh singleton argument wire per boundary position. It is valid only in an insertion-polarity region: negative while proving forward and positive while proving backward, and revalidates the relation id and arity at commit time.
-2. **Bound relation spawn** creates one atom node bound to a chosen enclosing bubble, with one fresh singleton argument wire per binder argument. It has the same polarity gate and additionally requires the chosen bubble to enclose the invocation region with matching live arity.
+1. **Open term spawn** creates one term node with fresh output/free-port wires, requires at least one free port, and is valid only in an insertion-polarity region: negative while proving forward and positive while proving backward.
+2. **Named relation spawn** creates one reference node for a currently loaded relation, with one fresh singleton argument wire per boundary position. It has the same orientation-sensitive polarity gate and revalidates the relation id and arity at commit time.
+3. **Bound relation spawn** creates one atom node bound to a chosen enclosing bubble, with one fresh singleton argument wire per binder argument. It has the same polarity gate and additionally requires the chosen bubble to enclose the invocation region with matching live arity.
 
-The existing `closedTermIntro` rule remains the sole Proof spawning route for a λ-term. The spawn cascade continues to route closed term input through `closedTermIntro` and refuses open terms. Open term nodes are derived through the existing conversion/fission, iteration, relation, and wiring operations rather than a duplicate term-spawn rule.
+The existing `closedTermIntro` rule remains the sole closed-term spawning route. The shared λ-term entry dispatches closed input to `closedTermIntro` and open input to `openTermSpawn`; each input has exactly one authority.
 
-Each new atomic step stores only its semantic input—region and relation id/arity, or region and binder—not an embedded `DiagramWithBoundary`. Appliers construct exactly one node plus required singleton wires and revalidate through `mkDiagram`. They do not accept preassembled subgraphs, attachments, binder maps, or arbitrary patterns.
+Each new atomic step stores only its semantic input—region and open term, region and relation id/arity, or region and binder—not an embedded `DiagramWithBoundary`. Appliers construct exactly one node plus required singleton wires and revalidate through `mkDiagram`. They do not accept preassembled subgraphs, attachments, binder maps, or arbitrary patterns.
 
 ## Shared contextual interaction
 
@@ -23,7 +24,7 @@ Each new atomic step stores only its semantic input—region and relation id/ari
 
 The cascade presents:
 
-- `λ term…` for the existing closed-term introduction;
+- `λ term…`, dispatching without overlap to closed-term introduction or open-term spawn;
 - loaded named relations, grouped and searchable by namespace; and
 - every enclosing bound relation, ordered innermost to outermost.
 
@@ -52,7 +53,7 @@ Forward atomic spawning requires a negative invocation region. Backward atomic s
 
 At commit time:
 
-- closed-term parsing and structural validity are rechecked by `closedTermIntro`;
+- term parsing and structural validity are rechecked, and the closed/open authority split is enforced;
 - named relations must still exist and retain the displayed arity;
 - bound relation binders must still exist, be bubbles, retain their displayed arity, and enclose the invocation region; and
 - every new wire is scoped at the invocation region.
@@ -77,7 +78,7 @@ There is no alias, compatibility decoder, legacy step, private arbitrary-pattern
 
 ## Derivation migration
 
-Each existing bundled insertion is reconstructed with ordinary steps. Flat term patterns use the existing closed-term-introduction plus conversion/fission construction path already embodied by the theory’s `kOpen` helper; references and bound relations use their atomic spawns, followed by wire joins. Open attachment positions are realized by joining the spawned singleton wire to the existing host wire under the same polarity gate.
+Each existing bundled insertion is reconstructed with ordinary steps. Flat patterns use open-term, relation-reference, and bound-relation spawns followed by wire joins. Open attachment positions are realized by joining the spawned singleton wire to the existing host wire under the same polarity gate.
 
 Nested guard and closure patterns are redesigned as actual derivations using the existing structural vocabulary: double-cut introduction/elimination, vacuous bubbles, atomic spawns, iteration/deiteration, comprehension abstraction/instantiation, relation fold/unfold, and wire operations. The migration must preserve each theorem’s declared boundary and final boundary-pinned canonical form; reproducing old intermediate ids or shapes is not required.
 
@@ -89,7 +90,7 @@ Generated `examples/frege.json` is regenerated from the migrated authoritative T
 
 Kernel and proof tests establish:
 
-- forward/backward polarity gates for both new atomic spawns and unchanged polarity-blind closed-term introduction;
+- forward/backward polarity gates for all three new atomic spawns, rejection of closed input by `openTermSpawn`, and unchanged polarity-blind closed-term introduction;
 - exact singleton-wire construction and binder-scope validation;
 - replay, composition-id mapping, undo/redo, and JSON round trips for atomic steps;
 - rejection of the removed insertion rule in JSON;
