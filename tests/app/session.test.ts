@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { applyConversion } from '../../src/kernel/rules/conversion'
+import { applyClosedTermIntro } from '../../src/kernel/rules/intro'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
@@ -14,7 +15,7 @@ import {
 } from '../../src/app/session'
 import type { ProofSession, TrackSession } from '../../src/app/session'
 import type { ProofStep } from '../../src/kernel/proof/step'
-import { singleStepAction, type ProofAction } from '../../src/kernel/proof/action'
+import { applyAction, singleStepAction, type ProofAction } from '../../src/kernel/proof/action'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 
 const p = (s: string) => parseTerm(s)
@@ -182,6 +183,30 @@ describe('proof session', () => {
     expect(currentSide(session, 'forward').wires[w0]).toBeDefined()
     expect(currentSide(session, 'forward').wires[w1]).toBeDefined()
     expect(timelineActiveActions(session.forward)).toHaveLength(0)
+  })
+
+  it('rejects a multi-step action when an intermediate destroys a fixed boundary even if the final step remints its id', () => {
+    const b = new DiagramBuilder()
+    const root = b.root
+    const initial = applyClosedTermIntro(b.build(), root, p('\\x. x'))
+    const boundary = `${root}_intro`
+    const node = `${root}_intro`
+    const side = mkDiagramWithBoundary(initial, [boundary])
+    const session = startSession(side, side, { theorems: new Map(), relations: new Map() })
+    const action: ProofAction = {
+      label: 'replace the boundary identity',
+      steps: [
+        { rule: 'erasure', sel: { region: root, regions: [], nodes: [node], wires: [boundary] } },
+        { rule: 'closedTermIntro', region: root, term: p('\\x. x') },
+      ],
+      placements: [],
+    }
+
+    const finalOnly = applyAction(initial, action, session.ctx)
+    expect(finalOnly.wires[boundary]).toBeDefined()
+    expect(() => applyForwardAction(session, action))
+      .toThrowError(new RegExp(`forward step destroyed fixed statement-boundary wire '${boundary}'`))
+    expect(session.forward.actions).toHaveLength(0)
   })
 
   it('undo pops exactly one step and restores the prior diagram', () => {

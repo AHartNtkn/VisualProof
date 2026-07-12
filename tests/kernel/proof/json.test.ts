@@ -198,6 +198,26 @@ describe('theorem round-trips through JSON', () => {
     expect(() => theoremFromJson({ name: 'old', lhs: side, rhs: side, actions: [], backSteps: [] }))
       .toThrowError(/unknown field 'backSteps'/)
   })
+
+  it('rejects unknown fields independently at action, nested-step, and placement levels', () => {
+    const b = new DiagramBuilder()
+    const side = mkDiagramWithBoundary(b.build(), [])
+    const theorem: Theorem = {
+      name: 'strict', lhs: side, rhs: side,
+      actions: [{
+        label: 'strict action',
+        steps: [{ rule: 'doubleCutIntro', sel: { region: side.diagram.root, regions: [], nodes: [], wires: [] } }],
+        placements: [{ introducedNode: 0, x: 1, y: 2 }],
+      }],
+    }
+    const valid = theoremToJson(theorem) as { actions: Array<{ steps: Array<Record<string, unknown>>, placements: Array<Record<string, unknown>> }> }
+    expect(() => theoremFromJson({ ...valid, actions: [{ ...valid.actions[0]!, extra: true }] }))
+      .toThrowError(/action.*unknown field 'extra'/)
+    expect(() => theoremFromJson({ ...valid, actions: [{ ...valid.actions[0]!, steps: [{ ...valid.actions[0]!.steps[0]!, extra: true }] }] }))
+      .toThrowError(/step has unknown field 'extra'/)
+    expect(() => theoremFromJson({ ...valid, actions: [{ ...valid.actions[0]!, placements: [{ ...valid.actions[0]!.placements[0]!, extra: true }] }] }))
+      .toThrowError(/placement.*unknown field 'extra'/)
+  })
   it('preserves sides, boundary order, and actions', () => {
     const l = new DiagramBuilder()
     const lp = l.termNode(l.root, p('\\a. a'))

@@ -91,6 +91,10 @@ export type LibraryViewActions = {
   readonly replay: (theorem: string) => void
 }
 
+export function theoremActionCountLabel(count: number): string {
+  return `${count} action${count === 1 ? '' : 's'}`
+}
+
 export type LibraryRenderer = (
   host: HTMLElement,
   state: LibraryViewState,
@@ -471,7 +475,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const renderGroup = (
     key: string,
     title: string,
-    thms: readonly { readonly name: string; readonly steps: number }[],
+    thms: readonly { readonly name: string; readonly actions: number }[],
     relNames: readonly string[],
   ): HTMLElement => {
     const g = div('vpa-lib-group')
@@ -487,7 +491,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (thms.length === 0) thmRow.append('none')
     thms.forEach((t, i) => {
       if (i > 0) thmRow.append(', ')
-      thmRow.append(`${t.name} (${t.steps} step${t.steps === 1 ? '' : 's'}) `)
+      thmRow.append(`${t.name} (${theoremActionCountLabel(t.actions)}) `)
       thmRow.append(button('▶ Replay', guard(() => enterReplay(t.name))))
     })
     g.append(thmRow)
@@ -563,7 +567,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
     for (const e of library.entries) {
       if (e.status !== 'loaded') continue
-      const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, steps: t.actions.length }))
+      const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, actions: t.actions.length }))
       libraryDiv.append(renderGroup(
         `file:${e.file}`, e.file, thms,
         Object.keys(e.theory.relations),
@@ -573,7 +577,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (library.adopted.length > 0 || library.definedRelations.length > 0) {
       libraryDiv.append(renderGroup(
         SESSION_GROUP, 'Session (adopted + defined)',
-        library.adopted.map((t) => ({ name: t.name, steps: t.actions.length })),
+        library.adopted.map((t) => ({ name: t.name, actions: t.actions.length })),
         library.definedRelations.map((r) => r.name),
       ))
     }

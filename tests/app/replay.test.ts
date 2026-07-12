@@ -4,6 +4,8 @@ import { replayActions } from '../../src/kernel/proof/action'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { bootFixture } from './boot-fixture'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 
 const boot = await bootFixture()
 const ctx = boot.ctx
@@ -16,6 +18,22 @@ const thm = (name: string): Theorem => {
 const plusComm = thm('plusComm')
 
 describe('mkReplay', () => {
+  it('uses one scrub stop for a genuine multi-step action and exposes every constituent in order', () => {
+    const b = new DiagramBuilder()
+    const lhs = mkDiagramWithBoundary(b.build(), [])
+    const steps = [
+      { rule: 'doubleCutIntro' as const, sel: { region: lhs.diagram.root, regions: [], nodes: [], wires: [] } },
+      { rule: 'doubleCutElim' as const, region: 'dc' },
+    ]
+    const action = { label: 'round trip a double cut', steps, placements: [] }
+    const theorem: Theorem = { name: 'multi', lhs, rhs: lhs, actions: [action] }
+    const replay = mkReplay(theorem, { theorems: new Map(), relations: new Map() })
+
+    expect(replay.actionCount).toBe(1)
+    expect(replay.diagramAt(0)).toBe(lhs.diagram)
+    expect(exploreForm(replay.diagramAt(1))).toBe(exploreForm(lhs.diagram))
+    expect(replay.stepsAt(1)).toEqual(steps)
+  })
   it('scrubs by action while exposing the active action constituent steps', () => {
     const r = mkReplay(plusComm, ctx)
     expect(r.actionCount).toBe(plusComm.actions.length)
