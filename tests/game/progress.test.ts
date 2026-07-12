@@ -6,29 +6,32 @@ import {
 import { cultureId, puzzleId, type PuzzleDefinition } from '../../src/game/types'
 import { minimalPuzzle, minimalSource } from './catalog-fixture'
 
-const first = minimalPuzzle({ title: 'Two Veils' })
+const first = minimalPuzzle({ name: { professional: 'Two Veils' } })
 const second: PuzzleDefinition = {
-  ...first, id: puzzleId('veil-retrieval'), title: 'Veil Retrieval',
+  ...first, id: puzzleId('veil-retrieval'), name: { professional: 'Veil Retrieval' },
   prerequisites: [first.id], grantsVellum: false,
 }
 const third: PuzzleDefinition = {
-  ...first, id: puzzleId('third-artifact'), title: 'Third Artifact',
+  ...first, id: puzzleId('third-artifact'), name: { professional: 'Third Artifact' },
   prerequisites: [second.id], grantsVellum: false,
 }
 const fourth: PuzzleDefinition = {
-  ...first, id: puzzleId('fourth-artifact'), title: 'Fourth Artifact',
+  ...first, id: puzzleId('fourth-artifact'), name: { professional: 'Fourth Artifact' },
   prerequisites: [third.id], grantsVellum: false,
 }
 const fifth: PuzzleDefinition = {
-  ...first, id: puzzleId('culture-gate'), title: 'Culture Gate',
+  ...first, id: puzzleId('culture-gate'), name: { professional: 'Culture Gate' },
   prerequisites: [fourth.id], grantsVellum: false,
 }
 const sixth: PuzzleDefinition = {
-  ...first, id: puzzleId('elective-artifact'), title: 'Elective Artifact', grantsVellum: false,
+  ...first, id: puzzleId('elective-artifact'), name: { professional: 'Elective Artifact' },
+  grantsVellum: false,
 }
 const secondCulture = {
+  ...minimalSource().cultures[0]!,
   id: cultureId('second-tradition'),
   name: 'Second tradition',
+  relativeAge: 1,
   unlocksAfter: [fifth.id],
   gateway: puzzleId('second-gateway'),
 }
@@ -36,7 +39,7 @@ const seventh: PuzzleDefinition = {
   ...first,
   id: secondCulture.gateway,
   culture: secondCulture.id,
-  title: 'Second Gateway',
+  name: { professional: 'Second Gateway' },
   grantsVellum: false,
 }
 const source = minimalSource()

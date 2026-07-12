@@ -5,7 +5,7 @@ import { blankDiagram, isBlank } from '../../src/game/blank'
 import { manifestSeal, dissolveSeal } from '../../src/game/vellum'
 import { minimalPuzzle } from './catalog-fixture'
 
-const seal = minimalPuzzle({ title: 'Two Veils' })
+const seal = minimalPuzzle({ name: { professional: 'Two Veils' } })
 
 describe('exact solved-seal vellums', () => {
   it('manifests one whole closed seal in a chosen region', () => {

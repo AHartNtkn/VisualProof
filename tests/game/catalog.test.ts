@@ -6,17 +6,15 @@ import { emptyProgress } from '../../src/game/progress'
 import { loadGame, saveGame } from '../../src/game/save'
 import { applyGameStep, currentDiagram, startPuzzle } from '../../src/game/session'
 import {
-  cultureId, GameDomainError, puzzleId,
+  cultureId, GameDomainError, performanceId, puzzleId,
   type CultureDefinition, type PuzzleDefinition, type PuzzleId,
 } from '../../src/game/types'
-import { fixtureCultureId, minimalPuzzle, minimalSource } from './catalog-fixture'
+import { fixturePerformanceId, minimalPerformance, minimalPuzzle, minimalSource } from './catalog-fixture'
 import { fourVeils, twoVeils } from './fixtures'
 
 const fixture = twoVeils()
-const puzzle = minimalPuzzle({ title: 'Two Veils' })
-const culture = {
-  id: fixtureCultureId, name: 'Fixture culture', unlocksAfter: [], gateway: puzzle.id,
-}
+const puzzle = minimalPuzzle({ name: { professional: 'Two Veils' } })
+const culture = minimalSource().cultures[0]!
 
 describe('verified game catalog', () => {
   it('accepts a closed puzzle whose backward witness reaches blank', () => {
@@ -48,7 +46,7 @@ describe('verified game catalog', () => {
     expect(() => buildCatalog({
       ...minimalSource(),
       cultures: [culture, {
-        id: otherCulture, name: 'Other culture', unlocksAfter: [], gateway: puzzle.id,
+        ...culture, id: otherCulture, name: 'Other culture', relativeAge: 1,
       }],
     })).toThrow(/gateway.*belongs to culture/)
   })
@@ -72,15 +70,18 @@ describe('verified game catalog', () => {
 
     const otherCultureId = cultureId('other-tradition')
     const otherPuzzle = minimalPuzzle({
-      id: puzzleId('other-gateway'), culture: otherCultureId, title: 'Other gateway',
+      id: puzzleId('other-gateway'), culture: otherCultureId,
+      name: { professional: 'Other gateway' },
     })
     expect(() => buildCatalog({
       ...minimalSource(),
       cultures: [
         { ...culture, unlocksAfter: [otherPuzzle.id] },
         {
+          ...culture,
           id: otherCultureId,
           name: 'Other culture',
+          relativeAge: 1,
           unlocksAfter: [puzzle.id],
           gateway: otherPuzzle.id,
         },
@@ -92,7 +93,7 @@ describe('verified game catalog', () => {
   it('rejects a witness that does not reach blank', () => {
     expect(() => buildCatalog({
       ...minimalSource(),
-      puzzles: [{ ...puzzle, witness: [] }],
+      puzzles: [{ ...puzzle, witness: [], learning: { ...puzzle.learning, rulesUsed: [] } }],
     })).toThrow(/witness does not reach blank/)
   })
 
@@ -101,6 +102,7 @@ describe('verified game catalog', () => {
       ...minimalSource(),
       puzzles: [{
         ...puzzle,
+        learning: { ...puzzle.learning, rulesUsed: ['doubleCutElim', 'doubleCutIntro'] },
         witness: [
           ...puzzle.witness,
           {
@@ -111,6 +113,142 @@ describe('verified game catalog', () => {
         ],
       }],
     })).toThrow(GameDomainError)
+  })
+
+  it('rejects incomplete artifact nomenclature and provenance', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({ name: { professional: '  ' } })],
+    })).toThrow(/professional/)
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({
+        provenance: { summary: '', function: 'Supports a minimal verified witness.' },
+      })],
+    })).toThrow(/provenance summary/)
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({ name: {
+        professional: 'Fixture artifact', curatorShorthand: ' padded ',
+      } })],
+    })).toThrow(/curator shorthand/)
+  })
+
+  it('rejects cultures without sealing vocabulary', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(), cultures: [{ ...culture, sealingVocabulary: [] }],
+    })).toThrow(/sealing vocabulary/)
+  })
+
+  it('requires two to five unique knowledge points per performance', () => {
+    const point = minimalPerformance().knowledgePoints[0]!
+    expect(() => buildCatalog({
+      ...minimalSource(), performances: [minimalPerformance({ knowledgePoints: [point] })],
+    })).toThrow(/two to five knowledge points/)
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      performances: [minimalPerformance({ knowledgePoints: Array.from({ length: 6 }, (_, index) => ({
+        ...point, id: `point-${index}`,
+      })) })],
+    })).toThrow(/two to five knowledge points/)
+    expect(() => buildCatalog({
+      ...minimalSource(), performances: [minimalPerformance({ knowledgePoints: [point, point] })],
+    })).toThrow(/duplicate knowledge point/)
+  })
+
+  it('rejects missing performance prerequisites and prerequisite cycles', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      performances: [minimalPerformance({ prerequisites: [performanceId('missing')] })],
+    })).toThrow(/missing performance prerequisite/)
+
+    const otherId = performanceId('other-performance')
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      performances: [
+        minimalPerformance({ prerequisites: [otherId] }),
+        minimalPerformance({ id: otherId, prerequisites: [fixturePerformanceId] }),
+      ],
+    })).toThrow(/performance prerequisite cycle/)
+  })
+
+  it('rejects unknown and duplicate puzzle learning-role entries', () => {
+    const roles = ['introduces', 'practices', 'retrieves', 'assesses'] as const
+    for (const role of roles) {
+      const learning = minimalPuzzle().learning
+      expect(() => buildCatalog({
+        ...minimalSource(),
+        puzzles: [minimalPuzzle({
+          learning: { ...learning, [role]: [performanceId('missing')] },
+        })],
+      })).toThrow(/unknown performance/)
+      expect(() => buildCatalog({
+        ...minimalSource(),
+        puzzles: [minimalPuzzle({
+          learning: { ...learning, [role]: [fixturePerformanceId, fixturePerformanceId] },
+        })],
+      })).toThrow(/duplicate.*learning role/)
+    }
+  })
+
+  it('rejects a misconception without corrective thought', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({
+        misconceptions: [{
+          id: 'single-cut', performance: fixturePerformanceId, thought: ' ',
+        }],
+      })],
+    })).toThrow(/misconception.*thought/)
+  })
+
+  it('requires declared rules to exactly equal witness rules', () => {
+    const learning = minimalPuzzle().learning
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({ learning: { ...learning, rulesUsed: [] } })],
+    })).toThrow(/rulesUsed.*witness/)
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({ learning: { ...learning, rulesUsed: ['doubleCutIntro'] } })],
+    })).toThrow(/rulesUsed.*witness/)
+  })
+
+  it('fingerprints teacher copy and cultural history', () => {
+    const original = buildCatalog(minimalSource())
+    const changedTeacher = buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({
+        teacher: [{ trigger: 'opening', text: 'Changed teacher copy.' }],
+      })],
+    })
+    const changedHistory = buildCatalog({
+      ...minimalSource(),
+      cultures: [{ ...culture, historicalSummary: 'Changed cultural history.' }],
+    })
+
+    expect(changedTeacher.fingerprint).not.toBe(original.fingerprint)
+    expect(changedHistory.fingerprint).not.toBe(original.fingerprint)
+  })
+
+  it('fingerprints structured metadata independently of object property insertion order', () => {
+    const original = buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({
+        name: {
+          professional: 'Fixture artifact', curatorShorthand: 'Fixture', accession: 'FX-1',
+        },
+      })],
+    })
+    const reordered = buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({
+        name: {
+          accession: 'FX-1', curatorShorthand: 'Fixture', professional: 'Fixture artifact',
+        },
+      })],
+    })
+
+    expect(reordered.fingerprint).toBe(original.fingerprint)
   })
 
   it('fingerprints canonical relation content independently of map insertion order', () => {
@@ -134,12 +272,16 @@ describe('verified game catalog', () => {
     const cultures = [mutableCulture]
     const prerequisites: PuzzleId[] = []
     const witness = [{ rule: 'doubleCutElim' as const, region: mutableGoalFixture.eliminations[0]! }]
-    const mutablePuzzle = { ...puzzle, goal: mutableGoalFixture.goal, prerequisites, witness }
+    const mutablePuzzle = {
+      ...puzzle, name: { ...puzzle.name }, goal: mutableGoalFixture.goal, prerequisites, witness,
+    }
     const puzzles = [mutablePuzzle]
     const relationDefinition = { diagram: mutableRelationFixture.goal.diagram, boundary: [] as string[] }
     const relations = new Map([['veil', relationDefinition]])
     const context = { relations }
-    const source = { cultures, puzzles, context }
+    const performances = [minimalPerformance()]
+    const source = { cultures, performances, puzzles, context }
+    const originalPuzzleName = { ...puzzle.name }
     const originalGoalForm = exploreForm(mutableGoalFixture.goal.diagram)
     const originalRelationForm = exploreForm(mutableRelationFixture.goal.diagram)
     const catalog = buildCatalog(source)
@@ -147,11 +289,11 @@ describe('verified game catalog', () => {
 
     mutableCulture.name = 'Mutated culture'
     cultures.push({
-      id: cultureId('intruder'), name: 'Intruder', unlocksAfter: [], gateway: puzzle.id,
+      ...culture, id: cultureId('intruder'), name: 'Intruder', relativeAge: 1,
     })
     mutablePuzzle.id = puzzleId('mutated-puzzle')
     mutablePuzzle.culture = cultureId('mutated-culture')
-    mutablePuzzle.title = 'Mutated puzzle'
+    mutablePuzzle.name.professional = 'Mutated puzzle'
     mutablePuzzle.grantsVellum = false
     mutablePuzzle.goal = fourVeils().goal
     prerequisites.push(puzzleId('missing'))
@@ -172,7 +314,7 @@ describe('verified game catalog', () => {
     expect(catalog.source.cultures[0]?.name).toBe(culture.name)
     expect(catalog.source.puzzles).toHaveLength(1)
     expect(catalog.puzzle(puzzle.id)).toMatchObject({
-      title: puzzle.title,
+      name: originalPuzzleName,
       grantsVellum: true,
       prerequisites: [],
     })

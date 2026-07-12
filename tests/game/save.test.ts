@@ -10,7 +10,7 @@ import { fourVeils } from './fixtures'
 
 const fixture = fourVeils()
 const puzzle = minimalPuzzle({
-  id: puzzleId('four-veils'), title: 'Four Veils', goal: fixture.goal,
+  id: puzzleId('four-veils'), name: { professional: 'Four Veils' }, goal: fixture.goal,
   witness: fixture.eliminations.map((region) => ({ rule: 'doubleCutElim' as const, region })),
 })
 const source = minimalSource()
