@@ -16,6 +16,9 @@ import type { FixedSide } from './fixed-side-layout'
 import { MotionCoordinator, type MotionPreferences } from './interact/motion'
 import type { MotionDebugState } from './interact/motion'
 import { ComprehensionEditor, type ComprehensionEditorDebug } from './comprehension-editor'
+import { SpawnCascade } from './interact/spawn'
+import { commitClosedTermSpawn } from './interact/closed-term-intro'
+import { seedBodyPlacement } from '../view/placement'
 
 export type ProofFrontModel = {
   readonly side: FixedSide
@@ -86,6 +89,7 @@ export class ProofFrontViewport {
   readonly motion: MotionCoordinator
   #engine: Engine
   #moves: ProofMoveController
+  #spawn: SpawnCascade
   #editor: ComprehensionEditor | null = null
   #surface: CanvasAdapter
   #model: ProofFrontModel
@@ -105,6 +109,27 @@ export class ProofFrontViewport {
       engine: () => this.#engine,
       theme: model.theme,
     })
+    this.#spawn = new SpawnCascade({
+      host: document.body,
+      spawnTerm: ({ source, invocation }) => {
+        try {
+          const before = model.diagram()
+          const placement = commitClosedTermSpawn(source, invocation, before, (step) => {
+            this.motion.run(step, model.prepare(step), performance.now())
+            return model.diagram()
+          })
+          seedBodyPlacement(this.#engine, placement.node, placement.at)
+          return true
+        } catch (error) {
+          model.refuse(error instanceof Error ? error.message : String(error), invocation.screen)
+          return false
+        }
+      },
+      spawnRelation: () => false,
+      spawnBoundPredicate: () => false,
+      binderColor: () => { throw new Error('proof term spawning has no bound-predicate entries') },
+      openChanged: model.changed,
+    })
 
     this.#moves = new ProofMoveController({
       host: document.body,
@@ -121,6 +146,13 @@ export class ProofFrontViewport {
       theme: model.theme,
       fuel: model.fuel,
       openComprehension: (bubble, pointer) => this.#openComprehension(bubble, pointer),
+      openSpawn: (sample, region) => {
+        this.#spawn.open(
+          { screen: sample.client, world: sample.world, region },
+          new Map(),
+          [],
+        )
+      },
     })
     this.interaction = new InteractiveViewport({
       canvas,
@@ -167,6 +199,7 @@ export class ProofFrontViewport {
     if (!focused) {
       this.interaction.cancelActiveGesture()
       this.#moves.cancel()
+      this.#spawn.close()
     }
   }
 
@@ -185,6 +218,7 @@ export class ProofFrontViewport {
   cancelActiveGesture(): void {
     this.interaction.cancelActiveGesture()
     this.#moves.cancel()
+    this.#spawn.close()
   }
 
   resize(width: number, height: number): void {
@@ -255,6 +289,7 @@ export class ProofFrontViewport {
     this.canvas.removeEventListener('contextmenu', this.#focus, true)
     this.canvas.removeEventListener('wheel', this.#focus, true)
     this.#moves.dispose()
+    this.#spawn.dispose()
     this.#editor?.dispose()
     this.#editor = null
     this.motion.dispose()

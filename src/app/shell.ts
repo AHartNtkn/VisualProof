@@ -39,6 +39,7 @@ import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { ProofMoveController } from './interact/moves'
+import { commitClosedTermSpawn } from './interact/closed-term-intro'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
 import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
 import { mountCompass } from './compass'
@@ -1394,6 +1395,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     host: document.body,
     spawnTerm: ({ source, invocation }) => {
       try {
+        if (mode === 'prove') {
+          if (proof?.kind !== 'track') throw new Error('closed-term spawning requires an active track proof')
+          const before = currentDiagram()
+          const placement = commitClosedTermSpawn(source, invocation, before, (step) => {
+            applyProofStep(step)
+            return currentDiagram()
+          })
+          seedBodyPlacement(engine, placement.node, placement.at)
+          return true
+        }
+        requireEdit()
         const added = addTermNode(editDiagram, invocation.region, parseTerm(source))
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
@@ -1404,6 +1416,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     spawnRelation: ({ defId, arity: relationArity, invocation }) => {
       try {
+        requireEdit()
         const relation = ctx.relations.get(defId)
         if (relation === undefined) throw new Error(`relation '${defId}' is no longer loaded`)
         if (relation.boundary.length !== relationArity) throw new Error(`relation '${defId}' changed while the spawn menu was open`)
@@ -1417,6 +1430,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     spawnBoundPredicate: ({ binder, invocation }) => {
       try {
+        requireEdit()
         const added = addAtomNode(editDiagram, invocation.region, binder)
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
@@ -1473,6 +1487,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     theme: () => theme,
     fuel: () => readCount(fuel.input, 'fuel'),
     openComprehension,
+    openSpawn: (sample, region) => {
+      spawnCascade.open(
+        { screen: sample.client, world: sample.world, region },
+        new Map(),
+        [],
+      )
+    },
   })
   interaction = new InteractiveViewport({
     canvas,

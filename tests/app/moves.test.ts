@@ -88,6 +88,7 @@ function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' =
     theme: () => LIGHT,
     fuel: () => 64,
     openComprehension: () => {},
+    openSpawn: () => {},
   })
   return { controller, producer, consumer, wire, applied, diagram: () => diagram }
 }
@@ -402,6 +403,7 @@ describe('proof connection resolution', () => {
       theme: () => LIGHT,
       fuel: () => 64,
       openComprehension: () => {},
+      openSpawn: () => {},
     })
     const from = { ...pointer({ kind: 'wire', id: wire }), world: pointFor(a), client: pointFor(a), screen: pointFor(a) }
     const to = { ...pointer({ kind: 'wire', id: wire }), world: pointFor(c), client: pointFor(c), screen: pointFor(c) }
