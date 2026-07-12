@@ -6,3 +6,5 @@ dist/
 demo/dist
 app/dist
 test-results/
+.tools/
+assets/interface/.staging/
