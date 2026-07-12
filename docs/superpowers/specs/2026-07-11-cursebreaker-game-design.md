@@ -212,21 +212,65 @@ Exit evidence: solve unfamiliar multi-proposition seals through polarity and str
 
 ### 8.3 Later proposition-binder culture
 
-This remains proposition-only. It begins with non-universal proposition quantification and later develops nested binders. Individual wires and equality are absent.
+The Myratic tradition remains proposition-only. Individual wires, equality, and
+lambda terms are absent. Its seals contain deliberate pattern lacunae: a bound
+mark may stand for a complete proposition-shaped diagram rather than merely an
+atomic mark. Myratic work therefore consists of reconstructing missing
+patterns, recognizing repeated patterns as instances of one design, and
+tracking ownership through nested layers. Supplying an existential witness is
+the tradition's first technique, not its complete mechanical identity.
 
-Required families:
+The culture develops through these ordered families:
 
-- vacuous proposition quantification;
-- independent-binder exchange;
-- atomic and compound arity-zero instantiation;
-- binders nested inside implication, negation, conjunction, and other binders;
-- quantifier movement with explicit non-occurrence conditions;
-- valid distribution paired with similar invalid cases;
-- shadowed versus independent binder ownership;
-- multiple occurrences at different depths;
-- impredicative proposition encodings when they produce clear puzzles.
+1. **Supplying missing patterns.** Begin with a closed blank or cut, then use an
+   outer mark, a negated outer mark, and compounds containing several outer
+   marks. Representative authoring forms include `∃P.P`, `∃P.¬P`,
+   `∀Q.∃P.(P↔Q)`, `∀Q.∃P.(P↔¬Q)`, and
+   `∀Q,R.∃P.(P↔(Q∧R))`. These are examples of the progression, not a frozen
+   artifact list.
+2. **Recovering a common pattern.** Introduce arity-zero comprehension
+   abstraction with one closed occurrence, several identical occurrences,
+   relevant occurrences among distractors, and an open pattern containing an
+   outer-bound mark. Near-matches teach that one binder may own only genuinely
+   identical proposition patterns.
+3. **Empty and independent binders.** Introduce vacuous binders, determine when
+   a binder truly owns nothing, and move a binder only past material that does
+   not contain its mark. Concrete artifacts may express valid instances of
+   `A↔∃P.A`, `A↔∀P.A`, and connective movement under an explicit
+   non-occurrence condition.
+4. **Nested ownership.** Develop independent nested binders, same-kind
+   exchange, shadowed versus independent marks, multiple occurrences at
+   different depths, open substitutions referencing an enclosing binder, and
+   invalid substitutions that would depend on an inner binder. Binders appear
+   inside implication, negation, conjunction, and other binders.
+5. **Quantifier laws and near-misses.** Exercise universal distribution over
+   conjunction, existential distribution over disjunction, and legal movement
+   across independent material. Similar invalid forms appear as tempting
+   attempted moves, comparisons, or damaged reconstructions, never as false
+   theorem puzzles.
+6. **Exhaustive proposition choice.** Develop the operational fact that a
+   quantified proposition can be examined through its true and false
+   instances. Concrete puzzles such as `∀Q.((∀P.(P→Q))↔Q)` lead from explicit
+   instantiation to quantifier elimination without requiring player-facing
+   truth-table terminology.
+7. **Impredicative constructions.** Cap the culture with proposition encodings
+   of falsity `∀P.P`, truth `∀P.(P→P)`, conjunction
+   `∀P.((A→B→P)→P)`, and disjunction
+   `∀P.((A→P)→(B→P)→P)`. Substantial artifacts establish their equivalence to
+   the familiar visible connectives. This prepares the later Boolean and
+   natural-number cultures without introducing their first-order material
+   prematurely.
 
-Exit evidence: predict binder ownership, construct compound proposition substitutions, and distinguish scope errors from polarity errors.
+Instruction names the immediate visible operation and then returns control.
+The game describes lacunae, patterns, and ownership; second-order quantifier
+terminology remains authoring metadata. Practice must require both
+instantiation and abstraction rather than reducing the culture to repeated
+existential-witness puzzles.
+
+Exit evidence: independently construct closed, compound, and outer-dependent
+proposition substitutions; recognize and abstract repeated patterns; predict
+nested binder ownership; apply binder movement and distribution conditions;
+and distinguish scope errors from polarity or pattern-matching errors.
 
 ### 8.4 First-order identity and relations — no lambdas
 
@@ -424,6 +468,10 @@ It includes:
 - one permanent gateway artifact beginning the next proposition-binder culture;
 - a required mastery spine alongside at least one elective artifact, so the interface proves non-linear progression;
 - the full curriculum and mechanic graph as the durable authoring roadmap.
+
+Only `∃P.P`, the Myratic gateway, is authored in this slice. The remaining
+Myratic families in Section 8.3 are durable curriculum direction, not content
+to implement before the interface is substantially finalized.
 
 Later cultural content must not appear as placeholder, locked empty panels, or unverifiable scaffolding in the shipped slice. Non-shipping development fixtures may exercise interface surfaces whose instructional culture has not yet been authored.
 

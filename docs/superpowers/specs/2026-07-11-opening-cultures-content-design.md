@@ -156,6 +156,14 @@ Authoring shorthand: **The Unwritten Name**. This is the required first artifact
 of the second culture. It isolates non-universal proposition quantification and
 the construction loupe: instantiate the proposition with the blank sheet.
 
+This gateway demonstrates only the Myratic tradition's first technique:
+supplying a complete proposition pattern for a deliberate lacuna. The full
+culture later develops compound and outer-dependent instantiation,
+comprehension abstraction, vacuous and nested binders, ownership and
+shadowing, quantifier movement and distribution, exhaustive proposition
+choice, and impredicative proposition encodings. None of those later artifacts
+belong to this pre-interface implementation slice.
+
 Verified backward witness: one arity-zero comprehension instantiation.
 
 ## Catalog authority and validation
