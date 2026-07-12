@@ -12,11 +12,11 @@ Three non-overlapping atomic spawning operations replace arbitrary insertion:
 
 1. **Open term spawn** creates one term node with fresh output/free-port wires, requires at least one free port, and is valid only in an insertion-polarity region: negative while proving forward and positive while proving backward.
 2. **Named relation spawn** creates one reference node for a currently loaded relation, with one fresh singleton argument wire per boundary position. It has the same orientation-sensitive polarity gate and revalidates the relation id and arity at commit time.
-3. **Bound relation spawn** creates one atom node bound to a chosen enclosing bubble, with one fresh singleton argument wire per binder argument. It has the same polarity gate and additionally requires the chosen bubble to enclose the invocation region with matching live arity.
+3. **Bound relation spawn** creates one atom node bound to a chosen enclosing bubble, with one fresh singleton argument wire per binder argument. It records the displayed arity, has the same polarity gate, and additionally requires the chosen bubble to enclose the invocation region with matching live arity at commit time.
 
 The existing `closedTermIntro` rule remains the sole closed-term spawning route. The shared λ-term entry dispatches closed input to `closedTermIntro` and open input to `openTermSpawn`; each input has exactly one authority.
 
-Each new atomic step stores only its semantic input—region and open term, region and relation id/arity, or region and binder—not an embedded `DiagramWithBoundary`. Appliers construct exactly one node plus required singleton wires and revalidate through `mkDiagram`. They do not accept preassembled subgraphs, attachments, binder maps, or arbitrary patterns.
+Each new atomic step stores only its semantic input—region and open term, region and relation id/arity, or region and binder id/displayed arity—not an embedded `DiagramWithBoundary`. Appliers construct exactly one node plus required singleton wires and revalidate through `mkDiagram`. They do not accept preassembled subgraphs, attachments, binder maps, or arbitrary patterns.
 
 ## Shared contextual interaction
 

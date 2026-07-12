@@ -142,7 +142,7 @@ git commit -m "refactor: share atomic diagram spawning"
 ```ts
 | { readonly rule: 'openTermSpawn'; readonly region: RegionId; readonly term: Term }
 | { readonly rule: 'relationSpawn'; readonly region: RegionId; readonly defId: string; readonly arity: number }
-| { readonly rule: 'boundRelationSpawn'; readonly region: RegionId; readonly binder: RegionId }
+| { readonly rule: 'boundRelationSpawn'; readonly region: RegionId; readonly binder: RegionId; readonly arity: number }
 ```
 
 - Remove the `insertion` variant and every arbitrary-pattern field.
