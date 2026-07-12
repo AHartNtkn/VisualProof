@@ -127,16 +127,31 @@ describe('the bundled Frege theory', () => {
     let replayed = t.lhs.diagram
     let observedSplit = false
     for (const step of t.steps) {
-      replayed = applyStep(replayed, step, ctx)
-      if (step.rule !== 'anchoredWireSplit') continue
+      if (step.rule !== 'anchoredWireSplit') {
+        replayed = applyStep(replayed, step, ctx)
+        continue
+      }
       observedSplit = true
-      const original = replayed.wires[step.wire]!
-      expect(original.scope).toBe(step.target)
-      expect(original.endpoints).toContainEqual({ node: step.witness, port: { kind: 'output' } })
-      expect(original.endpoints.some((endpoint) => {
+      const originalWire = replayed.wires[step.wire]
+      expect(originalWire).toBeDefined()
+      const originalScope = originalWire!.scope
+      expect(replayed.regions[originalScope]?.kind).toBe('bubble')
+      const baseEndpoint = originalWire!.endpoints.find((endpoint) => {
         const node = replayed.nodes[endpoint.node]
-        return node?.kind === 'atom' && node.region === step.target && endpoint.port.kind === 'arg'
-      })).toBe(true)
+        return node?.kind === 'atom' && node.region === originalScope && endpoint.port.kind === 'arg'
+      })
+      expect(baseEndpoint).toBeDefined()
+      const movedEndpoint = step.endpoints[0]
+      expect(movedEndpoint).toBeDefined()
+
+      replayed = applyStep(replayed, step, ctx)
+
+      const retainedWire = replayed.wires[step.wire]
+      expect(retainedWire).toBeDefined()
+      expect(retainedWire!.scope).toBe(originalScope)
+      expect(retainedWire!.endpoints).toContainEqual(baseEndpoint)
+      expect(retainedWire!.endpoints).toContainEqual({ node: step.witness, port: { kind: 'output' } })
+      expect(retainedWire!.endpoints).not.toContainEqual(movedEndpoint)
     }
     expect(observedSplit).toBe(true)
     // a standalone fact, so both sides are closed sentences (empty boundary)
