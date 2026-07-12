@@ -1,6 +1,6 @@
 # Opening Cultures and Content Design
 
-**Status:** Approved  
+**Status:** Exact copy review requested
 **Date:** 2026-07-11
 
 ## Outcome
@@ -76,11 +76,27 @@ names. Routine elective practice may use plainer excavation or accession names.
 Formal theorem names never become display titles merely because they are
 convenient mathematical labels.
 
-Culture and artifact names may mutate the real-world concepts that inspired
-their formal content, including through non-English linguistic roots. Exact
-names must be brainstormed as one coherent cultural naming pass during
-implementation. The descriptive labels below are authoring shorthand, not
-approved display names.
+The approved opening names use fictional archaeological exonyms built from a
+shared ancient philological stratum. **Seyric** is distantly shaped by Greek
+*sēma* (mark or sign); **Myratic** is distantly shaped by Greek *martys*
+(witness). The mutations are background construction logic, not etymology
+lessons shown to the player. Neither name identifies or borrows the name of a
+living people.
+
+The two exact culture records are:
+
+- **The Seyric Horizon** — the earliest secure sealing horizon, known from
+  funerary closures, threshold wards, and stone stoppers. Its self-name is
+  unknown; “Seyric” is the modern archaeological exonym. The opening seals
+  develop veils, fields, echoes, rings, and marks.
+- **The Myratic Tradition** — the isolated Myrat complex, whose deliberate
+  hollows may stand for complete seal-patterns. No direct Seyric lineage is
+  established. Supplying a pattern is its first technique, not the identity of
+  the whole tradition.
+
+These exact names and the provisional curatorial vocabulary in the main game
+design govern the initial content implementation. Later revision requires
+playtest or worldbuilding evidence, not local synonym preference.
 
 ## Learning metadata
 
@@ -105,72 +121,180 @@ dialogue with recovery guidance. Each exact-state intervention includes a legal
 demonstration trace so catalog validation can prove the state is reachable.
 Early empty-cut dead ends are the canonical example.
 
+## Opening performance graph
+
+The initial catalog uses these exact stable performance identities. Each row's
+clauses become ordered knowledge points; correction copy remains authoring
+metadata for later hints rather than invalid-action thoughts.
+
+| Identity | Performance | Prerequisites | Ordered knowledge points | Mastery evidence |
+|---|---|---|---|---|
+| `release-paired-veils` | Lift one eligible pair of veils without disturbing what it encloses. | none | The veils are directly nested; nothing lies between their boundaries; lifting them preserves enclosed content. | Independently identifies and lifts an eligible pair. |
+| `resolve-repeated-veils` | Resolve a seal containing more than one eligible pair. | `release-paired-veils` | More than one pair may be eligible; either legal order may be used; lifting one pair may expose another. | Completes nested-pair practice without treating one valid order as mandatory. |
+| `clear-dark-field` | Clear a complete fragment from an eligible dark field. | `release-paired-veils` | Clearing is allowed only in the appropriate field; the selection must be a complete fragment; clearing can expose an older paired form. | Clears only the necessary fragment and retrieves paired-veiling. |
+| `lift-supported-echo` | Lift an exact repeated fragment supported by an older matching form. | `clear-dark-field` | The outer support must already exist; the echo must match exactly; lifting the echo leaves its support in place. | Distinguishes an exact supported echo from a merely similar fragment. |
+| `trace-single-mark-ownership` | Trace one mark through veils to the ring that owns it. | `lift-supported-echo` | A ring owns matching marks throughout its interior; intervening veils do not change ownership; a ring dissolves only after it owns no marks. | Resolves the single-ring artifact while combining all earlier spatial skills. |
+| `distinguish-nested-owners` | Keep marks belonging to nested rings independent. | `trace-single-mark-ownership` | Each ring owns only its corresponding marks; nesting does not merge owners; removing one owner's material must not capture or release another's marks. | Independently resolves the elective two-ring artifact. |
+| `supply-complete-pattern` | Supply a complete pattern for a Myratic hollow. | `trace-single-mark-ownership` | A hollow may stand for an entire pattern; the blank sheet is a complete pattern; committing the loupe replaces every occurrence consistently. | Uses the construction loupe to resolve `∃P.P` with the blank sheet. |
+
+Artifact learning roles are fixed as follows:
+
+- artifact 1 introduces `release-paired-veils`;
+- artifact 2 practices and assesses `release-paired-veils` and introduces
+  `resolve-repeated-veils`;
+- artifact 3 introduces `clear-dark-field` and retrieves
+  `release-paired-veils`;
+- artifact 4 introduces `lift-supported-echo`, practices `clear-dark-field`,
+  and retrieves `release-paired-veils`;
+- artifact 5 introduces `trace-single-mark-ownership`, practices
+  `lift-supported-echo` and `clear-dark-field`, and retrieves
+  `release-paired-veils`;
+- artifact 6 introduces `distinguish-nested-owners`, practices
+  `trace-single-mark-ownership`, and assesses the first culture's core skills;
+- artifact 7 introduces `supply-complete-pattern` and retrieves
+  `trace-single-mark-ownership` without claiming mastery of the later Myratic
+  curriculum.
+
 ## Initial seven artifacts
 
-### 1. `¬¬⊤`
+### 1. The Seyr Ossuary Seal
 
-Authoring shorthand: **Two Veils**. Introduces eliminating one paired cut.
-Teacher copy identifies the removable pair without scripting the gesture.
+- **Curator shorthand:** paired-veil form.
+- **Formal goal:** `¬¬⊤`.
+- **Provenance:** a basalt stopper recovered in place from Ossuary I at Seyr,
+  the earliest securely excavated intact closure assigned to the horizon.
+- **Function:** contained a simple mortuary curse within the burial niche.
+- **Opening teacher intervention:** “The Seyric makers often laid one veil
+  directly inside another. When nothing separates a pair, both may be lifted
+  together.”
+- **Learning:** introduces `release-paired-veils`.
 
 Verified backward witness: one double-cut elimination.
 
-### 2. `¬¬¬¬⊤`
+### 2. Seyr Cairn Seal IV
 
-Authoring shorthand: **Four Veils**. Practices repeated elimination. The two
-valid orders provide a natural opportunity to introduce timeline scrubbing and
-branching without forcing either route.
+- **Curator shorthand:** four-veil nesting.
+- **Formal goal:** `¬¬¬¬⊤`.
+- **Provenance:** the fourth slate closure catalogued from the outer cairn cache
+  at Seyr; tool marks suggest it was cut during one workshop episode.
+- **Function:** reinforced a cache curse through repeated nested closure.
+- **Opening teacher intervention:** “There are two paired veils here. Either
+  pair may be lifted first.”
+- **Recognized-state teacher intervention:** after the first legal pair is
+  lifted, “The lever beneath the lens records each state. You may draw it back
+  to compare another route.” This is an affordance introduction, not a required
+  detour.
+- **Learning:** practices and assesses `release-paired-veils`; introduces
+  `resolve-repeated-veils`.
 
-Verified backward witness: two double-cut eliminations.
+Verified backward witness: two double-cut eliminations. Either legal order
+reaches the same canonical intermediate state and may trigger the timeline
+instruction once.
 
-### 3. `¬(¬⊤ ∧ ¬⊤)`
+### 3. The Orra Gate Fragment
 
-Authoring shorthand: **Forked Veil**. Introduces backward erasure: one sibling
-blocks the familiar collapse, so the player removes it and retrieves the prior
-move.
+- **Curator shorthand:** forked field.
+- **Formal goal:** `¬(¬⊤ ∧ ¬⊤)`.
+- **Provenance:** a broken limestone lintel ward from the Orra Gate. The forked
+  interior appears to be a later repair or accretion rather than the original
+  carving.
+- **Function:** confined a threshold curse while allowing one obstructing
+  fragment to be cleared during licensed passage.
+- **Opening teacher intervention:** “A dark field does not preserve every
+  fragment drawn within it. You may clear away a complete fragment to expose a
+  simpler form.”
+- **Recognized-trap teacher intervention:** if one legal clearing removes the
+  whole useful core and leaves an empty veil, “An empty veil is a familiar
+  novice’s trap. Nothing remains inside it to work upon. Draw the lever back to
+  before the clearing.” This intervention fires once and carries timeline
+  recovery guidance.
+- **Learning:** introduces `clear-dark-field`; retrieves
+  `release-paired-veils`.
 
-Verified backward witness: erasure, then double-cut elimination.
+Verified backward witness: erasure, then double-cut elimination. A separate
+legal demonstration trace must verify the empty-veil trap state.
 
-### 4. `¬(¬⊤ ∧ ¬¬⊤)`
+### 4. Tel Vey Chamber Seal VIII
 
-Authoring shorthand: **Echoed Veil**. Introduces deiteration through a nested
-copy supported by an older matching form, contrasts it with erasure, and then
-retrieves double-cut elimination.
+- **Curator shorthand:** supported-echo form.
+- **Formal goal:** `¬(¬⊤ ∧ ¬¬⊤)`.
+- **Provenance:** the eighth closure recorded in the Tel Vey storage chamber;
+  its repeated inner fragment remains unusually crisp beneath mineral deposits.
+- **Function:** reinforced a chamber curse by repeating an older surrounding
+  form inside a deeper field.
+- **Opening teacher intervention:** “The inner fragment is an exact echo of the
+  older form outside it. Where the older form remains, the echo may be lifted.”
+- **First stalled intervention:** “Compare the innermost fragment with the form
+  in the surrounding field. The match must be exact.”
+- **Learning:** introduces `lift-supported-echo`, practices `clear-dark-field`,
+  and retrieves `release-paired-veils`.
 
 Verified backward witness: deiteration, erasure, double-cut elimination.
 
-### 5. `∀P.P→P`
+### 5. The Auten Reliquary Closure
 
-Authoring descriptor: **single-mark return form**. This artifact transfers the
-preceding spatial pattern to one universally bound proposition mark. Instruction
-explains visible mark ownership without requiring formal-logic vocabulary.
+- **Curator shorthand:** single-ring ownership form.
+- **Formal goal:** `∀P.P→P`.
+- **Provenance:** a bronze-faced reliquary closure from Auten, preserving the
+  first securely dated Seyric ring with a bound colored mark. Its discovery
+  forced a revision of the horizon's chronology.
+- **Function:** returned a marked condition through a veiled chamber while
+  keeping both occurrences under one ring.
+- **Opening teacher intervention:** “This colored mark belongs to the ring
+  surrounding it. The veil changes where it appears, not which ring owns it.”
+- **Completion teacher intervention:** “Good. The Seyric rings are ownership
+  marks, not ornament. That distinction will matter among the Myratic finds.”
+- **Learning:** introduces `trace-single-mark-ownership`, practices
+  `lift-supported-echo` and `clear-dark-field`, and retrieves
+  `release-paired-veils`.
 
 Verified backward witness: deiteration, erasure, vacuous-bubble elimination,
 double-cut elimination.
 
-### 6. `∀P,Q.(P∧Q)→P`
+### 6. Seyric Field Seal S-27
 
-Authoring shorthand: **One of Two**. This elective artifact provides varied
-practice with two universal binders and selective removal while retrieving the
-preceding pattern.
+- **Curator shorthand:** two-ring field form.
+- **Formal goal:** `∀P,Q.(P∧Q)→P`.
+- **Accession:** S-27.
+- **Provenance:** a small repetitive tablet from Seyr workshop refuse, probably
+  a routine exercise or production trial rather than a commissioned closure.
+- **Function:** practiced separating two nested owners while retaining only the
+  mark required by the seal.
+- **First stalled intervention:** “Trace each color back to its own ring before
+  removing anything.” There is no opening lecture.
+- **Learning:** introduces `distinguish-nested-owners`, practices
+  `trace-single-mark-ownership`, and assesses the first culture's core skills.
+- **Progression:** elective.
 
 Verified backward witness: deiteration, two erasures, two vacuous-bubble
 eliminations, double-cut elimination.
 
-### 7. `∃P.P`
+### 7. The Uninscribed Votive of Myrat
 
-Authoring shorthand: **The Unwritten Name**. This is the required first artifact
-of the second culture. It isolates non-universal proposition quantification and
-the construction loupe: instantiate the proposition with the blank sheet.
+- **Curator shorthand:** blank-hollow form.
+- **Formal goal:** `∃P.P`.
+- **Provenance:** an alabaster votive from the isolated Myrat complex. Wear and
+  residue establish that its empty face is intentional and integral to the
+  seal, not unfinished work or later damage.
+- **Function:** required the maker or breaker to supply one complete pattern for
+  its deliberate hollow.
+- **Opening teacher intervention:** “The Myratic hollow is deliberate. It asks
+  for an entire seal-pattern. Open the loupe and place the blank sheet within
+  it.”
+- **Completion teacher intervention:** “Precisely. To a Myratic seal, even an
+  unwritten sheet is a complete pattern.”
+- **Learning:** introduces `supply-complete-pattern` and retrieves
+  `trace-single-mark-ownership`.
 
-This gateway demonstrates only the Myratic tradition's first technique:
-supplying a complete proposition pattern for a deliberate lacuna. The full
-culture later develops compound and outer-dependent instantiation,
-comprehension abstraction, vacuous and nested binders, ownership and
-shadowing, quantifier movement and distribution, exhaustive proposition
-choice, and impredicative proposition encodings. None of those later artifacts
-belong to this pre-interface implementation slice.
+This gateway demonstrates only the Myratic tradition's first technique. The
+full culture later develops compound and outer-dependent instantiation,
+comprehension abstraction, vacuous and nested binders, ownership and shadowing,
+quantifier movement and distribution, exhaustive proposition choice, and
+impredicative proposition encodings. None of those later artifacts belong to
+this pre-interface implementation slice.
 
-Verified backward witness: one arity-zero comprehension instantiation.
+Verified backward witness: one arity-zero comprehension instantiation with the
+blank sheet.
 
 ## Catalog authority and validation
 

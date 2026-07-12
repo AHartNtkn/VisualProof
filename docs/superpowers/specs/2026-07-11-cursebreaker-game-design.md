@@ -123,7 +123,48 @@ The existing comprehension construction workflow remains behaviorally authoritat
 - Escape or Backspace closes it without committing.
 - Construction, selection, connection planning, local history, cancellation, and atomic commit retain their established semantics.
 
-### 5.4 Visual-direction review
+### 5.4 Provisional curatorial language
+
+Learner-facing copy uses one provisional vocabulary. The bible prevents
+undefined jargon and accidental synonym drift; it is not immutable lore.
+Playtests may revise a term when players misunderstand it, form the wrong
+expectation, or find it unnatural during manipulation. Copy is not revised
+merely for local variety.
+
+| Term | Canonical meaning |
+|---|---|
+| artifact | The physical archaeological object under examination. |
+| seal | The curse-binding design carried by an artifact. |
+| lens | The main workspace containing the active seal. |
+| veil | A cut boundary. |
+| field | The space governed by a veil. |
+| paired veils | Two directly nested veils eligible to be lifted together. |
+| fragment | A complete selectable portion of a seal. |
+| echo | A repeated fragment supported by an exact matching form outside it. |
+| ring | A proposition-binder boundary that owns marks. |
+| mark | A visible proposition occurrence owned by a ring. |
+| hollow | A Myratic mark awaiting a complete replacement pattern. |
+| pattern | A complete diagram that can fill or be abstracted into a hollow. |
+| loupe | The secondary lens used to construct or select a pattern. |
+| timeline lever | The physical control for moving through recorded seal states. |
+| vellum | A complete seal recovered from an already solved artifact. |
+
+Canonical action language is: **lift paired veils**, **clear a fragment**,
+**lift an echo**, **trace a mark to its ring**, **dissolve an empty ring**,
+**supply a pattern**, **draw the timeline lever back**, and **manifest** or
+**dissolve a vellum**. Plain connective prose remains natural, but ordinary
+instruction does not rename these actions as readings, interpretations,
+proofs, rewrites, or rule applications.
+
+Vocabulary is introduced only when its visible referent or action first
+appears: veil and paired veil in artifact 1; timeline lever during artifact 2;
+field and fragment in artifact 3; echo in artifact 4; ring and mark in artifact
+5; hollow, pattern, and loupe in artifact 7; vellum at its first available use.
+Formal terms such as proposition, quantifier, variable, theorem, proof, and
+kernel rule names remain authoring metadata rather than ordinary learner-facing
+dialogue.
+
+### 5.5 Visual-direction review
 
 Layout mockups establish composition, scale, hierarchy, and interaction geometry only. They are not production visual targets and must not be promoted into the game merely because their formatting was approved.
 
