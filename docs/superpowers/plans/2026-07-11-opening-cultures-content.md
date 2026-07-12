@@ -645,14 +645,22 @@ git commit -m "refactor(game): separate thoughts from teaching"
 
 ## Required Naming and Copy Review Gate
 
-Before Task 4 changes production content, invoke `superpowers:brainstorming` and
+Before Task 5 changes production content, invoke `superpowers:brainstorming` and
 present two or three coherent naming systems for both cultures and all seven
 artifacts. Each option must show professional names, curator shorthand,
 provenance/function, linguistic mutation rationale, and representative teacher
 voice. Important artifacts 1, 5, and 7 should be memorable; elective artifact
 6 may use a plainer catalogue designation. Record the approved exact strings in
 `docs/superpowers/specs/2026-07-11-opening-cultures-content-design.md`, commit
-that documentation, and obtain user review before resuming Task 4.
+that documentation, and obtain user review before starting Task 5.
+
+Gate satisfied before production content: the exact culture names, artifact
+names, curator shorthand, provenance, provisional language bible, performance
+graph, teacher interventions, and recognized Orra trap are recorded in
+`docs/superpowers/specs/2026-07-11-opening-cultures-content-design.md` and
+`docs/superpowers/specs/2026-07-11-cursebreaker-game-design.md`. The written
+copy was committed in `5b8fa49` and approved by the user on 2026-07-12. Task 5
+must consume those exact strings and may not invent replacements locally.
 
 ---
 
