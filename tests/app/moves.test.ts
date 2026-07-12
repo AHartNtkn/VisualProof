@@ -36,6 +36,13 @@ const pointer = (hit: Hit): PointerSample => ({
   metaKey: false,
 })
 
+const contextPointer = (hit: Hit | null, world = { x: 0, y: 0 }): PointerSample => ({
+  ...pointer(hit ?? { kind: 'region', id: 'unused' }),
+  button: 2,
+  world,
+  hit,
+})
+
 const key = (value: string): KeySample => ({
   key: value,
   shiftKey: value === value.toUpperCase() && value !== value.toLowerCase(),
@@ -135,6 +142,72 @@ describe('shared proof move discovery', () => {
     }
     expect(forward).toContain('erase')
     expect(backward).not.toContain('erase')
+  })
+})
+
+describe('proof context routing', () => {
+  it('opens shared spawning for unselected blank space in the smallest containing region', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const diagram = b.build()
+    const engine = mkEngine(diagram, [])
+    recomputeRegions(engine)
+    engine.regions.get(cut)!.center = { x: 0, y: 0 }
+    engine.regions.get(cut)!.radius = 40
+    const opened: Array<{ sample: PointerSample; region: string }> = []
+    const controller = new ProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => engine,
+      viewScale: () => 1,
+      selection: () => [],
+      setSelection: () => {},
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      orientation: () => 'forward',
+      apply: () => {},
+      refuse: () => {},
+      theme: () => LIGHT,
+      fuel: () => 64,
+      openComprehension: () => {},
+      openSpawn: (sample, region) => { opened.push({ sample, region }) },
+    })
+    const sample = contextPointer(null)
+
+    expect(controller.contextMenu(sample)).toBe(true)
+    expect(opened).toEqual([{ sample, region: cut }])
+  })
+
+  it('does not replace object or selected-region proof menus with spawning', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const node = b.termNode(cut, p('x'))
+    const diagram = b.build()
+    const engine = mkEngine(diagram, [])
+    const opened: string[] = []
+    let selection: Hit[] = []
+    const controller = new ProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => engine,
+      viewScale: () => 1,
+      selection: () => selection,
+      setSelection: () => {},
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      orientation: () => 'forward',
+      apply: () => {},
+      refuse: () => {},
+      theme: () => LIGHT,
+      fuel: () => 64,
+      openComprehension: () => {},
+      openSpawn: (_sample, region) => { opened.push(region) },
+    })
+
+    expect(controller.contextMenu(contextPointer({ kind: 'node', id: node }))).toBe(true)
+    selection = [{ kind: 'region', id: cut }]
+    expect(controller.contextMenu(contextPointer({ kind: 'region', id: cut }))).toBe(true)
+    expect(opened).toEqual([])
   })
 })
 

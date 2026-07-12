@@ -192,6 +192,7 @@ export type ProofMoveControllerOptions = {
   readonly theme: () => Theme
   readonly fuel: () => number
   readonly openComprehension: (bubble: RegionId, pointer: Vec2) => void
+  readonly openSpawn: (sample: PointerSample, region: RegionId) => void
 }
 
 type IterationDrag = {
@@ -309,6 +310,10 @@ export class ProofMoveController {
     this.#closeMenu()
     const selection = this.#options.selection()
     if (selection.length > 0 && (sample.hit === null || !selection.some((hit) => sameHit(hit, sample.hit!)))) return false
+    if (selection.length === 0 && (sample.hit === null || sample.hit.kind === 'region')) {
+      this.#options.openSpawn(sample, regionAt(this.#options.engine(), this.#options.diagram(), sample.world))
+      return true
+    }
     try {
       this.#openMenu(sample, selection)
     } catch (error) {
