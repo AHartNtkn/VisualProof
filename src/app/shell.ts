@@ -5,6 +5,7 @@ import { parseTerm } from '../kernel/term/parse'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { applyRelFold, applyRelUnfold } from '../kernel/rules/reldef'
+import { applyFission } from '../kernel/rules/fusion'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
@@ -39,7 +40,7 @@ import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { ProofMoveController } from './interact/moves'
-import { commitClosedTermSpawn } from './interact/closed-term-intro'
+import { commitClosedTermSpawn, introducedNodeId } from './interact/closed-term-intro'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
 import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
 import { mountCompass } from './compass'
@@ -1455,6 +1456,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     selection: () => interaction.selection,
     setSelection: (selection) => interaction.setSelection(selection),
     commit: (diagram) => pushEdit(diagram),
+    commitFission: ({ node, path, at }) => {
+      const before = editDiagram
+      const next = applyFission(before, node, path)
+      pushEdit(next, { node: introducedNodeId(before, next), at })
+    },
     refuse,
     setProblem: setFeedbackProblem,
     clearProblem: clearFeedbackProblem,
@@ -1514,6 +1520,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       refreshChrome()
     },
     pointerChanged: rememberPointer,
+    passiveSample: (sample) => { if (mode === 'edit') construct.passiveSample(sample) },
+    modifiersChanged: (ctrlHeld) => { construct.modifiersChanged(ctrlHeld) },
     keyDown: onKeyDown,
     selectionChanged,
     selectionCommitted: () => {

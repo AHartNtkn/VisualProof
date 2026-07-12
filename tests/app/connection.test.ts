@@ -160,6 +160,7 @@ describe('shared connection drag', () => {
       selection: () => [],
       setSelection: () => {},
       commit: () => {},
+      commitFission: () => {},
       refuse: (text) => { refusals.push(text) },
       setProblem: () => {},
       clearProblem: () => {},

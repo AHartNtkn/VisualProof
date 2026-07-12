@@ -1,5 +1,6 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { parseTerm } from '../kernel/term/parse'
+import { applyFission } from '../kernel/rules/fusion'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
 import { carryOver, mkEngine, resolvedFrameSlot, type Engine } from '../view/engine'
 import { bubbleHues, paint, type Shape, type Theme } from '../view/paint'
@@ -11,6 +12,7 @@ import { addAtomNode, addRefNode, addTermNode } from './edit'
 import { wireHitTest, type Hit } from './hittest'
 import { ConstructController } from './interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
+import { introducedNodeId } from './interact/closed-term-intro'
 import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from './interact/viewport'
 import {
   applyComprehensionConnection,
@@ -266,6 +268,12 @@ export class ComprehensionEditor {
       selection: () => this.#interaction.selection,
       setSelection: (selection) => this.#interaction.setSelection(selection),
       commit: (diagram) => this.#commitDiagram(diagram),
+      commitFission: ({ node, path, at }) => {
+        const before = this.#diagram()
+        const next = applyFission(before, node, path)
+        this.#draft = replaceComprehensionDiagram(this.#draft, next)
+        this.#reconcile({ node: introducedNodeId(before, next), at })
+      },
       refuse: (text, pointer) => host.refuse(text, pointer ?? invocation),
       setProblem: (_id, text) => host.refuse(text, invocation),
       clearProblem: () => {},
@@ -289,6 +297,8 @@ export class ComprehensionEditor {
         this.#spawn.open({ screen: sample.client, world: sample.world, region }, host.context().relations, boundPredicateOptions(this.#diagram(), region))
       },
       pointerChanged: (client) => this.#pointerChanged('draft', client),
+      passiveSample: (sample) => this.#construct.passiveSample(sample),
+      modifiersChanged: (ctrlHeld) => this.#construct.modifiersChanged(ctrlHeld),
       keyDown: (sample) => this.keyDown(sample),
       selectionChanged: host.changed,
       selectionCommitted: host.changed,

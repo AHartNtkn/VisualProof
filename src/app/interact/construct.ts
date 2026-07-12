@@ -20,6 +20,7 @@ import {
 } from '../edit'
 import { buildSelection, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
+import { FissionDragController, type FissionRequest } from './fission'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 
 type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
@@ -37,6 +38,7 @@ export type ConstructOptions = {
   readonly selection: () => readonly Hit[]
   readonly setSelection: (selection: readonly Hit[]) => void
   readonly commit: (diagram: Diagram) => void
+  readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer?: Vec2) => void
   readonly setProblem: (problemId: string, text: string) => void
   readonly clearProblem: (problemId: string) => void
@@ -93,6 +95,7 @@ function endpointAt(diagram: Diagram, leg: Leg): Endpoint | null {
 export class ConstructController {
   readonly #options: ConstructOptions
   readonly #connection: ConnectionDragController
+  readonly #fission: FissionDragController
   #preview: Preview | null = null
   #prompt: HTMLDivElement | null = null
 
@@ -112,6 +115,15 @@ export class ConstructController {
       },
       refuse: options.refuse,
     })
+    this.#fission = new FissionDragController({
+      active: options.active,
+      diagram: options.diagram,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: options.commitFission,
+      refuse: (text, pointer) => options.refuse(text, pointer),
+    })
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -121,6 +133,8 @@ export class ConstructController {
 
     const connection = this.#connection.claim(sample)
     if (connection !== null) return connection
+    const fission = this.#fission.claim(sample)
+    if (fission !== null) return fission
 
     if (sample.hit?.kind === 'node' && this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) {
       return this.#placementClaim(sample.hit.id)
@@ -159,7 +173,7 @@ export class ConstructController {
   }
 
   overlay(): readonly Shape[] {
-    const connection = [...this.#connection.overlay()]
+    const connection = [...this.#connection.overlay(), ...this.#fission.overlay()]
     const preview = this.#preview
     if (preview === null) return connection
     const colors = this.#options.theme().interaction
@@ -177,7 +191,11 @@ export class ConstructController {
   dispose(): void {
     this.#closePrompt()
     this.#connection.cancel()
+    this.#fission.dispose()
   }
+
+  passiveSample(sample: PointerSample): void { this.#fission.hover(sample) }
+  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld) }
 
   #slashClaim(start: PointerSample): PointerClaim {
     const preview: Extract<Preview, { kind: 'slash' }> = { kind: 'slash', from: start.world, at: start.world }

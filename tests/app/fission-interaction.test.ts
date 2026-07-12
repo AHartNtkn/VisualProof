@@ -11,6 +11,7 @@ import {
   type FissionRequest,
 } from '../../src/app/interact/fission'
 import type { PointerSample } from '../../src/app/interact/viewport'
+import { ConstructController } from '../../src/app/interact/construct'
 
 const p = (source: string) => parseTerm(source)
 
@@ -139,5 +140,37 @@ describe('shared fission drag controller', () => {
     drag.release(end, true)
     expect(committed).toEqual([])
     expect(refused.join(' ')).toMatch(/references binders above/)
+  })
+})
+
+describe('Edit fission integration', () => {
+  it('routes an internal anatomy drag through the shared controller before node placement', () => {
+    const f = fixture()
+    const requests: FissionRequest[] = []
+    const construct = new ConstructController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      engine: () => f.engine,
+      viewScale: () => 1,
+      diagram: () => f.diagram,
+      selection: () => [{ kind: 'node', id: f.node }],
+      setSelection: () => {},
+      commit: () => {},
+      commitFission: (request) => { requests.push(request) },
+      refuse: (text) => { throw new Error(text) },
+      setProblem: () => {},
+      clearProblem: () => {},
+      openSpawn: () => {},
+      theme: () => LIGHT,
+    })
+    const start = sample(f.pointFor(['arg']), f.node)
+    const claim = construct.claim(start)
+    expect(claim).not.toBeNull()
+    const body = f.engine.bodies.get(f.node)!
+    const destination = { x: body.pos.x + body.discR * f.engine.scale + 8, y: body.pos.y }
+    const end = sample(destination, f.node)
+    claim!.move(end)
+    claim!.release(end, true)
+    expect(requests).toEqual([{ node: f.node, path: ['arg'], at: destination }])
   })
 })
