@@ -45,11 +45,15 @@ export function applyBoundRelationSpawn(
   d: Diagram,
   region: RegionId,
   binder: RegionId,
+  expectedArity: number,
   orientation: SpawnOrientation = 'forward',
 ): Diagram {
   requireSpawnPolarity(d, region, orientation)
   const value = d.regions[binder]
   if (value === undefined || value.kind !== 'bubble') throw new RuleError(`bound relation binder '${binder}' is not a bubble`)
+  if (value.arity !== expectedArity) {
+    throw new RuleError(`bound relation binder '${binder}' changed arity from ${expectedArity} to ${value.arity}`)
+  }
   if (!isAncestorOrEqual(d, binder, region)) throw new RuleError(`bubble '${binder}' does not enclose spawn region '${region}'`)
   return spawnBoundRelationNode(d, region, binder).diagram
 }

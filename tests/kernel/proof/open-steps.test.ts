@@ -25,7 +25,7 @@ describe('open and vacuous proof steps', () => {
       ([id, r]) => r.kind === 'bubble' && d.regions[id] === undefined,
     )![0]
     const more: ProofStep[] = [
-      { rule: 'boundRelationSpawn', region: bub, binder: bub },
+      { rule: 'boundRelationSpawn', region: bub, binder: bub, arity: 1 },
       { rule: 'vacuousElim', region: bub },
     ]
     // vacuousElim must now REFUSE: the bubble binds the spawned atom
@@ -40,7 +40,7 @@ describe('open and vacuous proof steps', () => {
     const steps: ProofStep[] = [
       { rule: 'openTermSpawn', region: 'r1', term: p('x') },
       { rule: 'relationSpawn', region: 'r1', defId: 'nat', arity: 1 },
-      { rule: 'boundRelationSpawn', region: 'r1', binder: 'rHost' },
+      { rule: 'boundRelationSpawn', region: 'r1', binder: 'rHost', arity: 1 },
       { rule: 'vacuousIntro', sel, arity: 3 },
       { rule: 'vacuousElim', region: 'r1' },
     ]
@@ -96,7 +96,7 @@ describe('open and vacuous proof steps', () => {
     const { d: db, bub: bBub } = mkB()
     expect(aBub).not.toBe(bBub) // the iso is non-identity on the bubble
     const tail: ProofStep[] = [
-      { rule: 'boundRelationSpawn', region: bBub, binder: bBub },
+      { rule: 'boundRelationSpawn', region: bBub, binder: bBub, arity: 1 },
     ]
     const composed = composeProofs(da, db, tail, ctx)
     const viaA = replayProof(da, composed, ctx)

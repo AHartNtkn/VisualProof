@@ -1066,7 +1066,8 @@
         {
           "rule": "boundRelationSpawn",
           "region": "vb",
-          "binder": "vb"
+          "binder": "vb",
+          "arity": 1
         },
         {
           "rule": "wireJoin",
@@ -1189,7 +1190,8 @@
         {
           "rule": "boundRelationSpawn",
           "region": "dc_2",
-          "binder": "vb"
+          "binder": "vb",
+          "arity": 1
         },
         {
           "rule": "wireJoin",
@@ -1432,7 +1434,8 @@
         {
           "rule": "boundRelationSpawn",
           "region": "vb",
-          "binder": "vb"
+          "binder": "vb",
+          "arity": 1
         },
         {
           "rule": "wireJoin",
@@ -1555,7 +1558,8 @@
         {
           "rule": "boundRelationSpawn",
           "region": "dc_2",
-          "binder": "vb"
+          "binder": "vb",
+          "arity": 1
         },
         {
           "rule": "wireJoin",

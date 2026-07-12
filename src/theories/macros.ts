@@ -85,8 +85,10 @@ export class DerivationCursor {
   }
 
   spawnBoundRelation(tag: string, region: RegionId, binder: RegionId): NodeId {
+    const value = this.cur.regions[binder]
+    if (value === undefined || value.kind !== 'bubble') throw new Error(`bound relation binder '${binder}' is not a bubble`)
     const before = this.cur
-    this.push(tag, { rule: 'boundRelationSpawn', region, binder })
+    this.push(tag, { rule: 'boundRelationSpawn', region, binder, arity: value.arity })
     const found = Object.entries(this.cur.nodes).find(([id, node]) =>
       node.kind === 'atom' && node.region === region && node.binder === binder && before.nodes[id] === undefined)
     if (found === undefined) throw new Error(`no new bound relation appeared in region '${region}'`)

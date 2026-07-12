@@ -71,6 +71,7 @@ export type SpawnRelationRequest = {
 
 export type SpawnBoundPredicateRequest = {
   readonly binder: RegionId
+  readonly arity: number
   readonly invocation: SpawnInvocation
 }
 
@@ -329,7 +330,7 @@ export class SpawnCascade {
 
     const pickBoundPredicate = (entry: SpawnBoundPredicateOption): void => {
       if (!current()) return
-      const accepted = this.#spawnBoundPredicate({ binder: entry.binder, invocation: snapshot })
+      const accepted = this.#spawnBoundPredicate({ binder: entry.binder, arity: entry.arity, invocation: snapshot })
       if (accepted === false) return
       if (current()) this.close()
     }

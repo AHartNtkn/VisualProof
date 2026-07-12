@@ -254,14 +254,16 @@ export class ProofFrontViewport {
     if (previewAt !== null) shapes.push({ kind: 'dot', center: previewAt, rPx: 8, fill: theme.interaction.pin })
     for (const hit of this.interaction.selection) shapes.push(...this.#itemShapes(hit, theme.interaction.selection))
     const hover = this.interaction.hover
-    this.motion.setHover(hover === null ? null : `${hover.kind}:${hover.id}`, now)
     const hoverShapes: Shape[] = []
-    if (this.#spawnHoverBinder !== null) hoverShapes.push(...highlightGroup(this.#engine, theme, this.#spawnHoverBinder))
-    if (hover !== null) {
+    if (this.#spawnHoverBinder !== null) {
+      this.motion.setHover(`region:${this.#spawnHoverBinder}`, now)
+      hoverShapes.push(...highlightGroup(this.#engine, theme, this.#spawnHoverBinder))
+    } else if (hover !== null) {
+      this.motion.setHover(`${hover.kind}:${hover.id}`, now)
       const binder = hoverBinder(this.#model.diagram(), hover)
       if (binder !== null) hoverShapes.push(...highlightGroup(this.#engine, theme, binder))
       else hoverShapes.push(...this.#itemShapes(hover, isHitSelected(this.interaction.selection, hover) ? theme.interaction.selectedHover : theme.interaction.hover))
-    }
+    } else this.motion.setHover(null, now)
     shapes.push(...this.#moves.overlay())
     if (this.#editor !== null) shapes.push(...this.#editor.hostOverlays())
     this.#surface.render({

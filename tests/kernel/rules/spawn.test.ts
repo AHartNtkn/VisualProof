@@ -58,11 +58,12 @@ describe('atomic proof spawning', () => {
     expect(() => applyRelationSpawn(h.diagram, h.root, 'logic/R', 2, relations(), 'forward')).toThrow(/negative region/)
     expect(() => applyRelationSpawn(h.diagram, h.root, 'logic/R', 2, relations(), 'backward')).not.toThrow()
 
-    const out = applyBoundRelationSpawn(h.diagram, h.bubble, h.bubble, 'forward')
+    const out = applyBoundRelationSpawn(h.diagram, h.bubble, h.bubble, 2, 'forward')
     expect(Object.values(out.nodes)).toEqual([
       expect.objectContaining({ kind: 'atom', region: h.bubble, binder: h.bubble }),
     ])
-    expect(() => applyBoundRelationSpawn(h.diagram, h.cut, h.bubble, 'forward')).toThrow(/does not enclose/)
-    expect(() => applyBoundRelationSpawn(h.diagram, h.innerCut, h.bubble, 'backward')).not.toThrow()
+    expect(() => applyBoundRelationSpawn(h.diagram, h.bubble, h.bubble, 1, 'forward')).toThrow(/changed arity from 1 to 2/)
+    expect(() => applyBoundRelationSpawn(h.diagram, h.cut, h.bubble, 2, 'forward')).toThrow(/does not enclose/)
+    expect(() => applyBoundRelationSpawn(h.diagram, h.innerCut, h.bubble, 2, 'backward')).not.toThrow()
   })
 })

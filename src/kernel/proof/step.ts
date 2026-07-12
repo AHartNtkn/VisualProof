@@ -38,7 +38,7 @@ export type ProofContext = {
 export type ProofStep =
   | { readonly rule: 'openTermSpawn'; readonly region: RegionId; readonly term: Term }
   | { readonly rule: 'relationSpawn'; readonly region: RegionId; readonly defId: string; readonly arity: number }
-  | { readonly rule: 'boundRelationSpawn'; readonly region: RegionId; readonly binder: RegionId }
+  | { readonly rule: 'boundRelationSpawn'; readonly region: RegionId; readonly binder: RegionId; readonly arity: number }
   | { readonly rule: 'wireJoin'; readonly a: WireId; readonly b: WireId }
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
   | { readonly rule: 'wireSever'; readonly wire: WireId; readonly keep: readonly Endpoint[] }
@@ -73,7 +73,7 @@ export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext, orient
   switch (step.rule) {
     case 'openTermSpawn': return applyOpenTermSpawn(d, step.region, step.term, orientation)
     case 'relationSpawn': return applyRelationSpawn(d, step.region, step.defId, step.arity, ctx.relations, orientation)
-    case 'boundRelationSpawn': return applyBoundRelationSpawn(d, step.region, step.binder, orientation)
+    case 'boundRelationSpawn': return applyBoundRelationSpawn(d, step.region, step.binder, step.arity, orientation)
     case 'wireJoin': return applyWireJoin(d, step.a, step.b, orientation)
     case 'erasure': return applyErasure(d, step.sel, orientation)
     case 'wireSever': return applyWireSever(d, step.wire, step.keep, orientation)

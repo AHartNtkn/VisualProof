@@ -388,10 +388,21 @@ test('proof fission refuses a binder-dependent occurrence without recording hist
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
 })
 
-test('both fixed proof fronts share atomic term spawn policy, placement, and disposal', async ({ page }) => {
+test('both fixed proof fronts share atomic term, named, and colored bound spawn policy', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await page.locator('#open-file-input').setInputFiles('examples/frege.json')
   await spawnTerm(page, '\\x. x')
+  const mainCanvas = (await page.locator('#c').boundingBox())!
+  const term = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  await page.mouse.click(mainCanvas.x + term.x, mainCanvas.y + term.y)
+  await page.keyboard.press('Shift+w')
+  await page.getByLabel('Bubble arity').fill('1')
+  await page.getByLabel('Bubble arity').press('Enter')
   await openMode(page)
   await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
   await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
@@ -417,13 +428,43 @@ test('both fixed proof fronts share atomic term spawn policy, placement, and dis
     await front.click({ button: 'right', position: local })
     return { box, invoke }
   }
+  const invokeOnBubble = async (side: 'forward' | 'backward') => {
+    const front = page.locator(`.vpa-proof-front-${side} .vpa-proof-front-canvas`)
+    const box = (await front.boundingBox())!
+    const candidates = await page.evaluate((which) => {
+      const state = window.__vpaDebug!.fixed()![which]
+      const bubble = state.regions.find((region) => region.kind === 'bubble')!
+      const center = {
+        x: bubble.x * state.view.scale + state.view.offsetX,
+        y: bubble.y * state.view.scale + state.view.offsetY,
+      }
+      const radius = bubble.r * state.view.scale
+      const candidates = [0.35, 0.52, 0.68].flatMap((fraction) =>
+        Array.from({ length: 12 }, (_, index) => ({
+          x: center.x + radius * fraction * Math.cos(index * Math.PI / 6),
+          y: center.y + radius * fraction * Math.sin(index * Math.PI / 6),
+        })))
+      const clearance = (point: { x: number; y: number }) => Math.min(...state.bodies.map((body) => {
+        const x = body.x * state.view.scale + state.view.offsetX
+        const y = body.y * state.view.scale + state.view.offsetY
+        return Math.hypot(point.x - x, point.y - y) - body.r * state.view.scale
+      }))
+      return candidates.sort((a, b) => clearance(b) - clearance(a))
+    }, side)
+    for (const local of candidates) {
+      await front.click({ button: 'right', position: local })
+      if (await page.locator('.vpa-spawn-bound-predicate').count() === 1) return
+      await page.keyboard.press('Escape')
+    }
+    throw new Error(`could not invoke the spawn cascade inside the ${side} bubble`)
+  }
 
   const forwardBefore = await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.bodies.map(({ id }) => id))
   const forwardInvocation = await invokeOn('forward')
   const cascade = page.locator('.vpa-spawn-column')
   await expect(cascade.getByRole('button', { name: 'λ term…', exact: true })).toBeVisible()
   await expect(cascade.locator('.vpa-spawn-bound-predicate')).toHaveCount(0)
-  await expect(cascade.locator('.vpa-spawn-heading', { hasText: 'Namespaces' })).toHaveCount(0)
+  await expect(cascade.locator('.vpa-spawn-heading', { hasText: 'Namespaces' })).toBeVisible()
   await cascade.getByRole('button', { name: 'λ term…', exact: true }).click()
   const input = page.getByLabel('Lambda term to spawn')
   await input.fill('free')
@@ -457,8 +498,26 @@ test('both fixed proof fronts share atomic term spawn policy, placement, and dis
   await page.getByLabel('Lambda term to spawn').fill('free')
   await page.getByLabel('Lambda term to spawn').press('Enter')
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.motion.playing)).toBe(false)
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.bodies.filter((body) => body.kind === 'term').length)).toBe(2)
+
+  await invokeOnBubble('backward')
+  const bound = cascade.locator('.vpa-spawn-bound-predicate')
+  await expect(bound).toHaveCount(1)
+  await expect(bound.locator('.vpa-spawn-binder-swatch')).toHaveCSS('border-radius', '50%')
+  await bound.hover()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.motion.hover)).toBeGreaterThan(0)
+  await bound.click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(2)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.motion.playing)).toBe(false)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
+
+  await invokeOnBubble('backward')
+  await page.getByLabel('Search relations to spawn').fill('zero')
+  await page.getByLabel('Search relations to spawn').press('Enter')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(3)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
 
   await invokeOn('forward')
   await expect(cascade).toBeVisible()

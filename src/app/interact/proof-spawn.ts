@@ -38,8 +38,8 @@ export class ProofSpawnController {
       spawnRelation: ({ defId, arity, invocation }) => this.#attempt(invocation, () => ({
         rule: 'relationSpawn', region: invocation.region, defId, arity,
       })),
-      spawnBoundPredicate: ({ binder, invocation }) => this.#attempt(invocation, () => ({
-        rule: 'boundRelationSpawn', region: invocation.region, binder,
+      spawnBoundPredicate: ({ binder, arity, invocation }) => this.#attempt(invocation, () => ({
+        rule: 'boundRelationSpawn', region: invocation.region, binder, arity,
       })),
       binderColor: options.binderColor,
       ...(options.hoverBinder === undefined ? {} : { hoverBinder: options.hoverBinder }),

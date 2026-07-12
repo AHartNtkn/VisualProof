@@ -138,7 +138,7 @@ export function stepToJson(s: ProofStep): unknown {
     case 'relationSpawn':
       return { rule: s.rule, region: s.region, defId: s.defId, arity: s.arity }
     case 'boundRelationSpawn':
-      return { rule: s.rule, region: s.region, binder: s.binder }
+      return { rule: s.rule, region: s.region, binder: s.binder, arity: s.arity }
     case 'wireJoin':
       return { rule: s.rule, a: s.a, b: s.b }
     case 'erasure':
@@ -199,8 +199,9 @@ export function stepFromJson(j: unknown): ProofStep {
       return { rule, region: str(j.region, 'region'), defId: str(j.defId, 'defId'), arity: j.arity }
     }
     case 'boundRelationSpawn':
-      assertOnlyKeys(j, ['rule', 'region', 'binder'], 'boundRelationSpawn step')
-      return { rule, region: str(j.region, 'region'), binder: str(j.binder, 'binder') }
+      assertOnlyKeys(j, ['rule', 'region', 'binder', 'arity'], 'boundRelationSpawn step')
+      if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')
+      return { rule, region: str(j.region, 'region'), binder: str(j.binder, 'binder'), arity: j.arity }
     case 'wireJoin':
       assertOnlyKeys(j, ['rule', 'a', 'b'], 'wireJoin step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
