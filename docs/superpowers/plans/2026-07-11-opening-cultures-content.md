@@ -856,3 +856,24 @@ git commit -m "test(game): verify opening culture content"
   decisive 109-test suite, typecheck, displaced-model scans, and both Task 6
   and full opening-plan physics-scope scans after review; all passed.
 - Naming and copy were approved in `5b8fa49`; the required gate was recorded in `9f78922` before production content work.
+
+#### Phase-wide final review evidence
+
+- Broad review of `6520bf8..fb156ce` found a combined culture/puzzle unlock
+  deadlock, one unsupported artifact-6 assessment claim, and missing exact
+  culture-history assertions.
+- Fix `d2173af` introduced one shared unlock-condition predicate used by runtime
+  and catalog fixed-point reachability, added invalid and valid cross-culture
+  regressions, removed only the unsupported repeated-pair assessment, and pinned
+  both complete culture records.
+- TDD RED evidence: the alternating-edge deadlock catalog was accepted before
+  the fix; artifact 6's exact role test received `resolve-repeated-veils` as its
+  sole extra assessment.
+- Final focused verification: 3 files and 36 tests passed.
+- Final decisive non-physics verification: 13 files and 111 tests passed;
+  `npm run typecheck`, diff checks, displaced-model scans, shared-predicate
+  ownership, and full `6520bf8` opening-range physics-scope scan passed.
+- Broad re-review of `6520bf8..0c752eb` verified all technical findings fixed
+  with no code issue. The required scratch foundation conformance receipt was
+  then appended by the root controller.
+- No physics test was run because no physics path changed.
