@@ -1487,7 +1487,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     fuel: () => readCount(fuel.input, 'fuel'),
     openComprehension,
   })
-  compass.lifecycle.append(construct.optionsElement)
   interaction = new InteractiveViewport({
     canvas,
     view,
@@ -1495,7 +1494,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     diagram: () => displayed,
     selectionEnabled: () => mode !== 'replay',
     claim: claimPointer,
-    doubleClick: (sample) => comprehensionEditor !== null ? false : mode === 'prove' ? proofMoves.doubleClick(sample) : construct.doubleClick(sample),
+    doubleClick: (sample) => comprehensionEditor !== null ? false : mode === 'prove' && proofMoves.doubleClick(sample),
     contextMenu: (sample) => {
       if (mode === 'prove') {
         if (comprehensionEditor !== null) return

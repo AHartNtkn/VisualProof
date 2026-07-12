@@ -276,7 +276,6 @@ export class ComprehensionEditor {
       ),
       theme: host.theme,
     })
-    actions.prepend(this.#construct.optionsElement)
     this.#interaction = new InteractiveViewport({
       canvas: this.#canvas,
       view: this.#view,
@@ -284,7 +283,7 @@ export class ComprehensionEditor {
       diagram: () => this.#diagram(),
       selectionEnabled: () => true,
       claim: (sample) => this.#connectionClaim('draft', sample) ?? this.#construct.claim(sample),
-      doubleClick: (sample) => this.#construct.doubleClick(sample),
+      doubleClick: () => false,
       contextMenu: (sample) => {
         const region = this.#regionAt(sample.world)
         this.#spawn.open({ screen: sample.client, world: sample.world, region }, host.context().relations, boundPredicateOptions(this.#diagram(), region))

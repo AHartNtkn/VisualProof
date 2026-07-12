@@ -61,6 +61,13 @@ describe('production interaction ownership', () => {
     ]) expect(shellSource).not.toContain(`button('${label}'`)
   })
 
+  it('keeps severing on the slash gesture with no double-click mode', () => {
+    for (const displaced of ['severMode', 'double-click strand', 'vpa-sever-option']) {
+      expect(constructSource, `construction retains ${displaced}`).not.toContain(displaced)
+      expect(shellSource, `shell retains ${displaced}`).not.toContain(displaced)
+    }
+  })
+
   it('has one shared proof controller and no backward/manual-picker interaction authority', () => {
     expect(shellSource.match(/new ProofMoveController/g)).toHaveLength(1)
     for (const displaced of [
