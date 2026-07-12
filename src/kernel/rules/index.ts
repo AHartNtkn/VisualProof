@@ -6,7 +6,11 @@ export { applyDoubleCutIntro, applyDoubleCutElim } from './doublecut'
 export type { ConversionResult } from './conversion'
 export { applyConversion, applyConversionByCertificate } from './conversion'
 export { applyCongruenceJoin } from './congruence'
-export { applyEndpointTransport } from './transport'
+export {
+  anchorAvailability,
+  applyAnchoredWireSplit,
+  applyAnchoredWireContract,
+} from './anchored-wire'
 export { applyHeadStrip } from './headstrip'
 export { applyClosedTermIntro } from './intro'
 export { applyFusion, applyFission } from './fusion'
