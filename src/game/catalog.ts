@@ -11,6 +11,7 @@ import {
   type PuzzleId,
   type TeacherTrigger,
 } from './types'
+import { meetsUnlockConditions } from './unlock'
 
 export type GameCatalog = {
   readonly source: GameCatalogSource
@@ -316,6 +317,24 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
     order.push(puzzle)
   }
   for (const puzzle of snapshot.puzzles) visit(puzzle.id)
+
+  const reachable = new Set<PuzzleId>()
+  while (true) {
+    const available = snapshot.puzzles.filter((puzzle) =>
+      !reachable.has(puzzle.id)
+      && meetsUnlockConditions(cultureById.get(puzzle.culture)!, puzzle, reachable),
+    )
+    if (available.length === 0) break
+    for (const puzzle of available) reachable.add(puzzle.id)
+  }
+  if (reachable.size !== snapshot.puzzles.length) {
+    const unreachable = snapshot.puzzles.filter((puzzle) => !reachable.has(puzzle.id))
+    const unreachableCultures = [...new Set(unreachable.map((puzzle) => puzzle.culture))]
+    throw new GameDomainError(
+      `unreachable puzzles ${unreachable.map((puzzle) => `'${puzzle.id}'`).join(', ')}`
+      + ` in cultures ${unreachableCultures.map((id) => `'${id}'`).join(', ')}`,
+    )
+  }
 
   const verified = new Set<PuzzleId>()
   const prerequisiteClosure = (puzzle: PuzzleDefinition): ReadonlySet<PuzzleId> => {

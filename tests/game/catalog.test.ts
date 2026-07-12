@@ -111,6 +111,66 @@ describe('verified game catalog', () => {
     })).toThrow(/culture dependency cycle/)
   })
 
+  it('rejects a deadlock formed jointly by culture gates and puzzle prerequisites', () => {
+    const secondCultureId = cultureId('second-tradition')
+    const firstGateway = minimalPuzzle({
+      id: puzzleId('gateway-a'),
+      prerequisites: [puzzleId('gateway-b')],
+    })
+    const secondGateway = minimalPuzzle({
+      id: puzzleId('gateway-b'),
+      culture: secondCultureId,
+      name: { professional: 'Second gateway' },
+    })
+
+    expect(() => buildCatalog({
+      ...minimalSource(),
+      cultures: [
+        { ...culture, gateway: firstGateway.id },
+        {
+          ...culture,
+          id: secondCultureId,
+          name: 'Second culture',
+          relativeAge: 1,
+          unlocksAfter: [firstGateway.id],
+          gateway: secondGateway.id,
+        },
+      ],
+      puzzles: [firstGateway, secondGateway],
+    })).toThrow(
+      "unreachable puzzles 'gateway-a', 'gateway-b' in cultures 'oldest-tradition', 'second-tradition'",
+    )
+  })
+
+  it('accepts staged progression across culture gates and puzzle prerequisites', () => {
+    const secondCultureId = cultureId('second-tradition')
+    const firstGateway = minimalPuzzle({ id: puzzleId('gateway-a') })
+    const secondGateway = minimalPuzzle({
+      id: puzzleId('gateway-b'),
+      culture: secondCultureId,
+      name: { professional: 'Second gateway' },
+      prerequisites: [firstGateway.id],
+    })
+
+    const catalog = buildCatalog({
+      ...minimalSource(),
+      cultures: [
+        { ...culture, gateway: firstGateway.id },
+        {
+          ...culture,
+          id: secondCultureId,
+          name: 'Second culture',
+          relativeAge: 1,
+          unlocksAfter: [firstGateway.id],
+          gateway: secondGateway.id,
+        },
+      ],
+      puzzles: [firstGateway, secondGateway],
+    })
+
+    expect(catalog.puzzle(secondGateway.id)).toStrictEqual(secondGateway)
+  })
+
   it('rejects a witness that does not reach blank', () => {
     expect(() => buildCatalog({
       ...minimalSource(),

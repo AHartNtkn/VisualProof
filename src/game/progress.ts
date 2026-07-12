@@ -2,6 +2,7 @@ import type { GameCatalog } from './catalog'
 import {
   GameDomainError, type CultureId, type PuzzleDefinition, type PuzzleId,
 } from './types'
+import { meetsUnlockConditions } from './unlock'
 
 export type GameProgress = { readonly completed: ReadonlySet<PuzzleId> }
 export const emptyProgress = (): GameProgress => ({ completed: new Set() })
@@ -21,8 +22,7 @@ export function isCultureUnlocked(
 
 export function isUnlocked(catalog: GameCatalog, progress: GameProgress, id: PuzzleId): boolean {
   const puzzle = catalog.puzzle(id)
-  return isCultureUnlocked(catalog, progress, puzzle.culture)
-    && puzzle.prerequisites.every((prerequisite) => progress.completed.has(prerequisite))
+  return meetsUnlockConditions(catalog.culture(puzzle.culture), puzzle, progress.completed)
 }
 
 export function requiredPuzzles(catalog: GameCatalog): ReadonlySet<PuzzleId> {

@@ -231,16 +231,18 @@ describe('permanent opening catalog', () => {
     }
 
     expect(catalog.source.cultures).toEqual([
-      expect.objectContaining({
+      {
         id: cultureId('seyric-horizon'), name: 'The Seyric Horizon', relativeAge: 0,
+        historicalSummary: 'the earliest secure sealing horizon, known from funerary closures, threshold wards, and stone stoppers. Its self-name is unknown; “Seyric” is the modern archaeological exonym.',
         lineage: [], isolation: 'uncertain', sealingVocabulary: ['veils', 'fields', 'echoes', 'rings', 'marks'],
         unlocksAfter: [], gateway: puzzleId('two-veils'),
-      }),
-      expect.objectContaining({
+      },
+      {
         id: cultureId('myratic-tradition'), name: 'The Myratic Tradition', relativeAge: 1,
+        historicalSummary: 'the isolated Myrat complex, whose deliberate hollows may stand for complete seal-patterns. No direct Seyric lineage is established. Supplying a pattern is its first technique, not the identity of the whole tradition.',
         lineage: [], isolation: 'isolated', sealingVocabulary: ['hollows', 'patterns'],
         unlocksAfter: [puzzleId('single-mark-return')], gateway: puzzleId('blank-witness'),
-      }),
+      },
     ])
     expect(catalog.source.puzzles.map((puzzle) => puzzle.prerequisites)).toEqual([
       [], [puzzleId('two-veils')], [puzzleId('four-veils')],
@@ -380,8 +382,8 @@ describe('permanent opening catalog', () => {
         introduces: [performanceId('distinguish-nested-owners')],
         practices: [performanceId('trace-single-mark-ownership')], retrieves: [],
         assesses: [
-          performanceId('release-paired-veils'), performanceId('resolve-repeated-veils'),
-          performanceId('clear-dark-field'), performanceId('lift-supported-echo'),
+          performanceId('release-paired-veils'), performanceId('clear-dark-field'),
+          performanceId('lift-supported-echo'),
           performanceId('trace-single-mark-ownership'),
         ],
         rulesUsed: ['deiteration', 'erasure', 'vacuousElim', 'doubleCutElim'],

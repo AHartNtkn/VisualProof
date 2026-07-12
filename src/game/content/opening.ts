@@ -503,7 +503,6 @@ function twoMarkProjection(): PuzzleDefinition {
       retrieves: [],
       assesses: [
         RELEASE_PAIRED_VEILS,
-        RESOLVE_REPEATED_VEILS,
         CLEAR_DARK_FIELD,
         LIFT_SUPPORTED_ECHO,
         TRACE_SINGLE_MARK_OWNERSHIP,
