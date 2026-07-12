@@ -1,8 +1,8 @@
 import type { Endpoint, WireId } from '../../kernel/diagram/diagram'
-import type { Engine } from '../../view/engine'
+import { pkey, type Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
-import { existentialStubs, legPaths } from '../../view/wires'
+import { computeLegs, existentialStubs, legPaths } from '../../view/wires'
 import { wireManipulationHitTest } from '../hittest'
 import type { PointerClaim, PointerSample } from './viewport'
 
@@ -36,6 +36,17 @@ function wireShapes(engine: Engine, wire: WireId, stroke: string, width: number)
     if (stub.wid === wire) out.push({ kind: 'segment', from: stub.from, to: stub.to, stroke, width, glow: null })
   }
   return out
+}
+
+function targetShapes(engine: Engine, target: ConnectionEnd, stroke: string, width: number): Shape[] {
+  if (target.endpoint === null) return wireShapes(engine, target.wire, stroke, width)
+  const key = pkey(target.endpoint.port)
+  return computeLegs(engine)
+    .filter(({ leg }) => leg.wid === target.wire && (
+      (leg.from.body === target.endpoint!.node && leg.from.key === key)
+      || (leg.to.body === target.endpoint!.node && leg.to.key === key)
+    ))
+    .map(({ pts }): Shape => ({ kind: 'polyline', pts, stroke, width, glow: null }))
 }
 
 /** One connection gesture for every canvas mode. Mode-specific policy decides
@@ -83,7 +94,7 @@ export class ConnectionDragController {
     if (preview === null) return []
     const color = this.#options.theme().interaction.valid
     const out: Shape[] = [{ kind: 'segment', from: preview.from, to: preview.at, stroke: color, width: 1.6, glow: null }]
-    if (preview.target !== null) out.push(...wireShapes(this.#options.engine(), preview.target.wire, color, 3.2))
+    if (preview.target !== null) out.push(...targetShapes(this.#options.engine(), preview.target, color, 3.2))
     return out
   }
 

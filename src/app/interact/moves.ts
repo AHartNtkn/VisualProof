@@ -140,9 +140,16 @@ export function proofConnectionStep(
   const candidates: ProofStep[] = [{ rule: 'wireJoin', a: source.wire, b: target.wire }]
   const left = outputNodes(d, source.wire)
   const right = outputNodes(d, target.wire)
+  const concreteOutput = (end: ConnectionEnd): NodeId | null => end.endpoint?.port.kind === 'output'
+    && d.nodes[end.endpoint.node]?.kind === 'term' ? end.endpoint.node : null
+  const sourceNode = concreteOutput(source)
+  const targetNode = concreteOutput(target)
+  const leftCandidates = sourceNode === null ? left : [sourceNode]
+  const rightCandidates = targetNode === null ? right : [targetNode]
+  const unambiguous = leftCandidates.length === 1 && rightCandidates.length === 1
   const convertiblePairs: Array<{ readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }> = []
-  for (const a of left) {
-    for (const b of right) {
+  if (unambiguous) for (const a of leftCandidates) {
+    for (const b of rightCandidates) {
       const result = convertible(termNodeAt(d, a).term, termNodeAt(d, b).term, fuel)
       if (result.status !== 'convertible') continue
       convertiblePairs.push({ a, b, certificate: result.certificate })
@@ -163,6 +170,9 @@ export function proofConnectionStep(
     } catch {
       // Another proof justification may license the same visible connection.
     }
+  }
+  if (!unambiguous && (leftCandidates.length > 1 || rightCandidates.length > 1)) {
+    throw new Error('proof connection is ambiguous; drag from one producer output strand to the other')
   }
   throw new Error(`no valid proof connection joins lines '${source.wire}' and '${target.wire}'`)
 }

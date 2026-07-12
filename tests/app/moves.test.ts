@@ -231,6 +231,44 @@ describe('proof connection resolution', () => {
     expect(step).toMatchObject({ a, b: c })
   })
 
+  it('uses the dragged producer pair rather than another pair on multi-output wires', () => {
+    const b = new DiagramBuilder()
+    const a0 = b.termNode(b.root, p('\\x. x'))
+    const a1 = b.termNode(b.root, p('\\x. x'))
+    const c0 = b.termNode(b.root, p('\\x. x'))
+    const c1 = b.termNode(b.root, p('\\x. x'))
+    const wa = b.wire(b.root, [
+      { node: a0, port: { kind: 'output' } },
+      { node: a1, port: { kind: 'output' } },
+    ])
+    const wc = b.wire(b.root, [
+      { node: c0, port: { kind: 'output' } },
+      { node: c1, port: { kind: 'output' } },
+    ])
+
+    expect(proofConnectionStep(b.build(), outputEnd(wa, a1), outputEnd(wc, c0), 'forward', 64))
+      .toMatchObject({ rule: 'congruenceJoin', a: a1, b: c0 })
+  })
+
+  it('refuses ambiguous certificate resolution from multi-output wire trunks', () => {
+    const b = new DiagramBuilder()
+    const a0 = b.termNode(b.root, p('\\x. x'))
+    const a1 = b.termNode(b.root, p('\\x. x'))
+    const c0 = b.termNode(b.root, p('\\x. x'))
+    const c1 = b.termNode(b.root, p('\\x. x'))
+    const wa = b.wire(b.root, [
+      { node: a0, port: { kind: 'output' } },
+      { node: a1, port: { kind: 'output' } },
+    ])
+    const wc = b.wire(b.root, [
+      { node: c0, port: { kind: 'output' } },
+      { node: c1, port: { kind: 'output' } },
+    ])
+
+    expect(() => proofConnectionStep(b.build(), { wire: wa, endpoint: null }, { wire: wc, endpoint: null }, 'forward', 64))
+      .toThrow(/ambiguous.*output strand/i)
+  })
+
   it('uses anchored contraction for equal closed witnesses in different regions', () => {
     const b = new DiagramBuilder()
     const bubble = b.bubble(b.root, 0)
@@ -300,6 +338,22 @@ describe('proof connection resolution', () => {
     claim!.move(to)
     claim!.release(to, true)
     expect(applied).toEqual([{ rule: 'headStrip', a, b: c }])
+  })
+
+  it('refuses the same endpoint and preserves a kernel head mismatch refusal', () => {
+    const b = new DiagramBuilder()
+    const a = b.termNode(b.root, p('\\x. \\y. x'))
+    const c = b.termNode(b.root, p('\\x. \\y. y'))
+    const wire = b.wire(b.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: c, port: { kind: 'output' } },
+    ])
+    const d = b.build()
+
+    expect(() => proofConnectionStep(d, outputEnd(wire, a), outputEnd(wire, a), 'forward', 64))
+      .toThrow(/another term's output strand/)
+    expect(() => proofConnectionStep(d, outputEnd(wire, a), outputEnd(wire, c), 'forward', 64))
+      .toThrow(/bound indices differ/)
   })
 })
 

@@ -103,8 +103,13 @@ export class ConstructController {
       engine: options.engine,
       viewScale: options.viewScale,
       theme: options.theme,
-      commit: (source, target) => source.wire !== target.wire
-        && this.#tryCommit(() => joinWires(this.#options.diagram(), [source.wire, target.wire]), 'lines joined — one individual now'),
+      commit: (source, target, pointer) => {
+        if (source.wire === target.wire) {
+          this.#options.refuse('release on another line to join', pointer)
+          return false
+        }
+        return this.#tryCommit(() => joinWires(this.#options.diagram(), [source.wire, target.wire]), 'lines joined — one individual now')
+      },
       refuse: options.refuse,
     })
   }
