@@ -458,11 +458,11 @@ git commit -m "build(game): add interface asset manifest authority"
 - Create: `assets/interface/generated/central-lens/shadow.png`
 - Create: `assets/interface/generated/central-lens/lever-housing.png`
 - Create: `assets/interface/generated/central-lens/lever-handle.png`
-- Modify: `assets/interface/manifest.json`
+- Create: `assets/interface/manifest.json`
 - Create: `tests/assets/render-contract.test.ts`
 
 **Interfaces:**
-- Consumes: Blender binary from Task 1 and manifest from Task 2.
+- Consumes: Blender binary from Task 1 and manifest schema/validator from Task 2.
 - Produces: editable `.blend` with scenes `Lens_Frame`, `Lens_Glass`, `Lens_Shadow`, `Lever_Housing`, and `Lever_Handle`; staged and promoted PNGs matching the manifest.
 
 - [ ] **Step 1: Write the failing render-contract test**
