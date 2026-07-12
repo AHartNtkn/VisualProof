@@ -6,7 +6,6 @@ import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { applyRelFold, applyRelUnfold } from '../../src/kernel/rules/reldef'
-import { mkEngine, settle, paint, LIGHT, DISC_R } from '../../src/view/index'
 import type { ProofContext } from '../../src/kernel/proof/step'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { emptyDiagram } from '../../src/app/edit'
@@ -61,43 +60,6 @@ describe('defineRelation — the extracted copy round-trips through fold/unfold'
     const before = exploreForm(d)
     defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
     expect(exploreForm(d)).toBe(before)
-  })
-})
-
-describe('defineRelation — the defined relation renders its argument-order pip', () => {
-  // The port-order pip on a disc marks port a0's angle so the argument order of a
-  // named relation is READABLE on the sheet. A ref to the defined arity-2 relation
-  // must therefore carry exactly one pip; an arity-1 relation's ref carries none
-  // (a single leg needs no ordering mark). The pip is the only ink-filled dot in
-  // the scene (junction dots are paper/wire), sitting DISC_R from the disc centre.
-  it('a ref to the defined ARITY-2 relation draws exactly one pip on its rim', () => {
-    const { d, sel, wY, wZ } = sheetBody()
-    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
-    const relations = new Map([['R', relation]])
-    const folded = applyRelFold(d, sel, 'R', [wY, wZ], relations)
-    const ref = refNodeOf(folded)
-    const e = mkEngine(folded, [])
-    settle(e, 400)
-    const shapes = paint(e, LIGHT)
-    // The disc centre is the ref's rendered label centre.
-    const label = shapes.find((s) => s.kind === 'label' && s.text === 'R')!
-    expect(label.kind === 'label').toBe(true)
-    const c = label.kind === 'label' ? label.center : { x: 0, y: 0 }
-    const inkDots = shapes.filter((s) => s.kind === 'dot' && s.fill === LIGHT.ink)
-    expect(inkDots).toHaveLength(1) // the port-order pip, nothing else
-    const pip = inkDots[0]!
-    const dist = pip.kind === 'dot' ? Math.hypot(pip.center.x - c.x, pip.center.y - c.y) : 0
-    expect(dist).toBeCloseTo(DISC_R, 5) // on the disc rim
-    expect(folded.nodes[ref]).toMatchObject({ kind: 'ref', defId: 'R', arity: 2 })
-  })
-
-  it('a ref to an ARITY-1 relation draws no pip (a single leg needs no order mark)', () => {
-    const b = new DiagramBuilder()
-    b.ref(b.root, 'S', 1)
-    const e = mkEngine(b.build(), [])
-    settle(e, 400)
-    const inkDots = paint(e, LIGHT).filter((s) => s.kind === 'dot' && s.fill === LIGHT.ink)
-    expect(inkDots).toHaveLength(0)
   })
 })
 

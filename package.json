@@ -8,6 +8,8 @@
   },
   "scripts": {
     "test": "vitest run",
+    "test:physics": "VPA_TEST_SUITE=physics vitest run",
+    "test:all": "VPA_TEST_SUITE=all vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "emit:theories": "tsx scripts/emit-theories.ts",
