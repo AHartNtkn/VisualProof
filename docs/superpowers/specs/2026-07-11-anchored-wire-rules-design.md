@@ -1,7 +1,7 @@
 # Anchored Wire Rules Design
 
 **Date:** 2026-07-11  
-**Status:** Written for final review
+**Status:** Implemented and validated (`348850d` through `fc7a9c1`)
 
 ## Outcome
 
