@@ -1519,7 +1519,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (mode === 'replay' && replay !== null) {
       return {
         states: Array.from({ length: replay.stepCount + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
-        steps: replay.steps,
+        transitions: replay.steps,
         cursor: replayK,
         boundary: replay.boundary,
         inputAllowed: () => true,

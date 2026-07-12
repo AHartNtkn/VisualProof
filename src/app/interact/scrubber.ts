@@ -4,7 +4,7 @@ import type { ProofStep } from '../../kernel/proof/step'
 export type TimelineView = {
   readonly name?: string
   readonly states: readonly Diagram[]
-  readonly steps: readonly ProofStep[]
+  readonly transitions: readonly ProofStep[]
   readonly cursor: number
   readonly boundary: readonly WireId[]
   readonly inputAllowed?: () => boolean
@@ -141,7 +141,7 @@ export function mountScrubber(
       actions.closePreview?.()
       return
     }
-    const labels = view.steps.map(proofStepLabel)
+    const labels = view.transitions.map(proofStepLabel)
     const content = timelineCopy(view.cursor, view.states.length, labels)
     copy.value = view.name === undefined ? content : `${view.name} · ${content}`
     undo.disabled = view.cursor === 0

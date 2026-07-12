@@ -10,7 +10,7 @@ import { termEq } from '../../src/kernel/term/term'
 import { bootFixture } from './boot-fixture'
 import {
   startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary, currentSide,
-  startTrack, applyTrack, undoTrack, declareTrack, trackBoundary, currentTrack,
+  startTrack, applyTrack, undoTrack, declareTrack, trackBoundary, currentTrack, timelineActiveSteps,
 } from '../../src/app/session'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 
@@ -34,7 +34,7 @@ describe('single-track proving', () => {
     }
     const s1 = applyTrack(s0, step)
     expect(s1.direction).toBe('forward')
-    expect(s1.timeline.steps).toEqual([step])
+    expect(timelineActiveSteps(s1.timeline)).toEqual([step])
     expect(currentTrack(undoTrack(s1))).toBe(currentTrack(s0))
     const theorem = declareTrack(s1, 'forwardTrack')
     expect(theorem.lhs).toBe(origin)
@@ -93,12 +93,12 @@ describe('proof session', () => {
     const ctx = verifyTheory(theory)
     const { lhs, rhs } = goalPair()
     const s0 = startSession(lhs, rhs, ctx)
-    expect(s0.forward.steps).toHaveLength(0)
+    expect(timelineActiveSteps(s0.forward)).toHaveLength(0)
     const s1 = applyForward(s0, {
       rule: 'doubleCutIntro',
       sel: mkSelection(currentSide(s0, 'forward'), { region: currentSide(s0, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
-    expect(s1.forward.steps).toHaveLength(1)
+    expect(timelineActiveSteps(s1.forward)).toHaveLength(1)
     expect(Object.keys(currentSide(s1, 'forward').regions).length).toBe(3)
   })
 
@@ -128,7 +128,7 @@ describe('proof session', () => {
       region: currentSide(s0, 'forward').root,
       pattern: lhs, attachments: [], binders: {},
     })).toThrowError(/insertion requires a negative region/)
-    expect(s0.forward.steps).toHaveLength(0)
+    expect(timelineActiveSteps(s0.forward)).toHaveLength(0)
     void n
   })
 
@@ -160,7 +160,7 @@ describe('proof session', () => {
       .toThrowError(new RegExp(`backward step destroyed fixed statement-boundary wire '${w1}'`))
     expect(currentSide(session, 'forward').wires[w0]).toBeDefined()
     expect(currentSide(session, 'forward').wires[w1]).toBeDefined()
-    expect(session.forward.steps).toHaveLength(0)
+    expect(timelineActiveSteps(session.forward)).toHaveLength(0)
   })
 
   it('undo pops exactly one step and restores the prior diagram', () => {
@@ -173,7 +173,8 @@ describe('proof session', () => {
       sel: mkSelection(currentSide(s0, 'forward'), { region: currentSide(s0, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
     const s2 = undoForward(s1)
-    expect(s2.forward.steps).toHaveLength(0)
+    expect(s2.forward.transitions).toHaveLength(1)
+    expect(timelineActiveSteps(s2.forward)).toHaveLength(0)
     expect(currentSide(s2, 'forward')).toBe(currentSide(s0, 'forward'))
     expect(() => undoForward(s2)).toThrowError(/nothing to undo/)
   })
@@ -209,8 +210,8 @@ describe('backward mode', () => {
       ([, r]) => r.kind === 'cut' && r.parent === currentSide(s, 'backward').root,
     )![0]
     s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
-    expect(s.backward.steps).toHaveLength(1)
-    expect(s.backward.steps[0]!.rule).toBe('doubleCutElim')
+    expect(timelineActiveSteps(s.backward)).toHaveLength(1)
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('doubleCutElim')
     expect(Object.keys(currentSide(s, 'backward').regions)).toHaveLength(1)
     // and now the two sides meet: lhs ≅ unwrapped rhs
     expect(meet(s)).toBe(true)
@@ -231,7 +232,8 @@ describe('backward mode', () => {
     s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
     s = undoBackward(s)
     expect(currentSide(s, 'backward')).toBe(before)
-    expect(s.backward.steps).toHaveLength(0)
+    expect(s.backward.transitions).toHaveLength(1)
+    expect(timelineActiveSteps(s.backward)).toHaveLength(0)
   })
 })
 
@@ -255,7 +257,7 @@ describe('multi-step backward composition', () => {
     // unwrap the INNER pair first, then the outer pair
     s = applyBackward(s, { rule: 'doubleCutElim', region: o2 })
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
-    expect(s.backward.steps).toHaveLength(2)
+    expect(timelineActiveSteps(s.backward)).toHaveLength(2)
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'doubleWrap')
     expect(thm.steps).toHaveLength(0)
@@ -296,7 +298,8 @@ describe('backward undo restores the composed tail', () => {
     s = applyBackward(s, { rule: 'doubleCutElim', region: o2 })
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
     s = undoBackward(s)
-    expect(s.backward.steps).toHaveLength(1)
+    expect(s.backward.transitions).toHaveLength(2)
+    expect(timelineActiveSteps(s.backward)).toHaveLength(1)
     // redo: the remaining pair is o1's (the inner one was restored by undo? no —
     // undo restored the state AFTER unwrapping o2 only, so o1's pair remains)
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
@@ -327,7 +330,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
       attachments: [],
       binders: {},
     })
-    expect(s.backward.steps[0]!.rule).toBe('insertion')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('insertion')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unErased')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -346,7 +349,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     // must be spelled in the node's CURRENT port names
     const conv = applyConversion(currentSide(s, 'backward'), m, p('(\\a. a) s0'), 32)
     s = applyBackward(s, { rule: 'conversion', node: m, term: p('(\\a. a) s0'), certificate: conv.certificate, attachments: {} })
-    expect(s.backward.steps[0]!.rule).toBe('conversion')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('conversion')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unConverted')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -380,7 +383,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
         args: [wo, wf],
       },
     })
-    expect(s.backward.steps[0]!.rule).toBe('theorem')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('theorem')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unCited')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -472,7 +475,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'erasure', sel: { region: cut, regions: [], nodes: [m], wires: [wm] } })
-    expect(s.backward.steps[0]!.rule).toBe('erasure')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('erasure')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardErased')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -505,7 +508,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'iteration', sel: { region: currentSide(s, 'backward').root, regions: [], nodes: [a], wires: [wa] }, target: cut })
-    expect(s.backward.steps[0]!.rule).toBe('iteration')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('iteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardIterated')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -527,7 +530,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'deiteration', sel: { region: cut, regions: [], nodes: [c], wires: [wc] }, fuel: 64 })
-    expect(s.backward.steps[0]!.rule).toBe('deiteration')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('deiteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardDeiterated')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -548,7 +551,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'doubleCutIntro', sel: { region: currentSide(s, 'backward').root, regions: [], nodes: [a], wires: [wa] } })
-    expect(s.backward.steps[0]!.rule).toBe('doubleCutIntro')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('doubleCutIntro')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardWrapped')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -595,7 +598,7 @@ describe('backward erasure of externally-bound atoms (binder stubs)', () => {
     void w
     // the bubble sits inside a cut: NEGATIVE — backward erasure's gate
     s = applyBackward(s, { rule: 'erasure', sel: { region: bub, regions: [], nodes: [a2], wires: [] } })
-    expect(s.backward.steps[0]!.rule).toBe('erasure')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('erasure')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'boundAtomErased')
     expect(() => checkTheorem(thm, c)).not.toThrow()
@@ -626,7 +629,7 @@ describe('dual-replay redesign: record actions, verify from both ends', () => {
     // erase is gated out (positive+backward needs negative) — deletion here IS
     // deiteration, justified by the surviving copy at the same scope
     s = applyBackward(s, { rule: 'deiteration', sel: { region: bub, regions: [], nodes: [a2], wires: [] }, fuel: 64 })
-    expect(s.backward.steps[0]!.rule).toBe('deiteration')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('deiteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'boundCopyDeiterated')
     expect(() => checkTheorem(thm, c)).not.toThrow()

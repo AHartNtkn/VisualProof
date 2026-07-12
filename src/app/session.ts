@@ -8,7 +8,7 @@ import { checkTheorem } from '../kernel/proof/theorem'
 
 export type ProofTimeline = {
   readonly states: readonly Diagram[]
-  readonly steps: readonly ProofStep[]
+  readonly transitions: readonly ProofStep[]
   readonly cursor: number
 }
 
@@ -35,13 +35,19 @@ export type TrackSession = {
 }
 
 function startTimeline(origin: Diagram): ProofTimeline {
-  return { states: [origin], steps: [], cursor: 0 }
+  return { states: [origin], transitions: [], cursor: 0 }
 }
 
 export function timelineCurrent(timeline: ProofTimeline): Diagram {
   const current = timeline.states[timeline.cursor]
   if (current === undefined) throw new Error('proof timeline cursor is out of bounds')
   return current
+}
+
+/** The proof currently selected by the cursor. Retained transitions beyond
+    the cursor belong to redo history and are not part of the active proof. */
+export function timelineActiveSteps(timeline: ProofTimeline): readonly ProofStep[] {
+  return timeline.transitions.slice(0, timeline.cursor)
 }
 
 export function moveTimeline(timeline: ProofTimeline, cursor: number): ProofTimeline {
@@ -53,8 +59,8 @@ export function moveTimeline(timeline: ProofTimeline, cursor: number): ProofTime
 
 function appendTimeline(timeline: ProofTimeline, step: ProofStep, next: Diagram): ProofTimeline {
   const states = timeline.states.slice(0, timeline.cursor + 1)
-  const steps = timeline.steps.slice(0, timeline.cursor)
-  return { states: [...states, next], steps: [...steps, step], cursor: steps.length + 1 }
+  const transitions = timeline.transitions.slice(0, timeline.cursor)
+  return { states: [...states, next], transitions: [...transitions, step], cursor: transitions.length + 1 }
 }
 
 export function startTrack(origin: DiagramWithBoundary, direction: TrackDirection, ctx: ProofContext): TrackSession {
@@ -94,7 +100,7 @@ export function redoTrack(track: TrackSession): TrackSession {
 
 export function declareTrack(track: TrackSession, name: string): Theorem {
   const current = { diagram: currentTrack(track), boundary: trackBoundary(track) }
-  const steps = track.timeline.steps.slice(0, track.timeline.cursor)
+  const steps = timelineActiveSteps(track.timeline)
   const theorem: Theorem = track.direction === 'forward'
     ? { name, lhs: track.origin, rhs: current, steps }
     : { name, lhs: current, rhs: track.origin, steps: [], backSteps: steps }
@@ -216,8 +222,8 @@ export function assembleTheorem(s: ProofSession, name: string): Theorem {
     name,
     lhs: s.lhs,
     rhs: s.rhs,
-    steps: s.forward.steps.slice(0, s.forward.cursor),
-    backSteps: s.backward.steps.slice(0, s.backward.cursor),
+    steps: timelineActiveSteps(s.forward),
+    backSteps: timelineActiveSteps(s.backward),
   }
 }
 

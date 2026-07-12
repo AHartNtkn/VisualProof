@@ -1,6 +1,6 @@
 export { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 export type { ProofTimeline, ProofSession } from './session'
-export { startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, currentSide, moveSide, meet, assembleTheorem, adoptTheorem } from './session'
+export { startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, currentSide, moveSide, timelineActiveSteps, meet, assembleTheorem, adoptTheorem } from './session'
 export { sessionTheory } from './persist'
 export type { Hit } from './hittest'
 export { hitTest, buildSelection } from './hittest'

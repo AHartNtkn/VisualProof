@@ -21,6 +21,7 @@ import {
   startTrack,
   undoForward,
   undoTrack,
+  timelineActiveSteps,
 } from '../../src/app/session'
 
 const ctx = verifyTheory(buildFregeTheory())
@@ -41,12 +42,13 @@ function intro(diagram = bare().diagram) {
 describe('authoritative proof timeline', () => {
   it('starts with one state and moves undo/redo without deleting the future', () => {
     const s0 = startTrack(bare(), 'forward', ctx)
-    expect(s0.timeline).toEqual({ states: [s0.origin.diagram], steps: [], cursor: 0 })
+    expect(s0.timeline).toEqual({ states: [s0.origin.diagram], transitions: [], cursor: 0 })
 
     const s1 = applyTrack(s0, intro(currentTrack(s0)))
     const undone = undoTrack(s1)
     expect(undone.timeline.states).toBe(s1.timeline.states)
-    expect(undone.timeline.steps).toBe(s1.timeline.steps)
+    expect(undone.timeline.transitions).toBe(s1.timeline.transitions)
+    expect(timelineActiveSteps(undone.timeline)).toEqual([])
     expect(undone.timeline.cursor).toBe(0)
     expect(currentTrack(undone)).toBe(s0.origin.diagram)
     expect(redoTrack(undone).timeline.cursor).toBe(1)
@@ -62,7 +64,7 @@ describe('authoritative proof timeline', () => {
     expect(s2.timeline).toMatchObject({ cursor: 2 })
     expect(rewound.timeline.states).toHaveLength(3)
     expect(replacement.timeline.states).toHaveLength(2)
-    expect(replacement.timeline.steps).toHaveLength(1)
+    expect(replacement.timeline.transitions).toHaveLength(1)
     expect(replacement.timeline.cursor).toBe(1)
   })
 
@@ -74,7 +76,7 @@ describe('authoritative proof timeline', () => {
     const theorem = declareTrack(rewound, 'prefix')
 
     expect(theorem.rhs.diagram).toBe(s1.timeline.states[1])
-    expect(theorem.steps).toEqual(s2.timeline.steps.slice(0, 1))
+    expect(theorem.steps).toEqual(timelineActiveSteps(rewound.timeline))
   })
 
   it('keeps fixed-side cursors independent and meets/assembles at those cursors', () => {
@@ -94,6 +96,6 @@ describe('authoritative proof timeline', () => {
     expect(meet(undone)).toBe(false)
     expect(meet(redoForward(undone))).toBe(true)
     expect(moveSide(s1, 'backward', 0).forward.cursor).toBe(1)
-    expect(assembleTheorem(s1, 'fixed-prefix').steps).toEqual(s1.forward.steps.slice(0, s1.forward.cursor))
+    expect(assembleTheorem(s1, 'fixed-prefix').steps).toEqual(timelineActiveSteps(s1.forward))
   })
 })
