@@ -228,6 +228,43 @@ describe('composeProofs', () => {
 })
 
 describe('mapStepIds', () => {
+  const certificate = { leftSteps: [], rightSteps: [] }
+
+  it('remaps every anchored split host operand', () => {
+    const iso: DiagramIso = {
+      regions: new Map([['r0', 'R0']]),
+      nodes: new Map([['n0', 'N0'], ['n1', 'N1']]),
+      wires: new Map([['w0', 'W0']]),
+    }
+    expect(mapStepIds({
+      rule: 'anchoredWireSplit', wire: 'w0', witness: 'n0',
+      endpoints: [{ node: 'n1', port: { kind: 'arg', index: 0 } }], target: 'r0',
+    }, iso)).toEqual({
+      rule: 'anchoredWireSplit', wire: 'W0', witness: 'N0',
+      endpoints: [{ node: 'N1', port: { kind: 'arg', index: 0 } }], target: 'R0',
+    })
+    expect(() => mapStepIds({
+      rule: 'anchoredWireSplit', wire: 'missing', witness: 'n0',
+      endpoints: [{ node: 'n1', port: { kind: 'arg', index: 0 } }], target: 'r0',
+    }, iso)).toThrowError(/composition cannot map wire 'missing'/)
+  })
+
+  it('remaps both anchored contraction witnesses', () => {
+    const iso: DiagramIso = {
+      regions: new Map(),
+      nodes: new Map([['n0', 'N0'], ['n1', 'N1']]),
+      wires: new Map(),
+    }
+    expect(mapStepIds({
+      rule: 'anchoredWireContract', redundant: 'n0', survivor: 'n1', certificate,
+    }, iso)).toEqual({
+      rule: 'anchoredWireContract', redundant: 'N0', survivor: 'N1', certificate,
+    })
+    expect(() => mapStepIds({
+      rule: 'anchoredWireContract', redundant: 'n0', survivor: 'missing', certificate,
+    }, iso)).toThrowError(/composition cannot map node 'missing'/)
+  })
+
   it('remaps the region of a closedTermIntro step through the iso; the term is host-id-free', () => {
     const iso: DiagramIso = {
       regions: new Map([['r1', 'R1']]),

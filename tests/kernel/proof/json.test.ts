@@ -39,6 +39,10 @@ describe('step round-trips through JSON', () => {
       { rule: 'doubleCutElim', region: 'r1' },
       { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: { z: 'w0' } },
       { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate },
+      { rule: 'anchoredWireSplit', wire: 'w0', witness: 'n0', endpoints: [
+        { node: 'n1', port: { kind: 'freeVar', name: 's0' } },
+      ], target: 'r1' },
+      { rule: 'anchoredWireContract', redundant: 'n0', survivor: 'n1', certificate },
       { rule: 'headStrip', a: 'n0', b: 'n1' },
       { rule: 'closedTermIntro', region: 'r1', term: p('\\x. \\y. x') },
       { rule: 'fusion', wire: 'w0' },
@@ -86,6 +90,41 @@ describe('step round-trips through JSON', () => {
     delete j['attachments']
     expect(() => stepFromJson(j)).toThrowError(/attachments must be an array/)
     expect(() => stepFromJson({ ...j, attachments: [], extra: 1 })).toThrowError(/unknown field 'extra'/)
+  })
+
+  it('requires every anchored wire split field and rejects unknown fields', () => {
+    const valid = {
+      rule: 'anchoredWireSplit',
+      wire: 'w0',
+      witness: 'n0',
+      endpoints: [{ node: 'n1', port: 'a:0' }],
+      target: 'r1',
+    }
+    const withoutRule: Record<string, unknown> = { ...valid }
+    delete withoutRule['rule']
+    expect(() => stepFromJson(withoutRule)).toThrowError(/step.rule must be a string/)
+    for (const field of ['wire', 'witness', 'target'] as const) {
+      const malformed: Record<string, unknown> = { ...valid }
+      delete malformed[field]
+      expect(() => stepFromJson(malformed)).toThrowError(new RegExp(`${field} must be a string`))
+    }
+    const withoutEndpoints: Record<string, unknown> = { ...valid }
+    delete withoutEndpoints['endpoints']
+    expect(() => stepFromJson(withoutEndpoints)).toThrowError(/endpoints must be an array/)
+    expect(() => stepFromJson({ ...valid, extra: 1 })).toThrowError(/anchoredWireSplit step has unknown field 'extra'/)
+  })
+
+  it('requires the anchored wire contraction certificate and rejects unknown fields', () => {
+    const valid = {
+      rule: 'anchoredWireContract',
+      redundant: 'n0',
+      survivor: 'n1',
+      certificate: { leftSteps: [], rightSteps: [] },
+    }
+    const withoutCertificate: Record<string, unknown> = { ...valid }
+    delete withoutCertificate['certificate']
+    expect(() => stepFromJson(withoutCertificate)).toThrowError(/certificate must be an object/)
+    expect(() => stepFromJson({ ...valid, extra: 1 })).toThrowError(/anchoredWireContract step has unknown field 'extra'/)
   })
 })
 

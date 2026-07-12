@@ -153,6 +153,10 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), attachments: { ...s.attachments } }
     case 'congruenceJoin':
       return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate) }
+    case 'anchoredWireSplit':
+      return { rule: s.rule, wire: s.wire, witness: s.witness, endpoints: s.endpoints.map(endpointToJson), target: s.target }
+    case 'anchoredWireContract':
+      return { rule: s.rule, redundant: s.redundant, survivor: s.survivor, certificate: certToJson(s.certificate) }
     case 'endpointTransport':
       return { rule: s.rule, a: s.a, b: s.b, endpoint: endpointToJson(s.endpoint), certificate: certToJson(s.certificate) }
     case 'headStrip':
@@ -225,6 +229,25 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'congruenceJoin':
       assertOnlyKeys(j, ['rule', 'a', 'b', 'certificate'], 'congruenceJoin step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), certificate: certFromJson(j.certificate, 'certificate') }
+    case 'anchoredWireSplit': {
+      assertOnlyKeys(j, ['rule', 'wire', 'witness', 'endpoints', 'target'], 'anchoredWireSplit step')
+      if (!Array.isArray(j.endpoints)) fail('endpoints must be an array')
+      return {
+        rule,
+        wire: str(j.wire, 'wire'),
+        witness: str(j.witness, 'witness'),
+        endpoints: j.endpoints.map((endpoint, index) => endpointFromJson(endpoint, `endpoints[${index}]`)),
+        target: str(j.target, 'target'),
+      }
+    }
+    case 'anchoredWireContract':
+      assertOnlyKeys(j, ['rule', 'redundant', 'survivor', 'certificate'], 'anchoredWireContract step')
+      return {
+        rule,
+        redundant: str(j.redundant, 'redundant'),
+        survivor: str(j.survivor, 'survivor'),
+        certificate: certFromJson(j.certificate, 'certificate'),
+      }
     case 'endpointTransport':
       assertOnlyKeys(j, ['rule', 'a', 'b', 'endpoint', 'certificate'], 'endpointTransport step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), endpoint: endpointFromJson(j.endpoint, 'endpoint'), certificate: certFromJson(j.certificate, 'certificate') }
