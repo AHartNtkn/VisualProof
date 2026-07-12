@@ -4,7 +4,7 @@
 
 **Goal:** Replace campaign grouping with culture authority and ship the approved seven-artifact opening catalog with verified backward witnesses, derived required/elective progression, and structured learning metadata.
 
-**Architecture:** Reconstruct `src/game` around immutable culture, performance, and artifact records while retaining the existing kernel-backed session, vellum, and save authorities. Catalog validation owns combined culture/artifact reachability, witness replay, learning metadata, exact rule-use claims, and fingerprints; progression derives culture unlocks and required artifacts from that verified graph. The shipped opening catalog is a separate `src/game/content` package that depends only on public game and kernel construction APIs.
+**Architecture:** Reconstruct `src/game` around immutable culture, performance, artifact, and teacher-intervention records while retaining the existing kernel-backed session, vellum, and save authorities. Catalog validation owns combined culture/artifact reachability, witness replay, proof-state intervention reachability, learning metadata, exact rule-use claims, and fingerprints; progression derives culture unlocks and required artifacts from that verified graph. The shipped opening catalog is a separate `src/game/content` package that depends only on public game and kernel construction APIs. Invalid-action thoughts remain exclusively in interaction refusal and are not content metadata.
 
 **Tech Stack:** TypeScript 5.5 strict mode, Vitest 2, existing immutable diagram kernel and canonical explorer.
 
@@ -16,6 +16,7 @@
 - The first culture contains only pure-propositional and outer-universal proposition content; the existential proposition appears only in culture 2.
 - Artifact display names use an approved professional name plus optional curator shorthand. Formula labels are validation metadata, never display titles.
 - Exact culture names, artifact names, provenance, and final teacher copy require the named review gate before shipped content is written.
+- Invalid actions produce interaction-owned pointer thoughts and never content-authored misconception feedback. Valid committed states may trigger separately authored teacher interventions.
 - Every goal is closed and every witness replays backward to canonical blank through already player-authorable interactions.
 - `src/game` imports neither `src/app`, `src/theories`, nor filesystem authority.
 - No game-only proof interaction, visual styling, physics change, or placeholder future culture is introduced.
@@ -25,8 +26,9 @@
 
 Production:
 
-- Modify `src/game/types.ts` — culture, nomenclature, performance, teacher, misconception, and artifact source types.
-- Modify `src/game/catalog.ts` — immutable snapshot, graph validation, metadata validation, witness replay, lookup, and fingerprint.
+- Modify `src/game/types.ts` — culture, nomenclature, performance, teacher-intervention, and artifact source types.
+- Modify `src/game/catalog.ts` — immutable snapshot, graph validation, metadata validation, witness and intervention-demonstration replay, lookup, and fingerprint.
+- Create `src/game/teaching.ts` — pure matching of lifecycle, stalled, and canonical proof-state teacher interventions.
 - Modify `src/game/progress.ts` — culture unlocks, artifact unlocks, and derived required/elective status.
 - Modify `src/game/index.ts` — export the new content API.
 - Create `src/game/content/opening.ts` — two cultures, performance graph, seven permanent artifacts, and diagram builders/witnesses.
@@ -37,6 +39,7 @@ Tests and documentation:
 - Create `tests/game/catalog-fixture.ts` — one complete minimal culture/performance/artifact source.
 - Modify `tests/game/{catalog,progress,save,session,vellum}.test.ts`.
 - Create `tests/game/opening-content.test.ts`.
+- Create `tests/game/teaching.test.ts`.
 - Modify `tests/architecture/game-boundary.test.ts`.
 - Mark the completed domain-foundation plan as a historical record superseded by culture authority.
 
@@ -285,7 +288,7 @@ git commit -m "feat(game): derive culture progression"
 - Modify: `tests/game/catalog.test.ts`
 
 **Interfaces:**
-- Produces: performance, knowledge-point, artifact-name, provenance, teacher, misconception, and puzzle-learning records.
+- Produces: performance, knowledge-point, artifact-name, provenance, and puzzle-learning records.
 - Catalog validation owns string completeness, knowledge-point bounds, performance DAG, referenced-performance existence, role uniqueness, exact rule-use equality, and fingerprint inclusion.
 
 - [ ] **Step 1: Write failing metadata-validation tests**
@@ -293,10 +296,9 @@ git commit -m "feat(game): derive culture progression"
 Add cases rejecting blank professional names; missing provenance summaries;
 empty sealing vocabulary; performance nodes outside the two-to-five
 knowledge-point bound; missing performance prerequisites; performance cycles;
-unknown puzzle performance references; duplicate learning-role entries; a
-misconception without corrective thought; and `rulesUsed` that omits or invents
-a witness rule. Assert fingerprint changes when teacher copy or cultural history
-changes.
+unknown puzzle performance references; duplicate learning-role entries; and
+`rulesUsed` that omits or invents a witness rule. Assert fingerprint changes
+when professional naming, performance content, or cultural history changes.
 
 - [ ] **Step 2: Run catalog tests and verify missing metadata**
 
@@ -340,15 +342,6 @@ export type ArtifactProvenance = {
   readonly findspot?: string
   readonly attributedTo?: string
 }
-export type TeacherBeat = {
-  readonly trigger: 'opening' | 'completion' | 'stuck'
-  readonly text: string
-}
-export type MisconceptionCue = {
-  readonly id: string
-  readonly performance: PerformanceId
-  readonly thought: string
-}
 export type PuzzleLearning = {
   readonly introduces: readonly PerformanceId[]
   readonly practices: readonly PerformanceId[]
@@ -369,19 +362,20 @@ readonly sealingVocabulary: readonly string[]
 ```
 
 Replace `PuzzleDefinition.title` with `name: ArtifactName`, then add `provenance`,
-`learning`, `teacher`, and `misconceptions`. Add
-`performances: readonly PerformanceDefinition[]` to `GameCatalogSource`.
+and `learning`. Add `performances: readonly PerformanceDefinition[]` to
+`GameCatalogSource`. Task 4 adds the separately owned teacher-intervention
+authority after its trigger semantics and reachability evidence are available.
 
 - [ ] **Step 4: Validate and fingerprint the metadata**
 
 Require trimmed nonempty strings; distinct nonnegative `relativeAge` values;
 two-to-five knowledge points per performance; unique knowledge-point IDs;
 acyclic performance prerequisites; present performance references; unique
-entries within every learning role; present misconception references; and exact
-set equality between `rulesUsed` and `new Set(witness.map(step => step.rule))`.
+entries within every learning role; and exact set equality between `rulesUsed`
+and `new Set(witness.map(step => step.rule))`.
 Require culture lineage identities to exist and reject lineage cycles.
 Include every field in deterministic fingerprint input, sorting identity sets
-while preserving authored dialogue and knowledge-point order.
+while preserving knowledge-point order.
 
 - [ ] **Step 5: Run catalog and full game tests**
 
@@ -403,6 +397,252 @@ git commit -m "feat(game): validate cultural learning metadata"
 
 ---
 
+### Task 4: Separate Interaction Thoughts from Teacher Interventions
+
+**Files:**
+- Modify: `src/game/types.ts`
+- Modify: `src/game/catalog.ts`
+- Create: `src/game/teaching.ts`
+- Modify: `src/game/index.ts`
+- Modify: `tests/game/catalog-fixture.ts`
+- Modify: `tests/game/catalog.test.ts`
+- Create: `tests/game/teaching.test.ts`
+
+**Interfaces:**
+- Replaces: `MisconceptionCue`, `PuzzleDefinition.misconceptions`, and
+  content-authored `thought` fields.
+- Produces: `TeacherTrigger`, `TeacherIntervention`, `TeacherSignal`, and
+  `teacherInterventionsFor(puzzle, signal, seen)`.
+- Consumes: canonical diagram exploration, the existing kernel-backed game
+  session, and the same prerequisite-scoped authority used to verify witnesses.
+
+- [ ] **Step 1: Write failing catalog tests for the replacement model**
+
+In `tests/game/catalog.test.ts`, remove the test that requires a misconception
+thought. Add a four-veil fixture whose first legal elimination reaches the
+canonical two-veil state:
+
+```ts
+const four = fourVeils()
+const reachedTwoVeils: TeacherIntervention = {
+  id: 'inner-pair-removed',
+  performance: fixturePerformanceId,
+  trigger: {
+    kind: 'proofState',
+    state: twoVeils().goal,
+    demonstration: [{ rule: 'doubleCutElim', region: four.eliminations[0]! }],
+  },
+  text: 'That route leaves the older paired form.',
+  repeat: 'once',
+  recovery: 'timeline',
+}
+const fourPuzzle = minimalPuzzle({
+  goal: four.goal,
+  witness: [
+    { rule: 'doubleCutElim', region: four.eliminations[0]! },
+    { rule: 'doubleCutElim', region: four.eliminations[1]! },
+  ],
+  teacher: [reachedTwoVeils],
+})
+expect(() => buildCatalog({ ...minimalSource(), puzzles: [fourPuzzle] })).not.toThrow()
+```
+
+Add refusals for duplicate intervention IDs, blank `id` or `text`, an unknown
+optional performance, a stalled level outside `1..3`, an empty proof-state
+demonstration, an open trigger state, a demonstration containing an invalid
+step, and a legal demonstration whose result does not canonically equal its
+declared state. Assert that removing or changing the proof-state intervention
+changes the catalog fingerprint.
+
+- [ ] **Step 2: Run the focused catalog test and verify the old model fails the contract**
+
+Run:
+
+```bash
+npx vitest run tests/game/catalog.test.ts
+```
+
+Expected: FAIL because `TeacherIntervention` and structured triggers do not
+exist and the fixture still requires the displaced `misconceptions` field.
+
+- [ ] **Step 3: Replace the metadata types completely**
+
+In `src/game/types.ts`, delete `MisconceptionCue` and replace `TeacherBeat` with:
+
+```ts
+export type TeacherTrigger =
+  | { readonly kind: 'opening' }
+  | { readonly kind: 'completion' }
+  | { readonly kind: 'stalled'; readonly level: 1 | 2 | 3 }
+  | {
+      readonly kind: 'proofState'
+      readonly state: DiagramWithBoundary
+      readonly demonstration: readonly GameStep[]
+    }
+
+export type TeacherIntervention = {
+  readonly id: string
+  readonly performance?: PerformanceId
+  readonly trigger: TeacherTrigger
+  readonly text: string
+  readonly repeat: 'once' | 'repeatable'
+  readonly recovery?: 'timeline'
+}
+```
+
+Change `PuzzleDefinition.teacher` to
+`readonly teacher: readonly TeacherIntervention[]` and delete
+`PuzzleDefinition.misconceptions`. Do not retain aliases, deprecated types,
+optional compatibility properties, or a second content-authored thought path.
+
+Update `tests/game/catalog-fixture.ts` to use:
+
+```ts
+teacher: [{
+  id: 'opening-pair',
+  performance: fixturePerformanceId,
+  trigger: { kind: 'opening' },
+  text: 'Look for the nested pair.',
+  repeat: 'once',
+}],
+```
+
+- [ ] **Step 4: Validate static intervention metadata**
+
+In `buildCatalog`, require unique intervention IDs within each puzzle; trimmed
+nonempty IDs and text; present optional performance references; and a safe
+integer stalled level from 1 through 3. Use an exhaustive switch on
+`intervention.trigger.kind`. For a `proofState` trigger, require a nonempty
+demonstration and call `assertClosedGoal(trigger.state)`. Reject canonical blank
+as a proof-state trigger because completion owns that event.
+
+Delete every validation branch and error message mentioning misconceptions or
+thoughts.
+
+- [ ] **Step 5: Prove proof-state triggers are legally reachable**
+
+In the existing dependency-ordered catalog verification loop, reuse the exact
+prerequisite-scoped `authority` created for the puzzle witness. For every
+proof-state intervention, start a fresh puzzle session, replay its
+`demonstration` through `applyGameStep`, and compare:
+
+```ts
+const reached = exploreForm(currentDiagram(session))
+const declared = exploreForm(intervention.trigger.state.diagram)
+if (reached !== declared) {
+  throw new GameDomainError(
+    `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' demonstration does not reach its declared proof state`,
+  )
+}
+```
+
+Do not catch or convert invalid game steps into a success-shaped fallback. A
+bad demonstration must make catalog construction fail.
+
+- [ ] **Step 6: Fingerprint the complete replacement authority**
+
+Replace the old `teacher` and `misconceptions` fingerprint entries with one
+ordered `teacher` entry. Include `id`, optional performance, text, repeat,
+recovery, trigger kind, stalled level when present, the canonical explored form
+of a proof-state diagram, and no raw demonstration-step IDs. The demonstration
+is validation evidence rather than player-visible content: two legal traces to
+the same canonical trigger state must yield the same content fingerprint.
+Preserve authored intervention order.
+
+- [ ] **Step 7: Write failing runtime matching tests**
+
+Create `tests/game/teaching.test.ts`. Construct the four-veil puzzle and the
+`reachedTwoVeils` intervention from Step 1. Assert:
+
+```ts
+expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, new Set()))
+  .toEqual([opening])
+expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, new Set([opening.id])))
+  .toEqual([])
+
+const transition = applyGameStep(
+  startPuzzle(puzzle),
+  { rule: 'doubleCutElim', region: four.eliminations[0]! },
+  authority,
+)
+expect(teacherInterventionsFor(
+  puzzle,
+  { kind: 'proofState', diagram: currentDiagram(transition.session) },
+  new Set(),
+)).toEqual([reachedTwoVeils])
+```
+
+Also assert that a different valid state does not match, stalled levels match
+only the exact authored level, completion matches only completion, a seen
+`once` intervention is suppressed, and a seen `repeatable` intervention remains
+available.
+
+Finally attempt an invalid game step against an unchanged session, assert it
+throws and the original current diagram remains identical, and do not emit a
+teacher signal. This proves refusal remains outside the teacher path; rendering
+the red thought stays with the interaction layer.
+
+- [ ] **Step 8: Implement the pure teacher matcher and export it**
+
+Create `src/game/teaching.ts`:
+
+```ts
+import type { Diagram } from '../kernel/diagram/diagram'
+import { exploreForm } from '../kernel/diagram/canonical/explore'
+import type { PuzzleDefinition, TeacherIntervention } from './types'
+
+export type TeacherSignal =
+  | { readonly kind: 'opening' }
+  | { readonly kind: 'completion' }
+  | { readonly kind: 'stalled'; readonly level: 1 | 2 | 3 }
+  | { readonly kind: 'proofState'; readonly diagram: Diagram }
+
+export function teacherInterventionsFor(
+  puzzle: PuzzleDefinition,
+  signal: TeacherSignal,
+  seen: ReadonlySet<string>,
+): readonly TeacherIntervention[] {
+  return puzzle.teacher.filter((intervention) => {
+    if (intervention.repeat === 'once' && seen.has(intervention.id)) return false
+    const trigger = intervention.trigger
+    if (trigger.kind !== signal.kind) return false
+    switch (trigger.kind) {
+      case 'opening':
+      case 'completion': return true
+      case 'stalled': return signal.kind === 'stalled' && trigger.level === signal.level
+      case 'proofState':
+        return signal.kind === 'proofState'
+          && exploreForm(trigger.state.diagram) === exploreForm(signal.diagram)
+    }
+  })
+}
+```
+
+Export the new module from `src/game/index.ts`. Keep this function pure; seen-ID
+persistence and visual presentation belong to the later interface task.
+
+- [ ] **Step 9: Run focused and full game verification**
+
+Run:
+
+```bash
+npx vitest run tests/game/catalog.test.ts tests/game/teaching.test.ts tests/game
+npm run typecheck
+! rg -n "MisconceptionCue|misconceptions|\.thought\b" src/game tests/game
+```
+
+Expected: all game tests pass, typecheck exits 0, and the displaced content
+model grep has no output. Do not run physics tests.
+
+- [ ] **Step 10: Commit the corrected authority**
+
+```bash
+git add src/game/types.ts src/game/catalog.ts src/game/teaching.ts src/game/index.ts tests/game
+git commit -m "refactor(game): separate thoughts from teaching"
+```
+
+---
+
 ## Required Naming and Copy Review Gate
 
 Before Task 4 changes production content, invoke `superpowers:brainstorming` and
@@ -416,7 +656,7 @@ that documentation, and obtain user review before resuming Task 4.
 
 ---
 
-### Task 4: Author the Seven Permanent Opening Artifacts
+### Task 5: Author the Seven Permanent Opening Artifacts
 
 **Files:**
 - Create: `src/game/content/opening.ts`
@@ -528,7 +768,7 @@ git commit -m "feat(game): add opening cultural artifacts"
 
 ---
 
-### Task 5: Prove Save, Boundary, and Displaced-Model Conformance
+### Task 6: Prove Save, Boundary, and Displaced-Model Conformance
 
 **Files:**
 - Modify: `tests/game/save.test.ts`
@@ -552,13 +792,14 @@ const production = tsFilesUnder('src/game')
   .map((file) => readFileSync(file, 'utf8'))
   .join('\n')
 expect(production).not.toMatch(/CampaignId|CampaignDefinition|campaignId|\bcampaigns\b/)
+expect(production).not.toMatch(/MisconceptionCue|misconceptions|\.thought\b/)
 ```
 
 - [ ] **Step 2: Run the new assertions**
 
 Run: `npx vitest run tests/game/save.test.ts tests/architecture/game-boundary.test.ts`
 
-Expected: PASS after Tasks 1–4. Repair any failure at its owning source.
+Expected: PASS after Tasks 1–5. Repair any failure at its owning source.
 
 - [ ] **Step 3: Run decisive non-physics verification**
 
@@ -570,9 +811,10 @@ npm run typecheck
 git diff --check
 ! git diff --name-only | rg 'src/view|physics|wirephys|relax'
 ! rg -n "CampaignId|CampaignDefinition|campaignId|campaigns|\.campaign\b" src/game tests/game
+! rg -n "MisconceptionCue|misconceptions|\.thought\b" src/game tests/game
 ```
 
-Expected: tests pass; typecheck and diff check exit 0; both scope greps have no
+Expected: tests pass; typecheck and diff check exit 0; all scope greps have no
 output. Do not run the physics battery.
 
 - [ ] **Step 4: Append implementation evidence to this plan**
