@@ -25,6 +25,24 @@ describe('interface asset Blender toolchain', () => {
     expect(checkSource).toContain("== 'Blender 4.5.11 LTS'")
   })
 
+  it('serializes the complete version-scoped provisioning transaction', () => {
+    const source = readFileSync(install, 'utf8')
+    const lock = source.indexOf('LOCK="$ROOT/.tools/blender/$VERSION.provision.lock"')
+    const acquire = source.indexOf('flock 9')
+    const cacheObservation = source.indexOf('if [[ ! -f "$CACHE" ]]')
+    const publication = source.indexOf(`printf '%s  %s\\n' "$SHA256" "$ARCHIVE" > "$DEST/ARCHIVE.sha256"`)
+    expect(source).toContain('exec 9>"$LOCK"')
+    expect(lock).toBeGreaterThan(-1)
+    expect(acquire).toBeGreaterThan(lock)
+    expect(cacheObservation).toBeGreaterThan(acquire)
+    expect(publication).toBeGreaterThan(cacheObservation)
+  })
+
+  it('quotes the checked Blender executable path', () => {
+    const source = readFileSync(check, 'utf8')
+    expect(source).toContain('"$("$BIN" --version | head -n 1)"')
+  })
+
   it.each([install, check])('%s has valid Bash syntax', (path) => {
     expect(spawnSync('bash', ['-n', path], { encoding: 'utf8' })).toMatchObject({ status: 0, stderr: '' })
   })
