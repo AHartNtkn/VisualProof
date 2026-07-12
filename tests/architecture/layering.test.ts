@@ -47,13 +47,19 @@ describe('layer separation (spec §4.2)', () => {
     expect(offenders, offenders.join('\n')).toEqual([])
   })
 
-  it('only the canvas adapter touches the canvas API', () => {
+  it('only the canvas adapter owns contexts or low-level drawing', () => {
     const offenders: string[] = []
+    const forbidden = [
+      /CanvasRenderingContext2D/,
+      /\.getContext\s*\(/,
+      /\.clearRect\s*\(/,
+      /\.fillRect\s*\(/,
+      /\bdrawShapes\b/,
+    ]
     for (const file of tsFilesUnder('src')) {
-      if (file.endsWith('view/canvas.ts')) continue
-      if (readFileSync(file, 'utf8').includes('CanvasRenderingContext2D')) {
-        offenders.push(file)
-      }
+      if (!file.startsWith('src/app/')) continue
+      const source = readFileSync(file, 'utf8')
+      if (forbidden.some((pattern) => pattern.test(source))) offenders.push(file)
     }
     expect(offenders, offenders.join('\n')).toEqual([])
   })

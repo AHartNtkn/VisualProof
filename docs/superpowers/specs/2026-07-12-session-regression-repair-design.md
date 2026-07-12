@@ -26,8 +26,8 @@ The former `steps` field is renamed, not aliased. There is no compatibility path
 
 The adapter clears once, fills the background when supplied, and draws layers in order. Each layer's alpha is isolated with save/restore so it cannot leak to later layers.
 
-`ProofFrontViewport` stores a `CanvasAdapter`, not a browser context. Its base diagram, hover highlight, and motion overlay become three frame layers. Direct context acquisition, clearing, filling, alpha mutation, and `drawShapes` calls are deleted from the app component.
+Every application surface stores or locally creates a `CanvasAdapter`, never a browser context. ProofFrontViewport and the main editor express base diagram, hover highlight, and motion overlay as frame layers. The companion and history preview express their background and content as adapter frames. ComprehensionEditor continues through its adapter. Direct context acquisition, clearing, filling, alpha mutation, and `drawShapes` calls are deleted from the entire app layer, and the low-level renderer is no longer exported as an application escape hatch.
 
 ## Validation
 
-Session tests prove retained redo history, active-prefix behavior, redo restoration, divergent truncation, and theorem assembly. Canvas tests prove background fill, ordered rendering, and alpha isolation. The existing architecture test must find no application reference to `CanvasRenderingContext2D`. Typecheck and the complete ordinary suite must pass with zero failures. Physics tests are not run because physics is unchanged.
+Session tests prove retained redo history, active-prefix behavior, redo restoration, divergent truncation, and theorem assembly. Canvas tests prove background fill, ordered rendering, alpha isolation, and explicit resizing. Architecture validation must reject explicit context types, context acquisition/drawing methods, and low-level `drawShapes` use anywhere in the app layer. Typecheck and the complete ordinary suite must pass with zero failures. Physics tests are not run because physics is unchanged.

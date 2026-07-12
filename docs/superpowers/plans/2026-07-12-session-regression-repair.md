@@ -164,3 +164,44 @@ Expected: typecheck passes and all ordinary tests pass with zero failures. Do no
 git add src/view/canvas.ts src/app/proof-front.ts src/app/comprehension-editor.ts tests/view/canvas.test.ts tests/app/proof-front.test.ts tests/architecture/layering.test.ts
 git commit -m "fix: keep proof-front drawing behind canvas adapter"
 ```
+
+### Task 3: Remove remaining application canvas authorities
+
+**Files:**
+- Modify: `src/app/shell.ts`
+- Modify: `src/view/index.ts`
+- Modify: `tests/architecture/layering.test.ts`
+- Modify: relevant shell/companion tests discovered by focused validation
+
+**Interfaces:**
+- Consumes: `adaptCanvas`, `CanvasAdapter.render(CanvasFrame, transform)`, and `CanvasAdapter.resize`
+- Removes: application imports/calls of `drawShapes` and all application `getContext` / context drawing calls
+
+- [ ] **Step 1: Strengthen the failing architecture test**
+
+Scan every `src/app/**/*.ts` file and reject `CanvasRenderingContext2D`, `.getContext(`, `.clearRect(`, `.fillRect(`, and `drawShapes` imports/calls. Verify it reports the main, companion, and history-preview paths in `src/app/shell.ts`.
+
+- [ ] **Step 2: Migrate shell-owned canvases**
+
+Create adapters for the main and companion canvases at shell construction. Render their backgrounds and ordered base/hover/motion layers through `CanvasAdapter.render`. For each history-preview canvas, create a local adapter, resize through it, and render background plus proof shapes through one frame. Delete all shell context variables and the `drawShapes` import.
+
+- [ ] **Step 3: Remove the low-level barrel escape hatch**
+
+Remove `drawShapes` from `src/view/index.ts` when no production consumer imports it. Direct unit tests may continue importing it from `src/view/canvas.ts` because the implementation remains view-owned.
+
+- [ ] **Step 4: Run focused and authoritative validation**
+
+Run: `npx vitest run tests/architecture/layering.test.ts tests/app/companion.test.ts tests/app/history-preview.test.ts tests/app/boot.test.ts --config vitest.config.ts`
+
+Run: `npm run typecheck`
+
+Run: `npm test`
+
+Expected: every focused test and all ordinary tests pass with zero failures. Do not run physics tests.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add src/app/shell.ts src/view/index.ts tests/architecture/layering.test.ts docs/superpowers/specs/2026-07-12-session-regression-repair-design.md docs/superpowers/plans/2026-07-12-session-regression-repair.md
+git commit -m "fix: route all app drawing through canvas adapters"
+```

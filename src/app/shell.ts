@@ -15,7 +15,7 @@ import { settleStep, establishProofFrame, establishProofSlotShift, seedProject }
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, bubbleHues, highlightGroup, LIGHT, THEMES } from '../view/paint'
-import { drawShapes } from '../view/canvas'
+import { adaptCanvas } from '../view/canvas'
 import { fitCamera } from '../view/camera'
 import { seedBodyPlacement } from '../view/placement'
 import type { Library } from './library'
@@ -105,8 +105,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const { canvas, chrome } = opts
   const themeCycle = opts.themes ?? THEMES
   if (themeCycle.length === 0) throw new Error('mountShell requires at least one theme')
-  const ctx2d = canvas.getContext('2d')
-  if (ctx2d === null) throw new Error('the canvas has no 2d context')
+  const mainSurface = adaptCanvas(canvas)
 
   // ---- boot: nothing. The app has ZERO built-in knowledge of any theory file
   // and fetches nothing. The working context is empty until the user opens
@@ -235,11 +234,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   companionLabel.style.pointerEvents = 'none'
   companionWrap.append(companionCanvas, companionLabel)
   document.body.append(companionWrap)
-  const cctx = companionCanvas.getContext('2d')
-  if (cctx === null) throw new Error('the companion canvas has no 2d context')
+  const companionSurface = adaptCanvas(companionCanvas)
 
-  canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
+  mainSurface.resize(window.innerWidth, window.innerHeight)
   const applyThemeBackdrop = (): void => {
     canvas.style.background = theme.canvas
     canvas.ownerDocument.documentElement.style.background = theme.canvas
@@ -1144,12 +1141,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     restyleCompanion(visible)
     if (!visible || comp === null) return
     companionWrap.style.background = theme.canvas
-    const w = companionCanvas.clientWidth
-    const h = companionCanvas.clientHeight
-    if (w > 0 && h > 0 && (companionCanvas.width !== w || companionCanvas.height !== h)) {
-      companionCanvas.width = w
-      companionCanvas.height = h
-    }
+    companionSurface.syncSize()
+    const { width: w, height: h } = companionSurface.size()
     if (comp.diagram !== companionShownDiagram || companionEngine === null) {
       const prev = companionEngine
       const next = mkEngine(comp.diagram, comp.boundary)
@@ -1160,12 +1153,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       companionRebuilds++
     }
     settleStep(companionEngine, null)
-    applyFit(companionEngine, companionCanvas.width, companionCanvas.height, 1, companionView)
+    applyFit(companionEngine, w, h, 1, companionView)
     const shapes = paint(companionEngine, theme)
-    cctx.clearRect(0, 0, companionCanvas.width, companionCanvas.height)
-    cctx.fillStyle = theme.canvas
-    cctx.fillRect(0, 0, companionCanvas.width, companionCanvas.height)
-    drawShapes(cctx, shapes, companionView)
+    companionSurface.render({ background: theme.canvas, layers: [{ shapes }] }, companionView)
     companionLabel.textContent = comp.label
   }
 
@@ -1190,10 +1180,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // Split gives the companion the right half, so the main view fits the left
     // half; PiP/hidden leave the main view full-width (PiP overlays a corner).
     const mainW = comp !== null && companionMode === 'split' ? Math.floor(window.innerWidth / 2) : window.innerWidth
-    if (canvas.width !== mainW || canvas.height !== window.innerHeight) {
-      canvas.width = mainW
-      canvas.height = window.innerHeight
-    }
+    mainSurface.resize(mainW, window.innerHeight)
     // Plan 24 motion policy: a FULL strict-descent sweep over every DOF each
     // frame (no time-slicing) — the whole diagram eases toward rest together.
     // InteractiveViewport supplies the exact persistent and active pin set.
@@ -1227,15 +1214,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     shapes.push(...construct.overlay())
     shapes.push(...proofMoves.overlay())
     if (comprehensionEditor !== null) shapes.push(...comprehensionEditor.hostOverlays())
-    ctx2d.clearRect(0, 0, canvas.width, canvas.height)
-    ctx2d.fillStyle = theme.canvas
-    ctx2d.fillRect(0, 0, canvas.width, canvas.height)
-    drawShapes(ctx2d, shapes, view)
-    ctx2d.save()
-    ctx2d.globalAlpha = mainMotion.hoverFraction(now)
-    drawShapes(ctx2d, hoverShapes, view)
-    ctx2d.restore()
-    drawShapes(ctx2d, mainMotion.overlays(now), view)
+    mainSurface.render({
+      background: theme.canvas,
+      layers: [
+        { shapes },
+        { shapes: hoverShapes, alpha: mainMotion.hoverFraction(now) },
+        { shapes: mainMotion.overlays(now) },
+      ],
+    }, view)
     comprehensionEditor?.frame(now)
     renderCompanion(comp, companionVisible)
     raf = requestAnimationFrame(frame)
@@ -1573,10 +1559,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     let previewCanvas = byTheme.get(theme)
     if (previewCanvas === undefined) {
       previewCanvas = document.createElement('canvas')
-      previewCanvas.width = 520
-      previewCanvas.height = 340
-      const previewContext = previewCanvas.getContext('2d')
-      if (previewContext === null) return
+      const previewSurface = adaptCanvas(previewCanvas)
+      previewSurface.resize(520, 340)
       const previewEngine = mkEngine(transition.after, timeline.boundary)
       seedProject(previewEngine)
       for (let i = 0; i < 16; i++) settleStep(previewEngine, null)
@@ -1605,9 +1589,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             const scale = Math.min(previewCanvas!.width / Math.max(80, maxX - minX + 80), previewCanvas!.height / Math.max(80, maxY - minY + 80))
             return { scale, offsetX: previewCanvas!.width / 2 - (minX + maxX) / 2 * scale, offsetY: previewCanvas!.height / 2 - (minY + maxY) / 2 * scale }
           })()
-      previewContext.fillStyle = theme.canvas
-      previewContext.fillRect(0, 0, previewCanvas.width, previewCanvas.height)
-      drawShapes(previewContext, paint(previewEngine, theme), previewView)
+      previewSurface.render({ background: theme.canvas, layers: [{ shapes: paint(previewEngine, theme) }] }, previewView)
       byTheme.set(theme, previewCanvas)
     }
     closeHistoryPreview()

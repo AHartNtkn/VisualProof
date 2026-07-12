@@ -7,14 +7,15 @@ describe('CanvasAdapter layered frames', () => {
     const calls: string[] = []
     let fillStyle = ''
     let globalAlpha = 1
+    const savedAlpha: number[] = []
     const context = {
       clearRect: () => calls.push('clear'),
       fillRect: () => calls.push(`fillRect:${fillStyle}`),
       beginPath: () => calls.push('beginPath'),
       arc: () => calls.push('arc'),
       fill: () => calls.push(`fill:${fillStyle}:alpha=${globalAlpha}`),
-      save: () => calls.push('save'),
-      restore: () => { calls.push('restore'); globalAlpha = 1 },
+      save: () => { calls.push('save'); savedAlpha.push(globalAlpha) },
+      restore: () => { calls.push('restore'); globalAlpha = savedAlpha.pop() ?? 1 },
       set fillStyle(value: string) { fillStyle = value; calls.push(`fillStyle:${value}`) },
       get fillStyle() { return fillStyle },
       set globalAlpha(value: number) { globalAlpha = value; calls.push(`alpha:${value}`) },

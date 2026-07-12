@@ -7,6 +7,7 @@ import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import {
   applyForward,
+  applyBackward,
   applyTrack,
   assembleTheorem,
   currentSide,
@@ -16,10 +17,12 @@ import {
   moveSide,
   moveTrack,
   redoForward,
+  redoBackward,
   redoTrack,
   startSession,
   startTrack,
   undoForward,
+  undoBackward,
   undoTrack,
   timelineActiveSteps,
 } from '../../src/app/session'
@@ -51,7 +54,10 @@ describe('authoritative proof timeline', () => {
     expect(timelineActiveSteps(undone.timeline)).toEqual([])
     expect(undone.timeline.cursor).toBe(0)
     expect(currentTrack(undone)).toBe(s0.origin.diagram)
-    expect(redoTrack(undone).timeline.cursor).toBe(1)
+    const redone = redoTrack(undone)
+    expect(redone.timeline.cursor).toBe(1)
+    expect(currentTrack(redone)).toBe(currentTrack(s1))
+    expect(timelineActiveSteps(redone.timeline)).toEqual(redone.timeline.transitions)
   })
 
   it('moves to any retained state and truncates future when applying there', () => {
@@ -59,13 +65,20 @@ describe('authoritative proof timeline', () => {
     const s1 = applyTrack(s0, intro(currentTrack(s0)))
     const s2 = applyTrack(s1, intro(currentTrack(s1)))
     const rewound = moveTrack(s2, 0)
-    const replacement = applyTrack(rewound, intro(currentTrack(rewound)))
+    const replacementStep = {
+      rule: 'vacuousIntro' as const,
+      sel: mkSelection(currentTrack(rewound), { region: currentTrack(rewound).root, regions: [], nodes: [], wires: [] }),
+      arity: 0,
+    }
+    const replacement = applyTrack(rewound, replacementStep)
 
     expect(s2.timeline).toMatchObject({ cursor: 2 })
     expect(rewound.timeline.states).toHaveLength(3)
     expect(replacement.timeline.states).toHaveLength(2)
     expect(replacement.timeline.transitions).toHaveLength(1)
+    expect(replacement.timeline.transitions).toEqual([replacementStep])
     expect(replacement.timeline.cursor).toBe(1)
+    expect(() => redoTrack(replacement)).toThrow(/nothing to redo/)
   })
 
   it('declares only the cursor state and step prefix', () => {
@@ -97,5 +110,32 @@ describe('authoritative proof timeline', () => {
     expect(meet(redoForward(undone))).toBe(true)
     expect(moveSide(s1, 'backward', 0).forward.cursor).toBe(1)
     expect(assembleTheorem(s1, 'fixed-prefix').steps).toEqual(timelineActiveSteps(s1.forward))
+  })
+
+  it('replaces an abandoned backward transition and leaves no redo tail', () => {
+    const side = bare()
+    const s0 = startSession(side, side, ctx)
+    const first = {
+      rule: 'vacuousIntro' as const,
+      sel: mkSelection(currentSide(s0, 'backward'), { region: currentSide(s0, 'backward').root, regions: [], nodes: [], wires: [] }),
+      arity: 0,
+    }
+    const s1 = applyBackward(s0, first)
+    const abandoned = intro(currentSide(s1, 'backward'))
+    const s2 = applyBackward(s1, abandoned)
+    const rewound = undoBackward(s2)
+    expect(timelineActiveSteps(rewound.backward)).toEqual([first])
+    expect(timelineActiveSteps(redoBackward(rewound).backward)).toEqual([first, abandoned])
+
+    const replacement = {
+      rule: 'vacuousIntro' as const,
+      sel: mkSelection(currentSide(rewound, 'backward'), { region: currentSide(rewound, 'backward').root, regions: [], nodes: [], wires: [] }),
+      arity: 1,
+    }
+    const diverged = applyBackward(rewound, replacement)
+
+    expect(diverged.backward.transitions).toEqual([first, replacement])
+    expect(timelineActiveSteps(diverged.backward)).toEqual([first, replacement])
+    expect(() => redoBackward(diverged)).toThrow(/nothing to redo/)
   })
 })
