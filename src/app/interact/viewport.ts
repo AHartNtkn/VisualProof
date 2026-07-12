@@ -66,7 +66,7 @@ export type InteractiveViewportOptions = {
   readonly doubleClick: (sample: PointerSample) => boolean
   readonly contextMenu: (sample: PointerSample) => void
   readonly pointerChanged: (client: Vec2) => void
-  readonly passiveSample?: (sample: PointerSample) => void
+  readonly passiveSample?: (sample: PointerSample | null) => void
   readonly modifiersChanged?: (ctrlHeld: boolean) => void
   readonly keyDown: (sample: KeySample) => boolean
   readonly selectionChanged: (selected: readonly Hit[]) => void
@@ -128,6 +128,8 @@ export class InteractiveViewport {
     canvas.addEventListener('wheel', this.#wheel, { passive: false })
     window.addEventListener('keydown', this.#keyDown)
     window.addEventListener('keyup', this.#modifierChanged)
+    window.addEventListener('blur', this.#focusLost)
+    document.addEventListener('visibilitychange', this.#visibilityChanged)
   }
 
   get selection(): readonly Hit[] { return this.#selected }
@@ -229,6 +231,8 @@ export class InteractiveViewport {
     canvas.removeEventListener('wheel', this.#wheel)
     window.removeEventListener('keydown', this.#keyDown)
     window.removeEventListener('keyup', this.#modifierChanged)
+    window.removeEventListener('blur', this.#focusLost)
+    document.removeEventListener('visibilitychange', this.#visibilityChanged)
   }
 
   #screen(event: MouseEvent | WheelEvent): Vec2 {
@@ -402,6 +406,17 @@ export class InteractiveViewport {
 
   #pointerLeave = (): void => {
     this.#hover = null
+    this.#opts.passiveSample?.(null)
+  }
+
+  #focusLost = (): void => {
+    this.#hover = null
+    this.#opts.passiveSample?.(null)
+    this.#cancelPointer(true)
+  }
+
+  #visibilityChanged = (): void => {
+    if (document.visibilityState === 'hidden') this.#focusLost()
   }
 
   #contextMenu = (event: MouseEvent): void => {

@@ -462,7 +462,7 @@ export class ProofMoveController {
 
   dispose(): void { this.cancel(); this.#fission.dispose() }
 
-  passiveSample(sample: PointerSample): void { this.#fission.hover(sample) }
+  passiveSample(sample: PointerSample | null): void { this.#fission.hover(sample) }
   modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld) }
 
   #commit(step: ProofStep): void {

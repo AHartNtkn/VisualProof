@@ -198,7 +198,7 @@ export class ConstructController {
     this.#fission.dispose()
   }
 
-  passiveSample(sample: PointerSample): void { this.#fission.hover(sample) }
+  passiveSample(sample: PointerSample | null): void { this.#fission.hover(sample) }
   modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld) }
 
   #slashClaim(start: PointerSample): PointerClaim {

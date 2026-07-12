@@ -119,8 +119,12 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
   const occurrences: TermOccurrenceGeometry[] = g.occurrences.map((occurrence) => {
     const ownedByOccurrence = (owner: readonly PathSeg[] | null): boolean => owner !== null
       && occurrence.path.every((segment, index) => owner[index] === segment)
-    const arcIndices = g.barOwners.flatMap((owner, index) => ownedByOccurrence(owner) ? [index] : [])
-    const radialIndices = g.stemOwners.flatMap((owner, index) => ownedByOccurrence(owner) ? [index] : [])
+    const arcIndices = occurrence.path.length === 0
+      ? arcs.map((_, index) => index)
+      : g.barOwners.flatMap((owner, index) => ownedByOccurrence(owner) ? [index] : [])
+    const radialIndices = occurrence.path.length === 0
+      ? radials.map((_, index) => index)
+      : g.stemOwners.flatMap((owner, index) => ownedByOccurrence(owner) ? [index] : [])
     const hit: TermOccurrenceHit = occurrence.hit.kind === 'exit'
       ? { kind: 'exit' }
       : occurrence.hit.kind === 'arcPoint'

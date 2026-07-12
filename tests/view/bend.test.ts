@@ -71,7 +71,8 @@ describe('bendGrid', () => {
     ])
     const root = g.occurrences[0]!
     expect(root.hit.kind).toBe('exit')
-    expect(root.arcIndices.length + root.radialIndices.length).toBeGreaterThan(0)
+    expect(root.arcIndices).toHaveLength(g.arcs.length)
+    expect(root.radialIndices).toHaveLength(g.radials.length)
     const argument = g.occurrences.find((occurrence) => occurrence.path.join('/') === 'arg')!
     expect(argument.hit.kind).toBe('radial')
     expect(argument.arcIndices.length + argument.radialIndices.length).toBeGreaterThan(0)
