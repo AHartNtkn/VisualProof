@@ -654,22 +654,23 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   return { name: 'plusComm', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wo]), steps: [...e.steps] }
 }
 
-// ─── guard-producing theorems (closed-evidence endpoint transport) ───
+// ─── guard-producing theorems (closed-evidence anchored sharing) ───
 //
 // natRelation(x) = ¬∃R∃w0[Zero(w0) ∧ R(w0) ∧ Cl(R) ∧ ¬R(x)], the base line w0
 // scoped strictly INSIDE the guard bubble (non-vacuity). Producing a concrete
 // nat guard requires relating the internal zero witness w0 to the external
-// argument line — every wire/quantifier move lifts w0 out of the bubble and
-// re-opens vacuity, so a single ENDPOINT is transported instead (endpointTransport):
-// wires and quantifiers stay put, the base keeps its bubble scope forever.
+// argument line. Anchored splitting duplicates only the available closed zero
+// witness for the conclusion endpoint, so the base line and quantifier remain
+// in the bubble; contraction then identifies that local duplicate with z.
 
 /**
  * zeroIsNat: the closed sentence `⟹ ∃z. Zero(z) ∧ nat(z)` — from the blank
  * sheet, zero is a natural number. The zero witness is minted as a closed term
  * on an existential z-line (no boundary); the guard body carries the conclusion
  * atom on the internal base line (a tautology built by sound moves), then that
- * endpoint is transported onto the z-line — justified by the minted Zero(z),
- * co-resident with the internal Zero(w0) as equal closed values. Boundary [].
+ * endpoint receives a local duplicate of the internal zero witness, then that
+ * duplicate contracts onto z by their closed-value equality. The original
+ * base line remains scoped in the guard bubble throughout. Boundary [].
  */
 function deriveZeroIsNat(ctx: ProofContext): Theorem {
   const lhsD = new DiagramBuilder().build()
@@ -715,21 +716,27 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   e.push('iterate base R into conclusion cut', { rule: 'iteration', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [a0], wires: [] }), target: cutI })
   const a3 = Object.entries(e.cur.nodes).find(([id, n]) => n.kind === 'atom' && n.region === cutI && snap.nodes[id] === undefined)![0]
 
-  // unfold the internal zero evidence to a λ-term node for transport (the
-  // external witness zExt is already the ZEROp term node)
+  // unfold the internal zero evidence. Split its conclusion endpoint onto a
+  // duplicate available in the guard while retaining w0's base endpoints.
   e.push('unfold internal zero', { rule: 'relUnfold', node: zrefIn })
   const z0 = e.nodeBy(rB, ZEROp)
   snap = e.cur
-  e.push('iterate external zero into bubble', { rule: 'iteration', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zExt], wires: [] }), target: rB })
-  const b = e.newNodeIn(rB, snap, ZEROp)
-
-  // transport the conclusion endpoint from the base line onto the z line
-  e.push('transport conclusion onto z-line', {
-    rule: 'endpointTransport', a: z0, b, endpoint: { node: a3, port: { kind: 'arg', index: 0 } }, certificate: idCert,
+  e.push('split conclusion from internal zero', {
+    rule: 'anchoredWireSplit',
+    wire: w0,
+    witness: z0,
+    endpoints: [{ node: a3, port: { kind: 'arg', index: 0 } }],
+    target: rB,
+  })
+  const localZero = e.newNodeIn(rB, snap, ZEROp)
+  e.push('contract conclusion onto external zero', {
+    rule: 'anchoredWireContract',
+    redundant: localZero,
+    survivor: zExt,
+    certificate: idCert,
   })
 
-  // remove the iterated external copy; refold both zeros; fold the guard to nat
-  e.push('deiterate external zero copy', { rule: 'deiteration', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [b], wires: [] }), fuel: 64 })
+  // refold both retained zeros, then fold the completed guard to nat
   e.push('refold internal zero', { rule: 'relFold', sel: mkSelection(e.cur, { region: rB, regions: [], nodes: [z0], wires: [] }), defId: 'zero', args: [w0] })
   e.push('refold external zero', { rule: 'relFold', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [zExt], wires: [] }), defId: 'zero', args: [wz] })
   e.push('fold nat', { rule: 'relFold', sel: mkSelection(e.cur, { region: e.cur.root, regions: [cutO], nodes: [], wires: [] }), defId: 'nat', args: [wz] })

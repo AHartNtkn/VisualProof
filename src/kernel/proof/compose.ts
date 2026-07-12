@@ -77,8 +77,6 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
         redundant: mapId(iso.nodes, step.redundant, 'node'),
         survivor: mapId(iso.nodes, step.survivor, 'node'),
       }
-    case 'endpointTransport':
-      return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node'), endpoint: mapEndpoint(iso, step.endpoint) }
     case 'headStrip':
       return { ...step, a: mapId(iso.nodes, step.a, 'node'), b: mapId(iso.nodes, step.b, 'node') }
     case 'closedTermIntro':

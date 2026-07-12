@@ -1176,41 +1176,25 @@
           "node": "n0"
         },
         {
-          "rule": "iteration",
-          "sel": {
-            "region": "r0",
-            "regions": [],
-            "nodes": [
-              "r0_intro"
-            ],
-            "wires": []
-          },
+          "rule": "anchoredWireSplit",
+          "wire": "w0",
+          "witness": "n0_0",
+          "endpoints": [
+            {
+              "node": "n1_0",
+              "port": "a:0"
+            }
+          ],
           "target": "vb"
         },
         {
-          "rule": "endpointTransport",
-          "a": "n0_0",
-          "b": "r0_intro_0",
-          "endpoint": {
-            "node": "n1_0",
-            "port": "a:0"
-          },
+          "rule": "anchoredWireContract",
+          "redundant": "n0_0_split",
+          "survivor": "r0_intro",
           "certificate": {
             "leftSteps": [],
             "rightSteps": []
           }
-        },
-        {
-          "rule": "deiteration",
-          "sel": {
-            "region": "vb",
-            "regions": [],
-            "nodes": [
-              "r0_intro_0"
-            ],
-            "wires": []
-          },
-          "fuel": 64
         },
         {
           "rule": "relFold",

@@ -7,6 +7,7 @@ import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyTheorem, type Theorem } from '../../src/kernel/proof/theorem'
+import { applyStep } from '../../src/kernel/proof/step'
 
 /** The reference nodes of a theorem side, as `defId/arity` strings, sorted. */
 function refKinds(side: Theorem['lhs']): string[] {
@@ -111,7 +112,33 @@ describe('the bundled Frege theory', () => {
   })
 
   it('zeroIsNat: the closed sentence ⟹ ∃z. Zero(z) ∧ nat(z); no boundary; nat and zero co-ride the existential z', () => {
-    const t = buildFregeTheory().theorems.find((x) => x.name === 'zeroIsNat')!
+    const theory = buildFregeTheory()
+    const t = theory.theorems.find((x) => x.name === 'zeroIsNat')!
+    const rules = t.steps.map((step) => step.rule)
+    expect(rules).toContain('anchoredWireSplit')
+    expect(rules).toContain('anchoredWireContract')
+    const displacedRule = ['endpoint', 'Transport'].join('')
+    expect(rules).not.toContain(displacedRule)
+    expect(rules.filter((rule) => rule === 'iteration')).toHaveLength(1)
+    expect(rules).not.toContain('deiteration')
+    expect(t.steps).toHaveLength(11)
+
+    const ctx = verifyTheory(theory)
+    let replayed = t.lhs.diagram
+    let observedSplit = false
+    for (const step of t.steps) {
+      replayed = applyStep(replayed, step, ctx)
+      if (step.rule !== 'anchoredWireSplit') continue
+      observedSplit = true
+      const original = replayed.wires[step.wire]!
+      expect(original.scope).toBe(step.target)
+      expect(original.endpoints).toContainEqual({ node: step.witness, port: { kind: 'output' } })
+      expect(original.endpoints.some((endpoint) => {
+        const node = replayed.nodes[endpoint.node]
+        return node?.kind === 'atom' && node.region === step.target && endpoint.port.kind === 'arg'
+      })).toBe(true)
+    }
+    expect(observedSplit).toBe(true)
     // a standalone fact, so both sides are closed sentences (empty boundary)
     expect(t.lhs.boundary).toHaveLength(0)
     expect(t.rhs.boundary).toHaveLength(0)

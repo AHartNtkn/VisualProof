@@ -157,8 +157,6 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, wire: s.wire, witness: s.witness, endpoints: s.endpoints.map(endpointToJson), target: s.target }
     case 'anchoredWireContract':
       return { rule: s.rule, redundant: s.redundant, survivor: s.survivor, certificate: certToJson(s.certificate) }
-    case 'endpointTransport':
-      return { rule: s.rule, a: s.a, b: s.b, endpoint: endpointToJson(s.endpoint), certificate: certToJson(s.certificate) }
     case 'headStrip':
       return { rule: s.rule, a: s.a, b: s.b }
     case 'closedTermIntro':
@@ -248,9 +246,6 @@ export function stepFromJson(j: unknown): ProofStep {
         survivor: str(j.survivor, 'survivor'),
         certificate: certFromJson(j.certificate, 'certificate'),
       }
-    case 'endpointTransport':
-      assertOnlyKeys(j, ['rule', 'a', 'b', 'endpoint', 'certificate'], 'endpointTransport step')
-      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), endpoint: endpointFromJson(j.endpoint, 'endpoint'), certificate: certFromJson(j.certificate, 'certificate') }
     case 'headStrip':
       assertOnlyKeys(j, ['rule', 'a', 'b'], 'headStrip step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
