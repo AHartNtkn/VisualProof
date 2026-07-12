@@ -1,16 +1,27 @@
 import { describe, expect, test } from 'vitest'
-import { mkDiagram, type Diagram, type Wire } from '../../src/kernel/diagram/diagram'
+import { mkDiagram, type Diagram, type Endpoint, type Wire } from '../../src/kernel/diagram/diagram'
+import { bvar, lam } from '../../src/kernel/term/term'
 import {
+  addRelationRef,
+  addRelationTerm,
+  applyRelationConnection,
+  attachRelationPort,
   beginAbstractionDraft,
   beginSubstitutionDraft,
   bindOptionalPort,
   currentRelationDraft,
+  deleteRelationNode,
   deleteOptionalPort,
   insertOptionalPort,
   materializeRelationDraft,
   moveOptionalPort,
   moveRelationHistory,
+  planRelationConnection,
   replaceRelationDiagram,
+  severRelationEndpoint,
+  wrapRelationNode,
+  wrapRelationNodes,
+  type RelationWorkspaceDraft,
 } from '../../src/app/relation-workspace-draft'
 
 function hostWithBubble(arity = 2): Diagram {
@@ -37,6 +48,30 @@ function withLooseDraftWires(draft: ReturnType<typeof beginAbstractionDraft>, id
     regions: { r0: { kind: 'sheet' } },
     wires,
   }))
+}
+
+function twoTermDiagram(joined = false): Diagram {
+  const output = (node: string): Endpoint => ({ node, port: { kind: 'output' } })
+  return mkDiagram({
+    root: 'r0',
+    regions: { r0: { kind: 'sheet' } },
+    nodes: {
+      n1: { kind: 'term', region: 'r0', term: lam(bvar(0)) },
+      n2: { kind: 'term', region: 'r0', term: lam(bvar(0)) },
+    },
+    wires: joined
+      ? { w1: { scope: 'r0', endpoints: [output('n1'), output('n2')] } }
+      : {
+          w1: { scope: 'r0', endpoints: [output('n1')] },
+          w2: { scope: 'r0', endpoints: [output('n2')] },
+        },
+  })
+}
+
+function expectOneSnapshot(before: RelationWorkspaceDraft, after: RelationWorkspaceDraft): void {
+  expect(after.history).toHaveLength(before.history.length + 1)
+  expect(after.cursor).toBe(before.cursor + 1)
+  expect(after.history[after.cursor]).toBe(currentRelationDraft(after))
 }
 
 describe('relation workspace port model', () => {
@@ -162,5 +197,244 @@ describe('relation workspace port model', () => {
     expect(currentRelationDraft(draft).ports).toEqual([
       expect.objectContaining({ id: w2.id, wire: 'w2', hostWire: 'h2' }),
     ])
+  })
+
+  test('diagram replacement commits the complete diagram and retained ports in one snapshot', () => {
+    const draft = beginSubstitutionDraft(hostWithBubble(1), 'bubble')
+    const replacement = mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { n1: { kind: 'term', region: 'r0', term: lam(bvar(0)) } },
+      wires: {
+        arg1: { scope: 'r0', endpoints: [] },
+        result: { scope: 'r0', endpoints: [{ node: 'n1', port: { kind: 'output' } }] },
+      },
+    })
+
+    const replaced = replaceRelationDiagram(draft, replacement)
+
+    expectOneSnapshot(draft, replaced)
+    expect(currentRelationDraft(replaced)).toEqual({
+      diagram: replacement,
+      ports: [{ id: 'forced1', wire: 'arg1', kind: 'forced' }],
+    })
+    expect(currentRelationDraft(draft).diagram.nodes).toEqual({})
+  })
+
+  test('connection preview is pure and connection commit applies its checked snapshot atomically', () => {
+    const draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    const before = currentRelationDraft(draft)
+
+    const preview = planRelationConnection(
+      draft,
+      { kind: 'draft', wire: 'w1' },
+      { kind: 'host', wire: 'h1' },
+    )
+
+    expect(preview).toMatchObject({
+      ok: true,
+      kind: 'external-reference',
+      snapshot: { ports: [{ wire: 'w1', kind: 'optional', hostWire: 'h1' }] },
+    })
+    expect(draft.history).toHaveLength(2)
+    expect(currentRelationDraft(draft)).toBe(before)
+
+    const committed = applyRelationConnection(
+      draft,
+      { kind: 'draft', wire: 'w1' },
+      { kind: 'host', wire: 'h1' },
+    )
+    expectOneSnapshot(draft, committed)
+    expect(currentRelationDraft(committed)).toEqual(preview.ok ? preview.snapshot : null)
+    expect(currentRelationDraft(committed).diagram).toBe(before.diagram)
+  })
+
+  test('refused connection previews and commits add no snapshot', () => {
+    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    draft = applyRelationConnection(
+      draft,
+      { kind: 'draft', wire: 'w1' },
+      { kind: 'host', wire: 'h1' },
+    )
+    const length = draft.history.length
+    const before = currentRelationDraft(draft)
+
+    expect(planRelationConnection(
+      draft,
+      { kind: 'draft', wire: 'w1' },
+      { kind: 'host', wire: 'h1' },
+    )).toMatchObject({ ok: false, code: 'duplicate-external-reference' })
+    expect(() => applyRelationConnection(
+      draft,
+      { kind: 'draft', wire: 'w1' },
+      { kind: 'host', wire: 'h1' },
+    )).toThrow(/already exists/i)
+    expect(draft.history).toHaveLength(length)
+    expect(currentRelationDraft(draft)).toBe(before)
+  })
+
+  test('spawning a term commits its node and complete port wiring in one snapshot', () => {
+    const draft = beginAbstractionDraft(hostWithBubble())
+
+    const spawned = addRelationTerm(draft, lam(bvar(0)))
+
+    expectOneSnapshot(draft, spawned)
+    expect(Object.values(currentRelationDraft(spawned).diagram.nodes)).toEqual([
+      { kind: 'term', region: 'r0', term: lam(bvar(0)) },
+    ])
+    expect(Object.values(currentRelationDraft(spawned).diagram.wires)).toEqual([
+      { scope: 'r0', endpoints: [{ node: 'n', port: { kind: 'output' } }] },
+    ])
+    expect(currentRelationDraft(spawned).ports).toEqual([])
+  })
+
+  test('spawning a named relation commits its arity and argument wiring in one snapshot', () => {
+    const draft = beginAbstractionDraft(hostWithBubble())
+
+    const spawned = addRelationRef(draft, 'named-relation', 2)
+
+    expectOneSnapshot(draft, spawned)
+    expect(Object.values(currentRelationDraft(spawned).diagram.nodes)).toEqual([
+      { kind: 'ref', region: 'r0', defId: 'named-relation', arity: 2 },
+    ])
+    expect(Object.values(currentRelationDraft(spawned).diagram.wires)).toEqual([
+      { scope: 'r0', endpoints: [{ node: 'n', port: { kind: 'arg', index: 0 } }] },
+      { scope: 'r0', endpoints: [{ node: 'n', port: { kind: 'arg', index: 1 } }] },
+    ])
+    expect(currentRelationDraft(spawned).ports).toEqual([])
+  })
+
+  test('local attachment fuses wire topology and rewrites its port in one snapshot', () => {
+    let draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    draft = insertOptionalPort(draft, 'w2', 0, 'h1')
+    const port = currentRelationDraft(draft).ports[0]!
+
+    const attached = attachRelationPort(draft, port.id, 'w1')
+
+    expectOneSnapshot(draft, attached)
+    expect(Object.keys(currentRelationDraft(attached).diagram.wires)).toEqual(['w2'])
+    expect(currentRelationDraft(attached).diagram.wires.w2!.endpoints).toEqual([
+      { node: 'n1', port: { kind: 'output' } },
+      { node: 'n2', port: { kind: 'output' } },
+    ])
+    expect(currentRelationDraft(attached).ports).toEqual([
+      { id: port.id, wire: 'w2', kind: 'optional', hostWire: 'h1' },
+    ])
+  })
+
+  test('attaching a port to its existing identity is a no-op with no snapshot', () => {
+    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    draft = insertOptionalPort(draft, 'w1', 0)
+    const port = currentRelationDraft(draft).ports[0]!
+
+    const unchanged = attachRelationPort(draft, port.id, 'w1')
+
+    expect(unchanged).toBe(draft)
+    expect(unchanged.history).toHaveLength(draft.history.length)
+    expect(currentRelationDraft(unchanged)).toEqual(currentRelationDraft(draft))
+  })
+
+  test('node deletion retains a bound interface wire and commits one complete snapshot', () => {
+    let draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    draft = insertOptionalPort(draft, 'w1', 0, 'h1')
+    const before = currentRelationDraft(draft)
+
+    const deleted = deleteRelationNode(draft, 'n1')
+
+    expectOneSnapshot(draft, deleted)
+    expect(currentRelationDraft(deleted).diagram.nodes).toEqual({ n2: before.diagram.nodes.n2 })
+    expect(currentRelationDraft(deleted).diagram.wires).toEqual({
+      w1: { scope: 'r0', endpoints: [] },
+      w2: before.diagram.wires.w2,
+    })
+    expect(currentRelationDraft(deleted).ports).toEqual(before.ports)
+  })
+
+  test('wrapping a node in a cut moves its node and wire under one new boundary snapshot', () => {
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+
+    const wrapped = wrapRelationNode(draft, 'n1')
+
+    expectOneSnapshot(draft, wrapped)
+    expect(currentRelationDraft(wrapped).diagram.regions).toEqual({
+      r0: { kind: 'sheet' },
+      cut: { kind: 'cut', parent: 'r0' },
+    })
+    expect(currentRelationDraft(wrapped).diagram.nodes.n1).toMatchObject({ region: 'cut' })
+    expect(currentRelationDraft(wrapped).diagram.wires.w1).toMatchObject({ scope: 'cut' })
+    expect(currentRelationDraft(wrapped).ports).toEqual([])
+  })
+
+  test('wrapping nodes in a bubble records arity and moves the selected contents in one snapshot', () => {
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+
+    const wrapped = wrapRelationNodes(draft, ['n1', 'n2'], 3)
+
+    expectOneSnapshot(draft, wrapped)
+    expect(currentRelationDraft(wrapped).diagram.regions).toEqual({
+      r0: { kind: 'sheet' },
+      bub: { kind: 'bubble', parent: 'r0', arity: 3 },
+    })
+    expect(Object.values(currentRelationDraft(wrapped).diagram.nodes).map((node) => node.region)).toEqual(['bub', 'bub'])
+    expect(Object.values(currentRelationDraft(wrapped).diagram.wires).map((wire) => wire.scope)).toEqual(['bub', 'bub'])
+    expect(currentRelationDraft(wrapped).ports).toEqual([])
+  })
+
+  test('endpoint severing splits one incidence onto a fresh wire in one snapshot', () => {
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram(true))
+    const endpoint = { node: 'n1', port: { kind: 'output' as const } }
+
+    const severed = severRelationEndpoint(draft, 'w1', endpoint)
+
+    expectOneSnapshot(draft, severed)
+    expect(currentRelationDraft(severed).diagram.wires).toEqual({
+      w1: { scope: 'r0', endpoints: [{ node: 'n2', port: { kind: 'output' } }] },
+      w: { scope: 'r0', endpoints: [endpoint] },
+    })
+    expect(currentRelationDraft(severed).ports).toEqual([])
+  })
+
+  test('refused endpoint severing leaves diagram, ports, and history unchanged', () => {
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram(true))
+    const severed = severRelationEndpoint(draft, 'w1', { node: 'n1', port: { kind: 'output' } })
+    const before = currentRelationDraft(severed)
+
+    expect(() => severRelationEndpoint(
+      severed,
+      'w',
+      { node: 'n1', port: { kind: 'output' } },
+    )).toThrow(/single loose end/i)
+    expect(severed.history).toHaveLength(draft.history.length + 1)
+    expect(currentRelationDraft(severed)).toBe(before)
+  })
+
+  test('undo and redo restore fused diagram topology together with bound ports', () => {
+    let draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    draft = insertOptionalPort(draft, 'w1', 0, 'h1')
+    draft = insertOptionalPort(draft, 'w2', 1, 'h2')
+    const beforeFusion = currentRelationDraft(draft)
+    const firstPort = beforeFusion.ports[0]!
+
+    const fused = attachRelationPort(draft, firstPort.id, 'w2')
+    const fusedSnapshot = currentRelationDraft(fused)
+    expectOneSnapshot(draft, fused)
+    expect(Object.keys(fusedSnapshot.diagram.wires)).toEqual(['w1'])
+    expect(fusedSnapshot.ports).toEqual([
+      expect.objectContaining({ wire: 'w1', hostWire: 'h1' }),
+      expect.objectContaining({ wire: 'w1', hostWire: 'h2' }),
+    ])
+
+    const undone = moveRelationHistory(fused, -1)
+    expect(currentRelationDraft(undone)).toBe(beforeFusion)
+    expect(Object.keys(currentRelationDraft(undone).diagram.wires)).toEqual(['w1', 'w2'])
+    expect(currentRelationDraft(undone).ports).toEqual([
+      expect.objectContaining({ wire: 'w1', hostWire: 'h1' }),
+      expect.objectContaining({ wire: 'w2', hostWire: 'h2' }),
+    ])
+
+    const redone = moveRelationHistory(undone, 1)
+    expect(currentRelationDraft(redone)).toBe(fusedSnapshot)
+    expect(currentRelationDraft(redone).diagram).toEqual(fusedSnapshot.diagram)
+    expect(currentRelationDraft(redone).ports).toEqual(fusedSnapshot.ports)
   })
 })
