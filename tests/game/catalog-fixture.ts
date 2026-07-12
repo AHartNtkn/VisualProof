@@ -53,8 +53,13 @@ export function minimalPuzzle(overrides: Partial<PuzzleDefinition> = {}): Puzzle
       introduces: [fixturePerformanceId], practices: [], retrieves: [], assesses: [],
       rulesUsed: ['doubleCutElim'],
     },
-    teacher: [{ trigger: 'opening', text: 'Look for the nested pair.' }],
-    misconceptions: [],
+    teacher: [{
+      id: 'opening-pair',
+      performance: fixturePerformanceId,
+      trigger: { kind: 'opening' },
+      text: 'Look for the nested pair.',
+      repeat: 'once',
+    }],
     ...overrides,
   }
 }

@@ -69,15 +69,23 @@ export type ArtifactProvenance = {
   readonly attributedTo?: string
 }
 
-export type TeacherBeat = {
-  readonly trigger: 'opening' | 'completion' | 'stuck'
-  readonly text: string
-}
+export type TeacherTrigger =
+  | { readonly kind: 'opening' }
+  | { readonly kind: 'completion' }
+  | { readonly kind: 'stalled'; readonly level: 1 | 2 | 3 }
+  | {
+      readonly kind: 'proofState'
+      readonly state: DiagramWithBoundary
+      readonly demonstration: readonly GameStep[]
+    }
 
-export type MisconceptionCue = {
+export type TeacherIntervention = {
   readonly id: string
-  readonly performance: PerformanceId
-  readonly thought: string
+  readonly performance?: PerformanceId
+  readonly trigger: TeacherTrigger
+  readonly text: string
+  readonly repeat: 'once' | 'repeatable'
+  readonly recovery?: 'timeline'
 }
 
 export type PuzzleLearning = {
@@ -98,8 +106,7 @@ export type PuzzleDefinition = {
   readonly grantsVellum: boolean
   readonly witness: readonly GameStep[]
   readonly learning: PuzzleLearning
-  readonly teacher: readonly TeacherBeat[]
-  readonly misconceptions: readonly MisconceptionCue[]
+  readonly teacher: readonly TeacherIntervention[]
 }
 
 export type CultureDefinition = {

@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { buildCatalog } from '../../src/game/catalog'
-import { isBlank } from '../../src/game/blank'
+import { blankDiagram, isBlank } from '../../src/game/blank'
 import { emptyProgress } from '../../src/game/progress'
 import { loadGame, saveGame } from '../../src/game/save'
 import { applyGameStep, currentDiagram, startPuzzle } from '../../src/game/session'
 import {
   cultureId, GameDomainError, performanceId, puzzleId,
-  type CultureDefinition, type PuzzleDefinition, type PuzzleId,
+  type CultureDefinition, type PuzzleDefinition, type PuzzleId, type TeacherIntervention,
 } from '../../src/game/types'
 import { fixturePerformanceId, minimalPerformance, minimalPuzzle, minimalSource } from './catalog-fixture'
 import { fourVeils, twoVeils } from './fixtures'
@@ -15,6 +15,27 @@ import { fourVeils, twoVeils } from './fixtures'
 const fixture = twoVeils()
 const puzzle = minimalPuzzle({ name: { professional: 'Two Veils' } })
 const culture = minimalSource().cultures[0]!
+const four = fourVeils()
+const reachedTwoVeils = {
+  id: 'inner-pair-removed',
+  performance: fixturePerformanceId,
+  trigger: {
+    kind: 'proofState',
+    state: twoVeils().goal,
+    demonstration: [{ rule: 'doubleCutElim', region: four.eliminations[0]! }],
+  },
+  text: 'That route leaves the older paired form.',
+  repeat: 'once',
+  recovery: 'timeline',
+} satisfies TeacherIntervention
+const fourPuzzle = minimalPuzzle({
+  goal: four.goal,
+  witness: [
+    { rule: 'doubleCutElim', region: four.eliminations[0]! },
+    { rule: 'doubleCutElim', region: four.eliminations[1]! },
+  ],
+  teacher: [reachedTwoVeils],
+})
 
 describe('verified game catalog', () => {
   it('accepts a closed puzzle whose backward witness reaches blank', () => {
@@ -190,15 +211,100 @@ describe('verified game catalog', () => {
     }
   })
 
-  it('rejects a misconception without corrective thought', () => {
+  it('accepts a reachable canonical proof-state teacher intervention', () => {
+    expect(() => buildCatalog({ ...minimalSource(), puzzles: [fourPuzzle] })).not.toThrow()
+  })
+
+  it('rejects duplicate, blank, and unknown teacher intervention metadata', () => {
     expect(() => buildCatalog({
-      ...minimalSource(),
-      puzzles: [minimalPuzzle({
-        misconceptions: [{
-          id: 'single-cut', performance: fixturePerformanceId, thought: ' ',
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [reachedTwoVeils, reachedTwoVeils],
+      })],
+    })).toThrow(/duplicate.*teacher intervention/)
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{ ...reachedTwoVeils, id: ' ' }],
+      })],
+    })).toThrow(/teacher intervention.*id/)
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{ ...reachedTwoVeils, text: '' }],
+      })],
+    })).toThrow(/teacher intervention.*text/)
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{ ...reachedTwoVeils, performance: performanceId('missing') }],
+      })],
+    })).toThrow(/teacher intervention.*unknown performance/)
+  })
+
+  it('rejects invalid stalled teacher levels', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{
+          id: 'bad-level', trigger: { kind: 'stalled', level: 4 },
+          text: 'Try another view.', repeat: 'once',
+        } as unknown as TeacherIntervention],
+      })],
+    })).toThrow(/stalled level.*1 through 3/)
+  })
+
+  it('rejects malformed or unreachable proof-state teacher triggers', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{
+          ...reachedTwoVeils,
+          trigger: { ...reachedTwoVeils.trigger, demonstration: [] },
         }],
       })],
-    })).toThrow(/misconception.*thought/)
+    })).toThrow(/proof-state demonstration.*nonempty/)
+
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{
+          ...reachedTwoVeils,
+          trigger: {
+            ...reachedTwoVeils.trigger,
+            state: { diagram: twoVeils().goal.diagram, boundary: ['open-wire'] },
+          },
+        }],
+      })],
+    })).toThrow(/closed/)
+
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{
+          ...reachedTwoVeils,
+          trigger: {
+            ...reachedTwoVeils.trigger,
+            state: { diagram: blankDiagram(), boundary: [] },
+          },
+        }],
+      })],
+    })).toThrow(/canonical blank.*completion owns that event/)
+
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{
+          ...reachedTwoVeils,
+          trigger: {
+            ...reachedTwoVeils.trigger,
+            demonstration: [{ rule: 'doubleCutElim', region: 'missing-region' }],
+          },
+        }],
+      })],
+    })).toThrow()
+
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [fourPuzzle, {
+        ...fourPuzzle,
+        id: puzzleId('mismatched-state'),
+        teacher: [{
+          ...reachedTwoVeils,
+          trigger: { ...reachedTwoVeils.trigger, state: four.goal },
+        }],
+      }],
+    })).toThrow(/demonstration does not reach its declared proof state/)
   })
 
   it('requires declared rules to exactly equal witness rules', () => {
@@ -218,7 +324,10 @@ describe('verified game catalog', () => {
     const changedTeacher = buildCatalog({
       ...minimalSource(),
       puzzles: [minimalPuzzle({
-        teacher: [{ trigger: 'opening', text: 'Changed teacher copy.' }],
+        teacher: [{
+          id: 'opening-pair', performance: fixturePerformanceId,
+          trigger: { kind: 'opening' }, text: 'Changed teacher copy.', repeat: 'once',
+        }],
       })],
     })
     const changedHistory = buildCatalog({
@@ -228,6 +337,46 @@ describe('verified game catalog', () => {
 
     expect(changedTeacher.fingerprint).not.toBe(original.fingerprint)
     expect(changedHistory.fingerprint).not.toBe(original.fingerprint)
+  })
+
+  it('fingerprints proof-state teacher authority and authored intervention order', () => {
+    const original = buildCatalog({ ...minimalSource(), puzzles: [fourPuzzle] })
+    const removed = buildCatalog({
+      ...minimalSource(), puzzles: [{ ...fourPuzzle, teacher: [] }],
+    })
+    const changedTrigger = buildCatalog({
+      ...minimalSource(), puzzles: [{
+        ...fourPuzzle,
+        teacher: [{ ...reachedTwoVeils, trigger: { kind: 'completion' } }],
+      }],
+    })
+    const opening: TeacherIntervention = {
+      id: 'opening-four', trigger: { kind: 'opening' },
+      text: 'Begin with the innermost pair.', repeat: 'repeatable',
+    }
+    const ordered = buildCatalog({
+      ...minimalSource(), puzzles: [{ ...fourPuzzle, teacher: [opening, reachedTwoVeils] }],
+    })
+    const reordered = buildCatalog({
+      ...minimalSource(), puzzles: [{ ...fourPuzzle, teacher: [reachedTwoVeils, opening] }],
+    })
+    const alternateDemonstration = buildCatalog({
+      ...minimalSource(), puzzles: [{
+        ...fourPuzzle,
+        teacher: [{
+          ...reachedTwoVeils,
+          trigger: {
+            ...reachedTwoVeils.trigger,
+            demonstration: [{ rule: 'doubleCutElim', region: four.eliminations[1]! }],
+          },
+        }],
+      }],
+    })
+
+    expect(removed.fingerprint).not.toBe(original.fingerprint)
+    expect(changedTrigger.fingerprint).not.toBe(original.fingerprint)
+    expect(reordered.fingerprint).not.toBe(ordered.fingerprint)
+    expect(alternateDemonstration.fingerprint).toBe(original.fingerprint)
   })
 
   it('fingerprints structured metadata independently of object property insertion order', () => {

@@ -9,6 +9,7 @@ import {
   type PerformanceId,
   type PuzzleDefinition,
   type PuzzleId,
+  type TeacherTrigger,
 } from './types'
 
 export type GameCatalog = {
@@ -147,17 +148,53 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
     nonBlank(puzzle.provenance.function, `puzzle '${puzzle.id}' provenance function`)
     optionalNonBlank(puzzle.provenance.findspot, `puzzle '${puzzle.id}' provenance findspot`)
     optionalNonBlank(puzzle.provenance.attributedTo, `puzzle '${puzzle.id}' attribution`)
-    for (const beat of puzzle.teacher) {
-      nonBlank(beat.text, `puzzle '${puzzle.id}' teacher text`)
-    }
-    unique(puzzle.misconceptions.map((cue) => cue.id), `misconception of puzzle '${puzzle.id}'`)
-    for (const cue of puzzle.misconceptions) {
-      nonBlank(cue.id, `misconception id of puzzle '${puzzle.id}'`)
-      nonBlank(cue.thought, `misconception '${cue.id}' thought`)
-      if (!performanceById.has(cue.performance)) {
+    unique(
+      puzzle.teacher.map((intervention) => intervention.id),
+      `teacher intervention id of puzzle '${puzzle.id}'`,
+    )
+    for (const intervention of puzzle.teacher) {
+      nonBlank(intervention.id, `puzzle '${puzzle.id}' teacher intervention id`)
+      nonBlank(
+        intervention.text,
+        `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' text`,
+      )
+      if (
+        intervention.performance !== undefined
+        && !performanceById.has(intervention.performance)
+      ) {
         throw new GameDomainError(
-          `puzzle '${puzzle.id}' misconception '${cue.id}' names unknown performance '${cue.performance}'`,
+          `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' names unknown performance '${intervention.performance}'`,
         )
+      }
+      const trigger = intervention.trigger
+      switch (trigger.kind) {
+        case 'opening':
+        case 'completion':
+          break
+        case 'stalled':
+          if (!Number.isSafeInteger(trigger.level) || trigger.level < 1 || trigger.level > 3) {
+            throw new GameDomainError(
+              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' stalled level must be a safe integer from 1 through 3`,
+            )
+          }
+          break
+        case 'proofState':
+          if (trigger.demonstration.length === 0) {
+            throw new GameDomainError(
+              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' proof-state demonstration must be nonempty`,
+            )
+          }
+          assertClosedGoal(trigger.state)
+          if (isBlank(trigger.state.diagram)) {
+            throw new GameDomainError(
+              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' proof state must not be canonical blank; completion owns that event`,
+            )
+          }
+          break
+        default: {
+          const exhaustive: never = trigger
+          throw new GameDomainError(`unknown teacher trigger '${String(exhaustive)}'`)
+        }
       }
     }
     const learningRoles = [
@@ -309,7 +346,37 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
     if (!isBlank(currentDiagram(session))) {
       throw new GameDomainError(`puzzle '${puzzle.id}' witness does not reach blank`)
     }
+    for (const intervention of puzzle.teacher) {
+      if (intervention.trigger.kind !== 'proofState') continue
+      let demonstration = startPuzzle(puzzle)
+      for (const step of intervention.trigger.demonstration) {
+        demonstration = applyGameStep(demonstration, step, authority).session
+      }
+      const reached = exploreForm(currentDiagram(demonstration))
+      const declared = exploreForm(intervention.trigger.state.diagram)
+      if (reached !== declared) {
+        throw new GameDomainError(
+          `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' demonstration does not reach its declared proof state`,
+        )
+      }
+    }
     verified.add(puzzle.id)
+  }
+
+  const teacherTriggerFingerprint = (trigger: TeacherTrigger): object => {
+    switch (trigger.kind) {
+      case 'opening':
+      case 'completion':
+        return { kind: trigger.kind }
+      case 'stalled':
+        return { kind: trigger.kind, level: trigger.level }
+      case 'proofState':
+        return { kind: trigger.kind, state: exploreForm(trigger.state.diagram) }
+      default: {
+        const exhaustive: never = trigger
+        throw new GameDomainError(`unknown teacher trigger '${String(exhaustive)}'`)
+      }
+    }
   }
 
   const fingerprintInput = {
@@ -375,9 +442,13 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
           assesses: [...puzzle.learning.assesses].sort(),
           rulesUsed: [...new Set(puzzle.learning.rulesUsed)].sort(),
         },
-        teacher: puzzle.teacher.map((beat) => ({ trigger: beat.trigger, text: beat.text })),
-        misconceptions: puzzle.misconceptions.map((cue) => ({
-          id: cue.id, performance: cue.performance, thought: cue.thought,
+        teacher: puzzle.teacher.map((intervention) => ({
+          id: intervention.id,
+          performance: intervention.performance,
+          text: intervention.text,
+          repeat: intervention.repeat,
+          recovery: intervention.recovery,
+          trigger: teacherTriggerFingerprint(intervention.trigger),
         })),
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
