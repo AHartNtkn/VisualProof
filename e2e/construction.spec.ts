@@ -4,7 +4,10 @@ type Hit = { readonly kind: 'node' | 'region' | 'wire'; readonly id: string }
 type Debug = {
   nodeCount(): number
   view(): { scale: number; offsetX: number; offsetY: number }
-  bodies(): { id: string; kind: string; x: number; y: number; region: string }[]
+  bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[]
+  fissionTargets(): { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]
+  interactionOverlays(): string[]
+  feedback(): { refusal: null | { text: string }; problems: readonly unknown[] }
   regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[]
   wires(): { id: string; x: number; y: number; dx: number; dy: number }[]
   wireBinds(): { id: string; node: string; x: number; y: number }[]
@@ -82,6 +85,49 @@ async function waitForRest(page: Page): Promise<void> {
     return stable
   }, { timeout: 30_000, intervals: [150, 200, 250] }).toBeGreaterThanOrEqual(3)
 }
+
+test('fission pulls an exact internal subterm in Edit while Ctrl remains physics-only', async ({ page }) => {
+  const pageErrors: string[] = []
+  page.on('pageerror', (error) => { pageErrors.push(error.message) })
+  await openApp(page)
+  await spawnTerm(page, 'a ((\\x. x) b)')
+  await waitForNodes(page, 1)
+  const target = await page.evaluate(() => window.__vpaDebug!.fissionTargets()
+    .find((candidate) => candidate.path.join('/') === 'arg')!)
+  const start = await pagePoint(page, target)
+  await page.mouse.move(start.x, start.y)
+  await expect.poll(() => page.evaluate(() => {
+    const kinds = window.__vpaDebug!.interactionOverlays()
+    return kinds.length > 0 && kinds.includes('arc') && !kinds.includes('circle')
+  })).toBe(true)
+
+  const destination = await pagePoint(page, { x: target.dropX, y: target.dropY })
+  await page.mouse.move(start.x, start.y)
+  await page.mouse.down()
+  await page.mouse.move(destination.x, destination.y, { steps: 5 })
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays().includes('arc'))).toBe(true)
+  await page.mouse.up()
+  expect(pageErrors).toEqual([])
+  const immediate = await page.evaluate(() => ({
+    count: window.__vpaDebug!.nodeCount(),
+    refusal: window.__vpaDebug!.feedback().refusal?.text ?? null,
+    overlays: window.__vpaDebug!.interactionOverlays(),
+  }))
+  expect(immediate).toEqual({ count: 2, refusal: null, overlays: [] })
+  await page.keyboard.press('Control+z')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
+  const ctrlTarget = await page.evaluate(() => window.__vpaDebug!.fissionTargets()
+    .find((candidate) => candidate.path.join('/') === 'arg')!)
+  const ctrlStart = await pagePoint(page, ctrlTarget)
+  await page.keyboard.down('Control')
+  await page.mouse.move(ctrlStart.x, ctrlStart.y)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays())).toEqual([])
+  await page.mouse.down()
+  await page.mouse.move(ctrlStart.x + 35, ctrlStart.y + 20, { steps: 4 })
+  await page.mouse.up()
+  await page.keyboard.up('Control')
+  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
+})
 
 test('the contextual spawn cascade is disposable and preserves the construction selection', async ({ page }) => {
   await openApp(page)

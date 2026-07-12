@@ -66,6 +66,7 @@ export function fissionHit(
   const candidates: Array<{ body: Body; occurrence: TermOccurrenceGeometry; distance: number }> = []
   for (const body of engine.bodies.values()) {
     if (body.node?.kind !== 'term' || body.geometry === null) continue
+    if (length(sub(world, body.pos)) > body.discR * engine.scale) continue
     for (const occurrence of body.geometry.occurrences) {
       const distance = occurrenceDistance(engine, body, occurrence, world)
       if (distance <= HIT_RADIUS_PX / viewScale) candidates.push({ body, occurrence, distance })
@@ -133,6 +134,14 @@ function hitPoint(engine: Engine, body: Body, occurrence: TermOccurrenceGeometry
   return localToWorld(engine, body, polar(radial.angle, (radial.r0 + radial.r1) / 2))
 }
 
+export function fissionTargetPoint(engine: Engine, node: NodeId, path: readonly PathSeg[]): Vec2 | null {
+  const body = engine.bodies.get(node)
+  if (body === undefined || body.geometry === null) return null
+  const occurrence = body.geometry.occurrences.find((candidate) => candidate.path.length === path.length
+    && candidate.path.every((segment, index) => segment === path[index]))
+  return occurrence === undefined ? null : hitPoint(engine, body, occurrence)
+}
+
 function geometryShapesAt(engine: Engine, geometry: NodeGeometry, at: Vec2, color: string): Shape[] {
   const scale = ascaleOf('term') * engine.scale
   const shapes: Shape[] = geometry.arcs.map((arc) => ({
@@ -168,6 +177,30 @@ function directRegionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId
 function insideFrame(engine: Engine, point: Vec2): boolean {
   const bounds = frameBounds(engine)
   return bounds === null || (bounds.minX <= point.x && point.x <= bounds.maxX && bounds.minY <= point.y && point.y <= bounds.maxY)
+}
+
+function placementValid(engine: Engine, diagram: Diagram, nodeId: NodeId, at: Vec2): boolean {
+  if (!insideFrame(engine, at)) return false
+  const body = engine.bodies.get(nodeId)
+  const node = diagram.nodes[nodeId]
+  if (body === undefined || node?.kind !== 'term') return false
+  if (length(sub(at, body.pos)) <= body.discR * engine.scale) return false
+  return directRegionAt(engine, diagram, at) === node.region
+}
+
+export function fissionDropPoint(engine: Engine, diagram: Diagram, nodeId: NodeId): Vec2 | null {
+  const body = engine.bodies.get(nodeId)
+  if (body === undefined) return null
+  const distance = body.discR * engine.scale + 2
+  for (let index = 0; index < 32; index += 1) {
+    const angle = index * Math.PI / 16
+    const candidate = {
+      x: body.pos.x + Math.cos(angle) * distance,
+      y: body.pos.y + Math.sin(angle) * distance,
+    }
+    if (placementValid(engine, diagram, nodeId, candidate)) return candidate
+  }
+  return null
 }
 
 export type FissionDragOptions = {
@@ -236,6 +269,11 @@ export class FissionDragController {
   }
 
   overlay(): readonly Shape[] {
+    if (!this.#options.active()) {
+      this.#hover = null
+      this.#drag = null
+      return []
+    }
     const target = this.#drag?.target ?? this.#hover
     if (target === null) return []
     const body = this.#options.engine().bodies.get(target.node)
@@ -260,11 +298,7 @@ export class FissionDragController {
   dispose(): void { this.cancel() }
 
   #placementValid(preview: DragPreview): boolean {
-    if (!preview.target.valid || !insideFrame(this.#options.engine(), preview.at)) return false
-    const body = this.#options.engine().bodies.get(preview.target.node)
-    const node = this.#options.diagram().nodes[preview.target.node]
-    if (body === undefined || node?.kind !== 'term') return false
-    if (length(sub(preview.at, body.pos)) <= body.discR * this.#options.engine().scale) return false
-    return directRegionAt(this.#options.engine(), this.#options.diagram(), preview.at) === node.region
+    return preview.target.valid
+      && placementValid(this.#options.engine(), this.#options.diagram(), preview.target.node, preview.at)
   }
 }

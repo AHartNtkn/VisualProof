@@ -19,6 +19,7 @@ import { ComprehensionEditor, type ComprehensionEditorDebug } from './comprehens
 import { SpawnCascade } from './interact/spawn'
 import { commitClosedTermSpawn, introducedNodeId } from './interact/closed-term-intro'
 import { seedBodyPlacement } from '../view/placement'
+import { fissionDropPoint, fissionTargetPoint } from './interact/fission'
 
 export type ProofFrontModel = {
   readonly side: FixedSide
@@ -48,6 +49,15 @@ export type ProofFrontDebugState = {
   readonly regions: readonly { id: string; kind: string; x: number; y: number; r: number }[]
   readonly motion: MotionDebugState
   readonly comprehension: ComprehensionEditorDebug | null
+  readonly fissionTargets: readonly {
+    readonly node: string
+    readonly path: readonly string[]
+    readonly x: number
+    readonly y: number
+    readonly dropX: number
+    readonly dropY: number
+  }[]
+  readonly interactionOverlays: readonly string[]
 }
 
 export function frontKeyRoute(focused: boolean, sample: KeySample): KeySample | null {
@@ -286,6 +296,21 @@ export class ProofFrontViewport {
       })),
       motion: this.motion.debugState(performance.now()),
       comprehension: this.#editor?.debugState() ?? null,
+      fissionTargets: [...this.#engine.bodies.values()].flatMap((body) => body.node?.kind === 'term'
+        ? body.geometry!.occurrences.flatMap((occurrence) => {
+          const point = fissionTargetPoint(this.#engine, body.id, occurrence.path)
+          const drop = fissionDropPoint(this.#engine, this.#model.diagram(), body.id)
+          return point === null || drop === null ? [] : [{
+            node: body.id,
+            path: occurrence.path,
+            x: point.x,
+            y: point.y,
+            dropX: drop.x,
+            dropY: drop.y,
+          }]
+        })
+        : []),
+      interactionOverlays: this.#moves.overlay().map((shape) => shape.kind),
     }
   }
 

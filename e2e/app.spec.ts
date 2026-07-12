@@ -38,6 +38,8 @@ declare global {
       companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null
       view(): { scale: number; offsetX: number; offsetY: number }
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[]
+      fissionTargets(): { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]
+      interactionOverlays(): string[]
       regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[]
       wires(): { id: string; x: number; y: number }[]
       interaction(): { selected: readonly { kind: 'node' | 'region' | 'wire'; id: string }[]; pins: string[]; userZoom: number }
@@ -47,8 +49,8 @@ declare global {
         ratio: number
         focused: 'forward' | 'backward'
         met: boolean
-        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null }
-        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null }
+        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
+        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
       }
       motion(): { playing: boolean; morph: string | null; ghosts: number; pulses: number; hover: number; preferences: { conversionAnimation: boolean; connectedMorph: boolean; speed: number; transitionGhosts: boolean; hoverEaseMs: number } }
       comprehension(): null | { bubble: string; cursor: number; historyLength: number; formalBoundary: string[]; materializedBoundary: string[]; externalWires: { draftWire: string; hostWire: string }[]; rect: { left: number; top: number; width: number; height: number }; draftBodies: { node: string; kind: string; x: number; y: number; point: { x: number; y: number } }[]; draftWires: { wire: string; point: { x: number; y: number } | null }[]; hostWires: { wire: string; point: { x: number; y: number } | null }[] }
@@ -140,6 +142,104 @@ test('proof term spawning reuses the edit cascade, refuses open terms, and recor
   await page.keyboard.press('Control+Shift+z')
   await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(before.nodeCount + 1)
+})
+
+test('fission uses the same internal pull gesture in ordinary and both fixed-side proof orientations', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, 'a ((\\x. x) b)')
+  await openMode(page)
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+
+  const canvas = (await page.locator('#c').boundingBox())!
+  const main = await page.evaluate(() => {
+    const target = window.__vpaDebug!.fissionTargets().find((candidate) => candidate.path.join('/') === 'arg')!
+    return { target, view: window.__vpaDebug!.view() }
+  })
+  const mainPoint = (x: number, y: number) => ({
+    x: canvas.x + x * main.view.scale + main.view.offsetX,
+    y: canvas.y + y * main.view.scale + main.view.offsetY,
+  })
+  const mainStart = mainPoint(main.target.x, main.target.y)
+  const mainDrop = mainPoint(main.target.dropX, main.target.dropY)
+  await page.mouse.move(mainStart.x, mainStart.y)
+  await expect.poll(() => page.evaluate(() => {
+    const overlays = window.__vpaDebug!.interactionOverlays()
+    return overlays.includes('arc') && !overlays.includes('circle')
+  })).toBe(true)
+  await page.mouse.down()
+  await page.mouse.move(mainDrop.x, mainDrop.y, { steps: 6 })
+  await page.mouse.up()
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(2)
+
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnTerm(page, 'a ((\\x. x) b)')
+  await openMode(page)
+  await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
+  await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
+  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
+
+  const pullFront = async (side: 'forward' | 'backward'): Promise<void> => {
+    const frontCanvas = page.locator(`.vpa-proof-front-${side} .vpa-proof-front-canvas`)
+    const box = (await frontCanvas.boundingBox())!
+    let previous = ''
+    let stable = 0
+    await expect.poll(async () => {
+      const signature = await page.evaluate((which) => JSON.stringify(window.__vpaDebug!.fixed()![which].bodies
+        .map((body) => [body.id, Math.round(body.x * 2), Math.round(body.y * 2)])), side)
+      stable = signature === previous ? stable + 1 : 0
+      previous = signature
+      return stable
+    }, { timeout: 30_000, intervals: [150, 200, 250] }).toBeGreaterThanOrEqual(3)
+    const state = await page.evaluate((which) => {
+      const front = window.__vpaDebug!.fixed()![which]
+      const target = front.fissionTargets.find((candidate) => candidate.path.join('/') === 'arg')!
+      return { target, view: front.view }
+    }, side)
+    const point = (x: number, y: number) => ({
+      x: box.x + x * state.view.scale + state.view.offsetX,
+      y: box.y + y * state.view.scale + state.view.offsetY,
+    })
+    const start = point(state.target.x, state.target.y)
+    const focused = await page.evaluate(() => window.__vpaDebug!.fixed()!.focused)
+    if (focused !== side) {
+      await page.mouse.click(start.x, start.y)
+      await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.focused)).toBe(side)
+      await page.mouse.move(start.x + 14, start.y + 14)
+    }
+    await page.mouse.move(start.x, start.y)
+    await expect.poll(() => page.evaluate((which) => {
+      const fixed = window.__vpaDebug!.fixed()!
+      const front = fixed[which]
+      return {
+        focused: fixed.focused,
+        motion: front.motion.playing,
+        overlays: front.interactionOverlays,
+      }
+    }, side)).toEqual({ focused: side, motion: false, overlays: expect.arrayContaining(['arc']) })
+    expect(await page.evaluate((which) => window.__vpaDebug!.fixed()![which].interactionOverlays, side)).not.toContain('circle')
+    await page.mouse.down()
+    const current = await page.evaluate(({ which, node, path }) => {
+      const front = window.__vpaDebug!.fixed()![which]
+      const target = front.fissionTargets.find((candidate) => candidate.node === node
+        && candidate.path.join('/') === path)!
+      return { target, view: front.view }
+    }, { which: side, node: state.target.node, path: state.target.path.join('/') })
+    const drop = {
+      x: box.x + current.target.dropX * current.view.scale + current.view.offsetX,
+      y: box.y + current.target.dropY * current.view.scale + current.view.offsetY,
+    }
+    await page.mouse.move(drop.x, drop.y, { steps: 6 })
+    await page.mouse.up()
+    await expect.poll(() => page.evaluate((which) => window.__vpaDebug!.fixed()![which].cursor, side)).toBe(1)
+    await expect.poll(() => page.evaluate((which) => window.__vpaDebug!.fixed()![which].motion.playing, side)).toBe(false)
+    expect(await page.evaluate((which) => window.__vpaDebug!.fixed()![which].bodies.filter((body) => body.kind === 'term').length, side)).toBe(2)
+  }
+
+  await pullFront('forward')
+  await pullFront('backward')
 })
 
 test('both fixed proof fronts share closed-term spawn policy, placement, refusal persistence, and disposal', async ({ page }) => {

@@ -41,6 +41,7 @@ import { ConstructController } from './interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { ProofMoveController } from './interact/moves'
 import { commitClosedTermSpawn, introducedNodeId } from './interact/closed-term-intro'
+import { fissionDropPoint, fissionTargetPoint } from './interact/fission'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
 import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
 import { mountCompass } from './compass'
@@ -1724,6 +1725,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           userZoom: interaction.userZoom,
         }
       },
+      interactionOverlays(): string[] {
+        return [...construct.overlay(), ...proofMoves.overlay()].map((shape) => shape.kind)
+      },
       fixed() {
         return fixedWorkspace?.debugState() ?? null
       },
@@ -1738,6 +1742,22 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       },
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[] {
         return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region }))
+      },
+      fissionTargets(): { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[] {
+        return [...engine.bodies.values()].flatMap((body) => body.node?.kind === 'term'
+          ? body.geometry!.occurrences.flatMap((occurrence) => {
+            const point = fissionTargetPoint(engine, body.id, occurrence.path)
+            const drop = fissionDropPoint(engine, displayed, body.id)
+            return point === null || drop === null ? [] : [{
+              node: body.id,
+              path: occurrence.path,
+              x: point.x,
+              y: point.y,
+              dropX: drop.x,
+              dropY: drop.y,
+            }]
+          })
+          : [])
       },
       diagram(): {
         nodes: { id: string; kind: string; region: string; defId: string | null; binder: string | null }[]
