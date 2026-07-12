@@ -142,7 +142,7 @@ test('proof term spawning reuses the edit cascade, refuses open terms, and recor
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(before.nodeCount + 1)
 })
 
-test('fixed proof fronts expose the same closed-term spawn interaction on their owning side', async ({ page }) => {
+test('both fixed proof fronts share closed-term spawn policy, placement, refusal persistence, and disposal', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await spawnTerm(page, '\\x. x')
@@ -151,17 +151,62 @@ test('fixed proof fronts expose the same closed-term spawn interaction on their 
   await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
   await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
 
-  const front = page.locator('.vpa-proof-front-forward .vpa-proof-front-canvas')
-  const box = (await front.boundingBox())!
-  await page.mouse.click(box.x + box.width * 0.76, box.y + box.height * 0.72, { button: 'right' })
+  const invokeOn = async (side: 'forward' | 'backward', x = 0.76, y = 0.72) => {
+    const front = page.locator(`.vpa-proof-front-${side} .vpa-proof-front-canvas`)
+    const box = (await front.boundingBox())!
+    const invoke = { x: box.x + box.width * x, y: box.y + box.height * y }
+    await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+    return { box, invoke }
+  }
+
+  const forwardBefore = await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.bodies.map(({ id }) => id))
+  const forwardInvocation = await invokeOn('forward')
   const cascade = page.locator('.vpa-spawn-column')
+  await expect(cascade.getByRole('button', { name: 'λ term…', exact: true })).toBeVisible()
+  await expect(cascade.locator('.vpa-spawn-bound-predicate')).toHaveCount(0)
+  await expect(cascade.locator('.vpa-spawn-heading', { hasText: 'Namespaces' })).toHaveCount(0)
   await cascade.getByRole('button', { name: 'λ term…', exact: true }).click()
-  await page.getByLabel('Lambda term to spawn').fill('\\y. y')
-  await page.getByLabel('Lambda term to spawn').press('Enter')
+  const input = page.getByLabel('Lambda term to spawn')
+  await input.fill('free')
+  await input.press('Enter')
+  await expect(cascade).toBeVisible()
+  await expect(page.locator('.vpa-refusal')).toContainText("free ports ['free'] remain")
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(0)
+  await input.fill('\\y. y')
+  await input.press('Enter')
 
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
-  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.bodies.filter((body) => body.kind === 'term').length)).toBe(2)
+  const placedForward = await page.evaluate((oldIds) => {
+    const front = window.__vpaDebug!.fixed()!.forward
+    return {
+      body: front.bodies.find((body) => body.kind === 'term' && !oldIds.includes(body.id)),
+      view: front.view,
+    }
+  }, forwardBefore)
+  expect(placedForward.body).toBeDefined()
+  expect(Math.abs(
+    placedForward.body!.x * placedForward.view.scale + placedForward.view.offsetX
+      - (forwardInvocation.invoke.x - forwardInvocation.box.x),
+  )).toBeLessThan(45)
+  expect(Math.abs(
+    placedForward.body!.y * placedForward.view.scale + placedForward.view.offsetY
+      - (forwardInvocation.invoke.y - forwardInvocation.box.y),
+  )).toBeLessThan(45)
+
+  await invokeOn('backward')
+  await cascade.getByRole('button', { name: 'λ term…', exact: true }).click()
+  await page.getByLabel('Lambda term to spawn').fill('\\z. z')
+  await page.getByLabel('Lambda term to spawn').press('Enter')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(1)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
+  expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.bodies.filter((body) => body.kind === 'term').length)).toBe(2)
+
+  await invokeOn('forward', 0.22, 0.72)
+  await expect(cascade).toBeVisible()
+  await page.evaluate(() => window.__vpaDebug!.dispose())
+  await expect(cascade).toHaveCount(0)
+  await expect(page.locator('.vpa-fixed-side-workspace')).toHaveCount(0)
 })
 
 test('ordinary proving is backward-first, forward is direct, and only fixed-side proving needs snapshots', async ({ page }) => {
