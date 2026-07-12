@@ -9,7 +9,6 @@ import {
   performanceId,
   puzzleId,
   type GameCatalogSource,
-  type KnowledgePoint,
   type PerformanceDefinition,
   type PuzzleDefinition,
   type TeacherIntervention,
@@ -40,107 +39,196 @@ const closed = (builder: DiagramBuilder): DiagramWithBoundary =>
 const backward = (diagram: Diagram, step: ProofStep): Diagram =>
   applyStep(diagram, step, { theorems: new Map(), relations: new Map() }, 'backward')
 
-const knowledgePoints = (clauses: readonly string[]): readonly KnowledgePoint[] =>
-  clauses.map((instruction, index) => ({
-    id: `point-${index + 1}`,
-    instruction,
-    commonError: 'Acts without establishing this condition.',
-    correction: `Recheck the seal: ${instruction}`,
-  }))
-
-const performance = (
-  id: ReturnType<typeof performanceId>,
-  description: string,
-  prerequisites: readonly ReturnType<typeof performanceId>[],
-  clauses: readonly string[],
-  masteryEvidence: string,
-): PerformanceDefinition => ({
-  id,
-  description,
-  prerequisites,
-  knowledgePoints: knowledgePoints(clauses),
-  masteryEvidence,
-  remediation: [],
-})
-
 const performances = (): readonly PerformanceDefinition[] => [
-  performance(
-    RELEASE_PAIRED_VEILS,
-    'Lift one eligible pair of veils without disturbing what it encloses.',
-    [],
-    [
-      'The veils are directly nested.',
-      'Nothing lies between their boundaries.',
-      'Lifting them preserves enclosed content.',
+  {
+    id: RELEASE_PAIRED_VEILS,
+    description: 'Lift one eligible pair of veils without disturbing what it encloses.',
+    prerequisites: [],
+    knowledgePoints: [
+      {
+        id: 'recognize-direct-nesting',
+        instruction: 'The veils are directly nested.',
+        commonError: 'Pairs veils that are not directly nested.',
+        correction: 'Choose two veils whose boundaries are directly nested.',
+      },
+      {
+        id: 'check-empty-annulus',
+        instruction: 'Nothing lies between their boundaries.',
+        commonError: 'Treats separated boundaries as an eligible pair.',
+        correction: 'Confirm that nothing lies between the two boundaries.',
+      },
+      {
+        id: 'preserve-enclosed-content',
+        instruction: 'Lifting them preserves enclosed content.',
+        commonError: 'Removes or changes content enclosed by the inner veil.',
+        correction: 'Lift only the paired boundaries and preserve everything they enclose.',
+      },
     ],
-    'Independently identifies and lifts an eligible pair.',
-  ),
-  performance(
-    RESOLVE_REPEATED_VEILS,
-    'Resolve a seal containing more than one eligible pair.',
-    [RELEASE_PAIRED_VEILS],
-    [
-      'More than one pair may be eligible.',
-      'Either legal order may be used.',
-      'Lifting one pair may expose another.',
+    masteryEvidence: 'Independently identifies and lifts an eligible pair.',
+    remediation: [],
+  },
+  {
+    id: RESOLVE_REPEATED_VEILS,
+    description: 'Resolve a seal containing more than one eligible pair.',
+    prerequisites: [RELEASE_PAIRED_VEILS],
+    knowledgePoints: [
+      {
+        id: 'recognize-multiple-pairs',
+        instruction: 'More than one pair may be eligible.',
+        commonError: 'Stops after finding the first eligible pair.',
+        correction: 'Scan the whole seal for every directly nested eligible pair.',
+      },
+      {
+        id: 'allow-either-order',
+        instruction: 'Either legal order may be used.',
+        commonError: 'Treats one legal pair as the mandatory first move.',
+        correction: 'Choose either currently eligible pair; neither legal order is privileged.',
+      },
+      {
+        id: 'recheck-after-lifting',
+        instruction: 'Lifting one pair may expose another.',
+        commonError: 'Does not inspect the new state after lifting a pair.',
+        correction: 'Recheck the resulting seal for a newly exposed eligible pair.',
+      },
     ],
-    'Completes nested-pair practice without treating one valid order as mandatory.',
-  ),
-  performance(
-    CLEAR_DARK_FIELD,
-    'Clear a complete fragment from an eligible dark field.',
-    [RELEASE_PAIRED_VEILS],
-    [
-      'Clearing is allowed only in the appropriate field.',
-      'The selection must be a complete fragment.',
-      'Clearing can expose an older paired form.',
+    masteryEvidence: 'Completes nested-pair practice without treating one valid order as mandatory.',
+    remediation: [],
+  },
+  {
+    id: CLEAR_DARK_FIELD,
+    description: 'Clear a complete fragment from an eligible dark field.',
+    prerequisites: [RELEASE_PAIRED_VEILS],
+    knowledgePoints: [
+      {
+        id: 'check-clearing-field',
+        instruction: 'Clearing is allowed only in the appropriate field.',
+        commonError: 'Attempts to clear a fragment from an ineligible field.',
+        correction: 'Trace the fragment to a field where clearing is allowed.',
+      },
+      {
+        id: 'select-complete-fragment',
+        instruction: 'The selection must be a complete fragment.',
+        commonError: 'Selects only part of a fragment.',
+        correction: 'Select the whole fragment, including every boundary and mark it contains.',
+      },
+      {
+        id: 'anticipate-exposed-pair',
+        instruction: 'Clearing can expose an older paired form.',
+        commonError: 'Misses the paired form revealed by clearing.',
+        correction: 'Inspect the cleared field for an older pair of directly nested veils.',
+      },
     ],
-    'Clears only the necessary fragment and retrieves paired-veiling.',
-  ),
-  performance(
-    LIFT_SUPPORTED_ECHO,
-    'Lift an exact repeated fragment supported by an older matching form.',
-    [CLEAR_DARK_FIELD],
-    [
-      'The outer support must already exist.',
-      'The echo must match exactly.',
-      'Lifting the echo leaves its support in place.',
+    masteryEvidence: 'Clears only the necessary fragment and retrieves paired-veiling.',
+    remediation: [],
+  },
+  {
+    id: LIFT_SUPPORTED_ECHO,
+    description: 'Lift an exact repeated fragment supported by an older matching form.',
+    prerequisites: [CLEAR_DARK_FIELD],
+    knowledgePoints: [
+      {
+        id: 'find-outer-support',
+        instruction: 'The outer support must already exist.',
+        commonError: 'Treats an unsupported inner fragment as an echo.',
+        correction: 'First locate the older matching fragment in a surrounding field.',
+      },
+      {
+        id: 'require-exact-match',
+        instruction: 'The echo must match exactly.',
+        commonError: 'Accepts a merely similar fragment as an echo.',
+        correction: 'Compare the complete fragments and require an exact structural match.',
+      },
+      {
+        id: 'retain-outer-support',
+        instruction: 'Lifting the echo leaves its support in place.',
+        commonError: 'Removes the older supporting form with its echo.',
+        correction: 'Lift only the repeated inner fragment and leave the outer support intact.',
+      },
     ],
-    'Distinguishes an exact supported echo from a merely similar fragment.',
-  ),
-  performance(
-    TRACE_SINGLE_MARK_OWNERSHIP,
-    'Trace one mark through veils to the ring that owns it.',
-    [LIFT_SUPPORTED_ECHO],
-    [
-      'A ring owns matching marks throughout its interior.',
-      'Intervening veils do not change ownership.',
-      'A ring dissolves only after it owns no marks.',
+    masteryEvidence: 'Distinguishes an exact supported echo from a merely similar fragment.',
+    remediation: [],
+  },
+  {
+    id: TRACE_SINGLE_MARK_OWNERSHIP,
+    description: 'Trace one mark through veils to the ring that owns it.',
+    prerequisites: [LIFT_SUPPORTED_ECHO],
+    knowledgePoints: [
+      {
+        id: 'trace-ring-interior',
+        instruction: 'A ring owns matching marks throughout its interior.',
+        commonError: 'Treats a matching interior mark as unowned.',
+        correction: 'Trace the mark outward through the ring’s entire interior to its owning ring.',
+      },
+      {
+        id: 'preserve-owner-through-veils',
+        instruction: 'Intervening veils do not change ownership.',
+        commonError: 'Assigns a new owner when a mark crosses a veil.',
+        correction: 'Continue tracing through intervening veils to the same surrounding ring.',
+      },
+      {
+        id: 'dissolve-only-empty-ring',
+        instruction: 'A ring dissolves only after it owns no marks.',
+        commonError: 'Attempts to dissolve a ring that still owns a mark.',
+        correction: 'Remove every mark owned by the ring before dissolving it.',
+      },
     ],
-    'Resolves the single-ring artifact while combining all earlier spatial skills.',
-  ),
-  performance(
-    DISTINGUISH_NESTED_OWNERS,
-    'Keep marks belonging to nested rings independent.',
-    [TRACE_SINGLE_MARK_OWNERSHIP],
-    [
-      'Each ring owns only its corresponding marks.',
-      'Nesting does not merge owners.',
-      'Removing one owner’s material must not capture or release another’s marks.',
+    masteryEvidence: 'Resolves the single-ring artifact while combining all earlier spatial skills.',
+    remediation: [],
+  },
+  {
+    id: DISTINGUISH_NESTED_OWNERS,
+    description: 'Keep marks belonging to nested rings independent.',
+    prerequisites: [TRACE_SINGLE_MARK_OWNERSHIP],
+    knowledgePoints: [
+      {
+        id: 'match-mark-to-own-ring',
+        instruction: 'Each ring owns only its corresponding marks.',
+        commonError: 'Assigns a mark to the wrong surrounding ring.',
+        correction: 'Match each mark to its corresponding ring before changing the seal.',
+      },
+      {
+        id: 'keep-nested-owners-distinct',
+        instruction: 'Nesting does not merge owners.',
+        commonError: 'Treats nested rings as one owner.',
+        correction: 'Track each nested ring as an independent owner.',
+      },
+      {
+        id: 'preserve-other-owner',
+        instruction: 'Removing one owner’s material must not capture or release another’s marks.',
+        commonError: 'Changes another ring’s marks while removing one owner’s material.',
+        correction: 'Remove only material owned by the selected ring and preserve every other ownership relation.',
+      },
     ],
-    'Independently resolves the elective two-ring artifact.',
-  ),
-  performance(
-    SUPPLY_COMPLETE_PATTERN,
-    'Supply a complete pattern for a Myratic hollow.',
-    [TRACE_SINGLE_MARK_OWNERSHIP],
-    [
-      'A hollow may stand for an entire pattern.',
-      'The blank sheet is a complete pattern.',
-      'Committing the loupe replaces every occurrence consistently.',
+    masteryEvidence: 'Independently resolves the elective two-ring artifact.',
+    remediation: [],
+  },
+  {
+    id: SUPPLY_COMPLETE_PATTERN,
+    description: 'Supply a complete pattern for a Myratic hollow.',
+    prerequisites: [TRACE_SINGLE_MARK_OWNERSHIP],
+    knowledgePoints: [
+      {
+        id: 'treat-hollow-as-whole-pattern',
+        instruction: 'A hollow may stand for an entire pattern.',
+        commonError: 'Treats the hollow as a place for only one fragment.',
+        correction: 'Construct one complete seal-pattern for the hollow.',
+      },
+      {
+        id: 'recognize-blank-pattern',
+        instruction: 'The blank sheet is a complete pattern.',
+        commonError: 'Rejects the blank sheet because it contains no marks.',
+        correction: 'Use the blank sheet as a complete zero-mark pattern.',
+      },
+      {
+        id: 'replace-occurrences-consistently',
+        instruction: 'Committing the loupe replaces every occurrence consistently.',
+        commonError: 'Expects the supplied pattern to replace only one occurrence.',
+        correction: 'Commit one pattern for every occurrence owned by the hollow’s ring.',
+      },
     ],
-    'Uses the construction loupe to resolve ∃P.P with the blank sheet.',
-  ),
+    masteryEvidence: 'Uses the construction loupe to resolve ∃P.P with the blank sheet.',
+    remediation: [],
+  },
 ]
 
 function twoVeils(): PuzzleDefinition {
