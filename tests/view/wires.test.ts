@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { mkEngine, DISC_R, worldBindAnchor, carryOver } from '../../src/view/engine'
+import { mkEngine, DISC_R, worldBindAnchor, carryOver, frameSlots } from '../../src/view/engine'
+import { recomputeRegions, resolveOverlaps, establishProofFrame, establishProofSlotShift } from '../../src/view/relax'
 
 const p = (s: string) => parseTerm(s)
 
@@ -76,5 +77,45 @@ describe('proof-wide boundary identity', () => {
     expect(lhsMap).toEqual([0, 1, 2])
     expect(rhsMap).toEqual([1, 0, 2])
     expect(rhsMap).not.toEqual(lhsMap)
+  })
+
+  it('chooses a legal slot shift that shortens the total boundary chord', () => {
+    const steps = [{ diagram: plusComm.lhs.diagram, boundary: plusComm.lhs.boundary }]
+    const probe = mkEngine(steps[0]!.diagram, steps[0]!.boundary)
+    establishProofFrame(probe, steps)
+    const frame = probe.frame!
+    const shift = establishProofSlotShift(frame, steps)
+    const count = steps[0]!.boundary.length
+    const bounds = {
+      minX: frame.center.x - frame.half,
+      maxX: frame.center.x + frame.half,
+      minY: frame.center.y - frame.half,
+      maxY: frame.center.y + frame.half,
+      frameR: frame.half,
+      center: frame.center,
+    }
+    const slots = frameSlots(bounds, count)
+    const totalChord = (candidateShift: number): number => {
+      const engine = mkEngine(plusComm.lhs.diagram, plusComm.lhs.boundary)
+      recomputeRegions(engine)
+      resolveOverlaps(engine)
+      let total = 0
+      engine.boundary.forEach((wire, index) => {
+        const bind = engine.wires.get(wire)?.binds[0]
+        if (bind === undefined) return
+        const port = worldBindAnchor(engine, engine.bodies.get(bind.body)!, bind.key)
+        const slot = slots[(index + candidateShift) % count]!
+        total += Math.hypot(slot.point.x - port.x, slot.point.y - port.y)
+      })
+      return total
+    }
+
+    expect(shift).toBeGreaterThanOrEqual(0)
+    expect(shift).toBeLessThan(count)
+    const chosen = totalChord(shift)
+    for (let candidate = 0; candidate < count; candidate++) {
+      expect(chosen).toBeLessThanOrEqual(totalChord(candidate) + 1e-6)
+    }
+    expect(chosen).toBeLessThan(totalChord(0))
   })
 })

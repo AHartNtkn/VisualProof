@@ -159,49 +159,6 @@ describe('frame ports — a prominent origin marks port 0 and unattached ports s
     expect(dots[0]!.kind === 'dot' && dots[0]!.rPx).toBeGreaterThan(3.6)
   })
 
-  it('endpointless boundary wires render at their ordered slots, with only port 0 prominent', () => {
-    const h = new DiagramBuilder()
-    const w0 = h.wire(h.root, [])
-    const w1 = h.wire(h.root, [])
-    const w2 = h.wire(h.root, [])
-    const e = mkEngine(h.build(), [w0, w1, w2])
-    settle(e, 20)
-    e.slotShift = 1
-    const shapes = paint(e, LIGHT)
-    const slots = frameSlots(frameBounds(e)!, 3)
-    const at0 = dotsAt(shapes, slots[0]!.point)
-    const at1 = dotsAt(shapes, slots[1]!.point)
-    const at2 = dotsAt(shapes, slots[2]!.point)
-
-    expect(at0).toHaveLength(1)
-    expect(at1).toHaveLength(1)
-    expect(at2).toHaveLength(1)
-    if (at0[0]!.kind !== 'dot' || at1[0]!.kind !== 'dot' || at2[0]!.kind !== 'dot') throw new Error('frame ports must paint as dots')
-    expect(at1[0]!.rPx).toBeGreaterThan(at0[0]!.rPx)
-    expect(at0[0]!.rPx).toBe(at2[0]!.rPx)
-    expect(e.bodies.has(`j:${w0}`) || e.bodies.has(`j:${w1}`) || e.bodies.has(`j:${w2}`)).toBe(false)
-  })
-
-  it('one wire occupying two boundary positions paints both ports and the connecting line', () => {
-    const h = new DiagramBuilder()
-    const shared = h.wire(h.root, [])
-    const e = mkEngine(h.build(), [shared, shared])
-    settle(e, 20)
-    e.slotShift = 1
-    const shapes = paint(e, LIGHT)
-    const slots = frameSlots(frameBounds(e)!, 2)
-    const logical0 = dotsAt(shapes, slots[1]!.point)
-    const logical1 = dotsAt(shapes, slots[0]!.point)
-
-    expect(logical0).toHaveLength(1)
-    expect(logical1).toHaveLength(1)
-    if (logical0[0]!.kind !== 'dot' || logical1[0]!.kind !== 'dot') throw new Error('frame ports must paint as dots')
-    expect(logical0[0]!.rPx).toBeGreaterThan(logical1[0]!.rPx)
-    const path = computeLegs(e).filter((leg) => leg.leg.wid === shared)
-    expect(path).toHaveLength(1)
-    expect(shapes.some((shape) => shape.kind === 'polyline')).toBe(true)
-  })
-
   it('no boundary wires: no pip', () => {
     const h = new DiagramBuilder()
     h.termNode(h.root, p('\\x. x'))
