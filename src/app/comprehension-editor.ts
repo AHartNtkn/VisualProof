@@ -338,7 +338,7 @@ export class ComprehensionEditor {
     shapes.push(...this.#construct.overlay(), ...this.#connectionShapes('draft'))
     const slot = resolvedFrameSlot(this.#engine, 0)
     if (slot !== null) shapes.push({ kind: 'dot', center: slot.point, rPx: 8, fill: theme.interaction.selection })
-    this.#surface.render(shapes, this.#view)
+    this.#surface.render({ layers: [{ shapes }] }, this.#view)
     this.#renderGesture()
   }
 

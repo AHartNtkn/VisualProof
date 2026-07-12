@@ -18,10 +18,21 @@ const LABEL_WIDTH_TO_RADIUS = 1.65
 export type CanvasAdapter = {
   readonly size: () => { readonly width: number; readonly height: number }
   readonly syncSize: () => boolean
+  readonly resize: (width: number, height: number) => boolean
   readonly render: (
-    shapes: readonly Shape[],
+    frame: CanvasFrame,
     transform: { readonly scale: number; readonly offsetX: number; readonly offsetY: number },
   ) => void
+}
+
+export type CanvasLayer = {
+  readonly shapes: readonly Shape[]
+  readonly alpha?: number
+}
+
+export type CanvasFrame = {
+  readonly background?: string
+  readonly layers: readonly CanvasLayer[]
 }
 
 /**
@@ -45,9 +56,28 @@ export function adaptCanvas(canvas: HTMLCanvasElement): CanvasAdapter {
       }
       return true
     },
-    render(shapes, transform): void {
+    resize(width, height): boolean {
+      const w = Math.max(1, Math.round(width))
+      const h = Math.max(1, Math.round(height))
+      if (canvas.width === w && canvas.height === h) return false
+      canvas.width = w
+      canvas.height = h
+      return true
+    },
+    render(frame, transform): void {
       ctx.clearRect(0, 0, canvas.width, canvas.height)
-      drawShapes(ctx, shapes, transform)
+      if (frame.background !== undefined) {
+        ctx.fillStyle = frame.background
+        ctx.fillRect(0, 0, canvas.width, canvas.height)
+      }
+      for (const layer of frame.layers) {
+        if (layer.alpha !== undefined) {
+          ctx.save()
+          ctx.globalAlpha = layer.alpha
+        }
+        drawShapes(ctx, layer.shapes, transform)
+        if (layer.alpha !== undefined) ctx.restore()
+      }
     },
   }
 }

@@ -5,7 +5,7 @@ import { carryOver, mkEngine } from '../view/engine'
 import { seedProject } from '../view/relax'
 import type { Shape, Theme } from '../view/paint'
 import { highlightGroup, paint } from '../view/paint'
-import { drawShapes } from '../view/canvas'
+import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { existentialStubs, legPaths } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import type { Hit } from './hittest'
@@ -87,7 +87,7 @@ export class ProofFrontViewport {
   #engine: Engine
   #moves: ProofMoveController
   #editor: ComprehensionEditor | null = null
-  #context: CanvasRenderingContext2D
+  #surface: CanvasAdapter
   #model: ProofFrontModel
   #disposed = false
   #rebuilds = 1
@@ -96,9 +96,7 @@ export class ProofFrontViewport {
     this.canvas = canvas
     this.side = model.side
     this.#model = model
-    const context = canvas.getContext('2d')
-    if (context === null) throw new Error(`the ${model.side} proof canvas has no 2d context`)
-    this.#context = context
+    this.#surface = adaptCanvas(canvas)
     this.#engine = mkEngine(model.diagram(), model.boundary())
     seedProject(this.#engine)
     this.motion = new MotionCoordinator({
@@ -190,12 +188,7 @@ export class ProofFrontViewport {
   }
 
   resize(width: number, height: number): void {
-    const w = Math.max(1, Math.round(width))
-    const h = Math.max(1, Math.round(height))
-    if (this.canvas.width === w && this.canvas.height === h) return
-    this.canvas.width = w
-    this.canvas.height = h
-    this.interaction.fit()
+    if (this.#surface.resize(width, height)) this.interaction.fit()
   }
 
   frame(now = performance.now()): void {
@@ -225,15 +218,14 @@ export class ProofFrontViewport {
     }
     shapes.push(...this.#moves.overlay())
     if (this.#editor !== null) shapes.push(...this.#editor.hostOverlays())
-    this.#context.clearRect(0, 0, this.canvas.width, this.canvas.height)
-    this.#context.fillStyle = theme.canvas
-    this.#context.fillRect(0, 0, this.canvas.width, this.canvas.height)
-    drawShapes(this.#context, shapes, this.view)
-    this.#context.save()
-    this.#context.globalAlpha = this.motion.hoverFraction(now)
-    drawShapes(this.#context, hoverShapes, this.view)
-    this.#context.restore()
-    drawShapes(this.#context, this.motion.overlays(now), this.view)
+    this.#surface.render({
+      background: theme.canvas,
+      layers: [
+        { shapes },
+        { shapes: hoverShapes, alpha: this.motion.hoverFraction(now) },
+        { shapes: this.motion.overlays(now) },
+      ],
+    }, this.view)
     this.#editor?.frame(now)
   }
 
