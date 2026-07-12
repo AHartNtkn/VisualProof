@@ -4,8 +4,14 @@ import { parseInterfaceManifest, validateInterfaceAssets } from './manifest'
 
 const root = process.cwd()
 const manifestPath = resolve(root, 'assets/interface/manifest.json')
-const manifest = parseInterfaceManifest(JSON.parse(readFileSync(manifestPath, 'utf8')))
-const errors = validateInterfaceAssets(root, manifest)
 
-for (const error of errors) console.error(error)
-if (errors.length > 0) process.exit(1)
+try {
+  const manifest = parseInterfaceManifest(JSON.parse(readFileSync(manifestPath, 'utf8')))
+  const errors = validateInterfaceAssets(root, manifest)
+  for (const error of errors) console.error(error)
+  if (errors.length > 0) process.exitCode = 1
+} catch (error) {
+  const detail = (error instanceof Error ? error.message : String(error)).replace(/\s+/g, ' ')
+  console.error(`interface asset validation failed: ${detail}`)
+  process.exitCode = 1
+}
