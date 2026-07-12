@@ -4,7 +4,7 @@ import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
 import { seedProject } from '../view/relax'
 import type { Shape, Theme } from '../view/paint'
-import { highlightGroup, paint } from '../view/paint'
+import { bubbleHues, highlightGroup, paint } from '../view/paint'
 import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { existentialStubs, legPaths } from '../view/wires'
 import type { Vec2 } from '../view/vec'
@@ -16,8 +16,8 @@ import type { FixedSide } from './fixed-side-layout'
 import { MotionCoordinator, type MotionPreferences } from './interact/motion'
 import type { MotionDebugState } from './interact/motion'
 import { ComprehensionEditor, type ComprehensionEditorDebug } from './comprehension-editor'
-import { SpawnCascade } from './interact/spawn'
-import { commitClosedTermSpawn, introducedNodeId } from './interact/closed-term-intro'
+import { ProofSpawnController } from './interact/proof-spawn'
+import { introducedNodeId } from './interact/closed-term-intro'
 import { seedBodyPlacement } from '../view/placement'
 import { fissionDropPoint, fissionTargetPoint } from './interact/fission'
 
@@ -99,7 +99,8 @@ export class ProofFrontViewport {
   readonly motion: MotionCoordinator
   #engine: Engine
   #moves: ProofMoveController
-  #spawn: SpawnCascade
+  #spawn: ProofSpawnController
+  #spawnHoverBinder: RegionId | null = null
   #editor: ComprehensionEditor | null = null
   #surface: CanvasAdapter
   #model: ProofFrontModel
@@ -119,25 +120,22 @@ export class ProofFrontViewport {
       engine: () => this.#engine,
       theme: model.theme,
     })
-    this.#spawn = new SpawnCascade({
+    this.#spawn = new ProofSpawnController({
       host: document.body,
-      spawnTerm: ({ source, invocation }) => {
-        try {
-          const before = model.diagram()
-          const placement = commitClosedTermSpawn(source, invocation, before, (step) => {
-            this.motion.run(step, model.prepare(step), performance.now())
-            return model.diagram()
-          })
-          seedBodyPlacement(this.#engine, placement.node, placement.at)
-          return true
-        } catch (error) {
-          model.refuse(error instanceof Error ? error.message : String(error), invocation.screen)
-          return false
-        }
+      diagram: model.diagram,
+      context: model.context,
+      commit: (step) => {
+        this.motion.run(step, model.prepare(step), performance.now())
+        return model.diagram()
       },
-      spawnRelation: () => false,
-      spawnBoundPredicate: () => false,
-      binderColor: () => { throw new Error('proof term spawning has no bound-predicate entries') },
+      place: (node, at) => seedBodyPlacement(this.#engine, node, at),
+      refuse: model.refuse,
+      binderColor: (binder) => {
+        const color = bubbleHues(model.diagram(), model.theme().bubbleLightness).get(binder)
+        if (color === undefined) throw new Error(`bound-predicate option references missing bubble '${binder}'`)
+        return color
+      },
+      hoverBinder: (binder) => { this.#spawnHoverBinder = binder },
       openChanged: model.changed,
     })
 
@@ -162,11 +160,7 @@ export class ProofFrontViewport {
       fuel: model.fuel,
       openComprehension: (bubble, pointer) => this.#openComprehension(bubble, pointer),
       openSpawn: (sample, region) => {
-        this.#spawn.open(
-          { screen: sample.client, world: sample.world, region },
-          new Map(),
-          [],
-        )
+        this.#spawn.open({ screen: sample.client, world: sample.world, region })
       },
     })
     this.interaction = new InteractiveViewport({
@@ -262,6 +256,7 @@ export class ProofFrontViewport {
     const hover = this.interaction.hover
     this.motion.setHover(hover === null ? null : `${hover.kind}:${hover.id}`, now)
     const hoverShapes: Shape[] = []
+    if (this.#spawnHoverBinder !== null) hoverShapes.push(...highlightGroup(this.#engine, theme, this.#spawnHoverBinder))
     if (hover !== null) {
       const binder = hoverBinder(this.#model.diagram(), hover)
       if (binder !== null) hoverShapes.push(...highlightGroup(this.#engine, theme, binder))

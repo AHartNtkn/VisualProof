@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { applicableActions } from '../../src/app/actions'
@@ -13,7 +12,7 @@ import { applyStep } from '../../src/kernel/proof/step'
 const p = (s: string) => parseTerm(s)
 
 describe('applicableActions', () => {
-  it('offers erasure at positive selections and insertion at negative regions', () => {
+  it('offers erasure contextually while spawning remains on the direct canvas interaction', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('\\x. x'))
     const cut = h.cut(h.root)
@@ -23,14 +22,13 @@ describe('applicableActions', () => {
     const pos = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const atPos = applicableActions(d, pos, ctx).map((a) => a.kind)
     expect(atPos).toContain('erase')
-    expect(atPos).not.toContain('insert')
     expect(atPos).toContain('doubleCutWrap')
     expect(atPos).toContain('iterate')
     expect(atPos).toContain('vacuousWrap')
 
     const neg = mkSelection(d, { region: cut, regions: [], nodes: [], wires: [] })
     const atNeg = applicableActions(d, neg, ctx).map((a) => a.kind)
-    expect(atNeg).toContain('insert')
+    expect(atNeg).not.toContain('insert')
     expect(atNeg).not.toContain('erase')
   })
 
@@ -155,20 +153,6 @@ describe('reference-node gates', () => {
 })
 
 describe('descriptor → step construction (the shell contract)', () => {
-  it('insert: an enumerated insert commits as the shell builds it', () => {
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: cut, regions: [], nodes: [], wires: [] })
-    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('insert')
-    const b = new DiagramBuilder()
-    b.termNode(b.root, p('\\x. \\y. x'))
-    const pattern = mkDiagramWithBoundary(b.build(), [])
-    const out = applyStep(d, { rule: 'insertion', region: cut, pattern, attachments: [], binders: {} }, ctx)
-    expect(Object.values(out.nodes)).toHaveLength(1)
-  })
-
   it('convert: an enumerated convert commits via the certificate path', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('(\\a. a) y'))

@@ -4,10 +4,7 @@ import { termEq } from '../../../src/kernel/term/term'
 import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
 import { DiagramError } from '../../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
-import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyClosedTermIntro } from '../../../src/kernel/rules/intro'
-import { applyInsertion } from '../../../src/kernel/rules/insertion'
 import { RuleError } from '../../../src/kernel/rules/error'
 
 const p = (s: string) => parseTerm(s)
@@ -82,24 +79,6 @@ describe('closed-term introduction', () => {
     expect(() => applyClosedTermIntro(d, d.root, p('\\x. x q'))).toThrowError(RuleError)
     expect(() => applyClosedTermIntro(d, d.root, p('f (\\x. x q)')))
       .toThrowError(/closed-term introduction requires a closed term.*'f'.*'q'/)
-  })
-
-  it('is subsumed by insertion in a negative region: applyInsertion draws the identical shape', () => {
-    // The rule header's negative-region validity argument claims insertion
-    // could already draw this node+wire shape there. Observe it: an
-    // empty-boundary pattern of one term node on a singleton output wire,
-    // inserted into a cut, is fingerprint-identical to closedTermIntro.
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const d = h.build()
-    const t = p('\\x. \\y. x')
-    const b = new DiagramBuilder()
-    const n = b.termNode(b.root, t)
-    b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
-    const pattern = mkDiagramWithBoundary(b.build(), [])
-    const viaInsertion = applyInsertion(d, cut, pattern, [])
-    const viaIntro = applyClosedTermIntro(d, cut, t)
-    expect(exploreForm(viaInsertion)).toBe(exploreForm(viaIntro))
   })
 
   it('rejects an unknown region structurally', () => {

@@ -4,7 +4,8 @@ import type { ConversionCertificate } from '../term/certificate'
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
-import { applyInsertion, applyWireJoin } from '../rules/insertion'
+import { applyWireJoin } from '../rules/wire-join'
+import { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from '../rules/spawn'
 import { applyErasure, applyWireSever } from '../rules/erasure'
 import { applyIteration, applyDeiteration } from '../rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../rules/doublecut'
@@ -35,7 +36,9 @@ export type ProofContext = {
  * deterministic, so replay reproduces the original search).
  */
 export type ProofStep =
-  | { readonly rule: 'insertion'; readonly region: RegionId; readonly pattern: DiagramWithBoundary; readonly attachments: readonly WireId[]; readonly binders: Readonly<Record<RegionId, RegionId>> }
+  | { readonly rule: 'openTermSpawn'; readonly region: RegionId; readonly term: Term }
+  | { readonly rule: 'relationSpawn'; readonly region: RegionId; readonly defId: string; readonly arity: number }
+  | { readonly rule: 'boundRelationSpawn'; readonly region: RegionId; readonly binder: RegionId }
   | { readonly rule: 'wireJoin'; readonly a: WireId; readonly b: WireId }
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
   | { readonly rule: 'wireSever'; readonly wire: WireId; readonly keep: readonly Endpoint[] }
@@ -63,12 +66,14 @@ export type ProofStep =
  * Apply one step. `orientation` is the reasoning direction: 'forward' (the
  * default — replay and forward proving) keeps every gate as stated;
  * 'backward' (acting on a GOAL) flips exactly the polarity-tied gates
- * (erasure, insertion, theorem citation) — the calculus's cut symmetry.
+ * (erasure, atomic spawning, wire joining, theorem citation) — the calculus's cut symmetry.
  * Execution is IDENTICAL either way: one applier per rule, no mirrors.
  */
 export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext, orientation: 'forward' | 'backward' = 'forward'): Diagram {
   switch (step.rule) {
-    case 'insertion': return applyInsertion(d, step.region, step.pattern, step.attachments, new Map(Object.entries(step.binders)), orientation)
+    case 'openTermSpawn': return applyOpenTermSpawn(d, step.region, step.term, orientation)
+    case 'relationSpawn': return applyRelationSpawn(d, step.region, step.defId, step.arity, ctx.relations, orientation)
+    case 'boundRelationSpawn': return applyBoundRelationSpawn(d, step.region, step.binder, orientation)
     case 'wireJoin': return applyWireJoin(d, step.a, step.b, orientation)
     case 'erasure': return applyErasure(d, step.sel, orientation)
     case 'wireSever': return applyWireSever(d, step.wire, step.keep, orientation)

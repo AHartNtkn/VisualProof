@@ -29,7 +29,9 @@ describe('step round-trips through JSON', () => {
 
     const sel = { region: 'r0', regions: ['r1'], nodes: ['n0'], wires: ['w0'] }
     const steps: ProofStep[] = [
-      { rule: 'insertion', region: 'r1', pattern: pat, attachments: ['w0'], binders: {} },
+      { rule: 'openTermSpawn', region: 'r1', term: p('x') },
+      { rule: 'relationSpawn', region: 'r1', defId: 'nat', arity: 1 },
+      { rule: 'boundRelationSpawn', region: 'r1', binder: 'r2' },
       { rule: 'wireJoin', a: 'w0', b: 'w1' },
       { rule: 'erasure', sel },
       { rule: 'wireSever', wire: 'w0', keep: [{ node: 'n0', port: { kind: 'freeVar', name: 'y' } }] },
@@ -61,6 +63,8 @@ describe('step round-trips through JSON', () => {
 
   it('rejects malformed steps loudly', () => {
     expect(() => stepFromJson({ rule: 'nonsense' })).toThrowError(/malformed proof JSON/)
+    expect(() => stepFromJson({ rule: 'insertion', region: 'r1', pattern: {}, attachments: [], binders: {} }))
+      .toThrowError(/unknown rule 'insertion'/)
     expect(() => stepFromJson({ rule: 'erasure', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, extra: 1 }))
       .toThrowError(/unknown field 'extra'/)
     expect(() => stepFromJson({ rule: 'fission', node: 'n0', path: ['sideways'] }))
@@ -144,20 +148,6 @@ describe('certFromJson rejects invalid reduction-step kinds', () => {
       ;(j['certificate'] as { rightSteps: unknown[] }).rightSteps.push({ kind: 'gamma', path: [] })
     }
     expect(() => stepFromJson(j)).toThrowError(/beta\|eta/)
-  })
-})
-
-describe('dwbFromJson validates boundary wire existence', () => {
-  it('rejects a pattern whose boundary references a non-existent wire', () => {
-    const b = new DiagramBuilder()
-    const bn = b.termNode(b.root, p('\\x. x'))
-    const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
-    const pat = mkDiagramWithBoundary(b.build(), [bw])
-    const step: ProofStep = { rule: 'insertion', region: 'r1', pattern: pat, attachments: ['w0'], binders: {} }
-    const j = JSON.parse(JSON.stringify(stepToJson(step))) as Record<string, unknown>
-    const patJson = j['pattern'] as { boundary: string[] }
-    patJson.boundary = ['nonexistent_wire_id']
-    expect(() => stepFromJson(j)).toThrow()
   })
 })
 

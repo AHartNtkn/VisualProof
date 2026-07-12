@@ -1,31 +1,7 @@
-import type { Diagram, RegionId, Wire, WireId } from '../diagram/diagram'
+import type { Diagram, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
 import { isAncestorOrEqual, polarity } from '../diagram/regions'
-import type { DiagramWithBoundary } from '../diagram/boundary'
-import { spliceSubgraph } from '../diagram/subgraph/splice'
 import { RuleError } from './error'
-
-/**
- * Rule 1a (spec §3.1): draw any well-formed subgraph into a NEGATIVE region.
- * Polarity gate here; the splice does the structural work and re-validation.
- */
-export function applyInsertion(
-  d: Diagram,
-  atRegion: RegionId,
-  pattern: DiagramWithBoundary,
-  attachments: readonly WireId[],
-  binders: ReadonlyMap<RegionId, RegionId> = new Map(),
-  orientation: 'forward' | 'backward' = 'forward',
-): Diagram {
-  // backward orientation (reasoning from a goal) flips the gate to POSITIVE:
-  // inserting into a goal's positive region is forward erasure read backwards
-  const need = orientation === 'forward' ? 'negative' : 'positive'
-  const have = polarity(d, atRegion)
-  if (have !== need) {
-    throw new RuleError(`${orientation === 'backward' ? 'backward ' : ''}insertion requires a ${need} region; '${atRegion}' is ${have}`)
-  }
-  return spliceSubgraph(d, atRegion, pattern, attachments, binders)
-}
 
 /**
  * Rule 1b: join two wires (assert identity of their individuals). Replaces

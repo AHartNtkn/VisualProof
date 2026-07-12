@@ -127,9 +127,8 @@ function argWire(e: DerivationCursor, node: NodeId, i: number): WireId {
 
 /**
  * K-trick: mint a node carrying the OPEN term `s` (its frees wired per `attach`)
- * in `region`, off the closed `seed`, restoring the seed after. closedTermIntro
- * handles closed terms; this is the open-term mint the kernel deliberately does
- * not provide as a rule.
+ * in `region`, off the closed `seed`, restoring the seed after. This remains
+ * useful in positive regions where polarity-gated atomic open spawning cannot fire.
  */
 function kOpen(e: DerivationCursor, tag: string, seed: NodeId, region: RegionId, s: Term, attach: Record<string, WireId>): NodeId {
   const seedTerm = e.termOf(seed)
@@ -182,6 +181,60 @@ function refoldSucc(e: DerivationCursor, node: NodeId, args: readonly WireId[]):
     sel: mkSelection(e.cur, { region, regions: [], nodes: [prog, node], wires: [internal] }),
     defId: 'succ', args: [...args],
   })
+}
+
+/** Build Zero(x) ∧ R(x) ∧ ¬(R(y) ∧ Succ(y,z) ∧ ¬R(z)) using only atomic moves. */
+function spawnNatGuard(e: DerivationCursor, region: RegionId): { readonly zero: NodeId; readonly base: NodeId } {
+  const zero = e.spawnRelation('guard: spawn zero', region, 'zero')
+  const base = e.spawnBoundRelation('guard: spawn base atom', region, region)
+  const w0 = argWire(e, zero, 0)
+  e.push('guard: join base line', { rule: 'wireJoin', a: w0, b: argWire(e, base, 0) })
+
+  let snap = e.cur
+  e.push('guard: introduce closure cuts', {
+    rule: 'doubleCutIntro',
+    sel: mkSelection(e.cur, { region, regions: [], nodes: [], wires: [] }),
+  })
+  const outer = e.newCutIn(region, snap)
+  const inner = e.newCutIn(outer, snap)
+
+  snap = e.cur
+  e.push('guard: iterate antecedent atom', {
+    rule: 'iteration',
+    sel: mkSelection(e.cur, { region, regions: [], nodes: [base], wires: [] }),
+    target: outer,
+  })
+  const antecedent = Object.entries(e.cur.nodes).find(([id, node]) =>
+    node.kind === 'atom' && node.region === outer && snap.nodes[id] === undefined)![0]
+
+  e.push('guard: unfold zero anchor', { rule: 'relUnfold', node: zero })
+  const zeroTerm = e.nodeBy(region, ZEROp)
+  snap = e.cur
+  e.push('guard: split closure variable', {
+    rule: 'anchoredWireSplit',
+    wire: w0,
+    witness: zeroTerm,
+    endpoints: [{ node: antecedent, port: { kind: 'arg', index: 0 } }],
+    target: outer,
+  })
+  const localZero = e.newNodeIn(outer, snap, ZEROp)
+  const x = e.wireOf(localZero, 'output')
+  const succTerm = kOpen(e, 'guard: mint successor', localZero, outer, SC(port('x')), { x })
+  const y = e.wireOf(succTerm, 'output')
+  refoldSucc(e, succTerm, [x, y])
+  e.push('guard: erase local zero anchor', {
+    rule: 'erasure',
+    sel: mkSelection(e.cur, { region: outer, regions: [], nodes: [localZero], wires: [] }),
+  })
+  const consequent = e.spawnBoundRelation('guard: spawn consequent atom', inner, region)
+  e.push('guard: join consequent line', { rule: 'wireJoin', a: y, b: argWire(e, consequent, 0) })
+  e.push('guard: refold zero', {
+    rule: 'relFold',
+    sel: mkSelection(e.cur, { region, regions: [], nodes: [zeroTerm], wires: [] }),
+    defId: 'zero',
+    args: [w0],
+  })
+  return { zero: refBy(e, region, 'zero'), base }
 }
 
 // ─── conversion theorems (βη-only: Church PLUS bakes these into normalization) ───
@@ -358,21 +411,12 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   e.push('c1 dcIntro', { rule: 'doubleCutIntro', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }) })
   const cutA = e.newCutIn(e.cur.root, snap)
   const cutB = e.newCutIn(cutA, snap)
-  const jb = new DiagramBuilder()
-  const h1 = jb.termNode(jb.root, F1term)
-  const h2 = jb.termNode(jb.root, F2term)
-  const ns = jb.termNode(jb.root, SC(port('s0')))
-  jb.wire(jb.root, [
-    { node: h1, port: { kind: 'freeVar', name: 's0' } },
-    { node: h2, port: { kind: 'freeVar', name: 's0' } },
-    { node: ns, port: { kind: 'freeVar', name: 's0' } },
-  ])
-  jb.wire(jb.root, [{ node: h1, port: { kind: 'output' } }, { node: h2, port: { kind: 'output' } }])
-  jb.wire(jb.root, [{ node: ns, port: { kind: 'output' } }])
-  snap = e.cur
-  e.push('c2 insert IH+SUCC', { rule: 'insertion', region: cutA, pattern: mkDiagramWithBoundary(jb.build(), []), attachments: [], binders: {} })
-  const H1 = e.newNodeIn(cutA, snap, F1term)
-  const H2 = e.newNodeIn(cutA, snap, F2term)
+  const H1 = e.spawnOpenTerm('c2 spawn IH1', cutA, F1term)
+  const H2 = e.spawnOpenTerm('c2b spawn IH2', cutA, F2term)
+  const nSucc = e.spawnOpenTerm('c2c spawn SUCC', cutA, SC(port('s0')))
+  e.push('c2d join IH arguments', { rule: 'wireJoin', a: e.wireOf(H1, 'freeVar'), b: e.wireOf(H2, 'freeVar') })
+  e.push('c2e join SUCC argument', { rule: 'wireJoin', a: e.wireOf(H1, 'freeVar'), b: e.wireOf(nSucc, 'freeVar') })
+  e.push('c2f join IH outputs', { rule: 'wireJoin', a: e.wireOf(H1, 'output'), b: e.wireOf(H2, 'output') })
   const wyF = e.wireOf(H1, 'freeVar')
   const ohF = e.wireOf(H1, 'output')
   const seedB = e.intro('c3 intro seedB', cutB, ZEROp)
@@ -574,17 +618,14 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   e.push('c1 dcIntro', { rule: 'doubleCutIntro', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }) })
   const cutA = e.newCutIn(e.cur.root, snap)
   const cutB = e.newCutIn(cutA, snap)
-  const jb = new DiagramBuilder()
-  const h1 = jb.termNode(jb.root, PT)
-  const h2 = jb.termNode(jb.root, PT)
-  const ns = jb.termNode(jb.root, SC(port('s0')))
-  jb.wire(jb.root, [{ node: h1, port: { kind: 'freeVar', name: 's0' } }, { node: h2, port: { kind: 'freeVar', name: 's1' } }, { node: ns, port: { kind: 'freeVar', name: 's0' } }])
-  jb.wire(jb.root, [{ node: h1, port: { kind: 'output' } }, { node: h2, port: { kind: 'output' } }])
-  jb.wire(jb.root, [{ node: ns, port: { kind: 'output' } }])
-  const wrJ = jb.wire(jb.root, [{ node: h1, port: { kind: 'freeVar', name: 's1' } }, { node: h2, port: { kind: 'freeVar', name: 's0' } }])
-  snap = e.cur
-  e.push('c2 insert hyp pair+SUCC', { rule: 'insertion', region: cutA, pattern: mkDiagramWithBoundary(jb.build(), [wrJ]), attachments: [wb], binders: {} })
-  const nSf = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined).find((id) => J(e.termOf(id)) === J(SC(port('s0'))))!
+  const H1spawn = e.spawnOpenTerm('c2 spawn hyp1', cutA, PT)
+  const H2spawn = e.spawnOpenTerm('c2b spawn hyp2', cutA, PT)
+  const nSf = e.spawnOpenTerm('c2c spawn SUCC', cutA, SC(port('s0')))
+  e.push('c2d join y arguments', { rule: 'wireJoin', a: e.wireOf(H1spawn, 'freeVar', 's0'), b: e.wireOf(H2spawn, 'freeVar', 's1') })
+  e.push('c2e join SUCC argument', { rule: 'wireJoin', a: e.wireOf(H1spawn, 'freeVar', 's0'), b: e.wireOf(nSf, 'freeVar') })
+  e.push('c2f join hyp outputs', { rule: 'wireJoin', a: e.wireOf(H1spawn, 'output'), b: e.wireOf(H2spawn, 'output') })
+  e.push('c2g attach b to hyp1', { rule: 'wireJoin', a: wb, b: e.wireOf(H1spawn, 'freeVar', 's1') })
+  e.push('c2h attach b to hyp2', { rule: 'wireJoin', a: wb, b: e.wireOf(H2spawn, 'freeVar', 's0') })
   const wyF = e.wireOf(nSf, 'freeVar')
   const H1 = nodeOnWire(e, cutA, PT, 's0', wyF)
   const H2 = nodeOnWire(e, cutA, PT, 's1', wyF)
@@ -692,24 +733,10 @@ function deriveZeroIsNat(ctx: ProofContext): Theorem {
   e.push('vbIntro rB', { rule: 'vacuousIntro', sel: mkSelection(e.cur, { region: cutO, regions: [cutI], nodes: [], wires: [] }), arity: 1 })
   const rB = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'bubble' && r.parent === cutO && snap.regions[id] === undefined)![0]
 
-  // insert Zero(w0) ∧ R(w0) ∧ Cl(R) into rB (negative); atoms bound to rB
-  const pb = new DiagramBuilder()
-  const stub = pb.bubble(pb.root, 1)
-  const pz = pb.ref(stub, 'zero', 1)
-  const pa0 = pb.atom(stub, stub)
-  pb.wire(stub, [{ node: pz, port: { kind: 'arg', index: 0 } }, { node: pa0, port: { kind: 'arg', index: 0 } }])
-  const pcut2 = pb.cut(stub)
-  const pa1 = pb.atom(pcut2, stub)
-  const ps = pb.ref(pcut2, 'succ', 2)
-  pb.wire(pcut2, [{ node: pa1, port: { kind: 'arg', index: 0 } }, { node: ps, port: { kind: 'arg', index: 0 } }])
-  const pcut3 = pb.cut(pcut2)
-  const pa2 = pb.atom(pcut3, stub)
-  pb.wire(pcut2, [{ node: ps, port: { kind: 'arg', index: 1 } }, { node: pa2, port: { kind: 'arg', index: 0 } }])
-  e.push('insert base+closure', { rule: 'insertion', region: rB, pattern: mkDiagramWithBoundary(pb.build(), []), attachments: [], binders: { [stub]: rB } })
-
-  const zrefIn = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero' && n.region === rB)![0]
+  const guard = spawnNatGuard(e, rB)
+  const zrefIn = guard.zero
   const w0 = argWire(e, zrefIn, 0)
-  const a0 = e.cur.wires[w0]!.endpoints.find((ep) => ep.node !== zrefIn)!.node
+  const a0 = guard.base
 
   // iterate the base R(w0) into the conclusion cut → ¬R(w0) (tautological body)
   snap = e.cur
@@ -780,19 +807,7 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   e.push('vbIntro rB', { rule: 'vacuousIntro', sel: mkSelection(e.cur, { region: cO, regions: [cI], nodes: [], wires: [] }), arity: 1 })
   const rBp = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'bubble' && r.parent === cO && snap.regions[id] === undefined)![0]
 
-  const pb = new DiagramBuilder()
-  const stub = pb.bubble(pb.root, 1)
-  const pz = pb.ref(stub, 'zero', 1)
-  const pa0 = pb.atom(stub, stub)
-  pb.wire(stub, [{ node: pz, port: { kind: 'arg', index: 0 } }, { node: pa0, port: { kind: 'arg', index: 0 } }])
-  const pcut2 = pb.cut(stub)
-  const pa1 = pb.atom(pcut2, stub)
-  const ps = pb.ref(pcut2, 'succ', 2)
-  pb.wire(pcut2, [{ node: pa1, port: { kind: 'arg', index: 0 } }, { node: ps, port: { kind: 'arg', index: 0 } }])
-  const pcut3 = pb.cut(pcut2)
-  const pa2 = pb.atom(pcut3, stub)
-  pb.wire(pcut2, [{ node: ps, port: { kind: 'arg', index: 1 } }, { node: pa2, port: { kind: 'arg', index: 0 } }])
-  e.push('insert base+closure', { rule: 'insertion', region: rBp, pattern: mkDiagramWithBoundary(pb.build(), []), attachments: [], binders: { [stub]: rBp } })
+  spawnNatGuard(e, rBp)
 
   // Phase B: iterate nat(n) into cI, instantiate its R with the skeleton's R,
   // bridge the zero witnesses, deiterate base + closure, dcElim → R(n) in cI

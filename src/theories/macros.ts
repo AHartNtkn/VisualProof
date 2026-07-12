@@ -2,9 +2,6 @@ import type { Term } from '../kernel/term/term'
 import { termEq } from '../kernel/term/term'
 import { applyConversion } from '../kernel/rules/conversion'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
-import { mkSelection, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { replayProof, type ProofContext, type ProofStep } from '../kernel/proof/step'
 
 /**
@@ -70,6 +67,32 @@ export class DerivationCursor {
     return this.newNodeIn(region, before, t)
   }
 
+  spawnOpenTerm(tag: string, region: RegionId, term: Term): NodeId {
+    const before = this.cur
+    this.push(tag, { rule: 'openTermSpawn', region, term })
+    return this.newNodeIn(region, before, term)
+  }
+
+  spawnRelation(tag: string, region: RegionId, defId: string): NodeId {
+    const relation = this.ctx.relations.get(defId)
+    if (relation === undefined) throw new Error(`unknown relation '${defId}'`)
+    const before = this.cur
+    this.push(tag, { rule: 'relationSpawn', region, defId, arity: relation.boundary.length })
+    const found = Object.entries(this.cur.nodes).find(([id, node]) =>
+      node.kind === 'ref' && node.region === region && node.defId === defId && before.nodes[id] === undefined)
+    if (found === undefined) throw new Error(`no new '${defId}' relation appeared in region '${region}'`)
+    return found[0]
+  }
+
+  spawnBoundRelation(tag: string, region: RegionId, binder: RegionId): NodeId {
+    const before = this.cur
+    this.push(tag, { rule: 'boundRelationSpawn', region, binder })
+    const found = Object.entries(this.cur.nodes).find(([id, node]) =>
+      node.kind === 'atom' && node.region === region && node.binder === binder && before.nodes[id] === undefined)
+    if (found === undefined) throw new Error(`no new bound relation appeared in region '${region}'`)
+    return found[0]
+  }
+
   /** The cut that appeared directly under `parent` since the `before` snapshot. */
   newCutIn(parent: RegionId, before: Diagram): RegionId {
     const found = Object.entries(this.cur.regions).find(
@@ -122,23 +145,4 @@ export class DerivationCursor {
     }
     return found[0]
   }
-}
-
-/**
- * Live extraction: copy a derived subgraph out of `d` as a self-contained
- * insertion pattern. Derivations prove a fact once, extract it, and insert
- * the copy wherever insertion's polarity gate allows. The selection must be
- * CLOSED — no touching wires, no externally bound atoms — because an open
- * extraction would need attachments or binder bindings the insertion site
- * cannot supply; a closed one inserts with empty attachments and binders.
- */
-export function extractClosedPattern(d: Diagram, sel: SubgraphSelection): DiagramWithBoundary {
-  const ex = extractSubgraph(d, mkSelection(d, sel))
-  if (ex.attachments.length > 0) {
-    throw new Error(`extraction is open: touching wires [${ex.attachments.join(', ')}] would need attachments at the insertion site`)
-  }
-  if (ex.binderStubs.length > 0) {
-    throw new Error(`extraction is open: external binders [${ex.binderAttachments.join(', ')}] would need binder bindings at the insertion site`)
-  }
-  return ex.pattern
 }

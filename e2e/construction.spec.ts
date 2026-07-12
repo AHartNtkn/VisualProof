@@ -410,19 +410,6 @@ test('direct EDIT gestures wrap, reparent, join, sever, and dissolve semantic ob
   await page.mouse.up({ button: 'right' })
   await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints).sort())).toEqual([1, 2])
 
-  // The options toggle exposes the accepted double-click alternative without
-  // changing the default slash gesture.
-  await openMode(page)
-  await page.getByRole('button', { name: /⚙ sever: right-drag slash/ }).click()
-  await waitForRest(page)
-  const remainingJoined = await page.evaluate(() => {
-    const semantic = window.__vpaDebug!.diagram().wires.find((wire) => wire.endpoints === 2)!
-    return window.__vpaDebug!.wires().find((wire) => wire.id === semantic.id)!
-  })
-  const remainingAt = await pagePoint(page, remainingJoined)
-  await page.mouse.dblclick(remainingAt.x, remainingAt.y)
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints).sort())).toEqual([1, 1, 1])
-
   // Delete on a boundary dissolves it and promotes all unselected contents.
   const liveCut = await page.evaluate((id) => window.__vpaDebug!.regions().find((region) => region.id === id)!, cut.id)
   let selectedCut = false

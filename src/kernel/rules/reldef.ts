@@ -24,7 +24,7 @@ import { wireAt } from './access'
 /**
  * Unfold: splice the relation body onto the reference's argument wires and drop
  * the reference. The body's boundary stub i merges into arg-i's wire (the same
- * splice path insertion uses), so the body lands attached exactly where the
+ * shared splice path uses), so the body lands attached exactly where the
  * reference's argument lines were.
  */
 export function applyRelUnfold(

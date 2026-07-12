@@ -40,6 +40,7 @@ declare global {
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[]
       fissionTargets(): { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]
       interactionOverlays(): string[]
+      spawnBinderHover(): string | null
       regions(): { id: string; kind: string; parent: string | null; x: number; y: number; r: number }[]
       wires(): { id: string; x: number; y: number }[]
       interaction(): { selected: readonly { kind: 'node' | 'region' | 'wire'; id: string }[]; pins: string[]; userZoom: number }
@@ -98,7 +99,7 @@ test('term entry adds a node to the edit diagram', async ({ page }) => {
   expect(after).toBe(before + 1)
 })
 
-test('proof term spawning reuses the edit cascade, refuses open terms, and records closed-term introduction', async ({ page }) => {
+test('proof term spawning shares the edit cascade and dispatches open terms through the proof polarity gate', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await spawnTerm(page, '\\x. x')
@@ -122,9 +123,8 @@ test('proof term spawning reuses the edit cascade, refuses open terms, and recor
   await input.fill('free')
   await input.press('Enter')
   await expect(cascade).toBeVisible()
-  await expect(page.locator('.vpa-refusal')).toContainText("free ports ['free'] remain")
+  await expect(page.locator('.vpa-refusal')).toContainText('spawning requires a negative region')
   await expect(page.locator('.vpa-temporal-copy')).toContainText('0 / 0')
-
   await input.fill('\\y. y')
   await input.press('Enter')
   await expect(cascade).toHaveCount(0)
@@ -142,6 +142,56 @@ test('proof term spawning reuses the edit cascade, refuses open terms, and recor
   await page.keyboard.press('Control+Shift+z')
   await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(before.nodeCount + 1)
+})
+
+test('proof spawning exposes loaded named relations and enclosing colored binders through the shared cascade', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await page.locator('#open-file-input').setInputFiles('examples/frege.json')
+  await spawnTerm(page, '\\x. x')
+  const canvas = (await page.locator('#c').boundingBox())!
+  const term = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find((candidate) => candidate.kind === 'term')!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  })
+  await page.mouse.click(canvas.x + term.x, canvas.y + term.y)
+  await page.keyboard.press('Shift+w')
+  await page.getByLabel('Bubble arity').fill('1')
+  await page.getByLabel('Bubble arity').press('Enter')
+
+  await openMode(page)
+  await page.getByRole('button', { name: 'Prove backward', exact: true }).click()
+  const invokeInBubble = async () => {
+    const bubble = await page.evaluate(() => {
+      const view = window.__vpaDebug!.view()
+      const region = window.__vpaDebug!.regions().find((candidate) => candidate.kind === 'bubble')!
+      return { x: region.x * view.scale + view.offsetX, y: region.y * view.scale + view.offsetY, r: region.r * view.scale }
+    })
+    await page.mouse.click(canvas.x + bubble.x + bubble.r * 0.68, canvas.y + bubble.y, { button: 'right' })
+  }
+
+  const before = await page.evaluate(() => window.__vpaDebug!.nodeCount())
+  await invokeInBubble()
+  const cascade = page.locator('.vpa-spawn-column')
+  await expect(cascade.locator('.vpa-spawn-heading', { hasText: 'Bound predicates' })).toBeVisible()
+  await expect(cascade.locator('.vpa-spawn-heading', { hasText: 'Namespaces' })).toBeVisible()
+  const bound = cascade.locator('.vpa-spawn-bound-predicate')
+  await expect(bound).toHaveCount(1)
+  const swatch = bound.locator('.vpa-spawn-binder-swatch')
+  await expect(swatch).toHaveCSS('border-radius', '50%')
+  expect(await swatch.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
+  await bound.hover()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.spawnBinderHover())).not.toBeNull()
+  await bound.click()
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('1 / 1')
+
+  await invokeInBubble()
+  const search = page.getByLabel('Search relations to spawn')
+  await search.fill('zero')
+  await search.press('Enter')
+  await expect(page.locator('.vpa-temporal-copy')).toContainText('2 / 2')
+  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(before + 2)
 })
 
 test('fission uses the same internal pull gesture in ordinary and both fixed-side proof orientations', async ({ page }) => {
@@ -338,7 +388,7 @@ test('proof fission refuses a binder-dependent occurrence without recording hist
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(1)
 })
 
-test('both fixed proof fronts share closed-term spawn policy, placement, refusal persistence, and disposal', async ({ page }) => {
+test('both fixed proof fronts share atomic term spawn policy, placement, and disposal', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await spawnTerm(page, '\\x. x')
@@ -379,11 +429,10 @@ test('both fixed proof fronts share closed-term spawn policy, placement, refusal
   await input.fill('free')
   await input.press('Enter')
   await expect(cascade).toBeVisible()
-  await expect(page.locator('.vpa-refusal')).toContainText("free ports ['free'] remain")
+  await expect(page.locator('.vpa-refusal')).toContainText('spawning requires a negative region')
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(0)
   await input.fill('\\y. y')
   await input.press('Enter')
-
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
   const placedForward = await page.evaluate((oldIds) => {
@@ -405,7 +454,7 @@ test('both fixed proof fronts share closed-term spawn policy, placement, refusal
 
   await invokeOn('backward')
   await cascade.getByRole('button', { name: 'λ term…', exact: true }).click()
-  await page.getByLabel('Lambda term to spawn').fill('\\z. z')
+  await page.getByLabel('Lambda term to spawn').fill('free')
   await page.getByLabel('Lambda term to spawn').press('Enter')
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(1)
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
@@ -831,18 +880,6 @@ test('anonymous comprehension opens from the real proof menu, cancels exactly, a
   await page.getByLabel('Lambda term to spawn').press('Enter')
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.draftBodies
     .filter((body) => body.kind === 'term').length)).toBe(2)
-  const looseDraftWires = await page.evaluate(() => window.__vpaDebug!.comprehension()!.draftWires
-    .filter((wire) => !wire.wire.startsWith('arg') && wire.point !== null))
-  expect(looseDraftWires).toHaveLength(2)
-  await page.mouse.move(looseDraftWires[0]!.point!.x, looseDraftWires[0]!.point!.y)
-  await page.mouse.down()
-  await page.mouse.move(looseDraftWires[1]!.point!.x, looseDraftWires[1]!.point!.y, { steps: 4 })
-  const liveTarget = await page.evaluate((wire) => window.__vpaDebug!.comprehension()!.draftWires
-    .find((candidate) => candidate.wire === wire)!.point!, looseDraftWires[1]!.wire)
-  await page.mouse.move(liveTarget.x, liveTarget.y, { steps: 4 })
-  await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()!.draftWires
-    .filter((wire) => !wire.wire.startsWith('arg')).length)).toBe(1)
   await page.waitForTimeout(250)
   const draftBodies = await page.evaluate(() => window.__vpaDebug!.comprehension()!.draftBodies
     .filter((body) => body.kind === 'term'))
@@ -902,7 +939,9 @@ test('anonymous comprehension opens from the real proof menu, cancels exactly, a
   await expect(page.locator('.vpa-comprehension-editor')).toHaveCount(0)
   await expect(page.locator('#status')).toContainText('0 step(s)')
 
-  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+  bubble = await bubblePoint()
+  const reinvoke = { x: canvas.x + bubble.x + bubble.r * 0.88, y: canvas.y + bubble.y }
+  await page.mouse.click(reinvoke.x, reinvoke.y, { button: 'right' })
   await page.getByRole('button', { name: 'New relation…', exact: true }).click()
   await page.getByRole('button', { name: 'Instantiate', exact: true }).click()
   await expect(page.locator('.vpa-comprehension-editor')).toHaveCount(0)

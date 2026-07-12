@@ -12,7 +12,7 @@ import { RuleError } from './error'
  * Soundness: every closed λ-term denotes an individual (its βη-class), so
  * ∃x(x = t) is valid for closed t. Adding a valid, self-contained conjunct
  * to ANY region is sound — in a positive region it is an equivalence
- * (φ ⟺ φ ∧ ψ when ⊨ ψ); in a negative region it is subsumed by insertion.
+ * (φ ⟺ φ ∧ ψ when ⊨ ψ); therefore no polarity gate is required.
  * Hence no polarity gate. The K-trick (convert a host node's term u to
  * `(λv. u) t`, fission at ['arg'], convert back) already derives exactly
  * this whenever a host node exists in the region; the rule removes the host
@@ -20,7 +20,7 @@ import { RuleError } from './error'
  *
  * Open terms must NOT be introducible this way: an open term's value depends
  * on its argument lines, and while ∃x(x = t(ā)) is still valid, the
- * attachment plumbing is exactly what insertion/iteration regulate. The
+ * attachment plumbing belongs to atomic open spawning and iteration. The
  * closed case is the one with zero entanglement.
  */
 export function applyClosedTermIntro(d: Diagram, region: RegionId, term: Term): Diagram {

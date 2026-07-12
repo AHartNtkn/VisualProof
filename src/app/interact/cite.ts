@@ -77,7 +77,7 @@ export function citationStep(
   region?: RegionId,
 ): ProofStep {
   if (candidate.occurrences === null) {
-    if (region === undefined) throw new Error(`closed citation '${candidate.name}' requires an insertion region`)
+    if (region === undefined) throw new Error(`closed citation '${candidate.name}' requires a target region`)
     return {
       rule: 'theorem',
       name: candidate.name,

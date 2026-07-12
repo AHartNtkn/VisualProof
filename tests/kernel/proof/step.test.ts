@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
@@ -109,14 +108,11 @@ describe('applyStep mirrors the direct appliers', () => {
     expect(Object.keys(out.regions).length).toBe(Object.keys(d.regions).length + 2)
   })
 
-  it('insertion and comprehension steps carry their patterns by value', () => {
-    const b = new DiagramBuilder()
-    b.termNode(b.root, pp('\\x. \\y. x'))
-    const pat = mkDiagramWithBoundary(b.build(), [])
+  it('atomic open-term spawning replays through the proof dispatcher', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const d = h.build()
-    const out = applyStep(d, { rule: 'insertion', region: cut, pattern: pat, attachments: [], binders: {} }, ctx)
+    const out = applyStep(d, { rule: 'openTermSpawn', region: cut, term: pp('x') }, ctx)
     expect(Object.values(out.nodes)).toHaveLength(1)
   })
 })

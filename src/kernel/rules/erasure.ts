@@ -9,7 +9,7 @@ import { RuleError } from './error'
 /** Rule 2a (spec §3.1): delete any subgraph from a POSITIVE region. Applied
     with the backward orientation (reasoning from a goal), the gate flips to
     NEGATIVE — the calculus's cut symmetry: erasing from a goal's negative
-    region is forward insertion read right-to-left. The gate stays inside the
+    region is forward erasure read right-to-left. The gate stays inside the
     applier either way; there is no gate-free entry. */
 export function applyErasure(d: Diagram, sel: SubgraphSelection, orientation: 'forward' | 'backward' = 'forward'): Diagram {
   const need = orientation === 'forward' ? 'positive' : 'negative'

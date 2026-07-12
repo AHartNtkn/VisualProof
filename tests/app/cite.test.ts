@@ -65,7 +65,7 @@ describe('infer-first citation candidates', () => {
     expect(citationDirection(d, cut, 'backward')).toBe('forward')
   })
 
-  it('builds matcher-derived and closed insertion steps without manual wire input', () => {
+  it('builds matcher-derived and closed citation steps without manual wire input', () => {
     const { host, first, firstWire, ctx } = fixture()
     const found = citationCandidates(host, [{ kind: 'node', id: first }], host.root, ctx, 'forward', 64)
     const applied = citationStep(host, found.applicable[0]!, 0)

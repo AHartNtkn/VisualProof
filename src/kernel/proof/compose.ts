@@ -37,11 +37,11 @@ function mapOccurrence(iso: DiagramIso, occ: AbstractionOccurrence): Abstraction
  */
 export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
   switch (step.rule) {
-    case 'insertion': {
-      const binders: Record<string, string> = {}
-      for (const [stub, hb] of Object.entries(step.binders)) binders[stub] = mapId(iso.regions, hb, 'region')
-      return { ...step, region: mapId(iso.regions, step.region, 'region'), attachments: step.attachments.map((w) => mapId(iso.wires, w, 'wire')), binders }
-    }
+    case 'openTermSpawn':
+    case 'relationSpawn':
+      return { ...step, region: mapId(iso.regions, step.region, 'region') }
+    case 'boundRelationSpawn':
+      return { ...step, region: mapId(iso.regions, step.region, 'region'), binder: mapId(iso.regions, step.binder, 'region') }
     case 'wireJoin':
       return { ...step, a: mapId(iso.wires, step.a, 'wire'), b: mapId(iso.wires, step.b, 'wire') }
     case 'erasure':

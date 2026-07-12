@@ -40,7 +40,7 @@ describe('equational rules are polarity-free at depths 0..3', () => {
   }
 })
 
-describe('comprehension gates mirror insertion/erasure parity', () => {
+describe('comprehension gates mirror atomic-spawn/erasure parity', () => {
   for (let depth = 0; depth <= 3; depth++) {
     const positive = depth % 2 === 0
     it(`depth ${depth} (${positive ? 'positive' : 'negative'}): abstract ${positive ? 'allowed' : 'rejected'}, instantiate ${positive ? 'rejected' : 'allowed'}`, () => {

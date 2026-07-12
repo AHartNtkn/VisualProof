@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { DerivationCursor, extractClosedPattern } from '../../src/theories/macros'
+import { DerivationCursor } from '../../src/theories/macros'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { termEq } from '../../src/kernel/term/term'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
@@ -79,43 +79,5 @@ describe('intro', () => {
       .toThrowError(/matFree.*closed-term introduction requires a closed term.*'q'/)
     expect(c.steps).toHaveLength(0)
     expect(c.cur).toBe(d)
-  })
-})
-
-describe('extractClosedPattern', () => {
-  it('lifts a derived cut into a pattern that inserts with empty attachments', () => {
-    const b = new DiagramBuilder()
-    const cut = b.cut(b.root)
-    const n = b.termNode(cut, p('\\x. x'))
-    b.wire(cut, [{ node: n, port: { kind: 'output' } }])
-    const d = b.build()
-    const pat = extractClosedPattern(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
-    expect(pat.boundary).toHaveLength(0)
-
-    // usable as-is: insert into a negative region of another diagram
-    const hb = new DiagramBuilder()
-    const hcut = hb.cut(hb.root)
-    const c = new DerivationCursor(hb.build(), ctx)
-    c.push('insert fact', { rule: 'insertion', region: hcut, pattern: pat, attachments: [], binders: {} })
-    const copies = Object.entries(c.cur.regions).filter(
-      ([, r]) => r.kind === 'cut' && r.parent === hcut,
-    )
-    expect(copies).toHaveLength(1)
-    const copied = Object.values(c.cur.nodes).filter(
-      (x) => x.kind === 'term' && x.region === copies[0]![0],
-    )
-    expect(copied).toHaveLength(1)
-  })
-
-  it('rejects an open extraction: a touching wire needs attachments downstream', () => {
-    const b = new DiagramBuilder()
-    const cut = b.cut(b.root)
-    const n = b.termNode(cut, p('\\x. x q'))
-    b.wire(cut, [{ node: n, port: { kind: 'output' } }])
-    b.wire(b.root, [{ node: n, port: { kind: 'freeVar', name: 'q' } }])
-    const d = b.build()
-    expect(() =>
-      extractClosedPattern(d, { region: d.root, regions: [cut], nodes: [], wires: [] }),
-    ).toThrowError(/open/)
   })
 })

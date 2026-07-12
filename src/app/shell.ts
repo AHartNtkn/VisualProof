@@ -40,8 +40,9 @@ import { hitTest, wireHitTest, buildSelection } from './hittest'
 import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
+import { ProofSpawnController } from './interact/proof-spawn'
 import { ProofMoveController } from './interact/moves'
-import { commitClosedTermSpawn, introducedNodeId } from './interact/closed-term-intro'
+import { introducedNodeId } from './interact/closed-term-intro'
 import { fissionDropPoint, fissionTargetPoint } from './interact/fission'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
 import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
@@ -159,6 +160,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let proofMoves!: ProofMoveController
   let comprehensionEditor: ComprehensionEditor | null = null
   let spawnCascade!: SpawnCascade
+  let proofSpawn!: ProofSpawnController
   let spawnHoverBinder: RegionId | null = null
   const feedback = new FeedbackController()
   let lastPointerClient: Vec2 = { x: window.innerWidth / 2, y: window.innerHeight / 2 }
@@ -1252,7 +1254,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       else onUndo()
       return true
     }
-    if (e.key === 'Escape' && spawnCascade.escape()) return true
+    if (e.key === 'Escape' && (spawnCascade.escape() || proofSpawn.close())) return true
     if (e.key === 'Escape' && pending !== null) {
       pending = null
       palettePoint = null
@@ -1409,16 +1411,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     host: document.body,
     spawnTerm: ({ source, invocation }) => {
       try {
-        if (mode === 'prove') {
-          if (proof?.kind !== 'track') throw new Error('closed-term spawning requires an active track proof')
-          const before = currentDiagram()
-          const placement = commitClosedTermSpawn(source, invocation, before, (step) => {
-            applyProofStep(step)
-            return currentDiagram()
-          })
-          seedBodyPlacement(engine, placement.node, placement.at)
-          return true
-        }
         requireEdit()
         const added = spawnTermNode(editDiagram, invocation.region, parseTerm(source))
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
@@ -1455,6 +1447,24 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     binderColor: (binder) => {
       const color = bubbleHues(editDiagram, theme.bubbleLightness).get(binder)
+      if (color === undefined) throw new Error(`bound-predicate option references missing bubble '${binder}'`)
+      return color
+    },
+    hoverBinder: (binder) => { spawnHoverBinder = binder },
+  })
+  proofSpawn = new ProofSpawnController({
+    host: document.body,
+    diagram: currentDiagram,
+    context: () => ctx,
+    commit: (step) => {
+      if (proof?.kind !== 'track') throw new Error('proof spawning requires an active track proof')
+      applyProofStep(step)
+      return currentDiagram()
+    },
+    place: (node, at) => seedBodyPlacement(engine, node, at),
+    refuse,
+    binderColor: (binder) => {
+      const color = bubbleHues(currentDiagram(), theme.bubbleLightness).get(binder)
       if (color === undefined) throw new Error(`bound-predicate option references missing bubble '${binder}'`)
       return color
     },
@@ -1512,11 +1522,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     fuel: () => readCount(fuel.input, 'fuel'),
     openComprehension,
     openSpawn: (sample, region) => {
-      spawnCascade.open(
-        { screen: sample.client, world: sample.world, region },
-        new Map(),
-        [],
-      )
+      proofSpawn.open({ screen: sample.client, world: sample.world, region })
     },
   })
   interaction = new InteractiveViewport({
@@ -1683,6 +1689,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     interaction.dispose()
     construct.dispose()
     spawnCascade.dispose()
+    proofSpawn.dispose()
     proofMoves.dispose()
     comprehensionEditor?.dispose()
     comprehensionEditor = null

@@ -124,10 +124,10 @@ describe('proof session', () => {
     const { lhs, rhs, n } = goalPair()
     const s0 = startSession(lhs, rhs, ctx)
     expect(() => applyForward(s0, {
-      rule: 'insertion',
+      rule: 'openTermSpawn',
       region: currentSide(s0, 'forward').root,
-      pattern: lhs, attachments: [], binders: {},
-    })).toThrowError(/insertion requires a negative region/)
+      term: p('x'),
+    })).toThrowError(/spawning requires a negative region/)
     expect(timelineActiveSteps(s0.forward)).toHaveLength(0)
     void n
   })
@@ -309,28 +309,28 @@ describe('backward undo restores the composed tail', () => {
   })
 })
 
-describe('backward un-erase, un-conversion, un-citation', () => {
-  it('un-erase adds content backward and records the forward erasure', () => {
+describe('backward spawning, un-conversion, un-citation', () => {
+  it('atomic spawning adds open content backward and records the same shared rule', () => {
     const ctx = verifyTheory(buildFregeTheory())
     // goal: a single node; backward: the proof "had" an extra node erased
     const l = new DiagramBuilder()
-    l.termNode(l.root, p('\\x. x'))
+    const l0 = l.termNode(l.root, p('\\x. x'))
+    l.wire(l.root, [{ node: l0, port: { kind: 'output' } }])
     const both = new DiagramBuilder()
-    both.termNode(both.root, p('\\x. x'))
-    both.termNode(both.root, p('\\x. \\y. x'))
+    const b0 = both.termNode(both.root, p('\\x. x'))
+    both.wire(both.root, [{ node: b0, port: { kind: 'output' } }])
+    const bx = both.termNode(both.root, p('x'))
+    both.wire(both.root, [{ node: bx, port: { kind: 'output' } }])
+    both.wire(both.root, [{ node: bx, port: { kind: 'freeVar', name: 'x' } }])
     const lhs = mkDiagramWithBoundary(both.build(), [])
     const rhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx)
-    const pat = new DiagramBuilder()
-    pat.termNode(pat.root, p('\\x. \\y. x'))
     s = applyBackward(s, {
-      rule: 'insertion',
+      rule: 'openTermSpawn',
       region: currentSide(s, 'backward').root,
-      pattern: mkDiagramWithBoundary(pat.build(), []),
-      attachments: [],
-      binders: {},
+      term: p('x'),
     })
-    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('insertion')
+    expect(timelineActiveSteps(s.backward)[0]!.rule).toBe('openTermSpawn')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unErased')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -459,7 +459,7 @@ describe('sideBoundary — prove-mode sides render their statement boundary', ()
 describe('backward proving takes the full vocabulary (shared implementation, flipped gates)', () => {
   const ctx = () => verifyTheory(buildFregeTheory())
 
-  it('erasure applies in NEGATIVE regions backward (forward reading: insertion) and declares green', () => {
+  it('erasure applies in NEGATIVE regions backward and declares green', () => {
     // goal: T at root + cut containing M; lhs: T + empty cut
     const r = new DiagramBuilder()
     const t = r.termNode(r.root, p('\\x. x'))
@@ -574,7 +574,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
 })
 
 describe('backward erasure of externally-bound atoms (binder stubs)', () => {
-  it('the inverse insertion rebinds the atom to its bubble (user bug: iterate a bound predicate, delete it)', () => {
+  it('backward erasure rebinds the atom to its bubble (user bug: iterate a bound predicate, delete it)', () => {
     const c = verifyTheory(buildFregeTheory())
     // goal: cut > bubble(1) > two bound atoms sharing a line
     const r = new DiagramBuilder()

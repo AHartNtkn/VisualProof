@@ -516,7 +516,6 @@ export class ProofMoveController {
   #appendAction(row: (label: string, run: (() => void) | null) => void, action: ActionDescriptor, sel: SubgraphSelection): void {
     switch (action.kind) {
       case 'erase': row(action.label, () => this.#commit(erasureStep(this.#options.diagram(), sel))); return
-      case 'insert': row(action.label, () => this.#openTermInsertion(sel.region)); return
       case 'doubleCutWrap': row(action.label, () => this.#commit({ rule: 'doubleCutIntro', sel })); return
       case 'doubleCutElim': row(action.label, () => this.#commit({ rule: 'doubleCutElim', region: sel.regions[0]! })); return
       case 'vacuousWrap': row(action.label, () => this.#openTextPrompt('Bubble arity', 'bubble arity', (value) => {
@@ -559,14 +558,6 @@ export class ProofMoveController {
       const conversion = applyConversion(this.#options.diagram(), node, term, this.#options.fuel())
       this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, attachments: {} })
     }))
-  }
-
-  #openTermInsertion(region: RegionId): void {
-    this.#openTextPrompt('Insertion term', 'λ-term pattern', (value) => {
-      const builder = new DiagramBuilder()
-      builder.termNode(builder.root, parseTerm(value))
-      this.#commit({ rule: 'insertion', region, pattern: mkDiagramWithBoundary(builder.build(), []), attachments: [], binders: {} })
-    })
   }
 
   #beginCitation(candidate: CitationCandidate): void {

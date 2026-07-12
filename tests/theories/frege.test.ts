@@ -117,9 +117,9 @@ describe('the bundled Frege theory', () => {
     const rules = t.steps.map((step) => step.rule)
     expect(rules).toContain('anchoredWireSplit')
     expect(rules).toContain('anchoredWireContract')
-    expect(rules.filter((rule) => rule === 'iteration')).toHaveLength(1)
-    expect(rules).not.toContain('deiteration')
-    expect(t.steps).toHaveLength(11)
+    expect(rules).toContain('relationSpawn')
+    expect(rules).toContain('boundRelationSpawn')
+    expect(rules).not.toContain('insertion')
 
     const ctx = verifyTheory(theory)
     let replayed = t.lhs.diagram

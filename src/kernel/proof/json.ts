@@ -133,8 +133,12 @@ function appFromJson(v: unknown, what: string): TheoremApplication {
 
 export function stepToJson(s: ProofStep): unknown {
   switch (s.rule) {
-    case 'insertion':
-      return { rule: s.rule, region: s.region, pattern: dwbToJson(s.pattern), attachments: [...s.attachments], binders: { ...s.binders } }
+    case 'openTermSpawn':
+      return { rule: s.rule, region: s.region, term: serializeTerm(s.term) }
+    case 'relationSpawn':
+      return { rule: s.rule, region: s.region, defId: s.defId, arity: s.arity }
+    case 'boundRelationSpawn':
+      return { rule: s.rule, region: s.region, binder: s.binder }
     case 'wireJoin':
       return { rule: s.rule, a: s.a, b: s.b }
     case 'erasure':
@@ -186,12 +190,17 @@ export function stepFromJson(j: unknown): ProofStep {
   if (!isRecord(j)) fail('step must be an object')
   const rule = str(j.rule, 'step.rule')
   switch (rule) {
-    case 'insertion':
-      assertOnlyKeys(j, ['rule', 'region', 'pattern', 'attachments', 'binders'], 'insertion step')
-      if (!isRecord(j.binders)) fail('binders must be an object')
-      const binders: Record<string, string> = {}
-      for (const [k, v] of Object.entries(j.binders)) binders[k] = str(v, `binders['${k}']`)
-      return { rule, region: str(j.region, 'region'), pattern: dwbFromJson(j.pattern), attachments: strArray(j.attachments, 'attachments'), binders }
+    case 'openTermSpawn':
+      assertOnlyKeys(j, ['rule', 'region', 'term'], 'openTermSpawn step')
+      return { rule, region: str(j.region, 'region'), term: termFromJson(j.term, 'term') }
+    case 'relationSpawn': {
+      assertOnlyKeys(j, ['rule', 'region', 'defId', 'arity'], 'relationSpawn step')
+      if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')
+      return { rule, region: str(j.region, 'region'), defId: str(j.defId, 'defId'), arity: j.arity }
+    }
+    case 'boundRelationSpawn':
+      assertOnlyKeys(j, ['rule', 'region', 'binder'], 'boundRelationSpawn step')
+      return { rule, region: str(j.region, 'region'), binder: str(j.binder, 'binder') }
     case 'wireJoin':
       assertOnlyKeys(j, ['rule', 'a', 'b'], 'wireJoin step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }

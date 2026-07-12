@@ -1,5 +1,5 @@
 export { RuleError } from './error'
-export { applyInsertion, applyWireJoin } from './insertion'
+export { applyWireJoin } from './wire-join'
 export { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from './spawn'
 export { applyErasure, applyWireSever } from './erasure'
 export { applyIteration, applyDeiteration } from './iteration'

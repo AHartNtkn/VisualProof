@@ -2,21 +2,15 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { DiagramError } from '../../../src/kernel/diagram/diagram'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { RuleError } from '../../../src/kernel/rules/error'
-import { applyInsertion, applyWireJoin } from '../../../src/kernel/rules/insertion'
+import { applyWireJoin } from '../../../src/kernel/rules/wire-join'
+import { applyOpenTermSpawn } from '../../../src/kernel/rules/spawn'
 import { applyErasure, applyWireSever } from '../../../src/kernel/rules/erasure'
 import { applyIteration } from '../../../src/kernel/rules/iteration'
 import { applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 
 const p = (s: string) => parseTerm(s)
-
-function closedPattern() {
-  const b = new DiagramBuilder()
-  b.termNode(b.root, p('\\x. x'))
-  return mkDiagramWithBoundary(b.build(), [])
-}
 
 function caughtBy(f: () => unknown): unknown {
   try {
@@ -33,11 +27,11 @@ function caughtBy(f: () => unknown): unknown {
  * input — structural DiagramError — no matter which entry point receives it.
  */
 describe('error vocabulary: unknown ids are DiagramError, gate refusals are RuleError', () => {
-  it('applyInsertion with an unknown region throws DiagramError', () => {
+  it('atomic spawning with an unknown region throws DiagramError', () => {
     const h = new DiagramBuilder()
     h.cut(h.root)
     const d = h.build()
-    expect(caughtBy(() => applyInsertion(d, 'ghost', closedPattern(), []))).toBeInstanceOf(DiagramError)
+    expect(caughtBy(() => applyOpenTermSpawn(d, 'ghost', p('x')))).toBeInstanceOf(DiagramError)
   })
 
   it('applyWireJoin with unknown wires throws DiagramError, in either position', () => {
@@ -87,8 +81,8 @@ describe('error vocabulary: unknown ids are DiagramError, gate refusals are Rule
     const cut = h.cut(h.root)
     const n = h.termNode(cut, p('\\x. x'))
     const d = h.build()
-    // insertion at the positive root: a real region, refused by the gate
-    expect(caughtBy(() => applyInsertion(d, d.root, closedPattern(), []))).toBeInstanceOf(RuleError)
+    // atomic spawn at the positive root: a real region, refused by the gate
+    expect(caughtBy(() => applyOpenTermSpawn(d, d.root, p('x')))).toBeInstanceOf(RuleError)
     // erasure at a negative region: a real region, refused by the gate
     const sel = mkSelection(d, { region: cut, regions: [], nodes: [n], wires: [] })
     expect(caughtBy(() => applyErasure(d, sel))).toBeInstanceOf(RuleError)
