@@ -20,6 +20,7 @@ import { convertToHeadNormal, convertToWeakHeadNormal } from '../tactics'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
 import { ConnectionDragController, type ConnectionEnd } from './connection'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
+import { FissionDragController, type FissionRequest } from './fission'
 
 export type ProofOrientation = 'forward' | 'backward'
 
@@ -188,6 +189,7 @@ export type ProofMoveControllerOptions = {
   readonly context: () => ProofContext
   readonly orientation: () => ProofOrientation
   readonly apply: (step: ProofStep) => void
+  readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
   readonly fuel: () => number
@@ -222,6 +224,7 @@ export class ProofMoveController {
   readonly #options: ProofMoveControllerOptions
   readonly #document: Document
   readonly #connection: ConnectionDragController
+  readonly #fission: FissionDragController
   #menu: HTMLDivElement | null = null
   #prompt: HTMLDivElement | null = null
   #drag: IterationDrag | null = null
@@ -252,6 +255,15 @@ export class ProofMoveController {
       },
       refuse: options.refuse,
     })
+    this.#fission = new FissionDragController({
+      active: options.active,
+      diagram: options.diagram,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: options.commitFission,
+      refuse: options.refuse,
+    })
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -271,6 +283,8 @@ export class ProofMoveController {
     if (sample.shiftKey || sample.ctrlKey) return null
     const connection = this.#connection.claim(sample)
     if (connection !== null) return connection
+    const fission = this.#fission.claim(sample)
+    if (fission !== null) return fission
     if (sample.hit?.kind !== 'node' || !this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) return null
     const discovery = discoverProofActions(
       this.#options.diagram(),
@@ -398,10 +412,24 @@ export class ProofMoveController {
   }
 
   overlay(): readonly Shape[] {
-    const out: Shape[] = [...this.#connection.overlay()]
+    const out: Shape[] = [...this.#connection.overlay(), ...this.#fission.overlay()]
     const drag = this.#drag
     if (drag !== null && drag.moved) {
       const color = this.#options.theme().interaction.valid
+      for (const node of drag.sel.nodes) {
+        const body = this.#options.engine().bodies.get(node)
+        if (body !== undefined) out.push({
+          kind: 'circle', center: body.pos, r: body.discR * this.#options.engine().scale + 2,
+          fill: null, stroke: color, width: 2.5, insetColor: null, glow: null,
+        })
+      }
+      for (const region of drag.sel.regions) {
+        const geometry = this.#options.engine().regions.get(region)
+        if (geometry !== undefined) out.push({
+          kind: 'circle', center: geometry.center, r: geometry.radius,
+          fill: null, stroke: color, width: 2.5, insetColor: null, glow: null,
+        })
+      }
       for (const region of drag.targets) {
         if (this.#options.diagram().regions[region]?.kind === 'sheet') continue
         const geometry = this.#options.engine().regions.get(region)
@@ -429,9 +457,13 @@ export class ProofMoveController {
     this.#drag = null
     this.#cycle = null
     this.#connection.cancel()
+    this.#fission.cancel()
   }
 
-  dispose(): void { this.cancel() }
+  dispose(): void { this.cancel(); this.#fission.dispose() }
+
+  passiveSample(sample: PointerSample): void { this.#fission.hover(sample) }
+  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld) }
 
   #commit(step: ProofStep): void {
     try {

@@ -12,6 +12,8 @@ import {
 } from '../../src/app/interact/fission'
 import type { PointerSample } from '../../src/app/interact/viewport'
 import { ConstructController } from '../../src/app/interact/construct'
+import { ProofMoveController } from '../../src/app/interact/moves'
+import { wireHitTest } from '../../src/app/hittest'
 
 const p = (source: string) => parseTerm(source)
 
@@ -172,5 +174,75 @@ describe('Edit fission integration', () => {
     claim!.move(end)
     claim!.release(end, true)
     expect(requests).toEqual([{ node: f.node, path: ['arg'], at: destination }])
+  })
+})
+
+describe('Proof fission integration', () => {
+  it('routes internal anatomy to fission before selected-node iteration', () => {
+    const f = fixture()
+    const requests: FissionRequest[] = []
+    const controller = new ProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => f.diagram,
+      engine: () => f.engine,
+      viewScale: () => 1,
+      selection: () => [{ kind: 'node', id: f.node }],
+      setSelection: () => {},
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      orientation: () => 'forward',
+      apply: () => {},
+      commitFission: (request) => { requests.push(request) },
+      refuse: (text) => { throw new Error(text) },
+      theme: () => LIGHT,
+      fuel: () => 64,
+      openComprehension: () => {},
+      openSpawn: () => {},
+    })
+    const start = sample(f.pointFor(['arg']), f.node)
+    const claim = controller.claim(start)!
+    const body = f.engine.bodies.get(f.node)!
+    const destination = { x: body.pos.x + body.discR * f.engine.scale + 8, y: body.pos.y }
+    const end = sample(destination, f.node)
+    claim.move(end)
+    claim.release(end, true)
+    expect(requests).toEqual([{ node: f.node, path: ['arg'], at: destination }])
+  })
+
+  it('retains iteration elsewhere on the selected node with an enclosing halo', () => {
+    const f = fixture()
+    const fissions: FissionRequest[] = []
+    const controller = new ProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => f.diagram,
+      engine: () => f.engine,
+      viewScale: () => 1,
+      selection: () => [{ kind: 'node', id: f.node }],
+      setSelection: () => {},
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      orientation: () => 'forward',
+      apply: () => {},
+      commitFission: (request) => { fissions.push(request) },
+      refuse: () => {},
+      theme: () => LIGHT,
+      fuel: () => 64,
+      openComprehension: () => {},
+      openSpawn: () => {},
+    })
+    const body = f.engine.bodies.get(f.node)!
+    const offsets = [-0.8, -0.6, -0.4, 0, 0.4, 0.6, 0.8]
+    const iterationPoint = offsets.flatMap((x) => offsets.map((y) => ({
+      x: body.pos.x + x * body.discR * f.engine.scale,
+      y: body.pos.y + y * body.discR * f.engine.scale,
+    }))).find((point) => fissionHit(f.engine, f.diagram, point, 1) === null
+      && wireHitTest(f.engine, point, { scale: 1 }) === null)!
+    expect(iterationPoint).toBeDefined()
+    const claim = controller.claim(sample(iterationPoint, f.node))!
+    claim.move(sample({ x: iterationPoint.x + 1, y: iterationPoint.y + 1 }, f.node))
+    expect(fissions).toEqual([])
+    expect(controller.overlay().some((shape) => shape.kind === 'circle')).toBe(true)
+    expect(controller.overlay().some((shape) => shape.kind === 'arc')).toBe(false)
+    claim.cancel()
   })
 })

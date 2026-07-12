@@ -1489,6 +1489,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     context: () => ctx,
     orientation: () => proofDirection() ?? 'forward',
     apply: applyProofStep,
+    commitFission: ({ node, path, at }) => {
+      const before = currentDiagram()
+      applyProofStep({ rule: 'fission', node, path })
+      seedBodyPlacement(engine, introducedNodeId(before, currentDiagram()), at)
+    },
     refuse: (text, pointer) => refuse(text, pointer),
     theme: () => theme,
     fuel: () => readCount(fuel.input, 'fuel'),
@@ -1520,8 +1525,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       refreshChrome()
     },
     pointerChanged: rememberPointer,
-    passiveSample: (sample) => { if (mode === 'edit') construct.passiveSample(sample) },
-    modifiersChanged: (ctrlHeld) => { construct.modifiersChanged(ctrlHeld) },
+    passiveSample: (sample) => {
+      if (mode === 'edit') construct.passiveSample(sample)
+      else if (mode === 'prove') proofMoves.passiveSample(sample)
+    },
+    modifiersChanged: (ctrlHeld) => {
+      construct.modifiersChanged(ctrlHeld)
+      proofMoves.modifiersChanged(ctrlHeld)
+    },
     keyDown: onKeyDown,
     selectionChanged,
     selectionCommitted: () => {

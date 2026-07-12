@@ -17,7 +17,7 @@ import { MotionCoordinator, type MotionPreferences } from './interact/motion'
 import type { MotionDebugState } from './interact/motion'
 import { ComprehensionEditor, type ComprehensionEditorDebug } from './comprehension-editor'
 import { SpawnCascade } from './interact/spawn'
-import { commitClosedTermSpawn } from './interact/closed-term-intro'
+import { commitClosedTermSpawn, introducedNodeId } from './interact/closed-term-intro'
 import { seedBodyPlacement } from '../view/placement'
 
 export type ProofFrontModel = {
@@ -142,6 +142,11 @@ export class ProofFrontViewport {
       context: model.context,
       orientation: () => model.side,
       apply: (step) => this.motion.run(step, model.prepare(step), performance.now()),
+      commitFission: ({ node, path, at }) => {
+        const before = model.diagram()
+        this.motion.run({ rule: 'fission', node, path }, model.prepare({ rule: 'fission', node, path }), performance.now())
+        seedBodyPlacement(this.#engine, introducedNodeId(before, model.diagram()), at)
+      },
       refuse: model.refuse,
       theme: model.theme,
       fuel: model.fuel,
@@ -164,6 +169,8 @@ export class ProofFrontViewport {
       doubleClick: (sample) => this.#editor === null && this.#moves.doubleClick(sample),
       contextMenu: (sample) => { if (this.#editor === null) this.#moves.contextMenu(sample) },
       pointerChanged: (client) => this.#editor?.hostPointerChanged(client),
+      passiveSample: (sample) => this.#moves.passiveSample(sample),
+      modifiersChanged: (ctrlHeld) => this.#moves.modifiersChanged(ctrlHeld),
       keyDown: (sample) => {
         if (this.#editor !== null) return true
         const routed = frontKeyRoute(model.focused(), sample)

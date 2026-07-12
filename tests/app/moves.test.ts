@@ -84,6 +84,7 @@ function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' =
       applied.push(step)
       diagram = applyStep(diagram, step, proof)
     },
+    commitFission: () => {},
     refuse: (text) => { throw new Error(text) },
     theme: () => LIGHT,
     fuel: () => 64,
@@ -167,6 +168,7 @@ describe('proof context routing', () => {
       context: () => ({ theorems: new Map(), relations: new Map() }),
       orientation: () => 'forward',
       apply: () => {},
+      commitFission: () => {},
       refuse: () => {},
       theme: () => LIGHT,
       fuel: () => 64,
@@ -198,6 +200,7 @@ describe('proof context routing', () => {
       context: () => ({ theorems: new Map(), relations: new Map() }),
       orientation: () => 'forward',
       apply: () => {},
+      commitFission: () => {},
       refuse: () => {},
       theme: () => LIGHT,
       fuel: () => 64,
@@ -399,6 +402,7 @@ describe('proof connection resolution', () => {
       context: () => ({ theorems: new Map(), relations: new Map() }),
       orientation: () => 'forward',
       apply: (step) => { applied.push(step); diagram = applyStep(diagram, step, { theorems: new Map(), relations: new Map() }) },
+      commitFission: () => {},
       refuse: (text) => { throw new Error(text) },
       theme: () => LIGHT,
       fuel: () => 64,
