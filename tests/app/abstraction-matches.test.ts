@@ -3,6 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../src/kernel/term/parse'
+import { applyComprehensionAbstract } from '../../src/kernel/rules/comprehension'
 import {
   createOccurrenceSetState,
   cycleOccurrenceSet,
@@ -84,12 +85,33 @@ describe('exact abstraction candidates', () => {
     expect(result.candidates[0]!.key).toContain(JSON.stringify([shared, shared]))
   })
 
+  test('expands an intrinsically repeated authored boundary into defined ordered arguments', () => {
+    const patternBuilder = new DiagramBuilder()
+    const patternNode = patternBuilder.termNode(patternBuilder.root, p('\\x. x'))
+    const patternWire = patternBuilder.wire(patternBuilder.root, [{ node: patternNode, port: { kind: 'output' } }])
+    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [patternWire, patternWire])
+
+    const hostBuilder = new DiagramBuilder()
+    const hostNode = hostBuilder.termNode(hostBuilder.root, p('\\x. x'))
+    const hostWire = hostBuilder.wire(hostBuilder.root, [{ node: hostNode, port: { kind: 'output' } }])
+    const host = hostBuilder.build()
+    const wrap = mkSelection(host, { region: host.root, regions: [], nodes: [hostNode], wires: [] })
+
+    const result = deriveAbstractionMatches(host, wrap, pattern, { matcherFuel: 32 })
+
+    expect(result.status).toBe('complete')
+    expect(result.candidates).toHaveLength(1)
+    expect(result.candidates[0]!.occurrence.args).toEqual([hostWire, hostWire])
+    expect(result.candidates[0]!.occurrence.args.every((wire) => wire !== undefined)).toBe(true)
+    expect(() => applyComprehensionAbstract(host, wrap, pattern, [result.candidates[0]!.occurrence])).not.toThrow()
+  })
+
   test('distinguishes exhaustive zero matches from matcher exhaustion', () => {
     const simple = new DiagramBuilder()
     const unmatched = simple.termNode(simple.root, p('\\x. \\y. x'))
     const host = simple.build()
     const wrap = mkSelection(host, { region: host.root, regions: [], nodes: [unmatched], wires: [] })
-    const zero = deriveAbstractionMatches(host, wrap, unaryPattern(), { matcherFuel: 1 })
+    const zero = deriveAbstractionMatches(host, wrap, unaryPattern(), { matcherFuel: 8 })
     expect(zero).toMatchObject({ status: 'complete', candidates: [] })
 
     const nested = new DiagramBuilder()

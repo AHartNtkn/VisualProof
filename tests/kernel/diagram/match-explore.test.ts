@@ -52,6 +52,48 @@ describe('exploration matcher — benchmark (visited-state growth)', () => {
   })
 })
 
+describe('exploration matcher — explicit exploration fuel', () => {
+  function identityNodes(count: number) {
+    const b = new DiagramBuilder()
+    for (let i = 0; i < count; i++) b.termNode(b.root, p('\\x. x'))
+    return b.build()
+  }
+
+  function identityPattern(count: number) {
+    const b = new DiagramBuilder()
+    for (let i = 0; i < count; i++) b.termNode(b.root, p('\\x. x'))
+    return mkDiagramWithBoundary(b.build(), [])
+  }
+
+  it('returns explicit exhaustion before exact backtracking completes', () => {
+    const result = findOccurrences(identityNodes(4), identityPattern(2), {
+      fuel: 50,
+      explorationFuel: 1,
+      mode: 'exact',
+      inRegion: 'r0',
+    })
+
+    expect(result.status).toBe('exhausted')
+    expect(result.matches.length).toBeLessThan(choose(4, 2))
+    expect(result.undecided).toEqual([])
+    expect(result.explorationSteps).toBe(1)
+  })
+
+  it('returns every exact match when exploration fuel is sufficient', () => {
+    const result = findOccurrences(identityNodes(4), identityPattern(2), {
+      fuel: 1,
+      explorationFuel: 100,
+      mode: 'exact',
+      inRegion: 'r0',
+    })
+
+    expect(result.status).toBe('complete')
+    expect(result.matches).toHaveLength(choose(4, 2))
+    expect(result.undecided).toEqual([])
+    expect(result.explorationSteps).toBeGreaterThan(1)
+  })
+})
+
 describe('exploration matcher — symmetry collapse is COMPLETE (not over-pruned)', () => {
   // k independent identical pattern nodes into M independent identical host
   // nodes: every k-subset is a distinct occurrence, so exactly C(M,k) matches.

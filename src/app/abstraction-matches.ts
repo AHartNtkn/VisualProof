@@ -62,24 +62,68 @@ function subset<T>(values: Iterable<T>, containing: ReadonlySet<T>): boolean {
   return true
 }
 
-/** Restricted-growth strings enumerate every quotient of ordered boundary positions once. */
-function boundaryQuotients(arity: number): readonly (readonly number[])[] {
-  if (arity === 0) return [[]]
-  const out: number[][] = []
+/** Lazily enumerate every quotient of ordered boundary positions once. */
+function* boundaryQuotients(arity: number): Generator<readonly number[]> {
+  if (arity === 0) {
+    yield []
+    return
+  }
   const current = [0]
-  const visit = (position: number, maximum: number): void => {
+  function* visit(position: number, maximum: number): Generator<readonly number[]> {
     if (position === arity) {
-      out.push([...current])
+      yield [...current]
       return
     }
     for (let next = 0; next <= maximum + 1; next++) {
       current.push(next)
-      visit(position + 1, Math.max(maximum, next))
+      yield* visit(position + 1, Math.max(maximum, next))
       current.pop()
     }
   }
-  visit(1, 0)
-  return out
+  yield* visit(1, 0)
+}
+
+/**
+ * Compose call-site quotient labels with intrinsic repeated boundary-wire
+ * identities, returning the effective attachment index for every authored
+ * boundary position. Class numbering follows first appearance, exactly as
+ * `diagonalize` orders its collapsed boundary.
+ */
+function effectiveBoundaryClasses(
+  boundary: readonly WireId[],
+  quotient: readonly number[],
+): readonly number[] {
+  const parent = quotient.map((_, index) => index)
+  const find = (index: number): number => parent[index] === index
+    ? index
+    : (parent[index] = find(parent[index]!))
+  const unite = (left: number, right: number): void => {
+    const leftRoot = find(left)
+    const rightRoot = find(right)
+    if (leftRoot !== rightRoot) parent[rightRoot] = leftRoot
+  }
+  const firstLabel = new Map<number, number>()
+  const firstWire = new Map<WireId, number>()
+  for (let index = 0; index < quotient.length; index++) {
+    const label = quotient[index]!
+    const wire = boundary[index]!
+    const labelPrior = firstLabel.get(label)
+    if (labelPrior === undefined) firstLabel.set(label, index)
+    else unite(labelPrior, index)
+    const wirePrior = firstWire.get(wire)
+    if (wirePrior === undefined) firstWire.set(wire, index)
+    else unite(wirePrior, index)
+  }
+  const classIndex = new Map<number, number>()
+  return quotient.map((_, index) => {
+    const root = find(index)
+    let effective = classIndex.get(root)
+    if (effective === undefined) {
+      effective = classIndex.size
+      classIndex.set(root, effective)
+    }
+    return effective
+  })
 }
 
 function actuallyEmptyNullary(pattern: DiagramWithBoundary): boolean {
@@ -106,10 +150,10 @@ function candidateKey(
 /**
  * Exhaustively derive exact candidates within the provisional wrap.
  *
- * Matcher fuel counts complete `findOccurrences` calls over the deterministic
- * product of boundary quotients and possible wrap anchors. Running out returns
- * `exhausted`; candidates accumulated so far are explicitly partial and are
- * never presented as a complete result.
+ * Matcher fuel is shared across lazy boundary-quotient production, anchor
+ * dispatch, and the matcher's internal exploration probes. Running out returns
+ * `exhausted`; accumulated candidates are explicitly partial and never
+ * presented as a complete result.
  */
 export function deriveAbstractionMatches(
   host: Diagram,
@@ -128,17 +172,27 @@ export function deriveAbstractionMatches(
   let remaining = options.matcherFuel
 
   for (const quotient of boundaryQuotients(pattern.boundary.length)) {
+    if (remaining === 0) {
+      return { status: 'exhausted', candidates: [...byKey.values()].sort(compareCandidate) }
+    }
+    remaining-- // producing this quotient is orchestration work
+    const effectiveClasses = effectiveBoundaryClasses(pattern.boundary, quotient)
     const searchedPattern = diagonalize(pattern, quotient)
     for (const anchor of anchors) {
       if (remaining === 0) {
         return { status: 'exhausted', candidates: [...byKey.values()].sort(compareCandidate) }
       }
-      remaining--
+      remaining-- // dispatching this anchored search is orchestration work
+      if (remaining === 0) {
+        return { status: 'exhausted', candidates: [...byKey.values()].sort(compareCandidate) }
+      }
       const found = findOccurrences(host, searchedPattern, {
         fuel: options.matcherFuel,
+        explorationFuel: remaining,
         mode: 'exact',
         inRegion: anchor,
       })
+      remaining -= found.explorationSteps
       for (const match of found.matches) {
         const selection = occurrenceToSelection(host, searchedPattern, match)
         const contents = selectionContents(host, selection)
@@ -152,7 +206,7 @@ export function deriveAbstractionMatches(
           throw new Error('subgraphs with atoms bound outside the occurrence cannot be abstracted')
         }
 
-        const args = Object.freeze(quotient.map((boundaryClass) => match.attachments[boundaryClass]!))
+        const args = Object.freeze(effectiveClasses.map((boundaryClass) => match.attachments[boundaryClass]!))
         const footprint = Object.freeze({
           nodes: new Set(contents.allNodes),
           wires: new Set(contents.internalWires),
@@ -161,6 +215,9 @@ export function deriveAbstractionMatches(
         const occurrence = Object.freeze({ sel: selection, args })
         const key = candidateKey(selection, footprint, args)
         byKey.set(key, Object.freeze({ key, occurrence, footprint }))
+      }
+      if (found.status === 'exhausted') {
+        return { status: 'exhausted', candidates: [...byKey.values()].sort(compareCandidate) }
       }
     }
   }

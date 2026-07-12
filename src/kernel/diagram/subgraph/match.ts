@@ -50,6 +50,8 @@ export type UndecidedPair = {
 }
 
 export type MatchResult = {
+  /** Whether the complete exploration space was searched under the separate exploration budget. */
+  readonly status: 'complete' | 'exhausted'
   readonly matches: readonly Occurrence[]
   /**
    * Candidate node pairs whose βη comparison exhausted fuel. Such pairs are
@@ -58,6 +60,8 @@ export type MatchResult = {
    * Exact mode never produces undecided pairs.
    */
   readonly undecided: readonly UndecidedPair[]
+  /** Backtracking probes consumed, independent of beta-eta conversion fuel. */
+  readonly explorationSteps: number
 }
 
 type Idx = {
@@ -145,6 +149,8 @@ export function findOccurrences(
   pattern: DiagramWithBoundary,
   opts: {
     fuel: number
+    /** Optional backtracking-probe budget, separate from beta-eta conversion fuel. */
+    explorationFuel?: number
     inRegion?: RegionId
     openBinders?: ReadonlyMap<RegionId, RegionId>
     mode?: MatchMode
@@ -162,6 +168,22 @@ export function findOccurrences(
   const mode: MatchMode = opts.mode ?? 'betaEta'
   if (!Number.isInteger(fuel) || fuel <= 0) {
     throw new DiagramError(`fuel must be a positive integer, got ${fuel}`)
+  }
+  if (opts.explorationFuel !== undefined
+    && (!Number.isSafeInteger(opts.explorationFuel) || opts.explorationFuel <= 0)) {
+    throw new DiagramError(`exploration fuel must be a positive safe integer, got ${opts.explorationFuel}`)
+  }
+  let explorationRemaining = opts.explorationFuel
+  let explorationSteps = 0
+  let explorationExhausted = false
+  const spendExploration = (): boolean => {
+    if (explorationRemaining === 0) {
+      explorationExhausted = true
+      return false
+    }
+    if (explorationRemaining !== undefined) explorationRemaining--
+    explorationSteps++
+    return true
   }
   const pd = pattern.diagram
   const boundarySet = new Set(pattern.boundary)
@@ -267,6 +289,7 @@ export function findOccurrences(
     ? [opts.inRegion]
     : Object.keys(host.regions).sort()
   for (const R of candidates) {
+    if (explorationExhausted) break
     let ok = true
     for (const hb of openBinders.values()) {
       if (!isAncestorOrEqual(host, hb, R)) { ok = false; break }
@@ -276,7 +299,12 @@ export function findOccurrences(
     assignContainer(rootRegions, rootNodes, R, () => finishWires(R))
     regionMap.delete(effectiveRoot)
   }
-  return { matches, undecided }
+  return {
+    status: explorationExhausted ? 'exhausted' : 'complete',
+    matches,
+    undecided,
+    explorationSteps,
+  }
 
   function termVerdict(pn: NodeId, hn: NodeId): boolean {
     const cached = verdictCache.get(pn)?.get(hn)
@@ -347,14 +375,17 @@ export function findOccurrences(
   // subtrees) then node-phase, then `done`. Subset semantics at the root (extra
   // host content is fine); exact below (matchSubtree's count guards).
   function assignContainer(pRegions: readonly RegionId[], pNodes: readonly NodeId[], R: RegionId, done: () => void): void {
+    if (explorationExhausted) return
     const regionCand = hIdx.childrenOf.get(R)!
     const nodeCand = hIdx.nodesIn.get(R)!
     const placeRegion = (pr: string, k: number, cont: () => void): void => {
+      if (!spendExploration()) return
       const hr = regionCand[k]
       if (hr === undefined || usedRegions.has(hr) || !regionsShallowCompatible(pr, hr)) return
       matchSubtree(pr, hr, cont)
     }
     const placeNode = (pn: string, k: number, cont: () => void): void => {
+      if (!spendExploration()) return
       const hn = nodeCand[k]
       if (hn === undefined || usedNodes.has(hn) || !nodeCompatible(pn, hn)) return
       nodeMap.set(pn, hn)
@@ -388,6 +419,7 @@ export function findOccurrences(
     i: number,
     done: () => void,
   ): void {
+    if (explorationExhausted) return
     if (i === items.length) { done(); return }
     let b = i + 1
     while (b < items.length && colorOf(items[b]!) === colorOf(items[i]!)) b++
@@ -404,9 +436,11 @@ export function findOccurrences(
     b: number,
     cont: () => void,
   ): void {
+    if (explorationExhausted) return
     const m = b - a
     const bindPerm = (indices: readonly number[], perm: readonly number[]): void => {
       const step = (t: number): void => {
+        if (explorationExhausted) return
         if (t === m) { cont(); return }
         place(items[a + t]!, indices[perm[t]!]!, () => step(t + 1))
       }
@@ -422,8 +456,10 @@ export function findOccurrences(
     }
     // increasing index combinations of size m (each host subset once)
     const chooseSubset = (t: number, start: number, chosen: number[]): void => {
+      if (explorationExhausted) return
       if (t === m) { bindSubset(chosen); return }
       for (let k = start; k <= candCount - (m - t); k++) {
+        if (explorationExhausted) return
         chosen.push(k)
         chooseSubset(t + 1, k + 1, chosen)
         chosen.pop()
@@ -451,6 +487,7 @@ export function findOccurrences(
 
   /** Wire images are determined; verify them and record the occurrence. */
   function finishWires(R: RegionId): void {
+    if (explorationExhausted) return
     const wireMap = new Map<WireId, WireId>()
     const usedImages = new Set<WireId>()
 
