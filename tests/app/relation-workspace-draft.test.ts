@@ -120,7 +120,7 @@ describe('relation workspace port model', () => {
   })
 
   test('deleting an optional port removes its pending host binding', () => {
-    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1'])
     draft = insertOptionalPort(draft, 'w1', 0, 'h1')
     const port = currentRelationDraft(draft).ports[0]!
 
@@ -186,7 +186,7 @@ describe('relation workspace port model', () => {
   })
 
   test('each port mutation is one snapshot and undo/redo restores order and bindings', () => {
-    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1', 'w2'])
+    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1', 'w2'])
     const initialLength = draft.history.length
 
     draft = insertOptionalPort(draft, 'w1', 0, 'h1')
@@ -246,8 +246,8 @@ describe('relation workspace port model', () => {
     expect(currentRelationDraft(draft).diagram.nodes).toEqual({})
   })
 
-  test('connection preview is pure and connection commit applies its checked snapshot atomically', () => {
-    const draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+  test('substitution connection preview is pure and connection commit applies its checked host binding atomically', () => {
+    const draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1'])
     const before = currentRelationDraft(draft)
 
     const preview = planRelationConnection(
@@ -274,8 +274,37 @@ describe('relation workspace port model', () => {
     expect(currentRelationDraft(committed).diagram).toBe(before.diagram)
   })
 
+  test('abstraction refuses host bindings before they can enter a draft snapshot', () => {
+    const draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    const before = currentRelationDraft(draft)
+
+    expect(planRelationConnection(
+      draft,
+      { kind: 'draft', wire: 'w1' },
+      { kind: 'host', wire: 'h1' },
+    )).toMatchObject({ ok: false, code: 'host-binding-unavailable' })
+    expect(() => applyRelationConnection(
+      draft,
+      { kind: 'host', wire: 'h1' },
+      { kind: 'draft', wire: 'w1' },
+    )).toThrow(/host bindings.*substitution/i)
+    expect(() => insertOptionalPort(draft, 'w1', 0, 'h1')).toThrow(/host bindings.*substitution/i)
+    expect(() => materializeRelationSnapshot({
+      ...before,
+      ports: [{ id: 'invalid-host-binding', wire: 'w1', kind: 'optional', hostWire: 'h1' }],
+    }, 'abstract')).toThrow(/host bindings.*substitution/i)
+    expect(draft.history).toHaveLength(2)
+    expect(currentRelationDraft(draft)).toBe(before)
+
+    const boundaryOnly = insertOptionalPort(draft, 'w1', 0)
+    expect(currentRelationDraft(boundaryOnly).ports).toEqual([
+      expect.objectContaining({ wire: 'w1', kind: 'optional' }),
+    ])
+    expect(currentRelationDraft(boundaryOnly).ports[0]).not.toHaveProperty('hostWire')
+  })
+
   test('refused connection previews and commits add no snapshot', () => {
-    let draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    let draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1'])
     draft = applyRelationConnection(
       draft,
       { kind: 'draft', wire: 'w1' },
@@ -330,7 +359,7 @@ describe('relation workspace port model', () => {
   })
 
   test('local attachment fuses wire topology and rewrites its port in one snapshot', () => {
-    let draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), twoTermDiagram())
     draft = insertOptionalPort(draft, 'w2', 0, 'h1')
     const port = currentRelationDraft(draft).ports[0]!
 
@@ -360,7 +389,7 @@ describe('relation workspace port model', () => {
   })
 
   test('node deletion retains a bound interface wire and commits one complete snapshot', () => {
-    let draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), twoTermDiagram())
     draft = insertOptionalPort(draft, 'w1', 0, 'h1')
     const before = currentRelationDraft(draft)
 
@@ -434,7 +463,7 @@ describe('relation workspace port model', () => {
   })
 
   test('undo and redo restore fused diagram topology together with bound ports', () => {
-    let draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    let draft = replaceRelationDiagram(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), twoTermDiagram())
     draft = insertOptionalPort(draft, 'w1', 0, 'h1')
     draft = insertOptionalPort(draft, 'w2', 1, 'h2')
     const beforeFusion = currentRelationDraft(draft)
@@ -472,7 +501,7 @@ describe('relation workspace port model', () => {
   })
 
   test('plans external references symmetrically and refuses host-only connections', () => {
-    const draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    const draft = withLooseDraftWires(beginSubstitutionDraft(hostWithBubble(0), 'bubble'), ['w1'])
     const draftFirst = planRelationConnection(draft, { kind: 'draft', wire: 'w1' }, { kind: 'host', wire: 'h1' })
     const hostFirst = planRelationConnection(draft, { kind: 'host', wire: 'h1' }, { kind: 'draft', wire: 'w1' })
 

@@ -95,12 +95,15 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(sourceNodes + 1)
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 
+  await page.waitForTimeout(350)
   const atom = await page.evaluate(() => {
     const view = window.__vpaDebug!.view()
     const body = window.__vpaDebug!.bodies().find(({ kind }) => kind === 'atom')!
     return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
   })
   await page.mouse.click(canvas.x + atom.x, canvas.y + atom.y)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected
+    .some(({ kind }) => kind === 'node'))).toBe(true)
   await page.keyboard.press('Shift+w')
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(1)
   await moveWorkspaceClearOfHistory(page)
@@ -116,6 +119,26 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
   await page.locator('.vpa-temporal-redo').click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
   await expect(page.locator('#status')).toContainText('1 action')
+
+  const committed = await page.evaluate(() => window.__vpaDebug!.proofSnapshot()!)
+  const persistedPlacement = committed.actions[0]!.placements[0]!
+  await page.getByPlaceholder('theorem name').fill('placedAbstraction')
+  await page.getByRole('button', { name: 'Declare / assemble + check', exact: true }).click()
+  const saved = await page.evaluate(() => window.__vpaDebug!.theoryJson())
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await page.locator('#open-file-input').setInputFiles({
+    name: 'placed-abstraction.json', mimeType: 'application/json', buffer: Buffer.from(saved),
+  })
+  const library = page.locator('#library')
+  await library.getByRole('button', { name: '▸ placed-abstraction.json', exact: true }).click()
+  await library.getByRole('button', { name: '▶ Replay', exact: true }).click()
+  await page.keyboard.press('ArrowRight')
+  const replayedAtom = await page.evaluate(() => {
+    const atom = window.__vpaDebug!.bodies().find(({ kind }) => kind === 'atom')!
+    return { x: atom.x, y: atom.y }
+  })
+  expect(Math.hypot(replayedAtom.x - persistedPlacement.x, replayedAtom.y - persistedPlacement.y)).toBeLessThan(10)
 })
 
 test('mounted nested empty marker accepts inside drag, refuses outside, and commits selected or trivial outcomes', async ({ page }) => {
@@ -174,17 +197,18 @@ test('mounted nested empty marker accepts inside drag, refuses outside, and comm
   const cutTarget = await page.evaluate(() => {
     const view = window.__vpaDebug!.view()
     const cut = window.__vpaDebug!.regions().find(({ kind }) => kind === 'cut')!
-    return { id: cut.id, x: cut.x * view.scale + view.offsetX, y: cut.y * view.scale + view.offsetY }
+    return { id: cut.id, x: cut.x * view.scale + view.offsetX, y: cut.y * view.scale + view.offsetY, r: cut.r * view.scale }
   })
   await page.mouse.move(startClient.x, startClient.y)
   await page.mouse.down()
   await page.mouse.move(canvas.x + cutTarget.x + 10, canvas.y + cutTarget.y + 4, { steps: 3 })
-  await page.mouse.move(canvas.x + cutTarget.x, canvas.y + cutTarget.y, { steps: 6 })
+  await page.mouse.move(canvas.x + cutTarget.x + cutTarget.r * 0.42, canvas.y + cutTarget.y, { steps: 6 })
   await page.mouse.up()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerAnchor)).toBe(cutTarget.id)
   const nested = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerPoint!)
 
   const nestedClient = { x: canvas.x + nested.x * view.scale + view.offsetX, y: canvas.y + nested.y * view.scale + view.offsetY }
+  await moveWorkspaceAwayFrom(page, nestedClient.x)
   await page.mouse.move(nestedClient.x, nestedClient.y)
   await page.mouse.down()
   await page.mouse.move(nestedClient.x + 10_000, nestedClient.y + 10_000, { steps: 8 })
@@ -196,6 +220,11 @@ test('mounted nested empty marker accepts inside drag, refuses outside, and comm
   await page.mouse.click(nestedClient.x, nestedClient.y)
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.status())).toContain('1 action')
+  const placedAtom = await page.evaluate(() => {
+    const atom = window.__vpaDebug!.bodies().find(({ kind }) => kind === 'atom')!
+    return { x: atom.x, y: atom.y }
+  })
+  expect(Math.hypot(placedAtom.x - nested.x, placedAtom.y - nested.y)).toBeLessThan(5)
   const selectedNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
 
   await page.locator('.vpa-temporal-undo').click()
@@ -246,6 +275,26 @@ test('mounted normal abstraction derives matches, cycles sets, toggles exclusion
   await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
   await page.getByLabel('Lambda term to spawn').fill('\\x. x')
   await page.getByLabel('Lambda term to spawn').press('Enter')
+  const beforeBinding = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!)
+  const visibleHost = beforeBinding.hostWires.find(({ point }) => point !== null)!
+  await moveWorkspaceAwayFrom(page, visibleHost.point!.x)
+  const bindingPoints = await page.evaluate(({ hostWire }) => {
+    const workspace = window.__vpaDebug!.relationWorkspace()!
+    return {
+      host: workspace.hostWires.find(({ wire, point }) => wire === hostWire && point !== null)!,
+      draft: workspace.draftWires.find(({ point }) => point !== null)!,
+      historyLength: workspace.historyLength,
+    }
+  }, { hostWire: visibleHost.wire })
+  await page.mouse.move(bindingPoints.host.point!.x, bindingPoints.host.point!.y)
+  await page.mouse.down()
+  await page.mouse.move(bindingPoints.draft.point!.x, bindingPoints.draft.point!.y, { steps: 8 })
+  await page.mouse.up()
+  await expect(page.locator('.vpa-refusal')).toContainText(/host bindings.*substitution/i)
+  expect(await page.evaluate(() => ({
+    historyLength: window.__vpaDebug!.relationWorkspace()!.historyLength,
+    externalWires: window.__vpaDebug!.relationWorkspace()!.externalWires,
+  }))).toEqual({ historyLength: bindingPoints.historyLength, externalWires: [] })
   if (await page.locator('.vpa-relation-status[data-status="zero-match"]').count() > 0) {
     await exposeFirstDraftWire(page)
   }
@@ -346,8 +395,14 @@ test('both fixed fronts open and cancel, with real finalization and global histo
   const initialForward = await fixedSnapshot('forward')
   await openFixedAbstraction('forward', 'term')
   expect(await fixedSnapshot('forward')).toEqual(initialForward)
+  const fixedMarker = await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.relationWorkspace!.transaction!.markerPoint!)
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
+  const fixedAtom = await page.evaluate(() => {
+    const atom = window.__vpaDebug!.fixed()!.forward.bodies.find(({ kind }) => kind === 'atom')!
+    return { x: atom.x, y: atom.y }
+  })
+  expect(Math.hypot(fixedAtom.x - fixedMarker.x, fixedAtom.y - fixedMarker.y)).toBeLessThan(10)
 
   await openFixedAbstraction('forward', 'atom')
   await moveWorkspaceClearOfHistory(page)

@@ -50,4 +50,27 @@ describe('authoritative proof snapshots', () => {
     expect(JSON.stringify(proofSnapshot(timeline(diagram, [action(0)]), 'forward')))
       .not.toBe(JSON.stringify(proofSnapshot(timeline(diagram, [action(1)]), 'forward')))
   })
+
+  it('preserves a deeply copied allocation reservation as exact action evidence', () => {
+    const diagram = mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } } })
+    const action: ProofAction = {
+      label: 'reserved introduction',
+      steps: [{ rule: 'closedTermIntro', region: 'r0', term: parseTerm('\\x. x') }],
+      placements: [],
+      allocation: { regions: ['reserved-region'], nodes: ['reserved-node'], wires: ['reserved-wire'] },
+    }
+
+    const snapshot = proofSnapshot(timeline(diagram, [action]), 'forward')
+
+    expect(snapshot.actions[0]).toEqual({
+      label: action.label,
+      steps: expect.any(Array),
+      placements: [],
+      allocation: action.allocation,
+    })
+    expect(snapshot.actions[0]!.allocation).not.toBe(action.allocation)
+    expect(snapshot.actions[0]!.allocation!.regions).not.toBe(action.allocation!.regions)
+    expect(snapshot.actions[0]!.allocation!.nodes).not.toBe(action.allocation!.nodes)
+    expect(snapshot.actions[0]!.allocation!.wires).not.toBe(action.allocation!.wires)
+  })
 })

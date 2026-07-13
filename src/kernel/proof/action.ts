@@ -58,6 +58,14 @@ export function singleStepAction(
   return { label, steps: [step], placements }
 }
 
+/** Stable action-wide placement index: all nodes introduced by every constituent
+    step, ordered only after the complete action has been applied. */
+export function introducedNodeIds(before: Diagram, after: Diagram): readonly NodeId[] {
+  return Object.keys(after.nodes)
+    .filter((id) => before.nodes[id] === undefined)
+    .sort()
+}
+
 export function applyAction(
   diagram: Diagram,
   action: ProofAction,
@@ -81,9 +89,7 @@ export function applyAction(
     afterStep?.(current, stepIndex)
   }
 
-  const introducedNodes = Object.keys(current.nodes)
-    .filter((id) => diagram.nodes[id] === undefined)
-    .sort()
+  const introducedNodes = introducedNodeIds(diagram, current)
   const placed = new Set<number>()
   for (const placement of action.placements) {
     if (!Number.isFinite(placement.x) || !Number.isFinite(placement.y)) {

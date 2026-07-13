@@ -145,8 +145,8 @@ describe('shared relation workspace mechanics', () => {
   })
 
   it('shares checked connection targets and rejects a gesture captured from a stale snapshot', () => {
-    const host = hostWithBubble()
-    let draft = beginAbstractionDraft(host)
+    const host = hostWithBubble(0)
+    let draft = beginSubstitutionDraft(host, 'bubble')
     const initial = currentRelationDraft(draft)
     draft = replaceRelationDiagram(draft, mkDiagram({
       root: initial.diagram.root,

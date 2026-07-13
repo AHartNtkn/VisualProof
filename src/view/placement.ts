@@ -1,3 +1,6 @@
+import type { Diagram } from '../kernel/diagram/diagram'
+import type { PlacementHint } from '../kernel/proof/action'
+import { introducedNodeIds } from '../kernel/proof/action'
 import type { Engine } from './engine'
 import type { Vec2 } from './vec'
 
@@ -32,4 +35,19 @@ export function cancelBodyPlacement(engine: Engine, placement: BodyPlacement): v
 export function seedBodyPlacement(engine: Engine, id: string, at: Vec2): void {
   const body = engine.bodies.get(id)
   if (body !== undefined) body.pos = { ...at }
+}
+
+/** Apply persisted presentation hints after the complete action's diagram has
+    been reconciled into the engine. The kernel validates every index first. */
+export function seedActionPlacements(
+  engine: Engine,
+  before: Diagram,
+  after: Diagram,
+  placements: readonly PlacementHint[],
+): void {
+  const introduced = introducedNodeIds(before, after)
+  for (const placement of placements) {
+    const node = introduced[placement.introducedNode]
+    if (node !== undefined) seedBodyPlacement(engine, node, { x: placement.x, y: placement.y })
+  }
 }

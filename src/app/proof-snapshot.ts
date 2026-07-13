@@ -2,6 +2,7 @@ import { diagramToJson } from '../kernel/diagram/json'
 import { stepToJson } from '../kernel/proof/json'
 import type { TrackDirection, ProofTimeline } from './session'
 import { timelineActiveActions, timelineCurrent } from './session'
+import type { ProofAllocation } from '../kernel/proof/action'
 
 export type ProofSnapshot = {
   readonly diagram: unknown
@@ -13,6 +14,7 @@ export type ProofSnapshot = {
       readonly x: number
       readonly y: number
     }[]
+    readonly allocation?: ProofAllocation
   }[]
   readonly cursor: number
   readonly orientation: TrackDirection
@@ -31,6 +33,11 @@ export function proofSnapshot(
       label: action.label,
       steps: action.steps.map(stepToJson),
       placements: action.placements.map((placement) => ({ ...placement })),
+      ...(action.allocation === undefined ? {} : { allocation: {
+        regions: [...action.allocation.regions],
+        nodes: [...action.allocation.nodes],
+        wires: [...action.allocation.wires],
+      } }),
     })),
     cursor: timeline.cursor,
     orientation,

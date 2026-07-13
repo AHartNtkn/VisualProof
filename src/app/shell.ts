@@ -19,7 +19,7 @@ import type { Shape, Theme } from '../view/paint'
 import { paint, bubbleHues, highlightGroup, LIGHT, THEMES } from '../view/paint'
 import { adaptCanvas } from '../view/canvas'
 import { fitCamera } from '../view/camera'
-import { seedBodyPlacement } from '../view/placement'
+import { seedActionPlacements, seedBodyPlacement } from '../view/placement'
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
 import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
@@ -27,7 +27,7 @@ import type { Replay } from './replay'
 import { mkReplay } from './replay'
 import { emptyDiagram } from './edit'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
-import type { ProofSession, TrackDirection, TrackSession } from './session'
+import type { ProofSession, ProofTimeline, TrackDirection, TrackSession } from './session'
 import {
   startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
   startTrack, applyTrack, undoTrack, redoTrack, moveTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
@@ -660,6 +660,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     sync(false, preserveSelection)
     if (placement !== undefined) seedBodyPlacement(engine, placement.node, placement.at)
   }
+  const seedTimelinePlacements = (timeline: ProofTimeline): void => {
+    if (timeline.cursor === 0) return
+    const before = timeline.states[timeline.cursor - 1]
+    const after = timeline.states[timeline.cursor]
+    const action = timeline.actions[timeline.cursor - 1]
+    if (before !== undefined && after !== undefined && action !== undefined) {
+      seedActionPlacements(engine, before, after, action.placements)
+    }
+  }
   const requireEdit = (): void => {
     if (mode !== 'edit') throw new Error('construction is an EDIT-mode operation; switch modes first')
   }
@@ -737,6 +746,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     carryOver(prevEngine, next)
     seedProject(next)
     engine = next
+    if (replayK > 0) {
+      seedActionPlacements(
+        engine,
+        replay.diagramAt(replayK - 1),
+        displayed,
+        replay.actions[replayK - 1]!.placements,
+      )
+    }
     interaction.reconcileDiagram()
     kernelSel = null
     pending = null
@@ -846,6 +863,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return
     }
     sync()
+    if (proof.kind === 'track') seedTimelinePlacements(proof.track.timeline)
   })
   const onRedo = guard(() => {
     cancelRelationAuthoring()
@@ -871,6 +889,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return
     }
     sync()
+    if (proof.kind === 'track') seedTimelinePlacements(proof.track.timeline)
   })
   const onAssemble = guard(() => {
     if (proof === null) throw new Error('no active proof')
@@ -891,12 +910,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const applyProofAction = (action: ProofAction): void => {
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') {
+      const before = currentTrack(proof.track)
       const next = applyTrack(proof.track, action)
       const step = action.steps[action.steps.length - 1]
       if (step === undefined) throw new Error('proof action has no kernel step')
       mainMotion.run(step, () => {
         proof = { kind: 'track', track: next }
         sync()
+        seedActionPlacements(engine, before, currentTrack(next), action.placements)
       }, performance.now())
       refreshChrome()
       return
@@ -1662,6 +1683,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           cancelRelationAuthoring()
           proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
           sync()
+          seedTimelinePlacements(proof.track.timeline)
         },
       }
     }

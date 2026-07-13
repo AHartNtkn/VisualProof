@@ -149,6 +149,7 @@ export class FixedSideWorkspace {
     const next = moveSide(this.#options.session(), this.#focused, cursor)
     this.#options.commit(next, this.#focused)
     this.reconcile(this.#focused)
+    this.#presentCursor(this.#focused)
   }
 
   cancelGestures(): void {
@@ -219,10 +220,23 @@ export class FixedSideWorkspace {
 
   #prepareAction(side: FixedSide, action: ProofAction): () => void {
     const session = this.#options.session()
+    const before = currentSide(session, side)
     const next = side === 'forward' ? applyForward(session, action) : applyBackward(session, action)
     return () => {
       this.#options.commit(next, side)
       this.reconcile(side)
+      this.#front(side).presentActionPlacements(before, currentSide(next, side), action.placements)
+    }
+  }
+
+  #presentCursor(side: FixedSide): void {
+    const timeline = this.#options.session()[side]
+    if (timeline.cursor === 0) return
+    const before = timeline.states[timeline.cursor - 1]
+    const after = timeline.states[timeline.cursor]
+    const action = timeline.actions[timeline.cursor - 1]
+    if (before !== undefined && after !== undefined && action !== undefined) {
+      this.#front(side).presentActionPlacements(before, after, action.placements)
     }
   }
 
@@ -241,6 +255,7 @@ export class FixedSideWorkspace {
     }
     this.#options.commit(moveSide(session, side, cursor), side)
     this.reconcile(side)
+    this.#presentCursor(side)
     return true
   }
 

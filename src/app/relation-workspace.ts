@@ -1,4 +1,5 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { parseTerm } from '../kernel/term/parse'
 import { applyFission } from '../kernel/rules/fusion'
@@ -91,8 +92,8 @@ export type RelationWorkspaceTransaction = {
 
 export function previewRelationWorkspaceSnapshot(
   snapshot: RelationWorkspaceSnapshot,
-): ReturnType<typeof materializeRelationSnapshot>['relation'] {
-  return materializeRelationSnapshot(snapshot, 'abstract').relation
+): ReturnType<typeof mkDiagramWithBoundary> {
+  return mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire))
 }
 
 export function applyPortStripDrop(

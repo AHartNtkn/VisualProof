@@ -50,6 +50,7 @@ export type RelationConnectionRefusalCode =
   | 'same-local-identity'
   | 'duplicate-external-reference'
   | 'non-root-external-source'
+  | 'host-binding-unavailable'
   | 'invalid-result'
 
 export type RelationConnectionPlan =
@@ -63,6 +64,12 @@ export type RelationConnectionPlan =
     readonly code: RelationConnectionRefusalCode
     readonly message: string
   }
+
+const HOST_BINDING_UNAVAILABLE = 'host bindings are available only during substitution'
+
+function assertHostBindingAllowed(mode: RelationWorkspaceDraft['mode']): void {
+  if (mode === 'abstract') throw new Error(HOST_BINDING_UNAVAILABLE)
+}
 
 function emptyRelation(): Diagram {
   return mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } } })
@@ -133,6 +140,7 @@ function validateSnapshot(draft: RelationWorkspaceDraft, snapshot: RelationWorks
       if (port.hostWire !== undefined) throw new Error(`forced relation port '${port.id}' cannot have a host binding`)
     }
     if (port.hostWire === undefined) continue
+    assertHostBindingAllowed(draft.mode)
     if (draft.host.wires[port.hostWire] === undefined) throw new Error(`host wire '${port.hostWire}' does not exist`)
     const representative = hostRepresentatives.get(port.hostWire)
     if (representative !== undefined && representative !== port.wire) {
@@ -247,6 +255,9 @@ export function materializeRelationSnapshot(
   snapshot: RelationWorkspaceSnapshot,
   mode: RelationWorkspaceDraft['mode'],
 ): MaterializedRelationDraft {
+  if (mode === 'abstract' && snapshot.ports.some((port) => port.hostWire !== undefined)) {
+    assertHostBindingAllowed(mode)
+  }
   if (mode === 'substitute') {
     const unbound = snapshot.ports.find((port) => port.kind === 'optional' && port.hostWire === undefined)
     if (unbound !== undefined) throw new Error(`optional substitution port '${unbound.id}' must be bound or removed before finalization`)
@@ -337,6 +348,14 @@ export function planRelationConnection(
   const target = first.kind === 'draft' && second.kind === 'draft'
     ? { kind: 'draft' as const, wire: second.wire }
     : { kind: 'host' as const, wire: first.kind === 'host' ? first.wire : second.wire }
+
+  if (target.kind === 'host' && draft.mode === 'abstract') {
+    return {
+      ok: false,
+      code: 'host-binding-unavailable',
+      message: HOST_BINDING_UNAVAILABLE,
+    }
+  }
 
   let kind: 'local-fusion' | 'external-reference'
   let snapshot: RelationWorkspaceSnapshot

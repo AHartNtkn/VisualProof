@@ -1,6 +1,6 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
-import type { ProofAction } from '../kernel/proof/action'
+import type { PlacementHint, ProofAction } from '../kernel/proof/action'
 import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
 import { seedProject } from '../view/relax'
@@ -25,7 +25,7 @@ import {
 import { AbstractTransaction } from './relation-transactions'
 import { ProofSpawnController } from './interact/proof-spawn'
 import { introducedNodeId } from './interact/closed-term-intro'
-import { seedBodyPlacement } from '../view/placement'
+import { seedActionPlacements, seedBodyPlacement } from '../view/placement'
 import { fissionDropPoint, fissionTargetPoint } from './interact/fission'
 
 export type ProofFrontModel = {
@@ -241,6 +241,10 @@ export class ProofFrontViewport {
     this.#rebuilds++
     this.interaction.reconcileDiagram(true)
     this.#model.changed()
+  }
+
+  presentActionPlacements(before: Diagram, after: Diagram, placements: readonly PlacementHint[]): void {
+    seedActionPlacements(this.#engine, before, after, placements)
   }
 
   cancelActiveGesture(): void {
