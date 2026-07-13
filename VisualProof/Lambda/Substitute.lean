@@ -131,6 +131,19 @@ def Term.bindFree (σ : α → Term n β) : Term n α → Term n β
   | .lam body => .lam (body.bindFree (fun x => (σ x).lift))
   | .app fn arg => .app (fn.bindFree σ) (arg.bindFree σ)
 
+theorem Term.mapFree_eq_bindFree_ports
+    (term : Term n α) (rename : α → β) :
+    term.mapFree rename =
+      term.bindFree (fun i => Term.port (rename i)) := by
+  induction term with
+  | bvar _ => rfl
+  | port _ => rfl
+  | lam body ih =>
+      simp only [mapFree, bindFree]
+      rw [ih]
+      rfl
+  | app _ _ ihFn ihArg => simp only [mapFree, bindFree, ihFn, ihArg]
+
 theorem Term.renameBound_bindFree
     (t : Term n α) (f : α → Term n β) (ρ : Fin n → Fin m) :
     (t.bindFree f).renameBound ρ =

@@ -46,8 +46,25 @@ theorem quote_bindFree_independent_of_quotes
 structure LambdaModel where
   Carrier : Type
   eval : {n : Nat} → Term 0 (Fin n) → (Fin n → Carrier) → Carrier
+  eval_port : ∀ {n} (i : Fin n) (env : Fin n → Carrier),
+    eval (.port i) env = env i
+  eval_bindFree : ∀ {n m} (term : Term 0 (Fin n))
+      (substitution : Fin n → Term 0 (Fin m))
+      (env : Fin m → Carrier),
+    eval (term.bindFree substitution) env =
+      eval term (fun i => eval (substitution i) env)
   betaEta_sound : ∀ {n} {a b : Term 0 (Fin n)} {env : Fin n → Carrier},
     BetaEta a b → eval a env = eval b env
+
+theorem LambdaModel.eval_mapFree
+    (model : LambdaModel) (rename : Fin n → Fin m)
+    (term : Term 0 (Fin n)) (env : Fin m → model.Carrier) :
+    model.eval (term.mapFree rename) env =
+      model.eval term (env ∘ rename) := by
+  rw [Term.mapFree_eq_bindFree_ports, model.eval_bindFree]
+  apply congrArg (model.eval term)
+  funext i
+  exact model.eval_port (rename i) env
 
 private noncomputable def representative (individual : Individual) : ClosedTerm :=
   Classical.choose (Quotient.exists_rep individual)
@@ -73,6 +90,26 @@ theorem canonicalEval_eq_of_representatives
 noncomputable def canonicalModel : LambdaModel where
   Carrier := Individual
   eval := canonicalEval
+  eval_port := by
+    intro n i env
+    exact quote_representative (env i)
+  eval_bindFree := by
+    intro n m term substitution env
+    let reps : Fin m → ClosedTerm := fun i => representative (env i)
+    let substitutedReps : Fin n → ClosedTerm :=
+      fun i => (substitution i).bindFree reps
+    calc
+      canonicalEval (term.bindFree substitution) env =
+          quote ((term.bindFree substitution).bindFree reps) :=
+        canonicalEval_eq_of_representatives _ _ reps
+          (fun i => quote_representative (env i))
+      _ = quote (term.bindFree substitutedReps) :=
+        congrArg quote (Term.bindFree_assoc term substitution reps)
+      _ = canonicalEval term (fun i => canonicalEval (substitution i) env) :=
+        (canonicalEval_eq_of_representatives term _ substitutedReps
+          (fun i => (canonicalEval_eq_of_representatives
+            (substitution i) env reps
+              (fun j => quote_representative (env j))).symm)).symm
   betaEta_sound := by
     intro n a b env h
     unfold canonicalEval
@@ -89,7 +126,7 @@ theorem canonicalModel_eval_eq_quote
 theorem canonicalModel_eval_port (i : Fin n)
     (env : Fin n → Individual) :
     canonicalModel.eval (Term.port i) env = env i := by
-  exact quote_representative (env i)
+  exact canonicalModel.eval_port i env
 
 theorem canonicalModel_eval_quoted
     (term : ClosedTerm) (env : Fin n → Individual) :
