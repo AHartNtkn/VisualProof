@@ -96,6 +96,8 @@ export class CopyDragController {
     this.#options = options
   }
 
+  get dragging(): boolean { return this.#drag?.current === true }
+
   claim(sample: PointerSample): PointerClaim | null {
     if (!this.#options.active() || sample.button !== 0 || sample.ctrlKey || sample.shiftKey) return null
     const hits = this.#options.sourceSelection()

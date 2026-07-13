@@ -121,6 +121,34 @@ test('one mounted RelationWorkspace renders both transaction configurations and 
   expect(await state(page)).toMatchObject({ cancelCount: 0, finalizeCount: 1, debug: null })
 })
 
+test('mounted boundary ports and the empty marker expose their editable state to keyboard users', async ({ page }) => {
+  await openFixture(page)
+  await page.evaluate(() => window.relationWorkspaceFixture.mount('substitute'))
+
+  const strip = page.locator('.vpa-relation-port-strip')
+  await expect(strip).toHaveAttribute('aria-label', 'Relation boundary ports')
+  const forced = strip.locator('.vpa-relation-port.is-forced')
+  const optional = strip.locator('.vpa-relation-port.is-optional')
+  await expect(forced).toHaveAttribute('aria-label', 'Forced relation port 1, locked')
+  await expect(optional).toHaveAttribute('aria-label', 'Optional relation port 2, unbound')
+  await forced.focus()
+  await expect(forced).toBeFocused()
+  await optional.focus()
+  await expect(optional).toBeFocused()
+
+  await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('stale-source'))
+  const marker = page.locator('.vpa-relation-empty-marker')
+  await expect(marker).toHaveCount(1)
+  await expect(marker).toHaveAttribute('aria-pressed', 'true')
+  await expect(marker).toHaveAttribute('aria-label', /Empty occurrence marker selected/)
+  await marker.click()
+  await expect(marker).toHaveAttribute('aria-pressed', 'false')
+  await expect(page.locator('.vpa-relation-status')).toHaveText('ready for a trivial wrap')
+  await marker.press('Enter')
+  await expect(marker).toHaveAttribute('aria-pressed', 'true')
+  await expect(page.locator('.vpa-relation-status')).toHaveText('ready to abstract one nullary occurrence')
+})
+
 test('mounted strip gestures reorder ports and consume Delete without touching canvas selection', async ({ page }) => {
   await openFixture(page)
   await page.evaluate(() => window.relationWorkspaceFixture.mount('substitute'))
@@ -137,7 +165,8 @@ test('mounted strip gestures reorder ports and consume Delete without touching c
   const beforeOrder = await page.locator('.vpa-relation-port.is-optional').evaluateAll((ports) =>
     ports.map((port) => (port as HTMLElement).dataset.wire!),
   )
-  await page.locator('.vpa-relation-port.is-optional').first().dragTo(page.locator('.vpa-relation-port.is-optional').last())
+  await page.locator('.vpa-relation-port.is-optional').first().focus()
+  await page.keyboard.press('ArrowRight')
   const afterOrder = await page.locator('.vpa-relation-port.is-optional').evaluateAll((ports) =>
     ports.map((port) => (port as HTMLElement).dataset.wire!),
   )
@@ -154,14 +183,14 @@ test('mounted strip gestures reorder ports and consume Delete without touching c
   const body = (await state(page)).debug!.draftBodies.find((candidate) => candidate.kind === 'term')!
   await page.mouse.click(body.point.x, body.point.y)
   const historyBeforeDelete = (await state(page)).debug!.historyLength
-  await page.locator('.vpa-relation-port.is-optional').first().click()
+  await page.locator('.vpa-relation-port.is-optional').first().focus()
   await page.keyboard.press('Delete')
   await expect(page.locator('.vpa-relation-port.is-optional')).toHaveCount(1)
   expect((await state(page)).debug!.draftBodies.filter((candidate) => candidate.kind === 'term')).toHaveLength(2)
   expect((await state(page)).debug!.historyLength).toBe(historyBeforeDelete + 1)
 
   const historyBeforeForcedRefusal = (await state(page)).debug!.historyLength
-  await page.locator('.vpa-relation-port.is-forced').click()
+  await page.locator('.vpa-relation-port.is-forced').focus()
   await page.keyboard.press('Backspace')
   await expect(page.locator('.vpa-relation-port.is-forced')).toHaveCount(1)
   expect((await state(page)).debug!.historyLength).toBe(historyBeforeForcedRefusal)
@@ -219,7 +248,10 @@ test('mounted abstraction captures marker geometry from the current scenario eng
   await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('multi-set'))
   await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('stale-source'))
 
-  expect((await state(page)).debug?.transaction?.markerPoint).toEqual({ x: 177, y: 93 })
+  const point = (await state(page)).debug?.transaction?.markerPoint
+  expect(point).not.toEqual({ x: 177, y: 93 })
+  expect(Number.isFinite(point?.x)).toBe(true)
+  expect(Number.isFinite(point?.y)).toBe(true)
 })
 
 test('mounted production multi-set transaction cycles exactly in both Tab directions', async ({ page }) => {

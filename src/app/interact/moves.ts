@@ -288,7 +288,9 @@ export class ProofMoveController {
     if (connection !== null) return connection
     const fission = this.#fission.claim(sample)
     if (fission !== null) return fission
-    return this.#copy.claim(sample)
+    const copy = this.#copy.claim(sample)
+    if (copy !== null) this.#fission.hover(null)
+    return copy
   }
 
   contextMenu(sample: PointerSample): boolean {
@@ -405,7 +407,7 @@ export class ProofMoveController {
 
   dispose(): void { this.cancel(); this.#fission.dispose(); this.#copy.dispose() }
 
-  passiveSample(sample: PointerSample | null): void { this.#fission.hover(sample) }
+  passiveSample(sample: PointerSample | null): void { this.#fission.hover(this.#copy.dragging ? null : sample) }
   modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld); this.#copy.modifiersChanged(ctrlHeld) }
 
   #commit(step: ProofStep): void {

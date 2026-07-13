@@ -147,6 +147,21 @@ describe('AbstractTransaction', () => {
     expect(fixture.actions).toEqual([])
   })
 
+  it('keeps the empty marker clear of a wrapped node so its selected surface can start host copy', () => {
+    const fixture = transactionFixture()
+    fixture.transaction.draftChanged(emptySnapshot())
+    const body = mkEngine(fixture.scene.diagram, []).bodies.get(fixture.scene.first)!
+    const marker = fixture.transaction.debugState().markerPoint!
+    expect(Math.hypot(marker.x - body.pos.x, marker.y - body.pos.y)).toBeGreaterThan(14)
+    const sample = {
+      pointerId: 1, button: 0,
+      client: body.pos, screen: body.pos, world: body.pos,
+      hit: { kind: 'node' as const, id: fixture.scene.first },
+      shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
+    }
+    expect(fixture.transaction.hostClaim(sample)).toBeNull()
+  })
+
   it('uses the selected actually-empty marker for one anchored nullary occurrence and placement, or deselects to a trivial wrap', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)

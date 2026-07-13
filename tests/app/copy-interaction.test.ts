@@ -297,6 +297,53 @@ describe('CopyDragController', () => {
 })
 
 describe('shared copy surface integration', () => {
+  it('routes one selected node through the same Edit copy planner as larger patterns', () => {
+    const builder = new DiagramBuilder()
+    const selected = builder.termNode(builder.root, p('\\x. x'))
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.bodies.get(selected)!.pos = { x: 0, y: 0 }
+    const body = engine.bodies.get(selected)!
+    const wholeNodeSurface = {
+      x: body.pos.x - 7 * engine.scale,
+      y: body.pos.y - 5 * engine.scale,
+    }
+    let copyTargets = 0
+    let copyCommits = 0
+    const controller = new ConstructController({
+      host: {} as HTMLElement,
+      active: () => true,
+      engine: () => engine,
+      viewScale: () => 1,
+      diagram: () => diagram,
+      selection: () => [{ kind: 'node', id: selected }],
+      setSelection: () => {},
+      commit: () => {},
+      commitFission: () => {},
+      refuse: () => {},
+      setProblem: () => {},
+      clearProblem: () => {},
+      openSpawn: () => {},
+      theme: () => LIGHT,
+      copy: {
+        destination: (at) => {
+          copyTargets++
+          return { kind: 'edit', diagram, region: diagram.root, at: at.world }
+        },
+        commit: () => { copyCommits++ },
+      },
+    })
+
+    const claim = controller.claim(sample({ kind: 'node', id: selected }, wholeNodeSurface))!
+    expect(claim.relaxationPins).toBeUndefined()
+    claim.move(sample({ kind: 'node', id: selected }, { x: 30, y: 10 }))
+    claim.release(sample({ kind: 'node', id: selected }, { x: 30, y: 10 }), true)
+
+    expect(copyTargets).toBeGreaterThan(0)
+    expect(copyCommits).toBe(1)
+    expect(engine.bodies.get(selected)!.pos).toEqual({ x: 0, y: 0 })
+  })
+
   it('lets connection-capable wire interaction claim before selected-pattern copy', () => {
     const builder = new DiagramBuilder()
     const a = builder.termNode(builder.root, p('f x'))

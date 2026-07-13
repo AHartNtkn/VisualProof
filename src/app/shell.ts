@@ -680,9 +680,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   const proofStatus = (): string => {
     if (proof === null) return 'no proof'
-    if (proof.kind === 'track') return `${proof.track.timeline.cursor} step(s) · declare when ready`
+    if (proof.kind === 'track') return `${theoremActionCountLabel(proof.track.timeline.cursor)} · declare when ready`
     const session = proof.session
-    return `forward ${session.forward.cursor} step(s) · backward ${session.backward.cursor} step(s) · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
+    return `forward ${theoremActionCountLabel(session.forward.cursor)} · backward ${theoremActionCountLabel(session.backward.cursor)} · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
   }
 
   // ---- replay stepping ----

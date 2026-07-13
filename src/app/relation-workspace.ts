@@ -80,6 +80,8 @@ export type RelationWorkspaceTransaction = {
   draftChanged?(snapshot: RelationWorkspaceSnapshot): void
   cycle?(delta: 1 | -1): void
   hostClaim?(sample: PointerSample): RelationHostClaim | null
+  emptyMarkerAccessibility?(): { readonly selected: boolean; readonly anchor: RegionId } | null
+  toggleEmptyMarker?(): void
   debugState?(): unknown
   status(snapshot: RelationWorkspaceSnapshot): WorkspaceStatus
   finalizeError?(error: unknown): WorkspaceStatus
@@ -117,6 +119,7 @@ export function applyPortStripDelete(draft: RelationWorkspaceDraft, portId: stri
 export function renderRelationPortStrip(document: Document, ports: readonly RelationPort[]): HTMLOListElement {
   const strip = document.createElement('ol')
   strip.className = 'vpa-relation-port-strip'
+  strip.setAttribute('aria-label', 'Relation boundary ports')
   let optionalIndex = 0
   ports.forEach((port, portIndex) => {
     const target = document.createElement('li')
@@ -131,8 +134,16 @@ export function renderRelationPortStrip(document: Document, ports: readonly Rela
     target.textContent = port.kind === 'forced' ? String(portIndex + 1) : '·'
     target.setAttribute('role', 'button')
     target.setAttribute('tabindex', '0')
+    target.setAttribute('aria-posinset', String(portIndex + 1))
+    target.setAttribute('aria-setsize', String(ports.length))
+    target.setAttribute('aria-keyshortcuts', port.kind === 'optional'
+      ? 'ArrowLeft ArrowRight Delete Backspace'
+      : 'Delete Backspace')
     target.draggable = port.kind === 'optional'
-    target.setAttribute('aria-label', `${port.kind} relation port ${portIndex + 1}`)
+    const qualifier = port.kind === 'forced'
+      ? 'locked'
+      : port.hostWire === undefined ? 'unbound' : 'bound to a host wire'
+    target.setAttribute('aria-label', `${port.kind === 'forced' ? 'Forced' : 'Optional'} relation port ${portIndex + 1}, ${qualifier}`)
     strip.append(target)
   })
   return strip
@@ -452,6 +463,7 @@ export class RelationWorkspace {
   readonly #redo: HTMLButtonElement
   readonly #finalizeButton: HTMLButtonElement
   readonly #status: HTMLOutputElement
+  readonly #emptyMarkerButton: HTMLButtonElement
   readonly #portStrip: HTMLOListElement
   readonly #gesture: SVGSVGElement
   #draft: RelationWorkspaceDraft
@@ -505,11 +517,26 @@ export class RelationWorkspace {
     this.#status = document.createElement('output')
     this.#status.className = 'vpa-relation-status'
     this.#status.setAttribute('aria-live', 'polite')
+    const footer = document.createElement('footer')
+    footer.className = 'vpa-relation-footer'
+    this.#emptyMarkerButton = document.createElement('button')
+    this.#emptyMarkerButton.type = 'button'
+    this.#emptyMarkerButton.className = 'vpa-relation-empty-marker'
+    this.#emptyMarkerButton.hidden = true
+    this.#emptyMarkerButton.addEventListener('click', () => {
+      if (this.#transaction.emptyMarkerAccessibility?.() === null
+        || this.#transaction.toggleEmptyMarker === undefined) return
+      this.#statusOverride = null
+      this.#transaction.toggleEmptyMarker()
+      this.#refreshButtons()
+      this.#host.changed()
+    })
+    footer.append(this.#status, this.#emptyMarkerButton)
     const resize = document.createElement('div')
     resize.className = 'vpa-relation-resize'
     resize.setAttribute('role', 'separator')
     resize.setAttribute('aria-label', 'Resize relation editor')
-    this.#root.append(title, this.#canvas, this.#portStrip, this.#status, resize)
+    this.#root.append(title, this.#canvas, this.#portStrip, footer, resize)
     this.#gesture = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     this.#gesture.classList.add('vpa-relation-gesture')
     host.mount.append(this.#root, this.#gesture)
@@ -788,11 +815,11 @@ export class RelationWorkspace {
     const current = previewRelationWorkspaceSnapshot(currentRelationDraft(this.#draft))
     const next = mkEngine(current.diagram, current.boundary)
     carryOver(this.#engine, next)
+    seedProject(next)
     if (placed !== undefined) {
       const body = next.bodies.get(placed.node)
       if (body !== undefined) body.pos = { ...placed.at }
     }
-    seedProject(next)
     this.#engine = next
     this.#connection = null
     this.#draftHoverWire = null
@@ -987,6 +1014,18 @@ export class RelationWorkspace {
     this.#finalizeButton.disabled = status.kind !== 'ready'
     this.#status.value = status.message
     this.#status.dataset.status = status.code
+    const marker = this.#transaction.emptyMarkerAccessibility?.() ?? null
+    this.#emptyMarkerButton.hidden = marker === null
+    if (marker !== null) {
+      const state = marker.selected ? 'selected' : 'not selected'
+      this.#emptyMarkerButton.textContent = `Empty marker: ${state}`
+      this.#emptyMarkerButton.setAttribute('aria-pressed', String(marker.selected))
+      this.#emptyMarkerButton.setAttribute('aria-label', `Empty occurrence marker ${state} in region ${marker.anchor}`)
+    } else {
+      this.#emptyMarkerButton.removeAttribute('aria-pressed')
+      this.#emptyMarkerButton.removeAttribute('aria-label')
+      this.#emptyMarkerButton.textContent = ''
+    }
   }
 
   #currentStatus(): WorkspaceStatus {
@@ -1014,6 +1053,22 @@ export class RelationWorkspace {
     }
   }
 
+  #selectPort(portId: string | null): void {
+    this.#selectedPort = portId
+    for (const child of this.#portStrip.children) {
+      if (child instanceof HTMLElement) child.classList.toggle('is-selected', child.dataset.portId === portId)
+    }
+  }
+
+  #focusPort(portId: string): void {
+    for (const child of this.#portStrip.children) {
+      if (child instanceof HTMLElement && child.dataset.portId === portId) {
+        child.focus()
+        return
+      }
+    }
+  }
+
   #optionalPortIndexAt(client: Vec2): number | null {
     const target = document.elementFromPoint(client.x, client.y)
     if (!(target instanceof HTMLElement) || target.closest('.vpa-relation-port-strip') !== this.#portStrip) return null
@@ -1025,12 +1080,16 @@ export class RelationWorkspace {
   }
 
   #installPortStrip(): void {
+    this.#portStrip.addEventListener('focusin', (event) => {
+      const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
+      if (target?.dataset.portId !== undefined) this.#selectPort(target.dataset.portId)
+    })
+    this.#portStrip.addEventListener('focusout', (event) => {
+      if (!(event.relatedTarget instanceof Node) || !this.#portStrip.contains(event.relatedTarget)) this.#selectPort(null)
+    })
     this.#portStrip.addEventListener('click', (event) => {
       const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
-      this.#selectedPort = target?.dataset.portId ?? null
-      for (const child of this.#portStrip.children) {
-        if (child instanceof HTMLElement) child.classList.toggle('is-selected', child.dataset.portId === this.#selectedPort)
-      }
+      this.#selectPort(target?.dataset.portId ?? null)
     })
     this.#portStrip.addEventListener('dragstart', (event) => {
       const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
@@ -1058,7 +1117,32 @@ export class RelationWorkspace {
       }
     })
     this.#portStrip.addEventListener('keydown', (event) => {
-      if ((event.key !== 'Delete' && event.key !== 'Backspace') || this.#selectedPort === null) return
+      const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
+      if (target === null || target.dataset.portId === undefined) return
+      const portId = target.dataset.portId
+      this.#selectPort(portId)
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault()
+        event.stopPropagation()
+        return
+      }
+      if ((event.key === 'ArrowLeft' || event.key === 'ArrowRight') && target.dataset.portKind === 'optional') {
+        event.preventDefault()
+        event.stopPropagation()
+        const index = Number(target.dataset.optionalIndex)
+        const count = currentRelationDraft(this.#draft).ports.filter((port) => port.kind === 'optional').length
+        const destination = Math.max(0, Math.min(count - 1, index + (event.key === 'ArrowLeft' ? -1 : 1)))
+        if (destination === index) return
+        try {
+          this.#draft = applyPortStripMove(this.#draft, portId, destination)
+          this.#reconcile()
+          this.#focusPort(portId)
+        } catch (error) {
+          this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
+        }
+        return
+      }
+      if (event.key !== 'Delete' && event.key !== 'Backspace') return
       event.preventDefault()
       event.stopPropagation()
       this.#deleteSelectedPort()

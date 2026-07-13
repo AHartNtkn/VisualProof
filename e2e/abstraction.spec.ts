@@ -79,15 +79,11 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
   expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected)).toHaveLength(1)
 
   await page.keyboard.press('Shift+w')
-  const title = (await page.locator('.vpa-relation-title').boundingBox())!
-  await page.mouse.move(title.x + title.width * 0.3, title.y + title.height / 2)
-  await page.mouse.down()
-  await page.mouse.move(title.x + title.width + 500, title.y + title.height / 2, { steps: 8 })
-  await page.mouse.up()
   const marker = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerPoint!)
   const canvas = (await page.locator('#c').boundingBox())!
   const view = await page.evaluate(() => window.__vpaDebug!.view())
   const markerClient = { x: canvas.x + marker.x * view.scale + view.offsetX, y: canvas.y + marker.y * view.scale + view.offsetY }
+  await moveWorkspaceAwayFrom(page, markerClient.x)
   await page.mouse.click(markerClient.x, markerClient.y)
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerSelected)).toBe(false)
   await page.mouse.click(markerClient.x, markerClient.y)
@@ -95,7 +91,7 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
 
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
-  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('#status')).toContainText('1 action')
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(sourceNodes + 1)
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 
@@ -110,7 +106,7 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
   await moveWorkspaceClearOfHistory(page)
   await page.locator('.vpa-temporal-undo').click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
-  await expect(page.locator('#status')).toContainText('0 step(s)')
+  await expect(page.locator('#status')).toContainText('0 actions')
 
   const original = await termClientPoint(page)
   await page.mouse.click(original.x, original.y)
@@ -119,7 +115,7 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
   await moveWorkspaceClearOfHistory(page)
   await page.locator('.vpa-temporal-redo').click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
-  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('#status')).toContainText('1 action')
 })
 
 test('mounted nested empty marker accepts inside drag, refuses outside, and commits selected or trivial outcomes', async ({ page }) => {
@@ -175,12 +171,17 @@ test('mounted nested empty marker accepts inside drag, refuses outside, and comm
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerSelected)).toBe(false)
   await page.mouse.click(startClient.x, startClient.y)
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerSelected)).toBe(true)
+  const cutTarget = await page.evaluate(() => {
+    const view = window.__vpaDebug!.view()
+    const cut = window.__vpaDebug!.regions().find(({ kind }) => kind === 'cut')!
+    return { id: cut.id, x: cut.x * view.scale + view.offsetX, y: cut.y * view.scale + view.offsetY }
+  })
   await page.mouse.move(startClient.x, startClient.y)
   await page.mouse.down()
-  await page.mouse.move(startClient.x + 10, startClient.y + 4, { steps: 3 })
-  await page.mouse.move(startClient.x, startClient.y, { steps: 3 })
+  await page.mouse.move(canvas.x + cutTarget.x + 10, canvas.y + cutTarget.y + 4, { steps: 3 })
+  await page.mouse.move(canvas.x + cutTarget.x, canvas.y + cutTarget.y, { steps: 6 })
   await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerAnchor)).not.toBe('r0')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerAnchor)).toBe(cutTarget.id)
   const nested = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerPoint!)
 
   const nestedClient = { x: canvas.x + nested.x * view.scale + view.offsetX, y: canvas.y + nested.y * view.scale + view.offsetY }
@@ -194,20 +195,20 @@ test('mounted nested empty marker accepts inside drag, refuses outside, and comm
   await page.mouse.click(nestedClient.x, nestedClient.y)
   await page.mouse.click(nestedClient.x, nestedClient.y)
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.status())).toContain('1 step(s)')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.status())).toContain('1 action')
   const selectedNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
 
   await page.locator('.vpa-temporal-undo').click()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.status())).toContain('0 step(s)')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.status())).toContain('0 actions')
   await openCutAbstraction()
   const marker = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerPoint!)
   const currentView = await page.evaluate(() => window.__vpaDebug!.view())
   const markerClient = { x: canvas.x + marker.x * currentView.scale + currentView.offsetX, y: canvas.y + marker.y * currentView.scale + currentView.offsetY }
   await moveWorkspaceAwayFrom(page, markerClient.x)
-  await page.mouse.click(markerClient.x, markerClient.y)
+  await page.locator('.vpa-relation-empty-marker').click()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerSelected)).toBe(false)
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.status())).toContain('1 step(s)')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.status())).toContain('1 action')
   expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(selectedNodes - 1)
 })
 
@@ -268,12 +269,13 @@ test('mounted normal abstraction derives matches, cycles sets, toggles exclusion
   const activeBeforeExclusion = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.activeKeys)
   await page.mouse.click(canvas.x + visibleTerm.x, canvas.y + visibleTerm.y)
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.excludedKeys.length)).toBe(1)
+  await expect(page.locator('.vpa-relation-status')).toContainText('1 excluded')
   await page.mouse.click(canvas.x + visibleTerm.x, canvas.y + visibleTerm.y)
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.excludedKeys.length)).toBe(0)
   expect(await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.activeKeys)).toEqual(activeBeforeExclusion)
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
-  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('#status')).toContainText('1 action')
 })
 
 test('mounted backward abstraction finalizes a real normal match in a negative region', async ({ page }) => {
@@ -309,7 +311,7 @@ test('mounted backward abstraction finalizes a real normal match in a negative r
   await expect(page.locator('.vpa-relation-status')).toHaveAttribute('data-status', 'ready')
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
-  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('#status')).toContainText('1 action')
 })
 
 test('both fixed fronts open and cancel, with real finalization and global history cancellation', async ({ page }) => {

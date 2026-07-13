@@ -91,7 +91,10 @@ button { color: inherit; }
 .vpa-relation-port.is-orientation { box-shadow: 0 0 0 2px rgba(180,83,9,.25); }
 .vpa-relation-port.is-bound { border-color: #08796b; background: rgba(8,121,107,.13); }
 .vpa-relation-port.is-selected { outline: 2px solid #08796b; outline-offset: 2px; }
-.vpa-relation-status { display: flex; align-items: center; min-width: 0; padding: 4px 10px; overflow: hidden; border-top: 1px solid rgba(69,66,55,.18); color: #5f574c; font: 11px "IBM Plex Mono", ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.vpa-relation-footer { display: flex; align-items: stretch; min-width: 0; border-top: 1px solid rgba(69,66,55,.18); }
+.vpa-relation-status { display: flex; flex: 1; align-items: center; min-width: 0; padding: 4px 10px; overflow: hidden; color: #5f574c; font: 11px "IBM Plex Mono", ui-monospace, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.vpa-relation-empty-marker { flex: none; margin: 3px 24px 3px 3px; border: 1px solid #08796b; border-radius: 999px; padding: 1px 7px; background: rgba(8,121,107,.1); color: #08796b; font: 10px "IBM Plex Mono", ui-monospace, monospace; cursor: pointer; }
+.vpa-relation-empty-marker[aria-pressed="false"] { border-color: #78716c; background: transparent; color: #57534e; }
 .vpa-relation-status[data-status="ready"] { color: #08796b; }
 .vpa-relation-status[data-status$="exhausted"], .vpa-relation-status[data-status="zero-match"], .vpa-relation-status[data-status="invalid-ports"], .vpa-relation-status[data-status="stale-source"], .vpa-relation-status[data-status="kernel-refusal"] { color: #b45309; }
 .vpa-relation-resize { position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; cursor: nwse-resize; }

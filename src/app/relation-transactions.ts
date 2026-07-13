@@ -86,6 +86,28 @@ function circleForSelection(engine: Engine, wrap: SubgraphSelection): { center: 
   return { center, radius: Math.max(24, Math.hypot(maxX - minX, maxY - minY) / 2 + 12) }
 }
 
+function emptyMarkerStart(engine: Engine, wrap: SubgraphSelection, circle: { readonly center: Vec2; readonly radius: number }): Vec2 {
+  const occupied = wrap.nodes.flatMap((id) => {
+    const body = engine.bodies.get(id)
+    return body === undefined ? [] : [{ center: body.pos, radius: body.discR * engine.scale }]
+  })
+  if (occupied.length === 0) return { ...circle.center }
+  const offset = Math.min(18, circle.radius * 0.72)
+  const candidates = Array.from({ length: 8 }, (_, index) => {
+    const angle = index * Math.PI / 4
+    return {
+      x: circle.center.x + Math.cos(angle) * offset,
+      y: circle.center.y + Math.sin(angle) * offset,
+    }
+  })
+  const clearance = (point: Vec2): number => Math.min(...occupied.map((other) =>
+    Math.hypot(point.x - other.center.x, point.y - other.center.y) - other.radius))
+  return candidates.reduce((best, point) => {
+    const difference = clearance(point) - clearance(best)
+    return difference > 1e-9 ? point : best
+  })
+}
+
 export class AbstractTransaction implements RelationWorkspaceTransaction {
   readonly mode = 'abstract' as const
   readonly title = 'ABSTRACT · NEW RELATION'
@@ -119,9 +141,10 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
     })
     const contents = selectionContents(this.#source, this.#wrap)
     this.#allowedMarkerAnchors = new Set([this.#wrap.region, ...contents.allRegions])
-    this.#wrapCircle = circleForSelection(opts.engine(), this.#wrap)
+    const engine = opts.engine()
+    this.#wrapCircle = circleForSelection(engine, this.#wrap)
     this.#markerAnchor = this.#wrap.region
-    this.#markerPoint = this.#wrapCircle.center
+    this.#markerPoint = emptyMarkerStart(engine, this.#wrap, this.#wrapCircle)
   }
 
   sourceDiagram = (): Diagram => this.#source
@@ -164,9 +187,15 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
       return { kind: 'refused', code: 'solver-exhausted', message: 'maximal-set solver exhausted its search budget' }
     }
     const active = this.#activeSet()
+    const excluded = this.#sets?.excluded.size ?? 0
     return active.length === 0
-      ? { kind: 'refused', code: 'zero-match', message: 'exhaustive search found no occurrence inside the wrap' }
-      : { kind: 'ready', code: 'ready', message: `${active.length} occurrence${active.length === 1 ? '' : 's'} selected` }
+      ? excluded === 0
+        ? { kind: 'refused', code: 'zero-match', message: 'exhaustive search found no occurrence inside the wrap' }
+        : { kind: 'refused', code: 'zero-match', message: `no occurrence remains after ${excluded} excluded occurrence${excluded === 1 ? '' : 's'}` }
+      : {
+          kind: 'ready', code: 'ready',
+          message: `${active.length} occurrence${active.length === 1 ? '' : 's'} selected${excluded === 0 ? '' : ` · ${excluded} excluded`}`,
+        }
   }
 
   finalizeError(error: unknown): WorkspaceStatus {
@@ -191,6 +220,10 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
   toggleEmptyMarker(): void {
     if (!this.#empty) throw new Error('the relation draft is not actually empty; the nullary marker is unavailable')
     this.#markerSelected = !this.#markerSelected
+  }
+
+  emptyMarkerAccessibility(): { readonly selected: boolean; readonly anchor: RegionId } | null {
+    return this.#empty ? { selected: this.#markerSelected, anchor: this.#markerAnchor } : null
   }
 
   moveEmptyMarker(anchor: RegionId, point: Vec2): void {

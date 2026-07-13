@@ -281,7 +281,7 @@ test('nested bound-predicate choices identify their bubbles by order, color, and
   await expect(rows).toHaveCount(0)
 })
 
-test('selected-node placement holds the pointer while connected physics remains live', async ({ page }) => {
+test('one selected Edit node uses the shared contextual copy gesture', async ({ page }) => {
   await openApp(page)
   await spawnTerm(page, '\\x. x')
   await spawnTerm(page, '\\y. y')
@@ -305,31 +305,19 @@ test('selected-node placement holds the pointer while connected physics remains 
   const heldPoint = await bodyPoint(page, held.id)
   const target = await pagePoint(page, neighbour)
   await page.mouse.click(heldPoint.x, heldPoint.y)
-  const neighbourBeforeDrag = await page.evaluate((id) => window.__vpaDebug!.bodies().find((body) => body.id === id)!, neighbour.id)
   await page.mouse.move(heldPoint.x, heldPoint.y)
   await page.mouse.down()
   await page.mouse.move(target.x, target.y)
-  const before = await page.evaluate(({ held, neighbour }) => {
-    const bodies = window.__vpaDebug!.bodies()
-    return {
-      held: bodies.find((body) => body.id === held)!,
-      neighbour: bodies.find((body) => body.id === neighbour)!,
-    }
-  }, { held: held.id, neighbour: neighbour.id })
-  await page.waitForTimeout(450)
-  const after = await page.evaluate(({ held, neighbour }) => {
-    const bodies = window.__vpaDebug!.bodies()
-    return {
-      held: bodies.find((body) => body.id === held)!,
-      neighbour: bodies.find((body) => body.id === neighbour)!,
-    }
-  }, { held: held.id, neighbour: neighbour.id })
-  expect(Math.hypot(after.held.x - before.held.x, after.held.y - before.held.y)).toBeLessThan(0.01)
-  expect(Math.hypot(after.neighbour.x - neighbourBeforeDrag.x, after.neighbour.y - neighbourBeforeDrag.y)).toBeGreaterThan(0.01)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays())).toContain('circle')
   await page.mouse.up()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(3)
+  expect(await page.evaluate(({ held, neighbour }) => {
+    const ids = window.__vpaDebug!.diagram().nodes.map((node) => node.id)
+    return ids.includes(held) && ids.includes(neighbour)
+  }, { held: held.id, neighbour: neighbour.id })).toBe(true)
 })
 
-test('direct EDIT gestures wrap, reparent, join, sever, and dissolve semantic objects', async ({ page }) => {
+test('direct EDIT gestures wrap, copy, join, sever, and dissolve semantic objects', async ({ page }) => {
   await openApp(page)
   await spawnTerm(page, '\\x. x')
   await spawnTerm(page, '\\y. y')
@@ -345,7 +333,8 @@ test('direct EDIT gestures wrap, reparent, join, sever, and dissolve semantic ob
   const cut = await page.evaluate(() => window.__vpaDebug!.diagram().regions.find((region) => region.kind === 'cut')!)
   expect((await page.evaluate(() => window.__vpaDebug!.diagram())).nodes.find((node) => node.id === ids[0])!.region).toBe(cut.id)
 
-  // Select, then drag: direct placement reparents into the destination region.
+  // Select, then drag: shared Edit copy creates a new node in the destination
+  // region and leaves the selected source in place.
   at = await bodyPoint(page, ids[1]!)
   await page.mouse.click(at.x, at.y)
   const cutGeometry = await page.evaluate((id) => window.__vpaDebug!.regions().find((region) => region.id === id)!, cut.id)
@@ -354,7 +343,10 @@ test('direct EDIT gestures wrap, reparent, join, sever, and dissolve semantic ob
   await page.mouse.down()
   await page.mouse.move(cutCenter.x, cutCenter.y, { steps: 12 })
   await page.mouse.up()
-  await expect.poll(async () => page.evaluate((id) => window.__vpaDebug!.diagram().nodes.find((node) => node.id === id)!.region, ids[1]!)).toBe(cut.id)
+  await expect.poll(async () => page.evaluate(({ initial, region }) =>
+    window.__vpaDebug!.diagram().nodes.filter((node) => !initial.includes(node.id) && node.region === region).length,
+  { initial: ids, region: cut.id })).toBe(1)
+  expect(await page.evaluate((id) => window.__vpaDebug!.diagram().nodes.find((node) => node.id === id)!.region, ids[1]!)).toBe('r0')
 
   // Shift-W requests the bubble's semantic arity at the point of use.
   at = await bodyPoint(page, ids[2]!)
@@ -365,22 +357,7 @@ test('direct EDIT gestures wrap, reparent, join, sever, and dissolve semantic ob
   await arity.press('Enter')
   await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().regions.filter((region) => region.kind === 'bubble').length)).toBe(1)
 
-  // Dragging one line onto another joins the two ports into one individual.
-  await waitForRest(page)
-  const insideWireIds = await page.evaluate((region) => window.__vpaDebug!.diagram().wires.filter((wire) => wire.scope === region).map((wire) => wire.id), cut.id)
-  expect(insideWireIds).toHaveLength(2)
-  const rendered = await page.evaluate(() => window.__vpaDebug!.wires())
-  const first = rendered.find((wire) => wire.id === insideWireIds[0])!
-  const second = rendered.find((wire) => wire.id === insideWireIds[1])!
-  const firstAt = await pagePoint(page, first)
-  const secondAt = await pagePoint(page, second)
-  await page.mouse.move(firstAt.x, firstAt.y)
-  await page.mouse.down()
-  await page.mouse.move(secondAt.x, secondAt.y, { steps: 12 })
-  await page.mouse.up()
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.some((wire) => wire.endpoints === 2))).toBe(true)
-
-  // J joins every selected line, including the remaining bubble-port line.
+  // J joins every selected line, including the copied and bubble-port lines.
   await waitForRest(page)
   const twoWires = await page.evaluate(() => {
     const semantic = window.__vpaDebug!.diagram().wires.map((wire) => wire.id)
@@ -392,12 +369,12 @@ test('direct EDIT gestures wrap, reparent, join, sever, and dissolve semantic ob
     await page.mouse.click(point.x, point.y)
   }
   await page.keyboard.press('j')
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints))).toEqual([3])
+  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints))).toEqual([4])
 
   // A perpendicular right-drag across a real rendered leg severs one endpoint.
   await waitForRest(page)
   const joined = await page.evaluate(() => {
-    const semantic = window.__vpaDebug!.diagram().wires.find((wire) => wire.endpoints === 3)!
+    const semantic = window.__vpaDebug!.diagram().wires.find((wire) => wire.endpoints === 4)!
     return window.__vpaDebug!.wires().find((wire) => wire.id === semantic.id)!
   })
   const joinedAt = await pagePoint(page, joined)
@@ -408,7 +385,7 @@ test('direct EDIT gestures wrap, reparent, join, sever, and dissolve semantic ob
   await page.mouse.down({ button: 'right' })
   await page.mouse.move(joinedAt.x + px, joinedAt.y + py, { steps: 10 })
   await page.mouse.up({ button: 'right' })
-  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints).sort())).toEqual([1, 2])
+  await expect.poll(async () => page.evaluate(() => window.__vpaDebug!.diagram().wires.map((wire) => wire.endpoints).sort())).toEqual([1, 3])
 
   // Delete on a boundary dissolves it and promotes all unselected contents.
   const liveCut = await page.evaluate((id) => window.__vpaDebug!.regions().find((region) => region.id === id)!, cut.id)

@@ -156,10 +156,11 @@ export class ConstructController {
     if (connection !== null) return connection
     const fission = this.#fission.claim(sample)
     if (fission !== null) return fission
+    const selected = this.#options.selection()
     const copy = this.#copy?.claim(sample) ?? null
-    if (copy !== null) return copy
+    if (copy !== null) { this.#fission.hover(null); return copy }
 
-    if (sample.hit?.kind === 'node' && this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) {
+    if (sample.hit?.kind === 'node' && selected.some((hit) => sameHit(hit, sample.hit!))) {
       return this.#placementClaim(sample.hit.id)
     }
     return null
@@ -223,7 +224,7 @@ export class ConstructController {
     this.#copy?.dispose()
   }
 
-  passiveSample(sample: PointerSample | null): void { this.#fission.hover(sample) }
+  passiveSample(sample: PointerSample | null): void { this.#fission.hover(this.#copy?.dragging === true ? null : sample) }
   modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld); this.#copy?.modifiersChanged(ctrlHeld) }
 
   #slashClaim(start: PointerSample): PointerClaim {

@@ -272,11 +272,16 @@ test('fission uses the same internal pull gesture in ordinary and both fixed-sid
     y: canvas.y + backward.target.y * backward.view.scale + backward.view.offsetY,
   }
   await page.mouse.move(backwardStart.x, backwardStart.y)
-  await page.mouse.down()
   const backwardNow = await page.evaluate(() => {
     const target = window.__vpaDebug!.fissionTargets().find((candidate) => candidate.path.join('/') === 'arg')!
     return { target, view: window.__vpaDebug!.view() }
   })
+  await page.mouse.move(
+    canvas.x + backwardNow.target.x * backwardNow.view.scale + backwardNow.view.offsetX,
+    canvas.y + backwardNow.target.y * backwardNow.view.scale + backwardNow.view.offsetY,
+  )
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interactionOverlays().includes('arc'))).toBe(true)
+  await page.mouse.down()
   await page.mouse.move(
     canvas.x + backwardNow.target.dropX * backwardNow.view.scale + backwardNow.view.offsetX,
     canvas.y + backwardNow.target.dropY * backwardNow.view.scale + backwardNow.view.offsetY,
@@ -641,7 +646,7 @@ test('proof actions require right-click and forward/backward share direct labels
   await expect(page.locator('.vpa-proof-menu')).not.toContainText('Un-')
   await page.keyboard.press('Escape')
   await page.mouse.dblclick(canvas.x + at.x, canvas.y + at.y)
-  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('#status')).toContainText('1 action')
 
   await page.getByRole('button', { name: 'Return to editing', exact: true }).click()
   await page.getByRole('button', { name: 'Prove backward', exact: true }).click()
@@ -668,7 +673,7 @@ test('Delete is a direct contextual proof gesture', async ({ page }) => {
   await page.mouse.click(canvas.x + at.x, canvas.y + at.y)
   await page.keyboard.press('Delete')
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(0)
-  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('#status')).toContainText('1 action')
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
@@ -699,7 +704,7 @@ test('dragging a selected proof node into a legal region iterates it', async ({ 
   await page.mouse.move(to.x, to.y, { steps: 12 })
   await page.mouse.up()
 
-  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('#status')).toContainText('1 action')
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(3)
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
@@ -870,11 +875,11 @@ test('production motion layers defer conversion and expose the five approved con
   })
   await page.mouse.dblclick(canvas.x + point.x, canvas.y + point.y)
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.motion().playing)).toBe(true)
-  await expect(page.locator('#status')).toContainText('0 step(s)')
+  await expect(page.locator('#status')).toContainText('0 actions')
   await page.keyboard.press('Control+z')
   await page.waitForTimeout(80)
-  await expect(page.locator('#status')).toContainText('0 step(s)')
-  await expect.poll(() => page.locator('#status').textContent(), { timeout: 2000 }).toContain('1 step(s)')
+  await expect(page.locator('#status')).toContainText('0 actions')
+  await expect.poll(() => page.locator('#status').textContent(), { timeout: 2000 }).toContain('1 action')
   expect(await page.evaluate(() => window.__vpaDebug!.motion().playing)).toBe(false)
 
   await page.getByRole('button', { name: 'Utilities', exact: true }).click()
@@ -961,19 +966,18 @@ test('relation workspace substitution opens from the real proof menu and cancels
   const neighbour = draftBodies[1]!
 
   await page.mouse.click(held.point.x, held.point.y)
-  const neighbourBefore = await page.evaluate((node) => window.__vpaDebug!.relationWorkspace()!.draftBodies.find((body) => body.node === node)!, neighbour.node)
+  const beforeCopy = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!)
   await page.mouse.move(held.point.x, held.point.y)
   await page.mouse.down()
   await page.mouse.move(neighbour.point.x, neighbour.point.y)
-  const heldDuring = await page.evaluate((node) => window.__vpaDebug!.relationWorkspace()!.draftBodies.find((body) => body.node === node)!, held.node)
-  await page.waitForTimeout(450)
-  const liveBodies = await page.evaluate(({ held, neighbour }) => ({
-    held: window.__vpaDebug!.relationWorkspace()!.draftBodies.find((body) => body.node === held)!,
-    neighbour: window.__vpaDebug!.relationWorkspace()!.draftBodies.find((body) => body.node === neighbour)!,
-  }), { held: held.node, neighbour: neighbour.node })
-  expect(Math.hypot(liveBodies.held.x - heldDuring.x, liveBodies.held.y - heldDuring.y)).toBeLessThan(0.01)
-  expect(Math.hypot(liveBodies.neighbour.x - neighbourBefore.x, liveBodies.neighbour.y - neighbourBefore.y)).toBeGreaterThan(0.01)
   await page.mouse.up()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.draftBodies
+    .filter((body) => body.kind === 'term').length)).toBe(3)
+  const afterCopy = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!)
+  expect(afterCopy.cursor).toBe(beforeCopy.cursor + 1)
+  expect(afterCopy.historyLength).toBe(beforeCopy.historyLength + 1)
+  expect(afterCopy.draftBodies.some((body) => body.node === held.node)).toBe(true)
+  expect(afterCopy.draftBodies.some((body) => body.node === neighbour.node)).toBe(true)
 
   const title = (await page.locator('.vpa-relation-title').boundingBox())!
   await page.mouse.move(title.x + title.width * 0.35, title.y + title.height / 2)
@@ -1012,7 +1016,7 @@ test('relation workspace substitution opens from the real proof menu and cancels
   expect(await page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.externalWires.length)).toBe(1)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
-  await expect(page.locator('#status')).toContainText('0 step(s)')
+  await expect(page.locator('#status')).toContainText('0 actions')
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
@@ -1048,12 +1052,12 @@ test('relation workspace substitution uses the same transaction in backward prov
   await page.getByRole('button', { name: 'New relation…', exact: true }).click()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.formalBoundary)).toEqual(['arg1'])
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await expect(page.locator('#status')).toContainText('0 step(s)')
+  await expect(page.locator('#status')).toContainText('0 actions')
 
   await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
   await page.getByRole('button', { name: 'New relation…', exact: true }).click()
   await page.getByRole('button', { name: 'Instantiate', exact: true }).click()
-  await expect(page.locator('#status')).toContainText('1 step(s)')
+  await expect(page.locator('#status')).toContainText('1 action')
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
