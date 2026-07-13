@@ -1,6 +1,6 @@
-import VisualProof.Diagram.Concrete.WellFormed
+namespace VisualProof.Data.Finite
 
-namespace VisualProof.Diagram.ConcreteElaboration
+/-! Deterministic enumeration and reindexing for finite carriers. -/
 
 def allFin : (n : Nat) -> List (Fin n)
   | 0 => []
@@ -158,4 +158,80 @@ theorem sequenceFin_isSome_iff {values : Fin n -> Option α} :
         exact Option.isSome_iff_exists.mpr
           ⟨Fin.cases head tail, by simp [sequenceFin, hhead, htailResult]⟩
 
-end VisualProof.Diagram.ConcreteElaboration
+/-! Exhaustive finite function enumeration. -/
+
+def enumerateFinFunctions : (n m : Nat) -> List (Fin n -> Fin m)
+  | 0, _ => [Fin.elim0]
+  | n + 1, m =>
+      (allFin m).flatMap fun head =>
+        (enumerateFinFunctions n m).map fun tail => Fin.cases head tail
+
+theorem enumerateFinFunctions_complete (n m : Nat) (f : Fin n -> Fin m) :
+    f ∈ enumerateFinFunctions n m := by
+  induction n generalizing m with
+  | zero =>
+      simp [enumerateFinFunctions]
+      funext i
+      exact Fin.elim0 i
+  | succ n ih =>
+      simp only [enumerateFinFunctions, List.mem_flatMap, List.mem_map]
+      refine ⟨f 0, mem_allFin _, ?_⟩
+      refine ⟨fun i : Fin n => f i.succ, ih m _, ?_⟩
+      funext i
+      exact Fin.cases rfl (fun j => rfl) i
+
+@[simp] theorem mem_enumerateFinFunctions_iff (f : Fin n -> Fin m) :
+    f ∈ enumerateFinFunctions n m ↔ True := by
+  exact iff_true_intro (enumerateFinFunctions_complete n m f)
+
+private theorem nodup_flatMap_of
+    {xs : List α} {f : α -> List β}
+    (hxs : xs.Nodup)
+    (hparts : ∀ x ∈ xs, (f x).Nodup)
+    (hdisjoint : ∀ x ∈ xs, ∀ y ∈ xs, x ≠ y ->
+      ∀ a ∈ f x, ∀ b ∈ f y, a ≠ b) :
+    (xs.flatMap f).Nodup := by
+  induction xs with
+  | nil => simp
+  | cons x xs ih =>
+      rw [List.flatMap_cons, List.nodup_append]
+      have ⟨hx, hxs⟩ := List.nodup_cons.mp hxs
+      refine ⟨hparts x (by simp), ?_, ?_⟩
+      · exact ih hxs
+          (fun y hy => hparts y (by simp [hy]))
+          (fun y hy z hz hyz =>
+            hdisjoint y (by simp [hy]) z (by simp [hz]) hyz)
+      · intro a ha b hb
+        obtain ⟨y, hy, hb⟩ := List.mem_flatMap.mp hb
+        apply hdisjoint x (by simp) y (by simp [hy])
+        · intro hxy
+          subst y
+          exact hx hy
+        · exact ha
+        · exact hb
+
+theorem enumerateFinFunctions_nodup (n m : Nat) :
+    (enumerateFinFunctions n m).Nodup := by
+  induction n generalizing m with
+  | zero => simp [enumerateFinFunctions]
+  | succ n ih =>
+      rw [enumerateFinFunctions]
+      apply nodup_flatMap_of (allFin_nodup m)
+      · intro head _
+        exact List.Pairwise.map (R := fun a b => a ≠ b) (S := fun a b => a ≠ b)
+          (fun tail : Fin n -> Fin m =>
+            (Fin.cases head tail : Fin (n + 1) -> Fin m)) (by
+          intro tail₁ tail₂ hne htail
+          apply hne
+          funext i
+          exact congrFun htail i.succ) (ih m)
+      · intro head₁ _ head₂ _ hne g hg₁ g' hg₂ heq
+        rcases List.mem_map.1 hg₁ with ⟨tail₁, _, hg₁eq⟩
+        rcases List.mem_map.1 hg₂ with ⟨tail₂, _, hg₂eq⟩
+        have hfun :
+            (Fin.cases head₁ tail₁ : Fin (n + 1) -> Fin m) =
+              Fin.cases head₂ tail₂ :=
+          hg₁eq.trans (heq.trans hg₂eq.symm)
+        exact hne (congrFun hfun 0)
+
+end VisualProof.Data.Finite

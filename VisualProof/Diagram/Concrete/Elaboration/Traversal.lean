@@ -1,8 +1,10 @@
-import VisualProof.Diagram.Concrete.Elaboration.Finite
+import VisualProof.Data.Finite
+import VisualProof.Diagram.Concrete.WellFormed
 
 namespace VisualProof.Diagram.ConcreteElaboration
 
 open VisualProof.Diagram
+open VisualProof.Data.Finite
 
 inductive LocalOccurrence (regions nodes : Nat)
   | node (node : Fin nodes)

@@ -4,6 +4,7 @@ import VisualProof.Diagram.Core
 namespace VisualProof.Diagram.ConcreteElaboration
 
 open VisualProof
+open VisualProof.Data.Finite
 open VisualProof.Theory
 open VisualProof.Diagram
 
