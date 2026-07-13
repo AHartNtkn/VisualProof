@@ -130,6 +130,7 @@ export class FixedSideWorkspace {
 
   setFocusedSide(side: FixedSide): void {
     if (side === this.#focused) return
+    this.#front(this.#focused).cancelRelationWorkspace()
     this.#focused = side
     this.forward.setFocused(side === 'forward')
     this.backward.setFocused(side === 'backward')
@@ -152,6 +153,11 @@ export class FixedSideWorkspace {
   cancelGestures(): void {
     this.forward.cancelActiveGesture()
     this.backward.cancelActiveGesture()
+  }
+
+  cancelRelationWorkspace(): void {
+    this.forward.cancelRelationWorkspace()
+    this.backward.cancelRelationWorkspace()
   }
 
   frame(now = performance.now()): void {

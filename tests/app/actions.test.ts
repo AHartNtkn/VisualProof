@@ -24,7 +24,7 @@ describe('applicableActions', () => {
     expect(atPos).toContain('erase')
     expect(atPos).toContain('doubleCutWrap')
     expect(atPos).toContain('iterate')
-    expect(atPos).toContain('vacuousWrap')
+    expect(atPos).toContain('abstractWrap')
 
     const neg = mkSelection(d, { region: cut, regions: [], nodes: [], wires: [] })
     const atNeg = applicableActions(d, neg, ctx).map((a) => a.kind)

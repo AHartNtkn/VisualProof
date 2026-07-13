@@ -13,7 +13,7 @@ export type ActionDescriptor =
   | { readonly kind: 'erase'; readonly label: string }
   | { readonly kind: 'doubleCutWrap'; readonly label: string }
   | { readonly kind: 'doubleCutElim'; readonly label: string }
-  | { readonly kind: 'vacuousWrap'; readonly label: string; readonly needsInput: 'arity' }
+  | { readonly kind: 'abstractWrap'; readonly label: string; readonly needsInput: 'abstraction' }
   | { readonly kind: 'vacuousElim'; readonly label: string }
   | { readonly kind: 'iterate'; readonly label: string; readonly needsTarget: true }
   | { readonly kind: 'deiterate'; readonly label: string }
@@ -37,7 +37,7 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
 
   if (hasContent && pol === eraseSign) out.push({ kind: 'erase', label: `Erase (${eraseSign} region)` })
   out.push({ kind: 'doubleCutWrap', label: 'Wrap in a double cut' })
-  out.push({ kind: 'vacuousWrap', label: 'Wrap in a vacuous bubble…', needsInput: 'arity' })
+  out.push({ kind: 'abstractWrap', label: 'Abstract as a relation…', needsInput: 'abstraction' })
   if (hasContent) {
     out.push({ kind: 'iterate', label: 'Iterate into…', needsTarget: true })
     out.push({ kind: 'deiterate', label: 'Deiterate (needs a justifying copy)' })

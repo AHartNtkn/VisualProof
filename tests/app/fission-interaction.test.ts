@@ -371,6 +371,7 @@ describe('Proof fission integration', () => {
       theme: () => LIGHT,
       fuel: () => 64,
       openComprehension: () => {},
+      openAbstraction: () => {},
       openSpawn: () => {},
     })
     const start = sample(f.pointFor(['arg']), f.node)
@@ -402,6 +403,7 @@ describe('Proof fission integration', () => {
       theme: () => LIGHT,
       fuel: () => 64,
       openComprehension: () => {},
+      openAbstraction: () => {},
       openSpawn: () => {},
     })
     const body = f.engine.bodies.get(f.node)!

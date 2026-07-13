@@ -10,6 +10,7 @@ import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { existentialStubs, legPaths } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import type { Hit } from './hittest'
+import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { isHitSelected } from './interact/brush'
 import { ProofMoveController } from './interact/moves'
 import { InteractiveViewport, type KeySample, type MutableView } from './interact/viewport'
@@ -21,6 +22,7 @@ import {
   SubstituteTransaction,
   type RelationWorkspaceDebug,
 } from './relation-workspace'
+import { AbstractTransaction } from './relation-transactions'
 import { ProofSpawnController } from './interact/proof-spawn'
 import { introducedNodeId } from './interact/closed-term-intro'
 import { seedBodyPlacement } from '../view/placement'
@@ -165,6 +167,7 @@ export class ProofFrontViewport {
       theme: model.theme,
       fuel: model.fuel,
       openComprehension: (bubble, pointer) => this.#openComprehension(bubble, pointer),
+      openAbstraction: (selection, pointer) => this.#openAbstraction(selection, pointer),
       openSpawn: (sample, region) => {
         this.#spawn.open({ screen: sample.client, world: sample.world, region })
       },
@@ -182,7 +185,7 @@ export class ProofFrontViewport {
       passiveSample: (sample) => this.#moves.passiveSample(sample),
       modifiersChanged: (ctrlHeld) => this.#moves.modifiersChanged(ctrlHeld),
       keyDown: (sample) => {
-        if (this.#relationWorkspace !== null) return true
+        if (this.#relationWorkspace !== null) return this.#relationWorkspace.keyDown(sample)
         const routed = frontKeyRoute(model.focused(), sample)
         if (routed === null) return false
         if (model.keyCommand(routed)) return true
@@ -214,6 +217,7 @@ export class ProofFrontViewport {
   setFocused(focused: boolean): void {
     this.canvas.closest('.vpa-proof-front')?.classList.toggle('is-focused', focused)
     if (!focused) {
+      this.cancelRelationWorkspace()
       this.interaction.cancelActiveGesture()
       this.#moves.cancel()
       this.#spawn.close()
@@ -236,6 +240,10 @@ export class ProofFrontViewport {
     this.interaction.cancelActiveGesture()
     this.#moves.cancel()
     this.#spawn.close()
+  }
+
+  cancelRelationWorkspace(): void {
+    this.#relationWorkspace?.cancel()
   }
 
   resize(width: number, height: number): void {
@@ -348,6 +356,46 @@ export class ProofFrontViewport {
         this.motion.run(step, this.#model.prepareAction(action), performance.now())
       },
       cancel: () => {},
+    })
+    workspace = new RelationWorkspace({
+      mount: document.body,
+      canvas: this.canvas,
+      engine: () => this.#engine,
+      view: () => this.view,
+      context: this.#model.context,
+      theme: this.#model.theme,
+      fuel: this.#model.fuel,
+      refuse: this.#model.refuse,
+      changed: this.#model.changed,
+      openChanged: (open) => {
+        if (!open && this.#relationWorkspace === workspace) this.#relationWorkspace = null
+        this.#model.changed()
+      },
+    }, transaction, transaction.initialDraft(), pointer)
+    this.#relationWorkspace = workspace
+    this.#moves.cancel()
+    this.#model.changed()
+  }
+
+  #openAbstraction(selection: SubgraphSelection, pointer: Vec2): void {
+    if (this.#relationWorkspace !== null) return
+    let workspace: RelationWorkspace
+    const transaction = new AbstractTransaction({
+      diagram: this.#model.diagram,
+      boundary: this.#model.boundary,
+      wrap: selection,
+      context: this.#model.context,
+      orientation: this.side,
+      apply: (action) => {
+        const step = action.steps[0]
+        if (step === undefined || action.steps.length !== 1) throw new Error('relation workspace motion requires one kernel step')
+        this.motion.run(step, this.#model.prepareAction(action), performance.now())
+      },
+      cancel: () => {},
+      engine: () => this.#engine,
+      theme: this.#model.theme,
+      matcherFuel: this.#model.fuel,
+      solverFuel: () => Math.max(1024, this.#model.fuel()),
     })
     workspace = new RelationWorkspace({
       mount: document.body,

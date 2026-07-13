@@ -53,6 +53,7 @@ import { previewTransition } from './history-preview'
 import { FixedSideWorkspace } from './fixed-side-workspace'
 import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
 import { RelationWorkspace, SubstituteTransaction } from './relation-workspace'
+import { AbstractTransaction } from './relation-transactions'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -164,6 +165,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let construct!: ConstructController
   let proofMoves!: ProofMoveController
   let relationWorkspace: RelationWorkspace | null = null
+  const cancelRelationAuthoring = (): void => {
+    relationWorkspace?.cancel()
+    fixedWorkspace?.cancelRelationWorkspace()
+  }
   let spawnCascade!: SpawnCascade
   let proofSpawn!: ProofSpawnController
   let spawnHoverBinder: RegionId | null = null
@@ -368,6 +373,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // A rebuild conflict propagates through guard() to typed refusal feedback, leaving
   // the prior library untouched.
   const applyLibrary = (next: Library): void => {
+    cancelRelationAuthoring()
     library = next
     const r = rebuild(library)
     setContext(r.ctx, r.relations)
@@ -681,6 +687,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Open the stepper over a bundled/adopted theorem, remembering the mode we
   // leave so exit restores it. Step 0 (the lhs) seeds a fresh engine.
   const enterReplay = (name: string): void => {
+    cancelRelationAuthoring()
     const thm = ctx.theorems.get(name)
     if (thm === undefined) throw new Error(`unknown theorem '${name}'`)
     if (mode !== 'replay') replayReturnMode = mode
@@ -748,7 +755,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const leaveProof = guard(() => {
-    if (relationWorkspace !== null || fixedWorkspace?.editing) return
+    cancelRelationAuthoring()
     proofMoves.cancel()
     mainMotion.cancel()
     if (mode === 'replay') {
@@ -814,7 +821,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     refreshChrome()
   })
   const onUndo = guard(() => {
-    if (mainMotion.playing || fixedWorkspace?.busy || relationWorkspace !== null) return
+    cancelRelationAuthoring()
+    if (mainMotion.playing || fixedWorkspace?.playing) return
     if (mode === 'edit') {
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
@@ -838,7 +846,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     sync()
   })
   const onRedo = guard(() => {
-    if (mainMotion.playing || fixedWorkspace?.busy || relationWorkspace !== null) return
+    cancelRelationAuthoring()
+    if (mainMotion.playing || fixedWorkspace?.playing) return
     if (mode === 'edit') {
       const next = editFuture.pop()
       if (next === undefined) throw new Error('nothing to redo in edit mode')
@@ -911,6 +920,42 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       orientation: proof.track.direction,
       apply: applyProofAction,
       cancel: () => {},
+    })
+    workspace = new RelationWorkspace({
+      mount: document.body,
+      canvas,
+      engine: () => engine,
+      view: () => view,
+      context: () => ctx,
+      theme: () => theme,
+      fuel: () => readCount(fuel.input, 'fuel'),
+      refuse,
+      changed: refreshChrome,
+      openChanged: (open) => {
+        if (!open && relationWorkspace === workspace) relationWorkspace = null
+        refreshChrome()
+      },
+    }, transaction, transaction.initialDraft(), pointer)
+    relationWorkspace = workspace
+    proofMoves.cancel()
+    refreshChrome()
+  }
+
+  const openAbstraction = (selection: SubgraphSelection, pointer: Vec2): void => {
+    if (mode !== 'prove' || proof?.kind !== 'track' || relationWorkspace !== null) return
+    let workspace: RelationWorkspace
+    const transaction = new AbstractTransaction({
+      diagram: currentDiagram,
+      boundary: () => proof?.kind === 'track' ? trackBoundary(proof.track) : [],
+      wrap: selection,
+      context: () => ctx,
+      orientation: proof.track.direction,
+      apply: applyProofAction,
+      cancel: () => {},
+      engine: () => engine,
+      theme: () => theme,
+      matcherFuel: () => readCount(fuel.input, 'fuel'),
+      solverFuel: () => Math.max(1024, readCount(fuel.input, 'fuel')),
     })
     workspace = new RelationWorkspace({
       mount: document.body,
@@ -1264,7 +1309,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
   // a text/number input is focused so typing a term is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
-    if (relationWorkspace !== null) return true
+    if (relationWorkspace !== null) return relationWorkspace.keyDown(e)
     if (mode === 'prove' && proof?.kind === 'dual') return false
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       if (e.shiftKey) onRedo()
@@ -1538,6 +1583,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     theme: () => theme,
     fuel: () => readCount(fuel.input, 'fuel'),
     openComprehension,
+    openAbstraction,
     openSpawn: (sample, region) => {
       proofSpawn.open({ screen: sample.client, world: sample.world, region })
     },

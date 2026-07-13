@@ -194,6 +194,7 @@ export type ProofMoveControllerOptions = {
   readonly theme: () => Theme
   readonly fuel: () => number
   readonly openComprehension: (bubble: RegionId, pointer: Vec2) => void
+  readonly openAbstraction: (selection: SubgraphSelection, pointer: Vec2) => void
   readonly openSpawn: (sample: PointerSample, region: RegionId) => void
 }
 
@@ -402,11 +403,8 @@ export class ProofMoveController {
       return true
     }
     if (sample.shiftKey) {
-      this.#openTextPrompt('Bubble arity', 'bubble arity', (value) => {
-        const arity = Number(value)
-        if (!Number.isInteger(arity) || arity < 0) throw new Error(`'${value}' is not a valid arity`)
-        this.#commit({ rule: 'vacuousIntro', sel: discovery.sel, arity })
-      })
+      this.#options.openAbstraction(discovery.sel, this.#lastPointer)
+      this.cancel()
     } else this.#commit({ rule: 'doubleCutIntro', sel: discovery.sel })
     return true
   }
@@ -518,10 +516,10 @@ export class ProofMoveController {
       case 'erase': row(action.label, () => this.#commit(erasureStep(this.#options.diagram(), sel))); return
       case 'doubleCutWrap': row(action.label, () => this.#commit({ rule: 'doubleCutIntro', sel })); return
       case 'doubleCutElim': row(action.label, () => this.#commit({ rule: 'doubleCutElim', region: sel.regions[0]! })); return
-      case 'vacuousWrap': row(action.label, () => this.#openTextPrompt('Bubble arity', 'bubble arity', (value) => {
-        const arity = Number(value); if (!Number.isInteger(arity) || arity < 0) throw new Error(`'${value}' is not a valid arity`)
-        this.#commit({ rule: 'vacuousIntro', sel, arity })
-      })); return
+      case 'abstractWrap': row(action.label, () => {
+        this.#closeMenu()
+        this.#options.openAbstraction(sel, this.#lastPointer)
+      }); return
       case 'vacuousElim': row(action.label, () => this.#commit({ rule: 'vacuousElim', region: sel.regions[0]! })); return
       case 'iterate': row('Iterate by dragging the selection', null); return
       case 'deiterate': row(action.label, () => this.#commit({ rule: 'deiteration', sel, fuel: this.#options.fuel() })); return

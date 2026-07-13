@@ -47,6 +47,10 @@ export type RelationWorkspaceTransaction = {
   readonly sourceDiagram: () => Diagram
   readonly sourceBoundary: () => readonly WireId[]
   previewShapes(): readonly Shape[]
+  draftChanged?(snapshot: RelationWorkspaceSnapshot): void
+  cycle?(delta: 1 | -1): void
+  hostClaim?(sample: PointerSample): PointerClaim | null
+  debugState?(): unknown
   status(snapshot: RelationWorkspaceSnapshot): WorkspaceStatus
   finalize(snapshot: RelationWorkspaceSnapshot, placements: readonly PlacementHint[]): void
   cancel(): void
@@ -240,12 +244,21 @@ const clamp = (value: number, min: number, max: number): number =>
 export function placeRelationWorkspace(invocation: Vec2, viewport: ViewportSize): EditorRect {
   const availableWidth = Math.max(0, viewport.width - HORIZONTAL_MARGIN * 2)
   const availableHeight = Math.max(0, viewport.height - TOP_MARGIN - BOTTOM_MARGIN)
-  const width = Math.min(WORKSPACE_PREFERRED_WIDTH, availableWidth)
+  const preferredWidth = Math.min(WORKSPACE_PREFERRED_WIDTH, availableWidth)
+  const minimumWidth = Math.min(WORKSPACE_MIN_WIDTH, availableWidth)
   const height = Math.min(WORKSPACE_PREFERRED_HEIGHT, availableHeight)
-  const right = invocation.x + INVOCATION_GAP
-  const preferredLeft = right + width <= viewport.width - HORIZONTAL_MARGIN
-    ? right
-    : invocation.x - width - INVOCATION_GAP
+  const rightLeft = invocation.x + INVOCATION_GAP
+  const rightCapacity = viewport.width - HORIZONTAL_MARGIN - rightLeft
+  const leftCapacity = invocation.x - INVOCATION_GAP - HORIZONTAL_MARGIN
+  const canUseRight = rightCapacity >= minimumWidth
+  const canUseLeft = leftCapacity >= minimumWidth
+  const useRight = rightCapacity >= preferredWidth
+    || (leftCapacity < preferredWidth && canUseRight && (!canUseLeft || rightCapacity >= leftCapacity))
+  const sideCapacity = useRight ? rightCapacity : leftCapacity
+  const width = canUseRight || canUseLeft
+    ? Math.min(preferredWidth, Math.max(minimumWidth, sideCapacity))
+    : preferredWidth
+  const preferredLeft = useRight ? rightLeft : invocation.x - width - INVOCATION_GAP
   return {
     left: clamp(preferredLeft, HORIZONTAL_MARGIN, viewport.width - width - HORIZONTAL_MARGIN),
     top: clamp(invocation.y - 18, TOP_MARGIN, viewport.height - height - BOTTOM_MARGIN),
@@ -321,6 +334,7 @@ export type RelationWorkspaceDebug = {
   readonly materializedBoundary: readonly WireId[]
   readonly externalWires: readonly RelationPort[]
   readonly rect: EditorRect
+  readonly transaction: unknown | null
   readonly draftBodies: readonly { readonly node: NodeId; readonly kind: string; readonly x: number; readonly y: number; readonly point: Vec2 }[]
   readonly draftWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
   readonly hostWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
@@ -391,6 +405,7 @@ export class RelationWorkspace {
     this.#transaction = transaction
     if (draft.mode !== transaction.mode) throw new Error(`workspace draft mode '${draft.mode}' does not match transaction mode '${transaction.mode}'`)
     this.#draft = draft
+    this.#transaction.draftChanged?.(currentRelationDraft(this.#draft))
     const materialized = previewRelationWorkspaceSnapshot(currentRelationDraft(this.#draft))
     this.#engine = mkEngine(materialized.diagram, materialized.boundary)
     seedProject(this.#engine)
@@ -495,7 +510,18 @@ export class RelationWorkspace {
   get playingGesture(): boolean { return this.#connection?.moved ?? false }
 
   hostClaim(sample: PointerSample): PointerClaim | null {
-    return this.#connectionClaim('host', sample)
+    const transaction = this.#transaction.hostClaim?.(sample) ?? null
+    if (transaction === null) return this.#connectionClaim('host', sample)
+    return {
+      ...transaction,
+      move: (next) => { transaction.move(next); this.#host.changed() },
+      release: (next, moved) => {
+        transaction.release(next, moved)
+        this.#refreshButtons()
+        this.#host.changed()
+      },
+      cancel: () => { transaction.cancel(); this.#host.changed() },
+    }
   }
 
   hostPointerChanged(client: Vec2): void { this.#pointerChanged('host', client) }
@@ -508,6 +534,12 @@ export class RelationWorkspace {
     }
     if ((sample.ctrlKey || sample.metaKey) && sample.key.toLowerCase() === 'z') {
       this.#moveHistory(sample.shiftKey ? 1 : -1)
+      return true
+    }
+    if (sample.key === 'Tab' && this.#transaction.cycle !== undefined) {
+      this.#transaction.cycle(sample.shiftKey ? -1 : 1)
+      this.#refreshButtons()
+      this.#host.changed()
       return true
     }
     if (sample.key === 'Escape') { this.cancel(); return true }
@@ -554,6 +586,7 @@ export class RelationWorkspace {
       materializedBoundary: [...materialized.boundary],
       externalWires: current.ports.filter((port) => port.hostWire !== undefined),
       rect: { ...this.#rect },
+      transaction: this.#transaction.debugState?.() ?? null,
       draftBodies: [...this.#engine.bodies].map(([node, body]) => ({
         node,
         kind: body.kind,
@@ -624,6 +657,7 @@ export class RelationWorkspace {
   }
 
   #reconcile(placed?: { readonly node: string; readonly at: Vec2 }): void {
+    this.#transaction.draftChanged?.(currentRelationDraft(this.#draft))
     const current = previewRelationWorkspaceSnapshot(currentRelationDraft(this.#draft))
     const next = mkEngine(current.diagram, current.boundary)
     carryOver(this.#engine, next)

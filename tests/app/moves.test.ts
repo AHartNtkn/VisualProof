@@ -69,6 +69,7 @@ function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' =
         ? [{ kind: 'wire', id: wire }, { kind: 'node', id: producer }]
         : []
   const applied: ProofStep[] = []
+  const abstractions: Array<{ sel: import('../../src/kernel/diagram/subgraph/selection').SubgraphSelection; pointer: { x: number; y: number } }> = []
   const proof = ctx()
   const controller = new ProofMoveController({
     host: { ownerDocument: {} } as HTMLElement,
@@ -89,9 +90,10 @@ function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' =
     theme: () => LIGHT,
     fuel: () => 64,
     openComprehension: () => {},
+    openAbstraction: (sel, at) => { abstractions.push({ sel, pointer: at }) },
     openSpawn: () => {},
   })
-  return { controller, producer, consumer, wire, applied, diagram: () => diagram }
+  return { controller, producer, consumer, wire, applied, abstractions, diagram: () => diagram }
 }
 
 describe('shared proof move discovery', () => {
@@ -138,7 +140,7 @@ describe('shared proof move discovery', () => {
     const d = b.build()
     const forward = discoverProofActions(d, [{ kind: 'node', id: node }], ctx(), 'forward')!.actions.map((action) => action.kind)
     const backward = discoverProofActions(d, [{ kind: 'node', id: node }], ctx(), 'backward')!.actions.map((action) => action.kind)
-    for (const shared of ['doubleCutWrap', 'vacuousWrap', 'iterate', 'deiterate', 'convert', 'relFold']) {
+    for (const shared of ['doubleCutWrap', 'abstractWrap', 'iterate', 'deiterate', 'convert', 'relFold']) {
       expect(forward).toContain(shared)
       expect(backward).toContain(shared)
     }
@@ -173,6 +175,7 @@ describe('proof context routing', () => {
       theme: () => LIGHT,
       fuel: () => 64,
       openComprehension: () => {},
+      openAbstraction: () => {},
       openSpawn: (sample, region) => { opened.push({ sample, region }) },
     })
     const sample = contextPointer(null)
@@ -205,6 +208,7 @@ describe('proof context routing', () => {
       theme: () => LIGHT,
       fuel: () => 64,
       openComprehension: () => {},
+      openAbstraction: () => {},
       openSpawn: (_sample, region) => { opened.push(region) },
     })
 
@@ -407,6 +411,7 @@ describe('proof connection resolution', () => {
       theme: () => LIGHT,
       fuel: () => 64,
       openComprehension: () => {},
+      openAbstraction: () => {},
       openSpawn: () => {},
     })
     const from = { ...pointer({ kind: 'wire', id: wire }), world: pointFor(a), client: pointFor(a), screen: pointFor(a) }
@@ -437,6 +442,17 @@ describe('proof connection resolution', () => {
 })
 
 describe('fusion gesture dispatch', () => {
+  it('opens provisional abstraction from Shift+W without submitting an immediate proof step', () => {
+    const fixture = fusionController('node')
+
+    expect(fixture.controller.keyDown(key('W'))).toBe(true)
+    expect(fixture.applied).toEqual([])
+    expect(fixture.abstractions).toEqual([{
+      sel: expect.objectContaining({ nodes: [fixture.producer] }),
+      pointer: { x: 0, y: 0 },
+    }])
+  })
+
   it('submits the existing fusion step when its wire is double-clicked', () => {
     const fixture = fusionController()
 

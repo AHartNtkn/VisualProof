@@ -46,6 +46,9 @@ describe('shared relation workspace mechanics', () => {
     expect(placeRelationWorkspace({ x: 1200, y: 300 }, { width: 1400, height: 900 })).toEqual({
       left: 524, top: 282, width: 660, height: 560,
     })
+    expect(placeRelationWorkspace({ x: 640, y: 360 }, { width: 1280, height: 720 })).toEqual({
+      left: 656, top: 126, width: 612, height: 560,
+    })
     expect(placeRelationWorkspace({ x: 10, y: 10 }, { width: 400, height: 360 })).toEqual({
       left: 12, top: 44, width: 376, height: 282,
     })
