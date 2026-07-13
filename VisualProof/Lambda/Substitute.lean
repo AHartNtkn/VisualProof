@@ -172,6 +172,41 @@ theorem Term.renameBound_substBound
   | app _ _ ihFn ihArg =>
       simp only [substBound_app, renameBound, ihFn, ihArg]
 
+theorem Term.renameBound_substBoundOption
+    (t : Term n α) (σ : Fin n → Option (Term m α)) (ρ : Fin m → Fin k) :
+    (t.substBoundOption σ).map (Term.renameBound ρ) =
+      t.substBoundOption (fun i => (σ i).map (Term.renameBound ρ)) := by
+  induction t generalizing m k with
+  | bvar _ => rfl
+  | port _ => rfl
+  | lam body ih =>
+      let ρ' : Fin (m + 1) → Fin (k + 1) :=
+        Fin.cases 0 (fun i => Fin.succ (ρ i))
+      simp only [substBoundOption_lam, Option.map_map]
+      rw [show (Term.renameBound ρ ∘ Term.lam) =
+          (Term.lam ∘ Term.renameBound ρ') by
+        funext u
+        rfl]
+      rw [← Option.map_map, ih]
+      apply congrArg (Option.map Term.lam)
+      apply congrArg (fun s => Term.substBoundOption s body)
+      funext i
+      refine Fin.cases ?_ (fun j => ?_) i
+      · rfl
+      · change Option.map (Term.renameBound ρ')
+            (Option.map Term.lift (σ j)) =
+          Option.map (Term.lift ∘ Term.renameBound ρ) (σ j)
+        rw [Option.map_map]
+        apply congrArg (fun f => Option.map f (σ j))
+        funext u
+        exact (lift_renameBound u ρ).symm
+  | app fn arg ihFn ihArg =>
+      simp only [substBoundOption_app]
+      rw [← ihFn, ← ihArg]
+      generalize Term.substBoundOption σ fn = ofn
+      generalize Term.substBoundOption σ arg = oarg
+      cases ofn <;> cases oarg <;> rfl
+
 theorem Term.substBound_renameBound
     (t : Term n α) (ρ : Fin n → Fin m) (σ : Fin m → Term k α) :
     (t.renameBound ρ).substBound σ = t.substBound (σ ∘ ρ) := by
@@ -187,6 +222,24 @@ theorem Term.substBound_renameBound
       refine Fin.cases ?_ (fun _ => ?_) i <;> rfl
   | app _ _ ihFn ihArg =>
       simp only [renameBound, substBound_app, ihFn, ihArg]
+
+theorem Term.substBoundOption_renameBound
+    (t : Term n α) (ρ : Fin n → Fin m)
+    (σ : Fin m → Option (Term k α)) :
+    (t.renameBound ρ).substBoundOption σ =
+      t.substBoundOption (σ ∘ ρ) := by
+  induction t generalizing m k with
+  | bvar _ => rfl
+  | port _ => rfl
+  | lam body ih =>
+      simp only [renameBound, substBoundOption_lam]
+      rw [ih]
+      apply congrArg (Option.map Term.lam)
+      apply congrArg (fun s => Term.substBoundOption s body)
+      funext i
+      refine Fin.cases ?_ (fun _ => ?_) i <;> rfl
+  | app _ _ ihFn ihArg =>
+      simp only [renameBound, substBoundOption_app, ihFn, ihArg]
 
 theorem Term.substBound_id (t : Term n α) :
     t.substBound Term.bvar = t := by
