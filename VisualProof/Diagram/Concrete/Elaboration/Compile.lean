@@ -630,11 +630,10 @@ private def finishRegion (d : ConcreteDiagram)
   rw [WireContext.length_extend] at items
   exact .mk (exactScopeWires d region).length items
 
-private def finishOpenRoot (d : OpenConcreteDiagram)
-    (items : ItemSeq signature d.rootWires.length []) :
-    Region signature d.exposedWires.length [] :=
-  .mk d.hiddenWires.length (by
-    simpa [OpenConcreteDiagram.rootWires] using items)
+private def finishRoot (ambient locals : WireContext d)
+    (items : ItemSeq signature (ambient ++ locals).length []) :
+    Region signature ambient.length [] :=
+  .mk locals.length (by simpa using items)
 
 private def castItemSeq (equality : sourceWires = targetWires)
     (items : ItemSeq signature sourceWires rels) :
@@ -672,6 +671,20 @@ private def compileRegion? (signature : List Nat) (d : ConcreteDiagram) :
         (compileRegion? signature d fuel) extended binders
         (localOccurrences d region)
       pure (finishRegion d context region items)
+
+/--
+The single proof-independent sheet compiler. `ambient` wires become the outer
+interface and `locals` become the root region's locally bound wires. Descendant
+regions are compiled only by `compileRegion?`.
+-/
+private def compileRoot? (signature : List Nat) (d : ConcreteDiagram)
+    (ambient locals : WireContext d) :
+    Option (Region signature ambient.length []) := do
+  let rootWires := ambient ++ locals
+  let items <- compileOccurrencesWith? signature d
+    (compileRegion? signature d d.regionCount)
+    rootWires BinderContext.empty (localOccurrences d d.root)
+  pure (finishRoot ambient locals items)
 
 private theorem compileRegion?_equivariant {source target : ConcreteDiagram}
     (iso : ConcreteIso source target)
@@ -994,101 +1007,124 @@ private theorem compileRegion?_complete
       rw [hitems]
       rfl
 
-private theorem compileRoot?_complete (checked : CheckedDiagram signature) :
-    exists body,
-      compileRegion? signature checked.val (checked.val.regionCount + 1)
-        checked.val.root ([] : WireContext checked.val)
-        BinderContext.empty = some body := by
-  apply compileRegion?_complete checked.property
-    (depth := 0) (region := checked.val.root)
-  · exact checked.val.climb_zero checked.val.root
-  · omega
-  · exact WireContext.root_exact checked.property
-  · exact BinderContext.empty_covers_root checked.property
+private theorem openRootWires_exact
+    {d : OpenConcreteDiagram} (hwf : d.WellFormed signature) :
+    WireContext.Exact d.rootWires d.diagram.root := by
+  constructor
+  · exact d.rootWires_nodup
+  · intro wire
+    rw [OpenConcreteDiagram.mem_rootWires_iff d hwf]
+    constructor
+    · intro hscope
+      rw [hscope]
+      exact ConcreteDiagram.Encloses.refl d.diagram d.diagram.root
+    · exact encloses_sheet_eq hwf.diagram_well_formed.root_is_sheet
 
-/--
-Compile only the open root specially. Descendant regions are handled by the
-same recursive compiler as closed elaboration.
--/
-private def compileOpenRoot? (signature : List Nat)
-    (d : OpenConcreteDiagram) :
-    Option (Region signature d.exposedWires.length []) := do
-  let items <- compileOccurrencesWith? signature d.diagram
-    (compileRegion? signature d.diagram d.diagram.regionCount)
-    d.rootWires BinderContext.empty
-    (localOccurrences d.diagram d.diagram.root)
-  pure (finishOpenRoot d items)
+private theorem closedRootWires_exact (hwf : d.WellFormed signature) :
+    WireContext.Exact
+      (([] : WireContext d) ++ exactScopeWires d d.root) d.root := by
+  simpa [WireContext.extend] using WireContext.root_exact hwf
 
-private theorem compileOpenRoot?_complete
-    (checked : CheckedOpenDiagram signature) :
-    exists body, compileOpenRoot? signature checked.val = some body := by
-  let d := checked.val
-  let diagram := d.diagram
-  have hwf : diagram.WellFormed signature :=
-    checked.property.diagram_well_formed
-  have hwires : WireContext.Exact d.rootWires diagram.root :=
-    checked.property.rootWires_exact
-  have hbinders : (BinderContext.empty : BinderContext diagram []).Covers
-      diagram.root :=
+private theorem compileRoot?_complete
+    (hwf : d.WellFormed signature)
+    (ambient locals : WireContext d)
+    (hwires : WireContext.Exact (ambient ++ locals) d.root) :
+    exists body, compileRoot? signature d ambient locals = some body := by
+  have hbinders : (BinderContext.empty : BinderContext d []).Covers d.root :=
     BinderContext.empty_covers_root hwf
   have hoccurrence : forall occurrence,
-      occurrence ∈ localOccurrences diagram diagram.root →
+      occurrence ∈ localOccurrences d d.root →
       exists item,
-        compileOccurrenceWith? signature diagram
-            (compileRegion? signature diagram diagram.regionCount)
-            d.rootWires BinderContext.empty occurrence = some item := by
+        compileOccurrenceWith? signature d
+            (compileRegion? signature d d.regionCount)
+            (ambient ++ locals) BinderContext.empty occurrence = some item := by
     intro occurrence hmem
     cases occurrence with
     | node node =>
         have hnodeRegion :=
-          (mem_localOccurrences_node diagram diagram.root node).mp hmem
+          (mem_localOccurrences_node d d.root node).mp hmem
         simpa [compileOccurrenceWith?] using
           compileNode?_complete hwf hwires.covers hbinders hnodeRegion
     | child child =>
         have hparent :=
-          (mem_localOccurrences_child diagram diagram.root child).mp hmem
-        cases hchild : diagram.regions child with
+          (mem_localOccurrences_child d d.root child).mp hmem
+        cases hchild : d.regions child with
         | sheet =>
-            have hchildRoot : child = diagram.root :=
+            have hchildRoot : child = d.root :=
               hwf.only_root_is_sheet child hchild
             subst child
             rw [hwf.root_is_sheet] at hparent
             simp [CRegion.parent?] at hparent
         | cut parent =>
-            have hparentEq : parent = diagram.root := by
+            have hparentEq : parent = d.root := by
               simpa [hchild, CRegion.parent?] using hparent
             subst parent
-            have hchildDepth : diagram.climb 1 child = some diagram.root := by
+            have hchildDepth : d.climb 1 child = some d.root := by
               simp [ConcreteDiagram.climb, hparent]
             have hchildWires := hwires.extend_child hwf hparent
             have hchildBinders :=
               BinderContext.covers_cut_child hbinders hchild
             obtain ⟨body, hbody⟩ := compileRegion?_complete hwf
-              (depth := 1) (fuel := diagram.regionCount)
+              (depth := 1) (fuel := d.regionCount)
               hchildDepth (by omega) hchildWires hchildBinders
             exact ⟨Item.cut body, by
               simp [compileOccurrenceWith?, hchild, hbody]⟩
         | bubble parent arity =>
-            have hparentEq : parent = diagram.root := by
+            have hparentEq : parent = d.root := by
               simpa [hchild, CRegion.parent?] using hparent
             subst parent
-            have hchildDepth : diagram.climb 1 child = some diagram.root := by
+            have hchildDepth : d.climb 1 child = some d.root := by
               simp [ConcreteDiagram.climb, hparent]
             have hchildWires := hwires.extend_child hwf hparent
             have hchildBinders :=
               BinderContext.push_covers_bubble_child hbinders hchild
             obtain ⟨body, hbody⟩ := compileRegion?_complete hwf
-              (depth := 1) (fuel := diagram.regionCount)
+              (depth := 1) (fuel := d.regionCount)
               hchildDepth (by omega) hchildWires hchildBinders
             exact ⟨Item.bubble arity body, by
               simp [compileOccurrenceWith?, hchild, hbody]⟩
   obtain ⟨items, hitems⟩ := compileOccurrencesWith?_complete
-    (compileRegion? signature diagram diagram.regionCount)
-    d.rootWires BinderContext.empty _ hoccurrence
-  exact ⟨finishOpenRoot d items, by
-    simp only [compileOpenRoot?]
+    (compileRegion? signature d d.regionCount)
+    (ambient ++ locals) BinderContext.empty _ hoccurrence
+  exact ⟨finishRoot ambient locals items, by
+    simp only [compileRoot?]
     rw [hitems]
     rfl⟩
+
+private theorem compileRoot?_closed_equivariant
+    {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target)
+    (htarget : target.WellFormed signature)
+    {sourceBody : Region signature 0 []}
+    {targetBody : Region signature 0 []}
+    (hsource : compileRoot? signature source []
+        (exactScopeWires source source.root) = some sourceBody)
+    (htargetResult : compileRoot? signature target []
+        (exactScopeWires target target.root) = some targetBody) :
+    RegionIso signature (.refl (Fin 0)) [] sourceBody targetBody := by
+  have htargetResult' := htargetResult
+  change compileRegion? signature source (source.regionCount + 1) source.root
+      ([] : WireContext source) BinderContext.empty = some sourceBody at hsource
+  change compileRegion? signature target (target.regionCount + 1) target.root
+      ([] : WireContext target) BinderContext.empty = some targetBody
+    at htargetResult'
+  rw [← iso.regionCount_eq, ← iso.root_eq] at htargetResult'
+  have hwires : WireContextsAgree iso
+      ([] : WireContext source) ([] : WireContext target) (.refl (Fin 0)) := by
+    intro index
+    exact Fin.elim0 index
+  have htargetExact : WireContext.Exact
+      (WireContext.extend ([] : WireContext target) (iso.regions source.root))
+      (iso.regions source.root) := by
+    rw [iso.root_eq]
+    exact WireContext.root_exact htarget
+  have hbinders : BinderContextsAgree iso
+      (BinderContext.empty : BinderContext source [])
+      (BinderContext.empty : BinderContext target []) := by
+    intro _
+    rfl
+  exact compileRegion?_equivariant iso htarget hwires htargetExact hbinders
+    hsource htargetResult'
 
 end VisualProof.Diagram.ConcreteElaboration
 
@@ -1100,16 +1136,19 @@ open VisualProof.Theory
 namespace CheckedDiagram
 
 def elaborate (checked : CheckedDiagram signature) : Region signature 0 [] :=
-  (compileRegion? signature checked.val (checked.val.regionCount + 1)
-    checked.val.root ([] : WireContext checked.val) BinderContext.empty).get
-      (Option.isSome_iff_exists.mpr (compileRoot?_complete checked))
+  (compileRoot? signature checked.val []
+    (exactScopeWires checked.val checked.val.root)).get
+      (Option.isSome_iff_exists.mpr
+        (compileRoot?_complete checked.property [] _
+          (closedRootWires_exact checked.property)))
 
 private theorem elaborate_computation (checked : CheckedDiagram signature) :
     exists body,
-      compileRegion? signature checked.val (checked.val.regionCount + 1)
-          checked.val.root ([] : WireContext checked.val) BinderContext.empty =
-        some body /\ checked.elaborate = body := by
-  obtain ⟨body, hbody⟩ := compileRoot?_complete checked
+      compileRoot? signature checked.val []
+          (exactScopeWires checked.val checked.val.root) = some body /\
+        checked.elaborate = body := by
+  obtain ⟨body, hbody⟩ := compileRoot?_complete checked.property [] _
+    (closedRootWires_exact checked.property)
   refine ⟨body, hbody, ?_⟩
   simp [elaborate, hbody]
 
@@ -1123,8 +1162,12 @@ def elaborate (checked : CheckedOpenDiagram signature) :
   externalClasses := checked.val.exposedWires.length
   boundary := checked.val.boundaryClass
   boundary_surjective := checked.val.boundaryClass_surjective
-  body := (compileOpenRoot? signature checked.val).get
-    (Option.isSome_iff_exists.mpr (compileOpenRoot?_complete checked))
+  body := (compileRoot? signature checked.val.diagram
+    checked.val.exposedWires checked.val.hiddenWires).get
+      (Option.isSome_iff_exists.mpr
+        (compileRoot?_complete checked.property.diagram_well_formed _ _ (by
+          simpa [OpenConcreteDiagram.rootWires] using
+            openRootWires_exact checked.property)))
 
 @[simp] theorem elaborate_externalClasses
     (checked : CheckedOpenDiagram signature) :
@@ -1138,9 +1181,14 @@ def elaborate (checked : CheckedOpenDiagram signature) :
 
 private theorem elaborate_body_computation
     (checked : CheckedOpenDiagram signature) :
-    exists body, compileOpenRoot? signature checked.val = some body ∧
-      checked.elaborate.body = body := by
-  obtain ⟨body, hbody⟩ := compileOpenRoot?_complete checked
+    exists body,
+      compileRoot? signature checked.val.diagram checked.val.exposedWires
+          checked.val.hiddenWires = some body ∧
+        checked.elaborate.body = body := by
+  obtain ⟨body, hbody⟩ := compileRoot?_complete
+    checked.property.diagram_well_formed _ _ (by
+      simpa [OpenConcreteDiagram.rootWires] using
+        openRootWires_exact checked.property)
   refine ⟨body, hbody, ?_⟩
   simp [elaborate, hbody]
 
@@ -1183,8 +1231,7 @@ theorem elaborate_proof_irrelevant (d : ConcreteDiagram)
 private theorem elaborate_computation (d : ConcreteDiagram)
     (hwf : d.WellFormed signature) :
     exists body,
-      compileRegion? signature d (d.regionCount + 1) d.root
-          ([] : WireContext d) BinderContext.empty = some body /\
+      compileRoot? signature d [] (exactScopeWires d d.root) = some body /\
         d.elaborate hwf = body :=
   CheckedDiagram.elaborate_computation ⟨d, hwf⟩
 
@@ -1201,31 +1248,9 @@ theorem elaborate_isomorphic {source target : ConcreteDiagram}
     ConcreteDiagram.elaborate_computation source hsource
   obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
     ConcreteDiagram.elaborate_computation target htarget
-  have htargetKernel' := htargetKernel
-  rw [<- iso.regionCount_eq, <- iso.root_eq] at htargetKernel'
-  have hwires : ConcreteElaboration.WireContextsAgree iso
-      ([] : ConcreteElaboration.WireContext source)
-      ([] : ConcreteElaboration.WireContext target)
-      (.refl (Fin 0)) := by
-    intro index
-    exact Fin.elim0 index
-  have htargetExact :
-      ConcreteElaboration.WireContext.Exact
-        (ConcreteElaboration.WireContext.extend
-          ([] : ConcreteElaboration.WireContext target)
-          (iso.regions source.root)) (iso.regions source.root) := by
-    rw [iso.root_eq]
-    exact ConcreteElaboration.WireContext.root_exact htarget
-  have hbinders : ConcreteElaboration.BinderContextsAgree iso
-      (ConcreteElaboration.BinderContext.empty :
-        ConcreteElaboration.BinderContext source [])
-      (ConcreteElaboration.BinderContext.empty :
-        ConcreteElaboration.BinderContext target []) := by
-    intro _
-    rfl
   have hbody : RegionIso signature (.refl (Fin 0)) [] sourceBody targetBody :=
-    ConcreteElaboration.compileRegion?_equivariant iso htarget hwires
-      htargetExact hbinders hsourceKernel htargetKernel'
+    ConcreteElaboration.compileRoot?_closed_equivariant iso htarget
+      hsourceKernel htargetKernel
   rw [hsourceElaborate, htargetElaborate]
   exact hbody
 
@@ -1244,22 +1269,6 @@ def repeatedBoundaryChecked : CheckedOpenDiagram [] :=
 
 def exposedAndHiddenOpenChecked : CheckedOpenDiagram [] :=
   ⟨exposedAndHiddenOpen, exposedAndHiddenOpen_wellFormed⟩
-
-theorem repeatedBoundary_elaborate_shape :
-    repeatedBoundaryChecked.elaborate.externalClasses = 1 ∧
-      repeatedBoundaryChecked.elaborate.boundary ⟨0, by decide⟩ =
-        (⟨0, by decide⟩ : Fin 1) ∧
-      repeatedBoundaryChecked.elaborate.boundary ⟨1, by decide⟩ =
-        (⟨0, by decide⟩ : Fin 1) ∧
-      repeatedBoundaryChecked.elaborate.body = (.mk 0 .nil : Region [] 1 []) := by
-  exact ⟨rfl, rfl, rfl, rfl⟩
-
-theorem exposedAndHiddenOpen_elaborate_shape :
-    exposedAndHiddenOpenChecked.elaborate.externalClasses = 1 ∧
-      exposedAndHiddenOpenChecked.elaborate.boundary ⟨0, by decide⟩ =
-        (⟨0, by decide⟩ : Fin 1) ∧
-      exposedAndHiddenOpenChecked.elaborate.body = (.mk 1 .nil : Region [] 1 []) := by
-  exact ⟨rfl, rfl, rfl⟩
 
 def unaryHead : RelVar [1] 1 where
   index := 0

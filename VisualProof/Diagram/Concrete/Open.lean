@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.Elaboration.Context
+import VisualProof.Diagram.Concrete.Elaboration.Traversal
 
 namespace VisualProof.Diagram
 
@@ -172,24 +172,6 @@ theorem rootWires_nodup (d : OpenConcreteDiagram) :
   rw [rootWires, List.nodup_append]
   exact ⟨d.exposedWires_nodup, d.hiddenWires_nodup,
     d.exposedWires_hiddenWires_disjoint⟩
-
-/--
-The open root partition is the exact wire context at the sheet: exposed classes
-are the ambient prefix and precisely the remaining root-scoped wires are local.
--/
-theorem WellFormed.rootWires_exact
-    {d : OpenConcreteDiagram} (hwf : d.WellFormed signature) :
-    ConcreteElaboration.WireContext.Exact d.rootWires d.diagram.root := by
-  constructor
-  · exact d.rootWires_nodup
-  · intro wire
-    rw [mem_rootWires_iff d hwf]
-    constructor
-    · intro hscope
-      rw [hscope]
-      exact ConcreteDiagram.Encloses.refl d.diagram d.diagram.root
-    · exact ConcreteElaboration.encloses_sheet_eq
-        hwf.diagram_well_formed.root_is_sheet
 
 end OpenConcreteDiagram
 
