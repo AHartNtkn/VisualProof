@@ -156,6 +156,26 @@ def Individual := Quotient betaEtaSetoid
 
 Term-node evaluation substitutes representatives of input individuals into an open term and returns the resulting quotient class. Well-definedness proofs show that the result is independent of chosen representatives.
 
+The abstract evaluator interface is a lawful beta-eta-respecting algebra for free
+term substitution, not an arbitrary function:
+
+```lean
+structure LambdaModel where
+  Carrier : Type
+  eval : {n : Nat} → Term 0 (Fin n) → (Fin n → Carrier) → Carrier
+  eval_port : eval (.port i) env = env i
+  eval_bindFree :
+    eval (term.bindFree substitution) env =
+      eval term (fun i => eval (substitution i) env)
+  betaEta_sound : BetaEta a b → eval a env = eval b env
+```
+
+Arbitrary free-port naturality is derived from `eval_port` and `eval_bindFree`;
+it is not a redundant structure field. This law is the authority for wire
+renaming and aliasing, while `eval_bindFree` is also the authority for later
+fusion and fission. The canonical quotient evaluator proves the structure laws
+from representative independence and substitution associativity.
+
 ### 4.3 Certificates and bounded search
 
 The formal relation is not defined by the search algorithm. A conversion certificate is a pair of finite reduction paths to a common term. The checker is executable and has the theorem:

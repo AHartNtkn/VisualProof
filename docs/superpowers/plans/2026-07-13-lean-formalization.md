@@ -298,13 +298,25 @@ def Individual := Quotient betaEtaSetoid
 structure LambdaModel where
   Carrier : Type
   eval : {n : Nat} → Term 0 (Fin n) → (Fin n → Carrier) → Carrier
+  eval_port : ∀ {n} (i : Fin n) (env : Fin n → Carrier),
+    eval (.port i) env = env i
+  eval_bindFree : ∀ {n m} (term : Term 0 (Fin n))
+      (substitution : Fin n → Term 0 (Fin m))
+      (env : Fin m → Carrier),
+    eval (term.bindFree substitution) env =
+      eval term (fun i => eval (substitution i) env)
   betaEta_sound : ∀ {n} {a b : Term 0 (Fin n)} {env : Fin n → Carrier},
     BetaEta a b → eval a env = eval b env
 
 def canonicalModel : LambdaModel
 ```
 
-Implement `canonicalModel.eval` by finite quotient induction over the environment, substituting closed representatives and taking the quotient. Prove representative independence from substitution congruence.
+Implement `canonicalModel.eval` by finite quotient induction over the environment,
+substituting closed representatives and taking the quotient. Prove representative
+independence, `eval_port`, and `eval_bindFree` from the owning substitution laws.
+Prove the syntactic identity between `mapFree` and binding renamed ports, then
+derive arbitrary-function `LambdaModel.eval_mapFree`; do not store naturality as a
+fourth model field.
 
 - [ ] **Step 5: Implement and prove certificate checking**
 
@@ -521,7 +533,19 @@ Prove both simultaneously by induction on the context path; only the cut constru
 
 - [ ] **Step 4: Prove permutation and alpha invariance**
 
-In `Isomorphism.lean`, define isomorphism from bijections on local wires plus permutations of item lists and recursively compatible child isomorphisms. Prove `iso_denotation` by induction, using existential change-of-variables and conjunction permutation.
+In `Isomorphism.lean`, define generalized mutually indexed region/item/item-sequence
+isomorphism under an ambient finite wire equivalence. Each region carries a
+separate local-wire equivalence extended blockwise, so inherited and local wires
+cannot mix. Equations move their output and term ports together; atom argument
+positions and relation binders remain fixed; cuts and bubbles recurse.
+
+Expose `ItemSeq.length` and dependent `ItemSeq.get` as eliminators over the sole
+authoritative sequence. Represent conjunct permutation by an equivalence of
+occurrence positions with recursively compatible items, never by converting to a
+`List Item` or defining a second syntax. Prove generalized denotation invariance
+under corresponding environments using the derived `LambdaModel.eval_mapFree`,
+then specialize `Core.Isomorphic` to identity inherited wiring and prove
+`iso_denotation`.
 
 - [ ] **Step 5: Build and commit**
 
