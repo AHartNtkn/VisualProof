@@ -1003,13 +1003,13 @@ private theorem classifyHead_toTerm (binders : Nat)
         simp only [Head.toTerm, RawHead.toTerm]
         apply congrArg Term.bvar
         apply Fin.ext
-        simp only [Fin.val_mk]
+        change binders - 1 - (binders - 1 - i.val) = i.val
         omega
       next h =>
         simp only [Head.toTerm, RawHead.toTerm]
         apply congrArg Term.bvar
         apply Fin.ext
-        simp only [Fin.val_mk]
+        change binders + (i.val - binders) = i.val
         omega
 
 private def Head.wrap : Head (n + 1) binders α → Head n (binders + 1) α
