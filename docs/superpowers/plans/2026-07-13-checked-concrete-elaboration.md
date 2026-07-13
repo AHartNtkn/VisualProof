@@ -68,12 +68,12 @@
 
 **Produces:** Private proof-independent elaboration, public total checked elaboration, proof irrelevance/computation theorems, and concrete denotation only through intrinsic semantics.
 
-- [ ] Implement the private recursive `Option` kernel. At each region enumerate every exact-scope wire (including bare wires), extend the wire environment, translate local nodes, and recurse over direct children.
-- [ ] Translate terms to equations using output resolution and `Lambda.Term.mapFree`; translate atoms by exact binder identity and ordered `.arg`; translate named relations using checked signature lookup and ordered `.arg`.
-- [ ] State and prove recursive success under the traversal/context invariants, then root success from `WellFormed`.
-- [ ] Expose only a total API from `CheckedDiagram signature` (plus the equivalent diagram/proof equation if useful). Prove the output is independent of proof witnesses and state its computation equation against the private kernel.
-- [ ] Define concrete denotation by applying existing intrinsic denotation to the elaborated region. Do not duplicate semantic clauses.
-- [ ] Add theorem-owned examples covering the valid nested diagram and the bare-wire diagram; build, inspect axioms, scan for alternate authorities, and commit.
+- [x] Implement the private recursive `Option` kernel. At each region enumerate every exact-scope wire (including bare wires), extend the wire environment, translate local nodes, and recurse over direct children.
+- [x] Translate terms to equations using output resolution and `Lambda.Term.mapFree`; translate atoms by exact binder identity and ordered `.arg`; translate named relations using checked signature lookup and ordered `.arg`.
+- [x] State and prove recursive success under the traversal/context invariants, then root success from `WellFormed`.
+- [x] Expose only a total API from `CheckedDiagram signature` (plus the equivalent diagram/proof equation if useful). Prove the output is independent of proof witnesses and state its computation equation against the private kernel.
+- [x] Define concrete denotation by applying existing intrinsic denotation to the elaborated region. Do not duplicate semantic clauses.
+- [x] Add theorem-owned examples covering the valid nested diagram and the bare-wire diagram; build, inspect axioms, scan for alternate authorities, and commit.
 
 ---
 
@@ -96,8 +96,7 @@
 ### Task 5: Elaboration equivariance into intrinsic isomorphism
 
 **Files:**
-- Create: `VisualProof/Diagram/Concrete/Elaboration/Isomorphism.lean`
-- Modify: `VisualProof/Diagram/Concrete/Elaboration.lean`
+- Modify: `VisualProof/Diagram/Concrete/Elaboration/Compile.lean`
 - Modify: `VisualProof/Diagram/Concrete.lean`
 
 **Produces:** The main theorem that concretely isomorphic checked diagrams elaborate to `Core.Isomorphic` intrinsic regions, hence have identical denotation.
@@ -106,7 +105,7 @@
 - [ ] Prove ambient wire extension commutes with concrete renaming via existing `extendWireEquiv`; prove port resolution is equivariant.
 - [ ] Prove binder contexts agree along corresponding region paths and all node translations yield the required intrinsic `ItemIso`.
 - [ ] Restrict node/child equivalences to tagged local-occurrence fibers and combine them into the position equivalence used by `ItemSeqIso.permute`.
-- [ ] Prove the synchronized recursive worker theorem and derive:
+- [ ] Keep the synchronized recursive worker theorem file-private by proving it in `Compile.lean` after importing the independent raw `ConcreteIso` layer; do not expose an internal partial compiler merely to cross a file boundary. Derive:
 
 ```lean
 theorem ConcreteIso.elaborate_isomorphic
