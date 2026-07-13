@@ -1,7 +1,11 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
+import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { parseTerm } from '../kernel/term/parse'
 import { applyFission } from '../kernel/rules/fusion'
-import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import { applyComprehensionInstantiate } from '../kernel/rules/comprehension'
+import type { ProofContext } from '../kernel/proof/step'
+import { applyAction, type PlacementHint, type ProofAction } from '../kernel/proof/action'
 import { carryOver, mkEngine, resolvedFrameSlot, type Engine } from '../view/engine'
 import { bubbleHues, paint, type Shape, type Theme } from '../view/paint'
 import type { Vec2 } from '../view/vec'
@@ -15,23 +19,258 @@ import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { introducedNodeId } from './interact/closed-term-intro'
 import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from './interact/viewport'
 import {
-  applyComprehensionConnection,
-  currentComprehensionDraft,
-  materializeComprehensionSnapshot,
-  moveComprehensionHistory,
-  planComprehensionConnection,
-  replaceComprehensionDiagram,
-  beginComprehensionDraft,
-  deriveExternalReferencePresentation,
-  type ComprehensionConnectionEndpoint,
-  type ComprehensionDraft,
-  type ExternalWireBinding,
-} from './comprehension-draft'
+  applyRelationConnection,
+  beginSubstitutionDraft,
+  currentRelationDraft,
+  deleteOptionalPort,
+  insertOptionalPort,
+  moveRelationHistory,
+  moveOptionalPort,
+  planRelationConnection,
+  replaceRelationDiagram,
+  deriveRelationExternalReferencePresentation,
+  type RelationConnectionEndpoint,
+  type RelationWorkspaceDraft,
+  type RelationWorkspaceSnapshot,
+  type RelationPort,
+} from './relation-workspace-draft'
 
-export const EDITOR_PREFERRED_WIDTH = 660
-export const EDITOR_PREFERRED_HEIGHT = 560
-export const EDITOR_MIN_WIDTH = 420
-export const EDITOR_MIN_HEIGHT = 340
+export type WorkspaceStatus = {
+  readonly kind: 'ready' | 'refused'
+  readonly message: string
+}
+
+export type RelationWorkspaceTransaction = {
+  readonly mode: 'substitute' | 'abstract'
+  readonly title: string
+  readonly finalizeLabel: string
+  readonly sourceDiagram: () => Diagram
+  readonly sourceBoundary: () => readonly WireId[]
+  previewShapes(): readonly Shape[]
+  status(snapshot: RelationWorkspaceSnapshot): WorkspaceStatus
+  finalize(snapshot: RelationWorkspaceSnapshot, placements: readonly PlacementHint[]): void
+  cancel(): void
+}
+
+export function transactionCopy(transaction: RelationWorkspaceTransaction): {
+  readonly title: string
+  readonly finalizeLabel: string
+} {
+  return { title: transaction.title, finalizeLabel: transaction.finalizeLabel }
+}
+
+function materializeSnapshot(
+  snapshot: RelationWorkspaceSnapshot,
+  mode: RelationWorkspaceTransaction['mode'],
+): { readonly relation: ReturnType<typeof mkDiagramWithBoundary>; readonly attachments: WireId[] } {
+  const unbound = mode === 'substitute'
+    ? snapshot.ports.find((port) => port.kind === 'optional' && port.hostWire === undefined)
+    : undefined
+  if (unbound !== undefined) throw new Error(`optional substitution port '${unbound.id}' must be bound or removed before finalization`)
+  return {
+    relation: mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire)),
+    attachments: snapshot.ports.flatMap((port) => port.kind === 'optional' && port.hostWire !== undefined ? [port.hostWire] : []),
+  }
+}
+
+export function previewRelationWorkspaceSnapshot(snapshot: RelationWorkspaceSnapshot): ReturnType<typeof mkDiagramWithBoundary> {
+  return mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire))
+}
+
+export function applyPortStripDrop(
+  draft: RelationWorkspaceDraft,
+  wire: WireId,
+  optionalIndex: number,
+  hostWire?: WireId,
+): RelationWorkspaceDraft {
+  return insertOptionalPort(draft, wire, optionalIndex, hostWire)
+}
+
+export function applyPortStripMove(
+  draft: RelationWorkspaceDraft,
+  portId: string,
+  optionalIndex: number,
+): RelationWorkspaceDraft {
+  return moveOptionalPort(draft, portId, optionalIndex)
+}
+
+export function applyPortStripDelete(draft: RelationWorkspaceDraft, portId: string): RelationWorkspaceDraft {
+  return deleteOptionalPort(draft, portId)
+}
+
+export function editRelationWorkspaceDraft(
+  draft: RelationWorkspaceDraft,
+  edit: (diagram: Diagram) => Diagram,
+): { readonly draft: RelationWorkspaceDraft; readonly error: string | null } {
+  try {
+    return { draft: replaceRelationDiagram(draft, edit(currentRelationDraft(draft).diagram)), error: null }
+  } catch (error) {
+    return { draft, error: error instanceof Error ? error.message : String(error) }
+  }
+}
+
+export type WorkspaceTransientState = {
+  readonly pointerClaimed: boolean
+  readonly draftHoverWire: WireId | null
+  readonly hostHoverWire: WireId | null
+  readonly connectionGesture: boolean
+  readonly mounted: boolean
+}
+
+export function clearRelationWorkspaceTransientState(_state: WorkspaceTransientState): WorkspaceTransientState {
+  return {
+    pointerClaimed: false,
+    draftHoverWire: null,
+    hostHoverWire: null,
+    connectionGesture: false,
+    mounted: false,
+  }
+}
+
+export function runRelationWorkspaceCancellation(transaction: RelationWorkspaceTransaction): void {
+  transaction.cancel()
+}
+
+export function renderRelationPortStrip(document: Document, ports: readonly RelationPort[]): HTMLOListElement {
+  const strip = document.createElement('ol')
+  strip.className = 'vpa-relation-port-strip'
+  let optionalIndex = 0
+  ports.forEach((port, portIndex) => {
+    const target = document.createElement('li')
+    target.className = `vpa-relation-port is-${port.kind}`
+    if (portIndex === 0 && port.kind === 'forced') target.classList.add('is-orientation')
+    if (port.hostWire !== undefined) target.classList.add('is-bound')
+    target.dataset.portId = port.id
+    target.dataset.portKind = port.kind
+    target.dataset.portIndex = String(portIndex)
+    target.dataset.wire = port.wire
+    if (port.kind === 'optional') target.dataset.optionalIndex = String(optionalIndex++)
+    target.textContent = port.kind === 'forced' ? String(portIndex + 1) : '·'
+    target.setAttribute('role', 'button')
+    target.setAttribute('tabindex', '0')
+    target.draggable = port.kind === 'optional'
+    target.setAttribute('aria-label', `${port.kind} relation port ${portIndex + 1}`)
+    strip.append(target)
+  })
+  return strip
+}
+
+export function portStripInsertionIndex(
+  ports: readonly RelationPort[],
+  target: { readonly kind: RelationPort['kind']; readonly optionalIndex?: number } | null,
+): number {
+  if (target?.kind === 'forced') return 0
+  if (target?.optionalIndex !== undefined) return target.optionalIndex
+  return ports.filter((port) => port.kind === 'optional').length
+}
+
+export function attemptRelationWorkspaceFinalize(
+  transaction: RelationWorkspaceTransaction,
+  snapshot: RelationWorkspaceSnapshot,
+  placements: readonly PlacementHint[],
+): { readonly closed: boolean; readonly error: unknown | null } {
+  try {
+    transaction.finalize(snapshot, placements)
+    return { closed: true, error: null }
+  } catch (error) {
+    return { closed: false, error }
+  }
+}
+
+export function relationWorkspaceCanFinalize(
+  transaction: RelationWorkspaceTransaction,
+  snapshot: RelationWorkspaceSnapshot,
+): boolean {
+  return transaction.status(snapshot).kind === 'ready'
+}
+
+export type SubstituteTransactionOptions = {
+  readonly diagram: () => Diagram
+  readonly boundary: () => readonly WireId[]
+  readonly bubble: RegionId
+  readonly context: () => ProofContext
+  readonly orientation?: 'forward' | 'backward'
+  readonly apply: (action: ProofAction) => void
+  readonly cancel: () => void
+}
+
+export class SubstituteTransaction implements RelationWorkspaceTransaction {
+  readonly mode = 'substitute' as const
+  readonly finalizeLabel = 'Instantiate'
+  readonly #source: Diagram
+  readonly #boundary: readonly WireId[]
+  readonly #sourceFingerprint: string
+  readonly #bubble: RegionId
+  readonly #arity: number
+  readonly #opts: SubstituteTransactionOptions
+
+  constructor(opts: SubstituteTransactionOptions) {
+    const source = opts.diagram()
+    const bubble = source.regions[opts.bubble]
+    if (bubble === undefined || bubble.kind !== 'bubble') throw new Error(`'${opts.bubble}' is not a relation bubble`)
+    this.#opts = opts
+    this.#source = source
+    this.#boundary = [...opts.boundary()]
+    this.#sourceFingerprint = exploreForm(source, this.#boundary)
+    this.#bubble = opts.bubble
+    this.#arity = bubble.arity
+  }
+
+  get title(): string { return `SUBSTITUTE · NEW RELATION /${this.#arity}` }
+  sourceDiagram = (): Diagram => this.#source
+  sourceBoundary = (): readonly WireId[] => this.#boundary
+  previewShapes(): readonly Shape[] { return [] }
+  initialDraft(): RelationWorkspaceDraft { return beginSubstitutionDraft(this.#source, this.#bubble) }
+
+  status(snapshot: RelationWorkspaceSnapshot): WorkspaceStatus {
+    try {
+      const forced = snapshot.ports.filter((port) => port.kind === 'forced')
+      if (forced.length !== this.#arity) throw new Error(`substitution requires ${this.#arity} forced ports`)
+      const materialized = materializeSnapshot(snapshot, this.mode)
+      applyComprehensionInstantiate(
+        this.#source,
+        this.#bubble,
+        materialized.relation,
+        materialized.attachments,
+        new Map(),
+        this.#opts.orientation ?? 'forward',
+      )
+      return { kind: 'ready', message: 'ready to instantiate' }
+    } catch (error) {
+      return { kind: 'refused', message: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  finalize(snapshot: RelationWorkspaceSnapshot, placements: readonly PlacementHint[]): void {
+    const live = this.#opts.diagram()
+    if (exploreForm(live, this.#boundary) !== this.#sourceFingerprint) {
+      throw new Error('substitution source changed while the relation workspace was open')
+    }
+    const status = this.status(snapshot)
+    if (status.kind !== 'ready') throw new Error(status.message)
+    const materialized = materializeSnapshot(snapshot, this.mode)
+    const action: ProofAction = {
+      label: 'substitute relation',
+      steps: [{
+        rule: 'comprehensionInstantiate',
+        bubble: this.#bubble,
+        comp: materialized.relation,
+        attachments: materialized.attachments,
+        binders: {},
+      }],
+      placements,
+    }
+    applyAction(live, action, this.#opts.context(), this.#opts.orientation ?? 'forward')
+    this.#opts.apply(action)
+  }
+
+  cancel(): void { this.#opts.cancel() }
+}
+
+export const WORKSPACE_PREFERRED_WIDTH = 660
+export const WORKSPACE_PREFERRED_HEIGHT = 560
+export const WORKSPACE_MIN_WIDTH = 420
+export const WORKSPACE_MIN_HEIGHT = 340
 
 const HORIZONTAL_MARGIN = 12
 const TOP_MARGIN = 44
@@ -50,11 +289,11 @@ type ViewportSize = { readonly width: number; readonly height: number }
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(Math.max(min, max), value))
 
-export function placeComprehensionEditor(invocation: Vec2, viewport: ViewportSize): EditorRect {
+export function placeRelationWorkspace(invocation: Vec2, viewport: ViewportSize): EditorRect {
   const availableWidth = Math.max(0, viewport.width - HORIZONTAL_MARGIN * 2)
   const availableHeight = Math.max(0, viewport.height - TOP_MARGIN - BOTTOM_MARGIN)
-  const width = Math.min(EDITOR_PREFERRED_WIDTH, availableWidth)
-  const height = Math.min(EDITOR_PREFERRED_HEIGHT, availableHeight)
+  const width = Math.min(WORKSPACE_PREFERRED_WIDTH, availableWidth)
+  const height = Math.min(WORKSPACE_PREFERRED_HEIGHT, availableHeight)
   const right = invocation.x + INVOCATION_GAP
   const preferredLeft = right + width <= viewport.width - HORIZONTAL_MARGIN
     ? right
@@ -67,7 +306,7 @@ export function placeComprehensionEditor(invocation: Vec2, viewport: ViewportSiz
   }
 }
 
-export function moveComprehensionEditor(rect: EditorRect, delta: Vec2, viewport: ViewportSize): EditorRect {
+export function moveRelationWorkspace(rect: EditorRect, delta: Vec2, viewport: ViewportSize): EditorRect {
   return {
     ...rect,
     left: clamp(rect.left + delta.x, 0, viewport.width - rect.width),
@@ -75,11 +314,11 @@ export function moveComprehensionEditor(rect: EditorRect, delta: Vec2, viewport:
   }
 }
 
-export function resizeComprehensionEditor(rect: EditorRect, delta: Vec2, viewport: ViewportSize): EditorRect {
+export function resizeRelationWorkspace(rect: EditorRect, delta: Vec2, viewport: ViewportSize): EditorRect {
   const availableWidth = Math.max(0, viewport.width - rect.left)
   const availableHeight = Math.max(0, viewport.height - rect.top)
-  const minWidth = Math.min(EDITOR_MIN_WIDTH, availableWidth)
-  const minHeight = Math.min(EDITOR_MIN_HEIGHT, availableHeight)
+  const minWidth = Math.min(WORKSPACE_MIN_WIDTH, availableWidth)
+  const minHeight = Math.min(WORKSPACE_MIN_HEIGHT, availableHeight)
   return {
     ...rect,
     width: clamp(rect.width + delta.x, minWidth, availableWidth),
@@ -87,23 +326,23 @@ export function resizeComprehensionEditor(rect: EditorRect, delta: Vec2, viewpor
   }
 }
 
-export function connectionTargets(
-  draft: ComprehensionDraft,
-  source: ComprehensionConnectionEndpoint,
+export function relationConnectionTargets(
+  draft: RelationWorkspaceDraft,
+  source: RelationConnectionEndpoint,
 ): { readonly draft: ReadonlySet<WireId>; readonly host: ReadonlySet<WireId> } {
   const draftTargets = new Set<WireId>()
   const hostTargets = new Set<WireId>()
-  const current = draft.history[draft.cursor]!
-  for (const wire of Object.keys(current.relation.diagram.wires)) {
-    if (planComprehensionConnection(draft, source, { kind: 'draft', wire }).ok) draftTargets.add(wire)
+  const current = currentRelationDraft(draft)
+  for (const wire of Object.keys(current.diagram.wires)) {
+    if (planRelationConnection(draft, source, { kind: 'draft', wire }).ok) draftTargets.add(wire)
   }
   for (const wire of Object.keys(draft.host.wires)) {
-    if (planComprehensionConnection(draft, source, { kind: 'host', wire }).ok) hostTargets.add(wire)
+    if (planRelationConnection(draft, source, { kind: 'host', wire }).ok) hostTargets.add(wire)
   }
   return { draft: draftTargets, host: hostTargets }
 }
 
-export function formalBoundaryMarks(boundary: readonly WireId[]): readonly {
+export function relationBoundaryMarks(boundary: readonly WireId[]): readonly {
   readonly wire: WireId
   readonly position: number
   readonly orientation: boolean
@@ -111,55 +350,42 @@ export function formalBoundaryMarks(boundary: readonly WireId[]): readonly {
   return boundary.map((wire, position) => ({ wire, position, orientation: position === 0 }))
 }
 
-export function applyEditorConnection(
-  draft: ComprehensionDraft,
-  captured: ComprehensionDraft['history'][number],
-  source: ComprehensionConnectionEndpoint,
-  target: ComprehensionConnectionEndpoint,
-): ComprehensionDraft {
-  if (currentComprehensionDraft(draft) !== captured) throw new Error('connection cancelled because the draft changed')
-  return applyComprehensionConnection(draft, source, target)
+export function applyCapturedRelationConnection(
+  draft: RelationWorkspaceDraft,
+  captured: RelationWorkspaceDraft['history'][number],
+  source: RelationConnectionEndpoint,
+  target: RelationConnectionEndpoint,
+): RelationWorkspaceDraft {
+  if (currentRelationDraft(draft) !== captured) throw new Error('connection cancelled because the draft changed')
+  return applyRelationConnection(draft, source, target)
 }
 
-export function comprehensionInstantiationStep(draft: ComprehensionDraft): ProofStep {
-  const materialized = materializeComprehensionSnapshot(currentComprehensionDraft(draft))
-  return {
-    rule: 'comprehensionInstantiate', bubble: draft.bubble,
-    comp: materialized.relation,
-    attachments: materialized.attachments,
-    binders: {},
-  }
-}
-
-export type ComprehensionEditorHost = {
+export type RelationWorkspaceHost = {
   readonly mount: HTMLElement
   readonly canvas: HTMLCanvasElement
-  diagram(): Diagram
-  boundary(): readonly WireId[]
   engine(): Engine
   view(): MutableView
   context(): ProofContext
   theme(): Theme
   fuel(): number
-  apply(step: ProofStep): void
   refuse(text: string, pointer: Vec2): void
   changed(): void
   openChanged(open: boolean): void
 }
 
-export type ComprehensionEditorDebug = {
-  readonly bubble: RegionId
+export type RelationWorkspaceDebug = {
+  readonly mode: RelationWorkspaceTransaction['mode']
   readonly cursor: number
   readonly historyLength: number
   readonly formalBoundary: readonly WireId[]
   readonly materializedBoundary: readonly WireId[]
-  readonly externalWires: readonly ExternalWireBinding[]
+  readonly externalWires: readonly RelationPort[]
   readonly rect: EditorRect
   readonly draftBodies: readonly { readonly node: NodeId; readonly kind: string; readonly x: number; readonly y: number; readonly point: Vec2 }[]
   readonly draftWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
   readonly hostWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
   readonly connection: null | {
-    readonly source: ComprehensionConnectionEndpoint
+    readonly source: RelationConnectionEndpoint
     readonly draftTargets: readonly WireId[]
     readonly hostTargets: readonly WireId[]
   }
@@ -167,8 +393,8 @@ export type ComprehensionEditorDebug = {
 
 type SurfaceKind = 'host' | 'draft'
 type ConnectionGesture = {
-  readonly source: ComprehensionConnectionEndpoint
-  readonly captured: ComprehensionDraft['history'][number]
+  readonly source: RelationConnectionEndpoint
+  readonly captured: RelationWorkspaceDraft['history'][number]
   readonly start: Vec2
   current: Vec2
   moved: boolean
@@ -191,8 +417,9 @@ const itemShapes = (engine: Engine, hit: Hit, stroke: string): Shape[] => {
   return region === undefined ? [] : [{ kind: 'circle', center: region.center, r: region.radius, fill: null, stroke, width: 2, insetColor: null, glow: null }]
 }
 
-export class ComprehensionEditor {
-  readonly #host: ComprehensionEditorHost
+export class RelationWorkspace {
+  readonly #host: RelationWorkspaceHost
+  readonly #transaction: RelationWorkspaceTransaction
   readonly #root: HTMLDivElement
   readonly #canvas: HTMLCanvasElement
   readonly #surface: CanvasAdapter
@@ -202,51 +429,62 @@ export class ComprehensionEditor {
   readonly #spawn: SpawnCascade
   readonly #undo: HTMLButtonElement
   readonly #redo: HTMLButtonElement
+  readonly #finalizeButton: HTMLButtonElement
+  readonly #portStrip: HTMLOListElement
   readonly #gesture: SVGSVGElement
-  #draft: ComprehensionDraft
+  #draft: RelationWorkspaceDraft
   #engine: Engine
   #rect: EditorRect
   #connection: ConnectionGesture | null = null
   #draftHoverWire: WireId | null = null
   #hostHoverWire: WireId | null = null
+  #selectedPort: string | null = null
   #disposed = false
 
-  constructor(host: ComprehensionEditorHost, bubble: RegionId, invocation: Vec2) {
+  constructor(
+    host: RelationWorkspaceHost,
+    transaction: RelationWorkspaceTransaction,
+    draft: RelationWorkspaceDraft,
+    invocation: Vec2,
+  ) {
     this.#host = host
-    this.#draft = beginComprehensionDraft(host.diagram(), bubble)
-    const materialized = materializeComprehensionSnapshot(currentComprehensionDraft(this.#draft))
-    this.#engine = mkEngine(materialized.relation.diagram, materialized.relation.boundary)
+    this.#transaction = transaction
+    if (draft.mode !== transaction.mode) throw new Error(`workspace draft mode '${draft.mode}' does not match transaction mode '${transaction.mode}'`)
+    this.#draft = draft
+    const materialized = previewRelationWorkspaceSnapshot(currentRelationDraft(this.#draft))
+    this.#engine = mkEngine(materialized.diagram, materialized.boundary)
     seedProject(this.#engine)
-    this.#rect = placeComprehensionEditor(invocation, { width: window.innerWidth, height: window.innerHeight })
+    this.#rect = placeRelationWorkspace(invocation, { width: window.innerWidth, height: window.innerHeight })
 
     this.#root = document.createElement('div')
-    this.#root.className = 'vpa-comprehension-editor'
+    this.#root.className = 'vpa-relation-workspace'
     this.#root.setAttribute('role', 'dialog')
     this.#root.setAttribute('aria-modal', 'false')
-    this.#root.setAttribute('aria-label', `Substitute relation of arity ${this.#draft.arity}`)
+    this.#root.setAttribute('aria-label', transaction.title)
     const title = document.createElement('header')
-    title.className = 'vpa-comprehension-title'
+    title.className = 'vpa-relation-title'
     const label = document.createElement('strong')
-    label.textContent = `SUBSTITUTE · NEW RELATION /${this.#draft.arity}`
+    label.textContent = transaction.title
     const actions = document.createElement('span')
-    actions.className = 'vpa-comprehension-actions'
+    actions.className = 'vpa-relation-actions'
     this.#undo = this.#button('Undo', () => this.#moveHistory(-1))
     this.#redo = this.#button('Redo', () => this.#moveHistory(1))
     const cancel = this.#button('Cancel', () => this.cancel())
-    const instantiate = this.#button('Instantiate', () => this.#instantiate())
-    instantiate.classList.add('is-primary')
-    actions.append(this.#undo, this.#redo, cancel, instantiate)
+    this.#finalizeButton = this.#button(transaction.finalizeLabel, () => this.#finalize())
+    this.#finalizeButton.classList.add('is-primary')
+    actions.append(this.#undo, this.#redo, cancel, this.#finalizeButton)
     title.append(label, actions)
     this.#canvas = document.createElement('canvas')
-    this.#canvas.className = 'vpa-comprehension-canvas'
+    this.#canvas.className = 'vpa-relation-canvas'
     this.#canvas.setAttribute('aria-label', 'Anonymous relation editor')
+    this.#portStrip = renderRelationPortStrip(document, currentRelationDraft(this.#draft).ports)
     const resize = document.createElement('div')
-    resize.className = 'vpa-comprehension-resize'
+    resize.className = 'vpa-relation-resize'
     resize.setAttribute('role', 'separator')
     resize.setAttribute('aria-label', 'Resize relation editor')
-    this.#root.append(title, this.#canvas, resize)
+    this.#root.append(title, this.#canvas, this.#portStrip, resize)
     this.#gesture = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-    this.#gesture.classList.add('vpa-comprehension-gesture')
+    this.#gesture.classList.add('vpa-relation-gesture')
     host.mount.append(this.#root, this.#gesture)
     this.#applyRect()
     this.#surface = adaptCanvas(this.#canvas)
@@ -271,7 +509,7 @@ export class ComprehensionEditor {
       commitFission: ({ node, path, at }) => {
         const before = this.#diagram()
         const next = applyFission(before, node, path)
-        this.#draft = replaceComprehensionDiagram(this.#draft, next)
+        this.#draft = replaceRelationDiagram(this.#draft, next)
         this.#reconcile({ node: introducedNodeId(before, next), at })
       },
       refuse: (text, pointer) => host.refuse(text, pointer ?? invocation),
@@ -306,6 +544,7 @@ export class ComprehensionEditor {
 
     this.#installWindowDrag(title)
     this.#installResize(resize)
+    this.#installPortStrip()
     this.#refreshButtons()
     host.openChanged(true)
     host.changed()
@@ -328,11 +567,13 @@ export class ComprehensionEditor {
       return true
     }
     if (sample.key === 'Escape') { this.cancel(); return true }
-    if (sample.ctrlKey && sample.key === 'Enter') { this.#instantiate(); return true }
+    if (sample.ctrlKey && sample.key === 'Enter') { this.#finalize(); return true }
     return this.#construct.keyDown(sample)
   }
 
-  hostOverlays(): readonly Shape[] { return this.#connectionShapes('host') }
+  hostOverlays(): readonly Shape[] {
+    return [...this.#transaction.previewShapes(), ...this.#connectionShapes('host')]
+  }
 
   frame(_now: number): void {
     if (this.#disposed || !this.#surface.syncSize()) return
@@ -346,26 +587,28 @@ export class ComprehensionEditor {
       if (body !== undefined) shapes.push({ kind: 'circle', center: body.pos, r: body.discR * this.#engine.scale + 1, fill: null, stroke: theme.interaction.pin, width: 1.5, insetColor: null, glow: null })
     }
     shapes.push(...this.#construct.overlay(), ...this.#connectionShapes('draft'))
-    const slot = resolvedFrameSlot(this.#engine, 0)
-    if (slot !== null) shapes.push({ kind: 'dot', center: slot.point, rPx: 8, fill: theme.interaction.selection })
     this.#surface.render({ layers: [{ shapes }] }, this.#view)
     this.#renderGesture()
   }
 
-  cancel(): void { this.dispose() }
+  cancel(): void {
+    if (this.#disposed) return
+    runRelationWorkspaceCancellation(this.#transaction)
+    this.#close()
+  }
 
-  debugState(): ComprehensionEditorDebug {
-    const current = currentComprehensionDraft(this.#draft)
-    const materialized = materializeComprehensionSnapshot(current)
+  debugState(): RelationWorkspaceDebug {
+    const current = currentRelationDraft(this.#draft)
+    const materialized = previewRelationWorkspaceSnapshot(current)
     const source = this.#connection?.source ?? this.#hoverSource()
-    const targets = source === null ? null : connectionTargets(this.#draft, source)
+    const targets = source === null ? null : relationConnectionTargets(this.#draft, source)
     return {
-      bubble: this.#draft.bubble,
+      mode: this.#transaction.mode,
       cursor: this.#draft.cursor,
       historyLength: this.#draft.history.length,
-      formalBoundary: [...current.relation.boundary],
-      materializedBoundary: [...materialized.relation.boundary],
-      externalWires: [...current.externalWires],
+      formalBoundary: current.ports.filter((port) => port.kind === 'forced').map((port) => port.wire),
+      materializedBoundary: [...materialized.boundary],
+      externalWires: current.ports.filter((port) => port.hostWire !== undefined),
       rect: { ...this.#rect },
       draftBodies: [...this.#engine.bodies].map(([node, body]) => ({
         node,
@@ -374,8 +617,8 @@ export class ComprehensionEditor {
         y: body.pos.y,
         point: this.#worldToClient(this.#canvas, this.#view, body.pos),
       })),
-      draftWires: Object.keys(current.relation.diagram.wires).map((wire) => ({ wire, point: this.#wireClientPoint('draft', wire) })),
-      hostWires: Object.keys(this.#host.diagram().wires).map((wire) => ({ wire, point: this.#wireClientPoint('host', wire) })),
+      draftWires: Object.keys(current.diagram.wires).map((wire) => ({ wire, point: this.#wireClientPoint('draft', wire) })),
+      hostWires: Object.keys(this.#transaction.sourceDiagram().wires).map((wire) => ({ wire, point: this.#wireClientPoint('host', wire) })),
       connection: source === null || targets === null ? null : {
         source, draftTargets: [...targets.draft], hostTargets: [...targets.host],
       },
@@ -384,8 +627,17 @@ export class ComprehensionEditor {
 
   dispose(): void {
     if (this.#disposed) return
+    runRelationWorkspaceCancellation(this.#transaction)
+    this.#close()
+  }
+
+  #close(): void {
+    if (this.#disposed) return
     this.#disposed = true
     this.#connection = null
+    this.#draftHoverWire = null
+    this.#hostHoverWire = null
+    this.#selectedPort = null
     this.#spawn.dispose()
     this.#construct.dispose()
     this.#interaction.dispose()
@@ -396,7 +648,7 @@ export class ComprehensionEditor {
     this.#host.canvas.focus()
   }
 
-  #diagram(): Diagram { return currentComprehensionDraft(this.#draft).relation.diagram }
+  #diagram(): Diagram { return currentRelationDraft(this.#draft).diagram }
 
   #button(label: string, action: () => void): HTMLButtonElement {
     const button = document.createElement('button')
@@ -408,7 +660,7 @@ export class ComprehensionEditor {
 
   #commitDiagram(diagram: Diagram): void {
     try {
-      this.#draft = replaceComprehensionDiagram(this.#draft, diagram)
+      this.#draft = replaceRelationDiagram(this.#draft, diagram)
       this.#reconcile()
     } catch (error) {
       this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
@@ -418,7 +670,7 @@ export class ComprehensionEditor {
   #editAdd(change: () => { diagram: Diagram; node: string }, at: Vec2): boolean {
     try {
       const added = change()
-      this.#draft = replaceComprehensionDiagram(this.#draft, added.diagram)
+      this.#draft = replaceRelationDiagram(this.#draft, added.diagram)
       this.#reconcile({ node: added.node, at })
       return true
     } catch (error) {
@@ -428,8 +680,8 @@ export class ComprehensionEditor {
   }
 
   #reconcile(placed?: { readonly node: string; readonly at: Vec2 }): void {
-    const current = materializeComprehensionSnapshot(currentComprehensionDraft(this.#draft))
-    const next = mkEngine(current.relation.diagram, current.relation.boundary)
+    const current = previewRelationWorkspaceSnapshot(currentRelationDraft(this.#draft))
+    const next = mkEngine(current.diagram, current.boundary)
     carryOver(this.#engine, next)
     if (placed !== undefined) {
       const body = next.bodies.get(placed.node)
@@ -441,12 +693,13 @@ export class ComprehensionEditor {
     this.#draftHoverWire = null
     this.#hostHoverWire = null
     this.#interaction.reconcileDiagram()
+    this.#renderPortStrip()
     this.#refreshButtons()
     this.#host.changed()
   }
 
   #moveHistory(delta: number): void {
-    const next = moveComprehensionHistory(this.#draft, delta)
+    const next = moveRelationHistory(this.#draft, delta)
     if (next.cursor === this.#draft.cursor) {
       this.#host.refuse(`nothing to ${delta < 0 ? 'undo' : 'redo'} in the relation draft`, this.#centerClient())
       return
@@ -455,13 +708,10 @@ export class ComprehensionEditor {
     this.#reconcile()
   }
 
-  #instantiate(): void {
-    try {
-      this.#host.apply(comprehensionInstantiationStep(this.#draft))
-      this.dispose()
-    } catch (error) {
-      this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
-    }
+  #finalize(): void {
+    const result = attemptRelationWorkspaceFinalize(this.#transaction, currentRelationDraft(this.#draft), [])
+    if (result.closed) this.#close()
+    else this.#host.refuse(result.error instanceof Error ? result.error.message : String(result.error), this.#centerClient())
   }
 
   #connectionClaim(surface: SurfaceKind, sample: PointerSample): PointerClaim | null {
@@ -471,7 +721,7 @@ export class ComprehensionEditor {
     const wire = wireHitTest(engine, sample.world, { scale: view.scale })?.id
     if (wire === undefined) return null
     const gesture: ConnectionGesture = {
-      source: { kind: surface, wire }, captured: currentComprehensionDraft(this.#draft),
+      source: { kind: surface, wire }, captured: currentRelationDraft(this.#draft),
       start: sample.client, current: sample.client, moved: false,
     }
     this.#connection = gesture
@@ -485,6 +735,17 @@ export class ComprehensionEditor {
       release: (next, moved) => {
         gesture.current = next.client
         if (!moved || !gesture.moved) { this.#connection = null; return }
+        const optionalIndex = gesture.source.kind === 'draft' ? this.#optionalPortIndexAt(next.client) : null
+        if (optionalIndex !== null) {
+          this.#connection = null
+          try {
+            this.#draft = applyPortStripDrop(this.#draft, gesture.source.wire, optionalIndex)
+            this.#reconcile()
+          } catch (error) {
+            this.#host.refuse(error instanceof Error ? error.message : String(error), next.client)
+          }
+          return
+        }
         const target = this.#endpointAtClient(next.client)
         this.#connection = null
         if (target === null) {
@@ -492,7 +753,7 @@ export class ComprehensionEditor {
           return
         }
         try {
-          this.#draft = applyEditorConnection(this.#draft, gesture.captured, gesture.source, target)
+          this.#draft = applyCapturedRelationConnection(this.#draft, gesture.captured, gesture.source, target)
           this.#reconcile()
         } catch (error) {
           this.#host.refuse(error instanceof Error ? error.message : String(error), next.client)
@@ -502,7 +763,7 @@ export class ComprehensionEditor {
     }
   }
 
-  #endpointAtClient(client: Vec2): ComprehensionConnectionEndpoint | null {
+  #endpointAtClient(client: Vec2): RelationConnectionEndpoint | null {
     const top = document.elementFromPoint(client.x, client.y)
     if (top !== this.#canvas && top !== this.#host.canvas) return null
     const kind: SurfaceKind = top === this.#canvas ? 'draft' : 'host'
@@ -527,8 +788,8 @@ export class ComprehensionEditor {
     for (const leg of legPaths(engine)) if (leg.wid === wire) points.push(...leg.pts)
     for (const stub of existentialStubs(engine)) if (stub.wid === wire) points.push(stub.dot, stub.from, stub.to)
     const boundary = surface === 'draft'
-      ? materializeComprehensionSnapshot(currentComprehensionDraft(this.#draft)).relation.boundary
-      : this.#host.boundary()
+      ? currentRelationDraft(this.#draft).ports.map((port) => port.wire)
+      : this.#transaction.sourceBoundary()
     boundary.forEach((id, position) => {
       if (id !== wire) return
       const slot = resolvedFrameSlot(engine, position)
@@ -560,7 +821,7 @@ export class ComprehensionEditor {
     this.#host.changed()
   }
 
-  #hoverSource(): ComprehensionConnectionEndpoint | null {
+  #hoverSource(): RelationConnectionEndpoint | null {
     if (this.#draftHoverWire !== null) return { kind: 'draft', wire: this.#draftHoverWire }
     if (this.#hostHoverWire !== null) return { kind: 'host', wire: this.#hostHoverWire }
     return null
@@ -569,10 +830,10 @@ export class ComprehensionEditor {
   #connectionShapes(surface: SurfaceKind): Shape[] {
     const theme = this.#host.theme()
     const engine = surface === 'draft' ? this.#engine : this.#host.engine()
-    const current = currentComprehensionDraft(this.#draft)
+    const current = currentRelationDraft(this.#draft)
     const selectedDraft = new Set(this.#interaction.selection.filter((hit) => hit.kind === 'wire').map((hit) => hit.id))
     const selectedHost = new Set(this.#hostHoverWire === null ? [] : [this.#hostHoverWire])
-    const presentation = deriveExternalReferencePresentation(current.externalWires, selectedDraft, selectedHost)
+    const presentation = deriveRelationExternalReferencePresentation(current.ports, selectedDraft, selectedHost)
     const shapes: Shape[] = []
     const marked = surface === 'draft' ? presentation.markedDraft : presentation.markedHost
     const glowing = surface === 'draft' ? presentation.glowingDraft : presentation.glowingHost
@@ -580,7 +841,7 @@ export class ComprehensionEditor {
     for (const wire of glowing) shapes.push(...wireShapes(engine, wire, theme.interaction.hover, 3.5, theme.interaction.hover))
     const source = this.#connection?.source ?? this.#hoverSource()
     if (source === null) return shapes
-    const targets = connectionTargets(this.#draft, source)
+    const targets = relationConnectionTargets(this.#draft, source)
     const surfaceTargets = surface === 'draft' ? targets.draft : targets.host
     for (const wire of surfaceTargets) shapes.push(...wireShapes(engine, wire, theme.interaction.valid, 2.5))
     if (source.kind === surface) shapes.push(...wireShapes(engine, source.wire, theme.interaction.valid, 3))
@@ -596,7 +857,7 @@ export class ComprehensionEditor {
     const line = document.createElementNS('http://www.w3.org/2000/svg', 'line')
     line.setAttribute('x1', String(active.start.x)); line.setAttribute('y1', String(active.start.y))
     line.setAttribute('x2', String(active.current.x)); line.setAttribute('y2', String(active.current.y))
-    line.classList.add('vpa-comprehension-join-gesture')
+    line.classList.add('vpa-relation-join-gesture')
     this.#gesture.append(line)
   }
 
@@ -613,6 +874,68 @@ export class ComprehensionEditor {
   #refreshButtons(): void {
     this.#undo.disabled = this.#draft.cursor === 0
     this.#redo.disabled = this.#draft.cursor === this.#draft.history.length - 1
+    this.#finalizeButton.disabled = !relationWorkspaceCanFinalize(this.#transaction, currentRelationDraft(this.#draft))
+  }
+
+  #renderPortStrip(): void {
+    const replacement = renderRelationPortStrip(document, currentRelationDraft(this.#draft).ports)
+    this.#portStrip.replaceChildren(...replacement.children)
+    for (const child of this.#portStrip.children) {
+      if (child instanceof HTMLElement) child.classList.toggle('is-selected', child.dataset.portId === this.#selectedPort)
+    }
+  }
+
+  #optionalPortIndexAt(client: Vec2): number | null {
+    const target = document.elementFromPoint(client.x, client.y)
+    if (!(target instanceof HTMLElement) || target.closest('.vpa-relation-port-strip') !== this.#portStrip) return null
+    const port = target.closest<HTMLElement>('.vpa-relation-port')
+    return portStripInsertionIndex(currentRelationDraft(this.#draft).ports, port === null ? null : {
+      kind: port.dataset.portKind === 'forced' ? 'forced' : 'optional',
+      ...(port.dataset.optionalIndex === undefined ? {} : { optionalIndex: Number(port.dataset.optionalIndex) }),
+    })
+  }
+
+  #installPortStrip(): void {
+    this.#portStrip.addEventListener('click', (event) => {
+      const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
+      this.#selectedPort = target?.dataset.portId ?? null
+      this.#renderPortStrip()
+    })
+    this.#portStrip.addEventListener('dragstart', (event) => {
+      const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
+      if (target?.dataset.portKind !== 'optional' || target.dataset.portId === undefined) {
+        event.preventDefault()
+        return
+      }
+      event.dataTransfer?.setData('application/x-vpa-relation-port', target.dataset.portId)
+    })
+    this.#portStrip.addEventListener('dragover', (event) => event.preventDefault())
+    this.#portStrip.addEventListener('drop', (event) => {
+      event.preventDefault()
+      const portId = event.dataTransfer?.getData('application/x-vpa-relation-port')
+      if (portId === undefined || portId === '') return
+      const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
+      const optionalIndex = portStripInsertionIndex(currentRelationDraft(this.#draft).ports, target === null ? null : {
+        kind: target.dataset.portKind === 'forced' ? 'forced' : 'optional',
+        ...(target.dataset.optionalIndex === undefined ? {} : { optionalIndex: Number(target.dataset.optionalIndex) }),
+      })
+      try {
+        this.#draft = applyPortStripMove(this.#draft, portId, optionalIndex)
+        this.#reconcile()
+      } catch (error) {
+        this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
+      }
+    })
+    this.#portStrip.addEventListener('keydown', (event) => {
+      if (event.key !== 'Delete' || this.#selectedPort === null) return
+      try {
+        this.#draft = applyPortStripDelete(this.#draft, this.#selectedPort)
+        this.#selectedPort = null
+        this.#reconcile()
+      } catch (error) {
+        this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
+      }
+    })
   }
 
   #applyRect(): void {
@@ -631,7 +954,7 @@ export class ComprehensionEditor {
     })
     title.addEventListener('pointermove', (event) => {
       if (drag?.pointer !== event.pointerId) return
-      this.#rect = moveComprehensionEditor(drag.rect, { x: event.clientX - drag.start.x, y: event.clientY - drag.start.y }, { width: innerWidth, height: innerHeight })
+      this.#rect = moveRelationWorkspace(drag.rect, { x: event.clientX - drag.start.x, y: event.clientY - drag.start.y }, { width: innerWidth, height: innerHeight })
       this.#applyRect()
     })
     title.addEventListener('pointerup', () => { drag = null })
@@ -647,7 +970,7 @@ export class ComprehensionEditor {
     })
     handle.addEventListener('pointermove', (event) => {
       if (drag?.pointer !== event.pointerId) return
-      this.#rect = resizeComprehensionEditor(drag.rect, { x: event.clientX - drag.start.x, y: event.clientY - drag.start.y }, { width: innerWidth, height: innerHeight })
+      this.#rect = resizeRelationWorkspace(drag.rect, { x: event.clientX - drag.start.x, y: event.clientY - drag.start.y }, { width: innerWidth, height: innerHeight })
       this.#applyRect()
     })
     handle.addEventListener('pointerup', () => { drag = null })

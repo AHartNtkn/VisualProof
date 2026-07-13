@@ -1,5 +1,6 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import type { ProofAction } from '../kernel/proof/action'
 import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
 import { seedProject } from '../view/relax'
@@ -15,7 +16,11 @@ import { InteractiveViewport, type KeySample, type MutableView } from './interac
 import type { FixedSide } from './fixed-side-layout'
 import { MotionCoordinator, type MotionPreferences } from './interact/motion'
 import type { MotionDebugState } from './interact/motion'
-import { ComprehensionEditor, type ComprehensionEditorDebug } from './comprehension-editor'
+import {
+  RelationWorkspace,
+  SubstituteTransaction,
+  type RelationWorkspaceDebug,
+} from './relation-workspace'
 import { ProofSpawnController } from './interact/proof-spawn'
 import { introducedNodeId } from './interact/closed-term-intro'
 import { seedBodyPlacement } from '../view/placement'
@@ -29,6 +34,7 @@ export type ProofFrontModel = {
   theme(): Theme
   fuel(): number
   prepare(step: ProofStep): () => void
+  prepareAction(action: ProofAction): () => void
   motionPreferences(): MotionPreferences
   workspaceInputAllowed(): boolean
   focused(): boolean
@@ -48,7 +54,7 @@ export type ProofFrontDebugState = {
   readonly bodies: readonly { id: string; kind: string; x: number; y: number; r: number }[]
   readonly regions: readonly { id: string; kind: string; x: number; y: number; r: number }[]
   readonly motion: MotionDebugState
-  readonly comprehension: ComprehensionEditorDebug | null
+  readonly relationWorkspace: RelationWorkspaceDebug | null
   readonly fissionTargets: readonly {
     readonly node: string
     readonly path: readonly string[]
@@ -101,7 +107,7 @@ export class ProofFrontViewport {
   #moves: ProofMoveController
   #spawn: ProofSpawnController
   #spawnHoverBinder: RegionId | null = null
-  #editor: ComprehensionEditor | null = null
+  #relationWorkspace: RelationWorkspace | null = null
   #surface: CanvasAdapter
   #model: ProofFrontModel
   #disposed = false
@@ -141,7 +147,7 @@ export class ProofFrontViewport {
 
     this.#moves = new ProofMoveController({
       host: document.body,
-      active: () => this.#editor === null && frontInputAllowed(model.focused(), this.motion.playing, model.workspaceInputAllowed()),
+      active: () => this.#relationWorkspace === null && frontInputAllowed(model.focused(), this.motion.playing, model.workspaceInputAllowed()),
       diagram: model.diagram,
       engine: () => this.#engine,
       viewScale: () => this.view.scale,
@@ -169,14 +175,14 @@ export class ProofFrontViewport {
       engine: () => this.#engine,
       diagram: model.diagram,
       selectionEnabled: () => true,
-      claim: (sample) => this.#editor?.hostClaim(sample) ?? this.#moves.claim(sample),
-      doubleClick: (sample) => this.#editor === null && this.#moves.doubleClick(sample),
-      contextMenu: (sample) => { if (this.#editor === null) this.#moves.contextMenu(sample) },
-      pointerChanged: (client) => this.#editor?.hostPointerChanged(client),
+      claim: (sample) => this.#relationWorkspace?.hostClaim(sample) ?? this.#moves.claim(sample),
+      doubleClick: (sample) => this.#relationWorkspace === null && this.#moves.doubleClick(sample),
+      contextMenu: (sample) => { if (this.#relationWorkspace === null) this.#moves.contextMenu(sample) },
+      pointerChanged: (client) => this.#relationWorkspace?.hostPointerChanged(client),
       passiveSample: (sample) => this.#moves.passiveSample(sample),
       modifiersChanged: (ctrlHeld) => this.#moves.modifiersChanged(ctrlHeld),
       keyDown: (sample) => {
-        if (this.#editor !== null) return true
+        if (this.#relationWorkspace !== null) return true
         const routed = frontKeyRoute(model.focused(), sample)
         if (routed === null) return false
         if (model.keyCommand(routed)) return true
@@ -203,7 +209,7 @@ export class ProofFrontViewport {
   get engine(): Engine { return this.#engine }
   get rebuilds(): number { return this.#rebuilds }
   get playing(): boolean { return this.motion.playing }
-  get editing(): boolean { return this.#editor !== null }
+  get editing(): boolean { return this.#relationWorkspace !== null }
 
   setFocused(focused: boolean): void {
     this.canvas.closest('.vpa-proof-front')?.classList.toggle('is-focused', focused)
@@ -239,7 +245,7 @@ export class ProofFrontViewport {
   frame(now = performance.now()): void {
     if (this.#disposed) return
     this.motion.frame(now)
-    if (!this.motion.playing) this.interaction.advance(this.#editor === null)
+    if (!this.motion.playing) this.interaction.advance(this.#relationWorkspace === null)
     const theme = this.#model.theme()
     const shapes: Shape[] = paint(this.#engine, theme)
     for (const id of this.interaction.pins) {
@@ -265,7 +271,7 @@ export class ProofFrontViewport {
       else hoverShapes.push(...this.#itemShapes(hover, isHitSelected(this.interaction.selection, hover) ? theme.interaction.selectedHover : theme.interaction.hover))
     } else this.motion.setHover(null, now)
     shapes.push(...this.#moves.overlay())
-    if (this.#editor !== null) shapes.push(...this.#editor.hostOverlays())
+    if (this.#relationWorkspace !== null) shapes.push(...this.#relationWorkspace.hostOverlays())
     this.#surface.render({
       background: theme.canvas,
       layers: [
@@ -274,7 +280,7 @@ export class ProofFrontViewport {
         { shapes: this.motion.overlays(now) },
       ],
     }, this.view)
-    this.#editor?.frame(now)
+    this.#relationWorkspace?.frame(now)
   }
 
   debugState(): ProofFrontDebugState {
@@ -292,7 +298,7 @@ export class ProofFrontViewport {
         id, kind: this.#model.diagram().regions[id]!.kind, x: region.center.x, y: region.center.y, r: region.radius,
       })),
       motion: this.motion.debugState(performance.now()),
-      comprehension: this.#editor?.debugState() ?? null,
+      relationWorkspace: this.#relationWorkspace?.debugState() ?? null,
       fissionTargets: [...this.#engine.bodies.values()].flatMap((body) => body.node?.kind === 'term'
         ? body.geometry!.occurrences.flatMap((occurrence) => {
           const point = fissionTargetPoint(this.#engine, body.id, occurrence.path)
@@ -319,8 +325,8 @@ export class ProofFrontViewport {
     this.canvas.removeEventListener('wheel', this.#focus, true)
     this.#moves.dispose()
     this.#spawn.dispose()
-    this.#editor?.dispose()
-    this.#editor = null
+    this.#relationWorkspace?.dispose()
+    this.#relationWorkspace = null
     this.motion.dispose()
     this.interaction.dispose()
   }
@@ -328,27 +334,37 @@ export class ProofFrontViewport {
   #focus = (): void => { this.#model.focus() }
 
   #openComprehension(bubble: RegionId, pointer: Vec2): void {
-    if (this.#editor !== null) return
-    let editor: ComprehensionEditor
-    editor = new ComprehensionEditor({
-      mount: document.body,
-      canvas: this.canvas,
+    if (this.#relationWorkspace !== null) return
+    let workspace: RelationWorkspace
+    const transaction = new SubstituteTransaction({
       diagram: this.#model.diagram,
       boundary: this.#model.boundary,
+      bubble,
+      context: this.#model.context,
+      orientation: this.side,
+      apply: (action) => {
+        const step = action.steps[0]
+        if (step === undefined || action.steps.length !== 1) throw new Error('relation workspace motion requires one kernel step')
+        this.motion.run(step, this.#model.prepareAction(action), performance.now())
+      },
+      cancel: () => {},
+    })
+    workspace = new RelationWorkspace({
+      mount: document.body,
+      canvas: this.canvas,
       engine: () => this.#engine,
       view: () => this.view,
       context: this.#model.context,
       theme: this.#model.theme,
       fuel: this.#model.fuel,
-      apply: (step) => this.motion.run(step, this.#model.prepare(step), performance.now()),
       refuse: this.#model.refuse,
       changed: this.#model.changed,
       openChanged: (open) => {
-        if (!open && this.#editor === editor) this.#editor = null
+        if (!open && this.#relationWorkspace === workspace) this.#relationWorkspace = null
         this.#model.changed()
       },
-    }, bubble, pointer)
-    this.#editor = editor
+    }, transaction, transaction.initialDraft(), pointer)
+    this.#relationWorkspace = workspace
     this.#moves.cancel()
     this.#model.changed()
   }

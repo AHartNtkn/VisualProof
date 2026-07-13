@@ -10,7 +10,9 @@ import {
   beginSubstitutionDraft,
   bindOptionalPort,
   currentRelationDraft,
+  cancelRelationDraft,
   deleteRelationNode,
+  deriveRelationExternalReferencePresentation,
   deleteOptionalPort,
   insertOptionalPort,
   materializeRelationDraft,
@@ -436,5 +438,44 @@ describe('relation workspace port model', () => {
     expect(currentRelationDraft(redone)).toBe(fusedSnapshot)
     expect(currentRelationDraft(redone).diagram).toEqual(fusedSnapshot.diagram)
     expect(currentRelationDraft(redone).ports).toEqual(fusedSnapshot.ports)
+  })
+
+  test('plans the same local quotient regardless of connection gesture direction', () => {
+    const draft = replaceRelationDiagram(beginAbstractionDraft(hostWithBubble()), twoTermDiagram())
+    const left = planRelationConnection(draft, { kind: 'draft', wire: 'w1' }, { kind: 'draft', wire: 'w2' })
+    const right = planRelationConnection(draft, { kind: 'draft', wire: 'w2' }, { kind: 'draft', wire: 'w1' })
+
+    expect(left.ok && left.snapshot).toEqual(right.ok && right.snapshot)
+  })
+
+  test('plans external references symmetrically and refuses host-only connections', () => {
+    const draft = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['w1'])
+    const draftFirst = planRelationConnection(draft, { kind: 'draft', wire: 'w1' }, { kind: 'host', wire: 'h1' })
+    const hostFirst = planRelationConnection(draft, { kind: 'host', wire: 'h1' }, { kind: 'draft', wire: 'w1' })
+
+    expect(draftFirst).toEqual(hostFirst)
+    expect(planRelationConnection(draft, { kind: 'host', wire: 'h1' }, { kind: 'host', wire: 'h2' }))
+      .toMatchObject({ ok: false, code: 'host-to-host' })
+  })
+
+  test('marks only real host bindings and propagates their active glow', () => {
+    const ports = [
+      { id: 'port1', wire: 'w1', kind: 'optional' as const, hostWire: 'h1' },
+      { id: 'port2', wire: 'w2', kind: 'optional' as const },
+    ]
+
+    const presentation = deriveRelationExternalReferencePresentation(ports, new Set(), new Set(['h1', 'h2']))
+
+    expect([...presentation.markedDraft]).toEqual(['w1'])
+    expect([...presentation.markedHost]).toEqual(['h1'])
+    expect([...presentation.glowingDraft]).toEqual(['w1'])
+    expect([...presentation.glowingHost]).toEqual(['h1'])
+  })
+
+  test('cancels by returning the exact immutable host snapshot', () => {
+    const host = hostWithBubble()
+    const draft = beginSubstitutionDraft(host, 'bubble')
+
+    expect(cancelRelationDraft(draft)).toBe(host)
   })
 })

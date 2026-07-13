@@ -7,7 +7,7 @@ import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { applyRelFold, applyRelUnfold } from '../kernel/rules/reldef'
 import { applyFission } from '../kernel/rules/fusion'
 import type { ProofContext, ProofStep } from '../kernel/proof/step'
-import { singleStepAction } from '../kernel/proof/action'
+import { singleStepAction, type ProofAction } from '../kernel/proof/action'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec } from '../view/vec'
@@ -52,7 +52,7 @@ import { mountScrubber, type MountedScrubber, type TimelineView } from './intera
 import { previewTransition } from './history-preview'
 import { FixedSideWorkspace } from './fixed-side-workspace'
 import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
-import { ComprehensionEditor } from './comprehension-editor'
+import { RelationWorkspace, SubstituteTransaction } from './relation-workspace'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -163,7 +163,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let interaction!: InteractiveViewport
   let construct!: ConstructController
   let proofMoves!: ProofMoveController
-  let comprehensionEditor: ComprehensionEditor | null = null
+  let relationWorkspace: RelationWorkspace | null = null
   let spawnCascade!: SpawnCascade
   let proofSpawn!: ProofSpawnController
   let spawnHoverBinder: RegionId | null = null
@@ -173,7 +173,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let refusalTimer = 0
   const rememberPointer = (pointer: Vec2): void => {
     lastPointerClient = pointer
-    comprehensionEditor?.hostPointerChanged(pointer)
+    relationWorkspace?.hostPointerChanged(pointer)
   }
   const clearRefusalPresentation = (sequence?: number): void => {
     feedback.clearRefusal(sequence)
@@ -748,7 +748,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const leaveProof = guard(() => {
-    if (comprehensionEditor !== null || fixedWorkspace?.editing) return
+    if (relationWorkspace !== null || fixedWorkspace?.editing) return
     proofMoves.cancel()
     mainMotion.cancel()
     if (mode === 'replay') {
@@ -814,7 +814,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     refreshChrome()
   })
   const onUndo = guard(() => {
-    if (mainMotion.playing || fixedWorkspace?.busy || comprehensionEditor !== null) return
+    if (mainMotion.playing || fixedWorkspace?.busy || relationWorkspace !== null) return
     if (mode === 'edit') {
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
@@ -838,7 +838,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     sync()
   })
   const onRedo = guard(() => {
-    if (mainMotion.playing || fixedWorkspace?.busy || comprehensionEditor !== null) return
+    if (mainMotion.playing || fixedWorkspace?.busy || relationWorkspace !== null) return
     if (mode === 'edit') {
       const next = editFuture.pop()
       if (next === undefined) throw new Error('nothing to redo in edit mode')
@@ -877,11 +877,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
 
   // ---- proof actions ----
-  const applyProofStep = (step: ProofStep): void => {
+  const applyProofAction = (action: ProofAction): void => {
     if (proof === null) throw new Error('no active proof')
-    const action = singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step)
     if (proof.kind === 'track') {
       const next = applyTrack(proof.track, action)
+      const step = action.steps[0]
+      if (step === undefined || action.steps.length !== 1) throw new Error('shell motion currently requires one kernel step per proof action')
       mainMotion.run(step, () => {
         proof = { kind: 'track', track: next }
         sync()
@@ -895,28 +896,38 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
   }
 
+  const applyProofStep = (step: ProofStep): void => {
+    applyProofAction(singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step))
+  }
+
   const openComprehension = (bubble: RegionId, pointer: Vec2): void => {
-    if (mode !== 'prove' || proof?.kind !== 'track' || comprehensionEditor !== null) return
-    let editor: ComprehensionEditor
-    editor = new ComprehensionEditor({
-      mount: document.body,
-      canvas,
+    if (mode !== 'prove' || proof?.kind !== 'track' || relationWorkspace !== null) return
+    let workspace: RelationWorkspace
+    const transaction = new SubstituteTransaction({
       diagram: currentDiagram,
       boundary: () => proof?.kind === 'track' ? trackBoundary(proof.track) : [],
+      bubble,
+      context: () => ctx,
+      orientation: proof.track.direction,
+      apply: applyProofAction,
+      cancel: () => {},
+    })
+    workspace = new RelationWorkspace({
+      mount: document.body,
+      canvas,
       engine: () => engine,
       view: () => view,
       context: () => ctx,
       theme: () => theme,
       fuel: () => readCount(fuel.input, 'fuel'),
-      apply: applyProofStep,
       refuse,
       changed: refreshChrome,
       openChanged: (open) => {
-        if (!open && comprehensionEditor === editor) comprehensionEditor = null
+        if (!open && relationWorkspace === workspace) relationWorkspace = null
         refreshChrome()
       },
-    }, bubble, pointer)
-    comprehensionEditor = editor
+    }, transaction, transaction.initialDraft(), pointer)
+    relationWorkspace = workspace
     proofMoves.cancel()
     refreshChrome()
   }
@@ -944,7 +955,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const claimPointer = (sample: PointerSample): PointerClaim | null => {
-    const editorClaim = comprehensionEditor?.hostClaim(sample) ?? null
+    const editorClaim = relationWorkspace?.hostClaim(sample) ?? null
     const pendingClaim: PointerClaim | null = sample.button === 0 && pending?.kind === 'defineRelation' ? {
         still: 'claim',
         blocksPassiveRelaxation: false,
@@ -1208,7 +1219,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // frame (no time-slicing) — the whole diagram eases toward rest together.
     // InteractiveViewport supplies the exact persistent and active pin set.
     mainMotion.frame(now)
-    if (!mainMotion.playing) interaction.advance(comprehensionEditor === null)
+    if (!mainMotion.playing) interaction.advance(relationWorkspace === null)
     const shapes: Shape[] = paint(engine, theme)
     for (const id of interaction.pins) {
       const b = engine.bodies.get(id)
@@ -1236,7 +1247,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     shapes.push(...construct.overlay())
     shapes.push(...proofMoves.overlay())
-    if (comprehensionEditor !== null) shapes.push(...comprehensionEditor.hostOverlays())
+    if (relationWorkspace !== null) shapes.push(...relationWorkspace.hostOverlays())
     mainSurface.render({
       background: theme.canvas,
       layers: [
@@ -1245,7 +1256,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         { shapes: mainMotion.overlays(now) },
       ],
     }, view)
-    comprehensionEditor?.frame(now)
+    relationWorkspace?.frame(now)
     renderCompanion(comp, companionVisible)
     raf = requestAnimationFrame(frame)
   }
@@ -1253,7 +1264,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
   // a text/number input is focused so typing a term is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
-    if (comprehensionEditor !== null) return true
+    if (relationWorkspace !== null) return true
     if (mode === 'prove' && proof?.kind === 'dual') return false
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       if (e.shiftKey) onRedo()
@@ -1509,7 +1520,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
   proofMoves = new ProofMoveController({
     host: document.body,
-    active: () => mode === 'prove' && proof?.kind === 'track' && !mainMotion.playing && comprehensionEditor === null,
+    active: () => mode === 'prove' && proof?.kind === 'track' && !mainMotion.playing && relationWorkspace === null,
     diagram: currentDiagram,
     engine: () => engine,
     viewScale: () => view.scale,
@@ -1538,10 +1549,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     diagram: () => displayed,
     selectionEnabled: () => mode !== 'replay',
     claim: claimPointer,
-    doubleClick: (sample) => comprehensionEditor !== null ? false : mode === 'prove' && proofMoves.doubleClick(sample),
+    doubleClick: (sample) => relationWorkspace !== null ? false : mode === 'prove' && proofMoves.doubleClick(sample),
     contextMenu: (sample) => {
       if (mode === 'prove') {
-        if (comprehensionEditor !== null) return
+        if (relationWorkspace !== null) return
         proofMoves.contextMenu(sample)
         return
       }
@@ -1583,7 +1594,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return {
         ...active.timeline,
         boundary: trackBoundary(active),
-        inputAllowed: () => !mainMotion.playing && comprehensionEditor === null,
+        inputAllowed: () => !mainMotion.playing && relationWorkspace === null,
         moveTo: (cursor) => {
           if (proof?.kind !== 'track') return
           proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
@@ -1697,8 +1708,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     spawnCascade.dispose()
     proofSpawn.dispose()
     proofMoves.dispose()
-    comprehensionEditor?.dispose()
-    comprehensionEditor = null
+    relationWorkspace?.dispose()
+    relationWorkspace = null
     mainMotion.dispose()
     fixedWorkspace?.dispose()
     fixedWorkspace = null
@@ -1759,8 +1770,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       motion() {
         return { ...mainMotion.debugState(performance.now()), preferences: { ...motionPreferences } }
       },
-      comprehension() {
-        return comprehensionEditor?.debugState() ?? null
+      relationWorkspace() {
+        return relationWorkspace?.debugState() ?? null
       },
       spawnBinderHover(): string | null {
         return spawnHoverBinder
