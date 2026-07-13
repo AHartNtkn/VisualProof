@@ -125,7 +125,7 @@ theorem ConcreteIso.elaborate_isomorphic
 **Files:**
 - Modify only defects found in Tasks 1-5 and the umbrella imports.
 
-- [ ] Review the implementation against the approved hybrid architecture, the concrete foundation, and this plan.
-- [ ] Verify no public partial elaborator, second validator, canonical graph, default result, proof-chosen data, scope flattening, or endpoint-order semantics remains.
-- [ ] Run `lake build`; inspect axioms of totality, proof irrelevance, concrete-isomorphism transport, elaboration isomorphism, and denotation invariance.
-- [ ] Append the foundation record's `<conformance>` section with ownership, replacement, migration, and validation evidence.
+- [x] Review the implementation against the approved hybrid architecture, the concrete foundation, and this plan.
+- [x] Verify no public partial elaborator, second validator, canonical graph, default result, proof-chosen data, scope flattening, or endpoint-order semantics remains.
+- [x] Run `lake build`; inspect axioms of totality, proof irrelevance, concrete-isomorphism transport, elaboration isomorphism, and denotation invariance.
+- [x] Append the foundation record's `<conformance>` section with ownership, replacement, migration, and validation evidence.
