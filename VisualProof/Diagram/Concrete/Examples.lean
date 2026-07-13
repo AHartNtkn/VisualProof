@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.WellFormed
+import VisualProof.Diagram.Concrete.Open
 
 namespace VisualProof.Diagram
 
@@ -225,6 +225,57 @@ theorem repeatedBoundary_alias :
     repeatedBoundary.boundary[0]? = some bareWireId /\
       repeatedBoundary.boundary[1]? = some bareWireId := by
   exact ⟨rfl, rfl⟩
+
+theorem repeatedBoundary_exposed_singleton :
+    repeatedBoundary.exposedWires = [bareWireId] := by
+  decide
+
+theorem repeatedBoundary_classes_alias :
+    repeatedBoundary.boundaryClass ⟨0, by decide⟩ =
+      repeatedBoundary.boundaryClass ⟨1, by decide⟩ := by
+  decide
+
+def exposedAndHiddenRootWires : ConcreteDiagram where
+  regionCount := 1
+  nodeCount := 0
+  wireCount := 2
+  root := 0
+  regions := fun _ => .sheet
+  nodes := nofun
+  wires := fun _ => { scope := 0, endpoints := [] }
+
+theorem exposedAndHiddenRootWires_check :
+    exists checked,
+      checkWellFormed [] exposedAndHiddenRootWires = .ok checked /\
+        checked.val = exposedAndHiddenRootWires := by
+  refine ⟨_, rfl, rfl⟩
+
+def exposedRootWireId : Fin exposedAndHiddenRootWires.wireCount :=
+  ⟨0, by decide⟩
+
+def hiddenRootWireId : Fin exposedAndHiddenRootWires.wireCount :=
+  ⟨1, by decide⟩
+
+def exposedAndHiddenOpen : OpenConcreteDiagram where
+  diagram := exposedAndHiddenRootWires
+  boundary := [exposedRootWireId]
+
+theorem exposedAndHiddenOpen_wellFormed :
+    exposedAndHiddenOpen.WellFormed [] := by
+  constructor
+  · exact checkWellFormed_iff.mp exposedAndHiddenRootWires_check
+  · intro wire hwire
+    change wire ∈ [exposedRootWireId] at hwire
+    have hwire : wire = exposedRootWireId := List.mem_singleton.mp hwire
+    subst wire
+    rfl
+
+theorem exposedAndHiddenOpen_partition :
+    exposedAndHiddenOpen.exposedWires = [exposedRootWireId] ∧
+      exposedAndHiddenOpen.hiddenWires = [hiddenRootWireId] ∧
+      exposedAndHiddenOpen.rootWires =
+        [exposedRootWireId, hiddenRootWireId] := by
+  decide
 
 end ConcreteExamples
 
