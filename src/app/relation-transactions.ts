@@ -7,7 +7,7 @@ import type { Engine } from '../view/engine'
 import type { Shape, Theme } from '../view/paint'
 import type { Vec2 } from '../view/vec'
 import { existentialStubs, legPaths } from '../view/wires'
-import type { PointerClaim, PointerSample } from './interact/viewport'
+import type { PointerSample } from './interact/viewport'
 import {
   createOccurrenceSetState,
   cycleOccurrenceSet,
@@ -21,7 +21,7 @@ import {
   type RelationWorkspaceDraft,
   type RelationWorkspaceSnapshot,
 } from './relation-workspace-draft'
-import type { RelationWorkspaceTransaction, WorkspaceStatus } from './relation-workspace'
+import type { RelationHostClaim, RelationWorkspaceTransaction, WorkspaceStatus } from './relation-workspace'
 
 export type AbstractTransactionOptions = {
   readonly diagram: () => Diagram
@@ -204,7 +204,7 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
     this.#markerPoint = { ...point }
   }
 
-  hostClaim(sample: PointerSample): PointerClaim | null {
+  hostClaim(sample: PointerSample): RelationHostClaim | null {
     if (sample.button !== 0 || sample.ctrlKey || sample.shiftKey) return null
     if (this.#empty) {
       if (Math.hypot(sample.world.x - this.#markerPoint.x, sample.world.y - this.#markerPoint.y) > 14) return null
@@ -226,6 +226,7 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
     })
     if (candidate === undefined) return null
     return {
+      yieldToCopyOnDrag: true,
       still: 'claim', blocksPassiveRelaxation: false, move: () => {},
       release: (_next, moved) => { if (!moved) this.toggleExclusion(candidate.key) },
       cancel: () => {},

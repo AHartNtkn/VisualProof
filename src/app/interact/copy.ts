@@ -1,5 +1,5 @@
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
-import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
+import { selectionContents, type SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import { existentialStubs, legPaths } from '../../view/wires'
@@ -36,10 +36,6 @@ type CopyDrag = {
   sample: PointerSample
 }
 
-function sameHit(a: Hit, b: Hit): boolean {
-  return a.kind === b.kind && a.id === b.id
-}
-
 export function copyRegionAt(engine: Engine, diagram: Diagram, point: { readonly x: number; readonly y: number }): RegionId {
   let best: { readonly id: RegionId; readonly radius: number } | null = null
   for (const [id, geometry] of engine.regions) {
@@ -60,30 +56,34 @@ export function copyDestinationPreview(engine: Engine, region: RegionId, theme: 
   }]
 }
 
-function selectionShapes(engine: Engine, selection: SubgraphSelection, stroke: string): Shape[] {
-  const shapes: Shape[] = []
+function selectionHalo(engine: Engine, selection: SubgraphSelection, stroke: string): Shape[] {
+  const discs: Array<{ readonly center: { readonly x: number; readonly y: number }; readonly r: number }> = []
   for (const node of selection.nodes) {
     const body = engine.bodies.get(node)
-    if (body !== undefined) shapes.push({
-      kind: 'circle', center: body.pos, r: body.discR * engine.scale + 2,
-      fill: null, stroke, width: 2.5, insetColor: null, glow: null,
-    })
+    if (body !== undefined) discs.push({ center: body.pos, r: body.discR * engine.scale + 2 })
   }
   for (const region of selection.regions) {
     const geometry = engine.regions.get(region)
-    if (geometry !== undefined) shapes.push({
-      kind: 'circle', center: geometry.center, r: geometry.radius,
-      fill: null, stroke, width: 2.5, insetColor: null, glow: null,
-    })
+    if (geometry !== undefined) discs.push({ center: geometry.center, r: geometry.radius + 2 })
   }
   const wires = new Set(selection.wires)
   for (const path of legPaths(engine)) if (wires.has(path.wid)) {
-    shapes.push({ kind: 'polyline', pts: path.pts, stroke, width: 3, glow: null })
+    for (const point of path.pts) discs.push({ center: point, r: 2 })
   }
   for (const stub of existentialStubs(engine)) if (wires.has(stub.wid)) {
-    shapes.push({ kind: 'segment', from: stub.from, to: stub.to, stroke, width: 3, glow: null })
+    discs.push({ center: stub.from, r: 2 }, { center: stub.to, r: 2 }, { center: stub.dot, r: 2 })
   }
-  return shapes
+  if (discs.length === 0) return []
+  const left = Math.min(...discs.map((disc) => disc.center.x - disc.r))
+  const right = Math.max(...discs.map((disc) => disc.center.x + disc.r))
+  const top = Math.min(...discs.map((disc) => disc.center.y - disc.r))
+  const bottom = Math.max(...discs.map((disc) => disc.center.y + disc.r))
+  const center = { x: (left + right) / 2, y: (top + bottom) / 2 }
+  const radius = Math.max(...discs.map((disc) => Math.hypot(disc.center.x - center.x, disc.center.y - center.y) + disc.r))
+  return [{
+    kind: 'circle', center, r: radius,
+    fill: null, stroke, width: 2.5, insetColor: null, glow: null,
+  }]
 }
 
 /** Shared ownership for selected-pattern copy gestures. All semantic target
@@ -99,7 +99,7 @@ export class CopyDragController {
   claim(sample: PointerSample): PointerClaim | null {
     if (!this.#options.active() || sample.button !== 0 || sample.ctrlKey || sample.shiftKey) return null
     const hits = this.#options.sourceSelection()
-    if (sample.hit === null || !hits.some((hit) => sameHit(hit, sample.hit!))) return null
+    if (sample.hit === null) return null
     let selection: SubgraphSelection
     const source = this.#options.sourceDiagram()
     try {
@@ -107,6 +107,13 @@ export class CopyDragController {
     } catch {
       return null
     }
+    const contents = selectionContents(source, selection)
+    const onSelectedSurface = sample.hit.kind === 'node'
+      ? contents.allNodes.has(sample.hit.id)
+      : sample.hit.kind === 'region'
+        ? contents.allRegions.has(sample.hit.id)
+        : contents.internalWires.includes(sample.hit.id)
+    if (!onSelectedSurface) return null
     const drag: CopyDrag = { source, selection, plan: null, destination: null, moved: false, current: true, sample }
     this.#drag = drag
     return {
@@ -114,6 +121,7 @@ export class CopyDragController {
       blocksPassiveRelaxation: false,
       move: (next) => {
         if (!drag.current || this.#drag !== drag || !this.#options.active()) return
+        if (next.ctrlKey) { this.#cancel(drag); return }
         drag.moved = true
         drag.sample = next
         const destination = this.#options.destination(next)
@@ -126,6 +134,7 @@ export class CopyDragController {
         drag.plan = planned.kind === 'refusal' ? null : planned
       },
       release: (next, moved) => {
+        if (next.ctrlKey) { this.#cancel(drag); return }
         if (!drag.current || this.#drag !== drag) return
         this.#drag = null
         drag.current = false
@@ -188,7 +197,7 @@ export class CopyDragController {
   }
 
   #sourceShapes(drag: CopyDrag): readonly Shape[] {
-    return selectionShapes(this.#options.sourceEngine(), drag.selection, this.#options.theme().interaction.valid)
+    return selectionHalo(this.#options.sourceEngine(), drag.selection, this.#options.theme().interaction.valid)
   }
 
   #destinationShapes(drag: CopyDrag): readonly Shape[] {

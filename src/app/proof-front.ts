@@ -187,7 +187,10 @@ export class ProofFrontViewport {
       contextMenu: (sample) => { if (this.#relationWorkspace === null) this.#moves.contextMenu(sample) },
       pointerChanged: (client) => this.#relationWorkspace?.hostPointerChanged(client),
       passiveSample: (sample) => this.#moves.passiveSample(sample),
-      modifiersChanged: (ctrlHeld) => this.#moves.modifiersChanged(ctrlHeld),
+      modifiersChanged: (ctrlHeld) => {
+        this.#moves.modifiersChanged(ctrlHeld)
+        this.#relationWorkspace?.modifiersChanged(ctrlHeld)
+      },
       keyDown: (sample) => {
         if (this.#relationWorkspace !== null) return this.#relationWorkspace.keyDown(sample)
         const routed = frontKeyRoute(model.focused(), sample)

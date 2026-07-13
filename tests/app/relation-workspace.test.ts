@@ -8,6 +8,7 @@ import type { ProofContext } from '../../src/kernel/proof/step'
 import {
   applyCapturedRelationConnection,
   applyRelationWorkspaceCopy,
+  arbitrateRelationHostCopy,
   applyPortStripDelete,
   applyPortStripDrop,
   applyPortStripMove,
@@ -45,6 +46,30 @@ function hostWithBubble(arity = 2): Diagram {
 }
 
 describe('shared relation workspace mechanics', () => {
+  it('uses a transaction still click but yields a moved occurrence gesture to copy', () => {
+    const events: string[] = []
+    const claim = (name: string): import('../../src/app/interact/viewport').PointerClaim => ({
+      still: 'claim', blocksPassiveRelaxation: false,
+      move: () => { events.push(`${name}:move`) },
+      release: (_sample, moved) => { events.push(`${name}:release:${moved}`) },
+      cancel: () => { events.push(`${name}:cancel`) },
+    })
+    const pointer = {
+      pointerId: 1, button: 0, client: { x: 0, y: 0 }, screen: { x: 0, y: 0 }, world: { x: 0, y: 0 },
+      hit: null, shiftKey: false, ctrlKey: false, altKey: false, metaKey: false,
+    }
+
+    const still = arbitrateRelationHostCopy(claim('transaction'), claim('copy'))
+    still.release(pointer, false)
+    expect(events).toEqual(['copy:cancel', 'transaction:release:false'])
+
+    events.length = 0
+    const moved = arbitrateRelationHostCopy(claim('transaction'), claim('copy'))
+    moved.move(pointer)
+    moved.release(pointer, true)
+    expect(events).toEqual(['copy:move', 'transaction:cancel', 'copy:release:true'])
+  })
+
   it('converts host-drop client coordinates into workspace world coordinates', () => {
     expect(relationWorkspaceWorldPoint(
       { x: 250, y: 180 },

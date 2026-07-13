@@ -44,6 +44,32 @@ export type WorkspaceStatus = {
   readonly message: string
 }
 
+export type RelationHostClaim = PointerClaim & {
+  /** A still press belongs to the transaction, but a drag may become selected-pattern copy. */
+  readonly yieldToCopyOnDrag?: boolean
+}
+
+export function arbitrateRelationHostCopy(
+  transaction: PointerClaim,
+  copy: PointerClaim,
+): PointerClaim {
+  return {
+    still: transaction.still,
+    blocksPassiveRelaxation: transaction.blocksPassiveRelaxation || copy.blocksPassiveRelaxation,
+    move: (sample) => copy.move(sample),
+    release: (sample, moved) => {
+      if (moved) {
+        transaction.cancel()
+        copy.release(sample, true)
+      } else {
+        copy.cancel()
+        transaction.release(sample, false)
+      }
+    },
+    cancel: () => { transaction.cancel(); copy.cancel() },
+  }
+}
+
 export type RelationWorkspaceTransaction = {
   readonly mode: 'substitute' | 'abstract'
   readonly title: string
@@ -53,7 +79,7 @@ export type RelationWorkspaceTransaction = {
   previewShapes(): readonly Shape[]
   draftChanged?(snapshot: RelationWorkspaceSnapshot): void
   cycle?(delta: 1 | -1): void
-  hostClaim?(sample: PointerSample): PointerClaim | null
+  hostClaim?(sample: PointerSample): RelationHostClaim | null
   debugState?(): unknown
   status(snapshot: RelationWorkspaceSnapshot): WorkspaceStatus
   finalizeError?(error: unknown): WorkspaceStatus
@@ -579,11 +605,8 @@ export class RelationWorkspace {
   hostClaim(sample: PointerSample): PointerClaim | null {
     const connection = this.#connectionClaim('host', sample)
     if (connection !== null) return connection
-    const copy = this.#hostCopy.claim(sample)
-    if (copy !== null) return copy
     const transaction = this.#transaction.hostClaim?.(sample) ?? null
-    if (transaction === null) return null
-    return {
+    const wrapped: PointerClaim | null = transaction === null ? null : {
       ...transaction,
       move: (next) => { transaction.move(next); this.#host.changed() },
       release: (next, moved) => {
@@ -599,9 +622,15 @@ export class RelationWorkspace {
       },
       cancel: () => { transaction.cancel(); this.#host.changed() },
     }
+    if (transaction !== null && transaction.yieldToCopyOnDrag !== true) return wrapped
+    const copy = this.#hostCopy.claim(sample)
+    if (wrapped !== null && copy !== null) return arbitrateRelationHostCopy(wrapped, copy)
+    return wrapped ?? copy
   }
 
   hostPointerChanged(client: Vec2): void { this.#pointerChanged('host', client) }
+
+  modifiersChanged(ctrlHeld: boolean): void { this.#hostCopy.modifiersChanged(ctrlHeld) }
 
   keyDown(sample: KeySample): boolean {
     if (this.#disposed || sample.repeat) return false

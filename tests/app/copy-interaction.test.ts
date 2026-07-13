@@ -72,6 +72,27 @@ describe('CopyDragController', () => {
     expect(controller.overlay()).toEqual([])
   })
 
+  it('starts from any contained item on the complete surface of a selected subtree', () => {
+    const builder = new DiagramBuilder()
+    const selected = builder.cut(builder.root)
+    const contained = builder.termNode(selected, p('x'))
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    const controller = new CopyDragController({
+      active: () => true,
+      sourceDiagram: () => diagram,
+      sourceSelection: () => [{ kind: 'region', id: selected }],
+      sourceEngine: () => engine,
+      viewScale: () => 1,
+      destination: () => ({ kind: 'edit', diagram, region: diagram.root, at: { x: 1, y: 2 } }),
+      commit: () => {},
+      refuse: () => {},
+      theme: () => LIGHT,
+    })
+
+    expect(controller.claim(sample({ kind: 'node', id: contained }))).not.toBeNull()
+  })
+
   it('uses one enclosing green group preview for a valid proof iteration and commits one ProofAction', () => {
     const f = fixture()
     let diagram = f.diagram
@@ -104,6 +125,40 @@ describe('CopyDragController', () => {
     expect(actions).toHaveLength(1)
     expect(actions[0]).toMatchObject({ label: 'Copy selection', steps: [{ rule: 'iteration', target: f.target }] })
     expect(controller.overlay()).toEqual([])
+  })
+
+  it('draws one enclosing source halo for a multi-item selected pattern', () => {
+    const builder = new DiagramBuilder()
+    const a = builder.termNode(builder.root, p('x'))
+    const b = builder.termNode(builder.root, p('y'))
+    const diagram = builder.build()
+    const engine = mkEngine(diagram, [])
+    engine.bodies.get(a)!.pos = { x: -40, y: 0 }
+    engine.bodies.get(b)!.pos = { x: 40, y: 0 }
+    const controller = new CopyDragController({
+      active: () => true,
+      sourceDiagram: () => diagram,
+      sourceSelection: () => [{ kind: 'node', id: a }, { kind: 'node', id: b }],
+      sourceEngine: () => engine,
+      viewScale: () => 1,
+      destination: () => ({ kind: 'edit', diagram, region: diagram.root, at: { x: 0, y: 20 } }),
+      commit: () => {},
+      refuse: () => {},
+      theme: () => LIGHT,
+    })
+    const at = sample({ kind: 'node', id: a })
+    const claim = controller.claim(at)!
+    claim.move(at)
+    const source = controller.sourceOverlay()
+
+    expect(source).toHaveLength(1)
+    expect(source[0]).toMatchObject({ kind: 'circle', stroke: LIGHT.interaction.valid })
+    if (source[0]?.kind !== 'circle') throw new Error('expected enclosing circle')
+    for (const node of [a, b]) {
+      const body = engine.bodies.get(node)!
+      expect(Math.hypot(body.pos.x - source[0].center.x, body.pos.y - source[0].center.y)
+        + body.discR * engine.scale).toBeLessThanOrEqual(source[0].r)
+    }
   })
 
   it('gives construction fallback the identical preview and still commits one durable action', () => {
@@ -182,6 +237,31 @@ describe('CopyDragController', () => {
     stale.release(at, true)
     expect(commits).toEqual([])
     expect(refusals.join(' ')).toMatch(/stale|changed/i)
+  })
+
+  it('cancels an active copy when Ctrl becomes held before release', () => {
+    const f = fixture()
+    const commits: unknown[] = []
+    const controller = new CopyDragController({
+      active: () => true,
+      sourceDiagram: () => f.diagram,
+      sourceSelection: () => [{ kind: 'node', id: f.selected }],
+      sourceEngine: () => f.engine,
+      viewScale: () => 1,
+      destination: () => ({ kind: 'edit', diagram: f.diagram, region: f.diagram.root, at: { x: 2, y: 3 } }),
+      commit: (plan) => { commits.push(plan) },
+      refuse: () => {},
+      theme: () => LIGHT,
+    })
+    const start = sample({ kind: 'node', id: f.selected })
+    const claim = controller.claim(start)!
+    claim.move(start)
+    const ctrl = sample({ kind: 'node', id: f.selected }, start.world, { ctrlKey: true })
+    claim.move(ctrl)
+    claim.release(ctrl, true)
+
+    expect(commits).toEqual([])
+    expect(controller.overlay()).toEqual([])
   })
 
   it('commits Edit and workspace structural copies without mutating before drop', () => {

@@ -1629,6 +1629,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     modifiersChanged: (ctrlHeld) => {
       construct.modifiersChanged(ctrlHeld)
       proofMoves.modifiersChanged(ctrlHeld)
+      relationWorkspace?.modifiersChanged(ctrlHeld)
     },
     keyDown: onKeyDown,
     selectionChanged,
