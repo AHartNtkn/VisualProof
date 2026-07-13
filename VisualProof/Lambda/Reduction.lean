@@ -806,4 +806,337 @@ theorem churchRosser {a b : Term n α} (h : BetaEta a b) :
       obtain ⟨z, hxz, hyz⟩ := reduces_confluent hbx hby
       exact ⟨z, hax.trans hxz, hcy.trans hyz⟩
 
+inductive Head (n binders : Nat) (α : Type u) where
+  | bound : Fin binders → Head n binders α
+  | outer : Fin n → Head n binders α
+  | port : α → Head n binders α
+
+inductive Head.Corresponds : Head n k α → Head n l α → Prop
+  | bound (i : Nat) (hi : i < k) (hj : i < l) :
+      Corresponds (.bound ⟨i, hi⟩) (.bound ⟨i, hj⟩)
+  | outer (i : Fin n) : Corresponds (.outer i) (.outer i)
+  | port (x : α) : Corresponds (.port x) (.port x)
+
+private def extendScope (n : Nat) : Nat → Nat
+  | 0 => n
+  | binders + 1 => extendScope (n + 1) binders
+
+private theorem extendScope_eq (n binders : Nat) :
+    extendScope n binders = n + binders := by
+  induction binders generalizing n with
+  | zero => rfl
+  | succ binders ih => simp only [extendScope, ih]; omega
+
+structure HeadSpine (n : Nat) (α : Type u) where
+  binders : Nat
+  head : Head n binders α
+  args : List (Term (extendScope n binders) α)
+
+private structure PrefixBody (n : Nat) (α : Type u) where
+  binders : Nat
+  body : Term (extendScope n binders) α
+
+private def peelPrefix : (t : Term n α) → PrefixBody n α
+  | .lam body =>
+      let peeled := peelPrefix body
+      { binders := peeled.binders + 1
+        body := peeled.body }
+  | t => { binders := 0, body := t }
+
+private inductive RawHead (n : Nat) (α : Type u) where
+  | bvar : Fin n → RawHead n α
+  | port : α → RawHead n α
+
+private structure RawSpine (n : Nat) (α : Type u) where
+  head : RawHead n α
+  args : List (Term n α)
+
+private def rawSpine : Term n α → Option (RawSpine n α)
+  | .bvar i => some { head := .bvar i, args := [] }
+  | .port x => some { head := .port x, args := [] }
+  | .lam _ => none
+  | .app fn arg =>
+      (rawSpine fn).map fun spine =>
+        { spine with args := spine.args ++ [arg] }
+
+private def classifyHead (binders : Nat) :
+    RawHead (extendScope n binders) α → Head n binders α
+  | .port x => .port x
+  | .bvar i =>
+      if h : i.val < binders then
+        .bound ⟨binders - 1 - i.val, by omega⟩
+      else
+        .outer ⟨i.val - binders, by
+          have hi : i.val < n + binders := by
+            simpa only [extendScope_eq] using i.isLt
+          omega⟩
+
+def headSpine (t : Term n α) : Option (HeadSpine n α) :=
+  let peeled := peelPrefix t
+  (rawSpine peeled.body).map fun spine =>
+    { binders := peeled.binders
+      head := classifyHead peeled.binders spine.head
+      args := spine.args }
+
+def prefixClose : (binders : Nat) → Term (extendScope n binders) α → Term n α
+  | 0, t => t
+  | binders + 1, t =>
+      Term.lam (prefixClose binders t)
+
+private def Head.toTerm : Head n binders α → Term (extendScope n binders) α
+  | .bound i => .bvar ⟨binders - 1 - i.val, by
+      rw [extendScope_eq]
+      omega⟩
+  | .outer i => .bvar ⟨binders + i.val, by
+      rw [extendScope_eq]
+      omega⟩
+  | .port x => .port x
+
+private def RawHead.toTerm : RawHead n α → Term n α
+  | .bvar i => .bvar i
+  | .port x => .port x
+
+private def Head.toRaw : Head n binders α →
+    RawHead (extendScope n binders) α
+  | .bound i => .bvar ⟨binders - 1 - i.val, by
+      rw [extendScope_eq]
+      omega⟩
+  | .outer i => .bvar ⟨binders + i.val, by
+      rw [extendScope_eq]
+      omega⟩
+  | .port x => .port x
+
+private theorem Head.toRaw_toTerm (head : Head n binders α) :
+    head.toRaw.toTerm = head.toTerm := by
+  cases head <;> rfl
+
+private theorem classifyHead_toRaw (head : Head n binders α) :
+    classifyHead binders head.toRaw = head := by
+  cases head with
+  | port x => rfl
+  | bound i =>
+      have hi := i.isLt
+      simp only [Head.toRaw, classifyHead]
+      split
+      next h =>
+        apply congrArg Head.bound
+        apply Fin.ext
+        change binders - 1 - (binders - 1 - i.val) = i.val
+        omega
+      next h => omega
+  | outer i =>
+      have hi := i.isLt
+      simp only [Head.toRaw, classifyHead]
+      split
+      next h => omega
+      next h =>
+        apply congrArg Head.outer
+        apply Fin.ext
+        change binders + i.val - binders = i.val
+        omega
+
+private def applyArgs (fn : Term n α) : List (Term n α) → Term n α
+  | [] => fn
+  | arg :: args => applyArgs (Term.app fn arg) args
+
+private def HeadSpine.toTerm (spine : HeadSpine n α) : Term n α :=
+  prefixClose spine.binders (applyArgs spine.head.toTerm spine.args)
+
+private theorem applyArgs_append (fn : Term n α)
+    (xs ys : List (Term n α)) :
+    applyArgs fn (xs ++ ys) = applyArgs (applyArgs fn xs) ys := by
+  induction xs generalizing fn with
+  | nil => rfl
+  | cons x xs ih => exact ih (Term.app fn x)
+
+private theorem rawSpine_applyArgs_of
+    {fn : Term n α} {spine : RawSpine n α}
+    (hfn : rawSpine fn = some spine) (args : List (Term n α)) :
+    rawSpine (applyArgs fn args) =
+      some { head := spine.head, args := spine.args ++ args } := by
+  induction args generalizing fn spine with
+  | nil => simpa [applyArgs] using hfn
+  | cons arg args ih =>
+      have happ : rawSpine (Term.app fn arg) =
+          some { head := spine.head, args := spine.args ++ [arg] } := by
+        simp only [rawSpine, Option.map_eq_some_iff]
+        exact ⟨spine, hfn, by simp⟩
+      simpa only [applyArgs, List.append_assoc] using ih happ
+
+private theorem rawSpine_applyArgs (head : RawHead n α)
+    (args : List (Term n α)) :
+    rawSpine (applyArgs head.toTerm args) =
+      some { head := head, args := args } := by
+  have := rawSpine_applyArgs_of
+    (show rawSpine head.toTerm = some { head := head, args := [] } by
+      cases head <;> rfl) args
+  simpa using this
+
+private theorem rawSpine_sound {t : Term n α} {spine : RawSpine n α}
+    (h : rawSpine t = some spine) :
+    t = applyArgs spine.head.toTerm spine.args := by
+  induction t with
+  | bvar i =>
+      simp only [rawSpine, Option.some.injEq] at h
+      subst spine
+      rfl
+  | port x =>
+      simp only [rawSpine, Option.some.injEq] at h
+      subst spine
+      rfl
+  | lam body => simp only [rawSpine] at h; contradiction
+  | app fn arg ihFn _ =>
+      simp only [rawSpine, Option.map_eq_some_iff] at h
+      obtain ⟨fnSpine, hfn, rfl⟩ := h
+      rw [ihFn hfn, applyArgs_append]
+      rfl
+
+private theorem classifyHead_toTerm (binders : Nat)
+    (head : RawHead (extendScope n binders) α) :
+    (classifyHead binders head).toTerm = head.toTerm := by
+  cases head with
+  | port x => rfl
+  | bvar i =>
+      simp only [classifyHead]
+      split
+      next h =>
+        simp only [Head.toTerm, RawHead.toTerm]
+        apply congrArg Term.bvar
+        apply Fin.ext
+        simp only [Fin.val_mk]
+        omega
+      next h =>
+        simp only [Head.toTerm, RawHead.toTerm]
+        apply congrArg Term.bvar
+        apply Fin.ext
+        simp only [Fin.val_mk]
+        omega
+
+private def Head.wrap : Head (n + 1) binders α → Head n (binders + 1) α
+  | .bound i => .bound ⟨i.val + 1, by omega⟩
+  | .outer i => Fin.cases (.bound ⟨0, by omega⟩) (fun j => .outer j) i
+  | .port x => .port x
+
+private def HeadSpine.wrap (spine : HeadSpine (n + 1) α) :
+    HeadSpine n α where
+  binders := spine.binders + 1
+  head := spine.head.wrap
+  args := spine.args
+
+private theorem classifyHead_wrap (binders : Nat)
+    (head : RawHead (extendScope (n + 1) binders) α) :
+    classifyHead (n := n) (binders + 1) head =
+      (classifyHead (n := n + 1) binders head).wrap := by
+  cases head with
+  | port x => rfl
+  | bvar i =>
+      simp only [classifyHead]
+      split
+      next hOuter =>
+        split
+        next hInner =>
+          simp only [Head.wrap]
+          apply congrArg Head.bound
+          apply Fin.ext
+          change binders + 1 - 1 - i.val = binders - 1 - i.val + 1
+          omega
+        next hInner =>
+          have hi : i.val = binders := by omega
+          have hj : (⟨i.val - binders, by omega⟩ : Fin (n + 1)) = 0 := by
+            apply Fin.ext
+            change i.val - binders = 0
+            omega
+          simp only [Head.wrap]
+          rw [hj]
+          apply congrArg Head.bound
+          apply Fin.ext
+          change binders + 1 - 1 - i.val = 0
+          omega
+      next hOuter =>
+        split
+        next hInner => omega
+        next hInner =>
+          have hiTotal : i.val < n + 1 + binders := by
+            simpa only [extendScope_eq, Nat.add_assoc, Nat.add_comm,
+              Nat.add_left_comm] using i.isLt
+          let j : Fin n := ⟨i.val - binders - 1, by omega⟩
+          have hj : (⟨i.val - binders, by omega⟩ : Fin (n + 1)) =
+              Fin.succ j := by
+            apply Fin.ext
+            dsimp [j]
+            omega
+          simp only [Head.wrap]
+          rw [hj]
+          apply congrArg Head.outer
+          apply Fin.ext
+          dsimp [j]
+          omega
+
+private theorem headSpine_lam (t : Term (n + 1) α) :
+    headSpine (Term.lam t) = (headSpine t).map HeadSpine.wrap := by
+  unfold headSpine
+  simp only [peelPrefix, Option.map_map]
+  apply congrArg (fun f :
+      RawSpine (extendScope (n + 1) (peelPrefix t).binders) α →
+        HeadSpine n α =>
+    Option.map f (rawSpine (peelPrefix t).body))
+  funext raw
+  cases raw with
+  | mk head args =>
+      dsimp only [Function.comp_apply, HeadSpine.wrap]
+      rw [classifyHead_wrap]
+
+private theorem peelPrefix_sound (t : Term n α) :
+    t = prefixClose (peelPrefix t).binders (peelPrefix t).body := by
+  induction t with
+  | bvar i => rfl
+  | port x => rfl
+  | app fn arg _ _ => rfl
+  | lam body ih =>
+      simp only [peelPrefix, prefixClose]
+      congr 1
+
+private theorem peelPrefix_prefixClose (binders : Nat)
+    (body : Term (extendScope n binders) α)
+    (hbody : rawSpine body ≠ none) :
+    peelPrefix (prefixClose binders body) =
+      { binders := binders, body := body } := by
+  induction binders generalizing n with
+  | zero =>
+      simp only [prefixClose]
+      cases body <;> simp_all [peelPrefix, rawSpine]
+  | succ binders ih =>
+      simp only [prefixClose, peelPrefix]
+      rw [ih body hbody]
+
+private theorem headSpine_toTerm (spine : HeadSpine n α) :
+    headSpine spine.toTerm = some spine := by
+  unfold HeadSpine.toTerm headSpine
+  rw [peelPrefix_prefixClose spine.binders
+    (applyArgs spine.head.toTerm spine.args) (by
+      rw [← spine.head.toRaw_toTerm, rawSpine_applyArgs]
+      simp)]
+  dsimp only
+  rw [← spine.head.toRaw_toTerm, rawSpine_applyArgs]
+  simp only [Option.map_some]
+  rw [classifyHead_toRaw]
+
+private theorem headSpine_sound {t : Term n α} {spine : HeadSpine n α}
+    (h : headSpine t = some spine) : t = spine.toTerm := by
+  unfold headSpine at h
+  simp only [Option.map_eq_some_iff] at h
+  obtain ⟨raw, hraw, hspine⟩ := h
+  subst spine
+  unfold HeadSpine.toTerm
+  calc
+    t = prefixClose (peelPrefix t).binders (peelPrefix t).body :=
+      peelPrefix_sound t
+    _ = prefixClose (peelPrefix t).binders
+          (applyArgs raw.head.toTerm raw.args) := by
+        rw [rawSpine_sound hraw]
+    _ = prefixClose (peelPrefix t).binders
+          (applyArgs (classifyHead (peelPrefix t).binders raw.head).toTerm
+            raw.args) := by
+        rw [classifyHead_toTerm]
+
 end VisualProof.Lambda
