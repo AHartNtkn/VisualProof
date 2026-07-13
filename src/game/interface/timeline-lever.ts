@@ -24,7 +24,6 @@ export function mountTimelineLever(
 ): MountedTimelineLever {
   const element = document.createElement('div')
   element.className = 'curse-timeline'
-  element.setAttribute('aria-label', 'Recorded seal states')
 
   const housing = document.createElement('img')
   housing.className = 'curse-timeline-housing curse-decoration'
@@ -34,6 +33,7 @@ export function mountTimelineLever(
   const rail = document.createElement('div')
   rail.className = 'curse-timeline-rail'
   rail.setAttribute('role', 'slider')
+  rail.setAttribute('aria-label', 'Recorded seal states')
   rail.tabIndex = 0
 
   const handle = document.createElement('img')
@@ -65,11 +65,37 @@ export function mountTimelineLever(
     dragging = false
     if (rail.hasPointerCapture(event.pointerId)) rail.releasePointerCapture(event.pointerId)
   }
+  const keydown = (event: KeyboardEvent): void => {
+    const timeline = getTimeline()
+    const last = Math.max(0, timeline.states.length - 1)
+    let cursor: number
+    switch (event.key) {
+      case 'ArrowLeft':
+      case 'ArrowDown':
+        cursor = Math.max(0, timeline.cursor - 1)
+        break
+      case 'ArrowRight':
+      case 'ArrowUp':
+        cursor = Math.min(last, timeline.cursor + 1)
+        break
+      case 'Home':
+        cursor = 0
+        break
+      case 'End':
+        cursor = last
+        break
+      default:
+        return
+    }
+    event.preventDefault()
+    onMove(cursor)
+  }
 
   rail.addEventListener('pointerdown', down)
   rail.addEventListener('pointermove', moving)
   rail.addEventListener('pointerup', up)
   rail.addEventListener('pointercancel', up)
+  rail.addEventListener('keydown', keydown)
 
   const refresh = (): void => {
     const timeline = getTimeline()
@@ -89,6 +115,7 @@ export function mountTimelineLever(
       rail.removeEventListener('pointermove', moving)
       rail.removeEventListener('pointerup', up)
       rail.removeEventListener('pointercancel', up)
+      rail.removeEventListener('keydown', keydown)
       element.remove()
     },
   }
