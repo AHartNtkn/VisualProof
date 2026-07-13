@@ -39,6 +39,20 @@ theorem denote_proof_irrelevant (d : ConcreteDiagram)
 
 end ConcreteDiagram
 
+namespace ConcreteIso
+
+theorem denote_iff {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target)
+    (hsource : source.WellFormed signature)
+    (htarget : target.WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature) :
+    source.denote hsource model named ↔ target.denote htarget model named := by
+  exact iso_denotation (iso.elaborate_isomorphic hsource htarget)
+    model named Fin.elim0 PUnit.unit
+
+end ConcreteIso
+
 namespace ConcreteExamples
 
 theorem bareWire_denotes_iff_nonempty
@@ -46,6 +60,14 @@ theorem bareWire_denotes_iff_nonempty
     bareWireChecked.denote model named <-> Nonempty model.Carrier := by
   rw [CheckedDiagram.denote_eq_intrinsic, bareWire_elaborate]
   exact bareLocalWireExample_denotes_iff_nonempty model named
+
+theorem validNestedRelabeled_denote_iff
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier []) :
+    validNested.denote (checkWellFormed_iff.mp validNested_check) model named ↔
+      validNestedRelabeled.denote validNestedRelabeled_wellFormed model named :=
+  validNestedRelabeledIso.denote_iff
+    (checkWellFormed_iff.mp validNested_check)
+    validNestedRelabeled_wellFormed model named
 
 end ConcreteExamples
 
