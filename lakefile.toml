@@ -1,0 +1,6 @@
+name = "visualproof"
+version = "0.1.0"
+defaultTargets = ["VisualProof"]
+
+[[lean_lib]]
+name = "VisualProof"
