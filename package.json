@@ -15,9 +15,7 @@
     "emit:theories": "tsx scripts/emit-theories.ts",
     "demo": "vite demo",
     "app": "vite app",
-    "preapp": "npm run emit:theories",
-    "e2e": "playwright test",
-    "pree2e": "npm run emit:theories"
+    "e2e": "playwright test"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",

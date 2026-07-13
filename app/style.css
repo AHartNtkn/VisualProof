@@ -1,114 +1,52 @@
 :root {
+  color-scheme: dark;
+  background: #08090b;
   font-family: Inter, "Avenir Next", system-ui, sans-serif;
-  color: #272722;
-  background: #fafaf7;
-  font-synthesis: none;
 }
 
-html, body { margin: 0; height: 100%; overflow: hidden; }
-canvas { display: block; }
-canvas[hidden] { display: none; }
-button, input { font: inherit; }
-button { color: inherit; }
-
-#chrome { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
-#chrome button, #chrome input, #chrome section, #chrome aside { pointer-events: auto; }
-.vpa-compass-north {
-  position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 5px; padding: 5px;
-  border: 1px solid rgba(69, 66, 55, .24); border-radius: 12px;
-  background: rgba(250, 249, 243, .94); box-shadow: 0 8px 28px rgba(50, 45, 30, .12);
-  backdrop-filter: blur(12px); pointer-events: auto;
+html, body, #cursebreaker { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+body { background: radial-gradient(circle at 50% 42%, #171319 0, #0b0b0f 52%, #050608 100%); }
+.curse-lens-stage { position: fixed; isolation: isolate; }
+.curse-decoration { pointer-events: none !important; user-select: none; }
+.curse-lens-shadow, .curse-lens-optics { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
+.curse-lens-shadow { z-index: 0; }
+.curse-lens-glass {
+  position: absolute;
+  z-index: 1;
+  left: 13.5%;
+  top: 13.5%;
+  width: 73%;
+  height: 73%;
+  overflow: hidden;
+  border-radius: 10%;
+  background: #0e1013;
 }
-.vpa-compass-north button, .vpa-compass-surface button, .vpa-temporal button {
-  border: 1px solid rgba(69, 66, 55, .22); border-radius: 7px; padding: 5px 9px;
-  background: rgba(255, 255, 252, .8); cursor: pointer;
+#seal-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+.curse-lens-optics { z-index: 2; opacity: .72; }
+.curse-lens-frame {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  box-sizing: border-box;
+  border: min(13.7vw, 13.7vh) solid transparent;
+  border-image-source: url('../assets/interface/generated/central-lens/frame.png');
+  border-image-slice: 560;
+  border-image-width: 1;
+  border-image-repeat: stretch;
 }
-.vpa-compass-north button:hover, .vpa-compass-surface button:hover { border-color: #7d6543; }
-.vpa-status { padding: 0 8px; max-width: 38vw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #666154; }
-.vpa-compass-surface {
-  position: fixed; top: 62px; max-height: calc(100vh - 110px); box-sizing: border-box;
-  padding: 12px; border: 1px solid rgba(69, 66, 55, .24); border-radius: 11px;
-  background: rgba(250, 249, 243, .97); box-shadow: 0 14px 44px rgba(50, 45, 30, .16);
-  color: #2b2a25; overflow: auto;
+.curse-timeline { position: absolute; z-index: 4; left: 50%; bottom: 5.4%; width: 38%; height: 8%; transform: translateX(-50%); }
+.curse-timeline-housing { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.curse-timeline-rail { position: absolute; left: 11%; right: 11%; top: 26%; height: 48%; cursor: ew-resize; touch-action: none; }
+.curse-timeline-handle { position: absolute; top: 50%; left: calc(var(--curse-lever-position) * 100%); width: 15%; height: auto; transform: translate(-50%, -50%); }
+.curse-refusal {
+  position: fixed;
+  z-index: 20;
+  max-width: 19rem;
+  padding: .55rem .75rem;
+  color: #ff9aa8;
+  background: rgba(67, 18, 29, .94);
+  border: 1px solid #fb7185;
+  border-radius: 45% 48% 42% 12% / 52% 46% 45% 18%;
+  box-shadow: 0 .4rem 1.4rem #0009;
+  pointer-events: none;
 }
-.vpa-compass-surface[hidden], .vpa-temporal[hidden] { display: none; }
-.vpa-lifecycle { left: 50%; transform: translateX(-50%); width: min(760px, calc(100vw - 24px)); display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
-.vpa-utility-surface { right: 12px; width: min(360px, calc(100vw - 24px)); display: flex; flex-wrap: wrap; gap: 6px; }
-.vpa-ledger { left: 12px; width: min(390px, calc(100vw - 24px)); }
-.vpa-ledger > header { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid rgba(69, 66, 55, .16); padding-bottom: 8px; margin-bottom: 8px; }
-.vpa-ledger > header span { display: flex; flex-direction: column; }
-.vpa-ledger > header small { color: #777165; font-size: 10px; margin-top: 2px; }
-.vpa-ledger-body #library { display: block; font-size: 12px; line-height: 1.5; }
-.vpa-ledger-body #library > * { margin-bottom: 7px; }
-.vpa-ledger-body .vpa-lib-row { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
-.vpa-compass-south { position: fixed; left: 50%; bottom: 12px; width: min(760px, calc(100vw - 32px)); transform: translateX(-50%); }
-.vpa-temporal { display: grid; grid-template-columns: auto 1fr auto auto; gap: 9px; align-items: center; padding: 7px 9px; border: 1px solid rgba(69, 66, 55, .24); border-radius: 11px; background: rgba(250, 249, 243, .94); box-shadow: 0 8px 28px rgba(50, 45, 30, .12); pointer-events: auto; }
-.vpa-temporal-rail { position: relative; height: 18px; cursor: ew-resize; touch-action: none; }
-.vpa-temporal-rail::before { content: ""; position: absolute; left: 0; right: 0; top: 8px; border-top: 1px solid #8c8678; }
-.vpa-temporal-tick { position: absolute; top: 4px; width: 2px; height: 9px; transform: translateX(-1px); background: #5d594f; }
-.vpa-temporal-tick.is-future { background: transparent; border-left: 2px dashed #9c9688; }
-.vpa-temporal-tick.is-current { top: 2px; height: 13px; width: 4px; transform: translateX(-2px); border-radius: 2px; background: #d17832; }
-.vpa-temporal-copy { min-width: 110px; font-size: 11px; color: #666154; }
-.vpa-history-preview { position: fixed; z-index: 55; width: 260px; height: 170px; padding: 5px; border: 1px solid rgba(69,66,55,.24); border-radius: 10px; background: rgba(250,249,243,.98); box-shadow: 0 12px 36px rgba(50,45,30,.18); pointer-events: none; }
-.vpa-history-preview canvas { width: 260px; height: 170px; border-radius: 6px; }
-.vpa-fixed-side-workspace { position: fixed; inset: 0; z-index: 0; overflow: hidden; background: #e8e4d8; }
-.vpa-fixed-side-workspace[hidden] { display: none; }
-.vpa-proof-front, .vpa-fixed-side-seam { position: absolute; box-sizing: border-box; }
-.vpa-proof-front { overflow: hidden; background: #e8e4d8; box-shadow: inset 0 0 0 1px rgba(69,66,55,.14); }
-.vpa-proof-front.is-focused { box-shadow: inset 0 0 0 3px #d17832; }
-.vpa-proof-front-canvas { width: 100%; height: 100%; }
-.vpa-proof-front-status { position: absolute; top: 68px; z-index: 2; padding: 4px 8px; border: 1px solid rgba(69,66,55,.22); border-radius: 7px; background: rgba(250,249,243,.9); color: #666154; font-size: 10px; letter-spacing: .08em; pointer-events: none; }
-.vpa-proof-front-forward .vpa-proof-front-status { left: 12px; }
-.vpa-proof-front-backward .vpa-proof-front-status { right: 12px; }
-.vpa-proof-front.is-focused .vpa-proof-front-status { border-color: #d17832; color: #8a481c; }
-.vpa-fixed-side-seam { z-index: 4; cursor: col-resize; background: rgba(75,70,59,.22); touch-action: none; }
-.vpa-fixed-side-seam::before { content: ""; position: absolute; inset: 0 3px; background: rgba(75,70,59,.58); }
-.vpa-fixed-side-declare { position: absolute; left: 50%; top: 50%; width: 116px; transform: translate(-50%, -50%) rotate(-90deg); white-space: nowrap; border: 1px solid rgba(69,66,55,.3); border-radius: 999px; padding: 5px 9px; background: rgba(250,249,243,.96); font-size: 10px; letter-spacing: .08em; cursor: pointer; }
-.vpa-fixed-side-declare:disabled { color: #777165; cursor: default; }
-.vpa-fixed-side-seam.is-met::before { background: #d17832; }
-.vpa-fixed-side-seam.is-met .vpa-fixed-side-declare { border-color: #d17832; color: #8a481c; font-weight: 700; }
-.vpa-fixed-side-too-narrow { position: fixed; inset: 0; z-index: 8; display: grid; place-items: center; padding: 32px; box-sizing: border-box; background: rgba(250,249,243,.97); color: #5f2c1b; font-size: 14px; text-align: center; }
-.vpa-fixed-side-too-narrow[hidden] { display: none; }
-.vpa-action-instruction { flex-basis: 100%; margin: 0 0 3px; }
-.vpa-mode-help, .vpa-keyboard-map { flex-basis: 100%; padding: 6px 8px; border-left: 2px solid #d17832; color: #666154; font-size: 11px; }
-.vpa-mode-help[hidden], .vpa-keyboard-map[hidden] { display: none; }
-.vpa-motion-controls { flex-basis: 100%; display: grid; gap: 5px; padding-top: 8px; border-top: 1px solid rgba(69,66,55,.16); font-size: 11px; }
-.vpa-motion-controls label { display: flex; align-items: center; gap: 6px; }
-.vpa-motion-controls input[type="range"] { width: 120px; }
-.vpa-motion-speed-value { min-width: 2.4em; color: #666154; }
-.vpa-comprehension-editor { position: fixed; z-index: 25; display: grid; grid-template-rows: 38px minmax(0,1fr); min-width: 0; min-height: 0; overflow: hidden; border: 2px solid #d97706; border-radius: 12px; background: #f4f2ec; box-shadow: 0 18px 55px rgba(41,37,36,.34); }
-.vpa-comprehension-title { display: flex; align-items: center; gap: 8px; padding: 0 7px 0 11px; border-bottom: 1px solid rgba(69,66,55,.18); background: rgba(251,250,246,.97); color: #b45309; cursor: move; user-select: none; }
-.vpa-comprehension-title strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 700 11px "IBM Plex Mono", ui-monospace, monospace; letter-spacing: .06em; }
-.vpa-comprehension-actions { display: flex; gap: 4px; }
-.vpa-comprehension-actions button { border: 1px solid rgba(69,66,55,.35); border-radius: 999px; padding: 3px 7px; background: #fffefa; color: #292524; font: 11px system-ui,sans-serif; cursor: pointer; }
-.vpa-comprehension-actions button:disabled { opacity: .38; cursor: default; }
-.vpa-comprehension-actions .is-primary { border-color: #08796b; background: #08796b; color: white; font-weight: 700; }
-.vpa-comprehension-canvas { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; touch-action: none; background: #f4f2ec; }
-.vpa-comprehension-resize { position: absolute; right: 0; bottom: 0; z-index: 2; width: 20px; height: 20px; cursor: nwse-resize; }
-.vpa-comprehension-resize::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 10px; height: 10px; border-right: 2px solid #72797b; border-bottom: 2px solid #72797b; }
-.vpa-comprehension-gesture { position: fixed; inset: 0; z-index: 26; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
-.vpa-comprehension-join-gesture { stroke: #08796b; stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 7 5; }
-.vpa-menu { position: fixed; z-index: 50; max-width: 350px; padding: 8px; border-radius: 8px; background: rgba(250,249,243,.98); box-shadow: 0 8px 28px rgba(50,45,30,.18); }
-@media (prefers-color-scheme: dark) {
-  .vpa-compass-north, .vpa-compass-surface, .vpa-temporal, .vpa-menu { color-scheme: dark; background: rgba(32, 31, 29, .96); color: #eee9df; border-color: rgba(238,233,223,.24); }
-  .vpa-status, .vpa-temporal-copy, .vpa-ledger > header small { color: #bbb4a8; }
-  .vpa-comprehension-editor, .vpa-comprehension-canvas { background: #121719; }
-  .vpa-comprehension-title { background: rgba(26,32,35,.97); color: #f59e0b; border-color: rgba(238,233,223,.2); }
-  .vpa-comprehension-actions button { background: #22292d; color: #edf0ea; border-color: rgba(238,233,223,.3); }
-}
-#chrome[data-color-mode="dark"] .vpa-compass-north,
-#chrome[data-color-mode="dark"] .vpa-compass-surface,
-#chrome[data-color-mode="dark"] .vpa-temporal,
-#chrome[data-color-mode="dark"] .vpa-menu { color-scheme: dark; background: rgba(28, 32, 38, .96); color: #e6e1d6; border-color: rgba(230,225,214,.24); }
-#chrome[data-color-mode="dark"] .vpa-status,
-#chrome[data-color-mode="dark"] .vpa-temporal-copy,
-#chrome[data-color-mode="dark"] .vpa-ledger > header small { color: #b8b3aa; }
-#chrome[data-color-mode="dark"] ~ .vpa-fixed-side-workspace,
-body:has(#chrome[data-color-mode="dark"]) .vpa-proof-front { background: #0e1013; }
-body:has(#chrome[data-color-mode="dark"]) .vpa-proof-front-status,
-body:has(#chrome[data-color-mode="dark"]) .vpa-fixed-side-declare { color-scheme: dark; background: rgba(28,32,38,.94); color: #d9d3c8; border-color: rgba(230,225,214,.24); }
-body:has(#chrome[data-color-mode="dark"]) .vpa-comprehension-editor,
-body:has(#chrome[data-color-mode="dark"]) .vpa-comprehension-canvas { background: #121719; }
-body:has(#chrome[data-color-mode="dark"]) .vpa-comprehension-title { background: rgba(26,32,35,.97); color: #f59e0b; border-color: rgba(238,233,223,.2); }
-body:has(#chrome[data-color-mode="dark"]) .vpa-comprehension-actions button { background: #22292d; color: #edf0ea; border-color: rgba(238,233,223,.3); }
