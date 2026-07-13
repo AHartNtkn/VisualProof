@@ -32,12 +32,12 @@
 
 **Produces:** Complete/nodup `Fin` enumeration and filtering, executable finite search/sequencing, exact-scope wire and local-occurrence enumerations, and the isolated theorem that a checked rooted parent graph cannot exhaust `regionCount`-bounded descent.
 
-- [ ] Define a canonical `List (Fin n)` enumeration, predicate filtering, index lookup, and `sequenceFin`, with soundness/completeness/nodup theorems.
-- [ ] Define exact-scope wire enumeration and tagged local occurrences (`node` or direct child region) as compiler-private references, not syntax.
-- [ ] State the fuel/no-exhaustion theorem before proving it. Derive it from `AllRegionsReachRoot`, unique total parent data, and finiteness.
-- [ ] If the proof requires a cleaner recursion state, replace fuel internally with a remaining-region list. Do not add a runtime fallback or strengthen `WellFormed` without a new foundation decision.
-- [ ] Build the focused modules and inspect their theorem axioms.
-- [ ] Commit the traversal gate independently.
+- [x] Define a canonical `List (Fin n)` enumeration, predicate filtering, index lookup, and `sequenceFin`, with soundness/completeness/nodup theorems.
+- [x] Define exact-scope wire enumeration and tagged local occurrences (`node` or direct child region) as compiler-private references, not syntax.
+- [x] State the fuel/no-exhaustion theorem before proving it. Derive it from `AllRegionsReachRoot`, unique total parent data, and finiteness.
+- [x] If the proof requires a cleaner recursion state, replace fuel internally with a remaining-region list. Do not add a runtime fallback or strengthen `WellFormed` without a new foundation decision.
+- [x] Build the focused modules and inspect their theorem axioms.
+- [x] Commit the traversal gate independently.
 
 ---
 
@@ -130,4 +130,3 @@ theorem ConcreteIso.elaborate_isomorphic
 - [ ] Verify no public partial elaborator, second validator, canonical graph, default result, proof-chosen data, scope flattening, or endpoint-order semantics remains.
 - [ ] Run `lake build`; inspect axioms of totality, proof irrelevance, concrete-isomorphism transport, elaboration isomorphism, and denotation invariance.
 - [ ] Append the foundation record's `<conformance>` section with ownership, replacement, migration, and validation evidence.
-
