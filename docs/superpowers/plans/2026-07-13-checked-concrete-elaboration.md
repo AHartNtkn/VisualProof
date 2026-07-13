@@ -101,11 +101,11 @@
 
 **Produces:** The main theorem that concretely isomorphic checked diagrams elaborate to `Core.Isomorphic` intrinsic regions, hence have identical denotation.
 
-- [ ] Prove exact-scope wire filtering respects concrete wire equivalence and construct the restricted local `FiniteEquiv`.
-- [ ] Prove ambient wire extension commutes with concrete renaming via existing `extendWireEquiv`; prove port resolution is equivariant.
-- [ ] Prove binder contexts agree along corresponding region paths and all node translations yield the required intrinsic `ItemIso`.
-- [ ] Restrict node/child equivalences to tagged local-occurrence fibers and combine them into the position equivalence used by `ItemSeqIso.permute`.
-- [ ] Keep the synchronized recursive worker theorem file-private by proving it in `Compile.lean` after importing the independent raw `ConcreteIso` layer; do not expose an internal partial compiler merely to cross a file boundary. Derive:
+- [x] Prove exact-scope wire filtering respects concrete wire equivalence and construct the restricted local `FiniteEquiv`.
+- [x] Prove ambient wire extension commutes with concrete renaming via existing `extendWireEquiv`; prove port resolution is equivariant.
+- [x] Prove binder contexts agree along corresponding region paths and all node translations yield the required intrinsic `ItemIso`.
+- [x] Restrict node/child equivalences to tagged local-occurrence fibers and combine them into the position equivalence used by `ItemSeqIso.permute`.
+- [x] Keep the synchronized recursive worker theorem file-private by proving it in `Compile.lean` after importing the independent raw `ConcreteIso` layer; do not expose an internal partial compiler merely to cross a file boundary. Derive:
 
 ```lean
 theorem ConcreteIso.elaborate_isomorphic
@@ -115,8 +115,8 @@ theorem ConcreteIso.elaborate_isomorphic
     Core.Isomorphic (d.elaborate hd) (e.elaborate he)
 ```
 
-- [ ] Derive concrete denotation invariance from existing `Core.iso_denotation` rather than reproving semantics.
-- [ ] Prove the nontrivial permutation example, build focused/full project, inspect all public theorem axioms, scan forbidden tokens/alternate authorities, and commit.
+- [x] Derive concrete denotation invariance from existing `Core.iso_denotation` rather than reproving semantics.
+- [x] Prove the nontrivial permutation example, build focused/full project, inspect all public theorem axioms, scan forbidden tokens/alternate authorities, and commit.
 
 ---
 
