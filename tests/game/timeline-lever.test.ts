@@ -112,12 +112,21 @@ describe('timeline lever presentation', () => {
   it('names the actual focusable slider rail', () => {
     const host = new FakeElement()
     const mounted = mountTimelineLever(host as unknown as HTMLElement, () => timeline(2), () => {})
-    const rail = (mounted.element as unknown as FakeElement).children[1]
+    const root = mounted.element as unknown as FakeElement
+    const housing = root.children[0]
+    const rail = root.children[1]
+    const handle = rail?.children[0]
 
     expect(rail?.getAttribute('role')).toBe('slider')
     expect(rail?.getAttribute('aria-label')).toBe('Recorded seal states')
     expect(rail?.tabIndex).toBe(0)
-    expect((mounted.element as unknown as FakeElement).getAttribute('aria-label')).toBeNull()
+    expect(root.getAttribute('aria-label')).toBeNull()
+    expect(housing?.className).toBe('curse-timeline-housing curse-decoration')
+    expect(housing?.src).toMatch(/assets\/interface\/generated\/central-lens\/lever-housing\.png$/)
+    expect(housing?.alt).toBe('')
+    expect(handle?.className).toBe('curse-timeline-handle curse-decoration')
+    expect(handle?.src).toMatch(/assets\/interface\/generated\/central-lens\/lever-handle\.png$/)
+    expect(handle?.alt).toBe('')
   })
 
   it('delegates standard slider keys as clamped cursor requests', () => {
