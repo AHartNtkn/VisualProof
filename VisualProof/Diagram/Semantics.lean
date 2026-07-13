@@ -8,7 +8,7 @@ open Theory
 
 def Relation (D : Type u) (arity : Nat) := (Fin arity -> D) -> Prop
 
-def RelEnv (D : Type u) : RelCtx -> Type (u + 1)
+def RelEnv (D : Type u) : RelCtx -> Type u
   | [] => PUnit
   | arity :: rest => Relation D arity × RelEnv D rest
 
