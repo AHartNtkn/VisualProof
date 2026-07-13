@@ -6,6 +6,25 @@ import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
 import { freshId } from './freshId'
 
+export type SpliceReservedNamespace = {
+  readonly regions?: ReadonlySet<RegionId>
+  readonly nodes?: ReadonlySet<string>
+  readonly wires?: ReadonlySet<WireId>
+}
+
+export type SpliceOptions = {
+  readonly binderMap?: ReadonlyMap<RegionId, RegionId>
+  readonly reserved?: SpliceReservedNamespace
+}
+
+export type MappedSplice = {
+  readonly diagram: Diagram
+  readonly regionMap: ReadonlyMap<RegionId, RegionId>
+  readonly nodeMap: ReadonlyMap<string, string>
+  /** Internal wires map to fresh wires; boundary stubs map to their surviving host attachment. */
+  readonly wireMap: ReadonlyMap<WireId, WireId>
+}
+
 /** Drop the selection's content; touching wires keep only their outside endpoints. */
 export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
   const c = selectionContents(d, sel)
@@ -46,13 +65,14 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
  * as fresh bubbles); their children reparent to the splice region, and atoms
  * bound to them rebind to the host bubbles indicated in the map.
  */
-export function spliceSubgraph(
+export function spliceSubgraphMapped(
   host: Diagram,
   atRegion: RegionId,
   pattern: DiagramWithBoundary,
   attachments: readonly WireId[],
-  binderMap: ReadonlyMap<RegionId, RegionId> = new Map(),
-): Diagram {
+  options: SpliceOptions = {},
+): MappedSplice {
+  const binderMap = options.binderMap ?? new Map<RegionId, RegionId>()
   if (host.regions[atRegion] === undefined) {
     throw new DiagramError(`splice region '${atRegion}' does not exist`)
   }
@@ -136,7 +156,7 @@ export function spliceSubgraph(
   }
 
   // fresh-id maps for pattern regions (except root), nodes, internal wires
-  const takenRegions = new Set(Object.keys(host.regions))
+  const takenRegions = new Set([...Object.keys(host.regions), ...(options.reserved?.regions ?? [])])
   const regionMap = new Map<RegionId, RegionId>([[pd.root, atRegion]])
   // mapped binder stubs are location-transparent layers: their children land
   // at the splice region and atoms bound to them rebind to the host bubble
@@ -147,7 +167,7 @@ export function spliceSubgraph(
     takenRegions.add(fresh)
     regionMap.set(id, fresh)
   }
-  const takenNodes = new Set(Object.keys(host.nodes))
+  const takenNodes = new Set([...Object.keys(host.nodes), ...(options.reserved?.nodes ?? [])])
   const nodeMap = new Map<string, string>()
   for (const id of Object.keys(pd.nodes)) {
     const fresh = freshId(takenNodes, id)
@@ -156,8 +176,11 @@ export function spliceSubgraph(
   }
   // Mint against the full PRE-QUOTIENT namespace: a wire removed by the
   // pushout must never be resurrected as unrelated copied content.
-  const takenWires = new Set(Object.keys(host.wires))
+  const takenWires = new Set([...Object.keys(host.wires), ...(options.reserved?.wires ?? [])])
   const wireMap = new Map<WireId, WireId>()
+  pattern.boundary.forEach((stub, index) => {
+    wireMap.set(stub, hostImage.get(attachments[index]!) ?? attachments[index]!)
+  })
   for (const id of Object.keys(pd.wires)) {
     if (boundarySet.has(id)) continue
     const fresh = freshId(takenWires, id)
@@ -222,5 +245,21 @@ export function spliceSubgraph(
     }
   })
 
-  return mkDiagram({ root: host.root, regions, nodes, wires })
+  return Object.freeze({
+    diagram: mkDiagram({ root: host.root, regions, nodes, wires }),
+    regionMap: new Map(regionMap),
+    nodeMap: new Map(nodeMap),
+    wireMap: new Map(wireMap),
+  })
+}
+
+/** Ordinary convenience entry: canonical mapped splice without extra reservations. */
+export function spliceSubgraph(
+  host: Diagram,
+  atRegion: RegionId,
+  pattern: DiagramWithBoundary,
+  attachments: readonly WireId[],
+  binderMap: ReadonlyMap<RegionId, RegionId> = new Map(),
+): Diagram {
+  return spliceSubgraphMapped(host, atRegion, pattern, attachments, { binderMap }).diagram
 }

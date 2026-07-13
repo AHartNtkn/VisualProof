@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { boundaryForm, exploreForm } from '../../src/kernel/diagram/canonical/explore'
-import type { Diagram, NodeId, WireId } from '../../src/kernel/diagram/diagram'
+import { mkDiagram, type Diagram, type NodeId, type WireId } from '../../src/kernel/diagram/diagram'
 import { spawnTermNode } from '../../src/kernel/diagram/spawn'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import { mkSelection, selectionContents, type SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
@@ -61,6 +61,29 @@ function introducedSelection(before: Diagram, after: Diagram, region: string): S
       && wire.endpoints.every((endpoint) => introducedNodes.has(endpoint.node))
   })
   return mkSelection(after, { region, regions, nodes, wires })
+}
+
+function reversedEndpointOrder(diagram: Diagram): Diagram {
+  return mkDiagram({
+    root: diagram.root,
+    regions: { ...diagram.regions },
+    nodes: { ...diagram.nodes },
+    wires: Object.fromEntries(Object.entries(diagram.wires).map(([id, wire]) => [id, {
+      scope: wire.scope,
+      endpoints: [...wire.endpoints].reverse(),
+    }])),
+  })
+}
+
+function renamedFirstWire(diagram: Diagram): Diagram {
+  const [first, ...rest] = Object.entries(diagram.wires)
+  if (first === undefined) throw new Error('fixture needs a wire')
+  return mkDiagram({
+    root: diagram.root,
+    regions: { ...diagram.regions },
+    nodes: { ...diagram.nodes },
+    wires: Object.fromEntries([['renamed-wire', first[1]], ...rest]),
+  })
 }
 
 describe('CopyPlanner structural destinations', () => {
@@ -278,6 +301,59 @@ describe('CopyPlanner proof destinations', () => {
     expect(copied.action.steps.map((step) => step.rule)).toEqual(['closedTermIntro', 'fission'])
     expect(copied.resultFingerprint).toBe(exploreForm(applyAction(diagram, copied.action, ctx, 'forward')))
   })
+
+  it('derives a closed fused term and reconstructs a non-root fission path exactly', () => {
+    const builder = new DiagramBuilder()
+    const sourceRegion = builder.cut(builder.root)
+    const producer = builder.termNode(sourceRegion, p('\\x. x'))
+    const consumer = builder.termNode(sourceRegion, p('q (\\z. z)'))
+    builder.wire(sourceRegion, [
+      { node: producer, port: { kind: 'output' } },
+      { node: consumer, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: sourceRegion,
+      regions: [],
+      nodes: [producer, consumer],
+      wires: Object.keys(diagram.wires),
+    })
+
+    const copied = plan(planCopy(diagram, selection, {
+      kind: 'proof', diagram, region: diagram.root, orientation: 'forward', ctx,
+    }))
+
+    expect(copied.kind).toBe('proof')
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+    expect(copied.action.steps.map((step) => step.rule)).toEqual(['closedTermIntro', 'fission'])
+    expect(copied.action.steps[1]).toMatchObject({ rule: 'fission', path: ['fn'] })
+    expect(copied.resultFingerprint).toBe(exploreForm(applyAction(diagram, copied.action, ctx, 'forward')))
+  })
+
+  it('refuses repeated-consumer substitution when no single exact fission path exists', () => {
+    const builder = new DiagramBuilder()
+    const sourceRegion = builder.cut(builder.root)
+    const producer = builder.termNode(sourceRegion, p('\\x. x'))
+    const consumer = builder.termNode(sourceRegion, p('q q'))
+    builder.wire(sourceRegion, [
+      { node: producer, port: { kind: 'output' } },
+      { node: consumer, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: sourceRegion,
+      regions: [],
+      nodes: [producer, consumer],
+      wires: Object.keys(diagram.wires),
+    })
+
+    const denied = refusal(planCopy(diagram, selection, {
+      kind: 'proof', diagram, region: diagram.root, orientation: 'forward', ctx,
+    }))
+
+    expect(denied.code).toBe('proof-unavailable')
+    expect(denied).not.toHaveProperty('action')
+  })
 })
 
 describe('CopyPlanner refusals and revalidation', () => {
@@ -399,6 +475,113 @@ describe('CopyPlanner refusals and revalidation', () => {
     const staleDestinationDiagram = spawnTermNode(destination.diagram, destination.diagram.root, p('\\x. \\y. x')).diagram
     expect(refusal(revalidateCopy(original, source.diagram, {
       ...destination, diagram: staleDestinationDiagram,
+    })).code).toBe('stale-destination')
+  })
+
+  it('treats wire endpoints as unordered while retaining exact wire identity', () => {
+    const source = crossingFixture()
+    const destination: CopyDestination = {
+      kind: 'edit', diagram: source.diagram, region: source.diagram.root, at: { x: 8, y: 9 },
+    }
+    const original = plan(planCopy(source.diagram, source.selection, destination))
+
+    expect(revalidateCopy(original, reversedEndpointOrder(source.diagram), destination).kind).toBe('edit')
+    expect(refusal(revalidateCopy(original, source.diagram, {
+      ...destination, diagram: renamedFirstWire(destination.diagram),
+    })).code).toBe('stale-destination')
+  })
+
+  it('rejects a real source port reassignment even when the diagram remains well formed', () => {
+    const builder = new DiagramBuilder()
+    const selected = builder.termNode(builder.root, p('x y'))
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, { region: diagram.root, regions: [], nodes: [selected], wires: [] })
+    const destination: CopyDestination = {
+      kind: 'edit', diagram, region: diagram.root, at: { x: 1, y: 2 },
+    }
+    const original = plan(planCopy(diagram, selection, destination))
+    const freeWires = Object.entries(diagram.wires).filter(([, wire]) =>
+      wire.endpoints[0]?.port.kind === 'freeVar')
+    expect(freeWires).toHaveLength(2)
+    const [firstId, first] = freeWires[0]!
+    const [secondId, second] = freeWires[1]!
+    const reassigned = mkDiagram({
+      root: diagram.root,
+      regions: { ...diagram.regions },
+      nodes: { ...diagram.nodes },
+      wires: {
+        ...diagram.wires,
+        [firstId]: { scope: first.scope, endpoints: second.endpoints },
+        [secondId]: { scope: second.scope, endpoints: first.endpoints },
+      },
+    })
+
+    expect(refusal(revalidateCopy(original, reassigned, destination)).code).toBe('stale-source')
+  })
+
+  it('keeps revalidation evidence private to the exact plan instance', () => {
+    const source = crossingFixture()
+    const destination: CopyDestination = {
+      kind: 'edit', diagram: source.diagram, region: source.diagram.root, at: { x: 8, y: 9 },
+    }
+    const original = plan(planCopy(source.diagram, source.selection, destination))
+    const descriptorClone = Object.create(
+      Object.getPrototypeOf(original),
+      Object.getOwnPropertyDescriptors(original),
+    ) as CopyPlan
+
+    expect(refusal(revalidateCopy({ ...original } as CopyPlan, source.diagram, destination)).code).toBe('invalid-plan')
+    expect(refusal(revalidateCopy(structuredClone(original), source.diagram, destination)).code).toBe('invalid-plan')
+    expect(refusal(revalidateCopy(descriptorClone, source.diagram, destination)).code).toBe('invalid-plan')
+  })
+
+  it('independently detects destination region and placement changes', () => {
+    const source = crossingFixture()
+    const host = new DiagramBuilder()
+    const otherRegion = host.cut(host.root)
+    const hostDiagram = mkDiagram({
+      root: source.diagram.root,
+      regions: { ...source.diagram.regions, [otherRegion]: { kind: 'cut', parent: source.diagram.root } },
+      nodes: { ...source.diagram.nodes },
+      wires: { ...source.diagram.wires },
+    })
+    const destination: CopyDestination = {
+      kind: 'edit', diagram: hostDiagram, region: hostDiagram.root, at: { x: 8, y: 9 },
+    }
+    const original = plan(planCopy(source.diagram, source.selection, destination))
+
+    expect(refusal(revalidateCopy(original, source.diagram, {
+      ...destination, region: otherRegion,
+    })).code).toBe('stale-destination')
+    expect(refusal(revalidateCopy(original, source.diagram, {
+      ...destination, at: { x: 9, y: 9 },
+    })).code).toBe('stale-destination')
+  })
+
+  it('independently detects proof orientation and proof-context changes', () => {
+    const builder = new DiagramBuilder()
+    const sourceRegion = builder.cut(builder.root)
+    const selected = builder.termNode(sourceRegion, p('\\x. x'))
+    const diagram = builder.build()
+    const output = Object.entries(diagram.wires).find(([, wire]) =>
+      wire.endpoints[0]?.node === selected)![0]
+    const selection = mkSelection(diagram, {
+      region: sourceRegion, regions: [], nodes: [selected], wires: [output],
+    })
+    const destination: CopyDestination = {
+      kind: 'proof', diagram, region: diagram.root, orientation: 'forward', ctx,
+    }
+    const original = plan(planCopy(diagram, selection, destination))
+
+    expect(refusal(revalidateCopy(original, diagram, {
+      ...destination, orientation: 'backward',
+    })).code).toBe('stale-destination')
+    const changedContext: ProofContext = {
+      theorems: new Map(),
+      relations: new Map([['new-relation', mkDiagramWithBoundary(new DiagramBuilder().build(), [])]]),
+    }
+    expect(refusal(revalidateCopy(original, diagram, {
+      ...destination, ctx: changedContext,
     })).code).toBe('stale-destination')
   })
 

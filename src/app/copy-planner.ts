@@ -1,13 +1,17 @@
-import { mkDiagram, portKey, type Diagram, type DiagramNode, type Endpoint, type NodeId, type Region, type RegionId, type Wire, type WireId } from '../kernel/diagram/diagram'
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
+import { mkDiagram, portKey, type Diagram, type Endpoint, type NodeId, type RegionId, type Wire, type WireId } from '../kernel/diagram/diagram'
+import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { boundaryForm, exploreForm } from '../kernel/diagram/canonical/explore'
+import { diagramToJson } from '../kernel/diagram/json'
 import { freshId } from '../kernel/diagram/subgraph/freshId'
 import { extractSubgraph, type Extraction } from '../kernel/diagram/subgraph/extract'
-import { spliceSubgraph } from '../kernel/diagram/subgraph/splice'
+import { spliceSubgraphMapped, type SpliceReservedNamespace } from '../kernel/diagram/subgraph/splice'
 import { mkSelection, selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { applyAction, type ProofAction } from '../kernel/proof/action'
+import { dwbToJson, theoremToJson } from '../kernel/proof/json'
 import { applyStep, type ProofContext, type ProofStep } from '../kernel/proof/step'
-import { bvar, freePorts, lam } from '../kernel/term/term'
+import { bvar, freePorts, lam, termEq, type Term } from '../kernel/term/term'
+import { isBvarClosed, subtermAt, substPort } from '../kernel/term/path'
+import type { PathSeg } from '../kernel/term/reduce'
 import type { Vec2 } from '../view/vec'
 import type { ProofOrientation } from './interact/moves'
 
@@ -41,13 +45,12 @@ type CopyEvidence = {
   readonly selection: SubgraphSelection
 }
 
-const evidenceKey: unique symbol = Symbol('CopyPlanner evidence')
-type EvidenceBacked = { readonly [evidenceKey]: CopyEvidence }
-
-export type CopyPlan = (
+export type CopyPlan =
   | { readonly kind: 'workspace' | 'edit'; readonly result: Diagram; readonly introduced: readonly NodeId[]; readonly at: Vec2 }
   | { readonly kind: 'proof'; readonly action: ProofAction; readonly resultFingerprint: string }
-) & EvidenceBacked
+
+/** Revalidation authority is deliberately ephemeral and bound to one in-process plan object. */
+const planEvidence = new WeakMap<CopyPlan, CopyEvidence>()
 
 type StructuralKind = 'workspace' | 'edit'
 
@@ -78,35 +81,45 @@ function isRefusal(value: Candidate | ConstructionRecipe | CopyRefusal): value i
   return 'kind' in value && value.kind === 'refusal'
 }
 
-function stableValue(value: unknown, seen = new Set<object>()): unknown {
+function canonicalSemanticJson(value: unknown, field?: string): unknown {
   if (value === null || typeof value !== 'object') return value
-  if (seen.has(value)) throw new Error('copy evidence cannot contain a cycle')
-  seen.add(value)
-  let normalized: unknown
   if (Array.isArray(value)) {
-    normalized = value.map((entry) => stableValue(entry, seen))
-  } else if (value instanceof Map) {
-    const entries = [...value.entries()].map(([key, entry]) => [stableValue(key, seen), stableValue(entry, seen)] as const)
-    entries.sort(([a], [b]) => compareCodeUnits(JSON.stringify(a), JSON.stringify(b)))
-    normalized = { map: entries }
-  } else if (value instanceof Set) {
-    const entries = [...value].map((entry) => stableValue(entry, seen))
-    entries.sort((a, b) => compareCodeUnits(JSON.stringify(a), JSON.stringify(b)))
-    normalized = { set: entries }
-  } else {
-    const record = value as Readonly<Record<string, unknown>>
-    normalized = Object.fromEntries(Object.keys(record).sort().map((key) => [key, stableValue(record[key], seen)]))
+    const values = value.map((entry) => canonicalSemanticJson(entry))
+    if (field === 'endpoints') {
+      values.sort((a, b) => compareCodeUnits(JSON.stringify(a), JSON.stringify(b)))
+    }
+    return values
   }
-  seen.delete(value)
-  return normalized
+  const record = value as Readonly<Record<string, unknown>>
+  return Object.fromEntries(Object.keys(record).sort().map((key) => [
+    key,
+    canonicalSemanticJson(record[key], key),
+  ]))
 }
 
 function compareCodeUnits(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0
 }
 
-function stateKey(value: unknown): string {
-  return JSON.stringify(stableValue(value))
+function semanticJsonFingerprint(value: unknown): string {
+  return JSON.stringify(canonicalSemanticJson(value))
+}
+
+function diagramStateFingerprint(diagram: Diagram): string {
+  // diagramToJson is injective over exact region/node/wire ids, terms, ports,
+  // scopes, and node ownership. Only endpoint-set iteration order is erased.
+  return semanticJsonFingerprint(diagramToJson(diagram))
+}
+
+function contextState(ctx: ProofContext): unknown {
+  return {
+    relations: [...ctx.relations.entries()]
+      .sort(([a], [b]) => compareCodeUnits(a, b))
+      .map(([name, relation]) => [name, dwbToJson(relation)]),
+    theorems: [...ctx.theorems.entries()]
+      .sort(([a], [b]) => compareCodeUnits(a, b))
+      .map(([name, theorem]) => [name, theoremToJson(theorem)]),
+  }
 }
 
 function destinationDiagram(destination: CopyDestination): Diagram {
@@ -116,33 +129,44 @@ function destinationDiagram(destination: CopyDestination): Diagram {
 function destinationState(destination: CopyDestination): string {
   switch (destination.kind) {
     case 'workspace':
-      return stateKey({ kind: destination.kind, draft: destination.draft, region: destination.region, at: destination.at })
-    case 'edit':
-      return stateKey({ kind: destination.kind, diagram: destination.diagram, region: destination.region, at: destination.at })
-    case 'proof':
-      return stateKey({
+      return semanticJsonFingerprint({
         kind: destination.kind,
-        diagram: destination.diagram,
+        draft: diagramToJson(destination.draft),
+        region: destination.region,
+        at: { x: destination.at.x, y: destination.at.y },
+      })
+    case 'edit':
+      return semanticJsonFingerprint({
+        kind: destination.kind,
+        diagram: diagramToJson(destination.diagram),
+        region: destination.region,
+        at: { x: destination.at.x, y: destination.at.y },
+      })
+    case 'proof':
+      return semanticJsonFingerprint({
+        kind: destination.kind,
+        diagram: diagramToJson(destination.diagram),
         region: destination.region,
         orientation: destination.orientation,
-        ctx: destination.ctx,
+        ctx: contextState(destination.ctx),
       })
   }
 }
 
-function finishPlan<T extends Omit<CopyPlan, keyof EvidenceBacked>>(
-  value: T,
+function finishPlan(
+  value: CopyPlan,
   source: Diagram,
   selection: SubgraphSelection,
   destination: CopyDestination,
 ): CopyPlan {
   const evidence: CopyEvidence = Object.freeze({
-    sourceState: stateKey(source),
+    sourceState: diagramStateFingerprint(source),
     destinationState: destinationState(destination),
     selection: mkSelection(source, selection),
   })
-  Object.defineProperty(value, evidenceKey, { value: evidence, enumerable: false, writable: false })
-  return Object.freeze(value) as unknown as CopyPlan
+  const finished = Object.freeze(value)
+  planEvidence.set(finished, evidence)
+  return finished
 }
 
 function classifyStructuralError(error: unknown): CopyRefusal {
@@ -165,69 +189,12 @@ function validateDestination(destination: CopyDestination): CopyRefusal | null {
   return null
 }
 
-/**
- * IDs in an extracted pattern still spell the source IDs because extraction
- * owns a separate namespace. Copy planning makes that namespace genuinely
- * fresh against BOTH live diagrams before handing it to the shared splicer.
- */
-function freshlyNamedPattern(extraction: Extraction, source: Diagram, destination: Diagram): DiagramWithBoundary {
-  const pattern = extraction.pattern
-  const pd = pattern.diagram
-  const takenRegions = new Set([...Object.keys(source.regions), ...Object.keys(destination.regions), pd.root])
-  const regionMap = new Map<RegionId, RegionId>([[pd.root, pd.root]])
-  for (const id of Object.keys(pd.regions).sort()) {
-    if (id === pd.root) continue
-    const mapped = freshId(takenRegions, `copy_${id}`)
-    takenRegions.add(mapped)
-    regionMap.set(id, mapped)
+function reservedSourceIds(source: Diagram): SpliceReservedNamespace {
+  return {
+    regions: new Set(Object.keys(source.regions)),
+    nodes: new Set(Object.keys(source.nodes)),
+    wires: new Set(Object.keys(source.wires)),
   }
-  const takenNodes = new Set([...Object.keys(source.nodes), ...Object.keys(destination.nodes)])
-  const nodeMap = new Map<NodeId, NodeId>()
-  for (const id of Object.keys(pd.nodes).sort()) {
-    const mapped = freshId(takenNodes, `copy_${id}`)
-    takenNodes.add(mapped)
-    nodeMap.set(id, mapped)
-  }
-  const takenWires = new Set([...Object.keys(source.wires), ...Object.keys(destination.wires)])
-  const wireMap = new Map<WireId, WireId>()
-  for (const id of Object.keys(pd.wires).sort()) {
-    const mapped = freshId(takenWires, `copy_${id}`)
-    takenWires.add(mapped)
-    wireMap.set(id, mapped)
-  }
-
-  const regions: Record<RegionId, Region> = { [pd.root]: { kind: 'sheet' } }
-  for (const [id, region] of Object.entries(pd.regions)) {
-    if (id === pd.root || region.kind === 'sheet') continue
-    const mapped = regionMap.get(id)!
-    regions[mapped] = region.kind === 'cut'
-      ? { kind: 'cut', parent: regionMap.get(region.parent)! }
-      : { kind: 'bubble', parent: regionMap.get(region.parent)!, arity: region.arity }
-  }
-  const nodes: Record<NodeId, DiagramNode> = {}
-  for (const [id, node] of Object.entries(pd.nodes)) {
-    const mapped = nodeMap.get(id)!
-    switch (node.kind) {
-      case 'term': nodes[mapped] = { kind: 'term', region: regionMap.get(node.region)!, term: node.term }; break
-      case 'atom': nodes[mapped] = { kind: 'atom', region: regionMap.get(node.region)!, binder: regionMap.get(node.binder)! }; break
-      case 'ref': nodes[mapped] = { kind: 'ref', region: regionMap.get(node.region)!, defId: node.defId, arity: node.arity }; break
-    }
-  }
-  const wires: Record<WireId, Wire> = {}
-  for (const [id, wire] of Object.entries(pd.wires)) {
-    wires[wireMap.get(id)!] = {
-      scope: regionMap.get(wire.scope)!,
-      endpoints: wire.endpoints.map((endpoint) => ({ node: nodeMap.get(endpoint.node)!, port: endpoint.port })),
-    }
-  }
-  return mkDiagramWithBoundary(
-    mkDiagram({ root: pd.root, regions, nodes, wires }),
-    pattern.boundary.map((wire) => wireMap.get(wire)!),
-  )
-}
-
-function introducedNodes(before: Diagram, after: Diagram): readonly NodeId[] {
-  return Object.freeze(Object.keys(after.nodes).filter((id) => before.nodes[id] === undefined).sort())
 }
 
 function planStructural(
@@ -238,11 +205,12 @@ function planStructural(
   destination: Extract<CopyDestination, { readonly kind: StructuralKind }>,
 ): CopyPlan | CopyRefusal {
   const host = destination.kind === 'workspace' ? destination.draft : destination.diagram
-  const pattern = freshlyNamedPattern(extraction, source, host)
+  const pattern = extraction.pattern
+  const reserved = reservedSourceIds(source)
   try {
-    let result: Diagram
+    let mapped: ReturnType<typeof spliceSubgraphMapped>
     if (destination.kind === 'edit') {
-      result = spliceSubgraph(host, destination.region, pattern, extraction.attachments)
+      mapped = spliceSubgraphMapped(host, destination.region, pattern, extraction.attachments, { reserved })
     } else {
       const taken = new Set([
         ...Object.keys(source.wires),
@@ -261,12 +229,12 @@ function planStructural(
         return wire
       })
       const seeded = mkDiagram({ root: host.root, regions: { ...host.regions }, nodes: { ...host.nodes }, wires })
-      result = spliceSubgraph(seeded, destination.region, pattern, loose)
+      mapped = spliceSubgraphMapped(seeded, destination.region, pattern, loose, { reserved })
     }
     return finishPlan({
       kind,
-      result,
-      introduced: introducedNodes(host, result),
+      result: mapped.diagram,
+      introduced: Object.freeze([...mapped.nodeMap.values()].sort()),
       at: Object.freeze({ x: destination.at.x, y: destination.at.y }),
     }, source, selection, destination)
   } catch (error) {
@@ -320,7 +288,7 @@ function verifyCandidate(
     if (boundaryForm(alleged.pattern) !== boundaryForm(extraction.pattern)) {
       return deny('fingerprint-mismatch', 'scratch replay copy does not match the boundary-pinned source pattern')
     }
-    if (stateKey(alleged.attachments) !== stateKey(extraction.attachments)) {
+    if (JSON.stringify(alleged.attachments) !== JSON.stringify(extraction.attachments)) {
       return deny('fingerprint-mismatch', 'scratch replay changed a crossing attachment identity')
     }
     return { action, replayed }
@@ -633,18 +601,40 @@ function compileContextualRelation(
   return null
 }
 
+function bvarClosedPaths(term: Term): readonly (readonly PathSeg[])[] {
+  const paths: PathSeg[][] = []
+  const visit = (current: Term, path: PathSeg[]): void => {
+    if (isBvarClosed(current)) paths.push([...path])
+    switch (current.kind) {
+      case 'lam': visit(current.body, [...path, 'body']); return
+      case 'app':
+        visit(current.fn, [...path, 'fn'])
+        visit(current.arg, [...path, 'arg'])
+        return
+      case 'bvar':
+      case 'port':
+        return
+    }
+  }
+  visit(term, [])
+  return paths
+}
+
 /**
- * Exact inverse-fusion normal form: a closed producer feeding a consumer that
- * is exactly that one port. Introducing the fused closed term and fissioning
- * at [] reconstructs both nodes and their bridge without auxiliary residue.
+ * Finite exact inverse-fusion emitter. Each eligible two-node bridge derives
+ * its unique fused term. A closed fused term can be introduced directly, and
+ * only its structurally present, bvar-closed paths are considered for
+ * fission, in deterministic pre-order. The caller scratch-replays every
+ * returned recipe against the exact intended splice.
  */
-function compileFissionNormalForm(
+function compileFissionNormalForms(
   before: Diagram,
   extraction: Extraction,
   destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
-): ConstructionRecipe | null {
+): readonly ConstructionRecipe[] {
   const pd = extraction.pattern.diagram
-  if (childRegions(pd, pd.root).length > 0 || Object.keys(pd.nodes).length !== 2) return null
+  if (childRegions(pd, pd.root).length > 0 || Object.keys(pd.nodes).length !== 2) return []
+  const recipes: ConstructionRecipe[] = []
   for (const [bridgeId, bridge] of Object.entries(pd.wires).sort(([a], [b]) => compareCodeUnits(a, b))) {
     if (extraction.pattern.boundary.includes(bridgeId) || bridge.endpoints.length !== 2 || bridge.scope !== pd.root) continue
     const output = bridge.endpoints.find((endpoint) => endpoint.port.kind === 'output')
@@ -653,35 +643,38 @@ function compileFissionNormalForm(
     const producer = pd.nodes[output.node]
     const consumer = pd.nodes[input.node]
     if (producer?.kind !== 'term' || consumer?.kind !== 'term') continue
-    if (freePorts(producer.term).length !== 0) continue
-    if (consumer.term.kind !== 'port' || consumer.term.name !== input.port.name) continue
-
-    const compiler: Compiler = {
-      diagram: before,
-      steps: [],
-      regionMap: new Map([[pd.root, destination.region]]),
-      nodeMap: new Map(),
-      pattern: extraction.pattern,
-      destination,
-    }
-    try {
-      const fused = emit(compiler, { rule: 'closedTermIntro', region: destination.region, term: producer.term })
-      if (fused.nodes.length !== 1) throw new Error('fission normal form did not introduce exactly one fused node')
-      const consumerNode = fused.nodes[0]!
-      const split = emit(compiler, { rule: 'fission', node: consumerNode, path: [] })
-      if (split.nodes.length !== 1) throw new Error('fission normal form did not create exactly one producer')
-      compiler.nodeMap.set(input.node, consumerNode)
-      compiler.nodeMap.set(output.node, split.nodes[0]!)
-      const attachmentMap = compileWires(compiler, extraction)
-      return Object.freeze({
-        steps: Object.freeze([...compiler.steps]),
-        attachmentMap,
-      })
-    } catch {
-      return null
+    const fusedTerm = substPort(consumer.term, input.port.name, producer.term)
+    if (freePorts(fusedTerm).length !== 0) continue
+    const paths = bvarClosedPaths(fusedTerm).filter((path) => termEq(subtermAt(fusedTerm, path), producer.term))
+    for (const path of paths) {
+      const compiler: Compiler = {
+        diagram: before,
+        steps: [],
+        regionMap: new Map([[pd.root, destination.region]]),
+        nodeMap: new Map(),
+        pattern: extraction.pattern,
+        destination,
+      }
+      try {
+        const fused = emit(compiler, { rule: 'closedTermIntro', region: destination.region, term: fusedTerm })
+        if (fused.nodes.length !== 1) throw new Error('fission normal form did not introduce exactly one fused node')
+        const consumerNode = fused.nodes[0]!
+        const split = emit(compiler, { rule: 'fission', node: consumerNode, path })
+        if (split.nodes.length !== 1) throw new Error('fission normal form did not create exactly one producer')
+        compiler.nodeMap.set(input.node, consumerNode)
+        compiler.nodeMap.set(output.node, split.nodes[0]!)
+        const attachmentMap = compileWires(compiler, extraction)
+        recipes.push(Object.freeze({
+          steps: Object.freeze([...compiler.steps]),
+          attachmentMap,
+        }))
+      } catch {
+        // This derived path failed a real rule or wiring gate. Other paths in
+        // the same finite fused term remain independent scratch candidates.
+      }
     }
   }
-  return null
+  return Object.freeze(recipes)
 }
 
 function acceptedProofPlan(
@@ -703,10 +696,15 @@ function planProof(
   extraction: Extraction,
   destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
 ): CopyPlan | CopyRefusal {
-  const pattern = freshlyNamedPattern(extraction, source, destination.diagram)
   let intended: Diagram
   try {
-    intended = spliceSubgraph(destination.diagram, destination.region, pattern, extraction.attachments)
+    intended = spliceSubgraphMapped(
+      destination.diagram,
+      destination.region,
+      extraction.pattern,
+      extraction.attachments,
+      { reserved: reservedSourceIds(source) },
+    ).diagram
   } catch (error) {
     const classified = classifyStructuralError(error)
     return classified.code === 'invalid-destination' ? classified : deny('invalid-attachment', classified.message)
@@ -724,8 +722,8 @@ function planProof(
     if (!isRefusal(constructed)) return acceptedProofPlan(source, selection, destination, constructed)
   }
 
-  const fission = compileFissionNormalForm(destination.diagram, extraction, destination)
-  if (fission !== null && completeAttachmentMap(fission, extraction)) {
+  for (const fission of compileFissionNormalForms(destination.diagram, extraction, destination)) {
+    if (!completeAttachmentMap(fission, extraction)) continue
     const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, fission.steps)
     if (!isRefusal(constructed)) return acceptedProofPlan(source, selection, destination, constructed)
   }
@@ -775,9 +773,9 @@ export function revalidateCopy(
   liveSource: Diagram,
   liveDestination: CopyDestination,
 ): CopyPlan | CopyRefusal {
-  const evidence = (plan as Partial<EvidenceBacked>)[evidenceKey]
+  const evidence = planEvidence.get(plan)
   if (evidence === undefined) return deny('invalid-plan', 'copy plan has no revalidation evidence')
-  if (stateKey(liveSource) !== evidence.sourceState) {
+  if (diagramStateFingerprint(liveSource) !== evidence.sourceState) {
     return deny('stale-source', 'copy source changed after the plan was created')
   }
   let liveDestinationState: string

@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
-import { removeSubgraph, spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
+import { removeSubgraph, spliceSubgraph, spliceSubgraphMapped } from '../../../src/kernel/diagram/subgraph/splice'
 
 const p = (s: string) => parseTerm(s)
 
@@ -63,6 +63,54 @@ describe('removeSubgraph', () => {
 })
 
 describe('spliceSubgraph', () => {
+  it('reserves an external namespace and returns the canonical clone maps', () => {
+    const patternBuilder = new DiagramBuilder()
+    const cut = patternBuilder.cut(patternBuilder.root)
+    const node = patternBuilder.termNode(cut, p('\\x. x'))
+    const internal = patternBuilder.wire(cut, [{ node, port: { kind: 'output' } }])
+    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const hostDiagram = new DiagramBuilder().build()
+
+    const mapped = spliceSubgraphMapped(hostDiagram, hostDiagram.root, pattern, [], {
+      reserved: {
+        regions: new Set(Object.keys(pattern.diagram.regions)),
+        nodes: new Set(Object.keys(pattern.diagram.nodes)),
+        wires: new Set(Object.keys(pattern.diagram.wires)),
+      },
+    })
+
+    expect(mapped.regionMap.get(pattern.diagram.root)).toBe(hostDiagram.root)
+    expect(mapped.regionMap.get(cut)).not.toBe(cut)
+    expect(mapped.nodeMap.get(node)).not.toBe(node)
+    expect(mapped.wireMap.get(internal)).not.toBe(internal)
+    const copiedNode = mapped.nodeMap.get(node)!
+    const copiedWire = mapped.wireMap.get(internal)!
+    expect(mapped.diagram.nodes[copiedNode]).toMatchObject({ kind: 'term', region: mapped.regionMap.get(cut) })
+    expect(mapped.diagram.wires[copiedWire]?.endpoints).toEqual([
+      { node: copiedNode, port: { kind: 'output' } },
+    ])
+  })
+
+  it('maps a boundary stub to the surviving host attachment', () => {
+    const patternBuilder = new DiagramBuilder()
+    const node = patternBuilder.termNode(patternBuilder.root, p('y'))
+    const boundary = patternBuilder.wire(patternBuilder.root, [
+      { node, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [boundary])
+    const hostBuilder = new DiagramBuilder()
+    const hostNode = hostBuilder.termNode(hostBuilder.root, p('\\x. x'))
+    const attachment = hostBuilder.wire(hostBuilder.root, [
+      { node: hostNode, port: { kind: 'output' } },
+    ])
+    const hostDiagram = hostBuilder.build()
+
+    const mapped = spliceSubgraphMapped(hostDiagram, hostDiagram.root, pattern, [attachment])
+
+    expect(mapped.wireMap.get(boundary)).toBe(attachment)
+    expect(mapped.diagram.wires[attachment]?.endpoints).toHaveLength(2)
+  })
+
   it('extract → remove → splice round-trips structurally (endpoint restored)', () => {
     const h = host()
     const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
