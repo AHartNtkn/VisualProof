@@ -43,6 +43,7 @@ export type CursebreakerDebugState = {
 export type MountedCursebreaker = {
   dispose(): void
   debug(): CursebreakerDebugState
+  canvasToClient(worldPoint: Vec2): Vec2
 }
 
 const rectSnapshot = (element: Element): CursebreakerRect => {
@@ -223,5 +224,12 @@ export function mountCursebreaker(options: CursebreakerMountOptions): MountedCur
       glass: rectSnapshot(glass),
       viewport: viewport.debugState(),
     }),
+    canvasToClient: (worldPoint) => {
+      const rect = canvas.getBoundingClientRect()
+      return {
+        x: rect.left + (worldPoint.x * viewport.view.scale + viewport.view.offsetX) * rect.width / canvas.width,
+        y: rect.top + (worldPoint.y * viewport.view.scale + viewport.view.offsetY) * rect.height / canvas.height,
+      }
+    },
   }
 }

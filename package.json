@@ -12,6 +12,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "assets:validate": "tsx scripts/assets/validate-interface-assets.ts",
+    "assets:capture-lens": "node scripts/assets/capture-central-lens.mjs",
     "emit:theories": "tsx scripts/emit-theories.ts",
     "demo": "vite demo",
     "app": "vite app",
