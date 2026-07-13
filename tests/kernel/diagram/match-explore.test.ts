@@ -136,6 +136,23 @@ describe('exploration matcher — explicit exploration fuel', () => {
     expect(__benchCounter.permutations).toBe(0)
   })
 
+  it('is complete when the exact budget funds identity and the sole fallback permutation', () => {
+    const count = 2
+    __benchCounter.permutations = 0
+
+    const result = findOccurrences(identityNodes(count), sharedWirePattern(count), {
+      fuel: 1,
+      explorationFuel: 4,
+      mode: 'exact',
+      inRegion: 'r0',
+    })
+
+    expect(result.status).toBe('complete')
+    expect(result.explorationSteps).toBe(4)
+    expect(result.matches).toEqual([])
+    expect(__benchCounter.permutations).toBe(1)
+  })
+
   it('exhaustively explores the small non-identity fallback with sufficient budget', () => {
     expect(__benchCounter.permutations).toBeTypeOf('number')
     __benchCounter.permutations = 0

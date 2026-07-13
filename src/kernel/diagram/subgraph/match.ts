@@ -11,14 +11,24 @@ import { mkSelection, type SubgraphSelection } from './selection'
 /** Production-neutral exploration counters. Reset by callers that measure. */
 export const __benchCounter = { n: 0, permutations: 0 }
 
-/** Lazily yield every permutation of [0, m) except the identity. */
-function* nonIdentityPermutations(m: number): Generator<readonly number[]> {
+type FallbackPermutation = {
+  readonly values: readonly number[]
+  readonly isLast: boolean
+}
+
+/** Lazily yield every permutation of [0, m) except the identity, marking the final yield without lookahead. */
+function* nonIdentityPermutations(m: number): Generator<FallbackPermutation> {
+  let total = 1n
+  for (let factor = 2; factor <= m; factor++) total *= BigInt(factor)
+  total-- // identity is not yielded
+  let yielded = 0n
   const arr = Array.from({ length: m }, (_, i) => i)
-  function* permute(k: number): Generator<readonly number[]> {
+  function* permute(k: number): Generator<FallbackPermutation> {
     if (k === m) {
       if (arr.some((v, i) => v !== i)) {
         __benchCounter.permutations++
-        yield [...arr]
+        yielded++
+        yield { values: [...arr], isLast: yielded === total }
       }
       return
     }
@@ -463,7 +473,8 @@ export function findOccurrences(
           }
           const next = permutations.next()
           if (next.done) break
-          bindPerm(indices, next.value)
+          bindPerm(indices, next.value.values)
+          if (next.value.isLast) break
         }
       }
     }
