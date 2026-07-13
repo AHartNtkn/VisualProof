@@ -99,7 +99,7 @@ theorem BetaEta.app {fn fn' arg arg' : Term n α}
     BetaEta (Term.app fn arg) (Term.app fn' arg') :=
   (hfn.appFn arg).trans (harg.appArg fn')
 
--- Required transport statements are declared before proof work.
+-- Reduction owns transport through term operations; substitution algebra stays in its defining modules.
 private theorem OneStep.renameBound {a b : Term n α} (h : OneStep a b)
     (ρ : Fin n → Fin m) : OneStep (a.renameBound ρ) (b.renameBound ρ) := by
   induction h generalizing m with
