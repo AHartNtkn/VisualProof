@@ -27,7 +27,9 @@ def Term.freeSupport [DecidableEq α] : Term n α → List α
   | .port x => [x]
   | .lam body => body.freeSupport
   | .app fn arg =>
-      fn.freeSupport ++ arg.freeSupport.filter (fun x => x ∉ fn.freeSupport)
+      let fnSupport := fn.freeSupport
+      let argSupport := arg.freeSupport
+      fnSupport ++ argSupport.filter (fun x => x ∉ fnSupport)
 
 theorem Term.mapFree_id (t : Term n α) : t.mapFree id = t := by
   induction t with
