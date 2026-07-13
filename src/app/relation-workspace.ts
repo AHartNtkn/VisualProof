@@ -309,6 +309,22 @@ export function resizeRelationWorkspace(rect: EditorRect, delta: Vec2, viewport:
   }
 }
 
+export function relationWorkspaceWorldPoint(
+  client: Vec2,
+  rect: Pick<DOMRect, 'left' | 'top' | 'width' | 'height'>,
+  canvas: Pick<HTMLCanvasElement, 'width' | 'height'>,
+  view: MutableView,
+): Vec2 {
+  const screen = {
+    x: (client.x - rect.left) * canvas.width / Math.max(1, rect.width),
+    y: (client.y - rect.top) * canvas.height / Math.max(1, rect.height),
+  }
+  return {
+    x: (screen.x - view.offsetX) / view.scale,
+    y: (screen.y - view.offsetY) / view.scale,
+  }
+}
+
 export function relationConnectionTargets(
   draft: RelationWorkspaceDraft,
   source: RelationConnectionEndpoint,
@@ -717,15 +733,9 @@ export class RelationWorkspace {
 
   #workspaceDestination(client: Vec2): CopyDestination | null {
     if (document.elementFromPoint(client.x, client.y) !== this.#canvas) return null
-    const rect = this.#canvas.getBoundingClientRect()
-    const screen = {
-      x: (client.x - rect.left) * this.#canvas.width / Math.max(1, rect.width),
-      y: (client.y - rect.top) * this.#canvas.height / Math.max(1, rect.height),
-    }
-    const world = {
-      x: (screen.x - this.#view.offsetX) / this.#view.scale,
-      y: (screen.y - this.#view.offsetY) / this.#view.scale,
-    }
+    const world = relationWorkspaceWorldPoint(
+      client, this.#canvas.getBoundingClientRect(), this.#canvas, this.#view,
+    )
     return {
       kind: 'workspace', draft: this.#diagram(), region: this.#regionAt(world), at: world,
     }

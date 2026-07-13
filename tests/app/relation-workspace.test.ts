@@ -15,6 +15,7 @@ import {
   placeRelationWorkspace,
   previewRelationWorkspaceSnapshot,
   relationConnectionTargets,
+  relationWorkspaceWorldPoint,
   relationWorkspaceCanFinalize,
   resizeRelationWorkspace,
   SubstituteTransaction,
@@ -44,6 +45,15 @@ function hostWithBubble(arity = 2): Diagram {
 }
 
 describe('shared relation workspace mechanics', () => {
+  it('converts host-drop client coordinates into workspace world coordinates', () => {
+    expect(relationWorkspaceWorldPoint(
+      { x: 250, y: 180 },
+      { left: 100, top: 80, width: 300, height: 200 },
+      { width: 600, height: 400 },
+      { scale: 2, offsetX: 100, offsetY: 60 },
+    )).toEqual({ x: 100, y: 70 })
+  })
+
   it('records a workspace copy as exactly one draft snapshot', () => {
     const sourceBuilder = new DiagramBuilder()
     const node = sourceBuilder.termNode(sourceBuilder.root, parseTerm('x'))
@@ -60,6 +70,11 @@ describe('shared relation workspace mechanics', () => {
     expect(copied.cursor).toBe(draft.cursor + 1)
     expect(copied.history).toHaveLength(draft.history.length + 1)
     expect(currentRelationDraft(copied).diagram).toBe(planned.kind === 'workspace' ? planned.result : null)
+    expect(currentRelationDraft(copied).ports).toEqual([])
+    const copiedWires = Object.values(currentRelationDraft(copied).diagram.wires)
+    expect(copiedWires).toHaveLength(2)
+    expect(copiedWires.every((wire) => wire.scope === currentRelationDraft(copied).diagram.root)).toBe(true)
+    expect(copiedWires.every((wire) => wire.endpoints.length === 1)).toBe(true)
   })
 
   it('retains one geometry implementation for every transaction configuration', () => {
