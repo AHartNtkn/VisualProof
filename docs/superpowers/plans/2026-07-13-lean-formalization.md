@@ -144,7 +144,11 @@ Create `Rename.lean` and `Substitute.lean` with these exact public signatures:
 ```lean
 def Term.lift : Term n α → Term (n + 1) α
 def Term.renameBound (ρ : Fin n → Fin m) : Term n α → Term m α
+def Term.traverseBound [Applicative F]
+  (σ : Fin n → F (Term m α)) : Term n α → F (Term m α)
 def Term.substBound (σ : Fin n → Term m α) : Term n α → Term m α
+def Term.substBoundOption
+  (σ : Fin n → Option (Term m α)) : Term n α → Option (Term m α)
 def Term.bindFree (σ : α → Term n β) : Term n α → Term n β
 
 theorem Term.mapFree_id (t : Term n α) : t.mapFree id = t
@@ -182,6 +186,9 @@ The exact dependent arguments must express composition/naturality across differi
 bound scopes. Add the narrow free-binding/substitution interchange lemma required by
 the quotient construction if it is not derivable from these statements and
 `bindFree_assoc`; keep that law in `Substitute.lean`, not in a reduction consumer.
+`substBound` and `substBoundOption` must be instantiations of the single
+`traverseBound` recursion; the reduction module may not own a second recursive
+substitution engine for eta unlift.
 
 - [ ] **Step 4: Make the public import compile**
 
