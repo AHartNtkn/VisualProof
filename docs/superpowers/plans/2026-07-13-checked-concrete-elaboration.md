@@ -85,11 +85,11 @@
 
 **Produces:** `ConcreteIso` with region/node/wire `FiniteEquiv`s; preservation of root, region/node structure, wire scopes, and endpoint incidence; `refl`, `symm`, `trans`; and transport of every well-formedness invariant.
 
-- [ ] Define endpoint renaming by node equivalence while leaving `CPort` unchanged.
-- [ ] Define `ConcreteIso` over raw diagrams. Region laws preserve kind, mapped parent, and bubble arity; node laws preserve constructor, mapped locations/binders, terms, named definitions/arities; wire laws preserve mapped scope and endpoint membership.
-- [ ] Use bidirectional endpoint membership (or mapped `List.Perm`) so order is nonsemantic while nodup remains transportable. Never require endpoint-list equality.
-- [ ] Prove `ConcreteIso.refl`, `.symm`, `.trans` and transport all eleven named invariants, then `WellFormed` and `CheckedDiagram`.
-- [ ] Add a nontrivial identifier-permutation witness and prove its checked transport; build, inspect axioms, and commit.
+- [x] Define endpoint renaming by node equivalence while leaving `CPort` unchanged.
+- [x] Define `ConcreteIso` over raw diagrams. Region laws preserve kind, mapped parent, and bubble arity; node laws preserve constructor, mapped locations/binders, terms, named definitions/arities; wire laws preserve mapped scope and endpoint membership.
+- [x] Use bidirectional endpoint membership (or mapped `List.Perm`) so order is nonsemantic while nodup remains transportable. Never require endpoint-list equality.
+- [x] Prove `ConcreteIso.refl`, `.symm`, `.trans` and transport all eleven named invariants, then `WellFormed` and `CheckedDiagram`.
+- [x] Add a nontrivial identifier-permutation witness and prove its checked transport; build, inspect axioms, and commit.
 
 ---
 
