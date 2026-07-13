@@ -240,13 +240,20 @@ export function bindOptionalPort(
 export function materializeRelationDraft(draft: RelationWorkspaceDraft): MaterializedRelationDraft {
   const current = currentRelationDraft(draft)
   validateSnapshot(draft, current)
-  if (draft.mode === 'substitute') {
-    const unbound = current.ports.find((port) => port.kind === 'optional' && port.hostWire === undefined)
+  return materializeRelationSnapshot(current, draft.mode)
+}
+
+export function materializeRelationSnapshot(
+  snapshot: RelationWorkspaceSnapshot,
+  mode: RelationWorkspaceDraft['mode'],
+): MaterializedRelationDraft {
+  if (mode === 'substitute') {
+    const unbound = snapshot.ports.find((port) => port.kind === 'optional' && port.hostWire === undefined)
     if (unbound !== undefined) throw new Error(`optional substitution port '${unbound.id}' must be bound or removed before finalization`)
   }
   return {
-    relation: mkDiagramWithBoundary(current.diagram, current.ports.map((port) => port.wire)),
-    attachments: current.ports.flatMap((port) => port.kind === 'optional' && port.hostWire !== undefined ? [port.hostWire] : []),
+    relation: mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire)),
+    attachments: snapshot.ports.flatMap((port) => port.kind === 'optional' && port.hostWire !== undefined ? [port.hostWire] : []),
   }
 }
 

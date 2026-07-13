@@ -16,6 +16,7 @@ import {
   deleteOptionalPort,
   insertOptionalPort,
   materializeRelationDraft,
+  materializeRelationSnapshot,
   moveOptionalPort,
   moveRelationHistory,
   planRelationConnection,
@@ -160,6 +161,28 @@ describe('relation workspace port model', () => {
 
     expect(materialized.relation.boundary).toEqual(['x', 'y'])
     expect(materialized.relation.boundary).toHaveLength(2)
+  })
+
+  test('substitution and abstraction project snapshots through one canonical materializer', () => {
+    let substitution = beginSubstitutionDraft(hostWithBubble(1), 'bubble')
+    const subCurrent = currentRelationDraft(substitution)
+    substitution = replaceRelationDiagram(substitution, mkDiagram({
+      root: subCurrent.diagram.root,
+      regions: { ...subCurrent.diagram.regions },
+      wires: { ...subCurrent.diagram.wires, parameter: { scope: 'r0', endpoints: [] } },
+    }))
+    substitution = insertOptionalPort(substitution, 'parameter', 0, 'h1')
+    expect(materializeRelationDraft(substitution)).toEqual(
+      materializeRelationSnapshot(currentRelationDraft(substitution), 'substitute'),
+    )
+
+    let abstraction = withLooseDraftWires(beginAbstractionDraft(hostWithBubble()), ['x'])
+    abstraction = insertOptionalPort(abstraction, 'x', 0)
+    expect(materializeRelationDraft(abstraction)).toEqual(
+      materializeRelationSnapshot(currentRelationDraft(abstraction), 'abstract'),
+    )
+    expect(() => materializeRelationSnapshot(currentRelationDraft(abstraction), 'substitute'))
+      .toThrow(/must be bound or removed/i)
   })
 
   test('each port mutation is one snapshot and undo/redo restores order and bindings', () => {

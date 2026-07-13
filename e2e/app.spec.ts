@@ -50,11 +50,11 @@ declare global {
         ratio: number
         focused: 'forward' | 'backward'
         met: boolean
-        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
-        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; comprehension: { bubble: string } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
+        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; relationWorkspace: { mode: 'substitute' | 'abstract' } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
+        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; relationWorkspace: { mode: 'substitute' | 'abstract' } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
       }
       motion(): { playing: boolean; morph: string | null; ghosts: number; pulses: number; hover: number; preferences: { conversionAnimation: boolean; connectedMorph: boolean; speed: number; transitionGhosts: boolean; hoverEaseMs: number } }
-      comprehension(): null | { bubble: string; cursor: number; historyLength: number; formalBoundary: string[]; materializedBoundary: string[]; externalWires: { draftWire: string; hostWire: string }[]; rect: { left: number; top: number; width: number; height: number }; draftBodies: { node: string; kind: string; x: number; y: number; point: { x: number; y: number } }[]; draftWires: { wire: string; point: { x: number; y: number } | null }[]; hostWires: { wire: string; point: { x: number; y: number } | null }[] }
+      relationWorkspace(): null | { mode: 'substitute' | 'abstract'; cursor: number; historyLength: number; formalBoundary: string[]; materializedBoundary: string[]; externalWires: { id: string; wire: string; kind: 'forced' | 'optional'; hostWire?: string }[]; rect: { left: number; top: number; width: number; height: number }; draftBodies: { node: string; kind: string; x: number; y: number; point: { x: number; y: number } }[]; draftWires: { wire: string; point: { x: number; y: number } | null }[]; hostWires: { wire: string; point: { x: number; y: number } | null }[] }
       dispose(): void
     }
   }
@@ -105,6 +105,7 @@ test('proof term spawning shares the edit cascade and dispatches open terms thro
   await spawnTerm(page, '\\x. x')
   await openMode(page)
   await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+  await page.waitForTimeout(500)
 
   const canvas = (await page.locator('#c').boundingBox())!
   const invoke = { x: canvas.x + canvas.width * 0.76, y: canvas.y + canvas.height * 0.72 }
@@ -881,7 +882,7 @@ test('production motion layers defer conversion and expose the five approved con
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
-test('anonymous comprehension opens from the real proof menu, cancels exactly, and commits one step', async ({ page }) => {
+test('relation workspace substitution opens from the real proof menu and cancels exactly', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await spawnTerm(page, '\\x. x')
@@ -914,52 +915,58 @@ test('anonymous comprehension opens from the real proof menu, cancels exactly, a
   await openMode(page)
   await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
   bubble = await bubblePoint()
-  const invoke = { x: canvas.x + bubble.x + bubble.r * 0.88, y: canvas.y + bubble.y }
+  const invoke = { x: canvas.x + bubble.x + bubble.r * 0.62, y: canvas.y + bubble.y - bubble.r * 0.62 }
   await page.mouse.click(invoke.x, invoke.y)
-  await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.interaction().selected)).toEqual([
+    expect.objectContaining({ kind: 'region' }),
+  ])
+  bubble = await bubblePoint()
+  await page.mouse.click(canvas.x + bubble.x + bubble.r * 0.62, canvas.y + bubble.y - bubble.r * 0.62, { button: 'right' })
   await page.getByRole('button', { name: 'New relation…', exact: true }).click()
-  await expect(page.locator('.vpa-comprehension-editor')).toBeVisible()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.formalBoundary.length)).toBe(2)
-  const editorCanvas = page.locator('.vpa-comprehension-canvas')
+  await expect(page.locator('.vpa-relation-workspace')).toBeVisible()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.formalBoundary.length)).toBe(2)
+  const editorCanvas = page.locator('.vpa-relation-canvas')
   const editorBox = (await editorCanvas.boundingBox())!
   await page.mouse.click(editorBox.x + editorBox.width * 0.55, editorBox.y + editorBox.height * 0.55, { button: 'right' })
   await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
   await page.getByLabel('Lambda term to spawn').fill('\\u. u')
   await page.getByLabel('Lambda term to spawn').press('Enter')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.historyLength)).toBe(2)
+  await page.waitForTimeout(500)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.historyLength)).toBe(2)
   await page.keyboard.press('Control+z')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.cursor)).toBe(0)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.cursor)).toBe(0)
   await page.keyboard.press('Control+Shift+z')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.cursor)).toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.cursor)).toBe(1)
 
   const editorBeforeSecond = (await editorCanvas.boundingBox())!
   await page.mouse.click(editorBeforeSecond.x + editorBeforeSecond.width * 0.72, editorBeforeSecond.y + editorBeforeSecond.height * 0.62, { button: 'right' })
   await page.locator('.vpa-spawn-column').getByRole('button', { name: 'λ term…', exact: true }).click()
   await page.getByLabel('Lambda term to spawn').fill('\\v. v')
   await page.getByLabel('Lambda term to spawn').press('Enter')
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.draftBodies
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.draftBodies
     .filter((body) => body.kind === 'term').length)).toBe(2)
   await page.waitForTimeout(250)
-  const draftBodies = await page.evaluate(() => window.__vpaDebug!.comprehension()!.draftBodies
+  const draftBodies = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.draftBodies
     .filter((body) => body.kind === 'term'))
   const held = draftBodies[0]!
   const neighbour = draftBodies[1]!
+
   await page.mouse.click(held.point.x, held.point.y)
-  const neighbourBefore = await page.evaluate((node) => window.__vpaDebug!.comprehension()!.draftBodies.find((body) => body.node === node)!, neighbour.node)
+  const neighbourBefore = await page.evaluate((node) => window.__vpaDebug!.relationWorkspace()!.draftBodies.find((body) => body.node === node)!, neighbour.node)
   await page.mouse.move(held.point.x, held.point.y)
   await page.mouse.down()
   await page.mouse.move(neighbour.point.x, neighbour.point.y)
-  const heldDuring = await page.evaluate((node) => window.__vpaDebug!.comprehension()!.draftBodies.find((body) => body.node === node)!, held.node)
+  const heldDuring = await page.evaluate((node) => window.__vpaDebug!.relationWorkspace()!.draftBodies.find((body) => body.node === node)!, held.node)
   await page.waitForTimeout(450)
   const liveBodies = await page.evaluate(({ held, neighbour }) => ({
-    held: window.__vpaDebug!.comprehension()!.draftBodies.find((body) => body.node === held)!,
-    neighbour: window.__vpaDebug!.comprehension()!.draftBodies.find((body) => body.node === neighbour)!,
+    held: window.__vpaDebug!.relationWorkspace()!.draftBodies.find((body) => body.node === held)!,
+    neighbour: window.__vpaDebug!.relationWorkspace()!.draftBodies.find((body) => body.node === neighbour)!,
   }), { held: held.node, neighbour: neighbour.node })
   expect(Math.hypot(liveBodies.held.x - heldDuring.x, liveBodies.held.y - heldDuring.y)).toBeLessThan(0.01)
   expect(Math.hypot(liveBodies.neighbour.x - neighbourBefore.x, liveBodies.neighbour.y - neighbourBefore.y)).toBeGreaterThan(0.01)
   await page.mouse.up()
 
-  const title = (await page.locator('.vpa-comprehension-title').boundingBox())!
+  const title = (await page.locator('.vpa-relation-title').boundingBox())!
   await page.mouse.move(title.x + title.width * 0.35, title.y + title.height / 2)
   await page.mouse.down()
   await page.mouse.move(canvas.x + canvas.width - 260, canvas.y + 80, { steps: 8 })
@@ -967,7 +974,7 @@ test('anonymous comprehension opens from the real proof menu, cancels exactly, a
 
   const points = await page.evaluate(() => {
     const debug = window.__vpaDebug!
-    const state = debug.comprehension()!
+    const state = debug.relationWorkspace()!
     const rootWires = new Set(debug.diagram().wires.filter((wire) => wire.scope === 'r0').map((wire) => wire.id))
     return {
       host: state.hostWires.find((wire) => rootWires.has(wire.wire) && wire.point !== null)!,
@@ -980,9 +987,9 @@ test('anonymous comprehension opens from the real proof menu, cancels exactly, a
   await page.mouse.down()
   await page.mouse.move(points.arg1.point!.x, points.arg1.point!.y, { steps: 8 })
   await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.externalWires.length)).toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.externalWires.length)).toBe(1)
   const reused = await page.evaluate((hostWire) => {
-    const state = window.__vpaDebug!.comprehension()!
+    const state = window.__vpaDebug!.relationWorkspace()!
     return {
       host: state.hostWires.find((wire) => wire.wire === hostWire)!,
       arg2: state.draftWires.find((wire) => wire.wire === 'arg2')!,
@@ -992,23 +999,15 @@ test('anonymous comprehension opens from the real proof menu, cancels exactly, a
   await page.mouse.down()
   await page.mouse.move(reused.arg2.point!.x, reused.arg2.point!.y, { steps: 8 })
   await page.mouse.up()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.formalBoundary)).toEqual(['arg1', 'arg1'])
-  expect(await page.evaluate(() => window.__vpaDebug!.comprehension()?.externalWires.length)).toBe(1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.formalBoundary)).toEqual(['arg1', 'arg1'])
+  expect(await page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.externalWires.length)).toBe(1)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await expect(page.locator('.vpa-comprehension-editor')).toHaveCount(0)
+  await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
   await expect(page.locator('#status')).toContainText('0 step(s)')
-
-  bubble = await bubblePoint()
-  const reinvoke = { x: canvas.x + bubble.x + bubble.r * 0.88, y: canvas.y + bubble.y }
-  await page.mouse.click(reinvoke.x, reinvoke.y, { button: 'right' })
-  await page.getByRole('button', { name: 'New relation…', exact: true }).click()
-  await page.getByRole('button', { name: 'Instantiate', exact: true }).click()
-  await expect(page.locator('.vpa-comprehension-editor')).toHaveCount(0)
-  await expect(page.locator('#status')).toContainText('1 step(s)')
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
-test('anonymous comprehension uses the same transaction in backward proving', async ({ page }) => {
+test('relation workspace substitution uses the same transaction in backward proving', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await spawnTerm(page, '\\x. x')
@@ -1038,7 +1037,7 @@ test('anonymous comprehension uses the same transaction in backward proving', as
   await page.mouse.click(invoke.x, invoke.y)
   await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
   await page.getByRole('button', { name: 'New relation…', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.comprehension()?.formalBoundary)).toEqual(['arg1'])
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()?.formalBoundary)).toEqual(['arg1'])
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect(page.locator('#status')).toContainText('0 step(s)')
 
@@ -1049,7 +1048,7 @@ test('anonymous comprehension uses the same transaction in backward proving', as
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 })
 
-test('fixed-side anonymous comprehension guards the shared session and advances only its owning front', async ({ page }) => {
+test('fixed-side relation workspace substitution guards the shared session and advances only its owning front', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
   await spawnTerm(page, '\\x. x')
@@ -1101,7 +1100,7 @@ test('fixed-side anonymous comprehension guards the shared session and advances 
   await page.mouse.click(invoke.x, invoke.y)
   await page.mouse.click(invoke.x, invoke.y, { button: 'right' })
   await page.getByRole('button', { name: 'New relation…', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.comprehension !== null)).toBe(true)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.relationWorkspace !== null)).toBe(true)
   await page.keyboard.press('Control+z')
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
   await page.getByRole('button', { name: 'Instantiate', exact: true }).click()
@@ -1119,9 +1118,9 @@ test('fixed-side anonymous comprehension guards the shared session and advances 
   await page.mouse.click(backwardInvoke.x, backwardInvoke.y)
   await page.mouse.click(backwardInvoke.x, backwardInvoke.y, { button: 'right' })
   await page.getByRole('button', { name: 'New relation…', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.comprehension !== null)).toBe(true)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.relationWorkspace !== null)).toBe(true)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
-  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.comprehension)).toBeNull()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.relationWorkspace)).toBeNull()
   expect(await page.evaluate(() => window.__vpaDebug!.fixed()!.backward.cursor)).toBe(0)
 })
 

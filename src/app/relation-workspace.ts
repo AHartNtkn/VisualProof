@@ -1,5 +1,4 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { parseTerm } from '../kernel/term/parse'
 import { applyFission } from '../kernel/rules/fusion'
@@ -24,6 +23,7 @@ import {
   currentRelationDraft,
   deleteOptionalPort,
   insertOptionalPort,
+  materializeRelationSnapshot,
   moveRelationHistory,
   moveOptionalPort,
   planRelationConnection,
@@ -52,29 +52,10 @@ export type RelationWorkspaceTransaction = {
   cancel(): void
 }
 
-export function transactionCopy(transaction: RelationWorkspaceTransaction): {
-  readonly title: string
-  readonly finalizeLabel: string
-} {
-  return { title: transaction.title, finalizeLabel: transaction.finalizeLabel }
-}
-
-function materializeSnapshot(
+export function previewRelationWorkspaceSnapshot(
   snapshot: RelationWorkspaceSnapshot,
-  mode: RelationWorkspaceTransaction['mode'],
-): { readonly relation: ReturnType<typeof mkDiagramWithBoundary>; readonly attachments: WireId[] } {
-  const unbound = mode === 'substitute'
-    ? snapshot.ports.find((port) => port.kind === 'optional' && port.hostWire === undefined)
-    : undefined
-  if (unbound !== undefined) throw new Error(`optional substitution port '${unbound.id}' must be bound or removed before finalization`)
-  return {
-    relation: mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire)),
-    attachments: snapshot.ports.flatMap((port) => port.kind === 'optional' && port.hostWire !== undefined ? [port.hostWire] : []),
-  }
-}
-
-export function previewRelationWorkspaceSnapshot(snapshot: RelationWorkspaceSnapshot): ReturnType<typeof mkDiagramWithBoundary> {
-  return mkDiagramWithBoundary(snapshot.diagram, snapshot.ports.map((port) => port.wire))
+): ReturnType<typeof materializeRelationSnapshot>['relation'] {
+  return materializeRelationSnapshot(snapshot, 'abstract').relation
 }
 
 export function applyPortStripDrop(
@@ -96,39 +77,6 @@ export function applyPortStripMove(
 
 export function applyPortStripDelete(draft: RelationWorkspaceDraft, portId: string): RelationWorkspaceDraft {
   return deleteOptionalPort(draft, portId)
-}
-
-export function editRelationWorkspaceDraft(
-  draft: RelationWorkspaceDraft,
-  edit: (diagram: Diagram) => Diagram,
-): { readonly draft: RelationWorkspaceDraft; readonly error: string | null } {
-  try {
-    return { draft: replaceRelationDiagram(draft, edit(currentRelationDraft(draft).diagram)), error: null }
-  } catch (error) {
-    return { draft, error: error instanceof Error ? error.message : String(error) }
-  }
-}
-
-export type WorkspaceTransientState = {
-  readonly pointerClaimed: boolean
-  readonly draftHoverWire: WireId | null
-  readonly hostHoverWire: WireId | null
-  readonly connectionGesture: boolean
-  readonly mounted: boolean
-}
-
-export function clearRelationWorkspaceTransientState(_state: WorkspaceTransientState): WorkspaceTransientState {
-  return {
-    pointerClaimed: false,
-    draftHoverWire: null,
-    hostHoverWire: null,
-    connectionGesture: false,
-    mounted: false,
-  }
-}
-
-export function runRelationWorkspaceCancellation(transaction: RelationWorkspaceTransaction): void {
-  transaction.cancel()
 }
 
 export function renderRelationPortStrip(document: Document, ports: readonly RelationPort[]): HTMLOListElement {
@@ -226,7 +174,7 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
     try {
       const forced = snapshot.ports.filter((port) => port.kind === 'forced')
       if (forced.length !== this.#arity) throw new Error(`substitution requires ${this.#arity} forced ports`)
-      const materialized = materializeSnapshot(snapshot, this.mode)
+      const materialized = materializeRelationSnapshot(snapshot, this.mode)
       applyComprehensionInstantiate(
         this.#source,
         this.#bubble,
@@ -248,7 +196,7 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
     }
     const status = this.status(snapshot)
     if (status.kind !== 'ready') throw new Error(status.message)
-    const materialized = materializeSnapshot(snapshot, this.mode)
+    const materialized = materializeRelationSnapshot(snapshot, this.mode)
     const action: ProofAction = {
       label: 'substitute relation',
       steps: [{
@@ -340,14 +288,6 @@ export function relationConnectionTargets(
     if (planRelationConnection(draft, source, { kind: 'host', wire }).ok) hostTargets.add(wire)
   }
   return { draft: draftTargets, host: hostTargets }
-}
-
-export function relationBoundaryMarks(boundary: readonly WireId[]): readonly {
-  readonly wire: WireId
-  readonly position: number
-  readonly orientation: boolean
-}[] {
-  return boundary.map((wire, position) => ({ wire, position, orientation: position === 0 }))
 }
 
 export function applyCapturedRelationConnection(
@@ -562,6 +502,10 @@ export class RelationWorkspace {
 
   keyDown(sample: KeySample): boolean {
     if (this.#disposed || sample.repeat) return false
+    if ((sample.key === 'Delete' || sample.key === 'Backspace') && this.#selectedPort !== null) {
+      this.#deleteSelectedPort()
+      return true
+    }
     if ((sample.ctrlKey || sample.metaKey) && sample.key.toLowerCase() === 'z') {
       this.#moveHistory(sample.shiftKey ? 1 : -1)
       return true
@@ -593,7 +537,7 @@ export class RelationWorkspace {
 
   cancel(): void {
     if (this.#disposed) return
-    runRelationWorkspaceCancellation(this.#transaction)
+    this.#transaction.cancel()
     this.#close()
   }
 
@@ -627,7 +571,7 @@ export class RelationWorkspace {
 
   dispose(): void {
     if (this.#disposed) return
-    runRelationWorkspaceCancellation(this.#transaction)
+    this.#transaction.cancel()
     this.#close()
   }
 
@@ -899,7 +843,9 @@ export class RelationWorkspace {
     this.#portStrip.addEventListener('click', (event) => {
       const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
       this.#selectedPort = target?.dataset.portId ?? null
-      this.#renderPortStrip()
+      for (const child of this.#portStrip.children) {
+        if (child instanceof HTMLElement) child.classList.toggle('is-selected', child.dataset.portId === this.#selectedPort)
+      }
     })
     this.#portStrip.addEventListener('dragstart', (event) => {
       const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>('.vpa-relation-port') : null
@@ -927,15 +873,22 @@ export class RelationWorkspace {
       }
     })
     this.#portStrip.addEventListener('keydown', (event) => {
-      if (event.key !== 'Delete' || this.#selectedPort === null) return
-      try {
-        this.#draft = applyPortStripDelete(this.#draft, this.#selectedPort)
-        this.#selectedPort = null
-        this.#reconcile()
-      } catch (error) {
-        this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
-      }
+      if ((event.key !== 'Delete' && event.key !== 'Backspace') || this.#selectedPort === null) return
+      event.preventDefault()
+      event.stopPropagation()
+      this.#deleteSelectedPort()
     })
+  }
+
+  #deleteSelectedPort(): void {
+    if (this.#selectedPort === null) return
+    try {
+      this.#draft = applyPortStripDelete(this.#draft, this.#selectedPort)
+      this.#selectedPort = null
+      this.#reconcile()
+    } catch (error) {
+      this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
+    }
   }
 
   #applyRect(): void {

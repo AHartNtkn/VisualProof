@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: 'e2e',
   use: { baseURL: 'http://localhost:4173' },
   webServer: {
-    command: 'npx vite build app --logLevel error && npx vite preview app --port 4173 --strictPort',
+    command: 'npx vite build --config e2e/vite.config.ts --logLevel error && npx vite preview app --port 4173 --strictPort',
     url: 'http://localhost:4173',
     reuseExistingServer: false,
     timeout: 60000,
