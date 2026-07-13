@@ -104,15 +104,46 @@ cardinality casts or alternate equivalence representation is used.
 
 ### 3.2 Concrete finite graphs
 
-The concrete representation mirrors the mathematical content of the TypeScript kernel without copying its string-keyed partial-record shape. Regions, nodes, and wires use finite index types with total vectors or arrays. A separate `Concrete.WellFormed` predicate establishes:
+The concrete representation mirrors the normalized mathematical content of the
+TypeScript kernel without copying its string-keyed partial-record shape. Region,
+node, and wire identifiers are separate `Fin` types over stored counts, and their
+tables are total functions. Missing identifiers are therefore rejected at the
+serialization boundary and are unrepresentable in this layer.
+
+Term nodes store a free-port count and a term whose free variables are
+`Fin freePortCount`; endpoints still use an extrinsic `free index` port so invalid
+port occurrences remain checkable. Bound atoms identify a concrete binder region.
+Named references store a natural-number definition position and asserted arity so
+resolution remains contextual. Wires are scoped hyperedges with lists of endpoint
+occurrences; endpoint order is not semantic, and empty lists represent bare wires.
+
+A separate `Concrete.WellFormed signature` proposition establishes:
 
 - one rooted region tree;
-- nonnegative finite bubble arities;
-- valid node regions;
-- enclosing, arity-correct atom binders;
+- the designated root as the unique sheet and termination of every parent chain there;
+- enclosing bubble binders for bound atoms;
+- named-reference existence and arity agreement in the supplied signature;
 - enclosing wire scopes;
-- valid endpoint ports; and
-- an exact partition of every node's required ports among wires.
+- valid endpoint ports;
+- no duplicate endpoint occurrence within a wire or across wires; and
+- total coverage of every required node port.
+
+One structured checker decides exactly this proposition and returns either a named
+`WFError` or the proof. Both directions are proved:
+
+```lean
+theorem checkWellFormed_sound :
+  checkWellFormed signature d = .ok h → d.WellFormed signature
+
+theorem checkWellFormed_complete :
+  d.WellFormed signature → ∃ h, checkWellFormed signature d = .ok h
+```
+
+Parent ancestry is backed by a bounded path or decreasing-rank certificate, so no
+consumer follows parent links under an unencoded acyclicity assumption. Checked
+consumers accept an explicit proof or `CheckedDiagram signature`; no Boolean,
+normalizing constructor, or constructor-provenance convention is a second
+validation authority.
 
 Concrete graphs retain explicit ports, incidence, named-reference identities, and identifier-independent finite structure because matching depends on them.
 
@@ -120,12 +151,14 @@ Concrete graphs retain explicit ports, incidence, named-reference identities, an
 
 `Concrete.elaborate` consumes a concrete graph plus a well-formedness proof and produces an intrinsic diagram. It:
 
-1. traverses the region tree;
-2. converts each scoped wire to a lexical variable;
-3. replaces free-port names with their incident wire variables;
-4. converts bubble references to typed `RelVar`s;
-5. resolves named relation signatures; and
-6. erases all concrete identifiers.
+1. traverses the proved region tree;
+2. introduces every wire at its scope, including endpoint-less bare wires;
+3. uses exact incidence to replace each output, free, and argument port by its
+   unique lexical wire variable;
+4. uses binder-enclosure evidence to convert concrete bubble identity to a typed
+   `RelVar`;
+5. resolves named relation positions to `NamedRel`; and
+6. erases all concrete identifiers and nonsemantic collection orders.
 
 Concrete graphs have no independent semantic interpreter. Their denotation is
 defined only by checked elaboration into the core:
@@ -151,6 +184,12 @@ theorem iso_denotation
   (hiso : Core.Isomorphic d₁ d₂) :
   Core.denote model d₁ ↔ Core.denote model d₂
 ```
+
+`Concrete.Isomorphic` contains bijections on the three concrete identifier sorts
+that preserve root, region ownership and kinds, bubble arities, positional term
+shape, binders, wire scope, endpoint occurrences modulo endpoint order, and any
+ordered boundary pins. Canonical strings and hashes are not definitions of this
+relation.
 
 The intrinsic core is the semantic authority. The concrete layer is a checked finite presentation, not a second logic.
 
@@ -226,7 +265,22 @@ theorem denote_splice :
   denoteContext host site (denoteOpen pattern arguments)
 ```
 
-Extraction and splicing are inverse up to intrinsic isomorphism when their side conditions hold. This theorem supports iteration, comprehension, relation definitions, and theorem citation.
+A selection at a region contains whole direct child subtrees, direct nodes, and
+explicitly selected wires scoped at that region whose endpoints are selected.
+Selection closure derives all descendant regions/nodes, internally owned wires,
+and touching wires. Extraction turns touching wires into root-scoped boundary
+stubs in a fixed incidence order and turns externally enclosing binders into an
+outermost-first chain of stub bubbles with aligned binder attachments. Repeated
+boundary incidences preserve wire alias classes.
+
+Removal drops the selected content while retaining outside endpoints. Splicing
+validates attachment enclosure and binder kind, arity, and enclosure before
+performing the boundary pushout; repeated incidences of one pattern wire identify
+their host attachments. The semantic theorem is stated over the intrinsic
+conjunction frame obtained by elaboration, rather than an untyped placeholder
+`site`. Extracting a lawful selection, removing it, and splicing the extraction
+back reconstructs the original host up to structural isomorphism. These theorems
+support iteration, comprehension, relation definitions, and theorem citation.
 
 ## 6. Semantic Context and Polarity
 
