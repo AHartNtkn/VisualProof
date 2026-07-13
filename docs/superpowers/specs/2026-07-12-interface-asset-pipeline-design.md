@@ -20,11 +20,12 @@ The asset system must preserve these decisions:
 
 - The live proof canvas remains the sole proof-surface and proof-input authority.
 - The existing canvas interaction, coordinate, zoom, history, and hit-testing contracts do not change.
-- The lens is a nearly viewport-height rounded square viewed straight-on, not a perspective-tilted prop or a rectangular application window.
+- The optical glass, gasket, and usable opening form a nearly viewport-height rounded square viewed straight-on. The surrounding chassis may be wider where its structure and integrated timeline require it; chassis proportion must not turn the optical opening into a rectangle.
 - Nothing resembling a title bar, menu, orbiting button, unexplained indicator, or permanent legend appears within or around the glass.
 - The timeline lever is centered across the bottom structural mass and spans most of the lens width. Its guide, end stops, and attachments must read as a substantial mechanism belonging to the chassis rather than a small control panel placed beside it.
 - Decorative layers never handle pointer input. Application-owned geometry positions the proof canvas and timeline interaction above or through those layers.
 - The material palette is dark walnut, subdued warm papers and leather, aged brass, dark glass, and the existing Dark (Slate) neon proof colors. Seals are not tan or brown.
+- The canonical desk presentation uses one large, soft, slightly warm source above and forward of the loupe. Dark materials and surroundings establish the theme; multiple theatrical spots, colored fill lights, and underexposure do not.
 - Physics behavior and physics validation are outside this work.
 - Every material milestone is demonstrated with real game content and reviewed before it becomes the basis for further assets.
 
@@ -96,13 +97,13 @@ The manifest does not contain layout coordinates or input geometry. Those remain
 
 The first family is deliberately small and separable:
 
-1. **Frame:** one straight-on square brass frame master with a transparent center, authored so its corners and ornamental masses remain fixed while its plain edge runs can extend.
-2. **Glass:** a separate restrained dark-glass overlay that adds edge depth, faint optical falloff, and controlled reflections without reducing proof legibility or pretending to be the proof surface.
+1. **Frame:** one straight-on mechanical chassis with a rounded-square transparent opening, authored so its aperture corners and ornamental masses remain fixed while mechanically plain outer runs may accommodate the timeline assembly.
+2. **Glass:** a separate rounded-square, restrained dark-glass overlay that adds edge depth, faint optical falloff, and controlled reflections without reducing proof legibility or pretending to be the proof surface.
 3. **Frame shadow:** a separate soft occlusion/cast-shadow layer so the frame can sit on later desk materials without baking a particular walnut image into the brass asset.
 4. **Lever housing:** a near-full-width brass guide, notch, end-stop, and attachment assembly integrated into the bottom chassis.
 5. **Lever handle:** a separate movable part whose application position represents the existing timeline cursor. Decorative artwork does not calculate history or cursor state.
 
-The frame uses a declared nine-slice contract. Corner quadrants and decorated junctions never stretch; only unornamented horizontal and vertical runs may extend. The glass and shadow may scale continuously because they have no semantic geometry. The lever housing has one intrinsic aspect ratio, spans most of the lower frame, and remains inside the chassis silhouette; the handle translates only along the application-defined track.
+The frame uses a declared nine-slice contract. Aperture corner quadrants and decorated junctions never stretch; only unornamented chassis runs may extend. The glass remains rounded-square and the shadow may scale continuously because neither owns semantic interaction geometry. The lever housing has one intrinsic aspect ratio, spans most of the lower frame, and remains inside the chassis silhouette; the handle translates only along the application-defined track.
 
 The first source scene renders a 4096-by-4096 frame master and separately sized lever layers. This is a review master, not an unconditional shipping budget. After browser integration, the pipeline measures decoded dimensions, transferred bytes, and frame cost, then derives the smallest runtime resolution that remains visually equivalent at the supported display sizes. Compression or downsampling cannot precede the material review or disguise weak source work.
 
