@@ -120,6 +120,22 @@ describe('exploration matcher — explicit exploration fuel', () => {
     expect(__benchCounter.permutations).toBe(0)
   })
 
+  it('does not advance fallback when identity placements consume exactly the budget', () => {
+    const count = 4
+    __benchCounter.permutations = 0
+
+    const result = findOccurrences(identityNodes(count), sharedWirePattern(count), {
+      fuel: 1,
+      explorationFuel: count,
+      mode: 'exact',
+      inRegion: 'r0',
+    })
+
+    expect(result.status).toBe('exhausted')
+    expect(result.explorationSteps).toBe(count)
+    expect(__benchCounter.permutations).toBe(0)
+  })
+
   it('exhaustively explores the small non-identity fallback with sufficient budget', () => {
     expect(__benchCounter.permutations).toBeTypeOf('number')
     __benchCounter.permutations = 0

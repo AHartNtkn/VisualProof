@@ -454,6 +454,13 @@ export function findOccurrences(
       if (m > 1 && matches.length === before && !explorationExhausted) {
         const permutations = nonIdentityPermutations(m)
         while (!explorationExhausted) {
+          // Iterator advancement itself can perform factorial traversal before
+          // yielding. Never request another permutation unless at least its
+          // first placement probe can be funded.
+          if (explorationRemaining === 0) {
+            explorationExhausted = true
+            break
+          }
           const next = permutations.next()
           if (next.done) break
           bindPerm(indices, next.value)
