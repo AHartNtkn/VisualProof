@@ -29,6 +29,30 @@ mutual
         ItemSeq signature wires rels
 end
 
+namespace ItemSeq
+
+def append : ItemSeq signature wires rels -> ItemSeq signature wires rels ->
+    ItemSeq signature wires rels
+  | .nil, suffix => suffix
+  | .cons item initial, suffix => .cons item (append initial suffix)
+
+@[simp] theorem nil_append (items : ItemSeq signature wires rels) :
+    append .nil items = items := rfl
+
+@[simp] theorem append_nil : (items : ItemSeq signature wires rels) ->
+    append items .nil = items
+  | .nil => rfl
+  | .cons item tail => congrArg (ItemSeq.cons item) (append_nil tail)
+
+@[simp] theorem append_assoc :
+    (first second third : ItemSeq signature wires rels) ->
+    append (append first second) third = append first (append second third)
+  | .nil, _, _ => rfl
+  | .cons item tail, second, third =>
+      congrArg (ItemSeq.cons item) (append_assoc tail second third)
+
+end ItemSeq
+
 def cutExample : Item [] 0 [] :=
   .cut (.mk 0 .nil)
 
