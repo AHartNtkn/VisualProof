@@ -23,6 +23,7 @@ import { ProofFrontViewport, type ProofFrontDebugState } from './proof-front'
 import type { KeySample } from './interact/viewport'
 import type { MotionPreferences } from './interact/motion'
 import { proofSnapshot, type ProofSnapshot } from './proof-snapshot'
+import { seedActionHistoryPlacements } from '../view/placement'
 
 export type FixedSideWorkspaceOptions = {
   readonly host: HTMLElement
@@ -110,6 +111,8 @@ export class FixedSideWorkspace {
     })
     this.forward = new ProofFrontViewport(forwardDom.canvas, model('forward'))
     this.backward = new ProofFrontViewport(backwardDom.canvas, model('backward'))
+    this.#presentHistory('forward')
+    this.#presentHistory('backward')
     this.#geometry = paneGeometry(window.innerWidth, window.innerHeight, this.#ratio, FIXED_SIDE_SEAM_WIDTH)
 
     this.seam.addEventListener('pointerdown', this.#seamDown)
@@ -141,6 +144,7 @@ export class FixedSideWorkspace {
 
   reconcile(side: FixedSide): void {
     this.#front(side).reconcileDiagram()
+    this.#presentHistory(side)
     this.#refresh()
   }
 
@@ -149,7 +153,6 @@ export class FixedSideWorkspace {
     const next = moveSide(this.#options.session(), this.#focused, cursor)
     this.#options.commit(next, this.#focused)
     this.reconcile(this.#focused)
-    this.#presentCursor(this.#focused)
   }
 
   cancelGestures(): void {
@@ -213,6 +216,16 @@ export class FixedSideWorkspace {
     return side === 'forward' ? this.forward : this.backward
   }
 
+  #presentHistory(side: FixedSide): void {
+    const timeline = this.#options.session()[side]
+    seedActionHistoryPlacements(
+      this.#front(side).engine,
+      timeline.states,
+      timeline.actions,
+      timeline.cursor,
+    )
+  }
+
   #prepare(side: FixedSide, step: ProofStep): () => void {
     const action = singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step)
     return this.#prepareAction(side, action)
@@ -220,23 +233,10 @@ export class FixedSideWorkspace {
 
   #prepareAction(side: FixedSide, action: ProofAction): () => void {
     const session = this.#options.session()
-    const before = currentSide(session, side)
     const next = side === 'forward' ? applyForward(session, action) : applyBackward(session, action)
     return () => {
       this.#options.commit(next, side)
       this.reconcile(side)
-      this.#front(side).presentActionPlacements(before, currentSide(next, side), action.placements)
-    }
-  }
-
-  #presentCursor(side: FixedSide): void {
-    const timeline = this.#options.session()[side]
-    if (timeline.cursor === 0) return
-    const before = timeline.states[timeline.cursor - 1]
-    const after = timeline.states[timeline.cursor]
-    const action = timeline.actions[timeline.cursor - 1]
-    if (before !== undefined && after !== undefined && action !== undefined) {
-      this.#front(side).presentActionPlacements(before, after, action.placements)
     }
   }
 
@@ -255,7 +255,6 @@ export class FixedSideWorkspace {
     }
     this.#options.commit(moveSide(session, side, cursor), side)
     this.reconcile(side)
-    this.#presentCursor(side)
     return true
   }
 

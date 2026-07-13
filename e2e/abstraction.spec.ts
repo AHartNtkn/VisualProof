@@ -53,6 +53,51 @@ async function exposeFirstDraftWire(page: Page): Promise<void> {
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.materializedBoundary.length)).toBe(1)
 }
 
+async function jumpHistory(page: Page, fraction: 0 | 1): Promise<void> {
+  const rail = page.locator('.vpa-temporal-rail')
+  const box = (await rail.boundingBox())!
+  await page.mouse.click(box.x + (fraction === 0 ? 1 : box.width - 1), box.y + box.height / 2)
+}
+
+async function abstractMainNode(page: Page, kind: 'term' | 'atom'): Promise<string> {
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.motion().playing)).toBe(false)
+  const canvas = (await page.locator('#c').boundingBox())!
+  const before = await page.evaluate(() => window.__vpaDebug!.bodies().map(({ id }) => id))
+  const cursor = await page.evaluate(() => window.__vpaDebug!.proofSnapshot()!.cursor)
+  const point = await page.evaluate((selectedKind) => {
+    const view = window.__vpaDebug!.view()
+    const body = window.__vpaDebug!.bodies().find(({ kind }) => kind === selectedKind)!
+    return { x: body.x * view.scale + view.offsetX, y: body.y * view.scale + view.offsetY }
+  }, kind)
+  await page.mouse.click(canvas.x + point.x, canvas.y + point.y)
+  await page.keyboard.press('Shift+w')
+  await expect(page.locator('.vpa-relation-workspace')).toHaveCount(1)
+  await page.getByRole('button', { name: 'Abstract', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.proofSnapshot()!.cursor)).toBe(cursor + 1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.motion().playing)).toBe(false)
+  return await page.evaluate((oldIds) => window.__vpaDebug!.bodies().find(({ id }) => !oldIds.includes(id))!.id, before)
+}
+
+async function abstractFixedNode(page: Page, kind: 'term' | 'atom'): Promise<string> {
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.motion.playing)).toBe(false)
+  const canvas = page.locator('.vpa-proof-front-forward canvas')
+  const box = (await canvas.boundingBox())!
+  const before = await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.bodies.map(({ id }) => id))
+  const cursor = await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)
+  const point = await page.evaluate((selectedKind) => {
+    const front = window.__vpaDebug!.fixed()!.forward
+    const body = front.bodies.find(({ kind }) => kind === selectedKind)!
+    return { x: body.x * front.view.scale + front.view.offsetX, y: body.y * front.view.scale + front.view.offsetY }
+  }, kind)
+  await page.mouse.click(box.x + point.x, box.y + point.y)
+  await page.keyboard.press('Shift+w')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.relationWorkspace?.mode)).toBe('abstract')
+  await page.getByRole('button', { name: 'Abstract', exact: true }).click()
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(cursor + 1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.motion.playing)).toBe(false)
+  return await page.evaluate((oldIds) => window.__vpaDebug!.fixed()!.forward.bodies.find(({ id }) => !oldIds.includes(id))!.id, before)
+}
+
 test('ordinary proof abstraction is provisional, cancellable, marker-authored, and one-action finalizable', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)
@@ -139,6 +184,50 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
     return { x: atom.x, y: atom.y }
   })
   expect(Math.hypot(replayedAtom.x - persistedPlacement.x, replayedAtom.y - persistedPlacement.y)).toBeLessThan(10)
+})
+
+test('ordinary and replay direct history jumps restore every active placement', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnIdentity(page)
+  await openMode(page)
+  await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
+
+  const firstId = await abstractMainNode(page, 'term')
+  const secondId = await abstractMainNode(page, 'atom')
+  const placements = await page.evaluate(() => window.__vpaDebug!.proofSnapshot()!.actions.map((action) => action.placements[0]!))
+  expect(placements).toHaveLength(2)
+
+  await jumpHistory(page, 0)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.proofSnapshot()!.cursor)).toBe(0)
+  await jumpHistory(page, 1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.proofSnapshot()!.cursor)).toBe(2)
+  const restored = await page.evaluate(({ firstNode, secondNode }) => {
+    const bodies = window.__vpaDebug!.bodies()
+    return [bodies.find(({ id }) => id === firstNode)!, bodies.find(({ id }) => id === secondNode)!]
+  }, { firstNode: firstId, secondNode: secondId })
+  expect(Math.hypot(restored[0]!.x - placements[0]!.x, restored[0]!.y - placements[0]!.y)).toBeLessThan(10)
+  expect(Math.hypot(restored[1]!.x - placements[1]!.x, restored[1]!.y - placements[1]!.y)).toBeLessThan(25)
+
+  await page.getByPlaceholder('theorem name').fill('twoPlacedAbstractions')
+  await page.getByRole('button', { name: 'Declare / assemble + check', exact: true }).click()
+  const saved = await page.evaluate(() => window.__vpaDebug!.theoryJson())
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await page.locator('#open-file-input').setInputFiles({
+    name: 'two-placed-abstractions.json', mimeType: 'application/json', buffer: Buffer.from(saved),
+  })
+  const library = page.locator('#library')
+  await library.getByRole('button', { name: '▸ two-placed-abstractions.json', exact: true }).click()
+  await library.getByRole('button', { name: '▶ Replay', exact: true }).click()
+  await jumpHistory(page, 1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.replay().k)).toBe(2)
+  const replayed = await page.evaluate(({ firstNode, secondNode }) => {
+    const bodies = window.__vpaDebug!.bodies()
+    return [bodies.find(({ id }) => id === firstNode)!, bodies.find(({ id }) => id === secondNode)!]
+  }, { firstNode: firstId, secondNode: secondId })
+  expect(Math.hypot(replayed[0]!.x - placements[0]!.x, replayed[0]!.y - placements[0]!.y)).toBeLessThan(10)
+  expect(Math.hypot(replayed[1]!.x - placements[1]!.x, replayed[1]!.y - placements[1]!.y)).toBeLessThan(25)
 })
 
 test('mounted nested empty marker accepts inside drag, refuses outside, and commits selected or trivial outcomes', async ({ page }) => {
@@ -432,4 +521,42 @@ test('both fixed fronts open and cancel, with real finalization and global histo
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.relationWorkspace)).toBeNull()
   expect(await fixedSnapshot('backward')).toBe(beforeBackwardCancel)
+})
+
+test('fixed direct jumps and redo restore every active placement', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+  await spawnIdentity(page)
+  await openMode(page)
+  await page.getByRole('button', { name: 'Set goal LHS', exact: true }).click()
+  await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
+  await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
+
+  const firstId = await abstractFixedNode(page, 'term')
+  const secondId = await abstractFixedNode(page, 'atom')
+  const placements = await page.evaluate(() => window.__vpaDebug!.fixed()!.forward.proofSnapshot.actions
+    .map((action) => action.placements[0]!))
+
+  const expectPlaced = async (): Promise<void> => {
+    const bodies = await page.evaluate(({ firstNode, secondNode }) => {
+      const front = window.__vpaDebug!.fixed()!.forward
+      return [front.bodies.find(({ id }) => id === firstNode)!, front.bodies.find(({ id }) => id === secondNode)!]
+    }, { firstNode: firstId, secondNode: secondId })
+    expect(Math.hypot(bodies[0]!.x - placements[0]!.x, bodies[0]!.y - placements[0]!.y)).toBeLessThan(10)
+    expect(Math.hypot(bodies[1]!.x - placements[1]!.x, bodies[1]!.y - placements[1]!.y)).toBeLessThan(10)
+  }
+
+  await jumpHistory(page, 0)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(0)
+  await jumpHistory(page, 1)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(2)
+  await expectPlaced()
+
+  await jumpHistory(page, 0)
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(0)
+  await page.keyboard.press('Control+Shift+z')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(1)
+  await page.keyboard.press('Control+Shift+z')
+  await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.cursor)).toBe(2)
+  await expectPlaced()
 })

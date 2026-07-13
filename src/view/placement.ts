@@ -1,5 +1,5 @@
 import type { Diagram } from '../kernel/diagram/diagram'
-import type { PlacementHint } from '../kernel/proof/action'
+import type { PlacementHint, ProofAction } from '../kernel/proof/action'
 import { introducedNodeIds } from '../kernel/proof/action'
 import type { Engine } from './engine'
 import type { Vec2 } from './vec'
@@ -39,15 +39,43 @@ export function seedBodyPlacement(engine: Engine, id: string, at: Vec2): void {
 
 /** Apply persisted presentation hints after the complete action's diagram has
     been reconciled into the engine. The kernel validates every index first. */
-export function seedActionPlacements(
+function seedPlacementHintsForTransition(
   engine: Engine,
   before: Diagram,
   after: Diagram,
   placements: readonly PlacementHint[],
+  survives: (node: string) => boolean,
 ): void {
   const introduced = introducedNodeIds(before, after)
   for (const placement of placements) {
     const node = introduced[placement.introducedNode]
-    if (node !== undefined) seedBodyPlacement(engine, node, { x: placement.x, y: placement.y })
+    if (node !== undefined && survives(node)) {
+      seedBodyPlacement(engine, node, { x: placement.x, y: placement.y })
+    }
+  }
+}
+
+/** Reconstruct presentation for the complete active action prefix. Hints are
+    interpreted against the exact transition that recorded them and apply only
+    when that introduced body remains present through every later active state;
+    a deleted id reused by a later body does not inherit the old hint. */
+export function seedActionHistoryPlacements(
+  engine: Engine,
+  states: readonly Diagram[],
+  actions: readonly ProofAction[],
+  cursor: number,
+): void {
+  for (let index = 0; index < cursor; index++) {
+    const before = states[index]
+    const after = states[index + 1]
+    const action = actions[index]
+    if (before !== undefined && after !== undefined && action !== undefined) {
+      seedPlacementHintsForTransition(engine, before, after, action.placements, (node) => {
+        for (let stateIndex = index + 1; stateIndex <= cursor; stateIndex++) {
+          if (states[stateIndex]?.nodes[node] === undefined) return false
+        }
+        return true
+      })
+    }
   }
 }
