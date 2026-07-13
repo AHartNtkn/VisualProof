@@ -1,9 +1,13 @@
 import { describe, expect, it } from 'vitest'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
+import { parseTerm } from '../../src/kernel/term/parse'
 import { mkDiagram, type Diagram } from '../../src/kernel/diagram/diagram'
 import type { ProofAction } from '../../src/kernel/proof/action'
 import type { ProofContext } from '../../src/kernel/proof/step'
 import {
   applyCapturedRelationConnection,
+  applyRelationWorkspaceCopy,
   applyPortStripDelete,
   applyPortStripDrop,
   applyPortStripMove,
@@ -21,6 +25,7 @@ import {
   currentRelationDraft,
   replaceRelationDiagram,
 } from '../../src/app/relation-workspace-draft'
+import { planCopy } from '../../src/app/copy-planner'
 
 const context = (): ProofContext => ({ theorems: new Map(), relations: new Map() })
 
@@ -39,6 +44,24 @@ function hostWithBubble(arity = 2): Diagram {
 }
 
 describe('shared relation workspace mechanics', () => {
+  it('records a workspace copy as exactly one draft snapshot', () => {
+    const sourceBuilder = new DiagramBuilder()
+    const node = sourceBuilder.termNode(sourceBuilder.root, parseTerm('x'))
+    const source = sourceBuilder.build()
+    const selection = mkSelection(source, { region: source.root, regions: [], nodes: [node], wires: [] })
+    const draft = beginAbstractionDraft(source)
+    const before = currentRelationDraft(draft)
+    const planned = planCopy(source, selection, {
+      kind: 'workspace', draft: before.diagram, region: before.diagram.root, at: { x: 3, y: 4 },
+    })
+    if (planned.kind === 'refusal') throw new Error(planned.message)
+
+    const copied = applyRelationWorkspaceCopy(draft, planned)
+    expect(copied.cursor).toBe(draft.cursor + 1)
+    expect(copied.history).toHaveLength(draft.history.length + 1)
+    expect(currentRelationDraft(copied).diagram).toBe(planned.kind === 'workspace' ? planned.result : null)
+  })
+
   it('retains one geometry implementation for every transaction configuration', () => {
     expect(placeRelationWorkspace({ x: 300, y: 300 }, { width: 1400, height: 900 })).toEqual({
       left: 316, top: 282, width: 660, height: 560,

@@ -1,8 +1,8 @@
 import { DiagramBuilder } from '../../kernel/diagram/builder'
 import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
-import { isAncestorOrEqual } from '../../kernel/diagram/regions'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
+import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
 import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof/step'
 import { convertible } from '../../kernel/term/convert'
 import type { ConversionCertificate } from '../../kernel/term/certificate'
@@ -21,6 +21,7 @@ import { citationCandidates, citationStep, type CitationCandidate } from './cite
 import { ConnectionDragController, type ConnectionEnd } from './connection'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
 import { FissionDragController, type FissionRequest } from './fission'
+import { CopyDragController, copyDestinationPreview } from './copy'
 
 export type ProofOrientation = 'forward' | 'backward'
 
@@ -79,20 +80,6 @@ export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel
     case 'deiterate': return { rule: 'deiteration', sel: discovery.sel, fuel }
     default: throw new Error(`'${action.kind}' is not a contextual deletion`)
   }
-}
-
-export function iterationTargets(d: Diagram, sel: SubgraphSelection): readonly RegionId[] {
-  const insideSelection = (region: RegionId): boolean => {
-    let current = region
-    for (;;) {
-      if (sel.regions.includes(current)) return true
-      const value = d.regions[current]!
-      if (value.kind === 'sheet') return false
-      current = value.parent
-    }
-  }
-  return Object.keys(d.regions)
-    .filter((region) => isAncestorOrEqual(d, sel.region, region) && !insideSelection(region))
 }
 
 export function foldedComprehension(ctx: ProofContext, name: string): DiagramWithBoundary {
@@ -188,7 +175,7 @@ export type ProofMoveControllerOptions = {
   readonly setSelection: (hits: readonly Hit[]) => void
   readonly context: () => ProofContext
   readonly orientation: () => ProofOrientation
-  readonly apply: (step: ProofStep) => void
+  readonly apply: (action: ProofAction) => void
   readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
@@ -196,13 +183,6 @@ export type ProofMoveControllerOptions = {
   readonly openComprehension: (bubble: RegionId, pointer: Vec2) => void
   readonly openAbstraction: (selection: SubgraphSelection, pointer: Vec2) => void
   readonly openSpawn: (sample: PointerSample, region: RegionId) => void
-}
-
-type IterationDrag = {
-  readonly sel: SubgraphSelection
-  readonly targets: readonly RegionId[]
-  over: RegionId | null
-  moved: boolean
 }
 
 type CitationCycle = { readonly candidate: CitationCandidate; index: number }
@@ -226,9 +206,9 @@ export class ProofMoveController {
   readonly #document: Document
   readonly #connection: ConnectionDragController
   readonly #fission: FissionDragController
+  readonly #copy: CopyDragController
   #menu: HTMLDivElement | null = null
   #prompt: HTMLDivElement | null = null
-  #drag: IterationDrag | null = null
   #cycle: CitationCycle | null = null
   #lastPointer: Vec2
 
@@ -265,6 +245,28 @@ export class ProofMoveController {
       commit: options.commitFission,
       refuse: options.refuse,
     })
+    this.#copy = new CopyDragController({
+      active: options.active,
+      sourceDiagram: options.diagram,
+      sourceSelection: options.selection,
+      sourceEngine: options.engine,
+      viewScale: options.viewScale,
+      destination: (sample) => ({
+        kind: 'proof', diagram: options.diagram(),
+        region: regionAt(options.engine(), options.diagram(), sample.world),
+        orientation: options.orientation(), ctx: options.context(),
+      }),
+      commit: (plan) => {
+        if (plan.kind !== 'proof') throw new Error('proof copy produced a structural plan')
+        this.#options.apply(plan.action)
+        this.#options.setSelection([])
+      },
+      refuse: (text, sample) => options.refuse(text, sample.client),
+      theme: options.theme,
+      destinationPreview: (destination) => copyDestinationPreview(
+        options.engine(), destination.region, options.theme(),
+      ),
+    })
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -286,37 +288,7 @@ export class ProofMoveController {
     if (connection !== null) return connection
     const fission = this.#fission.claim(sample)
     if (fission !== null) return fission
-    if (sample.hit?.kind !== 'node' || !this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) return null
-    const discovery = discoverProofActions(
-      this.#options.diagram(),
-      this.#options.selection(),
-      this.#options.context(),
-      this.#options.orientation(),
-    )
-    if (discovery === null || !discovery.actions.some((action) => action.kind === 'iterate')) return null
-    const drag: IterationDrag = { sel: discovery.sel, targets: iterationTargets(this.#options.diagram(), discovery.sel), over: null, moved: false }
-    this.#drag = drag
-    return {
-      still: 'selection',
-      blocksPassiveRelaxation: false,
-      move: (next) => {
-        drag.moved = true
-        const region = regionAt(this.#options.engine(), this.#options.diagram(), next.world)
-        drag.over = drag.targets.includes(region) ? region : null
-        this.#lastPointer = next.client
-      },
-      release: (next, moved) => {
-        this.#lastPointer = next.client
-        this.#drag = null
-        if (!moved) return
-        if (drag.over === null) {
-          this.#options.refuse('release inside a glowing region to iterate', next.client)
-          return
-        }
-        this.#commit({ rule: 'iteration', sel: drag.sel, target: drag.over })
-      },
-      cancel: () => { this.#drag = null },
-    }
+    return this.#copy.claim(sample)
   }
 
   contextMenu(sample: PointerSample): boolean {
@@ -363,7 +335,7 @@ export class ProofMoveController {
   keyDown(sample: KeySample): boolean {
     if (!this.#options.active() || sample.repeat) return false
     if (sample.key === 'Escape') {
-      const active = this.#menu !== null || this.#prompt !== null || this.#cycle !== null || this.#drag !== null
+      const active = this.#menu !== null || this.#prompt !== null || this.#cycle !== null
       this.cancel()
       return active
     }
@@ -410,34 +382,7 @@ export class ProofMoveController {
   }
 
   overlay(): readonly Shape[] {
-    const out: Shape[] = [...this.#connection.overlay(), ...this.#fission.overlay()]
-    const drag = this.#drag
-    if (drag !== null && drag.moved) {
-      const color = this.#options.theme().interaction.valid
-      for (const node of drag.sel.nodes) {
-        const body = this.#options.engine().bodies.get(node)
-        if (body !== undefined) out.push({
-          kind: 'circle', center: body.pos, r: body.discR * this.#options.engine().scale + 2,
-          fill: null, stroke: color, width: 2.5, insetColor: null, glow: null,
-        })
-      }
-      for (const region of drag.sel.regions) {
-        const geometry = this.#options.engine().regions.get(region)
-        if (geometry !== undefined) out.push({
-          kind: 'circle', center: geometry.center, r: geometry.radius,
-          fill: null, stroke: color, width: 2.5, insetColor: null, glow: null,
-        })
-      }
-      for (const region of drag.targets) {
-        if (this.#options.diagram().regions[region]?.kind === 'sheet') continue
-        const geometry = this.#options.engine().regions.get(region)
-        if (geometry !== undefined) out.push({
-          kind: 'circle', center: geometry.center, r: geometry.radius,
-          fill: region === drag.over ? `${color}22` : `${color}10`, stroke: color,
-          width: region === drag.over ? 2.4 : 1.4, insetColor: null, glow: null,
-        })
-      }
-    }
+    const out: Shape[] = [...this.#connection.overlay(), ...this.#fission.overlay(), ...this.#copy.overlay()]
     const cycle = this.#cycle
     if (cycle !== null && cycle.candidate.occurrences !== null) {
       const occurrence = cycle.candidate.occurrences[cycle.index]!
@@ -452,20 +397,20 @@ export class ProofMoveController {
   cancel(): void {
     this.#closeMenu()
     this.#closePrompt()
-    this.#drag = null
     this.#cycle = null
     this.#connection.cancel()
     this.#fission.cancel()
+    this.#copy.cancel()
   }
 
-  dispose(): void { this.cancel(); this.#fission.dispose() }
+  dispose(): void { this.cancel(); this.#fission.dispose(); this.#copy.dispose() }
 
   passiveSample(sample: PointerSample | null): void { this.#fission.hover(sample) }
-  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld) }
+  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld); this.#copy.modifiersChanged(ctrlHeld) }
 
   #commit(step: ProofStep): void {
     try {
-      this.#options.apply(step)
+      this.#options.apply(singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step))
       this.#options.setSelection([])
       this.#closeMenu()
       this.#closePrompt()
@@ -521,7 +466,7 @@ export class ProofMoveController {
         this.#options.openAbstraction(sel, this.#lastPointer)
       }); return
       case 'vacuousElim': row(action.label, () => this.#commit({ rule: 'vacuousElim', region: sel.regions[0]! })); return
-      case 'iterate': row('Iterate by dragging the selection', null); return
+      case 'iterate': row('Copy by dragging the selection', null); return
       case 'deiterate': row(action.label, () => this.#commit({ rule: 'deiteration', sel, fuel: this.#options.fuel() })); return
       case 'convert': this.#appendConversions(row, sel.nodes[0]!); return
       case 'instantiate': {

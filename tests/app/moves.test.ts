@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
+import type { ProofStep } from '../../src/kernel/proof/step'
+import { applyAction } from '../../src/kernel/proof/action'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { buildFregeTheory } from '../../src/theories/frege'
@@ -12,7 +13,6 @@ import {
   discoverProofActions,
   foldedComprehension,
   instantiationChoices,
-  iterationTargets,
   proofConnectionStep,
   ProofMoveController,
 } from '../../src/app/interact/moves'
@@ -81,9 +81,9 @@ function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' =
     setSelection: (next) => { selection = [...next] },
     context: () => proof,
     orientation: () => 'forward',
-    apply: (step) => {
-      applied.push(step)
-      diagram = applyStep(diagram, step, proof)
+    apply: (action) => {
+      applied.push(...action.steps)
+      diagram = applyAction(diagram, action, proof)
     },
     commitFission: () => {},
     refuse: (text) => { throw new Error(text) },
@@ -225,18 +225,6 @@ describe('proof move parameters', () => {
       { kind: 'anonymous', label: 'New relation…' },
       { kind: 'named', label: 'succ', name: 'succ' },
     ])
-  })
-
-  it('iterates only into descendants outside the selected subtree', () => {
-    const b = new DiagramBuilder()
-    const selected = b.cut(b.root)
-    const inside = b.cut(selected)
-    const sibling = b.cut(b.root)
-    const nestedSibling = b.bubble(sibling, 0)
-    const d = b.build()
-    const found = discoverProofActions(d, [{ kind: 'region', id: selected }], ctx(), 'forward')!
-    expect(iterationTargets(d, found.sel)).toEqual([d.root, sibling, nestedSibling])
-    expect(iterationTargets(d, found.sel)).not.toContain(inside)
   })
 
   it('builds a named comprehension as one folded reference with ordered boundary wires', () => {
@@ -405,7 +393,10 @@ describe('proof connection resolution', () => {
       setSelection: () => {},
       context: () => ({ theorems: new Map(), relations: new Map() }),
       orientation: () => 'forward',
-      apply: (step) => { applied.push(step); diagram = applyStep(diagram, step, { theorems: new Map(), relations: new Map() }) },
+      apply: (action) => {
+        applied.push(...action.steps)
+        diagram = applyAction(diagram, action, { theorems: new Map(), relations: new Map() })
+      },
       commitFission: () => {},
       refuse: (text) => { throw new Error(text) },
       theme: () => LIGHT,

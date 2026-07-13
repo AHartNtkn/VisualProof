@@ -14,6 +14,8 @@ import { existentialStubs, legPaths } from '../view/wires'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
 import { wireHitTest, type Hit } from './hittest'
 import { ConstructController } from './interact/construct'
+import { CopyDragController, copyDestinationPreview } from './interact/copy'
+import type { CopyDestination, CopyPlan } from './copy-planner'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { introducedNodeId } from './interact/closed-term-intro'
 import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from './interact/viewport'
@@ -130,6 +132,14 @@ export function attemptRelationWorkspaceFinalize(
   } catch (error) {
     return { closed: false, error }
   }
+}
+
+export function applyRelationWorkspaceCopy(
+  draft: RelationWorkspaceDraft,
+  plan: CopyPlan,
+): RelationWorkspaceDraft {
+  if (plan.kind !== 'workspace') throw new Error('relation workspace copy requires a workspace plan')
+  return replaceRelationDiagram(draft, plan.result)
 }
 
 export function relationWorkspaceCanFinalize(
@@ -330,6 +340,7 @@ export type RelationWorkspaceHost = {
   readonly canvas: HTMLCanvasElement
   engine(): Engine
   view(): MutableView
+  selection(): readonly Hit[]
   context(): ProofContext
   theme(): Theme
   fuel(): number
@@ -393,6 +404,7 @@ export class RelationWorkspace {
   readonly #view: MutableView = { scale: 1, offsetX: 0, offsetY: 0 }
   readonly #interaction: InteractiveViewport
   readonly #construct: ConstructController
+  readonly #hostCopy: CopyDragController
   readonly #spawn: SpawnCascade
   readonly #undo: HTMLButtonElement
   readonly #redo: HTMLButtonElement
@@ -494,6 +506,27 @@ export class RelationWorkspace {
         boundPredicateOptions(this.#diagram(), region),
       ),
       theme: host.theme,
+      copy: {
+        destination: (sample) => ({
+          kind: 'workspace', draft: this.#diagram(),
+          region: this.#regionAt(sample.world), at: sample.world,
+        }),
+        commit: (plan) => this.#commitCopy(plan),
+      },
+    })
+    this.#hostCopy = new CopyDragController({
+      active: () => !this.#disposed,
+      sourceDiagram: this.#transaction.sourceDiagram,
+      sourceSelection: host.selection,
+      sourceEngine: host.engine,
+      viewScale: () => host.view().scale,
+      destination: (sample) => this.#workspaceDestination(sample.client),
+      commit: (plan) => this.#commitCopy(plan),
+      refuse: (text, sample) => host.refuse(text, sample.client),
+      theme: host.theme,
+      destinationPreview: (destination) => copyDestinationPreview(
+        this.#engine, destination.region, host.theme(),
+      ),
     })
     this.#interaction = new InteractiveViewport({
       canvas: this.#canvas,
@@ -528,8 +561,12 @@ export class RelationWorkspace {
   get playingGesture(): boolean { return this.#connection?.moved ?? false }
 
   hostClaim(sample: PointerSample): PointerClaim | null {
+    const connection = this.#connectionClaim('host', sample)
+    if (connection !== null) return connection
+    const copy = this.#hostCopy.claim(sample)
+    if (copy !== null) return copy
     const transaction = this.#transaction.hostClaim?.(sample) ?? null
-    if (transaction === null) return this.#connectionClaim('host', sample)
+    if (transaction === null) return null
     return {
       ...transaction,
       move: (next) => { transaction.move(next); this.#host.changed() },
@@ -573,7 +610,7 @@ export class RelationWorkspace {
   }
 
   hostOverlays(): readonly Shape[] {
-    return [...this.#transaction.previewShapes(), ...this.#connectionShapes('host')]
+    return [...this.#transaction.previewShapes(), ...this.#connectionShapes('host'), ...this.#hostCopy.sourceOverlay()]
   }
 
   frame(_now: number): void {
@@ -587,7 +624,7 @@ export class RelationWorkspace {
       const body = this.#engine.bodies.get(id)
       if (body !== undefined) shapes.push({ kind: 'circle', center: body.pos, r: body.discR * this.#engine.scale + 1, fill: null, stroke: theme.interaction.pin, width: 1.5, insetColor: null, glow: null })
     }
-    shapes.push(...this.#construct.overlay(), ...this.#connectionShapes('draft'))
+    shapes.push(...this.#construct.overlay(), ...this.#connectionShapes('draft'), ...this.#hostCopy.destinationOverlay())
     this.#surface.render({ layers: [{ shapes }] }, this.#view)
     this.#renderGesture()
   }
@@ -643,6 +680,7 @@ export class RelationWorkspace {
     this.#selectedPort = null
     this.#spawn.dispose()
     this.#construct.dispose()
+    this.#hostCopy.dispose()
     this.#interaction.dispose()
     this.#root.remove()
     this.#gesture.remove()
@@ -667,6 +705,29 @@ export class RelationWorkspace {
       this.#reconcile()
     } catch (error) {
       this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
+    }
+  }
+
+  #commitCopy(plan: CopyPlan): void {
+    if (plan.kind !== 'workspace') throw new Error('relation workspace copy produced a non-workspace plan')
+    this.#draft = applyRelationWorkspaceCopy(this.#draft, plan)
+    const node = plan.introduced[0]
+    this.#reconcile(node === undefined ? undefined : { node, at: plan.at })
+  }
+
+  #workspaceDestination(client: Vec2): CopyDestination | null {
+    if (document.elementFromPoint(client.x, client.y) !== this.#canvas) return null
+    const rect = this.#canvas.getBoundingClientRect()
+    const screen = {
+      x: (client.x - rect.left) * this.#canvas.width / Math.max(1, rect.width),
+      y: (client.y - rect.top) * this.#canvas.height / Math.max(1, rect.height),
+    }
+    const world = {
+      x: (screen.x - this.#view.offsetX) / this.#view.scale,
+      y: (screen.y - this.#view.offsetY) / this.#view.scale,
+    }
+    return {
+      kind: 'workspace', draft: this.#diagram(), region: this.#regionAt(world), at: world,
     }
   }
 

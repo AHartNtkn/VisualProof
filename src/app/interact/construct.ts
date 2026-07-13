@@ -21,7 +21,9 @@ import {
 import { buildSelection, type Hit } from '../hittest'
 import { ConnectionDragController } from './connection'
 import { FissionDragController, type FissionRequest } from './fission'
+import { CopyDragController, copyDestinationPreview } from './copy'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
+import type { CopyDestination, CopyPlan } from '../copy-planner'
 
 type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
 
@@ -44,6 +46,10 @@ export type ConstructOptions = {
   readonly clearProblem: (problemId: string) => void
   readonly openSpawn: (sample: PointerSample, region: RegionId) => void
   readonly theme: () => Theme
+  readonly copy?: {
+    readonly destination: (sample: PointerSample) => CopyDestination | null
+    readonly commit: (plan: CopyPlan, sample: PointerSample) => void
+  }
 }
 
 function sameHit(a: Hit, b: Hit): boolean {
@@ -96,6 +102,7 @@ export class ConstructController {
   readonly #options: ConstructOptions
   readonly #connection: ConnectionDragController
   readonly #fission: FissionDragController
+  readonly #copy: CopyDragController | null
   #preview: Preview | null = null
   #prompt: HTMLDivElement | null = null
 
@@ -124,6 +131,20 @@ export class ConstructController {
       commit: options.commitFission,
       refuse: (text, pointer) => options.refuse(text, pointer),
     })
+    this.#copy = options.copy === undefined ? null : new CopyDragController({
+      active: options.active,
+      sourceDiagram: options.diagram,
+      sourceSelection: options.selection,
+      sourceEngine: options.engine,
+      viewScale: options.viewScale,
+      destination: options.copy.destination,
+      commit: options.copy.commit,
+      refuse: (text, sample) => options.refuse(text, sample.client),
+      theme: options.theme,
+      destinationPreview: (destination) => copyDestinationPreview(
+        options.engine(), destination.region, options.theme(),
+      ),
+    })
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -135,6 +156,8 @@ export class ConstructController {
     if (connection !== null) return connection
     const fission = this.#fission.claim(sample)
     if (fission !== null) return fission
+    const copy = this.#copy?.claim(sample) ?? null
+    if (copy !== null) return copy
 
     if (sample.hit?.kind === 'node' && this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) {
       return this.#placementClaim(sample.hit.id)
@@ -167,6 +190,7 @@ export class ConstructController {
     }
     if (sample.key === 'Escape') {
       const cancelledFission = this.#fission.cancel()
+      this.#copy?.cancel()
       if (this.#prompt !== null) {
         this.#closePrompt()
         return true
@@ -177,7 +201,7 @@ export class ConstructController {
   }
 
   overlay(): readonly Shape[] {
-    const connection = [...this.#connection.overlay(), ...this.#fission.overlay()]
+    const connection = [...this.#connection.overlay(), ...this.#fission.overlay(), ...(this.#copy?.overlay() ?? [])]
     const preview = this.#preview
     if (preview === null) return connection
     const colors = this.#options.theme().interaction
@@ -196,10 +220,11 @@ export class ConstructController {
     this.#closePrompt()
     this.#connection.cancel()
     this.#fission.dispose()
+    this.#copy?.dispose()
   }
 
   passiveSample(sample: PointerSample | null): void { this.#fission.hover(sample) }
-  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld) }
+  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld); this.#copy?.modifiersChanged(ctrlHeld) }
 
   #slashClaim(start: PointerSample): PointerClaim {
     const preview: Extract<Preview, { kind: 'slash' }> = { kind: 'slash', from: start.world, at: start.world }

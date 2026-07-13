@@ -157,7 +157,11 @@ export class ProofFrontViewport {
       setSelection: (selection) => this.interaction.setSelection(selection),
       context: model.context,
       orientation: () => model.side,
-      apply: (step) => this.motion.run(step, model.prepare(step), performance.now()),
+      apply: (action) => {
+        const step = action.steps[action.steps.length - 1]
+        if (step === undefined) throw new Error('proof action has no kernel step')
+        this.motion.run(step, model.prepareAction(action), performance.now())
+      },
       commitFission: ({ node, path, at }) => {
         const before = model.diagram()
         this.motion.run({ rule: 'fission', node, path }, model.prepare({ rule: 'fission', node, path }), performance.now())
@@ -351,8 +355,8 @@ export class ProofFrontViewport {
       context: this.#model.context,
       orientation: this.side,
       apply: (action) => {
-        const step = action.steps[0]
-        if (step === undefined || action.steps.length !== 1) throw new Error('relation workspace motion requires one kernel step')
+        const step = action.steps[action.steps.length - 1]
+        if (step === undefined) throw new Error('relation workspace action has no kernel step')
         this.motion.run(step, this.#model.prepareAction(action), performance.now())
       },
       cancel: () => {},
@@ -362,6 +366,7 @@ export class ProofFrontViewport {
       canvas: this.canvas,
       engine: () => this.#engine,
       view: () => this.view,
+      selection: () => this.interaction.selection,
       context: this.#model.context,
       theme: this.#model.theme,
       fuel: this.#model.fuel,
@@ -387,8 +392,8 @@ export class ProofFrontViewport {
       context: this.#model.context,
       orientation: this.side,
       apply: (action) => {
-        const step = action.steps[0]
-        if (step === undefined || action.steps.length !== 1) throw new Error('relation workspace motion requires one kernel step')
+        const step = action.steps[action.steps.length - 1]
+        if (step === undefined) throw new Error('relation workspace action has no kernel step')
         this.motion.run(step, this.#model.prepareAction(action), performance.now())
       },
       cancel: () => {},
@@ -402,6 +407,7 @@ export class ProofFrontViewport {
       canvas: this.canvas,
       engine: () => this.#engine,
       view: () => this.view,
+      selection: () => this.interaction.selection,
       context: this.#model.context,
       theme: this.#model.theme,
       fuel: this.#model.fuel,

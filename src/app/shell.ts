@@ -41,6 +41,7 @@ import type { Hit } from './hittest'
 import { hitTest, wireHitTest, buildSelection } from './hittest'
 import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
+import { copyRegionAt } from './interact/copy'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { ProofSpawnController } from './interact/proof-spawn'
 import { ProofMoveController } from './interact/moves'
@@ -891,8 +892,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') {
       const next = applyTrack(proof.track, action)
-      const step = action.steps[0]
-      if (step === undefined || action.steps.length !== 1) throw new Error('shell motion currently requires one kernel step per proof action')
+      const step = action.steps[action.steps.length - 1]
+      if (step === undefined) throw new Error('proof action has no kernel step')
       mainMotion.run(step, () => {
         proof = { kind: 'track', track: next }
         sync()
@@ -927,6 +928,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       canvas,
       engine: () => engine,
       view: () => view,
+      selection: () => interaction.selection,
       context: () => ctx,
       theme: () => theme,
       fuel: () => readCount(fuel.input, 'fuel'),
@@ -963,6 +965,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       canvas,
       engine: () => engine,
       view: () => view,
+      selection: () => interaction.selection,
       context: () => ctx,
       theme: () => theme,
       fuel: () => readCount(fuel.input, 'fuel'),
@@ -1563,6 +1566,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
     },
     theme: () => theme,
+    copy: {
+      destination: (sample) => ({
+        kind: 'edit', diagram: editDiagram,
+        region: copyRegionAt(engine, editDiagram, sample.world), at: sample.world,
+      }),
+      commit: (plan) => {
+        if (plan.kind !== 'edit') throw new Error('Edit copy produced a non-Edit plan')
+        const node = plan.introduced[0]
+        pushEdit(plan.result, node === undefined ? undefined : { node, at: plan.at })
+      },
+    },
   })
   proofMoves = new ProofMoveController({
     host: document.body,
@@ -1574,7 +1588,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     setSelection: (selection) => interaction.setSelection(selection),
     context: () => ctx,
     orientation: () => proofDirection() ?? 'forward',
-    apply: applyProofStep,
+    apply: applyProofAction,
     commitFission: ({ node, path, at }) => {
       const before = currentDiagram()
       applyProofStep({ rule: 'fission', node, path })
