@@ -223,7 +223,7 @@ theorem constId_beta : BetaEta constId idTerm := by
   exact BetaEta.step (OneStep.beta rfl)
 
 theorem validCertificate_accepts : checkCertificate constId idTerm
-    { left := [{ at := [], kind := .beta }], right := [] } = true := by
+    { left := [{ path := [], kind := .beta }], right := [] } = true := by
   rfl
 ```
 
@@ -303,7 +303,7 @@ executable `stepAt`, and these certificate types:
 inductive RedexKind | beta | eta
 inductive PathSegment | fn | arg | body
 structure ReductionStep where
-  at : List PathSegment
+  path : List PathSegment
   kind : RedexKind
 abbrev ReductionPath := List ReductionStep
 structure Certificate where
