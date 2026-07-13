@@ -435,6 +435,14 @@ The package uses Lean 4.30.0 and `Std` only. It introduces no network-fetched de
 
 ## 14. Validation and Completion Evidence
 
+Lean proof development is theorem-driven, not test-driven. A mathematical
+obligation is first stated at its owning module; while developing the proof, the
+statement may temporarily use `sorry` so Lean can validate that the proposition is
+well-formed. The completed task replaces every such admission with a checked proof.
+Initial package setup is validated by compilation, not by manufacturing an import
+failure. Separate Lean test modules must not duplicate propositions already owned
+by named theorems.
+
 The authoritative checks are:
 
 1. `lake build` from repository root.
@@ -442,7 +450,7 @@ The authoritative checks are:
 3. `#print axioms` auditing the public soundness, theory, and matcher theorems.
 4. An explicit allowlist documenting Lean's classical and quotient foundations: `Classical.choice`, `propext`, and `Quot.sound` when they actually occur. No custom axiom is permitted.
 5. Exact set equality between Lean `StepTag` names and TypeScript `ProofStep` discriminants.
-6. Executable examples covering well-formedness rejection, boundary aliasing, scope, every rule family, matcher positive/negative cases, open binders, and bare wires.
+6. Named theorems in their owning modules covering well-formedness rejection, boundary aliasing, scope, every rule family, matcher positive/negative cases, open binders, and bare wires; executable checks are retained only for decidable computation or cross-language integration not already expressed by those theorems.
 7. Differential Lean/TypeScript fixtures for the concrete correspondence boundary.
 8. `npm test` and `npm run typecheck` after integration.
 
@@ -454,7 +462,7 @@ Completion requires a coverage table mapping each of the 25 TypeScript tags to:
 - required shared metatheorems; and
 - validation command.
 
-Passing tests without these theorems is insufficient. A theorem about well-formedness or structural round trips cannot stand in for semantic validity.
+Passing builds or executable checks without these theorems is insufficient. A theorem about well-formedness or structural round trips cannot stand in for semantic validity.
 
 ## 15. Implementation Order
 

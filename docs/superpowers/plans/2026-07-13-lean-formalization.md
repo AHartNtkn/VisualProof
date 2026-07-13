@@ -21,7 +21,9 @@
 - Acknowledge only foundational dependencies actually reported by `#print axioms`; the intended allowlist is `Classical.choice`, `propext`, and `Quot.sound`.
 - Repair or remove any TypeScript path that accepts a state without the selected semantics; do not add compatibility aliases or fallbacks.
 - Preserve rendering, physics, UI, and unrelated user work.
-- Write a failing Lean `example`, executable check, or TypeScript test before each implementation slice.
+- Develop Lean obligations theorem-first: state each named theorem before proving it; a local transient `sorry` may validate the statement, but no `sorry` or other admission may enter a completed task or commit.
+- Validate initial package setup by compilation; do not manufacture a failing import or synthetic RED test.
+- Do not create separate Lean test modules for propositions already expressed by definitions and named theorems. Retain executable checks only for decidable computation, elaboration/API boundaries, or cross-language integration not already proved in Lean.
 
 ## Locked File Map
 
@@ -83,19 +85,6 @@
 - `src/kernel/proof/store.ts`: enforces ordered acyclic relation definitions if the formal audit confirms the current verifier gap.
 - `tests/kernel/proof/store.test.ts`: rejects forward, self, and cyclic relation references.
 
-### Lean compile-time tests
-
-- `VisualProof/Tests/Lambda.lean`
-- `VisualProof/Tests/Diagram.lean`
-- `VisualProof/Tests/Semantics.lean`
-- `VisualProof/Tests/Elaborate.lean`
-- `VisualProof/Tests/Theory.lean`
-- `VisualProof/Tests/StructuralRules.lean`
-- `VisualProof/Tests/EquationalRules.lean`
-- `VisualProof/Tests/Comprehension.lean`
-- `VisualProof/Tests/Proof.lean`
-- `VisualProof/Tests/Matcher.lean`
-
 ---
 
 ### Task 1: Root package and intrinsically scoped lambda syntax
@@ -107,13 +96,12 @@
 - Create: `VisualProof/Lambda/Syntax.lean`
 - Create: `VisualProof/Lambda/Rename.lean`
 - Create: `VisualProof/Lambda/Substitute.lean`
-- Create: `VisualProof/Tests/Lambda.lean`
 
 **Interfaces:**
 - Consumes: no prior Lean code.
 - Produces: `Lambda.Term`, `Term.mapFree`, `Term.renameBound`, `Term.substBound`, `Term.bindFree`, `Term.lift`, and substitution/renaming laws used by every later task.
 
-- [ ] **Step 1: Pin the toolchain and create a failing import test**
+- [ ] **Step 1: Pin the toolchain and create the package scaffold**
 
 Create `lean-toolchain` with exactly:
 
@@ -132,24 +120,7 @@ defaultTargets = ["VisualProof"]
 name = "VisualProof"
 ```
 
-Create `VisualProof/Tests/Lambda.lean` importing `VisualProof.Lambda.Syntax` and asserting the intended constructor types:
-
-```lean
-import VisualProof.Lambda.Syntax
-
-open VisualProof Lambda
-
-example : Term 0 (Fin 1) := Term.port 0
-example : Term 0 Empty := Term.lam (Term.bvar 0)
-```
-
-- [ ] **Step 2: Run the test to verify it fails before the module exists**
-
-Run: `lake env lean VisualProof/Tests/Lambda.lean`
-
-Expected: FAIL because `VisualProof.Lambda.Syntax` does not exist.
-
-- [ ] **Step 3: Implement the intrinsic term grammar**
+- [ ] **Step 2: Implement the intrinsic term grammar**
 
 Create `VisualProof/Lambda/Syntax.lean` under namespace `VisualProof.Lambda` with this public type:
 
@@ -166,7 +137,7 @@ abbrev ClosedTerm := Term 0 Empty
 
 Define `mapFree`, `renameBound`, and `freeSupport` by structural recursion. `freeSupport` takes `[DecidableEq α]` and preserves first occurrence.
 
-- [ ] **Step 4: Implement capture-avoiding renaming and substitution**
+- [ ] **Step 3: Implement capture-avoiding renaming and substitution**
 
 Create `Rename.lean` and `Substitute.lean` with these exact public signatures:
 
@@ -188,20 +159,23 @@ theorem Term.bindFree_assoc
   (t.bindFree f).bindFree g = t.bindFree (fun x => (f x).bindFree g)
 ```
 
-Prove each theorem by induction on `t`; the lambda case uses the lifted substitution induced by `Fin.cases`.
+State each theorem at its owning module before proving it. A transient local `sorry`
+may be used only to confirm that Lean accepts the statement. Prove each theorem by
+induction on `t`; the lambda case uses the lifted substitution induced by
+`Fin.cases`. Remove every admission before verification or commit.
 
-- [ ] **Step 5: Make the public import compile**
+- [ ] **Step 4: Make the public import compile**
 
-Create `VisualProof.lean` importing the three lambda modules and `VisualProof.Tests.Lambda`. Run:
+Create `VisualProof.lean` importing the three lambda modules. Run:
 
 `lake build`
 
 Expected: PASS with target `VisualProof` built.
 
-- [ ] **Step 6: Commit the lambda syntax slice**
+- [ ] **Step 5: Commit the lambda syntax slice**
 
 ```bash
-git add lean-toolchain lakefile.toml VisualProof.lean VisualProof/Lambda VisualProof/Tests/Lambda.lean
+git add lean-toolchain lakefile.toml VisualProof.lean VisualProof/Lambda
 git commit -m "feat(formal): add intrinsically scoped lambda syntax"
 ```
 
@@ -211,38 +185,34 @@ git commit -m "feat(formal): add intrinsically scoped lambda syntax"
 - Create: `VisualProof/Lambda/Reduction.lean`
 - Create: `VisualProof/Lambda/Quotient.lean`
 - Create: `VisualProof/Lambda/Certificate.lean`
-- Modify: `VisualProof/Tests/Lambda.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: `Term`, lifting, renaming, and substitution from Task 1.
 - Produces: `OneStep`, `BetaEta`, `Individual`, `LambdaModel`, `canonicalModel`, `ReductionPath`, `checkCertificate`, `checkCertificate_sound`, confluence, and `rigidHead_args`.
 
-- [ ] **Step 1: Add failing beta, eta, and forged-certificate examples**
+- [ ] **Step 1: State the beta-eta and certificate obligations**
 
-Add examples to `VisualProof/Tests/Lambda.lean` using:
+State named theorems in `Reduction.lean` and `Certificate.lean` before proving
+them. The certificate module includes named computation theorems using:
 
 ```lean
 def idTerm : ClosedTerm := Term.lam (Term.bvar 0)
 def constId : ClosedTerm := Term.app (Term.lam (Term.bvar 0)) idTerm
 
-example : BetaEta constId idTerm := by
+theorem constId_beta : BetaEta constId idTerm := by
   exact BetaEta.step (OneStep.beta rfl)
 
-example : checkCertificate constId idTerm
+theorem validCertificate_accepts : checkCertificate constId idTerm
     { left := [{ at := [], kind := .beta }], right := [] } = true := by
   rfl
 ```
 
-Also add a certificate whose first path segment is invalid and assert the checker returns `false`.
+Also state a named theorem that a certificate whose first path segment is invalid
+returns `false`. A transient `sorry` may be used to validate these statements, but
+must be removed before the task build and commit.
 
-- [ ] **Step 2: Run the focused Lean test and observe missing definitions**
-
-Run: `lake env lean VisualProof/Tests/Lambda.lean`
-
-Expected: FAIL on unknown `BetaEta` and `checkCertificate`.
-
-- [ ] **Step 3: Define reduction and equivalence independently of search**
+- [ ] **Step 2: Define reduction and equivalence independently of search**
 
 In `Reduction.lean`, define compatible beta and eta contraction:
 
@@ -264,7 +234,7 @@ inductive BetaEta : Term n α → Term n α → Prop
 
 Prove `BetaEta` is an equivalence and a congruence under `lam`, `app`, renaming, and substitution. Define parallel reduction and prove the diamond property; derive Church-Rosser for `BetaEta`.
 
-- [ ] **Step 4: Prove the rigid-head theorem required by head stripping**
+- [ ] **Step 3: Prove the rigid-head theorem required by head stripping**
 
 Define `Head`, `HeadSpine`, `headSpine`, and prefix closure. Prove:
 
@@ -283,7 +253,7 @@ theorem rigidHead_args
 
 The proof must use Church-Rosser and preservation of a rigid head under reduction. Do not introduce injectivity as an axiom.
 
-- [ ] **Step 5: Build the quotient individual domain and canonical model**
+- [ ] **Step 4: Build the quotient individual domain and canonical model**
 
 In `Quotient.lean`, define:
 
@@ -305,7 +275,7 @@ def canonicalModel : LambdaModel
 
 Implement `canonicalModel.eval` by finite quotient induction over the environment, substituting closed representatives and taking the quotient. Prove representative independence from substitution congruence.
 
-- [ ] **Step 6: Implement and prove certificate checking**
+- [ ] **Step 5: Implement and prove certificate checking**
 
 In `Certificate.lean`, define path segments matching the TypeScript reducer,
 executable `stepAt`, and these certificate types:
@@ -330,14 +300,14 @@ theorem checkCertificate_sound :
 
 Prove path soundness by induction on the path and certificate soundness through the common endpoint.
 
-- [ ] **Step 7: Run and commit**
+- [ ] **Step 6: Run and commit**
 
 Run: `lake build`
 
-Expected: PASS, including the beta, eta, rigid-head, valid-certificate, and forged-certificate examples.
+Expected: PASS, including the beta, eta, rigid-head, valid-certificate, and forged-certificate theorems.
 
 ```bash
-git add VisualProof.lean VisualProof/Lambda VisualProof/Tests/Lambda.lean
+git add VisualProof.lean VisualProof/Lambda
 git commit -m "feat(formal): define beta-eta quotient and certificates"
 ```
 
@@ -348,26 +318,22 @@ git commit -m "feat(formal): define beta-eta quotient and certificates"
 - Create: `VisualProof/Diagram/Core.lean`
 - Create: `VisualProof/Diagram/Boundary.lean`
 - Create: `VisualProof/Diagram/Rename.lean`
-- Create: `VisualProof/Tests/Diagram.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: intrinsic `Term`.
 - Produces: `RelVar`, `NamedRel`, `Region`, `Item`, `OpenDiagram`, `BoundaryAssignment`, wire/relation renaming, and capture-avoiding boundary substitution.
 
-- [ ] **Step 1: Add compile-time scope and arity examples**
+- [ ] **Step 1: Define the intrinsic syntax and state its scope/arity obligations**
 
-Create `VisualProof/Tests/Diagram.lean` with positive examples for a cut, a binary bubble atom, an ancestor wire used under a cut, a bare local wire, and an aliased binary boundary. Use `#check` only for intended public constructors and `example` values for complete diagrams.
+In the owning modules, state named construction or well-formedness theorems for a
+cut, a binary bubble atom, an ancestor wire used under a cut, a bare local wire,
+and an aliased binary boundary. Public-constructor `#check`s are permitted only
+when they validate elaboration/API shape not represented by a proposition.
 
 The aliased boundary example must have `externalClasses := 1` and `boundary := fun _ => 0`.
 
-- [ ] **Step 2: Run the test and verify missing imports fail**
-
-Run: `lake env lean VisualProof/Tests/Diagram.lean`
-
-Expected: FAIL because `VisualProof.Diagram.Core` is missing.
-
-- [ ] **Step 3: Implement typed relation contexts and intrinsic regions**
+- [ ] **Step 2: Implement typed relation contexts and intrinsic regions**
 
 In `Signature.lean` and `Core.lean`, expose:
 
@@ -397,7 +363,7 @@ end
 
 Keep constructors total; do not add raw binder IDs to the core.
 
-- [ ] **Step 4: Implement ordered boundaries and alias consistency**
+- [ ] **Step 3: Implement ordered boundaries and alias consistency**
 
 In `Boundary.lean`, define:
 
@@ -416,18 +382,18 @@ structure BoundaryAssignment (d : OpenDiagram signature arity) (D : Type) where
 
 Prove an assignment exists exactly when aliased positions carry equal arguments.
 
-- [ ] **Step 5: Implement renaming and substitution**
+- [ ] **Step 4: Implement renaming and substitution**
 
 In `Diagram/Rename.lean`, define `Region.renameWires`, `Region.renameRelations`, `OpenDiagram.substituteBoundary`, and identity/composition laws. Boundary substitution must use `BoundaryAssignment.classes`; it may not infer aliasing from a list position.
 
-- [ ] **Step 6: Build and commit**
+- [ ] **Step 5: Build and commit**
 
 Run: `lake build`
 
-Expected: PASS for all intrinsic scope, arity, bare-wire, ancestor-wire, and boundary-alias examples.
+Expected: PASS for all intrinsic scope, arity, bare-wire, ancestor-wire, and boundary-alias theorems.
 
 ```bash
-git add VisualProof.lean VisualProof/Diagram VisualProof/Theory/Signature.lean VisualProof/Tests/Diagram.lean
+git add VisualProof.lean VisualProof/Diagram VisualProof/Theory/Signature.lean
 git commit -m "feat(formal): add intrinsically scoped diagrams"
 ```
 
@@ -437,16 +403,15 @@ git commit -m "feat(formal): add intrinsically scoped diagrams"
 - Create: `VisualProof/Diagram/Semantics.lean`
 - Create: `VisualProof/Diagram/Context.lean`
 - Create: `VisualProof/Diagram/Isomorphism.lean`
-- Create: `VisualProof/Tests/Semantics.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: `LambdaModel`, intrinsic diagrams, and boundaries.
 - Produces: `Relation`, `RelEnv`, `NamedEnv`, `denoteRegion`, `denoteOpen`, `DiagramContext`, `context_mono`, `context_anti`, `Core.Isomorphic`, and `iso_denotation`.
 
-- [ ] **Step 1: Write semantic examples before the interpreter**
+- [ ] **Step 1: State the semantic characterization theorems**
 
-Create `VisualProof/Tests/Semantics.lean` with examples showing:
+In `Semantics.lean`, state named theorems showing:
 
 - blank region denotes `True`;
 - two items denote conjunction;
@@ -456,13 +421,10 @@ Create `VisualProof/Tests/Semantics.lean` with examples showing:
 - an aliased boundary rejects unequal arguments; and
 - double cut is equivalent under classical logic.
 
-- [ ] **Step 2: Verify the semantic examples fail**
+The statements may temporarily use `sorry` while the interpreter interface is
+formed; remove every admission before the task build and commit.
 
-Run: `lake env lean VisualProof/Tests/Semantics.lean`
-
-Expected: FAIL because `denoteRegion` and `denoteOpen` are undefined.
-
-- [ ] **Step 3: Define the only semantic interpreter**
+- [ ] **Step 2: Define the only semantic interpreter**
 
 In `Semantics.lean`, define:
 
@@ -491,7 +453,7 @@ def denoteOpen (model : LambdaModel) (named : NamedEnv model.Carrier signature)
 
 `denoteRegion` existentially chooses local-wire values and conjoins `items`. `cut` is negation; `bubble` existentially chooses a relation; an equation compares model evaluation to the output wire.
 
-- [ ] **Step 4: Prove context polarity once**
+- [ ] **Step 3: Prove context polarity once**
 
 In `Context.lean`, define a typed single-hole context whose indices record the
 outer and hole scopes separately:
@@ -526,18 +488,18 @@ theorem context_anti
 
 Prove both simultaneously by induction on the context path; only the cut constructor swaps implication direction.
 
-- [ ] **Step 5: Prove permutation and alpha invariance**
+- [ ] **Step 4: Prove permutation and alpha invariance**
 
 In `Isomorphism.lean`, define isomorphism from bijections on local wires plus permutations of item lists and recursively compatible child isomorphisms. Prove `iso_denotation` by induction, using existential change-of-variables and conjunction permutation.
 
-- [ ] **Step 6: Build and commit**
+- [ ] **Step 5: Build and commit**
 
 Run: `lake build`
 
-Expected: PASS for all semantic examples and context/isomorphism theorems.
+Expected: PASS for all semantic characterization and context/isomorphism theorems.
 
 ```bash
-git add VisualProof.lean VisualProof/Diagram VisualProof/Tests/Semantics.lean
+git add VisualProof.lean VisualProof/Diagram
 git commit -m "feat(formal): define diagram semantics and polarity"
 ```
 
@@ -547,24 +509,22 @@ git commit -m "feat(formal): define diagram semantics and polarity"
 - Create: `VisualProof/Diagram/Concrete.lean`
 - Create: `VisualProof/Diagram/Elaborate.lean`
 - Create: `VisualProof/Diagram/Subgraph.lean`
-- Create: `VisualProof/Tests/Elaborate.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: intrinsic diagrams, renaming, boundary substitution, semantics, and isomorphism.
 - Produces: `ConcreteDiagram`, `ConcreteDiagram.WellFormed`, `ConcreteDiagram.elaborate`, `ConcreteDiagram.denote`, proof irrelevance, concrete isomorphism preservation, `Selection`, `extract`, `remove`, `splice`, and `denote_splice`.
 
-- [ ] **Step 1: Write adversarial well-formedness and elaboration examples**
+- [ ] **Step 1: State adversarial well-formedness and elaboration theorems**
 
-Add fixtures for a valid nested bubble/cut graph and invalid graphs covering a second sheet, parent cycle, missing binder, binder escape, arity mismatch, missing endpoint port, duplicate port incidence, and nonenclosing wire scope. Assert the checker accepts only the valid graph. Assert two identifier permutations elaborate to isomorphic cores.
+In `Concrete.lean` and `Elaborate.lean`, state named acceptance/rejection theorems
+for a valid nested bubble/cut graph and invalid graphs covering a second sheet,
+parent cycle, missing binder, binder escape, arity mismatch, missing endpoint port,
+duplicate port incidence, and nonenclosing wire scope. State identifier-permutation
+invariance as a named theorem. These statements precede their proofs; transient
+admissions must be removed before build and commit.
 
-- [ ] **Step 2: Run the elaboration tests and verify failure**
-
-Run: `lake env lean VisualProof/Tests/Elaborate.lean`
-
-Expected: FAIL because the concrete graph API is absent.
-
-- [ ] **Step 3: Implement total finite graph data**
+- [ ] **Step 2: Implement total finite graph data**
 
 In `Concrete.lean`, define:
 
@@ -619,7 +579,7 @@ structure OpenConcreteDiagram.WellFormed
     (d.diagram.wires wire).scope = d.diagram.root
 ```
 
-- [ ] **Step 4: Implement checked elaboration**
+- [ ] **Step 3: Implement checked elaboration**
 
 In `Elaborate.lean`, traverse the proved region tree. At each region, enumerate wires whose scope is that region, extend the lexical wire environment, turn term free positions into their incident wire variables, and turn atom binders into `RelVar` witnesses.
 
@@ -643,7 +603,7 @@ theorem elaborate_proof_irrelevant
 
 Concrete denotation must be this definition, not a second interpreter.
 
-- [ ] **Step 5: Implement selection, extraction, and splicing**
+- [ ] **Step 4: Implement selection, extraction, and splicing**
 
 In `Subgraph.lean`, define selections by finite sets of top-level child regions, nodes, and scoped wires. `extract` returns an `OpenDiagram`, ordered attachment classes, and open relation-binder stubs. `splice` validates enclosure and binder maps before extending the host.
 
@@ -660,14 +620,14 @@ theorem remove_splice_inverse :
     host
 ```
 
-- [ ] **Step 6: Build and commit**
+- [ ] **Step 5: Build and commit**
 
 Run: `lake build`
 
 Expected: PASS for the complete well-formedness rejection matrix, identifier permutation, and splice laws.
 
 ```bash
-git add VisualProof.lean VisualProof/Diagram VisualProof/Tests/Elaborate.lean
+git add VisualProof.lean VisualProof/Diagram
 git commit -m "feat(formal): elaborate finite graphs into semantics"
 ```
 
@@ -676,24 +636,20 @@ git commit -m "feat(formal): elaborate finite graphs into semantics"
 **Files:**
 - Create: `VisualProof/Theory/Definition.lean`
 - Create: `VisualProof/Theory/Semantics.lean`
-- Create: `VisualProof/Tests/Theory.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: `OpenDiagram`, `denoteOpen`, and named signatures.
 - Produces: `Definition`, `VerifiedDefinitions`, `verifyDefinitions`, `interpretDefinitions`, `definition_equation`, and typed lookup for fold/unfold.
 
-- [ ] **Step 1: Add ordered-DAG acceptance and rejection examples**
+- [ ] **Step 1: State ordered-DAG acceptance and rejection theorems**
 
-Write compile-time tests accepting an empty definition, then a definition referring to the earlier entry. Add executable verifier examples rejecting an unknown reference, arity mismatch, forward reference, self-reference, and a two-definition cycle.
+State named theorems accepting an empty definition and a definition referring to an
+earlier entry, and rejecting an unknown reference, arity mismatch, forward
+reference, self-reference, and a two-definition cycle. Locate each theorem beside
+the verifier or semantic definition it characterizes.
 
-- [ ] **Step 2: Verify the theory tests fail before implementation**
-
-Run: `lake env lean VisualProof/Tests/Theory.lean`
-
-Expected: FAIL on unknown `verifyDefinitions`.
-
-- [ ] **Step 3: Define ordered definitions and verification**
+- [ ] **Step 2: Define ordered definitions and verification**
 
 Expose:
 
@@ -729,7 +685,7 @@ def verifyDefinitions : RawDefinitions → Except DefinitionError SomeVerifiedDe
 
 Verification processes definitions in order and resolves every named index against the current prefix. Because later entries are unavailable to the body type, self and cyclic references are unrepresentable after verification.
 
-- [ ] **Step 4: Define semantics by recursion over the DAG**
+- [ ] **Step 3: Define semantics by recursion over the DAG**
 
 Implement:
 
@@ -740,14 +696,14 @@ def interpretDefinitions {signature : List Nat}
 
 For each appended definition, its relation is `denoteOpen` under the already interpreted prefix. Prove `definition_equation` stating lookup of the new name equals its body's denotation.
 
-- [ ] **Step 5: Build and commit**
+- [ ] **Step 4: Build and commit**
 
 Run: `lake build`
 
 Expected: PASS for ordered definitions and all rejection examples.
 
 ```bash
-git add VisualProof.lean VisualProof/Theory VisualProof/Tests/Theory.lean
+git add VisualProof.lean VisualProof/Theory
 git commit -m "feat(formal): define acyclic relation theories"
 ```
 
@@ -756,14 +712,13 @@ git commit -m "feat(formal): define acyclic relation theories"
 **Files:**
 - Create: `VisualProof/Rule/Step.lean`
 - Create: `VisualProof/Rule/Structural.lean`
-- Create: `VisualProof/Tests/StructuralRules.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: concrete subgraph algebra, context polarity, and theory lookups.
 - Produces: `Orientation`, `StepTag`, structural step payloads, typed `StepError`, structural appliers, well-formedness preservation, and per-rule semantic theorems.
 
-- [ ] **Step 1: Lock the 25-tag enumeration and write structural failures**
+- [ ] **Step 1: Lock the 25-tag enumeration and state structural obligations**
 
 In `Step.lean`, declare the canonical tag enumeration up front:
 
@@ -778,15 +733,12 @@ inductive StepTag
   deriving DecidableEq, Repr
 ```
 
-Create structural tests for successful and refused polarity cases, incomparable wire scopes, binder escape during iteration, unjustified deiteration, dirty double-cut annulus, and nonvacuous bubble elimination.
+State named success/refusal theorems for polarity cases, incomparable wire scopes,
+binder escape during iteration, unjustified deiteration, dirty double-cut annulus,
+and nonvacuous bubble elimination. The semantic theorem statements precede the
+applier proofs and may be transiently admitted only during local development.
 
-- [ ] **Step 2: Run the structural tests and observe failure**
-
-Run: `lake env lean VisualProof/Tests/StructuralRules.lean`
-
-Expected: FAIL because structural appliers are missing.
-
-- [ ] **Step 3: Implement structural payloads and appliers**
+- [ ] **Step 2: Implement structural payloads and appliers**
 
 Define the `Step` sum with one payload per `StepTag`, preserving the TypeScript fields while replacing raw strings with finite indices. Implement:
 
@@ -809,7 +761,7 @@ Each function consumes and returns `CheckedDiagram signature`, using
 `Except StepError (CheckedDiagram signature)`. Fresh IDs extend finite
 vectors; they are not semantic inputs.
 
-- [ ] **Step 4: Prove structural soundness from shared semantic lemmas**
+- [ ] **Step 3: Prove structural soundness from shared semantic lemmas**
 
 Prove one theorem per tag with successful application as its premise. Factor the proofs through:
 
@@ -825,14 +777,14 @@ theorem vacuousRelation_equiv
 
 Use `context_mono` or `context_anti` for every polarity gate. `deiteration` must consume an exact occurrence witness, not a Boolean match result without proof.
 
-- [ ] **Step 5: Build and commit**
+- [ ] **Step 4: Build and commit**
 
 Run: `lake build`
 
-Expected: PASS for every structural success/refusal example and all twelve structural soundness theorems.
+Expected: PASS for every structural success/refusal theorem and all twelve structural soundness theorems.
 
 ```bash
-git add VisualProof.lean VisualProof/Rule/Step.lean VisualProof/Rule/Structural.lean VisualProof/Tests/StructuralRules.lean
+git add VisualProof.lean VisualProof/Rule/Step.lean VisualProof/Rule/Structural.lean
 git commit -m "feat(formal): prove structural rules sound"
 ```
 
@@ -840,7 +792,6 @@ git commit -m "feat(formal): prove structural rules sound"
 
 **Files:**
 - Create: `VisualProof/Rule/Equational.lean`
-- Create: `VisualProof/Tests/EquationalRules.lean`
 - Modify: `VisualProof/Rule/Step.lean`
 - Modify: `VisualProof.lean`
 
@@ -848,17 +799,13 @@ git commit -m "feat(formal): prove structural rules sound"
 - Consumes: beta-eta certificates, rigid-head theorem, subgraph algebra, and concrete semantics.
 - Produces: appliers and semantic theorems for conversion, congruence join, anchored split/contract, head strip, closed introduction, fusion, and fission.
 
-- [ ] **Step 1: Write one positive, inverse, and refusal test per equational family**
+- [ ] **Step 1: State positive, inverse, and refusal theorems per equational family**
 
 Cover forged conversion certificates, mismatched shared free wires, cut-shielded output scopes, open anchored witnesses, moved endpoints outside availability, head mismatch, non-head-normal terms, open closed-term introduction, self fusion, multi-endpoint fusion, and binder-open fission paths.
 
-- [ ] **Step 2: Run tests and verify missing appliers fail**
+Locate these named theorems beside the owning appliers and semantic results.
 
-Run: `lake env lean VisualProof/Tests/EquationalRules.lean`
-
-Expected: FAIL on unknown equational appliers.
-
-- [ ] **Step 3: Implement executable equational appliers**
+- [ ] **Step 2: Implement executable equational appliers**
 
 Implement:
 
@@ -875,7 +822,7 @@ def applyFission
 
 Conversion accepts only `checkCertificate = true`. Head strip calls a decidable head-spine checker whose output carries the premises required by `rigidHead_args`. Fusion and fission use capture-avoiding term substitution from Task 1.
 
-- [ ] **Step 4: Prove equational soundness**
+- [ ] **Step 3: Prove equational soundness**
 
 Expose and prove:
 
@@ -892,16 +839,16 @@ theorem fission_equiv
 
 `headStrip_entails` must derive argument equations through `rigidHead_args`; if its exact executable gate does not supply the theorem premises, stop and tighten the gate rather than assuming injectivity.
 
-- [ ] **Step 5: Run round-trip tests as secondary evidence**
+- [ ] **Step 4: Build the complete equational theory**
 
 Run: `lake build`
 
-Expected: PASS. Confirm conversion round trips, anchored split/contract, and fusion/fission examples, while retaining the semantic theorems as the authority.
+Expected: PASS, including conversion, anchored split/contract, fusion/fission, and all semantic soundness theorems.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add VisualProof.lean VisualProof/Rule VisualProof/Tests/EquationalRules.lean
+git add VisualProof.lean VisualProof/Rule
 git commit -m "feat(formal): prove equational rules sound"
 ```
 
@@ -914,8 +861,6 @@ git commit -m "feat(formal): prove equational rules sound"
 - Create: `VisualProof/Proof/Replay.lean`
 - Create: `VisualProof/Proof/Theorem.lean`
 - Create: `VisualProof/Proof/Theory.lean`
-- Create: `VisualProof/Tests/Comprehension.lean`
-- Create: `VisualProof/Tests/Proof.lean`
 - Modify: `VisualProof/Rule/Step.lean`
 - Modify: `VisualProof.lean`
 
@@ -923,21 +868,14 @@ git commit -m "feat(formal): prove equational rules sound"
 - Consumes: all prior semantic, theory, subgraph, and rule theorems.
 - Produces: comprehension/definition/theorem appliers; `applyStep`; `applyStep_sound`; replay, theorem, and verified-theory soundness.
 
-- [ ] **Step 1: Add adversarial comprehension and theorem tests**
+- [ ] **Step 1: State adversarial comprehension and theorem obligations**
 
 Cover positive abstraction, negative instantiation, backward gate reversal, zero occurrences, diagonal arguments `R(x,x)`, parameter sharing, open binder ancestry, overlapping abstraction occurrences, mismatched pinned boundaries, relation fold/unfold, boundary destruction during theorem replay, and citation at both polarities.
 
-- [ ] **Step 2: Run focused tests and observe missing modules**
+State named theorems for these cases in their owning comprehension, named-rule,
+replay, and theorem modules before implementing their proofs.
 
-Run:
-
-`lake env lean VisualProof/Tests/Comprehension.lean`
-
-`lake env lean VisualProof/Tests/Proof.lean`
-
-Expected: both FAIL because comprehension and replay APIs are missing.
-
-- [ ] **Step 3: Implement comprehension and diagonal boundaries**
+- [ ] **Step 2: Implement comprehension and diagonal boundaries**
 
 Define `diagonalize` as the quotient of boundary positions generated by intrinsic aliases and call-site aliases. Implement `applyComprehensionInstantiate` and `applyComprehensionAbstract` with explicit occurrence proofs, nonoverlap, parameter enclosure, and open-binder ancestry.
 
@@ -951,11 +889,11 @@ theorem diagonalize_denotation
 
 Use full relation quantification in `Prop`; do not restrict comprehension bodies to atomic or first-order patterns.
 
-- [ ] **Step 4: Implement fold, unfold, and theorem citation**
+- [ ] **Step 3: Implement fold, unfold, and theorem citation**
 
 `applyRelUnfold` and `applyRelFold` consume a verified ordered definition and exact occurrence proof. `applyTheorem` consumes a `VerifiedTheorem`, direction, orientation, and pinned-boundary occurrence. Prove all three through `definition_equation`, `denote_splice`, and context polarity.
 
-- [ ] **Step 5: Implement replay and theorem verification**
+- [ ] **Step 4: Implement replay and theorem verification**
 
 Expose:
 
@@ -982,14 +920,14 @@ theorem verifiedTheory_sound
 
 `applyStep_sound` must exhaust all 25 constructors. Boundary survival is checked after each constituent step and represented in `VerifiedTheorem`.
 
-- [ ] **Step 6: Build and commit**
+- [ ] **Step 5: Build and commit**
 
 Run: `lake build`
 
-Expected: PASS for all comprehension, definition, replay, backward, citation, and theory examples. A Lean exhaustiveness error must occur if a temporary 26th tag is injected without a soundness branch; revert the injection after observing it.
+Expected: PASS for all comprehension, definition, replay, backward, citation, and theory theorems. The 25-constructor `applyStep_sound` proof must be structurally exhaustive; the correspondence audit independently proves exact tag-set equality.
 
 ```bash
-git add VisualProof.lean VisualProof/Rule VisualProof/Proof VisualProof/Tests/Comprehension.lean VisualProof/Tests/Proof.lean
+git add VisualProof.lean VisualProof/Rule VisualProof/Proof
 git commit -m "feat(formal): prove proof and theory soundness"
 ```
 
@@ -998,24 +936,21 @@ git commit -m "feat(formal): prove proof and theory soundness"
 **Files:**
 - Create: `VisualProof/Matcher/Specification.lean`
 - Create: `VisualProof/Matcher/Exact.lean`
-- Create: `VisualProof/Tests/Matcher.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: well-formed concrete diagrams, finite indices, exact term shape, boundaries, and subgraph selections.
 - Produces: `Occurrence`, `CandidateOccurrence.Equivalent`, `exactMatcher`, `exactMatcher_sound`, `exactMatcher_complete`, and `exactMatcher_decides`.
 
-- [ ] **Step 1: Encode the matcher contract as tests before search code**
+- [ ] **Step 1: State the exact matcher contract before search code**
 
-Add positive and negative examples for root-subset semantics, exact nested regions, boundary order, repeated boundary identity, bare boundaries with supplied attachments, open binder chains, named reference identity, atom binder preservation, wire scope, multi-endpoint wires, and a symmetric sibling graph requiring a nonidentity assignment.
+In `Specification.lean`, state named positive and negative characterization
+theorems for root-subset semantics, exact nested regions, boundary order, repeated
+boundary identity, bare boundaries with supplied attachments, open binder chains,
+named reference identity, atom binder preservation, wire scope, multi-endpoint
+wires, and a symmetric sibling graph requiring a nonidentity assignment.
 
-- [ ] **Step 2: Run matcher tests and verify failure**
-
-Run: `lake env lean VisualProof/Tests/Matcher.lean`
-
-Expected: FAIL because `Occurrence` is undefined.
-
-- [ ] **Step 3: Define the declarative occurrence relation**
+- [ ] **Step 2: Define the declarative occurrence relation**
 
 In `Specification.lean`, define:
 
@@ -1047,7 +982,7 @@ structure Occurrence (pattern : OpenConcreteDiagram) (host : ConcreteDiagram)
 
 Define `CandidateOccurrence.Equivalent` by equal host footprint and boundary attachments so automorphic assignments may deduplicate.
 
-- [ ] **Step 4: Implement exhaustive finite enumeration**
+- [ ] **Step 3: Implement exhaustive finite enumeration**
 
 In `Exact.lean`, enumerate candidate sites, injections for region and node maps, and determined/finite wire maps using `List.ofFn` over `Fin` domains. Filter only by decidable projections of the fields in `Occurrence`. Bare wires receive finite canonical bijections; no heuristic pruning is allowed in the reference algorithm.
 
@@ -1058,7 +993,7 @@ def exactMatcher (pattern host options) :
   List (CandidateOccurrence pattern host)
 ```
 
-- [ ] **Step 5: Prove soundness and completeness**
+- [ ] **Step 4: Prove soundness and completeness**
 
 Prove soundness from filter membership. Prove completeness by showing that the finite enumeration contains the maps from any declarative occurrence, then that filtering retains them. Deduplication concludes with `CandidateOccurrence.Equivalent`.
 
@@ -1077,14 +1012,14 @@ theorem exactMatcher_decides :
   ¬ ∃ witness, Occurrence pattern host options witness
 ```
 
-- [ ] **Step 6: Build and commit**
+- [ ] **Step 5: Build and commit**
 
 Run: `lake build`
 
 Expected: PASS for the complete matcher matrix, including the symmetric nonidentity assignment.
 
 ```bash
-git add VisualProof.lean VisualProof/Matcher VisualProof/Tests/Matcher.lean
+git add VisualProof.lean VisualProof/Matcher
 git commit -m "feat(formal): prove exact matcher complete"
 ```
 
@@ -1092,24 +1027,19 @@ git commit -m "feat(formal): prove exact matcher complete"
 
 **Files:**
 - Create: `VisualProof/Matcher/BetaEta.lean`
-- Modify: `VisualProof/Tests/Matcher.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: exact occurrence specification, exact matcher, and certificate soundness.
 - Produces: `NodeVerdict`, `MatchStatus`, `BetaEtaMatchResult`, `betaEtaMatcher_sound`, and `betaEtaMatcher_complete_of_decided`.
 
-- [ ] **Step 1: Add decided, undecided, and exploration-exhausted examples**
+- [ ] **Step 1: State decided, undecided, and exploration-exhausted theorems**
 
-Test a beta-redex match with a valid certificate, a forged certificate, a pair whose bounded normalizer exhausts, and a search whose explicit exploration budget exhausts before a later occurrence.
+State named theorems for a beta-redex match with a valid certificate, a forged
+certificate, a pair whose bounded normalizer exhausts, and a search whose explicit
+exploration budget exhausts before a later occurrence.
 
-- [ ] **Step 2: Verify missing tri-state API fails**
-
-Run: `lake env lean VisualProof/Tests/Matcher.lean`
-
-Expected: FAIL on unknown `NodeVerdict`.
-
-- [ ] **Step 3: Implement honest result states**
+- [ ] **Step 2: Implement honest result states**
 
 Define:
 
@@ -1165,7 +1095,7 @@ def EveryRelevantConvertiblePairCertified
 
 Every returned node comparison must carry `checkCertificate_sound`; undecided pairs are never silently treated as proof of inequality.
 
-- [ ] **Step 4: Prove unconditional soundness and conditional completeness**
+- [ ] **Step 3: Prove unconditional soundness and conditional completeness**
 
 ```lean
 theorem betaEtaMatcher_sound :
@@ -1181,14 +1111,14 @@ theorem betaEtaMatcher_complete_of_decided
 
 The theorem statement must mention both completion hypotheses visibly.
 
-- [ ] **Step 5: Build and commit**
+- [ ] **Step 4: Build and commit**
 
 Run: `lake build`
 
-Expected: PASS while preserving distinct undecided and exhausted examples.
+Expected: PASS while preserving distinct undecided and exhausted theorems.
 
 ```bash
-git add VisualProof.lean VisualProof/Matcher VisualProof/Tests/Matcher.lean
+git add VisualProof.lean VisualProof/Matcher
 git commit -m "feat(formal): bound beta-eta matcher completeness"
 ```
 
