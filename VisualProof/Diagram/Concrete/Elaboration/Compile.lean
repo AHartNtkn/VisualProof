@@ -1194,6 +1194,39 @@ private theorem elaborate_body_computation
 
 end CheckedOpenDiagram
 
+private theorem checked_asOpen_compileRoot_eq
+    (checked : CheckedDiagram signature) :
+    compileRoot? signature checked.asOpen.val.diagram
+        checked.asOpen.val.exposedWires checked.asOpen.val.hiddenWires =
+      compileRoot? signature checked.val []
+        (exactScopeWires checked.val checked.val.root) := by
+  change compileRoot? signature checked.val [] checked.val.asOpen.hiddenWires =
+    compileRoot? signature checked.val []
+      (exactScopeWires checked.val checked.val.root)
+  rw [ConcreteDiagram.asOpen_hiddenWires]
+
+namespace CheckedDiagram
+
+@[simp] theorem asOpen_elaborate_externalClasses
+    (checked : CheckedDiagram signature) :
+    checked.asOpen.elaborate.externalClasses = 0 := rfl
+
+/-- Empty-boundary open elaboration is exactly the existing closed elaboration. -/
+@[simp] theorem asOpen_elaborate_body
+    (checked : CheckedDiagram signature) :
+    checked.asOpen.elaborate.body = checked.elaborate := by
+  obtain ⟨openBody, hopenKernel, hopenElaborate⟩ :=
+    CheckedOpenDiagram.elaborate_body_computation checked.asOpen
+  obtain ⟨closedBody, hclosedKernel, hclosedElaborate⟩ :=
+    CheckedDiagram.elaborate_computation checked
+  have hbodies : openBody = closedBody := by
+    have hopenKernel' := hopenKernel
+    rw [checked_asOpen_compileRoot_eq checked] at hopenKernel'
+    exact Option.some.inj (hopenKernel'.symm.trans hclosedKernel)
+  exact hopenElaborate.trans (hbodies.trans hclosedElaborate.symm)
+
+end CheckedDiagram
+
 namespace OpenConcreteDiagram
 
 def elaborate (d : OpenConcreteDiagram) (hwf : d.WellFormed signature) :
@@ -1227,6 +1260,16 @@ theorem elaborate_proof_irrelevant (d : ConcreteDiagram)
     (first second : d.WellFormed signature) :
     d.elaborate first = d.elaborate second := by
   rfl
+
+@[simp] theorem asOpen_elaborate_externalClasses (d : ConcreteDiagram)
+    (hwf : d.WellFormed signature) :
+    (d.asOpen.elaborate (d.asOpen_wellFormed hwf)).externalClasses = 0 :=
+  CheckedDiagram.asOpen_elaborate_externalClasses ⟨d, hwf⟩
+
+@[simp] theorem asOpen_elaborate_body (d : ConcreteDiagram)
+    (hwf : d.WellFormed signature) :
+    (d.asOpen.elaborate (d.asOpen_wellFormed hwf)).body = d.elaborate hwf :=
+  CheckedDiagram.asOpen_elaborate_body ⟨d, hwf⟩
 
 private theorem elaborate_computation (d : ConcreteDiagram)
     (hwf : d.WellFormed signature) :

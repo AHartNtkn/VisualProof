@@ -9,6 +9,41 @@ open ConcreteElaboration
 abbrev CheckedOpenDiagram (signature : List Nat) :=
   { d : OpenConcreteDiagram // d.WellFormed signature }
 
+namespace ConcreteDiagram
+
+/-- The derived open view of a closed concrete diagram has no boundary. -/
+def asOpen (d : ConcreteDiagram) : OpenConcreteDiagram where
+  diagram := d
+  boundary := []
+
+@[simp] theorem asOpen_diagram (d : ConcreteDiagram) :
+    d.asOpen.diagram = d := rfl
+
+@[simp] theorem asOpen_boundary (d : ConcreteDiagram) :
+    d.asOpen.boundary = [] := rfl
+
+theorem asOpen_wellFormed (d : ConcreteDiagram)
+    (hwf : d.WellFormed signature) :
+    d.asOpen.WellFormed signature where
+  diagram_well_formed := hwf
+  boundary_is_root_scoped := by
+    intro wire hwire
+    exact False.elim (List.not_mem_nil hwire)
+
+end ConcreteDiagram
+
+namespace CheckedDiagram
+
+/-- A checked closed diagram viewed as a checked open diagram with no boundary. -/
+def asOpen (checked : CheckedDiagram signature) :
+    CheckedOpenDiagram signature :=
+  ⟨checked.val.asOpen, checked.val.asOpen_wellFormed checked.property⟩
+
+@[simp] theorem asOpen_val (checked : CheckedDiagram signature) :
+    checked.asOpen.val = checked.val.asOpen := rfl
+
+end CheckedDiagram
+
 namespace OpenConcreteDiagram
 
 private theorem eraseDups_nodup [BEq alpha] [LawfulBEq alpha]
@@ -174,5 +209,26 @@ theorem rootWires_nodup (d : OpenConcreteDiagram) :
     d.exposedWires_hiddenWires_disjoint⟩
 
 end OpenConcreteDiagram
+
+namespace ConcreteDiagram
+
+@[simp] theorem asOpen_exposedWires (d : ConcreteDiagram) :
+    d.asOpen.exposedWires = [] := rfl
+
+@[simp] theorem asOpen_hiddenWires (d : ConcreteDiagram) :
+    d.asOpen.hiddenWires = exactScopeWires d d.root := by
+  unfold OpenConcreteDiagram.hiddenWires
+  apply List.filter_eq_self.mpr
+  intro wire _
+  change decide (wire ∉ ([] : List (Fin d.wireCount))) = true
+  exact decide_eq_true List.not_mem_nil
+
+@[simp] theorem asOpen_rootWires (d : ConcreteDiagram) :
+    d.asOpen.rootWires = exactScopeWires d d.root := by
+  unfold OpenConcreteDiagram.rootWires
+  rw [asOpen_exposedWires, asOpen_hiddenWires]
+  exact List.nil_append _
+
+end ConcreteDiagram
 
 end VisualProof.Diagram
