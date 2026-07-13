@@ -1139,4 +1139,672 @@ private theorem headSpine_sound {t : Term n α} {spine : HeadSpine n α}
             raw.args) := by
         rw [classifyHead_toTerm]
 
+private def scopeEmbed (h : k ≤ K) :
+    Fin (extendScope n k) → Fin (extendScope n K) :=
+  fun i => ⟨K - k + i.val, by
+    have hi : i.val < n + k := by
+      simpa only [extendScope_eq] using i.isLt
+    simpa only [extendScope_eq] using
+      (show K - k + i.val < n + K by omega)⟩
+
+private theorem scopeEmbed_refl :
+    scopeEmbed (n := n) (k := k) (K := k) (Nat.le_refl k) = id := by
+  funext i
+  apply Fin.ext
+  simp [scopeEmbed]
+
+private theorem scopeEmbed_comp (h₁ : k ≤ K) (h₂ : K ≤ L) :
+    scopeEmbed (n := n) h₂ ∘ scopeEmbed (n := n) h₁ =
+      scopeEmbed (n := n) (Nat.le_trans h₁ h₂) := by
+  funext i
+  apply Fin.ext
+  simp only [Function.comp_apply, scopeEmbed, Fin.val_mk]
+  omega
+
+private def etaProjections (n K : Nat) :
+    (d : Nat) → d ≤ K → List (Term (extendScope n K) α)
+  | 0, _ => []
+  | d + 1, hd =>
+      Term.bvar ⟨d, by
+        rw [extendScope_eq]
+        omega⟩ :: etaProjections n K d (by omega)
+
+private def etaEnvelopeArgs (K : Nat) (s : HeadSpine n α)
+    (h : s.binders ≤ K) : List (Term (extendScope n K) α) :=
+  s.args.map (Term.renameBound (scopeEmbed h)) ++
+    etaProjections n K (K - s.binders) (Nat.sub_le _ _)
+
+private theorem etaProjections_eq_of_d_eq (K : Nat)
+    {d e : Nat} (hd : d ≤ K) (he : e ≤ K) (hde : d = e) :
+    etaProjections (α := α) n K d hd = etaProjections n K e he := by
+  subst e
+  rfl
+
+private theorem etaProjections_fusion_add (L d e : Nat) (hd : d ≤ L) :
+    (etaProjections (α := α) n L d hd).map
+        (Term.renameBound (scopeEmbed (n := n) (Nat.le_add_right L e))) ++
+      etaProjections n (L + e) e (Nat.le_add_left e L) =
+    etaProjections n (L + e) (e + d) (by omega) := by
+  induction d with
+  | zero => simp [etaProjections]
+  | succ d ih =>
+      simp only [etaProjections, List.map_cons, List.cons_append]
+      congr 1
+      · apply congrArg Term.bvar
+        apply Fin.ext
+        change L + e - L + d = e + (d + 1) - 1
+        omega
+      · exact ih (by omega)
+
+private theorem etaProjections_fusion (b L K : Nat)
+    (hb : b ≤ L) (hLK : L ≤ K) :
+    (etaProjections (α := α) n L (L - b) (Nat.sub_le _ _)).map
+        (Term.renameBound (scopeEmbed (n := n) hLK)) ++
+      etaProjections n K (K - L) (Nat.sub_le _ _) =
+    etaProjections n K (K - b) (Nat.sub_le _ _) := by
+  obtain ⟨e, rfl⟩ := Nat.exists_eq_add_of_le hLK
+  have hf := etaProjections_fusion_add (α := α) (n := n)
+    L (L - b) e (Nat.sub_le _ _)
+  simp only [Nat.add_sub_cancel_left]
+  calc
+    _ = etaProjections n (L + e) (e + (L - b)) (by omega) := hf
+    _ = _ := etaProjections_eq_of_d_eq (α := α) (n := n) (L + e)
+      (by omega) (by omega) (by omega)
+
+private theorem etaEnvelopeArgs_fusion (s : HeadSpine n α)
+    (hsL : s.binders ≤ L) (hLK : L ≤ K) :
+    (etaEnvelopeArgs L s hsL).map
+        (Term.renameBound (scopeEmbed (n := n) hLK)) ++
+      etaProjections n K (K - L) (Nat.sub_le _ _) =
+    etaEnvelopeArgs K s (Nat.le_trans hsL hLK) := by
+  simp only [etaEnvelopeArgs, List.map_append, List.map_map,
+    List.append_assoc]
+  rw [etaProjections_fusion (α := α) (n := n) s.binders L K hsL hLK]
+  apply congrArg (fun xs => xs ++ etaProjections n K (K - s.binders)
+    (Nat.sub_le _ _))
+  apply List.map_congr_left
+  intro t ht
+  change (t.renameBound (scopeEmbed hsL)).renameBound (scopeEmbed hLK) = _
+  rw [Term.renameBound_comp]
+  apply congrArg (fun r => t.renameBound r)
+  exact scopeEmbed_comp hsL hLK
+
+private theorem etaEnvelopeArgs_identity (s : HeadSpine n α) :
+    etaEnvelopeArgs s.binders s (Nat.le_refl _) = s.args := by
+  simp only [etaEnvelopeArgs, Nat.sub_self, etaProjections, List.append_nil]
+  rw [scopeEmbed_refl]
+  induction s.args with
+  | nil => rfl
+  | cons t ts ih => simp only [List.map_cons, Term.renameBound_id, ih]
+
+private theorem etaProjections_wrap (K d : Nat) (hd : d ≤ K) :
+    etaProjections (α := α) (n + 1) K d hd =
+      etaProjections n (K + 1) d (by omega) := by
+  induction d with
+  | zero => rfl
+  | succ d ih =>
+      simp only [etaProjections]
+      congr 1
+      exact ih (by omega)
+
+private theorem etaEnvelopeArgs_wrap (s : HeadSpine (n + 1) α)
+    (h : s.binders ≤ K) :
+    etaEnvelopeArgs K s h =
+      etaEnvelopeArgs (K + 1) s.wrap (by
+        change s.binders + 1 ≤ K + 1
+        omega) := by
+  simp only [etaEnvelopeArgs, HeadSpine.wrap]
+  have hd : K + 1 - (s.binders + 1) = K - s.binders := by omega
+  rw [etaProjections_eq_of_d_eq (α := α) (n := n) (K + 1)
+    (d := K + 1 - (s.binders + 1)) (e := K - s.binders)
+    (Nat.sub_le _ _) (by omega) hd]
+  rw [← etaProjections_wrap (α := α) (n := n) K (K - s.binders)
+    (Nat.sub_le _ _)]
+  apply congrArg (fun xs => xs ++
+    etaProjections (α := α) (n + 1) K (K - s.binders) (Nat.sub_le _ _))
+  apply List.map_congr_left
+  intro t ht
+  apply congrArg (fun r => t.renameBound r)
+  funext i
+  apply Fin.ext
+  simp only [scopeEmbed, Fin.val_mk]
+  omega
+
+private theorem Head.Corresponds.refl (head : Head n k α) :
+    head.Corresponds head := by
+  cases head with
+  | bound i => exact .bound i.val i.isLt i.isLt
+  | outer i => exact .outer i
+  | port x => exact .port x
+
+private theorem Head.Corresponds.trans {a : Head n k α}
+    {b : Head n l α} {c : Head n m α}
+    (hab : a.Corresponds b) (hbc : b.Corresponds c) :
+    a.Corresponds c := by
+  cases hab with
+  | bound i hik hil =>
+      cases hbc
+      next hjm => exact .bound i hik hjm
+  | outer i =>
+      cases hbc
+      exact .outer i
+  | port x =>
+      cases hbc
+      exact .port x
+
+private inductive List.Forall₂ (r : α → β → Prop) :
+    List α → List β → Prop where
+  | nil : Forall₂ r [] []
+  | cons : r x y → Forall₂ r xs ys → Forall₂ r (x :: xs) (y :: ys)
+
+private theorem List.Forall₂.reduces_refl (xs : List (Term n α)) :
+    List.Forall₂ Reduces xs xs := by
+  induction xs with
+  | nil => exact .nil
+  | cons x xs ih => exact .cons .refl ih
+
+private theorem List.Forall₂.reduces_trans {xs ys zs : List (Term n α)}
+    (hxy : List.Forall₂ Reduces xs ys)
+    (hyz : List.Forall₂ Reduces ys zs) :
+    List.Forall₂ Reduces xs zs := by
+  induction hxy generalizing zs with
+  | nil => cases hyz; exact .nil
+  | cons hxy hxys ih =>
+      cases hyz with
+      | cons hyz hyzs => exact .cons (hxy.trans hyz) (ih hyzs)
+
+private theorem List.Forall₂.reduces_rename
+    {xs ys : List (Term n α)} (h : List.Forall₂ Reduces xs ys)
+    (ρ : Fin n → Fin m) :
+    List.Forall₂ Reduces (xs.map (Term.renameBound ρ))
+      (ys.map (Term.renameBound ρ)) := by
+  induction h with
+  | nil => exact .nil
+  | cons hxy hxys ih => exact .cons (hxy.renameBound ρ) ih
+
+private theorem List.Forall₂.append
+    {r : α → β → Prop} {xs us : List α} {ys vs : List β}
+    (hxy : List.Forall₂ r xs ys) (huv : List.Forall₂ r us vs) :
+    List.Forall₂ r (xs ++ us) (ys ++ vs) := by
+  induction hxy with
+  | nil => exact huv
+  | cons hxy hxys ih => exact .cons hxy ih
+
+private structure RigidResidualAt
+    (K : Nat) (source target : HeadSpine n α) : Prop where
+  source_le : source.binders ≤ K
+  target_le : target.binders ≤ K
+  head : source.head.Corresponds target.head
+  args : List.Forall₂ Reduces
+    (etaEnvelopeArgs K source source_le)
+    (etaEnvelopeArgs K target target_le)
+
+private theorem RigidResidualAt.refl (s : HeadSpine n α)
+    (h : s.binders ≤ K) : RigidResidualAt K s s where
+  source_le := h
+  target_le := h
+  head := Head.Corresponds.refl s.head
+  args := List.Forall₂.reduces_refl _
+
+private theorem RigidResidualAt.trans
+    {source middle target : HeadSpine n α}
+    (hsm : RigidResidualAt K source middle)
+    (hmt : RigidResidualAt K middle target) :
+    RigidResidualAt K source target := by
+  have hmiddle : hsm.target_le = hmt.source_le := Subsingleton.elim _ _
+  cases hmiddle
+  exact
+    { source_le := hsm.source_le
+      target_le := hmt.target_le
+      head := hsm.head.trans hmt.head
+      args := hsm.args.reduces_trans hmt.args }
+
+private theorem RigidResidualAt.raise
+    {source target : HeadSpine n α}
+    (hst : RigidResidualAt K source target) (hKL : K ≤ L) :
+    RigidResidualAt L source target := by
+  have hargs := (hst.args.reduces_rename (scopeEmbed (n := n) hKL)).append
+    (List.Forall₂.reduces_refl
+      (etaProjections (α := α) n L (L - K) (Nat.sub_le _ _)))
+  rw [etaEnvelopeArgs_fusion source hst.source_le hKL,
+    etaEnvelopeArgs_fusion target hst.target_le hKL] at hargs
+  exact
+    { source_le := Nat.le_trans hst.source_le hKL
+      target_le := Nat.le_trans hst.target_le hKL
+      head := hst.head
+      args := hargs }
+
+private def RawHead.rename (ρ : Fin n → Fin m) :
+    RawHead n α → RawHead m α
+  | .bvar i => .bvar (ρ i)
+  | .port x => .port x
+
+private def RawSpine.rename (ρ : Fin n → Fin m)
+    (s : RawSpine n α) : RawSpine m α where
+  head := s.head.rename ρ
+  args := s.args.map (Term.renameBound ρ)
+
+private theorem rawSpine_renameBound (t : Term n α)
+    (ρ : Fin n → Fin m) :
+    rawSpine (t.renameBound ρ) = (rawSpine t).map (RawSpine.rename ρ) := by
+  induction t with
+  | bvar i => rfl
+  | port x => rfl
+  | lam body ih => rfl
+  | app fn arg ihFn ihArg =>
+      simp only [Term.renameBound, rawSpine, ihFn]
+      cases rawSpine fn with
+      | none => rfl
+      | some s =>
+          cases s
+          simp only [Option.map_some, RawSpine.rename, RawHead.rename,
+            List.map_append, List.map_cons, List.map_nil]
+
+private theorem rawSpine_app_inv {fn arg : Term n α} {s : RawSpine n α}
+    (h : rawSpine (Term.app fn arg) = some s) :
+    ∃ fs, rawSpine fn = some fs ∧
+      s = { head := fs.head, args := fs.args ++ [arg] } := by
+  simp only [rawSpine, Option.map_eq_some_iff] at h
+  obtain ⟨fs, hfs, rfl⟩ := h
+  exact ⟨fs, hfs, rfl⟩
+
+private def RawSpine.toHeadSpine (raw : RawSpine n α) : HeadSpine n α where
+  binders := 0
+  head := classifyHead 0 raw.head
+  args := raw.args
+
+private def RawSpine.pushArg (raw : RawSpine n α)
+    (arg : Term n α) : HeadSpine n α where
+  binders := 0
+  head := classifyHead 0 raw.head
+  args := raw.args ++ [arg]
+
+private theorem headSpine_of_raw {t : Term n α} {raw : RawSpine n α}
+    (hraw : rawSpine t = some raw) :
+    headSpine t = some raw.toHeadSpine := by
+  let s : HeadSpine n α := raw.toHeadSpine
+  have ht : t = s.toTerm := by
+    unfold s RawSpine.toHeadSpine HeadSpine.toTerm
+    simp only [prefixClose]
+    rw [classifyHead_toTerm, rawSpine_sound hraw]
+    rfl
+  rw [ht, headSpine_toTerm]
+
+private theorem headSpine_app_inv {fn arg : Term n α} {s : HeadSpine n α}
+    (h : headSpine (Term.app fn arg) = some s) :
+    ∃ raw : RawSpine n α, rawSpine fn = some raw ∧
+      s = raw.pushArg arg := by
+  unfold headSpine at h
+  simp only [peelPrefix, rawSpine, Option.map_eq_some_iff] at h
+  obtain ⟨raw, ⟨fnRaw, hfn, rfl⟩, rfl⟩ := h
+  exact ⟨fnRaw, hfn, rfl⟩
+
+private theorem headSpine_app_push_raw {fn arg : Term n α}
+    {raw : RawSpine n α} (hraw : rawSpine fn = some raw) :
+    headSpine (Term.app fn arg) = some (raw.pushArg arg) := by
+  let pushed : RawSpine n α :=
+    { head := raw.head, args := raw.args ++ [arg] }
+  have hrawApp : rawSpine (Term.app fn arg) = some pushed := by
+    change (rawSpine fn).map (fun s =>
+      { head := s.head, args := s.args ++ [arg] }) = some pushed
+    rw [hraw]
+    rfl
+  have h := headSpine_of_raw hrawApp
+  change headSpine (Term.app fn arg) = some (raw.pushArg arg) at h
+  exact h
+
+private theorem headSpine_zero_raw {t : Term n α} {s : HeadSpine n α}
+    (ht : headSpine t = some s) (hzero : s.binders = 0) :
+    ∃ raw : RawSpine n α, rawSpine t = some raw ∧ s = raw.toHeadSpine := by
+  cases s with
+  | mk binders head args =>
+      dsimp only at hzero ⊢
+      subst binders
+      let raw : RawSpine n α := { head := head.toRaw, args := args }
+      have hraw : rawSpine t = some raw := by
+        rw [headSpine_sound ht]
+        unfold HeadSpine.toTerm raw
+        simp only [prefixClose]
+        calc
+          rawSpine (applyArgs head.toTerm args) =
+              rawSpine (applyArgs head.toRaw.toTerm args) := by
+            rw [head.toRaw_toTerm]
+          _ = some { head := head.toRaw, args := args } :=
+            rawSpine_applyArgs head.toRaw args
+      refine ⟨raw, hraw, ?_⟩
+      unfold raw RawSpine.toHeadSpine
+      simp only [classifyHead_toRaw]
+
+private theorem rawSpine_lift_inv {fn : Term n α}
+    {lifted : RawSpine (n + 1) α}
+    (h : rawSpine fn.lift = some lifted) :
+    ∃ raw : RawSpine n α, rawSpine fn = some raw ∧
+      lifted = raw.rename Fin.succ := by
+  unfold Term.lift at h
+  rw [rawSpine_renameBound] at h
+  simp only [Option.map_eq_some_iff] at h
+  obtain ⟨raw, hraw, rfl⟩ := h
+  exact ⟨raw, hraw, rfl⟩
+
+private def RawSpine.etaSource (raw : RawSpine n α) : HeadSpine n α :=
+  (raw.rename Fin.succ).pushArg
+    (Term.bvar (free := α) (bound := n + 1) 0) |>.wrap
+
+private theorem classifyHead_rename_succ_wrap (head : RawHead n α) :
+    (classifyHead (n := n + 1) 0 (head.rename Fin.succ)).wrap.Corresponds
+      (classifyHead (n := n) 0 head) := by
+  cases head with
+  | port x => exact .port x
+  | bvar i =>
+      have hsource : classifyHead (n := n + 1) 0
+          ((RawHead.bvar i : RawHead n α).rename Fin.succ) =
+          (.outer (Fin.succ i) : Head (n + 1) 0 α) := by
+        simp only [RawHead.rename, classifyHead]
+        split
+        next h => omega
+        next h =>
+          apply congrArg Head.outer
+          apply Fin.ext
+          simp only [Fin.val_mk, Fin.succ]
+          omega
+      have htarget : classifyHead (n := n) 0
+          (RawHead.bvar i : RawHead n α) =
+          (.outer i : Head n 0 α) := by
+        simp only [classifyHead]
+        split
+        next h => omega
+        next h =>
+          apply congrArg Head.outer
+          apply Fin.ext
+          change i.val - 0 = i.val
+          omega
+      rw [hsource, htarget]
+      exact .outer i
+
+private theorem etaSource_head (raw : RawSpine n α) :
+    raw.etaSource.head.Corresponds raw.toHeadSpine.head := by
+  unfold RawSpine.etaSource RawSpine.pushArg RawSpine.toHeadSpine
+  exact classifyHead_rename_succ_wrap raw.head
+
+private theorem etaEnvelopeArgs_one (head : Head n 0 α)
+    (args : List (Term n α)) :
+    args.map Term.lift ++
+      [(Term.bvar (free := α) (bound := n + 1) 0)] =
+      etaEnvelopeArgs 1
+        ({ binders := 0, head := head, args := args } : HeadSpine n α)
+        (by change 0 ≤ 1; omega) := by
+  simp only [etaEnvelopeArgs, etaProjections]
+  apply congrArg (fun xs => xs ++
+    [(Term.bvar (free := α) (bound := n + 1) 0)])
+  apply List.map_congr_left
+  intro t ht
+  unfold Term.lift
+  apply congrArg (fun r => t.renameBound r)
+  funext i
+  apply Fin.ext
+  simp only [scopeEmbed, Fin.val_mk, Fin.succ]
+  omega
+
+private theorem etaSource_envelope (raw : RawSpine n α) :
+    etaEnvelopeArgs 1 raw.etaSource (by
+      change 1 ≤ 1
+      omega) =
+    etaEnvelopeArgs 1 raw.toHeadSpine (by
+      change 0 ≤ 1
+      omega) := by
+  change etaEnvelopeArgs 1
+      ((raw.rename Fin.succ).pushArg
+        (Term.bvar (free := α) (bound := n + 1) 0)).wrap _ = _
+  rw [← etaEnvelopeArgs_wrap
+    ((raw.rename Fin.succ).pushArg
+      (Term.bvar (free := α) (bound := n + 1) 0)) (K := 0) (by
+        change 0 ≤ 0
+        omega)]
+  have hid := etaEnvelopeArgs_identity
+    ((raw.rename Fin.succ).pushArg
+      (Term.bvar (free := α) (bound := n + 1) 0))
+  change etaEnvelopeArgs 0
+      ((raw.rename Fin.succ).pushArg
+        (Term.bvar (free := α) (bound := n + 1) 0)) _ = _ at hid
+  rw [hid]
+  change _ = etaEnvelopeArgs 1
+    ({ binders := 0, head := classifyHead 0 raw.head, args := raw.args } :
+      HeadSpine n α) _
+  rw [← etaEnvelopeArgs_one (classifyHead 0 raw.head) raw.args]
+  unfold RawSpine.pushArg RawSpine.rename
+  rfl
+
+private theorem headCorresponds_wrap
+    {a : Head (n + 1) k α} {b : Head (n + 1) l α}
+    (h : a.Corresponds b) : a.wrap.Corresponds b.wrap := by
+  cases h with
+  | bound i hik hil => exact .bound (i + 1) (by omega) (by omega)
+  | outer i =>
+      refine Fin.cases ?_ (fun j => ?_) i
+      · exact .bound 0 (by omega) (by omega)
+      · exact .outer j
+  | port x => exact .port x
+
+private theorem OneStep.preserveRigidBase
+    {a b : Term n α} {source : HeadSpine n α}
+    (ha : headSpine a = some source) (hab : OneStep a b) :
+    ∃ target, headSpine b = some target ∧
+      RigidResidualAt source.binders source target := by
+  induction hab with
+  | beta hred =>
+      obtain ⟨raw, hraw, rfl⟩ := headSpine_app_inv ha
+      simp only [rawSpine] at hraw
+      contradiction
+  | eta heta =>
+      rw [etaContract_sound heta, headSpine_lam] at ha
+      simp only [Option.map_eq_some_iff] at ha
+      obtain ⟨bodySpine, hbody, rfl⟩ := ha
+      obtain ⟨lifted, hlifted, rfl⟩ := headSpine_app_inv hbody
+      obtain ⟨raw, hraw, rfl⟩ := rawSpine_lift_inv hlifted
+      refine ⟨raw.toHeadSpine, headSpine_of_raw hraw, ?_⟩
+      have hargs : List.Forall₂ Reduces
+          (etaEnvelopeArgs 1 raw.etaSource (by change 1 ≤ 1; omega))
+          (etaEnvelopeArgs 1 raw.toHeadSpine (by change 0 ≤ 1; omega)) := by
+        rw [etaSource_envelope raw]
+        exact List.Forall₂.reduces_refl _
+      exact
+        { source_le := by change 1 ≤ 1; omega
+          target_le := by change 0 ≤ 1; omega
+          head := etaSource_head raw
+          args := hargs }
+  | lam hab ih =>
+      rw [headSpine_lam] at ha
+      simp only [Option.map_eq_some_iff] at ha
+      obtain ⟨innerSource, hinner, rfl⟩ := ha
+      obtain ⟨innerTarget, htarget, hres⟩ := ih hinner
+      refine ⟨innerTarget.wrap, ?_, ?_⟩
+      · rw [headSpine_lam, htarget]
+        rfl
+      · have hargs := hres.args
+        rw [etaEnvelopeArgs_wrap innerSource hres.source_le,
+          etaEnvelopeArgs_wrap innerTarget hres.target_le] at hargs
+        exact
+          { source_le := by
+              change innerSource.binders + 1 ≤ innerSource.binders + 1
+              omega
+            target_le := by
+              change innerTarget.binders + 1 ≤ innerSource.binders + 1
+              exact Nat.add_le_add_right hres.target_le 1
+            head := headCorresponds_wrap hres.head
+            args := hargs }
+  | @appFn q γ fn fn' fixedArg hab ih =>
+      obtain ⟨sourceRaw, hsourceRaw, rfl⟩ := headSpine_app_inv ha
+      have hsource := headSpine_of_raw hsourceRaw
+      obtain ⟨innerTarget, htarget, hres⟩ := ih hsource
+      have hzero : innerTarget.binders = 0 := Nat.eq_zero_of_le_zero hres.target_le
+      obtain ⟨targetRaw, htargetRaw, htargetEq⟩ :=
+        headSpine_zero_raw htarget hzero
+      subst innerTarget
+      refine ⟨targetRaw.pushArg fixedArg,
+        headSpine_app_push_raw htargetRaw, ?_⟩
+      have hargs := hres.args
+      change List.Forall₂ Reduces
+        (etaEnvelopeArgs 0 sourceRaw.toHeadSpine _)
+        (etaEnvelopeArgs 0 targetRaw.toHeadSpine _) at hargs
+      have hsourceIdentity := etaEnvelopeArgs_identity sourceRaw.toHeadSpine
+      have htargetIdentity := etaEnvelopeArgs_identity targetRaw.toHeadSpine
+      change etaEnvelopeArgs 0 sourceRaw.toHeadSpine _ = _ at hsourceIdentity
+      change etaEnvelopeArgs 0 targetRaw.toHeadSpine _ = _ at htargetIdentity
+      rw [hsourceIdentity, htargetIdentity] at hargs
+      have hargs' := hargs.append
+        (List.Forall₂.cons (Reduces.refl (a := fixedArg)) List.Forall₂.nil)
+      have hsourceArgs := etaEnvelopeArgs_identity
+        (sourceRaw.pushArg fixedArg)
+      have htargetArgs := etaEnvelopeArgs_identity
+        (targetRaw.pushArg fixedArg)
+      change etaEnvelopeArgs 0 (sourceRaw.pushArg fixedArg) _ = _ at hsourceArgs
+      change etaEnvelopeArgs 0 (targetRaw.pushArg fixedArg) _ = _ at htargetArgs
+      have hfinal : List.Forall₂ Reduces
+          (etaEnvelopeArgs 0 (sourceRaw.pushArg fixedArg)
+            (by change 0 ≤ 0; omega))
+          (etaEnvelopeArgs 0 (targetRaw.pushArg fixedArg)
+            (by change 0 ≤ 0; omega)) := by
+        rw [hsourceArgs, htargetArgs]
+        exact hargs'
+      exact
+        { source_le := by change 0 ≤ 0; omega
+          target_le := by change 0 ≤ 0; omega
+          head := hres.head
+          args := hfinal }
+  | @appArg q γ changedArg changedArg' fixedFn hab ih =>
+      obtain ⟨sourceRaw, hsourceRaw, rfl⟩ := headSpine_app_inv ha
+      refine ⟨sourceRaw.pushArg changedArg',
+        headSpine_app_push_raw hsourceRaw, ?_⟩
+      have hargs := (List.Forall₂.reduces_refl sourceRaw.args).append
+        (List.Forall₂.cons (Reduces.tail .refl hab) List.Forall₂.nil)
+      have hsourceArgs := etaEnvelopeArgs_identity
+        (sourceRaw.pushArg changedArg)
+      have htargetArgs := etaEnvelopeArgs_identity
+        (sourceRaw.pushArg changedArg')
+      change etaEnvelopeArgs 0 (sourceRaw.pushArg changedArg) _ = _ at hsourceArgs
+      change etaEnvelopeArgs 0 (sourceRaw.pushArg changedArg') _ = _ at htargetArgs
+      have hfinal : List.Forall₂ Reduces
+          (etaEnvelopeArgs 0 (sourceRaw.pushArg changedArg)
+            (by change 0 ≤ 0; omega))
+          (etaEnvelopeArgs 0 (sourceRaw.pushArg changedArg')
+            (by change 0 ≤ 0; omega)) := by
+        rw [hsourceArgs, htargetArgs]
+        exact hargs
+      exact
+        { source_le := by change 0 ≤ 0; omega
+          target_le := by change 0 ≤ 0; omega
+          head := Head.Corresponds.refl _
+          args := hfinal }
+
+private theorem OneStep.preserveRigid
+    {a b : Term n α} {source : HeadSpine n α}
+    (ha : headSpine a = some source) (hab : OneStep a b)
+    (hK : source.binders ≤ K) :
+    ∃ target, headSpine b = some target ∧ RigidResidualAt K source target := by
+  obtain ⟨target, hb, hres⟩ := OneStep.preserveRigidBase ha hab
+  exact ⟨target, hb, hres.raise hK⟩
+
+private theorem Reduces.preserveRigid
+    {a b : Term n α} {source : HeadSpine n α}
+    (ha : headSpine a = some source) (hab : Reduces a b)
+    (hK : source.binders ≤ K) :
+    ∃ target, headSpine b = some target ∧ RigidResidualAt K source target := by
+  induction hab generalizing source K with
+  | refl => exact ⟨source, ha, RigidResidualAt.refl source hK⟩
+  | tail hab hstep ih =>
+      obtain ⟨middle, hmiddle, hres₁⟩ := ih ha hK
+      obtain ⟨target, htarget, hres₂⟩ :=
+        OneStep.preserveRigid hmiddle hstep hres₁.target_le
+      exact ⟨target, htarget, hres₁.trans hres₂⟩
+
+private theorem List.Forall₂.length_eq
+    {r : α → β → Prop} {xs : List α} {ys : List β}
+    (h : List.Forall₂ r xs ys) : xs.length = ys.length := by
+  induction h with
+  | nil => rfl
+  | cons hxy hxys ih => simp only [List.length_cons, ih]
+
+private theorem List.Forall₂.get
+    {r : α → β → Prop} {xs : List α} {ys : List β}
+    (h : List.Forall₂ r xs ys) (i : Fin xs.length) :
+    r (xs.get i) (ys.get ⟨i.val, by rw [← h.length_eq]; exact i.isLt⟩) := by
+  induction h with
+  | nil => exact Fin.elim0 i
+  | cons hxy hxys ih =>
+      refine Fin.cases ?_ (fun j => ?_) i
+      · exact hxy
+      · exact ih j
+
+private theorem Reduces.toBetaEta {a b : Term n α} (h : Reduces a b) :
+    BetaEta a b := by
+  induction h with
+  | refl => exact .refl
+  | tail _ hstep ih => exact ih.trans (.step hstep)
+
+private theorem BetaEta.prefixClose {a b : Term (extendScope n k) α}
+    (h : BetaEta a b) : BetaEta (prefixClose k a) (prefixClose k b) := by
+  induction k generalizing n with
+  | zero => exact h
+  | succ k ih =>
+      change BetaEta (Term.lam (VisualProof.Lambda.prefixClose k a))
+        (Term.lam (VisualProof.Lambda.prefixClose k b))
+      exact (ih h).lam
+
+theorem rigidHead_args
+  {n : Nat} {α : Type u} {a b : Term n α}
+  {sa sb : HeadSpine n α}
+  (ha : headSpine a = some sa)
+  (hb : headSpine b = some sb)
+  (heq : BetaEta a b)
+  (hbinders : sa.binders = sb.binders)
+  (hhead : sa.head.Corresponds sb.head)
+  (hlen : sa.args.length = sb.args.length) :
+  ∀ i (hi : i < sa.args.length),
+    BetaEta (prefixClose sa.binders (sa.args.get ⟨i, hi⟩))
+      (prefixClose sb.binders (sb.args.get ⟨i, hlen ▸ hi⟩)) := by
+  cases sa with
+  | mk ka ahead aargs =>
+      cases sb with
+      | mk kb bhead bargs =>
+          dsimp only at ha hb hbinders hhead hlen ⊢
+          subst kb
+          obtain ⟨common, hac, hbc⟩ := churchRosser heq
+          obtain ⟨commonSpine, hcommon, hresA⟩ :=
+            Reduces.preserveRigid ha hac (Nat.le_refl ka)
+          obtain ⟨commonSpineB, hcommonB, hresB⟩ :=
+            Reduces.preserveRigid hb hbc (Nat.le_refl ka)
+          have hspine : commonSpineB = commonSpine := by
+            rw [hcommon] at hcommonB
+            exact (Option.some.inj hcommonB).symm
+          subst commonSpineB
+          have htargetProof : hresA.target_le = hresB.target_le :=
+            Subsingleton.elim _ _
+          cases htargetProof
+          have hargsA := hresA.args
+          have hargsB := hresB.args
+          have hidA := etaEnvelopeArgs_identity
+            ({ binders := ka, head := ahead, args := aargs } : HeadSpine n α)
+          have hidB := etaEnvelopeArgs_identity
+            ({ binders := ka, head := bhead, args := bargs } : HeadSpine n α)
+          change etaEnvelopeArgs ka
+            ({ binders := ka, head := ahead, args := aargs } : HeadSpine n α)
+              _ = aargs at hidA
+          change etaEnvelopeArgs ka
+            ({ binders := ka, head := bhead, args := bargs } : HeadSpine n α)
+              _ = bargs at hidB
+          rw [hidA] at hargsA
+          rw [hidB] at hargsB
+          intro i hi
+          have hargA := hargsA.get ⟨i, hi⟩
+          have hargB := hargsB.get ⟨i, hlen ▸ hi⟩
+          have hcommonIndex :
+              (⟨i, by rw [← hargsB.length_eq]; exact hlen ▸ hi⟩ :
+                Fin (etaEnvelopeArgs ka commonSpine hresA.target_le).length) =
+              ⟨i, by rw [← hargsA.length_eq]; exact hi⟩ := by
+            apply Fin.ext
+            rfl
+          rw [hcommonIndex] at hargB
+          exact (hargA.toBetaEta.prefixClose).trans
+            hargB.toBetaEta.prefixClose.symm
+
 end VisualProof.Lambda
