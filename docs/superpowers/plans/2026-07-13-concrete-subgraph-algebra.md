@@ -48,19 +48,19 @@ extraction/removal/splice. Proofs certify computed data and never select it.
 
 **Produces:** One reusable Std-only finite enumeration/indexing authority.
 
-- [ ] Move `allFin`, `filterFin`, `indexOf?`, and `sequenceFin` with all existing
+- [x] Move `allFin`, `filterFin`, `indexOf?`, and `sequenceFin` with all existing
   proofs into `VisualProof.Data.Finite`.
-- [ ] Add enumeration of `Fin n → Fin m` and prove literal membership iff.
-- [ ] Add duplicate-free filtered-fiber indexing and explicit forward/backward
+- [x] Add enumeration of `Fin n → Fin m` and prove literal membership iff.
+- [x] Add duplicate-free filtered-fiber indexing and explicit forward/backward
   survivor maps with inverse laws.
-- [ ] Add deterministic reflexive-symmetric-transitive closure over a decidable
+- [x] Add deterministic reflexive-symmetric-transitive closure over a decidable
   relation on `Fin n`; prove it is the least equivalence containing the generators.
-- [ ] Migrate every elaboration consumer to the new owner and delete the old
+- [x] Migrate every elaboration consumer to the new owner and delete the old
   declarations. The old module may remain only if it owns genuinely
   elaboration-specific facts; it must not re-export moved names.
-- [ ] Add small theorem examples for empty/nonempty function spaces, a deleted
+- [x] Add small theorem examples for empty/nonempty function spaces, a deleted
   finite fiber, and a three-edge transitive closure.
-- [ ] Run focused/full builds and commit independently.
+- [x] Run focused/full builds and commit independently.
 
 ---
 
@@ -266,4 +266,3 @@ without a second context language.
 - [ ] Append a scoped `<conformance>` section to the foundation record without
   changing its pre-action sections.
 - [ ] Commit review repairs and conformance separately.
-
