@@ -134,7 +134,7 @@ describe('substitution transaction', () => {
     expect(relationWorkspaceCanFinalize(transaction, currentRelationDraft(draft))).toBe(true)
     const ready = transaction.status(currentRelationDraft(draft))
 
-    expect(ready).toEqual({ kind: 'ready', message: 'ready to instantiate' })
+    expect(ready).toEqual({ kind: 'ready', code: 'ready', message: 'ready to instantiate' })
     transaction.finalize(currentRelationDraft(draft), [])
     expect(actions).toEqual([{
       label: 'substitute relation',

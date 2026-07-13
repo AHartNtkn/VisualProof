@@ -10,6 +10,13 @@ type FixtureState = {
     historyLength: number
     rect: { left: number; top: number; width: number; height: number }
     materializedBoundary: string[]
+    status: { kind: 'ready' | 'refused'; code: string; message: string }
+    transaction: null | {
+      candidateCount: number
+      activeIndex: number
+      activeKeys: string[]
+      excludedKeys: string[]
+    }
     draftBodies: { node: string; kind: string; point: { x: number; y: number } }[]
     draftWires: { wire: string; point: { x: number; y: number } | null }[]
   }
@@ -19,6 +26,8 @@ declare global {
   interface Window {
     relationWorkspaceFixture: {
       mount(mode: 'substitute' | 'abstract', finalizeBehavior?: 'succeed' | 'refuse'): void
+      mountAbstractionScenario(scenario: 'multi-set' | 'zero-match' | 'matcher-exhausted' | 'solver-exhausted' | 'stale-source' | 'kernel-refusal' | 'invalid-ports'): void
+      staleSource(): void
       state(): FixtureState
     }
   }
@@ -67,6 +76,8 @@ test('one mounted RelationWorkspace renders both transaction configurations and 
     await expect(dialog).toHaveCount(1)
     await expect(dialog).toHaveAttribute('aria-label', configured.title)
     await expect(dialog.getByRole('button', { name: configured.finalize, exact: true })).toBeVisible()
+    await expect(dialog.locator('.vpa-relation-status')).toHaveText('ready')
+    await expect(dialog.locator('.vpa-relation-status')).toHaveAttribute('data-status', 'ready')
     expect((await state(page)).debug?.mode).toBe(configured.mode)
     const cursorBeforeUndo = (await state(page)).debug!.cursor
     await page.keyboard.press('Control+z')
@@ -98,6 +109,8 @@ test('one mounted RelationWorkspace renders both transaction configurations and 
   await page.evaluate(() => window.relationWorkspaceFixture.mount('abstract', 'refuse'))
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(1)
+  await expect(page.locator('.vpa-relation-status')).toHaveText('fixture kernel refusal')
+  await expect(page.locator('.vpa-relation-status')).toHaveAttribute('data-status', 'kernel-refusal')
   expect(await state(page)).toMatchObject({ cancelCount: 0, finalizeCount: 0, refusals: ['fixture kernel refusal'] })
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   expect((await state(page)).cancelCount).toBe(1)
@@ -163,4 +176,54 @@ test('mounted strip gestures reorder ports and consume Delete without touching c
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
   await expect(page.locator('.vpa-relation-gesture')).toHaveCount(0)
   expect(await state(page)).toMatchObject({ cancelCount: 1, debug: null })
+})
+
+test('production abstraction statuses distinguish exhaustive, exhausted, invalid, stale, and kernel outcomes', async ({ page }) => {
+  await openFixture(page)
+
+  for (const configured of [
+    { scenario: 'zero-match' as const, code: 'zero-match' },
+    { scenario: 'matcher-exhausted' as const, code: 'matcher-exhausted' },
+    { scenario: 'solver-exhausted' as const, code: 'solver-exhausted' },
+    { scenario: 'invalid-ports' as const, code: 'invalid-ports' },
+  ]) {
+    await page.evaluate((scenario) => window.relationWorkspaceFixture.mountAbstractionScenario(scenario), configured.scenario)
+    await expect(page.locator('.vpa-relation-status')).toHaveAttribute('data-status', configured.code)
+    await expect(page.getByRole('button', { name: /Abstract|Instantiate/, exact: false })).toBeDisabled()
+  }
+
+  await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('stale-source'))
+  const staleBefore = (await state(page)).debug!
+  await page.evaluate(() => window.relationWorkspaceFixture.staleSource())
+  await page.getByRole('button', { name: 'Abstract', exact: true }).click()
+  await expect(page.locator('.vpa-relation-status')).toHaveAttribute('data-status', 'stale-source')
+  expect((await state(page)).debug).toMatchObject({
+    cursor: staleBefore.cursor,
+    historyLength: staleBefore.historyLength,
+    draftBodies: staleBefore.draftBodies,
+  })
+
+  await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('kernel-refusal'))
+  const refusalBefore = (await state(page)).debug!
+  await page.getByRole('button', { name: 'Abstract', exact: true }).click()
+  await expect(page.locator('.vpa-relation-status')).toHaveAttribute('data-status', 'kernel-refusal')
+  expect((await state(page)).debug).toMatchObject({
+    cursor: refusalBefore.cursor,
+    historyLength: refusalBefore.historyLength,
+    draftBodies: refusalBefore.draftBodies,
+  })
+})
+
+test('mounted production multi-set transaction cycles exactly in both Tab directions', async ({ page }) => {
+  await openFixture(page)
+  await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('multi-set'))
+  await expect(page.locator('.vpa-relation-status')).toHaveAttribute('data-status', 'ready')
+  expect((await state(page)).debug?.transaction).toMatchObject({ candidateCount: 6, activeIndex: 0 })
+
+  await page.keyboard.press('Tab')
+  expect((await state(page)).debug?.transaction?.activeIndex).toBe(1)
+  await page.keyboard.press('Shift+Tab')
+  expect((await state(page)).debug?.transaction?.activeIndex).toBe(0)
+  await page.keyboard.press('Shift+Tab')
+  expect((await state(page)).debug?.transaction?.activeIndex).toBe(2)
 })

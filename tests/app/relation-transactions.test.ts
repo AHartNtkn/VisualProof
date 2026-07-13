@@ -160,11 +160,14 @@ describe('AbstractTransaction', () => {
     const selected = transactionFixture(scene)
     const draft = emptySnapshot()
     selected.transaction.draftChanged(draft)
-    selected.transaction.moveEmptyMarker(cut, { x: 24, y: 36 })
+    const nestedPoint = selected.transaction.debugState().markerPoint!
+    selected.transaction.moveEmptyMarker(cut, nestedPoint)
+    expect(() => selected.transaction.moveEmptyMarker(diagram.root, { x: 1_000_000, y: 1_000_000 }))
+      .toThrow(/outside the wrap/i)
     selected.transaction.finalize(draft, [])
     expect(selected.actions[0]).toMatchObject({
       steps: [{ rule: 'comprehensionAbstract', occurrences: [{ sel: { region: cut }, args: [] }] }],
-      placements: [{ introducedNode: 0, x: 24, y: 36 }],
+      placements: [{ introducedNode: 0, x: nestedPoint.x, y: nestedPoint.y }],
     })
 
     const deselected = transactionFixture(scene)

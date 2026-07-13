@@ -96,6 +96,7 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
   readonly #wrap: SubgraphSelection
   readonly #opts: AbstractTransactionOptions
   readonly #allowedMarkerAnchors: ReadonlySet<RegionId>
+  readonly #wrapCircle: { readonly center: Vec2; readonly radius: number }
   #snapshot: RelationWorkspaceSnapshot | null = null
   #sets: OccurrenceSetState | null = null
   #matchStatus: 'complete' | 'exhausted' = 'complete'
@@ -118,8 +119,9 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
     })
     const contents = selectionContents(this.#source, this.#wrap)
     this.#allowedMarkerAnchors = new Set([this.#wrap.region, ...contents.allRegions])
+    this.#wrapCircle = circleForSelection(opts.engine(), this.#wrap)
     this.#markerAnchor = this.#wrap.region
-    this.#markerPoint = circleForSelection(opts.engine(), this.#wrap).center
+    this.#markerPoint = this.#wrapCircle.center
   }
 
   sourceDiagram = (): Diagram => this.#source
@@ -154,14 +156,26 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
 
   status(snapshot: RelationWorkspaceSnapshot): WorkspaceStatus {
     this.draftChanged(snapshot)
-    if (this.#empty) return { kind: 'ready', message: this.#markerSelected ? 'ready to abstract one nullary occurrence' : 'ready for a trivial wrap' }
-    if (this.#matchStatus === 'exhausted' || this.#sets?.status === 'exhausted') {
-      return { kind: 'refused', message: 'abstraction matching exhausted its search budget' }
+    if (this.#empty) return { kind: 'ready', code: 'ready', message: this.#markerSelected ? 'ready to abstract one nullary occurrence' : 'ready for a trivial wrap' }
+    if (this.#matchStatus === 'exhausted') {
+      return { kind: 'refused', code: 'matcher-exhausted', message: 'abstraction matcher exhausted its search budget' }
+    }
+    if (this.#sets?.status === 'exhausted') {
+      return { kind: 'refused', code: 'solver-exhausted', message: 'maximal-set solver exhausted its search budget' }
     }
     const active = this.#activeSet()
     return active.length === 0
-      ? { kind: 'refused', message: 'the authored relation has no occurrence inside the wrap' }
-      : { kind: 'ready', message: `${active.length} occurrence${active.length === 1 ? '' : 's'} selected` }
+      ? { kind: 'refused', code: 'zero-match', message: 'exhaustive search found no occurrence inside the wrap' }
+      : { kind: 'ready', code: 'ready', message: `${active.length} occurrence${active.length === 1 ? '' : 's'} selected` }
+  }
+
+  finalizeError(error: unknown): WorkspaceStatus {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      kind: 'refused',
+      code: /source (?:is missing|changed)|missing a live selected id/i.test(message) ? 'stale-source' : 'kernel-refusal',
+      message,
+    }
   }
 
   cycle(delta: 1 | -1): void {
@@ -183,6 +197,9 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
     if (!this.#empty) throw new Error('the relation draft is not actually empty; the nullary marker is unavailable')
     if (!this.#allowedMarkerAnchors.has(anchor)) throw new Error(`empty marker anchor '${anchor}' is outside the wrap`)
     if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) throw new Error('empty marker placement must be finite')
+    if (Math.hypot(point.x - this.#wrapCircle.center.x, point.y - this.#wrapCircle.center.y) > this.#wrapCircle.radius) {
+      throw new Error('empty marker placement is outside the wrap')
+    }
     this.#markerAnchor = anchor
     this.#markerPoint = { ...point }
   }

@@ -1640,9 +1640,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       return {
         ...active.timeline,
         boundary: trackBoundary(active),
-        inputAllowed: () => !mainMotion.playing && relationWorkspace === null,
+        inputAllowed: () => !mainMotion.playing,
         moveTo: (cursor) => {
           if (proof?.kind !== 'track') return
+          cancelRelationAuthoring()
           proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
           sync()
         },
@@ -1654,8 +1655,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       ...active,
       name: activeProof.side,
       boundary: sideBoundary(activeProof.session, activeProof.side),
-      inputAllowed: () => fixedWorkspace?.busy !== true,
+      inputAllowed: () => fixedWorkspace?.playing !== true,
       moveTo: (cursor) => {
+        cancelRelationAuthoring()
         fixedWorkspace?.moveFocusedCursor(cursor)
       },
     }

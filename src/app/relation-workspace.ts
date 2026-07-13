@@ -37,6 +37,8 @@ import {
 
 export type WorkspaceStatus = {
   readonly kind: 'ready' | 'refused'
+  readonly code: 'ready' | 'zero-match' | 'matcher-exhausted' | 'solver-exhausted'
+    | 'invalid-ports' | 'stale-source' | 'kernel-refusal'
   readonly message: string
 }
 
@@ -52,6 +54,7 @@ export type RelationWorkspaceTransaction = {
   hostClaim?(sample: PointerSample): PointerClaim | null
   debugState?(): unknown
   status(snapshot: RelationWorkspaceSnapshot): WorkspaceStatus
+  finalizeError?(error: unknown): WorkspaceStatus
   finalize(snapshot: RelationWorkspaceSnapshot, placements: readonly PlacementHint[]): void
   cancel(): void
 }
@@ -187,9 +190,18 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
         new Map(),
         this.#opts.orientation ?? 'forward',
       )
-      return { kind: 'ready', message: 'ready to instantiate' }
+      return { kind: 'ready', code: 'ready', message: 'ready to instantiate' }
     } catch (error) {
-      return { kind: 'refused', message: error instanceof Error ? error.message : String(error) }
+      return { kind: 'refused', code: 'invalid-ports', message: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  finalizeError(error: unknown): WorkspaceStatus {
+    const message = error instanceof Error ? error.message : String(error)
+    return {
+      kind: 'refused',
+      code: /source changed/i.test(message) ? 'stale-source' : 'kernel-refusal',
+      message,
     }
   }
 
@@ -335,6 +347,7 @@ export type RelationWorkspaceDebug = {
   readonly externalWires: readonly RelationPort[]
   readonly rect: EditorRect
   readonly transaction: unknown | null
+  readonly status: WorkspaceStatus
   readonly draftBodies: readonly { readonly node: NodeId; readonly kind: string; readonly x: number; readonly y: number; readonly point: Vec2 }[]
   readonly draftWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
   readonly hostWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
@@ -384,6 +397,7 @@ export class RelationWorkspace {
   readonly #undo: HTMLButtonElement
   readonly #redo: HTMLButtonElement
   readonly #finalizeButton: HTMLButtonElement
+  readonly #status: HTMLOutputElement
   readonly #portStrip: HTMLOListElement
   readonly #gesture: SVGSVGElement
   #draft: RelationWorkspaceDraft
@@ -393,6 +407,7 @@ export class RelationWorkspace {
   #draftHoverWire: WireId | null = null
   #hostHoverWire: WireId | null = null
   #selectedPort: string | null = null
+  #statusOverride: WorkspaceStatus | null = null
   #disposed = false
 
   constructor(
@@ -433,11 +448,14 @@ export class RelationWorkspace {
     this.#canvas.className = 'vpa-relation-canvas'
     this.#canvas.setAttribute('aria-label', 'Anonymous relation editor')
     this.#portStrip = renderRelationPortStrip(document, currentRelationDraft(this.#draft).ports)
+    this.#status = document.createElement('output')
+    this.#status.className = 'vpa-relation-status'
+    this.#status.setAttribute('aria-live', 'polite')
     const resize = document.createElement('div')
     resize.className = 'vpa-relation-resize'
     resize.setAttribute('role', 'separator')
     resize.setAttribute('aria-label', 'Resize relation editor')
-    this.#root.append(title, this.#canvas, this.#portStrip, resize)
+    this.#root.append(title, this.#canvas, this.#portStrip, this.#status, resize)
     this.#gesture = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
     this.#gesture.classList.add('vpa-relation-gesture')
     host.mount.append(this.#root, this.#gesture)
@@ -516,7 +534,13 @@ export class RelationWorkspace {
       ...transaction,
       move: (next) => { transaction.move(next); this.#host.changed() },
       release: (next, moved) => {
-        transaction.release(next, moved)
+        this.#statusOverride = null
+        try {
+          transaction.release(next, moved)
+        } catch (error) {
+          this.#statusOverride = this.#transaction.finalizeError?.(error) ?? this.#errorStatus(error)
+          this.#host.refuse(this.#statusOverride.message, next.client)
+        }
         this.#refreshButtons()
         this.#host.changed()
       },
@@ -537,6 +561,7 @@ export class RelationWorkspace {
       return true
     }
     if (sample.key === 'Tab' && this.#transaction.cycle !== undefined) {
+      this.#statusOverride = null
       this.#transaction.cycle(sample.shiftKey ? -1 : 1)
       this.#refreshButtons()
       this.#host.changed()
@@ -587,6 +612,7 @@ export class RelationWorkspace {
       externalWires: current.ports.filter((port) => port.hostWire !== undefined),
       rect: { ...this.#rect },
       transaction: this.#transaction.debugState?.() ?? null,
+      status: this.#currentStatus(),
       draftBodies: [...this.#engine.bodies].map(([node, body]) => ({
         node,
         kind: body.kind,
@@ -657,6 +683,7 @@ export class RelationWorkspace {
   }
 
   #reconcile(placed?: { readonly node: string; readonly at: Vec2 }): void {
+    this.#statusOverride = null
     this.#transaction.draftChanged?.(currentRelationDraft(this.#draft))
     const current = previewRelationWorkspaceSnapshot(currentRelationDraft(this.#draft))
     const next = mkEngine(current.diagram, current.boundary)
@@ -689,7 +716,11 @@ export class RelationWorkspace {
   #finalize(): void {
     const result = attemptRelationWorkspaceFinalize(this.#transaction, currentRelationDraft(this.#draft), [])
     if (result.closed) this.#close()
-    else this.#host.refuse(result.error instanceof Error ? result.error.message : String(result.error), this.#centerClient())
+    else {
+      this.#statusOverride = this.#transaction.finalizeError?.(result.error) ?? this.#errorStatus(result.error)
+      this.#refreshButtons()
+      this.#host.refuse(this.#statusOverride.message, this.#centerClient())
+    }
   }
 
   #connectionClaim(surface: SurfaceKind, sample: PointerSample): PointerClaim | null {
@@ -852,7 +883,27 @@ export class RelationWorkspace {
   #refreshButtons(): void {
     this.#undo.disabled = this.#draft.cursor === 0
     this.#redo.disabled = this.#draft.cursor === this.#draft.history.length - 1
-    this.#finalizeButton.disabled = !relationWorkspaceCanFinalize(this.#transaction, currentRelationDraft(this.#draft))
+    const status = this.#currentStatus()
+    this.#finalizeButton.disabled = status.kind !== 'ready'
+    this.#status.value = status.message
+    this.#status.dataset.status = status.code
+  }
+
+  #currentStatus(): WorkspaceStatus {
+    if (this.#statusOverride !== null) return this.#statusOverride
+    try {
+      return this.#transaction.status(currentRelationDraft(this.#draft))
+    } catch (error) {
+      return { ...this.#errorStatus(error), code: 'invalid-ports' }
+    }
+  }
+
+  #errorStatus(error: unknown): WorkspaceStatus {
+    return {
+      kind: 'refused',
+      code: 'kernel-refusal',
+      message: error instanceof Error ? error.message : String(error),
+    }
   }
 
   #renderPortStrip(): void {
