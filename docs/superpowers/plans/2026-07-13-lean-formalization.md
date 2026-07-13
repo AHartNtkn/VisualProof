@@ -534,7 +534,10 @@ Prove both simultaneously by induction on the context path; only the cut constru
 - [ ] **Step 4: Prove permutation and alpha invariance**
 
 In `Isomorphism.lean`, define generalized mutually indexed region/item/item-sequence
-isomorphism under an ambient finite wire equivalence. Each region carries a
+isomorphism under an ambient finite wire equivalence. Lean 4.30 + Std does not
+expose a general bundled `Equiv`, so define and use exactly one owned
+`FiniteEquiv` record with forward/inverse functions and both inverse laws; prove
+identity, inverse, composition, application, and extensionality once. Each region carries a
 separate local-wire equivalence extended blockwise, so inherited and local wires
 cannot mix. Equations move their output and term ports together; atom argument
 positions and relation binders remain fixed; cuts and bubbles recurse.

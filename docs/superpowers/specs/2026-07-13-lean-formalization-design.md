@@ -87,6 +87,21 @@ Consequences:
 
 Lists provide finite conjunction syntax, not semantic order. Renaming and permutation theorems prove denotation invariant under reordering items and local variables.
 
+Under the locked Lean 4.30 + Std surface, structural bijections use one
+project-owned record:
+
+```lean
+structure FiniteEquiv (α β : Type) where
+  toFun : α → β
+  invFun : β → α
+  left_inv : ∀ x, invFun (toFun x) = x
+  right_inv : ∀ y, toFun (invFun y) = y
+```
+
+It is the sole representation of wire and item-occurrence bijections. Identity,
+inverse, composition, and block extension are proved from these fields; no
+cardinality casts or alternate equivalence representation is used.
+
 ### 3.2 Concrete finite graphs
 
 The concrete representation mirrors the mathematical content of the TypeScript kernel without copying its string-keyed partial-record shape. Regions, nodes, and wires use finite index types with total vectors or arrays. A separate `Concrete.WellFormed` predicate establishes:
