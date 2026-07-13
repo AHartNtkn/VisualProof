@@ -22,6 +22,7 @@ import {
 import { ProofFrontViewport, type ProofFrontDebugState } from './proof-front'
 import type { KeySample } from './interact/viewport'
 import type { MotionPreferences } from './interact/motion'
+import { proofSnapshot, type ProofSnapshot } from './proof-snapshot'
 
 export type FixedSideWorkspaceOptions = {
   readonly host: HTMLElement
@@ -41,8 +42,8 @@ export type FixedSideWorkspaceDebug = {
   readonly ratio: number
   readonly focused: FixedSide
   readonly met: boolean
-  readonly forward: ProofFrontDebugState & { readonly cursor: number; readonly selected: number; readonly pinCount: number }
-  readonly backward: ProofFrontDebugState & { readonly cursor: number; readonly selected: number; readonly pinCount: number }
+  readonly forward: ProofFrontDebugState & { readonly cursor: number; readonly selected: number; readonly pinCount: number; readonly proofSnapshot: ProofSnapshot }
+  readonly backward: ProofFrontDebugState & { readonly cursor: number; readonly selected: number; readonly pinCount: number; readonly proofSnapshot: ProofSnapshot }
 }
 
 export class FixedSideWorkspace {
@@ -181,10 +182,12 @@ export class FixedSideWorkspace {
       forward: {
         ...this.forward.debugState(), cursor: session.forward.cursor,
         selected: this.forward.interaction.selection.length, pinCount: this.forward.interaction.pins.size,
+        proofSnapshot: proofSnapshot(session.forward, 'forward', 'forward'),
       },
       backward: {
         ...this.backward.debugState(), cursor: session.backward.cursor,
         selected: this.backward.interaction.selection.length, pinCount: this.backward.interaction.pins.size,
+        proofSnapshot: proofSnapshot(session.backward, 'backward', 'backward'),
       },
     }
   }

@@ -200,6 +200,10 @@ function mountAbstractionScenario(scenario: AbstractionScenario): void {
     }],
     cursor: 0,
   }
+  hostEngine = mkEngine(sourceDiagram, [])
+  const firstBody = hostEngine.bodies.get(Object.keys(sourceDiagram.nodes)[0]!)
+  if (firstBody !== undefined && scenario === 'multi-set') firstBody.pos = { x: -177, y: -93 }
+  if (firstBody !== undefined && scenario === 'stale-source') firstBody.pos = { x: 177, y: 93 }
   const transaction = new AbstractTransaction({
     diagram: () => live,
     boundary: () => [],
@@ -216,7 +220,6 @@ function mountAbstractionScenario(scenario: AbstractionScenario): void {
   staleSourceAction = scenario === 'stale-source'
     ? () => { live = mkDiagram({ root: 'r0', regions: { r0: { kind: 'sheet' } } }) }
     : null
-  hostEngine = mkEngine(sourceDiagram, [])
   mountTransaction(transaction, draft)
 }
 

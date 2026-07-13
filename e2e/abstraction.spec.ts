@@ -60,12 +60,8 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
   await openMode(page)
   await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
   await page.waitForTimeout(350)
-  const source = await page.evaluate(() => ({
-    status: window.__vpaDebug!.status(),
-    nodes: window.__vpaDebug!.nodeCount(),
-    diagram: window.__vpaDebug!.diagram(),
-    history: document.querySelector('.vpa-temporal-copy')?.textContent,
-  }))
+  const sourceNodes = await page.evaluate(() => window.__vpaDebug!.nodeCount())
+  const sourceProof = await page.evaluate(() => JSON.stringify(window.__vpaDebug!.proofSnapshot()))
   const term = await termClientPoint(page)
   await page.mouse.click(term.x, term.y)
   await page.keyboard.press('Shift+w')
@@ -75,17 +71,11 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
   expect(await page.evaluate(() => window.__vpaDebug!.relationWorkspace())).toMatchObject({
     mode: 'abstract', transaction: { kind: 'empty-marker', markerSelected: true, canFinalize: true },
   })
-  expect(await page.evaluate(() => ({
-    status: window.__vpaDebug!.status(), nodes: window.__vpaDebug!.nodeCount(),
-    diagram: window.__vpaDebug!.diagram(), history: document.querySelector('.vpa-temporal-copy')?.textContent,
-  }))).toEqual(source)
+  expect(await page.evaluate(() => JSON.stringify(window.__vpaDebug!.proofSnapshot()))).toBe(sourceProof)
 
   await page.keyboard.press('Escape')
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
-  expect(await page.evaluate(() => ({
-    status: window.__vpaDebug!.status(), nodes: window.__vpaDebug!.nodeCount(),
-    diagram: window.__vpaDebug!.diagram(), history: document.querySelector('.vpa-temporal-copy')?.textContent,
-  }))).toEqual(source)
+  expect(await page.evaluate(() => JSON.stringify(window.__vpaDebug!.proofSnapshot()))).toBe(sourceProof)
   expect(await page.evaluate(() => window.__vpaDebug!.interaction().selected)).toHaveLength(1)
 
   await page.keyboard.press('Shift+w')
@@ -106,7 +96,7 @@ test('ordinary proof abstraction is provisional, cancellable, marker-authored, a
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
   await expect(page.locator('.vpa-relation-workspace')).toHaveCount(0)
   await expect(page.locator('#status')).toContainText('1 step(s)')
-  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(source.nodes + 1)
+  expect(await page.evaluate(() => window.__vpaDebug!.nodeCount())).toBe(sourceNodes + 1)
   await expect(page.locator('.vpa-refusal')).toHaveCount(0)
 
   const atom = await page.evaluate(() => {
@@ -145,6 +135,7 @@ test('mounted nested empty marker accepts inside drag, refuses outside, and comm
   await openMode(page)
   await page.getByRole('button', { name: 'Prove forward', exact: true }).click()
   await page.waitForTimeout(300)
+  const sourceProof = await page.evaluate(() => JSON.stringify(window.__vpaDebug!.proofSnapshot()))
 
   const openCutAbstraction = async (): Promise<void> => {
     const cut = await page.evaluate(() => {
@@ -171,6 +162,7 @@ test('mounted nested empty marker accepts inside drag, refuses outside, and comm
   }
 
   await openCutAbstraction()
+  expect(await page.evaluate(() => JSON.stringify(window.__vpaDebug!.proofSnapshot()))).toBe(sourceProof)
   const start = await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerPoint!)
   const view = await page.evaluate(() => window.__vpaDebug!.view())
   const startClient = { x: canvas.x + start.x * view.scale + view.offsetX, y: canvas.y + start.y * view.scale + view.offsetY }
@@ -198,6 +190,7 @@ test('mounted nested empty marker accepts inside drag, refuses outside, and comm
   await page.mouse.up()
   await expect(page.locator('.vpa-relation-status')).toHaveAttribute('data-status', 'kernel-refusal')
   expect(await page.evaluate(() => window.__vpaDebug!.relationWorkspace()!.transaction!.markerPoint)).toEqual(nested)
+  expect(await page.evaluate(() => JSON.stringify(window.__vpaDebug!.proofSnapshot()))).toBe(sourceProof)
   await page.mouse.click(nestedClient.x, nestedClient.y)
   await page.mouse.click(nestedClient.x, nestedClient.y)
   await page.getByRole('button', { name: 'Abstract', exact: true }).click()
@@ -328,15 +321,10 @@ test('both fixed fronts open and cancel, with real finalization and global histo
   await page.getByRole('button', { name: 'Set goal RHS', exact: true }).click()
   await page.getByRole('button', { name: 'Prove fixed sides', exact: true }).click()
 
-  const fixedSnapshot = (side: 'forward' | 'backward') => page.evaluate((selectedSide) => {
-    const front = window.__vpaDebug!.fixed()![selectedSide]
-    return {
-      cursor: front.cursor,
-      bodies: front.bodies.map(({ id, kind }) => ({ id, kind })).sort((a, b) => a.id.localeCompare(b.id)),
-      regions: front.regions.map(({ id, kind }) => ({ id, kind })).sort((a, b) => a.id.localeCompare(b.id)),
-      history: document.querySelector('.vpa-temporal-copy')?.textContent,
-    }
-  }, side)
+  const fixedSnapshot = (side: 'forward' | 'backward') => page.evaluate(
+    (selectedSide) => JSON.stringify(window.__vpaDebug!.fixed()![selectedSide].proofSnapshot),
+    side,
+  )
 
   const openFixedAbstraction = async (side: 'forward' | 'backward', kind: 'term' | 'atom'): Promise<void> => {
     const canvas = page.locator(`.vpa-proof-front-${side} canvas`)
@@ -373,6 +361,7 @@ test('both fixed fronts open and cancel, with real finalization and global histo
 
   const beforeForwardCancel = await fixedSnapshot('forward')
   await openFixedAbstraction('forward', 'atom')
+  expect(await fixedSnapshot('forward')).toBe(beforeForwardCancel)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.forward.relationWorkspace)).toBeNull()
   expect(await fixedSnapshot('forward')).toEqual(beforeForwardCancel)
@@ -382,8 +371,8 @@ test('both fixed fronts open and cancel, with real finalization and global histo
   await page.mouse.click(otherBox.x + otherBox.width - 12, otherBox.y + 20)
   const beforeBackwardCancel = await fixedSnapshot('backward')
   await openFixedAbstraction('backward', 'term')
-  expect(await fixedSnapshot('backward')).toEqual(beforeBackwardCancel)
+  expect(await fixedSnapshot('backward')).toBe(beforeBackwardCancel)
   await page.getByRole('button', { name: 'Cancel', exact: true }).click()
   await expect.poll(() => page.evaluate(() => window.__vpaDebug!.fixed()!.backward.relationWorkspace)).toBeNull()
-  expect(await fixedSnapshot('backward')).toEqual(beforeBackwardCancel)
+  expect(await fixedSnapshot('backward')).toBe(beforeBackwardCancel)
 })

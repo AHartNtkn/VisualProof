@@ -28,6 +28,14 @@ async function openMode(page: import('@playwright/test').Page): Promise<void> {
   if (await trigger.getAttribute('aria-expanded') !== 'true') await trigger.click()
 }
 
+type DebugProofSnapshot = {
+  diagram: unknown
+  actions: { label: string; steps: unknown[]; placements: { introducedNode: number; x: number; y: number }[] }[]
+  cursor: number
+  orientation: 'forward' | 'backward'
+  fixedSide?: 'forward' | 'backward'
+}
+
 declare global {
   interface Window {
     __vpaDebug?: {
@@ -35,6 +43,7 @@ declare global {
       status(): string
       replay(): { mode: string; k: number; n: number; label: string; bodies: number }
       proof(): null | { kind: 'track'; direction: 'forward' | 'backward' } | { kind: 'dual'; side: 'forward' | 'backward' }
+      proofSnapshot(): DebugProofSnapshot | null
       companion(): { visible: boolean; label: string; bodies: number; rebuilds: number; pos: { id: string; x: number; y: number }[] } | null
       view(): { scale: number; offsetX: number; offsetY: number }
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[]
@@ -50,8 +59,8 @@ declare global {
         ratio: number
         focused: 'forward' | 'backward'
         met: boolean
-        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; relationWorkspace: { mode: 'substitute' | 'abstract' } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
-        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; relationWorkspace: { mode: 'substitute' | 'abstract' } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
+        forward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; proofSnapshot: DebugProofSnapshot; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; relationWorkspace: { mode: 'substitute' | 'abstract' } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
+        backward: { cursor: number; rebuilds: number; view: { scale: number; offsetX: number; offsetY: number }; selected: number; pins: number; proofSnapshot: DebugProofSnapshot; bodies: { id: string; kind: string; x: number; y: number; r: number }[]; regions: { id: string; kind: string; x: number; y: number; r: number }[]; motion: { playing: boolean; morph: string | null }; relationWorkspace: { mode: 'substitute' | 'abstract' } | null; fissionTargets: { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[]; interactionOverlays: string[] }
       }
       motion(): { playing: boolean; morph: string | null; ghosts: number; pulses: number; hover: number; preferences: { conversionAnimation: boolean; connectedMorph: boolean; speed: number; transitionGhosts: boolean; hoverEaseMs: number } }
       relationWorkspace(): null | { mode: 'substitute' | 'abstract'; cursor: number; historyLength: number; formalBoundary: string[]; materializedBoundary: string[]; externalWires: { id: string; wire: string; kind: 'forced' | 'optional'; hostWire?: string }[]; rect: { left: number; top: number; width: number; height: number }; transaction: null | { kind: 'matches' | 'empty-marker'; canFinalize: boolean; candidateCount: number; excludedKeys: string[]; activeIndex: number; markerSelected: boolean; markerPoint: { x: number; y: number } | null }; draftBodies: { node: string; kind: string; x: number; y: number; point: { x: number; y: number } }[]; draftWires: { wire: string; point: { x: number; y: number } | null }[]; hostWires: { wire: string; point: { x: number; y: number } | null }[] }

@@ -32,6 +32,7 @@ import {
   startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
   startTrack, applyTrack, undoTrack, redoTrack, moveTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
 } from './session'
+import { proofSnapshot as serializeProofSnapshot } from './proof-snapshot'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
 import { sessionTheory } from './persist'
@@ -1798,6 +1799,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return proof.kind === 'track'
           ? { kind: 'track', direction: proof.track.direction }
           : { kind: 'dual', side: proof.side }
+      },
+      proofSnapshot() {
+        if (proof === null) return null
+        return proof.kind === 'track'
+          ? serializeProofSnapshot(proof.track.timeline, proof.track.direction)
+          : serializeProofSnapshot(proof.session[proof.side], proof.side)
       },
       view(): { scale: number; offsetX: number; offsetY: number } {
         return { ...view }

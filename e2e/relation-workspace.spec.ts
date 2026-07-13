@@ -214,6 +214,14 @@ test('production abstraction statuses distinguish exhaustive, exhausted, invalid
   })
 })
 
+test('mounted abstraction captures marker geometry from the current scenario engine', async ({ page }) => {
+  await openFixture(page)
+  await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('multi-set'))
+  await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('stale-source'))
+
+  expect((await state(page)).debug?.transaction?.markerPoint).toEqual({ x: 177, y: 93 })
+})
+
 test('mounted production multi-set transaction cycles exactly in both Tab directions', async ({ page }) => {
   await openFixture(page)
   await page.evaluate(() => window.relationWorkspaceFixture.mountAbstractionScenario('multi-set'))
