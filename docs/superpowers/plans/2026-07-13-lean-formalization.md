@@ -177,6 +177,8 @@ theorem Term.renameBound_comp
 theorem Term.lift_renameBound
 theorem Term.renameBound_substBound
 theorem Term.substBound_renameBound
+theorem Term.renameBound_substBoundOption
+theorem Term.substBoundOption_renameBound
 theorem Term.substBound_comp
 theorem Term.lift_substBound
 theorem Term.renameBound_bindFree
@@ -189,6 +191,9 @@ the quotient construction if it is not derivable from these statements and
 `substBound` and `substBoundOption` must be instantiations of the single
 `traverseBound` recursion; the reduction module may not own a second recursive
 substitution engine for eta unlift.
+The two Option naturality theorems must expose both directions needed by eta
+provenance: mapping a renaming over a successful partial substitution, and applying
+partial substitution after a source renaming.
 
 - [ ] **Step 4: Make the public import compile**
 
