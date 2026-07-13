@@ -49,12 +49,12 @@
 
 **Produces:** Executable ambient-wire and binder contexts, endpoint-owner lookup, ordered port resolution, named-reference lookup, and all checked success/uniqueness lemmas needed by the kernel.
 
-- [ ] Represent ambient concrete wires by an indexed enumeration synchronized with intrinsic `Fin wires`; extend it by the current exact-scope local-wire fiber using outer-prefix/local-suffix layout.
-- [ ] Represent active bubbles in de Bruijn order with concrete region identity and arity; prove entering a bubble produces the head `RelVar` and lifts existing binders.
-- [ ] Define private finite endpoint-owner lookup and prove coverage plus disjointness/nodup give the unique incident wire for every required port.
-- [ ] Prove `WireScopesEnclose` makes every resolved node port active in its lexical wire environment.
-- [ ] Prove `AtomBindersAreBubbles` and `AtomBindersEnclose` make the exact concrete binder available with its arity; prove named lookup succeeds from `NamedReferencesResolve`.
-- [ ] Build and inspect theorem axioms; commit independently.
+- [x] Represent ambient concrete wires by an indexed enumeration synchronized with intrinsic `Fin wires`; extend it by the current exact-scope local-wire fiber using outer-prefix/local-suffix layout.
+- [x] Represent active bubbles in de Bruijn order with concrete region identity and arity; prove entering a bubble produces the head `RelVar` and lifts existing binders.
+- [x] Define private finite endpoint-owner lookup and prove coverage plus disjointness/nodup give the unique incident wire for every required port.
+- [x] Prove `WireScopesEnclose` makes every resolved node port active in its lexical wire environment.
+- [x] Prove `AtomBindersAreBubbles` and `AtomBindersEnclose` make the exact concrete binder available with its arity; prove named lookup succeeds from `NamedReferencesResolve`.
+- [x] Build and inspect theorem axioms; commit independently.
 
 ---
 
