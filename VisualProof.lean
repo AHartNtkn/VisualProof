@@ -10,3 +10,4 @@ import VisualProof.Diagram.Boundary
 import VisualProof.Diagram.Rename
 import VisualProof.Diagram.Semantics
 import VisualProof.Diagram.Context
+import VisualProof.Diagram.Isomorphism

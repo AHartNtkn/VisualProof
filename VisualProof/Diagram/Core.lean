@@ -31,6 +31,15 @@ end
 
 namespace ItemSeq
 
+def length : ItemSeq signature wires rels -> Nat
+  | .nil => 0
+  | .cons _ tail => Nat.succ tail.length
+
+def get : (items : ItemSeq signature wires rels) ->
+    Fin items.length -> Item signature wires rels
+  | .nil, index => Fin.elim0 index
+  | .cons head tail, index => Fin.cases head tail.get index
+
 def append : ItemSeq signature wires rels -> ItemSeq signature wires rels ->
     ItemSeq signature wires rels
   | .nil, suffix => suffix
