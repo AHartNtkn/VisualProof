@@ -33,6 +33,7 @@ type CopyDrag = {
   destination: CopyDestination | null
   moved: boolean
   current: boolean
+  sample: PointerSample
 }
 
 function sameHit(a: Hit, b: Hit): boolean {
@@ -106,7 +107,7 @@ export class CopyDragController {
     } catch {
       return null
     }
-    const drag: CopyDrag = { source, selection, plan: null, destination: null, moved: false, current: true }
+    const drag: CopyDrag = { source, selection, plan: null, destination: null, moved: false, current: true, sample }
     this.#drag = drag
     return {
       still: 'selection',
@@ -114,6 +115,7 @@ export class CopyDragController {
       move: (next) => {
         if (!drag.current || this.#drag !== drag || !this.#options.active()) return
         drag.moved = true
+        drag.sample = next
         const destination = this.#options.destination(next)
         drag.destination = destination
         if (destination === null) {
@@ -146,19 +148,19 @@ export class CopyDragController {
   }
 
   overlay(): readonly Shape[] {
-    return [...this.sourceOverlay(), ...this.destinationOverlay()]
+    const drag = this.#previewableDrag()
+    if (drag === null) return []
+    return [...this.#sourceShapes(drag), ...this.#destinationShapes(drag)]
   }
 
   sourceOverlay(): readonly Shape[] {
-    const drag = this.#drag
-    if (drag === null || !drag.current || !drag.moved || drag.plan === null) return []
-    return selectionShapes(this.#options.sourceEngine(), drag.selection, this.#options.theme().interaction.valid)
+    const drag = this.#previewableDrag()
+    return drag === null ? [] : this.#sourceShapes(drag)
   }
 
   destinationOverlay(): readonly Shape[] {
-    const drag = this.#drag
-    if (drag === null || !drag.current || !drag.moved || drag.plan === null || drag.destination === null) return []
-    return this.#options.destinationPreview?.(drag.destination, drag.plan) ?? []
+    const drag = this.#previewableDrag()
+    return drag === null ? [] : this.#destinationShapes(drag)
   }
 
   cancel(): void {
@@ -174,5 +176,23 @@ export class CopyDragController {
   #cancel(drag: CopyDrag): void {
     drag.current = false
     if (this.#drag === drag) this.#drag = null
+  }
+
+  #previewableDrag(): CopyDrag | null {
+    const drag = this.#drag
+    if (drag === null || !drag.current || !drag.moved || drag.plan === null || drag.destination === null
+      || !this.#options.active()) return null
+    const destination = this.#options.destination(drag.sample)
+    if (destination === null) return null
+    return revalidateCopy(drag.plan, this.#options.sourceDiagram(), destination).kind === 'refusal' ? null : drag
+  }
+
+  #sourceShapes(drag: CopyDrag): readonly Shape[] {
+    return selectionShapes(this.#options.sourceEngine(), drag.selection, this.#options.theme().interaction.valid)
+  }
+
+  #destinationShapes(drag: CopyDrag): readonly Shape[] {
+    if (drag.destination === null || drag.plan === null) return []
+    return this.#options.destinationPreview?.(drag.destination, drag.plan) ?? []
   }
 }

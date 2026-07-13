@@ -178,6 +178,7 @@ describe('CopyDragController', () => {
     const stale = controller.claim(at)!
     stale.move(at)
     source = new DiagramBuilder().build()
+    expect(controller.overlay()).toEqual([])
     stale.release(at, true)
     expect(commits).toEqual([])
     expect(refusals.join(' ')).toMatch(/stale|changed/i)
