@@ -164,6 +164,25 @@ may be used only to confirm that Lean accepts the statement. Prove each theorem 
 induction on `t`; the lambda case uses the lifted substitution induced by
 `Fin.cases`. Remove every admission before verification or commit.
 
+Export the complete algebra consumed by reduction and quotient semantics from the
+owning modules rather than rebuilding it privately downstream:
+
+```lean
+theorem Term.renameBound_id
+theorem Term.renameBound_comp
+theorem Term.lift_renameBound
+theorem Term.renameBound_substBound
+theorem Term.substBound_renameBound
+theorem Term.substBound_comp
+theorem Term.lift_substBound
+theorem Term.renameBound_bindFree
+```
+
+The exact dependent arguments must express composition/naturality across differing
+bound scopes. Add the narrow free-binding/substitution interchange lemma required by
+the quotient construction if it is not derivable from these statements and
+`bindFree_assoc`; keep that law in `Substitute.lean`, not in a reduction consumer.
+
 - [ ] **Step 4: Make the public import compile**
 
 Create `VisualProof.lean` importing the three lambda modules. Run:
