@@ -8,3 +8,4 @@ import VisualProof.Theory.Signature
 import VisualProof.Diagram.Core
 import VisualProof.Diagram.Boundary
 import VisualProof.Diagram.Rename
+import VisualProof.Diagram.Semantics
