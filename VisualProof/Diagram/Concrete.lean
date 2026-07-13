@@ -1,1 +1,1 @@
-import VisualProof.Diagram.Concrete.Core
+import VisualProof.Diagram.Concrete.WellFormed
