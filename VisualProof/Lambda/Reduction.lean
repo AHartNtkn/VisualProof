@@ -2,94 +2,16 @@ import VisualProof.Lambda.Substitute
 
 namespace VisualProof.Lambda
 
-private def liftOptionSubstitution (σ : Fin n → Option (Term m α)) :
-    Fin (n + 1) → Option (Term (m + 1) α) :=
-  Fin.cases (some (Term.bvar 0)) (fun i => (σ i).map Term.lift)
-
-private def Term.substBoundOption (σ : Fin n → Option (Term m α)) :
-    Term n α → Option (Term m α)
-  | .bvar i => σ i
-  | .port x => some (.port x)
-  | .lam body => (body.substBoundOption (liftOptionSubstitution σ)).map Term.lam
-  | .app fn arg =>
-      match fn.substBoundOption σ, arg.substBoundOption σ with
-      | some fn', some arg' => some (.app fn' arg')
-      | _, _ => none
-
 private def dropZero : Fin (n + 1) → Option (Term n α) :=
   Fin.cases none (fun i => some (Term.bvar i))
 
 def Term.unlift (t : Term (n + 1) α) : Option (Term n α) :=
   t.substBoundOption dropZero
 
-private theorem Term.substBoundOption_rename_leftInverse
-    (t : Term n α) (ρ : Fin n → Fin m)
-    (σ : Fin m → Option (Term n α))
-    (hσ : ∀ i, σ (ρ i) = some (Term.bvar i)) :
-    (t.renameBound ρ).substBoundOption σ = some t := by
-  induction t generalizing m with
-  | bvar i => exact hσ i
-  | port _ => rfl
-  | lam body ih =>
-      simp only [Term.renameBound, Term.substBoundOption, Option.map_eq_some_iff]
-      refine ⟨body, ?_, rfl⟩
-      apply ih
-      intro i
-      refine Fin.cases ?_ (fun j => ?_) i
-      · rfl
-      · change Option.map Term.lift (σ (ρ j)) = some (Term.bvar j.succ)
-        rw [hσ]
-        rfl
-  | app fn arg ihFn ihArg =>
-      simp only [Term.renameBound, Term.substBoundOption]
-      rw [ihFn ρ σ hσ, ihArg ρ σ hσ]
-
 theorem Term.unlift_lift (t : Term n α) : t.lift.unlift = some t := by
   apply Term.substBoundOption_rename_leftInverse
   intro i
   rfl
-
-private theorem Term.renameBound_of_substBoundOption
-    (t : Term n α) (σ : Fin n → Option (Term m α))
-    (ρ : Fin m → Fin n) {u : Term m α}
-    (hσ : ∀ i v, σ i = some v → v.renameBound ρ = Term.bvar i)
-    (h : t.substBoundOption σ = some u) :
-    u.renameBound ρ = t := by
-  induction t generalizing m with
-  | bvar i => exact hσ i u h
-  | port _ => cases h; rfl
-  | lam body ih =>
-      simp only [Term.substBoundOption, Option.map_eq_some_iff] at h
-      obtain ⟨body', hbody, rfl⟩ := h
-      apply congrArg Term.lam
-      apply ih (σ := liftOptionSubstitution σ)
-        (ρ := Fin.cases 0 (fun i => Fin.succ (ρ i))) (u := body') ?_ hbody
-      exact fun i => Fin.cases
-        (fun v hv => by
-          change some (Term.bvar 0) = some v at hv
-          cases hv
-          rfl)
-        (fun j v hv => by
-          change Option.map Term.lift (σ j) = some v at hv
-          obtain ⟨w, hw, rfl⟩ := Option.map_eq_some_iff.mp hv
-          rw [← Term.lift_renameBound, hσ j w hw]
-          rfl)
-        i
-  | app fn arg ihFn ihArg =>
-      simp only [Term.substBoundOption] at h
-      generalize hfn : Term.substBoundOption σ fn = ofn at h
-      generalize harg : Term.substBoundOption σ arg = oarg at h
-      cases ofn with
-      | none => cases oarg <;> contradiction
-      | some fn' =>
-          cases oarg with
-          | none => contradiction
-          | some arg' =>
-              cases h
-              simp only [Term.renameBound]
-              congr
-              · exact ihFn (σ := σ) (ρ := ρ) (u := fn') hσ hfn
-              · exact ihArg (σ := σ) (ρ := ρ) (u := arg') hσ harg
 
 theorem Term.unlift_sound {t : Term (n + 1) α} {u : Term n α}
     (h : t.unlift = some u) : t = u.lift := by
@@ -177,7 +99,7 @@ theorem BetaEta.app {fn fn' arg arg' : Term n α}
     BetaEta (Term.app fn arg) (Term.app fn' arg') :=
   (hfn.appFn arg).trans (harg.appArg fn')
 
--- Required transport and confluence statements are declared before proof work.
+-- Required transport statements are declared before proof work.
 private theorem OneStep.renameBound {a b : Term n α} (h : OneStep a b)
     (ρ : Fin n → Fin m) : OneStep (a.renameBound ρ) (b.renameBound ρ) := by
   induction h generalizing m with
