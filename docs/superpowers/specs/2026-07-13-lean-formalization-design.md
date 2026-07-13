@@ -129,14 +129,20 @@ A separate `Concrete.WellFormed signature` proposition establishes:
 - total coverage of every required node port.
 
 One structured checker decides exactly this proposition and returns either a named
-`WFError` or the proof. Both directions are proved:
+`WFError` or the already-authoritative checked subtype. It never lifts or boxes a
+proof separately. Successful-output identity and both logical directions are
+proved:
 
 ```lean
-theorem checkWellFormed_sound :
-  checkWellFormed signature d = .ok h → d.WellFormed signature
+def checkWellFormed (signature : List Nat) (d : ConcreteDiagram) :
+  Except WFError (CheckedDiagram signature)
 
-theorem checkWellFormed_complete :
-  d.WellFormed signature → ∃ h, checkWellFormed signature d = .ok h
+theorem checkWellFormed_preserves_input :
+  checkWellFormed signature d = .ok checked → checked.val = d
+
+theorem checkWellFormed_iff :
+  (∃ checked, checkWellFormed signature d = .ok checked ∧ checked.val = d) ↔
+    d.WellFormed signature
 ```
 
 Parent ancestry is backed by a bounded path or decreasing-rank certificate, so no

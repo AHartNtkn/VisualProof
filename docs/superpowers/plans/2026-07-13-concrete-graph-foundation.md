@@ -138,7 +138,7 @@ git commit -m "feat(formal): define total finite concrete graphs"
 
 **Interfaces:**
 - Consumes: every predicate from Task 1.
-- Produces: the named invariant predicates, `ConcreteDiagram.WellFormed`, `CheckedDiagram`, `OpenConcreteDiagram.WellFormed`, `WFError`, `checkWellFormed`, `checkWellFormed_sound`, `checkWellFormed_complete`, and `checkWellFormed_iff`.
+- Produces: the named invariant predicates, `ConcreteDiagram.WellFormed`, `CheckedDiagram`, `OpenConcreteDiagram.WellFormed`, `WFError`, `checkWellFormed`, `checkWellFormed_preserves_input`, `checkWellFormed_complete`, and `checkWellFormed_iff`.
 
 - [ ] **Step 1: State each independently decidable invariant**
 
@@ -158,7 +158,7 @@ RequiredPortsAreCovered d
 WireScopesEnclose d
 ```
 
-`NamedReferencesResolve` requires `signature.get? definition = some arity` for every named node. `EndpointsAreNodup` is per-wire `List.Nodup`; `WireEndpointsAreDisjoint` forbids one endpoint value appearing in distinct wires; together with `RequiredPortsAreCovered` and `EndpointsAreValid`, these state exact incidence.
+`NamedReferencesResolve` requires `signature[definition]? = some arity` for every named node. `EndpointsAreNodup` is per-wire `List.Nodup`; `WireEndpointsAreDisjoint` forbids one endpoint value appearing in distinct wires; together with `RequiredPortsAreCovered` and `EndpointsAreValid`, these state exact incidence. Where Lean cannot synthesize a dependent finite `Decidable` instance, implement its constructive `Fin` eliminator explicitly rather than adding a Boolean mirror.
 
 - [ ] **Step 2: Assemble the sole contract**
 
@@ -205,33 +205,41 @@ Each constructor corresponds one-to-one with one failed invariant. Do not add a 
 
 - [ ] **Step 4: Implement the single checker**
 
-Implement `checkWellFormed (signature) (d) : Except WFError (d.WellFormed signature)` as one ordered chain of dependent `if h : Invariant ...` checks. Return the matching error at the first failure and construct `WellFormed` only after all eleven proofs are in scope.
+Implement:
+
+```lean
+def checkWellFormed (signature : List Nat) (d : ConcreteDiagram) :
+    Except WFError (CheckedDiagram signature)
+```
+
+as one ordered chain of dependent `if h : Invariant ...` checks. Return the matching error at the first failure and return `⟨d, WellFormed.mk ...⟩` only after all eleven proofs are in scope. Do not introduce `PLift`, a proof box, a custom dependent result, or another checked subtype.
 
 - [ ] **Step 5: Prove exact acceptance**
 
 State first, then prove without admissions:
 
 ```lean
-theorem checkWellFormed_sound
-    (hcheck : checkWellFormed signature d = .ok h) :
-    d.WellFormed signature := h
+theorem checkWellFormed_preserves_input
+    (hcheck : checkWellFormed signature d = .ok checked) :
+    checked.val = d
 
 theorem checkWellFormed_complete
     (h : d.WellFormed signature) :
-    exists checked, checkWellFormed signature d = .ok checked
+    checkWellFormed signature d = .ok ⟨d, h⟩
 
 theorem checkWellFormed_iff :
-    (exists checked, checkWellFormed signature d = .ok checked) <->
+    (exists checked, checkWellFormed signature d = .ok checked /\
+      checked.val = d) <->
       d.WellFormed signature
 ```
 
-The completeness proof unfolds the checker and discharges every branch from the corresponding field of `h`; proof irrelevance closes the returned proof equality.
+The preservation proof unfolds only the successful checker path. The completeness proof unfolds the checker and discharges every branch from the corresponding field of `h`; proof irrelevance closes the returned subtype equality.
 
 - [ ] **Step 6: Elaborate and scan**
 
 Run: `lake build VisualProof.Diagram.Concrete.WellFormed`
 
-Expected: focused elaboration passes. Scan the concrete modules for `sorry`, `admit`, project `axiom`, `Bool` validators, a second checked subtype, and unbounded parent recursion; expect no findings.
+Expected: focused elaboration passes. Scan the concrete modules for `sorry`, `admit`, project `axiom`, `PLift`, custom proof/result wrappers, `Bool` validators, a second checked subtype, and unbounded parent recursion; expect no findings.
 
 - [ ] **Step 7: Commit**
 
@@ -258,7 +266,8 @@ Define a three-region graph `sheet -> bubble(1) -> cut`, with a closed term node
 
 ```lean
 theorem validNested_check :
-  exists h, checkWellFormed [] validNested = .ok h
+  exists checked, checkWellFormed [] validNested = .ok checked /\
+    checked.val = validNested
 ```
 
 - [ ] **Step 2: Define every rejected graph and state its checker theorem**
