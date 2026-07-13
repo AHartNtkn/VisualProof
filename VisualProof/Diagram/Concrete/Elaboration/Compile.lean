@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Elaboration.Context
+import VisualProof.Diagram.Concrete.Open
 import VisualProof.Diagram.Concrete.Examples
 import VisualProof.Diagram.Concrete.Isomorphism
 
@@ -598,12 +599,42 @@ private theorem compileOccurrencesWith?_get
               · have ihResult := ih hrest tailIndex
                 simpa only [List.get, ItemSeq.get] using ihResult
 
+private theorem compileOccurrencesWith?_complete
+    (recurse : forall {rels : RelCtx},
+      (region : Fin d.regionCount) →
+      (context : WireContext d) → BinderContext d rels →
+      Option (Region signature context.length rels))
+    (context : WireContext d) (binders : BinderContext d rels)
+    (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
+    (hsuccess : forall occurrence, occurrence ∈ occurrences →
+      exists item,
+        compileOccurrenceWith? signature d recurse context binders occurrence =
+          some item) :
+    exists items,
+      compileOccurrencesWith? signature d recurse context binders occurrences =
+        some items := by
+  induction occurrences with
+  | nil => exact ⟨.nil, rfl⟩
+  | cons occurrence tail ih =>
+      obtain ⟨item, hitem⟩ := hsuccess occurrence (by simp)
+      obtain ⟨rest, hrest⟩ := ih (by
+        intro candidate hcandidate
+        exact hsuccess candidate (by simp [hcandidate]))
+      exact ⟨.cons item rest, by
+        simp [compileOccurrencesWith?, hitem, hrest]⟩
+
 private def finishRegion (d : ConcreteDiagram)
     (context : WireContext d) (region : Fin d.regionCount)
     (items : ItemSeq signature (context.extend region).length rels) :
     Region signature context.length rels := by
   rw [WireContext.length_extend] at items
   exact .mk (exactScopeWires d region).length items
+
+private def finishOpenRoot (d : OpenConcreteDiagram)
+    (items : ItemSeq signature d.rootWires.length []) :
+    Region signature d.exposedWires.length [] :=
+  .mk d.hiddenWires.length (by
+    simpa [OpenConcreteDiagram.rootWires] using items)
 
 private def castItemSeq (equality : sourceWires = targetWires)
     (items : ItemSeq signature sourceWires rels) :
@@ -951,28 +982,8 @@ private theorem compileRegion?_complete
       have hoccurrences : exists items,
           compileOccurrencesWith? signature d (compileRegion? signature d fuel)
             extended binders (localOccurrences d region) = some items := by
-        have go : forall occurrences :
-            List (LocalOccurrence d.regionCount d.nodeCount),
-            (forall occurrence, occurrence ∈ occurrences ->
-              exists item,
-                compileOccurrenceWith? signature d
-                    (compileRegion? signature d fuel) extended binders occurrence =
-                  some item) ->
-            exists items,
-              compileOccurrencesWith? signature d (compileRegion? signature d fuel)
-                extended binders occurrences = some items := by
-          intro occurrences
-          induction occurrences with
-          | nil => intro _; exact ⟨.nil, rfl⟩
-          | cons occurrence tail ihTail =>
-              intro hsuccess
-              obtain ⟨item, hitem⟩ := hsuccess occurrence (by simp)
-              obtain ⟨rest, hrest⟩ := ihTail (by
-                intro candidate hcandidate
-                exact hsuccess candidate (by simp [hcandidate]))
-              exact ⟨.cons item rest, by
-                simp [compileOccurrencesWith?, hitem, hrest]⟩
-        exact go _ hoccurrence
+        exact compileOccurrencesWith?_complete
+          (compileRegion? signature d fuel) extended binders _ hoccurrence
       obtain ⟨items, hitems⟩ := hoccurrences
       refine ⟨finishRegion d context region items, ?_⟩
       simp only [compileRegion?]
@@ -994,6 +1005,90 @@ private theorem compileRoot?_complete (checked : CheckedDiagram signature) :
   · omega
   · exact WireContext.root_exact checked.property
   · exact BinderContext.empty_covers_root checked.property
+
+/--
+Compile only the open root specially. Descendant regions are handled by the
+same recursive compiler as closed elaboration.
+-/
+private def compileOpenRoot? (signature : List Nat)
+    (d : OpenConcreteDiagram) :
+    Option (Region signature d.exposedWires.length []) := do
+  let items <- compileOccurrencesWith? signature d.diagram
+    (compileRegion? signature d.diagram d.diagram.regionCount)
+    d.rootWires BinderContext.empty
+    (localOccurrences d.diagram d.diagram.root)
+  pure (finishOpenRoot d items)
+
+private theorem compileOpenRoot?_complete
+    (checked : CheckedOpenDiagram signature) :
+    exists body, compileOpenRoot? signature checked.val = some body := by
+  let d := checked.val
+  let diagram := d.diagram
+  have hwf : diagram.WellFormed signature :=
+    checked.property.diagram_well_formed
+  have hwires : WireContext.Exact d.rootWires diagram.root :=
+    checked.property.rootWires_exact
+  have hbinders : (BinderContext.empty : BinderContext diagram []).Covers
+      diagram.root :=
+    BinderContext.empty_covers_root hwf
+  have hoccurrence : forall occurrence,
+      occurrence ∈ localOccurrences diagram diagram.root →
+      exists item,
+        compileOccurrenceWith? signature diagram
+            (compileRegion? signature diagram diagram.regionCount)
+            d.rootWires BinderContext.empty occurrence = some item := by
+    intro occurrence hmem
+    cases occurrence with
+    | node node =>
+        have hnodeRegion :=
+          (mem_localOccurrences_node diagram diagram.root node).mp hmem
+        simpa [compileOccurrenceWith?] using
+          compileNode?_complete hwf hwires.covers hbinders hnodeRegion
+    | child child =>
+        have hparent :=
+          (mem_localOccurrences_child diagram diagram.root child).mp hmem
+        cases hchild : diagram.regions child with
+        | sheet =>
+            have hchildRoot : child = diagram.root :=
+              hwf.only_root_is_sheet child hchild
+            subst child
+            rw [hwf.root_is_sheet] at hparent
+            simp [CRegion.parent?] at hparent
+        | cut parent =>
+            have hparentEq : parent = diagram.root := by
+              simpa [hchild, CRegion.parent?] using hparent
+            subst parent
+            have hchildDepth : diagram.climb 1 child = some diagram.root := by
+              simp [ConcreteDiagram.climb, hparent]
+            have hchildWires := hwires.extend_child hwf hparent
+            have hchildBinders :=
+              BinderContext.covers_cut_child hbinders hchild
+            obtain ⟨body, hbody⟩ := compileRegion?_complete hwf
+              (depth := 1) (fuel := diagram.regionCount)
+              hchildDepth (by omega) hchildWires hchildBinders
+            exact ⟨Item.cut body, by
+              simp [compileOccurrenceWith?, hchild, hbody]⟩
+        | bubble parent arity =>
+            have hparentEq : parent = diagram.root := by
+              simpa [hchild, CRegion.parent?] using hparent
+            subst parent
+            have hchildDepth : diagram.climb 1 child = some diagram.root := by
+              simp [ConcreteDiagram.climb, hparent]
+            have hchildWires := hwires.extend_child hwf hparent
+            have hchildBinders :=
+              BinderContext.push_covers_bubble_child hbinders hchild
+            obtain ⟨body, hbody⟩ := compileRegion?_complete hwf
+              (depth := 1) (fuel := diagram.regionCount)
+              hchildDepth (by omega) hchildWires hchildBinders
+            exact ⟨Item.bubble arity body, by
+              simp [compileOccurrenceWith?, hchild, hbody]⟩
+  obtain ⟨items, hitems⟩ := compileOccurrencesWith?_complete
+    (compileRegion? signature diagram diagram.regionCount)
+    d.rootWires BinderContext.empty _ hoccurrence
+  exact ⟨finishOpenRoot d items, by
+    simp only [compileOpenRoot?]
+    rw [hitems]
+    rfl⟩
 
 end VisualProof.Diagram.ConcreteElaboration
 
@@ -1019,6 +1114,60 @@ private theorem elaborate_computation (checked : CheckedDiagram signature) :
   simp [elaborate, hbody]
 
 end CheckedDiagram
+
+namespace CheckedOpenDiagram
+
+/-- Total elaboration of a checked open concrete diagram. -/
+def elaborate (checked : CheckedOpenDiagram signature) :
+    OpenDiagram signature checked.val.boundary.length where
+  externalClasses := checked.val.exposedWires.length
+  boundary := checked.val.boundaryClass
+  boundary_surjective := checked.val.boundaryClass_surjective
+  body := (compileOpenRoot? signature checked.val).get
+    (Option.isSome_iff_exists.mpr (compileOpenRoot?_complete checked))
+
+@[simp] theorem elaborate_externalClasses
+    (checked : CheckedOpenDiagram signature) :
+    checked.elaborate.externalClasses = checked.val.exposedWires.length :=
+  rfl
+
+@[simp] theorem elaborate_boundary
+    (checked : CheckedOpenDiagram signature) :
+    checked.elaborate.boundary = checked.val.boundaryClass :=
+  rfl
+
+private theorem elaborate_body_computation
+    (checked : CheckedOpenDiagram signature) :
+    exists body, compileOpenRoot? signature checked.val = some body ∧
+      checked.elaborate.body = body := by
+  obtain ⟨body, hbody⟩ := compileOpenRoot?_complete checked
+  refine ⟨body, hbody, ?_⟩
+  simp [elaborate, hbody]
+
+end CheckedOpenDiagram
+
+namespace OpenConcreteDiagram
+
+def elaborate (d : OpenConcreteDiagram) (hwf : d.WellFormed signature) :
+    OpenDiagram signature d.boundary.length :=
+  CheckedOpenDiagram.elaborate ⟨d, hwf⟩
+
+theorem elaborate_proof_irrelevant (d : OpenConcreteDiagram)
+    (first second : d.WellFormed signature) :
+    d.elaborate first = d.elaborate second := by
+  rfl
+
+@[simp] theorem elaborate_externalClasses (d : OpenConcreteDiagram)
+    (hwf : d.WellFormed signature) :
+    (d.elaborate hwf).externalClasses = d.exposedWires.length :=
+  rfl
+
+@[simp] theorem elaborate_boundary (d : OpenConcreteDiagram)
+    (hwf : d.WellFormed signature) :
+    (d.elaborate hwf).boundary = d.boundaryClass :=
+  rfl
+
+end OpenConcreteDiagram
 
 namespace ConcreteDiagram
 
@@ -1090,6 +1239,28 @@ def validNestedChecked : CheckedDiagram [] :=
 def bareWireChecked : CheckedDiagram [] :=
   ⟨bareWire, checkWellFormed_iff.mp bareWire_check⟩
 
+def repeatedBoundaryChecked : CheckedOpenDiagram [] :=
+  ⟨repeatedBoundary, repeatedBoundary_wellFormed⟩
+
+def exposedAndHiddenOpenChecked : CheckedOpenDiagram [] :=
+  ⟨exposedAndHiddenOpen, exposedAndHiddenOpen_wellFormed⟩
+
+theorem repeatedBoundary_elaborate_shape :
+    repeatedBoundaryChecked.elaborate.externalClasses = 1 ∧
+      repeatedBoundaryChecked.elaborate.boundary ⟨0, by decide⟩ =
+        (⟨0, by decide⟩ : Fin 1) ∧
+      repeatedBoundaryChecked.elaborate.boundary ⟨1, by decide⟩ =
+        (⟨0, by decide⟩ : Fin 1) ∧
+      repeatedBoundaryChecked.elaborate.body = (.mk 0 .nil : Region [] 1 []) := by
+  exact ⟨rfl, rfl, rfl, rfl⟩
+
+theorem exposedAndHiddenOpen_elaborate_shape :
+    exposedAndHiddenOpenChecked.elaborate.externalClasses = 1 ∧
+      exposedAndHiddenOpenChecked.elaborate.boundary ⟨0, by decide⟩ =
+        (⟨0, by decide⟩ : Fin 1) ∧
+      exposedAndHiddenOpenChecked.elaborate.body = (.mk 1 .nil : Region [] 1 []) := by
+  exact ⟨rfl, rfl, rfl⟩
+
 def unaryHead : RelVar [1] 1 where
   index := 0
   hasArity := rfl
@@ -1124,6 +1295,42 @@ theorem bareWire_elaborate :
     change some bareLocalWireExample = some body at hkernel'
     exact Option.some.inj hkernel'.symm
   exact helaborate.trans hbody
+
+theorem repeatedBoundary_open_elaborate_shape :
+    repeatedBoundaryChecked.elaborate.externalClasses = 1 ∧
+      repeatedBoundaryChecked.elaborate.boundary ⟨0, by decide⟩ =
+        ⟨0, by
+          rw [CheckedOpenDiagram.elaborate_externalClasses]
+          decide⟩ ∧
+      repeatedBoundaryChecked.elaborate.boundary ⟨1, by decide⟩ =
+        ⟨0, by
+          rw [CheckedOpenDiagram.elaborate_externalClasses]
+          decide⟩ ∧
+      repeatedBoundaryChecked.elaborate.body = Region.mk 0 .nil := by
+  obtain ⟨body, hkernel, helaborate⟩ :=
+    CheckedOpenDiagram.elaborate_body_computation repeatedBoundaryChecked
+  have hbody : body = Region.mk 0 .nil := by
+    have hkernel' := hkernel
+    simp only [repeatedBoundaryChecked] at hkernel'
+    change some (Region.mk 0 .nil) = some body at hkernel'
+    exact Option.some.inj hkernel'.symm
+  exact ⟨rfl, rfl, rfl, helaborate.trans hbody⟩
+
+theorem exposedAndHidden_open_elaborate_shape :
+    exposedAndHiddenOpenChecked.elaborate.externalClasses = 1 ∧
+      exposedAndHiddenOpenChecked.elaborate.boundary ⟨0, by decide⟩ =
+        ⟨0, by
+          rw [CheckedOpenDiagram.elaborate_externalClasses]
+          decide⟩ ∧
+      exposedAndHiddenOpenChecked.elaborate.body = Region.mk 1 .nil := by
+  obtain ⟨body, hkernel, helaborate⟩ :=
+    CheckedOpenDiagram.elaborate_body_computation exposedAndHiddenOpenChecked
+  have hbody : body = Region.mk 1 .nil := by
+    have hkernel' := hkernel
+    simp only [exposedAndHiddenOpenChecked] at hkernel'
+    change some (Region.mk 1 .nil) = some body at hkernel'
+    exact Option.some.inj hkernel'.symm
+  exact ⟨rfl, rfl, helaborate.trans hbody⟩
 
 theorem validNestedRelabeled_elaborate_isomorphic :
     Core.Isomorphic validNestedChecked.elaborate
