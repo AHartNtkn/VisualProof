@@ -18,22 +18,7 @@ def Term.bindFree (σ : α → Term n β) : Term n α → Term n β
   | .lam body => .lam (body.bindFree (fun x => (σ x).lift))
   | .app fn arg => .app (fn.bindFree σ) (arg.bindFree σ)
 
-private theorem Term.renameBound_comp
-    (t : Term n α) (ρ : Fin n → Fin m) (τ : Fin m → Fin k) :
-    (t.renameBound ρ).renameBound τ = t.renameBound (τ ∘ ρ) := by
-  induction t generalizing m k with
-  | bvar _ => rfl
-  | port _ => rfl
-  | lam body ih =>
-      simp only [renameBound]
-      apply congrArg TermCore.lam
-      rw [ih]
-      apply congrArg (fun r => Term.renameBound r body)
-      funext i
-      refine Fin.cases ?_ (fun _ => ?_) i <;> rfl
-  | app _ _ ihFn ihArg => simp only [renameBound, ihFn, ihArg]
-
-private theorem Term.renameBound_bindFree
+theorem Term.renameBound_bindFree
     (t : Term n α) (f : α → Term n β) (ρ : Fin n → Fin m) :
     (t.bindFree f).renameBound ρ =
       (t.renameBound ρ).bindFree (fun x => (f x).renameBound ρ) := by
@@ -55,6 +40,39 @@ private theorem Term.renameBound_bindFree
       rfl
   | app _ _ ihFn ihArg => simp only [bindFree, renameBound, ihFn, ihArg]
 
+theorem Term.renameBound_substBound
+    (t : Term n α) (σ : Fin n → Term m α) (ρ : Fin m → Fin k) :
+    (t.substBound σ).renameBound ρ =
+      t.substBound (fun i => (σ i).renameBound ρ) := by
+  induction t generalizing m k with
+  | bvar _ => rfl
+  | port _ => rfl
+  | lam body ih =>
+      simp only [substBound, renameBound]
+      apply congrArg Term.lam
+      rw [ih]
+      apply congrArg (fun s => Term.substBound s body)
+      funext i
+      refine Fin.cases ?_ (fun j => ?_) i
+      · rfl
+      · exact (lift_renameBound (σ j) ρ).symm
+  | app _ _ ihFn ihArg => simp only [substBound, renameBound, ihFn, ihArg]
+
+theorem Term.substBound_renameBound
+    (t : Term n α) (ρ : Fin n → Fin m) (σ : Fin m → Term k α) :
+    (t.renameBound ρ).substBound σ = t.substBound (σ ∘ ρ) := by
+  induction t generalizing m k with
+  | bvar _ => rfl
+  | port _ => rfl
+  | lam body ih =>
+      simp only [renameBound, substBound]
+      apply congrArg Term.lam
+      rw [ih]
+      apply congrArg (fun s => Term.substBound s body)
+      funext i
+      refine Fin.cases ?_ (fun _ => ?_) i <;> rfl
+  | app _ _ ihFn ihArg => simp only [renameBound, substBound, ihFn, ihArg]
+
 theorem Term.substBound_id (t : Term n α) :
     t.substBound Term.bvar = t := by
   induction t with
@@ -69,6 +87,84 @@ theorem Term.substBound_id (t : Term n α) :
         · rfl]
       exact congrArg Term.lam ih
   | app _ _ ihFn ihArg => simp only [substBound, ihFn, ihArg]
+
+theorem Term.lift_substBound
+    (t : Term n α) (σ : Fin n → Term m α) :
+    (t.substBound σ).lift =
+      t.lift.substBound
+        (Fin.cases (Term.bvar 0) (fun i => (σ i).lift)) := by
+  simp only [lift, renameBound_substBound, substBound_renameBound]
+  apply congrArg (fun s => t.substBound s)
+  funext i
+  rfl
+
+theorem Term.substBound_comp
+    (t : Term n α) (σ : Fin n → Term m α) (τ : Fin m → Term k α) :
+    (t.substBound σ).substBound τ =
+      t.substBound (fun i => (σ i).substBound τ) := by
+  induction t generalizing m k with
+  | bvar _ => rfl
+  | port _ => rfl
+  | lam body ih =>
+      simp only [substBound]
+      apply congrArg Term.lam
+      rw [ih]
+      apply congrArg (fun s => Term.substBound s body)
+      funext i
+      refine Fin.cases ?_ (fun j => ?_) i
+      · rfl
+      · exact (lift_substBound (σ j) τ).symm
+  | app _ _ ihFn ihArg => simp only [substBound, ihFn, ihArg]
+
+private theorem Term.bindFree_substBound_of_compatible
+    (t : Term n α)
+    (σ : Fin n → Term m α)
+    (f : α → Term n β)
+    (g : α → Term m β)
+    (τ : Fin n → Term m β)
+    (hbound : ∀ i, (σ i).bindFree g = τ i)
+    (hfree : ∀ x, g x = (f x).substBound τ) :
+    (t.substBound σ).bindFree g = (t.bindFree f).substBound τ := by
+  induction t generalizing m with
+  | bvar i => exact hbound i
+  | port x => exact hfree x
+  | lam body ih =>
+      simp only [substBound, bindFree]
+      apply congrArg Term.lam
+      apply ih
+      · intro i
+        refine Fin.cases ?_ (fun j => ?_) i
+        · rfl
+        · calc
+            ((σ j).lift).bindFree (fun x => (g x).lift) =
+                ((σ j).bindFree g).lift :=
+              (renameBound_bindFree (σ j) g Fin.succ).symm
+            _ = (τ j).lift := congrArg Term.lift (hbound j)
+      · intro x
+        calc
+          (g x).lift = ((f x).substBound τ).lift :=
+            congrArg Term.lift (hfree x)
+          _ = (f x).lift.substBound
+                (Fin.cases (Term.bvar 0) (fun i => (τ i).lift)) :=
+            lift_substBound (f x) τ
+  | app _ _ ihFn ihArg =>
+      simp only [substBound, bindFree]
+      rw [ihFn _ _ _ _ hbound hfree, ihArg _ _ _ _ hbound hfree]
+
+theorem Term.bindFree_substBound
+    (body : Term (n + 1) α) (arg : Term n α) (f : α → Term n β) :
+    (body.substBound (Fin.cases arg Term.bvar)).bindFree f =
+      (body.bindFree (fun x => (f x).lift)).substBound
+        (Fin.cases (arg.bindFree f) Term.bvar) := by
+  apply bindFree_substBound_of_compatible
+  · intro i
+    refine Fin.cases ?_ (fun _ => ?_) i <;> rfl
+  · intro x
+    simp only [lift, substBound_renameBound]
+    rw [show (Fin.cases (arg.bindFree f) Term.bvar) ∘ Fin.succ = Term.bvar by
+      funext i
+      rfl]
+    exact (substBound_id (f x)).symm
 
 theorem Term.bindFree_id (t : Term n α) :
     t.bindFree Term.port = t := by
