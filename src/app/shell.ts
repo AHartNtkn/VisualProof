@@ -19,7 +19,8 @@ import type { Shape, Theme } from '../view/paint'
 import { paint, bubbleHues, highlightGroup, LIGHT, THEMES } from '../view/paint'
 import { adaptCanvas } from '../view/canvas'
 import { fitCamera } from '../view/camera'
-import { seedActionHistoryPlacements, seedBodyPlacement } from '../view/placement'
+import { seedBodyPlacement } from '../view/placement'
+import { seedActionHistoryPlacements } from './proof-placement'
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
 import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
@@ -624,7 +625,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       engine = next
       if (mode === 'prove' && proof?.kind === 'track') {
         const timeline = proof.track.timeline
-        seedActionHistoryPlacements(engine, timeline.states, timeline.actions, timeline.cursor)
+        const initial = timeline.states[0]
+        if (initial === undefined) throw new Error('proof timeline has no initial state')
+        seedActionHistoryPlacements(
+          engine,
+          initial,
+          timeline.actions.slice(0, timeline.cursor),
+          proof.track.ctx,
+          proof.track.direction,
+        )
       }
       if (surfaceChanged) interaction.resetSurface()
       else interaction.reconcileDiagram()
@@ -743,9 +752,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     engine = next
     seedActionHistoryPlacements(
       engine,
-      Array.from({ length: replayK + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
-      replay.actions,
-      replayK,
+      replay.diagramAt(0),
+      replay.actions.slice(0, replayK),
+      ctx,
+      'forward',
     )
     interaction.reconcileDiagram()
     kernelSel = null

@@ -23,7 +23,7 @@ import { ProofFrontViewport, type ProofFrontDebugState } from './proof-front'
 import type { KeySample } from './interact/viewport'
 import type { MotionPreferences } from './interact/motion'
 import { proofSnapshot, type ProofSnapshot } from './proof-snapshot'
-import { seedActionHistoryPlacements } from '../view/placement'
+import { seedActionHistoryPlacements } from './proof-placement'
 
 export type FixedSideWorkspaceOptions = {
   readonly host: HTMLElement
@@ -217,12 +217,16 @@ export class FixedSideWorkspace {
   }
 
   #presentHistory(side: FixedSide): void {
-    const timeline = this.#options.session()[side]
+    const session = this.#options.session()
+    const timeline = session[side]
+    const initial = timeline.states[0]
+    if (initial === undefined) throw new Error(`${side} proof timeline has no initial state`)
     seedActionHistoryPlacements(
       this.#front(side).engine,
-      timeline.states,
-      timeline.actions,
-      timeline.cursor,
+      initial,
+      timeline.actions.slice(0, timeline.cursor),
+      session.ctx,
+      side,
     )
   }
 
