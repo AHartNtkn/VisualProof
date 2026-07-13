@@ -176,7 +176,7 @@ export function mountCursebreaker(options: CursebreakerMountOptions): MountedCur
     changed: () => {},
   })
 
-  lever = mountTimelineLever(stage, () => session.timeline, requestCursor)
+  lever = mountTimelineLever(stage, () => session.timeline, requestCursor, () => !viewport.playing)
 
   const applyLayout = (): void => {
     const layout = lensLayout(window.innerWidth, window.innerHeight)

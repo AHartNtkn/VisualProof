@@ -124,9 +124,11 @@ describe('timeline lever presentation', () => {
     expect(housing?.className).toBe('curse-timeline-housing curse-decoration')
     expect(housing?.src).toMatch(/assets\/interface\/generated\/central-lens\/lever-housing\.png$/)
     expect(housing?.alt).toBe('')
+    expect(housing?.getAttribute('aria-hidden')).toBe('true')
     expect(handle?.className).toBe('curse-timeline-handle curse-decoration')
     expect(handle?.src).toMatch(/assets\/interface\/generated\/central-lens\/lever-handle\.png$/)
     expect(handle?.alt).toBe('')
+    expect(handle?.getAttribute('aria-hidden')).toBe('true')
   })
 
   it('delegates standard slider keys as clamped cursor requests', () => {
@@ -206,5 +208,56 @@ describe('timeline lever presentation', () => {
     rail.dispatchEvent(eventWith('keydown', { key: 'End' }))
     rail.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 100, pointerId: 8 }))
     expect(moves).toEqual([2, 3])
+  })
+
+  it('does not begin or continue pointer cursor requests while input is disallowed', () => {
+    const host = new FakeElement()
+    let allowed = false
+    const moves: number[] = []
+    const mounted = mountTimelineLever(
+      host as unknown as HTMLElement,
+      () => timeline(1, 4),
+      (cursor) => moves.push(cursor),
+      () => allowed,
+    )
+    const rail = (mounted.element as unknown as FakeElement).children[1]
+    if (rail === undefined) throw new Error('timeline rail missing')
+    rail.rect = { left: 100, width: 300 }
+
+    rail.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 250, pointerId: 7 }))
+    rail.dispatchEvent(eventWith('pointermove', { clientX: 400, pointerId: 7 }))
+    expect(moves).toEqual([])
+
+    allowed = true
+    rail.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 250, pointerId: 8 }))
+    expect(moves).toEqual([2])
+    allowed = false
+    rail.dispatchEvent(eventWith('pointermove', { clientX: 400, pointerId: 8 }))
+    expect(moves).toEqual([2])
+  })
+
+  it('does not request keyboard cursor movement while input is disallowed and resumes when allowed', () => {
+    const host = new FakeElement()
+    let allowed = false
+    const moves: number[] = []
+    const mounted = mountTimelineLever(
+      host as unknown as HTMLElement,
+      () => timeline(1, 4),
+      (cursor) => moves.push(cursor),
+      () => allowed,
+    )
+    const rail = (mounted.element as unknown as FakeElement).children[1]
+    if (rail === undefined) throw new Error('timeline rail missing')
+
+    const blocked = eventWith('keydown', { key: 'ArrowRight' })
+    rail.dispatchEvent(blocked)
+    expect(moves).toEqual([])
+    expect(blocked.defaultPrevented).toBe(false)
+
+    allowed = true
+    const resumed = eventWith('keydown', { key: 'ArrowRight' })
+    rail.dispatchEvent(resumed)
+    expect(moves).toEqual([2])
+    expect(resumed.defaultPrevented).toBe(true)
   })
 })

@@ -40,3 +40,19 @@ The game entry no longer contains the assistant shell mount, separate canvas/chr
 ## Self-review
 
 The implementation stays within the Task 5 surface. It does not copy assistant shell state, add a second product path, alter proof/move/physics semantics, introduce controls over the lens, or bypass the Task 4 lever and existing timeline authority. The browser entry has one host and one product owner; decorative images are non-interactive and hidden from assistive technology; disposal releases every owned observer, listener, animation request, temporary refusal, lever, viewport, and DOM stage.
+
+## Review fix: motion-owned timeline admission
+
+Runtime review found that the new physical lever could still request timeline movement while `ProofFrontViewport` motion was playing, whereas the incumbent shell and established scrubber gate timeline input during motion.
+
+Replacement foundation: `/tmp/central-lens-task5-review-fix-foundation-20260712T220000Z.md`.
+
+The lever now accepts an optional `inputAllowed` capability, defaulting to true. It checks that authority before pointer initiation, during pointer movement, and before keyboard slider commands. Cursebreaker supplies `() => !viewport.playing`; the lever therefore emits no cursor request during proof motion and resumes its existing behavior afterward. Housing and handle also explicitly set `aria-hidden="true"` while retaining empty alternate text. Timeline mapping, session ownership, proof motion, invalid-move policy, and feedback behavior are unchanged.
+
+The tests were added first and observed failing on all intended behaviors: missing decorative semantics, disallowed pointer requests, and disallowed keyboard requests. Final validation passed:
+
+- Task 4 focused suite: 3 files, 15 tests.
+- Task 5 focused suite: 6 files, 29 tests.
+- TypeScript typecheck.
+- Vite production build.
+- No physics tests were run because physics did not change.

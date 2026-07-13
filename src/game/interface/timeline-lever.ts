@@ -21,6 +21,7 @@ export function mountTimelineLever(
   host: HTMLElement,
   getTimeline: () => GameTimeline,
   onMove: (cursor: number) => void,
+  inputAllowed: () => boolean = () => true,
 ): MountedTimelineLever {
   const element = document.createElement('div')
   element.className = 'curse-timeline'
@@ -29,6 +30,7 @@ export function mountTimelineLever(
   housing.className = 'curse-timeline-housing curse-decoration'
   housing.src = new URL('../../../assets/interface/generated/central-lens/lever-housing.png', import.meta.url).href
   housing.alt = ''
+  housing.setAttribute('aria-hidden', 'true')
 
   const rail = document.createElement('div')
   rail.className = 'curse-timeline-rail'
@@ -40,6 +42,7 @@ export function mountTimelineLever(
   handle.className = 'curse-timeline-handle curse-decoration'
   handle.src = new URL('../../../assets/interface/generated/central-lens/lever-handle.png', import.meta.url).href
   handle.alt = ''
+  handle.setAttribute('aria-hidden', 'true')
 
   rail.append(handle)
   element.append(housing, rail)
@@ -47,12 +50,13 @@ export function mountTimelineLever(
 
   let dragging = false
   const move = (event: PointerEvent): void => {
+    if (!inputAllowed()) return
     const timeline = getTimeline()
     const rect = rail.getBoundingClientRect()
     onMove(leverCursorAt(event.clientX, rect.left, rect.width, timeline.states.length))
   }
   const down = (event: PointerEvent): void => {
-    if (event.button !== 0) return
+    if (event.button !== 0 || !inputAllowed()) return
     dragging = true
     rail.setPointerCapture(event.pointerId)
     move(event)
@@ -66,6 +70,7 @@ export function mountTimelineLever(
     if (rail.hasPointerCapture(event.pointerId)) rail.releasePointerCapture(event.pointerId)
   }
   const keydown = (event: KeyboardEvent): void => {
+    if (!inputAllowed()) return
     const timeline = getTimeline()
     const last = Math.max(0, timeline.states.length - 1)
     let cursor: number
