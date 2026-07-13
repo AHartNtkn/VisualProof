@@ -3,7 +3,8 @@ import { isAncestorOrEqual } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
-import { removeSubgraph, spliceSubgraph } from '../diagram/subgraph/splice'
+import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
+import type { IdReservation } from '../diagram/subgraph/freshId'
 import { findOccurrences, type Occurrence } from '../diagram/subgraph/match'
 import { RuleError } from './error'
 
@@ -12,7 +13,7 @@ import { RuleError } from './error'
  * not inside the copy, the copy's boundary attaching to the same wires.
  * Sound everywhere — no polarity gate.
  */
-export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion: RegionId): Diagram {
+export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion: RegionId, reservation?: IdReservation): Diagram {
   const c = selectionContents(d, sel) // validates the selection loudly
   if (!isAncestorOrEqual(d, sel.region, targetRegion)) {
     throw new RuleError(`iteration target '${targetRegion}' must lie within the source region '${sel.region}'`)
@@ -27,7 +28,7 @@ export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion:
     }
   }
   const binderMap = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
-  return spliceSubgraph(d, targetRegion, pattern, attachments, binderMap)
+  return spliceSubgraphMapped(d, targetRegion, pattern, attachments, { binderMap, reserved: reservation }).diagram
 }
 
 /**

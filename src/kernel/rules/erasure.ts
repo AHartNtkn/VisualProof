@@ -3,7 +3,7 @@ import { DiagramError, mkDiagram, portKey } from '../diagram/diagram'
 import { polarity } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { removeSubgraph } from '../diagram/subgraph/splice'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
 /** Rule 2a (spec §3.1): delete any subgraph from a POSITIVE region. Applied
@@ -26,7 +26,7 @@ export function applyErasure(d: Diagram, sel: SubgraphSelection, orientation: 'f
  * Replaces `φ(x,x)` by the weaker `∃y φ(x,y)` at the wire's scope, so the
  * scope must be POSITIVE.
  */
-export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoint[], orientation: 'forward' | 'backward' = 'forward'): Diagram {
+export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoint[], orientation: 'forward' | 'backward' = 'forward', reservation?: IdReservation): Diagram {
   const w = d.wires[wireId]
   if (w === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
   const need = orientation === 'forward' ? 'positive' : 'negative'
@@ -43,7 +43,7 @@ export function applyWireSever(d: Diagram, wireId: WireId, keep: readonly Endpoi
   }
   const kept = w.endpoints.filter((ep) => has(keep, ep))
   const moved = w.endpoints.filter((ep) => !has(keep, ep))
-  const newId = freshId(new Set(Object.keys(d.wires)), `${wireId}_sever`)
+  const newId = freshId(new Set(Object.keys(d.wires)), `${wireId}_sever`, reservation?.wires)
   const wires: Record<WireId, Wire> = { ...d.wires }
   wires[wireId] = { scope: w.scope, endpoints: kept }
   wires[newId] = { scope: w.scope, endpoints: moved }

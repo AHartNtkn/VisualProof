@@ -5,7 +5,7 @@ import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { ProofContext, ProofStep } from './step'
 import { applyStep } from './step'
-import type { ProofAction } from './action'
+import { allocationReservation, type ProofAction } from './action'
 import { ProofError } from './error'
 
 function mapId<T extends string>(m: ReadonlyMap<string, string>, id: T, what: string): T {
@@ -130,13 +130,14 @@ export function composeActions(
   let curSource = meetSource
   const out: ProofAction[] = []
   for (const [actionIndex, action] of tail.entries()) {
+    const reservation = allocationReservation(action.allocation)
     const mappedSteps: ProofStep[] = []
     for (const [stepIndex, step] of action.steps.entries()) {
       const mapped = mapStepIds(step, iso)
       mappedSteps.push(mapped)
       try {
-        curTarget = applyStep(curTarget, mapped, ctx)
-        curSource = applyStep(curSource, step, ctx)
+        curTarget = applyStep(curTarget, mapped, ctx, 'forward', reservation)
+        curSource = applyStep(curSource, step, ctx, 'forward', reservation)
       } catch (e) {
         throw new ProofError(
           `composing action ${actionIndex} step ${stepIndex} (${step.rule}) failed: ${e instanceof Error ? e.message : String(e)}`,
@@ -149,7 +150,12 @@ export function composeActions(
         )
       }
     }
-    out.push({ label: action.label, steps: mappedSteps, placements: action.placements })
+    out.push({
+      label: action.label,
+      steps: mappedSteps,
+      placements: action.placements,
+      ...(action.allocation === undefined ? {} : { allocation: action.allocation }),
+    })
   }
   return out
 }

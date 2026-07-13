@@ -6,9 +6,9 @@ import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
-import { spliceSubgraph } from '../diagram/subgraph/splice'
+import { spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import { exploreForm } from '../diagram/canonical/explore'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { wireAt } from './access'
 
@@ -61,6 +61,7 @@ export function applyComprehensionInstantiate(
   attachments: readonly WireId[],
   binders: ReadonlyMap<RegionId, RegionId> = new Map(),
   orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
 ): Diagram {
   const bubble = d.regions[bubbleId]
   if (bubble === undefined) throw new DiagramError(`unknown region '${bubbleId}'`)
@@ -103,7 +104,10 @@ export function applyComprehensionInstantiate(
     for (let i = 0; i < bubble.arity; i++) {
       args.push(wireAt(cur, atomId, { kind: 'arg', index: i }))
     }
-    cur = spliceSubgraph(cur, atom.region, comp, [...args, ...attachments], binders)
+    cur = spliceSubgraphMapped(cur, atom.region, comp, [...args, ...attachments], {
+      binderMap: binders,
+      reserved: reservation,
+    }).diagram
     cur = dropNode(cur, atomId)
   }
   // dissolve the bubble: promote child regions, nodes, and wire scopes
@@ -215,6 +219,7 @@ export function applyComprehensionAbstract(
   comp: DiagramWithBoundary,
   occurrences: readonly AbstractionOccurrence[],
   orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
 ): Diagram {
   const wc = selectionContents(d, wrap) // validates the wrap selection loudly
   const need = orientation === 'forward' ? 'positive' : 'negative'
@@ -285,7 +290,7 @@ export function applyComprehensionAbstract(
     }
   })
 
-  const bubbleId = freshId(new Set(Object.keys(d.regions)), 'cm')
+  const bubbleId = freshId(new Set(Object.keys(d.regions)), 'cm', reservation?.regions)
   const selectedRoots = new Set(wrap.regions)
   const regions: Record<RegionId, Region> = {
     [bubbleId]: { kind: 'bubble', parent: wrap.region, arity: comp.boundary.length },
@@ -308,7 +313,7 @@ export function applyComprehensionAbstract(
   }
   const takenNodeIds = new Set(Object.keys(d.nodes))
   const atomIds = occurrences.map(() => {
-    const id = freshId(takenNodeIds, 'cmAtom')
+    const id = freshId(takenNodeIds, 'cmAtom', reservation?.nodes)
     takenNodeIds.add(id)
     return id
   })

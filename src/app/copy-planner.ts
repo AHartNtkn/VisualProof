@@ -4,9 +4,15 @@ import { boundaryForm, exploreForm } from '../kernel/diagram/canonical/explore'
 import { diagramToJson } from '../kernel/diagram/json'
 import { freshId } from '../kernel/diagram/subgraph/freshId'
 import { extractSubgraph, type Extraction } from '../kernel/diagram/subgraph/extract'
-import { spliceSubgraphMapped, type SpliceReservedNamespace } from '../kernel/diagram/subgraph/splice'
+import { spliceSubgraphMapped } from '../kernel/diagram/subgraph/splice'
+import type { IdReservation } from '../kernel/diagram/subgraph/freshId'
 import { mkSelection, selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import { applyAction, type ProofAction } from '../kernel/proof/action'
+import {
+  allocationReservation,
+  applyAction,
+  type ProofAction,
+  type ProofAllocation,
+} from '../kernel/proof/action'
 import { dwbToJson, theoremToJson } from '../kernel/proof/json'
 import { applyStep, type ProofContext, type ProofStep } from '../kernel/proof/step'
 import { bvar, freePorts, lam, termEq, type Term } from '../kernel/term/term'
@@ -71,6 +77,7 @@ type Compiler = {
   readonly nodeMap: Map<NodeId, NodeId>
   readonly pattern: DiagramWithBoundary
   readonly destination: Extract<CopyDestination, { readonly kind: 'proof' }>
+  readonly reservation: IdReservation
 }
 
 function deny(code: CopyRefusalCode, message: string): CopyRefusal {
@@ -189,12 +196,12 @@ function validateDestination(destination: CopyDestination): CopyRefusal | null {
   return null
 }
 
-function reservedSourceIds(source: Diagram): SpliceReservedNamespace {
-  return {
-    regions: new Set(Object.keys(source.regions)),
-    nodes: new Set(Object.keys(source.nodes)),
-    wires: new Set(Object.keys(source.wires)),
-  }
+function sourceAllocation(source: Diagram): ProofAllocation {
+  return Object.freeze({
+    regions: Object.freeze(Object.keys(source.regions).sort()),
+    nodes: Object.freeze(Object.keys(source.nodes).sort()),
+    wires: Object.freeze(Object.keys(source.wires).sort()),
+  })
 }
 
 function planStructural(
@@ -206,7 +213,7 @@ function planStructural(
 ): CopyPlan | CopyRefusal {
   const host = destination.kind === 'workspace' ? destination.draft : destination.diagram
   const pattern = extraction.pattern
-  const reserved = reservedSourceIds(source)
+  const reserved = allocationReservation(sourceAllocation(source))
   try {
     let mapped: ReturnType<typeof spliceSubgraphMapped>
     if (destination.kind === 'edit') {
@@ -258,11 +265,12 @@ function introducedCopySelection(before: Diagram, after: Diagram, region: Region
   return mkSelection(after, { region, regions, nodes, wires })
 }
 
-function frozenAction(steps: readonly ProofStep[]): ProofAction {
+function frozenAction(steps: readonly ProofStep[], allocation: ProofAllocation): ProofAction {
   return Object.freeze({
     label: 'Copy selection',
     steps: Object.freeze([...steps]),
     placements: Object.freeze([]),
+    allocation,
   })
 }
 
@@ -272,8 +280,9 @@ function verifyCandidate(
   extraction: Extraction,
   destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
   steps: readonly ProofStep[],
+  allocation: ProofAllocation,
 ): Candidate | CopyRefusal {
-  const action = frozenAction(steps)
+  const action = frozenAction(steps, allocation)
   let replayed: Diagram
   try {
     replayed = applyAction(before, action, destination.ctx, destination.orientation)
@@ -341,7 +350,13 @@ function regionChildrenConstructible(diagram: Diagram, parent: RegionId, memo: M
 
 function emit(compiler: Compiler, step: ProofStep): { readonly regions: readonly RegionId[]; readonly nodes: readonly NodeId[] } {
   const before = compiler.diagram
-  compiler.diagram = applyStep(before, step, compiler.destination.ctx, compiler.destination.orientation)
+  compiler.diagram = applyStep(
+    before,
+    step,
+    compiler.destination.ctx,
+    compiler.destination.orientation,
+    compiler.reservation,
+  )
   compiler.steps.push(step)
   return {
     regions: Object.freeze(Object.keys(compiler.diagram.regions).filter((id) => before.regions[id] === undefined).sort()),
@@ -509,6 +524,7 @@ function compileConstruction(
   before: Diagram,
   extraction: Extraction,
   destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
+  reservation: IdReservation,
 ): ConstructionRecipe | CopyRefusal {
   const pairing = new Map<RegionId, RegionId | null>()
   if (!regionChildrenConstructible(extraction.pattern.diagram, extraction.pattern.diagram.root, pairing)) {
@@ -521,6 +537,7 @@ function compileConstruction(
     nodeMap: new Map(),
     pattern: extraction.pattern,
     destination,
+    reservation,
   }
   try {
     compileRegionChildren(compiler, extraction.pattern.diagram.root, destination.region, pairing)
@@ -557,6 +574,7 @@ function compileContextualRelation(
   before: Diagram,
   extraction: Extraction,
   destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
+  reservation: IdReservation,
 ): ConstructionRecipe | null {
   const targetForm = boundaryForm(extraction.pattern)
   const matches = [...destination.ctx.relations.entries()]
@@ -570,6 +588,7 @@ function compileContextualRelation(
       nodeMap: new Map(),
       pattern: extraction.pattern,
       destination,
+      reservation,
     }
     try {
       const made = emit(compiler, {
@@ -631,6 +650,7 @@ function compileFissionNormalForms(
   before: Diagram,
   extraction: Extraction,
   destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
+  reservation: IdReservation,
 ): readonly ConstructionRecipe[] {
   const pd = extraction.pattern.diagram
   if (childRegions(pd, pd.root).length > 0 || Object.keys(pd.nodes).length !== 2) return []
@@ -654,6 +674,7 @@ function compileFissionNormalForms(
         nodeMap: new Map(),
         pattern: extraction.pattern,
         destination,
+        reservation,
       }
       try {
         const fused = emit(compiler, { rule: 'closedTermIntro', region: destination.region, term: fusedTerm })
@@ -696,6 +717,8 @@ function planProof(
   extraction: Extraction,
   destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
 ): CopyPlan | CopyRefusal {
+  const allocation = sourceAllocation(source)
+  const reservation = allocationReservation(allocation)
   let intended: Diagram
   try {
     intended = spliceSubgraphMapped(
@@ -703,7 +726,7 @@ function planProof(
       destination.region,
       extraction.pattern,
       extraction.attachments,
-      { reserved: reservedSourceIds(source) },
+      { reserved: reservation },
     ).diagram
   } catch (error) {
     const classified = classifyStructuralError(error)
@@ -711,29 +734,29 @@ function planProof(
   }
 
   const iteration: ProofStep = { rule: 'iteration', sel: selection, target: destination.region }
-  const iterated = verifyCandidate(destination.diagram, intended, extraction, destination, [iteration])
+  const iterated = verifyCandidate(destination.diagram, intended, extraction, destination, [iteration], allocation)
   if (!isRefusal(iterated)) {
     return acceptedProofPlan(source, selection, destination, iterated)
   }
 
-  const contextual = compileContextualRelation(destination.diagram, extraction, destination)
+  const contextual = compileContextualRelation(destination.diagram, extraction, destination, reservation)
   if (contextual !== null && completeAttachmentMap(contextual, extraction)) {
-    const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, contextual.steps)
+    const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, contextual.steps, allocation)
     if (!isRefusal(constructed)) return acceptedProofPlan(source, selection, destination, constructed)
   }
 
-  for (const fission of compileFissionNormalForms(destination.diagram, extraction, destination)) {
+  for (const fission of compileFissionNormalForms(destination.diagram, extraction, destination, reservation)) {
     if (!completeAttachmentMap(fission, extraction)) continue
-    const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, fission.steps)
+    const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, fission.steps, allocation)
     if (!isRefusal(constructed)) return acceptedProofPlan(source, selection, destination, constructed)
   }
 
-  const recipe = compileConstruction(destination.diagram, extraction, destination)
+  const recipe = compileConstruction(destination.diagram, extraction, destination, reservation)
   if (isRefusal(recipe)) return recipe
   if (!completeAttachmentMap(recipe, extraction)) {
     return deny('invalid-attachment', 'ordinary construction did not preserve every crossing attachment identity')
   }
-  const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, recipe.steps)
+  const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, recipe.steps, allocation)
   if (isRefusal(constructed)) return constructed
   return acceptedProofPlan(source, selection, destination, constructed)
 }

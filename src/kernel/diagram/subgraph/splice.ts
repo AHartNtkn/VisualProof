@@ -4,17 +4,11 @@ import { isAncestorOrEqual } from '../regions'
 import type { DiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
-import { freshId } from './freshId'
-
-export type SpliceReservedNamespace = {
-  readonly regions?: ReadonlySet<RegionId>
-  readonly nodes?: ReadonlySet<string>
-  readonly wires?: ReadonlySet<WireId>
-}
+import { freshId, type IdReservation } from './freshId'
 
 export type SpliceOptions = {
   readonly binderMap?: ReadonlyMap<RegionId, RegionId>
-  readonly reserved?: SpliceReservedNamespace
+  readonly reserved?: IdReservation | undefined
 }
 
 export type MappedSplice = {
@@ -156,34 +150,34 @@ export function spliceSubgraphMapped(
   }
 
   // fresh-id maps for pattern regions (except root), nodes, internal wires
-  const takenRegions = new Set([...Object.keys(host.regions), ...(options.reserved?.regions ?? [])])
+  const takenRegions = new Set(Object.keys(host.regions))
   const regionMap = new Map<RegionId, RegionId>([[pd.root, atRegion]])
   // mapped binder stubs are location-transparent layers: their children land
   // at the splice region and atoms bound to them rebind to the host bubble
   for (const stub of binderMap.keys()) regionMap.set(stub, atRegion)
   for (const id of Object.keys(pd.regions)) {
     if (id === pd.root || binderMap.has(id)) continue
-    const fresh = freshId(takenRegions, id)
+    const fresh = freshId(takenRegions, id, options.reserved?.regions)
     takenRegions.add(fresh)
     regionMap.set(id, fresh)
   }
-  const takenNodes = new Set([...Object.keys(host.nodes), ...(options.reserved?.nodes ?? [])])
+  const takenNodes = new Set(Object.keys(host.nodes))
   const nodeMap = new Map<string, string>()
   for (const id of Object.keys(pd.nodes)) {
-    const fresh = freshId(takenNodes, id)
+    const fresh = freshId(takenNodes, id, options.reserved?.nodes)
     takenNodes.add(fresh)
     nodeMap.set(id, fresh)
   }
   // Mint against the full PRE-QUOTIENT namespace: a wire removed by the
   // pushout must never be resurrected as unrelated copied content.
-  const takenWires = new Set([...Object.keys(host.wires), ...(options.reserved?.wires ?? [])])
+  const takenWires = new Set(Object.keys(host.wires))
   const wireMap = new Map<WireId, WireId>()
   pattern.boundary.forEach((stub, index) => {
     wireMap.set(stub, hostImage.get(attachments[index]!) ?? attachments[index]!)
   })
   for (const id of Object.keys(pd.wires)) {
     if (boundarySet.has(id)) continue
-    const fresh = freshId(takenWires, id)
+    const fresh = freshId(takenWires, id, options.reserved?.wires)
     takenWires.add(fresh)
     wireMap.set(id, fresh)
   }

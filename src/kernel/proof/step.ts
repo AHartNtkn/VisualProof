@@ -2,6 +2,7 @@ import type { Term } from '../term/term'
 import type { PathSeg } from '../term/reduce'
 import type { ConversionCertificate } from '../term/certificate'
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram/diagram'
+import type { IdReservation } from '../diagram/subgraph/freshId'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { applyWireJoin } from '../rules/wire-join'
@@ -69,37 +70,43 @@ export type ProofStep =
  * (erasure, atomic spawning, wire joining, theorem citation) — the calculus's cut symmetry.
  * Execution is IDENTICAL either way: one applier per rule, no mirrors.
  */
-export function applyStep(d: Diagram, step: ProofStep, ctx: ProofContext, orientation: 'forward' | 'backward' = 'forward'): Diagram {
+export function applyStep(
+  d: Diagram,
+  step: ProofStep,
+  ctx: ProofContext,
+  orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
+): Diagram {
   switch (step.rule) {
-    case 'openTermSpawn': return applyOpenTermSpawn(d, step.region, step.term, orientation)
-    case 'relationSpawn': return applyRelationSpawn(d, step.region, step.defId, step.arity, ctx.relations, orientation)
-    case 'boundRelationSpawn': return applyBoundRelationSpawn(d, step.region, step.binder, step.arity, orientation)
+    case 'openTermSpawn': return applyOpenTermSpawn(d, step.region, step.term, orientation, reservation)
+    case 'relationSpawn': return applyRelationSpawn(d, step.region, step.defId, step.arity, ctx.relations, orientation, reservation)
+    case 'boundRelationSpawn': return applyBoundRelationSpawn(d, step.region, step.binder, step.arity, orientation, reservation)
     case 'wireJoin': return applyWireJoin(d, step.a, step.b, orientation)
     case 'erasure': return applyErasure(d, step.sel, orientation)
-    case 'wireSever': return applyWireSever(d, step.wire, step.keep, orientation)
-    case 'iteration': return applyIteration(d, step.sel, step.target)
+    case 'wireSever': return applyWireSever(d, step.wire, step.keep, orientation, reservation)
+    case 'iteration': return applyIteration(d, step.sel, step.target, reservation)
     case 'deiteration': return applyDeiteration(d, step.sel, step.fuel)
-    case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel)
+    case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel, reservation)
     case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
-    case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.attachments)
+    case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.attachments, reservation)
     case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate)
-    case 'anchoredWireSplit': return applyAnchoredWireSplit(d, step.wire, step.witness, step.endpoints, step.target)
+    case 'anchoredWireSplit': return applyAnchoredWireSplit(d, step.wire, step.witness, step.endpoints, step.target, reservation)
     case 'anchoredWireContract': return applyAnchoredWireContract(d, step.redundant, step.survivor, step.certificate)
-    case 'headStrip': return applyHeadStrip(d, step.a, step.b)
-    case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term)
+    case 'headStrip': return applyHeadStrip(d, step.a, step.b, reservation)
+    case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term, reservation)
     case 'fusion': return applyFusion(d, step.wire)
-    case 'fission': return applyFission(d, step.node, step.path)
-    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, new Map(Object.entries(step.binders)), orientation)
-    case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences, orientation)
+    case 'fission': return applyFission(d, step.node, step.path, reservation)
+    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, new Map(Object.entries(step.binders)), orientation, reservation)
+    case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences, orientation, reservation)
     case 'theorem': {
       const thm = ctx.theorems.get(step.name)
       if (thm === undefined) throw new ProofError(`unknown theorem '${step.name}'`)
-      return applyTheorem(d, thm, step.at, step.direction, orientation)
+      return applyTheorem(d, thm, step.at, step.direction, orientation, reservation)
     }
-    case 'vacuousIntro': return applyVacuousBubbleIntro(d, step.sel, step.arity)
+    case 'vacuousIntro': return applyVacuousBubbleIntro(d, step.sel, step.arity, reservation)
     case 'vacuousElim': return applyVacuousBubbleElim(d, step.region)
-    case 'relUnfold': return applyRelUnfold(d, step.node, ctx.relations)
-    case 'relFold': return applyRelFold(d, step.sel, step.defId, step.args, ctx.relations)
+    case 'relUnfold': return applyRelUnfold(d, step.node, ctx.relations, reservation)
+    case 'relFold': return applyRelFold(d, step.sel, step.defId, step.args, ctx.relations, reservation)
   }
 }
 

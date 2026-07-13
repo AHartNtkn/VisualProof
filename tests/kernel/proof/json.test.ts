@@ -4,7 +4,16 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
 import type { ProofStep } from '../../../src/kernel/proof/step'
-import { stepToJson, stepFromJson, theoremToJson, theoremFromJson, dwbToJson, dwbFromJson } from '../../../src/kernel/proof/json'
+import {
+  actionFromJson,
+  actionToJson,
+  stepToJson,
+  stepFromJson,
+  theoremToJson,
+  theoremFromJson,
+  dwbToJson,
+  dwbFromJson,
+} from '../../../src/kernel/proof/json'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 import type { ProofAction } from '../../../src/kernel/proof/action'
 
@@ -14,6 +23,50 @@ function roundTrip(s: ProofStep): void {
   const j = JSON.parse(JSON.stringify(stepToJson(s)))
   expect(stepFromJson(j)).toEqual(s)
 }
+
+describe('action allocation JSON', () => {
+  it('round-trips non-logical allocation exclusions', () => {
+    const action = {
+      label: 'reserved replay',
+      steps: [{ rule: 'closedTermIntro' as const, region: 'r0', term: p('\\x. x') }],
+      placements: [],
+      allocation: { regions: ['dc'], nodes: ['r0_intro'], wires: ['r0_intro'] },
+    } as ProofAction & { readonly allocation: {
+      readonly regions: readonly string[]
+      readonly nodes: readonly string[]
+      readonly wires: readonly string[]
+    } }
+
+    const json = JSON.parse(JSON.stringify(actionToJson(action)))
+
+    expect(json.allocation).toEqual(action.allocation)
+    expect(actionFromJson(json)).toEqual(action)
+  })
+
+  it('omits empty allocation metadata and preserves the incumbent JSON shape', () => {
+    const action: ProofAction = {
+      label: 'ordinary replay',
+      steps: [{ rule: 'closedTermIntro', region: 'r0', term: p('\\x. x') }],
+      placements: [],
+      allocation: { regions: [], nodes: [], wires: [] },
+    }
+
+    expect(actionToJson(action)).toEqual({
+      label: action.label,
+      steps: [{ rule: 'closedTermIntro', region: 'r0', term: 'L(#0)' }],
+      placements: [],
+    })
+  })
+
+  it('rejects duplicate allocation exclusions', () => {
+    expect(() => actionFromJson({
+      label: 'bad reservation',
+      steps: [{ rule: 'closedTermIntro', region: 'r0', term: 'L(#0)' }],
+      placements: [],
+      allocation: { regions: [], nodes: ['n0', 'n0'], wires: [] },
+    })).toThrowError(/duplicate.*node.*n0/i)
+  })
+})
 
 describe('step round-trips through JSON', () => {
   it('covers every step kind', () => {

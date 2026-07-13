@@ -4,7 +4,7 @@ import type { PathSeg } from '../term/reduce'
 import { subtermAt, replaceSubtermAt, isBvarClosed, substPort, freshPortName } from '../term/path'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
 
@@ -106,7 +106,7 @@ export function applyFusion(d: Diagram, wireId: WireId): Diagram {
  * wired to a fresh port of the residual — fusion's exact inverse. The new
  * node and wire live at the host node's region so applyFusion can undo it.
  */
-export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[]): Diagram {
+export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[], reservation?: IdReservation): Diagram {
   const node = termNodeAt(d, nodeId)
   let sub: Term
   try {
@@ -120,8 +120,8 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
   const q = freshPortName(new Set(freePorts(node.term)), 'q')
   const residualTerm = replaceSubtermAt(node.term, path, port(q))
   const residualPorts = new Set(freePorts(residualTerm))
-  const producerId = freshId(new Set(Object.keys(d.nodes)), `${nodeId}_fis`)
-  const newWireId = freshId(new Set(Object.keys(d.wires)), `${nodeId}_fis`)
+  const producerId = freshId(new Set(Object.keys(d.nodes)), `${nodeId}_fis`, reservation?.nodes)
+  const newWireId = freshId(new Set(Object.keys(d.wires)), `${nodeId}_fis`, reservation?.wires)
 
   const subPortWires = new Map<string, WireId>()
   for (const n of freePorts(sub)) {

@@ -4,7 +4,7 @@ import type { HeadSpine } from '../term/hnf'
 import { headSpine } from '../term/hnf'
 import type { Diagram, DiagramNode, NodeId, Wire, WireId } from '../diagram/diagram'
 import { mkDiagram } from '../diagram/diagram'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
 
@@ -29,7 +29,7 @@ import { termNodeAt, wireAt } from './access'
  * their free head ports ride — never by port name, which is plumbing, not
  * semantics.
  */
-export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId): Diagram {
+export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId, reservation?: IdReservation): Diagram {
   // Gate 1: distinct term nodes in one region.
   if (a === b) throw new RuleError(`head strip needs two distinct nodes; got '${a}' twice`)
   const na = termNodeAt(d, a)
@@ -124,15 +124,15 @@ export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId): Diagram {
     wires[wid] = { scope: w.scope, endpoints: [...w.endpoints, { node, port: { kind: 'freeVar', name } }] }
   }
   for (const { ca, cb } of pairs) {
-    const ia = freshId(takenNodes, `${a}_hs`)
+    const ia = freshId(takenNodes, `${a}_hs`, reservation?.nodes)
     takenNodes.add(ia)
-    const ib = freshId(takenNodes, `${b}_hs`)
+    const ib = freshId(takenNodes, `${b}_hs`, reservation?.nodes)
     takenNodes.add(ib)
     nodes[ia] = { kind: 'term', region, term: ca }
     nodes[ib] = { kind: 'term', region, term: cb }
     for (const name of freePorts(ca)) attach(wireAt(d, a, { kind: 'freeVar', name }), ia, name)
     for (const name of freePorts(cb)) attach(wireAt(d, b, { kind: 'freeVar', name }), ib, name)
-    const wo = freshId(takenWires, `${a}_${b}_hs`)
+    const wo = freshId(takenWires, `${a}_${b}_hs`, reservation?.wires)
     takenWires.add(wo)
     wires[wo] = {
       scope: region,

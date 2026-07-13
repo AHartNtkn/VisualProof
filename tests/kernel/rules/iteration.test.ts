@@ -4,8 +4,11 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
+import { applyAction, type ProofAction } from '../../../src/kernel/proof/action'
+import type { ProofContext } from '../../../src/kernel/proof/step'
 
 const p = (s: string) => parseTerm(s)
+const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
 
 /** Host: node `y` at root wired to a hub, plus an empty cut to iterate into. */
 function host() {
@@ -36,6 +39,32 @@ describe('applyIteration', () => {
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const out = applyIteration(d, sel, d.root)
     expect(out.wires[w]?.endpoints).toHaveLength(3)
+  })
+
+  it('threads action reservations into the nested splice allocator', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    builder.termNode(cut, p('\\x. x'))
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: diagram.root, regions: [cut], nodes: [], wires: [],
+    })
+    const action = {
+      label: 'reserved iteration',
+      steps: [{ rule: 'iteration' as const, sel: selection, target: diagram.root }],
+      placements: [],
+      allocation: { regions: [`${cut}_0`], nodes: ['n0_0'], wires: ['w0_0'] },
+    } as ProofAction & { readonly allocation: {
+      readonly regions: readonly string[]
+      readonly nodes: readonly string[]
+      readonly wires: readonly string[]
+    } }
+
+    const out = applyAction(diagram, action, ctx)
+
+    expect(out.regions[`${cut}_1`]).toBeDefined()
+    expect(out.nodes['n0_1']).toBeDefined()
+    expect(out.wires['w0_1']).toBeDefined()
   })
 
   it('rejects targets outside the source region and targets inside the copy', () => {

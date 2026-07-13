@@ -3,6 +3,7 @@ import type { DiagramWithBoundary } from '../diagram/boundary'
 import { isAncestorOrEqual, polarity } from '../diagram/regions'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../diagram/spawn'
 import type { Term } from '../term/term'
+import type { IdReservation } from '../diagram/subgraph/freshId'
 import { freePorts } from '../term/term'
 import { RuleError } from './error'
 
@@ -16,12 +17,12 @@ function requireSpawnPolarity(d: Diagram, region: RegionId, orientation: SpawnOr
   }
 }
 
-export function applyOpenTermSpawn(d: Diagram, region: RegionId, term: Term, orientation: SpawnOrientation = 'forward'): Diagram {
+export function applyOpenTermSpawn(d: Diagram, region: RegionId, term: Term, orientation: SpawnOrientation = 'forward', reservation?: IdReservation): Diagram {
   requireSpawnPolarity(d, region, orientation)
   if (freePorts(term).length === 0) {
     throw new RuleError('open-term spawn requires at least one free port; use closed-term introduction')
   }
-  return spawnTermNode(d, region, term).diagram
+  return spawnTermNode(d, region, term, reservation).diagram
 }
 
 export function applyRelationSpawn(
@@ -31,6 +32,7 @@ export function applyRelationSpawn(
   expectedArity: number,
   relations: ReadonlyMap<string, DiagramWithBoundary>,
   orientation: SpawnOrientation = 'forward',
+  reservation?: IdReservation,
 ): Diagram {
   requireSpawnPolarity(d, region, orientation)
   const relation = relations.get(defId)
@@ -38,7 +40,7 @@ export function applyRelationSpawn(
   if (relation.boundary.length !== expectedArity) {
     throw new RuleError(`relation '${defId}' changed arity from ${expectedArity} to ${relation.boundary.length}`)
   }
-  return spawnRelationNode(d, region, defId, expectedArity).diagram
+  return spawnRelationNode(d, region, defId, expectedArity, reservation).diagram
 }
 
 export function applyBoundRelationSpawn(
@@ -47,6 +49,7 @@ export function applyBoundRelationSpawn(
   binder: RegionId,
   expectedArity: number,
   orientation: SpawnOrientation = 'forward',
+  reservation?: IdReservation,
 ): Diagram {
   requireSpawnPolarity(d, region, orientation)
   const value = d.regions[binder]
@@ -55,5 +58,5 @@ export function applyBoundRelationSpawn(
     throw new RuleError(`bound relation binder '${binder}' changed arity from ${expectedArity} to ${value.arity}`)
   }
   if (!isAncestorOrEqual(d, binder, region)) throw new RuleError(`bubble '${binder}' does not enclose spawn region '${region}'`)
-  return spawnBoundRelationNode(d, region, binder).diagram
+  return spawnBoundRelationNode(d, region, binder, reservation).diagram
 }

@@ -1,4 +1,6 @@
 import type { Diagram } from '../diagram/diagram'
+import type { NodeId, RegionId, WireId } from '../diagram/diagram'
+import type { IdReservation } from '../diagram/subgraph/freshId'
 import { ProofError } from './error'
 import { applyStep } from './step'
 import type { ProofContext, ProofStep } from './step'
@@ -9,10 +11,43 @@ export type PlacementHint = {
   readonly y: number
 }
 
+/** Non-logical exclusions consulted only when a proof step allocates fresh IDs. */
+export type ProofAllocation = {
+  readonly regions: readonly RegionId[]
+  readonly nodes: readonly NodeId[]
+  readonly wires: readonly WireId[]
+}
+
 export type ProofAction = {
   readonly label: string
   readonly steps: readonly ProofStep[]
   readonly placements: readonly PlacementHint[]
+  readonly allocation?: ProofAllocation
+}
+
+function checkedIds(ids: unknown, field: string, namespace: string): ReadonlySet<string> {
+  if (!Array.isArray(ids)) throw new ProofError(`proof action allocation ${field} must be an array`)
+  const seen = new Set<string>()
+  for (const id of ids) {
+    if (typeof id !== 'string' || id.length === 0) {
+      throw new ProofError(`proof action allocation ${namespace} ids must be non-empty strings`)
+    }
+    if (seen.has(id)) throw new ProofError(`duplicate ${namespace} allocation id '${id}'`)
+    seen.add(id)
+  }
+  return seen
+}
+
+export function allocationReservation(allocation?: ProofAllocation): IdReservation {
+  if (allocation === undefined) return { regions: new Set(), nodes: new Set(), wires: new Set() }
+  if (allocation === null || typeof allocation !== 'object') {
+    throw new ProofError('proof action allocation must be an object')
+  }
+  return {
+    regions: checkedIds(allocation.regions, 'regions', 'region'),
+    nodes: checkedIds(allocation.nodes, 'nodes', 'node'),
+    wires: checkedIds(allocation.wires, 'wires', 'wire'),
+  }
 }
 
 export function singleStepAction(
@@ -32,11 +67,12 @@ export function applyAction(
 ): Diagram {
   if (action.label.length === 0) throw new ProofError('proof action label must not be empty')
   if (action.steps.length === 0) throw new ProofError(`proof action '${action.label}' must contain at least one step`)
+  const reservation = allocationReservation(action.allocation)
 
   let current = diagram
   for (const [stepIndex, step] of action.steps.entries()) {
     try {
-      current = applyStep(current, step, ctx, orientation)
+      current = applyStep(current, step, ctx, orientation, reservation)
     } catch (error) {
       throw new ProofError(
         `step ${stepIndex} (${step.rule}) failed: ${error instanceof Error ? error.message : String(error)}`,

@@ -3,7 +3,8 @@ import { polarity } from '../diagram/regions'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
-import { removeSubgraph, spliceSubgraph } from '../diagram/subgraph/splice'
+import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
+import type { IdReservation } from '../diagram/subgraph/freshId'
 import { exploreForm } from '../diagram/canonical/explore'
 import { RuleError } from '../rules/error'
 import type { ProofContext } from './step'
@@ -92,6 +93,7 @@ export function applyTheorem(
   at: TheoremApplication,
   direction: 'forward' | 'reverse',
   orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
 ): Diagram {
   const from = direction === 'forward' ? thm.lhs : thm.rhs
   const to = direction === 'forward' ? thm.rhs : thm.lhs
@@ -140,6 +142,6 @@ export function applyTheorem(
   // (checkTheorem's per-step boundary checks rely on exactly that). The two
   // phases commute — the splice only adds content and extends the attachment
   // wires, none of which the removal selection touches.
-  const spliced = spliceSubgraph(d, at.sel.region, to, at.args)
+  const spliced = spliceSubgraphMapped(d, at.sel.region, to, at.args, { reserved: reservation }).diagram
   return removeSubgraph(spliced, at.sel)
 }

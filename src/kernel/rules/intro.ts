@@ -3,6 +3,7 @@ import { freePorts } from '../term/term'
 import type { Diagram, RegionId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
 import { freshId } from '../diagram/subgraph/freshId'
+import type { IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
 /**
@@ -23,7 +24,7 @@ import { RuleError } from './error'
  * attachment plumbing belongs to atomic open spawning and iteration. The
  * closed case is the one with zero entanglement.
  */
-export function applyClosedTermIntro(d: Diagram, region: RegionId, term: Term): Diagram {
+export function applyClosedTermIntro(d: Diagram, region: RegionId, term: Term, reservation?: IdReservation): Diagram {
   if (d.regions[region] === undefined) throw new DiagramError(`unknown region '${region}'`)
   const free = freePorts(term)
   if (free.length > 0) {
@@ -32,8 +33,8 @@ export function applyClosedTermIntro(d: Diagram, region: RegionId, term: Term): 
     )
   }
   // Term well-formedness is mkDiagram's node check; rely on it.
-  const nodeId = freshId(new Set(Object.keys(d.nodes)), `${region}_intro`)
-  const wireId = freshId(new Set(Object.keys(d.wires)), `${region}_intro`)
+  const nodeId = freshId(new Set(Object.keys(d.nodes)), `${region}_intro`, reservation?.nodes)
+  const wireId = freshId(new Set(Object.keys(d.wires)), `${region}_intro`, reservation?.wires)
   return mkDiagram({
     root: d.root,
     regions: { ...d.regions },

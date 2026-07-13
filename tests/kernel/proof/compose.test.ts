@@ -37,6 +37,25 @@ function twoCopies() {
 }
 
 describe('composeActions', () => {
+  it('preserves allocation exclusions and uses them while composing both sides', () => {
+    const source = new DiagramBuilder().build()
+    const target = new DiagramBuilder().build()
+    const reserved = `${source.root}_intro`
+    const tail: ProofAction[] = [{
+      label: 'reserved introduction',
+      steps: [{ rule: 'closedTermIntro', region: source.root, term: p('\\x. x') }],
+      placements: [],
+      allocation: { regions: [], nodes: [reserved], wires: [reserved] },
+    }]
+
+    const composed = composeActions(target, source, tail, ctx)
+    const replayed = replayActions(target, composed, ctx)
+
+    expect(composed[0]?.allocation).toEqual(tail[0]!.allocation)
+    expect(Object.keys(replayed.nodes)).toEqual([`${reserved}_0`])
+    expect(Object.keys(replayed.wires)).toEqual([`${reserved}_0`])
+  })
+
   it('rewrites a backward tail onto the forward meet and replays end to end', () => {
     const { da, db, bn } = twoCopies()
     // backward tail (recorded against db): wrap the y-node in a double cut

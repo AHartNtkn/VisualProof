@@ -6,7 +6,7 @@ import type { ConversionCertificate } from '../term/certificate'
 import { checkConversion } from '../term/certificate'
 import type { Diagram, DiagramNode, Endpoint, NodeId, Wire, WireId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt } from './access'
 
@@ -25,6 +25,7 @@ function replaceNodeTerm(
   node: Extract<DiagramNode, { kind: 'term' }>,
   newTerm: Term,
   attachments: Readonly<Record<string, WireId>>,
+  reservation?: IdReservation,
 ): Diagram {
   const oldPorts = new Set(freePorts(node.term))
   const newPorts = new Set(freePorts(newTerm))
@@ -51,7 +52,7 @@ function replaceNodeTerm(
       const w = wires[target]!
       wires[target] = { scope: w.scope, endpoints: [...w.endpoints, ep] }
     } else {
-      const fresh = freshId(new Set(Object.keys(wires)), `${nodeId}_${name}`)
+      const fresh = freshId(new Set(Object.keys(wires)), `${nodeId}_${name}`, reservation?.wires)
       wires[fresh] = { scope: node.region, endpoints: [ep] }
     }
   }
@@ -78,6 +79,7 @@ export function applyConversion(
   newTerm: Term,
   fuel: number,
   attachments: Readonly<Record<string, WireId>> = {},
+  reservation?: IdReservation,
 ): ConversionResult {
   const node = termNodeAt(d, nodeId)
   const r = convertible(node.term, newTerm, fuel)
@@ -87,7 +89,7 @@ export function applyConversion(
   if (r.status === 'not-convertible') {
     throw new RuleError(`'${printTerm(node.term)}' and '${printTerm(newTerm)}' are not βη-convertible`)
   }
-  return { diagram: replaceNodeTerm(d, nodeId, node, newTerm, attachments), certificate: r.certificate }
+  return { diagram: replaceNodeTerm(d, nodeId, node, newTerm, attachments, reservation), certificate: r.certificate }
 }
 
 /** Rule 5, replay form: fuel-free, checks a stored certificate mechanically. */
@@ -97,9 +99,10 @@ export function applyConversionByCertificate(
   newTerm: Term,
   certificate: ConversionCertificate,
   attachments: Readonly<Record<string, WireId>> = {},
+  reservation?: IdReservation,
 ): Diagram {
   const node = termNodeAt(d, nodeId)
   const check = checkConversion(node.term, newTerm, certificate)
   if (!check.ok) throw new RuleError(`conversion certificate rejected: ${check.reason}`)
-  return replaceNodeTerm(d, nodeId, node, newTerm, attachments)
+  return replaceNodeTerm(d, nodeId, node, newTerm, attachments, reservation)
 }

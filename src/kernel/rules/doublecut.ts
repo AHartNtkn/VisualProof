@@ -2,7 +2,7 @@ import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../di
 import { DiagramError, mkDiagram } from '../diagram/diagram'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
 /**
@@ -23,12 +23,12 @@ function reparent(n: DiagramNode, region: RegionId): DiagramNode {
  * Explicitly selected top-level wires keep their scope: they pass through the
  * empty annulus (∃x · ¬¬φ(x) ≡ ∃x · φ(x)). Equivalence — no polarity gate.
  */
-export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection): Diagram {
+export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection, reservation?: IdReservation): Diagram {
   const c = selectionContents(d, sel) // validates loudly
   const taken = new Set(Object.keys(d.regions))
-  const outer = freshId(taken, 'dc')
+  const outer = freshId(taken, 'dc', reservation?.regions)
   taken.add(outer)
-  const inner = freshId(taken, 'dc')
+  const inner = freshId(taken, 'dc', reservation?.regions)
   const regions: Record<RegionId, Region> = { ...d.regions }
   regions[outer] = { kind: 'cut', parent: sel.region }
   regions[inner] = { kind: 'cut', parent: outer }

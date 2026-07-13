@@ -8,7 +8,9 @@ import { checkTheorem, applyTheorem } from '../../../src/kernel/proof/theorem'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import type { ProofAction } from '../../../src/kernel/proof/action'
+import { applyAction, replayActions } from '../../../src/kernel/proof/action'
 import { replayProof } from '../../../src/kernel/proof/step'
+import { theoremFromJson, theoremToJson } from '../../../src/kernel/proof/json'
 
 const p = (s: string) => parseTerm(s)
 const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
@@ -38,6 +40,30 @@ function dropQ(): Theorem {
 }
 
 describe('checkTheorem', () => {
+  it('persists and honors action allocation during theorem replay', () => {
+    const lhsDiagram = new DiagramBuilder().build()
+    const reserved = `${lhsDiagram.root}_intro`
+    const reservedAction: ProofAction = {
+      label: 'reserved theorem introduction',
+      steps: [{ rule: 'closedTermIntro', region: lhsDiagram.root, term: p('\\x. x') }],
+      placements: [],
+      allocation: { regions: [], nodes: [reserved], wires: [reserved] },
+    }
+    const rhsDiagram = applyAction(lhsDiagram, reservedAction, ctx)
+    const theorem: Theorem = {
+      name: 'reserved-introduction',
+      lhs: mkDiagramWithBoundary(lhsDiagram, []),
+      rhs: mkDiagramWithBoundary(rhsDiagram, []),
+      actions: [reservedAction],
+    }
+
+    const loaded = theoremFromJson(JSON.parse(JSON.stringify(theoremToJson(theorem))))
+
+    expect(loaded.actions[0]?.allocation).toEqual(reservedAction.allocation)
+    expect(Object.keys(replayActions(loaded.lhs.diagram, loaded.actions, ctx).nodes)).toEqual([`${reserved}_0`])
+    expect(() => checkTheorem(loaded, ctx)).not.toThrow()
+  })
+
   it('accepts a valid proof', () => {
     expect(() => checkTheorem(dropQ(), ctx)).not.toThrow()
   })

@@ -12,7 +12,7 @@ import {
   type WireId,
 } from '../diagram/diagram'
 import { cutDepth, isAncestorOrEqual } from '../diagram/regions'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
 
@@ -51,6 +51,7 @@ export function applyAnchoredWireSplit(
   witnessId: NodeId,
   endpoints: readonly Endpoint[],
   target: RegionId,
+  reservation?: IdReservation,
 ): Diagram {
   const witness = termNodeAt(d, witnessId)
   const source = d.wires[wireId]
@@ -78,8 +79,8 @@ export function applyAnchoredWireSplit(
       throw new RuleError(`split endpoint '${key}' lies outside target '${target}'`)
     }
   }
-  const duplicate = freshId(new Set(Object.keys(d.nodes)), `${witnessId}_split`)
-  const freshWire = freshId(new Set(Object.keys(d.wires)), `${wireId}_split`)
+  const duplicate = freshId(new Set(Object.keys(d.nodes)), `${witnessId}_split`, reservation?.nodes)
+  const freshWire = freshId(new Set(Object.keys(d.wires)), `${wireId}_split`, reservation?.wires)
   return mkDiagram({
     root: d.root,
     regions: { ...d.regions },

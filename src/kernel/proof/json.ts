@@ -10,7 +10,7 @@ import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { ProofStep } from './step'
-import type { PlacementHint, ProofAction } from './action'
+import type { PlacementHint, ProofAction, ProofAllocation } from './action'
 import type { Theorem, TheoremApplication } from './theorem'
 
 function fail(msg: string): never {
@@ -330,22 +330,56 @@ function placementFromJson(j: unknown, what: string): PlacementHint {
 }
 
 export function actionToJson(action: ProofAction): unknown {
+  const allocation = action.allocation
+  const hasAllocation = allocation !== undefined
+    && (allocation.regions.length > 0 || allocation.nodes.length > 0 || allocation.wires.length > 0)
   return {
     label: action.label,
     steps: action.steps.map(stepToJson),
     placements: action.placements.map(placementToJson),
+    ...(hasAllocation ? { allocation: {
+      regions: [...allocation.regions],
+      nodes: [...allocation.nodes],
+      wires: [...allocation.wires],
+    } } : {}),
   }
+}
+
+function allocationFromJson(value: unknown, what: string): ProofAllocation | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  assertOnlyKeys(value, ['regions', 'nodes', 'wires'], what)
+  const read = (field: 'regions' | 'nodes' | 'wires', singular: string): string[] => {
+    const ids = strArray(value[field], `${what}.${field}`)
+    const seen = new Set<string>()
+    for (const id of ids) {
+      if (id.length === 0) fail(`${what}.${field} ids must be non-empty strings`)
+      if (seen.has(id)) fail(`duplicate ${singular} allocation id '${id}'`)
+      seen.add(id)
+    }
+    return ids
+  }
+  const allocation: ProofAllocation = {
+    regions: read('regions', 'region'),
+    nodes: read('nodes', 'node'),
+    wires: read('wires', 'wire'),
+  }
+  return allocation.regions.length > 0 || allocation.nodes.length > 0 || allocation.wires.length > 0
+    ? allocation
+    : undefined
 }
 
 export function actionFromJson(j: unknown, what = 'action'): ProofAction {
   if (!isRecord(j)) fail(`${what} must be an object`)
-  assertOnlyKeys(j, ['label', 'steps', 'placements'], what)
+  assertOnlyKeys(j, ['label', 'steps', 'placements', 'allocation'], what)
   if (!Array.isArray(j.steps)) fail(`${what}.steps must be an array`)
   if (!Array.isArray(j.placements)) fail(`${what}.placements must be an array`)
+  const allocation = allocationFromJson(j.allocation, `${what}.allocation`)
   return {
     label: str(j.label, `${what}.label`),
     steps: j.steps.map(stepFromJson),
     placements: j.placements.map((placement, index) => placementFromJson(placement, `${what}.placements[${index}]`)),
+    ...(allocation === undefined ? {} : { allocation }),
   }
 }
 

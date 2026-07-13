@@ -52,6 +52,71 @@ describe('proof actions', () => {
     expect(Object.keys(out.nodes)).toHaveLength(2)
   })
 
+  it('excludes action-reserved node and wire ids from fresh allocation', () => {
+    const { diagram, cut } = negativeStart()
+    const reserved = `${cut}_intro`
+    const action = {
+      label: 'reserved identity',
+      steps: [{ rule: 'closedTermIntro' as const, region: cut, term: p('\\x. x') }],
+      placements: [],
+      allocation: { regions: [], nodes: [reserved], wires: [reserved] },
+    } as ProofAction & { readonly allocation: {
+      readonly regions: readonly string[]
+      readonly nodes: readonly string[]
+      readonly wires: readonly string[]
+    } }
+
+    const out = applyAction(diagram, action, ctx)
+
+    expect(Object.keys(out.nodes)).toEqual([`${reserved}_0`])
+    expect(Object.keys(out.wires)).toEqual([`${reserved}_0`])
+  })
+
+  it('rejects duplicate allocation exclusions before applying any step', () => {
+    const { diagram, cut } = negativeStart()
+    const action = {
+      label: 'duplicate reservation',
+      steps: [{ rule: 'closedTermIntro' as const, region: cut, term: p('\\x. x') }],
+      placements: [],
+      allocation: { regions: [], nodes: ['reserved', 'reserved'], wires: [] },
+    } as unknown as ProofAction
+
+    expect(() => applyAction(diagram, action, ctx)).toThrowError(/duplicate.*node.*reserved/i)
+  })
+
+  it('rejects incomplete allocation metadata before applying any step', () => {
+    const { diagram, cut } = negativeStart()
+    const action = {
+      label: 'incomplete reservation',
+      steps: [{ rule: 'closedTermIntro', region: cut, term: p('\\x. x') }],
+      placements: [],
+      allocation: { regions: [], nodes: [] },
+    } as unknown as ProofAction
+
+    expect(() => applyAction(diagram, action, ctx)).toThrowError(/allocation wires must be an array/i)
+  })
+
+  it('excludes action-reserved region ids from multi-region allocation', () => {
+    const diagram = new DiagramBuilder().build()
+    const action = {
+      label: 'reserved double cut',
+      steps: [{
+        rule: 'doubleCutIntro' as const,
+        sel: { region: diagram.root, regions: [], nodes: [], wires: [] },
+      }],
+      placements: [],
+      allocation: { regions: ['dc', 'dc_0'], nodes: [], wires: [] },
+    } as ProofAction & { readonly allocation: {
+      readonly regions: readonly string[]
+      readonly nodes: readonly string[]
+      readonly wires: readonly string[]
+    } }
+
+    const out = applyAction(diagram, action, ctx)
+
+    expect(Object.keys(out.regions).filter((id) => diagram.regions[id] === undefined)).toEqual(['dc_1', 'dc_2'])
+  })
+
   it('identifies both the action and constituent step when replay fails', () => {
     const { diagram, cut } = negativeStart()
     const action: ProofAction = {

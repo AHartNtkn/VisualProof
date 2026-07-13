@@ -7,6 +7,7 @@ import { spawnTermNode } from '../../src/kernel/diagram/spawn'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import { mkSelection, selectionContents, type SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyAction } from '../../src/kernel/proof/action'
+import { actionFromJson, actionToJson } from '../../src/kernel/proof/json'
 import type { ProofContext } from '../../src/kernel/proof/step'
 import { parseTerm } from '../../src/kernel/term/parse'
 import {
@@ -138,6 +139,85 @@ describe('CopyPlanner structural destinations', () => {
 })
 
 describe('CopyPlanner proof destinations', () => {
+  it('reserves a colliding source node id through saved and loaded live replay', () => {
+    const source = mkDiagram({
+      root: 'sroot',
+      regions: { sroot: { kind: 'sheet' }, scut: { kind: 'cut', parent: 'sroot' } },
+      nodes: { r0_intro: { kind: 'term', region: 'scut', term: p('\\x. x') } },
+      wires: { sw: { scope: 'scut', endpoints: [{ node: 'r0_intro', port: { kind: 'output' } }] } },
+    })
+    const selection = mkSelection(source, {
+      region: 'scut', regions: [], nodes: ['r0_intro'], wires: ['sw'],
+    })
+    const destination = new DiagramBuilder().build()
+    const copied = plan(planCopy(source, selection, {
+      kind: 'proof', diagram: destination, region: destination.root, orientation: 'forward', ctx,
+    }))
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+
+    expect(copied.action.allocation).toEqual({
+      regions: ['scut', 'sroot'], nodes: ['r0_intro'], wires: ['sw'],
+    })
+    const loaded = actionFromJson(JSON.parse(JSON.stringify(actionToJson(copied.action))))
+    const replayed = applyAction(destination, loaded, ctx)
+    expect(Object.keys(replayed.nodes)).toEqual(['r0_intro_0'])
+    expect(Object.keys(replayed.nodes).some((id) => source.nodes[id] !== undefined)).toBe(false)
+    expect(replayed).toEqual(applyAction(destination, copied.action, ctx))
+  })
+
+  it('reserves a colliding source wire id independently of node ids', () => {
+    const source = mkDiagram({
+      root: 'sroot',
+      regions: { sroot: { kind: 'sheet' }, scut: { kind: 'cut', parent: 'sroot' } },
+      nodes: { sourceNode: { kind: 'term', region: 'scut', term: p('\\x. x') } },
+      wires: { r0_intro: { scope: 'scut', endpoints: [{ node: 'sourceNode', port: { kind: 'output' } }] } },
+    })
+    const selection = mkSelection(source, {
+      region: 'scut', regions: [], nodes: ['sourceNode'], wires: ['r0_intro'],
+    })
+    const destination = new DiagramBuilder().build()
+    const copied = plan(planCopy(source, selection, {
+      kind: 'proof', diagram: destination, region: destination.root, orientation: 'forward', ctx,
+    }))
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+
+    const replayed = applyAction(destination, copied.action, ctx)
+    expect(Object.keys(replayed.wires)).toEqual(['r0_intro_0'])
+    expect(Object.keys(replayed.wires).some((id) => source.wires[id] !== undefined)).toBe(false)
+  })
+
+  it('reserves colliding regions while later recipe steps reference the shifted inner id', () => {
+    const source = mkDiagram({
+      root: 'sroot',
+      regions: {
+        sroot: { kind: 'sheet' },
+        scut: { kind: 'cut', parent: 'sroot' },
+        dc: { kind: 'cut', parent: 'scut' },
+        dc_0: { kind: 'cut', parent: 'dc' },
+      },
+      nodes: { dc_2_intro: { kind: 'term', region: 'dc_0', term: p('\\x. x') } },
+      wires: { dc_2_intro: { scope: 'dc_0', endpoints: [{ node: 'dc_2_intro', port: { kind: 'output' } }] } },
+    })
+    const selection = mkSelection(source, {
+      region: 'scut', regions: ['dc'], nodes: [], wires: [],
+    })
+    const destination = new DiagramBuilder().build()
+    const copied = plan(planCopy(source, selection, {
+      kind: 'proof', diagram: destination, region: destination.root, orientation: 'forward', ctx,
+    }))
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+
+    expect(copied.action.steps.map((step) => step.rule)).toEqual(['doubleCutIntro', 'closedTermIntro'])
+    expect(copied.action.steps[1]).toMatchObject({ rule: 'closedTermIntro', region: 'dc_2' })
+    const replayed = applyAction(destination, copied.action, ctx)
+    expect(replayed.regions['dc_1']).toBeDefined()
+    expect(replayed.regions['dc_2']).toMatchObject({ kind: 'cut', parent: 'dc_1' })
+    expect(replayed.nodes['dc_2_intro_0']).toMatchObject({ kind: 'term', region: 'dc_2' })
+    for (const id of Object.keys(replayed.regions)) {
+      if (id !== destination.root) expect(source.regions[id]).toBeUndefined()
+    }
+  })
+
   it('prefers one genuine iteration action when its existing gate applies', () => {
     const builder = new DiagramBuilder()
     const selected = builder.termNode(builder.root, p('y'))

@@ -2,7 +2,7 @@ import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../di
 import { DiagramError, mkDiagram } from '../diagram/diagram'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 
 /**
@@ -25,12 +25,12 @@ function reparent(n: DiagramNode, region: RegionId): DiagramNode {
  * reparenting with a single bubble: ids stable, selected top-level wires
  * keep their scope.
  */
-export function applyVacuousBubbleIntro(d: Diagram, sel: SubgraphSelection, arity: number): Diagram {
+export function applyVacuousBubbleIntro(d: Diagram, sel: SubgraphSelection, arity: number, reservation?: IdReservation): Diagram {
   if (!Number.isSafeInteger(arity) || arity < 0) {
     throw new DiagramError(`bubble arity must be a non-negative safe integer, got ${arity}`)
   }
   selectionContents(d, sel) // validates loudly
-  const bubbleId = freshId(new Set(Object.keys(d.regions)), 'vb')
+  const bubbleId = freshId(new Set(Object.keys(d.regions)), 'vb', reservation?.regions)
   const regions: Record<RegionId, Region> = { ...d.regions }
   regions[bubbleId] = { kind: 'bubble', parent: sel.region, arity }
   const selectedRoots = new Set(sel.regions)
