@@ -410,6 +410,201 @@ describe('CopyPlanner proof destinations', () => {
     expect(copied.resultFingerprint).toBe(exploreForm(applyAction(diagram, copied.action, ctx, 'forward')))
   })
 
+  it('composes a non-root fission component with independent closed content', () => {
+    const builder = new DiagramBuilder()
+    const sourceRegion = builder.cut(builder.root)
+    const producer = builder.termNode(sourceRegion, p('\\x. x'))
+    const consumer = builder.termNode(sourceRegion, p('q (\\z. z)'))
+    const extra = builder.termNode(sourceRegion, p('\\a. \\b. a'))
+    builder.wire(sourceRegion, [
+      { node: producer, port: { kind: 'output' } },
+      { node: consumer, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: sourceRegion,
+      regions: [],
+      nodes: [producer, consumer, extra],
+      wires: Object.keys(diagram.wires),
+    })
+    const sourcePattern = extractSubgraph(diagram, selection)
+
+    const copied = plan(planCopy(diagram, selection, {
+      kind: 'proof', diagram, region: diagram.root, orientation: 'forward', ctx,
+    }))
+
+    expect(copied.kind).toBe('proof')
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+    expect(copied.action.steps.map((step) => step.rule))
+      .toEqual(['closedTermIntro', 'fission', 'closedTermIntro'])
+    expect(copied.action.steps[1]).toMatchObject({ rule: 'fission', path: ['fn'] })
+    const replayed = applyAction(diagram, copied.action, ctx, 'forward')
+    const alleged = extractSubgraph(replayed, introducedSelection(diagram, replayed, diagram.root))
+    expect(boundaryForm(alleged.pattern)).toBe(boundaryForm(sourcePattern.pattern))
+    expect(alleged.attachments).toEqual(sourcePattern.attachments)
+    expect(copied.resultFingerprint).toBe(exploreForm(replayed))
+  })
+
+  it('constructs a fission component inside a constructible bubble', () => {
+    const builder = new DiagramBuilder()
+    const sourceRegion = builder.cut(builder.root)
+    const wrapper = builder.bubble(sourceRegion, 0)
+    const producer = builder.termNode(wrapper, p('\\x. x'))
+    const consumer = builder.termNode(wrapper, p('q (\\z. z)'))
+    builder.wire(wrapper, [
+      { node: producer, port: { kind: 'output' } },
+      { node: consumer, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: sourceRegion,
+      regions: [wrapper],
+      nodes: [],
+      wires: [],
+    })
+    const sourcePattern = extractSubgraph(diagram, selection)
+
+    const copied = plan(planCopy(diagram, selection, {
+      kind: 'proof', diagram, region: diagram.root, orientation: 'forward', ctx,
+    }))
+
+    expect(copied.kind).toBe('proof')
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+    expect(copied.action.steps.map((step) => step.rule))
+      .toEqual(['vacuousIntro', 'closedTermIntro', 'fission'])
+    expect(copied.action.steps[2]).toMatchObject({ rule: 'fission', path: ['fn'] })
+    const replayed = applyAction(diagram, copied.action, ctx, 'forward')
+    const alleged = extractSubgraph(replayed, introducedSelection(diagram, replayed, diagram.root))
+    expect(boundaryForm(alleged.pattern)).toBe(boundaryForm(sourcePattern.pattern))
+    expect(alleged.attachments).toEqual(sourcePattern.attachments)
+    expect(copied.resultFingerprint).toBe(exploreForm(replayed))
+  })
+
+  it('composes two disjoint non-root fission components deterministically', () => {
+    const builder = new DiagramBuilder()
+    const sourceRegion = builder.cut(builder.root)
+    const firstProducer = builder.termNode(sourceRegion, p('\\x. x'))
+    const firstConsumer = builder.termNode(sourceRegion, p('q (\\z. z)'))
+    const secondProducer = builder.termNode(sourceRegion, p('\\a. \\b. a'))
+    const secondConsumer = builder.termNode(sourceRegion, p('q (\\u. u)'))
+    builder.wire(sourceRegion, [
+      { node: firstProducer, port: { kind: 'output' } },
+      { node: firstConsumer, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    builder.wire(sourceRegion, [
+      { node: secondProducer, port: { kind: 'output' } },
+      { node: secondConsumer, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: sourceRegion,
+      regions: [],
+      nodes: [firstProducer, firstConsumer, secondProducer, secondConsumer],
+      wires: Object.keys(diagram.wires),
+    })
+    const sourcePattern = extractSubgraph(diagram, selection)
+
+    const copied = plan(planCopy(diagram, selection, {
+      kind: 'proof', diagram, region: diagram.root, orientation: 'forward', ctx,
+    }))
+
+    expect(copied.kind).toBe('proof')
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+    expect(copied.action.steps.map((step) => step.rule))
+      .toEqual(['closedTermIntro', 'fission', 'closedTermIntro', 'fission'])
+    expect(copied.action.steps[1]).toMatchObject({ rule: 'fission', path: ['fn'] })
+    expect(copied.action.steps[3]).toMatchObject({ rule: 'fission', path: ['fn'] })
+    const replayed = applyAction(diagram, copied.action, ctx, 'forward')
+    const alleged = extractSubgraph(replayed, introducedSelection(diagram, replayed, diagram.root))
+    expect(boundaryForm(alleged.pattern)).toBe(boundaryForm(sourcePattern.pattern))
+    expect(alleged.attachments).toEqual(sourcePattern.attachments)
+    expect(copied.resultFingerprint).toBe(exploreForm(replayed))
+  })
+
+  it('constructs an overlapping producer-consumer fission chain root-to-leaves', () => {
+    const builder = new DiagramBuilder()
+    const sourceRegion = builder.cut(builder.root)
+    const innerProducer = builder.termNode(sourceRegion, p('\\x. x'))
+    const intermediate = builder.termNode(sourceRegion, p('q (\\z. z)'))
+    const rootConsumer = builder.termNode(sourceRegion, p('r (\\w. w)'))
+    builder.wire(sourceRegion, [
+      { node: innerProducer, port: { kind: 'output' } },
+      { node: intermediate, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    builder.wire(sourceRegion, [
+      { node: intermediate, port: { kind: 'output' } },
+      { node: rootConsumer, port: { kind: 'freeVar', name: 'r' } },
+    ])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: sourceRegion,
+      regions: [],
+      nodes: [innerProducer, intermediate, rootConsumer],
+      wires: Object.keys(diagram.wires),
+    })
+    const sourcePattern = extractSubgraph(diagram, selection)
+
+    const copied = plan(planCopy(diagram, selection, {
+      kind: 'proof', diagram, region: diagram.root, orientation: 'forward', ctx,
+    }))
+
+    expect(copied.kind).toBe('proof')
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+    expect(copied.action.steps.map((step) => step.rule))
+      .toEqual(['closedTermIntro', 'fission', 'fission'])
+    expect(copied.action.steps.slice(1)).toMatchObject([
+      { rule: 'fission', path: ['fn'] },
+      { rule: 'fission', path: ['fn'] },
+    ])
+    const replayed = applyAction(diagram, copied.action, ctx, 'forward')
+    const alleged = extractSubgraph(replayed, introducedSelection(diagram, replayed, diagram.root))
+    expect(boundaryForm(alleged.pattern)).toBe(boundaryForm(sourcePattern.pattern))
+    expect(alleged.attachments).toEqual(sourcePattern.attachments)
+    expect(copied.resultFingerprint).toBe(exploreForm(replayed))
+  })
+
+  it('constructs a branching fission tree with multiple producer children', () => {
+    const builder = new DiagramBuilder()
+    const sourceRegion = builder.cut(builder.root)
+    const leftProducer = builder.termNode(sourceRegion, p('\\x. x'))
+    const rightProducer = builder.termNode(sourceRegion, p('\\a. \\b. a'))
+    const rootConsumer = builder.termNode(sourceRegion, p('q r'))
+    builder.wire(sourceRegion, [
+      { node: leftProducer, port: { kind: 'output' } },
+      { node: rootConsumer, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    builder.wire(sourceRegion, [
+      { node: rightProducer, port: { kind: 'output' } },
+      { node: rootConsumer, port: { kind: 'freeVar', name: 'r' } },
+    ])
+    const diagram = builder.build()
+    const selection = mkSelection(diagram, {
+      region: sourceRegion,
+      regions: [],
+      nodes: [leftProducer, rightProducer, rootConsumer],
+      wires: Object.keys(diagram.wires),
+    })
+    const sourcePattern = extractSubgraph(diagram, selection)
+
+    const copied = plan(planCopy(diagram, selection, {
+      kind: 'proof', diagram, region: diagram.root, orientation: 'forward', ctx,
+    }))
+
+    expect(copied.kind).toBe('proof')
+    if (copied.kind !== 'proof') throw new Error('expected proof plan')
+    expect(copied.action.steps.map((step) => step.rule))
+      .toEqual(['closedTermIntro', 'fission', 'fission'])
+    expect(copied.action.steps.slice(1)).toMatchObject([
+      { rule: 'fission', path: ['fn'] },
+      { rule: 'fission', path: ['arg'] },
+    ])
+    const replayed = applyAction(diagram, copied.action, ctx, 'forward')
+    const alleged = extractSubgraph(replayed, introducedSelection(diagram, replayed, diagram.root))
+    expect(boundaryForm(alleged.pattern)).toBe(boundaryForm(sourcePattern.pattern))
+    expect(alleged.attachments).toEqual(sourcePattern.attachments)
+    expect(copied.resultFingerprint).toBe(exploreForm(replayed))
+  })
+
   it('refuses repeated-consumer substitution when no single exact fission path exists', () => {
     const builder = new DiagramBuilder()
     const sourceRegion = builder.cut(builder.root)

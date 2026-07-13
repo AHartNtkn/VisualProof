@@ -15,8 +15,7 @@ import {
 } from '../kernel/proof/action'
 import { dwbToJson, theoremToJson } from '../kernel/proof/json'
 import { applyStep, type ProofContext, type ProofStep } from '../kernel/proof/step'
-import { bvar, freePorts, lam, termEq, type Term } from '../kernel/term/term'
-import { isBvarClosed, subtermAt, substPort } from '../kernel/term/path'
+import { app, bvar, freePorts, lam, type Term } from '../kernel/term/term'
 import type { PathSeg } from '../kernel/term/reduce'
 import type { Vec2 } from '../view/vec'
 import type { ProofOrientation } from './interact/moves'
@@ -70,11 +69,27 @@ type ConstructionRecipe = {
   readonly attachmentMap: ReadonlyMap<WireId, WireId>
 }
 
+type FissionEdge = {
+  readonly wire: WireId
+  readonly producer: NodeId
+  readonly consumer: NodeId
+  readonly inputName: string
+  readonly path: readonly PathSeg[]
+}
+
+type FissionTree = {
+  readonly root: NodeId
+  readonly nodes: readonly NodeId[]
+  readonly fusedTerm: Term
+  readonly children: ReadonlyMap<NodeId, readonly FissionEdge[]>
+}
+
 type Compiler = {
   diagram: Diagram
   readonly steps: ProofStep[]
   readonly regionMap: Map<RegionId, RegionId>
   readonly nodeMap: Map<NodeId, NodeId>
+  readonly wireMap: Map<WireId, WireId>
   readonly pattern: DiagramWithBoundary
   readonly destination: Extract<CopyDestination, { readonly kind: 'proof' }>
   readonly reservation: IdReservation
@@ -423,18 +438,67 @@ function endpointWire(diagram: Diagram, endpoint: Endpoint): WireId {
   return found[0]
 }
 
-function compileNodes(compiler: Compiler): void {
+function emitTermNode(compiler: Compiler, region: RegionId, term: Term): NodeId {
+  const made = emit(compiler, freePorts(term).length === 0
+    ? { rule: 'closedTermIntro', region, term }
+    : { rule: 'openTermSpawn', region, term })
+  if (made.nodes.length !== 1) throw new Error('term constructor did not create exactly one node')
+  return made.nodes[0]!
+}
+
+function emitFissionTree(compiler: Compiler, tree: FissionTree): void {
   const pd = compiler.pattern.diagram
+  const sourceRoot = pd.nodes[tree.root]
+  if (sourceRoot?.kind !== 'term') throw new Error('fission tree root is not a term')
+  const region = compiler.regionMap.get(sourceRoot.region)
+  if (region === undefined) throw new Error(`pattern region '${sourceRoot.region}' was not constructed`)
+  const replayRoot = emitTermNode(compiler, region, tree.fusedTerm)
+  compiler.nodeMap.set(tree.root, replayRoot)
+
+  const splitChildren = (sourceConsumer: NodeId, replayConsumer: NodeId): void => {
+    for (const edge of tree.children.get(sourceConsumer) ?? []) {
+      const current = compiler.diagram.nodes[replayConsumer]
+      if (current?.kind !== 'term') throw new Error(`fission replay node '${replayConsumer}' is not a term`)
+      const beforeWires = new Set(Object.keys(compiler.diagram.wires))
+      const split = emit(compiler, { rule: 'fission', node: replayConsumer, path: edge.path })
+      if (split.nodes.length !== 1) throw new Error('fission tree edge did not create exactly one producer')
+      const madeWires = Object.keys(compiler.diagram.wires).filter((wire) => !beforeWires.has(wire))
+      if (madeWires.length !== 1) throw new Error('fission tree edge did not create exactly one bridge wire')
+      const replayProducer = split.nodes[0]!
+      compiler.nodeMap.set(edge.producer, replayProducer)
+      compiler.wireMap.set(edge.wire, madeWires[0]!)
+      splitChildren(edge.producer, replayProducer)
+    }
+  }
+  splitChildren(tree.root, replayRoot)
+}
+
+function compileNodes(compiler: Compiler, fissions: readonly FissionTree[]): void {
+  const pd = compiler.pattern.diagram
+  const treeByNode = new Map<NodeId, FissionTree>()
+  for (const tree of fissions) {
+    for (const node of tree.nodes) {
+      if (treeByNode.has(node)) throw new Error('fission trees must have disjoint node ownership')
+      treeByNode.set(node, tree)
+    }
+  }
+  const emitted = new Set<FissionTree>()
   for (const id of Object.keys(pd.nodes).sort()) {
+    const tree = treeByNode.get(id)
+    if (tree !== undefined) {
+      if (!emitted.has(tree)) {
+        emitFissionTree(compiler, tree)
+        emitted.add(tree)
+      }
+      continue
+    }
     const node = pd.nodes[id]!
     const region = compiler.regionMap.get(node.region)
     if (region === undefined) throw new Error(`pattern region '${node.region}' was not constructed`)
     let made: { readonly nodes: readonly NodeId[] }
     switch (node.kind) {
       case 'term':
-        made = emit(compiler, freePorts(node.term).length === 0
-          ? { rule: 'closedTermIntro', region, term: node.term }
-          : { rule: 'openTermSpawn', region, term: node.term })
+        made = { nodes: [emitTermNode(compiler, region, node.term)] }
         break
       case 'ref':
         made = emit(compiler, { rule: 'relationSpawn', region, defId: node.defId, arity: node.arity })
@@ -494,6 +558,7 @@ function compileWires(compiler: Compiler, extraction: Extraction): ReadonlyMap<W
   const explicitAttachments = new Map<WireId, WireId>()
   for (const wireId of Object.keys(pd.wires).sort()) {
     const wire = pd.wires[wireId]!
+    if (compiler.wireMap.has(wireId)) continue
     if (wire.endpoints.length === 0) {
       const scope = compiler.regionMap.get(wire.scope)
       if (scope === undefined) throw new Error(`wire scope '${wire.scope}' was not constructed`)
@@ -525,6 +590,7 @@ function compileConstruction(
   extraction: Extraction,
   destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
   reservation: IdReservation,
+  fissions: readonly FissionTree[] = [],
 ): ConstructionRecipe | CopyRefusal {
   const pairing = new Map<RegionId, RegionId | null>()
   if (!regionChildrenConstructible(extraction.pattern.diagram, extraction.pattern.diagram.root, pairing)) {
@@ -535,13 +601,14 @@ function compileConstruction(
     steps: [],
     regionMap: new Map([[extraction.pattern.diagram.root, destination.region]]),
     nodeMap: new Map(),
+    wireMap: new Map(),
     pattern: extraction.pattern,
     destination,
     reservation,
   }
   try {
     compileRegionChildren(compiler, extraction.pattern.diagram.root, destination.region, pairing)
-    compileNodes(compiler)
+    compileNodes(compiler, fissions)
     const attachments = compileWires(compiler, extraction)
     if (attachments.size !== new Set(extraction.attachments).size) {
       return deny('invalid-attachment', 'ordinary construction did not preserve every crossing attachment identity')
@@ -586,6 +653,7 @@ function compileContextualRelation(
       steps: [],
       regionMap: new Map([[extraction.pattern.diagram.root, destination.region]]),
       nodeMap: new Map(),
+      wireMap: new Map(),
       pattern: extraction.pattern,
       destination,
       reservation,
@@ -620,18 +688,19 @@ function compileContextualRelation(
   return null
 }
 
-function bvarClosedPaths(term: Term): readonly (readonly PathSeg[])[] {
+function portOccurrencePaths(term: Term, name: string): readonly (readonly PathSeg[])[] {
   const paths: PathSeg[][] = []
   const visit = (current: Term, path: PathSeg[]): void => {
-    if (isBvarClosed(current)) paths.push([...path])
     switch (current.kind) {
       case 'lam': visit(current.body, [...path, 'body']); return
       case 'app':
         visit(current.fn, [...path, 'fn'])
         visit(current.arg, [...path, 'arg'])
         return
-      case 'bvar':
       case 'port':
+        if (current.name === name) paths.push([...path])
+        return
+      case 'bvar':
         return
     }
   }
@@ -639,63 +708,119 @@ function bvarClosedPaths(term: Term): readonly (readonly PathSeg[])[] {
   return paths
 }
 
-/**
- * Finite exact inverse-fusion emitter. Each eligible two-node bridge derives
- * its unique fused term. A closed fused term can be introduced directly, and
- * only its structurally present, bvar-closed paths are considered for
- * fission, in deterministic pre-order. The caller scratch-replays every
- * returned recipe against the exact intended splice.
- */
-function compileFissionNormalForms(
-  before: Diagram,
-  extraction: Extraction,
-  destination: Extract<CopyDestination, { readonly kind: 'proof' }>,
-  reservation: IdReservation,
-): readonly ConstructionRecipe[] {
+function substituteChildTerms(term: Term, children: ReadonlyMap<string, Term>): Term {
+  switch (term.kind) {
+    case 'bvar': return term
+    case 'port': return children.get(term.name) ?? term
+    case 'lam': return lam(substituteChildTerms(term.body, children))
+    case 'app': return app(substituteChildTerms(term.fn, children), substituteChildTerms(term.arg, children))
+  }
+}
+
+/** Discover the deterministic acyclic forest of exact internal fusion edges. */
+function fissionTrees(extraction: Extraction): readonly FissionTree[] {
   const pd = extraction.pattern.diagram
-  if (childRegions(pd, pd.root).length > 0 || Object.keys(pd.nodes).length !== 2) return []
-  const recipes: ConstructionRecipe[] = []
+  const edges: FissionEdge[] = []
   for (const [bridgeId, bridge] of Object.entries(pd.wires).sort(([a], [b]) => compareCodeUnits(a, b))) {
-    if (extraction.pattern.boundary.includes(bridgeId) || bridge.endpoints.length !== 2 || bridge.scope !== pd.root) continue
+    if (extraction.pattern.boundary.includes(bridgeId) || bridge.endpoints.length !== 2) continue
     const output = bridge.endpoints.find((endpoint) => endpoint.port.kind === 'output')
     const input = bridge.endpoints.find((endpoint) => endpoint.port.kind === 'freeVar')
     if (output === undefined || input === undefined || output.node === input.node || input.port.kind !== 'freeVar') continue
     const producer = pd.nodes[output.node]
     const consumer = pd.nodes[input.node]
     if (producer?.kind !== 'term' || consumer?.kind !== 'term') continue
-    const fusedTerm = substPort(consumer.term, input.port.name, producer.term)
-    if (freePorts(fusedTerm).length !== 0) continue
-    const paths = bvarClosedPaths(fusedTerm).filter((path) => termEq(subtermAt(fusedTerm, path), producer.term))
-    for (const path of paths) {
-      const compiler: Compiler = {
-        diagram: before,
-        steps: [],
-        regionMap: new Map([[pd.root, destination.region]]),
-        nodeMap: new Map(),
-        pattern: extraction.pattern,
-        destination,
-        reservation,
+    if (producer.region !== consumer.region || bridge.scope !== producer.region) continue
+    const paths = portOccurrencePaths(consumer.term, input.port.name)
+    if (paths.length !== 1) continue
+    edges.push(Object.freeze({
+      wire: bridgeId,
+      producer: output.node,
+      consumer: input.node,
+      inputName: input.port.name,
+      path: Object.freeze([...paths[0]!]),
+    }))
+  }
+  if (edges.length === 0) return []
+
+  const outgoing = new Map<NodeId, FissionEdge>()
+  const children = new Map<NodeId, FissionEdge[]>()
+  const adjacency = new Map<NodeId, Set<NodeId>>()
+  const invalid = new Set<NodeId>()
+  for (const edge of edges) {
+    if (outgoing.has(edge.producer)) {
+      invalid.add(edge.producer)
+      invalid.add(edge.consumer)
+    } else {
+      outgoing.set(edge.producer, edge)
+    }
+    const prior = children.get(edge.consumer) ?? []
+    prior.push(edge)
+    children.set(edge.consumer, prior)
+    const producerLinks = adjacency.get(edge.producer) ?? new Set<NodeId>()
+    producerLinks.add(edge.consumer)
+    adjacency.set(edge.producer, producerLinks)
+    const consumerLinks = adjacency.get(edge.consumer) ?? new Set<NodeId>()
+    consumerLinks.add(edge.producer)
+    adjacency.set(edge.consumer, consumerLinks)
+  }
+  const trees: FissionTree[] = []
+  const visited = new Set<NodeId>()
+  for (const start of [...adjacency.keys()].sort()) {
+    if (visited.has(start)) continue
+    const pending = [start]
+    const component: NodeId[] = []
+    while (pending.length > 0) {
+      const node = pending.pop()!
+      if (visited.has(node)) continue
+      visited.add(node)
+      component.push(node)
+      for (const adjacent of [...(adjacency.get(node) ?? [])].sort().reverse()) pending.push(adjacent)
+    }
+    component.sort()
+    const owned = new Set(component)
+    const componentEdges = edges.filter((edge) => owned.has(edge.producer) && owned.has(edge.consumer))
+    const roots = component.filter((node) => !componentEdges.some((edge) => edge.producer === node))
+    if (roots.length !== 1 || componentEdges.length !== component.length - 1) continue
+    if (component.some((node) => invalid.has(node))) continue
+    const root = roots[0]!
+    const fused = new Map<NodeId, Term>()
+    const visiting = new Set<NodeId>()
+    const fuse = (nodeId: NodeId): Term => {
+      const prior = fused.get(nodeId)
+      if (prior !== undefined) return prior
+      if (visiting.has(nodeId)) throw new Error('cyclic fission component')
+      visiting.add(nodeId)
+      const node = pd.nodes[nodeId]
+      if (node?.kind !== 'term') throw new Error('fission tree contains a non-term node')
+      const replacements = new Map<string, Term>()
+      for (const edge of children.get(nodeId) ?? []) {
+        if (!owned.has(edge.producer)) continue
+        if (replacements.has(edge.inputName)) throw new Error('competing fission inputs')
+        replacements.set(edge.inputName, fuse(edge.producer))
       }
-      try {
-        const fused = emit(compiler, { rule: 'closedTermIntro', region: destination.region, term: fusedTerm })
-        if (fused.nodes.length !== 1) throw new Error('fission normal form did not introduce exactly one fused node')
-        const consumerNode = fused.nodes[0]!
-        const split = emit(compiler, { rule: 'fission', node: consumerNode, path })
-        if (split.nodes.length !== 1) throw new Error('fission normal form did not create exactly one producer')
-        compiler.nodeMap.set(input.node, consumerNode)
-        compiler.nodeMap.set(output.node, split.nodes[0]!)
-        const attachmentMap = compileWires(compiler, extraction)
-        recipes.push(Object.freeze({
-          steps: Object.freeze([...compiler.steps]),
-          attachmentMap,
-        }))
-      } catch {
-        // This derived path failed a real rule or wiring gate. Other paths in
-        // the same finite fused term remain independent scratch candidates.
-      }
+      const result = substituteChildTerms(node.term, replacements)
+      visiting.delete(nodeId)
+      fused.set(nodeId, result)
+      return result
+    }
+    try {
+      const fusedTerm = fuse(root)
+      if (fused.size !== component.length) continue
+      if (freePorts(fusedTerm).length > 0) continue
+      trees.push(Object.freeze({
+        root,
+        nodes: Object.freeze(component),
+        fusedTerm,
+        children: new Map(component.map((node) => [
+          node,
+          Object.freeze((children.get(node) ?? []).filter((edge) => owned.has(edge.producer))),
+        ])),
+      }))
+    } catch {
+      // Cyclic and competing ownership shapes are not finite fission trees.
     }
   }
-  return Object.freeze(recipes)
+  return Object.freeze(trees)
 }
 
 function acceptedProofPlan(
@@ -745,10 +870,13 @@ function planProof(
     if (!isRefusal(constructed)) return acceptedProofPlan(source, selection, destination, constructed)
   }
 
-  for (const fission of compileFissionNormalForms(destination.diagram, extraction, destination, reservation)) {
-    if (!completeAttachmentMap(fission, extraction)) continue
-    const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, fission.steps, allocation)
-    if (!isRefusal(constructed)) return acceptedProofPlan(source, selection, destination, constructed)
+  const trees = fissionTrees(extraction)
+  if (trees.length > 0) {
+    const recipe = compileConstruction(destination.diagram, extraction, destination, reservation, trees)
+    if (!isRefusal(recipe) && completeAttachmentMap(recipe, extraction)) {
+      const constructed = verifyCandidate(destination.diagram, intended, extraction, destination, recipe.steps, allocation)
+      if (!isRefusal(constructed)) return acceptedProofPlan(source, selection, destination, constructed)
+    }
   }
 
   const recipe = compileConstruction(destination.diagram, extraction, destination, reservation)
