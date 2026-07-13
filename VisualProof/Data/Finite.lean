@@ -43,6 +43,18 @@ def filterFin (p : Fin n -> Bool) : List (Fin n) :=
 theorem filterFin_nodup (p : Fin n -> Bool) : (filterFin p).Nodup := by
   exact (allFin_nodup n).filter p
 
+/-! A dense carrier for the elements accepted by a Boolean predicate. -/
+
+abbrev FilteredFiber (p : Fin n -> Bool) := Fin (filterFin p).length
+
+namespace FilteredFiber
+
+/-- The original element represented by a dense filtered index. -/
+def origin (p : Fin n -> Bool) (index : FilteredFiber p) : Fin n :=
+  (filterFin p).get (show Fin (filterFin p).length from index)
+
+end FilteredFiber
+
 def indexOf? [DecidableEq α] : (xs : List α) -> α -> Option (Fin xs.length)
   | [], _ => none
   | y :: ys, x =>
@@ -101,6 +113,121 @@ theorem indexOf?_unique_of_nodup [DecidableEq α] {xs : List α}
     rw [List.getElem?_eq_getElem j.isLt, List.getElem?_eq_getElem i.isLt]
     exact congrArg some (hj.trans (indexOf?_sound hi).symm)
   exact (List.getElem?_inj j.isLt hnodup).mp hvalues
+
+namespace FilteredFiber
+
+/-- The dense filtered index of an original element, when it survives. -/
+def index? (p : Fin n -> Bool) (original : Fin n) : Option (FilteredFiber p) :=
+  indexOf? (filterFin p) original
+
+@[simp] theorem origin_survives (p : Fin n -> Bool) (index : FilteredFiber p) :
+    p (origin p index) = true := by
+  rw [← mem_filterFin]
+  exact List.get_mem ..
+
+@[simp] theorem index?_isSome_iff (p : Fin n -> Bool) (original : Fin n) :
+    (index? p original).isSome = true ↔ p original = true := by
+  change (indexOf? (filterFin p) original).isSome = true ↔ _
+  rw [indexOf?_isSome_iff, mem_filterFin]
+
+theorem index?_eq_some_iff (p : Fin n -> Bool) (original : Fin n)
+    (index : FilteredFiber p) :
+    index? p original = some index ↔ origin p index = original := by
+  constructor
+  · intro h
+    exact indexOf?_sound h
+  · intro horigin
+    obtain ⟨found, hfound⟩ := indexOf?_complete
+      (show original ∈ filterFin p by
+        rw [← horigin]
+        exact List.get_mem ..)
+    have : found = index := (indexOf?_unique_of_nodup
+      (filterFin_nodup p) hfound horigin).symm
+    simpa [index?, this] using hfound
+
+@[simp] theorem index?_eq_none_iff (p : Fin n -> Bool) (original : Fin n) :
+    index? p original = none ↔ p original = false := by
+  constructor
+  · intro hnone
+    cases hsurvives : p original with
+    | false => rfl
+    | true =>
+        have hsome := (index?_isSome_iff p original).2 hsurvives
+        simp [hnone] at hsome
+  · intro hdeleted
+    cases hindex : index? p original with
+    | none => rfl
+    | some index =>
+        have hsurvives := origin_survives p index
+        have horigin := (index?_eq_some_iff p original index).1 hindex
+        rw [horigin, hdeleted] at hsurvives
+        contradiction
+
+@[simp] theorem index?_origin (p : Fin n -> Bool) (index : FilteredFiber p) :
+    index? p (origin p index) = some index := by
+  exact (index?_eq_some_iff p _ _).2 rfl
+
+theorem survives_iff_exists_origin (p : Fin n -> Bool) (original : Fin n) :
+    p original = true ↔ ∃ index : FilteredFiber p, origin p index = original := by
+  constructor
+  · intro hsurvives
+    have hsome : (index? p original).isSome = true :=
+      (index?_isSome_iff p original).2 hsurvives
+    obtain ⟨index, hindex⟩ := Option.isSome_iff_exists.mp hsome
+    exact ⟨index, (index?_eq_some_iff p original index).1 hindex⟩
+  · rintro ⟨index, rfl⟩
+    exact origin_survives p index
+
+theorem origin_injective (p : Fin n -> Bool) : Function.Injective (origin p) := by
+  intro left right heq
+  have hleft := index?_origin p left
+  have hright := index?_origin p right
+  rw [heq] at hleft
+  exact Option.some.inj (hleft.symm.trans hright)
+
+theorem exists_index_of_survives (p : Fin n -> Bool) (original : Fin n)
+    (hsurvives : p original = true) :
+    ∃ index : FilteredFiber p,
+      index? p original = some index ∧ origin p index = original := by
+  obtain ⟨index, horigin⟩ := (survives_iff_exists_origin p original).1 hsurvives
+  exact ⟨index, (index?_eq_some_iff p original index).2 horigin, horigin⟩
+
+/-- Restrict a dependent family to the dense filtered carrier. -/
+def pullback {α : Fin n -> Sort u} (p : Fin n -> Bool)
+    (values : (original : Fin n) -> α original) :
+    (index : FilteredFiber p) -> α (origin p index) :=
+  fun index => values (origin p index)
+
+@[simp] theorem pullback_apply {α : Fin n -> Sort u} (p : Fin n -> Bool)
+    (values : (original : Fin n) -> α original) (index : FilteredFiber p) :
+    pullback p values index = values (origin p index) := rfl
+
+end FilteredFiber
+
+namespace FilteredFiber.Examples
+
+def keepEvenFour (index : Fin 4) : Bool := index.val % 2 == 0
+
+theorem keepEvenFour_count : (filterFin keepEvenFour).length = 2 := by
+  decide
+
+def keepEvenFourFirst : FilteredFiber keepEvenFour := ⟨0, by decide⟩
+
+def keepEvenFourSecond : FilteredFiber keepEvenFour := ⟨1, by decide⟩
+
+theorem keepEvenFour_origins :
+    origin keepEvenFour keepEvenFourFirst = 0 ∧
+    origin keepEvenFour keepEvenFourSecond = 2 := by
+  decide
+
+theorem keepEvenFour_indices :
+    index? keepEvenFour 0 = some keepEvenFourFirst ∧
+    index? keepEvenFour 1 = none ∧
+    index? keepEvenFour 2 = some keepEvenFourSecond ∧
+    index? keepEvenFour 3 = none := by
+  decide
+
+end FilteredFiber.Examples
 
 def sequenceFin : {n : Nat} -> (Fin n -> Option α) -> Option (Fin n -> α)
   | 0, _ => some Fin.elim0
