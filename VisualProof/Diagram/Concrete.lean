@@ -1,1 +1,2 @@
 import VisualProof.Diagram.Concrete.WellFormed
+import VisualProof.Diagram.Concrete.Examples
