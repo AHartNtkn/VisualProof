@@ -1583,4 +1583,25 @@ theorem validNestedRelabeled_elaborate_isomorphic :
 
 end ConcreteExamples
 
+namespace OpenConcreteIsomorphismExamples
+
+def relabeledOpenElaborationIso :
+    OpenDiagramIso
+      (relabeledSource.elaborate relabeledSource_wellFormed)
+      ((relabeledTarget.elaborate relabeledTarget_wellFormed).castArity
+        relabeledOpenIso.boundary_length_eq.symm) :=
+  relabeledOpenIso.elaborate_isomorphic relabeledSource_wellFormed
+    relabeledTarget_wellFormed
+
+theorem relabeledOpenElaboration_preserves_positions
+    (position : Fin relabeledSource.boundary.length) :
+    relabeledOpenElaborationIso.external
+        ((relabeledSource.elaborate
+          relabeledSource_wellFormed).boundary position) =
+      ((relabeledTarget.elaborate relabeledTarget_wellFormed).castArity
+        relabeledOpenIso.boundary_length_eq.symm).boundary position :=
+  relabeledOpenElaborationIso.boundary position
+
+end OpenConcreteIsomorphismExamples
+
 end VisualProof.Diagram

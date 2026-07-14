@@ -66,6 +66,29 @@ theorem denote_proof_irrelevant (d : OpenConcreteDiagram)
 
 end OpenConcreteDiagram
 
+namespace OpenConcreteIso
+
+/-- Ordered open concrete isomorphism preserves denotation positionwise. -/
+theorem denote_iff {source target : OpenConcreteDiagram}
+    (iso : OpenConcreteIso source target)
+    (hsource : source.WellFormed signature)
+    (htarget : target.WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin source.boundary.length -> model.Carrier) :
+    source.denote hsource model named args <->
+      target.denote htarget model named
+        (args ∘ Fin.cast iso.boundary_length_eq.symm) := by
+  change denoteOpen model named (source.elaborate hsource) args <->
+    denoteOpen model named (target.elaborate htarget)
+      (args ∘ Fin.cast iso.boundary_length_eq.symm)
+  exact (iso.elaborate_isomorphic hsource htarget).denoteOpen_iff
+    model named args |>.trans
+      (denoteOpen_castArity model named (target.elaborate htarget)
+        iso.boundary_length_eq.symm args)
+
+end OpenConcreteIso
+
 namespace ConcreteDiagram
 
 def denote (d : ConcreteDiagram) (hwf : d.WellFormed signature)
@@ -132,5 +155,19 @@ theorem validNestedRelabeled_denote_iff
     validNestedRelabeled_wellFormed model named
 
 end ConcreteExamples
+
+namespace OpenConcreteIsomorphismExamples
+
+theorem relabeledOpen_denote_iff
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier [1])
+    (args : Fin relabeledSource.boundary.length -> model.Carrier) :
+    relabeledSource.denote relabeledSource_wellFormed model named args <->
+      relabeledTarget.denote relabeledTarget_wellFormed model named
+        (args ∘ Fin.cast relabeledOpenIso.boundary_length_eq.symm) :=
+  relabeledOpenIso.denote_iff relabeledSource_wellFormed
+    relabeledTarget_wellFormed model named args
+
+end OpenConcreteIsomorphismExamples
 
 end VisualProof.Diagram

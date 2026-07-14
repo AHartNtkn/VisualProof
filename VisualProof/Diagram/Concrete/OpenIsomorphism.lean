@@ -193,4 +193,144 @@ def checked_transport {source target : OpenConcreteDiagram}
 
 end OpenConcreteIso
 
+namespace OpenConcreteIsomorphismExamples
+
+def relabeledSourceDiagram : ConcreteDiagram where
+  regionCount := 2
+  nodeCount := 2
+  wireCount := 2
+  root := 0
+  regions := fun region => if region = 0 then .sheet else .cut 0
+  nodes := fun node =>
+    if node = 0 then .term 1 0 (.lam (.bvar 0)) else .named 1 0 1
+  wires := fun wire =>
+    if wire = 0 then {
+      scope := 0
+      endpoints := [
+        { node := 0, port := .output },
+        { node := 1, port := .arg 0 }
+      ]
+    } else {
+      scope := 0
+      endpoints := []
+    }
+
+theorem relabeledSourceDiagram_check :
+    exists checked,
+      checkWellFormed [1] relabeledSourceDiagram = .ok checked /\
+        checked.val = relabeledSourceDiagram := by
+  refine ⟨_, rfl, rfl⟩
+
+def relabeledSourceWire : Fin relabeledSourceDiagram.wireCount :=
+  ⟨0, by decide⟩
+
+def relabeledSource : OpenConcreteDiagram where
+  diagram := relabeledSourceDiagram
+  boundary := [relabeledSourceWire, relabeledSourceWire]
+
+theorem relabeledSource_wellFormed : relabeledSource.WellFormed [1] where
+  diagram_well_formed :=
+    checkWellFormed_iff.mp relabeledSourceDiagram_check
+  boundary_is_root_scoped := by
+    intro wire _
+    change (relabeledSourceDiagram.wires wire).scope =
+      relabeledSourceDiagram.root
+    unfold relabeledSourceDiagram
+    dsimp
+    split <;> rfl
+
+def relabeledTargetDiagram : ConcreteDiagram where
+  regionCount := relabeledSourceDiagram.regionCount
+  nodeCount := relabeledSourceDiagram.nodeCount
+  wireCount := relabeledSourceDiagram.wireCount
+  root := ConcreteExamples.nodeReverse relabeledSourceDiagram.root
+  regions := fun region =>
+    (relabeledSourceDiagram.regions
+      (ConcreteExamples.nodeReverse.invFun region)).rename
+        ConcreteExamples.nodeReverse
+  nodes := fun node =>
+    (relabeledSourceDiagram.nodes
+      (ConcreteExamples.nodeReverse.invFun node)).rename
+        ConcreteExamples.nodeReverse
+  wires := fun wire => {
+    scope := ConcreteExamples.nodeReverse
+      (relabeledSourceDiagram.wires
+        (ConcreteExamples.nodeReverse.invFun wire)).scope
+    endpoints := ((relabeledSourceDiagram.wires
+      (ConcreteExamples.nodeReverse.invFun wire)).endpoints.map
+        (CEndpoint.rename ConcreteExamples.nodeReverse)).reverse
+  }
+
+def relabeledDiagramIso :
+    ConcreteIso relabeledSourceDiagram relabeledTargetDiagram where
+  regionCount_eq := rfl
+  nodeCount_eq := rfl
+  wireCount_eq := rfl
+  regions := ConcreteExamples.nodeReverse
+  nodes := ConcreteExamples.nodeReverse
+  wires := ConcreteExamples.nodeReverse
+  root_eq := rfl
+  regions_eq := by
+    intro region
+    change (relabeledSourceDiagram.regions region).rename
+        ConcreteExamples.nodeReverse =
+      (relabeledSourceDiagram.regions
+        (Fin.rev (Fin.rev region))).rename ConcreteExamples.nodeReverse
+    rw [Fin.rev_rev]
+  nodes_eq := by
+    intro node
+    change (relabeledSourceDiagram.nodes node).rename
+        ConcreteExamples.nodeReverse =
+      (relabeledSourceDiagram.nodes
+        (Fin.rev (Fin.rev node))).rename ConcreteExamples.nodeReverse
+    rw [Fin.rev_rev]
+  wire_scope_eq := by
+    intro wire
+    change ConcreteExamples.nodeReverse
+        (relabeledSourceDiagram.wires wire).scope =
+      ConcreteExamples.nodeReverse
+        (relabeledSourceDiagram.wires (Fin.rev (Fin.rev wire))).scope
+    rw [Fin.rev_rev]
+  wire_endpoints_perm := by
+    intro wire
+    change ((relabeledSourceDiagram.wires wire).endpoints.map
+        (CEndpoint.rename ConcreteExamples.nodeReverse)).Perm
+      (((relabeledSourceDiagram.wires (Fin.rev (Fin.rev wire))).endpoints.map
+        (CEndpoint.rename ConcreteExamples.nodeReverse)).reverse)
+    rw [Fin.rev_rev]
+    exact (List.reverse_perm _).symm
+
+def relabeledTarget : OpenConcreteDiagram where
+  diagram := relabeledTargetDiagram
+  boundary := relabeledSource.boundary.map relabeledDiagramIso.wires
+
+def relabeledOpenIso : OpenConcreteIso relabeledSource relabeledTarget where
+  diagram := relabeledDiagramIso
+  boundary := rfl
+
+theorem relabeledTarget_wellFormed : relabeledTarget.WellFormed [1] :=
+  relabeledOpenIso.wellFormed_transport relabeledSource_wellFormed
+
+theorem relabeledOpenIso_nontrivial :
+    (relabeledOpenIso.diagram.regions (0 : Fin 2)).val = 1 /\
+      (relabeledOpenIso.diagram.nodes (0 : Fin 2)).val = 1 /\
+      (relabeledOpenIso.diagram.wires (0 : Fin 2)).val = 1 := by
+  exact ⟨rfl, rfl, rfl⟩
+
+theorem relabeledOpenIso_repeated_boundary :
+    relabeledSource.boundary[0]? = relabeledSource.boundary[1]? /\
+      relabeledTarget.boundary[0]? = relabeledTarget.boundary[1]? := by
+  exact ⟨rfl, rfl⟩
+
+def relabeledTargetMappedWire : Fin relabeledTarget.diagram.wireCount :=
+  relabeledOpenIso.diagram.wires relabeledSourceWire
+
+theorem relabeledOpenIso_reverses_endpoints :
+    (relabeledTarget.diagram.wires relabeledTargetMappedWire).endpoints =
+      ((relabeledSource.diagram.wires relabeledSourceWire).endpoints.map
+        (CEndpoint.rename relabeledOpenIso.diagram.nodes)).reverse := by
+  rfl
+
+end OpenConcreteIsomorphismExamples
+
 end VisualProof.Diagram

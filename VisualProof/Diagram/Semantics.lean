@@ -84,6 +84,16 @@ def denoteOpen (model : Lambda.LambdaModel)
       denoteRegion (relCtx := []) model named assignment.classes PUnit.unit
         diagram.body
 
+theorem denoteOpen_castArity (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (diagram : OpenDiagram signature sourceArity)
+    (equality : sourceArity = targetArity)
+    (args : Fin targetArity -> model.Carrier) :
+    denoteOpen model named (diagram.castArity equality) args <->
+      denoteOpen model named diagram (args ∘ Fin.cast equality) := by
+  subst targetArity
+  rfl
+
 @[simp] theorem denoteRegion_mk
     (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
     (env : Fin outer -> model.Carrier)
