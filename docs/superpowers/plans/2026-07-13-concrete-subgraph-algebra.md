@@ -123,19 +123,19 @@ open/closed compiler authority.
 **Produces:** Raw requests, exact operation-input validation, and one computed
 closure.
 
-- [ ] Define `SelectionRequest`, `SelectionRequest.Valid`, structured
+- [x] Define `SelectionRequest`, `SelectionRequest.Valid`, structured
   `SelectionError`, checked selections, and `checkSelection`.
-- [ ] Prove input preservation, checker soundness/completeness, and exact
+- [x] Prove input preservation, checker soundness/completeness, and exact
   acceptance.
-- [ ] Compute selected regions, selected nodes, internal wires, and touching wires
+- [x] Compute selected regions, selected nodes, internal wires, and touching wires
   using finite filters.
-- [ ] Prove membership iff the intended predicates, duplicate freedom,
+- [x] Prove membership iff the intended predicates, duplicate freedom,
   internal/touching disjointness, endpoint consequences, and closure monotonicity.
-- [ ] Prove an unselected anchor-scoped wire remains touching even if every one of
+- [x] Prove an unselected anchor-scoped wire remains touching even if every one of
   its endpoints is selected; uncontacted bare anchor wires remain outside closure.
-- [ ] Add examples for direct node, whole child subtree, explicit anchor wire,
+- [x] Add examples for direct node, whole child subtree, explicit anchor wire,
   all-endpoints-but-not-explicit, and crossing wire cases.
-- [ ] Build, inspect axioms, and commit independently.
+- [x] Build, inspect axioms, and commit independently.
 
 ---
 
