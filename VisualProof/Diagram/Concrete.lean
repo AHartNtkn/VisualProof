@@ -5,3 +5,4 @@ import VisualProof.Diagram.Concrete.Isomorphism
 import VisualProof.Diagram.Concrete.OpenIsomorphism
 import VisualProof.Diagram.Concrete.Elaboration
 import VisualProof.Diagram.Concrete.Semantics
+import VisualProof.Diagram.Concrete.Subgraph
