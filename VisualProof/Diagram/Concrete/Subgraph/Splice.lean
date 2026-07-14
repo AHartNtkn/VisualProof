@@ -1081,6 +1081,34 @@ def mapPatternEndpoint (layout : PlugLayout input)
     CEndpoint layout.nodeCount :=
   { node := layout.patternNode endpoint.node, port := endpoint.port }
 
+def mapFrameEndpoint (layout : PlugLayout input)
+    (endpoint : CEndpoint input.frame.val.nodeCount) :
+    CEndpoint layout.nodeCount :=
+  { node := layout.frameNode endpoint.node, port := endpoint.port }
+
+theorem mapFrameEndpoint_injective (layout : PlugLayout input) :
+    Function.Injective layout.mapFrameEndpoint := by
+  intro left right heq
+  cases left with
+  | mk leftNode leftPort =>
+    cases right with
+    | mk rightNode rightPort =>
+      simp only [mapFrameEndpoint] at heq
+      have hnodes : leftNode = rightNode :=
+        layout.frameNode_injective (congrArg CEndpoint.node heq)
+      have hports : leftPort = rightPort := congrArg CEndpoint.port heq
+      subst rightNode
+      subst rightPort
+      rfl
+
+theorem mapFrameEndpoint_ne_mapPatternEndpoint (layout : PlugLayout input)
+    (frame : CEndpoint input.frame.val.nodeCount)
+    (pattern : CEndpoint input.pattern.val.diagram.nodeCount) :
+    layout.mapFrameEndpoint frame ≠ layout.mapPatternEndpoint pattern := by
+  intro heq
+  exact layout.frameNode_ne_patternNode frame.node pattern.node
+    (congrArg CEndpoint.node heq)
+
 theorem mapPatternEndpoint_injective (layout : PlugLayout input) :
     Function.Injective layout.mapPatternEndpoint := by
   intro left right heq
@@ -1118,16 +1146,78 @@ def exposedAttachment (layout : PlugLayout input)
     input.wireQuotient.Carrier :=
   input.quotientWire (input.attachment (layout.exposedPosition external))
 
+def boundaryWires (layout : PlugLayout input)
+    (quotient : input.wireQuotient.Carrier) :
+    List (Fin input.pattern.val.diagram.wireCount) :=
+  ((allFin input.pattern.val.exposedWires.length).filter fun external =>
+    decide (layout.exposedAttachment external = quotient)).map fun external =>
+      input.pattern.val.exposedWires.get external
+
 def boundaryEndpoints (layout : PlugLayout input)
     (quotient : input.wireQuotient.Carrier) :
     List (CEndpoint layout.nodeCount) :=
-  (allFin input.pattern.val.exposedWires.length).flatMap fun external =>
-    if layout.exposedAttachment external = quotient then
-      (input.pattern.val.diagram.wires
-        (input.pattern.val.exposedWires.get external)).endpoints.map
-          layout.mapPatternEndpoint
-    else
-      []
+  ((layout.boundaryWires quotient).flatMap fun wire =>
+    (input.pattern.val.diagram.wires wire).endpoints).map
+      layout.mapPatternEndpoint
+
+theorem boundaryWires_nodup (layout : PlugLayout input)
+    (quotient : input.wireQuotient.Carrier) :
+    (layout.boundaryWires quotient).Nodup := by
+  unfold boundaryWires
+  apply List.Pairwise.map
+    (R := fun left right => left ≠ right)
+    (S := fun left right => left ≠ right)
+  · intro left right hne heq
+    apply hne
+    apply Fin.ext
+    exact (List.getElem_inj input.pattern.val.exposedWires_nodup).mp (by
+      simpa only [List.get_eq_getElem] using heq)
+  · exact List.Pairwise.filter _ (allFin_nodup _)
+
+theorem boundaryEndpoints_nodup (layout : PlugLayout input)
+    (quotient : input.wireQuotient.Carrier) :
+    (layout.boundaryEndpoints quotient).Nodup := by
+  unfold boundaryEndpoints
+  apply List.Pairwise.map
+    (R := fun left right => left ≠ right)
+    (S := fun left right => left ≠ right)
+    layout.mapPatternEndpoint
+    (fun left right hne heq => hne
+      (layout.mapPatternEndpoint_injective heq))
+  exact endpointLists_nodup
+      ⟨input.pattern.val.diagram,
+        input.pattern.property.diagram_well_formed⟩
+      (layout.boundaryWires quotient) (layout.boundaryWires_nodup quotient)
+
+theorem mem_boundaryEndpoints (layout : PlugLayout input)
+    (quotient : input.wireQuotient.Carrier)
+    (endpoint : CEndpoint layout.nodeCount) :
+    endpoint ∈ layout.boundaryEndpoints quotient ↔
+      ∃ external : Fin input.pattern.val.exposedWires.length,
+        layout.exposedAttachment external = quotient ∧
+          ∃ original : CEndpoint input.pattern.val.diagram.nodeCount,
+            original ∈ (input.pattern.val.diagram.wires
+                (input.pattern.val.exposedWires.get external)).endpoints ∧
+              layout.mapPatternEndpoint original = endpoint := by
+  simp only [boundaryEndpoints]
+  rw [List.mem_map]
+  constructor
+  · rintro ⟨original, horiginal, heq⟩
+    rw [List.mem_flatMap] at horiginal
+    obtain ⟨wire, hwire, hendpoint⟩ := horiginal
+    rw [boundaryWires, List.mem_map] at hwire
+    obtain ⟨external, hexternal, hget⟩ := hwire
+    rw [List.mem_filter] at hexternal
+    exact ⟨external, (decide_eq_true_iff.mp hexternal.2), original,
+      by simpa only [hget] using hendpoint, heq⟩
+  · rintro ⟨external, heq, original, horiginal, rfl⟩
+    refine ⟨original, ?_, rfl⟩
+    rw [List.mem_flatMap]
+    refine ⟨input.pattern.val.exposedWires.get external, ?_, horiginal⟩
+    rw [boundaryWires, List.mem_map]
+    refine ⟨external, ?_, rfl⟩
+    rw [List.mem_filter]
+    exact ⟨mem_allFin external, decide_eq_true_iff.mpr heq⟩
 
 def mapFrameRegion (layout : PlugLayout input) :
     CRegion input.frame.val.regionCount → CRegion layout.regionCount
@@ -1166,9 +1256,8 @@ def plugWire (layout : PlugLayout input)
     (fun quotient => {
       scope := layout.frameRegion (input.coalescedScope quotient)
       endpoints :=
-        (input.coalescedEndpoints quotient).map (fun endpoint =>
-          ({ node := layout.frameNode endpoint.node, port := endpoint.port } :
-            CEndpoint layout.nodeCount)) ++ layout.boundaryEndpoints quotient
+        (input.coalescedEndpoints quotient).map layout.mapFrameEndpoint ++
+          layout.boundaryEndpoints quotient
     })
     (fun internal => layout.mapPatternWire
       (input.pattern.val.diagram.wires
@@ -1189,10 +1278,8 @@ def plugRaw (layout : PlugLayout input) : ConcreteDiagram where
     layout.plugWire (layout.quotientBlockWire wire) = {
       scope := layout.frameRegion (input.coalescedScope wire)
       endpoints :=
-        (input.coalescedEndpoints wire).map
-          (fun endpoint : CEndpoint input.frame.val.nodeCount =>
-          ({ node := layout.frameNode endpoint.node, port := endpoint.port } :
-            CEndpoint layout.nodeCount)) ++ layout.boundaryEndpoints wire
+        (input.coalescedEndpoints wire).map layout.mapFrameEndpoint ++
+          layout.boundaryEndpoints wire
     } := by
   simp [plugWire, quotientBlockWire]
 
@@ -1927,6 +2014,263 @@ theorem plugRaw_atom_binders_enclose (layout : PlugLayout input)
             (hadmissible.binder_targets_enclose index)
           exact layout.plugRaw_encloses_trans htarget
             (layout.site_encloses_bodyRegion region)
+
+theorem plugRaw_requiresPort_frame (layout : PlugLayout input)
+    (node : Fin input.frame.val.nodeCount) (port : CPort)
+    (hrequires : input.frame.val.RequiresPort node port) :
+    layout.plugRaw.RequiresPort (layout.frameNode node) port := by
+  unfold ConcreteDiagram.RequiresPort at hrequires ⊢
+  simp only [plugRaw]
+  rw [layout.plugNode_frameNode]
+  cases hnode : input.frame.val.nodes node with
+  | term => simpa only [hnode, mapFrameNode] using hrequires
+  | named => simpa only [hnode, mapFrameNode] using hrequires
+  | atom region binder =>
+      simp only [hnode, mapFrameNode] at hrequires ⊢
+      rw [layout.plugRegion_frameRegion]
+      cases hbinder : input.frame.val.regions binder <;>
+        simp [hbinder, mapFrameRegion] at hrequires ⊢
+      exact hrequires
+
+theorem plugRaw_requiresPort_pattern (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    (node : Fin input.pattern.val.diagram.nodeCount) (port : CPort)
+    (hrequires : input.pattern.val.diagram.RequiresPort node port) :
+    layout.plugRaw.RequiresPort (layout.patternNode node) port := by
+  unfold ConcreteDiagram.RequiresPort at hrequires ⊢
+  simp only [plugRaw]
+  rw [layout.plugNode_patternNode]
+  cases hnode : input.pattern.val.diagram.nodes node with
+  | term => simpa only [hnode, mapPatternNode] using hrequires
+  | named => simpa only [hnode, mapPatternNode] using hrequires
+  | atom region binder =>
+      simp only [hnode, mapPatternNode] at hrequires ⊢
+      cases hbinder : input.pattern.val.diagram.regions binder with
+      | sheet => simp [hbinder] at hrequires
+      | cut => simp [hbinder] at hrequires
+      | bubble parent arity =>
+          obtain ⟨plugParent, hplug⟩ :=
+            layout.plugRaw_binderRegion_isBubble hadmissible binder parent
+              arity hbinder
+          change layout.plugRegion (layout.binderRegion binder) = _ at hplug
+          rw [hplug]
+          simpa only [hbinder] using hrequires
+
+theorem plugRaw_endpoints_are_valid (layout : PlugLayout input)
+    (hadmissible : input.Admissible) :
+    layout.plugRaw.EndpointsAreValid := by
+  intro wire
+  refine Fin.addCases (m := input.wireQuotient.count)
+    (n := layout.internalWires.count)
+    (fun quotient => ?_) (fun internal => ?_) wire
+  · intro endpoint hendpoint
+    change CEndpoint layout.nodeCount at endpoint
+    simp only [plugRaw, plugWire, Fin.addCases_left] at hendpoint
+    rcases List.mem_append.mp hendpoint with hframe | hboundary
+    · obtain ⟨original, horiginal, rfl⟩ := List.mem_map.mp hframe
+      rw [input.mem_coalescedEndpoints] at horiginal
+      obtain ⟨sourceWire, _, hsource⟩ := horiginal
+      exact layout.plugRaw_requiresPort_frame original.node original.port
+        (input.frame.property.endpoints_are_valid
+          sourceWire original hsource)
+    · rw [layout.mem_boundaryEndpoints] at hboundary
+      obtain ⟨external, _, original, horiginal, rfl⟩ := hboundary
+      exact layout.plugRaw_requiresPort_pattern hadmissible
+        original.node original.port
+        (input.pattern.property.diagram_well_formed.endpoints_are_valid
+          (input.pattern.val.exposedWires.get external) original horiginal)
+  · intro endpoint hendpoint
+    change CEndpoint layout.nodeCount at endpoint
+    simp only [plugRaw, plugWire, Fin.addCases_right, mapPatternWire] at hendpoint
+    obtain ⟨original, horiginal, rfl⟩ := List.mem_map.mp hendpoint
+    exact layout.plugRaw_requiresPort_pattern hadmissible
+      original.node original.port
+      (input.pattern.property.diagram_well_formed.endpoints_are_valid
+        (layout.internalWires.origin internal) original horiginal)
+
+theorem plugRaw_endpointOccurs_frame (signature : List Nat)
+    (input : Input signature) (layout : PlugLayout input)
+    (wire : Fin input.frame.val.wireCount)
+    (endpoint : CEndpoint input.frame.val.nodeCount)
+    (hoccurs : input.frame.val.EndpointOccurs wire endpoint) :
+    layout.plugRaw.EndpointOccurs
+      (layout.quotientBlockWire (input.quotientWire wire))
+      (layout.mapFrameEndpoint endpoint) := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [plugRaw]
+  rw [plugWire_quotientBlockWire signature input layout]
+  apply List.mem_append_left
+  apply List.mem_map.mpr
+  refine ⟨endpoint, ?_, rfl⟩
+  rw [input.mem_coalescedEndpoints]
+  exact ⟨wire, (input.mem_classWires _ wire).2 rfl, hoccurs⟩
+
+theorem plugRaw_endpointOccurs_pattern (signature : List Nat)
+    (input : Input signature) (layout : PlugLayout input)
+    (wire : Fin input.pattern.val.diagram.wireCount)
+    (endpoint : CEndpoint input.pattern.val.diagram.nodeCount)
+    (hoccurs : input.pattern.val.diagram.EndpointOccurs wire endpoint) :
+    ∃ plugWire, layout.plugRaw.EndpointOccurs plugWire
+      (layout.mapPatternEndpoint endpoint) := by
+  change endpoint ∈ (input.pattern.val.diagram.wires wire).endpoints at hoccurs
+  by_cases hexposed : wire ∈ input.pattern.val.exposedWires
+  · obtain ⟨external, hexternal⟩ := indexOf?_complete hexposed
+    have hget := indexOf?_sound hexternal
+    refine ⟨layout.quotientBlockWire (layout.exposedAttachment external), ?_⟩
+    unfold ConcreteDiagram.EndpointOccurs
+    simp only [plugRaw]
+    rw [plugWire_quotientBlockWire signature input layout]
+    apply List.mem_append_right
+    rw [layout.mem_boundaryEndpoints]
+    refine ⟨external, rfl, endpoint, ?_, rfl⟩
+    have hget' : input.pattern.val.exposedWires.get external = wire := by
+      simpa only [List.get_eq_getElem] using hget
+    rw [hget']
+    exact hoccurs
+  · let internal := layout.internalWires.index wire
+        ((layout.internalWires_survives_iff wire).2 hexposed)
+    refine ⟨layout.internalBlockWire internal, ?_⟩
+    unfold ConcreteDiagram.EndpointOccurs
+    simp only [plugRaw]
+    rw [plugWire_internalBlockWire signature input layout]
+    change layout.mapPatternEndpoint endpoint ∈
+      (input.pattern.val.diagram.wires
+        (layout.internalWires.origin internal)).endpoints.map
+          layout.mapPatternEndpoint
+    have horigin : layout.internalWires.origin internal = wire := by
+      exact layout.internalWires.origin_index wire
+        ((layout.internalWires_survives_iff wire).2 hexposed)
+    rw [horigin]
+    exact List.mem_map.mpr ⟨endpoint, hoccurs, rfl⟩
+
+theorem plugRaw_required_ports_are_covered (signature : List Nat)
+    (input : Input signature) (layout : PlugLayout input)
+    (hadmissible : input.Admissible) :
+    layout.plugRaw.RequiredPortsAreCovered := by
+  intro node
+  refine Fin.addCases (m := input.frame.val.nodeCount)
+    (n := input.pattern.val.diagram.nodeCount)
+    (fun frameNode => ?_) (fun patternNode => ?_) node
+  · have hold := input.frame.property.required_ports_are_covered frameNode
+    simp only [plugRaw, plugNode, Fin.addCases_left]
+    cases hnode : input.frame.val.nodes frameNode with
+    | term region freePorts term =>
+        simp only [hnode, mapFrameNode] at hold ⊢
+        obtain ⟨outputWire, houtput⟩ := hold.1
+        refine ⟨⟨layout.quotientBlockWire
+          (input.quotientWire outputWire), ?_⟩, ?_⟩
+        · simpa [mapFrameEndpoint] using
+            plugRaw_endpointOccurs_frame signature input layout
+              outputWire ⟨frameNode, .output⟩ houtput
+        · intro index
+          obtain ⟨sourceWire, hsource⟩ := hold.2 index
+          refine ⟨layout.quotientBlockWire
+            (input.quotientWire sourceWire), ?_⟩
+          simpa [mapFrameEndpoint] using
+            plugRaw_endpointOccurs_frame signature input layout
+              sourceWire ⟨frameNode, .free index⟩ hsource
+    | named region definition arity =>
+        simp only [hnode, mapFrameNode] at hold ⊢
+        intro index
+        obtain ⟨sourceWire, hsource⟩ := hold index
+        refine ⟨layout.quotientBlockWire
+          (input.quotientWire sourceWire), ?_⟩
+        simpa [mapFrameEndpoint] using
+          plugRaw_endpointOccurs_frame signature input layout
+            sourceWire ⟨frameNode, .arg index⟩ hsource
+    | atom region binder =>
+        simp only [hnode, mapFrameNode] at hold ⊢
+        rw [layout.plugRegion_frameRegion]
+        cases hbinder : input.frame.val.regions binder with
+        | sheet => trivial
+        | cut => trivial
+        | bubble parent arity =>
+            simp only [hbinder, mapFrameRegion] at hold ⊢
+            intro index
+            obtain ⟨sourceWire, hsource⟩ := hold index
+            refine ⟨layout.quotientBlockWire
+              (input.quotientWire sourceWire), ?_⟩
+            simpa [mapFrameEndpoint] using
+              plugRaw_endpointOccurs_frame signature input layout
+                sourceWire ⟨frameNode, .arg index⟩ hsource
+  · have hold :=
+      input.pattern.property.diagram_well_formed.required_ports_are_covered
+        patternNode
+    simp only [plugRaw, plugNode, Fin.addCases_right]
+    cases hnode : input.pattern.val.diagram.nodes patternNode with
+    | term region freePorts term =>
+        simp only [hnode, mapPatternNode] at hold ⊢
+        obtain ⟨outputWire, houtput⟩ := hold.1
+        obtain ⟨plugOutput, hplugOutput⟩ :=
+          plugRaw_endpointOccurs_pattern signature input layout outputWire
+            ⟨patternNode, .output⟩ houtput
+        refine ⟨⟨plugOutput, by
+          simpa [mapPatternEndpoint] using hplugOutput⟩, ?_⟩
+        intro index
+        obtain ⟨sourceWire, hsource⟩ := hold.2 index
+        obtain ⟨plugWire, hplug⟩ :=
+          plugRaw_endpointOccurs_pattern signature input layout sourceWire
+            ⟨patternNode, .free index⟩ hsource
+        exact ⟨plugWire, by simpa [mapPatternEndpoint] using hplug⟩
+    | named region definition arity =>
+        simp only [hnode, mapPatternNode] at hold ⊢
+        intro index
+        obtain ⟨sourceWire, hsource⟩ := hold index
+        obtain ⟨plugWire, hplug⟩ :=
+          plugRaw_endpointOccurs_pattern signature input layout sourceWire
+            ⟨patternNode, .arg index⟩ hsource
+        exact ⟨plugWire, by simpa [mapPatternEndpoint] using hplug⟩
+    | atom region binder =>
+        simp only [hnode, mapPatternNode] at hold ⊢
+        have hbinder :=
+          input.pattern.property.diagram_well_formed.atom_binders_are_bubbles
+            patternNode
+        simp only [hnode] at hbinder
+        obtain ⟨parent, arity, hbubble⟩ := hbinder
+        obtain ⟨plugParent, hplugBubble⟩ :=
+          layout.plugRaw_binderRegion_isBubble hadmissible
+            binder parent arity hbubble
+        change layout.plugRegion (layout.binderRegion binder) = _ at hplugBubble
+        rw [hplugBubble]
+        simp only [hbubble] at hold
+        intro index
+        obtain ⟨sourceWire, hsource⟩ := hold index
+        obtain ⟨plugWire, hplug⟩ :=
+          plugRaw_endpointOccurs_pattern signature input layout sourceWire
+            ⟨patternNode, .arg index⟩ hsource
+        exact ⟨plugWire, by simpa [mapPatternEndpoint] using hplug⟩
+
+theorem plugRaw_endpoints_are_nodup (layout : PlugLayout input) :
+    layout.plugRaw.EndpointsAreNodup := by
+  intro wire
+  refine Fin.addCases (m := input.wireQuotient.count)
+    (n := layout.internalWires.count)
+    (fun quotient => ?_) (fun internal => ?_) wire
+  · simp only [plugRaw, plugWire, Fin.addCases_left]
+    rw [List.nodup_append]
+    refine ⟨?_, layout.boundaryEndpoints_nodup quotient, ?_⟩
+    · apply List.Pairwise.map
+        (R := fun left right => left ≠ right)
+        (S := fun left right => left ≠ right)
+        layout.mapFrameEndpoint
+        (fun left right hne heq => hne
+          (layout.mapFrameEndpoint_injective heq))
+      exact input.coalescedEndpoints_nodup quotient
+    · intro frameEndpoint hframe patternEndpoint hpattern heq
+      obtain ⟨frameOriginal, _, rfl⟩ := List.mem_map.mp hframe
+      rw [layout.mem_boundaryEndpoints] at hpattern
+      obtain ⟨_, _, patternOriginal, _, hpatternEq⟩ := hpattern
+      exact layout.mapFrameEndpoint_ne_mapPatternEndpoint
+        frameOriginal patternOriginal (heq.trans hpatternEq.symm)
+  · simp only [plugRaw, plugWire, Fin.addCases_right, mapPatternWire]
+    apply List.Pairwise.map
+      (R := fun left right => left ≠ right)
+      (S := fun left right => left ≠ right)
+      layout.mapPatternEndpoint
+      (fun left right hne heq => hne
+        (layout.mapPatternEndpoint_injective heq))
+    exact input.pattern.property.diagram_well_formed.endpoints_are_nodup
+      (layout.internalWires.origin internal)
 
 end PlugLayout
 
