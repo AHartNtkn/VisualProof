@@ -11,6 +11,25 @@ structure OpenDiagramIso
 
 namespace OpenDiagramIso
 
+/-- Build an ordered open isomorphism across propositionally equal arities. -/
+def ofArityEq {sourceArity targetArity : Nat}
+    {source : OpenDiagram signature sourceArity}
+    {target : OpenDiagram signature targetArity}
+    (arityEq : sourceArity = targetArity)
+    (external : FiniteEquiv (Fin source.externalClasses)
+      (Fin target.externalClasses))
+    (boundary : forall position,
+      external (source.boundary position) =
+        target.boundary (Fin.cast arityEq position))
+    (body : RegionIso signature external [] source.body target.body) :
+    OpenDiagramIso source (target.castArity arityEq.symm) := by
+  subst targetArity
+  exact {
+    external := external
+    boundary := boundary
+    body := body
+  }
+
 def refl (diagram : OpenDiagram signature arity) :
     OpenDiagramIso diagram diagram where
   external := FiniteEquiv.refl (Fin diagram.externalClasses)

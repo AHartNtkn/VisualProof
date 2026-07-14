@@ -8,6 +8,27 @@ structure OpenDiagram (signature : List Nat) (arity : Nat) where
   boundary_surjective : Function.Surjective boundary
   body : Region signature externalClasses []
 
+namespace OpenDiagram
+
+/-- Transport only the dependent arity index of an open diagram. -/
+def castArity (diagram : OpenDiagram signature sourceArity)
+    (equality : sourceArity = targetArity) :
+    OpenDiagram signature targetArity :=
+  equality ▸ diagram
+
+@[simp] theorem castArity_externalClasses
+    (diagram : OpenDiagram signature sourceArity)
+    (equality : sourceArity = targetArity) :
+    (diagram.castArity equality).externalClasses = diagram.externalClasses := by
+  subst targetArity
+  rfl
+
+@[simp] theorem castArity_rfl
+    (diagram : OpenDiagram signature arity) :
+    diagram.castArity rfl = diagram := rfl
+
+end OpenDiagram
+
 structure BoundaryAssignment (d : OpenDiagram signature arity) (D : Type u) where
   args : Fin arity -> D
   classes : Fin d.externalClasses -> D

@@ -1,7 +1,8 @@
 import VisualProof.Diagram.Concrete.Elaboration.Context
 import VisualProof.Diagram.Concrete.Open
 import VisualProof.Diagram.Concrete.Examples
-import VisualProof.Diagram.Concrete.Isomorphism
+import VisualProof.Diagram.Concrete.OpenIsomorphism
+import VisualProof.Diagram.OpenIsomorphism
 
 namespace VisualProof.Diagram.ConcreteElaboration
 
@@ -199,6 +200,61 @@ private theorem get_append_natAdd (initial : List alpha) (suffix : List alpha)
         (Fin.cast (by simp) (Fin.natAdd initial.length index)) =
       suffix.get index := by
   simp [List.get_eq_getElem]
+
+private def appendContextEquiv
+    {sourceWire targetWire : Type}
+    {sourceAmbient sourceLocal : List sourceWire}
+    {targetAmbient targetLocal : List targetWire}
+    (ambient : FiniteEquiv (Fin sourceAmbient.length)
+      (Fin targetAmbient.length))
+    (localEquiv : FiniteEquiv (Fin sourceLocal.length) (Fin targetLocal.length)) :
+    FiniteEquiv (Fin (sourceAmbient ++ sourceLocal).length)
+      (Fin (targetAmbient ++ targetLocal).length) :=
+  castFinEquiv (by simp) (by simp)
+    (extendWireEquiv ambient localEquiv)
+
+private theorem appendContextsAgree {source target : ConcreteDiagram}
+    {iso : ConcreteIso source target}
+    {sourceAmbient : WireContext source} {targetAmbient : WireContext target}
+    {sourceLocal : WireContext source} {targetLocal : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceAmbient.length)
+      (Fin targetAmbient.length)}
+    {localEquiv : FiniteEquiv (Fin sourceLocal.length) (Fin targetLocal.length)}
+    (hambient : WireContextsAgree iso sourceAmbient targetAmbient ambient)
+    (hlocal : WireContextsAgree iso sourceLocal targetLocal localEquiv) :
+    WireContextsAgree iso (sourceAmbient ++ sourceLocal)
+      (targetAmbient ++ targetLocal)
+      (appendContextEquiv ambient localEquiv) := by
+  intro index
+  let sumIndex : Fin (sourceAmbient.length + sourceLocal.length) :=
+    Fin.cast (by simp) index
+  have hindex : Fin.cast (by simp) sumIndex = index := by
+    apply Fin.ext
+    rfl
+  rw [← hindex]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) sumIndex
+  · simp only [get_append_castAdd]
+    calc
+      _ = (targetAmbient ++ targetLocal).get
+          (Fin.cast (by simp)
+            (Fin.castAdd targetLocal.length (ambient outer))) := by
+        congr 1
+        apply Fin.ext
+        simp [appendContextEquiv, castFinEquiv, extendWireEquiv]
+      _ = targetAmbient.get (ambient outer) :=
+        get_append_castAdd targetAmbient targetLocal (ambient outer)
+      _ = iso.wires (sourceAmbient.get outer) := hambient outer
+  · simp only [get_append_natAdd]
+    calc
+      _ = (targetAmbient ++ targetLocal).get
+          (Fin.cast (by simp)
+            (Fin.natAdd targetAmbient.length (localEquiv localIndex))) := by
+        congr 1
+        apply Fin.ext
+        simp [appendContextEquiv, castFinEquiv, extendWireEquiv]
+      _ = targetLocal.get (localEquiv localIndex) :=
+        get_append_natAdd targetAmbient targetLocal (localEquiv localIndex)
+      _ = iso.wires (sourceLocal.get localIndex) := hlocal localIndex
 
 private theorem appendWireContextsAgree {source target : ConcreteDiagram}
     {iso : ConcreteIso source target}
@@ -1003,40 +1059,199 @@ private theorem compileRoot?_complete
     rw [hitems]
     rfl⟩
 
-private theorem compileRoot?_closed_equivariant
+private theorem compileRoot?_equivariant
     {source target : ConcreteDiagram}
     (iso : ConcreteIso source target)
     (htarget : target.WellFormed signature)
-    {sourceBody : Region signature 0 []}
-    {targetBody : Region signature 0 []}
-    (hsource : compileRoot? signature source []
-        (exactScopeWires source source.root) = some sourceBody)
-    (htargetResult : compileRoot? signature target []
-        (exactScopeWires target target.root) = some targetBody) :
-    RegionIso signature (.refl (Fin 0)) [] sourceBody targetBody := by
-  have htargetResult' := htargetResult
-  change compileRegion? signature source (source.regionCount + 1) source.root
-      ([] : WireContext source) BinderContext.empty = some sourceBody at hsource
-  change compileRegion? signature target (target.regionCount + 1) target.root
-      ([] : WireContext target) BinderContext.empty = some targetBody
-    at htargetResult'
-  rw [← iso.regionCount_eq, ← iso.root_eq] at htargetResult'
-  have hwires : WireContextsAgree iso
-      ([] : WireContext source) ([] : WireContext target) (.refl (Fin 0)) := by
-    intro index
-    exact Fin.elim0 index
-  have htargetExact : WireContext.Exact
-      (WireContext.extend ([] : WireContext target) (iso.regions source.root))
+    {sourceAmbient : WireContext source} {targetAmbient : WireContext target}
+    {sourceLocal : WireContext source} {targetLocal : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceAmbient.length)
+      (Fin targetAmbient.length)}
+    {localEquiv : FiniteEquiv (Fin sourceLocal.length)
+      (Fin targetLocal.length)}
+    (hwires : WireContextsAgree iso (sourceAmbient ++ sourceLocal)
+      (targetAmbient ++ targetLocal) (appendContextEquiv ambient localEquiv))
+    (htargetExact : WireContext.Exact (targetAmbient ++ targetLocal) target.root)
+    {sourceBody : Region signature sourceAmbient.length []}
+    {targetBody : Region signature targetAmbient.length []}
+    (hsource : compileRoot? signature source sourceAmbient sourceLocal =
+      some sourceBody)
+    (htargetResult : compileRoot? signature target targetAmbient targetLocal =
+      some targetBody) :
+    RegionIso signature ambient [] sourceBody targetBody := by
+  let sourceRoot := sourceAmbient ++ sourceLocal
+  let targetRoot := targetAmbient ++ targetLocal
+  let rootEquiv := appendContextEquiv ambient localEquiv
+  have htargetExactMapped : WireContext.Exact targetRoot
       (iso.regions source.root) := by
-    rw [iso.root_eq]
-    exact WireContext.root_exact htarget
+    simpa only [targetRoot, iso.root_eq] using htargetExact
   have hbinders : BinderContextsAgree iso
       (BinderContext.empty : BinderContext source [])
       (BinderContext.empty : BinderContext target []) := by
     intro _
     rfl
-  exact compileRegion?_equivariant iso htarget hwires htargetExact hbinders
-    hsource htargetResult'
+  have hoccurrence : forall
+      (occurrence : LocalOccurrence source.regionCount source.nodeCount)
+      (_ : occurrence ∈ localOccurrences source source.root)
+      (sourceItem : Item signature sourceRoot.length [])
+      (targetItem : Item signature targetRoot.length []),
+      compileOccurrenceWith? signature source
+          (compileRegion? signature source source.regionCount)
+          sourceRoot BinderContext.empty occurrence = some sourceItem ->
+      compileOccurrenceWith? signature target
+          (compileRegion? signature target source.regionCount)
+          targetRoot BinderContext.empty
+          (renameOccurrence iso occurrence) = some targetItem ->
+      ItemIso signature rootEquiv [] sourceItem targetItem := by
+    intro occurrence hoccurrenceMem sourceItem targetItem
+      hsourceItem htargetItem
+    cases occurrence with
+    | node node =>
+        exact compileNode?_equivariant iso htarget hwires
+          htargetExact.nodup hbinders node
+          (by simpa [sourceRoot, compileOccurrenceWith?] using hsourceItem)
+          (by simpa [targetRoot, compileOccurrenceWith?, renameOccurrence]
+            using htargetItem)
+    | child child =>
+        simp only [renameOccurrence, compileOccurrenceWith?]
+          at hsourceItem htargetItem
+        have hregionEq := iso.regions_eq child
+        cases hchild : source.regions child with
+        | sheet =>
+            rw [hchild] at hregionEq
+            simp only [CRegion.rename] at hregionEq
+            simp [hchild] at hsourceItem
+        | cut parent =>
+            have hparentSource :=
+              (mem_localOccurrences_child source source.root child).mp
+                hoccurrenceMem
+            have hparentEq : parent = source.root := by
+              simpa [hchild, CRegion.parent?] using hparentSource
+            subst parent
+            rw [hchild] at hregionEq
+            simp only [CRegion.rename] at hregionEq
+            have hparentTarget :
+                (target.regions (iso.regions child)).parent? =
+                  some (iso.regions source.root) := by
+              rw [<- hregionEq]
+              rfl
+            have hchildExact :=
+              htargetExactMapped.extend_child htarget hparentTarget
+            rw [<- hregionEq] at htargetItem
+            simp only [hchild] at hsourceItem htargetItem
+            cases hsourceBody : compileRegion? signature source
+                source.regionCount child sourceRoot BinderContext.empty with
+            | none => simp [hsourceBody] at hsourceItem
+            | some compiledSource =>
+                simp [hsourceBody] at hsourceItem
+                subst sourceItem
+                cases htargetBody : compileRegion? signature target
+                    source.regionCount (iso.regions child) targetRoot
+                    BinderContext.empty with
+                | none => simp [htargetBody] at htargetItem
+                | some compiledTarget =>
+                    simp [htargetBody] at htargetItem
+                    subst targetItem
+                    apply ItemIso.cut
+                    exact compileRegion?_equivariant iso htarget hwires
+                      hchildExact hbinders hsourceBody htargetBody
+        | bubble parent arity =>
+            have hparentSource :=
+              (mem_localOccurrences_child source source.root child).mp
+                hoccurrenceMem
+            have hparentEq : parent = source.root := by
+              simpa [hchild, CRegion.parent?] using hparentSource
+            subst parent
+            rw [hchild] at hregionEq
+            simp only [CRegion.rename] at hregionEq
+            have hparentTarget :
+                (target.regions (iso.regions child)).parent? =
+                  some (iso.regions source.root) := by
+              rw [<- hregionEq]
+              rfl
+            have hchildExact :=
+              htargetExactMapped.extend_child htarget hparentTarget
+            have hchildBinders := hbinders.push child arity
+            rw [<- hregionEq] at htargetItem
+            simp only [hchild] at hsourceItem htargetItem
+            cases hsourceBody : compileRegion? signature source
+                source.regionCount child sourceRoot
+                (BinderContext.empty.push child arity) with
+            | none => simp [hsourceBody] at hsourceItem
+            | some compiledSource =>
+                simp [hsourceBody] at hsourceItem
+                subst sourceItem
+                cases htargetBody : compileRegion? signature target
+                    source.regionCount (iso.regions child) targetRoot
+                    (BinderContext.empty.push (iso.regions child) arity) with
+                | none => simp [htargetBody] at htargetItem
+                | some compiledTarget =>
+                    simp [htargetBody] at htargetItem
+                    subst targetItem
+                    apply ItemIso.bubble
+                    exact compileRegion?_equivariant iso htarget hwires
+                      hchildExact hchildBinders hsourceBody htargetBody
+  simp only [compileRoot?] at hsource htargetResult
+  rw [<- iso.regionCount_eq, <- iso.root_eq] at htargetResult
+  cases hsourceItems : compileOccurrencesWith? signature source
+      (compileRegion? signature source source.regionCount)
+      sourceRoot BinderContext.empty
+      (localOccurrences source source.root) with
+  | none => simp [sourceRoot, hsourceItems] at hsource
+  | some sourceItems =>
+      simp [sourceRoot, hsourceItems] at hsource
+      subst sourceBody
+      cases htargetItems : compileOccurrencesWith? signature target
+          (compileRegion? signature target source.regionCount)
+          targetRoot BinderContext.empty
+          (localOccurrences target (iso.regions source.root)) with
+      | none => simp [targetRoot, htargetItems] at htargetResult
+      | some targetItems =>
+          simp [targetRoot, htargetItems] at htargetResult
+          subst targetBody
+          have hsourceLength := compileOccurrencesWith?_length
+            (compileRegion? signature source source.regionCount)
+            sourceRoot BinderContext.empty hsourceItems
+          have htargetLength := compileOccurrencesWith?_length
+            (compileRegion? signature target source.regionCount)
+            targetRoot BinderContext.empty htargetItems
+          let positions : FiniteEquiv (Fin sourceItems.length)
+              (Fin targetItems.length) :=
+            castFinEquiv hsourceLength htargetLength
+              (localOccurrenceEquiv iso source.root)
+          have hitems : ItemSeqIso signature rootEquiv []
+              sourceItems targetItems := by
+            apply ItemSeqIso.permute positions
+            intro sourceIndex
+            let occurrenceIndex :
+                Fin (localOccurrences source source.root).length :=
+              Fin.cast hsourceLength sourceIndex
+            let targetOccurrenceIndex :=
+              localOccurrenceEquiv iso source.root occurrenceIndex
+            have hsourceGet := compileOccurrencesWith?_get
+              (compileRegion? signature source source.regionCount)
+              sourceRoot BinderContext.empty hsourceItems occurrenceIndex
+            have htargetGet := compileOccurrencesWith?_get
+              (compileRegion? signature target source.regionCount)
+              targetRoot BinderContext.empty htargetItems targetOccurrenceIndex
+            rw [localOccurrenceEquiv_spec iso source.root occurrenceIndex]
+              at htargetGet
+            have hsourcePosition : Fin.cast hsourceLength.symm
+                occurrenceIndex = sourceIndex := by
+              apply Fin.ext
+              rfl
+            have htargetPosition : Fin.cast htargetLength.symm
+                targetOccurrenceIndex = positions sourceIndex := by
+              apply Fin.ext
+              rfl
+            rw [hsourcePosition] at hsourceGet
+            rw [htargetPosition] at htargetGet
+            exact hoccurrence _ (List.get_mem _ _) _ _
+              hsourceGet htargetGet
+          simpa only [finishRoot, sourceRoot, targetRoot, rootEquiv] using
+            regionIso_of_cast (by simp [sourceRoot]) (by simp [targetRoot])
+              ambient localEquiv
+              sourceItems targetItems hitems
 
 end VisualProof.Diagram.ConcreteElaboration
 
@@ -1203,13 +1418,76 @@ theorem elaborate_isomorphic {source target : ConcreteDiagram}
     ConcreteDiagram.elaborate_computation source hsource
   obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
     ConcreteDiagram.elaborate_computation target htarget
+  have htargetKernel' := htargetKernel
+  rw [<- iso.root_eq] at htargetKernel'
+  have hambient : ConcreteElaboration.WireContextsAgree iso
+      ([] : ConcreteElaboration.WireContext source)
+      ([] : ConcreteElaboration.WireContext target) (.refl (Fin 0)) := by
+    intro index
+    exact Fin.elim0 index
+  have hlocal : ConcreteElaboration.WireContextsAgree iso
+      (ConcreteElaboration.exactScopeWires source source.root)
+      (ConcreteElaboration.exactScopeWires target (iso.regions source.root))
+      (ConcreteElaboration.localWireEquiv iso source.root) := by
+    exact ConcreteElaboration.localWireEquiv_spec iso source.root
+  have hwires := ConcreteElaboration.appendContextsAgree hambient hlocal
+  have htargetExact : ConcreteElaboration.WireContext.Exact
+      (([] : ConcreteElaboration.WireContext target) ++
+        ConcreteElaboration.exactScopeWires target
+          (iso.regions source.root)) target.root := by
+    rw [iso.root_eq]
+    exact ConcreteElaboration.closedRootWires_exact htarget
   have hbody : RegionIso signature (.refl (Fin 0)) [] sourceBody targetBody :=
-    ConcreteElaboration.compileRoot?_closed_equivariant iso htarget
-      hsourceKernel htargetKernel
+    ConcreteElaboration.compileRoot?_equivariant iso htarget hwires
+      htargetExact hsourceKernel htargetKernel'
   rw [hsourceElaborate, htargetElaborate]
   exact hbody
 
 end ConcreteIso
+
+namespace OpenConcreteIso
+
+/-- Ordered open concrete isomorphism commutes with checked elaboration. -/
+def elaborate_isomorphic {source target : OpenConcreteDiagram}
+    (iso : OpenConcreteIso source target)
+    (hsource : source.WellFormed signature)
+    (htarget : target.WellFormed signature) :
+    OpenDiagramIso (source.elaborate hsource)
+      ((target.elaborate htarget).castArity
+        iso.boundary_length_eq.symm) := by
+  have hambient : ConcreteElaboration.WireContextsAgree iso.diagram
+      source.exposedWires target.exposedWires iso.exposedWiresEquiv :=
+    iso.exposedWiresEquiv_spec
+  have hlocal : ConcreteElaboration.WireContextsAgree iso.diagram
+      source.hiddenWires target.hiddenWires iso.hiddenWiresEquiv :=
+    iso.hiddenWiresEquiv_spec
+  have hwires := ConcreteElaboration.appendContextsAgree hambient hlocal
+  have htargetExact : ConcreteElaboration.WireContext.Exact
+      (target.exposedWires ++ target.hiddenWires) target.diagram.root := by
+    simpa only [OpenConcreteDiagram.rootWires] using
+      ConcreteElaboration.openRootWires_exact htarget
+  have hbody : RegionIso signature iso.exposedWiresEquiv []
+      (source.elaborate hsource).body (target.elaborate htarget).body := by
+    obtain ⟨sourceBody, hsourceKernel, hsourceElaborate⟩ :=
+      CheckedOpenDiagram.elaborate_body_computation
+        (show CheckedOpenDiagram signature from ⟨source, hsource⟩)
+    obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
+      CheckedOpenDiagram.elaborate_body_computation
+        (show CheckedOpenDiagram signature from ⟨target, htarget⟩)
+    change (source.elaborate hsource).body = sourceBody at hsourceElaborate
+    change (target.elaborate htarget).body = targetBody at htargetElaborate
+    rw [hsourceElaborate, htargetElaborate]
+    exact ConcreteElaboration.compileRoot?_equivariant iso.diagram
+      htarget.diagram_well_formed hwires htargetExact
+      hsourceKernel htargetKernel
+  apply OpenDiagramIso.ofArityEq iso.boundary_length_eq
+    iso.exposedWiresEquiv
+  · intro position
+    simpa only [OpenConcreteDiagram.elaborate_boundary] using
+      iso.boundaryClass_commute position
+  · exact hbody
+
+end OpenConcreteIso
 
 namespace ConcreteExamples
 
