@@ -1749,7 +1749,7 @@ theorem extractDiagramRaw_atom_binders_enclose
         exact hmapped
       · have huses : selection.UsesExternalBinder binder :=
           ⟨hselectedBinder, selection.selectedNodes.get node,
-            List.get_mem _ _, by simpa only [hnode]⟩
+            List.get_mem _ _, by rw [hnode]⟩
         have hexternal : binder ∈ layout.externalBinders := by
           rw [layout.externalBinders_exact]
           exact (selection.mem_externalBinders_iff_uses host binder).2 huses
