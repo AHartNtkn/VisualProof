@@ -75,20 +75,20 @@ extraction/removal/splice. Proofs certify computed data and never select it.
 **Produces:** Stable boundary classes, hidden root locals, and one private
 open/closed compiler authority.
 
-- [ ] Define first-occurrence exposed root wires and filtered hidden root wires.
+- [x] Define first-occurrence exposed root wires and filtered hidden root wires.
   Prove boundary positions map to equal external classes iff they name equal
   concrete wires, external-class surjectivity, and the exact root-local
   characterization.
-- [ ] Generalize the private root compilation entry to take a deterministic
+- [x] Generalize the private root compilation entry to take a deterministic
   ambient/local partition. Keep all recursive compiler definitions private.
-- [ ] Recover existing closed elaboration as the empty-external specialization and
+- [x] Recover existing closed elaboration as the empty-external specialization and
   prove its public result is unchanged.
-- [ ] Expose total checked open elaboration into the existing `OpenDiagram`, with
+- [x] Expose total checked open elaboration into the existing `OpenDiagram`, with
   proof irrelevance and computation theorems.
-- [ ] Define open concrete denotation only through intrinsic `denoteOpen`.
-- [ ] Add examples for repeated boundary aliases, an unexposed root bare wire, and
+- [x] Define open concrete denotation only through intrinsic `denoteOpen`.
+- [x] Add examples for repeated boundary aliases, an unexposed root bare wire, and
   an empty boundary agreeing with closed elaboration.
-- [ ] Inspect public axioms and private visibility; commit independently.
+- [x] Inspect public axioms and private visibility; commit independently.
 
 ---
 
