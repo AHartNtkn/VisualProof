@@ -68,6 +68,52 @@ open VisualProof.Data.Finite
 
 namespace Splice
 
+private theorem splice_climb_prefix_exists {d : ConcreteDiagram}
+    {start finish : Fin d.regionCount} {first second : Nat}
+    (hle : first ≤ second)
+    (hfinish : d.climb second start = some finish) :
+    ∃ middle, d.climb first start = some middle := by
+  induction first generalizing start second with
+  | zero => exact ⟨start, rfl⟩
+  | succ first ih =>
+      cases second with
+      | zero => omega
+      | succ second =>
+          cases hparent : (d.regions start).parent? with
+          | none => simp [ConcreteDiagram.climb, hparent] at hfinish
+          | some parent =>
+              have htail : d.climb second parent = some finish := by
+                simpa [ConcreteDiagram.climb, hparent] using hfinish
+              obtain ⟨middle, hmiddle⟩ :=
+                ih (Nat.le_of_succ_le_succ hle) htail
+              exact ⟨middle, by
+                simpa [ConcreteDiagram.climb, hparent] using hmiddle⟩
+
+private theorem splice_climb_cancel_prefix {d : ConcreteDiagram}
+    {start middle finish : Fin d.regionCount} {first second : Nat}
+    (hle : first ≤ second)
+    (hfirst : d.climb first start = some middle)
+    (hsecond : d.climb second start = some finish) :
+    d.climb (second - first) middle = some finish := by
+  induction first generalizing start second with
+  | zero =>
+      have heq : start = middle := Option.some.inj hfirst
+      subst middle
+      simpa using hsecond
+  | succ first ih =>
+      cases second with
+      | zero => omega
+      | succ second =>
+          cases hparent : (d.regions start).parent? with
+          | none => simp [ConcreteDiagram.climb, hparent] at hfirst
+          | some parent =>
+              have hfirstTail : d.climb first parent = some middle := by
+                simpa [ConcreteDiagram.climb, hparent] using hfirst
+              have hsecondTail : d.climb second parent = some finish := by
+                simpa [ConcreteDiagram.climb, hparent] using hsecond
+              simpa using ih (Nat.le_of_succ_le_succ hle)
+                hfirstTail hsecondTail
+
 /-- Proof-free inputs to checked concrete replacement. -/
 structure Input (signature : List Nat) where
   frame : CheckedDiagram signature
@@ -750,11 +796,35 @@ structure PlugLayout (input : Input signature) where
   materialRegions : SurvivorDomain input.pattern.val.diagram.regionCount := {
     survives region := decide (input.binderSpine.IsMaterialRegion region)
   }
+  materialRegions_exact : ∀ region,
+      materialRegions.survives region =
+        decide (input.binderSpine.IsMaterialRegion region) := by
+    intro region
+    rfl
   internalWires : SurvivorDomain input.pattern.val.diagram.wireCount := {
     survives wire := decide (wire ∉ input.pattern.val.exposedWires)
   }
+  internalWires_exact : ∀ wire,
+      internalWires.survives wire =
+        decide (wire ∉ input.pattern.val.exposedWires) := by
+    intro wire
+    rfl
 
 namespace PlugLayout
+
+@[simp] theorem materialRegions_survives_iff (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount) :
+    layout.materialRegions.survives region = true ↔
+      input.binderSpine.IsMaterialRegion region := by
+  rw [layout.materialRegions_exact]
+  exact decide_eq_true_iff
+
+@[simp] theorem internalWires_survives_iff (layout : PlugLayout input)
+    (wire : Fin input.pattern.val.diagram.wireCount) :
+    layout.internalWires.survives wire = true ↔
+      wire ∉ input.pattern.val.exposedWires := by
+  rw [layout.internalWires_exact]
+  exact decide_eq_true_iff
 
 def regionCount (layout : PlugLayout input) : Nat :=
   input.frame.val.regionCount + layout.materialRegions.count
@@ -781,6 +851,14 @@ def patternNode (layout : PlugLayout input)
     (node : Fin input.pattern.val.diagram.nodeCount) : Fin layout.nodeCount :=
   Fin.natAdd input.frame.val.nodeCount node
 
+def quotientBlockWire (layout : PlugLayout input)
+    (wire : input.wireQuotient.Carrier) : Fin layout.wireCount :=
+  Fin.castAdd layout.internalWires.count wire
+
+def internalBlockWire (layout : PlugLayout input)
+    (wire : layout.internalWires.Carrier) : Fin layout.wireCount :=
+  Fin.natAdd input.wireQuotient.count wire
+
 def frameWire (layout : PlugLayout input)
     (wire : input.wireQuotient.Carrier) : Fin layout.wireCount :=
   Fin.castAdd layout.internalWires.count wire
@@ -795,6 +873,113 @@ def bodyRegion (layout : PlugLayout input)
   match layout.materialRegions.index? region with
   | some material => layout.materialRegion material
   | none => layout.frameRegion input.site
+
+theorem frameRegion_injective (layout : PlugLayout input) :
+    Function.Injective layout.frameRegion := by
+  intro left right heq
+  apply Fin.ext
+  exact congrArg (fun index => index.val) heq
+
+theorem materialRegion_injective (layout : PlugLayout input) :
+    Function.Injective layout.materialRegion := by
+  intro left right heq
+  apply Fin.ext
+  have hvals := congrArg Fin.val heq
+  simp [materialRegion] at hvals
+  omega
+
+theorem frameRegion_ne_materialRegion (layout : PlugLayout input)
+    (frame : Fin input.frame.val.regionCount)
+    (material : layout.materialRegions.Carrier) :
+    layout.frameRegion frame ≠ layout.materialRegion material := by
+  intro heq
+  have hvals := congrArg Fin.val heq
+  simp [frameRegion, materialRegion] at hvals
+  omega
+
+def materialIndex (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : input.binderSpine.IsMaterialRegion region) :
+    layout.materialRegions.Carrier :=
+  layout.materialRegions.index region
+    ((layout.materialRegions_survives_iff region).2 hmaterial)
+
+@[simp] theorem bodyRegion_material (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : input.binderSpine.IsMaterialRegion region) :
+    layout.bodyRegion region = layout.materialRegion
+      (layout.materialIndex region hmaterial) := by
+  unfold bodyRegion materialIndex
+  rw [layout.materialRegions.index?_index]
+
+@[simp] theorem bodyRegion_origin (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    layout.bodyRegion (layout.materialRegions.origin material) =
+      layout.materialRegion material := by
+  have hmaterial : input.binderSpine.IsMaterialRegion
+      (layout.materialRegions.origin material) :=
+    (layout.materialRegions_survives_iff _).1
+      (layout.materialRegions.origin_survives material)
+  rw [layout.bodyRegion_material _ hmaterial]
+  apply congrArg layout.materialRegion
+  apply layout.materialRegions.origin_injective
+  simp only [materialIndex, layout.materialRegions.origin_index]
+
+theorem bodyRegion_nonmaterial (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : ¬ input.binderSpine.IsMaterialRegion region) :
+    layout.bodyRegion region = layout.frameRegion input.site := by
+  unfold bodyRegion
+  have hfalse : layout.materialRegions.survives region = false := by
+    rw [layout.materialRegions_exact]
+    simp [hmaterial]
+  rw [(layout.materialRegions.index?_eq_none_iff region).2 hfalse]
+
+@[simp] theorem bodyRegion_root (layout : PlugLayout input) :
+    layout.bodyRegion input.pattern.val.diagram.root =
+      layout.frameRegion input.site := by
+  apply layout.bodyRegion_nonmaterial
+  simp [BinderSpine.IsMaterialRegion]
+
+@[simp] theorem bodyRegion_proxy (layout : PlugLayout input)
+    (index : Fin input.binderSpine.proxyCount) :
+    layout.bodyRegion (input.binderSpine.proxy index) =
+      layout.frameRegion input.site := by
+  apply layout.bodyRegion_nonmaterial
+  intro hmaterial
+  exact hmaterial.2 index rfl
+
+@[simp] theorem bodyRegion_bodyContainer (layout : PlugLayout input) :
+    layout.bodyRegion input.binderSpine.bodyContainer =
+      layout.frameRegion input.site := by
+  by_cases hzero : input.binderSpine.proxyCount = 0
+  · rw [input.binderSpine.body_eq_root_of_empty hzero,
+      layout.bodyRegion_root]
+  · rw [input.binderSpine.body_eq_terminal_of_nonempty hzero,
+      layout.bodyRegion_proxy]
+
+theorem frameNode_injective (layout : PlugLayout input) :
+    Function.Injective layout.frameNode := by
+  intro left right heq
+  apply Fin.ext
+  exact congrArg (fun index => index.val) heq
+
+theorem patternNode_injective (layout : PlugLayout input) :
+    Function.Injective layout.patternNode := by
+  intro left right heq
+  apply Fin.ext
+  have hvals := congrArg Fin.val heq
+  simp [patternNode] at hvals
+  omega
+
+theorem frameNode_ne_patternNode (layout : PlugLayout input)
+    (frame : Fin input.frame.val.nodeCount)
+    (pattern : Fin input.pattern.val.diagram.nodeCount) :
+    layout.frameNode frame ≠ layout.patternNode pattern := by
+  intro heq
+  have hvals := congrArg Fin.val heq
+  simp [frameNode, patternNode] at hvals
+  omega
 
 def proxies (_layout : PlugLayout input) :
     List (Fin input.pattern.val.diagram.regionCount) :=
@@ -813,12 +998,64 @@ def proxyIndex? (layout : PlugLayout input)
   (indexOf? layout.proxies region).map (Fin.cast (by
     simp [proxies, allFin_eq_finRange]))
 
+def proxyPosition (layout : PlugLayout input)
+    (index : Fin input.binderSpine.proxyCount) : Fin layout.proxies.length :=
+  Fin.cast (by simp [proxies, allFin_eq_finRange]) index
+
+@[simp] theorem proxies_get_proxyPosition (layout : PlugLayout input)
+    (index : Fin input.binderSpine.proxyCount) :
+    layout.proxies.get (layout.proxyPosition index) =
+      input.binderSpine.proxy index := by
+  simp [proxies, proxyPosition, allFin_eq_finRange]
+
+@[simp] theorem proxyIndex?_proxy (layout : PlugLayout input)
+    (index : Fin input.binderSpine.proxyCount) :
+    layout.proxyIndex? (input.binderSpine.proxy index) = some index := by
+  unfold proxyIndex?
+  have hlookup : indexOf? layout.proxies
+      (input.binderSpine.proxy index) = some (layout.proxyPosition index) := by
+    rw [← layout.proxies_get_proxyPosition index]
+    exact indexOf?_get_eq_some_of_nodup layout.proxies_nodup _
+  rw [hlookup]
+  apply congrArg some
+  apply Fin.ext
+  rfl
+
+theorem proxyIndex?_eq_none_of_material (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : input.binderSpine.IsMaterialRegion region) :
+    layout.proxyIndex? region = none := by
+  unfold proxyIndex?
+  cases hlookup : indexOf? layout.proxies region with
+  | none => rfl
+  | some found =>
+      have hsound := indexOf?_sound hlookup
+      have hmember : region ∈ layout.proxies := by
+        rw [← hsound]
+        exact List.get_mem _ _
+      rw [proxies, List.mem_map] at hmember
+      rcases hmember with ⟨index, _, hproxy⟩
+      exact False.elim (hmaterial.2 index hproxy.symm)
+
 def binderRegion (layout : PlugLayout input)
     (region : Fin input.pattern.val.diagram.regionCount) :
     Fin layout.regionCount :=
   match layout.proxyIndex? region with
   | some proxy => layout.frameRegion (input.binderTarget proxy)
   | none => layout.bodyRegion region
+
+@[simp] theorem binderRegion_proxy (layout : PlugLayout input)
+    (index : Fin input.binderSpine.proxyCount) :
+    layout.binderRegion (input.binderSpine.proxy index) =
+      layout.frameRegion (input.binderTarget index) := by
+  simp [binderRegion]
+
+@[simp] theorem binderRegion_material (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : input.binderSpine.IsMaterialRegion region) :
+    layout.binderRegion region = layout.bodyRegion region := by
+  unfold binderRegion
+  rw [layout.proxyIndex?_eq_none_of_material region hmaterial]
 
 def mapPatternRegion (layout : PlugLayout input)
     (region : CRegion input.pattern.val.diagram.regionCount) :
@@ -843,6 +1080,21 @@ def mapPatternEndpoint (layout : PlugLayout input)
     (endpoint : CEndpoint input.pattern.val.diagram.nodeCount) :
     CEndpoint layout.nodeCount :=
   { node := layout.patternNode endpoint.node, port := endpoint.port }
+
+theorem mapPatternEndpoint_injective (layout : PlugLayout input) :
+    Function.Injective layout.mapPatternEndpoint := by
+  intro left right heq
+  cases left with
+  | mk leftNode leftPort =>
+    cases right with
+    | mk rightNode rightPort =>
+      simp only [mapPatternEndpoint] at heq
+      have hnodes : leftNode = rightNode :=
+        layout.patternNode_injective (congrArg CEndpoint.node heq)
+      have hports : leftPort = rightPort := congrArg CEndpoint.port heq
+      subst rightNode
+      subst rightPort
+      rfl
 
 def mapPatternWire (layout : PlugLayout input)
     (wire : CWire input.pattern.val.diagram.regionCount
@@ -877,14 +1129,26 @@ def boundaryEndpoints (layout : PlugLayout input)
     else
       []
 
+def mapFrameRegion (layout : PlugLayout input) :
+    CRegion input.frame.val.regionCount → CRegion layout.regionCount
+  | .sheet => .sheet
+  | .cut parent => .cut (layout.frameRegion parent)
+  | .bubble parent arity => .bubble (layout.frameRegion parent) arity
+
+def mapFrameNode (layout : PlugLayout input) :
+    CNode input.frame.val.regionCount → CNode layout.regionCount
+  | .term region freePorts term =>
+      .term (layout.frameRegion region) freePorts term
+  | .atom region binder =>
+      .atom (layout.frameRegion region) (layout.frameRegion binder)
+  | .named region definition arity =>
+      .named (layout.frameRegion region) definition arity
+
 def plugRegion (layout : PlugLayout input)
     (region : Fin layout.regionCount) : CRegion layout.regionCount :=
   Fin.addCases
-    (fun frameRegion =>
-      match input.frame.val.regions frameRegion with
-      | .sheet => .sheet
-      | .cut parent => .cut (layout.frameRegion parent)
-      | .bubble parent arity => .bubble (layout.frameRegion parent) arity)
+    (fun frameRegion => layout.mapFrameRegion
+      (input.frame.val.regions frameRegion))
     (fun material => layout.mapPatternRegion
       (input.pattern.val.diagram.regions
         (layout.materialRegions.origin material))) region
@@ -892,14 +1156,7 @@ def plugRegion (layout : PlugLayout input)
 def plugNode (layout : PlugLayout input)
     (node : Fin layout.nodeCount) : CNode layout.regionCount :=
   Fin.addCases
-    (fun frameNode =>
-      match input.frame.val.nodes frameNode with
-      | .term region freePorts term =>
-          .term (layout.frameRegion region) freePorts term
-      | .atom region binder =>
-          .atom (layout.frameRegion region) (layout.frameRegion binder)
-      | .named region definition arity =>
-          .named (layout.frameRegion region) definition arity)
+    (fun frameNode => layout.mapFrameNode (input.frame.val.nodes frameNode))
     (fun patternNode => layout.mapPatternNode
       (input.pattern.val.diagram.nodes patternNode)) node
 
@@ -925,6 +1182,751 @@ def plugRaw (layout : PlugLayout input) : ConcreteDiagram where
   regions := layout.plugRegion
   nodes := layout.plugNode
   wires := layout.plugWire
+
+@[simp] theorem plugWire_quotientBlockWire (signature : List Nat)
+    (input : Input signature) (layout : PlugLayout input)
+    (wire : input.wireQuotient.Carrier) :
+    layout.plugWire (layout.quotientBlockWire wire) = {
+      scope := layout.frameRegion (input.coalescedScope wire)
+      endpoints :=
+        (input.coalescedEndpoints wire).map
+          (fun endpoint : CEndpoint input.frame.val.nodeCount =>
+          ({ node := layout.frameNode endpoint.node, port := endpoint.port } :
+            CEndpoint layout.nodeCount)) ++ layout.boundaryEndpoints wire
+    } := by
+  simp [plugWire, quotientBlockWire]
+
+@[simp] theorem plugWire_internalBlockWire (signature : List Nat)
+    (input : Input signature) (layout : PlugLayout input)
+    (wire : layout.internalWires.Carrier) :
+    layout.plugWire (layout.internalBlockWire wire) =
+      layout.mapPatternWire (input.pattern.val.diagram.wires
+        (layout.internalWires.origin wire)) := by
+  simp [plugWire, internalBlockWire]
+
+@[simp] theorem plugRegion_frameRegion (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount) :
+    layout.plugRegion (layout.frameRegion region) =
+      layout.mapFrameRegion (input.frame.val.regions region) := by
+  simp [plugRegion, frameRegion]
+
+@[simp] theorem plugRegion_materialRegion (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    layout.plugRegion (layout.materialRegion material) =
+      layout.mapPatternRegion (input.pattern.val.diagram.regions
+        (layout.materialRegions.origin material)) := by
+  simp [plugRegion, materialRegion]
+
+@[simp] theorem plugNode_frameNode (layout : PlugLayout input)
+    (node : Fin input.frame.val.nodeCount) :
+    layout.plugNode (layout.frameNode node) =
+      layout.mapFrameNode (input.frame.val.nodes node) := by
+  simp [plugNode, frameNode]
+
+@[simp] theorem plugNode_patternNode (layout : PlugLayout input)
+    (node : Fin input.pattern.val.diagram.nodeCount) :
+    layout.plugNode (layout.patternNode node) =
+      layout.mapPatternNode (input.pattern.val.diagram.nodes node) := by
+  simp [plugNode, patternNode]
+
+theorem bodyRegion_parent_exact (layout : PlugLayout input)
+    (region parent : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : input.binderSpine.IsMaterialRegion region)
+    (hparent : (input.pattern.val.diagram.regions region).parent? = some parent) :
+    (layout.plugRaw.regions (layout.bodyRegion region)).parent? =
+      some (layout.bodyRegion parent) := by
+  rw [layout.bodyRegion_material region hmaterial]
+  change (layout.plugRegion (layout.materialRegion
+    (layout.materialIndex region hmaterial))).parent? = _
+  rw [layout.plugRegion_materialRegion]
+  have horigin : layout.materialRegions.origin
+      (layout.materialIndex region hmaterial) = region := by
+    exact layout.materialRegions.origin_index region
+      ((layout.materialRegions_survives_iff region).2 hmaterial)
+  rw [horigin]
+  cases hregion : input.pattern.val.diagram.regions region with
+  | sheet =>
+      rw [hregion] at hparent
+      contradiction
+  | cut actualParent =>
+      simp only [hregion, CRegion.parent?] at hparent
+      cases hparent
+      rfl
+  | bubble actualParent arity =>
+      simp only [hregion, CRegion.parent?] at hparent
+      cases hparent
+      rfl
+
+theorem bodyRegion_parent_encloses (layout : PlugLayout input)
+    (region parent : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : input.binderSpine.IsMaterialRegion region)
+    (hparent : (input.pattern.val.diagram.regions region).parent? = some parent) :
+    layout.plugRaw.Encloses (layout.bodyRegion parent)
+      (layout.bodyRegion region) := by
+  refine ⟨⟨1, by
+    simp only [plugRaw, regionCount]
+    have := input.frame.val.root.isLt
+    omega⟩, ?_⟩
+  simp only [ConcreteDiagram.climb,
+    layout.bodyRegion_parent_exact region parent hmaterial hparent]
+
+theorem nonmaterial_parent_eq_bodyContainer (input : Input signature)
+    (region parent : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : input.binderSpine.IsMaterialRegion region)
+    (hparent : (input.pattern.val.diagram.regions region).parent? = some parent)
+    (hparentNonmaterial : ¬ input.binderSpine.IsMaterialRegion parent) :
+    parent = input.binderSpine.bodyContainer := by
+  by_cases hroot : parent = input.pattern.val.diagram.root
+  · by_cases hzero : input.binderSpine.proxyCount = 0
+    · exact hroot.trans
+        (input.binderSpine.body_eq_root_of_empty hzero).symm
+    · have hfirst := input.terminalBody.root_direct_child hzero region (by
+        simpa only [hroot] using hparent)
+      exact False.elim (hmaterial.2 ⟨0, Nat.pos_of_ne_zero hzero⟩ hfirst)
+  · have hproxy : ∃ index : Fin input.binderSpine.proxyCount,
+        parent = input.binderSpine.proxy index := by
+      exact Classical.byContradiction fun hnone => hparentNonmaterial ⟨hroot, by
+        intro index heq
+        exact hnone ⟨index, heq⟩⟩
+    obtain ⟨index, hindex⟩ := hproxy
+    by_cases hnonterminal : index.val + 1 < input.binderSpine.proxyCount
+    · have hnext := input.terminalBody.nonterminal_direct_child
+        index hnonterminal region (by simpa only [hindex] using hparent)
+      exact False.elim (hmaterial.2 ⟨index.val + 1, hnonterminal⟩ hnext)
+    · have hcount : index.val + 1 = input.binderSpine.proxyCount := by
+        have := index.isLt
+        omega
+      have hnonzero : input.binderSpine.proxyCount ≠ 0 := by
+        have := index.isLt
+        omega
+      let terminal : Fin input.binderSpine.proxyCount :=
+        ⟨input.binderSpine.proxyCount - 1, by omega⟩
+      have hterminal : index = terminal := by
+        apply Fin.ext
+        simp only [terminal]
+        omega
+      rw [hindex, hterminal]
+      exact (input.binderSpine.body_eq_terminal_of_nonempty hnonzero).symm
+
+theorem material_climb_body_and_plug_site (layout : PlugLayout input) :
+    ∀ (fuel : Nat) (region : Fin input.pattern.val.diagram.regionCount),
+      input.binderSpine.IsMaterialRegion region →
+      input.pattern.val.diagram.climb fuel region =
+        some input.pattern.val.diagram.root →
+      ∃ steps : Nat,
+        input.pattern.val.diagram.climb steps region =
+            some input.binderSpine.bodyContainer ∧
+          layout.plugRaw.climb steps (layout.bodyRegion region) =
+            some (layout.frameRegion input.site) := by
+  intro fuel
+  induction fuel with
+  | zero =>
+      intro region hmaterial hclimb
+      have hroot : region = input.pattern.val.diagram.root :=
+        Option.some.inj hclimb
+      exact False.elim (hmaterial.1 hroot)
+  | succ fuel ih =>
+      intro region hmaterial hclimb
+      cases hparent : (input.pattern.val.diagram.regions region).parent? with
+      | none => simp [ConcreteDiagram.climb, hparent] at hclimb
+      | some parent =>
+          have htail : input.pattern.val.diagram.climb fuel parent =
+              some input.pattern.val.diagram.root := by
+            simpa [ConcreteDiagram.climb, hparent] using hclimb
+          by_cases hparentMaterial :
+              input.binderSpine.IsMaterialRegion parent
+          · obtain ⟨steps, horiginal, hplug⟩ :=
+              ih parent hparentMaterial htail
+            refine ⟨1 + steps, ?_, ?_⟩
+            · exact ConcreteElaboration.climb_add (by
+                simp [ConcreteDiagram.climb, hparent]) horiginal
+            · have hstep : layout.plugRaw.climb 1
+                  (layout.bodyRegion region) =
+                  some (layout.bodyRegion parent) := by
+                simp only [ConcreteDiagram.climb]
+                rw [layout.bodyRegion_parent_exact
+                  region parent hmaterial hparent]
+                rfl
+              exact ConcreteElaboration.climb_add hstep hplug
+          · have hbody := nonmaterial_parent_eq_bodyContainer (input := input)
+              region parent hmaterial hparent hparentMaterial
+            refine ⟨1, ?_, ?_⟩
+            · simpa [ConcreteDiagram.climb, hparent] using congrArg some hbody
+            · simp only [ConcreteDiagram.climb]
+              rw [layout.bodyRegion_parent_exact
+                region parent hmaterial hparent]
+              exact congrArg some
+                (layout.bodyRegion_nonmaterial parent hparentMaterial)
+
+theorem material_of_climb_lt_bodyContainer (input : Input signature) :
+    ∀ (steps : Nat)
+      (region current : Fin input.pattern.val.diagram.regionCount)
+      (position : Nat),
+      input.binderSpine.IsMaterialRegion region →
+      input.pattern.val.diagram.climb steps region =
+        some input.binderSpine.bodyContainer →
+      position < steps →
+      input.pattern.val.diagram.climb position region = some current →
+      input.binderSpine.IsMaterialRegion current := by
+  intro steps
+  induction steps with
+  | zero =>
+      intro region current position _ _ hlt _
+      omega
+  | succ steps ih =>
+      intro region current position hmaterial hbody hlt hposition
+      cases position with
+      | zero =>
+          have heq : region = current := Option.some.inj hposition
+          simpa only [← heq] using hmaterial
+      | succ position =>
+          cases hparent : (input.pattern.val.diagram.regions region).parent? with
+          | none => simp [ConcreteDiagram.climb, hparent] at hbody
+          | some parent =>
+              have htail : input.pattern.val.diagram.climb steps parent =
+                  some input.binderSpine.bodyContainer := by
+                simpa [ConcreteDiagram.climb, hparent] using hbody
+              have hpositionTail :
+                  input.pattern.val.diagram.climb position parent =
+                    some current := by
+                simpa [ConcreteDiagram.climb, hparent] using hposition
+              have hparentMaterial :
+                  input.binderSpine.IsMaterialRegion parent := by
+                by_cases hcandidate :
+                    input.binderSpine.IsMaterialRegion parent
+                · exact hcandidate
+                · have hparentBody := nonmaterial_parent_eq_bodyContainer
+                    (input := input) region parent hmaterial hparent hcandidate
+                  obtain ⟨rootSteps, hbodyRoot⟩ :=
+                    input.pattern.property.diagram_well_formed
+                      |>.all_regions_reach_root input.binderSpine.bodyContainer
+                  have hcycleRoot := ConcreteElaboration.climb_add
+                    htail hbodyRoot
+                  rw [hparentBody] at hcycleRoot
+                  have hunique :=
+                    ConcreteElaboration.ParentTraversal.climb_to_root_steps_unique
+                      input.pattern.val.diagram
+                      input.pattern.property.diagram_well_formed.root_is_sheet
+                      hcycleRoot hbodyRoot
+                  omega
+              exact ih parent current position hparentMaterial htail
+                (by omega) hpositionTail
+
+theorem material_climb_steps_le_count (layout : PlugLayout input)
+    {steps : Nat} {region : Fin input.pattern.val.diagram.regionCount}
+    (hmaterial : input.binderSpine.IsMaterialRegion region)
+    (hclimb : input.pattern.val.diagram.climb steps region =
+      some input.binderSpine.bodyContainer) :
+    steps ≤ layout.materialRegions.count := by
+  let pathIsSome (position : Fin steps) :
+      (input.pattern.val.diagram.climb position.val region).isSome = true :=
+    Option.isSome_iff_exists.mpr
+      (splice_climb_prefix_exists (Nat.le_of_lt position.isLt) hclimb)
+  let path (position : Fin steps) :
+      Fin input.pattern.val.diagram.regionCount :=
+    (input.pattern.val.diagram.climb position.val region).get
+      (pathIsSome position)
+  have path_spec (position : Fin steps) :
+      input.pattern.val.diagram.climb position.val region =
+        some (path position) :=
+    (Option.some_get (pathIsSome position)).symm
+  have path_material (position : Fin steps) :
+      input.binderSpine.IsMaterialRegion (path position) :=
+    material_of_climb_lt_bodyContainer input steps region (path position)
+      position.val hmaterial hclimb position.isLt (path_spec position)
+  let pathIndex (position : Fin steps) :
+      layout.materialRegions.Carrier :=
+    layout.materialIndex (path position) (path_material position)
+  have pathIndex_injective : Function.Injective pathIndex := by
+    intro first second heq
+    have hpaths : path first = path second := by
+      have horigins := congrArg layout.materialRegions.origin heq
+      simpa only [pathIndex, materialIndex,
+        SurvivorDomain.origin_index] using horigins
+    obtain ⟨bodyRootSteps, hbodyRoot⟩ :=
+      input.pattern.property.diagram_well_formed
+        |>.all_regions_reach_root input.binderSpine.bodyContainer
+    have hfirstSuffix := splice_climb_cancel_prefix
+      (Nat.le_of_lt first.isLt) (path_spec first) hclimb
+    have hsecondSuffix := splice_climb_cancel_prefix
+      (Nat.le_of_lt second.isLt) (path_spec second) hclimb
+    have hfirstRoot := ConcreteElaboration.climb_add hfirstSuffix hbodyRoot
+    have hsecondRoot := ConcreteElaboration.climb_add hsecondSuffix hbodyRoot
+    rw [hpaths] at hfirstRoot
+    have hremaining :=
+      ConcreteElaboration.ParentTraversal.climb_to_root_steps_unique
+        input.pattern.val.diagram
+        input.pattern.property.diagram_well_formed.root_is_sheet
+        hfirstRoot hsecondRoot
+    apply Fin.ext
+    omega
+  exact fin_card_le_of_injective pathIndex pathIndex_injective
+
+theorem frame_climb (layout : PlugLayout input) :
+    ∀ (steps : Nat) (start finish : Fin input.frame.val.regionCount),
+      input.frame.val.climb steps start = some finish →
+      layout.plugRaw.climb steps (layout.frameRegion start) =
+        some (layout.frameRegion finish) := by
+  intro steps
+  induction steps with
+  | zero =>
+      intro start finish hclimb
+      have heq : start = finish := Option.some.inj hclimb
+      subst finish
+      rfl
+  | succ steps ih =>
+      intro start finish hclimb
+      cases hregion : input.frame.val.regions start with
+      | sheet =>
+          simp [ConcreteDiagram.climb, hregion, CRegion.parent?] at hclimb
+      | cut parent =>
+          have htail : input.frame.val.climb steps parent = some finish := by
+            simpa [ConcreteDiagram.climb, hregion] using hclimb
+          simp only [ConcreteDiagram.climb, plugRaw,
+            plugRegion_frameRegion, hregion, mapFrameRegion, CRegion.parent?]
+          exact ih parent finish htail
+      | bubble parent arity =>
+          have htail : input.frame.val.climb steps parent = some finish := by
+            simpa [ConcreteDiagram.climb, hregion] using hclimb
+          simp only [ConcreteDiagram.climb, plugRaw,
+            plugRegion_frameRegion, hregion, mapFrameRegion, CRegion.parent?]
+          exact ih parent finish htail
+
+theorem plugRaw_all_regions_reach_root (layout : PlugLayout input) :
+    layout.plugRaw.AllRegionsReachRoot := by
+  intro region
+  refine Fin.addCases (m := input.frame.val.regionCount)
+    (n := layout.materialRegions.count)
+    (fun frame => ?_) (fun material => ?_) region
+  · obtain ⟨steps, hframe⟩ :=
+      input.frame.property.all_regions_reach_root frame
+    refine ⟨⟨steps.val, by
+      simp only [plugRaw, regionCount]
+      omega⟩, ?_⟩
+    exact layout.frame_climb steps.val frame input.frame.val.root hframe
+  · let original := layout.materialRegions.origin material
+    have hmaterial : input.binderSpine.IsMaterialRegion original :=
+      (layout.materialRegions_survives_iff original).1
+        (layout.materialRegions.origin_survives material)
+    obtain ⟨patternSteps, hpatternRoot⟩ :=
+      input.pattern.property.diagram_well_formed.all_regions_reach_root original
+    obtain ⟨materialSteps, hmaterialBody, hmaterialSite⟩ :=
+      layout.material_climb_body_and_plug_site patternSteps.val original
+        hmaterial hpatternRoot
+    have hmaterialBound :=
+      layout.material_climb_steps_le_count hmaterial hmaterialBody
+    obtain ⟨frameSteps, hsiteRoot⟩ :=
+      input.frame.property.all_regions_reach_root input.site
+    have hframeRoot := layout.frame_climb frameSteps.val input.site
+      input.frame.val.root hsiteRoot
+    have hplugRoot := ConcreteElaboration.climb_add hmaterialSite hframeRoot
+    refine ⟨⟨materialSteps + frameSteps.val, by
+      simp only [plugRaw, regionCount]
+      omega⟩, ?_⟩
+    simpa only [original, layout.bodyRegion_origin material] using hplugRoot
+
+theorem plugRaw_root_is_sheet (layout : PlugLayout input) :
+    layout.plugRaw.RootIsSheet := by
+  unfold ConcreteDiagram.RootIsSheet
+  change layout.plugRegion (layout.frameRegion input.frame.val.root) = .sheet
+  rw [layout.plugRegion_frameRegion]
+  rw [input.frame.property.root_is_sheet]
+  rfl
+
+theorem plugRaw_only_root_is_sheet (layout : PlugLayout input) :
+    layout.plugRaw.OnlyRootIsSheet := by
+  intro region
+  refine Fin.addCases (m := input.frame.val.regionCount)
+    (n := layout.materialRegions.count)
+    (fun frame => ?_) (fun material => ?_) region
+  · intro hsheet
+    simp only [plugRaw] at hsheet
+    change layout.plugRegion (layout.frameRegion frame) = .sheet at hsheet
+    rw [layout.plugRegion_frameRegion frame] at hsheet
+    have hframeSheet : input.frame.val.regions frame = .sheet := by
+      cases hregion : input.frame.val.regions frame with
+      | sheet => rfl
+      | cut => simp [hregion, mapFrameRegion] at hsheet
+      | bubble => simp [hregion, mapFrameRegion] at hsheet
+    have hroot := input.frame.property.only_root_is_sheet frame hframeSheet
+    subst frame
+    rfl
+  · intro hsheet
+    simp only [plugRaw] at hsheet
+    change layout.plugRegion (layout.materialRegion material) = .sheet at hsheet
+    rw [layout.plugRegion_materialRegion material] at hsheet
+    have himpossible : layout.mapPatternRegion
+        (input.pattern.val.diagram.regions
+          (layout.materialRegions.origin material)) ≠ .sheet := by
+      cases input.pattern.val.diagram.regions
+          (layout.materialRegions.origin material) <;>
+        simp [mapPatternRegion]
+    exact False.elim (himpossible hsheet)
+
+theorem plugRaw_encloses_trans (layout : PlugLayout input)
+    {ancestor middle descendant : Fin layout.plugRaw.regionCount}
+    (hfirst : layout.plugRaw.Encloses ancestor middle)
+    (hsecond : layout.plugRaw.Encloses middle descendant) :
+    layout.plugRaw.Encloses ancestor descendant := by
+  obtain ⟨first, hfirst⟩ := hfirst
+  obtain ⟨second, hsecond⟩ := hsecond
+  obtain ⟨rootSteps, hroot⟩ :=
+    layout.plugRaw_all_regions_reach_root ancestor
+  have hcomposed := ConcreteElaboration.climb_add hsecond hfirst
+  have htoRoot := ConcreteElaboration.climb_add hcomposed hroot
+  have hbound :=
+    ConcreteElaboration.ParentTraversal.climb_to_root_steps_le_regionCount
+      layout.plugRaw layout.plugRaw_root_is_sheet
+      layout.plugRaw_all_regions_reach_root htoRoot
+  exact ⟨⟨second.val + first.val, by omega⟩, hcomposed⟩
+
+theorem frame_encloses (layout : PlugLayout input)
+    {ancestor descendant : Fin input.frame.val.regionCount}
+    (hencloses : input.frame.val.Encloses ancestor descendant) :
+    layout.plugRaw.Encloses (layout.frameRegion ancestor)
+      (layout.frameRegion descendant) := by
+  obtain ⟨steps, hsteps⟩ := hencloses
+  refine ⟨⟨steps.val, by
+    simp only [plugRaw, regionCount]
+    omega⟩, layout.frame_climb steps.val descendant ancestor hsteps⟩
+
+theorem site_encloses_bodyRegion (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount) :
+    layout.plugRaw.Encloses (layout.frameRegion input.site)
+      (layout.bodyRegion region) := by
+  by_cases hmaterial : input.binderSpine.IsMaterialRegion region
+  · obtain ⟨patternSteps, hpatternRoot⟩ :=
+      input.pattern.property.diagram_well_formed.all_regions_reach_root region
+    obtain ⟨steps, horiginal, hplug⟩ :=
+      layout.material_climb_body_and_plug_site patternSteps.val region
+        hmaterial hpatternRoot
+    have hbound := layout.material_climb_steps_le_count hmaterial horiginal
+    refine ⟨⟨steps, by
+      simp only [plugRaw, regionCount]
+      have := input.frame.val.root.isLt
+      omega⟩, hplug⟩
+  · rw [layout.bodyRegion_nonmaterial region hmaterial]
+    exact ConcreteDiagram.Encloses.refl _ _
+
+theorem material_or_proxy_of_ne_root (input : Input signature)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hneRoot : region ≠ input.pattern.val.diagram.root) :
+    input.binderSpine.IsMaterialRegion region ∨
+      ∃ index : Fin input.binderSpine.proxyCount,
+        region = input.binderSpine.proxy index := by
+  by_cases hmaterial : input.binderSpine.IsMaterialRegion region
+  · exact Or.inl hmaterial
+  · right
+    exact Classical.byContradiction fun hnone => hmaterial ⟨hneRoot, by
+      intro index heq
+      exact hnone ⟨index, heq⟩⟩
+
+theorem plugRaw_binderRegion_isBubble (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    (binder parent : Fin input.pattern.val.diagram.regionCount) (arity : Nat)
+    (hbubble : input.pattern.val.diagram.regions binder =
+      .bubble parent arity) :
+    ∃ plugParent, layout.plugRaw.regions (layout.binderRegion binder) =
+      .bubble plugParent arity := by
+  have hneRoot : binder ≠ input.pattern.val.diagram.root := by
+    intro hroot
+    rw [hroot, input.pattern.property.diagram_well_formed.root_is_sheet]
+      at hbubble
+    contradiction
+  rcases material_or_proxy_of_ne_root input binder hneRoot with
+    hmaterial | ⟨index, hproxy⟩
+  · refine ⟨layout.bodyRegion parent, ?_⟩
+    change layout.plugRegion (layout.binderRegion binder) = _
+    rw [layout.binderRegion_material binder hmaterial,
+      layout.bodyRegion_material binder hmaterial,
+      layout.plugRegion_materialRegion]
+    have horigin : layout.materialRegions.origin
+        (layout.materialIndex binder hmaterial) = binder := by
+      exact layout.materialRegions.origin_index binder
+        ((layout.materialRegions_survives_iff binder).2 hmaterial)
+    rw [horigin, hbubble]
+    rfl
+  · subst binder
+    have hproxyRegion := input.binderSpine.proxy_region index
+    have harity : input.binderSpine.arity index = arity := by
+      rw [hproxyRegion] at hbubble
+      cases hbubble
+      rfl
+    obtain ⟨targetParent, htarget⟩ :=
+      hadmissible.binder_targets_match index
+    rw [harity] at htarget
+    refine ⟨layout.frameRegion targetParent, ?_⟩
+    change layout.plugRegion
+      (layout.binderRegion (input.binderSpine.proxy index)) = _
+    rw [layout.binderRegion_proxy, layout.plugRegion_frameRegion, htarget]
+    rfl
+
+theorem plugRaw_atom_binders_are_bubbles (layout : PlugLayout input)
+    (hadmissible : input.Admissible) :
+    layout.plugRaw.AtomBindersAreBubbles := by
+  intro node
+  refine Fin.addCases (m := input.frame.val.nodeCount)
+    (n := input.pattern.val.diagram.nodeCount)
+    (fun frameNode => ?_) (fun patternNode => ?_) node
+  · have hold := input.frame.property.atom_binders_are_bubbles frameNode
+    simp only [plugRaw, plugNode, Fin.addCases_left]
+    cases hnode : input.frame.val.nodes frameNode with
+    | term => trivial
+    | named => trivial
+    | atom region binder =>
+        simp only [hnode] at hold
+        obtain ⟨parent, arity, hbubble⟩ := hold
+        refine ⟨layout.frameRegion parent, arity, ?_⟩
+        rw [layout.plugRegion_frameRegion, hbubble]
+        rfl
+  · have hold :=
+      input.pattern.property.diagram_well_formed.atom_binders_are_bubbles
+        patternNode
+    simp only [plugRaw, plugNode, Fin.addCases_right]
+    cases hnode : input.pattern.val.diagram.nodes patternNode with
+    | term => trivial
+    | named => trivial
+    | atom region binder =>
+        simp only [hnode] at hold
+        obtain ⟨parent, arity, hbubble⟩ := hold
+        simp only [mapPatternNode]
+        obtain ⟨plugParent, hplugBubble⟩ :=
+          layout.plugRaw_binderRegion_isBubble
+            hadmissible binder parent arity hbubble
+        exact ⟨plugParent, arity, hplugBubble⟩
+
+theorem plugRaw_named_references_resolve (signature : List Nat)
+    (input : Input signature) (layout : PlugLayout input) :
+    layout.plugRaw.NamedReferencesResolve signature := by
+  intro node
+  refine Fin.addCases (m := input.frame.val.nodeCount)
+    (n := input.pattern.val.diagram.nodeCount)
+    (fun frameNode => ?_) (fun patternNode => ?_) node
+  · have hold := input.frame.property.named_references_resolve frameNode
+    simp only [plugRaw, plugNode, Fin.addCases_left]
+    cases hnode : input.frame.val.nodes frameNode <;>
+      simp only [hnode, mapFrameNode] at hold ⊢
+    exact hold
+  · have hold :=
+      input.pattern.property.diagram_well_formed.named_references_resolve
+        patternNode
+    simp only [plugRaw, plugNode, Fin.addCases_right]
+    cases hnode : input.pattern.val.diagram.nodes patternNode <;>
+      simp only [hnode, mapPatternNode] at hold ⊢
+    exact hold
+
+theorem bodyContainer_nonmaterial (input : Input signature) :
+    ¬ input.binderSpine.IsMaterialRegion
+      input.binderSpine.bodyContainer := by
+  intro hmaterial
+  by_cases hzero : input.binderSpine.proxyCount = 0
+  · exact hmaterial.1 (input.binderSpine.body_eq_root_of_empty hzero)
+  · rw [input.binderSpine.body_eq_terminal_of_nonempty hzero] at hmaterial
+    exact hmaterial.2 _ rfl
+
+theorem bodyRegion_climb_between_material (layout : PlugLayout input) :
+    ∀ (steps : Nat)
+      (start finish : Fin input.pattern.val.diagram.regionCount),
+      input.binderSpine.IsMaterialRegion start →
+      input.binderSpine.IsMaterialRegion finish →
+      input.pattern.val.diagram.climb steps start = some finish →
+      layout.plugRaw.climb steps (layout.bodyRegion start) =
+        some (layout.bodyRegion finish) := by
+  intro steps
+  induction steps with
+  | zero =>
+      intro start finish _ _ hclimb
+      have heq : start = finish := Option.some.inj hclimb
+      subst finish
+      rfl
+  | succ steps ih =>
+      intro start finish hstart hfinish hclimb
+      cases hparent : (input.pattern.val.diagram.regions start).parent? with
+      | none => simp [ConcreteDiagram.climb, hparent] at hclimb
+      | some parent =>
+          have htail : input.pattern.val.diagram.climb steps parent =
+              some finish := by
+            simpa [ConcreteDiagram.climb, hparent] using hclimb
+          have hparentMaterial :
+              input.binderSpine.IsMaterialRegion parent := by
+            by_cases hcandidate :
+                input.binderSpine.IsMaterialRegion parent
+            · exact hcandidate
+            · have hparentBody := nonmaterial_parent_eq_bodyContainer input
+                  start parent hstart hparent hcandidate
+              obtain ⟨finishRootSteps, hfinishRoot⟩ :=
+                input.pattern.property.diagram_well_formed
+                  |>.all_regions_reach_root finish
+              obtain ⟨finishBodySteps, hfinishBody, _⟩ :=
+                layout.material_climb_body_and_plug_site finishRootSteps.val
+                  finish hfinish hfinishRoot
+              obtain ⟨bodyRootSteps, hbodyRoot⟩ :=
+                input.pattern.property.diagram_well_formed
+                  |>.all_regions_reach_root input.binderSpine.bodyContainer
+              rw [hparentBody] at htail
+              have hcycle := ConcreteElaboration.climb_add htail hfinishBody
+              have hcycleRoot := ConcreteElaboration.climb_add hcycle hbodyRoot
+              have hunique :=
+                ConcreteElaboration.ParentTraversal.climb_to_root_steps_unique
+                  input.pattern.val.diagram
+                  input.pattern.property.diagram_well_formed.root_is_sheet
+                  hcycleRoot hbodyRoot
+              have hzero : finishBodySteps = 0 := by omega
+              rw [hzero] at hfinishBody
+              have hfinishEq := Option.some.inj hfinishBody
+              exact False.elim
+                (bodyContainer_nonmaterial input (hfinishEq ▸ hfinish))
+          have hstep : layout.plugRaw.climb 1
+              (layout.bodyRegion start) = some (layout.bodyRegion parent) := by
+            simp only [ConcreteDiagram.climb]
+            rw [layout.bodyRegion_parent_exact start parent hstart hparent]
+            rfl
+          have hcombined := ConcreteElaboration.climb_add hstep
+            (ih parent finish hparentMaterial hfinish htail)
+          simpa [Nat.add_comm] using hcombined
+
+theorem material_encloses (layout : PlugLayout input)
+    {ancestor descendant : Fin input.pattern.val.diagram.regionCount}
+    (hancestor : input.binderSpine.IsMaterialRegion ancestor)
+    (hdescendant : input.binderSpine.IsMaterialRegion descendant)
+    (hencloses : input.pattern.val.diagram.Encloses ancestor descendant) :
+    layout.plugRaw.Encloses (layout.bodyRegion ancestor)
+      (layout.bodyRegion descendant) := by
+  obtain ⟨steps, hsteps⟩ := hencloses
+  obtain ⟨ancestorRootSteps, hancestorRoot⟩ :=
+    input.pattern.property.diagram_well_formed.all_regions_reach_root ancestor
+  obtain ⟨ancestorBodySteps, hancestorBody, _⟩ :=
+    layout.material_climb_body_and_plug_site ancestorRootSteps.val ancestor
+      hancestor hancestorRoot
+  have hdescendantBody := ConcreteElaboration.climb_add hsteps hancestorBody
+  have hbound :=
+    layout.material_climb_steps_le_count hdescendant hdescendantBody
+  refine ⟨⟨steps.val, by
+    simp only [plugRaw, regionCount]
+    have := input.frame.val.root.isLt
+    omega⟩, ?_⟩
+  exact layout.bodyRegion_climb_between_material steps.val descendant ancestor
+    hdescendant hancestor hsteps
+
+theorem patternNode_region_material_or_bodyContainer
+    (input : Input signature)
+    (node : Fin input.pattern.val.diagram.nodeCount) :
+    input.binderSpine.IsMaterialRegion
+        (input.pattern.val.diagram.nodes node).region ∨
+      (input.pattern.val.diagram.nodes node).region =
+        input.binderSpine.bodyContainer := by
+  let region := (input.pattern.val.diagram.nodes node).region
+  by_cases hmaterial : input.binderSpine.IsMaterialRegion region
+  · exact Or.inl hmaterial
+  · right
+    by_cases hroot : region = input.pattern.val.diagram.root
+    · by_cases hzero : input.binderSpine.proxyCount = 0
+      · exact hroot.trans
+          (input.binderSpine.body_eq_root_of_empty hzero).symm
+      · exact False.elim
+          (input.terminalBody.root_has_no_nodes hzero node hroot)
+    · obtain ⟨index, hproxy⟩ :=
+        (material_or_proxy_of_ne_root input region hroot).resolve_left hmaterial
+      by_cases hnonterminal :
+          index.val + 1 < input.binderSpine.proxyCount
+      · exact False.elim
+          (input.terminalBody.nonterminal_has_no_nodes
+            index hnonterminal node hproxy)
+      · have hnonzero : input.binderSpine.proxyCount ≠ 0 := by
+          have := index.isLt
+          omega
+        let terminal : Fin input.binderSpine.proxyCount :=
+          ⟨input.binderSpine.proxyCount - 1, by omega⟩
+        have hterminal : index = terminal := by
+          apply Fin.ext
+          simp only [terminal]
+          have := index.isLt
+          omega
+        change region = input.binderSpine.bodyContainer
+        rw [hproxy, hterminal]
+        exact (input.binderSpine.body_eq_terminal_of_nonempty hnonzero).symm
+
+theorem material_not_encloses_bodyContainer (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hmaterial : input.binderSpine.IsMaterialRegion region) :
+    ¬ input.pattern.val.diagram.Encloses region
+      input.binderSpine.bodyContainer := by
+  intro hencloses
+  obtain ⟨upSteps, hup⟩ := hencloses
+  obtain ⟨rootSteps, hroot⟩ :=
+    input.pattern.property.diagram_well_formed.all_regions_reach_root region
+  obtain ⟨downSteps, hdown, _⟩ :=
+    layout.material_climb_body_and_plug_site rootSteps.val region
+      hmaterial hroot
+  obtain ⟨bodyRootSteps, hbodyRoot⟩ :=
+    input.pattern.property.diagram_well_formed.all_regions_reach_root
+      input.binderSpine.bodyContainer
+  have hcycle := ConcreteElaboration.climb_add hup hdown
+  have hcycleRoot := ConcreteElaboration.climb_add hcycle hbodyRoot
+  have hunique :=
+    ConcreteElaboration.ParentTraversal.climb_to_root_steps_unique
+      input.pattern.val.diagram
+      input.pattern.property.diagram_well_formed.root_is_sheet
+      hcycleRoot hbodyRoot
+  have hupZero : upSteps.val = 0 := by omega
+  rw [hupZero] at hup
+  have heq := Option.some.inj hup
+  exact bodyContainer_nonmaterial input (heq ▸ hmaterial)
+
+theorem plugRaw_atom_binders_enclose (layout : PlugLayout input)
+    (hadmissible : input.Admissible) :
+    layout.plugRaw.AtomBindersEnclose := by
+  intro node
+  refine Fin.addCases (m := input.frame.val.nodeCount)
+    (n := input.pattern.val.diagram.nodeCount)
+    (fun frameNode => ?_) (fun patternNode => ?_) node
+  · have hold := input.frame.property.atom_binders_enclose frameNode
+    simp only [plugRaw, plugNode, Fin.addCases_left]
+    cases hnode : input.frame.val.nodes frameNode with
+    | term => trivial
+    | named => trivial
+    | atom region binder =>
+        simp only [hnode] at hold
+        simp only [mapFrameNode]
+        exact layout.frame_encloses hold
+  · have hold :=
+      input.pattern.property.diagram_well_formed.atom_binders_enclose
+        patternNode
+    simp only [plugRaw, plugNode, Fin.addCases_right]
+    cases hnode : input.pattern.val.diagram.nodes patternNode with
+    | term => trivial
+    | named => trivial
+    | atom region binder =>
+        simp only [hnode] at hold
+        simp only [mapPatternNode]
+        have hbinderBubble :=
+          input.pattern.property.diagram_well_formed.atom_binders_are_bubbles
+            patternNode
+        simp only [hnode] at hbinderBubble
+        obtain ⟨parent, arity, hbubble⟩ := hbinderBubble
+        have hneRoot : binder ≠ input.pattern.val.diagram.root := by
+          intro hroot
+          rw [hroot,
+            input.pattern.property.diagram_well_formed.root_is_sheet] at hbubble
+          contradiction
+        rcases material_or_proxy_of_ne_root input binder hneRoot with
+          hmaterial | ⟨index, hproxy⟩
+        · rw [layout.binderRegion_material binder hmaterial]
+          have howner :=
+            patternNode_region_material_or_bodyContainer input patternNode
+          simp only [hnode, CNode.region] at howner
+          rcases howner with
+            hregionMaterial | hregionBody
+          · exact layout.material_encloses hmaterial hregionMaterial hold
+          · rw [hregionBody] at hold
+            exact False.elim (layout.material_not_encloses_bodyContainer
+              binder hmaterial hold)
+        · subst binder
+          rw [layout.binderRegion_proxy]
+          have htarget := layout.frame_encloses
+            (hadmissible.binder_targets_enclose index)
+          exact layout.plugRaw_encloses_trans htarget
+            (layout.site_encloses_bodyRegion region)
 
 end PlugLayout
 
