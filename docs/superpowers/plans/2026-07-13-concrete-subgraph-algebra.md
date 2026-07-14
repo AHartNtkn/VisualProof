@@ -100,16 +100,16 @@ open/closed compiler authority.
 
 **Produces:** `OpenConcreteIso` and open elaboration equivariance.
 
-- [ ] Define `OpenConcreteIso` as a `ConcreteIso` whose wire equivalence preserves
+- [x] Define `OpenConcreteIso` as a `ConcreteIso` whose wire equivalence preserves
   every ordered boundary position pointwise.
-- [ ] Prove reflexivity, symmetry, transitivity, open well-formedness transport,
+- [x] Prove reflexivity, symmetry, transitivity, open well-formedness transport,
   exposed-class equivalence, and hidden-root-wire equivalence.
-- [ ] Extend the synchronized private equivariance proof to open root contexts.
-- [ ] Prove open elaborations intrinsically isomorphic with boundary positions
+- [x] Extend the synchronized private equivariance proof to open root contexts.
+- [x] Prove open elaborations intrinsically isomorphic with boundary positions
   commuting, then prove open denotation invariance.
-- [ ] Add a nontrivial region/node/wire permutation whose endpoint order is
+- [x] Add a nontrivial region/node/wire permutation whose endpoint order is
   reversed and whose boundary contains a repeated wire.
-- [ ] Build, inspect axioms, and commit independently.
+- [x] Build, inspect axioms, and commit independently.
 
 ---
 
