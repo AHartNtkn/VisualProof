@@ -10,94 +10,6 @@ open VisualProof.Data.Finite
 open VisualProof.Theory
 open VisualProof.Diagram
 
-/-! Constructive restrictions of a finite equivalence to nodup list fibers. -/
-
-private def restrictedIndex
-    [DecidableEq beta]
-    (equivalence : FiniteEquiv alpha beta)
-    (source : List alpha) (target : List beta)
-    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source)
-    (index : Fin source.length) : Fin target.length :=
-  (indexOf? target (equivalence source[index])).get (by
-    rw [indexOf?_isSome_iff]
-    exact (mem_iff source[index]).mpr (List.getElem_mem ..))
-
-private theorem restrictedIndex_spec
-    [DecidableEq beta]
-    (equivalence : FiniteEquiv alpha beta)
-    (source : List alpha) (target : List beta)
-    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source)
-    (index : Fin source.length) :
-    target.get (restrictedIndex equivalence source target mem_iff index) =
-      equivalence (source.get index) := by
-  unfold restrictedIndex
-  let hsome : (indexOf? target (equivalence source[index])).isSome = true := by
-    rw [indexOf?_isSome_iff]
-    exact (mem_iff source[index]).mpr (List.getElem_mem ..)
-  obtain ⟨found, hfound⟩ := Option.isSome_iff_exists.mp hsome
-  calc
-    target.get ((indexOf? target (equivalence source[index])).get _) =
-        target.get found := congrArg target.get
-          (Option.get_of_eq_some hsome hfound)
-    _ = equivalence (source.get index) := by
-      simpa only [List.get_eq_getElem] using indexOf?_sound hfound
-
-private theorem restricted_inverse_mem_iff
-    (equivalence : FiniteEquiv alpha beta)
-    (source : List alpha) (target : List beta)
-    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source)
-    (y : beta) : equivalence.symm y ∈ source ↔ y ∈ target := by
-  constructor
-  · intro hsource
-    have := (mem_iff (equivalence.symm y)).mpr hsource
-    rwa [FiniteEquiv.apply_symm_apply] at this
-  · intro htarget
-    apply (mem_iff (equivalence.symm y)).mp
-    rwa [FiniteEquiv.apply_symm_apply]
-
-private def restrictedEquiv
-    [DecidableEq alpha] [DecidableEq beta]
-    (equivalence : FiniteEquiv alpha beta)
-    (source : List alpha) (target : List beta)
-    (sourceNodup : source.Nodup) (targetNodup : target.Nodup)
-    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source) :
-    FiniteEquiv (Fin source.length) (Fin target.length) where
-  toFun := restrictedIndex equivalence source target mem_iff
-  invFun := restrictedIndex equivalence.symm target source
-    (restricted_inverse_mem_iff equivalence source target mem_iff)
-  left_inv := by
-    intro index
-    have houter := restrictedIndex_spec equivalence.symm target source
-      (restricted_inverse_mem_iff equivalence source target mem_iff)
-      (restrictedIndex equivalence source target mem_iff index)
-    have hinner := restrictedIndex_spec equivalence source target mem_iff index
-    rw [hinner, FiniteEquiv.symm_apply_apply] at houter
-    apply Fin.ext
-    exact (List.getElem_inj sourceNodup).mp (by
-      simpa only [List.get_eq_getElem] using houter)
-  right_inv := by
-    intro index
-    have houter := restrictedIndex_spec equivalence source target mem_iff
-      (restrictedIndex equivalence.symm target source
-        (restricted_inverse_mem_iff equivalence source target mem_iff) index)
-    have hinner := restrictedIndex_spec equivalence.symm target source
-      (restricted_inverse_mem_iff equivalence source target mem_iff) index
-    rw [hinner, FiniteEquiv.apply_symm_apply] at houter
-    apply Fin.ext
-    exact (List.getElem_inj targetNodup).mp (by
-      simpa only [List.get_eq_getElem] using houter)
-
-private theorem restrictedEquiv_spec
-    [DecidableEq alpha] [DecidableEq beta]
-    (equivalence : FiniteEquiv alpha beta)
-    (source : List alpha) (target : List beta)
-    (sourceNodup : source.Nodup) (targetNodup : target.Nodup)
-    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source)
-    (index : Fin source.length) :
-    target.get (restrictedEquiv equivalence source target sourceNodup targetNodup
-      mem_iff index) = equivalence (source.get index) :=
-  restrictedIndex_spec equivalence source target mem_iff index
-
 private def renameOccurrence {source target : ConcreteDiagram}
     (iso : ConcreteIso source target) :
     LocalOccurrence source.regionCount source.nodeCount →
@@ -141,7 +53,7 @@ private def localWireEquiv {source target : ConcreteDiagram}
     FiniteEquiv
       (Fin (exactScopeWires source region).length)
       (Fin (exactScopeWires target (iso.regions region)).length) :=
-  restrictedEquiv iso.wires _ _
+  FiniteEquiv.restrictLists iso.wires _ _
     (exactScopeWires_nodup source region)
     (exactScopeWires_nodup target (iso.regions region))
     (exactScopeWires_mem_iff iso region)
@@ -152,7 +64,7 @@ private theorem localWireEquiv_spec {source target : ConcreteDiagram}
     (exactScopeWires target (iso.regions region)).get
         (localWireEquiv iso region index) =
       iso.wires ((exactScopeWires source region).get index) :=
-  restrictedEquiv_spec iso.wires _ _ _ _ _ index
+  FiniteEquiv.restrictLists_spec iso.wires _ _ _ _ _ index
 
 private theorem localOccurrences_mem_iff {source target : ConcreteDiagram}
     (iso : ConcreteIso source target) (region : Fin source.regionCount)
@@ -187,7 +99,7 @@ private def localOccurrenceEquiv {source target : ConcreteDiagram}
     FiniteEquiv
       (Fin (localOccurrences source region).length)
       (Fin (localOccurrences target (iso.regions region)).length) :=
-  restrictedEquiv (occurrenceEquiv iso) _ _
+  FiniteEquiv.restrictLists (occurrenceEquiv iso) _ _
     (localOccurrences_nodup source region)
     (localOccurrences_nodup target (iso.regions region))
     (localOccurrences_mem_iff iso region)
@@ -198,7 +110,7 @@ private theorem localOccurrenceEquiv_spec {source target : ConcreteDiagram}
     (localOccurrences target (iso.regions region)).get
         (localOccurrenceEquiv iso region index) =
       renameOccurrence iso ((localOccurrences source region).get index) :=
-  restrictedEquiv_spec (occurrenceEquiv iso) _ _ _ _ _ index
+  FiniteEquiv.restrictLists_spec (occurrenceEquiv iso) _ _ _ _ _ index
 
 private def WireContextsAgree {source target : ConcreteDiagram}
     (iso : ConcreteIso source target)

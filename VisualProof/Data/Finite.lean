@@ -1,3 +1,85 @@
+namespace VisualProof.Diagram
+
+/-- A constructive equivalence used for finite diagram carriers. -/
+structure FiniteEquiv (alpha beta : Type) where
+  toFun : alpha -> beta
+  invFun : beta -> alpha
+  left_inv : forall x, invFun (toFun x) = x
+  right_inv : forall y, toFun (invFun y) = y
+
+instance : CoeFun (FiniteEquiv alpha beta) (fun _ => alpha -> beta) where
+  coe equivalence := equivalence.toFun
+
+namespace FiniteEquiv
+
+def refl (alpha : Type) : FiniteEquiv alpha alpha where
+  toFun := id
+  invFun := id
+  left_inv := fun _ => rfl
+  right_inv := fun _ => rfl
+
+@[simp] theorem refl_apply (x : alpha) : refl alpha x = x := rfl
+
+def symm (equivalence : FiniteEquiv alpha beta) : FiniteEquiv beta alpha where
+  toFun := equivalence.invFun
+  invFun := equivalence.toFun
+  left_inv := equivalence.right_inv
+  right_inv := equivalence.left_inv
+
+@[simp] theorem symm_toFun (equivalence : FiniteEquiv alpha beta) :
+    equivalence.symm.toFun = equivalence.invFun := rfl
+
+def trans (first : FiniteEquiv alpha beta) (second : FiniteEquiv beta gamma) :
+    FiniteEquiv alpha gamma where
+  toFun := second.toFun ∘ first.toFun
+  invFun := first.invFun ∘ second.invFun
+  left_inv := by
+    intro x
+    simp only [Function.comp_apply, second.left_inv, first.left_inv]
+  right_inv := by
+    intro z
+    simp only [Function.comp_apply, first.right_inv, second.right_inv]
+
+@[simp] theorem trans_apply (first : FiniteEquiv alpha beta)
+    (second : FiniteEquiv beta gamma) (x : alpha) :
+    first.trans second x = second (first x) := rfl
+
+@[simp] theorem symm_apply_apply (equivalence : FiniteEquiv alpha beta)
+    (x : alpha) : equivalence.symm (equivalence x) = x :=
+  equivalence.left_inv x
+
+@[simp] theorem apply_symm_apply (equivalence : FiniteEquiv alpha beta)
+    (y : beta) : equivalence (equivalence.symm y) = y :=
+  equivalence.right_inv y
+
+theorem injective (equivalence : FiniteEquiv alpha beta) :
+    Function.Injective equivalence := by
+  intro left right heq
+  have := congrArg equivalence.invFun heq
+  simpa only [equivalence.left_inv] using this
+
+@[ext] theorem ext {left right : FiniteEquiv alpha beta}
+    (forward_eq : forall x, left x = right x) : left = right := by
+  have forward_fun_eq : left.toFun = right.toFun := funext forward_eq
+  cases left with
+  | mk leftForward leftInverse leftLeft leftRight =>
+      cases right with
+      | mk rightForward rightInverse rightLeft rightRight =>
+          simp only at forward_fun_eq
+          subst rightForward
+          have inverse_eq : leftInverse = rightInverse := by
+            funext y
+            calc
+              leftInverse y = leftInverse (leftForward (rightInverse y)) :=
+                congrArg leftInverse (rightRight y).symm
+              _ = rightInverse y := leftLeft (rightInverse y)
+          subst rightInverse
+          rfl
+
+end FiniteEquiv
+
+end VisualProof.Diagram
+
 namespace VisualProof.Data.Finite
 
 /-! Deterministic enumeration and reindexing for finite carriers. -/
@@ -113,6 +195,99 @@ theorem indexOf?_unique_of_nodup [DecidableEq α] {xs : List α}
     rw [List.getElem?_eq_getElem j.isLt, List.getElem?_eq_getElem i.isLt]
     exact congrArg some (hj.trans (indexOf?_sound hi).symm)
   exact (List.getElem?_inj j.isLt hnodup).mp hvalues
+
+end VisualProof.Data.Finite
+
+namespace VisualProof.Diagram.FiniteEquiv
+
+open VisualProof.Data.Finite
+
+private def restrictIndex [DecidableEq beta]
+    (equivalence : FiniteEquiv alpha beta)
+    (source : List alpha) (target : List beta)
+    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source)
+    (index : Fin source.length) : Fin target.length :=
+  (indexOf? target (equivalence source[index])).get (by
+    rw [indexOf?_isSome_iff]
+    exact (mem_iff source[index]).mpr (List.getElem_mem ..))
+
+private theorem restrictIndex_spec [DecidableEq beta]
+    (equivalence : FiniteEquiv alpha beta)
+    (source : List alpha) (target : List beta)
+    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source)
+    (index : Fin source.length) :
+    target.get (restrictIndex equivalence source target mem_iff index) =
+      equivalence (source.get index) := by
+  unfold restrictIndex
+  let hsome : (indexOf? target (equivalence source[index])).isSome = true := by
+    rw [indexOf?_isSome_iff]
+    exact (mem_iff source[index]).mpr (List.getElem_mem ..)
+  obtain ⟨found, hfound⟩ := Option.isSome_iff_exists.mp hsome
+  calc
+    target.get ((indexOf? target (equivalence source[index])).get _) =
+        target.get found := congrArg target.get
+          (Option.get_of_eq_some hsome hfound)
+    _ = equivalence (source.get index) := by
+      simpa only [List.get_eq_getElem] using indexOf?_sound hfound
+
+private theorem restrict_inverse_mem_iff
+    (equivalence : FiniteEquiv alpha beta)
+    (source : List alpha) (target : List beta)
+    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source)
+    (y : beta) : equivalence.symm y ∈ source ↔ y ∈ target := by
+  constructor
+  · intro hsource
+    have := (mem_iff (equivalence.symm y)).mpr hsource
+    rwa [apply_symm_apply] at this
+  · intro htarget
+    apply (mem_iff (equivalence.symm y)).mp
+    rwa [apply_symm_apply]
+
+/-- Restrict an equivalence to two nodup lists that enumerate matching fibers. -/
+def restrictLists [DecidableEq alpha] [DecidableEq beta]
+    (equivalence : FiniteEquiv alpha beta)
+    (source : List alpha) (target : List beta)
+    (sourceNodup : source.Nodup) (targetNodup : target.Nodup)
+    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source) :
+    FiniteEquiv (Fin source.length) (Fin target.length) where
+  toFun := restrictIndex equivalence source target mem_iff
+  invFun := restrictIndex equivalence.symm target source
+    (restrict_inverse_mem_iff equivalence source target mem_iff)
+  left_inv := by
+    intro index
+    have houter := restrictIndex_spec equivalence.symm target source
+      (restrict_inverse_mem_iff equivalence source target mem_iff)
+      (restrictIndex equivalence source target mem_iff index)
+    have hinner := restrictIndex_spec equivalence source target mem_iff index
+    rw [hinner, symm_apply_apply] at houter
+    apply Fin.ext
+    exact (List.getElem_inj sourceNodup).mp (by
+      simpa only [List.get_eq_getElem] using houter)
+  right_inv := by
+    intro index
+    have houter := restrictIndex_spec equivalence source target mem_iff
+      (restrictIndex equivalence.symm target source
+        (restrict_inverse_mem_iff equivalence source target mem_iff) index)
+    have hinner := restrictIndex_spec equivalence.symm target source
+      (restrict_inverse_mem_iff equivalence source target mem_iff) index
+    rw [hinner, apply_symm_apply] at houter
+    apply Fin.ext
+    exact (List.getElem_inj targetNodup).mp (by
+      simpa only [List.get_eq_getElem] using houter)
+
+theorem restrictLists_spec [DecidableEq alpha] [DecidableEq beta]
+    (equivalence : FiniteEquiv alpha beta)
+    (source : List alpha) (target : List beta)
+    (sourceNodup : source.Nodup) (targetNodup : target.Nodup)
+    (mem_iff : forall x, equivalence x ∈ target ↔ x ∈ source)
+    (index : Fin source.length) :
+    target.get (restrictLists equivalence source target sourceNodup targetNodup
+      mem_iff index) = equivalence (source.get index) :=
+  restrictIndex_spec equivalence source target mem_iff index
+
+end VisualProof.Diagram.FiniteEquiv
+
+namespace VisualProof.Data.Finite
 
 namespace FilteredFiber
 

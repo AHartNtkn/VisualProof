@@ -1,80 +1,10 @@
+import VisualProof.Data.Finite
 import VisualProof.Diagram.Context
 
 namespace VisualProof.Diagram
 
 open VisualProof
 open Theory
-
-structure FiniteEquiv (alpha beta : Type) where
-  toFun : alpha -> beta
-  invFun : beta -> alpha
-  left_inv : forall x, invFun (toFun x) = x
-  right_inv : forall y, toFun (invFun y) = y
-
-instance : CoeFun (FiniteEquiv alpha beta) (fun _ => alpha -> beta) where
-  coe equivalence := equivalence.toFun
-
-namespace FiniteEquiv
-
-def refl (alpha : Type) : FiniteEquiv alpha alpha where
-  toFun := id
-  invFun := id
-  left_inv := fun _ => rfl
-  right_inv := fun _ => rfl
-
-@[simp] theorem refl_apply (x : alpha) : refl alpha x = x := rfl
-
-def symm (equivalence : FiniteEquiv alpha beta) : FiniteEquiv beta alpha where
-  toFun := equivalence.invFun
-  invFun := equivalence.toFun
-  left_inv := equivalence.right_inv
-  right_inv := equivalence.left_inv
-
-@[simp] theorem symm_toFun (equivalence : FiniteEquiv alpha beta) :
-    equivalence.symm.toFun = equivalence.invFun := rfl
-
-def trans (first : FiniteEquiv alpha beta) (second : FiniteEquiv beta gamma) :
-    FiniteEquiv alpha gamma where
-  toFun := second.toFun ∘ first.toFun
-  invFun := first.invFun ∘ second.invFun
-  left_inv := by
-    intro x
-    simp only [Function.comp_apply, second.left_inv, first.left_inv]
-  right_inv := by
-    intro z
-    simp only [Function.comp_apply, first.right_inv, second.right_inv]
-
-@[simp] theorem trans_apply (first : FiniteEquiv alpha beta)
-    (second : FiniteEquiv beta gamma) (x : alpha) :
-    first.trans second x = second (first x) := rfl
-
-@[simp] theorem symm_apply_apply (equivalence : FiniteEquiv alpha beta)
-    (x : alpha) : equivalence.symm (equivalence x) = x :=
-  equivalence.left_inv x
-
-@[simp] theorem apply_symm_apply (equivalence : FiniteEquiv alpha beta)
-    (y : beta) : equivalence (equivalence.symm y) = y :=
-  equivalence.right_inv y
-
-@[ext] theorem ext {left right : FiniteEquiv alpha beta}
-    (forward_eq : forall x, left x = right x) : left = right := by
-  have forward_fun_eq : left.toFun = right.toFun := funext forward_eq
-  cases left with
-  | mk leftForward leftInverse leftLeft leftRight =>
-      cases right with
-      | mk rightForward rightInverse rightLeft rightRight =>
-          simp only at forward_fun_eq
-          subst rightForward
-          have inverse_eq : leftInverse = rightInverse := by
-            funext y
-            calc
-              leftInverse y = leftInverse (leftForward (rightInverse y)) :=
-                congrArg leftInverse (rightRight y).symm
-              _ = rightInverse y := leftLeft (rightInverse y)
-          subst rightInverse
-          rfl
-
-end FiniteEquiv
 
 def extendWireEquiv
     (outer : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
