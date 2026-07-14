@@ -1234,6 +1234,16 @@ def mapFrameNode (layout : PlugLayout input) :
   | .named region definition arity =>
       .named (layout.frameRegion region) definition arity
 
+@[simp] theorem mapFrameNode_region (layout : PlugLayout input)
+    (node : CNode input.frame.val.regionCount) :
+    (layout.mapFrameNode node).region = layout.frameRegion node.region := by
+  cases node <;> rfl
+
+@[simp] theorem mapPatternNode_region (layout : PlugLayout input)
+    (node : CNode input.pattern.val.diagram.regionCount) :
+    (layout.mapPatternNode node).region = layout.bodyRegion node.region := by
+  cases node <;> rfl
+
 def plugRegion (layout : PlugLayout input)
     (region : Fin layout.regionCount) : CRegion layout.regionCount :=
   Fin.addCases
@@ -2271,6 +2281,132 @@ theorem plugRaw_endpoints_are_nodup (layout : PlugLayout input) :
         (layout.mapPatternEndpoint_injective heq))
     exact input.pattern.property.diagram_well_formed.endpoints_are_nodup
       (layout.internalWires.origin internal)
+
+theorem patternWire_scope_material_or_bodyContainer
+    (input : Input signature)
+    (wire : Fin input.pattern.val.diagram.wireCount)
+    (hinternal : wire ∉ input.pattern.val.exposedWires) :
+    input.binderSpine.IsMaterialRegion
+        (input.pattern.val.diagram.wires wire).scope ∨
+      (input.pattern.val.diagram.wires wire).scope =
+        input.binderSpine.bodyContainer := by
+  let region := (input.pattern.val.diagram.wires wire).scope
+  have hnotBoundary : wire ∉ input.pattern.val.boundary := by
+    intro hboundary
+    exact hinternal ((input.pattern.val.mem_exposedWires wire).2 hboundary)
+  by_cases hmaterial : input.binderSpine.IsMaterialRegion region
+  · exact Or.inl hmaterial
+  · right
+    by_cases hroot : region = input.pattern.val.diagram.root
+    · by_cases hzero : input.binderSpine.proxyCount = 0
+      · exact hroot.trans
+          (input.binderSpine.body_eq_root_of_empty hzero).symm
+      · exact False.elim
+          (input.terminalBody.root_has_no_nonboundary_wires
+            hzero wire hnotBoundary hroot)
+    · obtain ⟨index, hproxy⟩ :=
+        (material_or_proxy_of_ne_root input region hroot).resolve_left hmaterial
+      by_cases hnonterminal :
+          index.val + 1 < input.binderSpine.proxyCount
+      · exact False.elim
+          (input.terminalBody.nonterminal_has_no_nonboundary_wires
+            index hnonterminal wire hnotBoundary hproxy)
+      · have hnonzero : input.binderSpine.proxyCount ≠ 0 := by
+          have := index.isLt
+          omega
+        let terminal : Fin input.binderSpine.proxyCount :=
+          ⟨input.binderSpine.proxyCount - 1, by omega⟩
+        have hterminal : index = terminal := by
+          apply Fin.ext
+          simp only [terminal]
+          have := index.isLt
+          omega
+        change region = input.binderSpine.bodyContainer
+        rw [hproxy, hterminal]
+        exact (input.binderSpine.body_eq_terminal_of_nonempty hnonzero).symm
+
+theorem bodyRegion_encloses_of_owners (layout : PlugLayout input)
+    (scope region : Fin input.pattern.val.diagram.regionCount)
+    (hscope : input.binderSpine.IsMaterialRegion scope ∨
+      scope = input.binderSpine.bodyContainer)
+    (hregion : input.binderSpine.IsMaterialRegion region ∨
+      region = input.binderSpine.bodyContainer)
+    (hencloses : input.pattern.val.diagram.Encloses scope region) :
+    layout.plugRaw.Encloses (layout.bodyRegion scope)
+      (layout.bodyRegion region) := by
+  rcases hscope with hscopeMaterial | rfl
+  · rcases hregion with hregionMaterial | hregionBody
+    · exact layout.material_encloses
+        hscopeMaterial hregionMaterial hencloses
+    · rw [hregionBody] at hencloses
+      exact False.elim (layout.material_not_encloses_bodyContainer
+        scope hscopeMaterial hencloses)
+  · rw [layout.bodyRegion_bodyContainer]
+    exact layout.site_encloses_bodyRegion region
+
+theorem plugRaw_wire_scopes_enclose (layout : PlugLayout input)
+    (hadmissible : input.Admissible) :
+    layout.plugRaw.WireScopesEnclose := by
+  intro wire
+  refine Fin.addCases (m := input.wireQuotient.count)
+    (n := layout.internalWires.count)
+    (fun quotient => ?_) (fun internal => ?_) wire
+  · intro endpoint hendpoint
+    change CEndpoint layout.nodeCount at endpoint
+    unfold ConcreteDiagram.EndpointOccurs at hendpoint
+    simp only [plugRaw, plugWire, Fin.addCases_left] at hendpoint
+    simp only [plugRaw, plugWire, Fin.addCases_left] at ⊢
+    rcases List.mem_append.mp hendpoint with hframe | hboundary
+    · obtain ⟨original, horiginal, rfl⟩ := List.mem_map.mp hframe
+      rw [input.mem_coalescedEndpoints] at horiginal
+      obtain ⟨sourceWire, hclass, hsource⟩ := horiginal
+      have houter := input.coalescedScope_encloses_member
+        hadmissible quotient sourceWire hclass
+      have hsourceScope := input.frame.property.wire_scopes_enclose
+        sourceWire original hsource
+      simpa [mapFrameEndpoint, plugRaw] using
+        layout.frame_encloses
+          (ConcreteElaboration.checked_encloses_trans input.frame.property
+            houter hsourceScope)
+    · rw [layout.mem_boundaryEndpoints] at hboundary
+      obtain ⟨external, hattachment, original, horiginal, rfl⟩ := hboundary
+      let attached := input.attachment (layout.exposedPosition external)
+      have hclass : attached ∈ input.classWires quotient := by
+        rw [input.mem_classWires]
+        exact hattachment
+      have houter := input.coalescedScope_encloses_member
+        hadmissible quotient attached hclass
+      have hvisible := hadmissible.attachments_visible
+        (layout.exposedPosition external)
+      have hscopeSite := ConcreteElaboration.checked_encloses_trans
+        input.frame.property houter hvisible
+      simpa [mapPatternEndpoint, plugRaw] using
+        layout.plugRaw_encloses_trans (layout.frame_encloses hscopeSite)
+          (layout.site_encloses_bodyRegion
+            (input.pattern.val.diagram.nodes original.node).region)
+  · intro endpoint hendpoint
+    change CEndpoint layout.nodeCount at endpoint
+    unfold ConcreteDiagram.EndpointOccurs at hendpoint
+    simp only [plugRaw, plugWire, Fin.addCases_right, mapPatternWire]
+      at hendpoint
+    simp only [plugRaw, plugWire, Fin.addCases_right, mapPatternWire] at ⊢
+    obtain ⟨original, horiginal, rfl⟩ := List.mem_map.mp hendpoint
+    let sourceWire := layout.internalWires.origin internal
+    have hinternal : sourceWire ∉ input.pattern.val.exposedWires :=
+      (layout.internalWires_survives_iff sourceWire).1
+        (layout.internalWires.origin_survives internal)
+    have hscopeOwner := patternWire_scope_material_or_bodyContainer
+      input sourceWire hinternal
+    have hregionOwner := patternNode_region_material_or_bodyContainer
+      input original.node
+    have horiginalScope :=
+      input.pattern.property.diagram_well_formed.wire_scopes_enclose
+        sourceWire original horiginal
+    simpa [mapPatternEndpoint, plugRaw, sourceWire] using
+      layout.bodyRegion_encloses_of_owners
+        (input.pattern.val.diagram.wires sourceWire).scope
+        (input.pattern.val.diagram.nodes original.node).region
+        hscopeOwner hregionOwner horiginalScope
 
 end PlugLayout
 
