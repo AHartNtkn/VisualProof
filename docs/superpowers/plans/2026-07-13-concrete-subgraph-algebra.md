@@ -156,18 +156,24 @@ closure.
   endpoints from touching wires, retain every other wire including newly bare
   touching wires, and compact all carriers.
 - [ ] Compute extraction: copy selected material beneath a fresh sheet, create
-  root-scoped boundary stubs for touching wires in deterministic incidence order,
-  and expose aligned original host attachments.
+  exactly one root-scoped seam wire per touching host wire in canonical
+  touching-wire order, retain all selected endpoints of that host wire on its
+  seam wire, and expose the aligned original host attachments. Endpoint
+  multiplicity never manufactures boundary positions.
 - [ ] Derive every external binder used by selected atoms, prove they form an
-  ancestry chain, and create a pure outermost-first bubble prefix with aligned
-  host targets and exact arities.
+  ancestry chain, and create a checked outermost-first terminal-body binder spine
+  of ordinary bubbles with aligned host targets and exact arities. Require only
+  the sheet and nonterminal proxies to be material-empty; the terminal proxy is
+  the effective body container and directly owns selected top-level material.
 - [ ] Define the raw decomposition from the shared closure and the checked
   decomposition that proves frame/fragment well-formedness, provenance exactness,
   seam exactness, and binder-prefix exactness.
 - [ ] Expose removal and extraction only as projections of the checked
   decomposition.
-- [ ] Add examples covering a trimmed-to-bare touching wire, repeated boundary
-  occurrences, nested external binders, and dense identifier compaction.
+- [ ] Add examples covering a trimmed-to-bare touching wire, one touching wire
+  with several selected endpoints but one extraction seam position, nested
+  external binders, and dense identifier compaction. Repeated boundary positions
+  are tested in general open-pattern/splice examples, not invented by extraction.
 - [ ] Build, inspect axioms, and commit independently.
 
 ---

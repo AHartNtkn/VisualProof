@@ -46,11 +46,14 @@ bidirectional compatibility theorem.
 
 **Produces:** Proof-free finite candidate maps and exact pattern material support.
 
-- [ ] Define the effective root after peeling a checked binder prefix and finite
-  material-region support excluding transparent stubs.
+- [ ] Define the effective body container after peeling a checked terminal-body
+  binder spine and finite material-region support excluding the sheet and every
+  explicitly designated proxy. No bubble is transparent by shape.
 - [ ] Define `OccurrenceOptions` with optional site and boundary attachment seeds.
-- [ ] Define `OccurrenceData` with site, region map, node map, and wire map.
-  Derive ordered attachments from the pattern boundary and wire map.
+- [ ] Define `OccurrenceData` with site, a map whose domain is only material
+  regions, a node map, and a wire map. Derive the body-container location as the
+  site, keep external binder images separate from material locations, and derive
+  ordered attachments from the pattern boundary and wire map.
 - [ ] Define helper predicates for mapped ownership, positional endpoint mapping,
   nested reflection, attachment visibility, and seed agreement.
 - [ ] Give every helper a decidable instance and theorem-owned computation
@@ -66,10 +69,12 @@ bidirectional compatibility theorem.
 
 **Produces:** `ScopedOccurrence` with direct graph-theoretic laws.
 
-- [ ] State the full relation before proving its decidability: effective-root/site,
+- [ ] State the full relation before proving its decidability: derived
+  body-container/site location,
   root subset, nested exact reflection, region kinds/parents/arities, node
   ownership/constructors, exact structural terms, named identity/arity, internal
-  and external atom binders, positional arguments, wire scopes, exact internal
+  material binders and exact external proxy binders, positional arguments, wire
+  scopes, exact internal
   incidence, included boundary incidence, injection/disjointness, attachment
   visibility, repeated aliases, and seed agreement.
 - [ ] Prove the relation is decidable using only finite data and the exact
@@ -167,4 +172,3 @@ bidirectional compatibility theorem.
   unproved pruning, proof-bearing result data, and generated Lake artifacts.
 - [ ] Append a scoped `<conformance>` section to the foundation record without
   altering pre-action sections; commit review repairs and conformance.
-

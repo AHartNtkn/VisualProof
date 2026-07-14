@@ -1,4 +1,5 @@
 import VisualProof.Data.Finite
+import VisualProof.Diagram.Concrete.Core
 
 namespace VisualProof.Diagram
 
@@ -159,6 +160,80 @@ theorem inRightBlock_injective (domain : SurvivorDomain size) (initial : Nat) :
   have hvals := congrArg (fun value => value.val) heq
   simp only [inRightBlock_val] at hvals
   omega
+
+/-! Structure-preserving partial reindexing through survivor receipts. -/
+
+/-- Reindex a concrete region when its parent survives. -/
+def reindexRegion? (domain : SurvivorDomain size) :
+    CRegion size → Option (CRegion domain.count)
+  | .sheet => some .sheet
+  | .cut parent => (domain.index? parent).map CRegion.cut
+  | .bubble parent arity =>
+      (domain.index? parent).map fun mapped => CRegion.bubble mapped arity
+
+/-- Reindex a concrete node when its owner and, for atoms, binder survive. -/
+def reindexNode? (domain : SurvivorDomain size) :
+    CNode size → Option (CNode domain.count)
+  | .term region freePorts term =>
+      (domain.index? region).map fun mapped =>
+        CNode.term mapped freePorts term
+  | .atom region binder => do
+      let mappedRegion ← domain.index? region
+      let mappedBinder ← domain.index? binder
+      pure (.atom mappedRegion mappedBinder)
+  | .named region definition arity =>
+      (domain.index? region).map fun mapped =>
+        CNode.named mapped definition arity
+
+/-- Reindex an endpoint when its node survives. -/
+def reindexEndpoint? (domain : SurvivorDomain size)
+    (endpoint : CEndpoint size) : Option (CEndpoint domain.count) :=
+  (domain.index? endpoint.node).map fun node =>
+    { node, port := endpoint.port }
+
+@[simp] theorem reindexRegion?_sheet (domain : SurvivorDomain size) :
+    domain.reindexRegion? .sheet = some .sheet := rfl
+
+theorem reindexRegion?_cut_eq_some_iff (domain : SurvivorDomain size)
+    (parent : Fin size) (region : CRegion domain.count) :
+    domain.reindexRegion? (.cut parent) = some region ↔
+      ∃ mapped, domain.index? parent = some mapped ∧ region = .cut mapped := by
+  change (domain.index? parent).map CRegion.cut = some region ↔ _
+  rw [Option.map_eq_some_iff]
+  constructor
+  · rintro ⟨mapped, hindex, hregion⟩
+    exact ⟨mapped, hindex, hregion.symm⟩
+  · rintro ⟨mapped, hindex, hregion⟩
+    exact ⟨mapped, hindex, hregion.symm⟩
+
+theorem reindexRegion?_bubble_eq_some_iff (domain : SurvivorDomain size)
+    (parent : Fin size) (arity : Nat) (region : CRegion domain.count) :
+    domain.reindexRegion? (.bubble parent arity) = some region ↔
+      ∃ mapped, domain.index? parent = some mapped ∧
+        region = .bubble mapped arity := by
+  change (domain.index? parent).map
+      (fun mapped => CRegion.bubble mapped arity) = some region ↔ _
+  rw [Option.map_eq_some_iff]
+  constructor
+  · rintro ⟨mapped, hindex, hregion⟩
+    exact ⟨mapped, hindex, hregion.symm⟩
+  · rintro ⟨mapped, hindex, hregion⟩
+    exact ⟨mapped, hindex, hregion.symm⟩
+
+theorem reindexEndpoint?_eq_some_iff (domain : SurvivorDomain size)
+    (endpoint : CEndpoint size) (mapped : CEndpoint domain.count) :
+    domain.reindexEndpoint? endpoint = some mapped ↔
+      ∃ node, domain.index? endpoint.node = some node ∧
+        mapped = { node, port := endpoint.port } := by
+  change (domain.index? endpoint.node).map
+      (fun node => ({ node, port := endpoint.port } :
+        CEndpoint domain.count)) = some mapped ↔ _
+  rw [Option.map_eq_some_iff]
+  constructor
+  · rintro ⟨node, hindex, hendpoint⟩
+    exact ⟨node, hindex, hendpoint.symm⟩
+  · rintro ⟨node, hindex, hendpoint⟩
+    exact ⟨node, hindex, hendpoint.symm⟩
 
 end SurvivorDomain
 

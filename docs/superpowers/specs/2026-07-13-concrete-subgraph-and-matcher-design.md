@@ -165,7 +165,8 @@ containing:
 - a checked frame obtained by removal;
 - a checked open fragment obtained by extraction;
 - boundary attachments ordered with the fragment boundary;
-- a pure outermost-first binder-stub chain and aligned host binder targets;
+- a checked outermost-first terminal-body binder spine and aligned host binder
+  targets;
 - survivor maps for retained regions, nodes, and wires; and
 - origin maps for copied fragment regions, nodes, and wires.
 
@@ -183,29 +184,45 @@ recover a canonical naming after the fact.
 
 ## 8. Binder Interface
 
-Extraction may externalize bound-relation dependencies only through a typed,
-transparent interface. Its binder stubs form a pure prefix chain above the
-fragment body:
+Extraction may externalize bound-relation dependencies only through a typed
+interface designating ordinary bubble regions as external-binder proxies. Proxy
+status is interface data, never a property inferred from graph shape. With an
+empty interface, a shape-identical bubble has its ordinary existential meaning.
 
-- every layer is a bubble;
-- layers are ordered outermost first;
-- each layer has exactly the next layer or body as its sole child;
-- prefix layers contain no nodes;
-- prefix layers contain no nonboundary wires; and
-- the exposed binder arity and every rebound atom agree.
+For a duplicate-free outermost-first proxy list `p₀, …, pₖ₋₁`, define the
+effective body container to be the fragment sheet when `k = 0` and `pₖ₋₁` when
+`k > 0`. When the list is nonempty, `p₀` is the sheet's sole direct child and
+each nonterminal `pᵢ` has `pᵢ₊₁` as its sole direct child. The sheet and every
+nonterminal proxy directly own no material nodes and no nonboundary wires.
+Boundary wires remain sheet-root-scoped. No emptiness or singleton-child
+condition applies to the terminal proxy: it is the body container and may
+directly own arbitrary selected nodes, internal wires, and selected child
+regions.
 
-This is intentionally narrower than arbitrary bubble deletion. It exactly models
-extraction-generated stubs and permits capture-avoiding reattachment. Peeling the
-prefix yields an intrinsic body under a relation context; reattachment is an
-existing `RelationRenaming` to exact host `RelVar`s. Recursive lifting under nested
-bubbles provides capture avoidance. No second term or relation syntax is added.
+Every proxy is an ordinary bubble whose arity agrees with its aligned host
+binder. Extraction-generated proxies correspond bijectively to the distinct
+external host binders actually used by selected atoms; both lists are ordered
+outermost first along the anchor's ancestor chain. Rebound atoms refer to the
+aligned proxy exactly when their originals referred to that host binder. The
+fresh sheet, proxies, and boundary seam wires are administrative and excluded
+from material provenance.
+
+This terminal-body spine is intentionally narrower than arbitrary bubble
+deletion. Peeling its nested `Item.bubble` prefix yields the terminal intrinsic
+body under an innermost-first relation context. Reattachment derives source and
+target `RelVar`s from exact bubble identity and uses the existing
+`RelationRenaming`; it does not zip outermost-first concrete positions directly
+to de Bruijn indices. Recursive lifting under nested material bubbles provides
+capture avoidance. No transparent region constructor, second term syntax,
+second graph syntax, or second interpreter is added.
 
 ## 9. Splice
 
 A checked splice input contains a checked frame, checked open pattern, site,
 position-indexed wire attachments, binder interface, and aligned binder targets.
 Admissibility proves wire visibility, site enclosure, binder kind/arity agreement,
-and the pure-prefix contract.
+and the terminal-body spine contract. Designated proxies are peeled and are not
+copied; undesignated bubbles remain ordinary material.
 
 If two boundary positions name the same pattern wire, their host attachments
 generate an equivalence relation. Splice computes its finite transitive closure,
@@ -253,7 +270,8 @@ outerContext.fill (frameAtAnchor.conjoin selectedFragment)
 
 Removal fills the same context with `frameAtAnchor`. General splice first renames
 the frame by the host attachment quotient, substitutes the pattern boundary, peels
-and renames the binder prefix, and conjoins the result at the site. The quotient
+and renames the designated binder spine, and conjoins the terminal body at the
+site. The quotient
 must precede ordinary boundary substitution: a `BoundaryAssignment` alone cannot
 map one pattern boundary class to two distinct pre-quotient host wires.
 
@@ -264,20 +282,24 @@ renaming, and isomorphism laws. The inverse semantic corollary follows through
 
 ## 11. Declarative Occurrence
 
-`OccurrenceData` is proof-free finite data: a host site plus material-region,
-node, and wire maps. Ordered boundary attachments are derived from the wire map;
-they are not duplicated stored state.
+`OccurrenceData` is proof-free finite data: a host site, a map only for material
+regions (excluding the sheet and every designated proxy), and node and wire maps.
+The effective body container's location is derived as the site; it is not entered
+in the material-region map. External atom binders use a separate exact
+proxy-to-host-binder assignment. Ordered boundary attachments are derived from the
+wire map; they are not duplicated stored state.
 
 `ScopedOccurrence pattern host options candidate : Prop` is independent of
 selection, extraction, and decomposition. It states directly:
 
-- the effective pattern root maps to the site;
+- the effective body container has the derived location `site`;
 - root content uses subset semantics;
 - every mapped proper descendant uses exact reflected child, node, and internal
   wire content;
 - constructors, parents, ownership, bubble arities, term shapes, named identities,
   named arities, atom binders, and positional arguments are preserved;
-- material region and node maps are injective;
+- the material-region and node maps are injective, while administrative proxies
+  have no material images;
 - internal wire maps are injective and disjoint from boundary images;
 - internal incidence is exact modulo endpoint permutation;
 - boundary incidence is included in the host attachment, whose scope encloses the

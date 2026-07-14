@@ -125,6 +125,20 @@ def filterFin (p : Fin n -> Bool) : List (Fin n) :=
 theorem filterFin_nodup (p : Fin n -> Bool) : (filterFin p).Nodup := by
   exact (allFin_nodup n).filter p
 
+/-- Duplicate erasure always produces a duplicate-free list. -/
+theorem eraseDups_nodup [BEq α] [LawfulBEq α]
+    (values : List α) : values.eraseDups.Nodup := by
+  match values with
+  | [] => simp
+  | head :: tail =>
+      rw [List.eraseDups_cons, List.nodup_cons]
+      constructor
+      · simp
+      · exact eraseDups_nodup (tail.filter fun value => !value == head)
+termination_by values.length
+decreasing_by
+  simpa using Nat.lt_succ_of_le (List.length_filter_le _ tail)
+
 /-! A dense carrier for the elements accepted by a Boolean predicate. -/
 
 abbrev FilteredFiber (p : Fin n -> Bool) := Fin (filterFin p).length
@@ -195,6 +209,15 @@ theorem indexOf?_unique_of_nodup [DecidableEq α] {xs : List α}
     rw [List.getElem?_eq_getElem j.isLt, List.getElem?_eq_getElem i.isLt]
     exact congrArg some (hj.trans (indexOf?_sound hi).symm)
   exact (List.getElem?_inj j.isLt hnodup).mp hvalues
+
+@[simp] theorem indexOf?_get_eq_some_of_nodup [DecidableEq α]
+    {xs : List α} (hnodup : xs.Nodup) (index : Fin xs.length) :
+    indexOf? xs (xs.get index) = some index := by
+  obtain ⟨found, hfound⟩ := indexOf?_complete (List.get_mem xs index)
+  have hindex : index = found :=
+    indexOf?_unique_of_nodup hnodup hfound rfl
+  subst found
+  exact hfound
 
 end VisualProof.Data.Finite
 

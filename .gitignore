@@ -1,6 +1,8 @@
 Old/
 .superpowers/
 .worktrees/
+.lake/
+lake-manifest.json
 node_modules/
 dist/
 demo/dist

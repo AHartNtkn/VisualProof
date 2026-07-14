@@ -663,7 +663,13 @@ Concrete denotation must be this definition, not a second interpreter.
 
 - [ ] **Step 4: Implement selection, extraction, and splicing**
 
-In `Subgraph.lean`, define selections by finite sets of top-level child regions, nodes, and scoped wires. `extract` returns an `OpenDiagram`, ordered attachment classes, and open relation-binder stubs. `splice` validates enclosure and binder maps before extending the host.
+In `Subgraph.lean`, define selections by finite sets of top-level child regions,
+nodes, and scoped wires. `extract` returns an `OpenDiagram`, one ordered seam
+identity per touching host wire, and a checked terminal-body binder spine whose
+ordinary proxy bubbles represent external relation binders. The terminal proxy,
+or the sheet when the spine is empty, directly owns the extracted body. `splice`
+validates enclosure and binder assignments, peels only explicitly designated
+proxies, and leaves every undesignated bubble as ordinary existential material.
 
 Prove:
 
@@ -1016,27 +1022,41 @@ In `Specification.lean`, define:
 structure MatchOptions (pattern : OpenConcreteDiagram) (host : ConcreteDiagram) where
   inRegion : Option (Fin host.regionCount)
   attachments : Option (Fin pattern.boundary.length → Fin host.wireCount)
-  openBinders : List (Fin pattern.diagram.regionCount × Fin host.regionCount)
+  binderSpine : BinderSpine pattern
+  openBinders : Fin binderSpine.proxies.length → Fin host.regionCount
 
 structure CandidateOccurrence (pattern : OpenConcreteDiagram)
-    (host : ConcreteDiagram) where
+    (host : ConcreteDiagram) (options : MatchOptions pattern host) where
   site : Fin host.regionCount
-  regionMap : Fin pattern.diagram.regionCount → Fin host.regionCount
+  materialRegionMap : options.binderSpine.MaterialRegion →
+    Fin host.regionCount
   nodeMap : Fin pattern.diagram.nodeCount → Fin host.nodeCount
   wireMap : Fin pattern.diagram.wireCount → Fin host.wireCount
 
 structure Occurrence (pattern : OpenConcreteDiagram) (host : ConcreteDiagram)
     (options : MatchOptions pattern host)
-    (candidate : CandidateOccurrence pattern host) : Prop where
-  root_maps_to_site : candidate.regionMap pattern.diagram.root = candidate.site
-  regions_preserved : RegionsPreserved pattern host candidate.regionMap options
-  nodes_preserved : NodesPreserved pattern host candidate.regionMap candidate.nodeMap candidate.wireMap options
-  wires_preserved : WiresPreserved pattern host candidate.regionMap candidate.nodeMap candidate.wireMap options
-  nested_exact : NestedRegionsExact pattern host candidate.regionMap candidate.nodeMap candidate.wireMap
-  root_subset : EffectiveRootSubset pattern host candidate.regionMap candidate.nodeMap candidate.wireMap
+    (candidate : CandidateOccurrence pattern host options) : Prop where
+  body_location : BodyContainerLocation options.binderSpine candidate.site
+  regions_preserved : RegionsPreserved pattern host
+    candidate.materialRegionMap options
+  nodes_preserved : NodesPreserved pattern host candidate.materialRegionMap
+    candidate.nodeMap candidate.wireMap options
+  wires_preserved : WiresPreserved pattern host candidate.materialRegionMap
+    candidate.nodeMap candidate.wireMap options
+  nested_exact : NestedRegionsExact pattern host candidate.materialRegionMap
+    candidate.nodeMap candidate.wireMap
+  root_subset : EffectiveBodySubset pattern host candidate.site
+    candidate.materialRegionMap candidate.nodeMap candidate.wireMap
   boundary_preserved : BoundaryPreserved pattern host candidate.wireMap options.attachments
-  open_binders_preserved : OpenBindersPreserved pattern host candidate.regionMap options.openBinders
+  open_binders_preserved : OpenBindersPreserved pattern host
+    options.binderSpine options.openBinders candidate.nodeMap
 ```
+
+`BinderSpine.MaterialRegion` excludes the sheet and every designated proxy.
+Location lookup is derived: the effective body container maps to `site`, proper
+material descendants use `materialRegionMap`, and nonterminal proxies have no
+material image. This prevents the terminal proxy constructor from being matched
+against the host site.
 
 Define `CandidateOccurrence.Equivalent` by equal host footprint and boundary attachments so automorphic assignments may deduplicate.
 
