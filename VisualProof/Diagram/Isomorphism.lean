@@ -224,6 +224,492 @@ mutual
         ItemSeqIso signature ambient rels source target
 end
 
+private def RegionIsoReflMotive {signature : List Nat}
+    {wires : Nat} (rels : RelCtx) (region : Region signature wires rels) : Prop :=
+  RegionIso signature (FiniteEquiv.refl (Fin wires)) rels region region
+
+private def ItemIsoReflMotive {signature : List Nat}
+    {wires : Nat} (rels : RelCtx) (item : Item signature wires rels) : Prop :=
+  ItemIso signature (FiniteEquiv.refl (Fin wires)) rels item item
+
+private def ItemSeqIsoReflMotive {signature : List Nat}
+    {wires : Nat} (rels : RelCtx) (items : ItemSeq signature wires rels) : Prop :=
+  forall i, ItemIso signature (FiniteEquiv.refl (Fin wires)) rels
+    (items.get i) (items.get i)
+
+private theorem regionIsoReflCase
+    {signature : List Nat} {wires : Nat} {rels : RelCtx}
+    (localWires : Nat)
+    (items : ItemSeq signature (wires + localWires) rels)
+    (itemsIH : ItemSeqIsoReflMotive rels items) :
+    RegionIsoReflMotive rels (.mk localWires items) := by
+  refine RegionIso.mk (FiniteEquiv.refl (Fin localWires)) ?_
+  have extended_refl :
+      extendWireEquiv (FiniteEquiv.refl (Fin wires))
+          (FiniteEquiv.refl (Fin localWires)) =
+        FiniteEquiv.refl (Fin (wires + localWires)) := by
+    apply FiniteEquiv.ext
+    intro i
+    refine Fin.addCases (fun _ => ?_) (fun _ => ?_) i <;>
+      simp [extendWireEquiv, FiniteEquiv.refl]
+  rw [extended_refl]
+  refine ItemSeqIso.permute (FiniteEquiv.refl (Fin items.length)) ?_
+  intro i
+  simpa only [FiniteEquiv.refl_apply] using itemsIH i
+
+private theorem equationIsoReflCase
+    {signature : List Nat} {wires : Nat} {rels : RelCtx}
+    (output : Fin wires) (term : Lambda.Term 0 (Fin wires)) :
+    ItemIsoReflMotive (signature := signature) rels (.equation output term) := by
+  apply ItemIso.equation
+  · rfl
+  · exact Lambda.Term.mapFree_id term
+
+private theorem atomIsoReflCase
+    {signature : List Nat} {wires arity : Nat} {rels : RelCtx}
+    (relation : RelVar rels arity) (arguments : Fin arity -> Fin wires) :
+    ItemIsoReflMotive (signature := signature) rels (.atom relation arguments) := by
+  apply ItemIso.atom relation
+  funext i
+  rfl
+
+private theorem namedIsoReflCase
+    {signature : List Nat} {wires arity : Nat} {rels : RelCtx}
+    (relation : NamedRel signature arity) (arguments : Fin arity -> Fin wires) :
+    ItemIsoReflMotive rels (.named relation arguments) := by
+  apply ItemIso.named relation
+  funext i
+  rfl
+
+private theorem cutIsoReflCase
+    {signature : List Nat} {wires : Nat} {rels : RelCtx}
+    (body : Region signature wires rels) (bodyIH : RegionIsoReflMotive rels body) :
+    ItemIsoReflMotive (signature := signature) rels (.cut body) :=
+  ItemIso.cut bodyIH
+
+private theorem bubbleIsoReflCase
+    {signature : List Nat} {wires : Nat} {rels : RelCtx}
+    (arity : Nat)
+    (body : Region signature wires (arity :: rels))
+    (bodyIH : RegionIsoReflMotive (arity :: rels) body) :
+    ItemIsoReflMotive (signature := signature) rels (.bubble arity body) :=
+  ItemIso.bubble bodyIH
+
+private theorem nilIsoReflCase
+    {signature : List Nat} {wires : Nat} {rels : RelCtx} :
+    ItemSeqIsoReflMotive (signature := signature) rels
+      (ItemSeq.nil : ItemSeq signature wires rels) := by
+  intro i
+  exact Fin.elim0 i
+
+private theorem consIsoReflCase
+    {signature : List Nat} {wires : Nat} {rels : RelCtx}
+    (item : Item signature wires rels) (tail : ItemSeq signature wires rels)
+    (itemIH : ItemIsoReflMotive rels item)
+    (tailIH : ItemSeqIsoReflMotive rels tail) :
+    ItemSeqIsoReflMotive rels (.cons item tail) := by
+  intro i
+  refine Fin.cases itemIH (fun j => ?_) i
+  exact tailIH j
+
+private theorem regionIsoReflRec
+    (region : Region signature wires rels) : RegionIsoReflMotive rels region := by
+  apply Region.rec
+    (motive_1 := fun _ rels region => RegionIsoReflMotive rels region)
+    (motive_2 := fun _ rels item => ItemIsoReflMotive rels item)
+    (motive_3 := fun _ rels items => ItemSeqIsoReflMotive rels items)
+    regionIsoReflCase equationIsoReflCase atomIsoReflCase namedIsoReflCase
+    cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase region
+
+theorem RegionIso.refl (region : Region signature wires rels) :
+    RegionIso signature (FiniteEquiv.refl (Fin wires)) rels region region :=
+  regionIsoReflRec region
+
+private def RegionIsoSymmMotive {signature : List Nat}
+    {sourceWires targetWires : Nat}
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (rels : RelCtx) (source : Region signature sourceWires rels)
+    (target : Region signature targetWires rels)
+    (_ : RegionIso signature wire rels source target) : Prop :=
+  RegionIso signature wire.symm rels target source
+
+private def ItemIsoSymmMotive {signature : List Nat}
+    {sourceWires targetWires : Nat}
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (rels : RelCtx) (source : Item signature sourceWires rels)
+    (target : Item signature targetWires rels)
+    (_ : ItemIso signature wire rels source target) : Prop :=
+  ItemIso signature wire.symm rels target source
+
+private def ItemSeqIsoSymmMotive {signature : List Nat}
+    {sourceWires targetWires : Nat}
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (rels : RelCtx) (source : ItemSeq signature sourceWires rels)
+    (target : ItemSeq signature targetWires rels)
+    (_ : ItemSeqIso signature wire rels source target) : Prop :=
+  ItemSeqIso signature wire.symm rels target source
+
+private theorem extendWireEquiv_symm
+    (outer : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
+    (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal)) :
+    (extendWireEquiv outer localEquiv).symm =
+      extendWireEquiv outer.symm localEquiv.symm := by
+  apply FiniteEquiv.ext
+  intro i
+  refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;> rfl
+
+private theorem regionIsoSymmCase
+    {signature : List Nat}
+    {sourceWires targetWires sourceLocal targetLocal : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {sourceItems : ItemSeq signature (sourceWires + sourceLocal) rels}
+    {targetItems : ItemSeq signature (targetWires + targetLocal) rels}
+    (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
+    (items : ItemSeqIso signature (extendWireEquiv ambient localEquiv) rels
+      sourceItems targetItems)
+    (itemsIH : ItemSeqIsoSymmMotive (extendWireEquiv ambient localEquiv)
+      rels sourceItems targetItems items) :
+    RegionIsoSymmMotive ambient rels
+      (.mk sourceLocal sourceItems) (.mk targetLocal targetItems)
+      (.mk localEquiv items) := by
+  refine RegionIso.mk localEquiv.symm ?_
+  rw [← extendWireEquiv_symm]
+  exact itemsIH
+
+private theorem equationIsoSymmCase
+    {signature : List Nat} {sourceWires targetWires : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {sourceOutput : Fin sourceWires} {targetOutput : Fin targetWires}
+    {sourceTerm : Lambda.Term 0 (Fin sourceWires)}
+    {targetTerm : Lambda.Term 0 (Fin targetWires)}
+    (output_eq : ambient sourceOutput = targetOutput)
+    (term_eq : sourceTerm.mapFree ambient = targetTerm) :
+    ItemIsoSymmMotive (signature := signature) ambient rels
+      (.equation (signature := signature) sourceOutput sourceTerm)
+      (.equation (signature := signature) targetOutput targetTerm)
+      (.equation (signature := signature) output_eq term_eq) := by
+  apply ItemIso.equation (signature := signature)
+  · simpa [output_eq] using ambient.left_inv sourceOutput
+  · subst targetTerm
+    rw [Lambda.Term.mapFree_comp]
+    have inverse_comp : ambient.symm.toFun ∘ ambient.toFun = id := by
+      funext i
+      exact ambient.left_inv i
+    rw [inverse_comp, Lambda.Term.mapFree_id]
+
+private theorem atomIsoSymmCase
+    {signature : List Nat} {sourceWires targetWires arity : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx} (relation : RelVar rels arity)
+    {sourceArguments : Fin arity -> Fin sourceWires}
+    {targetArguments : Fin arity -> Fin targetWires}
+    (arguments_eq : ambient.toFun ∘ sourceArguments = targetArguments) :
+    ItemIsoSymmMotive (signature := signature) ambient rels
+      (.atom (signature := signature) relation sourceArguments)
+      (.atom (signature := signature) relation targetArguments)
+      (.atom (signature := signature) relation arguments_eq) := by
+  apply ItemIso.atom (signature := signature) relation
+  funext i
+  rw [← arguments_eq]
+  exact ambient.left_inv (sourceArguments i)
+
+private theorem namedIsoSymmCase
+    {signature : List Nat} {sourceWires targetWires arity : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx} (relation : NamedRel signature arity)
+    {sourceArguments : Fin arity -> Fin sourceWires}
+    {targetArguments : Fin arity -> Fin targetWires}
+    (arguments_eq : ambient.toFun ∘ sourceArguments = targetArguments) :
+    ItemIsoSymmMotive ambient rels (.named relation sourceArguments)
+      (.named relation targetArguments) (.named relation arguments_eq) := by
+  apply ItemIso.named relation
+  funext i
+  rw [← arguments_eq]
+  exact ambient.left_inv (sourceArguments i)
+
+private theorem cutIsoSymmCase
+    {signature : List Nat} {sourceWires targetWires : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {sourceBody : Region signature sourceWires rels}
+    {targetBody : Region signature targetWires rels}
+    (body : RegionIso signature ambient rels sourceBody targetBody)
+    (bodyIH : RegionIsoSymmMotive ambient rels sourceBody targetBody body) :
+    ItemIsoSymmMotive ambient rels (.cut sourceBody) (.cut targetBody)
+      (.cut body) :=
+  ItemIso.cut bodyIH
+
+private theorem bubbleIsoSymmCase
+    {signature : List Nat} {sourceWires targetWires arity : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {sourceBody : Region signature sourceWires (arity :: rels)}
+    {targetBody : Region signature targetWires (arity :: rels)}
+    (body : RegionIso signature ambient (arity :: rels) sourceBody targetBody)
+    (bodyIH : RegionIsoSymmMotive ambient (arity :: rels)
+      sourceBody targetBody body) :
+    ItemIsoSymmMotive ambient rels (.bubble arity sourceBody)
+      (.bubble arity targetBody) (.bubble body) :=
+  ItemIso.bubble bodyIH
+
+private theorem permuteIsoSymmCase
+    {signature : List Nat} {sourceWires targetWires : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {source : ItemSeq signature sourceWires rels}
+    {target : ItemSeq signature targetWires rels}
+    (positions : FiniteEquiv (Fin source.length) (Fin target.length))
+    (items : forall i, ItemIso signature ambient rels
+      (source.get i) (target.get (positions i)))
+    (itemsIH : forall i, ItemIsoSymmMotive ambient rels
+      (source.get i) (target.get (positions i)) (items i)) :
+    ItemSeqIsoSymmMotive ambient rels source target (.permute positions items) := by
+  refine ItemSeqIso.permute positions.symm ?_
+  intro i
+  simpa only [positions.right_inv] using itemsIH (positions.invFun i)
+
+private theorem regionIsoSymmRec
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {source : Region signature sourceWires rels}
+    {target : Region signature targetWires rels}
+    (iso : RegionIso signature wire rels source target) :
+    RegionIsoSymmMotive wire rels source target iso := by
+  apply RegionIso.rec
+    (motive_1 := RegionIsoSymmMotive)
+    (motive_2 := ItemIsoSymmMotive)
+    (motive_3 := ItemSeqIsoSymmMotive)
+    regionIsoSymmCase equationIsoSymmCase atomIsoSymmCase namedIsoSymmCase
+    cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
+
+theorem RegionIso.symm
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {source : Region signature sourceWires rels}
+    {target : Region signature targetWires rels}
+    (iso : RegionIso signature wire rels source target) :
+    RegionIso signature wire.symm rels target source :=
+  regionIsoSymmRec iso
+
+private def RegionIsoTransMotive {signature : List Nat}
+    {sourceWires middleWires : Nat}
+    (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires))
+    (rels : RelCtx) (source : Region signature sourceWires rels)
+    (middle : Region signature middleWires rels)
+    (_ : RegionIso signature firstWire rels source middle) : Prop :=
+  forall {targetWires : Nat}
+    {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
+    {target : Region signature targetWires rels},
+    RegionIso signature secondWire rels middle target ->
+      RegionIso signature (firstWire.trans secondWire) rels source target
+
+private def ItemIsoTransMotive {signature : List Nat}
+    {sourceWires middleWires : Nat}
+    (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires))
+    (rels : RelCtx) (source : Item signature sourceWires rels)
+    (middle : Item signature middleWires rels)
+    (_ : ItemIso signature firstWire rels source middle) : Prop :=
+  forall {targetWires : Nat}
+    {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
+    {target : Item signature targetWires rels},
+    ItemIso signature secondWire rels middle target ->
+      ItemIso signature (firstWire.trans secondWire) rels source target
+
+private def ItemSeqIsoTransMotive {signature : List Nat}
+    {sourceWires middleWires : Nat}
+    (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires))
+    (rels : RelCtx) (source : ItemSeq signature sourceWires rels)
+    (middle : ItemSeq signature middleWires rels)
+    (_ : ItemSeqIso signature firstWire rels source middle) : Prop :=
+  forall {targetWires : Nat}
+    {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
+    {target : ItemSeq signature targetWires rels},
+    ItemSeqIso signature secondWire rels middle target ->
+      ItemSeqIso signature (firstWire.trans secondWire) rels source target
+
+private theorem extendWireEquiv_trans
+    (firstOuter : FiniteEquiv (Fin sourceOuter) (Fin middleOuter))
+    (secondOuter : FiniteEquiv (Fin middleOuter) (Fin targetOuter))
+    (firstLocal : FiniteEquiv (Fin sourceLocal) (Fin middleLocal))
+    (secondLocal : FiniteEquiv (Fin middleLocal) (Fin targetLocal)) :
+    (extendWireEquiv firstOuter firstLocal).trans
+        (extendWireEquiv secondOuter secondLocal) =
+      extendWireEquiv (firstOuter.trans secondOuter)
+        (firstLocal.trans secondLocal) := by
+  apply FiniteEquiv.ext
+  intro i
+  refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;>
+    simp [FiniteEquiv.trans, extendWireEquiv]
+
+private theorem regionIsoTransCase
+    {signature : List Nat}
+    {sourceWires middleWires sourceLocal middleLocal : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {rels : RelCtx}
+    {sourceItems : ItemSeq signature (sourceWires + sourceLocal) rels}
+    {middleItems : ItemSeq signature (middleWires + middleLocal) rels}
+    (firstLocal : FiniteEquiv (Fin sourceLocal) (Fin middleLocal))
+    (firstItems : ItemSeqIso signature
+      (extendWireEquiv firstWire firstLocal) rels sourceItems middleItems)
+    (itemsIH : ItemSeqIsoTransMotive
+      (extendWireEquiv firstWire firstLocal) rels
+      sourceItems middleItems firstItems) :
+    RegionIsoTransMotive firstWire rels
+      (.mk sourceLocal sourceItems) (.mk middleLocal middleItems)
+      (.mk firstLocal firstItems) := by
+  intro targetWires secondWire target second
+  cases second with
+  | mk secondLocal secondItems =>
+      refine RegionIso.mk (firstLocal.trans secondLocal) ?_
+      rw [← extendWireEquiv_trans]
+      exact itemsIH secondItems
+
+private theorem equationIsoTransCase
+    {signature : List Nat} {sourceWires middleWires : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {rels : RelCtx}
+    {sourceOutput : Fin sourceWires} {middleOutput : Fin middleWires}
+    {sourceTerm : Lambda.Term 0 (Fin sourceWires)}
+    {middleTerm : Lambda.Term 0 (Fin middleWires)}
+    (firstOutput : firstWire sourceOutput = middleOutput)
+    (firstTerm : sourceTerm.mapFree firstWire = middleTerm) :
+    ItemIsoTransMotive (signature := signature) firstWire rels
+      (.equation (signature := signature) sourceOutput sourceTerm)
+      (.equation (signature := signature) middleOutput middleTerm)
+      (.equation (signature := signature) firstOutput firstTerm) := by
+  intro targetWires secondWire target second
+  cases second with
+  | equation secondOutput secondTerm =>
+      apply ItemIso.equation (signature := signature)
+      · exact (congrArg secondWire firstOutput).trans secondOutput
+      · calc
+          sourceTerm.mapFree (firstWire.trans secondWire) =
+              (sourceTerm.mapFree firstWire).mapFree secondWire := by
+                rw [Lambda.Term.mapFree_comp]
+                rfl
+          _ = middleTerm.mapFree secondWire :=
+            congrArg (fun term => term.mapFree secondWire) firstTerm
+          _ = _ := secondTerm
+
+private theorem atomIsoTransCase
+    {signature : List Nat} {sourceWires middleWires arity : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {rels : RelCtx} (relation : RelVar rels arity)
+    {sourceArguments : Fin arity -> Fin sourceWires}
+    {middleArguments : Fin arity -> Fin middleWires}
+    (firstArguments : firstWire.toFun ∘ sourceArguments = middleArguments) :
+    ItemIsoTransMotive (signature := signature) firstWire rels
+      (.atom (signature := signature) relation sourceArguments)
+      (.atom (signature := signature) relation middleArguments)
+      (.atom (signature := signature) relation firstArguments) := by
+  intro targetWires secondWire target second
+  cases second with
+  | atom _ secondArguments =>
+      apply ItemIso.atom (signature := signature) relation
+      calc
+        (firstWire.trans secondWire).toFun ∘ sourceArguments =
+            secondWire.toFun ∘ (firstWire.toFun ∘ sourceArguments) := rfl
+        _ = secondWire.toFun ∘ middleArguments :=
+          congrArg (Function.comp secondWire.toFun) firstArguments
+        _ = _ := secondArguments
+
+private theorem namedIsoTransCase
+    {signature : List Nat} {sourceWires middleWires arity : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {rels : RelCtx} (relation : NamedRel signature arity)
+    {sourceArguments : Fin arity -> Fin sourceWires}
+    {middleArguments : Fin arity -> Fin middleWires}
+    (firstArguments : firstWire.toFun ∘ sourceArguments = middleArguments) :
+    ItemIsoTransMotive firstWire rels (.named relation sourceArguments)
+      (.named relation middleArguments) (.named relation firstArguments) := by
+  intro targetWires secondWire target second
+  cases second with
+  | named _ secondArguments =>
+      apply ItemIso.named relation
+      calc
+        (firstWire.trans secondWire).toFun ∘ sourceArguments =
+            secondWire.toFun ∘ (firstWire.toFun ∘ sourceArguments) := rfl
+        _ = secondWire.toFun ∘ middleArguments :=
+          congrArg (Function.comp secondWire.toFun) firstArguments
+        _ = _ := secondArguments
+
+private theorem cutIsoTransCase
+    {signature : List Nat} {sourceWires middleWires : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {rels : RelCtx}
+    {sourceBody : Region signature sourceWires rels}
+    {middleBody : Region signature middleWires rels}
+    (firstBody : RegionIso signature firstWire rels sourceBody middleBody)
+    (bodyIH : RegionIsoTransMotive firstWire rels
+      sourceBody middleBody firstBody) :
+    ItemIsoTransMotive firstWire rels (.cut sourceBody) (.cut middleBody)
+      (.cut firstBody) := by
+  intro targetWires secondWire target second
+  cases second with
+  | cut secondBody => exact ItemIso.cut (bodyIH secondBody)
+
+private theorem bubbleIsoTransCase
+    {signature : List Nat} {sourceWires middleWires arity : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {rels : RelCtx}
+    {sourceBody : Region signature sourceWires (arity :: rels)}
+    {middleBody : Region signature middleWires (arity :: rels)}
+    (firstBody : RegionIso signature firstWire (arity :: rels)
+      sourceBody middleBody)
+    (bodyIH : RegionIsoTransMotive firstWire (arity :: rels)
+      sourceBody middleBody firstBody) :
+    ItemIsoTransMotive firstWire rels (.bubble arity sourceBody)
+      (.bubble arity middleBody) (.bubble firstBody) := by
+  intro targetWires secondWire target second
+  cases second with
+  | bubble secondBody => exact ItemIso.bubble (bodyIH secondBody)
+
+private theorem permuteIsoTransCase
+    {signature : List Nat} {sourceWires middleWires : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {rels : RelCtx}
+    {source : ItemSeq signature sourceWires rels}
+    {middle : ItemSeq signature middleWires rels}
+    (firstPositions : FiniteEquiv (Fin source.length) (Fin middle.length))
+    (firstItems : forall i, ItemIso signature firstWire rels
+      (source.get i) (middle.get (firstPositions i)))
+    (itemsIH : forall i, ItemIsoTransMotive firstWire rels
+      (source.get i) (middle.get (firstPositions i)) (firstItems i)) :
+    ItemSeqIsoTransMotive firstWire rels source middle
+      (.permute firstPositions firstItems) := by
+  intro targetWires secondWire target second
+  cases second with
+  | permute secondPositions secondItems =>
+      refine ItemSeqIso.permute (firstPositions.trans secondPositions) ?_
+      intro i
+      exact itemsIH i (secondItems (firstPositions i))
+
+private theorem regionIsoTransRec
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {source : Region signature sourceWires rels}
+    {middle : Region signature middleWires rels}
+    (first : RegionIso signature firstWire rels source middle) :
+    RegionIsoTransMotive firstWire rels source middle first := by
+  unfold RegionIsoTransMotive
+  intro targetWires secondWire target second
+  exact RegionIso.rec
+    (motive_1 := RegionIsoTransMotive)
+    (motive_2 := ItemIsoTransMotive)
+    (motive_3 := ItemSeqIsoTransMotive)
+    regionIsoTransCase equationIsoTransCase atomIsoTransCase namedIsoTransCase
+    cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
+
+theorem RegionIso.trans
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
+    {source : Region signature sourceWires rels}
+    {middle : Region signature middleWires rels}
+    {target : Region signature targetWires rels}
+    (first : RegionIso signature firstWire rels source middle)
+    (second : RegionIso signature secondWire rels middle target) :
+    RegionIso signature (firstWire.trans secondWire) rels source target :=
+  regionIsoTransRec first second
+
 theorem denoteItemSeq_iff_get
     (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)

@@ -12,4 +12,5 @@ import VisualProof.Diagram.Rename
 import VisualProof.Diagram.Semantics
 import VisualProof.Diagram.Context
 import VisualProof.Diagram.Isomorphism
+import VisualProof.Diagram.OpenIsomorphism
 import VisualProof.Diagram.Concrete
