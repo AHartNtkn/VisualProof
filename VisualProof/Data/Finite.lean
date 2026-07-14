@@ -115,6 +115,61 @@ theorem allFin_nodup (n : Nat) : (allFin n).Nodup := by
           apply Fin.ext
           exact Nat.succ.inj (congrArg Fin.val hs))
 
+/-- An injection between finite initial segments witnesses the cardinal bound. -/
+theorem fin_card_le_of_injective {m n : Nat} (f : Fin m → Fin n)
+    (hinjective : Function.Injective f) : m ≤ n := by
+  induction n generalizing m with
+  | zero =>
+      cases m with
+      | zero => simp
+      | succ m => exact Fin.elim0 (f 0)
+  | succ n ih =>
+      cases m with
+      | zero => simp
+      | succ m =>
+          let skipped : Fin (n + 1) := f 0
+          let lower (value : Fin (n + 1)) (hne : value ≠ skipped) : Fin n :=
+            if hlt : value.val < skipped.val then
+              ⟨value.val, by omega⟩
+            else
+              ⟨value.val - 1, by
+                have hbound := value.isLt
+                omega⟩
+          have lower_injective :
+              ∀ {first second} (hfirst : first ≠ skipped)
+                (hsecond : second ≠ skipped),
+                lower first hfirst = lower second hsecond → first = second := by
+            intro first second hfirst hsecond heq
+            have hfirstVal : first.val ≠ skipped.val := by
+              intro h
+              exact hfirst (Fin.ext h)
+            have hsecondVal : second.val ≠ skipped.val := by
+              intro h
+              exact hsecond (Fin.ext h)
+            unfold lower at heq
+            split at heq <;> split at heq
+            all_goals
+              apply Fin.ext
+              have hvals := congrArg Fin.val heq
+              simp only at hvals
+              omega
+          let tail (index : Fin m) : Fin (n + 1) := f index.succ
+          have tail_ne (index : Fin m) : tail index ≠ skipped := by
+            intro heq
+            have hindices := hinjective heq
+            exact Fin.succ_ne_zero index hindices
+          let reduced (index : Fin m) : Fin n :=
+            lower (tail index) (tail_ne index)
+          have reduced_injective : Function.Injective reduced := by
+            intro first second heq
+            have htail : tail first = tail second :=
+              lower_injective (tail_ne first) (tail_ne second) heq
+            have hsucc : first.succ = second.succ := hinjective htail
+            apply Fin.ext
+            exact Nat.succ.inj (congrArg Fin.val hsucc)
+          have hle := ih reduced reduced_injective
+          omega
+
 def filterFin (p : Fin n -> Bool) : List (Fin n) :=
   (allFin n).filter p
 

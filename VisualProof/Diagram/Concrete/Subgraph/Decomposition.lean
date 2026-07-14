@@ -213,6 +213,29 @@ theorem decomposeChecked_sound
       decomposition.fragment.val.WellFormed signature := by
   exact ⟨decomposition.frame.property, decomposition.fragment.property⟩
 
+theorem decomposeChecked_complete
+    (signature : List Nat) (host : CheckedDiagram signature)
+    (selection : CheckedSelection host.val) :
+    ∃ decomposition,
+      decomposeChecked signature host selection = .ok decomposition := by
+  unfold decomposeChecked
+  dsimp only
+  split
+  · rename_i error hframe
+    have hcomplete := ConcreteDiagram.removeChecked_complete
+      (signature := signature) (host := host) (selection := selection)
+      (domains := ({} : FrameDomains host.val selection))
+    rw [hframe] at hcomplete
+    contradiction
+  · rename_i frame hframe
+    split
+    · rename_i error hextraction
+      obtain ⟨extraction, hcomplete⟩ :=
+        extractChecked_complete signature host selection
+      rw [hextraction] at hcomplete
+      contradiction
+    · exact ⟨_, rfl⟩
+
 namespace DecompositionExamples
 
 open ConcreteExamples
