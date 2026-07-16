@@ -558,6 +558,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (targetContext : WireContext target),
     ContextWitness sourceContext targetContext →
       ∀ region,
+        (regular : ¬ Distinguished region) →
         (sourceContext.extend region).Exact region →
         (targetContext.extend (regionMap region)).Exact (regionMap region) →
         ContextWitness (sourceContext.extend region)
@@ -569,7 +570,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (sourceBinders : BinderContext source rels)
     (targetBinders : BinderContext target rels)
     (region : Fin source.regionCount),
-    ¬ Distinguished region → Allowed direction region →
+    (regular : ¬ Distinguished region) → Allowed direction region →
       ∀ (sourceExact : (sourceContext.extend region).Exact region)
         (targetExact : (targetContext.extend (regionMap region)).Exact
           (regionMap region)),
@@ -587,7 +588,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
           (localOccurrences target (regionMap region)) = some targetItems →
       ItemSeqSimulation model named direction
         (indexRelation (extendContext sourceContext targetContext context region
-          sourceExact targetExact))
+          regular sourceExact targetExact))
         sourceItems targetItems →
       ∀ relEnv,
         DirectionalLocalTransport direction sourceContext targetContext
@@ -954,13 +955,10 @@ theorem compileRegion_denote
           intro region sourceContext targetContext context sourceBinders
             targetBinders allowed bindersRelated sourceExact targetExact sourceBody
             targetBody sourceCompiled targetCompiled
+          simp only [compileRegion?] at sourceCompiled targetCompiled
           let sourceExtended := sourceContext.extend region
           let targetExtended :=
             targetContext.extend (simulation.regionMap region)
-          let extendedContext := simulation.extendContext sourceContext targetContext
-            context region sourceExact targetExact
-          let extendedRelation := simulation.indexRelation extendedContext
-          simp only [compileRegion?] at sourceCompiled targetCompiled
           by_cases focused : simulation.Distinguished region
           · cases sourceItemsResult : compileOccurrencesWith? signature source
                 (compileRegion? signature source fuelSource) sourceExtended
@@ -985,6 +983,9 @@ theorem compileRegion_denote
                       bindersRelated sourceItems targetItems sourceItemsResult
                       targetItemsResult
           · rw [simulation.localOccurrences_map region focused] at targetCompiled
+            let extendedContext := simulation.extendContext sourceContext targetContext
+              context region focused sourceExact targetExact
+            let extendedRelation := simulation.indexRelation extendedContext
             cases sourceItemsResult : compileOccurrencesWith? signature source
                 (compileRegion? signature source fuelSource) sourceExtended
                 sourceBinders (localOccurrences source region) with

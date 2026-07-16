@@ -1867,7 +1867,7 @@ private noncomputable def conversionSimulation
   ContextWitness := ConversionContextEmbedding input node payload
   indexRelation := fun embedding =>
     Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index
-  extendContext := fun source target embedding region sourceExact targetExact =>
+  extendContext := fun source target embedding region _regular sourceExact targetExact =>
     embedding.extend region
   localTransport := by
     intro rels direction fuelSource fuelTarget source target embedding

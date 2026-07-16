@@ -1448,7 +1448,7 @@ private noncomputable def severWireSimulation
     SeverContextCollapse source.val.diagram wire keep expanded original
   indexRelation := fun collapse =>
     ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap
-  extendContext := fun original expanded collapse region sourceExact targetExact =>
+  extendContext := fun original expanded collapse region _regular sourceExact targetExact =>
     collapse.extend region
   localTransport := by
     intro rels direction fuelSource fuelTarget original expanded collapse

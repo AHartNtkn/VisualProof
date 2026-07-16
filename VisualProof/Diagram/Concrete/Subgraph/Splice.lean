@@ -29495,6 +29495,38 @@ theorem allowed_bubble
       (hposition := hposition) childKind routeDepth
   exact allowed parentRoute parentDepth
 
+/-- Concrete provenance for every pair of compiler contexts reached by the
+shared two-input traversal.  The only extension constructor is a regular frame
+step: distinguished splice material is owned opaquely by the focused kernel and
+therefore cannot manufacture a lexical-context witness. -/
+inductive ContextWitness
+    (presentation : TwoInputPresentation source target)
+    (sourceBoundary : List (Fin source.frame.val.wireCount)) :
+    ConcreteElaboration.WireContext source.plugLayout.plugRaw →
+      ConcreteElaboration.WireContext target.plugLayout.plugRaw → Type
+  | root :
+      ContextWitness presentation sourceBoundary
+        (PlugLayout.outputOpenRoot source source.plugLayout
+          sourceBoundary).rootWires
+        (PlugLayout.outputOpenRoot target target.plugLayout
+          (presentation.targetBoundary sourceBoundary)).rootWires
+  | extendRegular
+      {sourceContext : ConcreteElaboration.WireContext
+        source.plugLayout.plugRaw}
+      {targetContext : ConcreteElaboration.WireContext
+        target.plugLayout.plugRaw}
+      (parent : ContextWitness presentation sourceBoundary
+        sourceContext targetContext)
+      (region : Fin source.plugLayout.plugRaw.regionCount)
+      (regular : ¬ presentation.Distinguished region)
+      (sourceExact : (sourceContext.extend region).Exact region)
+      (targetExact :
+        (targetContext.extend (presentation.regionMap region)).Exact
+          (presentation.regionMap region)) :
+      ContextWitness presentation sourceBoundary
+        (sourceContext.extend region)
+        (targetContext.extend (presentation.regionMap region))
+
 /-- Relate compiler-context indices exactly when both carry the plug-layout
 copies of quotient classes containing one shared retained-frame wire.  This is
 many-to-many and therefore does not choose a refinement direction between the
@@ -29569,6 +29601,47 @@ theorem contextIndexRelation_extend_outer
     exact sourceWire
   · rw [PlugLayout.ConcreteElaboration.WireContext.extend_get_outer]
     exact targetWire
+
+/-- A provenance-preserving regular extension carries every related outer
+index to the corresponding outer indices of the extended contexts. -/
+theorem ContextWitness.extend_outer_related
+    (presentation : TwoInputPresentation source target)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    {sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw}
+    {targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw}
+    (witness : ContextWitness presentation sourceBoundary
+      sourceContext targetContext)
+    (region : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished region)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact :
+      (targetContext.extend (presentation.regionMap region)).Exact
+        (presentation.regionMap region))
+    (sourceIndex : Fin sourceContext.length)
+    (targetIndex : Fin targetContext.length)
+    (related :
+      (presentation.contextIndexRelation sourceContext targetContext).Rel
+        sourceIndex targetIndex) :
+    (presentation.contextIndexRelation (sourceContext.extend region)
+      (targetContext.extend (presentation.regionMap region))).Rel
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend sourceContext
+            region).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires
+              source.plugLayout.plugRaw region).length sourceIndex))
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend targetContext
+            (presentation.regionMap region)).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires
+              target.plugLayout.plugRaw
+              (presentation.regionMap region)).length targetIndex)) := by
+  exact presentation.contextIndexRelation_extend_outer sourceContext
+    targetContext region (presentation.regionMap region) sourceIndex
+    targetIndex related
 
 /-- Quotient classes are related exactly when they contain corresponding
 copies of one retained-frame wire.  This supports both refinement and
