@@ -28552,6 +28552,75 @@ structure TwoInputPresentation (source target : Input signature) where
 
 namespace TwoInputPresentation
 
+private theorem paired_allFin_succ_last (n : Nat) :
+    VisualProof.Data.Finite.allFin (n + 1) =
+      (VisualProof.Data.Finite.allFin n).map (Fin.castAdd 1) ++
+        [Fin.last n] := by
+  rw [VisualProof.Data.Finite.allFin_eq_finRange,
+    VisualProof.Data.Finite.allFin_eq_finRange, List.finRange_succ_last]
+  apply congrArg (fun xs : List (Fin (n + 1)) => xs ++ [Fin.last n])
+  apply List.map_congr_left
+  intro index _
+  apply Fin.ext
+  rfl
+
+private theorem paired_allFin_add (n m : Nat) :
+    VisualProof.Data.Finite.allFin (n + m) =
+      (VisualProof.Data.Finite.allFin n).map (Fin.castAdd m) ++
+        (VisualProof.Data.Finite.allFin m).map (Fin.natAdd n) := by
+  induction m with
+  | zero =>
+      simp only [Nat.add_zero, VisualProof.Data.Finite.allFin, List.map_nil,
+        List.append_nil]
+      have hfun : (Fin.castAdd 0 : Fin n → Fin (n + 0)) = id := by
+        funext index
+        apply Fin.ext
+        rfl
+      rw [hfun, List.map_id]
+  | succ m ih =>
+      change VisualProof.Data.Finite.allFin ((n + m) + 1) = _
+      rw [paired_allFin_succ_last (n + m), ih, List.map_append,
+        paired_allFin_succ_last m, List.map_append, List.map_map,
+        List.append_assoc]
+      simp only [List.map_map]
+      have hleft :
+          (Fin.castAdd 1 ∘ Fin.castAdd m : Fin n → Fin ((n + m) + 1)) =
+            Fin.castAdd (m + 1) := by
+        funext index
+        apply Fin.ext
+        rfl
+      have hmiddle :
+          (Fin.castAdd 1 ∘ Fin.natAdd n : Fin m → Fin ((n + m) + 1)) =
+            (Fin.natAdd n ∘ Fin.castAdd 1) := by
+        funext index
+        apply Fin.ext
+        rfl
+      have hlast : Fin.last (n + m) = Fin.natAdd n (Fin.last m) := by
+        apply Fin.ext
+        rfl
+      rw [hleft, hmiddle, hlast]
+      rfl
+
+private theorem paired_allFin_layout_nodes (layout : PlugLayout input) :
+    VisualProof.Data.Finite.allFin layout.plugRaw.nodeCount =
+      (VisualProof.Data.Finite.allFin input.frame.val.nodeCount).map
+          layout.frameNode ++
+        (VisualProof.Data.Finite.allFin
+          input.pattern.val.diagram.nodeCount).map layout.patternNode := by
+  simpa [PlugLayout.plugRaw, PlugLayout.nodeCount, PlugLayout.frameNode,
+    PlugLayout.patternNode] using paired_allFin_add input.frame.val.nodeCount
+      input.pattern.val.diagram.nodeCount
+
+private theorem paired_allFin_layout_regions (layout : PlugLayout input) :
+    VisualProof.Data.Finite.allFin layout.plugRaw.regionCount =
+      (VisualProof.Data.Finite.allFin input.frame.val.regionCount).map
+          layout.frameRegion ++
+        (VisualProof.Data.Finite.allFin layout.materialRegions.count).map
+          layout.materialRegion := by
+  simpa [PlugLayout.plugRaw, PlugLayout.regionCount, PlugLayout.frameRegion,
+    PlugLayout.materialRegion] using paired_allFin_add
+      input.frame.val.regionCount layout.materialRegions.count
+
 private theorem checkedDiagram_regions_eq
     (left right : CheckedDiagram signature) (h : left = right)
     (region : Fin left.val.regionCount) :
@@ -28590,6 +28659,62 @@ private theorem checkedDiagram_nodes_eq
             checked.val.nodeCount) h) node)) := by
   subst right
   rfl
+
+private def castLocalOccurrence
+    (left right : CheckedDiagram signature)
+    (regionEq : left.val.regionCount = right.val.regionCount)
+    (nodeEq : left.val.nodeCount = right.val.nodeCount) :
+    ConcreteElaboration.LocalOccurrence left.val.regionCount left.val.nodeCount →
+      ConcreteElaboration.LocalOccurrence right.val.regionCount
+        right.val.nodeCount
+  | .node node => .node (Fin.cast nodeEq node)
+  | .child region => .child (Fin.cast regionEq region)
+
+private theorem checkedDiagram_localOccurrences_eq
+    (left right : CheckedDiagram signature) (h : left = right)
+    (region : Fin left.val.regionCount) :
+    ConcreteElaboration.localOccurrences right.val
+        (Fin.cast (congrArg
+          (fun checked : CheckedDiagram signature => checked.val.regionCount) h)
+          region) =
+      (ConcreteElaboration.localOccurrences left.val region).map
+        (castLocalOccurrence
+          left right
+          (congrArg
+            (fun checked : CheckedDiagram signature => checked.val.regionCount) h)
+          (congrArg
+            (fun checked : CheckedDiagram signature => checked.val.nodeCount) h)) := by
+  cases h
+  have regionCast :
+      (Fin.cast (congrArg
+        (fun checked : CheckedDiagram signature => checked.val.regionCount)
+          (Eq.refl left)) : Fin left.val.regionCount → Fin left.val.regionCount) =
+        id := by
+    funext index
+    apply Fin.ext
+    rfl
+  have nodeCast :
+      (Fin.cast (congrArg
+        (fun checked : CheckedDiagram signature => checked.val.nodeCount)
+          (Eq.refl left)) : Fin left.val.nodeCount → Fin left.val.nodeCount) =
+        id := by
+    funext index
+    apply Fin.ext
+    rfl
+  rw [regionCast]
+  have occurrenceCast :
+      castLocalOccurrence left left
+          (congrArg
+            (fun checked : CheckedDiagram signature => checked.val.regionCount)
+            (Eq.refl left))
+          (congrArg
+            (fun checked : CheckedDiagram signature => checked.val.nodeCount)
+            (Eq.refl left)) = id := by
+    funext occurrence
+    cases occurrence <;>
+      simp [castLocalOccurrence, regionCast, nodeCast]
+  rw [occurrenceCast, List.map_id]
+  simp
 
 def frameRegionCountEq (presentation : TwoInputPresentation source target) :
     source.frame.val.regionCount = target.frame.val.regionCount :=
@@ -28722,6 +28847,235 @@ theorem regularFrameRegion
   · intro regular
     exact False.elim (regular (Or.inr ⟨material, rfl⟩))
 
+private theorem filter_frameNodes
+    (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount) :
+    List.filter
+        (fun node => decide
+          ((layout.plugNode node).region = layout.frameRegion region))
+        ((VisualProof.Data.Finite.allFin input.frame.val.nodeCount).map
+          layout.frameNode) =
+      ((VisualProof.Data.Finite.allFin input.frame.val.nodeCount).filter
+        fun node => decide ((input.frame.val.nodes node).region = region)).map
+          layout.frameNode := by
+  rw [List.filter_map]
+  apply congrArg (List.map layout.frameNode)
+  apply congrArg (fun predicate =>
+    List.filter predicate
+      (VisualProof.Data.Finite.allFin input.frame.val.nodeCount))
+  funext node
+  simp [layout.plugNode_frameNode, layout.frameRegion_eq_iff]
+
+private theorem filter_frameChildren
+    (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount) :
+    List.filter
+        (fun child => decide
+          ((layout.plugRegion child).parent? = some (layout.frameRegion region)))
+        ((VisualProof.Data.Finite.allFin input.frame.val.regionCount).map
+          layout.frameRegion) =
+      ((VisualProof.Data.Finite.allFin input.frame.val.regionCount).filter
+        fun child => decide
+          ((input.frame.val.regions child).parent? = some region)).map
+            layout.frameRegion := by
+  rw [List.filter_map]
+  apply congrArg (List.map layout.frameRegion)
+  apply congrArg (fun predicate =>
+    List.filter predicate
+      (VisualProof.Data.Finite.allFin input.frame.val.regionCount))
+  funext child
+  change decide ((layout.plugRegion (layout.frameRegion child)).parent? =
+    some (layout.frameRegion region)) = _
+  rw [layout.plugRegion_frameRegion]
+  cases hkind : input.frame.val.regions child <;>
+    simp [hkind, PlugLayout.mapFrameRegion, CRegion.parent?,
+      layout.frameRegion_eq_iff]
+
+private theorem filter_patternNodes_eq_nil
+    (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount)
+    (hne : region ≠ input.site) :
+    List.filter
+        (fun node => decide
+          ((layout.plugNode node).region = layout.frameRegion region))
+        ((VisualProof.Data.Finite.allFin
+          input.pattern.val.diagram.nodeCount).map layout.patternNode) = [] := by
+  apply List.eq_nil_iff_forall_not_mem.2
+  intro node hnode
+  rw [List.mem_filter] at hnode
+  obtain ⟨hnode, selected⟩ := hnode
+  rw [List.mem_map] at hnode
+  obtain ⟨patternNode, _, rfl⟩ := hnode
+  have member : ConcreteElaboration.LocalOccurrence.node
+      (layout.patternNode patternNode) ∈
+        ConcreteElaboration.localOccurrences layout.plugRaw
+          (layout.frameRegion region) :=
+    (ConcreteElaboration.mem_localOccurrences_node _ _ _).2
+      (decide_eq_true_iff.mp selected)
+  obtain ⟨original, _, mapped⟩ :=
+    layout.frameSemanticOccurrences_complete region hne _ member
+  cases original with
+  | node frameNode =>
+      exact layout.frameNode_ne_patternNode frameNode patternNode
+        (ConcreteElaboration.LocalOccurrence.node.inj mapped)
+  | child frameChild => contradiction
+
+private theorem filter_materialChildren_eq_nil
+    (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount)
+    (hne : region ≠ input.site) :
+    List.filter
+        (fun child => decide
+          ((layout.plugRegion child).parent? = some (layout.frameRegion region)))
+        ((VisualProof.Data.Finite.allFin layout.materialRegions.count).map
+          layout.materialRegion) = [] := by
+  apply List.eq_nil_iff_forall_not_mem.2
+  intro child hchild
+  rw [List.mem_filter] at hchild
+  obtain ⟨hchild, selected⟩ := hchild
+  rw [List.mem_map] at hchild
+  obtain ⟨materialChild, _, rfl⟩ := hchild
+  have member : ConcreteElaboration.LocalOccurrence.child
+      (layout.materialRegion materialChild) ∈
+        ConcreteElaboration.localOccurrences layout.plugRaw
+          (layout.frameRegion region) :=
+    (ConcreteElaboration.mem_localOccurrences_child _ _ _).2
+      (decide_eq_true_iff.mp selected)
+  obtain ⟨original, _, mapped⟩ :=
+    layout.frameSemanticOccurrences_complete region hne _ member
+  cases original with
+  | node frameNode => contradiction
+  | child frameChild =>
+      exact layout.frameRegion_ne_materialRegion frameChild materialChild
+        (ConcreteElaboration.LocalOccurrence.child.inj mapped)
+
+theorem localOccurrences_frameRegion
+    (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount)
+    (hne : region ≠ input.site) :
+    ConcreteElaboration.localOccurrences layout.plugRaw
+        (layout.frameRegion region) =
+      (ConcreteElaboration.localOccurrences input.coalesceFrameRaw region).map
+        layout.mapFrameOccurrence := by
+  unfold ConcreteElaboration.localOccurrences
+    VisualProof.Data.Finite.filterFin
+  change
+    ((VisualProof.Data.Finite.allFin
+      (input.frame.val.nodeCount + input.pattern.val.diagram.nodeCount)).filter
+        fun node => decide
+          ((layout.plugNode node).region = layout.frameRegion region)).map
+            ConcreteElaboration.LocalOccurrence.node ++
+      ((VisualProof.Data.Finite.allFin
+        (input.frame.val.regionCount + layout.materialRegions.count)).filter
+        fun child => decide
+          ((layout.plugRegion child).parent? =
+            some (layout.frameRegion region))).map
+              ConcreteElaboration.LocalOccurrence.child =
+    ((((VisualProof.Data.Finite.allFin input.frame.val.nodeCount).filter
+      fun node => decide ((input.frame.val.nodes node).region = region)).map
+        ConcreteElaboration.LocalOccurrence.node ++
+      ((VisualProof.Data.Finite.allFin input.frame.val.regionCount).filter
+      fun child => decide
+        ((input.frame.val.regions child).parent? = some region)).map
+          ConcreteElaboration.LocalOccurrence.child).map
+            layout.mapFrameOccurrence)
+  rw [show VisualProof.Data.Finite.allFin
+        (input.frame.val.nodeCount + input.pattern.val.diagram.nodeCount) =
+      (VisualProof.Data.Finite.allFin input.frame.val.nodeCount).map
+          layout.frameNode ++
+        (VisualProof.Data.Finite.allFin
+          input.pattern.val.diagram.nodeCount).map layout.patternNode from
+      paired_allFin_layout_nodes layout,
+    show VisualProof.Data.Finite.allFin
+        (input.frame.val.regionCount + layout.materialRegions.count) =
+      (VisualProof.Data.Finite.allFin input.frame.val.regionCount).map
+          layout.frameRegion ++
+        (VisualProof.Data.Finite.allFin layout.materialRegions.count).map
+          layout.materialRegion from paired_allFin_layout_regions layout]
+  calc
+    _ =
+        ((List.filter
+          (fun node => decide
+            ((layout.plugNode node).region = layout.frameRegion region))
+          ((VisualProof.Data.Finite.allFin input.frame.val.nodeCount).map
+            layout.frameNode)).map ConcreteElaboration.LocalOccurrence.node ++
+        (List.filter
+          (fun node => decide
+            ((layout.plugNode node).region = layout.frameRegion region))
+          ((VisualProof.Data.Finite.allFin
+            input.pattern.val.diagram.nodeCount).map layout.patternNode)).map
+              ConcreteElaboration.LocalOccurrence.node) ++
+        ((List.filter
+          (fun child => decide
+            ((layout.plugRegion child).parent? =
+              some (layout.frameRegion region)))
+          ((VisualProof.Data.Finite.allFin input.frame.val.regionCount).map
+            layout.frameRegion)).map
+              ConcreteElaboration.LocalOccurrence.child ++
+        (List.filter
+          (fun child => decide
+            ((layout.plugRegion child).parent? =
+              some (layout.frameRegion region)))
+          ((VisualProof.Data.Finite.allFin layout.materialRegions.count).map
+            layout.materialRegion)).map
+              ConcreteElaboration.LocalOccurrence.child) := by
+      congr 1
+      · exact (congrArg (List.map ConcreteElaboration.LocalOccurrence.node)
+            (List.filter_append
+              (p := fun node => decide
+                ((layout.plugNode node).region = layout.frameRegion region))
+              ((VisualProof.Data.Finite.allFin
+                input.frame.val.nodeCount).map layout.frameNode)
+              ((VisualProof.Data.Finite.allFin
+                input.pattern.val.diagram.nodeCount).map
+                  layout.patternNode))).trans List.map_append
+      · exact (congrArg (List.map ConcreteElaboration.LocalOccurrence.child)
+            (List.filter_append
+              (p := fun child => decide
+                ((layout.plugRegion child).parent? =
+                  some (layout.frameRegion region)))
+              ((VisualProof.Data.Finite.allFin
+                input.frame.val.regionCount).map layout.frameRegion)
+              ((VisualProof.Data.Finite.allFin
+                layout.materialRegions.count).map
+                  layout.materialRegion))).trans List.map_append
+    _ = _ := by
+      simp only [filter_frameNodes,
+        filter_patternNodes_eq_nil layout region hne,
+        filter_frameChildren,
+        filter_materialChildren_eq_nil layout region hne,
+        List.map_nil, List.append_nil, List.map_append, List.map_map]
+      let sourceNodes :=
+        (VisualProof.Data.Finite.allFin input.frame.val.nodeCount).filter
+          fun node => decide ((input.frame.val.nodes node).region = region)
+      let sourceChildren :=
+        (VisualProof.Data.Finite.allFin input.frame.val.regionCount).filter
+          fun child => decide
+            ((input.frame.val.regions child).parent? = some region)
+      change
+        List.map (ConcreteElaboration.LocalOccurrence.node ∘ layout.frameNode)
+            sourceNodes ++
+          List.map (ConcreteElaboration.LocalOccurrence.child ∘
+            layout.frameRegion) sourceChildren =
+        List.map layout.mapFrameOccurrence
+          (List.map ConcreteElaboration.LocalOccurrence.node sourceNodes ++
+            List.map ConcreteElaboration.LocalOccurrence.child sourceChildren)
+      calc
+        _ = List.map (layout.mapFrameOccurrence ∘
+              ConcreteElaboration.LocalOccurrence.node) sourceNodes ++
+            List.map (layout.mapFrameOccurrence ∘
+              ConcreteElaboration.LocalOccurrence.child) sourceChildren := by
+          congr 1 <;> apply List.map_congr_left <;> intro occurrence _ <;> rfl
+        _ = List.map layout.mapFrameOccurrence
+              (List.map ConcreteElaboration.LocalOccurrence.node sourceNodes) ++
+            List.map layout.mapFrameOccurrence
+              (List.map ConcreteElaboration.LocalOccurrence.child
+                sourceChildren) := by
+          congr 1
+          · exact List.map_map.symm
+          · exact List.map_map.symm
+        _ = _ := List.map_append.symm
+
 /-- The total occurrence map sends retained-frame occurrences positionally.
 Pattern occurrences are arbitrary outside their distinguished owner, so a
 pattern node is represented by the distinguished target child; the regular
@@ -28774,6 +29128,79 @@ theorem occurrenceMap_node
     exact False.elim
       (regular (patternRegion ▸ presentation.distinguished_bodyRegion
         (source.pattern.val.diagram.nodes patternNode).region))
+
+theorem occurrenceMap_mapFrameOccurrence
+    (presentation : TwoInputPresentation source target)
+    (frame : Fin source.frame.val.regionCount)
+    (regular : ¬ presentation.Distinguished
+      (source.plugLayout.frameRegion frame))
+    (occurrence : ConcreteElaboration.LocalOccurrence
+      source.frame.val.regionCount source.frame.val.nodeCount) :
+    presentation.occurrenceMap (source.plugLayout.frameRegion frame) regular
+        (source.plugLayout.mapFrameOccurrence occurrence) =
+      target.plugLayout.mapFrameOccurrence
+        (castLocalOccurrence source.frame target.frame
+          presentation.frameRegionCountEq presentation.frameNodeCountEq
+          occurrence) := by
+  cases occurrence with
+  | node node =>
+      simp [occurrenceMap, PlugLayout.mapFrameOccurrence, castLocalOccurrence,
+        PlugLayout.frameNode, PlugLayout.plugRaw, PlugLayout.nodeCount]
+  | child child =>
+      change ConcreteElaboration.LocalOccurrence.child
+          (presentation.regionMap
+            (source.plugLayout.frameRegion child)) =
+        ConcreteElaboration.LocalOccurrence.child
+          (target.plugLayout.frameRegion
+            (Fin.cast presentation.frameRegionCountEq child))
+      rw [presentation.regionMap_frameRegion]
+      rfl
+
+theorem localOccurrences_map
+    (presentation : TwoInputPresentation source target)
+    (region : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished region) :
+    ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
+        (presentation.regionMap region) =
+      (ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
+        region).map (presentation.occurrenceMap region regular) := by
+  obtain ⟨frame, hne, rfl⟩ :=
+    presentation.regularFrameRegion region regular
+  let targetFrame := Fin.cast presentation.frameRegionCountEq frame
+  have targetNe : targetFrame ≠ target.site := by
+    intro equality
+    apply hne
+    apply Fin.ext
+    have values := congrArg Fin.val
+      (equality.trans presentation.site_eq.symm)
+    exact values
+  rw [presentation.regionMap_frameRegion,
+    localOccurrences_frameRegion target.plugLayout targetFrame targetNe,
+    localOccurrences_frameRegion source.plugLayout frame hne]
+  have frameOccurrences := checkedDiagram_localOccurrences_eq
+    source.frame target.frame presentation.frame_eq frame
+  change ConcreteElaboration.localOccurrences target.coalesceFrameRaw
+      targetFrame =
+    (ConcreteElaboration.localOccurrences source.coalesceFrameRaw frame).map
+      (castLocalOccurrence source.frame target.frame
+        presentation.frameRegionCountEq presentation.frameNodeCountEq)
+      at frameOccurrences
+  rw [frameOccurrences]
+  calc
+    _ = List.map (target.plugLayout.mapFrameOccurrence ∘
+          castLocalOccurrence source.frame target.frame
+            presentation.frameRegionCountEq presentation.frameNodeCountEq)
+        (ConcreteElaboration.localOccurrences source.coalesceFrameRaw frame) :=
+      List.map_map
+    _ = List.map
+        (presentation.occurrenceMap (source.plugLayout.frameRegion frame)
+          regular ∘ source.plugLayout.mapFrameOccurrence)
+        (ConcreteElaboration.localOccurrences source.coalesceFrameRaw frame) := by
+      apply List.map_congr_left
+      intro occurrence _
+      exact (presentation.occurrenceMap_mapFrameOccurrence frame regular
+        occurrence).symm
+    _ = _ := List.map_map.symm
 
 def mapRegionKind
     (presentation : TwoInputPresentation source target) :
