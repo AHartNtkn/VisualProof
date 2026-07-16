@@ -32275,6 +32275,35 @@ def patternContextIndexRelation
   | some indexMap =>
       ConcreteElaboration.ContextIndexRelation.forwardMap indexMap
 
+noncomputable def patternExtendedWireMapAt
+    (layout : PlugLayout input)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region)
+    (targetRegion : Fin layout.plugRaw.regionCount)
+    (targetEq : targetRegion = layout.bodyRegion region)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length) :
+    Fin (sourceContext.extend region).length →
+      Fin (targetContext.extend targetRegion).length := by
+  subst targetRegion
+  exact layout.materialExtendedWireMap region hregion sourceContext
+    targetContext indexMap
+
+noncomputable def patternExtendedWireMap
+    (layout : PlugLayout input)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length) :
+    Fin (sourceContext.extend region).length →
+      Fin (targetContext.extend
+        (layout.patternSimulationRegionMap region)).length :=
+  layout.patternExtendedWireMapAt sourceContext targetContext region hregion
+    (layout.patternSimulationRegionMap region)
+    (layout.patternSimulationRegionMap_material region hregion) indexMap
+
 noncomputable def extendPatternContext
     (layout : PlugLayout input)
     (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
@@ -32283,10 +32312,70 @@ noncomputable def extendPatternContext
     (region : Fin input.pattern.val.diagram.regionCount)
     (hregion : input.binderSpine.IsMaterialRegion region) :
     layout.PatternContextWitness (sourceContext.extend region)
-      (targetContext.extend (layout.bodyRegion region)) :=
+      (targetContext.extend (layout.patternSimulationRegionMap region)) :=
   witness.map fun indexMap =>
-    layout.materialExtendedWireMap region hregion sourceContext targetContext
+    layout.patternExtendedWireMap sourceContext targetContext region hregion
       indexMap
+
+theorem patternExtendedWireMapAt_spec
+    (layout : PlugLayout input)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region)
+    (targetRegion : Fin layout.plugRaw.regionCount)
+    (targetEq : targetRegion = layout.bodyRegion region)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (indexSpec : ∀ index, targetContext.get (indexMap index) =
+      layout.patternPlugWire (sourceContext.get index)) :
+    ∀ index,
+      (targetContext.extend targetRegion).get
+          (layout.patternExtendedWireMapAt sourceContext targetContext region
+            hregion targetRegion targetEq indexMap index) =
+        layout.patternPlugWire ((sourceContext.extend region).get index) := by
+  subst targetRegion
+  simpa [patternExtendedWireMapAt] using
+    layout.materialExtendedWireMap_spec region hregion sourceContext
+      targetContext indexMap indexSpec
+
+theorem patternExtendedWireMap_spec
+    (layout : PlugLayout input)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (indexSpec : ∀ index, targetContext.get (indexMap index) =
+      layout.patternPlugWire (sourceContext.get index)) :
+    ∀ index,
+      (targetContext.extend (layout.patternSimulationRegionMap region)).get
+          (layout.patternExtendedWireMap sourceContext targetContext region
+            hregion indexMap index) =
+        layout.patternPlugWire ((sourceContext.extend region).get index) := by
+  exact layout.patternExtendedWireMapAt_spec sourceContext targetContext region
+    hregion (layout.patternSimulationRegionMap region)
+    (layout.patternSimulationRegionMap_material region hregion) indexMap
+    indexSpec
+
+theorem patternPlugWire_mem_extendedContext_iff
+    (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact :
+      (targetContext.extend (layout.patternSimulationRegionMap region)).Exact
+        (layout.patternSimulationRegionMap region)) :
+    ∀ wire, layout.patternPlugWire wire ∈
+        targetContext.extend (layout.patternSimulationRegionMap region) ↔
+      wire ∈ sourceContext.extend region := by
+  simpa [patternSimulationRegionMap, hregion] using
+    layout.patternPlugWire_mem_materialContext_iff hadmissible region hregion
+      (sourceContext.extend region)
+      (targetContext.extend (layout.bodyRegion region)) sourceExact
+      (by simpa [patternSimulationRegionMap, hregion] using targetExact)
 
 theorem patternLocalSelection
     (layout : PlugLayout input)
@@ -32367,6 +32456,321 @@ theorem patternLocalSelection
       · simp [ConcreteElaboration.extendedEnvironment,
           materialExtendedWireMap, split, localEquiv, extendWireEnv,
           FiniteEquiv.symm_apply_apply]
+
+theorem patternLocalSelectionAt
+    (layout : PlugLayout input)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region)
+    (targetRegion : Fin layout.plugRaw.regionCount)
+    (targetEq : targetRegion = layout.bodyRegion region)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (model : Lambda.LambdaModel) :
+    ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
+      (targetOuter : Fin targetContext.length → model.Carrier),
+      (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
+          |>.EnvironmentsAgree sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal,
+            ∃ targetLocal,
+              (ConcreteElaboration.ContextIndexRelation.forwardMap
+                (layout.patternExtendedWireMapAt sourceContext targetContext
+                  region hregion targetRegion targetEq indexMap))
+                |>.EnvironmentsAgree
+                  (ConcreteElaboration.extendedEnvironment sourceContext region
+                    sourceOuter sourceLocal)
+                  (ConcreteElaboration.extendedEnvironment targetContext
+                    targetRegion targetOuter targetLocal)
+        | .backward => ∀ targetLocal,
+            ∃ sourceLocal,
+              (ConcreteElaboration.ContextIndexRelation.forwardMap
+                (layout.patternExtendedWireMapAt sourceContext targetContext
+                  region hregion targetRegion targetEq indexMap))
+                |>.EnvironmentsAgree
+                  (ConcreteElaboration.extendedEnvironment sourceContext region
+                    sourceOuter sourceLocal)
+                  (ConcreteElaboration.extendedEnvironment targetContext
+                    targetRegion targetOuter targetLocal) := by
+  subst targetRegion
+  simpa [patternExtendedWireMapAt] using
+    layout.patternLocalSelection direction region hregion sourceContext
+      targetContext indexMap model
+
+theorem patternLocalSelectionMapped
+    (layout : PlugLayout input)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (model : Lambda.LambdaModel) :
+    ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
+      (targetOuter : Fin targetContext.length → model.Carrier),
+      (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
+          |>.EnvironmentsAgree sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal,
+            ∃ targetLocal,
+              (ConcreteElaboration.ContextIndexRelation.forwardMap
+                (layout.patternExtendedWireMap sourceContext targetContext
+                  region hregion indexMap)).EnvironmentsAgree
+                (ConcreteElaboration.extendedEnvironment sourceContext region
+                  sourceOuter sourceLocal)
+                (ConcreteElaboration.extendedEnvironment targetContext
+                  (layout.patternSimulationRegionMap region) targetOuter
+                  targetLocal)
+        | .backward => ∀ targetLocal,
+            ∃ sourceLocal,
+              (ConcreteElaboration.ContextIndexRelation.forwardMap
+                (layout.patternExtendedWireMap sourceContext targetContext
+                  region hregion indexMap)).EnvironmentsAgree
+                (ConcreteElaboration.extendedEnvironment sourceContext region
+                  sourceOuter sourceLocal)
+                (ConcreteElaboration.extendedEnvironment targetContext
+                  (layout.patternSimulationRegionMap region) targetOuter
+                  targetLocal) := by
+  exact layout.patternLocalSelectionAt direction region hregion
+    (layout.patternSimulationRegionMap region)
+    (layout.patternSimulationRegionMap_material region hregion) sourceContext
+    targetContext indexMap model
+
+/-- The input-local authoritative simulation from the intrinsic pattern graph
+to the corresponding retained material inside the concrete plug. -/
+noncomputable def patternConcreteSemanticSimulation
+    {signature : List Nat}
+    {input : Input signature}
+    (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature) :
+    ConcreteElaboration.ConcreteSemanticSimulation signature
+      input.pattern.val.diagram layout.plugRaw model named where
+  source_wellFormed := input.pattern.property.diagram_well_formed
+  target_wellFormed := layout.plugRaw_wellFormed signature input hadmissible
+  regionMap := layout.patternSimulationRegionMap
+  binderMap := layout.binderRegion
+  Distinguished := fun region =>
+    ¬ input.binderSpine.IsMaterialRegion region
+  occurrenceMap := fun _region _regular occurrence =>
+    match occurrence with
+    | .node node => .node (layout.patternNode node)
+    | .child child => .child (layout.patternSimulationRegionMap child)
+  occurrenceMap_node := by
+    intro region regular node nodeRegion
+    exact ⟨layout.patternNode node, rfl⟩
+  occurrenceMap_child := by
+    intro region regular child
+    rfl
+  root_eq := by
+    rw [layout.patternSimulationRegionMap_nonmaterial
+      input.pattern.val.diagram.root (by
+        simp [BinderSpine.IsMaterialRegion])]
+  region_shape := by
+    intro parent regular child childParent
+    have hparent : input.binderSpine.IsMaterialRegion parent :=
+      Classical.byContradiction fun absent => regular absent
+    have hchild := PlugLayout.directChildOfMaterial_material input parent child
+      hparent childParent
+    rw [layout.patternSimulationRegionMap_material child hchild]
+    cases kind : input.pattern.val.diagram.regions child with
+    | sheet => simp [kind, CRegion.parent?] at childParent
+    | cut actualParent =>
+        have equality : actualParent = parent := by
+          rw [kind] at childParent
+          exact Option.some.inj childParent
+        subst actualParent
+        simpa [kind, layout.patternSimulationRegionMap_material parent hparent]
+          using layout.plugRaw_bodyRegion_cut child parent hchild kind
+    | bubble actualParent arity =>
+        have equality : actualParent = parent := by
+          rw [kind] at childParent
+          exact Option.some.inj childParent
+        subst actualParent
+        simpa [kind, layout.patternSimulationRegionMap_material parent hparent]
+          using layout.plugRaw_bodyRegion_bubble child parent arity hchild kind
+  localOccurrences_map := by
+    intro region regular
+    have hregion : input.binderSpine.IsMaterialRegion region :=
+      Classical.byContradiction fun absent => regular absent
+    rw [layout.patternSimulationRegionMap_material region hregion,
+      TwoInputPresentation.PlugLayout.localOccurrences_bodyRegion layout region
+        hregion]
+    apply List.map_congr_left
+    intro occurrence member
+    cases occurrence with
+    | node node => rfl
+    | child child =>
+        have parent :=
+          (ConcreteElaboration.mem_localOccurrences_child _ _ _).1 member
+        have hchild := PlugLayout.directChildOfMaterial_material input region
+          child hregion parent
+        simp [layout.patternSimulationRegionMap_material child hchild,
+          mapPatternOccurrence]
+  BinderWitness := fun sourceBinders targetBinders =>
+    PatternBinderWitness layout sourceBinders targetBinders
+  relationMap := fun witness => witness.relationMap
+  binders_empty := PatternBinderWitness.empty layout
+  binders_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity childKind regular
+    have hparent : input.binderSpine.IsMaterialRegion parent :=
+      Classical.byContradiction fun absent => regular absent
+    have childParent :
+        (input.pattern.val.diagram.regions child).parent? = some parent := by
+      simp [childKind, CRegion.parent?]
+    have hchild := PlugLayout.directChildOfMaterial_material input parent child
+      hparent childParent
+    refine {
+      relationMap := RelationRenaming.lift witness.relationMap arity
+      lookup := ?_ }
+    intro binder relationArity relation sourceLookup
+    by_cases hbinder : binder = child
+    · subst binder
+      rw [ConcreteElaboration.BinderContext.push_self] at sourceLookup
+      have payload := Option.some.inj sourceLookup
+      cases payload
+      simp [layout.binderRegion_material child hchild,
+        patternSimulationRegionMap, hchild,
+        ConcreteElaboration.BinderContext.push_self,
+        ConcreteElaboration.BinderContext.head, RelationRenaming.lift]
+    · rw [ConcreteElaboration.BinderContext.push_other sourceBinders arity
+          hbinder] at sourceLookup
+      cases hsource : sourceBinders binder with
+      | none => simp [hsource] at sourceLookup
+      | some payload =>
+          rcases payload with ⟨sourceArity, sourceRelation⟩
+          simp only [hsource, Option.map_some] at sourceLookup
+          have targetNe : layout.binderRegion binder ≠
+              layout.patternSimulationRegionMap child := by
+            simpa [patternSimulationRegionMap, hchild] using
+              layout.binderRegion_ne_bodyRegion_of_ne_material binder child
+                hchild hbinder
+          rw [ConcreteElaboration.BinderContext.push_other targetBinders arity
+            targetNe]
+          rw [witness.lookup binder sourceRelation hsource]
+          cases sourceLookup
+          rfl
+  relationMap_push := by
+    intros
+    rfl
+  Allowed := fun _direction _region => True
+  allowed_cut := by simp
+  allowed_bubble := by simp
+  ContextWitness := fun sourceContext targetContext =>
+    layout.PatternContextWitness sourceContext targetContext
+  AtRegion := fun witness region => layout.PatternAtRegion witness region
+  indexRelation := fun witness => layout.patternContextIndexRelation witness
+  extendContext := by
+    intro sourceContext targetContext witness region regular sourceExact
+      targetExact
+    have hregion : input.binderSpine.IsMaterialRegion region :=
+      Classical.byContradiction fun absent => regular absent
+    exact layout.extendPatternContext sourceContext targetContext witness region
+      hregion
+  extendFocusedContext := by
+    intro sourceContext targetContext witness region focused sourceExact
+      targetExact
+    exact none
+  at_child := by
+    intro sourceContext targetContext witness parent regular sourceExact
+      targetExact child atParent childParent
+    rcases atParent with ⟨hparent, indexMap, witnessEq, indexSpec, memberSpec⟩
+    subst witness
+    have hchild := PlugLayout.directChildOfMaterial_material input parent child
+      hparent childParent
+    refine ⟨hchild, layout.patternExtendedWireMap sourceContext targetContext
+      parent hparent indexMap, ?_, ?_, ?_⟩
+    · simp [extendPatternContext, patternExtendedWireMap]
+    · exact layout.patternExtendedWireMap_spec sourceContext targetContext
+        parent hparent indexMap indexSpec
+    · exact layout.patternPlugWire_mem_extendedContext_iff hadmissible
+        sourceContext targetContext parent hparent sourceExact targetExact
+  at_extended := by
+    intro sourceContext targetContext witness region regular sourceExact
+      targetExact atRegion
+    rcases atRegion with ⟨hregion, indexMap, witnessEq, indexSpec, memberSpec⟩
+    subst witness
+    refine ⟨hregion, layout.patternExtendedWireMap sourceContext targetContext
+      region hregion indexMap, ?_, ?_, ?_⟩
+    · simp [extendPatternContext, patternExtendedWireMap]
+    · exact layout.patternExtendedWireMap_spec sourceContext targetContext
+        region hregion indexMap indexSpec
+    · exact layout.patternPlugWire_mem_extendedContext_iff hadmissible
+        sourceContext targetContext region hregion sourceExact targetExact
+  at_focused_child := by
+    intro sourceContext targetContext witness parent focused sourceExact
+      targetExact child atParent sourceParent targetParent
+    exact False.elim (focused atParent.1)
+  localTransport := by
+    intro sourceRels targetRels direction fuelSource fuelTarget sourceContext
+      targetContext witness sourceBinders targetBinders binderWitness region
+      atRegion regular allowed sourceExact targetExact sourceItems targetItems
+      sourceCompiled targetCompiled itemSemantics
+    rcases atRegion with ⟨hregion, indexMap, witnessEq, indexSpec, memberSpec⟩
+    subst witness
+    refine ConcreteElaboration.directionalLocalTransport_of_agreement direction
+      sourceContext targetContext region
+      (layout.patternSimulationRegionMap region)
+      (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (layout.patternExtendedWireMap sourceContext targetContext region
+          hregion indexMap)) model named
+      (sourceItems.renameRelations binderWitness.relationMap) targetItems ?_
+      itemSemantics
+    exact layout.patternLocalSelectionMapped direction region hregion
+      sourceContext targetContext indexMap model
+  nodeSemantic := by
+    intro sourceRels targetRels direction region sourceContext targetContext
+      context atRegion sourceNodup targetNodup sourceBinders targetBinders
+      allowed binderWitness sourceNode targetNode regular mapped nodeRegion
+      sourceItem targetItem sourceCompiled targetCompiled
+    rcases atRegion with
+      ⟨hregion, indexMap, contextEq, indexSpec, memberSpec⟩
+    subst context
+    have targetNodeEq := ConcreteElaboration.LocalOccurrence.node.inj mapped
+    subst targetNode
+    apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+      (source := input.pattern.val.diagram)
+      (target := layout.plugRaw)
+      model named direction sourceContext targetContext
+      (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
+      sourceBinders targetBinders binderWitness.relationMap sourceNode
+      (layout.patternNode sourceNode)
+      (regionMap := layout.bodyRegion)
+      (binderMap := layout.binderRegion)
+    · change layout.plugNode (layout.patternNode sourceNode) = _
+      rw [layout.plugNode_patternNode]
+      cases hsource : input.pattern.val.diagram.nodes sourceNode <;> rfl
+    · intro port sourceIndex targetIndex sourceResolved targetResolved
+      have resolved := ConcreteElaboration.resolvePort?_map_of_occurrence
+        sourceContext targetContext sourceNode (layout.patternNode sourceNode)
+        layout.patternPlugWire indexMap targetNodup indexSpec memberSpec
+        (fun wire requested occurs => by
+          simpa [mapPatternEndpoint] using
+            layout.plugRaw_patternEndpoint_forward wire
+              ⟨sourceNode, requested⟩ occurs)
+        (fun targetWire requested occurs => by
+          obtain ⟨sourceWire, wireEq, sourceOccurs⟩ :=
+            layout.plugRaw_patternEndpoint_backward targetWire
+              ⟨sourceNode, requested⟩ (by
+                simpa [mapPatternEndpoint] using occurs)
+          exact ⟨sourceWire, wireEq, sourceOccurs⟩)
+        ((layout.plugRaw_wellFormed signature input hadmissible)
+          |>.wire_endpoints_are_disjoint) port
+      rw [targetResolved, sourceResolved] at resolved
+      exact Option.some.inj resolved |>.symm
+    · intro binderRegion binder arity sourceRelation sourceShape sourceLookup
+      exact binderWitness.lookup binder sourceRelation sourceLookup
+    · exact sourceCompiled
+    · exact targetCompiled
+  focusedRegionKernel := by
+    intro sourceRels targetRels direction fuelSource fuelTarget region
+      sourceContext targetContext context sourceBinders targetBinders atRegion
+      focused
+    exact False.elim (focused atRegion.1)
 
 end PlugLayout
 
