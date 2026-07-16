@@ -1409,6 +1409,7 @@ private noncomputable def severWireSimulation
   source_wellFormed := source.property.diagram_well_formed
   target_wellFormed := targetWellFormed
   regionMap := id
+  binderMap := id
   Distinguished := fun _ => False
   occurrenceMap := fun _ _ occurrence => occurrence
   occurrenceMap_node := by
@@ -1426,13 +1427,34 @@ private noncomputable def severWireSimulation
     intro region regular
     rw [severWireRaw_localOccurrences]
     simp
-  BinderRelated := fun sourceBinders targetBinders =>
-    sourceBinders = targetBinders
-  binders_empty := rfl
+  BinderWitness := fun {sourceRels targetRels} sourceBinders targetBinders =>
+    ConcreteElaboration.IdentityBinderWitness
+      (sourceRels := sourceRels) (targetRels := targetRels)
+      source.val.diagram (severWireRaw source.val.diagram wire keep)
+      sourceBinders targetBinders
+  relationMap := fun witness =>
+    ConcreteElaboration.IdentityBinderWitness.relationMap witness
+  binders_empty := {
+    relationContexts_eq := rfl
+    binders_eq := HEq.rfl
+  }
   binders_push := by
-    intro rels sourceBinders targetBinders related child parent arity kind regular
-    subst targetBinders
-    rfl
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    exact ⟨rfl, HEq.rfl⟩
+  relationMap_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming] using
+        (RelationRenaming.lift_id_fun
+          (source := sourceRels) arity).symm
   Allowed := severAllowed source.val.diagram
     (source.val.diagram.wires wire).scope
   allowed_cut := by
@@ -1460,16 +1482,19 @@ private noncomputable def severWireSimulation
       atParent sourceParent targetParent
     exact False.elim focused
   localTransport := by
-    intro rels direction fuelSource fuelTarget original expanded collapse
-      sourceBinders targetBinders region atRegion regular allowed sourceExact
-      targetExact sourceItems targetItems sourceCompiled targetCompiled
-      itemSemantics
+    intro sourceRels targetRels direction fuelSource fuelTarget original expanded
+      collapse sourceBinders targetBinders binderWitness region atRegion regular
+      allowed sourceExact targetExact sourceItems targetItems sourceCompiled
+      targetCompiled itemSemantics
     refine ConcreteElaboration.directionalLocalTransport_of_agreement
       direction original expanded region region
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
       (ConcreteElaboration.ContextIndexRelation.backwardMap
         (collapse.extend region).indexMap)
-      model named sourceItems targetItems ?_ itemSemantics
+      model named
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems ?_ itemSemantics
     intro sourceOuter targetOuter outerAgrees
     rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
       at outerAgrees
@@ -1494,11 +1519,19 @@ private noncomputable def severWireSimulation
           (severExtendedEnv_uncollapse_of_ne collapse region hne
             sourceExact.nodup sourceOuter targetOuter outerAgrees targetLocal)
   nodeSemantic := by
-    intro rels direction region original expanded collapse sourceNodup
-      targetNodup sourceBinders targetBinders allowed bindersRelated sourceNode
-      targetNode regular nodeMapped nodeRegion sourceItem targetItem sourceCompiled
-      targetCompiled
-    subst targetBinders
+    intro sourceRels targetRels direction region original expanded collapse
+      sourceNodup targetNodup sourceBinders targetBinders allowed binderWitness
+      sourceNode targetNode regular nodeMapped nodeRegion sourceItem targetItem
+      sourceCompiled targetCompiled
+    rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    change ConcreteElaboration.ItemSimulation model named direction
+      (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
+      (sourceItem.renameRelations
+        ((fun relation => relation) : RelationRenaming sourceRels sourceRels))
+      targetItem
+    rw [Item.renameRelations_id]
     have nodeEq : sourceNode = targetNode := by
       exact ConcreteElaboration.LocalOccurrence.node.inj nodeMapped
     subst targetNode
@@ -1519,8 +1552,8 @@ private noncomputable def severWireSimulation
     | forward => exact renamed.mp
     | backward => exact renamed.mpr
   focusedRegionKernel := by
-    intro rels direction fuelSource fuelTarget region original expanded collapse
-      sourceBinders targetBinders atRegion distinguished
+    intro sourceRels targetRels direction fuelSource fuelTarget region original
+      expanded collapse sourceBinders targetBinders atRegion distinguished
     exact False.elim distinguished
 
 private noncomputable def severWireRootContext
@@ -1570,7 +1603,10 @@ private noncomputable def severWireRootContext
       (ConcreteElaboration.ContextIndexRelation.backwardMap
         (severExposedIndex source.val wire keep))
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
-      model named sourceItems targetItems ?_ itemSemantics
+      model named
+      (sourceItems.renameRelations
+        (simulation.relationMap simulation.binders_empty))
+      targetItems ?_ itemSemantics
     intro sourceOuter targetOuter outerAgrees
     rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
       at outerAgrees

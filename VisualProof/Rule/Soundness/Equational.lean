@@ -1825,6 +1825,7 @@ private noncomputable def conversionSimulation
   source_wellFormed := input.property
   target_wellFormed := htarget
   regionMap := id
+  binderMap := id
   Distinguished := fun _ => False
   occurrenceMap := fun _ _ occurrence => occurrence
   occurrenceMap_node := by
@@ -1854,13 +1855,33 @@ private noncomputable def conversionSimulation
           simp only [List.map_cons]
           rw [induction]
     exact (mapSelf _).symm
-  BinderRelated := fun sourceBinders targetBinders =>
-    sourceBinders = targetBinders
-  binders_empty := rfl
+  BinderWitness := fun {sourceRels targetRels} sourceBinders targetBinders =>
+    Diagram.ConcreteElaboration.IdentityBinderWitness
+      (sourceRels := sourceRels) (targetRels := targetRels)
+      input.val (conversionRaw input node payload) sourceBinders targetBinders
+  relationMap := fun witness =>
+    Diagram.ConcreteElaboration.IdentityBinderWitness.relationMap witness
+  binders_empty := {
+    relationContexts_eq := rfl
+    binders_eq := HEq.rfl
+  }
   binders_push := by
-    intro rels sourceBinders targetBinders related child parent arity kind regular
-    subst targetBinders
-    rfl
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    exact ⟨rfl, HEq.rfl⟩
+  relationMap_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    simpa [Diagram.ConcreteElaboration.IdentityBinderWitness.relationMap,
+      Diagram.ConcreteElaboration.identityRelationRenaming] using
+        (Diagram.RelationRenaming.lift_id_fun
+          (source := sourceRels) arity).symm
   Allowed := fun _ _ => True
   allowed_cut := by simp
   allowed_bubble := by simp
@@ -1879,24 +1900,38 @@ private noncomputable def conversionSimulation
       atParent sourceParent targetParent
     exact False.elim focused
   localTransport := by
-    intro rels direction fuelSource fuelTarget source target embedding
-      sourceBinders targetBinders region atRegion regular allowed sourceExact
-      targetExact sourceItems targetItems sourceCompiled targetCompiled
-      itemSemantics
+    intro sourceRels targetRels direction fuelSource fuelTarget source target
+      embedding sourceBinders targetBinders binderWitness region atRegion regular
+      allowed sourceExact targetExact sourceItems targetItems sourceCompiled
+      targetCompiled itemSemantics
     exact Diagram.ConcreteElaboration.directionalLocalTransport_of_agreement
       direction source target region region
       (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
       (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
         (embedding.extend region).index)
-      model named sourceItems targetItems
+      model named
+      (sourceItems.renameRelations
+        (Diagram.ConcreteElaboration.IdentityBinderWitness.relationMap
+          binderWitness))
+      targetItems
       (conversionRaw_localSelection direction source target embedding region
         sourceExact targetExact model)
       itemSemantics
   nodeSemantic := by
-    intro rels direction region source target embedding sourceNodup targetNodup
-      sourceBinders targetBinders allowed bindersRelated sourceNode targetNode
+    intro sourceRels targetRels direction region source target embedding
+      sourceNodup targetNodup sourceBinders targetBinders allowed binderWitness
+      sourceNode targetNode
       regular mapped nodeRegion sourceItem targetItem sourceCompiled targetCompiled
-    subst targetBinders
+    rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    change Diagram.ConcreteElaboration.ItemSimulation model named direction
+      (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      (sourceItem.renameRelations
+        ((fun relation => relation) :
+          Diagram.RelationRenaming sourceRels sourceRels))
+      targetItem
+    rw [Diagram.Item.renameRelations_id]
     have targetNodeEq : targetNode = sourceNode := by
       exact Diagram.ConcreteElaboration.LocalOccurrence.node.inj mapped.symm
     subst targetNode
@@ -1930,8 +1965,8 @@ private noncomputable def conversionSimulation
       | forward => exact semantic.mpr
       | backward => exact semantic.mp
   focusedRegionKernel := by
-    intro rels direction fuelSource fuelTarget region source target embedding
-      sourceBinders targetBinders atRegion distinguished
+    intro sourceRels targetRels direction fuelSource fuelTarget region source
+      target embedding sourceBinders targetBinders atRegion distinguished
     exact False.elim distinguished
 
 private noncomputable def conversionRootContext
@@ -1981,7 +2016,11 @@ private noncomputable def conversionRootContext
       (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
         (conversionExposedIndex boundary))
       (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
-      model named sourceItems targetItems ?_ itemSemantics
+      model named
+      (sourceItems.renameRelations
+        ((conversionSimulation model named htarget).relationMap
+          (conversionSimulation model named htarget).binders_empty))
+      targetItems ?_ itemSemantics
     intro sourceOuter targetOuter outerAgrees
     rw [Diagram.ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
       at outerAgrees

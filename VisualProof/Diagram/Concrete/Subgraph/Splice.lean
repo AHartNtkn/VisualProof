@@ -30872,12 +30872,14 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
         simpa [ConcreteElaboration.compileOccurrenceWith?,
           PlugLayout.mapFrameOccurrence, castLocalOccurrence] using
             targetCompiled
+      rw [← Item.renameRelations_id sourceItem]
       apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
         (source := source.plugLayout.plugRaw)
         (target := target.plugLayout.plugRaw)
         model named direction sourceContext targetContext
         (presentation.contextIndexRelation sourceContext targetContext)
         sourceBinders targetBinders
+        (ConcreteElaboration.identityRelationRenaming rels)
         (source.plugLayout.frameNode node)
         (target.plugLayout.frameNode
           (Fin.cast presentation.frameNodeCountEq node))
@@ -30891,7 +30893,7 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
         exact presentation.contextIndexRelation_of_resolved_frame_port
           sourceContext targetContext node port sourceIndex targetIndex
           sourceResolved targetResolved
-      · intro region binder sourceAtom
+      · intro region binder arity sourceRelation sourceAtom sourceLookup
         change source.plugLayout.plugNode
             (source.plugLayout.frameNode node) = .atom region binder
           at sourceAtom
@@ -30902,8 +30904,9 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
         | atom nodeRegion frameBinder =>
             simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
             obtain ⟨rfl, rfl⟩ := sourceAtom
-            simpa [presentation.regionMap_frameRegion] using
-              (bindersRelated frameBinder).symm
+            simpa [presentation.regionMap_frameRegion,
+              ConcreteElaboration.identityRelationRenaming] using
+                ((bindersRelated frameBinder).symm.trans sourceLookup)
         | named nodeRegion definition arity =>
             simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
       · exact sourceNodeCompiled

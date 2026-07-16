@@ -107,6 +107,30 @@ end ContextIndexRelation
 def identityRelationRenaming (rels : RelCtx) : RelationRenaming rels rels :=
   fun relation => relation
 
+/-- A same-context binder witness expressed without requiring the source and
+target diagrams to be definitionally identical. -/
+structure IdentityBinderWitness
+    (source target : ConcreteDiagram)
+    {sourceRels targetRels : RelCtx}
+    (sourceBinders : BinderContext source sourceRels)
+    (targetBinders : BinderContext target targetRels) : Type where
+  relationContexts_eq : sourceRels = targetRels
+  binders_eq : HEq sourceBinders targetBinders
+
+namespace IdentityBinderWitness
+
+def relationMap
+    (witness : IdentityBinderWitness
+      (sourceRels := sourceRels) (targetRels := targetRels)
+      source target sourceBinders targetBinders) :
+    RelationRenaming sourceRels targetRels := by
+  cases witness with
+  | mk relationContexts_eq _ =>
+      subst targetRels
+      exact identityRelationRenaming sourceRels
+
+end IdentityBinderWitness
+
 /-- Semantic simulation of two intrinsic items under related environments. -/
 def ItemSimulation (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
