@@ -30573,6 +30573,38 @@ theorem coalescedRootExposedWireEquivOfNested_spec
           sourceBoundary).exposedWires.get index) := by
   exact listEmbeddingEquiv_spec presentation.quotientMap _ _ _ _ _ _ _ index
 
+/-- The paired coalesced exposed-class equivalence preserves every ordered
+boundary position, including repeated occurrences of the same class. -/
+theorem coalescedRootExposedWireEquivOfNested_boundaryClass
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (position : Fin sourceBoundary.length) :
+    presentation.coalescedRootExposedWireEquivOfNested sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested
+        ((PlugLayout.coalescedOpenRoot source
+          sourceBoundary).boundaryClass
+          (Fin.cast (by simp [PlugLayout.coalescedOpenRoot]) position)) =
+      (PlugLayout.coalescedOpenRoot target
+        (presentation.targetBoundary sourceBoundary)).boundaryClass
+        (Fin.cast (by simp [PlugLayout.coalescedOpenRoot,
+          targetBoundary]) position) := by
+  apply OpenConcreteDiagram.boundaryClass_complete
+  rw [presentation.coalescedRootExposedWireEquivOfNested_spec,
+    OpenConcreteDiagram.boundaryClass_sound]
+  simp only [PlugLayout.coalescedOpenRoot, targetBoundary,
+    List.get_eq_getElem, List.getElem_map, Function.comp_apply]
+  exact presentation.quotientMap_quotientWire_of_nonSite
+    (sourceBoundary.get position)
+    (by
+      rw [sourceRoot (sourceBoundary.get position)
+        (List.get_mem sourceBoundary position)]
+      exact fun equality => hnested equality.symm)
+
 /-- The coalesced hidden root classes of a proper nested paired replacement
 are canonically equivalent. -/
 noncomputable def coalescedRootHiddenWireEquivOfNested
@@ -30785,6 +30817,62 @@ theorem outputRootExposedWireEquivOfNested_related
       sourceWireScope
   simpa [outputRootExposedWireEquivOfNested, sourceCoalesced,
     mappedQuotient] using targetGet
+
+/-- The actual plugged-output exposed-class equivalence preserves every
+ordered boundary position. -/
+theorem outputRootExposedWireEquivOfNested_boundaryClass
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (position : Fin sourceBoundary.length) :
+    presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested
+        ((PlugLayout.outputOpenRoot source source.plugLayout
+          sourceBoundary).boundaryClass
+          (Fin.cast (by simp [PlugLayout.outputOpenRoot]) position)) =
+      (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).boundaryClass
+        (Fin.cast (by simp [PlugLayout.outputOpenRoot,
+          targetBoundary]) position) := by
+  let sourceCoalesced :=
+    PlugLayout.coalescedOpenRoot source sourceBoundary
+  let targetCoalesced :=
+    PlugLayout.coalescedOpenRoot target
+      (presentation.targetBoundary sourceBoundary)
+  let sourceOpen :=
+    PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary
+  let targetOpen :=
+    PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)
+  let targetBoundaryPosition :
+      Fin (presentation.targetBoundary sourceBoundary).length :=
+    Fin.cast (presentation.targetBoundary_length sourceBoundary).symm position
+  have sourceBoundaryClass :=
+    source.plugLayout.rootExposedWireEquiv_boundaryClass source sourceBoundary
+      position
+  have targetBoundaryClass :=
+    target.plugLayout.rootExposedWireEquiv_boundaryClass target
+      (presentation.targetBoundary sourceBoundary) targetBoundaryPosition
+  have pairedBoundaryClass :=
+    presentation.coalescedRootExposedWireEquivOfNested_boundaryClass
+      sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+      position
+  have sourceInverse :
+      (source.plugLayout.rootExposedWireEquiv source sourceBoundary).symm
+          ((PlugLayout.outputOpenRoot source source.plugLayout
+            sourceBoundary).boundaryClass
+            (Fin.cast (by simp [PlugLayout.outputOpenRoot]) position)) =
+        (PlugLayout.coalescedOpenRoot source sourceBoundary).boundaryClass
+          (Fin.cast (by simp [PlugLayout.coalescedOpenRoot]) position) := by
+    rw [← sourceBoundaryClass]
+    exact FiniteEquiv.symm_apply_apply _ _
+  rw [outputRootExposedWireEquivOfNested, FiniteEquiv.trans_apply,
+    FiniteEquiv.trans_apply, sourceInverse, pairedBoundaryClass]
+  simpa [targetBoundaryPosition] using targetBoundaryClass
 
 /-- The actual hidden root-wire blocks of the two plugged outputs are
 canonically equivalent at a proper nested replacement. -/
@@ -31254,6 +31342,20 @@ def Distinguished (presentation : TwoInputPresentation source target)
   region = source.plugLayout.frameRegion source.site ∨
     ∃ material : source.plugLayout.materialRegions.Carrier,
       region = source.plugLayout.materialRegion material
+
+/-- A proper nested splice leaves the enclosing root in the regular,
+retained-frame part of the paired traversal. -/
+theorem root_not_distinguished_of_nested
+    (presentation : TwoInputPresentation source target)
+    (hnested : source.site ≠ source.frame.val.root) :
+    ¬ presentation.Distinguished source.plugLayout.plugRaw.root := by
+  change ¬ presentation.Distinguished
+    (source.plugLayout.frameRegion source.frame.val.root)
+  rintro (rootAtSite | ⟨material, rootMaterial⟩)
+  · exact hnested
+      (source.plugLayout.frameRegion_injective rootAtSite).symm
+  · exact source.plugLayout.frameRegion_ne_materialRegion
+      source.frame.val.root material rootMaterial
 
 theorem distinguished_bodyRegion
     (presentation : TwoInputPresentation source target)
@@ -32502,6 +32604,326 @@ theorem contextIndexRelation_root_iff_of_nested
         targetAdmissible sourceBoundary sourceRoot hnested sourceIndex
     subst targetIndex
     exact ⟨wire, sourceGet, targetGet⟩
+
+/-- Canonical injections of the exposed and hidden blocks into the complete
+root context. -/
+def rootExposedIndex (openDiagram : OpenConcreteDiagram)
+    (index : Fin openDiagram.exposedWires.length) :
+    Fin openDiagram.rootWires.length :=
+  Fin.cast (by simp [OpenConcreteDiagram.rootWires])
+    (Fin.castAdd openDiagram.hiddenWires.length index)
+
+def rootHiddenIndex (openDiagram : OpenConcreteDiagram)
+    (index : Fin openDiagram.hiddenWires.length) :
+    Fin openDiagram.rootWires.length :=
+  Fin.cast (by simp [OpenConcreteDiagram.rootWires])
+    (Fin.natAdd openDiagram.exposedWires.length index)
+
+@[simp] theorem rootEnvironment_rootExposedIndex
+    (openDiagram : OpenConcreteDiagram)
+    (outer : Fin openDiagram.exposedWires.length → D)
+    (localEnv : Fin openDiagram.hiddenWires.length → D)
+    (index : Fin openDiagram.exposedWires.length) :
+    ConcreteElaboration.rootEnvironment openDiagram.exposedWires
+        openDiagram.hiddenWires outer localEnv
+        (rootExposedIndex openDiagram index) =
+      outer index := by
+  unfold ConcreteElaboration.rootEnvironment
+  let lengthEq : openDiagram.rootWires.length =
+      openDiagram.exposedWires.length + openDiagram.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  change Fin.addCases outer localEnv
+      (Fin.cast lengthEq (rootExposedIndex openDiagram index)) =
+    outer index
+  have indexEq :
+      Fin.cast lengthEq (rootExposedIndex openDiagram index) =
+        Fin.castAdd openDiagram.hiddenWires.length index := by
+    apply Fin.ext
+    rfl
+  rw [indexEq]
+  exact Fin.addCases_left index
+
+@[simp] theorem rootEnvironment_rootHiddenIndex
+    (openDiagram : OpenConcreteDiagram)
+    (outer : Fin openDiagram.exposedWires.length → D)
+    (localEnv : Fin openDiagram.hiddenWires.length → D)
+    (index : Fin openDiagram.hiddenWires.length) :
+    ConcreteElaboration.rootEnvironment openDiagram.exposedWires
+        openDiagram.hiddenWires outer localEnv
+        (rootHiddenIndex openDiagram index) =
+      localEnv index := by
+  unfold ConcreteElaboration.rootEnvironment
+  let lengthEq : openDiagram.rootWires.length =
+      openDiagram.exposedWires.length + openDiagram.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  change Fin.addCases outer localEnv
+      (Fin.cast lengthEq (rootHiddenIndex openDiagram index)) =
+    localEnv index
+  have indexEq :
+      Fin.cast lengthEq (rootHiddenIndex openDiagram index) =
+        Fin.natAdd openDiagram.exposedWires.length index := by
+    apply Fin.ext
+    rfl
+  rw [indexEq]
+  exact Fin.addCases_right index
+
+theorem outputRootWireEquivOfNested_rootExposedIndex
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (index : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).exposedWires.length) :
+    presentation.outputRootWireEquivOfNested sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested
+        (rootExposedIndex
+          (PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary)
+          index) =
+      rootExposedIndex
+        (PlugLayout.outputOpenRoot target target.plugLayout
+          (presentation.targetBoundary sourceBoundary))
+        (presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+          targetAdmissible sourceBoundary sourceRoot hnested index) := by
+  simp [rootExposedIndex, outputRootWireEquivOfNested,
+    FiniteEquiv.finCast, extendWireEquiv]
+
+theorem outputRootWireEquivOfNested_rootHiddenIndex
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (index : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).hiddenWires.length) :
+    presentation.outputRootWireEquivOfNested sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested
+        (rootHiddenIndex
+          (PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary)
+          index) =
+      rootHiddenIndex
+        (PlugLayout.outputOpenRoot target target.plugLayout
+          (presentation.targetBoundary sourceBoundary))
+        (presentation.outputRootHiddenWireEquivOfNested sourceAdmissible
+          targetAdmissible sourceBoundary sourceRoot hnested index) := by
+  simp [rootHiddenIndex, outputRootWireEquivOfNested,
+    FiniteEquiv.finCast, extendWireEquiv]
+
+/-- A valuation of the source hidden root block extends any agreeing exposed
+valuation to the complete paired nested root contexts. -/
+theorem nestedRootForwardSelection
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (sourceOuter : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).exposedWires.length → D)
+    (targetOuter : Fin (PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)).exposedWires.length → D)
+    (outerAgrees :
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+          targetAdmissible sourceBoundary sourceRoot hnested)).EnvironmentsAgree
+            sourceOuter targetOuter)
+    (sourceLocal : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).hiddenWires.length → D) :
+    ∃ targetLocal : Fin (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).hiddenWires.length → D,
+      (presentation.contextIndexRelation
+        (PlugLayout.outputOpenRoot source source.plugLayout
+          sourceBoundary).rootWires
+        (PlugLayout.outputOpenRoot target target.plugLayout
+          (presentation.targetBoundary sourceBoundary)).rootWires
+      ).EnvironmentsAgree
+        (ConcreteElaboration.rootEnvironment
+          (PlugLayout.outputOpenRoot source source.plugLayout
+            sourceBoundary).exposedWires
+          (PlugLayout.outputOpenRoot source source.plugLayout
+            sourceBoundary).hiddenWires sourceOuter sourceLocal)
+        (ConcreteElaboration.rootEnvironment
+          (PlugLayout.outputOpenRoot target target.plugLayout
+            (presentation.targetBoundary sourceBoundary)).exposedWires
+          (PlugLayout.outputOpenRoot target target.plugLayout
+            (presentation.targetBoundary sourceBoundary)).hiddenWires
+          targetOuter targetLocal) := by
+  let sourceOpen :=
+    PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary
+  let targetOpen :=
+    PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)
+  let exposedEquiv :=
+    presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  let hiddenEquiv :=
+    presentation.outputRootHiddenWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  let rootEquiv :=
+    presentation.outputRootWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  let targetLocal : Fin targetOpen.hiddenWires.length → D :=
+    sourceLocal ∘ hiddenEquiv.symm
+  refine ⟨targetLocal, ?_⟩
+  intro sourceIndex targetIndex related
+  have mapped :
+      rootEquiv sourceIndex = targetIndex := by
+    exact (presentation.contextIndexRelation_root_iff_of_nested
+      sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+      sourceIndex targetIndex).1 related
+  subst targetIndex
+  let sourceEq : sourceOpen.rootWires.length =
+      sourceOpen.exposedWires.length + sourceOpen.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  let split := Fin.cast sourceEq sourceIndex
+  have sourceIndexEq :
+      sourceIndex = Fin.cast sourceEq.symm split := by
+    apply Fin.ext
+    rfl
+  rw [sourceIndexEq]
+  refine Fin.addCases (fun exposed => ?_) (fun hidden => ?_) split
+  · have agrees := outerAgrees exposed (exposedEquiv exposed) rfl
+    have indexForm :
+        Fin.cast sourceEq.symm
+            (Fin.castAdd sourceOpen.hiddenWires.length exposed) =
+          rootExposedIndex sourceOpen exposed := by
+      apply Fin.ext
+      rfl
+    rw [indexForm]
+    rw [show rootEquiv (rootExposedIndex sourceOpen exposed) =
+        rootExposedIndex targetOpen (exposedEquiv exposed) by
+      simpa [sourceOpen, targetOpen, exposedEquiv, rootEquiv] using
+        presentation.outputRootWireEquivOfNested_rootExposedIndex
+          sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+          exposed]
+    simpa [sourceOpen, targetOpen] using agrees
+  · have indexForm :
+        Fin.cast sourceEq.symm
+            (Fin.natAdd sourceOpen.exposedWires.length hidden) =
+          rootHiddenIndex sourceOpen hidden := by
+      apply Fin.ext
+      rfl
+    rw [indexForm]
+    rw [show rootEquiv (rootHiddenIndex sourceOpen hidden) =
+        rootHiddenIndex targetOpen (hiddenEquiv hidden) by
+      simpa [sourceOpen, targetOpen, hiddenEquiv, rootEquiv] using
+        presentation.outputRootWireEquivOfNested_rootHiddenIndex
+          sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+          hidden]
+    rw [rootEnvironment_rootHiddenIndex, rootEnvironment_rootHiddenIndex]
+    change sourceLocal hidden =
+      sourceLocal (hiddenEquiv.symm (hiddenEquiv hidden))
+    exact congrArg sourceLocal
+      (FiniteEquiv.symm_apply_apply hiddenEquiv hidden).symm
+
+/-- The backward dual reconstructs the source hidden valuation from the
+target hidden block while preserving the same exposed-context agreement. -/
+theorem nestedRootBackwardSelection
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (sourceOuter : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).exposedWires.length → D)
+    (targetOuter : Fin (PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)).exposedWires.length → D)
+    (outerAgrees :
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+          targetAdmissible sourceBoundary sourceRoot hnested)).EnvironmentsAgree
+            sourceOuter targetOuter)
+    (targetLocal : Fin (PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)).hiddenWires.length → D) :
+    ∃ sourceLocal : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).hiddenWires.length → D,
+      (presentation.contextIndexRelation
+        (PlugLayout.outputOpenRoot source source.plugLayout
+          sourceBoundary).rootWires
+        (PlugLayout.outputOpenRoot target target.plugLayout
+          (presentation.targetBoundary sourceBoundary)).rootWires
+      ).EnvironmentsAgree
+        (ConcreteElaboration.rootEnvironment
+          (PlugLayout.outputOpenRoot source source.plugLayout
+            sourceBoundary).exposedWires
+          (PlugLayout.outputOpenRoot source source.plugLayout
+            sourceBoundary).hiddenWires sourceOuter sourceLocal)
+        (ConcreteElaboration.rootEnvironment
+          (PlugLayout.outputOpenRoot target target.plugLayout
+            (presentation.targetBoundary sourceBoundary)).exposedWires
+          (PlugLayout.outputOpenRoot target target.plugLayout
+            (presentation.targetBoundary sourceBoundary)).hiddenWires
+          targetOuter targetLocal) := by
+  let sourceOpen :=
+    PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary
+  let targetOpen :=
+    PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)
+  let exposedEquiv :=
+    presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  let hiddenEquiv :=
+    presentation.outputRootHiddenWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  let rootEquiv :=
+    presentation.outputRootWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  let sourceLocal : Fin sourceOpen.hiddenWires.length → D :=
+    targetLocal ∘ hiddenEquiv
+  refine ⟨sourceLocal, ?_⟩
+  intro sourceIndex targetIndex related
+  have mapped :
+      rootEquiv sourceIndex = targetIndex := by
+    exact (presentation.contextIndexRelation_root_iff_of_nested
+      sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+      sourceIndex targetIndex).1 related
+  subst targetIndex
+  let sourceEq : sourceOpen.rootWires.length =
+      sourceOpen.exposedWires.length + sourceOpen.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  let split := Fin.cast sourceEq sourceIndex
+  have sourceIndexEq :
+      sourceIndex = Fin.cast sourceEq.symm split := by
+    apply Fin.ext
+    rfl
+  rw [sourceIndexEq]
+  refine Fin.addCases (fun exposed => ?_) (fun hidden => ?_) split
+  · have agrees := outerAgrees exposed (exposedEquiv exposed) rfl
+    have indexForm :
+        Fin.cast sourceEq.symm
+            (Fin.castAdd sourceOpen.hiddenWires.length exposed) =
+          rootExposedIndex sourceOpen exposed := by
+      apply Fin.ext
+      rfl
+    rw [indexForm]
+    rw [show rootEquiv (rootExposedIndex sourceOpen exposed) =
+        rootExposedIndex targetOpen (exposedEquiv exposed) by
+      simpa [sourceOpen, targetOpen, exposedEquiv, rootEquiv] using
+        presentation.outputRootWireEquivOfNested_rootExposedIndex
+          sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+          exposed]
+    simpa [sourceOpen, targetOpen] using agrees
+  · have indexForm :
+        Fin.cast sourceEq.symm
+            (Fin.natAdd sourceOpen.exposedWires.length hidden) =
+          rootHiddenIndex sourceOpen hidden := by
+      apply Fin.ext
+      rfl
+    rw [indexForm]
+    rw [show rootEquiv (rootHiddenIndex sourceOpen hidden) =
+        rootHiddenIndex targetOpen (hiddenEquiv hidden) by
+      simpa [sourceOpen, targetOpen, hiddenEquiv, rootEquiv] using
+        presentation.outputRootWireEquivOfNested_rootHiddenIndex
+          sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+          hidden]
+    simp [sourceOpen, targetOpen, sourceLocal, hiddenEquiv]
 
 theorem contextIndexRelation_of_sharedWire
     (presentation : TwoInputPresentation source target)
@@ -36793,6 +37215,345 @@ noncomputable def concreteSemanticSimulationOfEmpty
         (source.plugLayout.frameRegion source.site))
       (presentation.contextIndexRelation sourceContext targetContext)
       model named sourceItems targetItems transport
+
+/-- The canonical complete-root simulation for a proper nested replacement.
+The root remains regular, so its existential hidden-wire semantics is derived
+from the proved complete root-context bijection and the generic item
+simulation. -/
+noncomputable def nestedRootContextSimulationOfEmpty
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (siteDirection rootDirection :
+      ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (localLaw : match siteDirection with
+      | .forward => ∀ sourceArgs,
+          source.pattern.denote model named sourceArgs →
+            target.pattern.denote model named
+              (sourceArgs ∘
+                Fin.cast presentation.boundary_arity_eq.symm)
+      | .backward => ∀ targetArgs,
+          target.pattern.denote model named targetArgs →
+            source.pattern.denote model named
+              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)) :
+    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+      (presentation.concreteSemanticSimulationOfEmpty sourceAdmissible
+        targetAdmissible sourceZero targetZero sourceBoundary siteDirection
+        model named localLaw)
+      rootDirection
+      (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).exposedWires
+      (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).hiddenWires
+      (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).exposedWires
+      (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).hiddenWires := by
+  let sourceOpen :=
+    PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary
+  let targetOpen :=
+    PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)
+  let exposedEquiv :=
+    presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  let simulation :=
+    presentation.concreteSemanticSimulationOfEmpty sourceAdmissible
+      targetAdmissible sourceZero targetZero sourceBoundary siteDirection
+      model named localLaw
+  have rootRegular :
+      ¬ presentation.Distinguished source.plugLayout.plugRaw.root :=
+    presentation.root_not_distinguished_of_nested hnested
+  let context : presentation.ContextWitness sourceBoundary
+      sourceOpen.rootWires targetOpen.rootWires :=
+    .root
+  refine {
+    outer := ConcreteElaboration.ContextIndexRelation.forwardMap exposedEquiv
+    context := context
+    atRoot := ?_
+    atRootChild := ?_
+    atFocusedRootChild := ?_
+    transport := ?_
+    focusedRootKernel := ?_
+  }
+  · exact ContextWitness.AtRegion.root
+  · intro regular child childParent
+    exact ContextWitness.AtRegion.rootChild regular childParent
+  · intro focused
+    exact False.elim (rootRegular focused)
+  · intro _regular _allowed sourceItems targetItems _sourceCompiled
+      _targetCompiled itemSemantics
+    apply ConcreteElaboration.directionalRootTransport_of_agreement
+      rootDirection sourceOpen.exposedWires sourceOpen.hiddenWires
+      targetOpen.exposedWires targetOpen.hiddenWires
+      (ConcreteElaboration.ContextIndexRelation.forwardMap exposedEquiv)
+      (presentation.contextIndexRelation sourceOpen.rootWires
+        targetOpen.rootWires)
+      model named
+      (sourceItems.renameRelations
+        (simulation.relationMap simulation.binders_empty))
+      targetItems
+    · intro sourceOuter targetOuter outerAgrees
+      cases rootDirection with
+      | forward =>
+          simpa only [sourceOpen, targetOpen, exposedEquiv,
+            OpenConcreteDiagram.rootWires] using
+            presentation.nestedRootForwardSelection sourceAdmissible
+              targetAdmissible sourceBoundary sourceRoot hnested sourceOuter
+              targetOuter outerAgrees
+      | backward =>
+          simpa only [sourceOpen, targetOpen, exposedEquiv,
+            OpenConcreteDiagram.rootWires] using
+            presentation.nestedRootBackwardSelection sourceAdmissible
+              targetAdmissible sourceBoundary sourceRoot hnested sourceOuter
+              targetOuter outerAgrees
+    · simpa only [simulation, context, sourceOpen, targetOpen,
+        concreteSemanticSimulationOfEmpty, OpenConcreteDiagram.rootWires] using
+        itemSemantics
+  · intro _atRoot focused
+    exact False.elim (rootRegular focused)
+
+/-- The common ordered retained-frame argument vector supplies the directional
+boundary witness for the paired nested plugged outputs. -/
+theorem nestedDirectionalBoundaryWitnessOfEmpty
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin sourceBoundary.length → model.Carrier) :
+    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+      direction
+      (PlugLayout.checkedOutputOpenRoot source source.plugLayout
+        sourceAdmissible sourceBoundary sourceRoot).elaborate
+      (PlugLayout.checkedOutputOpenRoot target target.plugLayout
+        targetAdmissible (presentation.targetBoundary sourceBoundary)
+        (presentation.targetBoundary_root sourceBoundary sourceRoot)).elaborate
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+          targetAdmissible sourceBoundary sourceRoot hnested))
+      model named
+      (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
+        PlugLayout.outputOpenRoot]))
+      (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
+        PlugLayout.outputOpenRoot, targetBoundary])) := by
+  let sourceOpen :=
+    PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary
+  let targetOpen :=
+    PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)
+  let exposedEquiv :=
+    presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  have sourceBoundaryLength :
+      sourceOpen.boundary.length = sourceBoundary.length := by
+    simp [sourceOpen, PlugLayout.outputOpenRoot]
+  have targetBoundaryLength :
+      targetOpen.boundary.length = sourceBoundary.length := by
+    simp [targetOpen, PlugLayout.outputOpenRoot, targetBoundary]
+  let sourceArgs : Fin sourceOpen.boundary.length → model.Carrier :=
+    args ∘ Fin.cast sourceBoundaryLength
+  let targetArgs : Fin targetOpen.boundary.length → model.Carrier :=
+    args ∘ Fin.cast targetBoundaryLength
+  have boundaryCommutes :
+      ∀ position : Fin sourceBoundary.length,
+        exposedEquiv
+            (sourceOpen.boundaryClass
+              (Fin.cast (by simp [sourceOpen, PlugLayout.outputOpenRoot])
+                position)) =
+          targetOpen.boundaryClass
+            (Fin.cast (by simp [targetOpen, PlugLayout.outputOpenRoot,
+              targetBoundary]) position) := by
+    intro position
+    simpa [sourceOpen, targetOpen, exposedEquiv] using
+      presentation.outputRootExposedWireEquivOfNested_boundaryClass
+        sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+        position
+  change ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    direction
+    (PlugLayout.checkedOutputOpenRoot source source.plugLayout
+      sourceAdmissible sourceBoundary sourceRoot).elaborate
+    (PlugLayout.checkedOutputOpenRoot target target.plugLayout
+      targetAdmissible (presentation.targetBoundary sourceBoundary)
+      (presentation.targetBoundary_root sourceBoundary sourceRoot)).elaborate
+    (ConcreteElaboration.ContextIndexRelation.forwardMap exposedEquiv)
+    model named sourceArgs targetArgs
+  cases direction with
+  | forward =>
+      intro sourceAssignment sourceAssignmentArgs _sourceDenotes
+      let targetAssignment :
+          BoundaryAssignment
+            (PlugLayout.checkedOutputOpenRoot target target.plugLayout
+              targetAdmissible (presentation.targetBoundary sourceBoundary)
+              (presentation.targetBoundary_root sourceBoundary
+                sourceRoot)).elaborate
+            model.Carrier := {
+        args := targetArgs
+        classes := sourceAssignment.classes ∘ exposedEquiv.symm
+        agrees := by
+          intro targetPosition
+          change Fin targetOpen.boundary.length at targetPosition
+          let position : Fin sourceBoundary.length :=
+            Fin.cast targetBoundaryLength targetPosition
+          have positionEq :
+              targetPosition =
+                Fin.cast targetBoundaryLength.symm position := by
+            apply Fin.ext
+            rfl
+          have commute := boundaryCommutes position
+          change sourceAssignment.classes
+              (exposedEquiv.symm
+                (targetOpen.boundaryClass targetPosition)) =
+            targetArgs targetPosition
+          rw [positionEq, ← commute, FiniteEquiv.symm_apply_apply]
+          have sourceAgrees := sourceAssignment.agrees
+            (Fin.cast sourceBoundaryLength.symm position)
+          change sourceAssignment.classes
+              (sourceOpen.boundaryClass
+                (Fin.cast sourceBoundaryLength.symm position)) =
+            sourceAssignment.args
+              (Fin.cast sourceBoundaryLength.symm position) at sourceAgrees
+          rw [sourceAgrees]
+          simpa [sourceArgs, targetArgs, position] using
+            congrFun sourceAssignmentArgs
+              (Fin.cast sourceBoundaryLength.symm position)
+      }
+      refine ⟨targetAssignment, rfl, ?_⟩
+      intro sourceClass targetClass related
+      subst targetClass
+      change sourceAssignment.classes sourceClass =
+        sourceAssignment.classes
+          (exposedEquiv.symm (exposedEquiv sourceClass))
+      rw [FiniteEquiv.symm_apply_apply]
+  | backward =>
+      intro targetAssignment targetAssignmentArgs _targetDenotes
+      let sourceAssignment :
+          BoundaryAssignment
+            (PlugLayout.checkedOutputOpenRoot source source.plugLayout
+              sourceAdmissible sourceBoundary sourceRoot).elaborate
+            model.Carrier := {
+        args := sourceArgs
+        classes := targetAssignment.classes ∘ exposedEquiv
+        agrees := by
+          intro sourcePosition
+          change Fin sourceOpen.boundary.length at sourcePosition
+          let position : Fin sourceBoundary.length :=
+            Fin.cast sourceBoundaryLength sourcePosition
+          have positionEq :
+              sourcePosition =
+                Fin.cast sourceBoundaryLength.symm position := by
+            apply Fin.ext
+            rfl
+          have commute := boundaryCommutes position
+          let targetPosition : Fin targetOpen.boundary.length :=
+            Fin.cast targetBoundaryLength.symm position
+          change targetAssignment.classes
+              (exposedEquiv (sourceOpen.boundaryClass sourcePosition)) =
+            sourceArgs sourcePosition
+          rw [positionEq, commute]
+          have targetAgrees := targetAssignment.agrees targetPosition
+          change targetAssignment.classes
+              (targetOpen.boundaryClass targetPosition) =
+            targetAssignment.args targetPosition at targetAgrees
+          rw [targetAgrees]
+          simpa [sourceArgs, targetArgs, position, targetPosition] using
+            congrFun targetAssignmentArgs targetPosition
+      }
+      refine ⟨sourceAssignment, rfl, ?_⟩
+      intro sourceClass targetClass related
+      subst targetClass
+      rfl
+
+/-- Logical validity of a proper nested empty-spine paired replacement,
+lifted through the actual checked open compiler outputs.  The active root
+direction is the variance allowed by the enclosing cut parity; the ordered
+boundary arguments are preserved positionally. -/
+theorem nestedOutput_denoteOfEmpty
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (siteDirection rootDirection :
+      ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (localLaw : match siteDirection with
+      | .forward => ∀ sourceArgs,
+          source.pattern.denote model named sourceArgs →
+            target.pattern.denote model named
+              (sourceArgs ∘
+                Fin.cast presentation.boundary_arity_eq.symm)
+      | .backward => ∀ targetArgs,
+          target.pattern.denote model named targetArgs →
+            source.pattern.denote model named
+              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (allowed : presentation.Allowed siteDirection rootDirection
+      source.plugLayout.plugRaw.root)
+    (args : Fin sourceBoundary.length → model.Carrier) :
+    rootDirection.Entails
+      ((PlugLayout.checkedOutputOpenRoot source source.plugLayout
+        sourceAdmissible sourceBoundary sourceRoot).denote model named
+        (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
+          PlugLayout.outputOpenRoot])))
+      ((PlugLayout.checkedOutputOpenRoot target target.plugLayout
+        targetAdmissible (presentation.targetBoundary sourceBoundary)
+        (presentation.targetBoundary_root sourceBoundary sourceRoot)).denote
+        model named
+        (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
+          PlugLayout.outputOpenRoot, targetBoundary]))) := by
+  let sourceOpen :=
+    PlugLayout.checkedOutputOpenRoot source source.plugLayout
+      sourceAdmissible sourceBoundary sourceRoot
+  let targetOpen :=
+    PlugLayout.checkedOutputOpenRoot target target.plugLayout
+      targetAdmissible (presentation.targetBoundary sourceBoundary)
+      (presentation.targetBoundary_root sourceBoundary sourceRoot)
+  let simulation :=
+    presentation.concreteSemanticSimulationOfEmpty sourceAdmissible
+      targetAdmissible sourceZero targetZero sourceBoundary siteDirection
+      model named localLaw
+  let rootContext :=
+    presentation.nestedRootContextSimulationOfEmpty sourceAdmissible
+      targetAdmissible sourceZero targetZero sourceBoundary sourceRoot hnested
+      siteDirection rootDirection model named localLaw
+  let sourceArgs : Fin sourceOpen.val.boundary.length → model.Carrier :=
+    args ∘ Fin.cast (by simp [sourceOpen,
+      PlugLayout.checkedOutputOpenRoot, PlugLayout.outputOpenRoot])
+  let targetArgs : Fin targetOpen.val.boundary.length → model.Carrier :=
+    args ∘ Fin.cast (by simp [targetOpen,
+      PlugLayout.checkedOutputOpenRoot, PlugLayout.outputOpenRoot,
+      targetBoundary])
+  have boundary :=
+    presentation.nestedDirectionalBoundaryWitnessOfEmpty sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested rootDirection model
+      named args
+  exact
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      sourceOpen targetOpen model named simulation rootDirection rootContext
+      allowed sourceArgs targetArgs (by
+        simpa [sourceOpen, targetOpen, simulation, rootContext, sourceArgs,
+          targetArgs] using boundary)
 
 end TwoInputPresentation
 
