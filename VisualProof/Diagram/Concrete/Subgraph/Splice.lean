@@ -31624,6 +31624,23 @@ inductive ContextWitness.AtRegion
       AtRegion
         (.extendRegular parentWitness parent regular sourceExact targetExact)
         child
+  | extendHere
+      {sourceContext : ConcreteElaboration.WireContext
+        source.plugLayout.plugRaw}
+      {targetContext : ConcreteElaboration.WireContext
+        target.plugLayout.plugRaw}
+      {region : Fin source.plugLayout.plugRaw.regionCount}
+      {parentWitness : ContextWitness presentation sourceBoundary
+        sourceContext targetContext}
+      (atRegion : AtRegion parentWitness region)
+      (regular : ¬ presentation.Distinguished region)
+      (sourceExact : (sourceContext.extend region).Exact region)
+      (targetExact :
+        (targetContext.extend (presentation.regionMap region)).Exact
+          (presentation.regionMap region)) :
+      AtRegion
+        (.extendRegular parentWitness region regular sourceExact targetExact)
+        region
   | extendFocusedChild
       {sourceContext : ConcreteElaboration.WireContext
         source.plugLayout.plugRaw}
@@ -31731,6 +31748,8 @@ theorem ContextWitness.focused_region_eq_site
       · exact focused
       · exact False.elim
           (source.plugLayout.frameRegion_ne_materialRegion frame material focused)
+  | extendHere atRegion regular sourceExact targetExact ih =>
+      exact False.elim (regular focused)
   | @extendFocusedChild sourceContext targetContext parent parentWitness
       parentAt parentFocused sourceExact targetExact child sourceParent
       targetParent ih =>
@@ -34768,6 +34787,20 @@ theorem compilePatternRootOccurrence_at_site_simulation
                         bodies sourceEnv targetEnv (relationValue, relEnv)
                           environments targetDenotes⟩
 
+/-- A retained-frame position in the semantic insertion order of an arbitrary
+plug-layout witness for the same input. -/
+def frameSiteSemanticIndexAt
+    (input : Input signature)
+    (layout : PlugLayout input)
+    (index : Fin (ConcreteElaboration.localOccurrences
+      input.coalesceFrameRaw input.site).length) :
+    Fin layout.semanticSiteOccurrences.length :=
+  Fin.cast (by simp [PlugLayout.semanticSiteOccurrences])
+    (Fin.castAdd
+      (ConcreteElaboration.localOccurrences
+        input.pattern.val.diagram input.binderSpine.bodyContainer).length
+      index)
+
 /-- The terminal-pattern position in semantic insertion order for an empty
 proxy spine. -/
 def patternSiteSemanticIndex
@@ -34875,6 +34908,162 @@ theorem focusedPatternOccurrence_itemSimulation
     (List.get_mem _ occurrenceIndex)
     (pattern.items.get patternIndex) (outputLeaf.items.get targetIndex)
     (by simpa [occurrenceIndex, patternLength] using sourceGet) targetGet'
+
+/-- Reassemble the complete actual focused conjunction from its two semantic
+blocks.  Retained-frame items are supplied by the caller; intrinsic pattern
+items are transported through the authoritative pattern compiler simulation.
+The executable node/child enumeration order is handled solely by
+`siteOccurrenceEquiv`. -/
+theorem denoteFocusedItems_of_patternRootItems_and_frame
+    {signature : List Nat}
+    {input : Input signature}
+    (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
+      (layout.frameRegion input.site) outputWitness)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (env : Fin (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
+    (patternDenotes :
+      let pattern := compiledSpliceOpenRootItems input.pattern
+      denoteItemSeq (relCtx := []) model named
+        (env ∘ layout.patternRootWireIndexMap hadmissible hzero
+          outputWitness outputLeaf)
+        (PUnit.unit : RelEnv model.Carrier []) pattern.items)
+    (frameDenotes :
+      ∀ frameIndex : Fin (ConcreteElaboration.localOccurrences
+          input.coalesceFrameRaw input.site).length,
+        let occurrenceIndex :=
+          layout.siteOccurrenceEquiv
+            (layout.frameSiteSemanticIndexAt input frameIndex)
+        let itemIndex := Fin.cast
+          (ConcreteElaboration.compileOccurrencesWith?_length
+            (ConcreteElaboration.compileRegion? signature layout.plugRaw
+              outputLeaf.fuel)
+            (outputLeaf.inheritedWires.extend
+              (layout.frameRegion input.site))
+            outputLeaf.binders outputLeaf.itemsComputation).symm
+          occurrenceIndex
+        denoteItem model named env relEnv (outputLeaf.items.get itemIndex)) :
+    denoteItemSeq model named env relEnv outputLeaf.items := by
+  let pattern := compiledSpliceOpenRootItems input.pattern
+  have targetLength :=
+    ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+        outputLeaf.fuel)
+      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+      outputLeaf.binders outputLeaf.itemsComputation
+  have patternLength :=
+    ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature
+        input.pattern.val.diagram input.pattern.val.diagram.regionCount)
+      (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
+      ConcreteElaboration.BinderContext.empty pattern.computation
+  apply (denoteItemSeq_iff_get model named env relEnv outputLeaf.items).mpr
+  intro targetIndex
+  let targetOccurrenceIndex := Fin.cast targetLength targetIndex
+  let semanticIndex := layout.siteOccurrenceEquiv.symm targetOccurrenceIndex
+  let split : Fin
+      ((ConcreteElaboration.localOccurrences input.coalesceFrameRaw
+          input.site).length +
+        (ConcreteElaboration.localOccurrences input.pattern.val.diagram
+          input.pattern.val.diagram.root).length) :=
+    Fin.cast (by
+      rw [PlugLayout.semanticSiteOccurrences,
+        input.binderSpine.body_eq_root_of_empty hzero]
+      simp) semanticIndex
+  have semanticRecover :
+      Fin.cast (by
+        rw [PlugLayout.semanticSiteOccurrences,
+          input.binderSpine.body_eq_root_of_empty hzero]
+        simp) split = semanticIndex := by
+    apply Fin.ext
+    rfl
+  revert semanticRecover
+  refine Fin.addCases (fun frameIndex semanticRecover => ?_)
+    (fun patternOccurrenceIndex semanticRecover => ?_) split
+  · let frameSemanticIndex := layout.frameSiteSemanticIndexAt input frameIndex
+    have semanticEq : semanticIndex = frameSemanticIndex := by
+      apply Fin.ext
+      exact congrArg Fin.val semanticRecover.symm
+    let occurrenceIndex := layout.siteOccurrenceEquiv frameSemanticIndex
+    let itemIndex := Fin.cast targetLength.symm occurrenceIndex
+    have targetOccurrenceEq :
+        targetOccurrenceIndex = occurrenceIndex := by
+      change targetOccurrenceIndex =
+        layout.siteOccurrenceEquiv frameSemanticIndex
+      rw [← semanticEq]
+      exact (layout.siteOccurrenceEquiv.right_inv targetOccurrenceIndex).symm
+    have targetIndexEq : targetIndex = itemIndex := by
+      apply Fin.ext
+      change targetOccurrenceIndex.val = occurrenceIndex.val
+      exact congrArg Fin.val targetOccurrenceEq
+    subst targetIndex
+    exact frameDenotes frameIndex
+  · let occurrenceIndex : Fin
+        (ConcreteElaboration.localOccurrences input.pattern.val.diagram
+          input.pattern.val.diagram.root).length :=
+      patternOccurrenceIndex
+    let patternIndex := Fin.cast patternLength.symm occurrenceIndex
+    have patternSemanticEq :
+        semanticIndex =
+          patternSiteSemanticIndex input layout hzero occurrenceIndex := by
+      apply Fin.ext
+      exact congrArg Fin.val semanticRecover.symm
+    obtain ⟨actualIndex, actualIndexVal, simulation⟩ :=
+      layout.focusedPatternOccurrence_itemSimulation hadmissible outputWitness
+        outputLeaf hzero model named .forward patternIndex
+    have actualIndexEq : actualIndex = targetIndex := by
+      apply Fin.ext
+      calc
+        actualIndex.val =
+            (layout.siteOccurrenceEquiv
+              (patternSiteSemanticIndex input layout hzero
+                (Fin.cast patternLength patternIndex))).val :=
+          actualIndexVal
+        _ = (layout.siteOccurrenceEquiv semanticIndex).val := by
+          rw [Fin.cast_cast]
+          simpa [patternIndex] using
+            congrArg (fun index => (layout.siteOccurrenceEquiv index).val)
+              patternSemanticEq.symm
+        _ = targetOccurrenceIndex.val := by
+          exact congrArg Fin.val
+            (layout.siteOccurrenceEquiv.right_inv targetOccurrenceIndex)
+        _ = targetIndex.val := rfl
+    subst actualIndex
+    have intrinsicDenotes :=
+      (denoteItemSeq_iff_get (relCtx := []) model named
+        (env ∘ layout.patternRootWireIndexMap hadmissible hzero
+          outputWitness outputLeaf)
+        (PUnit.unit : RelEnv model.Carrier []) pattern.items).mp
+        patternDenotes patternIndex
+    have relationAgrees : RelEnv.Agrees
+        (emptyRelationRenaming outputWitness.toFocus.holeRels)
+        (PUnit.unit : RelEnv model.Carrier []) relEnv := by
+      simpa using RelEnv.pullback_agrees
+        (emptyRelationRenaming outputWitness.toFocus.holeRels) relEnv
+    have renamedDenotes :=
+      (denoteItem_renameRelations model named
+        (emptyRelationRenaming outputWitness.toFocus.holeRels)
+        (PUnit.unit : RelEnv model.Carrier []) relEnv relationAgrees
+        (env ∘ layout.patternRootWireIndexMap hadmissible hzero
+          outputWitness outputLeaf)
+        (pattern.items.get patternIndex)).mpr intrinsicDenotes
+    exact simulation
+      (env ∘ layout.patternRootWireIndexMap hadmissible hzero
+        outputWitness outputLeaf)
+      env relEnv (by
+        intro sourceIndex mappedIndex related
+        change layout.patternRootWireIndexMap hadmissible hzero
+          outputWitness outputLeaf sourceIndex = mappedIndex at related
+        subst mappedIndex
+        rfl) renamedDenotes
 
 /-- The actual focused item conjunction entails the intrinsic empty-spine
 pattern-root conjunction under the canonical direct wire map.  Pattern
@@ -35023,5 +35212,890 @@ theorem pattern_denote_of_denoteFocusedItems
     outputLeaf hzero model named env fallback
   exact input.plugLayout.denotePatternRootItems_of_denoteFocusedItems input
     hadmissible outputWitness outputLeaf hzero model named env relEnv denotes
+
+namespace TwoInputPresentation
+
+/-- Complete proof-dependent local transport at the distinguished splice site
+in the forward direction.  The active source witness determines the target
+quotient values and hidden pattern witness; retained-frame items are then
+transported recursively and the target conjunction is reassembled in the
+executable occurrence order. -/
+theorem focusedForwardLocalTransportOfEmpty
+    {signature : List Nat} {source target : Input signature}
+    {rels : Theory.RelCtx}
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (siteDirection : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (fuelSource fuelTarget : Nat)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (targetRegion : Fin target.plugLayout.plugRaw.regionCount)
+    (targetRegion_eq :
+      targetRegion = target.plugLayout.frameRegion target.site)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw rels)
+    (allowed : presentation.Allowed siteDirection .forward
+      (source.plugLayout.frameRegion source.site))
+    (bindersRelated :
+      presentation.BinderRelated sourceBinders targetBinders)
+    (sourceExact : (sourceContext.extend
+      (source.plugLayout.frameRegion source.site)).Exact
+        (source.plugLayout.frameRegion source.site))
+    (targetExact : (targetContext.extend targetRegion).Exact targetRegion)
+    (sourceBindersCover :
+      sourceBinders.Covers (source.plugLayout.frameRegion source.site))
+    (targetBindersCover : targetBinders.Covers targetRegion)
+    (sourceEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration
+        source.plugLayout.plugRaw sourceBinders
+        (source.plugLayout.frameRegion source.site))
+    (targetEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration
+        target.plugLayout.plugRaw targetBinders targetRegion)
+    (recurse : ∀
+      {childDirection : ConcreteElaboration.SimulationDirection}
+      {child : Fin source.plugLayout.plugRaw.regionCount}
+      {childRels : Theory.RelCtx}
+      {childSourceBinders : ConcreteElaboration.BinderContext
+        source.plugLayout.plugRaw childRels}
+      {childTargetBinders : ConcreteElaboration.BinderContext
+        target.plugLayout.plugRaw childRels}
+      {sourceBody : Region signature
+        (sourceContext.extend
+          (source.plugLayout.frameRegion source.site)).length childRels}
+      {targetBody : Region signature
+        (targetContext.extend targetRegion).length childRels},
+      (source.plugLayout.plugRaw.regions child).parent? =
+          some (source.plugLayout.frameRegion source.site) →
+      (target.plugLayout.plugRaw.regions
+        (presentation.regionMap child)).parent? =
+          some targetRegion →
+      presentation.Allowed siteDirection childDirection child →
+      presentation.BinderRelated childSourceBinders childTargetBinders →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers (presentation.regionMap child) →
+      ConcreteElaboration.BinderContext.Enumeration
+        source.plugLayout.plugRaw childSourceBinders child →
+      ConcreteElaboration.BinderContext.Enumeration
+        target.plugLayout.plugRaw childTargetBinders
+        (presentation.regionMap child) →
+      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+          fuelSource child
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          childSourceBinders = some sourceBody →
+      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+          fuelTarget (presentation.regionMap child)
+          (targetContext.extend targetRegion)
+          childTargetBinders = some targetBody →
+      ConcreteElaboration.RegionSimulation model named childDirection
+        (presentation.contextIndexRelation
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          (targetContext.extend targetRegion))
+        sourceBody targetBody)
+    (sourceItems : ItemSeq signature
+      (sourceContext.extend
+        (source.plugLayout.frameRegion source.site)).length rels)
+    (targetItems : ItemSeq signature
+      (targetContext.extend targetRegion).length rels)
+    (sourceItemsCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        source.plugLayout.plugRaw
+        (ConcreteElaboration.compileRegion? signature
+          source.plugLayout.plugRaw fuelSource)
+        (sourceContext.extend
+          (source.plugLayout.frameRegion source.site))
+        sourceBinders
+        (ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
+          (source.plugLayout.frameRegion source.site)) = some sourceItems)
+    (targetItemsCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        target.plugLayout.plugRaw
+        (ConcreteElaboration.compileRegion? signature
+          target.plugLayout.plugRaw fuelTarget)
+        (targetContext.extend targetRegion)
+        targetBinders
+        (ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
+          targetRegion) = some targetItems)
+    (localLaw : ∀ sourceArgs,
+      source.pattern.denote model named sourceArgs →
+        target.pattern.denote model named
+          (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm)) :
+    ∀ relEnv,
+      ConcreteElaboration.DirectionalLocalTransport .forward
+        sourceContext targetContext
+        (source.plugLayout.frameRegion source.site)
+        targetRegion
+        (presentation.contextIndexRelation sourceContext targetContext)
+        model named relEnv sourceItems targetItems := by
+  subst targetRegion
+  intro relEnv sourceOuter targetOuter outerAgrees sourceLocal sourceDenotes
+  let sourceWitness : Region.ContextPath
+      (ConcreteElaboration.finishRegion source.plugLayout.plugRaw sourceContext
+        (source.plugLayout.frameRegion source.site) sourceItems) [] :=
+    .here _
+  let sourceLeaf :=
+    Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      source.plugLayout.plugRaw
+      (source.plugLayout.frameRegion source.site) sourceContext sourceBinders
+      fuelSource sourceItems sourceItemsCompiled sourceExact sourceBindersCover
+      sourceEnumeration
+  let targetWitness : Region.ContextPath
+      (ConcreteElaboration.finishRegion target.plugLayout.plugRaw targetContext
+        (target.plugLayout.frameRegion target.site) targetItems) [] :=
+    .here _
+  let targetLeaf :=
+    Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      target.plugLayout.plugRaw
+      (target.plugLayout.frameRegion target.site) targetContext targetBinders
+      fuelTarget targetItems targetItemsCompiled targetExact targetBindersCover
+      targetEnumeration
+  let fallback : model.Carrier :=
+    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
+      Lambda.Term 0 (Fin 0)) Fin.elim0
+  let sourceEnv :=
+    ConcreteElaboration.extendedEnvironment sourceContext
+      (source.plugLayout.frameRegion source.site) sourceOuter sourceLocal
+  let sourceValues :=
+    siteQuotientEnvironment source
+      (sourceContext.extend (source.plugLayout.frameRegion source.site))
+      sourceExact sourceEnv fallback
+  have sourcePatternDenotes :
+      source.pattern.denote model named (fun position =>
+        sourceValues (source.quotientWire (source.attachment position))) := by
+    exact pattern_denote_of_denoteFocusedItems source sourceAdmissible
+      sourceWitness sourceLeaf sourceZero model named sourceEnv relEnv fallback
+      sourceDenotes
+  obtain ⟨targetValues, valuesAgree, targetPatternDenotes⟩ :=
+    presentation.forwardQuotientEnvironment_of_pattern_entailment model named
+      sourceValues (localLaw _) sourcePatternDenotes
+  obtain ⟨targetHidden, targetPatternItemsDenote⟩ :=
+    target.patternRootItems_of_pattern_denote model named targetValues
+      targetPatternDenotes
+  let targetLocal :=
+    focusedLocalEnvironmentOfEmpty target targetZero targetValues targetHidden
+  let targetEnv :=
+    ConcreteElaboration.extendedEnvironment targetContext
+      (target.plugLayout.frameRegion target.site) targetOuter targetLocal
+  have targetOuterValues :=
+    presentation.targetOuterValues_of_sourceFocused sourceAdmissible
+      targetAdmissible sourceContext targetContext sourceExact targetExact
+      sourceOuter targetOuter sourceLocal outerAgrees fallback targetValues
+      valuesAgree
+  have targetPatternEnvironment :=
+    focusedExtendedEnvironment_patternRoot_eq target targetAdmissible
+      targetWitness targetLeaf targetZero targetOuter targetValues targetHidden
+      targetOuterValues
+  have targetPatternItemsFocused :
+      let pattern := compiledSpliceOpenRootItems target.pattern
+      denoteItemSeq (relCtx := []) model named
+        (targetEnv ∘ target.plugLayout.patternRootWireIndexMap targetAdmissible
+          targetZero targetWitness targetLeaf)
+        (PUnit.unit : RelEnv model.Carrier []) pattern.items := by
+    dsimp only
+    have targetPatternEnvironment' :
+        ConcreteElaboration.extendedEnvironment targetContext
+            (target.plugLayout.frameRegion target.site) targetOuter
+            (focusedLocalEnvironmentOfEmpty target targetZero targetValues
+              targetHidden) ∘
+          target.plugLayout.patternRootWireIndexMap targetAdmissible targetZero
+            targetWitness targetLeaf =
+        extendWireEnv
+            (target.patternAttachmentAssignment.map targetValues).classes
+            targetHidden ∘
+          Fin.cast (by simp [OpenConcreteDiagram.rootWires]) := by
+      simpa [targetLeaf] using targetPatternEnvironment
+    rw [show targetEnv =
+      ConcreteElaboration.extendedEnvironment targetContext
+        (target.plugLayout.frameRegion target.site) targetOuter
+        (focusedLocalEnvironmentOfEmpty target targetZero targetValues
+          targetHidden) from rfl]
+    rw [targetPatternEnvironment']
+    exact targetPatternItemsDenote
+  have extendedAgrees :=
+    presentation.focusedForwardEnvironmentsAgreeOfEmpty sourceAdmissible
+      targetAdmissible sourceZero targetZero sourceContext targetContext
+      sourceExact targetExact sourceOuter targetOuter sourceLocal outerAgrees
+      fallback targetValues targetHidden valuesAgree
+  refine ⟨targetLocal, ?_⟩
+  apply target.plugLayout.denoteFocusedItems_of_patternRootItems_and_frame
+    targetAdmissible targetWitness targetLeaf targetZero model named targetEnv
+    relEnv targetPatternItemsFocused
+  intro targetFrameIndex
+  have frameLengths := congrArg List.length
+    presentation.focusedFrameLocalOccurrences_eq
+  let sourceFrameIndex : Fin (ConcreteElaboration.localOccurrences
+      source.coalesceFrameRaw source.site).length :=
+    Fin.cast (by simpa using frameLengths) targetFrameIndex
+  have targetFrameIndexEq :
+      presentation.targetFrameOccurrenceIndex sourceFrameIndex =
+        targetFrameIndex := by
+    apply Fin.ext
+    rfl
+  obtain ⟨sourceIndex, targetIndex, sourceIndexVal, targetIndexVal,
+      itemSimulation⟩ :=
+    presentation.focusedFrameOccurrence_itemSimulation model named
+      sourceAdmissible targetAdmissible siteDirection .forward fuelSource
+      fuelTarget
+      (sourceContext.extend (source.plugLayout.frameRegion source.site))
+      (targetContext.extend (target.plugLayout.frameRegion target.site))
+      sourceBinders targetBinders allowed bindersRelated sourceBindersCover
+      targetBindersCover sourceEnumeration targetEnumeration recurse sourceItems
+      targetItems sourceItemsCompiled targetItemsCompiled sourceFrameIndex
+  have sourceItemDenotes :=
+    (denoteItemSeq_iff_get model named sourceEnv relEnv sourceItems).mp
+      sourceDenotes sourceIndex
+  have targetOccurrenceIndexEq :
+      (target.plugLayout.siteOccurrenceEquiv
+        (target.plugLayout.frameSiteSemanticIndexAt target
+          targetFrameIndex)).val =
+        targetIndex.val := by
+    rw [← targetFrameIndexEq]
+    exact targetIndexVal.symm
+  let expectedTargetIndex := Fin.cast
+    (ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+        fuelTarget)
+      (targetContext.extend (target.plugLayout.frameRegion target.site))
+      targetBinders targetItemsCompiled).symm
+    (target.plugLayout.siteOccurrenceEquiv
+      (target.plugLayout.frameSiteSemanticIndexAt target targetFrameIndex))
+  have targetIndexEq : targetIndex = expectedTargetIndex := by
+    apply Fin.ext
+    exact targetOccurrenceIndexEq.symm
+  subst targetIndex
+  exact itemSimulation sourceEnv targetEnv relEnv extendedAgrees
+    sourceItemDenotes
+
+/-- Complete proof-dependent local transport at the distinguished splice site
+in the backward direction. -/
+theorem focusedBackwardLocalTransportOfEmpty
+    {signature : List Nat} {source target : Input signature}
+    {rels : Theory.RelCtx}
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (siteDirection : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (fuelSource fuelTarget : Nat)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (targetRegion : Fin target.plugLayout.plugRaw.regionCount)
+    (targetRegion_eq :
+      targetRegion = target.plugLayout.frameRegion target.site)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw rels)
+    (allowed : presentation.Allowed siteDirection .backward
+      (source.plugLayout.frameRegion source.site))
+    (bindersRelated :
+      presentation.BinderRelated sourceBinders targetBinders)
+    (sourceExact : (sourceContext.extend
+      (source.plugLayout.frameRegion source.site)).Exact
+        (source.plugLayout.frameRegion source.site))
+    (targetExact : (targetContext.extend targetRegion).Exact targetRegion)
+    (sourceBindersCover :
+      sourceBinders.Covers (source.plugLayout.frameRegion source.site))
+    (targetBindersCover : targetBinders.Covers targetRegion)
+    (sourceEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration
+        source.plugLayout.plugRaw sourceBinders
+        (source.plugLayout.frameRegion source.site))
+    (targetEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration
+        target.plugLayout.plugRaw targetBinders targetRegion)
+    (recurse : ∀
+      {childDirection : ConcreteElaboration.SimulationDirection}
+      {child : Fin source.plugLayout.plugRaw.regionCount}
+      {childRels : Theory.RelCtx}
+      {childSourceBinders : ConcreteElaboration.BinderContext
+        source.plugLayout.plugRaw childRels}
+      {childTargetBinders : ConcreteElaboration.BinderContext
+        target.plugLayout.plugRaw childRels}
+      {sourceBody : Region signature
+        (sourceContext.extend
+          (source.plugLayout.frameRegion source.site)).length childRels}
+      {targetBody : Region signature
+        (targetContext.extend targetRegion).length childRels},
+      (source.plugLayout.plugRaw.regions child).parent? =
+          some (source.plugLayout.frameRegion source.site) →
+      (target.plugLayout.plugRaw.regions
+        (presentation.regionMap child)).parent? =
+          some targetRegion →
+      presentation.Allowed siteDirection childDirection child →
+      presentation.BinderRelated childSourceBinders childTargetBinders →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers (presentation.regionMap child) →
+      ConcreteElaboration.BinderContext.Enumeration
+        source.plugLayout.plugRaw childSourceBinders child →
+      ConcreteElaboration.BinderContext.Enumeration
+        target.plugLayout.plugRaw childTargetBinders
+        (presentation.regionMap child) →
+      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+          fuelSource child
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          childSourceBinders = some sourceBody →
+      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+          fuelTarget (presentation.regionMap child)
+          (targetContext.extend targetRegion)
+          childTargetBinders = some targetBody →
+      ConcreteElaboration.RegionSimulation model named childDirection
+        (presentation.contextIndexRelation
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          (targetContext.extend targetRegion))
+        sourceBody targetBody)
+    (sourceItems : ItemSeq signature
+      (sourceContext.extend
+        (source.plugLayout.frameRegion source.site)).length rels)
+    (targetItems : ItemSeq signature
+      (targetContext.extend targetRegion).length rels)
+    (sourceItemsCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        source.plugLayout.plugRaw
+        (ConcreteElaboration.compileRegion? signature
+          source.plugLayout.plugRaw fuelSource)
+        (sourceContext.extend
+          (source.plugLayout.frameRegion source.site))
+        sourceBinders
+        (ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
+          (source.plugLayout.frameRegion source.site)) = some sourceItems)
+    (targetItemsCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        target.plugLayout.plugRaw
+        (ConcreteElaboration.compileRegion? signature
+          target.plugLayout.plugRaw fuelTarget)
+        (targetContext.extend targetRegion)
+        targetBinders
+        (ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
+          targetRegion) = some targetItems)
+    (localLaw : ∀ targetArgs,
+      target.pattern.denote model named targetArgs →
+        source.pattern.denote model named
+          (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)) :
+    ∀ relEnv,
+      ConcreteElaboration.DirectionalLocalTransport .backward
+        sourceContext targetContext
+        (source.plugLayout.frameRegion source.site)
+        targetRegion
+        (presentation.contextIndexRelation sourceContext targetContext)
+        model named relEnv sourceItems targetItems := by
+  subst targetRegion
+  intro relEnv sourceOuter targetOuter outerAgrees targetLocal targetDenotes
+  let sourceWitness : Region.ContextPath
+      (ConcreteElaboration.finishRegion source.plugLayout.plugRaw sourceContext
+        (source.plugLayout.frameRegion source.site) sourceItems) [] :=
+    .here _
+  let sourceLeaf :=
+    Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      source.plugLayout.plugRaw
+      (source.plugLayout.frameRegion source.site) sourceContext sourceBinders
+      fuelSource sourceItems sourceItemsCompiled sourceExact sourceBindersCover
+      sourceEnumeration
+  let targetWitness : Region.ContextPath
+      (ConcreteElaboration.finishRegion target.plugLayout.plugRaw targetContext
+        (target.plugLayout.frameRegion target.site) targetItems) [] :=
+    .here _
+  let targetLeaf :=
+    Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      target.plugLayout.plugRaw
+      (target.plugLayout.frameRegion target.site) targetContext targetBinders
+      fuelTarget targetItems targetItemsCompiled targetExact targetBindersCover
+      targetEnumeration
+  let fallback : model.Carrier :=
+    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
+      Lambda.Term 0 (Fin 0)) Fin.elim0
+  let targetEnv :=
+    ConcreteElaboration.extendedEnvironment targetContext
+      (target.plugLayout.frameRegion target.site) targetOuter targetLocal
+  let targetValues :=
+    siteQuotientEnvironment target
+      (targetContext.extend (target.plugLayout.frameRegion target.site))
+      targetExact targetEnv fallback
+  have targetPatternDenotes :
+      target.pattern.denote model named (fun position =>
+        targetValues (target.quotientWire (target.attachment position))) := by
+    exact pattern_denote_of_denoteFocusedItems target targetAdmissible
+      targetWitness targetLeaf targetZero model named targetEnv relEnv fallback
+      targetDenotes
+  obtain ⟨sourceValues, valuesAgree, sourcePatternDenotes⟩ :=
+    presentation.backwardQuotientEnvironment_of_pattern_entailment model named
+      targetValues (localLaw _) targetPatternDenotes
+  obtain ⟨sourceHidden, sourcePatternItemsDenote⟩ :=
+    source.patternRootItems_of_pattern_denote model named sourceValues
+      sourcePatternDenotes
+  let sourceLocal :=
+    focusedLocalEnvironmentOfEmpty source sourceZero sourceValues sourceHidden
+  let sourceEnv :=
+    ConcreteElaboration.extendedEnvironment sourceContext
+      (source.plugLayout.frameRegion source.site) sourceOuter sourceLocal
+  have sourceOuterValues :=
+    presentation.sourceOuterValues_of_targetFocused sourceAdmissible
+      targetAdmissible sourceContext targetContext sourceExact targetExact
+      sourceOuter targetOuter targetLocal outerAgrees fallback sourceValues
+      valuesAgree
+  have sourcePatternEnvironment :=
+    focusedExtendedEnvironment_patternRoot_eq source sourceAdmissible
+      sourceWitness sourceLeaf sourceZero sourceOuter sourceValues sourceHidden
+      sourceOuterValues
+  have sourcePatternItemsFocused :
+      let pattern := compiledSpliceOpenRootItems source.pattern
+      denoteItemSeq (relCtx := []) model named
+        (sourceEnv ∘ source.plugLayout.patternRootWireIndexMap sourceAdmissible
+          sourceZero sourceWitness sourceLeaf)
+        (PUnit.unit : RelEnv model.Carrier []) pattern.items := by
+    dsimp only
+    have sourcePatternEnvironment' :
+        ConcreteElaboration.extendedEnvironment sourceContext
+            (source.plugLayout.frameRegion source.site) sourceOuter
+            (focusedLocalEnvironmentOfEmpty source sourceZero sourceValues
+              sourceHidden) ∘
+          source.plugLayout.patternRootWireIndexMap sourceAdmissible sourceZero
+            sourceWitness sourceLeaf =
+        extendWireEnv
+            (source.patternAttachmentAssignment.map sourceValues).classes
+            sourceHidden ∘
+          Fin.cast (by simp [OpenConcreteDiagram.rootWires]) := by
+      simpa [sourceLeaf] using sourcePatternEnvironment
+    rw [show sourceEnv =
+      ConcreteElaboration.extendedEnvironment sourceContext
+        (source.plugLayout.frameRegion source.site) sourceOuter
+        (focusedLocalEnvironmentOfEmpty source sourceZero sourceValues
+          sourceHidden) from rfl]
+    rw [sourcePatternEnvironment']
+    exact sourcePatternItemsDenote
+  have extendedAgrees :=
+    presentation.focusedBackwardEnvironmentsAgreeOfEmpty sourceAdmissible
+      targetAdmissible sourceZero targetZero sourceContext targetContext
+      sourceExact targetExact sourceOuter targetOuter targetLocal outerAgrees
+      fallback sourceValues sourceHidden valuesAgree
+  refine ⟨sourceLocal, ?_⟩
+  apply source.plugLayout.denoteFocusedItems_of_patternRootItems_and_frame
+    sourceAdmissible sourceWitness sourceLeaf sourceZero model named sourceEnv
+    relEnv sourcePatternItemsFocused
+  intro sourceFrameIndex
+  obtain ⟨sourceIndex, targetIndex, sourceIndexVal, targetIndexVal,
+      itemSimulation⟩ :=
+    presentation.focusedFrameOccurrence_itemSimulation model named
+      sourceAdmissible targetAdmissible siteDirection .backward fuelSource
+      fuelTarget
+      (sourceContext.extend (source.plugLayout.frameRegion source.site))
+      (targetContext.extend (target.plugLayout.frameRegion target.site))
+      sourceBinders targetBinders allowed bindersRelated sourceBindersCover
+      targetBindersCover sourceEnumeration targetEnumeration recurse sourceItems
+      targetItems sourceItemsCompiled targetItemsCompiled sourceFrameIndex
+  have targetItemDenotes :=
+    (denoteItemSeq_iff_get model named targetEnv relEnv targetItems).mp
+      targetDenotes targetIndex
+  have sourceOccurrenceIndexEq :
+      (source.plugLayout.siteOccurrenceEquiv
+        (source.plugLayout.frameSiteSemanticIndexAt source
+          sourceFrameIndex)).val =
+        sourceIndex.val :=
+    sourceIndexVal.symm
+  let expectedSourceIndex := Fin.cast
+    (ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+        fuelSource)
+      (sourceContext.extend (source.plugLayout.frameRegion source.site))
+      sourceBinders sourceItemsCompiled).symm
+    (source.plugLayout.siteOccurrenceEquiv
+      (source.plugLayout.frameSiteSemanticIndexAt source sourceFrameIndex))
+  have sourceIndexEq : sourceIndex = expectedSourceIndex := by
+    apply Fin.ext
+    exact sourceOccurrenceIndexEq.symm
+  subst sourceIndex
+  exact itemSimulation sourceEnv targetEnv relEnv extendedAgrees
+    targetItemDenotes
+
+/-- Authoritative paired concrete simulation for an empty-spine replacement.
+All regular regions are transported structurally; the distinguished site uses
+the proof-dependent local implication supplied by the caller. -/
+noncomputable def concreteSemanticSimulationOfEmpty
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (siteDirection : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (localLaw : match siteDirection with
+      | .forward => ∀ sourceArgs,
+          source.pattern.denote model named sourceArgs →
+            target.pattern.denote model named
+              (sourceArgs ∘
+                Fin.cast presentation.boundary_arity_eq.symm)
+      | .backward => ∀ targetArgs,
+          target.pattern.denote model named targetArgs →
+            source.pattern.denote model named
+              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)) :
+    ConcreteElaboration.ConcreteSemanticSimulation signature
+      source.plugLayout.plugRaw target.plugLayout.plugRaw model named where
+  source_wellFormed :=
+    source.plugLayout.plugRaw_wellFormed signature source sourceAdmissible
+  target_wellFormed :=
+    target.plugLayout.plugRaw_wellFormed signature target targetAdmissible
+  regionMap := presentation.regionMap
+  binderMap := presentation.regionMap
+  Distinguished := presentation.Distinguished
+  occurrenceMap := presentation.occurrenceMap
+  occurrenceMap_node := presentation.occurrenceMap_node
+  occurrenceMap_child := presentation.occurrenceMap_child
+  root_eq := presentation.regionMap_root
+  region_shape := by
+    intro parent regular child childParent
+    have shape :=
+      presentation.region_shape parent regular child childParent
+    cases childKind : source.plugLayout.plugRaw.regions child with
+    | sheet =>
+        simpa [childKind, mapRegionKind] using shape
+    | cut actualParent =>
+        have parentEq : actualParent = parent := by
+          rw [childKind] at childParent
+          exact Option.some.inj childParent
+        subst actualParent
+        simpa [childKind, mapRegionKind] using shape
+    | bubble actualParent arity =>
+        have parentEq : actualParent = parent := by
+          rw [childKind] at childParent
+          exact Option.some.inj childParent
+        subst actualParent
+        simpa [childKind, mapRegionKind] using shape
+  localOccurrences_map := presentation.localOccurrences_map
+  BinderWitness := fun sourceBinders targetBinders =>
+    presentation.BinderWitness sourceBinders targetBinders
+  relationMap := fun witness => witness.relationMap
+  binders_empty := presentation.binderWitness_empty
+  binders_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity childKind regular
+    exact presentation.binderWitness_push witness child parent arity childKind
+      regular
+  relationMap_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity childKind regular
+    exact presentation.binderWitness_relationMap_push witness child parent arity
+      childKind regular
+  Allowed := presentation.Allowed siteDirection
+  allowed_cut := by
+    intro direction child parent childKind regular allowed
+    exact presentation.allowed_cut siteDirection direction child parent
+      childKind allowed
+  allowed_bubble := by
+    intro direction child parent arity childKind regular allowed
+    exact presentation.allowed_bubble siteDirection direction child parent arity
+      childKind allowed
+  ContextWitness := fun sourceContext targetContext =>
+    presentation.ContextWitness sourceBoundary sourceContext targetContext
+  AtRegion := fun witness region => ContextWitness.AtRegion witness region
+  indexRelation := fun _witness =>
+    presentation.contextIndexRelation _ _
+  extendContext := by
+    intro sourceContext targetContext witness region regular sourceExact
+      targetExact
+    exact .extendRegular witness region regular sourceExact targetExact
+  extendFocusedContext := by
+    intro sourceContext targetContext witness region focused sourceExact
+      targetExact
+    exact .extendFocused witness region focused sourceExact targetExact
+  at_child := by
+    intro sourceContext targetContext witness parent regular sourceExact
+      targetExact child atParent childParent
+    exact .extendChild atParent regular sourceExact targetExact childParent
+  at_extended := by
+    intro sourceContext targetContext witness region regular sourceExact
+      targetExact atRegion
+    exact .extendHere atRegion regular sourceExact targetExact
+  at_focused_child := by
+    intro sourceContext targetContext witness parent focused sourceExact
+      targetExact child atParent sourceParent targetParent
+    exact .extendFocusedChild atParent focused sourceExact targetExact
+      sourceParent targetParent
+  localTransport := by
+    intro sourceRels targetRels direction fuelSource fuelTarget sourceContext
+      targetContext witness sourceBinders targetBinders binderWitness region
+      atRegion regular allowed sourceExact targetExact sourceItems targetItems
+      sourceCompiled targetCompiled itemSemantics
+    rcases binderWitness with ⟨relationContextsEq, related⟩
+    subst targetRels
+    have bindersRelated :
+        presentation.BinderRelated sourceBinders targetBinders :=
+      fun frame => eq_of_heq (related frame)
+    have identityRelationRenamingEq :
+        (ConcreteElaboration.identityRelationRenaming sourceRels :
+          RelationRenaming sourceRels sourceRels) =
+            (fun {arity} (relation : Theory.RelVar sourceRels arity) =>
+              relation) := rfl
+    have itemSemantics' :
+        ConcreteElaboration.ItemSeqSimulation model named direction
+          (presentation.contextIndexRelation
+            (sourceContext.extend region)
+            (targetContext.extend (presentation.regionMap region)))
+          sourceItems targetItems := by
+      change ConcreteElaboration.ItemSeqSimulation model named direction
+        (presentation.contextIndexRelation
+          (sourceContext.extend region)
+          (targetContext.extend (presentation.regionMap region)))
+        (sourceItems.renameRelations
+          (ConcreteElaboration.identityRelationRenaming sourceRels))
+        targetItems at itemSemantics
+      rw [identityRelationRenamingEq, ItemSeq.renameRelations_id] at itemSemantics
+      exact itemSemantics
+    have transport :=
+      presentation.regularLocalTransport sourceAdmissible targetAdmissible
+      direction sourceContext targetContext region regular sourceExact
+      targetExact model named sourceItems targetItems itemSemantics'
+    change ∀ relEnv,
+      ConcreteElaboration.DirectionalLocalTransport direction sourceContext
+        targetContext region (presentation.regionMap region)
+        (presentation.contextIndexRelation sourceContext targetContext)
+        model named relEnv
+        (sourceItems.renameRelations
+          (ConcreteElaboration.identityRelationRenaming sourceRels))
+        targetItems
+    rw [identityRelationRenamingEq, ItemSeq.renameRelations_id]
+    exact transport
+  nodeSemantic := by
+    intro sourceRels targetRels direction region sourceContext targetContext
+      witness atRegion sourceNodup targetNodup sourceBinders targetBinders
+      allowed binderWitness sourceNode targetNode regular mapped nodeRegion
+      sourceItem targetItem sourceCompiled targetCompiled
+    rcases binderWitness with ⟨relationContextsEq, related⟩
+    subst targetRels
+    have bindersRelated :
+        presentation.BinderRelated sourceBinders targetBinders :=
+      fun frame => eq_of_heq (related frame)
+    revert nodeRegion mapped sourceCompiled
+    refine Fin.addCases (m := source.frame.val.nodeCount)
+      (n := source.pattern.val.diagram.nodeCount) (fun frameNode => ?_)
+      (fun patternNode => ?_) sourceNode
+    · intro mappedOccurrence sourceNodeRegion sourceCompiled
+      have mappedFrame :
+          presentation.occurrenceMap region regular
+              (.node (source.plugLayout.frameNode frameNode)) =
+            .node (target.plugLayout.frameNode
+              (Fin.cast presentation.frameNodeCountEq frameNode)) := by
+        simp [occurrenceMap, PlugLayout.frameNode, PlugLayout.plugRaw,
+          PlugLayout.nodeCount]
+      have targetNodeEq : targetNode =
+          target.plugLayout.frameNode
+            (Fin.cast presentation.frameNodeCountEq frameNode) := by
+        exact ConcreteElaboration.LocalOccurrence.node.inj
+          (mappedOccurrence.symm.trans mappedFrame)
+      subst targetNode
+      apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+        (source := source.plugLayout.plugRaw)
+        (target := target.plugLayout.plugRaw)
+        model named direction sourceContext targetContext
+        (presentation.contextIndexRelation sourceContext targetContext)
+        sourceBinders targetBinders
+        (ConcreteElaboration.identityRelationRenaming sourceRels)
+        (source.plugLayout.frameNode frameNode)
+        (target.plugLayout.frameNode
+          (Fin.cast presentation.frameNodeCountEq frameNode))
+        (regionMap := presentation.regionMap)
+        (binderMap := presentation.regionMap)
+      · rw [presentation.frameNode_shape]
+        cases source.plugLayout.plugRaw.nodes
+            (source.plugLayout.frameNode frameNode) <;>
+          rfl
+      · intro port sourceIndex targetIndex sourceResolved targetResolved
+        exact presentation.contextIndexRelation_of_resolved_frame_port
+          sourceContext targetContext frameNode port sourceIndex targetIndex
+          sourceResolved targetResolved
+      · intro nodeRegion binder arity sourceRelation sourceAtom sourceLookup
+        change source.plugLayout.plugNode
+            (source.plugLayout.frameNode frameNode) =
+              .atom nodeRegion binder at sourceAtom
+        rw [source.plugLayout.plugNode_frameNode] at sourceAtom
+        cases hnode : source.frame.val.nodes frameNode with
+        | term owner freePorts term =>
+            simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
+        | atom owner frameBinder =>
+            simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
+            obtain ⟨rfl, rfl⟩ := sourceAtom
+            simpa [presentation.regionMap_frameRegion,
+              ConcreteElaboration.identityRelationRenaming] using
+                ((bindersRelated frameBinder).symm.trans sourceLookup)
+        | named owner definition arity =>
+            simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
+      · exact sourceCompiled
+      · exact targetCompiled
+    · intro mappedOccurrence sourceNodeRegion sourceCompiled
+      have patternRegion : source.plugLayout.bodyRegion
+          (source.pattern.val.diagram.nodes patternNode).region = region := by
+        simpa [PlugLayout.plugRaw, PlugLayout.plugNode,
+          PlugLayout.mapPatternNode_region] using sourceNodeRegion
+      exact False.elim
+        (regular (patternRegion ▸ presentation.distinguished_bodyRegion
+          (source.pattern.val.diagram.nodes patternNode).region))
+  focusedRegionKernel := by
+    intro sourceRels targetRels direction fuelSource fuelTarget region
+      sourceContext targetContext witness sourceBinders targetBinders atRegion
+      focused allowed binderWitness sourceExact targetExact sourceBindersCover
+      targetBindersCover sourceEnumeration targetEnumeration recurse sourceItems
+      targetItems sourceItemsCompiled targetItemsCompiled
+    have regionEq :=
+      ContextWitness.focused_region_eq_site atRegion focused
+    subst region
+    have directionEq :=
+      presentation.allowed_at_site_direction_eq siteDirection direction allowed
+    subst direction
+    rcases binderWitness with ⟨relationContextsEq, related⟩
+    subst targetRels
+    have bindersRelated :
+        presentation.BinderRelated sourceBinders targetBinders :=
+      fun frame => eq_of_heq (related frame)
+    have recurseSame : ∀
+        {childDirection : ConcreteElaboration.SimulationDirection}
+        {child : Fin source.plugLayout.plugRaw.regionCount}
+        {childRels : Theory.RelCtx}
+        {childSourceBinders : ConcreteElaboration.BinderContext
+          source.plugLayout.plugRaw childRels}
+        {childTargetBinders : ConcreteElaboration.BinderContext
+          target.plugLayout.plugRaw childRels}
+        {sourceBody : Region signature
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site)).length childRels}
+        {targetBody : Region signature
+          (targetContext.extend
+            (presentation.regionMap
+              (source.plugLayout.frameRegion source.site))).length childRels},
+        (source.plugLayout.plugRaw.regions child).parent? =
+            some (source.plugLayout.frameRegion source.site) →
+        (target.plugLayout.plugRaw.regions
+          (presentation.regionMap child)).parent? =
+            some (presentation.regionMap
+              (source.plugLayout.frameRegion source.site)) →
+        presentation.Allowed siteDirection childDirection child →
+        presentation.BinderRelated childSourceBinders childTargetBinders →
+        childSourceBinders.Covers child →
+        childTargetBinders.Covers (presentation.regionMap child) →
+        ConcreteElaboration.BinderContext.Enumeration
+          source.plugLayout.plugRaw childSourceBinders child →
+        ConcreteElaboration.BinderContext.Enumeration
+          target.plugLayout.plugRaw childTargetBinders
+          (presentation.regionMap child) →
+        ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+            fuelSource child
+            (sourceContext.extend
+              (source.plugLayout.frameRegion source.site))
+            childSourceBinders = some sourceBody →
+        ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+            fuelTarget (presentation.regionMap child)
+            (targetContext.extend
+              (presentation.regionMap
+                (source.plugLayout.frameRegion source.site)))
+            childTargetBinders = some targetBody →
+        ConcreteElaboration.RegionSimulation model named childDirection
+          (presentation.contextIndexRelation
+            (sourceContext.extend
+              (source.plugLayout.frameRegion source.site))
+            (targetContext.extend
+              (presentation.regionMap
+                (source.plugLayout.frameRegion source.site))))
+          sourceBody targetBody := by
+      intro childDirection child childRels childSourceBinders
+        childTargetBinders sourceBody targetBody sourceParent targetParent
+        childAllowed childRelated sourceCover targetCover sourceEnum targetEnum
+        sourceResult targetResult
+      let childWitness :
+          presentation.BinderWitness childSourceBinders childTargetBinders :=
+        ⟨rfl, fun frame => heq_of_eq (childRelated frame)⟩
+      have result := recurse sourceParent targetParent childAllowed childWitness
+        sourceCover targetCover sourceEnum targetEnum sourceResult targetResult
+      have identityRelationRenamingEq :
+          (ConcreteElaboration.identityRelationRenaming childRels :
+            RelationRenaming childRels childRels) =
+              (fun {arity} (relation : Theory.RelVar childRels arity) =>
+                relation) := rfl
+      change ConcreteElaboration.RegionSimulation model named childDirection
+        (presentation.contextIndexRelation
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          (targetContext.extend
+            (presentation.regionMap
+              (source.plugLayout.frameRegion source.site))))
+        (sourceBody.renameRelations
+          (ConcreteElaboration.identityRelationRenaming childRels))
+        targetBody at result
+      rw [identityRelationRenamingEq, Region.renameRelations_id] at result
+      exact result
+    have transport :
+        ∀ relEnv,
+          ConcreteElaboration.DirectionalLocalTransport siteDirection
+            sourceContext targetContext
+            (source.plugLayout.frameRegion source.site)
+            (presentation.regionMap
+              (source.plugLayout.frameRegion source.site))
+            (presentation.contextIndexRelation sourceContext targetContext)
+            model named relEnv sourceItems targetItems := by
+      cases siteDirection with
+      | forward =>
+          exact presentation.focusedForwardLocalTransportOfEmpty
+            sourceAdmissible targetAdmissible sourceZero targetZero .forward
+            model named fuelSource fuelTarget sourceContext targetContext
+            (presentation.regionMap
+              (source.plugLayout.frameRegion source.site))
+            presentation.regionMap_site
+            sourceBinders targetBinders allowed bindersRelated sourceExact
+            targetExact sourceBindersCover targetBindersCover sourceEnumeration
+            targetEnumeration recurseSame sourceItems targetItems
+            sourceItemsCompiled targetItemsCompiled localLaw
+      | backward =>
+          exact presentation.focusedBackwardLocalTransportOfEmpty
+            sourceAdmissible targetAdmissible sourceZero targetZero .backward
+            model named fuelSource fuelTarget sourceContext targetContext
+            (presentation.regionMap
+              (source.plugLayout.frameRegion source.site))
+            presentation.regionMap_site
+            sourceBinders targetBinders allowed bindersRelated sourceExact
+            targetExact sourceBindersCover targetBindersCover sourceEnumeration
+            targetEnumeration recurseSame sourceItems targetItems
+            sourceItemsCompiled targetItemsCompiled localLaw
+    have identityRelationRenamingEq :
+        (ConcreteElaboration.identityRelationRenaming sourceRels :
+          RelationRenaming sourceRels sourceRels) =
+            (fun {arity} (relation : Theory.RelVar sourceRels arity) =>
+              relation) := rfl
+    rw [ConcreteElaboration.finishRegion_renameRelations]
+    change ConcreteElaboration.RegionSimulation model named siteDirection
+      (presentation.contextIndexRelation sourceContext targetContext)
+      (ConcreteElaboration.finishRegion source.plugLayout.plugRaw
+        sourceContext (source.plugLayout.frameRegion source.site)
+        (sourceItems.renameRelations
+          (ConcreteElaboration.identityRelationRenaming sourceRels)))
+      (ConcreteElaboration.finishRegion target.plugLayout.plugRaw targetContext
+        (presentation.regionMap
+          (source.plugLayout.frameRegion source.site)) targetItems)
+    rw [identityRelationRenamingEq, ItemSeq.renameRelations_id]
+    exact ConcreteElaboration.finishRegion_denote siteDirection sourceContext
+      targetContext (source.plugLayout.frameRegion source.site)
+      (presentation.regionMap
+        (source.plugLayout.frameRegion source.site))
+      (presentation.contextIndexRelation sourceContext targetContext)
+      model named sourceItems targetItems transport
+
+end TwoInputPresentation
 
 end VisualProof.Diagram.Splice.Input
