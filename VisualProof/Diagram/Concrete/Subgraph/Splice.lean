@@ -28865,6 +28865,134 @@ theorem siteQuotientEnvironment_attachment_eq
         (input.quotientAttachment_visible hadmissible position))
     index indexWire
 
+/-- An actual focused item conjunction for an empty proxy spine entails the
+intrinsic checked pattern at the quotient valuation read from that exact
+focused context.  Hidden pattern-root wires remain the existential locals of
+the open denotation. -/
+theorem pattern_denote_of_denoteFocusedItems
+    (input : Input signature)
+    (hadmissible : input.Admissible)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
+      (input.plugLayout.frameRegion input.site) outputWitness)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (env : Fin (outputLeaf.inheritedWires.extend
+      (input.plugLayout.frameRegion input.site)).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
+    (fallback : model.Carrier)
+    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    input.pattern.denote model named (fun position =>
+      siteQuotientEnvironment input
+        (outputLeaf.inheritedWires.extend
+          (input.plugLayout.frameRegion input.site))
+        outputLeaf.wiresExact env fallback
+        (input.quotientWire (input.attachment position))) := by
+  let layout := input.plugLayout
+  let context := outputLeaf.inheritedWires.extend
+    (layout.frameRegion input.site)
+  let values := siteQuotientEnvironment input context
+    outputLeaf.wiresExact env fallback
+  let assignment := input.patternAttachmentAssignment.map values
+  let pattern := compiledSpliceOpenRootItems input.pattern
+  let hiddenEnv : Fin input.pattern.val.hiddenWires.length → model.Carrier :=
+    fun hidden =>
+      env (layout.patternRootWireIndexMap hadmissible hzero
+        outputWitness outputLeaf
+        (Fin.cast (by simp)
+          (Fin.natAdd input.pattern.val.exposedWires.length hidden)))
+  have rootEnvironmentEq :
+      env ∘ layout.patternRootWireIndexMap hadmissible hzero
+          outputWitness outputLeaf =
+        extendWireEnv assignment.classes hiddenEnv ∘ Fin.cast (by simp) := by
+    funext index
+    let split : Fin (input.pattern.val.exposedWires.length +
+        input.pattern.val.hiddenWires.length) := Fin.cast (by simp) index
+    have recover : Fin.cast (by simp) split = index := by
+      apply Fin.ext
+      rfl
+    rw [← recover]
+    refine Fin.addCases (fun external => ?_) (fun hidden => ?_) split
+    · let rootIndex : Fin
+          (input.pattern.val.exposedWires ++
+            input.pattern.val.hiddenWires).length :=
+        Fin.cast (by simp)
+          (Fin.castAdd input.pattern.val.hiddenWires.length external)
+      have rootWire :
+          (input.pattern.val.exposedWires ++
+            input.pattern.val.hiddenWires).get rootIndex =
+          input.pattern.val.exposedWires.get external := by
+        simp [rootIndex]
+      have indexWire :
+          context.get
+              (layout.patternRootWireIndexMap hadmissible hzero
+                outputWitness outputLeaf rootIndex) =
+            layout.frameWire (layout.exposedAttachment external) := by
+        rw [layout.patternRootWireIndexMap_spec hadmissible hzero
+          outputWitness outputLeaf, rootWire]
+        rw [layout.patternPlugWire_exposed
+          (input.pattern.val.exposedWires.get external)
+          (List.get_mem _ external)]
+        have externalIndex :
+            PlugLayout.exposedWireIndex input
+                (input.pattern.val.exposedWires.get external)
+                (List.get_mem _ external) =
+              external := by
+          apply PlugLayout.exposedWire_get_injective input
+          exact PlugLayout.exposedWireIndex_get input
+            (input.pattern.val.exposedWires.get external)
+            (List.get_mem _ external)
+        rw [externalIndex]
+        rfl
+      have visible :
+          layout.plugRaw.Encloses
+            (layout.plugRaw.wires
+              (layout.frameWire
+                (layout.exposedAttachment external))).scope
+            (layout.frameRegion input.site) :=
+        (layout.frameWire_visible_at_region_iff input.site
+          (layout.exposedAttachment external)).2
+          (input.quotientAttachment_visible hadmissible
+            (layout.exposedPosition external))
+      have valueEq :
+          values (layout.exposedAttachment external) =
+            env (layout.patternRootWireIndexMap hadmissible hzero
+              outputWitness outputLeaf rootIndex) :=
+        siteQuotientEnvironment_eq input context outputLeaf.wiresExact env
+          fallback (layout.exposedAttachment external) visible
+          (layout.patternRootWireIndexMap hadmissible hzero
+            outputWitness outputLeaf rootIndex) indexWire
+      simpa [split, rootIndex, assignment, patternAttachmentAssignment,
+        BoundaryAssignment.map, values, Function.comp_def, extendWireEnv] using
+          valueEq.symm
+    · simp [split, hiddenEnv, Function.comp_def, extendWireEnv]
+  change denoteOpen model named input.pattern.elaborate
+    (fun position => values
+      (input.quotientWire (input.attachment position)))
+  refine ⟨assignment, ?_, ?_⟩
+  · rfl
+  · rw [pattern.elaborate_body]
+    unfold ConcreteElaboration.finishRoot
+    refine ⟨hiddenEnv, ?_⟩
+    have patternDenotes :=
+      layout.denotePatternRootItems_of_denoteFocusedItems input hadmissible
+        outputWitness outputLeaf hzero model named env relEnv denotes
+    rw [ItemSeq.castWiresEq_eq_renameWires]
+    apply (denoteItemSeq_renameWires (relCtx := []) model named
+      (Fin.cast (by simp [OpenConcreteDiagram.rootWires]))
+      (extendWireEnv assignment.classes hiddenEnv)
+      (PUnit.unit : RelEnv model.Carrier []) pattern.items).mpr
+    exact Eq.mp
+      (congrArg (fun wireEnv :
+          Fin input.pattern.val.rootWires.length → model.Carrier =>
+        denoteItemSeq (relCtx := []) model named wireEnv
+          (PUnit.unit : RelEnv model.Carrier []) pattern.items)
+        rootEnvironmentEq)
+      patternDenotes
+
 /-- Structural presentation shared by two canonical splice inputs over the
 same retained frame and site.  Ordered positions agree, but the two pattern
 boundaries may induce different quotient partitions of the retained wires. -/
