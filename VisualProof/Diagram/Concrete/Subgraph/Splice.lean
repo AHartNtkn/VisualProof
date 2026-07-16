@@ -28613,6 +28613,22 @@ private theorem checkedDiagram_nodes_rename_eq
   cases hnode : left.val.nodes node <;>
     simp [hnode, FiniteEquiv.finCast, CNode.rename]
 
+private theorem checkedDiagram_endpointOccurs_eq
+    (left right : CheckedDiagram signature) (h : left = right)
+    (wire : Fin left.val.wireCount)
+    (endpoint : CEndpoint left.val.nodeCount) :
+    left.val.EndpointOccurs wire endpoint ↔
+      right.val.EndpointOccurs
+        (Fin.cast (congrArg
+          (fun checked : CheckedDiagram signature => checked.val.wireCount) h)
+          wire)
+        { node := Fin.cast (congrArg
+            (fun checked : CheckedDiagram signature => checked.val.nodeCount) h)
+            endpoint.node
+          port := endpoint.port } := by
+  cases h
+  rfl
+
 private def castLocalOccurrence
     (left right : CheckedDiagram signature)
     (regionEq : left.val.regionCount = right.val.regionCount)
@@ -29950,6 +29966,73 @@ theorem contextIndexRelation_of_sharedWire
     (presentation.contextIndexRelation sourceContext targetContext).Rel
       sourceIndex targetIndex := by
   exact ⟨wire, sourceWire, targetWire⟩
+
+/-- Resolving the same port of corresponding retained-frame nodes produces
+indices related by the shared original-wire provenance relation. -/
+theorem contextIndexRelation_of_resolved_frame_port
+    (presentation : TwoInputPresentation source target)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (node : Fin source.frame.val.nodeCount)
+    (port : CPort)
+    (sourceIndex : Fin sourceContext.length)
+    (targetIndex : Fin targetContext.length)
+    (sourceResolved :
+      ConcreteElaboration.resolvePort? source.plugLayout.plugRaw sourceContext
+        (source.plugLayout.frameNode node) port = some sourceIndex)
+    (targetResolved :
+      ConcreteElaboration.resolvePort? target.plugLayout.plugRaw targetContext
+        (target.plugLayout.frameNode
+          (Fin.cast presentation.frameNodeCountEq node)) port =
+        some targetIndex) :
+    (presentation.contextIndexRelation sourceContext targetContext).Rel
+      sourceIndex targetIndex := by
+  obtain ⟨sourcePlugWire, sourceOccurs, sourceGet⟩ :=
+    ConcreteElaboration.resolvePort?_sound sourceResolved
+  obtain ⟨targetPlugWire, targetOccurs, targetGet⟩ :=
+    ConcreteElaboration.resolvePort?_sound targetResolved
+  obtain ⟨sourceClass, sourceClassWire, sourceClassOccurs⟩ :=
+    source.plugLayout.plugRaw_frameEndpoint_backward sourcePlugWire
+      ⟨node, port⟩ (by
+        simpa [PlugLayout.mapFrameEndpoint] using sourceOccurs)
+  obtain ⟨targetClass, targetClassWire, targetClassOccurs⟩ :=
+    target.plugLayout.plugRaw_frameEndpoint_backward targetPlugWire
+      ⟨Fin.cast presentation.frameNodeCountEq node, port⟩ (by
+        simpa [PlugLayout.mapFrameEndpoint] using targetOccurs)
+  change ⟨node, port⟩ ∈ source.coalescedEndpoints sourceClass
+    at sourceClassOccurs
+  rw [source.mem_coalescedEndpoints] at sourceClassOccurs
+  obtain ⟨sourceWire, sourceWireClass, sourceWireOccurs⟩ :=
+    sourceClassOccurs
+  change
+    ⟨Fin.cast presentation.frameNodeCountEq node, port⟩ ∈
+      target.coalescedEndpoints targetClass at targetClassOccurs
+  rw [target.mem_coalescedEndpoints] at targetClassOccurs
+  obtain ⟨targetWire, targetWireClass, targetWireOccurs⟩ :=
+    targetClassOccurs
+  have transportedSourceOccurs :
+      target.frame.val.EndpointOccurs
+        (Fin.cast presentation.frameWireCountEq sourceWire)
+        ⟨Fin.cast presentation.frameNodeCountEq node, port⟩ :=
+    (checkedDiagram_endpointOccurs_eq source.frame target.frame
+      presentation.frame_eq sourceWire ⟨node, port⟩).1 sourceWireOccurs
+  have targetWireEq :
+      targetWire = Fin.cast presentation.frameWireCountEq sourceWire :=
+    checked_endpoint_wire_unique target.frame targetWire
+      (Fin.cast presentation.frameWireCountEq sourceWire)
+      ⟨Fin.cast presentation.frameNodeCountEq node, port⟩
+      targetWireOccurs transportedSourceOccurs
+  refine presentation.contextIndexRelation_of_sharedWire sourceContext
+    targetContext sourceIndex targetIndex sourceWire ?_ ?_
+  · exact sourceGet.trans (sourceClassWire.symm.trans (congrArg
+      source.plugLayout.frameWire
+      ((source.mem_classWires sourceClass sourceWire).1 sourceWireClass).symm))
+  · exact targetGet.trans (targetClassWire.symm.trans (congrArg
+      target.plugLayout.frameWire
+      (((target.mem_classWires targetClass targetWire).1 targetWireClass).symm
+        |>.trans (congrArg target.quotientWire targetWireEq))))
 
 /-- Extending both compiler contexts preserves every already-related outer
 index.  The focused kernel may add unrelated local pattern wires without
