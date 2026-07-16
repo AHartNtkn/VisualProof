@@ -2972,6 +2972,48 @@ theorem quotientAttachment_visible (input : Input signature)
       ((input.mem_classWires _ _).2 rfl))
     (hadmissible.attachments_visible position)
 
+/-- Visibility of a quotient wire at the splice site is equivalent to
+visibility of any chosen original representative.  Nontrivial quotient
+classes contain only admissible attachment wires, hence all of their members
+are site-visible; singleton classes retain the original scope. -/
+theorem quotientWire_visible_at_site_iff
+    (input : Input signature)
+    (hadmissible : input.Admissible)
+    (wire : Fin input.frame.val.wireCount) :
+    input.coalesceFrameRaw.Encloses
+        (input.coalesceFrameRaw.wires
+          (input.quotientWire wire)).scope input.site ↔
+      input.frame.val.Encloses
+        (input.frame.val.wires wire).scope input.site := by
+  rw [input.coalesceFrameRaw_wire]
+  change input.coalesceFrameRaw.Encloses
+      (input.coalescedScope (input.quotientWire wire)) input.site ↔ _
+  rw [input.coalesceFrameRaw_encloses_iff]
+  constructor
+  · intro quotientVisible
+    by_cases hall : input.classAllVisible (input.quotientWire wire)
+    · exact hall wire ((input.mem_classWires _ _).2 rfl)
+    · let first := input.firstClassWire (input.quotientWire wire)
+      have related :
+          input.attachmentPartition.related wire first = true := by
+        rw [← input.quotientWire_eq_iff,
+          input.quotientWire_firstClassWire]
+      rcases input.related_eq_or_both_visible hadmissible related with
+        equality | bothVisible
+      · have firstVisible :
+            input.frame.val.Encloses
+              (input.frame.val.wires first).scope input.site := by
+          simpa only [coalescedScope, hall, ↓reduceIte, first] using
+            quotientVisible
+        exact equality.symm ▸ firstVisible
+      · exact bothVisible.1
+  · intro wireVisible
+    exact ConcreteElaboration.checked_encloses_trans input.frame.property
+      (input.coalescedScope_encloses_member hadmissible
+        (input.quotientWire wire) wire
+        ((input.mem_classWires _ _).2 rfl))
+      wireVisible
+
 /-- Stable material/proxy and internal-wire blocks for plugging. -/
 structure PlugLayout (input : Input signature) where
   materialRegions : SurvivorDomain input.pattern.val.diagram.regionCount := {
@@ -28643,6 +28685,18 @@ private theorem checkedDiagram_wire_scope_eq
   subst right
   rfl
 
+private theorem checkedDiagram_encloses_eq
+    (left right : CheckedDiagram signature) (h : left = right)
+    (ancestor descendant : Fin left.val.regionCount) :
+    left.val.Encloses ancestor descendant ↔
+      right.val.Encloses
+        (Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+          checked.val.regionCount) h) ancestor)
+        (Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+          checked.val.regionCount) h) descendant) := by
+  subst right
+  rfl
+
 /-- Transport a caller's ordered retained-frame boundary to the paired target
 frame. `List.map` preserves positions and repetitions exactly. -/
 def targetBoundary (presentation : TwoInputPresentation source target)
@@ -28676,6 +28730,29 @@ theorem targetBoundary_root
       source.frame.val.root = target.frame.val.root := by
     exact checkedDiagram_root_eq source.frame target.frame presentation.frame_eq
   rw [← scopeEq, sourceRoot original horiginal, rootEq]
+
+/-- Corresponding quotient copies of one retained-frame wire are visible at
+the paired splice sites exactly together. -/
+theorem coalescedFrame_wire_visible_at_site_iff
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (wire : Fin source.frame.val.wireCount) :
+    source.coalesceFrameRaw.Encloses
+        (source.coalesceFrameRaw.wires
+          (source.quotientWire wire)).scope source.site ↔
+      target.coalesceFrameRaw.Encloses
+        (target.coalesceFrameRaw.wires
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire))).scope
+        target.site := by
+  rw [source.quotientWire_visible_at_site_iff sourceAdmissible,
+    target.quotientWire_visible_at_site_iff targetAdmissible]
+  have visible := checkedDiagram_encloses_eq source.frame target.frame
+    presentation.frame_eq (source.frame.val.wires wire).scope source.site
+  rw [checkedDiagram_wire_scope_eq source.frame target.frame
+    presentation.frame_eq wire, presentation.site_eq] at visible
+  exact visible
 
 /-- Source frame regions retain their identity in the target plug layout;
 source-only pattern material is opaque and maps to the distinguished site. -/
