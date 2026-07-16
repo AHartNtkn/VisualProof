@@ -30034,6 +30034,414 @@ theorem contextIndexRelation_of_resolved_frame_port
       (((target.mem_classWires targetClass targetWire).1 targetWireClass).symm
         |>.trans (congrArg target.quotientWire targetWireEq))))
 
+/-- One retained-frame occurrence at the focused site is semantically
+transported by the actual source and target compiler calls.  Nodes use shared
+port provenance; child wrappers use only their retained-frame shape and the
+authoritative recursive callback supplied by the compiler traversal. -/
+theorem focusedFrameOccurrence_itemSimulation_of_compiled
+    {signature : List Nat} {source target : Input signature}
+    {rels : Theory.RelCtx}
+    (presentation : TwoInputPresentation source target)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (siteDirection direction : ConcreteElaboration.SimulationDirection)
+    (fuelSource fuelTarget : Nat)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw rels)
+    (allowed : presentation.Allowed siteDirection direction
+      (source.plugLayout.frameRegion source.site))
+    (bindersRelated :
+      presentation.BinderRelated sourceBinders targetBinders)
+    (sourceBindersCover :
+      sourceBinders.Covers (source.plugLayout.frameRegion source.site))
+    (targetBindersCover :
+      targetBinders.Covers (target.plugLayout.frameRegion target.site))
+    (sourceEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration
+        source.plugLayout.plugRaw sourceBinders
+        (source.plugLayout.frameRegion source.site))
+    (targetEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration
+        target.plugLayout.plugRaw targetBinders
+        (target.plugLayout.frameRegion target.site))
+    (recurse : ∀
+      {childDirection : ConcreteElaboration.SimulationDirection}
+      {child : Fin source.plugLayout.plugRaw.regionCount}
+      {childRels : Theory.RelCtx}
+      {childSourceBinders : ConcreteElaboration.BinderContext
+        source.plugLayout.plugRaw childRels}
+      {childTargetBinders : ConcreteElaboration.BinderContext
+        target.plugLayout.plugRaw childRels}
+      {sourceBody : Region signature sourceContext.length childRels}
+      {targetBody : Region signature targetContext.length childRels},
+      (source.plugLayout.plugRaw.regions child).parent? =
+          some (source.plugLayout.frameRegion source.site) →
+      (target.plugLayout.plugRaw.regions
+        (presentation.regionMap child)).parent? =
+          some (target.plugLayout.frameRegion target.site) →
+      presentation.Allowed siteDirection childDirection child →
+      presentation.BinderRelated childSourceBinders childTargetBinders →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers (presentation.regionMap child) →
+      ConcreteElaboration.BinderContext.Enumeration
+        source.plugLayout.plugRaw childSourceBinders child →
+      ConcreteElaboration.BinderContext.Enumeration
+        target.plugLayout.plugRaw childTargetBinders
+        (presentation.regionMap child) →
+      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+          fuelSource child sourceContext childSourceBinders = some sourceBody →
+      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+          fuelTarget (presentation.regionMap child) targetContext
+          childTargetBinders = some targetBody →
+      ConcreteElaboration.RegionSimulation model named childDirection
+        (presentation.contextIndexRelation sourceContext targetContext)
+        sourceBody targetBody)
+    (occurrence : ConcreteElaboration.LocalOccurrence
+      source.coalesceFrameRaw.regionCount source.coalesceFrameRaw.nodeCount)
+    (member : occurrence ∈
+      ConcreteElaboration.localOccurrences source.coalesceFrameRaw source.site)
+    (sourceItem : Item signature sourceContext.length rels)
+    (targetItem : Item signature targetContext.length rels)
+    (sourceCompiled :
+      ConcreteElaboration.compileOccurrenceWith? signature
+        source.plugLayout.plugRaw
+        (ConcreteElaboration.compileRegion? signature
+          source.plugLayout.plugRaw fuelSource)
+        sourceContext sourceBinders
+        (source.plugLayout.mapFrameOccurrence occurrence) = some sourceItem)
+    (targetCompiled :
+      ConcreteElaboration.compileOccurrenceWith? signature
+        target.plugLayout.plugRaw
+        (ConcreteElaboration.compileRegion? signature
+          target.plugLayout.plugRaw fuelTarget)
+        targetContext targetBinders
+        (target.plugLayout.mapFrameOccurrence
+          (castLocalOccurrence source.frame target.frame
+            presentation.frameRegionCountEq presentation.frameNodeCountEq
+            occurrence)) = some targetItem) :
+    ConcreteElaboration.ItemSimulation model named direction
+      (presentation.contextIndexRelation sourceContext targetContext)
+      sourceItem targetItem := by
+  cases occurrence with
+  | node node =>
+      have sourceNodeCompiled :
+          ConcreteElaboration.compileNode? signature
+            source.plugLayout.plugRaw sourceContext sourceBinders
+            (source.plugLayout.frameNode node) = some sourceItem := by
+        simpa [ConcreteElaboration.compileOccurrenceWith?,
+          PlugLayout.mapFrameOccurrence] using sourceCompiled
+      have targetNodeCompiled :
+          ConcreteElaboration.compileNode? signature
+            target.plugLayout.plugRaw targetContext targetBinders
+            (target.plugLayout.frameNode
+              (Fin.cast presentation.frameNodeCountEq node)) =
+                some targetItem := by
+        simpa [ConcreteElaboration.compileOccurrenceWith?,
+          PlugLayout.mapFrameOccurrence, castLocalOccurrence] using
+            targetCompiled
+      apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+        (source := source.plugLayout.plugRaw)
+        (target := target.plugLayout.plugRaw)
+        model named direction sourceContext targetContext
+        (presentation.contextIndexRelation sourceContext targetContext)
+        sourceBinders targetBinders
+        (source.plugLayout.frameNode node)
+        (target.plugLayout.frameNode
+          (Fin.cast presentation.frameNodeCountEq node))
+        (regionMap := presentation.regionMap)
+        (binderMap := presentation.regionMap)
+      · rw [presentation.frameNode_shape]
+        cases source.plugLayout.plugRaw.nodes
+            (source.plugLayout.frameNode node) <;>
+          rfl
+      · intro port sourceIndex targetIndex sourceResolved targetResolved
+        exact presentation.contextIndexRelation_of_resolved_frame_port
+          sourceContext targetContext node port sourceIndex targetIndex
+          sourceResolved targetResolved
+      · intro region binder sourceAtom
+        change source.plugLayout.plugNode
+            (source.plugLayout.frameNode node) = .atom region binder
+          at sourceAtom
+        rw [source.plugLayout.plugNode_frameNode] at sourceAtom
+        cases hnode : source.frame.val.nodes node with
+        | term nodeRegion freePorts term =>
+            simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
+        | atom nodeRegion frameBinder =>
+            simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
+            obtain ⟨rfl, rfl⟩ := sourceAtom
+            simpa [presentation.regionMap_frameRegion] using
+              (bindersRelated frameBinder).symm
+        | named nodeRegion definition arity =>
+            simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
+      · exact sourceNodeCompiled
+      · exact targetNodeCompiled
+  | child frameChild =>
+      have sourceChildCompiled :
+          ConcreteElaboration.compileOccurrenceWith? signature
+            source.plugLayout.plugRaw
+            (ConcreteElaboration.compileRegion? signature
+              source.plugLayout.plugRaw fuelSource)
+            sourceContext sourceBinders
+            (.child (source.plugLayout.frameRegion frameChild)) =
+              some sourceItem := by
+        simpa [PlugLayout.mapFrameOccurrence] using sourceCompiled
+      have targetChildCompiled :
+          ConcreteElaboration.compileOccurrenceWith? signature
+            target.plugLayout.plugRaw
+            (ConcreteElaboration.compileRegion? signature
+              target.plugLayout.plugRaw fuelTarget)
+            targetContext targetBinders
+            (.child (presentation.regionMap
+              (source.plugLayout.frameRegion frameChild))) =
+                some targetItem := by
+        simpa [PlugLayout.mapFrameOccurrence, castLocalOccurrence,
+          presentation.regionMap_frameRegion] using targetCompiled
+      have targetChildEq :
+          target.plugLayout.frameRegion
+              (Fin.cast presentation.frameRegionCountEq frameChild) =
+            presentation.regionMap
+              (source.plugLayout.frameRegion frameChild) :=
+        (presentation.regionMap_frameRegion frameChild).symm
+      have frameParent :
+          (source.frame.val.regions frameChild).parent? = some source.site :=
+        (ConcreteElaboration.mem_localOccurrences_child
+          source.coalesceFrameRaw source.site frameChild).1 member
+      cases frameKind : source.frame.val.regions frameChild with
+      | sheet =>
+          simp [frameKind, CRegion.parent?] at frameParent
+      | cut actualParent =>
+          have parentEq : actualParent = source.site := by
+            rw [frameKind] at frameParent
+            exact Option.some.inj frameParent
+          subst actualParent
+          have sourceKind :
+              source.plugLayout.plugRaw.regions
+                  (source.plugLayout.frameRegion frameChild) =
+                .cut (source.plugLayout.frameRegion source.site) := by
+            change source.plugLayout.plugRegion
+                (source.plugLayout.frameRegion frameChild) =
+              .cut (source.plugLayout.frameRegion source.site)
+            rw [source.plugLayout.plugRegion_frameRegion]
+            simp [frameKind, PlugLayout.mapFrameRegion]
+          have targetKind :
+              target.plugLayout.plugRaw.regions
+                  (presentation.regionMap
+                    (source.plugLayout.frameRegion frameChild)) =
+                .cut (target.plugLayout.frameRegion target.site) := by
+            have shape := presentation.region_shape_frameRegion frameChild
+            rw [sourceKind] at shape
+            simpa [mapRegionKind, presentation.regionMap_site] using shape
+          have targetKindFrame :
+              target.plugLayout.plugRaw.regions
+                  (target.plugLayout.frameRegion
+                    (Fin.cast presentation.frameRegionCountEq frameChild)) =
+                .cut (target.plugLayout.frameRegion target.site) := by
+            rw [targetChildEq]
+            exact targetKind
+          have sourcePlugParent :
+              (source.plugLayout.plugRaw.regions
+                (source.plugLayout.frameRegion frameChild)).parent? =
+                  some (source.plugLayout.frameRegion source.site) := by
+            rw [sourceKind]
+            rfl
+          have targetPlugParent :
+              (target.plugLayout.plugRaw.regions
+                (presentation.regionMap
+                  (source.plugLayout.frameRegion frameChild))).parent? =
+                  some (target.plugLayout.frameRegion target.site) := by
+            rw [targetKind]
+            rfl
+          cases sourceResult :
+              ConcreteElaboration.compileRegion? signature
+                source.plugLayout.plugRaw fuelSource
+                (source.plugLayout.frameRegion frameChild)
+                sourceContext sourceBinders with
+          | none =>
+              simp [ConcreteElaboration.compileOccurrenceWith?,
+                sourceKind, sourceResult] at sourceChildCompiled
+          | some sourceBody =>
+              simp [ConcreteElaboration.compileOccurrenceWith?,
+                sourceKind, sourceResult] at sourceChildCompiled
+              subst sourceItem
+              cases targetResult :
+                  ConcreteElaboration.compileRegion? signature
+                    target.plugLayout.plugRaw fuelTarget
+                    (target.plugLayout.frameRegion
+                      (Fin.cast presentation.frameRegionCountEq frameChild))
+                    targetContext targetBinders with
+              | none =>
+                  simp [ConcreteElaboration.compileOccurrenceWith?,
+                    targetKindFrame, targetResult] at targetChildCompiled
+              | some targetBody =>
+                  simp [ConcreteElaboration.compileOccurrenceWith?,
+                    targetKindFrame, targetResult] at targetChildCompiled
+                  subst targetItem
+                  have bodies := recurse
+                    (child := source.plugLayout.frameRegion frameChild)
+                    sourcePlugParent targetPlugParent
+                    (presentation.allowed_cut siteDirection direction
+                      (source.plugLayout.frameRegion frameChild)
+                      (source.plugLayout.frameRegion source.site)
+                      sourceKind allowed)
+                    bindersRelated
+                    (ConcreteElaboration.BinderContext.covers_cut_child
+                      sourceBindersCover sourceKind)
+                    (ConcreteElaboration.BinderContext.covers_cut_child
+                      targetBindersCover targetKind)
+                    (sourceEnumeration.cutChild
+                      (source.plugLayout.plugRaw_wellFormed signature source
+                        sourceAdmissible) sourceKind)
+                    (targetEnumeration.cutChild
+                      (target.plugLayout.plugRaw_wellFormed signature target
+                        targetAdmissible) targetKind)
+                    sourceResult (by
+                      simpa [presentation.regionMap_frameRegion] using
+                        targetResult)
+                  intro sourceEnv targetEnv relEnv environments
+                  have bodyEntailment :=
+                    bodies sourceEnv targetEnv relEnv environments
+                  simp only [cut_denotes_negation]
+                  cases direction with
+                  | forward =>
+                      exact fun sourceNot targetDenotes =>
+                        sourceNot (bodyEntailment targetDenotes)
+                  | backward =>
+                      exact fun targetNot sourceDenotes =>
+                        targetNot (bodyEntailment sourceDenotes)
+      | bubble actualParent arity =>
+          have parentEq : actualParent = source.site := by
+            rw [frameKind] at frameParent
+            exact Option.some.inj frameParent
+          subst actualParent
+          have sourceKind :
+              source.plugLayout.plugRaw.regions
+                  (source.plugLayout.frameRegion frameChild) =
+                .bubble (source.plugLayout.frameRegion source.site) arity := by
+            change source.plugLayout.plugRegion
+                (source.plugLayout.frameRegion frameChild) =
+              .bubble (source.plugLayout.frameRegion source.site) arity
+            rw [source.plugLayout.plugRegion_frameRegion]
+            simp [frameKind, PlugLayout.mapFrameRegion]
+          have targetKind :
+              target.plugLayout.plugRaw.regions
+                  (presentation.regionMap
+                    (source.plugLayout.frameRegion frameChild)) =
+                .bubble (target.plugLayout.frameRegion target.site) arity := by
+            have shape := presentation.region_shape_frameRegion frameChild
+            rw [sourceKind] at shape
+            simpa [mapRegionKind, presentation.regionMap_site] using shape
+          have targetKindFrame :
+              target.plugLayout.plugRaw.regions
+                  (target.plugLayout.frameRegion
+                    (Fin.cast presentation.frameRegionCountEq frameChild)) =
+                .bubble (target.plugLayout.frameRegion target.site) arity := by
+            rw [targetChildEq]
+            exact targetKind
+          have sourcePlugParent :
+              (source.plugLayout.plugRaw.regions
+                (source.plugLayout.frameRegion frameChild)).parent? =
+                  some (source.plugLayout.frameRegion source.site) := by
+            rw [sourceKind]
+            rfl
+          have targetPlugParent :
+              (target.plugLayout.plugRaw.regions
+                (presentation.regionMap
+                  (source.plugLayout.frameRegion frameChild))).parent? =
+                  some (target.plugLayout.frameRegion target.site) := by
+            rw [targetKind]
+            rfl
+          let sourcePushed :=
+            sourceBinders.push
+              (source.plugLayout.frameRegion frameChild) arity
+          let targetPushed :=
+            targetBinders.push
+              (target.plugLayout.frameRegion
+                (Fin.cast presentation.frameRegionCountEq frameChild)) arity
+          cases sourceResult :
+              ConcreteElaboration.compileRegion? signature
+                source.plugLayout.plugRaw fuelSource
+                (source.plugLayout.frameRegion frameChild)
+                sourceContext sourcePushed with
+          | none =>
+              simp [ConcreteElaboration.compileOccurrenceWith?,
+                sourceKind, sourcePushed, sourceResult] at sourceChildCompiled
+          | some sourceBody =>
+              simp [ConcreteElaboration.compileOccurrenceWith?,
+                sourceKind, sourcePushed, sourceResult] at sourceChildCompiled
+              subst sourceItem
+              cases targetResult :
+                  ConcreteElaboration.compileRegion? signature
+                    target.plugLayout.plugRaw fuelTarget
+                    (target.plugLayout.frameRegion
+                      (Fin.cast presentation.frameRegionCountEq frameChild))
+                    targetContext targetPushed with
+              | none =>
+                  simp [ConcreteElaboration.compileOccurrenceWith?,
+                    targetKindFrame, targetPushed, targetResult]
+                    at targetChildCompiled
+              | some targetBody =>
+                  simp [ConcreteElaboration.compileOccurrenceWith?,
+                    targetKindFrame, targetPushed, targetResult]
+                    at targetChildCompiled
+                  subst targetItem
+                  have pushedRelated :=
+                    presentation.binders_push_frameRegion bindersRelated
+                      frameChild arity
+                  have pushedRelatedMapped :
+                      presentation.BinderRelated
+                        (sourceBinders.push
+                          (source.plugLayout.frameRegion frameChild) arity)
+                        (targetBinders.push
+                          (presentation.regionMap
+                            (source.plugLayout.frameRegion frameChild)) arity) := by
+                    simpa [presentation.regionMap_frameRegion] using
+                      pushedRelated
+                  have bodies := recurse
+                    (child := source.plugLayout.frameRegion frameChild)
+                    (childTargetBinders := targetBinders.push
+                      (presentation.regionMap
+                        (source.plugLayout.frameRegion frameChild)) arity)
+                    sourcePlugParent targetPlugParent
+                    (presentation.allowed_bubble siteDirection direction
+                      (source.plugLayout.frameRegion frameChild)
+                      (source.plugLayout.frameRegion source.site) arity
+                      sourceKind allowed)
+                    pushedRelatedMapped
+                    (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                      sourceBindersCover sourceKind)
+                    (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                      targetBindersCover targetKind)
+                    (sourceEnumeration.bubbleChild
+                      (source.plugLayout.plugRaw_wellFormed signature source
+                        sourceAdmissible) sourceKind)
+                    (targetEnumeration.bubbleChild
+                      (target.plugLayout.plugRaw_wellFormed signature target
+                        targetAdmissible) targetKind)
+                    sourceResult (by
+                      simpa [presentation.regionMap_frameRegion, targetPushed]
+                        using targetResult)
+                  intro sourceEnv targetEnv relEnv environments
+                  simp only [bubble_denotes_exists]
+                  cases direction with
+                  | forward =>
+                      rintro ⟨relationValue, sourceDenotes⟩
+                      exact ⟨relationValue,
+                        bodies sourceEnv targetEnv
+                          (relationValue, relEnv) environments sourceDenotes⟩
+                  | backward =>
+                      rintro ⟨relationValue, targetDenotes⟩
+                      exact ⟨relationValue,
+                        bodies sourceEnv targetEnv
+                          (relationValue, relEnv) environments targetDenotes⟩
+
 /-- Extending both compiler contexts preserves every already-related outer
 index.  The focused kernel may add unrelated local pattern wires without
 changing the retained-frame relation. -/
