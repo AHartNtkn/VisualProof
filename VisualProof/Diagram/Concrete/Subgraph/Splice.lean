@@ -28754,6 +28754,121 @@ theorem coalescedFrame_wire_visible_at_site_iff
     presentation.frame_eq wire, presentation.site_eq] at visible
   exact visible
 
+/-- Relate coalesced-host compiler indices when their quotient classes contain
+corresponding copies of one retained-frame wire. -/
+def coalescedContextIndexRelation
+    (presentation : TwoInputPresentation source target)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.coalesceFrameRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.coalesceFrameRaw) :
+    ConcreteElaboration.ContextIndexRelation sourceContext.length
+      targetContext.length where
+  Rel sourceIndex targetIndex :=
+    ∃ wire : Fin source.frame.val.wireCount,
+      sourceContext.get sourceIndex = source.quotientWire wire ∧
+        targetContext.get targetIndex =
+          target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)
+
+/-- Exact site contexts make the coalesced-host relation total from source to
+target. -/
+theorem coalescedContextIndexRelation_left_total_at_site
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.coalesceFrameRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.coalesceFrameRaw)
+    (sourceExact : sourceContext.Exact source.site)
+    (targetExact : targetContext.Exact target.site)
+    (sourceIndex : Fin sourceContext.length) :
+    ∃ targetIndex,
+      (presentation.coalescedContextIndexRelation sourceContext targetContext).Rel
+        sourceIndex targetIndex := by
+  let sourceClass := sourceContext.get sourceIndex
+  let wire := source.wireQuotient.origin sourceClass
+  have sourceClassEq : source.quotientWire wire = sourceClass :=
+    source.quotientWire_wireQuotient_origin sourceClass
+  have sourceVisible :
+      source.coalesceFrameRaw.Encloses
+        (source.coalesceFrameRaw.wires
+          (source.quotientWire wire)).scope source.site := by
+    rw [sourceClassEq]
+    exact (sourceExact.mem_iff sourceClass).1
+      (List.get_mem sourceContext sourceIndex)
+  have targetVisible :
+      target.coalesceFrameRaw.Encloses
+        (target.coalesceFrameRaw.wires
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire))).scope
+        target.site :=
+    (presentation.coalescedFrame_wire_visible_at_site_iff
+      sourceAdmissible targetAdmissible wire).1 sourceVisible
+  have targetMember :
+      target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire) ∈ targetContext :=
+    (targetExact.mem_iff _).2 targetVisible
+  obtain ⟨targetIndex, targetLookup⟩ :=
+    targetContext.lookup?_complete targetMember
+  refine ⟨targetIndex, wire, ?_, ?_⟩
+  · exact sourceClassEq.symm
+  · simpa only [List.get_eq_getElem] using
+      ConcreteElaboration.WireContext.lookup?_sound targetLookup
+
+/-- Exact site contexts make the coalesced-host relation total from target to
+source. -/
+theorem coalescedContextIndexRelation_right_total_at_site
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.coalesceFrameRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.coalesceFrameRaw)
+    (sourceExact : sourceContext.Exact source.site)
+    (targetExact : targetContext.Exact target.site)
+    (targetIndex : Fin targetContext.length) :
+    ∃ sourceIndex,
+      (presentation.coalescedContextIndexRelation sourceContext targetContext).Rel
+        sourceIndex targetIndex := by
+  let targetClass := targetContext.get targetIndex
+  let targetWire := target.wireQuotient.origin targetClass
+  let wire := Fin.cast presentation.frameWireCountEq.symm targetWire
+  have targetClassEq :
+      target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire) = targetClass := by
+    have castEq :
+        Fin.cast presentation.frameWireCountEq wire = targetWire := by
+      apply Fin.ext
+      rfl
+    rw [castEq]
+    exact target.quotientWire_wireQuotient_origin targetClass
+  have targetVisible :
+      target.coalesceFrameRaw.Encloses
+        (target.coalesceFrameRaw.wires
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire))).scope
+        target.site := by
+    rw [targetClassEq]
+    exact (targetExact.mem_iff targetClass).1
+      (List.get_mem targetContext targetIndex)
+  have sourceVisible :
+      source.coalesceFrameRaw.Encloses
+        (source.coalesceFrameRaw.wires
+          (source.quotientWire wire)).scope source.site :=
+    (presentation.coalescedFrame_wire_visible_at_site_iff
+      sourceAdmissible targetAdmissible wire).2 targetVisible
+  have sourceMember : source.quotientWire wire ∈ sourceContext :=
+    (sourceExact.mem_iff _).2 sourceVisible
+  obtain ⟨sourceIndex, sourceLookup⟩ :=
+    sourceContext.lookup?_complete sourceMember
+  refine ⟨sourceIndex, wire, ?_, ?_⟩
+  · simpa only [List.get_eq_getElem] using
+      ConcreteElaboration.WireContext.lookup?_sound sourceLookup
+  · exact targetClassEq.symm
+
 /-- Source frame regions retain their identity in the target plug layout;
 source-only pattern material is opaque and maps to the distinguished site. -/
 def regionMap (presentation : TwoInputPresentation source target) :
@@ -29426,9 +29541,8 @@ theorem allowed_bubble
   exact allowed parentRoute parentDepth
 
 /-- Concrete provenance for every pair of compiler contexts reached by the
-shared two-input traversal.  The only extension constructor is a regular frame
-step: distinguished splice material is owned opaquely by the focused kernel and
-therefore cannot manufacture a lexical-context witness. -/
+shared two-input traversal.  Focused extension is retained separately so the
+kernel can recurse only into children that are direct children on both sides. -/
 inductive ContextWitness
     (presentation : TwoInputPresentation source target)
     (sourceBoundary : List (Fin source.frame.val.wireCount)) :
@@ -29449,6 +29563,22 @@ inductive ContextWitness
         sourceContext targetContext)
       (region : Fin source.plugLayout.plugRaw.regionCount)
       (regular : ¬ presentation.Distinguished region)
+      (sourceExact : (sourceContext.extend region).Exact region)
+      (targetExact :
+        (targetContext.extend (presentation.regionMap region)).Exact
+          (presentation.regionMap region)) :
+      ContextWitness presentation sourceBoundary
+        (sourceContext.extend region)
+        (targetContext.extend (presentation.regionMap region))
+  | extendFocused
+      {sourceContext : ConcreteElaboration.WireContext
+        source.plugLayout.plugRaw}
+      {targetContext : ConcreteElaboration.WireContext
+        target.plugLayout.plugRaw}
+      (parent : ContextWitness presentation sourceBoundary
+        sourceContext targetContext)
+      (region : Fin source.plugLayout.plugRaw.regionCount)
+      (focused : presentation.Distinguished region)
       (sourceExact : (sourceContext.extend region).Exact region)
       (targetExact :
         (targetContext.extend (presentation.regionMap region)).Exact
@@ -29483,6 +29613,19 @@ inductive ContextWitness.AtRegion
           some source.plugLayout.plugRaw.root) :
       AtRegion (.root (presentation := presentation)
         (sourceBoundary := sourceBoundary)) child
+  | rootFocusedChild
+      (focused :
+        presentation.Distinguished source.plugLayout.plugRaw.root)
+      {child : Fin source.plugLayout.plugRaw.regionCount}
+      (sourceParent :
+        (source.plugLayout.plugRaw.regions child).parent? =
+          some source.plugLayout.plugRaw.root)
+      (targetParent :
+        (target.plugLayout.plugRaw.regions
+          (presentation.regionMap child)).parent? =
+            some (presentation.regionMap source.plugLayout.plugRaw.root)) :
+      AtRegion (.root (presentation := presentation)
+        (sourceBoundary := sourceBoundary)) child
   | extendChild
       {sourceContext : ConcreteElaboration.WireContext
         source.plugLayout.plugRaw}
@@ -29503,6 +29646,30 @@ inductive ContextWitness.AtRegion
       AtRegion
         (.extendRegular parentWitness parent regular sourceExact targetExact)
         child
+  | extendFocusedChild
+      {sourceContext : ConcreteElaboration.WireContext
+        source.plugLayout.plugRaw}
+      {targetContext : ConcreteElaboration.WireContext
+        target.plugLayout.plugRaw}
+      {parent : Fin source.plugLayout.plugRaw.regionCount}
+      {parentWitness : ContextWitness presentation sourceBoundary
+        sourceContext targetContext}
+      (parentAt : AtRegion parentWitness parent)
+      (focused : presentation.Distinguished parent)
+      (sourceExact : (sourceContext.extend parent).Exact parent)
+      (targetExact :
+        (targetContext.extend (presentation.regionMap parent)).Exact
+          (presentation.regionMap parent))
+      {child : Fin source.plugLayout.plugRaw.regionCount}
+      (sourceParent :
+        (source.plugLayout.plugRaw.regions child).parent? = some parent)
+      (targetParent :
+        (target.plugLayout.plugRaw.regions
+          (presentation.regionMap child)).parent? =
+            some (presentation.regionMap parent)) :
+      AtRegion
+        (.extendFocused parentWitness parent focused sourceExact targetExact)
+        child
 
 /-- Every distinguished region reached by the actual shared compiler route is
 the retained splice site.  Source-pattern material is distinguished only to
@@ -29521,7 +29688,7 @@ theorem ContextWitness.focused_region_eq_site
     (atRegion : ContextWitness.AtRegion witness region)
     (focused : presentation.Distinguished region) :
     region = source.plugLayout.frameRegion source.site := by
-  cases atRegion with
+  induction atRegion with
   | root =>
       rcases focused with focused | ⟨material, focused⟩
       · exact focused
@@ -29536,6 +29703,49 @@ theorem ContextWitness.focused_region_eq_site
       · exact focused
       · exact False.elim
           (source.plugLayout.frameRegion_ne_materialRegion frame material focused)
+  | @rootFocusedChild rootFocused child sourceParent targetParent =>
+      have rootEq :
+          source.plugLayout.plugRaw.root =
+            source.plugLayout.frameRegion source.site := by
+        rcases rootFocused with rootFocused | ⟨material, rootFocused⟩
+        · exact rootFocused
+        · exact False.elim
+            (source.plugLayout.frameRegion_ne_materialRegion
+              source.frame.val.root material rootFocused)
+      have childMapEq :
+          presentation.regionMap child =
+            target.plugLayout.frameRegion target.site := by
+        rcases focused with childFocused | ⟨material, childFocused⟩
+        · exact (congrArg presentation.regionMap childFocused).trans
+            presentation.regionMap_site
+        · exact (congrArg presentation.regionMap childFocused).trans (by
+            simp [regionMap, PlugLayout.materialRegion,
+              PlugLayout.plugRaw, PlugLayout.regionCount])
+      have rootMapEq :
+          presentation.regionMap source.plugLayout.plugRaw.root =
+            target.plugLayout.frameRegion target.site := by
+        rw [rootEq, presentation.regionMap_site]
+      rw [childMapEq, rootMapEq] at targetParent
+      have targetMember :
+          ConcreteElaboration.LocalOccurrence.child
+              (target.plugLayout.frameRegion target.site) ∈
+            ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
+              (target.plugLayout.frameRegion target.site) :=
+        (ConcreteElaboration.mem_localOccurrences_child _ _ _).2 targetParent
+      have rawMember :
+          ConcreteElaboration.LocalOccurrence.child target.site ∈
+            ConcreteElaboration.localOccurrences target.coalesceFrameRaw
+              target.site :=
+        (target.plugLayout.mapFrameOccurrence_mem_localOccurrences target.site
+          (.child target.site)).1 targetMember
+      have rawParent :
+          (target.frame.val.regions target.site).parent? =
+            some target.site := by
+        exact (ConcreteElaboration.mem_localOccurrences_child _ _ _).1 rawMember
+      exact False.elim
+        (ConcreteElaboration.checked_direct_child_not_encloses_parent
+          target.frame.property rawParent
+          (ConcreteDiagram.Encloses.refl target.frame.val target.site))
   | extendChild parentAt regular sourceExact targetExact childParent =>
       obtain ⟨frame, rfl⟩ :=
         presentation.regularChildFrameRegion _ _ regular childParent
@@ -29543,6 +29753,40 @@ theorem ContextWitness.focused_region_eq_site
       · exact focused
       · exact False.elim
           (source.plugLayout.frameRegion_ne_materialRegion frame material focused)
+  | @extendFocusedChild sourceContext targetContext parent parentWitness
+      parentAt parentFocused sourceExact targetExact child sourceParent
+      targetParent ih =>
+      have parentEq := ih parentFocused
+      have childMapEq :
+          presentation.regionMap child =
+            target.plugLayout.frameRegion target.site := by
+        rcases focused with childFocused | ⟨material, childFocused⟩
+        · exact (congrArg presentation.regionMap childFocused).trans
+            presentation.regionMap_site
+        · exact (congrArg presentation.regionMap childFocused).trans (by
+            simp [regionMap, PlugLayout.materialRegion,
+              PlugLayout.plugRaw, PlugLayout.regionCount])
+      rw [childMapEq, parentEq, presentation.regionMap_site] at targetParent
+      have targetMember :
+          ConcreteElaboration.LocalOccurrence.child
+              (target.plugLayout.frameRegion target.site) ∈
+            ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
+              (target.plugLayout.frameRegion target.site) :=
+        (ConcreteElaboration.mem_localOccurrences_child _ _ _).2 targetParent
+      have rawMember :
+          ConcreteElaboration.LocalOccurrence.child target.site ∈
+            ConcreteElaboration.localOccurrences target.coalesceFrameRaw
+              target.site :=
+        (target.plugLayout.mapFrameOccurrence_mem_localOccurrences target.site
+          (.child target.site)).1 targetMember
+      have rawParent :
+          (target.frame.val.regions target.site).parent? =
+            some target.site := by
+        exact (ConcreteElaboration.mem_localOccurrences_child _ _ _).1 rawMember
+      exact False.elim
+        (ConcreteElaboration.checked_direct_child_not_encloses_parent
+          target.frame.property rawParent
+          (ConcreteDiagram.Encloses.refl target.frame.val target.site))
 
 /-- Relate compiler-context indices exactly when both carry the plug-layout
 copies of quotient classes containing one shared retained-frame wire.  This is

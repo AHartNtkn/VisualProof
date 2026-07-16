@@ -571,6 +571,18 @@ structure ConcreteSemanticSimulation (signature : List Nat)
         (targetContext.extend (regionMap region)).Exact (regionMap region) →
         ContextWitness (sourceContext.extend region)
           (targetContext.extend (regionMap region))
+  /-- Extend validated context evidence at the focused region.  The focused
+  kernel may still need the authoritative recursive theorem for retained
+  frame children, even though pattern material is handled opaquely. -/
+  extendFocusedContext : ∀ (sourceContext : WireContext source)
+    (targetContext : WireContext target),
+    ContextWitness sourceContext targetContext →
+      ∀ region,
+        Distinguished region →
+        (sourceContext.extend region).Exact region →
+        (targetContext.extend (regionMap region)).Exact (regionMap region) →
+        ContextWitness (sourceContext.extend region)
+          (targetContext.extend (regionMap region))
   /-- The recursive compiler reaches a child only through the actual
   direct-parent occurrence currently being traversed. -/
   at_child : ∀ (sourceContext : WireContext source)
@@ -586,6 +598,25 @@ structure ConcreteSemanticSimulation (signature : List Nat)
       (source.regions child).parent? = some parent →
       AtRegion
         (extendContext sourceContext targetContext context parent regular
+          sourceExact targetExact)
+        child
+  /-- A child under a focused region is recursively available only when it is
+  a direct child on both sides.  This excludes opaque replacement material
+  whose source regions collapse to the target focus. -/
+  at_focused_child : ∀ (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (context : ContextWitness sourceContext targetContext)
+    (parent : Fin source.regionCount)
+    (focused : Distinguished parent)
+    (sourceExact : (sourceContext.extend parent).Exact parent)
+    (targetExact :
+      (targetContext.extend (regionMap parent)).Exact (regionMap parent))
+    (child : Fin source.regionCount),
+    AtRegion context parent →
+      (source.regions child).parent? = some parent →
+      (target.regions (regionMap child)).parent? = some (regionMap parent) →
+      AtRegion
+        (extendFocusedContext sourceContext targetContext context parent focused
           sourceExact targetExact)
         child
   localTransport : ∀ {rels : RelCtx} direction
@@ -655,14 +686,46 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (context : ContextWitness sourceContext targetContext)
     (sourceBinders : BinderContext source rels)
     (targetBinders : BinderContext target rels),
-    AtRegion context region → Distinguished region → Allowed direction region →
-      BinderRelated sourceBinders targetBinders →
-      (sourceContext.extend region).Exact region →
-      (targetContext.extend (regionMap region)).Exact (regionMap region) →
-      sourceBinders.Covers region →
-      targetBinders.Covers (regionMap region) →
-      BinderContext.Enumeration source sourceBinders region →
-      BinderContext.Enumeration target targetBinders (regionMap region) →
+    (atRegion : AtRegion context region) →
+      (focused : Distinguished region) →
+      (allowed : Allowed direction region) →
+      (bindersRelated : BinderRelated sourceBinders targetBinders) →
+      (sourceExact : (sourceContext.extend region).Exact region) →
+      (targetExact :
+        (targetContext.extend (regionMap region)).Exact (regionMap region)) →
+      (sourceBindersCover : sourceBinders.Covers region) →
+      (targetBindersCover : targetBinders.Covers (regionMap region)) →
+      (sourceEnumeration :
+        BinderContext.Enumeration source sourceBinders region) →
+      (targetEnumeration :
+        BinderContext.Enumeration target targetBinders (regionMap region)) →
+      (∀ {childDirection : SimulationDirection}
+        {child : Fin source.regionCount} {childRels : RelCtx}
+        {childSourceBinders : BinderContext source childRels}
+        {childTargetBinders : BinderContext target childRels}
+        {sourceBody : Region signature
+          (sourceContext.extend region).length childRels}
+        {targetBody : Region signature
+          (targetContext.extend (regionMap region)).length childRels},
+        (source.regions child).parent? = some region →
+        (target.regions (regionMap child)).parent? = some (regionMap region) →
+        Allowed childDirection child →
+        BinderRelated childSourceBinders childTargetBinders →
+        childSourceBinders.Covers child →
+        childTargetBinders.Covers (regionMap child) →
+        BinderContext.Enumeration source childSourceBinders child →
+        BinderContext.Enumeration target childTargetBinders
+          (regionMap child) →
+        compileRegion? signature source fuelSource child
+            (sourceContext.extend region) childSourceBinders = some sourceBody →
+        compileRegion? signature target fuelTarget (regionMap child)
+            (targetContext.extend (regionMap region)) childTargetBinders =
+          some targetBody →
+        RegionSimulation model named childDirection
+          (indexRelation
+            (extendFocusedContext sourceContext targetContext context region
+              focused sourceExact targetExact))
+          sourceBody targetBody) →
       ∀ (sourceItems : ItemSeq signature (sourceContext.extend region).length rels)
         (targetItems : ItemSeq signature
           (targetContext.extend (regionMap region)).length rels),
@@ -1060,11 +1123,66 @@ theorem compileRegion_denote
                 | some targetItems =>
                     simp [targetExtended, targetItemsResult] at targetCompiled
                     subst targetBody
+                    let focusedContext :=
+                      simulation.extendFocusedContext sourceContext targetContext
+                        context region focused sourceExact targetExact
+                    have recurse : ∀
+                        {childDirection : SimulationDirection}
+                        {child : Fin source.regionCount} {childRels : RelCtx}
+                        {childSourceBinders : BinderContext source childRels}
+                        {childTargetBinders : BinderContext target childRels}
+                        {sourceChild : Region signature sourceExtended.length
+                          childRels}
+                        {targetChild : Region signature targetExtended.length
+                          childRels},
+                        (source.regions child).parent? = some region →
+                        (target.regions (simulation.regionMap child)).parent? =
+                          some (simulation.regionMap region) →
+                        simulation.Allowed childDirection child →
+                        simulation.BinderRelated childSourceBinders
+                          childTargetBinders →
+                        childSourceBinders.Covers child →
+                        childTargetBinders.Covers
+                          (simulation.regionMap child) →
+                        BinderContext.Enumeration source childSourceBinders
+                          child →
+                        BinderContext.Enumeration target childTargetBinders
+                          (simulation.regionMap child) →
+                        compileRegion? signature source fuelSource child
+                            sourceExtended childSourceBinders =
+                          some sourceChild →
+                        compileRegion? signature target fuelTarget
+                            (simulation.regionMap child) targetExtended
+                            childTargetBinders = some targetChild →
+                        RegionSimulation model named childDirection
+                          (simulation.indexRelation focusedContext)
+                          sourceChild targetChild := by
+                      intro childDirection child childRels childSourceBinders
+                        childTargetBinders sourceChild targetChild sourceParent
+                        targetParent childAllowed childBindersRelated
+                        childSourceBindersCover childTargetBindersCover
+                        childSourceEnumeration childTargetEnumeration
+                        sourceChildCompiled targetChildCompiled
+                      exact induction childDirection fuelTarget child
+                        sourceExtended targetExtended focusedContext
+                        (simulation.at_focused_child sourceContext targetContext
+                          context region focused sourceExact targetExact child
+                          atRegion sourceParent targetParent)
+                        childSourceBinders childTargetBinders childAllowed
+                        childBindersRelated childSourceBindersCover
+                        childTargetBindersCover childSourceEnumeration
+                        childTargetEnumeration
+                        (sourceExact.extend_child simulation.source_wellFormed
+                          sourceParent)
+                        (targetExact.extend_child simulation.target_wellFormed
+                          targetParent)
+                        sourceChild targetChild sourceChildCompiled
+                        targetChildCompiled
                     exact simulation.focusedRegionKernel direction
                       fuelSource fuelTarget region sourceContext targetContext
                       context sourceBinders targetBinders atRegion focused allowed
                       bindersRelated sourceExact targetExact sourceBindersCover
-                      targetBindersCover sourceEnumeration targetEnumeration
+                      targetBindersCover sourceEnumeration targetEnumeration recurse
                       sourceItems targetItems sourceItemsResult targetItemsResult
           · rw [simulation.localOccurrences_map region focused] at targetCompiled
             let extendedContext := simulation.extendContext sourceContext targetContext
@@ -1177,6 +1295,11 @@ structure RootContextSimulation
   atRootChild : ¬ simulation.Distinguished source.root → ∀ child,
     (source.regions child).parent? = some source.root →
       simulation.AtRegion context child
+  atFocusedRootChild : simulation.Distinguished source.root → ∀ child,
+    (source.regions child).parent? = some source.root →
+      (target.regions (simulation.regionMap child)).parent? =
+        some (simulation.regionMap source.root) →
+      simulation.AtRegion context child
   transport : ¬ simulation.Distinguished source.root →
     simulation.Allowed direction source.root →
     ∀ (sourceItems : ItemSeq signature
@@ -1201,6 +1324,31 @@ structure RootContextSimulation
   focusedRootKernel : simulation.AtRegion context source.root →
     simulation.Distinguished source.root →
     simulation.Allowed direction source.root →
+    (∀ {childDirection : SimulationDirection}
+      {child : Fin source.regionCount} {childRels : RelCtx}
+      {childSourceBinders : BinderContext source childRels}
+      {childTargetBinders : BinderContext target childRels}
+      {sourceBody : Region signature
+        (sourceAmbient ++ sourceLocals).length childRels}
+      {targetBody : Region signature
+        (targetAmbient ++ targetLocals).length childRels},
+      (source.regions child).parent? = some source.root →
+      (target.regions (simulation.regionMap child)).parent? =
+        some (simulation.regionMap source.root) →
+      simulation.Allowed childDirection child →
+      simulation.BinderRelated childSourceBinders childTargetBinders →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers (simulation.regionMap child) →
+      BinderContext.Enumeration source childSourceBinders child →
+      BinderContext.Enumeration target childTargetBinders
+        (simulation.regionMap child) →
+      compileRegion? signature source source.regionCount child
+          (sourceAmbient ++ sourceLocals) childSourceBinders = some sourceBody →
+      compileRegion? signature target target.regionCount
+          (simulation.regionMap child) (targetAmbient ++ targetLocals)
+          childTargetBinders = some targetBody →
+      RegionSimulation model named childDirection
+        (simulation.indexRelation context) sourceBody targetBody) →
     ∀ (sourceItems : ItemSeq signature
         (sourceAmbient ++ sourceLocals).length [])
       (targetItems : ItemSeq signature
@@ -1323,8 +1471,52 @@ theorem compileRoot_denote
         | some targetItems =>
             simp [targetRootContext, targetItemsResult] at targetCompiled
             subst targetBody
-            exact rootContext.focusedRootKernel rootContext.atRoot focused allowed sourceItems
-              targetItems sourceItemsResult targetItemsResult
+            have recurse : ∀ {childDirection : SimulationDirection}
+                {child : Fin source.regionCount} {childRels : RelCtx}
+                {childSourceBinders : BinderContext source childRels}
+                {childTargetBinders : BinderContext target childRels}
+                {sourceChild : Region signature sourceRootContext.length childRels}
+                {targetChild : Region signature targetRootContext.length childRels},
+                (source.regions child).parent? = some source.root →
+                (target.regions (simulation.regionMap child)).parent? =
+                  some (simulation.regionMap source.root) →
+                simulation.Allowed childDirection child →
+                simulation.BinderRelated childSourceBinders childTargetBinders →
+                childSourceBinders.Covers child →
+                childTargetBinders.Covers (simulation.regionMap child) →
+                BinderContext.Enumeration source childSourceBinders child →
+                BinderContext.Enumeration target childTargetBinders
+                  (simulation.regionMap child) →
+                compileRegion? signature source source.regionCount child
+                    sourceRootContext childSourceBinders = some sourceChild →
+                compileRegion? signature target target.regionCount
+                    (simulation.regionMap child) targetRootContext
+                    childTargetBinders = some targetChild →
+                RegionSimulation model named childDirection
+                  (simulation.indexRelation rootContext.context)
+                  sourceChild targetChild := by
+              intro childDirection child childRels childSourceBinders
+                childTargetBinders sourceChild targetChild sourceParent
+                targetParent childAllowed childBindersRelated
+                childSourceBindersCover childTargetBindersCover
+                childSourceEnumeration childTargetEnumeration
+                sourceChildCompiled targetChildCompiled
+              exact simulation.compileRegion_denote childDirection
+                source.regionCount target.regionCount child sourceRootContext
+                targetRootContext rootContext.context
+                (rootContext.atFocusedRootChild focused child sourceParent
+                  targetParent)
+                childSourceBinders childTargetBinders childAllowed
+                childBindersRelated childSourceBindersCover
+                childTargetBindersCover childSourceEnumeration
+                childTargetEnumeration
+                (sourceExact.extend_child simulation.source_wellFormed
+                  sourceParent)
+                (targetRootExact.extend_child simulation.target_wellFormed
+                  targetParent)
+                sourceChild targetChild sourceChildCompiled targetChildCompiled
+            exact rootContext.focusedRootKernel rootContext.atRoot focused allowed
+              recurse sourceItems targetItems sourceItemsResult targetItemsResult
 
   · rw [simulation.localOccurrences_map source.root focused]
         at targetCompiled

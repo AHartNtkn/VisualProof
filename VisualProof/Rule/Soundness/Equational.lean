@@ -1870,7 +1870,14 @@ private noncomputable def conversionSimulation
     Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index
   extendContext := fun source target embedding region _regular sourceExact targetExact =>
     embedding.extend region
+  extendFocusedContext := by
+    intro source target embedding region focused sourceExact targetExact
+    exact False.elim focused
   at_child := by simp
+  at_focused_child := by
+    intro source target embedding parent focused sourceExact targetExact child
+      atParent sourceParent targetParent
+    exact False.elim focused
   localTransport := by
     intro rels direction fuelSource fuelTarget source target embedding
       sourceBinders targetBinders region atRegion regular allowed sourceExact
@@ -1956,6 +1963,9 @@ private noncomputable def conversionRootContext
     atRootChild := by
       intro regular child parent
       trivial
+    atFocusedRootChild := by
+      intro focused
+      exact False.elim focused
     transport := ?_
     focusedRootKernel := ?_
   }

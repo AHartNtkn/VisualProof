@@ -1451,7 +1451,14 @@ private noncomputable def severWireSimulation
     ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap
   extendContext := fun original expanded collapse region _regular sourceExact targetExact =>
     collapse.extend region
+  extendFocusedContext := by
+    intro original expanded collapse region focused sourceExact targetExact
+    exact False.elim focused
   at_child := by simp
+  at_focused_child := by
+    intro original expanded collapse parent focused sourceExact targetExact child
+      atParent sourceParent targetParent
+    exact False.elim focused
   localTransport := by
     intro rels direction fuelSource fuelTarget original expanded collapse
       sourceBinders targetBinders region atRegion regular allowed sourceExact
@@ -1546,6 +1553,9 @@ private noncomputable def severWireRootContext
     atRootChild := by
       intro regular child parent
       trivial
+    atFocusedRootChild := by
+      intro focused
+      exact False.elim focused
     transport := ?_
     focusedRootKernel := ?_
   }
