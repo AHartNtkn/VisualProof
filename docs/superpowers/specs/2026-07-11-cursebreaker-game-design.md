@@ -29,7 +29,7 @@ Play is exclusively backward. A puzzle begins at its theorem diagram and ends au
 
 Each accepted move produces a new immutable diagram state. The kernel remains the sole authority for move legality. A refused move changes neither the diagram nor the timeline.
 
-First completion is durable. Rewinding a completed puzzle does not revoke its completion, prerequisites, or solved-seal vellum.
+First completion is durable. Rewinding a completed puzzle does not revoke its completion, prerequisites, or broken-seal reference.
 
 ## 3. Timeline interaction
 
@@ -45,18 +45,27 @@ The existing single-track timeline semantics remain unchanged and become a brass
 
 Past, current, and future notches must be distinguishable without relying on color alone. Timeline branching is a safe experimentation affordance, not a logical skill whose use is required merely for assessment.
 
-## 4. Solved-seal vellums
+## 4. Broken-seal references
 
-Completing a puzzle records its identity, unlocks dependent artifacts, and adds the exact closed theorem to the vellum library.
+Completing a puzzle records its identity, unlocks dependent artifacts, marks the
+seal broken on that artifact's existing catalog record, and enables the exact
+closed theorem as a reference from that same record. Completion never moves or
+duplicates the artifact in another collection.
 
-A vellum exposes exactly two inverse actions:
+A broken-seal reference exposes exactly two inverse actions:
 
 1. Manifest one complete copy of its closed seal inside a chosen region.
 2. Dissolve one exact canonical occurrence of that complete seal.
 
-Vellums have no boundary arguments, partial matches, alternate sides, arbitrary replacement, direction choice, or compatibility with the proof assistant's general theorem application. A later puzzle may manifest an outer-quantified seal and then specialize it through ordinary game mechanics; this does not turn the vellum itself into a parameterized rewrite rule.
+Broken-seal references have no boundary arguments, partial matches, alternate
+sides, arbitrary replacement, direction choice, or compatibility with the proof
+assistant's general theorem application. A later puzzle may manifest an
+outer-quantified seal and then specialize it through ordinary game mechanics;
+this does not turn the reference itself into a parameterized rewrite rule.
 
-Authoring validation must detect accidental one-move solutions in which a later goal is merely the obvious whole occurrence of a newly unlocked vellum.
+Authoring validation must detect accidental one-move solutions in which a later
+goal is merely the obvious whole occurrence of a newly available broken-seal
+reference.
 
 ## 5. Desk presentation
 
@@ -66,8 +75,10 @@ The game presents one orderly working curator's desk with slight physical asymme
 
 - A rounded-square brass lens dominates the center and fills nearly the full viewport height.
 - The active artifact diagram remains crisp and visually primary beneath the glass.
-- The left folio owns culture and artifact navigation.
-- The right-side vellums own solved seals and their organization.
+- The left folio owns culture and artifact navigation, replay, and broken-seal
+  reference access through the same stable artifact records.
+- Completion changes an artifact record's physical seal state and available
+  actions; it never changes the artifact's catalog location.
 - Papers may be slightly skewed, but interaction positions remain predictable.
 - At compact widths, side papers collapse into edge stacks or drawers while the main lens remains dominant.
 
@@ -147,19 +158,20 @@ merely for local variety.
 | pattern | A complete diagram that can fill or be abstracted into a hollow. |
 | loupe | The secondary lens used to construct or select a pattern. |
 | timeline lever | The physical control for moving through recorded seal states. |
-| vellum | A complete seal recovered from an already solved artifact. |
+| broken-seal reference | The complete seal retained on the original artifact record after its curse has been released. |
 
 Canonical action language is: **lift paired veils**, **clear a fragment**,
 **lift an echo**, **trace a mark to its ring**, **dissolve an empty ring**,
 **supply a pattern**, **draw the timeline lever back**, and **manifest** or
-**dissolve a vellum**. Plain connective prose remains natural, but ordinary
+**dissolve a referenced seal**. Plain connective prose remains natural, but ordinary
 instruction does not rename these actions as readings, interpretations,
 proofs, rewrites, or rule applications.
 
 Vocabulary is introduced only when its visible referent or action first
 appears: veil and paired veil in artifact 1; timeline lever during artifact 2;
 field and fragment in artifact 3; echo in artifact 4; ring and mark in artifact
-5; hollow, pattern, and loupe in artifact 7; vellum at its first available use.
+5; hollow, pattern, and loupe in artifact 7; broken-seal reference at its first
+available use.
 Formal terms such as proposition, quantifier, variable, theorem, proof, and
 kernel rule names remain authoring metadata rather than ordinary learner-facing
 dialogue.
@@ -168,7 +180,7 @@ dialogue.
 
 Layout mockups establish composition, scale, hierarchy, and interaction geometry only. They are not production visual targets and must not be promoted into the game merely because their formatting was approved.
 
-Before adopting a material aesthetic direction, present a small set of coherent options as representative in-game demos and discuss them with the user. Each demo must show the real interface at realistic content density—including the main lens, artifact diagram, surrounding papers or vellums, and any affected loupe, teacher, or thought treatment—rather than isolated swatches or ornamental fragments. The options should make meaningful differences in materials, lighting, typography, ornament, animation, and atmosphere visible without changing approved interaction semantics.
+Before adopting a material aesthetic direction, present a small set of coherent options as representative in-game demos and discuss them with the user. Each demo must show the real interface at realistic content density—including the main lens, artifact diagram, surrounding artifact records and broken-seal states, and any affected loupe, teacher, or thought treatment—rather than isolated swatches or ornamental fragments. The options should make meaningful differences in materials, lighting, typography, ornament, animation, and atmosphere visible without changing approved interaction semantics.
 
 Production styling begins only after the user selects or refines a demonstrated direction. Acceptance requires a unified, intentionally crafted result that looks appropriate for a polished puzzle game; a functional wireframe, lightly decorated utility interface, or direct rendering of the formatting mockups is insufficient.
 
@@ -182,7 +194,7 @@ One immutable bundled catalog is the only source of game content. Every artifact
 - content fingerprint;
 - prerequisite artifact and knowledge-node identities;
 - mechanics introduced, practiced, retrieved, and assessed;
-- required vellum dependencies;
+- required broken-seal reference dependencies;
 - diegetic title and artifact description;
 - teacher interventions and optional escalating hints, including exact
   recognized-state triggers where appropriate.
@@ -192,13 +204,17 @@ A build-time verifier rejects:
 - nonempty theorem boundaries;
 - goals whose witness does not replay backward to canonical blank;
 - cyclic, missing, or unreachable prerequisites;
-- unavailable or circular vellum dependencies;
+- unavailable or circular broken-seal reference dependencies;
 - duplicate identities or unstable fingerprints;
 - claimed mechanics absent from the verified trace;
 - invalid, open, or unreachable recognized-state teacher triggers;
 - references to proof-assistant-only content or actions.
 
-Progress derives unlocked artifacts and available vellums solely from the catalog plus completed puzzle identities. The versioned local save contains progress, settings, and the active puzzle timeline. It contains no external theory, arbitrary authored diagram, filesystem authority, or imported proof object.
+Progress derives unlocked artifacts and available broken-seal references solely
+from the catalog plus completed puzzle identities. The versioned local save
+contains progress, settings, and the active puzzle timeline. It contains no
+external theory, arbitrary authored diagram, filesystem authority, or imported
+proof object.
 
 ## 7. Mastery-learning content contract
 
@@ -228,7 +244,7 @@ Every candidate mechanic family must pass a representative feasibility spike bef
 - one closed zero-boundary theorem;
 - a legal backward trace through exposed game interactions;
 - evidence the advertised mechanic is load-bearing;
-- no accidental one-step vellum solution;
+- no accidental one-step broken-seal reference solution;
 - a readable diagram independent of layout accidents.
 
 If a retained kernel mechanic does not create a distinct, intelligible player decision in backward play, it must be removed from the player-facing surface rather than justified through filler puzzles.
@@ -252,7 +268,7 @@ Must include:
 - Timeline scrubbing, retained future, and branch replacement.
 - Early outer arity-zero proposition bubbles.
 - One low-noise construction-loupe substitution.
-- One obvious whole-vellum use after several seals have been solved.
+- One obvious whole-seal reference use after several seals have been broken.
 
 Exit evidence: independently read a small seal, use the timeline, understand atomic refusals, and complete a simple outer-quantified proposition puzzle.
 
@@ -272,7 +288,7 @@ Required theorem families:
 - distribution and absorption;
 - contraposition and De Morgan families;
 - delayed classical families: excluded middle, double-negation elimination, reductio, and Peirce-style forms;
-- exact vellum choice among multiple older seals;
+- exact broken-seal reference choice among multiple older artifacts;
 - the same semantic family in structurally different diagrams.
 
 Exit evidence: solve unfamiliar multi-proposition seals through polarity and structural reasoning without stepwise dialogue or silhouette matching.
@@ -464,7 +480,7 @@ Required families:
 - De Morgan laws;
 - selected distributive laws.
 
-The culture progresses from operational equations to proofs using Boolean case analysis. Its capstone combines several operational and closure vellums rather than reproducing a truth table.
+The culture progresses from operational equations to proofs using Boolean case analysis. Its capstone combines several operational and closure broken-seal references rather than reproducing a truth table.
 
 ### 8.10 Natural-number theory — final synthesis culture
 
@@ -493,9 +509,9 @@ The final artifact is a newly authored closed theorem:
 
 `∀m,n. Nat(m) → Nat(n) → m+n=n+m`.
 
-Its intended proof is genuinely inductive and requires earlier lemma vellums. Commutativity is never exposed as a general replacement rule.
+Its intended proof is genuinely inductive and requires earlier broken-seal lemma references. Commutativity is never exposed as a general replacement rule.
 
-This culture reconnects proposition structure, nested second-order comprehension, first-order wires, equality, named definitions, explicit lambda terms, βη conversion, term-specific equality mechanics, relational typing, fixed points, vellum planning, and timeline exploration. It is the readiness gate for future cultures involving lists, trees, order, algorithms, or algebraic structures.
+This culture reconnects proposition structure, nested second-order comprehension, first-order wires, equality, named definitions, explicit lambda terms, βη conversion, term-specific equality mechanics, relational typing, fixed points, broken-seal reference planning, and timeline exploration. It is the readiness gate for future cultures involving lists, trees, order, algorithms, or algebraic structures.
 
 ## 9. Mechanic coverage contract
 
@@ -505,7 +521,7 @@ This culture reconnects proposition structure, nested second-order comprehension
 | Insertion/erasure | Apprenticeship and outer propositions |
 | Iteration/deiteration | Early propositional contraction |
 | Timeline scrubbing/branching | Apprenticeship |
-| Exact vellum manifestation/dissolution | Apprenticeship demonstration; strategic use thereafter |
+| Exact broken-seal reference manifestation/dissolution | Apprenticeship demonstration; strategic use thereafter |
 | Arity-zero comprehension | Early outer propositions |
 | Vacuous bubble introduction/elimination | Nested proposition binders |
 | Wire join/sever | First-order identity |
@@ -529,7 +545,7 @@ It includes:
 
 - the sole game entry point and game-native product architecture;
 - backward-only puzzle sessions and blank completion;
-- progression, local save, and exact vellum authority;
+- progression, local save, and exact broken-seal reference authority;
 - the curator's desk, main lens, timeline lever, teacher dialogue, red thoughts, and clean construction loupe;
 - six permanent artifacts beginning the oldest pure-propositional culture;
 - one permanent gateway artifact beginning the next proposition-binder culture;
@@ -549,7 +565,7 @@ Later cultural content must not appear as placeholder, locked empty panels, or u
 - Every shipped theorem is closed and has an empty boundary.
 - Every witness replays backward through exposed game actions to canonical blank.
 - Every advertised mechanic is load-bearing in at least one representative assessment.
-- Exact vellum dependencies are acyclic and audited for shortcuts.
+- Exact broken-seal reference dependencies are acyclic and audited for shortcuts.
 - The prerequisite graph is acyclic, reachable, and free of overloaded or orphan nodes.
 - Representative spikes establish feasibility before phase sizes are committed.
 - Formal relational type translations and Boolean/Nat definitions are mechanically checked.
@@ -562,7 +578,7 @@ Later cultural content must not appear as placeholder, locked empty panels, or u
 - Architecture-boundary tests.
 - Catalog, fingerprint, prerequisite, and save-version tests.
 - Timeline retained-future and branch-truncation tests.
-- Exact vellum manifestation/dissolution tests.
+- Exact broken-seal reference manifestation/dissolution tests.
 - Construction-loupe geometry and unchanged behavior tests.
 - Playwright novice-path playthroughs.
 - Responsive rendered evidence for desktop and compact desk arrangements.
@@ -577,7 +593,7 @@ Kernel verification proves soundness, not learnability or fun. Novice playtests 
 - where first meaningful moves stall;
 - error categories and hint depth;
 - whether teacher dialogue becomes intrusive;
-- whether vellums create planning rather than one-move deletion;
+- whether broken-seal references create planning rather than one-move deletion;
 - whether diagrams remain readable at realistic scale;
 - whether players can transfer a skill after intervening content.
 

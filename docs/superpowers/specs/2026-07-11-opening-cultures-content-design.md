@@ -108,7 +108,7 @@ Every artifact records:
 - proof mechanics used by the witness;
 - authored teacher interventions for opening, completion, stalled play, or
   exact recognized proof states;
-- vellum eligibility;
+- broken-seal reference eligibility;
 - professional name, curator shorthand, and provenance metadata.
 
 Teacher instruction states the immediate visible affordance briefly, then

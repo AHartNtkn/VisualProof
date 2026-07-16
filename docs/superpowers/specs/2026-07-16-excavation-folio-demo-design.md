@@ -34,9 +34,9 @@ The demo does not own:
 - puzzle loading;
 - real unlock or completion calculation;
 - save data or persistence;
-- theorem citation or vellum manifestation;
+- broken-seal reference manifestation or dissolution;
 - teacher presentation;
-- the right-side solved-artifact library;
+- broken-seal reference behavior beyond the demonstrated physical artifact states;
 - integration with `src/game`, `src/app`, or either application mount;
 - file/folder importing, loading, unloading, conflicts, or any other source-management behavior from the proof assistant.
 
