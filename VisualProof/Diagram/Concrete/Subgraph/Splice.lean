@@ -28599,6 +28599,20 @@ private theorem checkedDiagram_nodes_eq
   subst right
   rfl
 
+private theorem checkedDiagram_nodes_rename_eq
+    (left right : CheckedDiagram signature) (h : left = right)
+    (node : Fin left.val.nodeCount) :
+    right.val.nodes (Fin.cast (congrArg
+      (fun checked : CheckedDiagram signature => checked.val.nodeCount) h)
+      node) =
+      (left.val.nodes node).rename
+        (FiniteEquiv.finCast (congrArg
+          (fun checked : CheckedDiagram signature =>
+            checked.val.regionCount) h)) := by
+  cases h
+  cases hnode : left.val.nodes node <;>
+    simp [hnode, FiniteEquiv.finCast, CNode.rename]
+
 private def castLocalOccurrence
     (left right : CheckedDiagram signature)
     (regionEq : left.val.regionCount = right.val.regionCount)
@@ -29230,6 +29244,45 @@ def occurrenceMap (presentation : TwoInputPresentation source target)
         (fun _ => .child (target.plugLayout.frameRegion target.site)) node
   | .child child => .child (presentation.regionMap child)
 
+/-- Retained-frame nodes have the same computational payload at the focused
+site; only their region and binder identities are transported through the
+paired frame equality. -/
+def mapFrameNodeShape
+    (presentation : TwoInputPresentation source target) :
+    CNode source.plugLayout.plugRaw.regionCount →
+      CNode target.plugLayout.plugRaw.regionCount
+  | .term region freePorts term =>
+      .term (presentation.regionMap region) freePorts term
+  | .atom region binder =>
+      .atom (presentation.regionMap region)
+        (presentation.regionMap binder)
+  | .named region definition arity =>
+      .named (presentation.regionMap region) definition arity
+
+theorem frameNode_shape
+    (presentation : TwoInputPresentation source target)
+    (node : Fin source.frame.val.nodeCount) :
+    target.plugLayout.plugRaw.nodes
+        (target.plugLayout.frameNode
+          (Fin.cast presentation.frameNodeCountEq node)) =
+      presentation.mapFrameNodeShape
+        (source.plugLayout.plugRaw.nodes
+          (source.plugLayout.frameNode node)) := by
+  change target.plugLayout.plugNode
+      (target.plugLayout.frameNode
+        (Fin.cast presentation.frameNodeCountEq node)) =
+    presentation.mapFrameNodeShape
+      (source.plugLayout.plugNode
+        (source.plugLayout.frameNode node))
+  rw [source.plugLayout.plugNode_frameNode,
+    target.plugLayout.plugNode_frameNode,
+    checkedDiagram_nodes_rename_eq source.frame target.frame
+      presentation.frame_eq node]
+  cases hnode : source.frame.val.nodes node <;>
+    simp [hnode, mapFrameNodeShape, PlugLayout.mapFrameNode, CNode.rename,
+      FiniteEquiv.finCast, presentation.regionMap_frameRegion]
+  all_goals rfl
+
 theorem occurrenceMap_child
     (presentation : TwoInputPresentation source target)
     (region : Fin source.plugLayout.plugRaw.regionCount)
@@ -29347,6 +29400,34 @@ def mapRegionKind
   | .bubble sourceParent arity =>
       .bubble (presentation.regionMap sourceParent) arity
 
+/-- A retained-frame child keeps its cut/bubble wrapper even when its parent is
+the distinguished splice site.  Regular-parent provenance is unnecessary for
+this frame-only fact. -/
+theorem region_shape_frameRegion
+    (presentation : TwoInputPresentation source target)
+    (frameChild : Fin source.frame.val.regionCount) :
+    target.plugLayout.plugRaw.regions
+        (presentation.regionMap
+          (source.plugLayout.frameRegion frameChild)) =
+      presentation.mapRegionKind
+        (source.plugLayout.plugRaw.regions
+          (source.plugLayout.frameRegion frameChild)) := by
+  rw [presentation.regionMap_frameRegion]
+  change target.plugLayout.plugRegion
+      (target.plugLayout.frameRegion
+        (Fin.cast presentation.frameRegionCountEq frameChild)) =
+    presentation.mapRegionKind
+      (source.plugLayout.plugRegion
+        (source.plugLayout.frameRegion frameChild))
+  rw [source.plugLayout.plugRegion_frameRegion,
+    target.plugLayout.plugRegion_frameRegion]
+  have payload := checkedDiagram_regions_rename_eq source.frame target.frame
+    presentation.frame_eq frameChild
+  rw [payload]
+  cases hkind : source.frame.val.regions frameChild <;>
+    simp [hkind, CRegion.rename, PlugLayout.mapFrameRegion, mapRegionKind,
+      presentation.regionMap_frameRegion, FiniteEquiv.finCast] <;> rfl
+
 theorem region_shape
     (presentation : TwoInputPresentation source target)
     (parent : Fin source.plugLayout.plugRaw.regionCount)
@@ -29422,6 +29503,49 @@ theorem binders_empty
       ConcreteElaboration.BinderContext.empty := by
   intro frame
   rfl
+
+/-- Pushing a retained-frame bubble preserves binder agreement even when the
+bubble is a direct child of the distinguished splice site. -/
+theorem binders_push_frameRegion
+    (presentation : TwoInputPresentation source target)
+    {rels : VisualProof.Theory.RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw rels}
+    {targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw rels}
+    (related : presentation.BinderRelated sourceBinders targetBinders)
+    (frameChild : Fin source.frame.val.regionCount)
+    (arity : Nat) :
+    presentation.BinderRelated
+      (sourceBinders.push
+        (source.plugLayout.frameRegion frameChild) arity)
+      (targetBinders.push
+        (target.plugLayout.frameRegion
+          (Fin.cast presentation.frameRegionCountEq frameChild)) arity) := by
+  intro frame
+  by_cases hframe : frame = frameChild
+  · subst frame
+    rw [ConcreteElaboration.BinderContext.push_self,
+      ConcreteElaboration.BinderContext.push_self]
+  · have sourceNe :
+        source.plugLayout.frameRegion frame ≠
+          source.plugLayout.frameRegion frameChild := by
+      intro equality
+      exact hframe (source.plugLayout.frameRegion_injective equality)
+    have targetNe :
+        target.plugLayout.frameRegion
+            (Fin.cast presentation.frameRegionCountEq frame) ≠
+          target.plugLayout.frameRegion
+            (Fin.cast presentation.frameRegionCountEq frameChild) := by
+      intro equality
+      apply hframe
+      apply Fin.ext
+      have values := congrArg Fin.val
+        (target.plugLayout.frameRegion_injective equality)
+      exact values
+    rw [ConcreteElaboration.BinderContext.push_other _ arity sourceNe,
+      ConcreteElaboration.BinderContext.push_other _ arity targetNe,
+      related frame]
 
 theorem binders_push
     (presentation : TwoInputPresentation source target)

@@ -118,6 +118,201 @@ def ItemSimulation (model : Lambda.LambdaModel)
         (denoteItem model named sourceEnv relEnv sourceItem)
         (denoteItem model named targetEnv relEnv targetItem)
 
+/-- Node compilation is semantically invariant when corresponding resolved
+ports are related, even when the context relation is genuinely many-to-many
+and therefore cannot be represented by one global index-renaming function. -/
+theorem compileNode?_itemSimulation_of_related_ports
+    {source target : ConcreteDiagram}
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : SimulationDirection)
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (relation : ContextIndexRelation sourceContext.length targetContext.length)
+    (sourceBinders : BinderContext source rels)
+    (targetBinders : BinderContext target rels)
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (regionMap : Fin source.regionCount → Fin target.regionCount)
+    (binderMap : Fin source.regionCount → Fin target.regionCount)
+    (nodeShape : target.nodes targetNode =
+      match source.nodes sourceNode with
+      | .term region freePorts term =>
+          .term (regionMap region) freePorts term
+      | .atom region binder =>
+          .atom (regionMap region) (binderMap binder)
+      | .named region definition arity =>
+          .named (regionMap region) definition arity)
+    (portsRelated : ∀ port sourceIndex targetIndex,
+      resolvePort? source sourceContext sourceNode port = some sourceIndex →
+      resolvePort? target targetContext targetNode port = some targetIndex →
+      relation.Rel sourceIndex targetIndex)
+    (bindersRelated : ∀ region binder,
+      source.nodes sourceNode = .atom region binder →
+      targetBinders (binderMap binder) = sourceBinders binder)
+    (sourceItem : Item signature sourceContext.length rels)
+    (targetItem : Item signature targetContext.length rels)
+    (sourceCompiled :
+      compileNode? signature source sourceContext sourceBinders sourceNode =
+        some sourceItem)
+    (targetCompiled :
+      compileNode? signature target targetContext targetBinders targetNode =
+        some targetItem) :
+    ItemSimulation model named direction relation sourceItem targetItem := by
+  cases sourceNodeShape : source.nodes sourceNode with
+  | term region freePorts term =>
+      have targetNodeShape :
+          target.nodes targetNode =
+            .term (regionMap region) freePorts term := by
+        simpa only [sourceNodeShape] using nodeShape
+      cases sourceOutputResult :
+          resolvePort? source sourceContext sourceNode .output with
+      | none =>
+          simp [compileNode?, sourceNodeShape, sourceOutputResult]
+            at sourceCompiled
+      | some sourceOutput =>
+          cases sourceFreeResult :
+              resolvePorts? source sourceContext sourceNode freePorts
+                (fun index => .free index) with
+          | none =>
+              simp [compileNode?, sourceNodeShape, sourceOutputResult,
+                sourceFreeResult] at sourceCompiled
+          | some sourceFree =>
+              simp [compileNode?, sourceNodeShape, sourceOutputResult,
+                sourceFreeResult] at sourceCompiled
+              subst sourceItem
+              cases targetOutputResult :
+                  resolvePort? target targetContext targetNode .output with
+              | none =>
+                  simp [compileNode?, targetNodeShape, targetOutputResult]
+                    at targetCompiled
+              | some targetOutput =>
+                  cases targetFreeResult :
+                      resolvePorts? target targetContext targetNode freePorts
+                        (fun index => .free index) with
+                  | none =>
+                      simp [compileNode?, targetNodeShape, targetOutputResult,
+                        targetFreeResult] at targetCompiled
+                  | some targetFree =>
+                      simp [compileNode?, targetNodeShape, targetOutputResult,
+                        targetFreeResult] at targetCompiled
+                      subst targetItem
+                      intro sourceEnv targetEnv relEnv environments
+                      have outputEq : sourceEnv sourceOutput =
+                          targetEnv targetOutput :=
+                        environments sourceOutput targetOutput
+                          (portsRelated .output sourceOutput targetOutput
+                            sourceOutputResult targetOutputResult)
+                      have freeEq : sourceEnv ∘ sourceFree =
+                          targetEnv ∘ targetFree := by
+                        funext index
+                        exact environments (sourceFree index) (targetFree index)
+                          (portsRelated (.free index) (sourceFree index)
+                            (targetFree index)
+                            (VisualProof.Data.Finite.sequenceFin_sound
+                              sourceFreeResult index)
+                            (VisualProof.Data.Finite.sequenceFin_sound
+                              targetFreeResult index))
+                      simp only [denoteItem]
+                      rw [model.eval_mapFree sourceFree term sourceEnv,
+                        model.eval_mapFree targetFree term targetEnv,
+                        outputEq, freeEq]
+                      cases direction <;> exact id
+  | atom region binder =>
+      have targetNodeShape :
+          target.nodes targetNode =
+            .atom (regionMap region) (binderMap binder) := by
+        simpa only [sourceNodeShape] using nodeShape
+      have binderEq :
+          targetBinders (binderMap binder) = sourceBinders binder :=
+        bindersRelated region binder sourceNodeShape
+      cases sourceBinderResult : sourceBinders binder with
+      | none =>
+          simp [compileNode?, sourceNodeShape, sourceBinderResult]
+            at sourceCompiled
+      | some sourceRelation =>
+          cases sourceRelation with
+          | mk arity relationVariable =>
+              cases sourceArgumentsResult :
+                  resolvePorts? source sourceContext sourceNode arity
+                    (fun index => .arg index) with
+              | none =>
+                  simp [compileNode?, sourceNodeShape, sourceBinderResult,
+                    sourceArgumentsResult] at sourceCompiled
+              | some sourceArguments =>
+                  simp [compileNode?, sourceNodeShape, sourceBinderResult,
+                    sourceArgumentsResult] at sourceCompiled
+                  subst sourceItem
+                  cases targetArgumentsResult :
+                      resolvePorts? target targetContext targetNode arity
+                        (fun index => .arg index) with
+                  | none =>
+                      simp [compileNode?, targetNodeShape, binderEq,
+                        sourceBinderResult, targetArgumentsResult]
+                        at targetCompiled
+                  | some targetArguments =>
+                      simp [compileNode?, targetNodeShape, binderEq,
+                        sourceBinderResult, targetArgumentsResult]
+                        at targetCompiled
+                      subst targetItem
+                      intro sourceEnv targetEnv relEnv environments
+                      have argumentsEq : sourceEnv ∘ sourceArguments =
+                          targetEnv ∘ targetArguments := by
+                        funext index
+                        exact environments (sourceArguments index)
+                          (targetArguments index)
+                          (portsRelated (.arg index) (sourceArguments index)
+                            (targetArguments index)
+                            (VisualProof.Data.Finite.sequenceFin_sound
+                              sourceArgumentsResult index)
+                            (VisualProof.Data.Finite.sequenceFin_sound
+                              targetArgumentsResult index))
+                      rw [denoteItem, argumentsEq]
+                      cases direction <;> exact id
+  | named region definition arity =>
+      have targetNodeShape :
+          target.nodes targetNode =
+            .named (regionMap region) definition arity := by
+        simpa only [sourceNodeShape] using nodeShape
+      cases namedResult : namedRel? signature definition arity with
+      | none =>
+          simp [compileNode?, sourceNodeShape, namedResult] at sourceCompiled
+      | some relationVariable =>
+          cases sourceArgumentsResult :
+              resolvePorts? source sourceContext sourceNode arity
+                (fun index => .arg index) with
+          | none =>
+              simp [compileNode?, sourceNodeShape, namedResult,
+                sourceArgumentsResult] at sourceCompiled
+          | some sourceArguments =>
+              simp [compileNode?, sourceNodeShape, namedResult,
+                sourceArgumentsResult] at sourceCompiled
+              subst sourceItem
+              cases targetArgumentsResult :
+                  resolvePorts? target targetContext targetNode arity
+                    (fun index => .arg index) with
+              | none =>
+                  simp [compileNode?, targetNodeShape, namedResult,
+                    targetArgumentsResult] at targetCompiled
+              | some targetArguments =>
+                  simp [compileNode?, targetNodeShape, namedResult,
+                    targetArgumentsResult] at targetCompiled
+                  subst targetItem
+                  intro sourceEnv targetEnv relEnv environments
+                  have argumentsEq : sourceEnv ∘ sourceArguments =
+                      targetEnv ∘ targetArguments := by
+                    funext index
+                    exact environments (sourceArguments index)
+                      (targetArguments index)
+                      (portsRelated (.arg index) (sourceArguments index)
+                        (targetArguments index)
+                        (VisualProof.Data.Finite.sequenceFin_sound
+                          sourceArgumentsResult index)
+                        (VisualProof.Data.Finite.sequenceFin_sound
+                          targetArgumentsResult index))
+                  rw [denoteItem, argumentsEq]
+                  cases direction <;> exact id
+
 /-- Semantic simulation of two intrinsic item sequences. -/
 def ItemSeqSimulation (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
