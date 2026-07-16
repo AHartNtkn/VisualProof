@@ -1835,7 +1835,7 @@ private noncomputable def conversionSimulation
     sourceBinders = targetBinders
   binders_empty := rfl
   binders_push := by
-    intro rels sourceBinders targetBinders related region arity
+    intro rels sourceBinders targetBinders related child parent arity kind regular
     subst targetBinders
     rfl
   Allowed := fun _ _ => True
@@ -1848,7 +1848,7 @@ private noncomputable def conversionSimulation
     embedding.extend region
   localWitness := by
     intro rels direction fuelSource fuelTarget source target embedding
-      sourceBinders targetBinders region allowed sourceExact targetExact
+      sourceBinders targetBinders region regular allowed sourceExact targetExact
       sourceItems targetItems sourceCompiled targetCompiled relEnv
     exact conversionRaw_localWitness direction source target embedding region
       sourceExact targetExact model named relEnv sourceItems targetItems
@@ -1923,7 +1923,7 @@ private noncomputable def conversionRootContext
     focusedRootKernel := ?_
   }
   · simpa only [Diagram.OpenConcreteDiagram.rootWires] using embedding
-  · intro sourceItems targetItems sourceOuter targetOuter relEnv outerAgrees
+  · intro regular sourceItems targetItems sourceOuter targetOuter relEnv outerAgrees
     rw [Diagram.ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
       at outerAgrees
     have indexEq : embedding.index = conversionRootIndex boundary := by

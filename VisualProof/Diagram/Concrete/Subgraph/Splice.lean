@@ -1,5 +1,6 @@
 import VisualProof.Diagram.Concrete.Subgraph.Decomposition
 import VisualProof.Diagram.Concrete.Elaboration.Compile
+import VisualProof.Diagram.Concrete.Elaboration.Simulation
 import VisualProof.Diagram.Concrete.Semantics
 import VisualProof.Diagram.Algebra
 
@@ -28564,6 +28565,19 @@ private theorem checkedDiagram_regions_eq
   subst right
   rfl
 
+private theorem checkedDiagram_regions_rename_eq
+    (left right : CheckedDiagram signature) (h : left = right)
+    (region : Fin left.val.regionCount) :
+    right.val.regions (Fin.cast (congrArg
+      (fun checked : CheckedDiagram signature => checked.val.regionCount) h)
+      region) =
+      (left.val.regions region).rename
+        (FiniteEquiv.finCast (congrArg
+          (fun checked : CheckedDiagram signature => checked.val.regionCount) h)) := by
+  cases h
+  cases hregion : left.val.regions region <;>
+    simp [hregion, FiniteEquiv.finCast, CRegion.rename]
+
 private theorem checkedDiagram_nodes_eq
     (left right : CheckedDiagram signature) (h : left = right)
     (node : Fin left.val.nodeCount) :
@@ -28584,6 +28598,62 @@ def frameRegionCountEq (presentation : TwoInputPresentation source target) :
 def frameWireCountEq (presentation : TwoInputPresentation source target) :
     source.frame.val.wireCount = target.frame.val.wireCount :=
   congrArg (fun checked => checked.val.wireCount) presentation.frame_eq
+
+def frameNodeCountEq (presentation : TwoInputPresentation source target) :
+    source.frame.val.nodeCount = target.frame.val.nodeCount :=
+  congrArg (fun checked => checked.val.nodeCount) presentation.frame_eq
+
+private theorem checkedDiagram_root_eq
+    (left right : CheckedDiagram signature) (h : left = right) :
+    Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+      checked.val.regionCount) h) left.val.root = right.val.root := by
+  subst right
+  rfl
+
+private theorem checkedDiagram_wire_scope_eq
+    (left right : CheckedDiagram signature) (h : left = right)
+    (wire : Fin left.val.wireCount) :
+    Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+      checked.val.regionCount) h) (left.val.wires wire).scope =
+      (right.val.wires (Fin.cast (congrArg
+        (fun checked : CheckedDiagram signature => checked.val.wireCount) h)
+        wire)).scope := by
+  subst right
+  rfl
+
+/-- Transport a caller's ordered retained-frame boundary to the paired target
+frame. `List.map` preserves positions and repetitions exactly. -/
+def targetBoundary (presentation : TwoInputPresentation source target)
+    (boundary : List (Fin source.frame.val.wireCount)) :
+    List (Fin target.frame.val.wireCount) :=
+  boundary.map (Fin.cast presentation.frameWireCountEq)
+
+@[simp] theorem targetBoundary_length
+    (presentation : TwoInputPresentation source target)
+    (boundary : List (Fin source.frame.val.wireCount)) :
+    (presentation.targetBoundary boundary).length = boundary.length := by
+  simp [targetBoundary]
+
+theorem targetBoundary_root
+    (presentation : TwoInputPresentation source target)
+    (boundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root) :
+    ∀ wire, wire ∈ presentation.targetBoundary boundary →
+      (target.frame.val.wires wire).scope = target.frame.val.root := by
+  intro wire hwire
+  rw [targetBoundary, List.mem_map] at hwire
+  obtain ⟨original, horiginal, rfl⟩ := hwire
+  have scopeEq : Fin.cast presentation.frameRegionCountEq
+        (source.frame.val.wires original).scope =
+      (target.frame.val.wires
+        (Fin.cast presentation.frameWireCountEq original)).scope := by
+    exact checkedDiagram_wire_scope_eq source.frame target.frame
+      presentation.frame_eq original
+  have rootEq : Fin.cast presentation.frameRegionCountEq
+      source.frame.val.root = target.frame.val.root := by
+    exact checkedDiagram_root_eq source.frame target.frame presentation.frame_eq
+  rw [← scopeEq, sourceRoot original horiginal, rootEq]
 
 /-- Source frame regions retain their identity in the target plug layout;
 source-only pattern material is opaque and maps to the distinguished site. -/
@@ -28610,6 +28680,239 @@ def regionMap (presentation : TwoInputPresentation source target) :
         (source.plugLayout.frameRegion source.site) =
       target.plugLayout.frameRegion target.site := by
   rw [presentation.regionMap_frameRegion, presentation.site_eq]
+
+/-- The shared simulation owns every source-pattern region opaquely.  The
+retained splice site is distinguished as well because it contains the complete
+local replacement, even when the pattern has no surviving material region. -/
+def Distinguished (presentation : TwoInputPresentation source target)
+    (region : Fin source.plugLayout.plugRaw.regionCount) : Prop :=
+  region = source.plugLayout.frameRegion source.site ∨
+    ∃ material : source.plugLayout.materialRegions.Carrier,
+      region = source.plugLayout.materialRegion material
+
+theorem distinguished_bodyRegion
+    (presentation : TwoInputPresentation source target)
+    (region : Fin source.pattern.val.diagram.regionCount) :
+    presentation.Distinguished (source.plugLayout.bodyRegion region) := by
+  unfold Distinguished PlugLayout.bodyRegion
+  split
+  · rename_i material hmaterial
+    exact Or.inr ⟨material, rfl⟩
+  · exact Or.inl rfl
+
+/-- Every non-distinguished region is retained-frame material away from the
+splice site. -/
+theorem regularFrameRegion
+    (presentation : TwoInputPresentation source target)
+    (region : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished region) :
+    ∃ frame : Fin source.frame.val.regionCount,
+      frame ≠ source.site ∧
+        region = source.plugLayout.frameRegion frame := by
+  revert regular
+  refine Fin.addCases (m := source.frame.val.regionCount)
+    (n := source.plugLayout.materialRegions.count) (fun frame => ?_)
+    (fun material => ?_) region
+  · intro regular
+    refine ⟨frame, ?_, rfl⟩
+    intro equality
+    apply regular
+    subst frame
+    exact Or.inl rfl
+  · intro regular
+    exact False.elim (regular (Or.inr ⟨material, rfl⟩))
+
+/-- The total occurrence map sends retained-frame occurrences positionally.
+Pattern occurrences are arbitrary outside their distinguished owner, so a
+pattern node is represented by the distinguished target child; the regular
+node theorem below proves that this branch is never semantically traversed. -/
+def occurrenceMap (presentation : TwoInputPresentation source target)
+    (region : Fin source.plugLayout.plugRaw.regionCount)
+    (_regular : ¬ presentation.Distinguished region) :
+    ConcreteElaboration.LocalOccurrence source.plugLayout.plugRaw.regionCount
+        source.plugLayout.plugRaw.nodeCount →
+      ConcreteElaboration.LocalOccurrence target.plugLayout.plugRaw.regionCount
+        target.plugLayout.plugRaw.nodeCount
+  | .node node =>
+      Fin.addCases
+        (fun frameNode => .node (target.plugLayout.frameNode
+          (Fin.cast presentation.frameNodeCountEq frameNode)))
+        (fun _ => .child (target.plugLayout.frameRegion target.site)) node
+  | .child child => .child (presentation.regionMap child)
+
+theorem occurrenceMap_child
+    (presentation : TwoInputPresentation source target)
+    (region : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished region)
+    (child : Fin source.plugLayout.plugRaw.regionCount) :
+    presentation.occurrenceMap region regular (.child child) =
+      .child (presentation.regionMap child) := by
+  rfl
+
+theorem occurrenceMap_node
+    (presentation : TwoInputPresentation source target)
+    (region : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished region)
+    (node : Fin source.plugLayout.plugRaw.nodeCount)
+    (nodeRegion : (source.plugLayout.plugRaw.nodes node).region = region) :
+    ∃ targetNode,
+      presentation.occurrenceMap region regular (.node node) =
+        .node targetNode := by
+  revert nodeRegion
+  refine Fin.addCases (m := source.frame.val.nodeCount)
+    (n := source.pattern.val.diagram.nodeCount) (fun frameNode => ?_)
+    (fun patternNode => ?_) node
+  · intro nodeRegion
+    exact ⟨target.plugLayout.frameNode
+      (Fin.cast presentation.frameNodeCountEq frameNode), by
+        simp [occurrenceMap]⟩
+  · intro nodeRegion
+    have patternRegion : source.plugLayout.bodyRegion
+        (source.pattern.val.diagram.nodes patternNode).region = region := by
+      simpa [PlugLayout.plugRaw, PlugLayout.plugNode,
+        PlugLayout.mapPatternNode_region] using nodeRegion
+    exact False.elim
+      (regular (patternRegion ▸ presentation.distinguished_bodyRegion
+        (source.pattern.val.diagram.nodes patternNode).region))
+
+def mapRegionKind
+    (presentation : TwoInputPresentation source target) :
+    CRegion source.plugLayout.plugRaw.regionCount →
+      CRegion target.plugLayout.plugRaw.regionCount
+  | .sheet => .sheet
+  | .cut sourceParent => .cut (presentation.regionMap sourceParent)
+  | .bubble sourceParent arity =>
+      .bubble (presentation.regionMap sourceParent) arity
+
+theorem region_shape
+    (presentation : TwoInputPresentation source target)
+    (parent : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished parent)
+    (child : Fin source.plugLayout.plugRaw.regionCount)
+    (childParent : (source.plugLayout.plugRaw.regions child).parent? =
+      some parent) :
+    target.plugLayout.plugRaw.regions (presentation.regionMap child) =
+      presentation.mapRegionKind
+        (source.plugLayout.plugRaw.regions child) := by
+  obtain ⟨frameParent, hne, rfl⟩ :=
+    presentation.regularFrameRegion parent regular
+  revert childParent
+  refine Fin.addCases (m := source.frame.val.regionCount)
+    (n := source.plugLayout.materialRegions.count) (fun frameChild => ?_)
+    (fun materialChild => ?_) child
+  · intro childParent
+    change target.plugLayout.plugRaw.regions
+        (presentation.regionMap
+          (source.plugLayout.frameRegion frameChild)) =
+      presentation.mapRegionKind
+        (source.plugLayout.plugRaw.regions
+          (source.plugLayout.frameRegion frameChild))
+    rw [presentation.regionMap_frameRegion]
+    change target.plugLayout.plugRegion
+        (target.plugLayout.frameRegion
+          (Fin.cast presentation.frameRegionCountEq frameChild)) =
+      presentation.mapRegionKind
+        (source.plugLayout.plugRegion
+          (source.plugLayout.frameRegion frameChild))
+    rw [source.plugLayout.plugRegion_frameRegion,
+      target.plugLayout.plugRegion_frameRegion]
+    have payload := checkedDiagram_regions_rename_eq source.frame target.frame
+      presentation.frame_eq frameChild
+    rw [payload]
+    cases hkind : source.frame.val.regions frameChild <;>
+      simp [hkind, CRegion.rename, PlugLayout.mapFrameRegion, mapRegionKind,
+        presentation.regionMap_frameRegion, FiniteEquiv.finCast] <;> rfl
+  · intro childParent
+    have member : ConcreteElaboration.LocalOccurrence.child
+        (source.plugLayout.materialRegion materialChild) ∈
+          ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
+            (source.plugLayout.frameRegion frameParent) :=
+      (ConcreteElaboration.mem_localOccurrences_child _ _ _).2 childParent
+    obtain ⟨original, _, mapped⟩ :=
+      source.plugLayout.frameSemanticOccurrences_complete frameParent hne
+        _ member
+    cases original with
+    | node frameNode => contradiction
+    | child frameChild =>
+        exact False.elim
+          (source.plugLayout.frameRegion_ne_materialRegion frameChild
+            materialChild
+            (ConcreteElaboration.LocalOccurrence.child.inj mapped))
+
+/-- Relate compiler-context indices exactly when both carry the plug-layout
+copies of quotient classes containing one shared retained-frame wire.  This is
+many-to-many and therefore does not choose a refinement direction between the
+two boundary partitions. -/
+def contextIndexRelation
+    (presentation : TwoInputPresentation source target)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw) :
+    ConcreteElaboration.ContextIndexRelation sourceContext.length
+      targetContext.length where
+  Rel sourceIndex targetIndex :=
+    ∃ wire : Fin source.frame.val.wireCount,
+      sourceContext.get sourceIndex = source.plugLayout.frameWire
+          (source.quotientWire wire) ∧
+        targetContext.get targetIndex = target.plugLayout.frameWire
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire))
+
+theorem contextIndexRelation_of_sharedWire
+    (presentation : TwoInputPresentation source target)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceIndex : Fin sourceContext.length)
+    (targetIndex : Fin targetContext.length)
+    (wire : Fin source.frame.val.wireCount)
+    (sourceWire : sourceContext.get sourceIndex =
+      source.plugLayout.frameWire (source.quotientWire wire))
+    (targetWire : targetContext.get targetIndex =
+      target.plugLayout.frameWire
+        (target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire))) :
+    (presentation.contextIndexRelation sourceContext targetContext).Rel
+      sourceIndex targetIndex := by
+  exact ⟨wire, sourceWire, targetWire⟩
+
+/-- Extending both compiler contexts preserves every already-related outer
+index.  The focused kernel may add unrelated local pattern wires without
+changing the retained-frame relation. -/
+theorem contextIndexRelation_extend_outer
+    (presentation : TwoInputPresentation source target)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceRegion : Fin source.plugLayout.plugRaw.regionCount)
+    (targetRegion : Fin target.plugLayout.plugRaw.regionCount)
+    (sourceIndex : Fin sourceContext.length)
+    (targetIndex : Fin targetContext.length)
+    (related : (presentation.contextIndexRelation sourceContext targetContext).Rel
+      sourceIndex targetIndex) :
+    (presentation.contextIndexRelation (sourceContext.extend sourceRegion)
+      (targetContext.extend targetRegion)).Rel
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend sourceContext
+            sourceRegion).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires
+              source.plugLayout.plugRaw sourceRegion).length sourceIndex))
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend targetContext
+            targetRegion).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires
+              target.plugLayout.plugRaw targetRegion).length targetIndex)) := by
+  obtain ⟨wire, sourceWire, targetWire⟩ := related
+  refine ⟨wire, ?_, ?_⟩
+  · rw [PlugLayout.ConcreteElaboration.WireContext.extend_get_outer]
+    exact sourceWire
+  · rw [PlugLayout.ConcreteElaboration.WireContext.extend_get_outer]
+    exact targetWire
 
 /-- Quotient classes are related exactly when they contain corresponding
 copies of one retained-frame wire.  This supports both refinement and

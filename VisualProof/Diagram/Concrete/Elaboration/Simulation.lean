@@ -403,15 +403,19 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     {sourceBinders : BinderContext source rels}
     {targetBinders : BinderContext target rels},
     BinderRelated sourceBinders targetBinders →
-      ∀ region arity,
-        BinderRelated (sourceBinders.push region arity)
-          (targetBinders.push (regionMap region) arity)
+      ∀ child parent arity,
+        source.regions child = .bubble parent arity →
+        ¬ Distinguished parent →
+        BinderRelated (sourceBinders.push child arity)
+          (targetBinders.push (regionMap child) arity)
   Allowed : SimulationDirection → Fin source.regionCount → Prop
   allowed_cut : ∀ direction child parent,
-    source.regions child = .cut parent → Allowed direction parent →
+    source.regions child = .cut parent → ¬ Distinguished parent →
+      Allowed direction parent →
       Allowed direction.flip child
   allowed_bubble : ∀ direction child parent arity,
-    source.regions child = .bubble parent arity → Allowed direction parent →
+    source.regions child = .bubble parent arity → ¬ Distinguished parent →
+      Allowed direction parent →
       Allowed direction child
   /-- Rule-owned evidence that a pair of lexical contexts is related by the
   concrete surgery.  This retains the wire-lookup provenance that a bare
@@ -440,7 +444,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (sourceBinders : BinderContext source rels)
     (targetBinders : BinderContext target rels)
     (region : Fin source.regionCount),
-    Allowed direction region →
+    ¬ Distinguished region → Allowed direction region →
       ∀ (sourceExact : (sourceContext.extend region).Exact region)
         (targetExact : (targetContext.extend (regionMap region)).Exact
           (regionMap region)),
@@ -623,7 +627,7 @@ theorem compileOccurrence_denote
                   subst targetItem
                   have bodies := recurse
                     parent
-                    (simulation.allowed_cut direction child region kind allowed)
+                    (simulation.allowed_cut direction child region kind regular allowed)
                     bindersRelated sourceResult targetResult
                   intro sourceEnv targetEnv relEnv environments
                   have bodyEntailment := bodies sourceEnv targetEnv
@@ -664,11 +668,11 @@ theorem compileOccurrence_denote
                     targetResult] at targetCompiled
                   subst targetItem
                   have pushedRelated := simulation.binders_push bindersRelated
-                    child arity
+                    child region arity kind regular
                   have bodies := recurse
                     parent
                     (simulation.allowed_bubble direction child region arity kind
-                      allowed)
+                      regular allowed)
                     pushedRelated sourceResult targetResult
                   intro sourceEnv targetEnv relEnv environments
                   simp only [bubble_denotes_exists]
@@ -924,7 +928,7 @@ theorem compileRegion_denote
                       model named sourceItems targetItems
                       (simulation.localWitness direction fuelSource fuelTarget
                         sourceContext targetContext context sourceBinders
-                        targetBinders region allowed sourceExact targetExact
+                        targetBinders region focused allowed sourceExact targetExact
                         sourceItems targetItems sourceItemsResult
                         targetItemsCompiled)
                       itemSemantics
@@ -941,7 +945,8 @@ structure RootContextSimulation
   outer : ContextIndexRelation sourceAmbient.length targetAmbient.length
   context : simulation.ContextWitness (sourceAmbient ++ sourceLocals)
     (targetAmbient ++ targetLocals)
-  witness : ∀ (sourceItems : ItemSeq signature
+  witness : ¬ simulation.Distinguished source.root →
+    ∀ (sourceItems : ItemSeq signature
       (sourceAmbient ++ sourceLocals).length [])
     (targetItems : ItemSeq signature
       (targetAmbient ++ targetLocals).length []),
@@ -1134,7 +1139,7 @@ theorem compileRoot_denote
               targetAmbient targetLocals rootContext.outer
               (simulation.indexRelation rootContext.context)
               model named sourceItems targetItems
-              (rootContext.witness sourceItems targetItems) itemSemantics
+              (rootContext.witness focused sourceItems targetItems) itemSemantics
 
 /-- The canonical exposed/hidden root context is exact.  Kept public here
 because root simulation clients must construct the same authoritative compiler

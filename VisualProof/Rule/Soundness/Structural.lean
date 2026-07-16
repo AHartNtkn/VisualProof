@@ -1430,17 +1430,17 @@ private noncomputable def severWireSimulation
     sourceBinders = targetBinders
   binders_empty := rfl
   binders_push := by
-    intro rels sourceBinders targetBinders related region arity
+    intro rels sourceBinders targetBinders related child parent arity kind regular
     subst targetBinders
     rfl
   Allowed := severAllowed source.val.diagram
     (source.val.diagram.wires wire).scope
   allowed_cut := by
-    intro direction child parent childKind allowed
+    intro direction child parent childKind _ allowed
     exact severAllowed_cut source.val.diagram
       (source.val.diagram.wires wire).scope direction child parent childKind allowed
   allowed_bubble := by
-    intro direction child parent arity childKind allowed
+    intro direction child parent arity childKind _ allowed
     exact severAllowed_bubble source.val.diagram
       (source.val.diagram.wires wire).scope direction child parent arity childKind
       allowed
@@ -1452,7 +1452,7 @@ private noncomputable def severWireSimulation
     collapse.extend region
   localWitness := by
     intro rels direction fuelSource fuelTarget original expanded collapse
-      sourceBinders targetBinders region allowed sourceExact targetExact
+      sourceBinders targetBinders region regular allowed sourceExact targetExact
       sourceItems targetItems sourceCompiled targetCompiled relEnv sourceOuter
       targetOuter outerAgrees
     rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
@@ -1537,7 +1537,7 @@ private noncomputable def severWireRootContext
     focusedRootKernel := ?_
   }
   · simpa only [OpenConcreteDiagram.rootWires] using collapse
-  · intro sourceItems targetItems sourceOuter targetOuter relEnv outerAgrees
+  · intro regular sourceItems targetItems sourceOuter targetOuter relEnv outerAgrees
     rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
       at outerAgrees
     cases orientation with
