@@ -21,11 +21,11 @@ The demo owns:
 - artifact records and their mounted specimen imagery;
 - professional catalog information and provenance;
 - physical expressions of availability, completion, importance, and restriction;
-- culture-specific materials and catalog histories;
+- culture-specific artifact and documentary evidence within one institutional archive system;
 - dossier, record, packet, and cover animations;
 - a standalone inspection state;
 - responsive positioning beside the approved lens;
-- hidden review controls for selecting simulated progression states;
+- keyboard-only review controls for selecting simulated progression states;
 - captured still and motion evidence.
 
 The demo does not own:
@@ -44,7 +44,7 @@ The demo does not own:
 
 Use the current opening catalog as authored content, copied into a small demo-only projection rather than imported from runtime modules.
 
-### Seyric dossier
+### Seyric evidence
 
 Represent all six initial artifacts:
 
@@ -55,28 +55,40 @@ Represent all six initial artifacts:
 5. The Auten Reliquary Closure
 6. Seyric Field Seal S-27
 
-The Seyric dossier communicates the oldest securely excavated sealing horizon. Its mounted evidence favors:
+The Seyric records communicate the oldest securely excavated sealing horizon through their evidence content:
 
-- dark conservation board;
 - stone rubbings, edge tracings, and restrained monochrome specimen photographs;
-- sparse institutional typescript and accession pencil;
-- old repairs, linen hinges, corner mounts, and catalog revisions;
-- chronological uncertainty expressed through annotations and overwritten classifications;
+- excavation notes and accession history;
+- conservation repairs visible on the recorded or mounted objects;
+- chronological uncertainty expressed through revisions to catalog information;
 - little overt mystical decoration.
 
-### Myratic dossier
+### Myratic evidence
 
 Represent the first artifact:
 
 - The Uninscribed Votive of Myrat
 
-The dossier must clearly belong to the same modern institution but differ in mounted evidence:
+The Myratic records use the same institutional folio, mounts, labels, and status language as the Seyric material. Their evidence content differs:
 
-- layered translucent survey sheets or thin mineral-paper overlays;
-- registration holes, alignment marks, and repeated empty apertures;
-- indigo-black material with restrained pale or violet technical notation;
+- survey photographs, tracings, and transcriptions recording repeated empty apertures;
+- registration and alignment evidence found on or inferred from the artifacts;
+- the material colors and markings of the actual finds;
 - evidence of scholarly uncertainty and isolation;
-- a participatory quality suggested by removable overlays and an unopened pattern packet, without presenting the tradition as merely “the existential culture.”
+- a participatory quality documented in the construction of the finds, without presenting the tradition as merely “the existential culture.”
+
+### One institutional visual language
+
+The folio is not reskinned by culture. Every culture uses the same:
+
+- dossier stock and binding system;
+- catalog labels and typography;
+- record sizes and mount families;
+- tabs and navigation;
+- status treatments;
+- inspection mechanics and animations.
+
+The archive may use a small reusable set of evidence mounts—such as photograph, rubbing, tracing, fragment, transcription, or material sample—but each mount type is available to every culture. Adding a culture requires new artifact evidence and catalog content, not a new interface style.
 
 ## 4. Folio construction
 
@@ -102,14 +114,15 @@ The default composition at 1600×1000 must retain the corrected central instrume
 
 Every artifact record is a coherent archival object with:
 
-- a specimen representation: rubbing, photograph, tracing, fragment diagram, or mounted material sample;
+- one specimen representation: rubbing, photograph, tracing, fragment diagram, or mounted material sample;
 - professional name;
-- accession or location notation where available;
-- concise provenance;
-- restrained classification or curator shorthand;
+- one optional accession or location line;
+- one brief descriptive line conveying provenance, physical function, or curator shorthand.
 - a physical status treatment.
 
 Formal theorem text is absent from the primary record face. The archive describes artifacts, not mathematical exercises.
+
+The player-facing content budget is one image and no more than three short text lines per artifact. A culture may also have one short shared introductory note. Artifact records do not contain essays, multi-paragraph lore, or multiple documentary images.
 
 ### Status treatments
 
@@ -132,15 +145,7 @@ At rest, the player should read:
 3. which record is currently selected or handled;
 4. the selected artifact's professional name and material character.
 
-On lifting or opening a record, secondary information becomes legible:
-
-- provenance summary;
-- recovered or attributed location;
-- original sealing function;
-- curator shorthand;
-- evidence of prerequisite or related finds through catalog cross-references, not dependency arrows.
-
-Long text belongs on a folded note, reverse leaf, or attached catalog slip. It must not become a floating tooltip or conventional modal.
+Lifting a record makes the same compact image and text easier to inspect. It does not reveal additional lore, a reverse-side essay, a folded explanatory note, or expanded catalog prose. Relationships between finds may be suggested by their arrangement or a terse accession notation, not explained through dependency arrows or cross-reference paragraphs.
 
 ## 7. Interaction model
 
@@ -156,7 +161,7 @@ These interactions exist only to demonstrate the folio:
 
 The central lens is inert in this demo.
 
-Visible player-facing controls must be physical parts of the folio. Review-only controls are allowed in a separate developer strip that is hidden by default and opened with a clearly non-product keyboard command. The strip may switch among named simulated states, pause motion, and reset the demo.
+Visible player-facing controls must be physical parts of the folio. Review-only controls are keyboard shortcuts with no visible strip, button, help overlay, or legend in the demo. They switch among named simulated progression states, toggle full/reduced/paused motion, close inspection, and reset the demo. Their mapping is documented for reviewers and automated capture outside the visible interface.
 
 ## 8. Motion language
 
@@ -241,6 +246,8 @@ The finished demo must provide deterministic paths and captures for:
 Automated validation must prove:
 
 - the demo imports no application or domain runtime;
+- no visible developer controls or shortcut legend exist;
+- keyboard review shortcuts reach every simulated progression and motion state, close inspection, and reset the demo;
 - all named scenarios are reachable;
 - culture switching, cover state, inspection, restriction, and review-state changes settle into deterministic DOM states;
 - reduced motion removes large mechanical travel but preserves legibility;
