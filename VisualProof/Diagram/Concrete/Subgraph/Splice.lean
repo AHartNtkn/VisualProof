@@ -386,6 +386,39 @@ structure Region.ContextPath.CompilerLeaf
     Region.castWiresEq inheritedLength
       (ConcreteElaboration.finishRegion diagram inheritedWires target items)
 
+/-- Package the actual focused compiler equation as a terminal `.here` leaf.
+All lexical evidence comes from the authoritative semantic traversal; this
+constructor performs no second compilation or route reconstruction. -/
+def Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+    (diagram : ConcreteDiagram)
+    (target : Fin diagram.regionCount)
+    (inheritedWires : ConcreteElaboration.WireContext diagram)
+    (binders : ConcreteElaboration.BinderContext diagram rels)
+    (fuel : Nat)
+    (items : ItemSeq signature (inheritedWires.extend target).length rels)
+    (itemsComputation :
+      ConcreteElaboration.compileOccurrencesWith? signature diagram
+        (ConcreteElaboration.compileRegion? signature diagram fuel)
+        (inheritedWires.extend target) binders
+        (ConcreteElaboration.localOccurrences diagram target) = some items)
+    (wiresExact : (inheritedWires.extend target).Exact target)
+    (bindersCover : binders.Covers target)
+    (binderEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration diagram binders target) :
+    Region.ContextPath.CompilerLeaf diagram target
+      (.here (ConcreteElaboration.finishRegion diagram inheritedWires target
+        items)) where
+  inheritedWires := inheritedWires
+  inheritedLength := rfl
+  binders := binders
+  items := items
+  fuel := fuel
+  itemsComputation := itemsComputation
+  wiresExact := wiresExact
+  bindersCover := bindersCover
+  binderEnumeration := binderEnumeration
+  bodyComputation := rfl
+
 /-- Canonical compiler index of any concrete wire visible at the focused
 region. -/
 noncomputable def Region.ContextPath.CompilerLeaf.siteWireIndex
