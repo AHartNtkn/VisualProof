@@ -164,66 +164,6 @@ def replaySimulationDirection : Orientation →
   | .forward => .forward
   | .backward => .backward
 
-/-- The representative position chosen for an exposed pattern class carries
-exactly that exposed wire. -/
-theorem spliceExposedPosition_sound
-    (layout : Diagram.Splice.Input.PlugLayout input)
-    (external : Fin input.pattern.val.exposedWires.length) :
-    input.pattern.val.boundary.get (layout.exposedPosition external) =
-      input.pattern.val.exposedWires.get external := by
-  let exposed := input.pattern.val.exposedWires.get external
-  let boundary := input.pattern.val.boundary
-  have hsome : (indexOf? boundary exposed).isSome = true := by
-    rw [indexOf?_isSome_iff]
-    exact (OpenConcreteDiagram.mem_exposedWires _ _).1
-      (List.get_mem _ _)
-  have hlookup : indexOf? boundary exposed = some
-      ((indexOf? boundary exposed).get hsome) := by
-    obtain ⟨found, hfound⟩ := Option.isSome_iff_exists.mp hsome
-    exact hfound.trans (congrArg some
-      (Option.get_of_eq_some hsome hfound).symm)
-  have hsound := indexOf?_sound hlookup
-  simpa only [Diagram.Splice.Input.PlugLayout.exposedPosition, exposed,
-    boundary] using hsound
-
-/-- The canonical intrinsic boundary substitution induced by a concrete
-splice input. Its argument vector is positional, while its class map quotients
-exactly the repeated boundary identities declared by the open pattern. -/
-def splicePatternAttachmentAssignment
-    (input : Diagram.Splice.Input signature) :
-    BoundaryAssignment input.pattern.elaborate
-      (Fin input.wireQuotient.count) where
-  args position := input.quotientWire (input.attachment position)
-  classes external := input.plugLayout.exposedAttachment external
-  agrees := by
-    intro position
-    change input.quotientWire
-        (input.attachment
-          (input.plugLayout.exposedPosition
-            (input.pattern.val.boundaryClass position))) =
-      input.quotientWire (input.attachment position)
-    apply input.equalBoundary_quotientWire_eq
-    exact (spliceExposedPosition_sound input.plugLayout
-      (input.pattern.val.boundaryClass position)).trans
-        (input.pattern.val.boundaryClass_sound position)
-
-/-- A compiled pattern body after canonical attachment substitution denotes
-the original open pattern at exactly the positional host attachment values.
-Repeated boundary positions are handled by `splicePatternAttachmentAssignment`, so
-no injectivity premise is introduced. -/
-theorem denote_pattern_substitution
-    (input : Diagram.Splice.Input signature)
-    (model : Lambda.LambdaModel)
-    (named : NamedEnv model.Carrier signature)
-    (env : Fin input.wireQuotient.count → model.Carrier) :
-    denoteRegion (relCtx := []) model named env PUnit.unit
-        (input.pattern.elaborate.substituteBoundary
-          (splicePatternAttachmentAssignment input)) ↔
-      input.pattern.denote model named
-        (env ∘ (splicePatternAttachmentAssignment input).args) := by
-  exact input.pattern.elaborate.denote_substituteBoundary
-    (splicePatternAttachmentAssignment input) model named env
-
 /-- The registered forward side of a theorem payload inherits exactly the
 schema implication.  Equality of checked open diagrams is recovered from the
 serialized value equalities, so no second theorem-validity authority is

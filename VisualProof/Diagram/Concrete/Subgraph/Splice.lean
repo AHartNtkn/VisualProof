@@ -28474,6 +28474,179 @@ theorem compiledSpliceNestedSourceOfEmpty_projects_coalesced
 
 /-! ### Generic paired replacement presentation -/
 
+/-- The representative position chosen for an exposed pattern class carries
+exactly that exposed wire. -/
+theorem PlugLayout.exposedPosition_sound
+    (layout : PlugLayout input)
+    (external : Fin input.pattern.val.exposedWires.length) :
+    input.pattern.val.boundary.get (layout.exposedPosition external) =
+      input.pattern.val.exposedWires.get external := by
+  let exposed := input.pattern.val.exposedWires.get external
+  let boundary := input.pattern.val.boundary
+  have hsome :
+      (VisualProof.Data.Finite.indexOf? boundary exposed).isSome = true := by
+    rw [VisualProof.Data.Finite.indexOf?_isSome_iff]
+    exact (OpenConcreteDiagram.mem_exposedWires _ _).1
+      (List.get_mem _ _)
+  have hlookup : VisualProof.Data.Finite.indexOf? boundary exposed = some
+      ((VisualProof.Data.Finite.indexOf? boundary exposed).get hsome) := by
+    obtain ⟨found, hfound⟩ := Option.isSome_iff_exists.mp hsome
+    exact hfound.trans (congrArg some
+      (Option.get_of_eq_some hsome hfound).symm)
+  have hsound := VisualProof.Data.Finite.indexOf?_sound hlookup
+  simpa only [PlugLayout.exposedPosition, exposed, boundary] using hsound
+
+/-- Canonical intrinsic boundary substitution for one splice input.  Its
+argument vector is positional while its class map identifies exactly the
+repeated boundary identities declared by the checked open pattern. -/
+def patternAttachmentAssignment
+    (input : Input signature) :
+    BoundaryAssignment input.pattern.elaborate
+      (Fin input.wireQuotient.count) where
+  args position := input.quotientWire (input.attachment position)
+  classes external := input.plugLayout.exposedAttachment external
+  agrees := by
+    intro position
+    change input.quotientWire
+        (input.attachment
+          (input.plugLayout.exposedPosition
+            (input.pattern.val.boundaryClass position))) =
+      input.quotientWire (input.attachment position)
+    apply input.equalBoundary_quotientWire_eq
+    exact (input.plugLayout.exposedPosition_sound
+      (input.pattern.val.boundaryClass position)).trans
+        (input.pattern.val.boundaryClass_sound position)
+
+/-- Substituting quotient classes into the intrinsic pattern body is exactly
+the open-pattern denotation at the ordered attachment values. -/
+theorem denote_patternAttachmentAssignment
+    (input : Input signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (values : input.wireQuotient.Carrier → model.Carrier) :
+    denoteRegion (relCtx := []) model named values PUnit.unit
+        (input.pattern.elaborate.substituteBoundary
+          input.patternAttachmentAssignment) ↔
+      input.pattern.denote model named
+        (fun position =>
+          values (input.quotientWire (input.attachment position))) := by
+  simpa [patternAttachmentAssignment, Function.comp_def] using
+    input.pattern.elaborate.denote_substituteBoundary
+      input.patternAttachmentAssignment model named values
+
+/-- Read a wire value from an exact compiler context.  Exactness supplies
+existence and nodup makes the result independent of the chosen index. -/
+noncomputable def exactContextValue
+    {diagram : ConcreteDiagram}
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : Fin diagram.regionCount)
+    (exact : context.Exact region)
+    (env : Fin context.length → D)
+    (wire : Fin diagram.wireCount)
+    (visible : diagram.Encloses (diagram.wires wire).scope region) : D :=
+  env (Classical.choose
+    (ConcreteElaboration.WireContext.lookup?_complete
+      ((exact.mem_iff wire).2 visible)))
+
+theorem exactContextValue_eq
+    {diagram : ConcreteDiagram}
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : Fin diagram.regionCount)
+    (exact : context.Exact region)
+    (env : Fin context.length → D)
+    (wire : Fin diagram.wireCount)
+    (visible : diagram.Encloses (diagram.wires wire).scope region)
+    (index : Fin context.length)
+    (indexWire : context.get index = wire) :
+    exactContextValue context region exact env wire visible = env index := by
+  unfold exactContextValue
+  let chosen : Fin context.length := Classical.choose
+    (ConcreteElaboration.WireContext.lookup?_complete
+      ((exact.mem_iff wire).2 visible))
+  have chosenLookup : context.lookup? wire = some chosen :=
+    Classical.choose_spec
+      (ConcreteElaboration.WireContext.lookup?_complete
+        ((exact.mem_iff wire).2 visible))
+  have chosenWire : context.get chosen = wire :=
+    ConcreteElaboration.WireContext.lookup?_sound chosenLookup
+  have chosenEq : chosen = index := by
+    exact (ConcreteElaboration.WireContext.lookup?_unique exact.nodup
+      chosenLookup indexWire).symm
+  change env chosen = env index
+  rw [chosenEq]
+
+/-- The valuation of splice quotient classes induced by an exact compiler
+context at the focused site.  Invisible classes are semantically irrelevant
+there and receive the supplied fallback; visible classes read the unique
+compiler-context value of their plug-layout wire. -/
+noncomputable def siteQuotientEnvironment
+    (input : Input signature)
+    (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (exact : context.Exact
+      (input.plugLayout.frameRegion input.site))
+    (env : Fin context.length → D)
+    (fallback : D) :
+    input.wireQuotient.Carrier → D :=
+  fun quotient =>
+    if visible :
+        input.plugLayout.plugRaw.Encloses
+          (input.plugLayout.plugRaw.wires
+            (input.plugLayout.frameWire quotient)).scope
+          (input.plugLayout.frameRegion input.site)
+    then
+      exactContextValue context
+        (input.plugLayout.frameRegion input.site) exact env
+        (input.plugLayout.frameWire quotient) visible
+    else fallback
+
+theorem siteQuotientEnvironment_eq
+    (input : Input signature)
+    (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (exact : context.Exact
+      (input.plugLayout.frameRegion input.site))
+    (env : Fin context.length → D)
+    (fallback : D)
+    (quotient : input.wireQuotient.Carrier)
+    (visible :
+      input.plugLayout.plugRaw.Encloses
+        (input.plugLayout.plugRaw.wires
+          (input.plugLayout.frameWire quotient)).scope
+        (input.plugLayout.frameRegion input.site))
+    (index : Fin context.length)
+    (indexWire :
+      context.get index = input.plugLayout.frameWire quotient) :
+    siteQuotientEnvironment input context exact env fallback quotient =
+      env index := by
+  rw [siteQuotientEnvironment, dif_pos visible]
+  exact exactContextValue_eq context
+    (input.plugLayout.frameRegion input.site) exact env
+    (input.plugLayout.frameWire quotient) visible index indexWire
+
+/-- Every ordered attachment reads its quotient value from the unique
+focused compiler-context index carrying that quotient wire. -/
+theorem siteQuotientEnvironment_attachment_eq
+    (input : Input signature)
+    (hadmissible : input.Admissible)
+    (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (exact : context.Exact
+      (input.plugLayout.frameRegion input.site))
+    (env : Fin context.length → D)
+    (fallback : D)
+    (position : Fin input.pattern.val.boundary.length)
+    (index : Fin context.length)
+    (indexWire :
+      context.get index = input.plugLayout.frameWire
+        (input.quotientWire (input.attachment position))) :
+    siteQuotientEnvironment input context exact env fallback
+        (input.quotientWire (input.attachment position)) =
+      env index := by
+  exact siteQuotientEnvironment_eq input context exact env fallback
+    (input.quotientWire (input.attachment position))
+    ((input.plugLayout.frameWire_visible_at_region_iff input.site
+      (input.quotientWire (input.attachment position))).2
+        (input.quotientAttachment_visible hadmissible position))
+    index indexWire
+
 /-- Structural presentation shared by two canonical splice inputs over the
 same retained frame and site.  Ordered positions agree, but the two pattern
 boundaries may induce different quotient partitions of the retained wires. -/
@@ -30798,119 +30971,6 @@ theorem attachment_quotient_related
         (target.attachment (Fin.cast presentation.boundary_arity_eq position))) := by
   refine ⟨source.attachment position, rfl, ?_⟩
   rw [presentation.attachment_eq position]
-
-/-- Read a wire value from an exact compiler context.  Exactness supplies
-existence and nodup makes the result independent of the chosen index. -/
-noncomputable def exactContextValue
-    {diagram : ConcreteDiagram}
-    (context : ConcreteElaboration.WireContext diagram)
-    (region : Fin diagram.regionCount)
-    (exact : context.Exact region)
-    (env : Fin context.length → D)
-    (wire : Fin diagram.wireCount)
-    (visible : diagram.Encloses (diagram.wires wire).scope region) : D :=
-  env (Classical.choose
-    (ConcreteElaboration.WireContext.lookup?_complete
-      ((exact.mem_iff wire).2 visible)))
-
-theorem exactContextValue_eq
-    {diagram : ConcreteDiagram}
-    (context : ConcreteElaboration.WireContext diagram)
-    (region : Fin diagram.regionCount)
-    (exact : context.Exact region)
-    (env : Fin context.length → D)
-    (wire : Fin diagram.wireCount)
-    (visible : diagram.Encloses (diagram.wires wire).scope region)
-    (index : Fin context.length)
-    (indexWire : context.get index = wire) :
-    exactContextValue context region exact env wire visible = env index := by
-  unfold exactContextValue
-  let chosen : Fin context.length := Classical.choose
-    (ConcreteElaboration.WireContext.lookup?_complete
-      ((exact.mem_iff wire).2 visible))
-  have chosenLookup : context.lookup? wire = some chosen :=
-    Classical.choose_spec
-      (ConcreteElaboration.WireContext.lookup?_complete
-        ((exact.mem_iff wire).2 visible))
-  have chosenWire : context.get chosen = wire :=
-    ConcreteElaboration.WireContext.lookup?_sound chosenLookup
-  have chosenEq : chosen = index := by
-    exact (ConcreteElaboration.WireContext.lookup?_unique exact.nodup
-      chosenLookup indexWire).symm
-  change env chosen = env index
-  rw [chosenEq]
-
-/-- The valuation of splice quotient classes induced by an exact compiler
-context at the focused site.  Invisible classes are semantically irrelevant
-there and receive the supplied fallback; visible classes read the unique
-compiler-context value of their plug-layout wire. -/
-noncomputable def siteQuotientEnvironment
-    (input : Input signature)
-    (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
-    (exact : context.Exact
-      (input.plugLayout.frameRegion input.site))
-    (env : Fin context.length → D)
-    (fallback : D) :
-    input.wireQuotient.Carrier → D :=
-  fun quotient =>
-    if visible :
-        input.plugLayout.plugRaw.Encloses
-          (input.plugLayout.plugRaw.wires
-            (input.plugLayout.frameWire quotient)).scope
-          (input.plugLayout.frameRegion input.site)
-    then
-      exactContextValue context
-        (input.plugLayout.frameRegion input.site) exact env
-        (input.plugLayout.frameWire quotient) visible
-    else fallback
-
-theorem siteQuotientEnvironment_eq
-    (input : Input signature)
-    (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
-    (exact : context.Exact
-      (input.plugLayout.frameRegion input.site))
-    (env : Fin context.length → D)
-    (fallback : D)
-    (quotient : input.wireQuotient.Carrier)
-    (visible :
-      input.plugLayout.plugRaw.Encloses
-        (input.plugLayout.plugRaw.wires
-          (input.plugLayout.frameWire quotient)).scope
-        (input.plugLayout.frameRegion input.site))
-    (index : Fin context.length)
-    (indexWire :
-      context.get index = input.plugLayout.frameWire quotient) :
-    siteQuotientEnvironment input context exact env fallback quotient =
-      env index := by
-  rw [siteQuotientEnvironment, dif_pos visible]
-  exact exactContextValue_eq context
-    (input.plugLayout.frameRegion input.site) exact env
-    (input.plugLayout.frameWire quotient) visible index indexWire
-
-/-- Every ordered attachment reads its quotient value from the unique
-focused compiler-context index carrying that quotient wire. -/
-theorem siteQuotientEnvironment_attachment_eq
-    (input : Input signature)
-    (hadmissible : input.Admissible)
-    (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
-    (exact : context.Exact
-      (input.plugLayout.frameRegion input.site))
-    (env : Fin context.length → D)
-    (fallback : D)
-    (position : Fin input.pattern.val.boundary.length)
-    (index : Fin context.length)
-    (indexWire :
-      context.get index = input.plugLayout.frameWire
-        (input.quotientWire (input.attachment position))) :
-    siteQuotientEnvironment input context exact env fallback
-        (input.quotientWire (input.attachment position)) =
-      env index := by
-  exact siteQuotientEnvironment_eq input context exact env fallback
-    (input.quotientWire (input.attachment position))
-    ((input.plugLayout.frameWire_visible_at_region_iff input.site
-      (input.quotientWire (input.attachment position))).2
-        (input.quotientAttachment_visible hadmissible position))
-    index indexWire
 
 /-- Related exact focused contexts assign the same value to the two quotient
 copies of every visible retained-frame wire.  The proof uses the original
