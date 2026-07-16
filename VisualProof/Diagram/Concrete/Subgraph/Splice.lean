@@ -28806,6 +28806,17 @@ def regionMap (presentation : TwoInputPresentation source target) :
       target.plugLayout.frameRegion target.site := by
   rw [presentation.regionMap_frameRegion, presentation.site_eq]
 
+theorem regionMap_root
+    (presentation : TwoInputPresentation source target) :
+    target.plugLayout.plugRaw.root =
+      presentation.regionMap source.plugLayout.plugRaw.root := by
+  change target.plugLayout.frameRegion target.frame.val.root =
+    presentation.regionMap
+      (source.plugLayout.frameRegion source.frame.val.root)
+  rw [presentation.regionMap_frameRegion]
+  exact congrArg target.plugLayout.frameRegion
+    (checkedDiagram_root_eq source.frame target.frame presentation.frame_eq).symm
+
 /-- The shared simulation owns every source-pattern region opaquely.  The
 retained splice site is distinguished as well because it contains the complete
 local replacement, even when the pattern has no surviving material region. -/
