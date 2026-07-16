@@ -28858,6 +28858,42 @@ theorem regularFrameRegion
   · intro regular
     exact False.elim (regular (Or.inr ⟨material, rfl⟩))
 
+/-- A child of a regular retained-frame region is itself retained-frame
+material.  Pattern material can only occur below the distinguished splice
+site. -/
+theorem regularChildFrameRegion
+    (presentation : TwoInputPresentation source target)
+    (parent child : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished parent)
+    (childParent : (source.plugLayout.plugRaw.regions child).parent? =
+      some parent) :
+    ∃ frameChild : Fin source.frame.val.regionCount,
+      child = source.plugLayout.frameRegion frameChild := by
+  obtain ⟨frameParent, hne, rfl⟩ :=
+    presentation.regularFrameRegion parent regular
+  revert childParent
+  refine Fin.addCases (m := source.frame.val.regionCount)
+    (n := source.plugLayout.materialRegions.count) (fun frameChild => ?_)
+    (fun materialChild => ?_) child
+  · intro _
+    exact ⟨frameChild, rfl⟩
+  · intro childParent
+    have member : ConcreteElaboration.LocalOccurrence.child
+        (source.plugLayout.materialRegion materialChild) ∈
+          ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
+            (source.plugLayout.frameRegion frameParent) :=
+      (ConcreteElaboration.mem_localOccurrences_child _ _ _).2 childParent
+    obtain ⟨original, _, mapped⟩ :=
+      source.plugLayout.frameSemanticOccurrences_complete frameParent hne
+        _ member
+    cases original with
+    | node frameNode => contradiction
+    | child frameChild =>
+        exact False.elim
+          (source.plugLayout.frameRegion_ne_materialRegion frameChild
+            materialChild
+            (ConcreteElaboration.LocalOccurrence.child.inj mapped))
+
 private theorem filter_frameNodes
     (layout : PlugLayout input)
     (region : Fin input.frame.val.regionCount) :
@@ -29276,6 +29312,144 @@ theorem region_shape
           (source.plugLayout.frameRegion_ne_materialRegion frameChild
             materialChild
             (ConcreteElaboration.LocalOccurrence.child.inj mapped))
+
+/-- Binder environments agree exactly on retained-frame bubble identities,
+transported through the proof that the two presentations share a frame.
+Pattern binders are owned by the distinguished focused kernel. -/
+def BinderRelated {rels : VisualProof.Theory.RelCtx}
+    (presentation : TwoInputPresentation source target)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw rels) : Prop :=
+  ∀ frame : Fin source.frame.val.regionCount,
+    sourceBinders (source.plugLayout.frameRegion frame) =
+      targetBinders (target.plugLayout.frameRegion
+        (Fin.cast presentation.frameRegionCountEq frame))
+
+theorem binders_empty
+    (presentation : TwoInputPresentation source target) :
+    presentation.BinderRelated ConcreteElaboration.BinderContext.empty
+      ConcreteElaboration.BinderContext.empty := by
+  intro frame
+  rfl
+
+theorem binders_push
+    (presentation : TwoInputPresentation source target)
+    {rels : VisualProof.Theory.RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw rels}
+    {targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw rels}
+    (related : presentation.BinderRelated sourceBinders targetBinders)
+    (child parent : Fin source.plugLayout.plugRaw.regionCount)
+    (arity : Nat)
+    (childKind : source.plugLayout.plugRaw.regions child =
+      .bubble parent arity)
+    (regular : ¬ presentation.Distinguished parent) :
+    presentation.BinderRelated
+      (sourceBinders.push child arity)
+      (targetBinders.push (presentation.regionMap child) arity) := by
+  have childParent :
+      (source.plugLayout.plugRaw.regions child).parent? = some parent := by
+    rw [childKind]
+    rfl
+  obtain ⟨frameChild, rfl⟩ :=
+    presentation.regularChildFrameRegion parent child regular childParent
+  intro frame
+  by_cases hframe : frame = frameChild
+  · subst frame
+    rw [ConcreteElaboration.BinderContext.push_self,
+      presentation.regionMap_frameRegion,
+      ConcreteElaboration.BinderContext.push_self]
+  · have sourceNe :
+        source.plugLayout.frameRegion frame ≠
+          source.plugLayout.frameRegion frameChild := by
+      intro equality
+      exact hframe (source.plugLayout.frameRegion_injective equality)
+    have targetNe :
+        target.plugLayout.frameRegion
+            (Fin.cast presentation.frameRegionCountEq frame) ≠
+          presentation.regionMap
+            (source.plugLayout.frameRegion frameChild) := by
+      rw [presentation.regionMap_frameRegion]
+      intro equality
+      apply hframe
+      apply Fin.ext
+      have values := congrArg Fin.val
+        (target.plugLayout.frameRegion_injective equality)
+      exact values
+    rw [ConcreteElaboration.BinderContext.push_other _ arity sourceNe,
+      ConcreteElaboration.BinderContext.push_other _ arity targetNe,
+      related frame]
+
+private def depthAllowed
+    (siteDirection direction : ConcreteElaboration.SimulationDirection)
+    (depth : Nat) : Prop :=
+  match siteDirection, direction with
+  | .forward, .forward | .backward, .backward => depth % 2 = 0
+  | .forward, .backward | .backward, .forward => depth % 2 = 1
+
+/-- A direction is admissible at a source region when every route from that
+region to the distinguished splice site has the parity required to arrive in
+the citation's focused direction.  Regions outside the site's ancestor chain
+have no such route, so the condition is intentionally vacuous there. -/
+def Allowed
+    (presentation : TwoInputPresentation source target)
+    (siteDirection direction : ConcreteElaboration.SimulationDirection)
+    (region : Fin source.plugLayout.plugRaw.regionCount) : Prop :=
+  ∀ {path depth}
+    (route : RegionRoute source.plugLayout.plugRaw region
+      (source.plugLayout.frameRegion source.site) path),
+    route.HasCutDepth depth → depthAllowed siteDirection direction depth
+
+theorem allowed_cut
+    (presentation : TwoInputPresentation source target)
+    (siteDirection direction : ConcreteElaboration.SimulationDirection)
+    (child parent : Fin source.plugLayout.plugRaw.regionCount)
+    (childKind : source.plugLayout.plugRaw.regions child = .cut parent)
+    (allowed : presentation.Allowed siteDirection direction parent) :
+    presentation.Allowed siteDirection direction.flip child := by
+  intro path depth route routeDepth
+  have childParent :
+      (source.plugLayout.plugRaw.regions child).parent? = some parent := by
+    rw [childKind]
+    rfl
+  obtain ⟨position, hposition⟩ := VisualProof.Data.Finite.indexOf?_complete
+    ((ConcreteElaboration.mem_localOccurrences_child
+      source.plugLayout.plugRaw parent child).2 childParent)
+  let parentRoute := RegionRoute.step childParent position hposition route
+  have parentDepth : parentRoute.HasCutDepth (depth + 1) := by
+    exact RegionRoute.HasCutDepth.cut
+      (hparent := childParent) (position := position)
+      (hposition := hposition) childKind routeDepth
+  have parity := allowed parentRoute parentDepth
+  cases siteDirection <;> cases direction <;>
+    simp [depthAllowed] at parity ⊢ <;> omega
+
+theorem allowed_bubble
+    (presentation : TwoInputPresentation source target)
+    (siteDirection direction : ConcreteElaboration.SimulationDirection)
+    (child parent : Fin source.plugLayout.plugRaw.regionCount)
+    (arity : Nat)
+    (childKind : source.plugLayout.plugRaw.regions child =
+      .bubble parent arity)
+    (allowed : presentation.Allowed siteDirection direction parent) :
+    presentation.Allowed siteDirection direction child := by
+  intro path depth route routeDepth
+  have childParent :
+      (source.plugLayout.plugRaw.regions child).parent? = some parent := by
+    rw [childKind]
+    rfl
+  obtain ⟨position, hposition⟩ := VisualProof.Data.Finite.indexOf?_complete
+    ((ConcreteElaboration.mem_localOccurrences_child
+      source.plugLayout.plugRaw parent child).2 childParent)
+  let parentRoute := RegionRoute.step childParent position hposition route
+  have parentDepth : parentRoute.HasCutDepth depth := by
+    exact RegionRoute.HasCutDepth.bubble
+      (hparent := childParent) (position := position)
+      (hposition := hposition) childKind routeDepth
+  exact allowed parentRoute parentDepth
 
 /-- Relate compiler-context indices exactly when both carry the plug-layout
 copies of quotient classes containing one shared retained-frame wire.  This is
