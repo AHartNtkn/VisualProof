@@ -1446,14 +1446,17 @@ private noncomputable def severWireSimulation
       allowed
   ContextWitness := fun original expanded =>
     SeverContextCollapse source.val.diagram wire keep expanded original
+  AtRegion := fun _ _ => True
   indexRelation := fun collapse =>
     ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap
   extendContext := fun original expanded collapse region _regular sourceExact targetExact =>
     collapse.extend region
+  at_child := by simp
   localTransport := by
     intro rels direction fuelSource fuelTarget original expanded collapse
-      sourceBinders targetBinders region regular allowed sourceExact targetExact
-      sourceItems targetItems sourceCompiled targetCompiled itemSemantics
+      sourceBinders targetBinders region atRegion regular allowed sourceExact
+      targetExact sourceItems targetItems sourceCompiled targetCompiled
+      itemSemantics
     refine ConcreteElaboration.directionalLocalTransport_of_agreement
       direction original expanded region region
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
@@ -1510,7 +1513,7 @@ private noncomputable def severWireSimulation
     | backward => exact renamed.mpr
   focusedRegionKernel := by
     intro rels direction fuelSource fuelTarget region original expanded collapse
-      sourceBinders targetBinders distinguished
+      sourceBinders targetBinders atRegion distinguished
     exact False.elim distinguished
 
 private noncomputable def severWireRootContext
@@ -1539,6 +1542,10 @@ private noncomputable def severWireRootContext
     outer := ConcreteElaboration.ContextIndexRelation.backwardMap
       (severExposedIndex source.val wire keep)
     context := ?_
+    atRoot := True.intro
+    atRootChild := by
+      intro regular child parent
+      trivial
     transport := ?_
     focusedRootKernel := ?_
   }
@@ -1577,7 +1584,7 @@ private noncomputable def severWireRootContext
         simpa only [OpenConcreteDiagram.rootWires] using
           (severRootEnvironment_uncollapse_of_ne source wire keep targetWellFormed
             hne sourceOuter targetOuter outerAgrees targetHidden)
-  · intro distinguished
+  · intro atRoot distinguished
     exact False.elim distinguished
 
 private theorem severBoundaryLengthEq

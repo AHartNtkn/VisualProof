@@ -29527,6 +29527,93 @@ inductive ContextWitness
         (sourceContext.extend region)
         (targetContext.extend (presentation.regionMap region))
 
+/-- The exact compiler route represented by a paired context witness.  Root
+compilation starts at the root; recursive compilation reaches only actual
+direct children of a regular region whose context was just extended. -/
+inductive ContextWitness.AtRegion
+    {presentation : TwoInputPresentation source target}
+    {sourceBoundary : List (Fin source.frame.val.wireCount)} :
+    {sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw} →
+    {targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw} →
+    (witness : ContextWitness presentation sourceBoundary
+      sourceContext targetContext) →
+    Fin source.plugLayout.plugRaw.regionCount → Prop
+  | root :
+      AtRegion (.root (presentation := presentation)
+        (sourceBoundary := sourceBoundary))
+        source.plugLayout.plugRaw.root
+  | rootChild
+      (regular :
+        ¬ presentation.Distinguished source.plugLayout.plugRaw.root)
+      {child : Fin source.plugLayout.plugRaw.regionCount}
+      (parent :
+        (source.plugLayout.plugRaw.regions child).parent? =
+          some source.plugLayout.plugRaw.root) :
+      AtRegion (.root (presentation := presentation)
+        (sourceBoundary := sourceBoundary)) child
+  | extendChild
+      {sourceContext : ConcreteElaboration.WireContext
+        source.plugLayout.plugRaw}
+      {targetContext : ConcreteElaboration.WireContext
+        target.plugLayout.plugRaw}
+      {parent : Fin source.plugLayout.plugRaw.regionCount}
+      {parentWitness : ContextWitness presentation sourceBoundary
+        sourceContext targetContext}
+      (parentAt : AtRegion parentWitness parent)
+      (regular : ¬ presentation.Distinguished parent)
+      (sourceExact : (sourceContext.extend parent).Exact parent)
+      (targetExact :
+        (targetContext.extend (presentation.regionMap parent)).Exact
+          (presentation.regionMap parent))
+      {child : Fin source.plugLayout.plugRaw.regionCount}
+      (childParent :
+        (source.plugLayout.plugRaw.regions child).parent? = some parent) :
+      AtRegion
+        (.extendRegular parentWitness parent regular sourceExact targetExact)
+        child
+
+/-- Every distinguished region reached by the actual shared compiler route is
+the retained splice site.  Source-pattern material is distinguished only to
+make the total structural presentation possible; the compiler never enters it
+because it stops at the site. -/
+theorem ContextWitness.focused_region_eq_site
+    {presentation : TwoInputPresentation source target}
+    {sourceBoundary : List (Fin source.frame.val.wireCount)}
+    {sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw}
+    {targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw}
+    {witness : ContextWitness presentation sourceBoundary
+      sourceContext targetContext}
+    {region : Fin source.plugLayout.plugRaw.regionCount}
+    (atRegion : ContextWitness.AtRegion witness region)
+    (focused : presentation.Distinguished region) :
+    region = source.plugLayout.frameRegion source.site := by
+  cases atRegion with
+  | root =>
+      rcases focused with focused | ⟨material, focused⟩
+      · exact focused
+      · exact False.elim
+          (source.plugLayout.frameRegion_ne_materialRegion
+            source.frame.val.root material focused)
+  | rootChild regular parent =>
+      obtain ⟨frame, rfl⟩ :=
+        presentation.regularChildFrameRegion
+          source.plugLayout.plugRaw.root _ regular parent
+      rcases focused with focused | ⟨material, focused⟩
+      · exact focused
+      · exact False.elim
+          (source.plugLayout.frameRegion_ne_materialRegion frame material focused)
+  | extendChild parentAt regular sourceExact targetExact childParent =>
+      obtain ⟨frame, rfl⟩ :=
+        presentation.regularChildFrameRegion _ _ regular childParent
+      rcases focused with focused | ⟨material, focused⟩
+      · exact focused
+      · exact False.elim
+          (source.plugLayout.frameRegion_ne_materialRegion frame material focused)
+
 /-- Relate compiler-context indices exactly when both carry the plug-layout
 copies of quotient classes containing one shared retained-frame wire.  This is
 many-to-many and therefore does not choose a refinement direction between the

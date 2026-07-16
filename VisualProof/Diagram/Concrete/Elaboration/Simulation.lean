@@ -546,6 +546,14 @@ structure ConcreteSemanticSimulation (signature : List Nat)
   concrete surgery.  This retains the wire-lookup provenance that a bare
   semantic relation cannot express. -/
   ContextWitness : WireContext source → WireContext target → Type
+  /-- Concrete traversal provenance identifying which region is being compiled
+  under a validated lexical-context pair.  This prevents focused kernels from
+  being invoked at unrelated distinguished regions that merely admit the same
+  wire context. -/
+  AtRegion : ∀ {sourceContext : WireContext source}
+    {targetContext : WireContext target},
+    ContextWitness sourceContext targetContext →
+      Fin source.regionCount → Prop
   /-- Project the semantic index relation from validated concrete context
   evidence. -/
   indexRelation : ∀ {sourceContext : WireContext source}
@@ -563,6 +571,23 @@ structure ConcreteSemanticSimulation (signature : List Nat)
         (targetContext.extend (regionMap region)).Exact (regionMap region) →
         ContextWitness (sourceContext.extend region)
           (targetContext.extend (regionMap region))
+  /-- The recursive compiler reaches a child only through the actual
+  direct-parent occurrence currently being traversed. -/
+  at_child : ∀ (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (context : ContextWitness sourceContext targetContext)
+    (parent : Fin source.regionCount)
+    (regular : ¬ Distinguished parent)
+    (sourceExact : (sourceContext.extend parent).Exact parent)
+    (targetExact :
+      (targetContext.extend (regionMap parent)).Exact (regionMap parent))
+    (child : Fin source.regionCount),
+    AtRegion context parent →
+      (source.regions child).parent? = some parent →
+      AtRegion
+        (extendContext sourceContext targetContext context parent regular
+          sourceExact targetExact)
+        child
   localTransport : ∀ {rels : RelCtx} direction
     (fuelSource fuelTarget : Nat)
     (sourceContext : WireContext source) (targetContext : WireContext target)
@@ -570,7 +595,8 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (sourceBinders : BinderContext source rels)
     (targetBinders : BinderContext target rels)
     (region : Fin source.regionCount),
-    (regular : ¬ Distinguished region) → Allowed direction region →
+    AtRegion context region →
+      (regular : ¬ Distinguished region) → Allowed direction region →
       ∀ (sourceExact : (sourceContext.extend region).Exact region)
         (targetExact : (targetContext.extend (regionMap region)).Exact
           (regionMap region)),
@@ -629,7 +655,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (context : ContextWitness sourceContext targetContext)
     (sourceBinders : BinderContext source rels)
     (targetBinders : BinderContext target rels),
-    Distinguished region → Allowed direction region →
+    AtRegion context region → Distinguished region → Allowed direction region →
       BinderRelated sourceBinders targetBinders →
       ∀ (sourceItems : ItemSeq signature (sourceContext.extend region).length rels)
         (targetItems : ItemSeq signature
@@ -921,6 +947,7 @@ theorem compileRegion_denote
       (fuelSource fuelTarget : Nat) (region : Fin source.regionCount)
       (sourceContext : WireContext source) (targetContext : WireContext target)
       (context : simulation.ContextWitness sourceContext targetContext)
+      (atRegion : simulation.AtRegion context region)
       (sourceBinders : BinderContext source rels)
       (targetBinders : BinderContext target rels),
       simulation.Allowed direction region →
@@ -939,20 +966,20 @@ theorem compileRegion_denote
   intro rels direction fuelSource
   induction fuelSource generalizing rels direction with
   | zero =>
-      intro fuelTarget region sourceContext targetContext context sourceBinders
-        targetBinders allowed bindersRelated sourceExact targetExact sourceBody
-        targetBody sourceCompiled targetCompiled
+      intro fuelTarget region sourceContext targetContext context atRegion
+        sourceBinders targetBinders allowed bindersRelated sourceExact targetExact
+        sourceBody targetBody sourceCompiled targetCompiled
       simp [compileRegion?] at sourceCompiled
   | succ fuelSource induction =>
       intro fuelTarget
       cases fuelTarget with
       | zero =>
-          intro region sourceContext targetContext context sourceBinders
+          intro region sourceContext targetContext context atRegion sourceBinders
             targetBinders allowed bindersRelated sourceExact targetExact sourceBody
             targetBody sourceCompiled targetCompiled
           simp [compileRegion?] at targetCompiled
       | succ fuelTarget =>
-          intro region sourceContext targetContext context sourceBinders
+          intro region sourceContext targetContext context atRegion sourceBinders
             targetBinders allowed bindersRelated sourceExact targetExact sourceBody
             targetBody sourceCompiled targetCompiled
           simp only [compileRegion?] at sourceCompiled targetCompiled
@@ -979,7 +1006,7 @@ theorem compileRegion_denote
                     subst targetBody
                     exact simulation.focusedRegionKernel direction
                       fuelSource fuelTarget region sourceContext targetContext
-                      context sourceBinders targetBinders focused allowed
+                      context sourceBinders targetBinders atRegion focused allowed
                       bindersRelated sourceItems targetItems sourceItemsResult
                       targetItemsResult
           · rw [simulation.localOccurrences_map region focused] at targetCompiled
@@ -1036,7 +1063,10 @@ theorem compileRegion_denote
                         childTargetBinders sourceChild targetChild parent childAllowed
                         childBindersRelated sourceChildCompiled targetChildCompiled
                       exact induction childDirection fuelTarget child sourceExtended
-                        targetExtended extendedContext childSourceBinders
+                        targetExtended extendedContext
+                        (simulation.at_child sourceContext targetContext context
+                          region focused sourceExact targetExact child atRegion parent)
+                        childSourceBinders
                         childTargetBinders childAllowed childBindersRelated
                         (sourceExact.extend_child simulation.source_wellFormed parent)
                         (targetExact.extend_child simulation.target_wellFormed
@@ -1056,8 +1086,8 @@ theorem compileRegion_denote
                       model named sourceItems targetItems
                       (simulation.localTransport direction fuelSource fuelTarget
                         sourceContext targetContext context sourceBinders
-                        targetBinders region focused allowed sourceExact targetExact
-                        sourceItems targetItems sourceItemsResult
+                        targetBinders region atRegion focused allowed sourceExact
+                        targetExact sourceItems targetItems sourceItemsResult
                         targetItemsCompiled itemSemantics)
 
 /-- Root ambient/local partitions and their proof-dependent semantic
@@ -1073,6 +1103,10 @@ structure RootContextSimulation
   outer : ContextIndexRelation sourceAmbient.length targetAmbient.length
   context : simulation.ContextWitness (sourceAmbient ++ sourceLocals)
     (targetAmbient ++ targetLocals)
+  atRoot : simulation.AtRegion context source.root
+  atRootChild : ¬ simulation.Distinguished source.root → ∀ child,
+    (source.regions child).parent? = some source.root →
+      simulation.AtRegion context child
   transport : ¬ simulation.Distinguished source.root →
     simulation.Allowed direction source.root →
     ∀ (sourceItems : ItemSeq signature
@@ -1094,7 +1128,8 @@ structure RootContextSimulation
       targetAmbient targetLocals outer model named sourceItems targetItems
   /-- A distinguished root owns its complete existential semantics directly;
   regular roots may derive their transport from shared item simulation. -/
-  focusedRootKernel : simulation.Distinguished source.root →
+  focusedRootKernel : simulation.AtRegion context source.root →
+    simulation.Distinguished source.root →
     simulation.Allowed direction source.root →
     ∀ (sourceItems : ItemSeq signature
         (sourceAmbient ++ sourceLocals).length [])
@@ -1218,7 +1253,7 @@ theorem compileRoot_denote
         | some targetItems =>
             simp [targetRootContext, targetItemsResult] at targetCompiled
             subst targetBody
-            exact rootContext.focusedRootKernel focused allowed sourceItems
+            exact rootContext.focusedRootKernel rootContext.atRoot focused allowed sourceItems
               targetItems sourceItemsResult targetItemsResult
 
   · rw [simulation.localOccurrences_map source.root focused]
@@ -1261,7 +1296,9 @@ theorem compileRoot_denote
                 childBindersRelated sourceChildCompiled targetChildCompiled
               exact simulation.compileRegion_denote childDirection
                 source.regionCount target.regionCount child sourceRootContext
-                targetRootContext rootContext.context childSourceBinders
+                targetRootContext rootContext.context
+                (rootContext.atRootChild focused child parent)
+                childSourceBinders
                 childTargetBinders childAllowed childBindersRelated
                 (sourceExact.extend_child simulation.source_wellFormed parent)
                 (targetRootExact.extend_child simulation.target_wellFormed

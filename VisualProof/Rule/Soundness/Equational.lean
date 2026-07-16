@@ -1865,14 +1865,17 @@ private noncomputable def conversionSimulation
   allowed_cut := by simp
   allowed_bubble := by simp
   ContextWitness := ConversionContextEmbedding input node payload
+  AtRegion := fun _ _ => True
   indexRelation := fun embedding =>
     Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index
   extendContext := fun source target embedding region _regular sourceExact targetExact =>
     embedding.extend region
+  at_child := by simp
   localTransport := by
     intro rels direction fuelSource fuelTarget source target embedding
-      sourceBinders targetBinders region regular allowed sourceExact targetExact
-      sourceItems targetItems sourceCompiled targetCompiled itemSemantics
+      sourceBinders targetBinders region atRegion regular allowed sourceExact
+      targetExact sourceItems targetItems sourceCompiled targetCompiled
+      itemSemantics
     exact Diagram.ConcreteElaboration.directionalLocalTransport_of_agreement
       direction source target region region
       (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
@@ -1921,7 +1924,7 @@ private noncomputable def conversionSimulation
       | backward => exact semantic.mp
   focusedRegionKernel := by
     intro rels direction fuelSource fuelTarget region source target embedding
-      sourceBinders targetBinders distinguished
+      sourceBinders targetBinders atRegion distinguished
     exact False.elim distinguished
 
 private noncomputable def conversionRootContext
@@ -1949,6 +1952,10 @@ private noncomputable def conversionRootContext
     outer := Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
       (conversionExposedIndex boundary)
     context := ?_
+    atRoot := True.intro
+    atRootChild := by
+      intro regular child parent
+      trivial
     transport := ?_
     focusedRootKernel := ?_
   }
@@ -2006,7 +2013,7 @@ private noncomputable def conversionRootContext
         rw [indexEq]
         exact conversionRootEnvironment_backward boundary sourceOuter targetOuter
           targetLocal outerAgrees
-  · intro distinguished
+  · intro atRoot distinguished
     exact False.elim distinguished
 
 private theorem conversionBoundaryWitness
