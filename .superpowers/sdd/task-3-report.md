@@ -85,3 +85,23 @@ Focused browser commands used Playwright directly and did not add capture infras
 ## Concerns
 
 - The file-URL browser probe reports missing runtime image URLs for HTML-authored specimen/lens sources because their existing `../../assets` paths are outside the temporary build directory. Motion CSS assets were bundled, motion sampling remained valid, and the authoritative asset/layout test separately loaded and decoded every specimen. No repository capture infrastructure was changed in this task.
+
+## Review fixes
+
+- Added a generation-owned integration boundary for asynchronous motion completions.
+- Every dispatched state change now invalidates earlier completion callbacks before projecting the newer state.
+- Inspection-return completion can no longer replay its captured state after progression, reset, motion-preference, or culture changes, including when `settleAll()` aborts the animation.
+- Restriction markers are cleared at the dispatch boundary and replacement attempts receive new channel ownership, so an older refusal's `finally` callback cannot remove the newest marker.
+
+Validation after the fixes:
+
+- `npx vitest run tests/review/excavation-folio-motion.test.ts --reporter=verbose`
+  - 14/14 tests passed, including four stale inspection-return cases and repeated inaccessible attempts.
+- `npx vitest run tests/review/excavation-folio-assets.test.ts tests/review/excavation-folio-motion.test.ts tests/review/excavation-folio-model.test.ts`
+  - 45/45 focused folio tests passed.
+- `npm run typecheck`
+  - Passed without diagnostics.
+- `npx vite build review/excavation-folio --base ./ --outDir /tmp/excavation-folio-task3-fix --emptyOutDir --logLevel error`
+  - Passed.
+- `git diff --check`
+  - Passed.
