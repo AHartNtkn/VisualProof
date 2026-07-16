@@ -9814,6 +9814,140 @@ theorem binderRegion_ne_bodyRegion_directMaterialChild
       layout.bodyRegion_material child hchildMaterial]
     exact layout.frameRegion_ne_materialRegion _ _
 
+/-- Distinct pattern binders cannot collide with the image of a retained
+material region.  Material regions occupy the plug's material summand, while
+the root and proxy binders occupy its retained-frame summand. -/
+theorem binderRegion_ne_bodyRegion_of_ne_material
+    (layout : PlugLayout input)
+    (binder child : Fin input.pattern.val.diagram.regionCount)
+    (hchildMaterial : input.binderSpine.IsMaterialRegion child)
+    (hne : binder ≠ child) :
+    layout.binderRegion binder ≠ layout.bodyRegion child := by
+  by_cases hroot : binder = input.pattern.val.diagram.root
+  · subst binder
+    have hproxy : layout.proxyIndex? input.pattern.val.diagram.root = none := by
+      unfold proxyIndex?
+      cases hlookup : indexOf? layout.proxies
+          input.pattern.val.diagram.root with
+      | none => rfl
+      | some found =>
+          have hsound := indexOf?_sound hlookup
+          have hmember : input.pattern.val.diagram.root ∈ layout.proxies := by
+            rw [← hsound]
+            exact List.get_mem _ _
+          rw [proxies, List.mem_map] at hmember
+          rcases hmember with ⟨proxy, _, equality⟩
+          exact False.elim
+            (input.binderSpine.proxy_ne_root proxy equality)
+    rw [binderRegion, hproxy, layout.bodyRegion_root,
+      layout.bodyRegion_material child hchildMaterial]
+    exact layout.frameRegion_ne_materialRegion _ _
+  · rcases material_or_proxy_of_ne_root input binder hroot with
+      hbinderMaterial | ⟨proxy, hproxy⟩
+    · rw [layout.binderRegion_material binder hbinderMaterial]
+      intro equality
+      exact hne (layout.bodyRegion_injective_of_material
+        hbinderMaterial hchildMaterial equality)
+    · rw [hproxy, layout.binderRegion_proxy,
+        layout.bodyRegion_material child hchildMaterial]
+      exact layout.frameRegion_ne_materialRegion _ _
+
+/-- A heterogeneous binder-context witness for the intrinsic pattern and its
+plug image.  The renaming is data, and `lookup` records that it follows the
+actual concrete binder identities used by the compiler. -/
+structure PatternBinderWitness
+    (layout : PlugLayout input)
+    {sourceRels targetRels : Theory.RelCtx}
+    (sourceBinders : ConcreteElaboration.BinderContext
+      input.pattern.val.diagram sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      layout.plugRaw targetRels) where
+  relationMap : RelationRenaming sourceRels targetRels
+  lookup : ∀ (binder : Fin input.pattern.val.diagram.regionCount)
+      {arity : Nat} (relation : Theory.RelVar sourceRels arity),
+    sourceBinders binder = some ⟨arity, relation⟩ →
+      targetBinders (layout.binderRegion binder) =
+        some ⟨arity, relationMap relation⟩
+
+namespace PatternBinderWitness
+
+def empty (layout : PlugLayout input) :
+    PatternBinderWitness layout
+      ConcreteElaboration.BinderContext.empty
+      ConcreteElaboration.BinderContext.empty where
+  relationMap := emptyRelationRenaming []
+  lookup := by
+    intro binder arity relation sourceLookup
+    simp [ConcreteElaboration.BinderContext.empty] at sourceLookup
+
+noncomputable def push
+    (layout : PlugLayout input)
+    {sourceRels targetRels : Theory.RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext
+      input.pattern.val.diagram sourceRels}
+    {targetBinders : ConcreteElaboration.BinderContext
+      layout.plugRaw targetRels}
+    (witness : PatternBinderWitness layout sourceBinders targetBinders)
+    (child parent : Fin input.pattern.val.diagram.regionCount)
+    (arity : Nat)
+    (childKind : input.pattern.val.diagram.regions child =
+      .bubble parent arity)
+    (hparentMaterial : input.binderSpine.IsMaterialRegion parent) :
+    PatternBinderWitness layout
+      (sourceBinders.push child arity)
+      (targetBinders.push (layout.bodyRegion child) arity) where
+  relationMap := RelationRenaming.lift witness.relationMap arity
+  lookup := by
+    intro binder relationArity relation sourceLookup
+    have childParent :
+        (input.pattern.val.diagram.regions child).parent? = some parent := by
+      simp [childKind, CRegion.parent?]
+    have hchildMaterial := directChildOfMaterial_material input parent child
+      hparentMaterial childParent
+    by_cases hbinder : binder = child
+    · subst binder
+      rw [ConcreteElaboration.BinderContext.push_self] at sourceLookup
+      have payload := Option.some.inj sourceLookup
+      cases payload
+      rw [layout.binderRegion_material child hchildMaterial,
+        ConcreteElaboration.BinderContext.push_self]
+      rfl
+    · rw [ConcreteElaboration.BinderContext.push_other sourceBinders arity
+        hbinder] at sourceLookup
+      cases hsource : sourceBinders binder with
+      | none => simp [hsource] at sourceLookup
+      | some payload =>
+          rcases payload with ⟨sourceArity, sourceRelation⟩
+          simp only [hsource, Option.map_some] at sourceLookup
+          have targetNe := layout.binderRegion_ne_bodyRegion_of_ne_material
+            binder child hchildMaterial hbinder
+          rw [ConcreteElaboration.BinderContext.push_other targetBinders arity
+            targetNe]
+          rw [witness.lookup binder sourceRelation hsource]
+          cases sourceLookup
+          rfl
+
+theorem relationMap_push
+    (layout : PlugLayout input)
+    {sourceRels targetRels : Theory.RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext
+      input.pattern.val.diagram sourceRels}
+    {targetBinders : ConcreteElaboration.BinderContext
+      layout.plugRaw targetRels}
+    (witness : PatternBinderWitness layout sourceBinders targetBinders)
+    (child parent : Fin input.pattern.val.diagram.regionCount)
+    (arity : Nat)
+    (childKind : input.pattern.val.diagram.regions child =
+      .bubble parent arity)
+    (hparentMaterial : input.binderSpine.IsMaterialRegion parent) :
+    ((push layout witness child parent arity childKind
+      hparentMaterial).relationMap :
+        RelationRenaming (arity :: sourceRels) (arity :: targetRels)) =
+      (RelationRenaming.lift witness.relationMap arity :
+        RelationRenaming (arity :: sourceRels) (arity :: targetRels)) := rfl
+
+end PatternBinderWitness
+
 theorem materialRelationLookup_cutChild
     (layout : PlugLayout input)
     (parent child : Fin input.pattern.val.diagram.regionCount)
