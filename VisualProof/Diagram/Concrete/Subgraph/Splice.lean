@@ -17192,6 +17192,123 @@ theorem OpenRootCompilerItems.elaborate_body
   dsimp only
   exact Option.get_of_eq_some _ hroot
 
+/-- The actual focused item conjunction contains the intrinsic empty-spine
+pattern-root conjunction under the canonical direct wire map.  Pattern
+positions are recovered from `semanticSiteOccurrences` and the executable
+site permutation; no coalesced-host compiler view is involved. -/
+theorem PlugLayout.denotePatternRootItems_of_denoteFocusedItems
+    (input : Input signature)
+    (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
+      (layout.frameRegion input.site) outputWitness)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (env : Fin (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
+    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    let pattern := compiledSpliceOpenRootItems input.pattern
+    denoteItemSeq (relCtx := []) model named
+      (env ∘ layout.patternRootWireIndexMap hadmissible hzero
+        outputWitness outputLeaf)
+      (PUnit.unit : RelEnv model.Carrier []) pattern.items := by
+  dsimp only
+  let pattern := compiledSpliceOpenRootItems input.pattern
+  have hpatternLength :=
+    ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature
+        input.pattern.val.diagram input.pattern.val.diagram.regionCount)
+      (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
+      ConcreteElaboration.BinderContext.empty pattern.computation
+  have htargetLength :=
+    ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+        outputLeaf.fuel)
+      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+      outputLeaf.binders outputLeaf.itemsComputation
+  have hbody := input.binderSpine.body_eq_root_of_empty hzero
+  apply (denoteItemSeq_iff_get (relCtx := []) model named
+    (env ∘ layout.patternRootWireIndexMap hadmissible hzero
+      outputWitness outputLeaf)
+    (PUnit.unit : RelEnv model.Carrier []) pattern.items).mpr
+  intro patternOriginalIndex
+  let patternOccurrenceIndex := Fin.cast hpatternLength patternOriginalIndex
+  have hpatternOccurrencesLength :
+      (ConcreteElaboration.localOccurrences input.pattern.val.diagram
+        input.pattern.val.diagram.root).length =
+      (ConcreteElaboration.localOccurrences input.pattern.val.diagram
+        input.binderSpine.bodyContainer).length := by
+    rw [hbody]
+  let patternOccurrenceAtBody :=
+    Fin.cast hpatternOccurrencesLength patternOccurrenceIndex
+  let occurrenceIndex : Fin layout.semanticSiteOccurrences.length :=
+    Fin.cast (by simp [semanticSiteOccurrences])
+      (Fin.natAdd
+        (ConcreteElaboration.localOccurrences input.coalesceFrameRaw
+          input.site).length
+        patternOccurrenceAtBody)
+  let targetOccurrenceIndex := layout.siteOccurrenceEquiv occurrenceIndex
+  let targetOriginalIndex := Fin.cast htargetLength.symm targetOccurrenceIndex
+  have hsourceGet := ConcreteElaboration.compileOccurrencesWith?_get
+    (ConcreteElaboration.compileRegion? signature input.pattern.val.diagram
+      input.pattern.val.diagram.regionCount)
+    (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
+    ConcreteElaboration.BinderContext.empty pattern.computation
+    patternOccurrenceIndex
+  have htargetGet := ConcreteElaboration.compileOccurrencesWith?_get
+    (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      outputLeaf.fuel)
+    (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+    outputLeaf.binders outputLeaf.itemsComputation targetOccurrenceIndex
+  rw [layout.siteOccurrenceEquiv_spec occurrenceIndex] at htargetGet
+  have htargetGet' : ConcreteElaboration.compileOccurrenceWith? signature
+      layout.plugRaw
+      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+        outputLeaf.fuel)
+      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+      outputLeaf.binders
+      (layout.mapPatternOccurrence
+        ((ConcreteElaboration.localOccurrences input.pattern.val.diagram
+          input.pattern.val.diagram.root).get patternOccurrenceIndex)) =
+        some (outputLeaf.items.get targetOriginalIndex) := by
+    simpa [semanticSiteOccurrences, occurrenceIndex, hbody] using htargetGet
+  have hiso := layout.compilePatternRootOccurrence_at_site_iso signature input
+    hadmissible outputWitness outputLeaf hzero
+    ((ConcreteElaboration.localOccurrences input.pattern.val.diagram
+      input.pattern.val.diagram.root).get patternOccurrenceIndex)
+    (List.get_mem _ patternOccurrenceIndex)
+    (pattern.items.get patternOriginalIndex)
+    (outputLeaf.items.get targetOriginalIndex) hsourceGet htargetGet'
+  have targetDenotes :=
+    (denoteItemSeq_iff_get model named env relEnv outputLeaf.items).mp
+      denotes targetOriginalIndex
+  have transformedDenotes :=
+    (hiso.denotation model named env env relEnv (by
+      intro index
+      rfl)).mpr targetDenotes
+  have relationAgrees : RelEnv.Agrees
+      (emptyRelationRenaming outputWitness.toFocus.holeRels)
+      (PUnit.unit : RelEnv model.Carrier []) relEnv := by
+    simpa using RelEnv.pullback_agrees
+      (emptyRelationRenaming outputWitness.toFocus.holeRels) relEnv
+  have wireRenamedDenotes :=
+    (denoteItem_renameRelations model named
+      (emptyRelationRenaming outputWitness.toFocus.holeRels)
+      (PUnit.unit : RelEnv model.Carrier []) relEnv relationAgrees env
+      ((pattern.items.get patternOriginalIndex).renameWires
+        (layout.patternRootWireIndexMap hadmissible hzero
+          outputWitness outputLeaf))).mp transformedDenotes
+  exact (denoteItem_renameWires (relCtx := []) model named
+    (layout.patternRootWireIndexMap hadmissible hzero outputWitness outputLeaf)
+    env (PUnit.unit : RelEnv model.Carrier [])
+    (pattern.items.get patternOriginalIndex)).mp
+      wireRenamedDenotes
+
 theorem PlugLayout.denote_expandedCoalescedRootItems_iff
     (input : Input signature) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
