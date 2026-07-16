@@ -30398,6 +30398,595 @@ theorem coalescedLocalWireEquiv_spec
       (Fin.cast presentation.frameRegionCountEq region))
     _ _ _ _ _ index
 
+/-- At a proper nested splice site, a root-scoped quotient is exposed by the
+ordered boundary exactly when its canonical paired quotient is exposed. -/
+theorem quotientMap_mem_rootExposed_iff_of_nested
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (quotient : source.wireQuotient.Carrier)
+    (sourceScope :
+      source.coalescedScope quotient = source.frame.val.root) :
+    quotient ∈
+        (PlugLayout.coalescedOpenRoot source sourceBoundary).exposedWires ↔
+      presentation.quotientMap quotient ∈
+        (PlugLayout.coalescedOpenRoot target
+          (presentation.targetBoundary sourceBoundary)).exposedWires := by
+  have rootNe : source.frame.val.root ≠ source.site := by
+    exact fun equality => hnested equality.symm
+  constructor
+  · intro sourceExposed
+    have sourceBoundaryClass :
+        quotient ∈ sourceBoundary.map source.quotientWire := by
+      change quotient ∈ (sourceBoundary.map source.quotientWire).eraseDups
+        at sourceExposed
+      exact (List.mem_eraseDups.mp sourceExposed)
+    obtain ⟨wire, wireBoundary, quotientEq⟩ :=
+      List.mem_map.mp sourceBoundaryClass
+    have wireNonSite : (source.frame.val.wires wire).scope ≠ source.site := by
+      rw [sourceRoot wire wireBoundary]
+      exact rootNe
+    have targetBoundaryWire :
+        Fin.cast presentation.frameWireCountEq wire ∈
+          presentation.targetBoundary sourceBoundary := by
+      exact List.mem_map.mpr ⟨wire, wireBoundary, rfl⟩
+    have targetBoundaryClass :
+        target.quotientWire (Fin.cast presentation.frameWireCountEq wire) ∈
+          (presentation.targetBoundary sourceBoundary).map
+            target.quotientWire :=
+      List.mem_map.mpr
+        ⟨Fin.cast presentation.frameWireCountEq wire, targetBoundaryWire, rfl⟩
+    rw [← quotientEq,
+      presentation.quotientMap_quotientWire_of_nonSite wire wireNonSite]
+    change target.quotientWire
+      (Fin.cast presentation.frameWireCountEq wire) ∈
+        ((presentation.targetBoundary sourceBoundary).map
+          target.quotientWire).eraseDups
+    exact List.mem_eraseDups.mpr targetBoundaryClass
+  · intro targetExposed
+    have targetBoundaryClass :
+        presentation.quotientMap quotient ∈
+          (presentation.targetBoundary sourceBoundary).map
+            target.quotientWire := by
+      change presentation.quotientMap quotient ∈
+          ((presentation.targetBoundary sourceBoundary).map
+            target.quotientWire).eraseDups at targetExposed
+      exact List.mem_eraseDups.mp targetExposed
+    obtain ⟨targetWire, targetBoundaryWire, targetClassEq⟩ :=
+      List.mem_map.mp targetBoundaryClass
+    obtain ⟨wire, wireBoundary, wireEq⟩ :=
+      List.mem_map.mp targetBoundaryWire
+    subst targetWire
+    let sourceClass := source.quotientWire wire
+    have wireNonSite : (source.frame.val.wires wire).scope ≠ source.site := by
+      rw [sourceRoot wire wireBoundary]
+      exact rootNe
+    have mappedSourceClass :
+        presentation.quotientMap sourceClass =
+          target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire) :=
+      presentation.quotientMap_quotientWire_of_nonSite wire wireNonSite
+    have sourceClassScope :
+        source.coalescedScope sourceClass = source.frame.val.root :=
+      PlugLayout.quotientWire_scope_eq_root source sourceAdmissible wire
+        (sourceRoot wire wireBoundary)
+    have quotientEq : quotient = sourceClass :=
+      presentation.quotientMap_injective_at_nonSite source.frame.val.root
+        rootNe quotient sourceClass sourceScope sourceClassScope
+        (targetClassEq.symm.trans mappedSourceClass.symm)
+    have sourceBoundaryClass :
+        sourceClass ∈ sourceBoundary.map source.quotientWire :=
+      List.mem_map.mpr ⟨wire, wireBoundary, rfl⟩
+    rw [quotientEq]
+    change sourceClass ∈
+      (sourceBoundary.map source.quotientWire).eraseDups
+    exact List.mem_eraseDups.mpr sourceBoundaryClass
+
+/-- The coalesced exposed root classes of a proper nested paired replacement
+are canonically equivalent. -/
+noncomputable def coalescedRootExposedWireEquivOfNested
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root) :
+    FiniteEquiv
+      (Fin (PlugLayout.coalescedOpenRoot source
+        sourceBoundary).exposedWires.length)
+      (Fin (PlugLayout.coalescedOpenRoot target
+        (presentation.targetBoundary sourceBoundary)).exposedWires.length) :=
+  listEmbeddingEquiv presentation.quotientMap
+    (PlugLayout.coalescedOpenRoot source sourceBoundary).exposedWires
+    (PlugLayout.coalescedOpenRoot target
+      (presentation.targetBoundary sourceBoundary)).exposedWires
+    (PlugLayout.coalescedOpenRoot source sourceBoundary).exposedWires_nodup
+    (PlugLayout.coalescedOpenRoot target
+      (presentation.targetBoundary sourceBoundary)).exposedWires_nodup
+    (fun quotient member => by
+      have scope :=
+        (PlugLayout.coalescedOpenRoot_wellFormed source sourceAdmissible
+          sourceBoundary sourceRoot).exposed_root_scoped member
+      exact (presentation.quotientMap_mem_rootExposed_iff_of_nested
+        sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+        quotient scope).1 member)
+    (fun targetQuotient member => by
+      have targetBoundaryClass :
+          targetQuotient ∈
+            (presentation.targetBoundary sourceBoundary).map
+              target.quotientWire := by
+        change targetQuotient ∈
+            ((presentation.targetBoundary sourceBoundary).map
+              target.quotientWire).eraseDups at member
+        exact List.mem_eraseDups.mp member
+      obtain ⟨targetWire, targetBoundaryWire, targetClassEq⟩ :=
+        List.mem_map.mp targetBoundaryClass
+      obtain ⟨wire, wireBoundary, wireEq⟩ :=
+        List.mem_map.mp targetBoundaryWire
+      subst targetWire
+      let quotient := source.quotientWire wire
+      have wireNonSite :
+          (source.frame.val.wires wire).scope ≠ source.site := by
+        rw [sourceRoot wire wireBoundary]
+        exact fun equality => hnested equality.symm
+      refine ⟨quotient, ?_, ?_⟩
+      · have sourceBoundaryClass :
+            quotient ∈ sourceBoundary.map source.quotientWire :=
+          List.mem_map.mpr ⟨wire, wireBoundary, rfl⟩
+        change quotient ∈
+          (sourceBoundary.map source.quotientWire).eraseDups
+        exact List.mem_eraseDups.mpr sourceBoundaryClass
+      · exact (presentation.quotientMap_quotientWire_of_nonSite wire
+          wireNonSite).trans targetClassEq)
+    (fun left leftMember right rightMember mapped => by
+      have leftScope :=
+        (PlugLayout.coalescedOpenRoot_wellFormed source sourceAdmissible
+          sourceBoundary sourceRoot).exposed_root_scoped leftMember
+      have rightScope :=
+        (PlugLayout.coalescedOpenRoot_wellFormed source sourceAdmissible
+          sourceBoundary sourceRoot).exposed_root_scoped rightMember
+      exact presentation.quotientMap_injective_at_nonSite
+        source.frame.val.root (fun equality => hnested equality.symm)
+        left right leftScope rightScope mapped)
+
+theorem coalescedRootExposedWireEquivOfNested_spec
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (index : Fin (PlugLayout.coalescedOpenRoot source
+      sourceBoundary).exposedWires.length) :
+    (PlugLayout.coalescedOpenRoot target
+      (presentation.targetBoundary sourceBoundary)).exposedWires.get
+        (presentation.coalescedRootExposedWireEquivOfNested sourceAdmissible
+          targetAdmissible sourceBoundary sourceRoot hnested index) =
+      presentation.quotientMap
+        ((PlugLayout.coalescedOpenRoot source
+          sourceBoundary).exposedWires.get index) := by
+  exact listEmbeddingEquiv_spec presentation.quotientMap _ _ _ _ _ _ _ index
+
+/-- The coalesced hidden root classes of a proper nested paired replacement
+are canonically equivalent. -/
+noncomputable def coalescedRootHiddenWireEquivOfNested
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root) :
+    FiniteEquiv
+      (Fin (PlugLayout.coalescedOpenRoot source
+        sourceBoundary).hiddenWires.length)
+      (Fin (PlugLayout.coalescedOpenRoot target
+        (presentation.targetBoundary sourceBoundary)).hiddenWires.length) :=
+  listEmbeddingEquiv presentation.quotientMap
+    (PlugLayout.coalescedOpenRoot source sourceBoundary).hiddenWires
+    (PlugLayout.coalescedOpenRoot target
+      (presentation.targetBoundary sourceBoundary)).hiddenWires
+    (PlugLayout.coalescedOpenRoot source sourceBoundary).hiddenWires_nodup
+    (PlugLayout.coalescedOpenRoot target
+      (presentation.targetBoundary sourceBoundary)).hiddenWires_nodup
+    (fun quotient member => by
+      have hidden :=
+        (OpenConcreteDiagram.mem_hiddenWires
+          (PlugLayout.coalescedOpenRoot source sourceBoundary) quotient).1
+          member
+      have mappedScope :=
+        presentation.quotientMap_coalescedScope sourceAdmissible
+          targetAdmissible source.frame.val.root
+          (fun equality => hnested equality.symm) quotient hidden.1
+      have targetRoot :
+          Fin.cast presentation.frameRegionCountEq source.frame.val.root =
+            target.frame.val.root :=
+        checkedDiagram_root_eq source.frame target.frame presentation.frame_eq
+      apply (OpenConcreteDiagram.mem_hiddenWires
+        (PlugLayout.coalescedOpenRoot target
+          (presentation.targetBoundary sourceBoundary))
+        (presentation.quotientMap quotient)).2
+      refine ⟨by simpa [PlugLayout.coalescedOpenRoot, targetRoot] using
+        mappedScope, ?_⟩
+      intro exposed
+      exact hidden.2
+        ((presentation.quotientMap_mem_rootExposed_iff_of_nested
+          sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+          quotient hidden.1).2 exposed))
+    (fun targetQuotient member => by
+      have hidden :=
+        (OpenConcreteDiagram.mem_hiddenWires
+          (PlugLayout.coalescedOpenRoot target
+            (presentation.targetBoundary sourceBoundary)) targetQuotient).1
+          member
+      have targetRoot :
+          Fin.cast presentation.frameRegionCountEq source.frame.val.root =
+            target.frame.val.root :=
+        checkedDiagram_root_eq source.frame target.frame presentation.frame_eq
+      have targetScope :
+          target.coalescedScope targetQuotient =
+            Fin.cast presentation.frameRegionCountEq source.frame.val.root := by
+        simpa [PlugLayout.coalescedOpenRoot, targetRoot] using hidden.1
+      obtain ⟨quotient, sourceScope, mapped⟩ :=
+        presentation.quotientMap_complete_at_nonSite sourceAdmissible
+          targetAdmissible source.frame.val.root
+          (fun equality => hnested equality.symm) targetQuotient targetScope
+      refine ⟨quotient, ?_, mapped⟩
+      apply (OpenConcreteDiagram.mem_hiddenWires
+        (PlugLayout.coalescedOpenRoot source sourceBoundary) quotient).2
+      refine ⟨by simpa [PlugLayout.coalescedOpenRoot] using sourceScope, ?_⟩
+      intro exposed
+      exact hidden.2 (mapped ▸
+        (presentation.quotientMap_mem_rootExposed_iff_of_nested
+          sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+          quotient sourceScope).1 exposed))
+    (fun left leftMember right rightMember mapped => by
+      have leftScope :=
+        (OpenConcreteDiagram.mem_hiddenWires
+          (PlugLayout.coalescedOpenRoot source sourceBoundary) left).1
+          leftMember |>.1
+      have rightScope :=
+        (OpenConcreteDiagram.mem_hiddenWires
+          (PlugLayout.coalescedOpenRoot source sourceBoundary) right).1
+          rightMember |>.1
+      exact presentation.quotientMap_injective_at_nonSite
+        source.frame.val.root (fun equality => hnested equality.symm)
+        left right leftScope rightScope mapped)
+
+theorem coalescedRootHiddenWireEquivOfNested_spec
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (index : Fin (PlugLayout.coalescedOpenRoot source
+      sourceBoundary).hiddenWires.length) :
+    (PlugLayout.coalescedOpenRoot target
+      (presentation.targetBoundary sourceBoundary)).hiddenWires.get
+        (presentation.coalescedRootHiddenWireEquivOfNested sourceAdmissible
+          targetAdmissible sourceBoundary sourceRoot hnested index) =
+      presentation.quotientMap
+        ((PlugLayout.coalescedOpenRoot source
+          sourceBoundary).hiddenWires.get index) := by
+  exact listEmbeddingEquiv_spec presentation.quotientMap _ _ _ _ _ _ _ index
+
+theorem target_site_ne_root_of_nested
+    (presentation : TwoInputPresentation source target)
+    (hnested : source.site ≠ source.frame.val.root) :
+    target.site ≠ target.frame.val.root := by
+  intro targetSiteRoot
+  apply hnested
+  apply Fin.ext
+  have siteEq :
+      Fin.cast presentation.frameRegionCountEq source.site = target.site :=
+    presentation.site_eq
+  have rootEq :
+      Fin.cast presentation.frameRegionCountEq source.frame.val.root =
+        target.frame.val.root :=
+    checkedDiagram_root_eq source.frame target.frame presentation.frame_eq
+  simpa using
+    congrArg Fin.val (siteEq.trans (targetSiteRoot.trans rootEq.symm))
+
+/-- The actual exposed root-wire blocks of the two plugged outputs are
+canonically equivalent at a proper nested replacement. -/
+noncomputable def outputRootExposedWireEquivOfNested
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root) :
+    FiniteEquiv
+      (Fin (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).exposedWires.length)
+      (Fin (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).exposedWires.length) :=
+  (source.plugLayout.rootExposedWireEquiv source sourceBoundary).symm |>.trans
+    ((presentation.coalescedRootExposedWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested).trans
+      (target.plugLayout.rootExposedWireEquiv target
+        (presentation.targetBoundary sourceBoundary)))
+
+theorem outputRootExposedWireEquivOfNested_related
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (index : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).exposedWires.length) :
+    ∃ wire : Fin source.frame.val.wireCount,
+      (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).exposedWires.get index =
+          source.plugLayout.frameWire (source.quotientWire wire) ∧
+      (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).exposedWires.get
+          (presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+            targetAdmissible sourceBoundary sourceRoot hnested index) =
+        target.plugLayout.frameWire
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) := by
+  let sourceCoalesced :=
+    (source.plugLayout.rootExposedWireEquiv source sourceBoundary).symm index
+  let sourceQuotient :=
+    (PlugLayout.coalescedOpenRoot source sourceBoundary).exposedWires.get
+      sourceCoalesced
+  let wire := source.wireQuotient.origin sourceQuotient
+  have sourceQuotientEq : source.quotientWire wire = sourceQuotient :=
+    source.quotientWire_wireQuotient_origin sourceQuotient
+  have sourceGet :
+      (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).exposedWires.get index =
+          source.plugLayout.frameWire sourceQuotient := by
+    have mapped := source.plugLayout.rootExposedWireEquiv_spec source
+      sourceBoundary sourceCoalesced
+    rw [FiniteEquiv.apply_symm_apply] at mapped
+    exact mapped
+  refine ⟨wire, sourceGet.trans
+    (congrArg source.plugLayout.frameWire sourceQuotientEq.symm), ?_⟩
+  have targetCoalesced :=
+    presentation.coalescedRootExposedWireEquivOfNested_spec sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested sourceCoalesced
+  have targetGet := target.plugLayout.rootExposedWireEquiv_spec target
+    (presentation.targetBoundary sourceBoundary)
+    (presentation.coalescedRootExposedWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested sourceCoalesced)
+  rw [targetCoalesced] at targetGet
+  have sourceScope :=
+    (PlugLayout.coalescedOpenRoot_wellFormed source sourceAdmissible
+      sourceBoundary sourceRoot).exposed_root_scoped
+      (List.get_mem _ sourceCoalesced)
+  have sourceQuotientScope :
+      source.coalescedScope sourceQuotient = source.frame.val.root := by
+    simpa [PlugLayout.coalescedOpenRoot] using sourceScope
+  have sourceWireScope :
+      source.coalescedScope (source.quotientWire wire) =
+        source.frame.val.root := by
+    rw [sourceQuotientEq]
+    exact sourceQuotientScope
+  have mappedQuotient :
+      presentation.quotientMap sourceQuotient =
+        target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire) := by
+    rw [← sourceQuotientEq]
+    exact presentation.quotientMap_quotientWire_of_coalescedScope
+      source.frame.val.root (fun equality => hnested equality.symm) wire
+      sourceWireScope
+  simpa [outputRootExposedWireEquivOfNested, sourceCoalesced,
+    mappedQuotient] using targetGet
+
+/-- The actual hidden root-wire blocks of the two plugged outputs are
+canonically equivalent at a proper nested replacement. -/
+noncomputable def outputRootHiddenWireEquivOfNested
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root) :
+    FiniteEquiv
+      (Fin (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).hiddenWires.length)
+      (Fin (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).hiddenWires.length) :=
+  (source.plugLayout.nestedRootHiddenWireEquiv source sourceBoundary
+    hnested).symm |>.trans
+      ((presentation.coalescedRootHiddenWireEquivOfNested sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested).trans
+        (target.plugLayout.nestedRootHiddenWireEquiv target
+          (presentation.targetBoundary sourceBoundary)
+          (presentation.target_site_ne_root_of_nested hnested)))
+
+theorem outputRootHiddenWireEquivOfNested_related
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (index : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).hiddenWires.length) :
+    ∃ wire : Fin source.frame.val.wireCount,
+      (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).hiddenWires.get index =
+          source.plugLayout.frameWire (source.quotientWire wire) ∧
+      (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).hiddenWires.get
+          (presentation.outputRootHiddenWireEquivOfNested sourceAdmissible
+            targetAdmissible sourceBoundary sourceRoot hnested index) =
+        target.plugLayout.frameWire
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) := by
+  let sourceCoalesced :=
+    (source.plugLayout.nestedRootHiddenWireEquiv source sourceBoundary
+      hnested).symm index
+  let sourceQuotient :=
+    (PlugLayout.coalescedOpenRoot source sourceBoundary).hiddenWires.get
+      sourceCoalesced
+  let wire := source.wireQuotient.origin sourceQuotient
+  have sourceQuotientEq : source.quotientWire wire = sourceQuotient :=
+    source.quotientWire_wireQuotient_origin sourceQuotient
+  have sourceGet :
+      (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).hiddenWires.get index =
+          source.plugLayout.frameWire sourceQuotient := by
+    have mapped := source.plugLayout.nestedRootHiddenWireEquiv_spec source
+      sourceBoundary hnested sourceCoalesced
+    rw [FiniteEquiv.apply_symm_apply] at mapped
+    exact mapped
+  refine ⟨wire, sourceGet.trans
+    (congrArg source.plugLayout.frameWire sourceQuotientEq.symm), ?_⟩
+  have targetCoalesced :=
+    presentation.coalescedRootHiddenWireEquivOfNested_spec sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested sourceCoalesced
+  have targetGet := target.plugLayout.nestedRootHiddenWireEquiv_spec target
+    (presentation.targetBoundary sourceBoundary)
+    (presentation.target_site_ne_root_of_nested hnested)
+    (presentation.coalescedRootHiddenWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested sourceCoalesced)
+  rw [targetCoalesced] at targetGet
+  have sourceScope :=
+    (OpenConcreteDiagram.mem_hiddenWires
+      (PlugLayout.coalescedOpenRoot source sourceBoundary) sourceQuotient).1
+      (List.get_mem _ sourceCoalesced) |>.1
+  have sourceQuotientScope :
+      source.coalescedScope sourceQuotient = source.frame.val.root := by
+    simpa [PlugLayout.coalescedOpenRoot] using sourceScope
+  have sourceWireScope :
+      source.coalescedScope (source.quotientWire wire) =
+        source.frame.val.root := by
+    rw [sourceQuotientEq]
+    exact sourceQuotientScope
+  have mappedQuotient :
+      presentation.quotientMap sourceQuotient =
+        target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire) := by
+    rw [← sourceQuotientEq]
+    exact presentation.quotientMap_quotientWire_of_coalescedScope
+      source.frame.val.root (fun equality => hnested equality.symm) wire
+      sourceWireScope
+  simpa [outputRootHiddenWireEquivOfNested, sourceCoalesced,
+    mappedQuotient] using targetGet
+
+/-- The complete actual root contexts are the exposed and hidden paired
+equivalences in compiler order. -/
+noncomputable def outputRootWireEquivOfNested
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root) :
+    FiniteEquiv
+      (Fin (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).rootWires.length)
+      (Fin (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).rootWires.length) :=
+  let sourceOpen :=
+    PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary
+  let targetOpen :=
+    PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)
+  let sourceEq : sourceOpen.rootWires.length =
+      sourceOpen.exposedWires.length + sourceOpen.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  let targetEq : targetOpen.rootWires.length =
+      targetOpen.exposedWires.length + targetOpen.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  (FiniteEquiv.finCast sourceEq).trans
+    ((extendWireEquiv
+      (presentation.outputRootExposedWireEquivOfNested sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested)
+      (presentation.outputRootHiddenWireEquivOfNested sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested)).trans
+      (FiniteEquiv.finCast targetEq.symm))
+
+theorem outputRootWireEquivOfNested_related
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (index : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).rootWires.length) :
+    ∃ wire : Fin source.frame.val.wireCount,
+      (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).rootWires.get index =
+          source.plugLayout.frameWire (source.quotientWire wire) ∧
+      (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).rootWires.get
+          (presentation.outputRootWireEquivOfNested sourceAdmissible
+            targetAdmissible sourceBoundary sourceRoot hnested index) =
+        target.plugLayout.frameWire
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) := by
+  let sourceOpen :=
+    PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary
+  let targetOpen :=
+    PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)
+  let sourceEq : sourceOpen.rootWires.length =
+      sourceOpen.exposedWires.length + sourceOpen.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  let targetEq : targetOpen.rootWires.length =
+      targetOpen.exposedWires.length + targetOpen.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  let split := Fin.cast sourceEq index
+  have indexEq : index = Fin.cast sourceEq.symm split := by
+    apply Fin.ext
+    rfl
+  rw [indexEq]
+  change ∃ wire : Fin source.frame.val.wireCount,
+      sourceOpen.rootWires.get (Fin.cast sourceEq.symm split) =
+          source.plugLayout.frameWire (source.quotientWire wire) ∧
+      targetOpen.rootWires.get
+          (Fin.cast targetEq.symm
+            ((extendWireEquiv
+              (presentation.outputRootExposedWireEquivOfNested
+                sourceAdmissible targetAdmissible sourceBoundary sourceRoot
+                hnested)
+              (presentation.outputRootHiddenWireEquivOfNested
+                sourceAdmissible targetAdmissible sourceBoundary sourceRoot
+                hnested)) split)) =
+        target.plugLayout.frameWire
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire))
+  refine Fin.addCases (fun exposed => ?_) (fun hidden => ?_) split
+  · obtain ⟨wire, sourceGet, targetGet⟩ :=
+      presentation.outputRootExposedWireEquivOfNested_related
+        sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+        exposed
+    refine ⟨wire, ?_, ?_⟩
+    · simpa [sourceOpen, OpenConcreteDiagram.rootWires] using sourceGet
+    · dsimp only [sourceOpen]
+      rw [extendWireEquiv_outer]
+      simpa [targetOpen, OpenConcreteDiagram.rootWires] using targetGet
+  · obtain ⟨wire, sourceGet, targetGet⟩ :=
+      presentation.outputRootHiddenWireEquivOfNested_related
+        sourceAdmissible targetAdmissible sourceBoundary sourceRoot hnested
+        hidden
+    refine ⟨wire, ?_, ?_⟩
+    · simpa [sourceOpen, OpenConcreteDiagram.rootWires] using sourceGet
+    · dsimp only [sourceOpen]
+      rw [extendWireEquiv_local]
+      simpa [targetOpen, OpenConcreteDiagram.rootWires] using targetGet
+
 /-- The actual plug-layout local wire indices at paired regular frame regions
 are canonically equivalent through their retained-frame quotient classes. -/
 noncomputable def regularFrameLocalWireEquiv
@@ -31804,6 +32393,115 @@ def contextIndexRelation
         targetContext.get targetIndex = target.plugLayout.frameWire
           (target.quotientWire
             (Fin.cast presentation.frameWireCountEq wire))
+
+/-- On complete nested root contexts, shared-wire provenance is exactly the
+graph of the canonical root-wire equivalence. -/
+theorem contextIndexRelation_root_iff_of_nested
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (sourceIndex : Fin (PlugLayout.outputOpenRoot source source.plugLayout
+      sourceBoundary).rootWires.length)
+    (targetIndex : Fin (PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)).rootWires.length) :
+    (presentation.contextIndexRelation
+      (PlugLayout.outputOpenRoot source source.plugLayout
+        sourceBoundary).rootWires
+      (PlugLayout.outputOpenRoot target target.plugLayout
+        (presentation.targetBoundary sourceBoundary)).rootWires).Rel
+        sourceIndex targetIndex ↔
+      presentation.outputRootWireEquivOfNested sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested sourceIndex =
+          targetIndex := by
+  let sourceOpen :=
+    PlugLayout.outputOpenRoot source source.plugLayout sourceBoundary
+  let targetOpen :=
+    PlugLayout.outputOpenRoot target target.plugLayout
+      (presentation.targetBoundary sourceBoundary)
+  let rootEquiv :=
+    presentation.outputRootWireEquivOfNested sourceAdmissible
+      targetAdmissible sourceBoundary sourceRoot hnested
+  constructor
+  · rintro ⟨wire, sourceGet, targetGet⟩
+    obtain ⟨mappedWire, mappedSourceGet, mappedTargetGet⟩ :=
+      presentation.outputRootWireEquivOfNested_related sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested sourceIndex
+    have sourceClasses :
+        source.quotientWire wire = source.quotientWire mappedWire :=
+      source.plugLayout.frameWire_injective
+        (sourceGet.symm.trans mappedSourceGet)
+    have sourceScope :
+        source.coalescedScope (source.quotientWire wire) =
+          source.frame.val.root := by
+      have frameMem :
+          source.plugLayout.frameWire (source.quotientWire wire) ∈
+            sourceOpen.rootWires :=
+        sourceGet ▸ List.get_mem sourceOpen.rootWires sourceIndex
+      have quotientMem :
+          source.quotientWire wire ∈
+            (PlugLayout.coalescedOpenRoot source
+              sourceBoundary).rootWires := by
+        change source.plugLayout.frameWire (source.quotientWire wire) ∈
+            sourceOpen.exposedWires ++ sourceOpen.hiddenWires at frameMem
+        change source.quotientWire wire ∈
+          (PlugLayout.coalescedOpenRoot source
+              sourceBoundary).exposedWires ++
+            (PlugLayout.coalescedOpenRoot source
+              sourceBoundary).hiddenWires
+        rcases List.mem_append.mp frameMem with exposed | hidden
+        · exact List.mem_append.mpr <| .inl <|
+            (PlugLayout.frameWire_mem_rootExposed_iff source
+              source.plugLayout sourceBoundary
+              (source.quotientWire wire)).1 exposed
+        · exact List.mem_append.mpr <| .inr <|
+            (PlugLayout.frameWire_mem_rootHidden_iff_of_nested source
+              source.plugLayout sourceBoundary hnested
+              (source.quotientWire wire)).1 hidden
+      have quotientScoped :=
+        (OpenConcreteDiagram.mem_rootWires_iff
+          (PlugLayout.coalescedOpenRoot source sourceBoundary)
+          (PlugLayout.coalescedOpenRoot_wellFormed source sourceAdmissible
+            sourceBoundary sourceRoot)
+          (source.quotientWire wire)).1 quotientMem
+      simpa [PlugLayout.coalescedOpenRoot] using quotientScoped
+    have mappedScope :
+        source.coalescedScope (source.quotientWire mappedWire) =
+          source.frame.val.root := by
+      rw [← sourceClasses]
+      exact sourceScope
+    have targetClasses :
+        target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire) =
+          target.quotientWire
+            (Fin.cast presentation.frameWireCountEq mappedWire) := by
+      calc
+        _ = presentation.quotientMap (source.quotientWire wire) := by
+          symm
+          exact presentation.quotientMap_quotientWire_of_coalescedScope
+            source.frame.val.root (fun equality => hnested equality.symm)
+            wire sourceScope
+        _ = presentation.quotientMap
+            (source.quotientWire mappedWire) :=
+          congrArg presentation.quotientMap sourceClasses
+        _ = _ := presentation.quotientMap_quotientWire_of_coalescedScope
+          source.frame.val.root (fun equality => hnested equality.symm)
+          mappedWire mappedScope
+    apply Fin.ext
+    apply (List.getElem_inj targetOpen.rootWires_nodup).mp
+    simpa only [List.get_eq_getElem, rootEquiv] using
+      mappedTargetGet.trans
+        ((congrArg target.plugLayout.frameWire targetClasses.symm).trans
+          targetGet.symm)
+  · intro indexEq
+    obtain ⟨wire, sourceGet, targetGet⟩ :=
+      presentation.outputRootWireEquivOfNested_related sourceAdmissible
+        targetAdmissible sourceBoundary sourceRoot hnested sourceIndex
+    subst targetIndex
+    exact ⟨wire, sourceGet, targetGet⟩
 
 theorem contextIndexRelation_of_sharedWire
     (presentation : TwoInputPresentation source target)
