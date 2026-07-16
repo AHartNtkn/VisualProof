@@ -30442,6 +30442,232 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
                         bodies sourceEnv targetEnv
                           (relationValue, relEnv) environments targetDenotes⟩
 
+/-- The retained-frame prefix position in the semantic insertion order used
+at a plugged site. -/
+def frameSiteSemanticIndex
+    (input : Input signature)
+    (index : Fin (ConcreteElaboration.localOccurrences
+      input.coalesceFrameRaw input.site).length) :
+    Fin input.plugLayout.semanticSiteOccurrences.length :=
+  Fin.cast (by simp [PlugLayout.semanticSiteOccurrences])
+    (Fin.castAdd
+      (ConcreteElaboration.localOccurrences
+        input.pattern.val.diagram input.binderSpine.bodyContainer).length
+      index)
+
+/-- Paired presentations enumerate retained-frame occurrences positionally at
+their common focused site. -/
+theorem focusedFrameLocalOccurrences_eq
+    (presentation : TwoInputPresentation source target) :
+    ConcreteElaboration.localOccurrences target.coalesceFrameRaw target.site =
+      (ConcreteElaboration.localOccurrences source.coalesceFrameRaw
+        source.site).map
+        (castLocalOccurrence source.frame target.frame
+          presentation.frameRegionCountEq presentation.frameNodeCountEq) := by
+  have occurrences := checkedDiagram_localOccurrences_eq
+    source.frame target.frame presentation.frame_eq source.site
+  change ConcreteElaboration.localOccurrences target.coalesceFrameRaw
+      (Fin.cast presentation.frameRegionCountEq source.site) =
+    (ConcreteElaboration.localOccurrences source.coalesceFrameRaw
+      source.site).map
+      (castLocalOccurrence source.frame target.frame
+        presentation.frameRegionCountEq presentation.frameNodeCountEq)
+    at occurrences
+  rw [← presentation.site_eq]
+  exact occurrences
+
+def targetFrameOccurrenceIndex
+    (presentation : TwoInputPresentation source target)
+    (index : Fin (ConcreteElaboration.localOccurrences
+      source.coalesceFrameRaw source.site).length) :
+    Fin (ConcreteElaboration.localOccurrences
+      target.coalesceFrameRaw target.site).length :=
+  Fin.cast (by
+    have lengths := congrArg List.length
+      presentation.focusedFrameLocalOccurrences_eq
+    simpa using lengths.symm) index
+
+theorem focusedFrameLocalOccurrences_get
+    (presentation : TwoInputPresentation source target)
+    (index : Fin (ConcreteElaboration.localOccurrences
+      source.coalesceFrameRaw source.site).length) :
+    (ConcreteElaboration.localOccurrences target.coalesceFrameRaw
+      target.site).get (presentation.targetFrameOccurrenceIndex index) =
+      castLocalOccurrence source.frame target.frame
+        presentation.frameRegionCountEq presentation.frameNodeCountEq
+        ((ConcreteElaboration.localOccurrences source.coalesceFrameRaw
+          source.site).get index) := by
+  simp [targetFrameOccurrenceIndex,
+    presentation.focusedFrameLocalOccurrences_eq]
+
+/-- Inject a retained-frame occurrence through semantic insertion order and
+the executable site permutation, then transport the actual items returned by
+the two compiler sequences. -/
+theorem focusedFrameOccurrence_itemSimulation
+    {signature : List Nat} {source target : Input signature}
+    {rels : Theory.RelCtx}
+    (presentation : TwoInputPresentation source target)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (siteDirection direction : ConcreteElaboration.SimulationDirection)
+    (fuelSource fuelTarget : Nat)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw rels)
+    (allowed : presentation.Allowed siteDirection direction
+      (source.plugLayout.frameRegion source.site))
+    (bindersRelated :
+      presentation.BinderRelated sourceBinders targetBinders)
+    (sourceBindersCover :
+      sourceBinders.Covers (source.plugLayout.frameRegion source.site))
+    (targetBindersCover :
+      targetBinders.Covers (target.plugLayout.frameRegion target.site))
+    (sourceEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration
+        source.plugLayout.plugRaw sourceBinders
+        (source.plugLayout.frameRegion source.site))
+    (targetEnumeration :
+      ConcreteElaboration.BinderContext.Enumeration
+        target.plugLayout.plugRaw targetBinders
+        (target.plugLayout.frameRegion target.site))
+    (recurse : ∀
+      {childDirection : ConcreteElaboration.SimulationDirection}
+      {child : Fin source.plugLayout.plugRaw.regionCount}
+      {childRels : Theory.RelCtx}
+      {childSourceBinders : ConcreteElaboration.BinderContext
+        source.plugLayout.plugRaw childRels}
+      {childTargetBinders : ConcreteElaboration.BinderContext
+        target.plugLayout.plugRaw childRels}
+      {sourceBody : Region signature sourceContext.length childRels}
+      {targetBody : Region signature targetContext.length childRels},
+      (source.plugLayout.plugRaw.regions child).parent? =
+          some (source.plugLayout.frameRegion source.site) →
+      (target.plugLayout.plugRaw.regions
+        (presentation.regionMap child)).parent? =
+          some (target.plugLayout.frameRegion target.site) →
+      presentation.Allowed siteDirection childDirection child →
+      presentation.BinderRelated childSourceBinders childTargetBinders →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers (presentation.regionMap child) →
+      ConcreteElaboration.BinderContext.Enumeration
+        source.plugLayout.plugRaw childSourceBinders child →
+      ConcreteElaboration.BinderContext.Enumeration
+        target.plugLayout.plugRaw childTargetBinders
+        (presentation.regionMap child) →
+      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+          fuelSource child sourceContext childSourceBinders = some sourceBody →
+      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+          fuelTarget (presentation.regionMap child) targetContext
+          childTargetBinders = some targetBody →
+      ConcreteElaboration.RegionSimulation model named childDirection
+        (presentation.contextIndexRelation sourceContext targetContext)
+        sourceBody targetBody)
+    (sourceItems : ItemSeq signature sourceContext.length rels)
+    (targetItems : ItemSeq signature targetContext.length rels)
+    (sourceItemsCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        source.plugLayout.plugRaw
+        (ConcreteElaboration.compileRegion? signature
+          source.plugLayout.plugRaw fuelSource)
+        sourceContext sourceBinders
+        (ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
+          (source.plugLayout.frameRegion source.site)) = some sourceItems)
+    (targetItemsCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        target.plugLayout.plugRaw
+        (ConcreteElaboration.compileRegion? signature
+          target.plugLayout.plugRaw fuelTarget)
+        targetContext targetBinders
+        (ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
+          (target.plugLayout.frameRegion target.site)) = some targetItems)
+    (frameIndex : Fin (ConcreteElaboration.localOccurrences
+      source.coalesceFrameRaw source.site).length) :
+    let sourceOccurrenceIndex :=
+      source.plugLayout.siteOccurrenceEquiv
+        (frameSiteSemanticIndex source frameIndex)
+    let targetOccurrenceIndex :=
+      target.plugLayout.siteOccurrenceEquiv
+        (frameSiteSemanticIndex target
+          (presentation.targetFrameOccurrenceIndex frameIndex))
+    ∃ sourceIndex : Fin sourceItems.length,
+      ∃ targetIndex : Fin targetItems.length,
+        sourceIndex.val = sourceOccurrenceIndex.val ∧
+        targetIndex.val = targetOccurrenceIndex.val ∧
+        ConcreteElaboration.ItemSimulation model named direction
+          (presentation.contextIndexRelation sourceContext targetContext)
+          (sourceItems.get sourceIndex) (targetItems.get targetIndex) := by
+  dsimp only
+  let sourceSemanticIndex := frameSiteSemanticIndex source frameIndex
+  let targetFrameIndex :=
+    presentation.targetFrameOccurrenceIndex frameIndex
+  let targetSemanticIndex := frameSiteSemanticIndex target targetFrameIndex
+  let sourceOccurrenceIndex :=
+    source.plugLayout.siteOccurrenceEquiv sourceSemanticIndex
+  let targetOccurrenceIndex :=
+    target.plugLayout.siteOccurrenceEquiv targetSemanticIndex
+  have sourceLength :=
+    ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature
+        source.plugLayout.plugRaw fuelSource)
+      sourceContext sourceBinders sourceItemsCompiled
+  have targetLength :=
+    ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature
+        target.plugLayout.plugRaw fuelTarget)
+      targetContext targetBinders targetItemsCompiled
+  let sourceIndex := Fin.cast sourceLength.symm sourceOccurrenceIndex
+  let targetIndex := Fin.cast targetLength.symm targetOccurrenceIndex
+  have sourceOccurrenceGet :
+      source.plugLayout.semanticSiteOccurrences.get sourceSemanticIndex =
+        source.plugLayout.mapFrameOccurrence
+          ((ConcreteElaboration.localOccurrences source.coalesceFrameRaw
+            source.site).get frameIndex) := by
+    simp [sourceSemanticIndex, frameSiteSemanticIndex,
+      PlugLayout.semanticSiteOccurrences]
+  have targetOccurrenceGet :
+      target.plugLayout.semanticSiteOccurrences.get targetSemanticIndex =
+        target.plugLayout.mapFrameOccurrence
+          (castLocalOccurrence source.frame target.frame
+            presentation.frameRegionCountEq presentation.frameNodeCountEq
+            ((ConcreteElaboration.localOccurrences source.coalesceFrameRaw
+              source.site).get frameIndex)) := by
+    simp only [targetSemanticIndex, frameSiteSemanticIndex,
+      PlugLayout.semanticSiteOccurrences, List.get_eq_getElem]
+    simpa [targetFrameIndex] using congrArg
+      target.plugLayout.mapFrameOccurrence
+      (presentation.focusedFrameLocalOccurrences_get frameIndex)
+  have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
+    (ConcreteElaboration.compileRegion? signature
+      source.plugLayout.plugRaw fuelSource)
+    sourceContext sourceBinders sourceItemsCompiled sourceOccurrenceIndex
+  have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
+    (ConcreteElaboration.compileRegion? signature
+      target.plugLayout.plugRaw fuelTarget)
+    targetContext targetBinders targetItemsCompiled targetOccurrenceIndex
+  rw [source.plugLayout.siteOccurrenceEquiv_spec sourceSemanticIndex,
+    sourceOccurrenceGet] at sourceGet
+  rw [target.plugLayout.siteOccurrenceEquiv_spec targetSemanticIndex,
+    targetOccurrenceGet] at targetGet
+  refine ⟨sourceIndex, targetIndex, rfl, rfl, ?_⟩
+  exact presentation.focusedFrameOccurrence_itemSimulation_of_compiled
+    model named sourceAdmissible targetAdmissible siteDirection direction
+    fuelSource fuelTarget sourceContext targetContext sourceBinders targetBinders
+    allowed bindersRelated sourceBindersCover targetBindersCover
+    sourceEnumeration targetEnumeration recurse
+    ((ConcreteElaboration.localOccurrences source.coalesceFrameRaw
+      source.site).get frameIndex)
+    (List.get_mem _ frameIndex)
+    (sourceItems.get sourceIndex) (targetItems.get targetIndex)
+    (by simpa [sourceIndex] using sourceGet)
+    (by simpa [targetIndex] using targetGet)
+
 /-- Extending both compiler contexts preserves every already-related outer
 index.  The focused kernel may add unrelated local pattern wires without
 changing the retained-frame relation. -/
