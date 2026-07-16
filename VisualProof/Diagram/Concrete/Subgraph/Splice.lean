@@ -28865,6 +28865,190 @@ theorem siteQuotientEnvironment_attachment_eq
         (input.quotientAttachment_visible hadmissible position))
     index indexWire
 
+/-- The canonical local valuation at an empty-spine focused site.  Retained
+frame locals read their quotient value; pattern locals read the existential
+hidden-root valuation supplied by the intrinsic open-pattern denotation. -/
+noncomputable def focusedLocalEnvironmentOfEmpty
+    (input : Input signature)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (values : input.wireQuotient.Carrier → D)
+    (hiddenEnv : Fin input.pattern.val.hiddenWires.length → D) :
+    Fin (ConcreteElaboration.exactScopeWires input.plugLayout.plugRaw
+      (input.plugLayout.frameRegion input.site)).length → D :=
+  fun index =>
+    let semantic :=
+      (input.plugLayout.siteLocalWireEquivOfEmpty hzero).symm index
+    Fin.addCases
+      (fun frame =>
+        values ((ConcreteElaboration.exactScopeWires
+          input.coalesceFrameRaw input.site).get frame))
+      hiddenEnv semantic
+
+@[simp] theorem focusedLocalEnvironmentOfEmpty_frame
+    (input : Input signature)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (values : input.wireQuotient.Carrier → D)
+    (hiddenEnv : Fin input.pattern.val.hiddenWires.length → D)
+    (frame : Fin (ConcreteElaboration.exactScopeWires
+      input.coalesceFrameRaw input.site).length) :
+    focusedLocalEnvironmentOfEmpty input hzero values hiddenEnv
+        (input.plugLayout.siteLocalWireEquivOfEmpty hzero
+          (Fin.castAdd input.pattern.val.hiddenWires.length frame)) =
+      values ((ConcreteElaboration.exactScopeWires
+        input.coalesceFrameRaw input.site).get frame) := by
+  simp [focusedLocalEnvironmentOfEmpty,
+    FiniteEquiv.symm_apply_apply, extendWireEnv]
+
+@[simp] theorem focusedLocalEnvironmentOfEmpty_hidden
+    (input : Input signature)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (values : input.wireQuotient.Carrier → D)
+    (hiddenEnv : Fin input.pattern.val.hiddenWires.length → D)
+    (hidden : Fin input.pattern.val.hiddenWires.length) :
+    focusedLocalEnvironmentOfEmpty input hzero values hiddenEnv
+        (input.plugLayout.siteLocalWireEquivOfEmpty hzero
+          (Fin.natAdd
+            (ConcreteElaboration.exactScopeWires
+              input.coalesceFrameRaw input.site).length hidden)) =
+      hiddenEnv hidden := by
+  simp [focusedLocalEnvironmentOfEmpty,
+    FiniteEquiv.symm_apply_apply, extendWireEnv]
+
+/-- The canonical focused valuation realizes the requested quotient value at
+every actual compiler-context index carrying a retained-frame wire.  Outer
+indices use the caller's agreement hypothesis; exact-site indices use the
+retained-frame half of `siteLocalWireEquivOfEmpty`. -/
+theorem focusedExtendedEnvironment_frameWire_eq
+    (input : Input signature)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (outerEnv : Fin context.length → D)
+    (values : input.wireQuotient.Carrier → D)
+    (hiddenEnv : Fin input.pattern.val.hiddenWires.length → D)
+    (outerValues : ∀ quotient index,
+      context.get index = input.plugLayout.frameWire quotient →
+        outerEnv index = values quotient)
+    (quotient : input.wireQuotient.Carrier)
+    (index : Fin (context.extend
+      (input.plugLayout.frameRegion input.site)).length)
+    (indexWire :
+      (context.extend
+        (input.plugLayout.frameRegion input.site)).get index =
+          input.plugLayout.frameWire quotient) :
+    ConcreteElaboration.extendedEnvironment context
+        (input.plugLayout.frameRegion input.site) outerEnv
+        (focusedLocalEnvironmentOfEmpty input hzero values hiddenEnv) index =
+      values quotient := by
+  let layout := input.plugLayout
+  let region := layout.frameRegion input.site
+  let split : Fin (context.length +
+      (ConcreteElaboration.exactScopeWires layout.plugRaw region).length) :=
+    Fin.cast
+      (ConcreteElaboration.WireContext.length_extend context region) index
+  have recover :
+      Fin.cast
+          (ConcreteElaboration.WireContext.length_extend context region).symm
+          split =
+        index := by
+    apply Fin.ext
+    rfl
+  rw [← recover] at indexWire ⊢
+  revert indexWire
+  refine Fin.addCases (fun outer indexWire => ?_)
+    (fun localIndex indexWire => ?_) split
+  · have outerWire :
+        context.get outer = layout.frameWire quotient := by
+      have canonicalWire :
+          (context.extend region).get
+              (Fin.cast
+                (ConcreteElaboration.WireContext.length_extend
+                  context region).symm
+                (Fin.castAdd
+                  (ConcreteElaboration.exactScopeWires
+                    layout.plugRaw region).length outer)) =
+            layout.frameWire quotient := by
+        simpa [region] using indexWire
+      exact
+        (PlugLayout.ConcreteElaboration.WireContext.extend_get_outer
+          context region outer).symm.trans canonicalWire
+    unfold ConcreteElaboration.extendedEnvironment
+    simp only [Function.comp_apply]
+    have castEq :
+        Fin.cast
+            (ConcreteElaboration.WireContext.length_extend context
+              (input.plugLayout.frameRegion input.site))
+            (Fin.cast
+              (ConcreteElaboration.WireContext.length_extend context region).symm
+              (Fin.castAdd
+                (ConcreteElaboration.exactScopeWires layout.plugRaw region).length
+                outer)) =
+          Fin.castAdd
+            (ConcreteElaboration.exactScopeWires layout.plugRaw region).length
+            outer := by
+      apply Fin.ext
+      rfl
+    rw [castEq]
+    unfold extendWireEnv
+    rw [Fin.addCases_left]
+    exact outerValues quotient outer outerWire
+  · have localWire :
+        (ConcreteElaboration.exactScopeWires layout.plugRaw region).get
+            localIndex =
+          layout.frameWire quotient := by
+      simpa only [region,
+        PlugLayout.ConcreteElaboration.WireContext.extend_get_local] using
+          indexWire
+    let coalescedQuotient : Fin input.coalesceFrameRaw.wireCount :=
+      Fin.cast input.coalesceFrameRaw_wireCount.symm quotient
+    have quotientLocal :
+        coalescedQuotient ∈ ConcreteElaboration.exactScopeWires
+          input.coalesceFrameRaw input.site := by
+      have targetLocal :
+          layout.frameWire quotient ∈
+            ConcreteElaboration.exactScopeWires layout.plugRaw region := by
+        rw [← localWire]
+        exact List.get_mem _ localIndex
+      have targetScope :=
+        (ConcreteElaboration.mem_exactScopeWires layout.plugRaw region
+          (layout.frameWire quotient)).1 targetLocal
+      change (layout.plugWire (layout.quotientBlockWire quotient)).scope =
+        layout.frameRegion input.site at targetScope
+      rw [PlugLayout.plugWire_quotientBlockWire] at targetScope
+      apply (ConcreteElaboration.mem_exactScopeWires
+        input.coalesceFrameRaw input.site coalescedQuotient).2
+      simpa [coalescedQuotient] using layout.frameRegion_injective targetScope
+    obtain ⟨frame, frameGet⟩ := List.mem_iff_get.mp quotientLocal
+    let mapped :=
+      layout.siteLocalWireEquivOfEmpty hzero
+        (Fin.castAdd input.pattern.val.hiddenWires.length frame)
+    have mappedWire :
+        (ConcreteElaboration.exactScopeWires layout.plugRaw region).get mapped =
+          layout.frameWire quotient := by
+      rw [layout.siteLocalWireEquivOfEmpty_host_spec hzero frame]
+      apply congrArg layout.frameWire
+      apply Fin.ext
+      exact congrArg Fin.val frameGet
+    have localEq : localIndex = mapped := by
+      apply Fin.ext
+      exact (List.getElem_inj
+        (ConcreteElaboration.exactScopeWires_nodup layout.plugRaw region)).mp
+          (localWire.trans mappedWire.symm)
+    subst localIndex
+    have mappedValue :
+        focusedLocalEnvironmentOfEmpty input hzero values hiddenEnv mapped =
+          values ((ConcreteElaboration.exactScopeWires
+            input.coalesceFrameRaw input.site).get frame) := by
+      exact focusedLocalEnvironmentOfEmpty_frame input hzero values
+        hiddenEnv frame
+    have targetValue :
+        focusedLocalEnvironmentOfEmpty input hzero values hiddenEnv mapped =
+          values quotient := mappedValue.trans (by
+        apply congrArg values
+        apply Fin.ext
+        exact congrArg Fin.val frameGet)
+    simpa [ConcreteElaboration.extendedEnvironment, region, extendWireEnv] using
+      targetValue
+
 /-- An actual focused item conjunction for an empty proxy spine entails the
 intrinsic checked pattern at the quotient valuation read from that exact
 focused context.  Hidden pattern-root wires remain the existential locals of
