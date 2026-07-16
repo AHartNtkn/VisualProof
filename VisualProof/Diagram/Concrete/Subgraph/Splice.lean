@@ -37555,6 +37555,96 @@ theorem nestedOutput_denoteOfEmpty
         simpa [sourceOpen, targetOpen, simulation, rootContext, sourceArgs,
           targetArgs] using boundary)
 
+/-- The nested paired-output theorem transported back across each splice
+compiler's canonical intrinsic source view. -/
+theorem compiledSpliceSourceOpen_entails_of_nested
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    {sourceResult targetResult : CheckedDiagram signature}
+    (sourceSplice : spliceChecked signature source = .ok sourceResult)
+    (targetSplice : spliceChecked signature target = .ok targetResult)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (hnested : source.site ≠ source.frame.val.root)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (siteDirection rootDirection :
+      ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (localLaw : match siteDirection with
+      | .forward => ∀ sourceArgs,
+          source.pattern.denote model named sourceArgs →
+            target.pattern.denote model named
+              (sourceArgs ∘
+                Fin.cast presentation.boundary_arity_eq.symm)
+      | .backward => ∀ targetArgs,
+          target.pattern.denote model named targetArgs →
+            source.pattern.denote model named
+              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (allowed : presentation.Allowed siteDirection rootDirection
+      source.plugLayout.plugRaw.root)
+    (args : Fin sourceBoundary.length → model.Carrier) :
+    rootDirection.Entails
+      (denoteOpen model named
+        (compiledSpliceSourceOpen source sourceSplice sourceBoundary sourceRoot)
+        (args ∘ Fin.cast (by simp [compiledSpliceSourceOpen,
+          PlugLayout.checkedCoalescedOpenRoot,
+          PlugLayout.coalescedOpenRoot])))
+      (denoteOpen model named
+        (compiledSpliceSourceOpen target targetSplice
+          (presentation.targetBoundary sourceBoundary)
+          (presentation.targetBoundary_root sourceBoundary sourceRoot))
+        (args ∘ Fin.cast (by simp [compiledSpliceSourceOpen,
+          PlugLayout.checkedCoalescedOpenRoot,
+          PlugLayout.coalescedOpenRoot, targetBoundary]))) := by
+  let sourceAdmissible := (spliceChecked_sound sourceSplice).2.1
+  let targetAdmissible := (spliceChecked_sound targetSplice).2.1
+  let sourceArgs : Fin
+      (PlugLayout.checkedCoalescedOpenRoot source sourceAdmissible
+        sourceBoundary sourceRoot).val.boundary.length → model.Carrier :=
+    args ∘ Fin.cast (by simp [PlugLayout.checkedCoalescedOpenRoot,
+      PlugLayout.coalescedOpenRoot])
+  let targetArgs : Fin
+      (PlugLayout.checkedCoalescedOpenRoot target targetAdmissible
+        (presentation.targetBoundary sourceBoundary)
+        (presentation.targetBoundary_root sourceBoundary
+          sourceRoot)).val.boundary.length → model.Carrier :=
+    args ∘ Fin.cast (by simp [PlugLayout.checkedCoalescedOpenRoot,
+      PlugLayout.coalescedOpenRoot, targetBoundary])
+  have sourceCompiler :=
+    spliceChecked_open_denotation_iff source sourceSplice sourceBoundary
+      sourceRoot model named sourceArgs
+  have targetCompiler :=
+    spliceChecked_open_denotation_iff target targetSplice
+      (presentation.targetBoundary sourceBoundary)
+      (presentation.targetBoundary_root sourceBoundary sourceRoot)
+      model named targetArgs
+  have output :=
+    presentation.nestedOutput_denoteOfEmpty sourceAdmissible targetAdmissible
+      sourceZero targetZero sourceBoundary sourceRoot hnested siteDirection
+      rootDirection model named localLaw allowed args
+  cases rootDirection with
+  | forward =>
+      intro sourceDenotes
+      have sourceOutput := sourceCompiler.mp sourceDenotes
+      have targetOutput := output (by
+        simpa [sourceArgs, CheckedOpenDiagram.denote,
+          denoteOpen_castArity] using sourceOutput)
+      apply targetCompiler.mpr
+      simpa [targetArgs, CheckedOpenDiagram.denote,
+        denoteOpen_castArity] using targetOutput
+  | backward =>
+      intro targetDenotes
+      have targetOutput := targetCompiler.mp targetDenotes
+      have sourceOutput := output (by
+        simpa [targetArgs, CheckedOpenDiagram.denote,
+          denoteOpen_castArity] using targetOutput)
+      apply sourceCompiler.mpr
+      simpa [sourceArgs, CheckedOpenDiagram.denote,
+        denoteOpen_castArity] using sourceOutput
+
 end TwoInputPresentation
 
 end VisualProof.Diagram.Splice.Input
