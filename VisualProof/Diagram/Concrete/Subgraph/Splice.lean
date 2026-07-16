@@ -15457,15 +15457,15 @@ theorem compilePatternOccurrence_at_seam_iso
                   simpa [hrelations, Item.renameWires, Item.renameRelations] using
                     ItemIso.bubble htransport
 
-/-- Empty-proxy counterpart of `compilePatternOccurrence_at_seam_iso`.
-The pattern sheet root is compiled with its open root wire context and empty
-lexical relation context; every proper direct child is material. -/
-theorem compilePatternRootOccurrence_at_seam_iso
+/-- Direct empty-proxy pattern transport into the actual focused compiler
+context.  This theorem needs no coalesced-host compiler view: root nodes use
+the canonical open-root wire map, while proper children reuse the actual
+compile equations supplied by the output leaf. -/
+theorem compilePatternRootOccurrence_at_site_iso
     (signature : List Nat)
     (input : Input signature)
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    (host : SiteView (input.coalesceFrame hadmissible) input.site)
     {outputBody : Region signature outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
@@ -15498,29 +15498,16 @@ theorem compilePatternRootOccurrence_at_seam_iso
       outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
         some targetItem) :
     ItemIso signature
-      (layout.siteCombinedWireEquivOfEmpty hadmissible host
-        (outputWitness := outputWitness) (outputLeaf := outputLeaf) hzero)
+      (FiniteEquiv.refl (Fin
+        (outputLeaf.inheritedWires.extend
+          (layout.frameRegion input.site)).length))
       outputWitness.toFocus.holeRels
       ((sourceItem.renameWires
-        (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
+        (layout.patternRootWireIndexMap hadmissible hzero outputWitness
+          outputLeaf))
           |>.renameRelations
             (emptyRelationRenaming outputWitness.toFocus.holeRels))
-      (targetItem.castWiresEq
-        (ConcreteElaboration.WireContext.length_extend
-          outputLeaf.inheritedWires (layout.frameRegion input.site))) := by
-  let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
-    outputWitness outputLeaf hzero
-  let targetEq := ConcreteElaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let toTargetContext := combined.trans (FiniteEquiv.finCast targetEq.symm)
-  have hwire : toTargetContext.toFun ∘
-        layout.patternRootSeamPreparedWireOfEmpty hadmissible host =
-      layout.patternRootWireIndexMap hadmissible hzero outputWitness
-        outputLeaf := by
-    simpa only [toTargetContext, combined, FiniteEquiv.trans_apply,
-      FiniteEquiv.finCast, Function.comp_def] using
-      layout.patternRootSeamWireMapOfEmpty_eq hadmissible host outputWitness
-        outputLeaf hzero
+      targetItem := by
   let sourceExact := openRootWires_exact input.pattern
   let sourceCover := ConcreteElaboration.BinderContext.empty_covers_root
     input.pattern.property.diagram_well_formed
@@ -15531,12 +15518,42 @@ theorem compilePatternRootOccurrence_at_seam_iso
   | node node =>
       have hnodeRegion :=
         (ConcreteElaboration.mem_localOccurrences_node _ _ _).1 hoccurrence
-      exact layout.compilePatternRootNode_at_seam_iso signature input
-        hadmissible host outputWitness outputLeaf hzero node hnodeRegion
-        sourceItem targetItem
-        (by simpa [ConcreteElaboration.compileOccurrenceWith?] using hsource)
-        (by simpa [mapPatternOccurrence,
-          ConcreteElaboration.compileOccurrenceWith?] using htarget)
+      have htransport := layout.compilePatternRootNode_at_site signature input
+        hadmissible hzero outputWitness outputLeaf node hnodeRegion
+      rw [show layout.mapPatternOccurrence
+          (ConcreteElaboration.LocalOccurrence.node node) =
+            ConcreteElaboration.LocalOccurrence.node
+              (layout.patternNode node) by rfl] at htarget
+      simp only [ConcreteElaboration.compileOccurrenceWith?] at hsource htarget
+      rw [htarget] at htransport
+      let transform := fun item : Item signature
+          (input.pattern.val.exposedWires ++
+            input.pattern.val.hiddenWires).length [] =>
+        (item.renameWires
+          (layout.patternRootWireIndexMap hadmissible hzero outputWitness
+            outputLeaf)).renameRelations
+          (emptyRelationRenaming outputWitness.toFocus.holeRels)
+      have hmapped : Option.map transform
+            (ConcreteElaboration.compileNode? signature
+              input.pattern.val.diagram
+              (input.pattern.val.exposedWires ++
+                input.pattern.val.hiddenWires)
+              ConcreteElaboration.BinderContext.empty node) =
+          some (transform sourceItem) := by
+        exact (congrArg (Option.map transform) hsource).trans rfl
+      have htransport' : targetItem = transform sourceItem :=
+        Option.some.inj (htransport.trans hmapped)
+      subst targetItem
+      have href := ItemIso.renameWiresEquiv (transform sourceItem)
+        (FiniteEquiv.refl (Fin
+          (outputLeaf.inheritedWires.extend
+            (layout.frameRegion input.site)).length))
+      have hfun :
+          (FiniteEquiv.refl (Fin
+            (outputLeaf.inheritedWires.extend
+              (layout.frameRegion input.site)).length)).toFun = id := rfl
+      rw [hfun, Item.renameWires_id] at href
+      simpa only [transform] using href
   | child child =>
       have hparentRoot :=
         (ConcreteElaboration.mem_localOccurrences_child _ _ _).1 hoccurrence
@@ -15629,16 +15646,8 @@ theorem compilePatternRootOccurrence_at_seam_iso
                       nofun)
                     compiledSource compiledTarget hsourceChild
                     htargetChildResult
-                  have htransport := seamRecursiveRegionIso_of_maps combined
-                    targetEq
-                    (layout.patternRootSeamPreparedWireOfEmpty hadmissible host)
-                    (layout.patternRootWireIndexMap hadmissible hzero
-                      outputWitness outputLeaf)
-                    hwire
-                    (emptyRelationRenaming outputWitness.toFocus.holeRels)
-                    compiledSource compiledTarget hrecursive
                   simpa [Item.renameWires, Item.renameRelations] using
-                    ItemIso.cut htransport
+                    ItemIso.cut hrecursive
       | bubble parent arity =>
           have hparentEq : parent = input.pattern.val.diagram.root := by
             simpa [hchild, CRegion.parent?] using hparentRoot
@@ -15750,18 +15759,110 @@ theorem compilePatternRootOccurrence_at_seam_iso
                       nofun)
                     compiledSource compiledTarget hsourceChild
                     htargetChildResult
-                  have htransport := seamRecursiveRegionIso_of_maps combined
-                    targetEq
-                    (layout.patternRootSeamPreparedWireOfEmpty hadmissible host)
-                    (layout.patternRootWireIndexMap hadmissible hzero
-                      outputWitness outputLeaf)
-                    hwire
-                    (RelationRenaming.lift
-                      (emptyRelationRenaming
-                        outputWitness.toFocus.holeRels) arity)
-                    compiledSource compiledTarget hrecursive
                   simpa [Item.renameWires, Item.renameRelations] using
-                    ItemIso.bubble htransport
+                    ItemIso.bubble hrecursive
+
+/-- Empty-proxy counterpart of `compilePatternOccurrence_at_seam_iso`.
+The pattern sheet root is compiled with its open root wire context and empty
+lexical relation context; every proper direct child is material. -/
+theorem compilePatternRootOccurrence_at_seam_iso
+    (signature : List Nat)
+    (input : Input signature)
+    (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    (host : SiteView (input.coalesceFrame hadmissible) input.site)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
+      (layout.frameRegion input.site) outputWitness)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (occurrence : ConcreteElaboration.LocalOccurrence
+      input.pattern.val.diagram.regionCount
+      input.pattern.val.diagram.nodeCount)
+    (hoccurrence : occurrence ∈ ConcreteElaboration.localOccurrences
+      input.pattern.val.diagram input.pattern.val.diagram.root)
+    (sourceItem : Item signature
+      (input.pattern.val.exposedWires ++
+        input.pattern.val.hiddenWires).length [])
+    (targetItem : Item signature
+      (outputLeaf.inheritedWires.extend
+        (layout.frameRegion input.site)).length
+      outputWitness.toFocus.holeRels)
+    (hsource : ConcreteElaboration.compileOccurrenceWith? signature
+      input.pattern.val.diagram
+      (ConcreteElaboration.compileRegion? signature input.pattern.val.diagram
+        input.pattern.val.diagram.regionCount)
+      (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
+      ConcreteElaboration.BinderContext.empty occurrence = some sourceItem)
+    (htarget : ConcreteElaboration.compileOccurrenceWith? signature
+      layout.plugRaw
+      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+        outputLeaf.fuel)
+      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+      outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
+        some targetItem) :
+    ItemIso signature
+      (layout.siteCombinedWireEquivOfEmpty hadmissible host
+        (outputWitness := outputWitness) (outputLeaf := outputLeaf) hzero)
+      outputWitness.toFocus.holeRels
+      ((sourceItem.renameWires
+        (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
+          |>.renameRelations
+            (emptyRelationRenaming outputWitness.toFocus.holeRels))
+      (targetItem.castWiresEq
+        (ConcreteElaboration.WireContext.length_extend
+          outputLeaf.inheritedWires (layout.frameRegion input.site))) := by
+  let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
+    outputWitness outputLeaf hzero
+  let targetEq := ConcreteElaboration.WireContext.length_extend
+    outputLeaf.inheritedWires (layout.frameRegion input.site)
+  let toTargetContext := combined.trans (FiniteEquiv.finCast targetEq.symm)
+  have hwire : toTargetContext.toFun ∘
+        layout.patternRootSeamPreparedWireOfEmpty hadmissible host =
+      layout.patternRootWireIndexMap hadmissible hzero outputWitness
+        outputLeaf := by
+    simpa only [toTargetContext, combined, FiniteEquiv.trans_apply,
+      FiniteEquiv.finCast, Function.comp_def] using
+      layout.patternRootSeamWireMapOfEmpty_eq hadmissible host outputWitness
+        outputLeaf hzero
+  have hdirect := layout.compilePatternRootOccurrence_at_site_iso signature input
+    hadmissible outputWitness outputLeaf hzero occurrence hoccurrence sourceItem
+    targetItem hsource htarget
+  let sourcePrepared :=
+    (sourceItem.renameWires
+      (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
+        |>.renameRelations
+          (emptyRelationRenaming outputWitness.toFocus.holeRels)
+  have hfirstRaw := ItemIso.renameWiresEquiv sourcePrepared toTargetContext
+  have hfirst : ItemIso signature toTargetContext
+      outputWitness.toFocus.holeRels sourcePrepared
+      ((sourceItem.renameWires
+        (layout.patternRootWireIndexMap hadmissible hzero outputWitness
+          outputLeaf)).renameRelations
+        (emptyRelationRenaming outputWitness.toFocus.holeRels)) := by
+    simpa only [sourcePrepared, Item.renameWires_renameRelations,
+      Item.renameWires_comp, hwire] using hfirstRaw
+  have hlastRaw := ItemIso.renameWiresEquiv targetItem
+    (FiniteEquiv.finCast targetEq)
+  have hlast : ItemIso signature (FiniteEquiv.finCast targetEq)
+      outputWitness.toFocus.holeRels targetItem
+      (targetItem.castWiresEq targetEq) := by
+    simpa only [Item.castWiresEq_eq_renameWires,
+      FiniteEquiv.finCast] using hlastRaw
+  have hcombined := (hfirst.trans hdirect).trans hlast
+  have hequiv :
+      (toTargetContext.trans
+        (FiniteEquiv.refl
+          (Fin (outputLeaf.inheritedWires.extend
+            (layout.frameRegion input.site)).length))).trans
+          (FiniteEquiv.finCast targetEq) = combined := by
+    apply FiniteEquiv.ext
+    intro index
+    apply Fin.ext
+    rfl
+  rw [hequiv] at hcombined
+  exact hcombined
 
 theorem compiledSiteItemsIsoOfNonempty
     (signature : List Nat)
