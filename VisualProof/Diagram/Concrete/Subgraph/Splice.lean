@@ -2344,6 +2344,50 @@ theorem equalBoundary_quotientWire_eq (input : Input signature)
     (edge := (input.attachment left, input.attachment right))
     ((input.mem_attachmentEdges_iff _).2 ⟨left, right, hequal, rfl⟩)
 
+/-- A denoting pattern makes any retained-frame valuation that realizes its
+ordered boundary arguments constant on every attachment quotient class.  This
+is the semantic extraction needed when a replacement presentation coalesces
+more retained wires than the source presentation. -/
+theorem quotientWire_value_eq_of_pattern_denotes
+    (input : Input signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (frameValue : Fin input.frame.val.wireCount → model.Carrier)
+    (args : Fin input.pattern.val.boundary.length → model.Carrier)
+    (realizes : ∀ position,
+      frameValue (input.attachment position) = args position)
+    (denotes : input.pattern.denote model named args)
+    {left right : Fin input.frame.val.wireCount}
+    (sameClass : input.quotientWire left = input.quotientWire right) :
+    frameValue left = frameValue right := by
+  have aliasConsistent : AliasConsistent input.pattern.elaborate args := by
+    change denoteOpen model named input.pattern.elaborate args at denotes
+    rcases denotes with ⟨assignment, hargs, _⟩
+    exact (boundaryAssignment_iff_aliasConsistent
+      input.pattern.elaborate args).mp ⟨assignment, hargs⟩
+  have contains : ∀ edge ∈ input.attachmentEdges,
+      frameValue edge.1 = frameValue edge.2 := by
+    intro edge member
+    obtain ⟨leftPosition, rightPosition, boundaryEq, rfl⟩ :=
+      (input.mem_attachmentEdges_iff edge).mp member
+    have classEq : input.pattern.elaborate.boundary leftPosition =
+        input.pattern.elaborate.boundary rightPosition := by
+      change input.pattern.val.boundaryClass leftPosition =
+        input.pattern.val.boundaryClass rightPosition
+      exact (input.pattern.val.boundaryClass_eq_iff
+        leftPosition rightPosition).2 boundaryEq
+    calc
+      frameValue (input.attachment leftPosition) = args leftPosition :=
+        realizes leftPosition
+      _ = args rightPosition := aliasConsistent leftPosition rightPosition classEq
+      _ = frameValue (input.attachment rightPosition) :=
+        (realizes rightPosition).symm
+  apply VisualProof.Data.Finite.FinitePartition.least
+    (relation := fun first second => frameValue first = frameValue second)
+    (fun _ => rfl) (fun equality => equality.symm)
+    (fun firstSecond secondThird => firstSecond.trans secondThird) contains
+  exact (input.quotientWire_eq_iff left right).mp sameClass
+
 def AttachmentsVisible (input : Input signature) : Prop :=
   ∀ position,
     input.frame.val.Encloses
