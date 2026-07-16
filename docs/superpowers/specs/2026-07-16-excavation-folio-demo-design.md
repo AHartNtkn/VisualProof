@@ -46,7 +46,8 @@ Use the current opening catalog as authored content, copied into a small demo-on
 
 ### Seyric evidence
 
-Represent all six initial artifacts:
+Represent all six initial artifacts as the opening content fixture. Six is the
+ordinary visible density at the approved viewport, not a culture capacity:
 
 1. The Seyr Ossuary Seal
 2. Seyr Cairn Seal IV
@@ -76,6 +77,11 @@ The Myratic records use the same institutional folio, mounts, labels, and status
 - the material colors and markings of the actual finds;
 - evidence of scholarly uncertainty and isolation;
 - a participatory quality documented in the construction of the finds, without presenting the tradition as merely “the existential culture.”
+
+Production culture dossiers must support dozens of records without changing this
+record scale or creating another catalog location. The demonstration's next motion
+revision must therefore include a realistic long-culture fixture in addition to
+the permanent opening records.
 
 ### One institutional visual language
 
@@ -123,6 +129,27 @@ Every artifact record is a coherent archival object with:
 Formal theorem text is absent from the primary record face. The archive describes artifacts, not mathematical exercises.
 
 The player-facing content budget is one image and no more than three short text lines per artifact. A culture may also have one short shared introductory note. Artifact records do not contain essays, multi-paragraph lore, or multiple documentary images.
+
+### Continuous magical sheet
+
+Each culture dossier contains one continuous vertically scrolling magical sheet.
+The folio opening is a viewport onto that sheet and normally exposes roughly six
+records in the approved two-column density. Additional records continue below; no
+page boundary, page-turn control, numbered leaf, sub-dossier, or pagination model
+exists.
+
+Wheel, trackpad, touch, and standard keyboard scrolling move the sheet directly.
+The folio body, culture tabs, and dossier identity remain fixed while the sheet
+travels beneath them. A partial continuation at the lower viewport edge makes the
+overflow discoverable without a visible software scrollbar or explanatory legend.
+Scrolling is continuous and does not snap to six-record increments.
+
+Artifact order is deterministic and unaffected by unlocking, completion, replay,
+or broken-seal reference availability. Each culture retains its own scroll position
+while the folio is open. Inspection returns to the exact prior position. Switching
+cultures and returning restores that culture's prior position rather than resetting
+to the top. Focus order follows the same stable artifact order. Reduced-motion mode
+removes inertial flourish but preserves direct scrolling and position restoration.
 
 ### Status treatments
 

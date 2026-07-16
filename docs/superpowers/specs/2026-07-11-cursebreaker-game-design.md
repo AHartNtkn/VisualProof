@@ -79,8 +79,12 @@ The game presents one orderly working curator's desk with slight physical asymme
   reference access through the same stable artifact records.
 - Completion changes an artifact record's physical seal state and available
   actions; it never changes the artifact's catalog location.
+- Each culture is one continuous magical scrolling sheet. Roughly six records are
+  visible at once, while dozens may continue vertically at the same scale and in
+  one stable order; there is no pagination or subordinate catalog hierarchy.
 - Papers may be slightly skewed, but interaction positions remain predictable.
-- At compact widths, side papers collapse into edge stacks or drawers while the main lens remains dominant.
+- At compact widths, the folio may collapse into an edge stack or drawer while its
+  culture sheets retain their positions and the main lens remains dominant.
 
 ### 5.2 Teacher and feedback
 
@@ -582,6 +586,9 @@ Later cultural content must not appear as placeholder, locked empty panels, or u
 - Construction-loupe geometry and unchanged behavior tests.
 - Playwright novice-path playthroughs.
 - Responsive rendered evidence for desktop and compact desk arrangements.
+- Long-culture folio evidence using a realistic dozens-record fixture, including
+  direct scrolling, stable order, per-culture position restoration, inspection
+  return, keyboard access, and reduced-motion behavior.
 - Mechanical checks proving proof-assistant entry points, direction modes, authoring, external libraries, and import/export are absent.
 
 ### 11.3 Human validation
