@@ -138,6 +138,61 @@ theorem checked_encloses_trans {d : ConcreteDiagram}
     hwf.root_is_sheet hwf.all_regions_reach_root htoRoot
   exact ⟨⟨second.val + first.val, by omega⟩, hcomposed⟩
 
+/-- Every proper descendant lies below a unique-level direct child of the
+chosen ancestor.  This is the parent-tree decomposition used when a partial
+occurrence is reconstructed as a checked selection. -/
+theorem exists_direct_child_enclosing {d : ConcreteDiagram}
+    (hwf : d.WellFormed signature)
+    {ancestor descendant : Fin d.regionCount}
+    (hne : descendant ≠ ancestor)
+    (hencloses : d.Encloses ancestor descendant) :
+    ∃ child,
+      (d.regions child).parent? = some ancestor ∧
+        d.Encloses child descendant := by
+  obtain ⟨steps, hclimb⟩ := hencloses
+  rcases steps with ⟨steps, hbound⟩
+  induction steps generalizing descendant with
+  | zero =>
+      have : descendant = ancestor := Option.some.inj hclimb
+      exact False.elim (hne this)
+  | succ steps ih =>
+      cases hparent : (d.regions descendant).parent? with
+      | none => simp [ConcreteDiagram.climb, hparent] at hclimb
+      | some parent =>
+          have htail : d.climb steps parent = some ancestor := by
+            simpa [ConcreteDiagram.climb, hparent] using hclimb
+          by_cases heq : parent = ancestor
+          · subst parent
+            exact ⟨descendant, hparent,
+              ConcreteDiagram.Encloses.refl d descendant⟩
+          · obtain ⟨child, hchild, hchildParent⟩ :=
+              ih (descendant := parent) heq (by omega) htail
+            have hparentDescendant : d.Encloses parent descendant := by
+              refine ⟨⟨1, by have := descendant.isLt; omega⟩, ?_⟩
+              simp [ConcreteDiagram.climb, hparent]
+            exact ⟨child, hchild,
+              checked_encloses_trans hwf hchildParent hparentDescendant⟩
+
+/-- Enclosure in a checked parent tree is antisymmetric. -/
+theorem checked_encloses_antisymm {d : ConcreteDiagram}
+    (hwf : d.WellFormed signature)
+    {first second : Fin d.regionCount}
+    (hfirst : d.Encloses first second)
+    (hsecond : d.Encloses second first) : first = second := by
+  obtain ⟨firstSteps, hfirst⟩ := hfirst
+  obtain ⟨secondSteps, hsecond⟩ := hsecond
+  obtain ⟨rootSteps, hroot⟩ := hwf.all_regions_reach_root second
+  have hcycle :
+      d.climb (firstSteps.val + secondSteps.val + rootSteps.val) second =
+        some d.root :=
+    climb_add (climb_add hfirst hsecond) hroot
+  have heq := ParentTraversal.climb_to_root_steps_unique d hwf.root_is_sheet
+    hcycle hroot
+  have hzero : firstSteps.val = 0 := by omega
+  have : second = first := by
+    simpa [hzero, ConcreteDiagram.climb] using hfirst
+  exact this.symm
+
 theorem checked_direct_child_not_encloses_parent
     {d : ConcreteDiagram} (hwf : d.WellFormed signature)
     {child parent : Fin d.regionCount}
@@ -354,6 +409,176 @@ theorem checked_atom_binder_available {d : ConcreteDiagram}
   apply hcovers binder parent arity hbinder
   simpa [ConcreteDiagram.AtomBindersEnclose, hnode]
     using hwf.atom_binders_enclose node
+
+/-- Exact enumeration of the concrete bubbles represented by an intrinsic
+relation context. It supplements coverage with the inverse direction needed
+to transport a pattern's relation variables into a host lexical context. -/
+structure Enumeration
+    (diagram : ConcreteDiagram)
+    (context : BinderContext diagram rels)
+    (region : Fin diagram.regionCount) where
+  binder : Fin rels.length → Fin diagram.regionCount
+  binder_injective : Function.Injective binder
+  bubble : ∀ index, ∃ parent,
+    diagram.regions (binder index) =
+      .bubble parent (rels.get index)
+  encloses : ∀ index, diagram.Encloses (binder index) region
+  lookup : ∀ index,
+    context (binder index) = some ⟨rels.get index, {
+      index := index
+      hasArity := rfl
+    }⟩
+  lookup_owner : ∀ {candidate arity} (relation : RelVar rels arity),
+    context candidate = some ⟨arity, relation⟩ →
+      binder relation.index = candidate
+
+def Enumeration.empty
+    (diagram : ConcreteDiagram) :
+    Enumeration diagram BinderContext.empty diagram.root where
+  binder := nofun
+  binder_injective := nofun
+  bubble := nofun
+  encloses := nofun
+  lookup := nofun
+  lookup_owner := by
+    intro candidate arity relation hlookup
+    simp [BinderContext.empty] at hlookup
+
+def Enumeration.cutChild
+    (enumeration : Enumeration diagram context parent)
+    (hwf : diagram.WellFormed signature)
+    (hchild : diagram.regions child = .cut parent) :
+    Enumeration diagram context child where
+  binder := enumeration.binder
+  binder_injective := enumeration.binder_injective
+  bubble := enumeration.bubble
+  encloses := by
+    intro index
+    have parentChild : diagram.Encloses parent child := by
+      refine ⟨⟨1, by
+        have := child.isLt
+        omega⟩, ?_⟩
+      simp [ConcreteDiagram.climb, hchild, CRegion.parent?]
+    exact checked_encloses_trans hwf
+      (enumeration.encloses index) parentChild
+  lookup := enumeration.lookup
+  lookup_owner := enumeration.lookup_owner
+
+def Enumeration.bubbleChild
+    (enumeration : Enumeration diagram context parent)
+    (hwf : diagram.WellFormed signature)
+    (hchild : diagram.regions child = .bubble parent arity) :
+    Enumeration diagram (context.push child arity) child where
+  binder := Fin.cases child enumeration.binder
+  binder_injective := by
+    intro left right heq
+    rcases Fin.eq_zero_or_eq_succ left with rfl | ⟨leftTail, rfl⟩
+    · rcases Fin.eq_zero_or_eq_succ right with rfl | ⟨rightTail, rfl⟩
+      · rfl
+      · simp only [Fin.cases_zero, Fin.cases_succ] at heq
+        have hencloses := enumeration.encloses rightTail
+        have parentEq : (diagram.regions child).parent? = some parent := by
+          simp [hchild, CRegion.parent?]
+        exact False.elim
+          (checked_direct_child_not_encloses_parent
+            hwf parentEq (by simpa [heq] using hencloses))
+    · rcases Fin.eq_zero_or_eq_succ right with rfl | ⟨rightTail, rfl⟩
+      · simp only [Fin.cases_zero, Fin.cases_succ] at heq
+        have hencloses := enumeration.encloses leftTail
+        have parentEq : (diagram.regions child).parent? = some parent := by
+          simp [hchild, CRegion.parent?]
+        exact False.elim
+          (checked_direct_child_not_encloses_parent
+            hwf parentEq (by simpa [← heq] using hencloses))
+      · simp only [Fin.cases_succ] at heq
+        exact congrArg Fin.succ (enumeration.binder_injective heq)
+  bubble := by
+    intro index
+    refine Fin.cases ?_ (fun tail => ?_) index
+    · exact ⟨parent, by simpa using hchild⟩
+    · simpa using enumeration.bubble tail
+  encloses := by
+    intro index
+    refine Fin.cases ?_ (fun tail => ?_) index
+    · exact ConcreteDiagram.Encloses.refl diagram child
+    · have parentChild : diagram.Encloses parent child := by
+        refine ⟨⟨1, by
+          have := child.isLt
+          omega⟩, ?_⟩
+        simp [ConcreteDiagram.climb, hchild, CRegion.parent?]
+      exact checked_encloses_trans hwf
+        (enumeration.encloses tail) parentChild
+  lookup := by
+    intro index
+    refine Fin.cases ?_ (fun tail => ?_) index
+    · exact BinderContext.push_self context child arity
+    · have childNe : enumeration.binder tail ≠ child := by
+        intro heq
+        have hencloses := enumeration.encloses tail
+        have parentEq : (diagram.regions child).parent? = some parent := by
+          simp [hchild, CRegion.parent?]
+        exact checked_direct_child_not_encloses_parent
+          hwf parentEq (by simpa [heq] using hencloses)
+      change context.push child arity (enumeration.binder tail) = _
+      rw [BinderContext.push_other context arity childNe, enumeration.lookup]
+      rfl
+  lookup_owner := by
+    intro candidate relationArity relation hlookup
+    rcases relation with ⟨index, hasArity⟩
+    revert hasArity
+    refine Fin.cases ?_ (fun tail => ?_) index
+    · intro hasArity hlookup
+      have harity : relationArity = arity := by simpa using hasArity.symm
+      subst relationArity
+      by_cases heq : candidate = child
+      · subst candidate
+        rfl
+      · rw [BinderContext.push_other context arity heq] at hlookup
+        cases hcandidate : context candidate with
+        | none => simp [hcandidate] at hlookup
+        | some previous =>
+            have hindexValue := congrArg
+              (fun value => value.map fun relation => relation.2.index.val)
+              hlookup
+            simp [hcandidate, BinderContext.liftVar] at hindexValue
+    · intro hasArity hlookup
+      have hcandidateNe : candidate ≠ child := by
+        intro heq
+        subst candidate
+        rw [BinderContext.push_self] at hlookup
+        have hindexValue := congrArg
+          (fun value => value.map fun relation => relation.2.index.val)
+          hlookup
+        simp [BinderContext.head] at hindexValue
+      rw [BinderContext.push_other context arity hcandidateNe] at hlookup
+      cases hcandidate : context candidate with
+      | none => simp [hcandidate] at hlookup
+      | some previous =>
+          cases previous with
+          | mk previousArity previousRelation =>
+              have hprevious : context candidate =
+                  some ⟨previousArity, previousRelation⟩ := hcandidate
+              have hindex : previousRelation.index = tail := by
+                have hindexValue := congrArg
+                  (fun value => value.map fun relation => relation.2.index.val)
+                  hlookup
+                simp [hcandidate, BinderContext.liftVar] at hindexValue
+                apply Fin.ext
+                omega
+              have howner := enumeration.lookup_owner previousRelation hprevious
+              simpa only [Fin.cases_succ, hindex] using howner
+
+/-- The concrete binder represented by each lexical relation position is
+independent of the retained proof of enumeration. -/
+theorem Enumeration.binder_unique
+    {diagram : ConcreteDiagram} {rels : RelCtx}
+    {context : BinderContext diagram rels}
+    {region : Fin diagram.regionCount}
+    (first second : Enumeration diagram context region) :
+    first.binder = second.binder := by
+  funext index
+  let relation : RelVar rels (rels.get index) := ⟨index, rfl⟩
+  exact (second.lookup_owner relation (first.lookup index)).symm
 
 end BinderContext
 

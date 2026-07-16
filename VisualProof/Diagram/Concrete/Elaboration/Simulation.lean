@@ -657,6 +657,12 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (targetBinders : BinderContext target rels),
     AtRegion context region → Distinguished region → Allowed direction region →
       BinderRelated sourceBinders targetBinders →
+      (sourceContext.extend region).Exact region →
+      (targetContext.extend (regionMap region)).Exact (regionMap region) →
+      sourceBinders.Covers region →
+      targetBinders.Covers (regionMap region) →
+      BinderContext.Enumeration source sourceBinders region →
+      BinderContext.Enumeration target targetBinders (regionMap region) →
       ∀ (sourceItems : ItemSeq signature (sourceContext.extend region).length rels)
         (targetItems : ItemSeq signature
           (targetContext.extend (regionMap region)).length rels),
@@ -713,6 +719,14 @@ theorem compileOccurrence_denote
     (allowed : simulation.Allowed direction region)
     (regular : ¬ simulation.Distinguished region)
     (bindersRelated : simulation.BinderRelated sourceBinders targetBinders)
+    (sourceBindersCover : sourceBinders.Covers region)
+    (targetBindersCover :
+      targetBinders.Covers (simulation.regionMap region))
+    (sourceEnumeration :
+      BinderContext.Enumeration source sourceBinders region)
+    (targetEnumeration :
+      BinderContext.Enumeration target targetBinders
+        (simulation.regionMap region))
     (recurse : ∀ {childDirection : SimulationDirection}
       {child : Fin source.regionCount} {childRels : RelCtx}
       {childSourceBinders : BinderContext source childRels}
@@ -722,6 +736,11 @@ theorem compileOccurrence_denote
       (source.regions child).parent? = some region →
       simulation.Allowed childDirection child →
       simulation.BinderRelated childSourceBinders childTargetBinders →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers (simulation.regionMap child) →
+      BinderContext.Enumeration source childSourceBinders child →
+      BinderContext.Enumeration target childTargetBinders
+        (simulation.regionMap child) →
       compileRegion? signature source fuelSource child sourceContext
           childSourceBinders = some sourceBody →
       compileRegion? signature target fuelTarget (simulation.regionMap child)
@@ -782,7 +801,13 @@ theorem compileOccurrence_denote
                   have bodies := recurse
                     parent
                     (simulation.allowed_cut direction child region kind regular allowed)
-                    bindersRelated sourceResult targetResult
+                    bindersRelated
+                    (BinderContext.covers_cut_child sourceBindersCover kind)
+                    (BinderContext.covers_cut_child targetBindersCover targetKind)
+                    (sourceEnumeration.cutChild simulation.source_wellFormed kind)
+                    (targetEnumeration.cutChild simulation.target_wellFormed
+                      targetKind)
+                    sourceResult targetResult
                   intro sourceEnv targetEnv relEnv environments
                   have bodyEntailment := bodies sourceEnv targetEnv
                     relEnv environments
@@ -827,7 +852,15 @@ theorem compileOccurrence_denote
                     parent
                     (simulation.allowed_bubble direction child region arity kind
                       regular allowed)
-                    pushedRelated sourceResult targetResult
+                    pushedRelated
+                    (BinderContext.push_covers_bubble_child sourceBindersCover kind)
+                    (BinderContext.push_covers_bubble_child targetBindersCover
+                      targetKind)
+                    (sourceEnumeration.bubbleChild simulation.source_wellFormed
+                      kind)
+                    (targetEnumeration.bubbleChild simulation.target_wellFormed
+                      targetKind)
+                    sourceResult targetResult
                   intro sourceEnv targetEnv relEnv environments
                   simp only [bubble_denotes_exists]
                   cases direction with
@@ -856,6 +889,14 @@ theorem compileOccurrences_denote
     (allowed : simulation.Allowed direction region)
     (regular : ¬ simulation.Distinguished region)
     (bindersRelated : simulation.BinderRelated sourceBinders targetBinders)
+    (sourceBindersCover : sourceBinders.Covers region)
+    (targetBindersCover :
+      targetBinders.Covers (simulation.regionMap region))
+    (sourceEnumeration :
+      BinderContext.Enumeration source sourceBinders region)
+    (targetEnumeration :
+      BinderContext.Enumeration target targetBinders
+        (simulation.regionMap region))
     (recurse : ∀ {childDirection : SimulationDirection}
       {child : Fin source.regionCount} {childRels : RelCtx}
       {childSourceBinders : BinderContext source childRels}
@@ -865,6 +906,11 @@ theorem compileOccurrences_denote
       (source.regions child).parent? = some region →
       simulation.Allowed childDirection child →
       simulation.BinderRelated childSourceBinders childTargetBinders →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers (simulation.regionMap child) →
+      BinderContext.Enumeration source childSourceBinders child →
+      BinderContext.Enumeration target childTargetBinders
+        (simulation.regionMap child) →
       compileRegion? signature source fuelSource child sourceContext
           childSourceBinders = some sourceBody →
       compileRegion? signature target fuelTarget (simulation.regionMap child)
@@ -926,6 +972,8 @@ theorem compileOccurrences_denote
                         fuelSource fuelTarget region sourceContext targetContext
                         context sourceNodup targetNodup sourceBinders targetBinders
                         allowed regular bindersRelated
+                        sourceBindersCover targetBindersCover sourceEnumeration
+                        targetEnumeration
                         recurse occurrence (members occurrence (by simp))
                         sourceHead targetHead sourceHeadResult targetHeadResult
                       have tail := induction
@@ -952,6 +1000,11 @@ theorem compileRegion_denote
       (targetBinders : BinderContext target rels),
       simulation.Allowed direction region →
       simulation.BinderRelated sourceBinders targetBinders →
+      sourceBinders.Covers region →
+      targetBinders.Covers (simulation.regionMap region) →
+      BinderContext.Enumeration source sourceBinders region →
+      BinderContext.Enumeration target targetBinders
+        (simulation.regionMap region) →
       (sourceContext.extend region).Exact region →
       (targetContext.extend (simulation.regionMap region)).Exact
         (simulation.regionMap region) →
@@ -967,21 +1020,24 @@ theorem compileRegion_denote
   induction fuelSource generalizing rels direction with
   | zero =>
       intro fuelTarget region sourceContext targetContext context atRegion
-        sourceBinders targetBinders allowed bindersRelated sourceExact targetExact
-        sourceBody targetBody sourceCompiled targetCompiled
+        sourceBinders targetBinders allowed bindersRelated sourceBindersCover
+        targetBindersCover sourceEnumeration targetEnumeration sourceExact
+        targetExact sourceBody targetBody sourceCompiled targetCompiled
       simp [compileRegion?] at sourceCompiled
   | succ fuelSource induction =>
       intro fuelTarget
       cases fuelTarget with
       | zero =>
           intro region sourceContext targetContext context atRegion sourceBinders
-            targetBinders allowed bindersRelated sourceExact targetExact sourceBody
-            targetBody sourceCompiled targetCompiled
+            targetBinders allowed bindersRelated sourceBindersCover
+            targetBindersCover sourceEnumeration targetEnumeration sourceExact
+            targetExact sourceBody targetBody sourceCompiled targetCompiled
           simp [compileRegion?] at targetCompiled
       | succ fuelTarget =>
           intro region sourceContext targetContext context atRegion sourceBinders
-            targetBinders allowed bindersRelated sourceExact targetExact sourceBody
-            targetBody sourceCompiled targetCompiled
+            targetBinders allowed bindersRelated sourceBindersCover
+            targetBindersCover sourceEnumeration targetEnumeration sourceExact
+            targetExact sourceBody targetBody sourceCompiled targetCompiled
           simp only [compileRegion?] at sourceCompiled targetCompiled
           let sourceExtended := sourceContext.extend region
           let targetExtended :=
@@ -1007,8 +1063,9 @@ theorem compileRegion_denote
                     exact simulation.focusedRegionKernel direction
                       fuelSource fuelTarget region sourceContext targetContext
                       context sourceBinders targetBinders atRegion focused allowed
-                      bindersRelated sourceItems targetItems sourceItemsResult
-                      targetItemsResult
+                      bindersRelated sourceExact targetExact sourceBindersCover
+                      targetBindersCover sourceEnumeration targetEnumeration
+                      sourceItems targetItems sourceItemsResult targetItemsResult
           · rw [simulation.localOccurrences_map region focused] at targetCompiled
             let extendedContext := simulation.extendContext sourceContext targetContext
               context region focused sourceExact targetExact
@@ -1051,6 +1108,13 @@ theorem compileRegion_denote
                         simulation.Allowed childDirection child →
                         simulation.BinderRelated childSourceBinders
                           childTargetBinders →
+                        childSourceBinders.Covers child →
+                        childTargetBinders.Covers
+                          (simulation.regionMap child) →
+                        BinderContext.Enumeration source childSourceBinders
+                          child →
+                        BinderContext.Enumeration target childTargetBinders
+                          (simulation.regionMap child) →
                         compileRegion? signature source fuelSource child
                             sourceExtended childSourceBinders = some sourceChild →
                         compileRegion? signature target fuelTarget
@@ -1061,13 +1125,18 @@ theorem compileRegion_denote
                           sourceChild targetChild := by
                       intro childDirection child childRels childSourceBinders
                         childTargetBinders sourceChild targetChild parent childAllowed
-                        childBindersRelated sourceChildCompiled targetChildCompiled
+                        childBindersRelated childSourceBindersCover
+                        childTargetBindersCover childSourceEnumeration
+                        childTargetEnumeration sourceChildCompiled
+                        targetChildCompiled
                       exact induction childDirection fuelTarget child sourceExtended
                         targetExtended extendedContext
                         (simulation.at_child sourceContext targetContext context
                           region focused sourceExact targetExact child atRegion parent)
                         childSourceBinders
                         childTargetBinders childAllowed childBindersRelated
+                        childSourceBindersCover childTargetBindersCover
+                        childSourceEnumeration childTargetEnumeration
                         (sourceExact.extend_child simulation.source_wellFormed parent)
                         (targetExact.extend_child simulation.target_wellFormed
                           (simulation.parent_mapped focused parent))
@@ -1077,7 +1146,8 @@ theorem compileRegion_denote
                       direction fuelSource fuelTarget region sourceExtended
                       targetExtended extendedContext sourceExact.nodup
                       targetExact.nodup sourceBinders targetBinders allowed focused
-                      bindersRelated recurse
+                      bindersRelated sourceBindersCover targetBindersCover
+                      sourceEnumeration targetEnumeration recurse
                       (localOccurrences source region) (fun _ member => member)
                       sourceItems targetItems sourceItemsResult targetItemsResult
                     exact finishRegion_denote direction sourceContext targetContext
@@ -1283,6 +1353,11 @@ theorem compileRoot_denote
                 (source.regions child).parent? = some source.root →
                 simulation.Allowed childDirection child →
                 simulation.BinderRelated childSourceBinders childTargetBinders →
+                childSourceBinders.Covers child →
+                childTargetBinders.Covers (simulation.regionMap child) →
+                BinderContext.Enumeration source childSourceBinders child →
+                BinderContext.Enumeration target childTargetBinders
+                  (simulation.regionMap child) →
                 compileRegion? signature source source.regionCount child
                     sourceRootContext childSourceBinders = some sourceChild →
                 compileRegion? signature target target.regionCount
@@ -1293,13 +1368,17 @@ theorem compileRoot_denote
                   sourceChild targetChild := by
               intro childDirection child childRels childSourceBinders
                 childTargetBinders sourceChild targetChild parent childAllowed
-                childBindersRelated sourceChildCompiled targetChildCompiled
+                childBindersRelated childSourceBindersCover
+                childTargetBindersCover childSourceEnumeration
+                childTargetEnumeration sourceChildCompiled targetChildCompiled
               exact simulation.compileRegion_denote childDirection
                 source.regionCount target.regionCount child sourceRootContext
                 targetRootContext rootContext.context
                 (rootContext.atRootChild focused child parent)
                 childSourceBinders
                 childTargetBinders childAllowed childBindersRelated
+                childSourceBindersCover childTargetBindersCover
+                childSourceEnumeration childTargetEnumeration
                 (sourceExact.extend_child simulation.source_wellFormed parent)
                 (targetRootExact.extend_child simulation.target_wellFormed
                   (simulation.parent_mapped focused parent))
@@ -1308,7 +1387,16 @@ theorem compileRoot_denote
               source.regionCount target.regionCount source.root sourceRootContext
               targetRootContext rootContext.context sourceExact.nodup
               targetRootExact.nodup BinderContext.empty BinderContext.empty
-              allowed focused simulation.binders_empty recurse
+              allowed focused simulation.binders_empty
+              (BinderContext.empty_covers_root simulation.source_wellFormed)
+              (by
+                simpa only [← simulation.root_eq] using
+                  BinderContext.empty_covers_root simulation.target_wellFormed)
+              (BinderContext.Enumeration.empty source)
+              (by
+                simpa only [← simulation.root_eq] using
+                  BinderContext.Enumeration.empty target)
+              recurse
               (localOccurrences source source.root) (fun _ member => member)
               sourceItems targetItems sourceItemsResult targetItemsResult
             have targetItemsCompiled :
