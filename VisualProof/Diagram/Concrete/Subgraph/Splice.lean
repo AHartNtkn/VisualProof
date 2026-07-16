@@ -29224,9 +29224,35 @@ theorem pattern_denote_of_patternRootItems
         rootEnvironmentEq)
       patternDenotes
 
+/-- Boundary aliasing may change only the quotient classes whose original
+retained wires are all scoped exactly at the splice site.  Any pair involving
+an outer-scoped wire has the same quotient equality on both sides, so replacing
+the focused conjunction cannot move an existential wire binder across its
+enclosing logical context. -/
+def SiteLocalQuotientAgreement
+    (source target : Input signature)
+    (frameEq : source.frame = target.frame) : Prop :=
+  ∀ left right : Fin source.frame.val.wireCount,
+    (source.frame.val.wires left).scope ≠ source.site ∨
+      (source.frame.val.wires right).scope ≠ source.site →
+    (source.quotientWire left = source.quotientWire right ↔
+      target.quotientWire
+          (Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+            checked.val.wireCount) frameEq) left) =
+        target.quotientWire
+          (Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+            checked.val.wireCount) frameEq) right))
+
+instance (source target : Input signature)
+    (frameEq : source.frame = target.frame) :
+    Decidable (SiteLocalQuotientAgreement source target frameEq) := by
+  unfold SiteLocalQuotientAgreement
+  exact @Nat.decidableForallFin _ _ fun _ =>
+    @Nat.decidableForallFin _ _ fun _ => inferInstance
+
 /-- Structural presentation shared by two canonical splice inputs over the
-same retained frame and site.  Ordered positions agree, but the two pattern
-boundaries may induce different quotient partitions of the retained wires. -/
+same retained frame and site. Ordered positions agree. Boundary quotient
+partitions may differ only at the focused site's own wire-binding level. -/
 structure TwoInputPresentation (source target : Input signature) where
   frame_eq : source.frame = target.frame
   site_eq :
@@ -29238,6 +29264,8 @@ structure TwoInputPresentation (source target : Input signature) where
     Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
       checked.val.wireCount) frame_eq) (source.attachment position) =
       target.attachment (Fin.cast boundary_arity_eq position)
+  site_local_quotients :
+    SiteLocalQuotientAgreement source target frame_eq
 
 namespace TwoInputPresentation
 
@@ -29799,6 +29827,529 @@ theorem coalescedFrame_wire_visible_at_site_iff
   rw [checkedDiagram_wire_scope_eq source.frame target.frame
     presentation.frame_eq wire, presentation.site_eq] at visible
   exact visible
+
+/-- A quotient class containing a wire bound outside the splice site has the
+same outermost scope in both presentations. The site-local quotient condition
+makes the two class-member sets identical; admissibility makes each coalesced
+scope their common outermost member. -/
+theorem coalescedScope_eq_of_nonSite_wire
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (wire : Fin source.frame.val.wireCount)
+    (nonSite : (source.frame.val.wires wire).scope ≠ source.site) :
+    Fin.cast presentation.frameRegionCountEq
+        (source.coalescedScope (source.quotientWire wire)) =
+      target.coalescedScope
+        (target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire)) := by
+  let sourceClass := source.quotientWire wire
+  let targetWire := Fin.cast presentation.frameWireCountEq wire
+  let targetClass := target.quotientWire targetWire
+  obtain ⟨sourceMember, sourceMemberIn, sourceScope⟩ :=
+    source.coalescedScope_eq_member_scope sourceClass
+  obtain ⟨targetMember, targetMemberIn, targetScope⟩ :=
+    target.coalescedScope_eq_member_scope targetClass
+  let targetMemberSource :=
+    Fin.cast presentation.frameWireCountEq.symm targetMember
+  have targetMemberCast :
+      Fin.cast presentation.frameWireCountEq targetMemberSource =
+        targetMember := by
+    apply Fin.ext
+    rfl
+  have sourceMemberClass :
+      source.quotientWire sourceMember = source.quotientWire wire := by
+    exact (source.mem_classWires sourceClass sourceMember).1
+      sourceMemberIn
+  have targetSourceMemberClass :
+      target.quotientWire
+          (Fin.cast presentation.frameWireCountEq sourceMember) =
+        target.quotientWire targetWire := by
+    exact (presentation.site_local_quotients sourceMember wire
+      (Or.inr nonSite)).1 sourceMemberClass
+  have targetSourceMemberIn :
+      Fin.cast presentation.frameWireCountEq sourceMember ∈
+        target.classWires targetClass := by
+    exact (target.mem_classWires targetClass _).2 targetSourceMemberClass
+  have targetMemberClass :
+      target.quotientWire targetMember =
+        target.quotientWire targetWire := by
+    exact (target.mem_classWires targetClass targetMember).1 targetMemberIn
+  have sourceTargetMemberClass :
+      source.quotientWire targetMemberSource =
+        source.quotientWire wire := by
+    apply (presentation.site_local_quotients targetMemberSource wire
+      (Or.inr nonSite)).2
+    simpa only [targetMemberCast] using targetMemberClass
+  have sourceTargetMemberIn :
+      targetMemberSource ∈ source.classWires sourceClass := by
+    exact (source.mem_classWires sourceClass targetMemberSource).2
+      sourceTargetMemberClass
+  have targetEnclosesSource :
+      target.frame.val.Encloses
+        (target.coalescedScope targetClass)
+        (Fin.cast presentation.frameRegionCountEq
+          (source.coalescedScope sourceClass)) := by
+    have encloses := target.coalescedScope_encloses_member targetAdmissible
+      targetClass (Fin.cast presentation.frameWireCountEq sourceMember)
+      targetSourceMemberIn
+    rw [sourceScope,
+      checkedDiagram_wire_scope_eq source.frame target.frame
+        presentation.frame_eq sourceMember]
+    exact encloses
+  have sourceEnclosesTarget :
+      target.frame.val.Encloses
+        (Fin.cast presentation.frameRegionCountEq
+          (source.coalescedScope sourceClass))
+        (target.coalescedScope targetClass) := by
+    have encloses := source.coalescedScope_encloses_member sourceAdmissible
+      sourceClass targetMemberSource sourceTargetMemberIn
+    have transported :=
+      (checkedDiagram_encloses_eq source.frame target.frame
+        presentation.frame_eq
+        (source.coalescedScope sourceClass)
+        (source.frame.val.wires targetMemberSource).scope).1 encloses
+    rw [checkedDiagram_wire_scope_eq source.frame target.frame
+        presentation.frame_eq targetMemberSource,
+      targetMemberCast, ← targetScope] at transported
+    exact transported
+  exact ConcreteElaboration.checked_encloses_antisymm target.frame.property
+    sourceEnclosesTarget targetEnclosesSource
+
+/-- Canonical target quotient represented by a source quotient. Away from the
+site, locality makes this independent of the chosen source representative. -/
+def quotientMap
+    (presentation : TwoInputPresentation source target)
+    (quotient : source.wireQuotient.Carrier) :
+    target.wireQuotient.Carrier :=
+  target.quotientWire
+    (Fin.cast presentation.frameWireCountEq
+      (source.wireQuotient.origin quotient))
+
+theorem quotientMap_quotientWire_of_nonSite
+    (presentation : TwoInputPresentation source target)
+    (wire : Fin source.frame.val.wireCount)
+    (nonSite : (source.frame.val.wires wire).scope ≠ source.site) :
+    presentation.quotientMap (source.quotientWire wire) =
+      target.quotientWire
+        (Fin.cast presentation.frameWireCountEq wire) := by
+  unfold quotientMap
+  apply (presentation.site_local_quotients
+    (source.wireQuotient.origin (source.quotientWire wire)) wire
+    (Or.inr nonSite)).1
+  exact source.quotientWire_wireQuotient_origin
+    (source.quotientWire wire)
+
+/-- Exact non-site scope is preserved by the canonical quotient map. -/
+theorem quotientMap_coalescedScope
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site)
+    (quotient : source.wireQuotient.Carrier)
+    (scope : source.coalescedScope quotient = region) :
+    target.coalescedScope (presentation.quotientMap quotient) =
+      Fin.cast presentation.frameRegionCountEq region := by
+  obtain ⟨wire, member, wireScope⟩ :=
+    source.coalescedScope_eq_member_scope quotient
+  have quotientEq : source.quotientWire wire = quotient :=
+    (source.mem_classWires quotient wire).1 member
+  have wireNonSite : (source.frame.val.wires wire).scope ≠ source.site := by
+    rw [← wireScope, scope]
+    exact regionNe
+  have mappedEq :
+      presentation.quotientMap quotient =
+        target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire) := by
+    rw [← quotientEq]
+    exact presentation.quotientMap_quotientWire_of_nonSite wire wireNonSite
+  have coalesced := presentation.coalescedScope_eq_of_nonSite_wire
+    sourceAdmissible targetAdmissible wire wireNonSite
+  rw [quotientEq, scope, ← mappedEq] at coalesced
+  exact coalesced.symm
+
+/-- A shared original wire whose source quotient is bound at a regular scope
+is represented by the canonical quotient map, even when that particular
+original wire is itself bound at the splice site. -/
+theorem quotientMap_quotientWire_of_coalescedScope
+    (presentation : TwoInputPresentation source target)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site)
+    (wire : Fin source.frame.val.wireCount)
+    (scope :
+      source.coalescedScope (source.quotientWire wire) = region) :
+    presentation.quotientMap (source.quotientWire wire) =
+      target.quotientWire
+        (Fin.cast presentation.frameWireCountEq wire) := by
+  obtain ⟨representative, member, representativeScope⟩ :=
+    source.coalescedScope_eq_member_scope (source.quotientWire wire)
+  have representativeClass :
+      source.quotientWire representative = source.quotientWire wire :=
+    (source.mem_classWires (source.quotientWire wire) representative).1 member
+  have representativeNonSite :
+      (source.frame.val.wires representative).scope ≠ source.site := by
+    rw [← representativeScope, scope]
+    exact regionNe
+  have targetClass :
+      target.quotientWire
+          (Fin.cast presentation.frameWireCountEq representative) =
+        target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire) :=
+    (presentation.site_local_quotients representative wire
+      (Or.inl representativeNonSite)).1 representativeClass
+  rw [← representativeClass,
+    presentation.quotientMap_quotientWire_of_nonSite representative
+      representativeNonSite]
+  exact targetClass
+
+/-- Corresponding quotient copies of any shared original wire have paired
+coalesced scopes at every regular frame region. -/
+theorem related_coalescedScope_iff
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site)
+    (wire : Fin source.frame.val.wireCount) :
+    source.coalescedScope (source.quotientWire wire) = region ↔
+      target.coalescedScope
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) =
+        Fin.cast presentation.frameRegionCountEq region := by
+  constructor
+  · intro sourceScope
+    have mappedScope := presentation.quotientMap_coalescedScope
+      sourceAdmissible targetAdmissible region regionNe
+      (source.quotientWire wire) sourceScope
+    rw [presentation.quotientMap_quotientWire_of_coalescedScope region
+      regionNe wire sourceScope] at mappedScope
+    exact mappedScope
+  · intro targetScope
+    let targetWire := Fin.cast presentation.frameWireCountEq wire
+    obtain ⟨targetRepresentative, targetMember, targetRepresentativeScope⟩ :=
+      target.coalescedScope_eq_member_scope
+        (target.quotientWire targetWire)
+    let sourceRepresentative :=
+      Fin.cast presentation.frameWireCountEq.symm targetRepresentative
+    have targetRepresentativeCast :
+        Fin.cast presentation.frameWireCountEq sourceRepresentative =
+          targetRepresentative := by
+      apply Fin.ext
+      rfl
+    have sourceRepresentativeScope :
+        (source.frame.val.wires sourceRepresentative).scope = region := by
+      have transported := checkedDiagram_wire_scope_eq source.frame target.frame
+        presentation.frame_eq sourceRepresentative
+      rw [targetRepresentativeCast, ← targetRepresentativeScope,
+        targetScope] at transported
+      have values :
+          (Fin.cast presentation.frameRegionCountEq
+            (source.frame.val.wires sourceRepresentative).scope).val =
+          (Fin.cast presentation.frameRegionCountEq region).val :=
+        congrArg (fun index => index.val) transported
+      apply Fin.ext
+      exact values
+    have sourceRepresentativeNonSite :
+        (source.frame.val.wires sourceRepresentative).scope ≠ source.site := by
+      rw [sourceRepresentativeScope]
+      exact regionNe
+    have targetClasses :
+        target.quotientWire
+            (Fin.cast presentation.frameWireCountEq sourceRepresentative) =
+          target.quotientWire targetWire := by
+      rw [targetRepresentativeCast]
+      exact (target.mem_classWires (target.quotientWire targetWire)
+        targetRepresentative).1 targetMember
+    have sourceClasses :
+        source.quotientWire sourceRepresentative =
+          source.quotientWire wire :=
+      (presentation.site_local_quotients sourceRepresentative wire
+        (Or.inl sourceRepresentativeNonSite)).2 targetClasses
+    have coalesced := presentation.coalescedScope_eq_of_nonSite_wire
+      sourceAdmissible targetAdmissible sourceRepresentative
+        sourceRepresentativeNonSite
+    rw [sourceClasses, targetClasses, targetScope] at coalesced
+    have values :
+        (Fin.cast presentation.frameRegionCountEq
+          (source.coalescedScope (source.quotientWire wire))).val =
+        (Fin.cast presentation.frameRegionCountEq region).val :=
+      congrArg (fun index => index.val) coalesced
+    apply Fin.ext
+    exact values
+
+/-- Every target quotient scoped at a regular paired region is the canonical
+image of a source quotient scoped at the corresponding source region. -/
+theorem quotientMap_complete_at_nonSite
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site)
+    (targetQuotient : target.wireQuotient.Carrier)
+    (targetScope :
+      target.coalescedScope targetQuotient =
+        Fin.cast presentation.frameRegionCountEq region) :
+    ∃ sourceQuotient : source.wireQuotient.Carrier,
+      source.coalescedScope sourceQuotient = region ∧
+        presentation.quotientMap sourceQuotient = targetQuotient := by
+  obtain ⟨targetWire, targetMember, targetWireScope⟩ :=
+    target.coalescedScope_eq_member_scope targetQuotient
+  let sourceWire :=
+    Fin.cast presentation.frameWireCountEq.symm targetWire
+  have targetWireCast :
+      Fin.cast presentation.frameWireCountEq sourceWire = targetWire := by
+    apply Fin.ext
+    rfl
+  have sourceWireScope :
+      (source.frame.val.wires sourceWire).scope = region := by
+    have transported := checkedDiagram_wire_scope_eq source.frame target.frame
+      presentation.frame_eq sourceWire
+    rw [targetWireCast, ← targetWireScope, targetScope] at transported
+    have values :
+        (Fin.cast presentation.frameRegionCountEq
+          (source.frame.val.wires sourceWire).scope).val =
+        (Fin.cast presentation.frameRegionCountEq region).val :=
+      congrArg (fun index => index.val) transported
+    apply Fin.ext
+    exact values
+  have sourceWireNonSite :
+      (source.frame.val.wires sourceWire).scope ≠ source.site := by
+    rw [sourceWireScope]
+    exact regionNe
+  let sourceQuotient := source.quotientWire sourceWire
+  have targetClass :
+      target.quotientWire
+          (Fin.cast presentation.frameWireCountEq sourceWire) =
+        targetQuotient := by
+    rw [targetWireCast]
+    exact (target.mem_classWires targetQuotient targetWire).1 targetMember
+  have mapped :
+      presentation.quotientMap sourceQuotient = targetQuotient := by
+    rw [presentation.quotientMap_quotientWire_of_nonSite sourceWire
+      sourceWireNonSite]
+    exact targetClass
+  have coalesced := presentation.coalescedScope_eq_of_nonSite_wire
+    sourceAdmissible targetAdmissible sourceWire sourceWireNonSite
+  rw [targetClass, targetScope] at coalesced
+  refine ⟨sourceQuotient, ?_, mapped⟩
+  have values :
+      (Fin.cast presentation.frameRegionCountEq
+        (source.coalescedScope sourceQuotient)).val =
+      (Fin.cast presentation.frameRegionCountEq region).val :=
+    congrArg (fun index => index.val) coalesced
+  apply Fin.ext
+  exact values
+
+/-- The canonical quotient map is injective on every exact non-site scope. -/
+theorem quotientMap_injective_at_nonSite
+    (presentation : TwoInputPresentation source target)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site)
+    (left right : source.wireQuotient.Carrier)
+    (leftScope : source.coalescedScope left = region)
+    (rightScope : source.coalescedScope right = region)
+    (mapped : presentation.quotientMap left =
+      presentation.quotientMap right) :
+    left = right := by
+  obtain ⟨leftWire, leftMember, leftWireScope⟩ :=
+    source.coalescedScope_eq_member_scope left
+  obtain ⟨rightWire, rightMember, rightWireScope⟩ :=
+    source.coalescedScope_eq_member_scope right
+  have leftClass : source.quotientWire leftWire = left :=
+    (source.mem_classWires left leftWire).1 leftMember
+  have rightClass : source.quotientWire rightWire = right :=
+    (source.mem_classWires right rightWire).1 rightMember
+  have leftNonSite :
+      (source.frame.val.wires leftWire).scope ≠ source.site := by
+    rw [← leftWireScope, leftScope]
+    exact regionNe
+  have rightNonSite :
+      (source.frame.val.wires rightWire).scope ≠ source.site := by
+    rw [← rightWireScope, rightScope]
+    exact regionNe
+  have targetClasses :
+      target.quotientWire
+          (Fin.cast presentation.frameWireCountEq leftWire) =
+        target.quotientWire
+          (Fin.cast presentation.frameWireCountEq rightWire) := by
+    rw [← presentation.quotientMap_quotientWire_of_nonSite leftWire
+        leftNonSite,
+      ← presentation.quotientMap_quotientWire_of_nonSite rightWire
+        rightNonSite,
+      leftClass, rightClass]
+    exact mapped
+  have sourceClasses :=
+    (presentation.site_local_quotients leftWire rightWire
+      (Or.inl leftNonSite)).2 targetClasses
+  exact leftClass.symm.trans (sourceClasses.trans rightClass)
+
+/-- The exact quotient wires bound at paired regular frame regions are
+canonically equivalent.  Site-local quotient changes cannot alter this
+enumeration away from the splice site. -/
+noncomputable def coalescedLocalWireEquiv
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site) :
+    FiniteEquiv
+      (Fin (ConcreteElaboration.exactScopeWires source.coalesceFrameRaw
+        region).length)
+      (Fin (ConcreteElaboration.exactScopeWires target.coalesceFrameRaw
+        (Fin.cast presentation.frameRegionCountEq region)).length) :=
+  listEmbeddingEquiv presentation.quotientMap
+    (ConcreteElaboration.exactScopeWires source.coalesceFrameRaw region)
+    (ConcreteElaboration.exactScopeWires target.coalesceFrameRaw
+      (Fin.cast presentation.frameRegionCountEq region))
+    (ConcreteElaboration.exactScopeWires_nodup _ _)
+    (ConcreteElaboration.exactScopeWires_nodup _ _)
+    (fun quotient member =>
+      (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+        (presentation.quotientMap_coalescedScope sourceAdmissible
+          targetAdmissible region regionNe quotient
+          ((ConcreteElaboration.mem_exactScopeWires _ _ _).1 member)))
+    (fun quotient member => by
+      obtain ⟨sourceQuotient, sourceScope, mapped⟩ :=
+        presentation.quotientMap_complete_at_nonSite sourceAdmissible
+          targetAdmissible region regionNe quotient
+          ((ConcreteElaboration.mem_exactScopeWires _ _ _).1 member)
+      exact ⟨sourceQuotient,
+        (ConcreteElaboration.mem_exactScopeWires _ _ _).2 sourceScope,
+        mapped⟩)
+    (fun left leftMember right rightMember mapped =>
+      presentation.quotientMap_injective_at_nonSite region regionNe left right
+        ((ConcreteElaboration.mem_exactScopeWires _ _ _).1 leftMember)
+        ((ConcreteElaboration.mem_exactScopeWires _ _ _).1 rightMember)
+        mapped)
+
+theorem coalescedLocalWireEquiv_spec
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site)
+    (index : Fin (ConcreteElaboration.exactScopeWires
+      source.coalesceFrameRaw region).length) :
+    (ConcreteElaboration.exactScopeWires target.coalesceFrameRaw
+      (Fin.cast presentation.frameRegionCountEq region)).get
+        (presentation.coalescedLocalWireEquiv sourceAdmissible
+          targetAdmissible region regionNe index) =
+      presentation.quotientMap
+        ((ConcreteElaboration.exactScopeWires source.coalesceFrameRaw
+          region).get index) := by
+  exact listEmbeddingEquiv_spec presentation.quotientMap
+    (ConcreteElaboration.exactScopeWires source.coalesceFrameRaw region)
+    (ConcreteElaboration.exactScopeWires target.coalesceFrameRaw
+      (Fin.cast presentation.frameRegionCountEq region))
+    _ _ _ _ _ index
+
+/-- The actual plug-layout local wire indices at paired regular frame regions
+are canonically equivalent through their retained-frame quotient classes. -/
+noncomputable def regularFrameLocalWireEquiv
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site) :
+    FiniteEquiv
+      (Fin (ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+        (source.plugLayout.frameRegion region)).length)
+      (Fin (ConcreteElaboration.exactScopeWires target.plugLayout.plugRaw
+        (target.plugLayout.frameRegion
+          (Fin.cast presentation.frameRegionCountEq region))).length) := by
+  let targetRegion := Fin.cast presentation.frameRegionCountEq region
+  have targetRegionNe : targetRegion ≠ target.site := by
+    intro equality
+    apply regionNe
+    apply Fin.ext
+    have castEquality :
+        Fin.cast presentation.frameRegionCountEq region =
+          Fin.cast presentation.frameRegionCountEq source.site :=
+      equality.trans presentation.site_eq.symm
+    exact congrArg (fun index => index.val) castEquality
+  exact
+    (source.plugLayout.frameLocalWireEquiv region regionNe).symm |>.trans
+      ((presentation.coalescedLocalWireEquiv sourceAdmissible
+        targetAdmissible region regionNe).trans
+        (target.plugLayout.frameLocalWireEquiv targetRegion targetRegionNe))
+
+theorem regularFrameLocalWireEquiv_related
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (region : Fin source.frame.val.regionCount)
+    (regionNe : region ≠ source.site)
+    (index : Fin (ConcreteElaboration.exactScopeWires
+      source.plugLayout.plugRaw
+      (source.plugLayout.frameRegion region)).length) :
+    ∃ wire : Fin source.frame.val.wireCount,
+      (ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+        (source.plugLayout.frameRegion region)).get index =
+          source.plugLayout.frameWire (source.quotientWire wire) ∧
+      (ConcreteElaboration.exactScopeWires target.plugLayout.plugRaw
+        (target.plugLayout.frameRegion
+          (Fin.cast presentation.frameRegionCountEq region))).get
+            (presentation.regularFrameLocalWireEquiv sourceAdmissible
+              targetAdmissible region regionNe index) =
+          target.plugLayout.frameWire
+            (target.quotientWire
+              (Fin.cast presentation.frameWireCountEq wire)) := by
+  let sourceEquiv := source.plugLayout.frameLocalWireEquiv region regionNe
+  let sourceCoalesced := sourceEquiv.symm index
+  let sourceQuotient :=
+    (ConcreteElaboration.exactScopeWires source.coalesceFrameRaw region).get
+      sourceCoalesced
+  let wire := source.wireQuotient.origin sourceQuotient
+  have sourceQuotientEq : source.quotientWire wire = sourceQuotient :=
+    source.quotientWire_wireQuotient_origin sourceQuotient
+  have sourceGet :
+      (ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+        (source.plugLayout.frameRegion region)).get index =
+        source.plugLayout.frameWire sourceQuotient := by
+    have mapped := source.plugLayout.frameLocalWireEquiv_spec region regionNe
+      sourceCoalesced
+    rw [FiniteEquiv.apply_symm_apply] at mapped
+    exact mapped
+  refine ⟨wire, sourceGet.trans (congrArg source.plugLayout.frameWire
+    sourceQuotientEq.symm), ?_⟩
+  let targetRegion := Fin.cast presentation.frameRegionCountEq region
+  have targetRegionNe : targetRegion ≠ target.site := by
+    intro equality
+    apply regionNe
+    apply Fin.ext
+    have castEquality :
+        Fin.cast presentation.frameRegionCountEq region =
+          Fin.cast presentation.frameRegionCountEq source.site :=
+      equality.trans presentation.site_eq.symm
+    exact congrArg (fun index => index.val) castEquality
+  let coalescedEquiv :=
+    presentation.coalescedLocalWireEquiv sourceAdmissible targetAdmissible
+      region regionNe
+  have targetGet :=
+    target.plugLayout.frameLocalWireEquiv_spec targetRegion targetRegionNe
+      (coalescedEquiv sourceCoalesced)
+  have coalescedGet :
+      (ConcreteElaboration.exactScopeWires target.coalesceFrameRaw
+        targetRegion).get (coalescedEquiv sourceCoalesced) =
+        presentation.quotientMap sourceQuotient := by
+    simpa [coalescedEquiv, targetRegion, sourceQuotient] using
+      presentation.coalescedLocalWireEquiv_spec sourceAdmissible
+        targetAdmissible region regionNe sourceCoalesced
+  rw [coalescedGet] at targetGet
+  have mappedQuotient :
+      presentation.quotientMap sourceQuotient =
+        target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire) := by
+    unfold quotientMap
+    change target.quotientWire
+        (Fin.cast presentation.frameWireCountEq
+          (source.wireQuotient.origin sourceQuotient)) =
+      target.quotientWire
+        (Fin.cast presentation.frameWireCountEq wire)
+    rfl
+  simpa [regularFrameLocalWireEquiv, sourceEquiv, sourceCoalesced,
+    coalescedEquiv, targetRegion, targetRegionNe, mappedQuotient] using targetGet
 
 /-- Relate coalesced-host compiler indices when their quotient classes contain
 corresponding copies of one retained-frame wire. -/
@@ -31880,6 +32431,382 @@ theorem ContextWitness.extend_outer_related
   exact presentation.contextIndexRelation_extend_outer sourceContext
     targetContext region (presentation.regionMap region) sourceIndex
     targetIndex related
+
+/-- At every regular retained-frame region, existential local valuations can
+be transported in either direction through the canonical local-wire
+equivalence while inherited values remain governed by the outer provenance
+relation. -/
+theorem regularLocalSelection
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (region : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished region)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact :
+      (targetContext.extend (presentation.regionMap region)).Exact
+        (presentation.regionMap region))
+    (model : Lambda.LambdaModel) :
+    ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
+      (targetOuter : Fin targetContext.length → model.Carrier),
+      (presentation.contextIndexRelation sourceContext targetContext)
+          |>.EnvironmentsAgree sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal,
+            ∃ targetLocal,
+              (presentation.contextIndexRelation
+                (sourceContext.extend region)
+                (targetContext.extend (presentation.regionMap region)))
+                |>.EnvironmentsAgree
+                  (ConcreteElaboration.extendedEnvironment sourceContext region
+                    sourceOuter sourceLocal)
+                  (ConcreteElaboration.extendedEnvironment targetContext
+                    (presentation.regionMap region) targetOuter targetLocal)
+        | .backward => ∀ targetLocal,
+            ∃ sourceLocal,
+              (presentation.contextIndexRelation
+                (sourceContext.extend region)
+                (targetContext.extend (presentation.regionMap region)))
+                |>.EnvironmentsAgree
+                  (ConcreteElaboration.extendedEnvironment sourceContext region
+                    sourceOuter sourceLocal)
+                  (ConcreteElaboration.extendedEnvironment targetContext
+                    (presentation.regionMap region) targetOuter targetLocal) := by
+  obtain ⟨frame, frameNe, rfl⟩ :=
+    presentation.regularFrameRegion region regular
+  rw [presentation.regionMap_frameRegion] at targetExact ⊢
+  let targetFrame := Fin.cast presentation.frameRegionCountEq frame
+  let localEquiv :=
+    presentation.regularFrameLocalWireEquiv sourceAdmissible targetAdmissible
+      frame frameNe
+  intro sourceOuter targetOuter outerAgrees
+  have extendedAgrees :
+      ∀ (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+          source.plugLayout.plugRaw
+          (source.plugLayout.frameRegion frame)).length → model.Carrier)
+        (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+          target.plugLayout.plugRaw
+          (target.plugLayout.frameRegion targetFrame)).length → model.Carrier),
+        (∀ index, sourceLocal index = targetLocal (localEquiv index)) →
+          ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+            (presentation.contextIndexRelation
+              (sourceContext.extend (source.plugLayout.frameRegion frame))
+              (targetContext.extend
+                (target.plugLayout.frameRegion targetFrame)))
+            (ConcreteElaboration.extendedEnvironment sourceContext
+              (source.plugLayout.frameRegion frame) sourceOuter sourceLocal)
+            (ConcreteElaboration.extendedEnvironment targetContext
+              (target.plugLayout.frameRegion targetFrame) targetOuter
+              targetLocal) := by
+    intro sourceLocal targetLocal localsAgree sourceIndex targetIndex related
+    obtain ⟨wire, sourceGet, targetGet⟩ := related
+    by_cases localScope :
+        source.coalescedScope (source.quotientWire wire) = frame
+    · have sourceLocalMember :
+          source.plugLayout.frameWire (source.quotientWire wire) ∈
+            ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+              (source.plugLayout.frameRegion frame) := by
+        apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+        change (source.plugLayout.plugWire
+          (source.plugLayout.quotientBlockWire
+            (source.quotientWire wire))).scope =
+          source.plugLayout.frameRegion frame
+        rw [PlugLayout.plugWire_quotientBlockWire]
+        change source.plugLayout.frameRegion
+            (source.coalescedScope (source.quotientWire wire)) =
+          source.plugLayout.frameRegion frame
+        exact congrArg source.plugLayout.frameRegion localScope
+      obtain ⟨sourceLocalIndex, sourceLocalLookup⟩ :=
+        VisualProof.Data.Finite.indexOf?_complete sourceLocalMember
+      have sourceLocalGet :
+          (ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+            (source.plugLayout.frameRegion frame)).get sourceLocalIndex =
+              source.plugLayout.frameWire (source.quotientWire wire) :=
+        VisualProof.Data.Finite.indexOf?_sound sourceLocalLookup
+      let sourceExtendedIndex :=
+        Fin.cast
+          (ConcreteElaboration.WireContext.length_extend sourceContext
+            (source.plugLayout.frameRegion frame)).symm
+          (Fin.natAdd sourceContext.length sourceLocalIndex)
+      have sourceExtendedGet :
+          (sourceContext.extend
+            (source.plugLayout.frameRegion frame)).get sourceExtendedIndex =
+            source.plugLayout.frameWire (source.quotientWire wire) := by
+        simpa only [sourceExtendedIndex,
+          PlugLayout.ConcreteElaboration.WireContext.extend_get_local] using
+            sourceLocalGet
+      have sourceIndexEq : sourceIndex = sourceExtendedIndex := by
+        apply Fin.ext
+        exact (List.getElem_inj sourceExact.nodup).mp (by
+          simpa only [List.get_eq_getElem] using
+            sourceGet.trans sourceExtendedGet.symm)
+      obtain ⟨canonicalWire, canonicalSourceGet, canonicalTargetGet⟩ :=
+        presentation.regularFrameLocalWireEquiv_related sourceAdmissible
+          targetAdmissible frame frameNe sourceLocalIndex
+      have sourceClasses :
+          source.quotientWire canonicalWire = source.quotientWire wire := by
+        exact source.plugLayout.frameWire_injective
+          (canonicalSourceGet.symm.trans sourceLocalGet)
+      have canonicalScope :
+          source.coalescedScope
+              (source.quotientWire canonicalWire) = frame := by
+        rw [sourceClasses]
+        exact localScope
+      have targetClasses :
+          target.quotientWire
+              (Fin.cast presentation.frameWireCountEq canonicalWire) =
+            target.quotientWire
+              (Fin.cast presentation.frameWireCountEq wire) := by
+        have canonicalMapped :=
+          presentation.quotientMap_quotientWire_of_coalescedScope frame
+            frameNe canonicalWire canonicalScope
+        have wireMapped :=
+          presentation.quotientMap_quotientWire_of_coalescedScope frame
+            frameNe wire localScope
+        rw [sourceClasses] at canonicalMapped
+        exact canonicalMapped.symm.trans wireMapped
+      let targetLocalIndex := localEquiv sourceLocalIndex
+      let targetExtendedIndex :=
+        Fin.cast
+          (ConcreteElaboration.WireContext.length_extend targetContext
+            (target.plugLayout.frameRegion targetFrame)).symm
+          (Fin.natAdd targetContext.length targetLocalIndex)
+      have targetCanonicalGet :
+          (ConcreteElaboration.exactScopeWires target.plugLayout.plugRaw
+            (target.plugLayout.frameRegion targetFrame)).get
+              targetLocalIndex =
+            target.plugLayout.frameWire
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire)) := by
+        exact canonicalTargetGet.trans
+          (congrArg target.plugLayout.frameWire targetClasses)
+      have targetExtendedGet :
+          (targetContext.extend
+            (target.plugLayout.frameRegion targetFrame)).get
+              targetExtendedIndex =
+            target.plugLayout.frameWire
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire)) := by
+        simpa only [targetExtendedIndex,
+          PlugLayout.ConcreteElaboration.WireContext.extend_get_local] using
+            targetCanonicalGet
+      have targetIndexEq : targetIndex = targetExtendedIndex := by
+        apply Fin.ext
+        exact (List.getElem_inj targetExact.nodup).mp (by
+          simpa only [List.get_eq_getElem] using
+            targetGet.trans targetExtendedGet.symm)
+      subst sourceIndex
+      subst targetIndex
+      simpa [ConcreteElaboration.extendedEnvironment, sourceExtendedIndex,
+        targetExtendedIndex, targetLocalIndex, targetFrame, localEquiv,
+        extendWireEnv] using localsAgree sourceLocalIndex
+    · have sourceNotLocal :
+          source.plugLayout.frameWire (source.quotientWire wire) ∉
+            ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+              (source.plugLayout.frameRegion frame) := by
+        intro member
+        have scope := (ConcreteElaboration.mem_exactScopeWires _ _ _).1 member
+        change (source.plugLayout.plugWire
+          (source.plugLayout.quotientBlockWire
+            (source.quotientWire wire))).scope =
+          source.plugLayout.frameRegion frame at scope
+        rw [PlugLayout.plugWire_quotientBlockWire] at scope
+        change source.plugLayout.frameRegion
+            (source.coalescedScope (source.quotientWire wire)) =
+          source.plugLayout.frameRegion frame at scope
+        exact localScope (source.plugLayout.frameRegion_injective scope)
+      have sourceExtendedMember :
+          source.plugLayout.frameWire (source.quotientWire wire) ∈
+            sourceContext.extend (source.plugLayout.frameRegion frame) := by
+        rw [← sourceGet]
+        exact List.get_mem _ sourceIndex
+      have sourceOuterMember :
+          source.plugLayout.frameWire (source.quotientWire wire) ∈
+            sourceContext := by
+        change source.plugLayout.frameWire (source.quotientWire wire) ∈
+          sourceContext ++ ConcreteElaboration.exactScopeWires
+            source.plugLayout.plugRaw
+            (source.plugLayout.frameRegion frame) at sourceExtendedMember
+        exact (List.mem_append.mp sourceExtendedMember).resolve_right
+          sourceNotLocal
+      obtain ⟨sourceOuterIndex, sourceOuterLookup⟩ :=
+        ConcreteElaboration.WireContext.lookup?_complete sourceOuterMember
+      have sourceOuterGet :
+          sourceContext.get sourceOuterIndex =
+            source.plugLayout.frameWire (source.quotientWire wire) :=
+        ConcreteElaboration.WireContext.lookup?_sound sourceOuterLookup
+      have targetScopeNe :
+          target.coalescedScope
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire)) ≠
+            targetFrame := by
+        intro targetScope
+        apply localScope
+        exact (presentation.related_coalescedScope_iff sourceAdmissible
+          targetAdmissible frame frameNe wire).2 targetScope
+      have targetNotLocal :
+          target.plugLayout.frameWire
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire)) ∉
+            ConcreteElaboration.exactScopeWires target.plugLayout.plugRaw
+              (target.plugLayout.frameRegion targetFrame) := by
+        intro member
+        have scope := (ConcreteElaboration.mem_exactScopeWires _ _ _).1 member
+        change (target.plugLayout.plugWire
+          (target.plugLayout.quotientBlockWire
+            (target.quotientWire
+              (Fin.cast presentation.frameWireCountEq wire)))).scope =
+          target.plugLayout.frameRegion targetFrame at scope
+        rw [PlugLayout.plugWire_quotientBlockWire] at scope
+        change target.plugLayout.frameRegion
+            (target.coalescedScope
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire))) =
+          target.plugLayout.frameRegion targetFrame at scope
+        exact targetScopeNe (target.plugLayout.frameRegion_injective scope)
+      have targetExtendedMember :
+          target.plugLayout.frameWire
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire)) ∈
+            targetContext.extend
+              (target.plugLayout.frameRegion targetFrame) := by
+        rw [← targetGet]
+        exact List.get_mem _ targetIndex
+      have targetOuterMember :
+          target.plugLayout.frameWire
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire)) ∈
+            targetContext := by
+        change target.plugLayout.frameWire
+            (target.quotientWire
+              (Fin.cast presentation.frameWireCountEq wire)) ∈
+          targetContext ++ ConcreteElaboration.exactScopeWires
+            target.plugLayout.plugRaw
+            (target.plugLayout.frameRegion targetFrame) at targetExtendedMember
+        exact (List.mem_append.mp targetExtendedMember).resolve_right
+          targetNotLocal
+      obtain ⟨targetOuterIndex, targetOuterLookup⟩ :=
+        ConcreteElaboration.WireContext.lookup?_complete targetOuterMember
+      have targetOuterGet :
+          targetContext.get targetOuterIndex =
+            target.plugLayout.frameWire
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire)) :=
+        ConcreteElaboration.WireContext.lookup?_sound targetOuterLookup
+      let sourceExtendedIndex :=
+        Fin.cast
+          (ConcreteElaboration.WireContext.length_extend sourceContext
+            (source.plugLayout.frameRegion frame)).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+              (source.plugLayout.frameRegion frame)).length sourceOuterIndex)
+      let targetExtendedIndex :=
+        Fin.cast
+          (ConcreteElaboration.WireContext.length_extend targetContext
+            (target.plugLayout.frameRegion targetFrame)).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires target.plugLayout.plugRaw
+              (target.plugLayout.frameRegion targetFrame)).length
+            targetOuterIndex)
+      have sourceExtendedGet :
+          (sourceContext.extend
+            (source.plugLayout.frameRegion frame)).get sourceExtendedIndex =
+            source.plugLayout.frameWire (source.quotientWire wire) := by
+        simpa only [sourceExtendedIndex,
+          PlugLayout.ConcreteElaboration.WireContext.extend_get_outer] using
+            sourceOuterGet
+      have targetExtendedGet :
+          (targetContext.extend
+            (target.plugLayout.frameRegion targetFrame)).get
+              targetExtendedIndex =
+            target.plugLayout.frameWire
+              (target.quotientWire
+                (Fin.cast presentation.frameWireCountEq wire)) := by
+        simpa only [targetExtendedIndex,
+          PlugLayout.ConcreteElaboration.WireContext.extend_get_outer] using
+            targetOuterGet
+      have sourceIndexEq : sourceIndex = sourceExtendedIndex := by
+        apply Fin.ext
+        exact (List.getElem_inj sourceExact.nodup).mp (by
+          simpa only [List.get_eq_getElem] using
+            sourceGet.trans sourceExtendedGet.symm)
+      have targetIndexEq : targetIndex = targetExtendedIndex := by
+        apply Fin.ext
+        exact (List.getElem_inj targetExact.nodup).mp (by
+          simpa only [List.get_eq_getElem] using
+            targetGet.trans targetExtendedGet.symm)
+      have outerValue :=
+        outerAgrees sourceOuterIndex targetOuterIndex
+          (presentation.contextIndexRelation_of_sharedWire sourceContext
+            targetContext sourceOuterIndex targetOuterIndex wire sourceOuterGet
+            targetOuterGet)
+      subst sourceIndex
+      subst targetIndex
+      simpa [ConcreteElaboration.extendedEnvironment, sourceExtendedIndex,
+        targetExtendedIndex, targetFrame, extendWireEnv] using outerValue
+  cases direction with
+  | forward =>
+      intro sourceLocal
+      let targetLocal := fun index => sourceLocal (localEquiv.symm index)
+      exact ⟨targetLocal, extendedAgrees sourceLocal targetLocal
+        (by
+          intro index
+          exact congrArg sourceLocal
+            (FiniteEquiv.symm_apply_apply localEquiv index).symm)⟩
+  | backward =>
+      intro targetLocal
+      let sourceLocal := fun index => targetLocal (localEquiv index)
+      exact ⟨sourceLocal, extendedAgrees sourceLocal targetLocal
+        (by intro index; rfl)⟩
+
+/-- The regular-region local selection discharges the generalized compiler's
+proof-dependent local transport obligation whenever the compiled item
+sequences are pointwise simulated under the extended provenance relation. -/
+theorem regularLocalTransport
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (region : Fin source.plugLayout.plugRaw.regionCount)
+    (regular : ¬ presentation.Distinguished region)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact :
+      (targetContext.extend (presentation.regionMap region)).Exact
+        (presentation.regionMap region))
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceItems : ItemSeq signature
+      (sourceContext.extend region).length rels)
+    (targetItems : ItemSeq signature
+      (targetContext.extend (presentation.regionMap region)).length rels)
+    (items : ConcreteElaboration.ItemSeqSimulation model named direction
+      (presentation.contextIndexRelation (sourceContext.extend region)
+        (targetContext.extend (presentation.regionMap region)))
+      sourceItems targetItems) :
+    ∀ relEnv,
+      ConcreteElaboration.DirectionalLocalTransport direction sourceContext
+        targetContext region (presentation.regionMap region)
+        (presentation.contextIndexRelation sourceContext targetContext)
+        model named relEnv sourceItems targetItems := by
+  apply ConcreteElaboration.directionalLocalTransport_of_agreement direction
+    sourceContext targetContext region (presentation.regionMap region)
+    (presentation.contextIndexRelation sourceContext targetContext)
+    (presentation.contextIndexRelation (sourceContext.extend region)
+      (targetContext.extend (presentation.regionMap region)))
+    model named sourceItems targetItems
+  · exact presentation.regularLocalSelection sourceAdmissible targetAdmissible
+      direction sourceContext targetContext region regular sourceExact
+        targetExact model
+  · exact items
 
 /-- Quotient classes are related exactly when they contain corresponding
 copies of one retained-frame wire.  This supports both refinement and

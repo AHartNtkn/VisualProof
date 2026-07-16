@@ -298,6 +298,40 @@ def PinnedOccurrence.replacementInput
     binderTarget := nofun
   }
 
+/-- The source and replacement boundary quotients may differ only on retained
+wires scoped exactly at the replacement site. This is the contextual interface
+condition required before the local open-pattern implication can be lifted
+through the surrounding host. -/
+def PinnedOccurrence.ReplacementQuotientsLocal
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length) : Prop :=
+  let sourceInput := occurrence.replacementInput decomposition pattern rfl
+  let targetInput := occurrence.replacementInput decomposition replacement
+    sameArity
+  Splice.Input.SiteLocalQuotientAgreement sourceInput targetInput rfl
+
+instance
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length) :
+    Decidable (occurrence.ReplacementQuotientsLocal decomposition replacement
+      sameArity) := by
+  unfold PinnedOccurrence.ReplacementQuotientsLocal
+  infer_instance
+
 /-- Every canonical pinned replacement input is executable. Attachment
 visibility is inherited from canonical decomposition reassembly; the empty
 binder spine discharges the remaining admissibility fields. -/
@@ -342,26 +376,30 @@ def applyTheorem (orientation : Orientation)
     match decomposeChecked signature input selection with
     | .error _ => .error .operationRejected
     | .ok decomposition =>
-        let spliceInput := payload.occurrence.replacementInput decomposition
-          payload.target payload.sameBoundaryArity
-        match hsplice : Splice.Input.spliceChecked signature spliceInput with
-        | .error error => .error (namedSpliceError error)
-        | .ok checked =>
-            have hresult : checked.val = spliceInput.plugLayout.plugRaw :=
-              (Splice.Input.spliceChecked_sound hsplice).1
-            let provenance :=
-              (removeWireProvenance input selection
-                decomposition.frameDomains).compose
-                (spliceFrameWireProvenance spliceInput)
-            let interface :=
-              (removeWireInterfaceTransport input selection
-                decomposition.frameDomains).compose
-                (spliceFrameInterfaceTransport spliceInput)
-            .ok {
-              result := checked
-              provenance := provenance.castTarget hresult.symm
-              interface := interface.castTarget hresult.symm
-            }
+        if payload.occurrence.ReplacementQuotientsLocal decomposition
+            payload.target payload.sameBoundaryArity then
+          let spliceInput := payload.occurrence.replacementInput decomposition
+            payload.target payload.sameBoundaryArity
+          match hsplice : Splice.Input.spliceChecked signature spliceInput with
+          | .error error => .error (namedSpliceError error)
+          | .ok checked =>
+              have hresult : checked.val = spliceInput.plugLayout.plugRaw :=
+                (Splice.Input.spliceChecked_sound hsplice).1
+              let provenance :=
+                (removeWireProvenance input selection
+                  decomposition.frameDomains).compose
+                  (spliceFrameWireProvenance spliceInput)
+              let interface :=
+                (removeWireInterfaceTransport input selection
+                  decomposition.frameDomains).compose
+                  (spliceFrameInterfaceTransport spliceInput)
+              .ok {
+                result := checked
+                provenance := provenance.castTarget hresult.symm
+                interface := interface.castTarget hresult.symm
+              }
+        else
+          .error .boundaryMismatch
   else
     .error .wrongPolarity
 
@@ -380,6 +418,8 @@ theorem applyTheorem_success {signature : List Nat}
         (concreteCutDepth input.val selection.val.anchor) ∧
       ∃ decomposition : Decomposition signature input selection,
         decomposeChecked signature input selection = .ok decomposition ∧
+          payload.occurrence.ReplacementQuotientsLocal decomposition
+            payload.target payload.sameBoundaryArity ∧
           let spliceInput := payload.occurrence.replacementInput decomposition
             payload.target payload.sameBoundaryArity
           ∃ checked : CheckedDiagram signature,
@@ -398,9 +438,11 @@ theorem applyTheorem_success {signature : List Nat}
   rename_i decomposition hdecomposition
   dsimp only at happly
   split at happly <;> try contradiction
+  rename_i hlocal
+  split at happly <;> try contradiction
   rename_i checked hsplice
   cases happly
-  exact ⟨decomposition, hdecomposition, checked, hsplice, rfl⟩
+  exact ⟨decomposition, hdecomposition, hlocal, checked, hsplice, rfl⟩
 
 theorem applyTheorem_realizes {signature : List Nat}
     {orientation : Orientation}
@@ -418,6 +460,8 @@ theorem applyTheorem_realizes {signature : List Nat}
       ∃ decomposition : Decomposition signature input selection,
         ∃ hdecomposition : decomposeChecked signature input selection =
             .ok decomposition,
+          payload.occurrence.ReplacementQuotientsLocal decomposition
+              payload.target payload.sameBoundaryArity ∧
           let spliceInput := payload.occurrence.replacementInput decomposition
             payload.target payload.sameBoundaryArity
           ∃ checked : CheckedDiagram signature,
@@ -443,6 +487,8 @@ theorem applyTheorem_realizes {signature : List Nat}
   rename_i decomposition hdecomposition
   dsimp only at happly
   split at happly <;> try contradiction
+  rename_i hlocal
+  split at happly <;> try contradiction
   rename_i checked hsplice
   have hresult : checked.val =
       (payload.occurrence.replacementInput decomposition payload.target
@@ -452,7 +498,7 @@ theorem applyTheorem_realizes {signature : List Nat}
   rcases checked with ⟨diagram, wellFormed⟩
   dsimp only at hresult hsplice ⊢
   subst diagram
-  refine ⟨decomposition, hdecomposition, ⟨_, wellFormed⟩, hsplice, ?_⟩
+  refine ⟨decomposition, hdecomposition, hlocal, ⟨_, wellFormed⟩, hsplice, ?_⟩
   refine ⟨rfl, ?_, ?_⟩
   · intro wire
     simp [WireProvenance.castTarget]
@@ -547,8 +593,8 @@ theorem PinnedOccurrence.replacementInput_attachment_origin
     (Fin.cast sameArity.symm position)
 
 /-- The source-side and replacement-side canonical inputs share one retained
-frame, splice site, ordered arity, and positional attachment presentation.
-Their boundary partitions remain free to differ. -/
+frame, splice site, ordered arity, positional attachment presentation, and the
+contextual locality condition on quotient changes. -/
 def PinnedOccurrence.twoInputPresentation
     {input : CheckedDiagram signature}
     {selection : CheckedSelection input.val}
@@ -558,7 +604,9 @@ def PinnedOccurrence.twoInputPresentation
     (decomposition : Decomposition signature input selection)
     (replacement : CheckedOpenDiagram signature)
     (sameArity : pattern.val.boundary.length =
-      replacement.val.boundary.length) :
+      replacement.val.boundary.length)
+    (locality : occurrence.ReplacementQuotientsLocal decomposition replacement
+      sameArity) :
     Splice.Input.TwoInputPresentation
       (occurrence.replacementInput decomposition pattern rfl)
       (occurrence.replacementInput decomposition replacement sameArity) where
@@ -569,6 +617,7 @@ def PinnedOccurrence.twoInputPresentation
     intro position
     apply Fin.ext
     rfl
+  site_local_quotients := locality
 
 /-- A theorem-citation payload determines an accepted canonical
 remove-then-splice replacement before any operational commuting argument. -/
