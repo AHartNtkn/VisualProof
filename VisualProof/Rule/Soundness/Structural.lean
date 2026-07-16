@@ -1450,16 +1450,22 @@ private noncomputable def severWireSimulation
     ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap
   extendContext := fun original expanded collapse region sourceExact targetExact =>
     collapse.extend region
-  localWitness := by
+  localTransport := by
     intro rels direction fuelSource fuelTarget original expanded collapse
       sourceBinders targetBinders region regular allowed sourceExact targetExact
-      sourceItems targetItems sourceCompiled targetCompiled relEnv sourceOuter
-      targetOuter outerAgrees
+      sourceItems targetItems sourceCompiled targetCompiled itemSemantics
+    refine ConcreteElaboration.directionalLocalTransport_of_agreement
+      direction original expanded region region
+      (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
+      (ConcreteElaboration.ContextIndexRelation.backwardMap
+        (collapse.extend region).indexMap)
+      model named sourceItems targetItems ?_ itemSemantics
+    intro sourceOuter targetOuter outerAgrees
     rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
       at outerAgrees
     cases direction with
     | forward =>
-        intro sourceLocal sourceDenotes
+        intro sourceLocal
         refine ⟨severTargetLocalEnv collapse region sourceOuter sourceLocal, ?_⟩
         apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
           _ _ _).2
@@ -1467,7 +1473,7 @@ private noncomputable def severWireSimulation
           (severExtendedEnv_collapse collapse region sourceExact.nodup
             sourceOuter sourceLocal)
     | backward =>
-        intro targetLocal targetDenotes
+        intro targetLocal
         have hne := severAllowed_backward_ne_site source.val.diagram
           (source.val.diagram.wires wire).scope region allowed
         refine ⟨severSourceLocalEnv source.val.diagram wire keep region hne
@@ -1533,16 +1539,27 @@ private noncomputable def severWireRootContext
     outer := ConcreteElaboration.ContextIndexRelation.backwardMap
       (severExposedIndex source.val wire keep)
     context := ?_
-    witness := ?_
+    transport := ?_
     focusedRootKernel := ?_
   }
   · simpa only [OpenConcreteDiagram.rootWires] using collapse
-  · intro regular sourceItems targetItems sourceOuter targetOuter relEnv outerAgrees
+  · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
+      itemSemantics
+    refine ConcreteElaboration.directionalRootTransport_of_agreement
+      (severDirection orientation)
+      source.val.exposedWires source.val.hiddenWires
+      (severWireRawOpen source.val wire keep).exposedWires
+      (severWireRawOpen source.val wire keep).hiddenWires
+      (ConcreteElaboration.ContextIndexRelation.backwardMap
+        (severExposedIndex source.val wire keep))
+      (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
+      model named sourceItems targetItems ?_ itemSemantics
+    intro sourceOuter targetOuter outerAgrees
     rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
       at outerAgrees
     cases orientation with
     | forward =>
-        intro sourceHidden sourceDenotes
+        intro sourceHidden
         refine ⟨severTargetHiddenEnv source wire keep targetWellFormed sourceOuter
           sourceHidden, ?_⟩
         apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
@@ -1551,16 +1568,9 @@ private noncomputable def severWireRootContext
           (severRootEnvironment_collapse source wire keep targetWellFormed
             sourceOuter targetOuter outerAgrees sourceHidden)
     | backward =>
-        intro targetHidden targetDenotes
-        have rootAllowed : severAllowed source.val.diagram
-            (source.val.diagram.wires wire).scope .backward
-            source.val.diagram.root := by
-          intro path depth route routeDepth
-          exact severAllowed_root source
-            (source.val.diagram.wires wire).scope .backward polarity route
-            routeDepth
+        intro targetHidden
         have hne := severAllowed_backward_ne_site source.val.diagram
-          (source.val.diagram.wires wire).scope source.val.diagram.root rootAllowed
+          (source.val.diagram.wires wire).scope source.val.diagram.root allowed
         refine ⟨severSourceHiddenEnv source.val wire keep hne targetHidden, ?_⟩
         apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
           _ _ _).2

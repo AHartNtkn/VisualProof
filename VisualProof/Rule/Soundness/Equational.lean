@@ -1671,7 +1671,11 @@ private theorem conversionRaw_localOccurrences
           (fun child => Diagram.ConcreteElaboration.LocalOccurrence.child
             (nodes := input.val.nodeCount) child)) hmapped) rfl
 
-private theorem conversionRaw_localWitness
+private theorem conversionRaw_localSelection
+    {signature : List Nat}
+    {input : Diagram.CheckedDiagram signature}
+    {node : Fin input.val.nodeCount}
+    {payload : ConversionPayload input node}
     (direction : Diagram.ConcreteElaboration.SimulationDirection)
     (source : Diagram.ConcreteElaboration.WireContext input.val)
     (target : Diagram.ConcreteElaboration.WireContext
@@ -1680,19 +1684,38 @@ private theorem conversionRaw_localWitness
     (region : Fin input.val.regionCount)
     (sourceExact : (source.extend region).Exact region)
     (targetExact : (target.extend region).Exact region)
-    (model : Lambda.LambdaModel)
-    (named : Diagram.NamedEnv model.Carrier signature)
-    (relEnv : Diagram.RelEnv model.Carrier rels)
-    (sourceItems : Diagram.ItemSeq signature
-      (source.extend region).length rels)
-    (targetItems : Diagram.ItemSeq signature
-      (target.extend region).length rels) :
-    Diagram.ConcreteElaboration.DirectionalLocalWitness direction source target
-      region region
-      (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
-      (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
-        (embedding.extend region).index)
-      model named relEnv sourceItems targetItems := by
+    (model : Lambda.LambdaModel) :
+    ∀ (sourceOuter : Fin source.length → model.Carrier)
+      (targetOuter : Fin target.length → model.Carrier),
+      Diagram.ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+          (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
+            embedding.index)
+          sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal : Fin
+            (Diagram.ConcreteElaboration.exactScopeWires input.val region).length →
+              model.Carrier,
+            ∃ targetLocal : Fin (Diagram.ConcreteElaboration.exactScopeWires
+                (conversionRaw input node payload) region).length →
+                model.Carrier,
+              (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
+                (embedding.extend region).index).EnvironmentsAgree
+                (Diagram.ConcreteElaboration.extendedEnvironment source region
+                  sourceOuter sourceLocal)
+                (Diagram.ConcreteElaboration.extendedEnvironment target region
+                  targetOuter targetLocal)
+        | .backward => ∀ targetLocal : Fin
+            (Diagram.ConcreteElaboration.exactScopeWires
+              (conversionRaw input node payload) region).length → model.Carrier,
+            ∃ sourceLocal : Fin
+                (Diagram.ConcreteElaboration.exactScopeWires input.val region).length →
+                model.Carrier,
+              (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
+                (embedding.extend region).index).EnvironmentsAgree
+                (Diagram.ConcreteElaboration.extendedEnvironment source region
+                  sourceOuter sourceLocal)
+                (Diagram.ConcreteElaboration.extendedEnvironment target region
+                  targetOuter targetLocal) := by
   intro sourceOuter targetOuter outerAgrees
   have outerEq : sourceOuter = targetOuter ∘ embedding.index :=
     (Diagram.ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
@@ -1703,7 +1726,7 @@ private theorem conversionRaw_localWitness
       Lambda.Term 0 (Fin 0)) Fin.elim0
   cases direction with
   | forward =>
-      intro sourceLocal sourceDenotes
+      intro sourceLocal
       by_cases hsite : region = payload.region
       · subst region
         let targetLocal : Fin (Diagram.ConcreteElaboration.exactScopeWires
@@ -1751,7 +1774,7 @@ private theorem conversionRaw_localWitness
         unfold Diagram.ConcreteElaboration.extendedEnvironment
         rw [hindex, henv, hlocal, outerEq]
   | backward =>
-      intro targetLocal targetDenotes
+      intro targetLocal
       by_cases hsite : region = payload.region
       · subst region
         let sourceLocal : Fin (Diagram.ConcreteElaboration.exactScopeWires
@@ -1846,12 +1869,19 @@ private noncomputable def conversionSimulation
     Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index
   extendContext := fun source target embedding region sourceExact targetExact =>
     embedding.extend region
-  localWitness := by
+  localTransport := by
     intro rels direction fuelSource fuelTarget source target embedding
       sourceBinders targetBinders region regular allowed sourceExact targetExact
-      sourceItems targetItems sourceCompiled targetCompiled relEnv
-    exact conversionRaw_localWitness direction source target embedding region
-      sourceExact targetExact model named relEnv sourceItems targetItems
+      sourceItems targetItems sourceCompiled targetCompiled itemSemantics
+    exact Diagram.ConcreteElaboration.directionalLocalTransport_of_agreement
+      direction source target region region
+      (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
+        (embedding.extend region).index)
+      model named sourceItems targetItems
+      (conversionRaw_localSelection direction source target embedding region
+        sourceExact targetExact model)
+      itemSemantics
   nodeSemantic := by
     intro rels direction region source target embedding sourceNodup targetNodup
       sourceBinders targetBinders allowed bindersRelated sourceNode targetNode
@@ -1919,11 +1949,23 @@ private noncomputable def conversionRootContext
     outer := Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
       (conversionExposedIndex boundary)
     context := ?_
-    witness := ?_
+    transport := ?_
     focusedRootKernel := ?_
   }
   · simpa only [Diagram.OpenConcreteDiagram.rootWires] using embedding
-  · intro regular sourceItems targetItems sourceOuter targetOuter relEnv outerAgrees
+  · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
+      itemSemantics
+    refine Diagram.ConcreteElaboration.directionalRootTransport_of_agreement
+      direction
+      (conversionSourceOpen input boundary).exposedWires
+      (conversionSourceOpen input boundary).hiddenWires
+      (conversionTargetOpen input node payload boundary).exposedWires
+      (conversionTargetOpen input node payload boundary).hiddenWires
+      (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap
+        (conversionExposedIndex boundary))
+      (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      model named sourceItems targetItems ?_ itemSemantics
+    intro sourceOuter targetOuter outerAgrees
     rw [Diagram.ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
       at outerAgrees
     have indexEq : embedding.index = conversionRootIndex boundary := by
@@ -1931,7 +1973,7 @@ private noncomputable def conversionRootContext
       exact conversionRootEmbedding_index boundary sourceRoot htarget index
     cases direction with
     | forward =>
-        intro sourceLocal sourceDenotes
+        intro sourceLocal
         let fallback : model.Carrier :=
           model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
             Lambda.Term 0 (Fin 0)) Fin.elim0
@@ -1949,7 +1991,7 @@ private noncomputable def conversionRootContext
         exact conversionRootEnvironment_forward boundary sourceOuter targetOuter
           sourceLocal fallback outerAgrees
     | backward =>
-        intro targetLocal targetDenotes
+        intro targetLocal
         let hiddenLength := conversionTargetOpen_hidden_length
           (input := input) (node := node) (payload := payload) boundary
         let sourceLocal : Fin

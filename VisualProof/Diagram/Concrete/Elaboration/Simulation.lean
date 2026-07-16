@@ -158,19 +158,15 @@ def extendedEnvironment
     Fin (context.extend region).length → D :=
   extendWireEnv outerEnv localEnv ∘ Fin.cast (WireContext.length_extend context region)
 
-/-- Directional existential-witness transport for `finishRegion`.  This is
-separate from the index relation because conversion and coalescing have
-different witness constructions even when their item semantics are handled by
-the same compiler theorem. -/
-def DirectionalLocalWitness
+/-- Proof-dependent transport of the complete local existential semantics used
+by `finishRegion`.  The opposite valuation and its item denotation are produced
+together, after the active item denotation is available. -/
+def DirectionalLocalTransport
     (direction : SimulationDirection)
     {source target : ConcreteDiagram}
     (sourceContext : WireContext source) (targetContext : WireContext target)
     (sourceRegion : Fin source.regionCount) (targetRegion : Fin target.regionCount)
     (outer : ContextIndexRelation sourceContext.length targetContext.length)
-    (extended : ContextIndexRelation
-      (sourceContext.extend sourceRegion).length
-      (targetContext.extend targetRegion).length)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (relEnv : RelEnv model.Carrier rels)
@@ -187,20 +183,22 @@ def DirectionalLocalWitness
             (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
             relEnv sourceItems →
           ∃ targetLocal,
-            extended.EnvironmentsAgree
-              (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
+            denoteItemSeq model named
               (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
+              relEnv targetItems
       | .backward => ∀ targetLocal,
           denoteItemSeq model named
             (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
             relEnv targetItems →
           ∃ sourceLocal,
-            extended.EnvironmentsAgree
+            denoteItemSeq model named
               (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
-              (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
+              relEnv sourceItems
 
-/-- Lift item-sequence simulation through `finishRegion`. -/
-theorem finishRegion_denote
+/-- Adapter for structurally total simulations.  A raw valuation-selection
+function plus pointwise item-sequence simulation yields the authoritative
+proof-dependent local transport. -/
+theorem directionalLocalTransport_of_agreement
     {source target : ConcreteDiagram}
     (direction : SimulationDirection)
     (sourceContext : WireContext source) (targetContext : WireContext target)
@@ -213,10 +211,109 @@ theorem finishRegion_denote
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature (sourceContext.extend sourceRegion).length rels)
     (targetItems : ItemSeq signature (targetContext.extend targetRegion).length rels)
-    (witness : ∀ relEnv, DirectionalLocalWitness direction sourceContext
-      targetContext sourceRegion targetRegion outer extended model named relEnv
-      sourceItems targetItems)
+    (selection :
+      ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
+      (targetOuter : Fin targetContext.length → model.Carrier),
+      outer.EnvironmentsAgree sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal,
+            ∃ targetLocal,
+              extended.EnvironmentsAgree
+                (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
+                (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
+        | .backward => ∀ targetLocal,
+            ∃ sourceLocal,
+              extended.EnvironmentsAgree
+                (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
+                (extendedEnvironment targetContext targetRegion targetOuter targetLocal))
     (items : ItemSeqSimulation model named direction extended sourceItems targetItems) :
+    ∀ relEnv, DirectionalLocalTransport direction sourceContext targetContext
+      sourceRegion targetRegion outer model named relEnv sourceItems targetItems := by
+  intro relEnv sourceOuter targetOuter agrees
+  cases direction with
+  | forward =>
+      intro sourceLocal sourceDenotes
+      obtain ⟨targetLocal, extendedAgrees⟩ :=
+        selection sourceOuter targetOuter agrees sourceLocal
+      exact ⟨targetLocal,
+        items
+          (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
+          (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
+          relEnv extendedAgrees sourceDenotes⟩
+  | backward =>
+      intro targetLocal targetDenotes
+      obtain ⟨sourceLocal, extendedAgrees⟩ :=
+        selection sourceOuter targetOuter agrees targetLocal
+      exact ⟨sourceLocal,
+        items
+          (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
+          (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
+          relEnv extendedAgrees targetDenotes⟩
+
+namespace MaskedCutTransportValidation
+
+private def falseRelation : NamedRel [0] 0 where
+  index := 0
+  hasArity := rfl
+
+private def falseNamedEnv (D : Type) : NamedEnv D [0] :=
+  fun _ _ _ => False
+
+private def maskedCutItems (wires : Nat) : ItemSeq [0] wires [] :=
+  .cons
+    (.cut (.mk 0
+      (.cons (.named falseRelation (fun index => Fin.elim0 index)) .nil)))
+    .nil
+
+/-- A cut whose body begins with a false conjunct is true without exposing a
+valuation or proof for anything later in that body. -/
+private theorem maskedCutItems_denote
+    (model : Lambda.LambdaModel)
+    (env : Fin wires → model.Carrier)
+    (relEnv : RelEnv model.Carrier []) :
+    denoteItemSeq model (falseNamedEnv model.Carrier) env relEnv
+      (maskedCutItems wires) := by
+  constructor
+  · rintro ⟨localEnv, bodyHead, bodyTail⟩
+    exact bodyHead
+  · trivial
+
+/-- The implication-shaped contract accepts the masked cut directly.  It
+chooses only the enclosing region's existential valuation; no valuation from
+inside the negative branch is required or manufactured. -/
+example
+    {source target : ConcreteDiagram}
+    (sourceContext : WireContext source) (targetContext : WireContext target)
+    (sourceRegion : Fin source.regionCount) (targetRegion : Fin target.regionCount)
+    (outer : ContextIndexRelation sourceContext.length targetContext.length)
+    (model : Lambda.LambdaModel) :
+    DirectionalLocalTransport (rels := []) .forward sourceContext targetContext
+      sourceRegion targetRegion outer model (falseNamedEnv model.Carrier)
+      PUnit.unit .nil (maskedCutItems (targetContext.extend targetRegion).length) := by
+  intro sourceOuter targetOuter outerAgrees sourceLocal sourceDenotes
+  let fallback : model.Carrier :=
+    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
+      Lambda.Term 0 (Fin 0)) Fin.elim0
+  let targetLocal : Fin (exactScopeWires target targetRegion).length →
+      model.Carrier := fun _ => fallback
+  exact ⟨targetLocal, maskedCutItems_denote model _ PUnit.unit⟩
+
+end MaskedCutTransportValidation
+
+/-- Lift the authoritative local implication through `finishRegion`. -/
+theorem finishRegion_denote
+    {source target : ConcreteDiagram}
+    (direction : SimulationDirection)
+    (sourceContext : WireContext source) (targetContext : WireContext target)
+    (sourceRegion : Fin source.regionCount) (targetRegion : Fin target.regionCount)
+    (outer : ContextIndexRelation sourceContext.length targetContext.length)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceItems : ItemSeq signature (sourceContext.extend sourceRegion).length rels)
+    (targetItems : ItemSeq signature (targetContext.extend targetRegion).length rels)
+    (transport : ∀ relEnv, DirectionalLocalTransport direction sourceContext
+      targetContext sourceRegion targetRegion outer model named relEnv
+      sourceItems targetItems) :
     RegionSimulation model named direction outer
       (finishRegion source sourceContext sourceRegion sourceItems)
       (finishRegion target targetContext targetRegion targetItems) := by
@@ -224,20 +321,15 @@ theorem finishRegion_denote
   letI : Nonempty model.Carrier := lambdaModel_carrier_nonempty model
   unfold finishRegion
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
-  have hitems := items
   cases direction with
   | forward =>
       rintro ⟨sourceLocal, sourceDenotes⟩
       have sourceRaw := (denoteItemSeq_renameWires model named
         (Fin.cast (WireContext.length_extend sourceContext sourceRegion))
         (extendWireEnv sourceOuter sourceLocal) relEnv sourceItems).mp sourceDenotes
-      obtain ⟨targetLocal, extendedAgrees⟩ :=
-        witness relEnv sourceOuter targetOuter agrees sourceLocal sourceRaw
+      obtain ⟨targetLocal, targetRaw⟩ :=
+        transport relEnv sourceOuter targetOuter agrees sourceLocal sourceRaw
       refine ⟨targetLocal, ?_⟩
-      have targetRaw := hitems
-        (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
-        (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
-        relEnv extendedAgrees sourceRaw
       exact (denoteItemSeq_renameWires model named
         (Fin.cast (WireContext.length_extend targetContext targetRegion))
         (extendWireEnv targetOuter targetLocal) relEnv targetItems).mpr targetRaw
@@ -246,13 +338,9 @@ theorem finishRegion_denote
       have targetRaw := (denoteItemSeq_renameWires model named
         (Fin.cast (WireContext.length_extend targetContext targetRegion))
         (extendWireEnv targetOuter targetLocal) relEnv targetItems).mp targetDenotes
-      obtain ⟨sourceLocal, extendedAgrees⟩ :=
-        witness relEnv sourceOuter targetOuter agrees targetLocal targetRaw
+      obtain ⟨sourceLocal, sourceRaw⟩ :=
+        transport relEnv sourceOuter targetOuter agrees targetLocal targetRaw
       refine ⟨sourceLocal, ?_⟩
-      have sourceRaw := hitems
-        (extendedEnvironment sourceContext sourceRegion sourceOuter sourceLocal)
-        (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
-        relEnv extendedAgrees targetRaw
       exact (denoteItemSeq_renameWires model named
         (Fin.cast (WireContext.length_extend sourceContext sourceRegion))
         (extendWireEnv sourceOuter sourceLocal) relEnv sourceItems).mpr sourceRaw
@@ -265,15 +353,13 @@ def rootEnvironment (ambient locals : WireContext diagram)
     Fin (ambient ++ locals).length → D :=
   extendWireEnv outerEnv localEnv ∘ Fin.cast (by simp)
 
-/-- Directional existential-witness transport for `finishRoot`. -/
-def DirectionalRootWitness (direction : SimulationDirection)
+/-- Proof-dependent transport of the complete hidden-root existential
+semantics. -/
+def DirectionalRootTransport (direction : SimulationDirection)
     {source target : ConcreteDiagram}
     (sourceAmbient sourceLocals : WireContext source)
     (targetAmbient targetLocals : WireContext target)
     (outer : ContextIndexRelation sourceAmbient.length targetAmbient.length)
-    (combined : ContextIndexRelation
-      (sourceAmbient ++ sourceLocals).length
-      (targetAmbient ++ targetLocals).length)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature
@@ -290,20 +376,20 @@ def DirectionalRootWitness (direction : SimulationDirection)
             (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
             relEnv sourceItems →
           ∃ targetLocal,
-            combined.EnvironmentsAgree
-              (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
+            denoteItemSeq model named
               (rootEnvironment targetAmbient targetLocals targetOuter targetLocal)
+              relEnv targetItems
       | .backward => ∀ targetLocal,
           denoteItemSeq model named
             (rootEnvironment targetAmbient targetLocals targetOuter targetLocal)
             relEnv targetItems →
           ∃ sourceLocal,
-            combined.EnvironmentsAgree
+            denoteItemSeq model named
               (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
-              (rootEnvironment targetAmbient targetLocals targetOuter targetLocal)
+              relEnv sourceItems
 
-/-- Lift item-sequence simulation through `finishRoot`. -/
-theorem finishRoot_denote
+/-- Structural adapter for root transports. -/
+theorem directionalRootTransport_of_agreement
     {source target : ConcreteDiagram}
     (direction : SimulationDirection)
     (sourceAmbient sourceLocals : WireContext source)
@@ -316,9 +402,57 @@ theorem finishRoot_denote
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature (sourceAmbient ++ sourceLocals).length [])
     (targetItems : ItemSeq signature (targetAmbient ++ targetLocals).length [])
-    (witness : DirectionalRootWitness direction sourceAmbient sourceLocals
-      targetAmbient targetLocals outer combined model named sourceItems targetItems)
+    (selection : ∀ (sourceOuter : Fin sourceAmbient.length → model.Carrier)
+      (targetOuter : Fin targetAmbient.length → model.Carrier),
+      outer.EnvironmentsAgree sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal,
+            ∃ targetLocal,
+              combined.EnvironmentsAgree
+                (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
+                (rootEnvironment targetAmbient targetLocals targetOuter targetLocal)
+        | .backward => ∀ targetLocal,
+            ∃ sourceLocal,
+              combined.EnvironmentsAgree
+                (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
+                (rootEnvironment targetAmbient targetLocals targetOuter targetLocal))
     (items : ItemSeqSimulation model named direction combined sourceItems targetItems) :
+    DirectionalRootTransport direction sourceAmbient sourceLocals targetAmbient
+      targetLocals outer model named sourceItems targetItems := by
+  intro sourceOuter targetOuter relEnv agrees
+  cases direction with
+  | forward =>
+      intro sourceLocal sourceDenotes
+      obtain ⟨targetLocal, combinedAgrees⟩ :=
+        selection sourceOuter targetOuter agrees sourceLocal
+      exact ⟨targetLocal,
+        items
+          (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
+          (rootEnvironment targetAmbient targetLocals targetOuter targetLocal)
+          relEnv combinedAgrees sourceDenotes⟩
+  | backward =>
+      intro targetLocal targetDenotes
+      obtain ⟨sourceLocal, combinedAgrees⟩ :=
+        selection sourceOuter targetOuter agrees targetLocal
+      exact ⟨sourceLocal,
+        items
+          (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
+          (rootEnvironment targetAmbient targetLocals targetOuter targetLocal)
+          relEnv combinedAgrees targetDenotes⟩
+
+/-- Lift the authoritative root implication through `finishRoot`. -/
+theorem finishRoot_denote
+    {source target : ConcreteDiagram}
+    (direction : SimulationDirection)
+    (sourceAmbient sourceLocals : WireContext source)
+    (targetAmbient targetLocals : WireContext target)
+    (outer : ContextIndexRelation sourceAmbient.length targetAmbient.length)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceItems : ItemSeq signature (sourceAmbient ++ sourceLocals).length [])
+    (targetItems : ItemSeq signature (targetAmbient ++ targetLocals).length [])
+    (transport : DirectionalRootTransport direction sourceAmbient sourceLocals
+      targetAmbient targetLocals outer model named sourceItems targetItems) :
     RegionSimulation model named direction outer
       (finishRoot sourceAmbient sourceLocals sourceItems)
       (finishRoot targetAmbient targetLocals targetItems) := by
@@ -326,20 +460,15 @@ theorem finishRoot_denote
   letI : Nonempty model.Carrier := lambdaModel_carrier_nonempty model
   unfold finishRoot
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
-  have hitems := items
   cases direction with
   | forward =>
       rintro ⟨sourceLocal, sourceDenotes⟩
       have sourceRaw := (denoteItemSeq_renameWires model named
         (Fin.cast (by simp)) (extendWireEnv sourceOuter sourceLocal)
         relEnv sourceItems).mp sourceDenotes
-      obtain ⟨targetLocal, combinedAgrees⟩ :=
-        witness sourceOuter targetOuter relEnv agrees sourceLocal sourceRaw
+      obtain ⟨targetLocal, targetRaw⟩ :=
+        transport sourceOuter targetOuter relEnv agrees sourceLocal sourceRaw
       refine ⟨targetLocal, ?_⟩
-      have targetRaw := hitems
-        (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
-        (rootEnvironment targetAmbient targetLocals targetOuter targetLocal)
-        relEnv combinedAgrees sourceRaw
       exact (denoteItemSeq_renameWires model named
         (Fin.cast (by simp)) (extendWireEnv targetOuter targetLocal)
         relEnv targetItems).mpr targetRaw
@@ -348,13 +477,9 @@ theorem finishRoot_denote
       have targetRaw := (denoteItemSeq_renameWires model named
         (Fin.cast (by simp)) (extendWireEnv targetOuter targetLocal)
         relEnv targetItems).mp targetDenotes
-      obtain ⟨sourceLocal, combinedAgrees⟩ :=
-        witness sourceOuter targetOuter relEnv agrees targetLocal targetRaw
+      obtain ⟨sourceLocal, sourceRaw⟩ :=
+        transport sourceOuter targetOuter relEnv agrees targetLocal targetRaw
       refine ⟨sourceLocal, ?_⟩
-      have sourceRaw := hitems
-        (rootEnvironment sourceAmbient sourceLocals sourceOuter sourceLocal)
-        (rootEnvironment targetAmbient targetLocals targetOuter targetLocal)
-        relEnv combinedAgrees targetRaw
       exact (denoteItemSeq_renameWires model named
         (Fin.cast (by simp)) (extendWireEnv sourceOuter sourceLocal)
         relEnv sourceItems).mpr sourceRaw
@@ -437,7 +562,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
         (targetContext.extend (regionMap region)).Exact (regionMap region) →
         ContextWitness (sourceContext.extend region)
           (targetContext.extend (regionMap region))
-  localWitness : ∀ {rels : RelCtx} direction
+  localTransport : ∀ {rels : RelCtx} direction
     (fuelSource fuelTarget : Nat)
     (sourceContext : WireContext source) (targetContext : WireContext target)
     (context : ContextWitness sourceContext targetContext)
@@ -460,11 +585,13 @@ structure ConcreteSemanticSimulation (signature : List Nat)
           (compileRegion? signature target fuelTarget)
           (targetContext.extend (regionMap region)) targetBinders
           (localOccurrences target (regionMap region)) = some targetItems →
+      ItemSeqSimulation model named direction
+        (indexRelation (extendContext sourceContext targetContext context region
+          sourceExact targetExact))
+        sourceItems targetItems →
       ∀ relEnv,
-        DirectionalLocalWitness direction sourceContext targetContext
+        DirectionalLocalTransport direction sourceContext targetContext
           region (regionMap region) (indexRelation context)
-          (indexRelation (extendContext sourceContext targetContext context region
-            sourceExact targetExact))
           model named relEnv sourceItems targetItems
   /-- The distinguished local logical law.  Unchanged nodes normally use a
   public `compileNode?` mapping kernel; a rewritten node supplies its own
@@ -924,16 +1051,16 @@ theorem compileRegion_denote
                       sourceItems targetItems sourceItemsResult targetItemsResult
                     exact finishRegion_denote direction sourceContext targetContext
                       region (simulation.regionMap region)
-                      (simulation.indexRelation context) extendedRelation
+                      (simulation.indexRelation context)
                       model named sourceItems targetItems
-                      (simulation.localWitness direction fuelSource fuelTarget
+                      (simulation.localTransport direction fuelSource fuelTarget
                         sourceContext targetContext context sourceBinders
                         targetBinders region focused allowed sourceExact targetExact
                         sourceItems targetItems sourceItemsResult
-                        targetItemsCompiled)
-                      itemSemantics
+                        targetItemsCompiled itemSemantics)
 
-/-- Root ambient/local partitions and their existential witness transport. -/
+/-- Root ambient/local partitions and their proof-dependent semantic
+transport. -/
 structure RootContextSimulation
     {source target : ConcreteDiagram}
     {model : Lambda.LambdaModel}
@@ -945,16 +1072,27 @@ structure RootContextSimulation
   outer : ContextIndexRelation sourceAmbient.length targetAmbient.length
   context : simulation.ContextWitness (sourceAmbient ++ sourceLocals)
     (targetAmbient ++ targetLocals)
-  witness : ¬ simulation.Distinguished source.root →
+  transport : ¬ simulation.Distinguished source.root →
+    simulation.Allowed direction source.root →
     ∀ (sourceItems : ItemSeq signature
       (sourceAmbient ++ sourceLocals).length [])
     (targetItems : ItemSeq signature
       (targetAmbient ++ targetLocals).length []),
-    DirectionalRootWitness direction sourceAmbient sourceLocals
-      targetAmbient targetLocals outer (simulation.indexRelation context)
-      model named sourceItems targetItems
+    compileOccurrencesWith? signature source
+        (compileRegion? signature source source.regionCount)
+        (sourceAmbient ++ sourceLocals) BinderContext.empty
+        (localOccurrences source source.root) = some sourceItems →
+    compileOccurrencesWith? signature target
+        (compileRegion? signature target target.regionCount)
+        (targetAmbient ++ targetLocals) BinderContext.empty
+        (localOccurrences target (simulation.regionMap source.root)) =
+          some targetItems →
+    ItemSeqSimulation model named direction
+      (simulation.indexRelation context) sourceItems targetItems →
+    DirectionalRootTransport direction sourceAmbient sourceLocals
+      targetAmbient targetLocals outer model named sourceItems targetItems
   /-- A distinguished root owns its complete existential semantics directly;
-  regular roots use the proof-dependent witness and shared item simulation. -/
+  regular roots may derive their transport from shared item simulation. -/
   focusedRootKernel : simulation.Distinguished source.root →
     simulation.Allowed direction source.root →
     ∀ (sourceItems : ItemSeq signature
@@ -1135,11 +1273,19 @@ theorem compileRoot_denote
               allowed focused simulation.binders_empty recurse
               (localOccurrences source source.root) (fun _ member => member)
               sourceItems targetItems sourceItemsResult targetItemsResult
+            have targetItemsCompiled :
+                compileOccurrencesWith? signature target
+                    (compileRegion? signature target target.regionCount)
+                    targetRootContext BinderContext.empty
+                    (localOccurrences target
+                      (simulation.regionMap source.root)) = some targetItems := by
+              rw [simulation.localOccurrences_map source.root focused]
+              exact targetItemsResult
             exact finishRoot_denote direction sourceAmbient sourceLocals
               targetAmbient targetLocals rootContext.outer
-              (simulation.indexRelation rootContext.context)
               model named sourceItems targetItems
-              (rootContext.witness focused sourceItems targetItems) itemSemantics
+              (rootContext.transport focused allowed sourceItems targetItems
+                sourceItemsResult targetItemsCompiled itemSemantics)
 
 /-- The canonical exposed/hidden root context is exact.  Kept public here
 because root simulation clients must construct the same authoritative compiler
