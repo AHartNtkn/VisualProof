@@ -32214,4 +32214,160 @@ theorem coalescedFrame_nodes_eq
 
 end TwoInputPresentation
 
+namespace PlugLayout
+
+/-- Total region map for the input-local pattern simulation.  Retained
+material maps to its actual plug body region; regions removed by the binder
+spine are sent to the plug root and are never admitted by `AtRegion`. -/
+def patternSimulationRegionMap (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount) :
+    Fin layout.plugRaw.regionCount :=
+  if input.binderSpine.IsMaterialRegion region then
+    layout.bodyRegion region
+  else
+    layout.plugRaw.root
+
+theorem patternSimulationRegionMap_material
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region) :
+    layout.patternSimulationRegionMap region = layout.bodyRegion region := by
+  simp [patternSimulationRegionMap, hregion]
+
+theorem patternSimulationRegionMap_nonmaterial
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : ¬ input.binderSpine.IsMaterialRegion region) :
+    layout.patternSimulationRegionMap region = layout.plugRaw.root := by
+  simp [patternSimulationRegionMap, hregion]
+
+/-- A context pair may be unavailable at opaque nonmaterial regions.  At a
+material region it carries the concrete pattern-to-plug index map. -/
+abbrev PatternContextWitness
+    (layout : PlugLayout input)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw) : Type :=
+  Option (Fin sourceContext.length → Fin targetContext.length)
+
+def PatternAtRegion
+    (layout : PlugLayout input)
+    {sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram}
+    {targetContext : ConcreteElaboration.WireContext layout.plugRaw}
+    (witness : layout.PatternContextWitness sourceContext targetContext)
+    (region : Fin input.pattern.val.diagram.regionCount) : Prop :=
+  input.binderSpine.IsMaterialRegion region ∧
+    ∃ indexMap : Fin sourceContext.length → Fin targetContext.length,
+      witness = some indexMap ∧
+      (∀ index, targetContext.get (indexMap index) =
+        layout.patternPlugWire (sourceContext.get index)) ∧
+      (∀ wire, layout.patternPlugWire wire ∈ targetContext ↔
+        wire ∈ sourceContext)
+
+def patternContextIndexRelation
+    (layout : PlugLayout input)
+    {sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram}
+    {targetContext : ConcreteElaboration.WireContext layout.plugRaw}
+    (witness : layout.PatternContextWitness sourceContext targetContext) :
+    ConcreteElaboration.ContextIndexRelation sourceContext.length
+      targetContext.length :=
+  match witness with
+  | none => { Rel := fun _ _ => False }
+  | some indexMap =>
+      ConcreteElaboration.ContextIndexRelation.forwardMap indexMap
+
+noncomputable def extendPatternContext
+    (layout : PlugLayout input)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (witness : layout.PatternContextWitness sourceContext targetContext)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region) :
+    layout.PatternContextWitness (sourceContext.extend region)
+      (targetContext.extend (layout.bodyRegion region)) :=
+  witness.map fun indexMap =>
+    layout.materialExtendedWireMap region hregion sourceContext targetContext
+      indexMap
+
+theorem patternLocalSelection
+    (layout : PlugLayout input)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region)
+    (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (model : Lambda.LambdaModel) :
+    ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
+      (targetOuter : Fin targetContext.length → model.Carrier),
+      (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
+          |>.EnvironmentsAgree sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal,
+            ∃ targetLocal,
+              (ConcreteElaboration.ContextIndexRelation.forwardMap
+                (layout.materialExtendedWireMap region hregion sourceContext
+                  targetContext indexMap)).EnvironmentsAgree
+                (ConcreteElaboration.extendedEnvironment sourceContext region
+                  sourceOuter sourceLocal)
+                (ConcreteElaboration.extendedEnvironment targetContext
+                  (layout.bodyRegion region) targetOuter targetLocal)
+        | .backward => ∀ targetLocal,
+            ∃ sourceLocal,
+              (ConcreteElaboration.ContextIndexRelation.forwardMap
+                (layout.materialExtendedWireMap region hregion sourceContext
+                  targetContext indexMap)).EnvironmentsAgree
+                (ConcreteElaboration.extendedEnvironment sourceContext region
+                  sourceOuter sourceLocal)
+                (ConcreteElaboration.extendedEnvironment targetContext
+                  (layout.bodyRegion region) targetOuter targetLocal) := by
+  intro sourceOuter targetOuter outerAgrees
+  rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+    at outerAgrees
+  let localEquiv := layout.materialLocalWireEquiv region hregion
+  cases direction with
+  | forward =>
+      intro sourceLocal
+      refine ⟨fun targetLocal => sourceLocal (localEquiv.symm targetLocal), ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        _ _ _).2
+      funext index
+      let split := Fin.cast
+        (ConcreteElaboration.WireContext.length_extend sourceContext region) index
+      have recover : Fin.cast
+          (ConcreteElaboration.WireContext.length_extend sourceContext region).symm
+          split = index := by
+        apply Fin.ext
+        rfl
+      rw [← recover]
+      refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+      · simpa [ConcreteElaboration.extendedEnvironment,
+          materialExtendedWireMap, split, Function.comp_def, extendWireEnv] using
+          congrFun outerAgrees outer
+      · simpa [ConcreteElaboration.extendedEnvironment,
+          materialExtendedWireMap, split, localEquiv, extendWireEnv] using
+          congrArg sourceLocal (localEquiv.left_inv localIndex).symm
+  | backward =>
+      intro targetLocal
+      refine ⟨fun sourceLocal => targetLocal (localEquiv sourceLocal), ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        _ _ _).2
+      funext index
+      let split := Fin.cast
+        (ConcreteElaboration.WireContext.length_extend sourceContext region) index
+      have recover : Fin.cast
+          (ConcreteElaboration.WireContext.length_extend sourceContext region).symm
+          split = index := by
+        apply Fin.ext
+        rfl
+      rw [← recover]
+      refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+      · simpa [ConcreteElaboration.extendedEnvironment,
+          materialExtendedWireMap, split, Function.comp_def, extendWireEnv] using
+          congrFun outerAgrees outer
+      · simp [ConcreteElaboration.extendedEnvironment,
+          materialExtendedWireMap, split, localEquiv, extendWireEnv,
+          FiniteEquiv.symm_apply_apply]
+
+end PlugLayout
+
 end VisualProof.Diagram.Splice.Input
