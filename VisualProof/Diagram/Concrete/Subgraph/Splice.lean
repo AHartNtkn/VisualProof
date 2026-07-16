@@ -33096,6 +33096,583 @@ theorem siteQuotientEnvironment_eq_of_related_wire
           (Fin.cast presentation.frameWireCountEq wire))
         targetVisible targetIndex targetIndexWire).symm
 
+/-- Reverse a paired replacement presentation without introducing a second
+notion of compatibility.  Frame, site, positional attachment, and locality
+evidence are all the symmetric forms of the original witnesses. -/
+def symm {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target) :
+    TwoInputPresentation target source where
+  frame_eq := presentation.frame_eq.symm
+  site_eq := by
+    apply Fin.ext
+    exact (congrArg Fin.val presentation.site_eq).symm
+  boundary_arity_eq := presentation.boundary_arity_eq.symm
+  attachment_eq := by
+    intro position
+    let sourcePosition :=
+      Fin.cast presentation.boundary_arity_eq.symm position
+    have attachment := presentation.attachment_eq sourcePosition
+    apply Fin.ext
+    exact (congrArg Fin.val attachment).symm
+  site_local_quotients := by
+    intro left right outside
+    let sourceLeft :=
+      Fin.cast
+        (congrArg (fun checked : CheckedDiagram signature =>
+          checked.val.wireCount) presentation.frame_eq).symm left
+    let sourceRight :=
+      Fin.cast
+        (congrArg (fun checked : CheckedDiagram signature =>
+          checked.val.wireCount) presentation.frame_eq).symm right
+    have outsideSource :
+        (source.frame.val.wires sourceLeft).scope ≠ source.site ∨
+          (source.frame.val.wires sourceRight).scope ≠ source.site := by
+      rcases outside with leftOutside | rightOutside
+      · exact Or.inl (by
+          intro sourceAtSite
+          apply leftOutside
+          have scopeEq := checkedDiagram_wire_scope_eq source.frame target.frame
+            presentation.frame_eq sourceLeft
+          have siteEq := presentation.site_eq
+          apply Fin.ext
+          calc
+            (target.frame.val.wires left).scope.val =
+                (target.frame.val.wires
+                  (Fin.cast
+                    (congrArg (fun checked : CheckedDiagram signature =>
+                      checked.val.wireCount) presentation.frame_eq)
+                    sourceLeft)).scope.val := by
+                  congr
+            _ = (source.frame.val.wires sourceLeft).scope.val :=
+              (congrArg Fin.val scopeEq).symm
+            _ = source.site.val := congrArg Fin.val sourceAtSite
+            _ = target.site.val := congrArg Fin.val siteEq)
+      · exact Or.inr (by
+          intro sourceAtSite
+          apply rightOutside
+          have scopeEq := checkedDiagram_wire_scope_eq source.frame target.frame
+            presentation.frame_eq sourceRight
+          have siteEq := presentation.site_eq
+          apply Fin.ext
+          calc
+            (target.frame.val.wires right).scope.val =
+                (target.frame.val.wires
+                  (Fin.cast
+                    (congrArg (fun checked : CheckedDiagram signature =>
+                      checked.val.wireCount) presentation.frame_eq)
+                    sourceRight)).scope.val := by
+                  congr
+            _ = (source.frame.val.wires sourceRight).scope.val :=
+              (congrArg Fin.val scopeEq).symm
+            _ = source.site.val := congrArg Fin.val sourceAtSite
+            _ = target.site.val := congrArg Fin.val siteEq)
+    have locality :=
+      presentation.site_local_quotients sourceLeft sourceRight outsideSource
+    simpa [sourceLeft, sourceRight] using locality.symm
+
+/-- Once the active source focused valuation has been read into quotient
+values, any target quotient valuation agreeing on shared original wires also
+agrees with the inherited target compiler environment.  Site-local quotient
+changes cannot move such an inherited wire into the site's existential local
+block. -/
+theorem targetOuterValues_of_sourceFocused
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceExact : (sourceContext.extend
+      (source.plugLayout.frameRegion source.site)).Exact
+        (source.plugLayout.frameRegion source.site))
+    (targetExact : (targetContext.extend
+      (target.plugLayout.frameRegion target.site)).Exact
+        (target.plugLayout.frameRegion target.site))
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+      source.plugLayout.plugRaw
+      (source.plugLayout.frameRegion source.site)).length → D)
+    (outerAgrees :
+      (presentation.contextIndexRelation sourceContext targetContext)
+        |>.EnvironmentsAgree sourceOuter targetOuter)
+    (sourceFallback : D)
+    (targetValues : target.wireQuotient.Carrier → D)
+    (valuesAgree : ∀ wire,
+      targetValues
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) =
+        siteQuotientEnvironment source
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          sourceExact
+          (ConcreteElaboration.extendedEnvironment sourceContext
+            (source.plugLayout.frameRegion source.site)
+            sourceOuter sourceLocal)
+          sourceFallback (source.quotientWire wire)) :
+    ∀ quotient index,
+      targetContext.get index = target.plugLayout.frameWire quotient →
+        targetOuter index = targetValues quotient := by
+  intro quotient targetIndex targetIndexWire
+  have targetOuterMember :
+      target.plugLayout.frameWire quotient ∈ targetContext := by
+    rw [← targetIndexWire]
+    exact List.get_mem _ targetIndex
+  have targetExtendedMember :
+      target.plugLayout.frameWire quotient ∈
+        targetContext.extend
+          (target.plugLayout.frameRegion target.site) := by
+    change target.plugLayout.frameWire quotient ∈
+      targetContext ++ ConcreteElaboration.exactScopeWires
+        target.plugLayout.plugRaw
+        (target.plugLayout.frameRegion target.site)
+    exact List.mem_append_left _ targetOuterMember
+  have targetVisible :
+      target.plugLayout.plugRaw.Encloses
+        (target.plugLayout.plugRaw.wires
+          (target.plugLayout.frameWire quotient)).scope
+        (target.plugLayout.frameRegion target.site) :=
+    (targetExact.mem_iff _).1 targetExtendedMember
+  have targetCoalescedVisible :
+      target.coalesceFrameRaw.Encloses
+        (target.coalesceFrameRaw.wires quotient).scope target.site :=
+    (target.plugLayout.frameWire_visible_at_region_iff target.site quotient).1
+      targetVisible
+  have targetScopeNe :
+      target.coalescedScope quotient ≠ target.site := by
+    intro targetScope
+    have targetLocalMember :
+        target.plugLayout.frameWire quotient ∈
+          ConcreteElaboration.exactScopeWires target.plugLayout.plugRaw
+            (target.plugLayout.frameRegion target.site) := by
+      apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+      change (target.plugLayout.plugWire
+        (target.plugLayout.quotientBlockWire quotient)).scope =
+          target.plugLayout.frameRegion target.site
+      rw [PlugLayout.plugWire_quotientBlockWire]
+      exact congrArg target.plugLayout.frameRegion targetScope
+    have hn := targetExact.nodup
+    rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at hn
+    exact hn.2.2 _ targetOuterMember _ targetLocalMember rfl
+  obtain ⟨targetWire, targetWireMember, targetWireScope⟩ :=
+    target.coalescedScope_eq_member_scope quotient
+  let sourceWire :=
+    Fin.cast presentation.frameWireCountEq.symm targetWire
+  have targetWireCast :
+      Fin.cast presentation.frameWireCountEq sourceWire = targetWire := by
+    apply Fin.ext
+    rfl
+  have targetClass :
+      target.quotientWire
+          (Fin.cast presentation.frameWireCountEq sourceWire) = quotient := by
+    rw [targetWireCast]
+    exact (target.mem_classWires quotient targetWire).1 targetWireMember
+  have sourceWireNonSite :
+      (source.frame.val.wires sourceWire).scope ≠ source.site := by
+    intro sourceScope
+    have targetScope :
+        (target.frame.val.wires targetWire).scope = target.site := by
+      rw [← targetWireCast,
+        ← checkedDiagram_wire_scope_eq source.frame target.frame
+          presentation.frame_eq sourceWire,
+        sourceScope, presentation.site_eq]
+    apply targetScopeNe
+    exact targetWireScope.trans targetScope
+  have sourceVisible :
+      source.coalesceFrameRaw.Encloses
+        (source.coalesceFrameRaw.wires
+          (source.quotientWire sourceWire)).scope source.site := by
+    apply (presentation.coalescedFrame_wire_visible_at_site_iff
+      sourceAdmissible targetAdmissible sourceWire).2
+    simpa only [targetClass] using targetCoalescedVisible
+  have sourcePlugVisible :
+      source.plugLayout.plugRaw.Encloses
+        (source.plugLayout.plugRaw.wires
+          (source.plugLayout.frameWire
+            (source.quotientWire sourceWire))).scope
+        (source.plugLayout.frameRegion source.site) :=
+    (source.plugLayout.frameWire_visible_at_region_iff source.site
+      (source.quotientWire sourceWire)).2 sourceVisible
+  have sourceExtendedMember :
+      source.plugLayout.frameWire (source.quotientWire sourceWire) ∈
+        sourceContext.extend
+          (source.plugLayout.frameRegion source.site) :=
+    (sourceExact.mem_iff _).2 sourcePlugVisible
+  have sourceNotLocal :
+      source.plugLayout.frameWire (source.quotientWire sourceWire) ∉
+        ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+          (source.plugLayout.frameRegion source.site) := by
+    intro sourceLocalMember
+    have sourceLocalScope :=
+      (ConcreteElaboration.mem_exactScopeWires _ _ _).1 sourceLocalMember
+    change (source.plugLayout.plugWire
+      (source.plugLayout.quotientBlockWire
+        (source.quotientWire sourceWire))).scope =
+        source.plugLayout.frameRegion source.site at sourceLocalScope
+    rw [PlugLayout.plugWire_quotientBlockWire] at sourceLocalScope
+    have sourceCoalescedSite :=
+      source.plugLayout.frameRegion_injective sourceLocalScope
+    have coalesced := presentation.coalescedScope_eq_of_nonSite_wire
+      sourceAdmissible targetAdmissible sourceWire sourceWireNonSite
+    rw [sourceCoalescedSite, presentation.site_eq, targetClass] at coalesced
+    exact targetScopeNe coalesced.symm
+  have sourceOuterMember :
+      source.plugLayout.frameWire (source.quotientWire sourceWire) ∈
+        sourceContext := by
+    change source.plugLayout.frameWire (source.quotientWire sourceWire) ∈
+      sourceContext ++ ConcreteElaboration.exactScopeWires
+        source.plugLayout.plugRaw
+        (source.plugLayout.frameRegion source.site) at sourceExtendedMember
+    exact (List.mem_append.mp sourceExtendedMember).resolve_right sourceNotLocal
+  obtain ⟨sourceIndex, sourceLookup⟩ :=
+    ConcreteElaboration.WireContext.lookup?_complete sourceOuterMember
+  have sourceIndexWire :
+      sourceContext.get sourceIndex =
+        source.plugLayout.frameWire (source.quotientWire sourceWire) :=
+    ConcreteElaboration.WireContext.lookup?_sound sourceLookup
+  let sourceExtendedIndex :=
+    Fin.cast
+      (ConcreteElaboration.WireContext.length_extend sourceContext
+        (source.plugLayout.frameRegion source.site)).symm
+      (Fin.castAdd
+        (ConcreteElaboration.exactScopeWires source.plugLayout.plugRaw
+          (source.plugLayout.frameRegion source.site)).length sourceIndex)
+  have sourceExtendedIndexWire :
+      (sourceContext.extend
+        (source.plugLayout.frameRegion source.site)).get sourceExtendedIndex =
+          source.plugLayout.frameWire
+            (source.quotientWire sourceWire) := by
+    simpa only [sourceExtendedIndex,
+      PlugLayout.ConcreteElaboration.WireContext.extend_get_outer] using
+        sourceIndexWire
+  have sourceValue :
+      siteQuotientEnvironment source
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          sourceExact
+          (ConcreteElaboration.extendedEnvironment sourceContext
+            (source.plugLayout.frameRegion source.site)
+            sourceOuter sourceLocal)
+          sourceFallback (source.quotientWire sourceWire) =
+        sourceOuter sourceIndex := by
+    rw [siteQuotientEnvironment_eq source
+      (sourceContext.extend (source.plugLayout.frameRegion source.site))
+      sourceExact
+      (ConcreteElaboration.extendedEnvironment sourceContext
+        (source.plugLayout.frameRegion source.site) sourceOuter sourceLocal)
+      sourceFallback (source.quotientWire sourceWire) sourcePlugVisible
+      sourceExtendedIndex sourceExtendedIndexWire]
+    simp [sourceExtendedIndex, ConcreteElaboration.extendedEnvironment,
+      extendWireEnv]
+  have outerValue :
+      sourceOuter sourceIndex = targetOuter targetIndex :=
+    outerAgrees sourceIndex targetIndex
+      (presentation.contextIndexRelation_of_sharedWire sourceContext
+        targetContext sourceIndex targetIndex sourceWire sourceIndexWire
+        (targetIndexWire.trans
+          (congrArg target.plugLayout.frameWire targetClass.symm)))
+  calc
+    targetOuter targetIndex = sourceOuter sourceIndex := outerValue.symm
+    _ = siteQuotientEnvironment source
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          sourceExact
+          (ConcreteElaboration.extendedEnvironment sourceContext
+            (source.plugLayout.frameRegion source.site)
+            sourceOuter sourceLocal)
+          sourceFallback (source.quotientWire sourceWire) := sourceValue.symm
+    _ = targetValues
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq sourceWire)) :=
+      (valuesAgree sourceWire).symm
+    _ = targetValues quotient := congrArg targetValues targetClass
+
+/-- Backward counterpart of `targetOuterValues_of_sourceFocused`, obtained by
+reversing the same paired presentation. -/
+theorem sourceOuterValues_of_targetFocused
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceExact : (sourceContext.extend
+      (source.plugLayout.frameRegion source.site)).Exact
+        (source.plugLayout.frameRegion source.site))
+    (targetExact : (targetContext.extend
+      (target.plugLayout.frameRegion target.site)).Exact
+        (target.plugLayout.frameRegion target.site))
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      target.plugLayout.plugRaw
+      (target.plugLayout.frameRegion target.site)).length → D)
+    (outerAgrees :
+      (presentation.contextIndexRelation sourceContext targetContext)
+        |>.EnvironmentsAgree sourceOuter targetOuter)
+    (targetFallback : D)
+    (sourceValues : source.wireQuotient.Carrier → D)
+    (valuesAgree : ∀ wire,
+      sourceValues (source.quotientWire wire) =
+        siteQuotientEnvironment target
+          (targetContext.extend
+            (target.plugLayout.frameRegion target.site))
+          targetExact
+          (ConcreteElaboration.extendedEnvironment targetContext
+            (target.plugLayout.frameRegion target.site)
+            targetOuter targetLocal)
+          targetFallback
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire))) :
+    ∀ quotient index,
+      sourceContext.get index = source.plugLayout.frameWire quotient →
+        sourceOuter index = sourceValues quotient := by
+  have reversedOuterAgrees :
+      ((presentation.symm).contextIndexRelation targetContext sourceContext)
+        |>.EnvironmentsAgree targetOuter sourceOuter := by
+    intro targetIndex sourceIndex related
+    obtain ⟨targetWire, targetWireGet, sourceWireGet⟩ := related
+    let sourceWire :=
+      Fin.cast presentation.frameWireCountEq.symm targetWire
+    have targetWireCast :
+        Fin.cast presentation.frameWireCountEq sourceWire = targetWire := by
+      apply Fin.ext
+      rfl
+    apply (outerAgrees sourceIndex targetIndex ?_).symm
+    refine ⟨sourceWire, ?_, ?_⟩
+    · simpa [sourceWire, TwoInputPresentation.symm, frameWireCountEq] using
+        sourceWireGet
+    · simpa [sourceWire, targetWireCast] using targetWireGet
+  apply (presentation.symm).targetOuterValues_of_sourceFocused
+    targetAdmissible sourceAdmissible targetContext sourceContext
+    targetExact sourceExact targetOuter sourceOuter targetLocal
+    reversedOuterAgrees targetFallback sourceValues
+  intro targetWire
+  let sourceWire :=
+    Fin.cast presentation.frameWireCountEq.symm targetWire
+  have targetWireCast :
+      Fin.cast presentation.frameWireCountEq sourceWire = targetWire := by
+    apply Fin.ext
+    rfl
+  simpa [sourceWire, targetWireCast, TwoInputPresentation.symm,
+    frameWireCountEq] using valuesAgree sourceWire
+
+/-- The active source focused valuation and the canonical target focused
+valuation agree on the complete retained-frame provenance relation.  Pattern
+hidden wires remain intentionally unrelated. -/
+theorem focusedForwardEnvironmentsAgreeOfEmpty
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceExact : (sourceContext.extend
+      (source.plugLayout.frameRegion source.site)).Exact
+        (source.plugLayout.frameRegion source.site))
+    (targetExact : (targetContext.extend
+      (target.plugLayout.frameRegion target.site)).Exact
+        (target.plugLayout.frameRegion target.site))
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+      source.plugLayout.plugRaw
+      (source.plugLayout.frameRegion source.site)).length → D)
+    (outerAgrees :
+      (presentation.contextIndexRelation sourceContext targetContext)
+        |>.EnvironmentsAgree sourceOuter targetOuter)
+    (sourceFallback : D)
+    (targetValues : target.wireQuotient.Carrier → D)
+    (targetHidden :
+      Fin target.pattern.val.hiddenWires.length → D)
+    (valuesAgree : ∀ wire,
+      targetValues
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) =
+        siteQuotientEnvironment source
+          (sourceContext.extend
+            (source.plugLayout.frameRegion source.site))
+          sourceExact
+          (ConcreteElaboration.extendedEnvironment sourceContext
+            (source.plugLayout.frameRegion source.site)
+            sourceOuter sourceLocal)
+          sourceFallback (source.quotientWire wire)) :
+    (presentation.contextIndexRelation
+      (sourceContext.extend (source.plugLayout.frameRegion source.site))
+      (targetContext.extend (target.plugLayout.frameRegion target.site)))
+      |>.EnvironmentsAgree
+        (ConcreteElaboration.extendedEnvironment sourceContext
+          (source.plugLayout.frameRegion source.site)
+          sourceOuter sourceLocal)
+        (ConcreteElaboration.extendedEnvironment targetContext
+          (target.plugLayout.frameRegion target.site)
+          targetOuter
+          (focusedLocalEnvironmentOfEmpty target targetZero
+            targetValues targetHidden)) := by
+  have targetOuterValues :=
+    presentation.targetOuterValues_of_sourceFocused sourceAdmissible
+      targetAdmissible sourceContext targetContext sourceExact targetExact
+      sourceOuter targetOuter sourceLocal outerAgrees sourceFallback
+      targetValues valuesAgree
+  intro sourceIndex targetIndex related
+  obtain ⟨wire, sourceIndexWire, targetIndexWire⟩ := related
+  have sourceVisible :
+      source.plugLayout.plugRaw.Encloses
+        (source.plugLayout.plugRaw.wires
+          (source.plugLayout.frameWire
+            (source.quotientWire wire))).scope
+        (source.plugLayout.frameRegion source.site) :=
+    (sourceExact.mem_iff _).1 (by
+      rw [← sourceIndexWire]
+      exact List.get_mem _ sourceIndex)
+  have sourceValue :=
+    siteQuotientEnvironment_eq source
+      (sourceContext.extend (source.plugLayout.frameRegion source.site))
+      sourceExact
+      (ConcreteElaboration.extendedEnvironment sourceContext
+        (source.plugLayout.frameRegion source.site) sourceOuter sourceLocal)
+      sourceFallback (source.quotientWire wire) sourceVisible sourceIndex
+      sourceIndexWire
+  have targetValue :=
+    focusedExtendedEnvironment_frameWire_eq target targetZero targetContext
+      targetOuter targetValues targetHidden targetOuterValues
+      (target.quotientWire
+        (Fin.cast presentation.frameWireCountEq wire))
+      targetIndex targetIndexWire
+  calc
+    ConcreteElaboration.extendedEnvironment sourceContext
+        (source.plugLayout.frameRegion source.site)
+        sourceOuter sourceLocal sourceIndex =
+      siteQuotientEnvironment source
+        (sourceContext.extend (source.plugLayout.frameRegion source.site))
+        sourceExact
+        (ConcreteElaboration.extendedEnvironment sourceContext
+          (source.plugLayout.frameRegion source.site)
+          sourceOuter sourceLocal)
+        sourceFallback (source.quotientWire wire) := sourceValue.symm
+    _ = targetValues
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) :=
+      (valuesAgree wire).symm
+    _ = ConcreteElaboration.extendedEnvironment targetContext
+          (target.plugLayout.frameRegion target.site)
+          targetOuter
+          (focusedLocalEnvironmentOfEmpty target targetZero
+            targetValues targetHidden) targetIndex := targetValue.symm
+
+/-- Backward counterpart of
+`focusedForwardEnvironmentsAgreeOfEmpty`. -/
+theorem focusedBackwardEnvironmentsAgreeOfEmpty
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceExact : (sourceContext.extend
+      (source.plugLayout.frameRegion source.site)).Exact
+        (source.plugLayout.frameRegion source.site))
+    (targetExact : (targetContext.extend
+      (target.plugLayout.frameRegion target.site)).Exact
+        (target.plugLayout.frameRegion target.site))
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      target.plugLayout.plugRaw
+      (target.plugLayout.frameRegion target.site)).length → D)
+    (outerAgrees :
+      (presentation.contextIndexRelation sourceContext targetContext)
+        |>.EnvironmentsAgree sourceOuter targetOuter)
+    (targetFallback : D)
+    (sourceValues : source.wireQuotient.Carrier → D)
+    (sourceHidden :
+      Fin source.pattern.val.hiddenWires.length → D)
+    (valuesAgree : ∀ wire,
+      sourceValues (source.quotientWire wire) =
+        siteQuotientEnvironment target
+          (targetContext.extend
+            (target.plugLayout.frameRegion target.site))
+          targetExact
+          (ConcreteElaboration.extendedEnvironment targetContext
+            (target.plugLayout.frameRegion target.site)
+            targetOuter targetLocal)
+          targetFallback
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire))) :
+    (presentation.contextIndexRelation
+      (sourceContext.extend (source.plugLayout.frameRegion source.site))
+      (targetContext.extend (target.plugLayout.frameRegion target.site)))
+      |>.EnvironmentsAgree
+        (ConcreteElaboration.extendedEnvironment sourceContext
+          (source.plugLayout.frameRegion source.site)
+          sourceOuter
+          (focusedLocalEnvironmentOfEmpty source sourceZero
+            sourceValues sourceHidden))
+        (ConcreteElaboration.extendedEnvironment targetContext
+          (target.plugLayout.frameRegion target.site)
+          targetOuter targetLocal) := by
+  have reversedOuterAgrees :
+      ((presentation.symm).contextIndexRelation targetContext sourceContext)
+        |>.EnvironmentsAgree targetOuter sourceOuter := by
+    intro targetIndex sourceIndex related
+    obtain ⟨targetWire, targetWireGet, sourceWireGet⟩ := related
+    let sourceWire :=
+      Fin.cast presentation.frameWireCountEq.symm targetWire
+    have targetWireCast :
+        Fin.cast presentation.frameWireCountEq sourceWire = targetWire := by
+      apply Fin.ext
+      rfl
+    exact (outerAgrees sourceIndex targetIndex
+      ⟨sourceWire,
+        by
+          simpa [sourceWire, TwoInputPresentation.symm,
+            frameWireCountEq] using sourceWireGet,
+        by simpa [sourceWire, targetWireCast] using targetWireGet⟩).symm
+  have reversedValuesAgree : ∀ targetWire,
+      sourceValues
+          (source.quotientWire
+            (Fin.cast (presentation.symm).frameWireCountEq targetWire)) =
+        siteQuotientEnvironment target
+          (targetContext.extend
+            (target.plugLayout.frameRegion target.site))
+          targetExact
+          (ConcreteElaboration.extendedEnvironment targetContext
+            (target.plugLayout.frameRegion target.site)
+            targetOuter targetLocal)
+          targetFallback (target.quotientWire targetWire) := by
+    intro targetWire
+    let sourceWire :=
+      Fin.cast presentation.frameWireCountEq.symm targetWire
+    have targetWireCast :
+        Fin.cast presentation.frameWireCountEq sourceWire = targetWire := by
+      apply Fin.ext
+      rfl
+    simpa [sourceWire, targetWireCast, TwoInputPresentation.symm,
+      frameWireCountEq] using valuesAgree sourceWire
+  have reversed :=
+    (presentation.symm).focusedForwardEnvironmentsAgreeOfEmpty
+      targetAdmissible sourceAdmissible targetZero sourceZero targetContext
+      sourceContext targetExact sourceExact targetOuter sourceOuter targetLocal
+      reversedOuterAgrees targetFallback sourceValues sourceHidden
+      reversedValuesAgree
+  intro sourceIndex targetIndex related
+  apply (reversed targetIndex sourceIndex ?_).symm
+  obtain ⟨sourceWire, sourceWireGet, targetWireGet⟩ := related
+  let targetWire :=
+    Fin.cast presentation.frameWireCountEq sourceWire
+  refine ⟨targetWire, ?_, ?_⟩
+  · simpa [targetWire, TwoInputPresentation.symm, frameWireCountEq] using
+      targetWireGet
+  · simpa [targetWire] using sourceWireGet
+
 /-- In the forward direction, active source-pattern denotation is exactly the
 evidence needed to construct values on a potentially coarser target quotient.
 No target quotient valuation is selected before the local implication fires. -/
@@ -34190,6 +34767,114 @@ theorem compilePatternRootOccurrence_at_site_simulation
                       exact ⟨relationValue,
                         bodies sourceEnv targetEnv (relationValue, relEnv)
                           environments targetDenotes⟩
+
+/-- The terminal-pattern position in semantic insertion order for an empty
+proxy spine. -/
+def patternSiteSemanticIndex
+    (input : Input signature)
+    (layout : PlugLayout input)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (index : Fin (ConcreteElaboration.localOccurrences
+      input.pattern.val.diagram input.pattern.val.diagram.root).length) :
+    Fin layout.semanticSiteOccurrences.length :=
+  Fin.cast (by
+    rw [PlugLayout.semanticSiteOccurrences,
+      input.binderSpine.body_eq_root_of_empty hzero]
+    simp)
+    (Fin.natAdd
+      (ConcreteElaboration.localOccurrences
+        input.coalesceFrameRaw input.site).length index)
+
+/-- Inject one intrinsic empty-spine pattern-root occurrence through semantic
+insertion order and the executable site permutation, then transport the item
+returned by the actual focused compiler. -/
+theorem focusedPatternOccurrence_itemSimulation
+    {signature : List Nat}
+    {input : Input signature}
+    (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
+      (layout.frameRegion input.site) outputWitness)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (patternIndex : Fin
+      (compiledSpliceOpenRootItems input.pattern).items.length) :
+    let pattern := compiledSpliceOpenRootItems input.pattern
+    let occurrenceIndex := Fin.cast
+      (ConcreteElaboration.compileOccurrencesWith?_length
+        (ConcreteElaboration.compileRegion? signature
+          input.pattern.val.diagram input.pattern.val.diagram.regionCount)
+        (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
+        ConcreteElaboration.BinderContext.empty pattern.computation)
+      patternIndex
+    let targetOccurrenceIndex :=
+      layout.siteOccurrenceEquiv
+        (patternSiteSemanticIndex input layout hzero occurrenceIndex)
+    ∃ targetIndex : Fin outputLeaf.items.length,
+      targetIndex.val = targetOccurrenceIndex.val ∧
+        ConcreteElaboration.ItemSimulation model named direction
+          (ConcreteElaboration.ContextIndexRelation.forwardMap
+            (layout.patternRootWireIndexMap hadmissible hzero
+              outputWitness outputLeaf))
+          ((pattern.items.get patternIndex).renameRelations
+            (emptyRelationRenaming outputWitness.toFocus.holeRels))
+          (outputLeaf.items.get targetIndex) := by
+  dsimp only
+  let pattern := compiledSpliceOpenRootItems input.pattern
+  have patternLength :=
+    ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature
+        input.pattern.val.diagram input.pattern.val.diagram.regionCount)
+      (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
+      ConcreteElaboration.BinderContext.empty pattern.computation
+  let occurrenceIndex := Fin.cast patternLength patternIndex
+  let semanticIndex :=
+    patternSiteSemanticIndex input layout hzero occurrenceIndex
+  let targetOccurrenceIndex := layout.siteOccurrenceEquiv semanticIndex
+  have targetLength :=
+    ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+        outputLeaf.fuel)
+      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+      outputLeaf.binders outputLeaf.itemsComputation
+  let targetIndex := Fin.cast targetLength.symm targetOccurrenceIndex
+  have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
+    (ConcreteElaboration.compileRegion? signature input.pattern.val.diagram
+      input.pattern.val.diagram.regionCount)
+    (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
+    ConcreteElaboration.BinderContext.empty pattern.computation occurrenceIndex
+  have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
+    (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      outputLeaf.fuel)
+    (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+    outputLeaf.binders outputLeaf.itemsComputation targetOccurrenceIndex
+  rw [layout.siteOccurrenceEquiv_spec semanticIndex] at targetGet
+  have targetGet' :
+      ConcreteElaboration.compileOccurrenceWith? signature layout.plugRaw
+        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+          outputLeaf.fuel)
+        (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+        outputLeaf.binders
+        (layout.mapPatternOccurrence
+          ((ConcreteElaboration.localOccurrences input.pattern.val.diagram
+            input.pattern.val.diagram.root).get occurrenceIndex)) =
+          some (outputLeaf.items.get targetIndex) := by
+    simpa [PlugLayout.semanticSiteOccurrences, semanticIndex,
+      patternSiteSemanticIndex, input.binderSpine.body_eq_root_of_empty hzero,
+      targetIndex] using targetGet
+  refine ⟨targetIndex, rfl, ?_⟩
+  exact layout.compilePatternRootOccurrence_at_site_simulation hadmissible
+    outputWitness outputLeaf hzero model named direction
+    ((ConcreteElaboration.localOccurrences input.pattern.val.diagram
+      input.pattern.val.diagram.root).get occurrenceIndex)
+    (List.get_mem _ occurrenceIndex)
+    (pattern.items.get patternIndex) (outputLeaf.items.get targetIndex)
+    (by simpa [occurrenceIndex, patternLength] using sourceGet) targetGet'
 
 /-- The actual focused item conjunction entails the intrinsic empty-spine
 pattern-root conjunction under the canonical direct wire map.  Pattern
