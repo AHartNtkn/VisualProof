@@ -29224,6 +29224,160 @@ theorem pattern_denote_of_patternRootItems
         rootEnvironmentEq)
       patternDenotes
 
+/-- A checked empty-spine pattern denotation exposes the hidden root
+valuation and the actual intrinsic item conjunction emitted by the compiler.
+The exposed part is the canonical quotient-class assignment used by the
+splice input, so the result can be transported occurrence-by-occurrence into
+the concrete focused context. -/
+theorem patternRootItems_of_pattern_denote
+    (input : Input signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (values : input.wireQuotient.Carrier → model.Carrier)
+    (denotes : input.pattern.denote model named (fun position =>
+      values (input.quotientWire (input.attachment position)))) :
+    let pattern := compiledSpliceOpenRootItems input.pattern
+    ∃ hiddenEnv : Fin input.pattern.val.hiddenWires.length → model.Carrier,
+      denoteItemSeq (relCtx := []) model named
+        (extendWireEnv
+          (input.patternAttachmentAssignment.map values).classes hiddenEnv ∘
+            Fin.cast (by simp [OpenConcreteDiagram.rootWires]))
+        (PUnit.unit : RelEnv model.Carrier []) pattern.items := by
+  dsimp only
+  let pattern := compiledSpliceOpenRootItems input.pattern
+  have substituted :
+      denoteRegion (relCtx := []) model named values PUnit.unit
+        (input.pattern.elaborate.substituteBoundary
+          input.patternAttachmentAssignment) :=
+    (input.denote_patternAttachmentAssignment model named values).2 denotes
+  rw [OpenDiagram.substituteBoundary, denoteRegion_renameWires] at substituted
+  rw [pattern.elaborate_body] at substituted
+  unfold ConcreteElaboration.finishRoot at substituted
+  simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
+    at substituted
+  obtain ⟨hiddenEnv, hiddenDenotes⟩ := substituted
+  refine ⟨hiddenEnv, ?_⟩
+  have classesEq :
+      values ∘ input.patternAttachmentAssignment.classes =
+        (input.patternAttachmentAssignment.map values).classes := rfl
+  rw [← classesEq]
+  exact (denoteItemSeq_renameWires (relCtx := []) model named
+    (Fin.cast (by simp [OpenConcreteDiagram.rootWires]))
+    (extendWireEnv
+      (values ∘ input.patternAttachmentAssignment.classes) hiddenEnv)
+    (PUnit.unit : RelEnv model.Carrier []) pattern.items).mp hiddenDenotes
+
+/-- The canonical focused valuation realizes exactly the intrinsic
+empty-spine root valuation: exposed root wires read their quotient values and
+hidden root wires read the supplied hidden witness. -/
+theorem focusedExtendedEnvironment_patternRoot_eq
+    (input : Input signature)
+    (hadmissible : input.Admissible)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
+      (input.plugLayout.frameRegion input.site) outputWitness)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (outerEnv : Fin outputLeaf.inheritedWires.length → D)
+    (values : input.wireQuotient.Carrier → D)
+    (hiddenEnv : Fin input.pattern.val.hiddenWires.length → D)
+    (outerValues : ∀ quotient index,
+      outputLeaf.inheritedWires.get index =
+          input.plugLayout.frameWire quotient →
+        outerEnv index = values quotient) :
+    ConcreteElaboration.extendedEnvironment outputLeaf.inheritedWires
+        (input.plugLayout.frameRegion input.site) outerEnv
+        (focusedLocalEnvironmentOfEmpty input hzero values hiddenEnv) ∘
+          input.plugLayout.patternRootWireIndexMap hadmissible hzero
+            outputWitness outputLeaf =
+      extendWireEnv
+          (input.patternAttachmentAssignment.map values).classes hiddenEnv ∘
+        Fin.cast (by simp [OpenConcreteDiagram.rootWires]) := by
+  funext index
+  let split : Fin (input.pattern.val.exposedWires.length +
+      input.pattern.val.hiddenWires.length) := Fin.cast (by simp) index
+  have recover : Fin.cast (by simp) split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun exposed => ?_) (fun hidden => ?_) split
+  · let rootIndex : Fin
+        (input.pattern.val.exposedWires ++
+          input.pattern.val.hiddenWires).length :=
+      Fin.cast (by simp)
+        (Fin.castAdd input.pattern.val.hiddenWires.length exposed)
+    have rootWire :
+        (input.pattern.val.exposedWires ++
+          input.pattern.val.hiddenWires).get rootIndex =
+        input.pattern.val.exposedWires.get exposed := by
+      simp [rootIndex]
+    have indexWire :
+        (outputLeaf.inheritedWires.extend
+          (input.plugLayout.frameRegion input.site)).get
+            (input.plugLayout.patternRootWireIndexMap hadmissible hzero
+              outputWitness outputLeaf rootIndex) =
+          input.plugLayout.frameWire
+            (input.plugLayout.exposedAttachment exposed) := by
+      rw [input.plugLayout.patternRootWireIndexMap_spec hadmissible hzero
+        outputWitness outputLeaf, rootWire]
+      rw [input.plugLayout.patternPlugWire_exposed
+        (input.pattern.val.exposedWires.get exposed)
+        (List.get_mem _ exposed)]
+      have externalIndex :
+          PlugLayout.exposedWireIndex input
+              (input.pattern.val.exposedWires.get exposed)
+              (List.get_mem _ exposed) =
+            exposed := by
+        apply PlugLayout.exposedWire_get_injective input
+        exact PlugLayout.exposedWireIndex_get input
+          (input.pattern.val.exposedWires.get exposed)
+          (List.get_mem _ exposed)
+      rw [externalIndex]
+      rfl
+    have focusedValue :=
+      focusedExtendedEnvironment_frameWire_eq input hzero
+        outputLeaf.inheritedWires outerEnv values hiddenEnv outerValues
+        (input.plugLayout.exposedAttachment exposed)
+        (input.plugLayout.patternRootWireIndexMap hadmissible hzero
+          outputWitness outputLeaf rootIndex) indexWire
+    simpa [split, rootIndex, patternAttachmentAssignment,
+      BoundaryAssignment.map, extendWireEnv] using focusedValue
+  · let rootIndex : Fin
+        (input.pattern.val.exposedWires ++
+          input.pattern.val.hiddenWires).length :=
+      Fin.cast (by simp)
+        (Fin.natAdd input.pattern.val.exposedWires.length hidden)
+    let host := compiledSpliceHostView input hadmissible
+    have seamEq :=
+      input.plugLayout.patternRootSeamWireMapOfEmpty_eq hadmissible host
+        outputWitness outputLeaf hzero
+    have rootMapEq :
+        input.plugLayout.patternRootWireIndexMap hadmissible hzero
+            outputWitness outputLeaf rootIndex =
+          Fin.cast
+            (ConcreteElaboration.WireContext.length_extend
+              outputLeaf.inheritedWires
+              (input.plugLayout.frameRegion input.site)).symm
+            (Fin.natAdd outputLeaf.inheritedWires.length
+              (input.plugLayout.siteLocalWireEquivOfEmpty hzero
+                (Fin.natAdd
+                  (ConcreteElaboration.exactScopeWires
+                    input.coalesceFrameRaw input.site).length hidden))) := by
+      rw [← seamEq]
+      apply Fin.ext
+      simp [rootIndex, PlugLayout.patternRootSeamWireMapOfEmpty,
+        PlugLayout.patternRootSeamPreparedWireOfEmpty,
+        PlugLayout.siteCombinedWireEquivOfEmpty, extendWireEquiv]
+    have presentedIndexEq :
+        Fin.cast (by simp)
+            (Fin.natAdd input.pattern.val.exposedWires.length hidden) =
+          rootIndex := rfl
+    simp only [Function.comp_apply]
+    rw [presentedIndexEq, rootMapEq]
+    simp [split, rootIndex, ConcreteElaboration.extendedEnvironment,
+      focusedLocalEnvironmentOfEmpty, extendWireEnv]
+
 /-- Boundary aliasing may change only the quotient classes whose original
 retained wires are all scoped exactly at the splice site.  Any pair involving
 an outer-scoped wire has the same quotient equality on both sides, so replacing
