@@ -92,3 +92,26 @@ Validation must include:
 General proof-system completeness is not asserted. Exact finite occurrence
 matching completeness and conditional beta-eta matching completeness remain the
 separate scoped completeness results.
+
+## Semantic transport correction
+
+The local and root witness contracts are implication-shaped, not
+agreement-shaped. A contextual denotation under cuts can be true because a
+sibling is false, so it need not expose any valuation for the distinguished
+subdiagram. Requiring an opposite local valuation with full extended-context
+agreement before transporting item truth is therefore stronger than logical
+validity.
+
+`finishRegion_denote` and `finishRoot_denote` consume a directional transport
+that takes the active local valuation and item-sequence denotation together and
+returns an opposite local valuation together with the opposite item-sequence
+denotation. Regular structural simulations may derive this transport from
+environment agreement plus `ItemSeqSimulation`; that decomposition is an
+adapter, not the authoritative interface.
+
+Focused replacement transports the whole implication through its retained
+compiler context using the existing cut/bubble traversal and contextual
+monotonicity. It does not extract focused denotation from a masked negative
+branch. Any route or trace evidence is advanced during the shared compiler
+recursion from the compile results already in scope; a rule module must not run
+a second recursive compiler traversal afterward.

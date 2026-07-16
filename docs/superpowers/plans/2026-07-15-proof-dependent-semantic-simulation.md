@@ -199,6 +199,22 @@ lake build VisualProof.Rule.Soundness.HighLevel
 
 Expected: exit 0, including both alias-partition examples.
 
+#### Corrected shared transport prerequisite
+
+Before completing the paired replacement kernel, replace the displaced split
+between `DirectionalLocalWitness`/`DirectionalRootWitness` and later item
+simulation with implication-shaped local/root transports. The transport consumes
+the active local valuation and compiled-item proof and returns the opposite
+valuation and compiled-item proof together. Provide an adapter for conversion,
+wire severing, and other structurally total simulations, migrate their call
+sites, and delete the agreement-only authoritative path.
+
+Validate the correction with a masked-cut example where the enclosing
+proposition is true without a focused valuation. The paired splice proof must
+advance its focus trace through the existing `compileRegion_denote` recursion
+and use contextual implication; it must not call a second compiler traversal to
+extract the focus.
+
 ### Task 4: Prove scope-changing wire join on concrete contexts
 
 **Files:**
