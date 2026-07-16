@@ -30529,12 +30529,54 @@ def BinderRelated {rels : VisualProof.Theory.RelCtx}
       targetBinders (target.plugLayout.frameRegion
         (Fin.cast presentation.frameRegionCountEq frame))
 
+/-- Heterogeneous binder evidence for the generalized compiler simulation.
+The relation contexts are propositionally equal, while retained-frame lookup
+agreement is recorded with `HEq` so the witness remains well-typed before
+that equality is eliminated. -/
+structure BinderWitness
+    (presentation : TwoInputPresentation source target)
+    {sourceRels targetRels : VisualProof.Theory.RelCtx}
+    (sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw targetRels) : Type where
+  relationContexts_eq : sourceRels = targetRels
+  related : ∀ frame : Fin source.frame.val.regionCount,
+    HEq (sourceBinders (source.plugLayout.frameRegion frame))
+      (targetBinders (target.plugLayout.frameRegion
+        (Fin.cast presentation.frameRegionCountEq frame)))
+
+namespace BinderWitness
+
+def relationMap
+    (witness : BinderWitness (sourceRels := sourceRels)
+      (targetRels := targetRels) presentation sourceBinders targetBinders) :
+    RelationRenaming sourceRels targetRels := by
+  rcases witness with ⟨relationContextsEq, related⟩
+  subst targetRels
+  exact ConcreteElaboration.identityRelationRenaming sourceRels
+
+theorem related_of_same_context
+    (witness : BinderWitness presentation sourceBinders targetBinders) :
+    presentation.BinderRelated sourceBinders targetBinders := by
+  intro frame
+  exact eq_of_heq (witness.related frame)
+
+end BinderWitness
+
 theorem binders_empty
     (presentation : TwoInputPresentation source target) :
     presentation.BinderRelated ConcreteElaboration.BinderContext.empty
       ConcreteElaboration.BinderContext.empty := by
   intro frame
   rfl
+
+def binderWitness_empty
+    (presentation : TwoInputPresentation source target) :
+    presentation.BinderWitness ConcreteElaboration.BinderContext.empty
+      ConcreteElaboration.BinderContext.empty where
+  relationContexts_eq := rfl
+  related := fun _ => HEq.rfl
 
 /-- Pushing a retained-frame bubble preserves binder agreement even when the
 bubble is a direct child of the distinguished splice site. -/
@@ -30627,6 +30669,59 @@ theorem binders_push
     rw [ConcreteElaboration.BinderContext.push_other _ arity sourceNe,
       ConcreteElaboration.BinderContext.push_other _ arity targetNe,
       related frame]
+
+def binderWitness_push
+    (presentation : TwoInputPresentation source target)
+    {sourceRels targetRels : VisualProof.Theory.RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw sourceRels}
+    {targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw targetRels}
+    (witness : presentation.BinderWitness sourceBinders targetBinders)
+    (child parent : Fin source.plugLayout.plugRaw.regionCount)
+    (arity : Nat)
+    (childKind : source.plugLayout.plugRaw.regions child =
+      .bubble parent arity)
+    (regular : ¬ presentation.Distinguished parent) :
+    presentation.BinderWitness
+      (sourceBinders.push child arity)
+      (targetBinders.push (presentation.regionMap child) arity) := by
+  cases witness with
+  | mk relationContexts_eq related =>
+      subst targetRels
+      have relatedEq : presentation.BinderRelated sourceBinders targetBinders :=
+        fun frame => eq_of_heq (related frame)
+      have pushed := presentation.binders_push relatedEq child parent arity
+        childKind regular
+      exact ⟨rfl, fun frame => heq_of_eq (pushed frame)⟩
+
+theorem binderWitness_relationMap_push
+    (presentation : TwoInputPresentation source target)
+    {sourceRels targetRels : VisualProof.Theory.RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext
+      source.plugLayout.plugRaw sourceRels}
+    {targetBinders : ConcreteElaboration.BinderContext
+      target.plugLayout.plugRaw targetRels}
+    (witness : presentation.BinderWitness sourceBinders targetBinders)
+    (child parent : Fin source.plugLayout.plugRaw.regionCount)
+    (arity : Nat)
+    (childKind : source.plugLayout.plugRaw.regions child =
+      .bubble parent arity)
+    (regular : ¬ presentation.Distinguished parent) :
+    (BinderWitness.relationMap
+        (presentation.binderWitness_push witness child parent arity childKind
+          regular) : RelationRenaming (arity :: sourceRels)
+            (arity :: targetRels)) =
+      (RelationRenaming.lift (BinderWitness.relationMap witness) arity :
+        RelationRenaming (arity :: sourceRels)
+          (arity :: targetRels)) := by
+  cases witness with
+  | mk relationContexts_eq related =>
+      subst targetRels
+      simpa [BinderWitness.relationMap, binderWitness_push,
+        ConcreteElaboration.identityRelationRenaming] using
+          (RelationRenaming.lift_id_fun
+            (source := sourceRels) arity).symm
 
 private def depthAllowed
     (siteDirection direction : ConcreteElaboration.SimulationDirection)
