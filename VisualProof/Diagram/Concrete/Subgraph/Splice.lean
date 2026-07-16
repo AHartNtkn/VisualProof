@@ -30912,6 +30912,108 @@ theorem siteQuotientEnvironment_attachment_eq
         (input.quotientAttachment_visible hadmissible position))
     index indexWire
 
+/-- Related exact focused contexts assign the same value to the two quotient
+copies of every visible retained-frame wire.  The proof uses the original
+wire as provenance and does not choose a map between quotient partitions. -/
+theorem siteQuotientEnvironment_eq_of_related_wire
+    (presentation : TwoInputPresentation source target)
+    (sourceAdmissible : source.Admissible)
+    (targetAdmissible : target.Admissible)
+    (sourceContext : ConcreteElaboration.WireContext
+      source.plugLayout.plugRaw)
+    (targetContext : ConcreteElaboration.WireContext
+      target.plugLayout.plugRaw)
+    (sourceExact : sourceContext.Exact
+      (source.plugLayout.frameRegion source.site))
+    (targetExact : targetContext.Exact
+      (target.plugLayout.frameRegion target.site))
+    (sourceEnv : Fin sourceContext.length → D)
+    (targetEnv : Fin targetContext.length → D)
+    (sourceFallback targetFallback : D)
+    (agrees :
+      (presentation.contextIndexRelation sourceContext targetContext)
+        |>.EnvironmentsAgree sourceEnv targetEnv)
+    (wire : Fin source.frame.val.wireCount)
+    (sourceVisible :
+      source.plugLayout.plugRaw.Encloses
+        (source.plugLayout.plugRaw.wires
+          (source.plugLayout.frameWire (source.quotientWire wire))).scope
+        (source.plugLayout.frameRegion source.site)) :
+    siteQuotientEnvironment source sourceContext sourceExact sourceEnv
+        sourceFallback (source.quotientWire wire) =
+      siteQuotientEnvironment target targetContext targetExact targetEnv
+        targetFallback
+        (target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire)) := by
+  have sourceCoalescedVisible :
+      source.coalesceFrameRaw.Encloses
+        (source.coalesceFrameRaw.wires
+          (source.quotientWire wire)).scope source.site :=
+    (source.plugLayout.frameWire_visible_at_region_iff source.site
+      (source.quotientWire wire)).1 sourceVisible
+  have targetCoalescedVisible :
+      target.coalesceFrameRaw.Encloses
+        (target.coalesceFrameRaw.wires
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire))).scope target.site :=
+    (presentation.coalescedFrame_wire_visible_at_site_iff
+      sourceAdmissible targetAdmissible wire).1 sourceCoalescedVisible
+  have targetVisible :
+      target.plugLayout.plugRaw.Encloses
+        (target.plugLayout.plugRaw.wires
+          (target.plugLayout.frameWire
+            (target.quotientWire
+              (Fin.cast presentation.frameWireCountEq wire)))).scope
+        (target.plugLayout.frameRegion target.site) :=
+    (target.plugLayout.frameWire_visible_at_region_iff target.site
+      (target.quotientWire
+        (Fin.cast presentation.frameWireCountEq wire))).2
+      targetCoalescedVisible
+  have sourceMember :
+      source.plugLayout.frameWire (source.quotientWire wire) ∈
+        sourceContext :=
+    (sourceExact.mem_iff _).2 sourceVisible
+  have targetMember :
+      target.plugLayout.frameWire
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) ∈ targetContext :=
+    (targetExact.mem_iff _).2 targetVisible
+  obtain ⟨sourceIndex, sourceLookup⟩ :=
+    ConcreteElaboration.WireContext.lookup?_complete sourceMember
+  obtain ⟨targetIndex, targetLookup⟩ :=
+    ConcreteElaboration.WireContext.lookup?_complete targetMember
+  have sourceIndexWire :
+      sourceContext.get sourceIndex =
+        source.plugLayout.frameWire (source.quotientWire wire) :=
+    ConcreteElaboration.WireContext.lookup?_sound sourceLookup
+  have targetIndexWire :
+      targetContext.get targetIndex =
+        target.plugLayout.frameWire
+          (target.quotientWire
+            (Fin.cast presentation.frameWireCountEq wire)) :=
+    ConcreteElaboration.WireContext.lookup?_sound targetLookup
+  calc
+    siteQuotientEnvironment source sourceContext sourceExact sourceEnv
+        sourceFallback (source.quotientWire wire) =
+      sourceEnv sourceIndex :=
+        siteQuotientEnvironment_eq source sourceContext sourceExact sourceEnv
+          sourceFallback (source.quotientWire wire) sourceVisible sourceIndex
+          sourceIndexWire
+    _ = targetEnv targetIndex :=
+      agrees sourceIndex targetIndex
+        (presentation.contextIndexRelation_of_sharedWire sourceContext
+          targetContext sourceIndex targetIndex wire sourceIndexWire
+          targetIndexWire)
+    _ = siteQuotientEnvironment target targetContext targetExact targetEnv
+        targetFallback
+        (target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire)) :=
+      (siteQuotientEnvironment_eq target targetContext targetExact targetEnv
+        targetFallback
+        (target.quotientWire
+          (Fin.cast presentation.frameWireCountEq wire))
+        targetVisible targetIndex targetIndexWire).symm
+
 /-- In the forward direction, active source-pattern denotation is exactly the
 evidence needed to construct values on a potentially coarser target quotient.
 No target quotient valuation is selected before the local implication fires. -/
