@@ -29397,6 +29397,272 @@ private theorem paired_allFin_layout_regions (layout : PlugLayout input) :
     PlugLayout.materialRegion] using paired_allFin_add
       input.frame.val.regionCount layout.materialRegions.count
 
+private theorem paired_allFin_map_survivor_origin
+    (domain : SurvivorDomain size) :
+    (VisualProof.Data.Finite.allFin domain.count).map domain.origin =
+      domain.enumeration := by
+  rw [VisualProof.Data.Finite.allFin_eq_finRange, List.finRange,
+    List.map_ofFn]
+  change List.ofFn (fun index => domain.enumeration.get index) =
+    domain.enumeration
+  exact List.ofFn_getElem
+
+private theorem filter_frameNodes_eq_nil_at_material
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region) :
+    List.filter
+        (fun node => decide
+          ((layout.plugNode node).region = layout.bodyRegion region))
+        ((VisualProof.Data.Finite.allFin input.frame.val.nodeCount).map
+          layout.frameNode) = [] := by
+  apply List.eq_nil_iff_forall_not_mem.2
+  intro node member
+  rw [List.mem_filter, List.mem_map] at member
+  rcases member with ⟨⟨frameNode, _, rfl⟩, selected⟩
+  have equality := decide_eq_true_iff.mp selected
+  rw [layout.plugNode_frameNode, layout.mapFrameNode_region,
+    layout.bodyRegion_material region hregion] at equality
+  exact layout.frameRegion_ne_materialRegion _ _ equality
+
+private theorem filter_patternNodes_at_material
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region) :
+    List.filter
+        (fun node => decide
+          ((layout.plugNode node).region = layout.bodyRegion region))
+        ((VisualProof.Data.Finite.allFin
+          input.pattern.val.diagram.nodeCount).map layout.patternNode) =
+      ((VisualProof.Data.Finite.allFin
+        input.pattern.val.diagram.nodeCount).filter
+          fun node => decide
+            ((input.pattern.val.diagram.nodes node).region = region)).map
+              layout.patternNode := by
+  rw [List.filter_map]
+  apply congrArg (List.map layout.patternNode)
+  apply List.filter_congr
+  intro node _
+  change decide
+      ((layout.plugNode (layout.patternNode node)).region =
+        layout.bodyRegion region) =
+    decide ((input.pattern.val.diagram.nodes node).region = region)
+  apply decide_eq_decide.mpr
+  constructor
+  · intro equality
+    rw [layout.plugNode_patternNode, layout.mapPatternNode_region] at equality
+    by_cases hnode : input.binderSpine.IsMaterialRegion
+        (input.pattern.val.diagram.nodes node).region
+    · exact layout.bodyRegion_injective_of_material hnode hregion equality
+    · rw [layout.bodyRegion_nonmaterial _ hnode,
+        layout.bodyRegion_material region hregion] at equality
+      exact False.elim (layout.frameRegion_ne_materialRegion _ _ equality)
+  · intro equality
+    subst region
+    rw [layout.plugNode_patternNode, layout.mapPatternNode_region]
+
+private theorem filter_frameChildren_eq_nil_at_material
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region) :
+    List.filter
+        (fun child => decide
+          ((layout.plugRegion child).parent? = some (layout.bodyRegion region)))
+        ((VisualProof.Data.Finite.allFin input.frame.val.regionCount).map
+          layout.frameRegion) = [] := by
+  apply List.eq_nil_iff_forall_not_mem.2
+  intro child member
+  rw [List.mem_filter, List.mem_map] at member
+  rcases member with ⟨⟨frameChild, _, rfl⟩, selected⟩
+  have equality := decide_eq_true_iff.mp selected
+  rw [layout.plugRegion_frameRegion] at equality
+  cases kind : input.frame.val.regions frameChild with
+  | sheet => simp [kind, PlugLayout.mapFrameRegion, CRegion.parent?] at equality
+  | cut parent =>
+      have mapped : layout.frameRegion parent = layout.bodyRegion region :=
+        Option.some.inj (by
+          simpa [kind, PlugLayout.mapFrameRegion, CRegion.parent?] using equality)
+      rw [layout.bodyRegion_material region hregion] at mapped
+      exact layout.frameRegion_ne_materialRegion _ _ mapped
+  | bubble parent arity =>
+      have mapped : layout.frameRegion parent = layout.bodyRegion region :=
+        Option.some.inj (by
+          simpa [kind, PlugLayout.mapFrameRegion, CRegion.parent?] using equality)
+      rw [layout.bodyRegion_material region hregion] at mapped
+      exact layout.frameRegion_ne_materialRegion _ _ mapped
+
+private theorem filter_materialChildren_at_material
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region) :
+    List.filter
+        (fun child => decide
+          ((layout.plugRegion child).parent? = some (layout.bodyRegion region)))
+        ((VisualProof.Data.Finite.allFin layout.materialRegions.count).map
+          layout.materialRegion) =
+      ((VisualProof.Data.Finite.allFin
+        input.pattern.val.diagram.regionCount).filter
+          fun child => decide
+            ((input.pattern.val.diagram.regions child).parent? = some region)).map
+              layout.bodyRegion := by
+  let parentPredicate := fun child : Fin input.pattern.val.diagram.regionCount =>
+    decide ((input.pattern.val.diagram.regions child).parent? = some region)
+  have selectedSurvives : ∀ child,
+      parentPredicate child = true →
+        layout.materialRegions.survives child = true := by
+    intro child selected
+    have parent := decide_eq_true_iff.mp selected
+    have material := PlugLayout.directChildOfMaterial_material input region child
+      hregion parent
+    exact (layout.materialRegions_survives_iff child).2 material
+  rw [List.filter_map]
+  have predicateEq : ∀ material : layout.materialRegions.Carrier,
+      decide
+          ((layout.plugRegion (layout.materialRegion material)).parent? =
+            some (layout.bodyRegion region)) =
+        parentPredicate (layout.materialRegions.origin material) := by
+    intro material
+    change decide
+        ((layout.plugRegion (layout.materialRegion material)).parent? =
+          some (layout.bodyRegion region)) =
+      decide
+        ((input.pattern.val.diagram.regions
+          (layout.materialRegions.origin material)).parent? = some region)
+    apply decide_eq_decide.mpr
+    rw [layout.plugRegion_materialRegion]
+    have hmaterial : input.binderSpine.IsMaterialRegion
+        (layout.materialRegions.origin material) :=
+      (layout.materialRegions_survives_iff _).1
+        (layout.materialRegions.origin_survives material)
+    cases kind : input.pattern.val.diagram.regions
+        (layout.materialRegions.origin material) with
+    | sheet =>
+        simp only [PlugLayout.mapPatternRegion, CRegion.parent?]
+        constructor
+        · intro equality
+          have bodyEq := Option.some.inj equality
+          rw [layout.bodyRegion_material region hregion] at bodyEq
+          exact False.elim
+            (layout.frameRegion_ne_materialRegion _ _ bodyEq)
+        · intro equality
+          contradiction
+    | cut parent =>
+        simp only [kind, PlugLayout.mapPatternRegion, CRegion.parent?]
+        constructor <;> intro equality
+        · have bodyEq := Option.some.inj equality
+          by_cases hparent : input.binderSpine.IsMaterialRegion parent
+          · exact congrArg some
+              (layout.bodyRegion_injective_of_material hparent hregion bodyEq)
+          · rw [layout.bodyRegion_nonmaterial parent hparent,
+                layout.bodyRegion_material region hregion] at bodyEq
+            exact False.elim
+              (layout.frameRegion_ne_materialRegion _ _ bodyEq)
+        · exact congrArg (fun parent => some (layout.bodyRegion parent))
+            (Option.some.inj equality)
+    | bubble parent arity =>
+        simp only [kind, PlugLayout.mapPatternRegion, CRegion.parent?]
+        constructor <;> intro equality
+        · have bodyEq := Option.some.inj equality
+          by_cases hparent : input.binderSpine.IsMaterialRegion parent
+          · exact congrArg some
+              (layout.bodyRegion_injective_of_material hparent hregion bodyEq)
+          · rw [layout.bodyRegion_nonmaterial parent hparent,
+                layout.bodyRegion_material region hregion] at bodyEq
+            exact False.elim
+              (layout.frameRegion_ne_materialRegion _ _ bodyEq)
+        · exact congrArg (fun parent => some (layout.bodyRegion parent))
+            (Option.some.inj equality)
+  have filteredEq :
+      List.filter
+          ((fun child => decide
+            ((layout.plugRegion child).parent? =
+              some (layout.bodyRegion region))) ∘ layout.materialRegion)
+          (VisualProof.Data.Finite.allFin layout.materialRegions.count) =
+        List.filter (parentPredicate ∘ layout.materialRegions.origin)
+          (VisualProof.Data.Finite.allFin layout.materialRegions.count) := by
+    apply List.filter_congr
+    intro material _
+    exact predicateEq material
+  rw [filteredEq]
+  calc
+    _ = (List.filter (parentPredicate ∘ layout.materialRegions.origin)
+          (VisualProof.Data.Finite.allFin layout.materialRegions.count)).map
+            (layout.bodyRegion ∘ layout.materialRegions.origin) := by
+      apply List.map_congr_left
+      intro material _
+      exact (layout.bodyRegion_origin material).symm
+    _ = (List.filter parentPredicate
+          ((VisualProof.Data.Finite.allFin layout.materialRegions.count).map
+            layout.materialRegions.origin)).map layout.bodyRegion := by
+      rw [List.filter_map, List.map_map]
+    _ = (List.filter parentPredicate layout.materialRegions.enumeration).map
+          layout.bodyRegion := by
+      rw [paired_allFin_map_survivor_origin]
+    _ = (List.filter parentPredicate
+          (VisualProof.Data.Finite.allFin
+            input.pattern.val.diagram.regionCount)).map
+          layout.bodyRegion := by
+      unfold SurvivorDomain.enumeration VisualProof.Data.Finite.filterFin
+      rw [List.filter_filter]
+      have filtersEq :
+          List.filter
+              (fun child => parentPredicate child &&
+                layout.materialRegions.survives child)
+              (VisualProof.Data.Finite.allFin
+                input.pattern.val.diagram.regionCount) =
+            List.filter parentPredicate
+              (VisualProof.Data.Finite.allFin
+                input.pattern.val.diagram.regionCount) := by
+        apply List.filter_congr
+        intro child _
+        cases selected : parentPredicate child with
+        | false => rfl
+        | true =>
+            rw [selectedSurvives child selected]
+            rfl
+      rw [filtersEq]
+    _ = _ := rfl
+
+theorem PlugLayout.localOccurrences_bodyRegion
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (hregion : input.binderSpine.IsMaterialRegion region) :
+    ConcreteElaboration.localOccurrences layout.plugRaw
+        (layout.bodyRegion region) =
+      (ConcreteElaboration.localOccurrences input.pattern.val.diagram
+        region).map layout.mapPatternOccurrence := by
+  unfold ConcreteElaboration.localOccurrences
+    VisualProof.Data.Finite.filterFin
+  change
+    ((VisualProof.Data.Finite.allFin layout.plugRaw.nodeCount).filter
+        fun node => decide
+          ((layout.plugNode node).region = layout.bodyRegion region)).map
+          ConcreteElaboration.LocalOccurrence.node ++
+      ((VisualProof.Data.Finite.allFin layout.plugRaw.regionCount).filter
+        fun child => decide
+          ((layout.plugRegion child).parent? =
+            some (layout.bodyRegion region))).map
+              ConcreteElaboration.LocalOccurrence.child =
+    ((((VisualProof.Data.Finite.allFin
+      input.pattern.val.diagram.nodeCount).filter
+        fun node => decide
+          ((input.pattern.val.diagram.nodes node).region = region)).map
+            ConcreteElaboration.LocalOccurrence.node ++
+      ((VisualProof.Data.Finite.allFin
+        input.pattern.val.diagram.regionCount).filter
+        fun child => decide
+          ((input.pattern.val.diagram.regions child).parent? = some region)).map
+            ConcreteElaboration.LocalOccurrence.child).map
+              layout.mapPatternOccurrence)
+  rw [paired_allFin_layout_nodes, paired_allFin_layout_regions]
+  simp only [List.filter_append, List.map_append, List.map_map,
+    filter_frameNodes_eq_nil_at_material layout region hregion,
+    filter_patternNodes_at_material layout region hregion,
+    filter_frameChildren_eq_nil_at_material layout region hregion,
+    filter_materialChildren_at_material layout region hregion,
+    List.map_nil, List.nil_append]
+  rfl
+
 private theorem checkedDiagram_regions_eq
     (left right : CheckedDiagram signature) (h : left = right)
     (region : Fin left.val.regionCount) :
