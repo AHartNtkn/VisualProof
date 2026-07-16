@@ -29762,6 +29762,163 @@ theorem attachment_quotient_related
   refine ⟨source.attachment position, rfl, ?_⟩
   rw [presentation.attachment_eq position]
 
+/-- In the forward direction, active source-pattern denotation is exactly the
+evidence needed to construct values on a potentially coarser target quotient.
+No target quotient valuation is selected before the local implication fires. -/
+theorem forwardQuotientEnvironment_of_pattern_entailment
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceValues : source.wireQuotient.Carrier → model.Carrier)
+    (localLaw :
+      let sourceArgs := fun position =>
+        sourceValues (source.quotientWire (source.attachment position))
+      source.pattern.denote model named sourceArgs →
+        target.pattern.denote model named
+          (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm))
+    (sourceDenotes :
+      source.pattern.denote model named (fun position =>
+        sourceValues (source.quotientWire (source.attachment position)))) :
+    ∃ targetValues : target.wireQuotient.Carrier → model.Carrier,
+      (∀ wire,
+        targetValues
+            (target.quotientWire
+              (Fin.cast presentation.frameWireCountEq wire)) =
+          sourceValues (source.quotientWire wire)) ∧
+      target.pattern.denote model named (fun position =>
+        targetValues (target.quotientWire (target.attachment position))) := by
+  let sourceArgs := fun position =>
+    sourceValues (source.quotientWire (source.attachment position))
+  let targetFrameValue : Fin target.frame.val.wireCount → model.Carrier :=
+    fun wire =>
+      sourceValues (source.quotientWire
+        (Fin.cast presentation.frameWireCountEq.symm wire))
+  have targetDenotes :
+      target.pattern.denote model named
+        (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm) :=
+    localLaw sourceDenotes
+  have realizes : ∀ position,
+      targetFrameValue (target.attachment position) =
+        (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm) position := by
+    intro position
+    let sourcePosition :=
+      Fin.cast presentation.boundary_arity_eq.symm position
+    have positionEq :
+        Fin.cast presentation.boundary_arity_eq sourcePosition = position := by
+      apply Fin.ext
+      rfl
+    have attachmentEq := presentation.attachment_eq sourcePosition
+    rw [positionEq] at attachmentEq
+    unfold targetFrameValue sourceArgs Function.comp
+    rw [← attachmentEq]
+    congr 2
+  have targetConstant :
+      ∀ {left right : Fin target.frame.val.wireCount},
+        target.quotientWire left = target.quotientWire right →
+          targetFrameValue left = targetFrameValue right := by
+    intro left right sameClass
+    exact target.quotientWire_value_eq_of_pattern_denotes model named
+      targetFrameValue
+      (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm)
+      realizes targetDenotes sameClass
+  let targetValues : target.wireQuotient.Carrier → model.Carrier :=
+    fun quotient => targetFrameValue (target.wireQuotient.origin quotient)
+  have targetValues_quotientWire :
+      ∀ wire, targetValues (target.quotientWire wire) =
+        targetFrameValue wire := by
+    intro wire
+    apply targetConstant
+    exact target.quotientWire_wireQuotient_origin
+      (target.quotientWire wire)
+  refine ⟨targetValues, ?_, ?_⟩
+  · intro wire
+    rw [targetValues_quotientWire]
+    rfl
+  · have argsEq :
+        (fun position =>
+          targetValues (target.quotientWire (target.attachment position))) =
+        sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm := by
+      funext position
+      rw [targetValues_quotientWire]
+      exact realizes position
+    rw [argsEq]
+    exact targetDenotes
+
+/-- The backward dual of
+`forwardQuotientEnvironment_of_pattern_entailment`: a target quotient
+environment satisfying the target pattern can be transported to a source
+quotient environment once the target pattern entails the source pattern. -/
+theorem backwardQuotientEnvironment_of_pattern_entailment
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (targetValues : target.wireQuotient.Carrier → model.Carrier)
+    (localLaw :
+      let targetArgs := fun position =>
+        targetValues (target.quotientWire (target.attachment position))
+      target.pattern.denote model named targetArgs →
+        source.pattern.denote model named
+          (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (targetDenotes :
+      target.pattern.denote model named (fun position =>
+        targetValues (target.quotientWire (target.attachment position)))) :
+    ∃ sourceValues : source.wireQuotient.Carrier → model.Carrier,
+      (∀ wire,
+        sourceValues (source.quotientWire wire) =
+          targetValues
+            (target.quotientWire
+              (Fin.cast presentation.frameWireCountEq wire))) ∧
+      source.pattern.denote model named (fun position =>
+        sourceValues (source.quotientWire (source.attachment position))) := by
+  let targetArgs := fun position =>
+    targetValues (target.quotientWire (target.attachment position))
+  let sourceFrameValue : Fin source.frame.val.wireCount → model.Carrier :=
+    fun wire =>
+      targetValues (target.quotientWire
+        (Fin.cast presentation.frameWireCountEq wire))
+  have sourceDenotes :
+      source.pattern.denote model named
+        (targetArgs ∘ Fin.cast presentation.boundary_arity_eq) :=
+    localLaw targetDenotes
+  have realizes : ∀ position,
+      sourceFrameValue (source.attachment position) =
+        (targetArgs ∘ Fin.cast presentation.boundary_arity_eq) position := by
+    intro position
+    unfold sourceFrameValue targetArgs Function.comp
+    rw [presentation.attachment_eq]
+  have sourceConstant :
+      ∀ {left right : Fin source.frame.val.wireCount},
+        source.quotientWire left = source.quotientWire right →
+          sourceFrameValue left = sourceFrameValue right := by
+    intro left right sameClass
+    exact source.quotientWire_value_eq_of_pattern_denotes model named
+      sourceFrameValue
+      (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)
+      realizes sourceDenotes sameClass
+  let sourceValues : source.wireQuotient.Carrier → model.Carrier :=
+    fun quotient => sourceFrameValue (source.wireQuotient.origin quotient)
+  have sourceValues_quotientWire :
+      ∀ wire, sourceValues (source.quotientWire wire) =
+        sourceFrameValue wire := by
+    intro wire
+    apply sourceConstant
+    exact source.quotientWire_wireQuotient_origin
+      (source.quotientWire wire)
+  refine ⟨sourceValues, ?_, ?_⟩
+  · intro wire
+    rw [sourceValues_quotientWire]
+  · have argsEq :
+        (fun position =>
+          sourceValues (source.quotientWire (source.attachment position))) =
+        targetArgs ∘ Fin.cast presentation.boundary_arity_eq := by
+      funext position
+      rw [sourceValues_quotientWire]
+      exact realizes position
+    rw [argsEq]
+    exact sourceDenotes
+
 /-- The coalesced frames retain the same root region even though their wire
 carriers may have different quotient cardinalities. -/
 theorem coalescedFrame_root_eq
