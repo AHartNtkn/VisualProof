@@ -93,6 +93,8 @@ structure RootItemContractionTransport
     (Fin targetWitness.toFocus.holeWires)
   targetReplacement : Region signature targetWitness.toFocus.holeWires
     targetWitness.toFocus.holeRels
+  targetReplacement_eq : targetReplacement =
+    holeRelsEq.symm ▸ sourceReplacement.renameWires holeWire
   replacementIso : RegionIso signature holeWire
     sourceWitness.toFocus.holeRels sourceReplacement
     (holeRelsEq ▸ targetReplacement)
@@ -147,6 +149,7 @@ theorem ItemSeqIso.transportRootContraction
     holeRelsEq := alignment.holeRelsEq
     holeWire := alignment.holeWire
     targetReplacement := targetReplacement
+    targetReplacement_eq := rfl
     replacementIso := replacementIso
     equivalent := ?_
   }⟩
@@ -199,6 +202,23 @@ structure OrderedRootItemContraction
     denoteItemSeq model named environment relEnv items ↔
       denoteRegion model named environment relEnv
         (witness.toFocus.context.fill replacement)
+
+/-- An ordered-root contraction whose transported replacement is certified
+against the executor's exact route-native splice region. -/
+structure OrderedRootItemContractionAgainst
+    (checked : CheckedOpenDiagram signature)
+    (compiled : Splice.Input.OpenRootCompilerItems checked)
+    {actualWires : Nat} {actualRels : RelCtx}
+    (actual : Region signature actualWires actualRels)
+    extends OrderedRootItemContraction checked compiled where
+  actualRelsEq : toOrderedRootItemContraction.witness.toFocus.holeRels =
+    actualRels
+  actualWire : FiniteEquiv
+    (Fin toOrderedRootItemContraction.witness.toFocus.holeWires)
+    (Fin actualWires)
+  actualIso : RegionIso signature actualWire actualRels
+    (toOrderedRootItemContraction.replacement.renameRelations
+      (Splice.Input.relationRenamingOfEq actualRelsEq)) actual
 
 /-- Denotation is invariant under transport of an item sequence and its
 relation environment across the same relation-context equality. -/
@@ -419,7 +439,9 @@ theorem properIterationRootAnchorItems_nonempty_complete
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
     let compiled := Splice.Input.compiledSpliceOpenRootItems ordered
-    Nonempty (OrderedRootItemContraction ordered compiled) := by
+    Nonempty (OrderedRootItemContractionAgainst ordered compiled
+      (iterationActualSpliceOfNonempty input selection target hadmissible
+        hnonempty)) := by
   dsimp only
   let ordered := Splice.Input.PlugLayout.checkedCoalescedOpenRoot
     (iterationInput input selection target) hadmissible sourceBoundary
@@ -449,6 +471,22 @@ theorem properIterationRootAnchorItems_nonempty_complete
     ItemSeqIso.pullRelationEq hrels wire itemIso'
   obtain ⟨transport⟩ := ItemSeqIso.transportRootContraction wire pulledIso
     closed.flatWitness closed.flatReplacement closed.flatEquivalent
+  let targetActualRelsEq :=
+    transport.holeRelsEq.trans closed.flatActualRelsEq
+  let targetActualWire := transport.holeWire.symm.trans closed.flatActualWire
+  have targetActualIso : RegionIso signature targetActualWire
+      (Splice.Input.compiledSpliceHostView
+        (iterationInput input selection target) hadmissible).focus.holeRels
+      (transport.targetReplacement.renameRelations
+        (Splice.Input.relationRenamingOfEq targetActualRelsEq))
+      (iterationActualSpliceOfNonempty input selection target hadmissible
+        hnonempty) := by
+    rw [transport.targetReplacement_eq]
+    exact RegionIso.transportedReplacement_to_actual
+      transport.holeRelsEq closed.flatActualRelsEq transport.holeWire
+      closed.flatActualWire closed.flatReplacement
+      (iterationActualSpliceOfNonempty input selection target hadmissible
+        hnonempty) closed.flatActualIso
   exact ⟨{
     rels := anchorView.focus.holeRels
     relsEq := hrels
@@ -458,6 +496,9 @@ theorem properIterationRootAnchorItems_nonempty_complete
     witness := transport.targetWitness
     replacement := transport.targetReplacement
     equivalent := transport.equivalent
+    actualRelsEq := targetActualRelsEq
+    actualWire := targetActualWire
+    actualIso := targetActualIso
   }⟩
 
 /-- Transport the zero-spine closed root-anchor certificate into the
@@ -477,7 +518,8 @@ theorem properIterationRootAnchorItems_zero_complete
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
     let compiled := Splice.Input.compiledSpliceOpenRootItems ordered
-    Nonempty (OrderedRootItemContraction ordered compiled) := by
+    Nonempty (OrderedRootItemContractionAgainst ordered compiled
+      (iterationActualSpliceOfEmpty input selection target hadmissible)) := by
   dsimp only
   let ordered := Splice.Input.PlugLayout.checkedCoalescedOpenRoot
     (iterationInput input selection target) hadmissible sourceBoundary
@@ -507,6 +549,21 @@ theorem properIterationRootAnchorItems_zero_complete
     ItemSeqIso.pullRelationEq hrels wire itemIso'
   obtain ⟨transport⟩ := ItemSeqIso.transportRootContraction wire pulledIso
     closed.flatWitness closed.flatReplacement closed.flatEquivalent
+  let targetActualRelsEq :=
+    transport.holeRelsEq.trans closed.flatActualRelsEq
+  let targetActualWire := transport.holeWire.symm.trans closed.flatActualWire
+  have targetActualIso : RegionIso signature targetActualWire
+      (Splice.Input.compiledSpliceHostView
+        (iterationInput input selection target) hadmissible).focus.holeRels
+      (transport.targetReplacement.renameRelations
+        (Splice.Input.relationRenamingOfEq targetActualRelsEq))
+      (iterationActualSpliceOfEmpty input selection target hadmissible) := by
+    rw [transport.targetReplacement_eq]
+    exact RegionIso.transportedReplacement_to_actual
+      transport.holeRelsEq closed.flatActualRelsEq transport.holeWire
+      closed.flatActualWire closed.flatReplacement
+      (iterationActualSpliceOfEmpty input selection target hadmissible)
+      closed.flatActualIso
   exact ⟨{
     rels := anchorView.focus.holeRels
     relsEq := hrels
@@ -516,6 +573,9 @@ theorem properIterationRootAnchorItems_zero_complete
     witness := transport.targetWitness
     replacement := transport.targetReplacement
     equivalent := transport.equivalent
+    actualRelsEq := targetActualRelsEq
+    actualWire := targetActualWire
+    actualIso := targetActualIso
   }⟩
 
 end VisualProof.Rule.IterationSoundness

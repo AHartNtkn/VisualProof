@@ -47,6 +47,18 @@ structure ProperIterationRootAnchorContraction
           ).compilerLeaf.items ↔
       denoteRegion model named environment relEnv
         (flatWitness.toFocus.context.fill flatReplacement)
+  flatActualRelsEq : flatWitness.toFocus.holeRels =
+    (Splice.Input.compiledSpliceHostView
+      (iterationInput input selection target) hadmissible).focus.holeRels
+  flatActualWire : FiniteEquiv (Fin flatWitness.toFocus.holeWires)
+    (Fin (Splice.Input.compiledSpliceHostView
+      (iterationInput input selection target) hadmissible).focus.holeWires)
+  flatActualIso : RegionIso signature flatActualWire
+    (Splice.Input.compiledSpliceHostView
+      (iterationInput input selection target) hadmissible).focus.holeRels
+    (flatReplacement.renameRelations
+      (Splice.Input.relationRenamingOfEq flatActualRelsEq))
+    (iterationActualSpliceOfEmpty input selection target hadmissible)
   witness : Region.ContextPath root path
   replacement : Region signature witness.toFocus.holeWires
     witness.toFocus.holeRels
@@ -685,6 +697,11 @@ theorem properIterationRootAnchorContraction_complete
     flatWitness := alignment.targetWitness
     flatReplacement := canonicalActual
     flatEquivalent := itemsEquiv
+    flatActualRelsEq := targetActualRelsEq
+    flatActualWire := bridgeWire
+    flatActualIso := by
+      simpa [canonicalActual] using
+        (RegionIso.pulledBack_to_actual targetActualRelsEq bridgeWire actual)
     witness := scopedWitness
     replacement := scopedReplacement
     actualRelsEq := scopedActualRelsEq
