@@ -5,6 +5,7 @@ import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram/dia
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
+import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import { applyWireJoin } from '../rules/wire-join'
 import { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from '../rules/spawn'
 import { applyErasure, applyWireSever } from '../rules/erasure'
@@ -33,8 +34,7 @@ export type ProofContext = {
 /**
  * One serializable rule application. Replay carries no trust: applyStep calls
  * the real appliers, each enforcing its own gate. Conversion replays by
- * certificate (fuel-free, §3.7); deiteration records its fuel (the matcher is
- * deterministic, so replay reproduces the original search).
+ * certificates. Replay is entirely fuel-free and never reruns proof search.
  */
 export type ProofStep =
   | { readonly rule: 'openTermSpawn'; readonly region: RegionId; readonly term: Term }
@@ -44,7 +44,7 @@ export type ProofStep =
   | { readonly rule: 'erasure'; readonly sel: SubgraphSelection }
   | { readonly rule: 'wireSever'; readonly wire: WireId; readonly keep: readonly Endpoint[] }
   | { readonly rule: 'iteration'; readonly sel: SubgraphSelection; readonly target: RegionId }
-  | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly fuel: number }
+  | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
   | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly attachments: Readonly<Record<string, WireId>> }
@@ -85,7 +85,7 @@ export function applyStep(
     case 'erasure': return applyErasure(d, step.sel, orientation)
     case 'wireSever': return applyWireSever(d, step.wire, step.keep, orientation, reservation)
     case 'iteration': return applyIteration(d, step.sel, step.target, reservation)
-    case 'deiteration': return applyDeiteration(d, step.sel, step.fuel)
+    case 'deiteration': return applyDeiteration(d, step.sel, step.justifier, step.certificate)
     case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel, reservation)
     case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
     case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.attachments, reservation)

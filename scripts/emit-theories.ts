@@ -29,7 +29,7 @@ export function emitTheories(outDir: string): { written: string[] } {
   mkdirSync(outDir, { recursive: true })
   const written: string[] = []
   for (const { file, build } of sources) {
-    writeFileSync(join(outDir, file), `${JSON.stringify(theoryToJson(build()), null, 2)}\n`)
+    writeFileSync(join(outDir, file), `${JSON.stringify(theoryToJson(build()))}\n`)
     written.push(file)
   }
   return { written }

@@ -113,6 +113,13 @@ describe('verifyTheory — relation references', () => {
     return mkDiagramWithBoundary(b.build(), [w])
   }
 
+  function relationRefBody(defId: string) {
+    const b = new DiagramBuilder()
+    const node = b.ref(b.root, defId, 1)
+    const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
+    return mkDiagramWithBoundary(b.build(), [w])
+  }
+
   /** A theorem whose (identical) sides are a single reference node. */
   function refTheorem(defId: string, arity = 1): Theorem {
     const b = new DiagramBuilder()
@@ -162,6 +169,34 @@ describe('verifyTheory — relation references', () => {
   it('refuses a theorem side whose reference arity disagrees with the relation', () => {
     expect(() => verifyTheory({ relations: { R: simpleBody() }, theorems: [refTheorem('R', 2)] }))
       .toThrowError(/has arity 2 but the relation has arity 1/)
+  })
+
+  it('accepts relation references only to an earlier registered definition', () => {
+    expect(() => verifyTheory({
+      relations: { Base: simpleBody(), Alias: relationRefBody('Base') },
+      theorems: [],
+    })).not.toThrow()
+  })
+
+  it('refuses a forward relation reference', () => {
+    expect(() => verifyTheory({
+      relations: { Alias: relationRefBody('Base'), Base: simpleBody() },
+      theorems: [],
+    })).toThrowError(/relation 'Alias' body: reference node .* names unknown relation 'Base'/)
+  })
+
+  it('refuses a self-recursive relation definition', () => {
+    expect(() => verifyTheory({
+      relations: { Loop: relationRefBody('Loop') },
+      theorems: [],
+    })).toThrowError(/relation 'Loop' body: reference node .* names unknown relation 'Loop'/)
+  })
+
+  it('refuses a mutually recursive relation cycle at its first forward edge', () => {
+    expect(() => verifyTheory({
+      relations: { Left: relationRefBody('Right'), Right: relationRefBody('Left') },
+      theorems: [],
+    })).toThrowError(/relation 'Left' body: reference node .* names unknown relation 'Right'/)
   })
 })
 

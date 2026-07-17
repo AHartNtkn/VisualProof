@@ -9,7 +9,7 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import type { ConversionCertificate } from '../../../src/kernel/term/certificate'
 import { applyCongruenceJoin } from '../../../src/kernel/rules/congruence'
-import { applyDeiteration } from '../../../src/kernel/rules/iteration'
+import { applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 
 const p = (s: string) => parseTerm(s)
 const empty: ConversionCertificate = { leftSteps: [], rightSteps: [] }
@@ -169,7 +169,8 @@ describe('name-blind free ports (canonicalization at construction)', () => {
     ])
     const d = h.build()
     const sel = mkSelection(d, { region: cut, regions: [], nodes: [copy], wires: [] })
-    const out = applyDeiteration(d, sel, 100)
+    const evidence = findDeiterationEvidence(d, sel, 100)
+    const out = applyDeiteration(d, sel, evidence.justifier, evidence.certificate)
     expect(out.nodes[copy]).toBeUndefined()
     const ref = new DiagramBuilder()
     const rn = ref.termNode(ref.root, p('y'))

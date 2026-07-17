@@ -3,12 +3,17 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
+import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyAction, type ProofAction } from '../../../src/kernel/proof/action'
 import type { ProofContext } from '../../../src/kernel/proof/step'
 
 const p = (s: string) => parseTerm(s)
 const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+
+const deiterate = (d: Parameters<typeof applyDeiteration>[0], sel: Parameters<typeof applyDeiteration>[1], fuel: number) => {
+  const evidence = findDeiterationEvidence(d, sel, fuel)
+  return applyDeiteration(d, sel, evidence.justifier, evidence.certificate)
+}
 
 /** Host: node `y` at root wired to a hub, plus an empty cut to iterate into. */
 function host() {
@@ -90,7 +95,7 @@ describe('applyDeiteration', () => {
     // the copy is the unique node in the cut
     const copyId = Object.entries(iterated.nodes).find(([, x]) => x.region === cut)![0]
     const copySel = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
-    const back = applyDeiteration(iterated, copySel, 100)
+    const back = deiterate(iterated, copySel, 100)
     expect(exploreForm(back)).toBe(exploreForm(d))
   })
 
@@ -98,7 +103,7 @@ describe('applyDeiteration', () => {
     const { d, n } = host()
     // the original has no second copy anywhere: deiterating it is unjustified
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    expect(() => applyDeiteration(d, sel, 100))
+    expect(() => deiterate(d, sel, 100))
       .toThrowError(/no justifying occurrence found for deiteration at 'r0'/)
   })
 
@@ -119,7 +124,7 @@ describe('applyDeiteration', () => {
     ])
     const d = h.build()
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [a], wires: [] })
-    expect(() => applyDeiteration(d, sel, 100))
+    expect(() => deiterate(d, sel, 100))
       .toThrowError(/no justifying occurrence/)
   })
 
@@ -130,7 +135,7 @@ describe('applyDeiteration', () => {
     const n = h.termNode(h.root, p('\\x. x'))
     const d = h.build()
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
-    expect(() => applyDeiteration(d, sel, 100))
+    expect(() => deiterate(d, sel, 100))
       .toThrowError(/no justifying occurrence/)
     // TWO separately built identical nodes have DISTINCT output wires:
     // ∃x.P(x) ∧ ∃y.P(y) → ∃x.P(x) is erasure, not deiteration — refuse
@@ -139,7 +144,7 @@ describe('applyDeiteration', () => {
     h2.termNode(h2.root, p('\\x. x'))
     const d2 = h2.build()
     const sel2 = mkSelection(d2, { region: d2.root, regions: [], nodes: [a], wires: [] })
-    expect(() => applyDeiteration(d2, sel2, 100))
+    expect(() => deiterate(d2, sel2, 100))
       .toThrowError(/no justifying occurrence/)
   })
 
@@ -158,7 +163,7 @@ describe('applyDeiteration', () => {
     ])
     const d = h.build()
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [b], wires: [] })
-    const out = applyDeiteration(d, sel, 100)
+    const out = deiterate(d, sel, 100)
     expect(Object.keys(out.nodes)).toHaveLength(1)
     expect(out.nodes[a]).toBeDefined()
   })
@@ -182,7 +187,7 @@ describe('applyDeiteration', () => {
     ])
     const d = h.build()
     const sel = mkSelection(d, { region: c1, regions: [], nodes: [aT], wires: [] })
-    expect(() => applyDeiteration(d, sel, 100))
+    expect(() => deiterate(d, sel, 100))
       .toThrowError(/no justifying occurrence/)
   })
 
@@ -194,7 +199,7 @@ describe('applyDeiteration', () => {
     h.termNode(h.root, p('(\\x. x x x) (\\x. x x x)'))
     const d = h.build()
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [a], wires: [] })
-    expect(() => applyDeiteration(d, sel, 25))
+    expect(() => deiterate(d, sel, 25))
       .toThrowError(/undecided under fuel 25/)
   })
 })

@@ -38,6 +38,77 @@ def fill : DiagramContext signature outerWires holeWires outerRels holeRels ->
       .mk localWires
         (before.append (.cons (.bubble arity (child.fill body)) after))
 
+/-- Compose nested one-hole contexts.  The result first traverses `outer`
+and then `inner`; no second path or rebuilding representation is introduced. -/
+def comp
+    (outer : DiagramContext signature outerWires middleWires
+      outerRels middleRels)
+    (inner : DiagramContext signature middleWires holeWires
+      middleRels holeRels) :
+    DiagramContext signature outerWires holeWires outerRels holeRels :=
+  match outer with
+  | .hole => inner
+  | .cut localWires before after child =>
+      .cut localWires before after (child.comp inner)
+  | .bubble localWires before after arity child =>
+      .bubble localWires before after arity (child.comp inner)
+
+@[simp] theorem fill_comp
+    (outer : DiagramContext signature outerWires middleWires
+      outerRels middleRels)
+    (inner : DiagramContext signature middleWires holeWires
+      middleRels holeRels)
+    (body : Region signature holeWires holeRels) :
+    (outer.comp inner).fill body = outer.fill (inner.fill body) := by
+  induction outer with
+  | hole => rfl
+  | cut localWires before after child induction =>
+      simp only [comp, fill, induction]
+  | bubble localWires before after arity child induction =>
+      simp only [comp, fill, induction]
+
+/-- Canonical embedding of wires inherited by the outer context into the
+complete wire carrier visible at its hole. -/
+def outerWire :
+    DiagramContext signature outerWires holeWires outerRels holeRels →
+      Fin outerWires → Fin holeWires
+  | .hole => id
+  | .cut localWires _ _ child =>
+      child.outerWire ∘ Fin.castAdd localWires
+  | .bubble localWires _ _ _ child =>
+      child.outerWire ∘ Fin.castAdd localWires
+
+/-- Transporting the hole relation index commutes with adding a cut frame. -/
+theorem cut_transport_holeRels
+    {sourceHoleRels targetHoleRels : RelCtx}
+    (equality : sourceHoleRels = targetHoleRels)
+    (before after : ItemSeq signature (outerWires + localWires) outerRels)
+    (child : DiagramContext signature (outerWires + localWires) holeWires
+      outerRels targetHoleRels) :
+    equality.symm ▸
+        (DiagramContext.cut localWires before after child :
+          DiagramContext signature outerWires holeWires outerRels
+            targetHoleRels) =
+      DiagramContext.cut localWires before after (equality.symm ▸ child) := by
+  subst targetHoleRels
+  rfl
+
+/-- Transporting the hole relation index commutes with adding a bubble frame. -/
+theorem bubble_transport_holeRels
+    {sourceHoleRels targetHoleRels : RelCtx}
+    (equality : sourceHoleRels = targetHoleRels)
+    (before after : ItemSeq signature (outerWires + localWires) outerRels)
+    (child : DiagramContext signature (outerWires + localWires) holeWires
+      (arity :: outerRels) targetHoleRels) :
+    equality.symm ▸
+        (DiagramContext.bubble localWires before after arity child :
+          DiagramContext signature outerWires holeWires outerRels
+            targetHoleRels) =
+      DiagramContext.bubble localWires before after arity
+        (equality.symm ▸ child) := by
+  subst targetHoleRels
+  rfl
+
 end DiagramContext
 
 theorem denoteItemSeq_append
@@ -72,6 +143,61 @@ theorem denoteItemSeq_frame
           denoteItemSeq model named env rels after := by
   rw [denoteItemSeq_append]
   simp only [denoteItemSeq_cons]
+
+/-- Bubble-only descent preserves every outer wire value while exposing the
+denotation at the hole. -/
+theorem DiagramContext.denote_hole_of_cutDepth_zero_with_outer
+    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin outerWires -> model.Carrier)
+    (rels : RelEnv model.Carrier outerRels)
+    (body : Region signature holeWires holeRels)
+    (depth : ctx.cutDepth = 0)
+    (filled : denoteRegion model named env rels (ctx.fill body)) :
+    ∃ holeEnv : Fin holeWires -> model.Carrier,
+      ∃ holeRelEnv : RelEnv model.Carrier holeRels,
+        holeEnv ∘ ctx.outerWire = env ∧
+          denoteRegion model named holeEnv holeRelEnv body := by
+  induction ctx with
+  | hole =>
+      exact ⟨env, rels, rfl, filled⟩
+  | cut localWires before after child ih =>
+      simp [DiagramContext.cutDepth] at depth
+  | bubble localWires before after arity child ih =>
+      rcases filled with ⟨localEnv, hitems⟩
+      rcases (denoteItemSeq_frame model named
+        (extendWireEnv env localEnv) rels before after
+        (Item.bubble arity (child.fill body))).mp hitems with
+        ⟨_, ⟨relation, hchild⟩, _⟩
+      obtain ⟨holeEnv, holeRelEnv, outerAgrees, holeDenotes⟩ :=
+        ih (extendWireEnv env localEnv) (relation, rels) body depth hchild
+      refine ⟨holeEnv, holeRelEnv, ?_, holeDenotes⟩
+      funext wire
+      change holeEnv (child.outerWire (Fin.castAdd localWires wire)) = env wire
+      rw [show holeEnv (child.outerWire (Fin.castAdd localWires wire)) =
+          extendWireEnv env localEnv (Fin.castAdd localWires wire) from
+        congrFun outerAgrees (Fin.castAdd localWires wire)]
+      simp [extendWireEnv]
+
+/--
+Filling a context that crosses only bubble boundaries exposes a denotation of the
+hole body under the wire and relation environments chosen by those bubbles.
+-/
+theorem DiagramContext.denote_hole_of_cutDepth_zero
+    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin outerWires -> model.Carrier)
+    (rels : RelEnv model.Carrier outerRels)
+    (body : Region signature holeWires holeRels)
+    (depth : ctx.cutDepth = 0)
+    (filled : denoteRegion model named env rels (ctx.fill body)) :
+    ∃ holeEnv : Fin holeWires -> model.Carrier,
+      ∃ holeRelEnv : RelEnv model.Carrier holeRels,
+        denoteRegion model named holeEnv holeRelEnv body := by
+  obtain ⟨holeEnv, holeRelEnv, _, holeDenotes⟩ :=
+    ctx.denote_hole_of_cutDepth_zero_with_outer model named env rels body
+      depth filled
+  exact ⟨holeEnv, holeRelEnv, holeDenotes⟩
 
 private theorem succ_even_implies_odd {n : Nat} (h : (n + 1) % 2 = 0) :
     n % 2 = 1 := by

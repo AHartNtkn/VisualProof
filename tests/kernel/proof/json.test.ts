@@ -82,6 +82,15 @@ describe('step round-trips through JSON', () => {
     const { certificate } = applyConversion(d, n, p('s0'), 10)
 
     const sel = { region: 'r0', regions: ['r1'], nodes: ['n0'], wires: ['w0'] }
+    const occurrenceCertificate = {
+      region: 'r0',
+      regionMap: new Map([['root', 'r0']]),
+      nodeMap: new Map([['n0', 'n1']]),
+      wireMap: new Map([['w0', 'w1']]),
+      attachments: ['w1'],
+      binderMap: new Map(),
+      termCertificates: new Map([['n0', certificate]]),
+    }
     const steps: ProofStep[] = [
       { rule: 'openTermSpawn', region: 'r1', term: p('x') },
       { rule: 'relationSpawn', region: 'r1', defId: 'nat', arity: 1 },
@@ -90,7 +99,7 @@ describe('step round-trips through JSON', () => {
       { rule: 'erasure', sel },
       { rule: 'wireSever', wire: 'w0', keep: [{ node: 'n0', port: { kind: 'freeVar', name: 'y' } }] },
       { rule: 'iteration', sel, target: 'r1' },
-      { rule: 'deiteration', sel, fuel: 50 },
+      { rule: 'deiteration', sel, justifier: sel, certificate: occurrenceCertificate },
       { rule: 'doubleCutIntro', sel },
       { rule: 'doubleCutElim', region: 'r1' },
       { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: { z: 'w0' } },
@@ -129,8 +138,8 @@ describe('step round-trips through JSON', () => {
       ...(stepToJson({ rule: 'closedTermIntro', region: 'r1', term: p('\\x. x') }) as Record<string, unknown>),
       node: 'n0',
     })).toThrowError(/unknown field 'node'/)
-    expect(() => stepFromJson({ rule: 'deiteration', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, fuel: -1 }))
-      .toThrowError(/fuel/)
+    expect(() => stepFromJson({ rule: 'deiteration', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, fuel: 50 }))
+      .toThrowError(/unknown field 'fuel'/)
     expect(() => stepFromJson({ rule: 'relUnfold', node: 'n0', extra: 1 }))
       .toThrowError(/unknown field 'extra'/)
     expect(() => stepFromJson({ rule: 'relFold', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, defId: 'nat', args: ['w0'], extra: 1 }))

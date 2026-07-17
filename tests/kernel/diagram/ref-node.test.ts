@@ -8,7 +8,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
-import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
+import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { parseTerm } from '../../../src/kernel/term/parse'
 
 const p = (s: string) => parseTerm(s)
@@ -208,7 +208,8 @@ describe('ref node — iteration round-trip', () => {
     // deiterate the copy back out
     const copyId = Object.entries(iterated.nodes).find(([, n]) => n.kind === 'ref' && n.region === cut)![0]
     const selCopy = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
-    const back = applyDeiteration(iterated, selCopy, 100)
+    const evidence = findDeiterationEvidence(iterated, selCopy, 100)
+    const back = applyDeiteration(iterated, selCopy, evidence.justifier, evidence.certificate)
     expect(exploreForm(back)).toBe(exploreForm(d0))
   })
 })

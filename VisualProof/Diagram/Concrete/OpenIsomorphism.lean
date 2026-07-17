@@ -25,6 +25,12 @@ def refl (diagram : OpenConcreteDiagram) :
         simp only [List.map_cons]
         congr
 
+/-- Equality is the degenerate ordered-interface isomorphism. -/
+def ofEq {source target : OpenConcreteDiagram}
+    (equality : source = target) : OpenConcreteIso source target := by
+  subst target
+  exact refl source
+
 def symm {source target : OpenConcreteDiagram}
     (iso : OpenConcreteIso source target) : OpenConcreteIso target source where
   diagram := iso.diagram.symm

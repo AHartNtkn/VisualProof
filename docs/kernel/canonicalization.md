@@ -110,3 +110,11 @@ The algorithm is **exact always**: it never makes heuristic choices. This is the
 ## Storage note
 
 `diagramFingerprint` in `fingerprint.ts` returns `canonicalForm(d)` — the full canonical string. This string is the comparison key for isomorphism. Do not compare hashes for soundness-relevant equality. If profiling shows fingerprint length is a storage concern, hash at the storage layer and keep the full canonical string as the in-memory comparison key; that way a hash collision is caught immediately on comparison and cannot silently produce an unsound proof.
+
+## Formal authority boundary
+
+The canonical mathematical semantics lives in Lean. Concrete isomorphism is connected to denotation by `ConcreteIso.denote_iff` and `OpenConcreteIso.denote_iff` in `VisualProof/Diagram/Concrete/Semantics.lean`; certified beta-eta occurrence equivalence is connected to open denotation by `OpenOccurrenceEquiv.denote_iff` in `VisualProof/Diagram/Concrete/Elaboration/Compile.lean`.
+
+The exact finite matcher theorem applies specifically to Lean's declarative `OccurrenceProblem` and `ExactOpenOccurrenceEmbedding`: `findOccurrences_sound` validates every returned certificate, while `findOccurrences_exact_complete` proves that complete finite exploration returns every exact embedding. It is not a general completeness theorem for the proof calculus or for untyped beta-eta equality.
+
+TypeScript correspondence checks compare the runtime tag inventory and deterministic matcher fixtures with Lean outputs. Those checks monitor the implementation boundary; they are not a machine proof of TypeScript execution. Beta-eta matching remains explicitly conditional on the term oracle deciding the relevant pairs and on structural exploration completing. An undecided comparison or exhausted frontier is never treated as a negative proof.

@@ -5,7 +5,7 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyOpenTermSpawn } from '../../../src/kernel/rules/spawn'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
-import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
+import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 
 const p = (s: string) => parseTerm(s)
@@ -76,6 +76,7 @@ describe('inverse round-trips (fingerprint identities)', () => {
     const iterated = applyIteration(d, sel, cut)
     const copyId = Object.entries(iterated.nodes).find(([, x]) => x.region === cut)![0]
     const copySel = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
-    expect(exploreForm(applyDeiteration(iterated, copySel, 100))).toBe(exploreForm(d))
+    const evidence = findDeiterationEvidence(iterated, copySel, 100)
+    expect(exploreForm(applyDeiteration(iterated, copySel, evidence.justifier, evidence.certificate))).toBe(exploreForm(d))
   })
 })

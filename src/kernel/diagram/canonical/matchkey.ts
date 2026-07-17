@@ -1,6 +1,7 @@
 import type { Term } from '../../term/term'
 import { app, assertWellFormedTerm, bvar, freePorts, lam, termEq } from '../../term/term'
 import { normalize } from '../../term/reduce'
+import type { ConversionCertificate } from '../../term/certificate'
 import { DiagramError } from '../diagram'
 
 /**
@@ -34,7 +35,7 @@ export function closeOverPorts(t: Term): Term {
 }
 
 export type NodeMatchVerdict =
-  | { readonly status: 'match' }
+  | { readonly status: 'match'; readonly certificate: ConversionCertificate }
   | { readonly status: 'no-match' }
   | { readonly status: 'undecided'; readonly detail: string }
 
@@ -54,7 +55,7 @@ export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMat
   // Sound shortcut, not a heuristic: structural equality of closures implies
   // convertibility by reflexivity — and avoids spurious 'undecided' verdicts
   // on identical non-normalizing terms.
-  if (termEq(ca, cb)) return { status: 'match' }
+  if (termEq(ca, cb)) return { status: 'match', certificate: { leftSteps: [], rightSteps: [] } }
   const na = normalize(ca, fuel)
   if (na.status === 'fuel-exhausted') {
     return { status: 'undecided', detail: `left closure did not normalize within ${fuel} steps` }
@@ -63,5 +64,7 @@ export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMat
   if (nb.status === 'fuel-exhausted') {
     return { status: 'undecided', detail: `right closure did not normalize within ${fuel} steps` }
   }
-  return termEq(na.term, nb.term) ? { status: 'match' } : { status: 'no-match' }
+  return termEq(na.term, nb.term)
+    ? { status: 'match', certificate: { leftSteps: na.path, rightSteps: nb.path } }
+    : { status: 'no-match' }
 }

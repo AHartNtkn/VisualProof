@@ -68,12 +68,8 @@ describe('applyStep mirrors the direct appliers', () => {
 
   it('headStrip step decomposes a rigid-head equation, replaying through replayProof', () => {
     const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, pp('f a b'))
-    const n2 = h.termNode(h.root, pp('f a c'))
-    h.wire(h.root, [
-      { node: n1, port: { kind: 'freeVar', name: 'f' } },
-      { node: n2, port: { kind: 'freeVar', name: 'f' } },
-    ])
+    const n1 = h.termNode(h.root, pp('\\x. x a b'))
+    const n2 = h.termNode(h.root, pp('\\x. x a c'))
     h.wire(h.root, [
       { node: n1, port: { kind: 'freeVar', name: 'a' } },
       { node: n2, port: { kind: 'freeVar', name: 'a' } },

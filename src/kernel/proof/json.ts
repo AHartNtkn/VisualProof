@@ -8,6 +8,7 @@ import { diagramToJson, diagramFromJson, parsePortKey } from '../diagram/json'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
+import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { ProofStep } from './step'
 import type { PlacementHint, ProofAction, ProofAllocation } from './action'
@@ -112,6 +113,63 @@ function certFromJson(v: unknown, what: string): ConversionCertificate {
   return { leftSteps: steps(v.leftSteps, `${what}.leftSteps`), rightSteps: steps(v.rightSteps, `${what}.rightSteps`) }
 }
 
+function idMapToJson(map: ReadonlyMap<string, string>): unknown {
+  return [...map].sort(([left], [right]) => left.localeCompare(right))
+}
+
+function idMapFromJson(v: unknown, what: string): Map<string, string> {
+  if (!Array.isArray(v)) fail(`${what} must be an array`)
+  const result = new Map<string, string>()
+  for (const [index, entry] of v.entries()) {
+    if (!Array.isArray(entry) || entry.length !== 2) fail(`${what}[${index}] must be a [pattern, host] pair`)
+    const pattern = str(entry[0], `${what}[${index}][0]`)
+    const host = str(entry[1], `${what}[${index}][1]`)
+    if (result.has(pattern)) fail(`${what} repeats pattern id '${pattern}'`)
+    result.set(pattern, host)
+  }
+  return result
+}
+
+function occurrenceCertificateToJson(certificate: OccurrenceCertificate): unknown {
+  return {
+    region: certificate.region,
+    regionMap: idMapToJson(certificate.regionMap),
+    nodeMap: idMapToJson(certificate.nodeMap),
+    wireMap: idMapToJson(certificate.wireMap),
+    attachments: [...certificate.attachments],
+    binderMap: idMapToJson(certificate.binderMap),
+    termCertificates: [...certificate.termCertificates]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([node, conversion]) => [node, certToJson(conversion)]),
+  }
+}
+
+function occurrenceCertificateFromJson(v: unknown, what: string): OccurrenceCertificate {
+  if (!isRecord(v)) fail(`${what} must be an object`)
+  assertOnlyKeys(v, [
+    'region', 'regionMap', 'nodeMap', 'wireMap', 'attachments', 'binderMap', 'termCertificates',
+  ], what)
+  if (!Array.isArray(v.termCertificates)) fail(`${what}.termCertificates must be an array`)
+  const termCertificates = new Map<string, ConversionCertificate>()
+  for (const [index, entry] of v.termCertificates.entries()) {
+    if (!Array.isArray(entry) || entry.length !== 2) {
+      fail(`${what}.termCertificates[${index}] must be a [node, certificate] pair`)
+    }
+    const node = str(entry[0], `${what}.termCertificates[${index}][0]`)
+    if (termCertificates.has(node)) fail(`${what}.termCertificates repeats node '${node}'`)
+    termCertificates.set(node, certFromJson(entry[1], `${what}.termCertificates[${index}][1]`))
+  }
+  return {
+    region: str(v.region, `${what}.region`),
+    regionMap: idMapFromJson(v.regionMap, `${what}.regionMap`),
+    nodeMap: idMapFromJson(v.nodeMap, `${what}.nodeMap`),
+    wireMap: idMapFromJson(v.wireMap, `${what}.wireMap`),
+    attachments: strArray(v.attachments, `${what}.attachments`),
+    binderMap: idMapFromJson(v.binderMap, `${what}.binderMap`),
+    termCertificates,
+  }
+}
+
 function occToJson(o: AbstractionOccurrence): unknown {
   return { sel: selToJson(o.sel), args: [...o.args] }
 }
@@ -149,7 +207,12 @@ export function stepToJson(s: ProofStep): unknown {
     case 'iteration':
       return { rule: s.rule, sel: selToJson(s.sel), target: s.target }
     case 'deiteration':
-      return { rule: s.rule, sel: selToJson(s.sel), fuel: s.fuel }
+      return {
+        rule: s.rule,
+        sel: selToJson(s.sel),
+        justifier: selToJson(s.justifier),
+        certificate: occurrenceCertificateToJson(s.certificate),
+      }
     case 'doubleCutIntro':
       return { rule: s.rule, sel: selToJson(s.sel) }
     case 'doubleCutElim':
@@ -218,9 +281,13 @@ export function stepFromJson(j: unknown): ProofStep {
       assertOnlyKeys(j, ['rule', 'sel', 'target'], 'iteration step')
       return { rule, sel: selFromJson(j.sel, 'sel'), target: str(j.target, 'target') }
     case 'deiteration': {
-      assertOnlyKeys(j, ['rule', 'sel', 'fuel'], 'deiteration step')
-      if (typeof j.fuel !== 'number' || !Number.isInteger(j.fuel) || j.fuel <= 0) fail('fuel must be a positive integer')
-      return { rule, sel: selFromJson(j.sel, 'sel'), fuel: j.fuel }
+      assertOnlyKeys(j, ['rule', 'sel', 'justifier', 'certificate'], 'deiteration step')
+      return {
+        rule,
+        sel: selFromJson(j.sel, 'sel'),
+        justifier: selFromJson(j.justifier, 'justifier'),
+        certificate: occurrenceCertificateFromJson(j.certificate, 'certificate'),
+      }
     }
     case 'doubleCutIntro':
       assertOnlyKeys(j, ['rule', 'sel'], 'doubleCutIntro step')

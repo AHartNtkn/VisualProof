@@ -382,8 +382,8 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   const H2pc = e.newNodeIn(cut3c, snap, F2term)
   e.push('t9 cJ E1c=H1pc', { rule: 'congruenceJoin', a: E1c, b: H1pc, certificate: idCert })
   e.push('t9b cJ E2c=H2pc', { rule: 'congruenceJoin', a: E2c, b: H2pc, certificate: idCert })
-  e.push('t11 deiterate E1c', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E1c], wires: [] }), fuel: 64 })
-  e.push('t11b deiterate E2c', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E2c], wires: [] }), fuel: 64 })
+  e.pushDeiteration('t11 deiterate E1c', mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E1c], wires: [] }), 64)
+  e.pushDeiteration('t11b deiterate E2c', mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E2c], wires: [] }), 64)
 
   // b: manufactured root base fact {Z1, M=G(0).F1, Mp=G(0).F2}; deiterate the copy's base
   const M = e.intro('b1 intro G(0).F1', e.cur.root, lam(PL(ZEROp, SC(bvar(0)))))
@@ -400,11 +400,8 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   e.push('b5 cJ Z1=Z2', { rule: 'congruenceJoin', a: Z1, b: Z2, certificate: idCert })
   e.push('b6 erase Z2 dup', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [Z2], wires: [] }) })
   const wZ = e.wireOf(Z1, 'output')
-  e.push('A7 deiterate base conjunct', {
-    rule: 'deiteration',
-    sel: mkSelection(e.cur, { region: cut1c, regions: [], nodes: [nzC, F1_0, F2_0], wires: [w0C, o0] }),
-    fuel: 64,
-  })
+  e.pushDeiteration('A7 deiterate base conjunct',
+    mkSelection(e.cur, { region: cut1c, regions: [], nodes: [nzC, F1_0, F2_0], wires: [w0C, o0] }), 64)
 
   // c: manufactured root closure fact; discharge the copy's closure, unwrap
   snap = e.cur
@@ -431,10 +428,10 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   e.push('c7 cJ E1=H1p', { rule: 'congruenceJoin', a: E1, b: H1p, certificate: idCert })
   e.push('c7b cJ E2=H2p', { rule: 'congruenceJoin', a: E2, b: H2p, certificate: idCert })
   e.push('c7c cJ D1=D2', { rule: 'congruenceJoin', a: D1, b: D2, certificate: idCert })
-  e.push('c8 deiterate E1', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [E1], wires: [] }), fuel: 64 })
-  e.push('c8b deiterate E2', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [E2], wires: [] }), fuel: 64 })
+  e.pushDeiteration('c8 deiterate E1', mkSelection(e.cur, { region: cutB, regions: [], nodes: [E1], wires: [] }), 64)
+  e.pushDeiteration('c8b deiterate E2', mkSelection(e.cur, { region: cutB, regions: [], nodes: [E2], wires: [] }), 64)
   e.push('c8c erase seedB', { rule: 'erasure', sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [seedB], wires: [e.wireOf(seedB, 'output')] }) })
-  e.push('A8 deiterate Cl conjunct', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut1c, regions: [cut2c], nodes: [], wires: [] }), fuel: 64 })
+  e.pushDeiteration('A8 deiterate Cl conjunct', mkSelection(e.cur, { region: cut1c, regions: [cut2c], nodes: [], wires: [] }), 64)
   e.push('A9 dcElim cut1c', { rule: 'doubleCutElim', region: cut1c })
 
   // e: apply the G(a) function pair to the wn line
@@ -587,7 +584,7 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   const H1pc = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined)
     .find((id) => e.cur.wires[wyC]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === 's0'))!
   e.push('t9 cJ E1c=H1pc', { rule: 'congruenceJoin', a: E1c, b: H1pc, certificate: idCert })
-  e.push('t11 deiterate E1c', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E1c], wires: [] }), fuel: 64 })
+  e.pushDeiteration('t11 deiterate E1c', mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E1c], wires: [] }), 64)
 
   // b: root base fact `0 + b` —o— `b + 0` (units are pure conversion)
   const Zs = e.intro('b0 intro K-seed', e.cur.root, ZEROp)
@@ -607,11 +604,8 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   e.push('b6 erase Z2 dup', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [Z2], wires: [] }) })
   const wZ = e.wireOf(Z1, 'output')
   const wM = e.wireOf(M, 'output')
-  e.push('A7 deiterate base conjunct', {
-    rule: 'deiteration',
-    sel: mkSelection(e.cur, { region: cut1c, regions: [], nodes: [nzC, P1_0, P2_0], wires: [w0C, o0] }),
-    fuel: 64,
-  })
+  e.pushDeiteration('A7 deiterate base conjunct',
+    mkSelection(e.cur, { region: cut1c, regions: [], nodes: [nzC, P1_0, P2_0], wires: [w0C, o0] }), 64)
 
   // c: root Cl fact; the inductive step cites succShiftS inside cutB
   snap = e.cur
@@ -672,12 +666,12 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   const H2p = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined)
     .find((id) => e.cur.wires[wyF]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === 's1'))!
   e.push('c8 cJ E2=H2p', { rule: 'congruenceJoin', a: E2, b: H2p, certificate: idCert })
-  e.push('c9 deiterate E2', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [E2], wires: [] }), fuel: 64 })
+  e.pushDeiteration('c9 deiterate E2', mkSelection(e.cur, { region: cutB, regions: [], nodes: [E2], wires: [] }), 64)
   e.push('c10 erase occurrence leftovers', {
     rule: 'erasure',
     sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [natRef2], wires: [] }),
   })
-  e.push('A8 deiterate Cl conjunct', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut1c, regions: [cut2c], nodes: [], wires: [] }), fuel: 64 })
+  e.pushDeiteration('A8 deiterate Cl conjunct', mkSelection(e.cur, { region: cut1c, regions: [cut2c], nodes: [], wires: [] }), 64)
   e.push('A9 dcElim cut1c', { rule: 'doubleCutElim', region: cut1c })
   e.push('e1 erase base fact', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [M, Mp, Z1], wires: [wM, wZ] }) })
   e.push('e2 erase Cl fact', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [cutA], nodes: [], wires: [] }) })
@@ -829,8 +823,8 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   const cpAtom = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'atom' && n.region === cut1c)![0]
   const cpClosure = Object.entries(e.cur.regions).find(([id, r]) => r.kind === 'cut' && r.parent === cut1c && Object.values(e.cur.regions).some((rr) => rr.kind === 'cut' && rr.parent === id))![0]
   e.push('bridge base lines', { rule: 'wireJoin', a: w0s, b: argWire(e, cpZero, 0) })
-  e.push('deiterate copy base', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut1c, regions: [], nodes: [cpZero, cpAtom], wires: [] }), fuel: 64 })
-  e.push('deiterate copy closure', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut1c, regions: [cpClosure], nodes: [], wires: [] }), fuel: 64 })
+  e.pushDeiteration('deiterate copy base', mkSelection(e.cur, { region: cut1c, regions: [], nodes: [cpZero, cpAtom], wires: [] }), 64)
+  e.pushDeiteration('deiterate copy closure', mkSelection(e.cur, { region: cut1c, regions: [cpClosure], nodes: [], wires: [] }), 64)
   e.push('dcElim cut1c', { rule: 'doubleCutElim', region: cut1c })
   const rNn = Object.entries(e.cur.nodes).find(([, n]) => n.kind === 'atom' && n.region === cI)![0]
 
@@ -843,9 +837,9 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   const mLine = argWire(e, succCopy, 0)
   const rmAtom = e.cur.wires[mLine]!.endpoints.find((ep) => ep.node !== succCopy)!.node
   e.push('bind m=n', { rule: 'wireJoin', a: wn, b: mLine })
-  e.push('deiterate R(m) against R(n)', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut2c2, regions: [], nodes: [rmAtom], wires: [] }), fuel: 64 })
+  e.pushDeiteration('deiterate R(m) against R(n)', mkSelection(e.cur, { region: cut2c2, regions: [], nodes: [rmAtom], wires: [] }), 64)
   e.push('bind t=s', { rule: 'wireJoin', a: ws, b: argWire(e, succCopy, 1) })
-  e.push('deiterate Succ(n,s) against hypothesis', { rule: 'deiteration', sel: mkSelection(e.cur, { region: cut2c2, regions: [], nodes: [succCopy], wires: [] }), fuel: 64 })
+  e.pushDeiteration('deiterate Succ(n,s) against hypothesis', mkSelection(e.cur, { region: cut2c2, regions: [], nodes: [succCopy], wires: [] }), 64)
   e.push('dcElim closure copy', { rule: 'doubleCutElim', region: cut2c2 })
   e.push('erase R(n)', { rule: 'erasure', sel: mkSelection(e.cur, { region: cI, regions: [], nodes: [rNn], wires: [] }) })
 

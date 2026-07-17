@@ -217,6 +217,19 @@ structure FragmentLayout (d : ConcreteDiagram) (selection : CheckedSelection d) 
 
 namespace FragmentLayout
 
+/-- A checked selection determines its fragment layout uniquely.  The explicit
+layout parameter carries only the selection's already-fixed external-binder
+list; its proof field is irrelevant. -/
+theorem unique (left right : FragmentLayout d selection) : left = right := by
+  cases left with
+  | mk leftBinders leftExact =>
+      cases right with
+      | mk rightBinders rightExact =>
+          have hbinders : leftBinders = rightBinders :=
+            leftExact.trans rightExact.symm
+          cases hbinders
+          congr
+
 def proxyCount (layout : FragmentLayout d selection) : Nat :=
   layout.externalBinders.length
 
@@ -572,10 +585,52 @@ private def fragmentWire (d : ConcreteDiagram)
     (d.fragmentInternalWire selection layout)
     (d.fragmentBoundaryWire selection layout)
 
-private def fragmentWireOrigin (selection : CheckedSelection d)
+/-- The host wire copied by an extracted internal or boundary wire.  This is
+the authoritative wire-provenance map used by extraction soundness. -/
+def fragmentWireOrigin (selection : CheckedSelection d)
     (layout : FragmentLayout d selection) :
     Fin layout.wireCount → Fin d.wireCount :=
   Fin.addCases selection.internalWires.get selection.touchingWires.get
+
+/-- Every extracted boundary wire comes from a host wire visible at the
+selection anchor. -/
+theorem touchingWire_scope_encloses_anchor
+    (host : CheckedDiagram signature)
+    (selection : CheckedSelection host.val)
+    (index : Fin selection.touchingWires.length) :
+    host.val.Encloses
+      (host.val.wires (selection.touchingWires.get index)).scope
+      selection.val.anchor := by
+  have htouching : selection.touchingWires.get index ∈
+      selection.touchingWires := List.get_mem _ _
+  obtain ⟨hnotInternal, endpoint, hendpoint, hselectedEndpoint⟩ :=
+    selection.mem_touchingWires_consequences htouching
+  have hscopeNode := host.property.wire_scopes_enclose
+    (selection.touchingWires.get index) endpoint hendpoint
+  rcases (selection.mem_selectedNodes endpoint.node).1 hselectedEndpoint with
+    hdirect | hsubtree
+  · have howner := selection.property.directNodes_at_anchor endpoint.node
+      hdirect
+    rwa [howner] at hscopeNode
+  · obtain ⟨child, hchild, hchildNode⟩ := hsubtree
+    rcases host.val.enclosingRegions_comparable hscopeNode hchildNode with
+      hscopeChild | hchildScope
+    · have hparent := selection.property.childRoots_direct child hchild
+      rcases ConcreteElaboration.encloses_direct_child hparent hscopeChild with
+        hscopeEq | hscopeAnchor
+      · exfalso
+        apply hnotInternal
+        apply selection.selectedScope_mem_internalWires
+        rw [hscopeEq]
+        exact (selection.mem_selectedRegions child).1
+          ((selection.mem_selectedRegions child).2
+            ⟨child, hchild, ConcreteDiagram.Encloses.refl host.val child⟩)
+      · exact hscopeAnchor
+    · exfalso
+      apply hnotInternal
+      apply selection.selectedScope_mem_internalWires
+      exact (selection.mem_selectedRegions _).1
+        ((selection.mem_selectedRegions _).2 ⟨child, hchild, hchildScope⟩)
 
 /-- The ordinary concrete graph underlying extraction. -/
 def extractDiagramRaw (d : ConcreteDiagram) (selection : CheckedSelection d)
@@ -599,6 +654,15 @@ def extractOpenRaw (d : ConcreteDiagram) (selection : CheckedSelection d)
   diagram := d.extractDiagramRaw selection layout
   boundary := d.extractBoundaryRaw selection layout
 
+@[simp] theorem extractDiagramRaw_boundaryWire_scope
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection)
+    (index : Fin layout.boundaryWireCount) :
+    ((d.extractDiagramRaw selection layout).wires
+      (layout.boundaryWire index)).scope = layout.root := by
+  simp [extractDiagramRaw, fragmentWire, fragmentBoundaryWire,
+    FragmentLayout.boundaryWire]
+
 @[simp] theorem extractDiagramRaw_root_region (d : ConcreteDiagram)
     (selection : CheckedSelection d) (layout : FragmentLayout d selection) :
     (d.extractDiagramRaw selection layout).regions layout.root = .sheet := by
@@ -620,6 +684,51 @@ theorem extractDiagramRaw_materialRegion (d : ConcreteDiagram)
       d.fragmentMaterialRegion selection layout index := by
   rw [layout.materialRegion_eq_succ_natAdd]
   simp [extractDiagramRaw, fragmentRegion]
+
+theorem extractDiagramRaw_materialRegion_sheet
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection)
+    (index : Fin layout.materialRegionCount)
+    (hkind : d.regions (selection.selectedRegions.get index) = .sheet) :
+    (d.extractDiagramRaw selection layout).regions
+        (layout.materialRegion index) =
+      .cut layout.bodyContainer := by
+  rw [d.extractDiagramRaw_materialRegion selection layout index]
+  change d.fragmentMaterialRegion selection layout index = _
+  unfold fragmentMaterialRegion
+  rw [hkind]
+  rfl
+
+theorem extractDiagramRaw_materialRegion_cut
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection)
+    (index : Fin layout.materialRegionCount)
+    (parent : Fin d.regionCount)
+    (hkind : d.regions (selection.selectedRegions.get index) = .cut parent) :
+    (d.extractDiagramRaw selection layout).regions
+        (layout.materialRegion index) =
+      .cut (d.fragmentParent layout parent) := by
+  rw [d.extractDiagramRaw_materialRegion selection layout index]
+  change d.fragmentMaterialRegion selection layout index = _
+  unfold fragmentMaterialRegion
+  rw [hkind]
+  rfl
+
+theorem extractDiagramRaw_materialRegion_bubble
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection)
+    (index : Fin layout.materialRegionCount)
+    (parent : Fin d.regionCount) (arity : Nat)
+    (hkind : d.regions (selection.selectedRegions.get index) =
+      .bubble parent arity) :
+    (d.extractDiagramRaw selection layout).regions
+        (layout.materialRegion index) =
+      .bubble (d.fragmentParent layout parent) arity := by
+  rw [d.extractDiagramRaw_materialRegion selection layout index]
+  change d.fragmentMaterialRegion selection layout index = _
+  unfold fragmentMaterialRegion
+  rw [hkind]
+  rfl
 
 /-- The extraction-generated terminal-body binder interface. -/
 def extractedBinderSpine (d : ConcreteDiagram)
@@ -687,6 +796,49 @@ theorem fragmentBinder_externalBinder
     (layout : FragmentLayout d selection) (index : Fin layout.nodeCount) :
     (d.extractDiagramRaw selection layout).nodes index =
       d.fragmentNode selection layout index := rfl
+
+theorem extractDiagramRaw_node_term
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection) (index : Fin layout.nodeCount)
+    (region : Fin d.regionCount) (freePorts : Nat)
+    (term : Lambda.Term 0 (Fin freePorts))
+    (hnode : d.nodes (selection.selectedNodes.get index) =
+      .term region freePorts term) :
+    (d.extractDiagramRaw selection layout).nodes index =
+      .term (d.fragmentParent layout region) freePorts term := by
+  rw [d.extractDiagramRaw_node selection layout index]
+  change d.fragmentNode selection layout index = _
+  unfold fragmentNode
+  rw [hnode]
+  rfl
+
+theorem extractDiagramRaw_node_atom
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection) (index : Fin layout.nodeCount)
+    (region binder : Fin d.regionCount)
+    (hnode : d.nodes (selection.selectedNodes.get index) =
+      .atom region binder) :
+    (d.extractDiagramRaw selection layout).nodes index =
+      .atom (d.fragmentParent layout region) (d.fragmentBinder layout binder) := by
+  rw [d.extractDiagramRaw_node selection layout index]
+  change d.fragmentNode selection layout index = _
+  unfold fragmentNode
+  rw [hnode]
+  rfl
+
+theorem extractDiagramRaw_node_named
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection) (index : Fin layout.nodeCount)
+    (region : Fin d.regionCount) (definition : Nat) (arity : Nat)
+    (hnode : d.nodes (selection.selectedNodes.get index) =
+      .named region definition arity) :
+    (d.extractDiagramRaw selection layout).nodes index =
+      .named (d.fragmentParent layout region) definition arity := by
+  rw [d.extractDiagramRaw_node selection layout index]
+  change d.fragmentNode selection layout index = _
+  unfold fragmentNode
+  rw [hnode]
+  rfl
 
 theorem extractDiagramRaw_node_region
     (d : ConcreteDiagram) (selection : CheckedSelection d)
@@ -806,6 +958,18 @@ theorem fragmentEndpoint?_some_injective
   rw [fragmentEndpoint?_origin selection hfirst,
     fragmentEndpoint?_origin selection hsecond]
 
+theorem fragmentEndpoint_selectedNode
+    (selection : CheckedSelection d)
+    (node : Fin selection.selectedNodes.length) (port : CPort) :
+    fragmentEndpoint? selection
+        ({ node := selection.selectedNodes.get node, port := port } :
+          CEndpoint d.nodeCount) =
+      some ({ node := node, port := port } :
+        CEndpoint selection.selectedNodes.length) := by
+  unfold fragmentEndpoint?
+  rw [indexOf?_get_eq_some_of_nodup selection.selectedNodes_nodup]
+  rfl
+
 @[simp] theorem extractDiagramRaw_wire_endpoints
     (d : ConcreteDiagram) (selection : CheckedSelection d)
     (layout : FragmentLayout d selection)
@@ -834,6 +998,34 @@ theorem mem_extractDiagramRaw_wire_endpoints_iff
         fragmentEndpoint? selection original = some endpoint := by
   rw [d.extractDiagramRaw_wire_endpoints selection layout wire]
   exact List.mem_filterMap
+
+theorem mem_extractDiagramRaw_internalWire_endpoints_iff
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection)
+    (index : Fin layout.internalWireCount)
+    (endpoint : CEndpoint layout.nodeCount) :
+    endpoint ∈ ((d.extractDiagramRaw selection layout).wires
+        (layout.internalWire index)).endpoints ↔
+      ∃ original,
+        original ∈ (d.wires (selection.internalWires.get index)).endpoints ∧
+          fragmentEndpoint? selection original = some endpoint := by
+  simpa [fragmentWireOrigin, FragmentLayout.internalWire] using
+    d.mem_extractDiagramRaw_wire_endpoints_iff selection layout
+      (layout.internalWire index) endpoint
+
+theorem mem_extractDiagramRaw_boundaryWire_endpoints_iff
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection)
+    (index : Fin layout.boundaryWireCount)
+    (endpoint : CEndpoint layout.nodeCount) :
+    endpoint ∈ ((d.extractDiagramRaw selection layout).wires
+        (layout.boundaryWire index)).endpoints ↔
+      ∃ original,
+        original ∈ (d.wires (selection.touchingWires.get index)).endpoints ∧
+          fragmentEndpoint? selection original = some endpoint := by
+  simpa [fragmentWireOrigin, FragmentLayout.boundaryWire] using
+    d.mem_extractDiagramRaw_wire_endpoints_iff selection layout
+      (layout.boundaryWire index) endpoint
 
 theorem fragmentWireOrigin_injective
     (selection : CheckedSelection d)
@@ -1976,6 +2168,17 @@ theorem extractDiagramRaw_internalWire_scope
     (d.fragmentParent_eq_bodyContainer_or_materialRegion selection layout
       (d.wires (selection.internalWires.get index)).scope)
 
+theorem extractDiagramRaw_internalWire_scope_exact
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection)
+    (index : Fin layout.internalWireCount) :
+    ((d.extractDiagramRaw selection layout).wires
+        (layout.internalWire index)).scope =
+      d.fragmentParent layout
+        (d.wires (selection.internalWires.get index)).scope := by
+  simp [extractDiagramRaw, fragmentWire, FragmentLayout.internalWire,
+    fragmentInternalWire]
+
 /-- Every material region is attached beneath the terminal body or material. -/
 theorem extractDiagramRaw_materialRegion_parent
     (d : ConcreteDiagram) (selection : CheckedSelection d)
@@ -2255,6 +2458,16 @@ theorem extractedBinderSpine_target_region
     (d.extractBoundaryRaw selection layout).length =
       selection.touchingWires.length := by
   simp [extractBoundaryRaw, FragmentLayout.boundaryWireCount]
+
+/-- Extraction emits one distinct boundary wire for each touching host wire;
+ordered boundary positions therefore identify their extracted wire uniquely. -/
+theorem extractBoundaryRaw_get_injective (d : ConcreteDiagram)
+    (selection : CheckedSelection d) (layout : FragmentLayout d selection) :
+    Function.Injective (d.extractBoundaryRaw selection layout).get := by
+  intro left right equality
+  apply Fin.ext
+  have values := congrArg Fin.val equality
+  simpa [extractBoundaryRaw, FragmentLayout.boundaryWire] using values
 
 theorem extractBoundaryRaw_root_scoped (d : ConcreteDiagram)
     (selection : CheckedSelection d) (layout : FragmentLayout d selection) :

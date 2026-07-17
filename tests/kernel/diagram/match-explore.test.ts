@@ -14,12 +14,10 @@ function choose(m: number, k: number): number {
   return Math.round(r)
 }
 
-describe('exploration matcher — benchmark (visited-state growth)', () => {
+describe('exploration matcher — exhaustive assignment and footprint quotient', () => {
   // N identical `\x. x` nodes whose outputs all lie on ONE N-endpoint equality
-  // wire; pattern identical (empty boundary). Exactly one occurrence (the whole
-  // thing); the N! interchangeable bijections collapse to it. The old
-  // backtracking matcher visited 325 / 9.86M / (infeasible) at N=5/10/20; the
-  // exploration matcher is linear.
+  // wire; pattern identical (empty boundary). Every bijection is enumerated,
+  // then the declared image-set footprint quotient retains one occurrence.
   function shared(N: number) {
     const b = new DiagramBuilder()
     const eps: Endpoint[] = []
@@ -41,14 +39,12 @@ describe('exploration matcher — benchmark (visited-state growth)', () => {
     return mkDiagramWithBoundary(b.build(), [])
   }
 
-  it('visits O(N) states — pinned at N = 5, 10, 20 (old matcher was factorial)', () => {
-    const expected: Record<number, number> = { 5: 5, 10: 10, 20: 20 }
-    for (const N of [5, 10, 20]) {
-      __benchCounter.n = 0
-      const r = findOccurrences(shared(N), sharedPattern(N), { fuel: 100 })
-      expect(r.matches, `N=${N} occurrence count`).toHaveLength(1)
-      expect(__benchCounter.n, `N=${N} visited states`).toBe(expected[N])
-    }
+  it('enumerates symmetric bijections but returns their one declared footprint', () => {
+    __benchCounter.n = 0
+    const r = findOccurrences(shared(4), sharedPattern(4), { fuel: 100 })
+    expect(r.status).toBe('complete')
+    expect(r.matches).toHaveLength(1)
+    expect(__benchCounter.n).toBeGreaterThan(4)
   })
 })
 
@@ -62,17 +58,6 @@ describe('exploration matcher — explicit exploration fuel', () => {
   function identityPattern(count: number) {
     const b = new DiagramBuilder()
     for (let i = 0; i < count; i++) b.termNode(b.root, p('\\x. x'))
-    return mkDiagramWithBoundary(b.build(), [])
-  }
-
-  function sharedWirePattern(count: number) {
-    const b = new DiagramBuilder()
-    const endpoints: Endpoint[] = []
-    for (let i = 0; i < count; i++) {
-      const node = b.termNode(b.root, p('\\x. x'))
-      endpoints.push({ node, port: { kind: 'output' } })
-    }
-    b.wire(b.root, endpoints)
     return mkDiagramWithBoundary(b.build(), [])
   }
 
@@ -104,69 +89,17 @@ describe('exploration matcher — explicit exploration fuel', () => {
     expect(result.explorationSteps).toBeGreaterThan(1)
   })
 
-  it('does not generate factorial fallback permutations after identity consumes the final probe', () => {
-    expect(__benchCounter.permutations).toBeTypeOf('number')
-    __benchCounter.permutations = 0
-
-    const result = findOccurrences(identityNodes(12), sharedWirePattern(12), {
+  it('reports exhaustion when the budget stops inside the finite injection space', () => {
+    const result = findOccurrences(identityNodes(3), identityPattern(3), {
       fuel: 1,
-      explorationFuel: 1,
+      explorationFuel: 3,
       mode: 'exact',
       inRegion: 'r0',
     })
 
     expect(result.status).toBe('exhausted')
-    expect(result.explorationSteps).toBe(1)
-    expect(__benchCounter.permutations).toBe(0)
-  })
-
-  it('does not advance fallback when identity placements consume exactly the budget', () => {
-    const count = 4
-    __benchCounter.permutations = 0
-
-    const result = findOccurrences(identityNodes(count), sharedWirePattern(count), {
-      fuel: 1,
-      explorationFuel: count,
-      mode: 'exact',
-      inRegion: 'r0',
-    })
-
-    expect(result.status).toBe('exhausted')
-    expect(result.explorationSteps).toBe(count)
-    expect(__benchCounter.permutations).toBe(0)
-  })
-
-  it('is complete when the exact budget funds identity and the sole fallback permutation', () => {
-    const count = 2
-    __benchCounter.permutations = 0
-
-    const result = findOccurrences(identityNodes(count), sharedWirePattern(count), {
-      fuel: 1,
-      explorationFuel: 4,
-      mode: 'exact',
-      inRegion: 'r0',
-    })
-
-    expect(result.status).toBe('complete')
-    expect(result.explorationSteps).toBe(4)
-    expect(result.matches).toEqual([])
-    expect(__benchCounter.permutations).toBe(1)
-  })
-
-  it('exhaustively explores the small non-identity fallback with sufficient budget', () => {
-    expect(__benchCounter.permutations).toBeTypeOf('number')
-    __benchCounter.permutations = 0
-
-    const result = findOccurrences(identityNodes(3), sharedWirePattern(3), {
-      fuel: 1,
-      explorationFuel: 100,
-      mode: 'exact',
-      inRegion: 'r0',
-    })
-
-    expect(result.status).toBe('complete')
-    expect(result.matches).toEqual([])
-    expect(__benchCounter.permutations).toBe(5)
+    expect(result.explorationSteps).toBe(3)
+    expect(result.undecided).toEqual([])
   })
 })
 
@@ -283,12 +216,12 @@ describe('exploration matcher — exact vs betaEta mode', () => {
 // ---------------------------------------------------------------------------
 // STANDING brute-force footprint-equality oracle (team-lead ruling): an
 // independent full-enumeration reference matcher — every injective region/node
-// assignment, verified directly, footprints collected. It shares NONE of the
-// matcher's search strategy, so agreement is a genuine completeness check on
-// the symmetry break + per-subset fallback. Scoped to CLOSED patterns (empty
-// boundary), term nodes + cut regions, matched at the root — enough to exercise
-// symmetric node/region runs, which is exactly where the break could drop
-// occurrences. It is a regression guard, not a gate.
+// assignment, verified directly, footprints collected. It shares none of the
+// production candidate construction, so agreement is a genuine
+// completeness check on finite injection enumeration and the footprint
+// quotient. Scoped to closed patterns (empty boundary), term nodes + cut
+// regions, matched at the root — enough to exercise
+// symmetric node/region assignments. It is a regression guard, not a gate.
 // ---------------------------------------------------------------------------
 
 function mulberry32(seed: number): () => number {

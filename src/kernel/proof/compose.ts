@@ -3,6 +3,7 @@ import type { DiagramIso } from '../diagram/canonical/explore'
 import { exploreIso } from '../diagram/canonical/explore'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { AbstractionOccurrence } from '../rules/comprehension'
+import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { ProofContext, ProofStep } from './step'
 import { applyStep } from './step'
 import { allocationReservation, type ProofAction } from './action'
@@ -31,6 +32,26 @@ function mapOccurrence(iso: DiagramIso, occ: AbstractionOccurrence): Abstraction
   return { sel: mapSel(iso, occ.sel), args: occ.args.map((w) => mapId(iso.wires, w, 'wire')) }
 }
 
+function mapOccurrenceCertificate(iso: DiagramIso, certificate: OccurrenceCertificate): OccurrenceCertificate {
+  return {
+    region: mapId(iso.regions, certificate.region, 'region'),
+    regionMap: new Map([...certificate.regionMap].map(([pattern, host]) => [
+      pattern, mapId(iso.regions, host, 'region'),
+    ])),
+    nodeMap: new Map([...certificate.nodeMap].map(([pattern, host]) => [
+      pattern, mapId(iso.nodes, host, 'node'),
+    ])),
+    wireMap: new Map([...certificate.wireMap].map(([pattern, host]) => [
+      pattern, mapId(iso.wires, host, 'wire'),
+    ])),
+    attachments: certificate.attachments.map((wire) => mapId(iso.wires, wire, 'wire')),
+    binderMap: new Map([...certificate.binderMap].map(([stub, host]) => [
+      stub, mapId(iso.regions, host, 'region'),
+    ])),
+    termCertificates: certificate.termCertificates,
+  }
+}
+
 /**
  * Rewrite one step's HOST ids through an isomorphism. Embedded patterns
  * (DiagramWithBoundary values) are self-contained namespaces and terms are
@@ -52,7 +73,12 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
     case 'iteration':
       return { ...step, sel: mapSel(iso, step.sel), target: mapId(iso.regions, step.target, 'region') }
     case 'deiteration':
-      return { ...step, sel: mapSel(iso, step.sel) }
+      return {
+        ...step,
+        sel: mapSel(iso, step.sel),
+        justifier: mapSel(iso, step.justifier),
+        certificate: mapOccurrenceCertificate(iso, step.certificate),
+      }
     case 'doubleCutIntro':
       return { ...step, sel: mapSel(iso, step.sel) }
     case 'doubleCutElim':

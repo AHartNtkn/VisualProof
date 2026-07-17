@@ -17,12 +17,18 @@ import type { ProofSession, TrackSession } from '../../src/app/session'
 import type { ProofStep } from '../../src/kernel/proof/step'
 import { applyAction, singleStepAction, type ProofAction } from '../../src/kernel/proof/action'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
+import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
 
 const p = (s: string) => parseTerm(s)
 const gesture = (step: ProofStep): ProofAction => singleStepAction(step.rule, step)
 const applyTrack = (track: TrackSession, step: ProofStep): TrackSession => applyTrackAction(track, gesture(step))
 const applyForward = (session: ProofSession, step: ProofStep): ProofSession => applyForwardAction(session, gesture(step))
 const applyBackward = (session: ProofSession, step: ProofStep): ProofSession => applyBackwardAction(session, gesture(step))
+const certifiedDeiterationStep = (
+  diagram: Parameters<typeof findDeiterationEvidence>[0],
+  sel: Parameters<typeof findDeiterationEvidence>[1],
+  fuel: number,
+): ProofStep => ({ rule: 'deiteration', sel, ...findDeiterationEvidence(diagram, sel, fuel) })
 // pure λ fixtures for the citation demos (no term constants)
 const YF = p('(\\g. (\\x. g (x x)) (\\x. g (x x))) f')
 const FYF = p('s0 ((\\g. (\\x. g (x x)) (\\x. g (x x))) s0)')
@@ -575,7 +581,8 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     l.cut(l.root)
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
-    s = applyBackward(s, { rule: 'deiteration', sel: { region: cut, regions: [], nodes: [c], wires: [wc] }, fuel: 64 })
+    const deSel = { region: cut, regions: [], nodes: [c], wires: [wc] }
+    s = applyBackward(s, certifiedDeiterationStep(currentSide(s, 'backward'), deSel, 64))
     expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('deiteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardDeiterated')
@@ -674,7 +681,8 @@ describe('dual-replay redesign: record actions, verify from both ends', () => {
     void w
     // erase is gated out (positive+backward needs negative) — deletion here IS
     // deiteration, justified by the surviving copy at the same scope
-    s = applyBackward(s, { rule: 'deiteration', sel: { region: bub, regions: [], nodes: [a2], wires: [] }, fuel: 64 })
+    const deSel = { region: bub, regions: [], nodes: [a2], wires: [] }
+    s = applyBackward(s, certifiedDeiterationStep(currentSide(s, 'backward'), deSel, 64))
     expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('deiteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'boundCopyDeiterated')

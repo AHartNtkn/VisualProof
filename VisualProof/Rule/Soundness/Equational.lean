@@ -1,4 +1,5 @@
 import VisualProof.Rule.Soundness
+import VisualProof.Rule.Soundness.Congruence
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule
@@ -1895,6 +1896,7 @@ private noncomputable def conversionSimulation
     intro source target embedding region focused sourceExact targetExact
     exact False.elim focused
   at_child := by simp
+  at_extended := by simp
   at_focused_child := by
     intro source target embedding parent focused sourceExact targetExact child
       atParent sourceParent targetParent
@@ -1902,8 +1904,8 @@ private noncomputable def conversionSimulation
   localTransport := by
     intro sourceRels targetRels direction fuelSource fuelTarget source target
       embedding sourceBinders targetBinders binderWitness region atRegion regular
-      allowed sourceExact targetExact sourceItems targetItems sourceCompiled
-      targetCompiled itemSemantics
+      allowed sourceExact targetExact _ _ _ _ sourceItems targetItems
+      sourceCompiled targetCompiled itemSemantics
     exact Diagram.ConcreteElaboration.directionalLocalTransport_of_agreement
       direction source target region region
       (Diagram.ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
@@ -1919,8 +1921,8 @@ private noncomputable def conversionSimulation
       itemSemantics
   nodeSemantic := by
     intro sourceRels targetRels direction region source target embedding
-      sourceNodup targetNodup sourceBinders targetBinders allowed binderWitness
-      sourceNode targetNode
+      atRegion sourceNodup targetNodup sourceBinders targetBinders allowed
+      binderWitness sourceNode targetNode
       regular mapped nodeRegion sourceItem targetItem sourceCompiled targetCompiled
     rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
     subst targetRels
@@ -2210,5 +2212,80 @@ theorem applyConversion_sound
     apply backwardSemantic
     simpa [source, target, targetArgs, model, named, conversionSourceCheckedOpen,
       conversionTargetCheckedOpen, conversionOperationalOpen] using targetDenotes
+
+/-- Every successful congruence-join receipt is semantically equivalent. -/
+theorem applyCongruenceJoin_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram signature)
+    (first second : Fin input.val.nodeCount)
+    (payload : CongruencePayload input first second)
+    (receipt : StepReceipt input)
+    (happly : applyCongruenceJoin input payload = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.congruenceJoin first second payload) receipt := by
+  exact CongruenceSoundness.applyCongruenceJoin_sound
+    context orientation input first second payload receipt happly
+
+/-- Every successful anchored-wire split receipt is semantically equivalent. -/
+theorem applyAnchoredWireSplit_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram signature)
+    (wire : Fin input.val.wireCount) (witness : Fin input.val.nodeCount)
+    (endpoints : List (Diagram.CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount)
+    (receipt : StepReceipt input)
+    (happly :
+      applyAnchoredWireSplit input wire witness endpoints target = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.anchoredWireSplit wire witness endpoints target) receipt := by
+  sorry
+
+/-- Every successful anchored-wire contraction receipt is equivalent. -/
+theorem applyAnchoredWireContract_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram signature)
+    (redundant survivor : Fin input.val.nodeCount)
+    (certificate : Lambda.Certificate)
+    (receipt : StepReceipt input)
+    (happly :
+      applyAnchoredWireContract input redundant survivor certificate =
+        .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.anchoredWireContract redundant survivor certificate) receipt := by
+  sorry
+
+/-- Every successful head-strip receipt is semantically equivalent. -/
+theorem applyHeadStrip_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram signature)
+    (first second : Fin input.val.nodeCount)
+    (payload : HeadStripPayload input first second)
+    (receipt : StepReceipt input)
+    (happly : applyHeadStrip input payload = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.headStrip first second payload) receipt := by
+  sorry
+
+/-- Every successful fusion receipt is semantically equivalent. -/
+theorem applyFusion_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram signature)
+    (wire : Fin input.val.wireCount)
+    (receipt : StepReceipt input)
+    (happly : applyFusion input wire = .ok receipt) :
+    SuccessfulReceiptSound context orientation input (.fusion wire)
+      receipt := by
+  sorry
+
+/-- Every successful fission receipt is semantically equivalent. -/
+theorem applyFission_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram signature)
+    (node : Fin input.val.nodeCount) (path : List Lambda.PathSegment)
+    (receipt : StepReceipt input)
+    (happly : applyFission input node path = .ok receipt) :
+    SuccessfulReceiptSound context orientation input (.fission node path)
+      receipt := by
+  sorry
 
 end VisualProof.Rule

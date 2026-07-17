@@ -16,7 +16,9 @@ describe('emitTheories (real filesystem)', () => {
       // the shipped files exist and load through the real verifying road
       for (const f of written) {
         expect(existsSync(join(dir, f))).toBe(true)
-        expect(() => loadTheory(JSON.parse(readFileSync(join(dir, f), 'utf8')))).not.toThrow()
+        const text = readFileSync(join(dir, f), 'utf8')
+        expect(text.trimEnd().split('\n').length).toBeLessThanOrEqual(3000)
+        expect(() => loadTheory(JSON.parse(text))).not.toThrow()
       }
     } finally {
       rmSync(dir, { recursive: true, force: true })

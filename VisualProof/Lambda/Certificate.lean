@@ -135,6 +135,32 @@ theorem checkCertificate_sound {n : Nat} {α : Type u} [DecidableEq α]
           subst rightEnd
           exact (checkPath_sound hleft).trans (checkPath_sound hright).symm
 
+/-- A raw reduction certificate paired with the kernel check that makes it
+proof-bearing. Search bounds and normalization strategy are deliberately absent. -/
+structure CheckedCertificate {n : Nat} {α : Type u} [DecidableEq α]
+    (left right : Term n α) where
+  certificate : Certificate
+  valid : checkCertificate left right certificate = true
+
+def CheckedCertificate.refl [DecidableEq α] (term : Term n α) :
+    CheckedCertificate term term where
+  certificate := { left := [], right := [] }
+  valid := by simp [checkCertificate, checkPath]
+
+theorem CheckedCertificate.betaEta {n : Nat} {α : Type u} [DecidableEq α]
+    {left right : Term n α} (checked : CheckedCertificate left right) :
+    BetaEta left right :=
+  checkCertificate_sound checked.valid
+
+/-- A checked certificate between positional closures is sufficient to relate
+the original open terms. No normalization fuel or unchecked βη premise enters
+the theorem. -/
+theorem CheckedCertificate.positionalBetaEta
+    {left right : Term 0 (Fin ports)}
+    (checked : CheckedCertificate left.closeOverPorts right.closeOverPorts) :
+    BetaEta left right :=
+  closeOverPorts_betaEta_cancel checked.betaEta
+
 def idTerm : ClosedTerm := Term.lam (Term.bvar 0)
 
 def constId : ClosedTerm := Term.app (Term.lam (Term.bvar 0)) idTerm

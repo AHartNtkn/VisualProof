@@ -1,5 +1,10 @@
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 import VisualProof.Rule.Soundness
+import VisualProof.Rule.Soundness.Modal.EliminationRootSimulation
+import VisualProof.Rule.Soundness.Modal.VacuousEliminationRootSimulation
+import VisualProof.Rule.Soundness.Modal.VacuousRoot
+import VisualProof.Rule.Soundness.Iteration.OpenRoute
+import VisualProof.Rule.Soundness.WireJoin
 
 namespace VisualProof.Rule
 
@@ -1477,6 +1482,7 @@ private noncomputable def severWireSimulation
     intro original expanded collapse region focused sourceExact targetExact
     exact False.elim focused
   at_child := by simp
+  at_extended := by simp
   at_focused_child := by
     intro original expanded collapse parent focused sourceExact targetExact child
       atParent sourceParent targetParent
@@ -1484,8 +1490,8 @@ private noncomputable def severWireSimulation
   localTransport := by
     intro sourceRels targetRels direction fuelSource fuelTarget original expanded
       collapse sourceBinders targetBinders binderWitness region atRegion regular
-      allowed sourceExact targetExact sourceItems targetItems sourceCompiled
-      targetCompiled itemSemantics
+      allowed sourceExact targetExact _ _ _ _ sourceItems targetItems
+      sourceCompiled targetCompiled itemSemantics
     refine ConcreteElaboration.directionalLocalTransport_of_agreement
       direction original expanded region region
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
@@ -1520,9 +1526,9 @@ private noncomputable def severWireSimulation
             sourceExact.nodup sourceOuter targetOuter outerAgrees targetLocal)
   nodeSemantic := by
     intro sourceRels targetRels direction region original expanded collapse
-      sourceNodup targetNodup sourceBinders targetBinders allowed binderWitness
-      sourceNode targetNode regular nodeMapped nodeRegion sourceItem targetItem
-      sourceCompiled targetCompiled
+      atRegion sourceNodup targetNodup sourceBinders targetBinders allowed
+      binderWitness sourceNode targetNode regular nodeMapped nodeRegion
+      sourceItem targetItem sourceCompiled targetCompiled
     rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
     subst targetRels
     cases bindersEq
@@ -2110,5 +2116,479 @@ private theorem joinWireRaw_scope
       (joinWireDomain input inner).origin candidate = outer
   · rw [if_pos houter, if_pos houter]
   · rw [if_neg houter, if_neg houter]
+
+/-- Every successful wire-join receipt preserves ordered-open semantics. -/
+theorem applyWireJoin_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (first second : Fin input.val.wireCount)
+    (receipt : StepReceipt input)
+    (happly : applyWireJoin orientation input first second = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.wireJoin first second) receipt := by
+  exact WireJoinSoundness.wireJoinReceipt_sound context orientation input
+    first second receipt happly
+
+private def iterationOperationalOpen
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root) :
+    CheckedOpenDiagram signature :=
+  Splice.Input.PlugLayout.checkedOutputOpenRoot
+    (iterationInput input selection target)
+    (iterationInput input selection target).plugLayout hadmissible boundary
+    sourceRoot
+
+private def iterationOperationalIso
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {target : Fin input.val.regionCount}
+    {receipt : StepReceipt input}
+    (realizes : receipt.Realizes
+      (iterationInput input selection target).plugLayout.plugRaw
+      (iterationWireProvenance input selection target)
+      (iterationInterfaceTransport input selection target))
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (mapped : List (Fin receipt.result.val.wireCount))
+    (htransport : receipt.interface.transportBoundary boundary = some mapped) :
+    OpenConcreteIso
+      (iterationOperationalOpen input selection target hadmissible boundary
+        sourceRoot).val
+      (realizes.rawResultOpen mapped) := by
+  let spliceInput := iterationInput input selection target
+  let rawMapped := boundary.map fun wire =>
+    spliceInput.plugLayout.frameWire (spliceInput.quotientWire wire)
+  have expected : (iterationInterfaceTransport input selection target
+      ).transportBoundary boundary = some (realizes.targetBoundary mapped) :=
+    realizes.transportBoundary_expected htransport
+  have boundaryEq : realizes.targetBoundary mapped = rawMapped := by
+    simpa [iterationInterfaceTransport, spliceInput] using
+      spliceFrameInterfaceTransport_boundary_eq spliceInput boundary
+        (realizes.targetBoundary mapped) expected
+  apply realizes.operationalIso_to_rawResultOpen htransport rawMapped
+  rw [← boundaryEq]
+  exact expected
+
+/-- Receipt bridge for the proper nested, nonempty iteration case. -/
+private theorem applyIteration_sound_proper_nonempty
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (receipt : StepReceipt input)
+    (happly : applyIteration input selection target = .ok receipt)
+    (targetNe : target ≠ selection.val.anchor)
+    (anchorNeRoot : selection.val.anchor ≠ input.val.root)
+    (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
+      ≠ 0) :
+    SuccessfulReceiptSound context orientation input
+      (.iteration selection target) receipt := by
+  have realizes := applyIteration_realizes happly
+  have success := applyIteration_success input selection target receipt happly
+  let hsplice := success.2.2
+  let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot _mapped _htransport =>
+      iterationOperationalOpen input selection target hadmissible boundary
+        sourceRoot)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
+        htransport)
+  intro boundary sourceRoot mapped htransport _valid args
+  obtain ⟨certificate⟩ :=
+    IterationSoundness.properIterationOpenAnchorContraction_complete input
+      selection target hadmissible success.1 success.2.1 targetNe hnonempty
+      boundary sourceRoot anchorNeRoot
+  obtain ⟨alignment⟩ :=
+    IterationSoundness.properIterationOpenTargetAlignment_complete certificate
+  have semantic := IterationSoundness.properIterationOpen_output_equiv
+    hsplice sourceRoot hnonempty certificate alignment Lambda.canonicalModel
+    (Theory.interpretDefinitions context.definitions) args
+  simpa only [DirectedEntailment, StepTag.semanticMode,
+    iterationOperationalOpen] using semantic
+
+/-- Every successful iteration receipt preserves ordered-open semantics. -/
+theorem applyIteration_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (receipt : StepReceipt input)
+    (happly : applyIteration input selection target = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.iteration selection target) receipt := by
+  by_cases hproper : target ≠ selection.val.anchor ∧
+      selection.val.anchor ≠ input.val.root ∧
+      (iterationInput input selection target).binderSpine.proxyCount ≠ 0
+  · exact applyIteration_sound_proper_nonempty context orientation input
+      selection target receipt happly hproper.1 hproper.2.1 hproper.2.2
+  · sorry
+
+/-- Every successful deiteration receipt preserves ordered-open semantics. -/
+theorem applyDeiteration_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (receipt : StepReceipt input)
+    (happly : applyDeiteration input selection witness = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.deiteration selection witness) receipt := by
+  sorry
+
+/-- Every successful double-cut introduction receipt is equivalent. -/
+theorem applyDoubleCutIntro_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val)
+    (receipt : StepReceipt input)
+    (happly : applyDoubleCutIntro input selection = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.doubleCutIntro selection) receipt := by
+  have realizes := applyDoubleCutIntro_realizes happly
+  have targetWellFormed :
+      (doubleCutIntroRaw input.val selection).WellFormed signature :=
+    realizes.result_eq ▸ receipt.result.property
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot mapped htransport =>
+      ⟨ModalSoundness.doubleCutIntroRawOpen
+          (OpenProofState.asCheckedOpen {
+            diagram := input
+            boundary := boundary
+            boundary_root_scoped := sourceRoot
+          }).val selection,
+        ModalSoundness.doubleCutIntroRawOpen_wellFormed
+          (OpenProofState.asCheckedOpen {
+            diagram := input
+            boundary := boundary
+            boundary_root_scoped := sourceRoot
+          }) selection targetWellFormed⟩)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      realizes.operationalIso_to_rawResultOpen htransport boundary
+        (ModalSoundness.doubleCutIntroInterfaceTransport_transportBoundary
+          input.val selection boundary sourceRoot))
+  intro boundary sourceRoot mapped htransport valid args
+  let source : OpenProofState signature := {
+    diagram := input
+    boundary := boundary
+    boundary_root_scoped := sourceRoot
+  }
+  let target : CheckedOpenDiagram signature :=
+    ⟨ModalSoundness.doubleCutIntroRawOpen source.asCheckedOpen.val selection,
+      ModalSoundness.doubleCutIntroRawOpen_wellFormed source.asCheckedOpen
+        selection targetWellFormed⟩
+  let model := Lambda.canonicalModel
+  let named := Theory.interpretDefinitions context.definitions
+  let simulation := ModalSoundness.doubleCutIntroSimulation input selection
+    targetWellFormed model named
+  have forward :=
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source.asCheckedOpen target model named simulation .forward
+      (ModalSoundness.doubleCutIntroRootContext source.asCheckedOpen selection
+        targetWellFormed model named .forward)
+      True.intro args args
+      (ModalSoundness.doubleCutIntroBoundaryWitness source.asCheckedOpen
+        selection targetWellFormed .forward model named args)
+  have backward :=
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source.asCheckedOpen target model named simulation .backward
+      (ModalSoundness.doubleCutIntroRootContext source.asCheckedOpen selection
+        targetWellFormed model named .backward)
+      True.intro args args
+      (ModalSoundness.doubleCutIntroBoundaryWitness source.asCheckedOpen
+        selection targetWellFormed .backward model named args)
+  dsimp only
+  unfold DirectedEntailment
+  simp only [StepTag.semanticMode]
+  constructor
+  · intro sourceDenotes
+    have targetDenotes := forward sourceDenotes
+    simpa [source, target] using targetDenotes
+  · intro targetDenotes
+    apply backward
+    simpa [source, target] using targetDenotes
+
+/-- Every successful double-cut elimination receipt is equivalent. -/
+theorem applyDoubleCutElim_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (region : Fin input.val.regionCount)
+    (receipt : StepReceipt input)
+    (happly : applyDoubleCutElim input region = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.doubleCutElim region) receipt := by
+  obtain ⟨raw, hraw, realizes⟩ := applyDoubleCutElim_realizes happly
+  let trace := doubleCutElimTrace hraw
+  have rawWellFormed : raw.WellFormed signature :=
+    realizes.result_eq ▸ receipt.result.property
+  have sourceWellFormed : trace.sourceDiagram.WellFormed signature := by
+    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+      trace.promotion.raw_eq_diagram) rawWellFormed
+  let rawBoundary := fun (boundary : List (Fin input.val.wireCount)) =>
+    boundary.map (Fin.cast (doubleCutElimRaw?_wireCount hraw).symm)
+  let operational := fun
+      (boundary : List (Fin input.val.wireCount))
+      (sourceRoot : ∀ wire, wire ∈ boundary →
+        (input.val.wires wire).scope = input.val.root)
+      (_mapped : List (Fin receipt.result.val.wireCount))
+      (_htransport : receipt.interface.transportBoundary boundary =
+        some _mapped) =>
+    (⟨trace.sourceOpen boundary,
+      trace.sourceOpen_wellFormed sourceWellFormed input.property boundary
+        sourceRoot⟩ : CheckedOpenDiagram signature)
+  let operationalIso := fun
+      (boundary : List (Fin input.val.wireCount))
+      (sourceRoot : ∀ wire, wire ∈ boundary →
+        (input.val.wires wire).scope = input.val.root)
+      (mapped : List (Fin receipt.result.val.wireCount))
+      (htransport : receipt.interface.transportBoundary boundary =
+        some mapped) => by
+    let rawOpen : OpenConcreteDiagram := {
+      diagram := raw
+      boundary := rawBoundary boundary
+    }
+    let toRaw : OpenConcreteIso (trace.sourceOpen boundary) rawOpen := {
+      diagram := DoubleCutElimTrace.concreteIsoOfEq
+        trace.promotion.raw_eq_diagram.symm
+      boundary := by
+        apply List.map_congr_left
+        intro wire member
+        apply Fin.ext
+        exact DoubleCutElimTrace.concreteIsoOfEq_wires_val
+          trace.promotion.raw_eq_diagram.symm wire
+    }
+    exact toRaw.trans
+      (realizes.operationalIso_to_rawResultOpen htransport
+        (rawBoundary boundary)
+        (DoubleCutElimTrace.interfaceTransport_transportBoundary hraw
+          input.property boundary sourceRoot))
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := operational) (operationalIso := operationalIso)
+  intro boundary sourceRoot mapped htransport valid args
+  let source : OpenProofState signature := {
+    diagram := input
+    boundary := boundary
+    boundary_root_scoped := sourceRoot
+  }
+  let target : CheckedOpenDiagram signature :=
+    ⟨trace.sourceOpen boundary,
+      trace.sourceOpen_wellFormed sourceWellFormed input.property boundary
+        sourceRoot⟩
+  let original : CheckedOpenDiagram signature :=
+    ⟨DoubleCutElimTrace.targetOpen input.val boundary,
+      DoubleCutElimTrace.targetOpen_wellFormed input.property boundary
+        sourceRoot⟩
+  let model := Lambda.canonicalModel
+  let named := Theory.interpretDefinitions context.definitions
+  let simulation := trace.semanticSimulation sourceWellFormed input.property
+    model named
+  have forward :=
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      target original model named simulation .forward
+      (trace.rootContextSimulation sourceWellFormed input.property boundary
+        sourceRoot model named .forward)
+      True.intro args args
+      (trace.boundaryWitness sourceWellFormed input.property boundary
+        sourceRoot .forward model named args)
+  have backward :=
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      target original model named simulation .backward
+      (trace.rootContextSimulation sourceWellFormed input.property boundary
+        sourceRoot model named .backward)
+      True.intro args args
+      (trace.boundaryWitness sourceWellFormed input.property boundary
+        sourceRoot .backward model named args)
+  dsimp only
+  unfold DirectedEntailment
+  simp only [StepTag.semanticMode]
+  constructor
+  · intro sourceDenotes
+    have targetDenotes := backward sourceDenotes
+    simpa [source, target, original, operational] using targetDenotes
+  · intro targetDenotes
+    apply forward
+    simpa [source, target, original, operational] using targetDenotes
+
+/-- Every successful vacuous-cut introduction receipt is equivalent. -/
+theorem applyVacuousIntro_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val) (arity : Nat)
+    (receipt : StepReceipt input)
+    (happly : applyVacuousIntro input selection arity = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.vacuousIntro selection arity) receipt := by
+  have realizes := applyVacuousIntro_realizes happly
+  have targetWellFormed :
+      (vacuousIntroRaw input.val selection arity).WellFormed signature :=
+    realizes.result_eq ▸ receipt.result.property
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot mapped htransport =>
+      ⟨VacuousSoundness.vacuousIntroRawOpen
+          (OpenProofState.asCheckedOpen {
+            diagram := input
+            boundary := boundary
+            boundary_root_scoped := sourceRoot
+          }).val selection arity,
+        VacuousSoundness.vacuousIntroRawOpen_wellFormed
+          (OpenProofState.asCheckedOpen {
+            diagram := input
+            boundary := boundary
+            boundary_root_scoped := sourceRoot
+          }) selection arity targetWellFormed⟩)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      realizes.operationalIso_to_rawResultOpen htransport boundary
+        (VacuousSoundness.vacuousIntroInterfaceTransport_transportBoundary
+          input.val selection arity boundary sourceRoot))
+  intro boundary sourceRoot mapped htransport valid args
+  let source : OpenProofState signature := {
+    diagram := input
+    boundary := boundary
+    boundary_root_scoped := sourceRoot
+  }
+  let target : CheckedOpenDiagram signature :=
+    ⟨VacuousSoundness.vacuousIntroRawOpen source.asCheckedOpen.val selection
+        arity,
+      VacuousSoundness.vacuousIntroRawOpen_wellFormed source.asCheckedOpen
+        selection arity targetWellFormed⟩
+  let model := Lambda.canonicalModel
+  let named := Theory.interpretDefinitions context.definitions
+  let simulation := VacuousSoundness.vacuousIntroSimulation input selection
+    arity targetWellFormed model named
+  have forward :=
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source.asCheckedOpen target model named simulation .forward
+      (VacuousSoundness.vacuousIntroRootContext source.asCheckedOpen selection
+        arity targetWellFormed model named .forward)
+      True.intro args args
+      (VacuousSoundness.vacuousIntroBoundaryWitness source.asCheckedOpen
+        selection arity targetWellFormed .forward model named args)
+  have backward :=
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source.asCheckedOpen target model named simulation .backward
+      (VacuousSoundness.vacuousIntroRootContext source.asCheckedOpen selection
+        arity targetWellFormed model named .backward)
+      True.intro args args
+      (VacuousSoundness.vacuousIntroBoundaryWitness source.asCheckedOpen
+        selection arity targetWellFormed .backward model named args)
+  dsimp only
+  unfold DirectedEntailment
+  simp only [StepTag.semanticMode]
+  constructor
+  · intro sourceDenotes
+    have targetDenotes := forward sourceDenotes
+    simpa [source, target] using targetDenotes
+  · intro targetDenotes
+    apply backward
+    simpa [source, target] using targetDenotes
+
+/-- Every successful vacuous-cut elimination receipt is equivalent. -/
+theorem applyVacuousElim_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (region : Fin input.val.regionCount)
+    (receipt : StepReceipt input)
+    (happly : applyVacuousElim input region = .ok receipt) :
+    SuccessfulReceiptSound context orientation input
+      (.vacuousElim region) receipt := by
+  obtain ⟨raw, hraw, realizes⟩ := applyVacuousElim_realizes happly
+  let trace := vacuousElimTrace hraw
+  have rawWellFormed : raw.WellFormed signature :=
+    realizes.result_eq ▸ receipt.result.property
+  have sourceWellFormed : trace.sourceDiagram.WellFormed signature := by
+    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+      trace.promotion.raw_eq_diagram) rawWellFormed
+  let rawBoundary := fun (boundary : List (Fin input.val.wireCount)) =>
+    boundary.map (Fin.cast (vacuousElimRaw?_wireCount hraw).symm)
+  let operational := fun
+      (boundary : List (Fin input.val.wireCount))
+      (sourceRoot : ∀ wire, wire ∈ boundary →
+        (input.val.wires wire).scope = input.val.root)
+      (_mapped : List (Fin receipt.result.val.wireCount))
+      (_htransport : receipt.interface.transportBoundary boundary =
+        some _mapped) =>
+    (⟨trace.sourceOpen boundary,
+      trace.sourceOpen_wellFormed sourceWellFormed input.property boundary
+        sourceRoot⟩ : CheckedOpenDiagram signature)
+  let operationalIso := fun
+      (boundary : List (Fin input.val.wireCount))
+      (sourceRoot : ∀ wire, wire ∈ boundary →
+        (input.val.wires wire).scope = input.val.root)
+      (mapped : List (Fin receipt.result.val.wireCount))
+      (htransport : receipt.interface.transportBoundary boundary =
+        some mapped) => by
+    let rawOpen : OpenConcreteDiagram := {
+      diagram := raw
+      boundary := rawBoundary boundary
+    }
+    let toRaw : OpenConcreteIso (trace.sourceOpen boundary) rawOpen := {
+      diagram := VacuousElimTrace.concreteIsoOfEq
+        trace.promotion.raw_eq_diagram.symm
+      boundary := by
+        apply List.map_congr_left
+        intro wire member
+        apply Fin.ext
+        exact VacuousElimTrace.concreteIsoOfEq_wires_val
+          trace.promotion.raw_eq_diagram.symm wire
+    }
+    exact toRaw.trans
+      (realizes.operationalIso_to_rawResultOpen htransport
+        (rawBoundary boundary)
+        (VacuousElimTrace.interfaceTransport_transportBoundary hraw
+          input.property boundary sourceRoot))
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := operational) (operationalIso := operationalIso)
+  intro boundary sourceRoot mapped htransport valid args
+  let source : OpenProofState signature := {
+    diagram := input
+    boundary := boundary
+    boundary_root_scoped := sourceRoot
+  }
+  let target : CheckedOpenDiagram signature :=
+    ⟨trace.sourceOpen boundary,
+      trace.sourceOpen_wellFormed sourceWellFormed input.property boundary
+        sourceRoot⟩
+  let original : CheckedOpenDiagram signature :=
+    ⟨VacuousElimTrace.targetOpen input.val boundary,
+      VacuousElimTrace.targetOpen_wellFormed input.property boundary
+        sourceRoot⟩
+  let model := Lambda.canonicalModel
+  let named := Theory.interpretDefinitions context.definitions
+  let simulation := trace.semanticSimulation sourceWellFormed input.property
+    model named
+  have forward :=
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      target original model named simulation .forward
+      (trace.rootContextSimulation sourceWellFormed input.property boundary
+        sourceRoot model named .forward)
+      True.intro args args
+      (trace.boundaryWitness sourceWellFormed input.property boundary
+        sourceRoot .forward model named args)
+  have backward :=
+    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      target original model named simulation .backward
+      (trace.rootContextSimulation sourceWellFormed input.property boundary
+        sourceRoot model named .backward)
+      True.intro args args
+      (trace.boundaryWitness sourceWellFormed input.property boundary
+        sourceRoot .backward model named args)
+  dsimp only
+  unfold DirectedEntailment
+  simp only [StepTag.semanticMode]
+  constructor
+  · intro sourceDenotes
+    have targetDenotes := backward sourceDenotes
+    simpa [source, target, original, operational] using targetDenotes
+  · intro targetDenotes
+    apply forward
+    simpa [source, target, original, operational] using targetDenotes
+
 
 end VisualProof.Rule

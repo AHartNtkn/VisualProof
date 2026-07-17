@@ -54,11 +54,9 @@ export function verifyTheory(t: Theory): ProofContext {
     // splices with an EMPTY binder map, so every bubble in a body is content with
     // ∃-meaning and is copied soundly. A body like R(x) := ∃S[S(x)] with a
     // top-level bubble is therefore perfectly legitimate.
+    assertRefsResolve(rel.diagram, relArity, `relation '${name}' body`)
     relations.set(name, rel)
     relArity.set(name, rel.boundary.length)
-  }
-  for (const [name, rel] of relations) {
-    assertRefsResolve(rel.diagram, relArity, `relation '${name}' body`)
   }
   const theorems = new Map<string, Theorem>()
   for (const thm of t.theorems) {

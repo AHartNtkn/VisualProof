@@ -25,9 +25,9 @@ import { termNodeAt, wireAt } from './access'
  * justification as congruenceJoin, valid under any polarity. Nothing is
  * removed and no polarity is touched.
  *
- * Name-blindness: heads correspond by bound de Bruijn INDEX or by the WIRE
- * their free head ports ride — never by port name, which is plumbing, not
- * semantics.
+ * Only bound heads are rigid under the diagram semantics. A free head is an
+ * arbitrary lambda-model individual and may denote a non-injective function,
+ * so equality of two applications does not entail equality of their arguments.
  */
 export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId, reservation?: IdReservation): Diagram {
   // Gate 1: distinct term nodes in one region.
@@ -50,8 +50,8 @@ export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId, reservation?: I
     )
   }
 
-  // Gate 3: both heads rigid (bound or free).
-  const rigidHead = (node: NodeId, s: HeadSpine): Extract<HeadSpine['head'], { kind: 'bound' | 'free' }> => {
+  // Gate 3: both terms are in head-normal form.
+  const normalHead = (node: NodeId, s: HeadSpine): Extract<HeadSpine['head'], { kind: 'bound' | 'free' }> => {
     if (s.head.kind === 'redex') {
       throw new RuleError(`'${node}' is not in head-normal form; apply the HNF tactic first`)
     }
@@ -59,8 +59,8 @@ export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId, reservation?: I
   }
   const sa = headSpine(na.term)
   const sb = headSpine(nb.term)
-  const ha = rigidHead(a, sa)
-  const hb = rigidHead(b, sb)
+  const ha = normalHead(a, sa)
+  const hb = normalHead(b, sb)
 
   // Gate 4: literal spine alignment (η-mismatched spines are the tactic's job).
   if (sa.binders !== sb.binders) {
@@ -70,25 +70,18 @@ export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId, reservation?: I
     throw new RuleError(`head strip requires aligned spines; argument counts differ: ${sa.args.length} vs ${sb.args.length}`)
   }
 
-  // Gate 5: heads correspond — equal bound index, or free heads on the SAME wire.
-  if (ha.kind === 'bound' || hb.kind === 'bound') {
-    if (ha.kind !== 'bound' || hb.kind !== 'bound') {
-      throw new RuleError(`heads do not correspond: one head is a bound variable, the other is a free individual`)
-    }
-    if (ha.index !== hb.index) {
-      throw new RuleError(`heads do not correspond: bound indices differ (${ha.index} vs ${hb.index})`)
-    }
-  } else {
-    const wha = wireAt(d, a, { kind: 'freeVar', name: ha.name })
-    const whb = wireAt(d, b, { kind: 'freeVar', name: hb.name })
-    if (wha !== whb) {
-      throw new RuleError(
-        `heads do not correspond: the free heads ride different wires ('${wha}' and '${whb}'); they must be one individual`,
-      )
-    }
+  // Gate 5: both heads are genuinely rigid bound variables. Free heads are
+  // substituted by arbitrary model values and are not injective in general.
+  if (ha.kind !== 'bound' || hb.kind !== 'bound') {
+    throw new RuleError(`head strip requires bound rigid heads; free heads are not injective`)
   }
 
-  // Gate 6: prefix-closures per position, skipping trivial ones. Wrapping the
+  // Gate 6: bound heads correspond by de Bruijn index.
+  if (ha.index !== hb.index) {
+    throw new RuleError(`heads do not correspond: bound indices differ (${ha.index} vs ${hb.index})`)
+  }
+
+  // Gate 7: prefix-closures per position, skipping trivial ones. Wrapping the
   // argument in the same n lambdas keeps its de Bruijn indices into the
   // binder prefix valid and leaves free ports unchanged. A position is
   // trivial exactly when the closures are termEq AND every shared free port

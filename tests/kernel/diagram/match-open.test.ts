@@ -201,7 +201,9 @@ describe('findOccurrences with openBinders', () => {
       fuel: 50,
       openBinders: new Map([[ex.binderStubs[0]!, rB]]),
     })
-    expect(matches).toHaveLength(1)
+    // The effective-root bare wire may map to either host bare wire; both
+    // checked selection footprints must be returned.
+    expect(matches).toHaveLength(2)
   })
 
   it('candidates outside an open binder are skipped (atoms cannot escape their quantifier)', () => {

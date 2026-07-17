@@ -1,6 +1,7 @@
 import type { Term } from '../kernel/term/term'
 import { termEq } from '../kernel/term/term'
 import { applyConversion } from '../kernel/rules/conversion'
+import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { type ProofContext, type ProofStep } from '../kernel/proof/step'
 import { applyAction, singleStepAction, type ProofAction } from '../kernel/proof/action'
@@ -56,6 +57,12 @@ export class DerivationCursor {
       throw new Error(`step '${label}' (conversion) failed: ${e instanceof Error ? e.message : String(e)}`)
     }
     this.push(label, { rule: 'conversion', node, term: t, certificate, attachments: attach })
+  }
+
+  /** Search while constructing the theory, then store only the chosen checked evidence. */
+  pushDeiteration(label: string, selection: import('../kernel/diagram/subgraph/selection').SubgraphSelection, fuel = 8192): void {
+    const evidence = findDeiterationEvidence(this.cur, selection, fuel)
+    this.push(label, { rule: 'deiteration', sel: selection, ...evidence })
   }
 
   /**

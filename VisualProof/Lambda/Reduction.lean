@@ -248,6 +248,11 @@ theorem BetaEta.bindFree {a b : Term n α} (h : BetaEta a b)
   | symm _ ih => exact ih.symm
   | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
 
+theorem BetaEta.mapFree {a b : Term n α} (h : BetaEta a b)
+    (rename : α → β) : BetaEta (a.mapFree rename) (b.mapFree rename) := by
+  rw [Term.mapFree_eq_bindFree_ports, Term.mapFree_eq_bindFree_ports]
+  exact h.bindFree (fun value => Term.port (rename value))
+
 inductive Reduces : Term n α → Term n α → Prop
   | refl : Reduces a a
   | tail : Reduces a b → OneStep b c → Reduces a c
@@ -832,6 +837,17 @@ structure HeadSpine (n : Nat) (α : Type u) where
   head : Head n binders α
   args : List (Term (extendScope n binders) α)
 
+def Head.mapFree (rename : α → β) : Head n binders α → Head n binders β
+  | Head.bound index => Head.bound index
+  | Head.outer index => Head.outer index
+  | Head.port value => Head.port (rename value)
+
+def HeadSpine.mapFree (rename : α → β)
+    (spine : HeadSpine n α) : HeadSpine n β where
+  binders := spine.binders
+  head := spine.head.mapFree rename
+  args := spine.args.map (Term.mapFree rename)
+
 private structure PrefixBody (n : Nat) (α : Type u) where
   binders : Nat
   body : Term (extendScope n binders) α
@@ -948,6 +964,178 @@ private theorem applyArgs_append (fn : Term n α)
   induction xs generalizing fn with
   | nil => rfl
   | cons x xs ih => exact ih (Term.app fn x)
+
+private theorem BetaEta.applyArgs {fn fn' : Term n α}
+    (h : BetaEta fn fn') (args : List (Term n α)) :
+    BetaEta (applyArgs fn args) (applyArgs fn' args) := by
+  induction args generalizing fn fn' with
+  | nil => exact h
+  | cons argument arguments ih =>
+      exact ih (h.appFn argument)
+
+private theorem lift_substBound_closed (term argument : Term 0 α) :
+    term.lift.substBound (Fin.cases argument Term.bvar) = term := by
+  calc
+    _ = term.substBound ((Fin.cases argument Term.bvar) ∘ Fin.succ) :=
+      Term.substBound_renameBound term Fin.succ _
+    _ = term.substBound Term.bvar := by
+      apply congrArg (fun environment => term.substBound environment)
+      funext index
+      exact Fin.elim0 index
+    _ = term := Term.substBound_id term
+
+private def reverseArgument (arguments : Fin ports → Term 0 α)
+    (index : Fin ports) : Term 0 α :=
+  arguments ⟨ports - 1 - index.val, by
+    have hindex := index.isLt
+    omega⟩
+
+/-- Applying an abstracted positional body to its arguments beta-reduces to
+simultaneous reverse-index substitution into the body. -/
+private theorem abstractPorts_applyArgs
+    (body : Term ports Empty) (arguments : Fin ports → Term 0 α) :
+    BetaEta
+      (applyArgs ((Term.abstractPorts ports body).mapFree Empty.elim)
+        (List.ofFn arguments))
+      ((body.mapFree Empty.elim).substBound (reverseArgument arguments)) := by
+  induction ports with
+  | zero =>
+      simp only [Term.abstractPorts, List.ofFn_zero, applyArgs]
+      rw [show reverseArgument arguments = Term.bvar by
+        funext index
+        exact Fin.elim0 index]
+      rw [Term.substBound_id]
+      exact .refl
+  | succ ports ih =>
+      rw [List.ofFn_succ_last, applyArgs_append]
+      have hprefix := ih (Term.lam body)
+        (fun index => arguments index.castSucc)
+      have happ := hprefix.appFn (arguments (Fin.last ports))
+      refine happ.trans ?_
+      simp only [Term.mapFree, Term.substBound_lam]
+      apply BetaEta.step
+      apply OneStep.beta
+      rw [Term.substBound_comp]
+      apply congrArg (fun substitution =>
+        Term.substBound substitution (body.mapFree Empty.elim))
+      funext index
+      refine Fin.cases ?_ (fun prior => ?_) index
+      · simp only [Fin.cases_zero, reverseArgument, Term.substBound_bvar]
+        apply congrArg arguments
+        apply Fin.ext
+        simp
+      · simp only [Fin.cases_succ, reverseArgument]
+        rw [lift_substBound_closed]
+        apply congrArg arguments
+        apply Fin.ext
+        simp only [Fin.val_castSucc, Fin.val_succ]
+        omega
+
+private def reopenClosedPort (bound ports : Nat) :
+    Fin (ports + bound) → Term bound (Fin ports) := fun index =>
+  if hbound : index.val < bound then
+    Term.bvar ⟨index.val, hbound⟩
+  else
+    Term.port ⟨ports - 1 - (index.val - bound), by
+      have hindex := index.isLt
+      omega⟩
+
+private theorem reopenClosedPort_succ (bound ports : Nat) :
+    Fin.cases (Term.bvar 0)
+        (fun index => (reopenClosedPort bound ports index).lift) =
+      reopenClosedPort (bound + 1) ports := by
+  funext index
+  refine Fin.cases ?_ (fun prior => ?_) index
+  · simp only [Fin.cases_zero, reopenClosedPort]
+    split
+    next _ => rfl
+    next h => exact False.elim (h (Nat.zero_lt_succ bound))
+  · simp only [Fin.cases_succ, reopenClosedPort]
+    by_cases hbound : prior.val < bound
+    · simp only [hbound, ↓reduceDIte, Term.lift, Term.renameBound]
+      split
+      next _ => apply congrArg Term.bvar; apply Fin.ext; rfl
+      next h => exact False.elim (h (Nat.succ_lt_succ hbound))
+    · simp only [hbound, ↓reduceDIte, Term.lift, Term.renameBound]
+      split
+      next h => exact False.elim (hbound (Nat.lt_of_succ_lt_succ h))
+      next _ =>
+        apply congrArg Term.port
+        apply Fin.ext
+        simp only [Fin.val_succ]
+        omega
+
+private theorem closeOverPortsBody_reopen
+    (term : Term bound (Fin ports)) :
+    (term.closeOverPortsBody.mapFree Empty.elim).substBound
+      (reopenClosedPort bound ports) = term := by
+  induction term with
+  | bvar index =>
+      simp only [Term.closeOverPortsBody, Term.mapFree, Term.substBound_bvar,
+        reopenClosedPort]
+      split
+      next h => exact congrArg Term.bvar (Fin.ext rfl)
+      next h => exact False.elim (h index.isLt)
+  | port port =>
+      simp only [Term.closeOverPortsBody, Term.mapFree, Term.substBound_bvar,
+        reopenClosedPort]
+      split
+      next h => omega
+      next h =>
+        apply congrArg Term.port
+        apply Fin.ext
+        simp only
+        omega
+  | lam body ih =>
+      rename_i currentBound
+      simp only [Term.closeOverPortsBody, Term.mapFree, Term.substBound_lam]
+      apply congrArg Term.lam
+      have henvironment :
+          (fun index => Fin.cases (Term.bvar 0)
+            (fun prior => (reopenClosedPort currentBound ports prior).lift)
+            index) = reopenClosedPort (currentBound + 1) ports := by
+        funext index
+        exact congrFun (reopenClosedPort_succ currentBound ports) index
+      exact (congrArg (fun environment =>
+        (Term.mapFree Empty.elim (Term.closeOverPortsBody body)).substBound
+          environment)
+        henvironment).trans ih
+  | app fn argument ihFn ihArgument =>
+      simp only [Term.closeOverPortsBody, Term.mapFree, Term.substBound_app,
+        ihFn, ihArgument]
+
+theorem closeOverPorts_applyPorts (term : Term 0 (Fin ports)) :
+    BetaEta
+      (applyArgs (term.closeOverPorts.mapFree Empty.elim)
+        (List.ofFn fun port => Term.port port))
+      term := by
+  unfold Term.closeOverPorts
+  have happ := abstractPorts_applyArgs
+    (body := term.closeOverPortsBody)
+    (arguments := fun port => Term.port port)
+  refine happ.trans ?_
+  rw [show reverseArgument (fun port => Term.port port) =
+      reopenClosedPort 0 ports by
+    funext index
+    simp only [reverseArgument, reopenClosedPort]
+    split
+    next h => omega
+    next _ => rfl]
+  rw [closeOverPortsBody_reopen]
+  exact .refl
+
+/-- Closing positional ports reflects beta-eta equivalence. The proof maps the
+closed relation to the positional free type, applies both sides to the same
+ordered fresh ports, and cancels each closure by beta reduction. -/
+theorem closeOverPorts_betaEta_cancel {left right : Term 0 (Fin ports)}
+    (equivalent : BetaEta left.closeOverPorts right.closeOverPorts) :
+    BetaEta left right := by
+  have mapped := equivalent.mapFree (Empty.elim : Empty → Fin ports)
+  let arguments : List (Term 0 (Fin ports)) :=
+    List.ofFn fun port => Term.port port
+  have applied := mapped.applyArgs arguments
+  exact (closeOverPorts_applyPorts left).symm.trans
+    (applied.trans (closeOverPorts_applyPorts right))
 
 private theorem rawSpine_applyArgs_of
     {fn : Term n α} {spine : RawSpine n α}
@@ -1139,6 +1327,39 @@ private theorem headSpine_sound {t : Term n α} {spine : HeadSpine n α}
             raw.args) := by
         rw [classifyHead_toTerm]
 
+private theorem applyArgs_mapFree (fn : Term n α)
+    (args : List (Term n α)) (rename : α → β) :
+    (applyArgs fn args).mapFree rename =
+      applyArgs (fn.mapFree rename) (args.map (Term.mapFree rename)) := by
+  induction args generalizing fn with
+  | nil => rfl
+  | cons argument rest ih =>
+      simpa only [applyArgs, Term.mapFree, List.map_cons] using
+        ih (Term.app fn argument)
+
+theorem prefixClose_mapFree (binders : Nat)
+    (body : Term (extendScope n binders) α) (rename : α → β) :
+    (prefixClose binders body).mapFree rename =
+      prefixClose binders (body.mapFree rename) := by
+  induction binders generalizing n with
+  | zero => rfl
+  | succ binders ih =>
+      simp only [prefixClose, Term.mapFree]
+      exact congrArg Term.lam (ih body)
+
+private theorem Head.toTerm_mapFree (head : Head n binders α)
+    (rename : α → β) :
+    head.toTerm.mapFree rename = (head.mapFree rename).toTerm := by
+  cases head <;> simp [Head.toTerm, Head.mapFree, Term.mapFree]
+
+/-- Free-port renaming preserves the complete head-spine decomposition. -/
+theorem headSpine_mapFree {term : Term n α} {spine : HeadSpine n α}
+    (hspine : headSpine term = some spine) (rename : α → β) :
+    headSpine (term.mapFree rename) = some (spine.mapFree rename) := by
+  rw [headSpine_sound hspine, HeadSpine.toTerm, prefixClose_mapFree,
+    applyArgs_mapFree, Head.toTerm_mapFree]
+  exact headSpine_toTerm (spine.mapFree rename)
+
 private def scopeEmbed (h : k ≤ K) :
     Fin (extendScope n k) → Fin (extendScope n K) :=
   fun i => ⟨K - k + i.val, by
@@ -1160,6 +1381,115 @@ private theorem scopeEmbed_comp (h₁ : k ≤ K) (h₂ : K ≤ L) :
   apply Fin.ext
   simp only [Function.comp_apply, scopeEmbed, Fin.val_mk]
   omega
+
+private theorem applyArgs_bindFree (fn : Term n α)
+    (args : List (Term n α)) (substitution : α → Term n β) :
+    (applyArgs fn args).bindFree substitution =
+      applyArgs (fn.bindFree substitution)
+        (args.map fun arg => arg.bindFree substitution) := by
+  induction args generalizing fn with
+  | nil => rfl
+  | cons arg rest ih =>
+      simpa only [applyArgs, Term.bindFree, List.map_cons] using
+        ih (Term.app fn arg)
+
+private theorem prefixClose_bindFree
+    (binders : Nat) (body : Term (extendScope n binders) α)
+    (substitution : α → Term n β) :
+    (prefixClose binders body).bindFree substitution =
+      prefixClose binders
+        (body.bindFree fun x =>
+          (substitution x).renameBound
+            (scopeEmbed (n := n) (k := 0) (K := binders)
+              (Nat.zero_le binders))) := by
+  induction binders generalizing n with
+  | zero =>
+      simp only [prefixClose]
+      apply congrArg (fun replacement => body.bindFree replacement)
+      funext x
+      rw [scopeEmbed_refl]
+      exact (Term.renameBound_id (substitution x)).symm
+  | succ binders ih =>
+      simp only [prefixClose, Term.bindFree]
+      rw [ih]
+      apply congrArg Term.lam
+      apply congrArg (prefixClose binders)
+      apply congrArg (fun replacement => body.bindFree replacement)
+      funext x
+      unfold Term.lift
+      calc
+        _ = (substitution x).renameBound
+            (scopeEmbed (n := n + 1) (k := 0) (K := binders)
+              (Nat.zero_le binders) ∘ Fin.succ) :=
+          Term.renameBound_comp (substitution x) Fin.succ
+            (scopeEmbed (n := n + 1) (k := 0) (K := binders)
+              (Nat.zero_le binders))
+        _ = _ := by
+          apply congrArg (fun rename => (substitution x).renameBound rename)
+          funext index
+          apply Fin.ext
+          simp only [Function.comp_apply, scopeEmbed, Fin.val_mk, Fin.succ]
+          omega
+
+def Term.liftClosed (term : ClosedTerm) : Term n Empty :=
+  term.renameBound Fin.elim0
+
+private theorem prefixClose_bindFree_closed
+    (binders : Nat) (body : Term (extendScope 0 binders) α)
+    (substitution : α → ClosedTerm) :
+    (prefixClose binders body).bindFree substitution =
+      prefixClose binders
+        (body.bindFree fun port => (substitution port).liftClosed) := by
+  rw [prefixClose_bindFree]
+  apply congrArg (prefixClose binders)
+  apply congrArg (fun replacement => body.bindFree replacement)
+  funext port
+  apply congrArg (fun rename => (substitution port).renameBound rename)
+  funext impossible
+  exact Fin.elim0 impossible
+
+/-- Substituting closed terms for free ports preserves an aligned bound rigid
+head and maps the same substitution over every spine argument.  This is the
+public bridge from canonical diagram evaluation to `rigidHead_args`. -/
+theorem headSpine_bindFree_bound
+    {term : Term 0 α} {spine : HeadSpine 0 α}
+    (hspine : headSpine term = some spine)
+    (headIndex : Fin spine.binders)
+    (hhead : spine.head = .bound headIndex)
+    (substitution : α → ClosedTerm) :
+    headSpine (term.bindFree substitution) = some {
+      binders := spine.binders
+      head := .bound headIndex
+      args := spine.args.map fun argument =>
+        argument.bindFree fun port => (substitution port).liftClosed
+    } := by
+  let substituted : HeadSpine 0 Empty := {
+    binders := spine.binders
+    head := .bound headIndex
+    args := spine.args.map fun argument =>
+      argument.bindFree fun port => (substitution port).liftClosed
+  }
+  have hterm : term = spine.toTerm := headSpine_sound hspine
+  rw [hterm, HeadSpine.toTerm, prefixClose_bindFree, applyArgs_bindFree]
+  have hsubstitution :
+      (fun port =>
+        (substitution port).renameBound
+          (scopeEmbed (n := 0) (k := 0) (K := spine.binders)
+            (Nat.zero_le spine.binders))) =
+        (fun port => (substitution port).liftClosed) := by
+    funext port
+    apply congrArg (fun rename => (substitution port).renameBound rename)
+    funext impossible
+    exact Fin.elim0 impossible
+  rw [hsubstitution]
+  have hbody :
+      (spine.head.toTerm.bindFree fun port =>
+          (substitution port).liftClosed) =
+        (Head.bound headIndex : Head 0 spine.binders Empty).toTerm := by
+    rw [hhead]
+    rfl
+  rw [hbody]
+  exact headSpine_toTerm substituted
 
 private def etaProjections (n K : Nat) :
     (d : Nat) → d ≤ K → List (Term (extendScope n K) α)
@@ -1806,5 +2136,59 @@ theorem rigidHead_args
           rw [hcommonIndex] at hargB
           exact (hargA.toBetaEta.prefixClose).trans
             hargB.toBetaEta.prefixClose.symm
+
+/-- Canonical-evaluation form of rigid-head decomposition.  It starts with
+beta-eta equality only after one closed substitution, matching what equality
+of two term-node evaluations supplies. -/
+theorem rigidHead_args_bindFree_bound
+    {α : Type u} {a b : Term 0 α} {sa sb : HeadSpine 0 α}
+    (ha : headSpine a = some sa)
+    (hb : headSpine b = some sb)
+    (sameBinders : sa.binders = sb.binders)
+    (headIndex : Fin sa.binders)
+    (firstHead : sa.head = .bound headIndex)
+    (secondHead : sb.head = .bound (Fin.cast sameBinders headIndex))
+    (sameLength : sa.args.length = sb.args.length)
+    (substitution : α → ClosedTerm)
+    (equivalent : BetaEta (a.bindFree substitution)
+      (b.bindFree substitution)) :
+    ∀ index (valid : index < sa.args.length),
+      BetaEta
+        ((prefixClose sa.binders (sa.args.get ⟨index, valid⟩)).bindFree
+          substitution)
+        ((prefixClose sb.binders
+          (sb.args.get ⟨index, sameLength ▸ valid⟩)).bindFree substitution) := by
+  let leftSpine : HeadSpine 0 Empty := {
+    binders := sa.binders
+    head := .bound headIndex
+    args := sa.args.map fun argument =>
+      argument.bindFree fun port => (substitution port).liftClosed
+  }
+  let rightSpine : HeadSpine 0 Empty := {
+    binders := sb.binders
+    head := .bound (Fin.cast sameBinders headIndex)
+    args := sb.args.map fun argument =>
+      argument.bindFree fun port => (substitution port).liftClosed
+  }
+  have hleft : headSpine (a.bindFree substitution) = some leftSpine := by
+    exact headSpine_bindFree_bound ha headIndex firstHead substitution
+  have hright : headSpine (b.bindFree substitution) = some rightSpine := by
+    exact headSpine_bindFree_bound hb (Fin.cast sameBinders headIndex)
+      secondHead substitution
+  have hbinders : leftSpine.binders = rightSpine.binders := sameBinders
+  have hheads : leftSpine.head.Corresponds rightSpine.head := by
+    exact .bound headIndex.val headIndex.isLt
+      (by simpa only [sameBinders] using headIndex.isLt)
+  have hlength : leftSpine.args.length = rightSpine.args.length := by
+    simpa [leftSpine, rightSpine] using sameLength
+  have hrigid := rigidHead_args hleft hright equivalent hbinders hheads hlength
+  intro index valid
+  have hvalid : index < leftSpine.args.length := by
+    simpa [leftSpine] using valid
+  have h := hrigid index hvalid
+  dsimp only [leftSpine, rightSpine] at h
+  simp at h
+  rw [← prefixClose_bindFree_closed, ← prefixClose_bindFree_closed] at h
+  exact h
 
 end VisualProof.Lambda

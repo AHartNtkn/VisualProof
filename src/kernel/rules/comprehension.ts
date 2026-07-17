@@ -50,9 +50,9 @@ function dropNode(d: Diagram, nodeId: NodeId): Diagram {
  * and exact. Each copy's trailing boundary stubs splice onto the SAME host
  * `attachments` wires — sharing across instances is what makes them
  * parameters (G is one fixed relation R := λx⃗. ψ(x⃗, b⃗) over host lines b⃗).
- * Per-copy enclosure of each parameter wire over the copy's landing region is
- * the splice's own attachment validation; this rule enforces existence and
- * the count split itself.
+ * The rule first requires every parameter wire to be available strictly
+ * outside the quantified bubble, so one fixed witness relation can use it.
+ * Per-copy splice validation then checks visibility at each landing region.
  */
 export function applyComprehensionInstantiate(
   d: Diagram,
@@ -78,8 +78,14 @@ export function applyComprehensionInstantiate(
     )
   }
   for (const a of attachments) {
-    if (d.wires[a] === undefined) {
+    const wire = d.wires[a]
+    if (wire === undefined) {
       throw new RuleError(`parameter attachment wire '${a}' does not exist`)
+    }
+    if (wire.scope === bubbleId || !isAncestorOrEqual(d, wire.scope, bubbleId)) {
+      throw new RuleError(
+        `parameter attachment wire '${a}' (scope '${wire.scope}') must properly enclose the instantiated bubble '${bubbleId}'`,
+      )
     }
   }
 

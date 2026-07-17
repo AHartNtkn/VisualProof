@@ -92,8 +92,8 @@ describe('findOccurrences adversarial battery', () => {
     expect(findOccurrences(mkHost(0, 1), mkPattern(false), { fuel: 10 }).matches).toHaveLength(1)
     // root: one bare pattern wire among two host bare wires → matches (subset)
     const rootMatches = findOccurrences(mkHost(2, 0), mkPattern(true), { fuel: 10 })
-    // canonical pairing: one occurrence per region attempt at the root
-    expect(rootMatches.matches.filter((m) => m.region === 'r0')).toHaveLength(1)
+    // Root subset semantics retains both distinct one-wire host footprints.
+    expect(rootMatches.matches.filter((m) => m.region === 'r0')).toHaveLength(2)
   })
 
   it('rejects when an internal wire is scoped differently in the host', () => {

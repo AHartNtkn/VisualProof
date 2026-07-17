@@ -4,6 +4,7 @@ import type { DiagramWithBoundary } from '../boundary'
 import type { Occurrence } from './match'
 import type { SubgraphSelection } from './selection'
 import { mkSelection } from './selection'
+import { occurrenceContentRoot } from './occurrence-certificate'
 
 /**
  * Convert a matcher occurrence into the selection of its host subgraph —
@@ -22,27 +23,30 @@ export function occurrenceToSelection(
   // maps means the caller passed a malformed Occurrence — a structural
   // invariant violation, not a rule-gate refusal.
   const pd = pattern.diagram
+  const content = occurrenceContentRoot(pattern, occ.binderMap)
+  if (!content.ok) throw new DiagramError(`malformed occurrence binder map: ${content.reason}`)
+  const root = content.root
   const boundary = new Set(pattern.boundary)
   const regions: RegionId[] = []
   // Only direct root-children enter sel.regions (mkSelection requires
   // parent === sel.region); deeper pattern regions ride along transitively
   // via the selectionContents subtree closure.
   for (const [pr, r] of Object.entries(pd.regions)) {
-    if (r.kind === 'sheet' || r.parent !== pd.root) continue
+    if (r.kind === 'sheet' || r.parent !== root) continue
     const img = occ.regionMap.get(pr)
     if (img === undefined) throw new DiagramError(`occurrence is missing an image for pattern region '${pr}'`)
     regions.push(img)
   }
   const nodes: NodeId[] = []
   for (const [pn, n] of Object.entries(pd.nodes)) {
-    if (n.region !== pd.root) continue
+    if (n.region !== root) continue
     const img = occ.nodeMap.get(pn)
     if (img === undefined) throw new DiagramError(`occurrence is missing an image for pattern node '${pn}'`)
     nodes.push(img)
   }
   const wires: WireId[] = []
   for (const [pw, w] of Object.entries(pd.wires)) {
-    if (boundary.has(pw) || w.scope !== pd.root) continue
+    if (boundary.has(pw) || w.scope !== root) continue
     const img = occ.wireMap.get(pw)
     if (img === undefined) throw new DiagramError(`occurrence is missing an image for pattern wire '${pw}'`)
     wires.push(img)

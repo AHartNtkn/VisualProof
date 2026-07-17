@@ -388,6 +388,24 @@ def extendedEnvironment
     Fin (context.extend region).length → D :=
   extendWireEnv outerEnv localEnv ∘ Fin.cast (WireContext.length_extend context region)
 
+theorem extendedEnvironment_nil_eq_cast
+    (region : Fin diagram.regionCount)
+    (localEnv : Fin (exactScopeWires diagram region).length → D) :
+    extendedEnvironment ([] : WireContext diagram) region Fin.elim0 localEnv =
+      fun index => localEnv
+        (Fin.cast (by simp [WireContext.extend]) index) := by
+  funext index
+  let localIndex : Fin (exactScopeWires diagram region).length :=
+    Fin.cast (by simp [WireContext.extend]) index
+  have cast_eq :
+      Fin.cast (WireContext.length_extend
+        ([] : WireContext diagram) region) index =
+        Fin.natAdd 0 localIndex := by
+    apply Fin.ext
+    simp [localIndex]
+  rw [extendedEnvironment, Function.comp_apply, cast_eq]
+  exact Fin.addCases_right localIndex
+
 /-- Proof-dependent transport of the complete local existential semantics used
 by `finishRegion`.  The opposite valuation and its item denotation are produced
 together, after the active item denotation is available. -/
@@ -864,6 +882,21 @@ structure ConcreteSemanticSimulation (signature : List Nat)
         (extendContext sourceContext targetContext context parent regular
           sourceExact targetExact)
         child
+  /-- Extending the lexical wire context preserves traversal provenance for
+  compiling the current region's direct occurrences. -/
+  at_extended : ∀ (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (context : ContextWitness sourceContext targetContext)
+    (region : Fin source.regionCount)
+    (regular : ¬ Distinguished region)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact :
+      (targetContext.extend (regionMap region)).Exact (regionMap region)),
+    AtRegion context region →
+      AtRegion
+        (extendContext sourceContext targetContext context region regular
+          sourceExact targetExact)
+        region
   /-- A child under a focused region is recursively available only when it is
   a direct child on both sides.  This excludes opaque replacement material
   whose source regions collapse to the target focus. -/
@@ -896,6 +929,10 @@ structure ConcreteSemanticSimulation (signature : List Nat)
       ∀ (sourceExact : (sourceContext.extend region).Exact region)
         (targetExact : (targetContext.extend (regionMap region)).Exact
           (regionMap region)),
+      sourceBinders.Covers region →
+      targetBinders.Covers (regionMap region) →
+      BinderContext.Enumeration source sourceBinders region →
+      BinderContext.Enumeration target targetBinders (regionMap region) →
       ∀ (sourceItems : ItemSeq signature
           (sourceContext.extend region).length sourceRels)
         (targetItems : ItemSeq signature
@@ -924,6 +961,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (region : Fin source.regionCount)
     (sourceContext : WireContext source) (targetContext : WireContext target)
     (context : ContextWitness sourceContext targetContext)
+    (atRegion : AtRegion context region)
     (sourceNodup : sourceContext.Nodup)
     (targetNodup : targetContext.Nodup)
     (sourceBinders : BinderContext source sourceRels)
@@ -995,6 +1033,41 @@ structure ConcreteSemanticSimulation (signature : List Nat)
             (extendFocusedContext sourceContext targetContext context region
               focused sourceExact targetExact))
           (sourceBody.renameRelations (relationMap childBinderWitness))
+          targetBody) →
+      -- Focused rewrites may reparent retained material through fresh wrappers.
+      (∀ {childDirection : SimulationDirection}
+        {child : Fin source.regionCount}
+        {childSourceRels childTargetRels : RelCtx}
+        {childSourceBinders : BinderContext source childSourceRels}
+        {childTargetBinders : BinderContext target childTargetRels}
+        (childFuelTarget : Nat)
+        (childSourceContext : WireContext source)
+        (childTargetContext : WireContext target)
+        (childContext : ContextWitness childSourceContext childTargetContext),
+        AtRegion childContext child →
+        Allowed childDirection child →
+        (childBinderWitness :
+          BinderWitness childSourceBinders childTargetBinders) →
+        childSourceBinders.Covers child →
+        childTargetBinders.Covers (regionMap child) →
+        BinderContext.Enumeration source childSourceBinders child →
+        BinderContext.Enumeration target childTargetBinders
+          (regionMap child) →
+        (childSourceContext.extend child).Exact child →
+        (childTargetContext.extend (regionMap child)).Exact
+          (regionMap child) →
+        ∀ (sourceBody : Region signature
+            childSourceContext.length childSourceRels)
+          (targetBody : Region signature
+            childTargetContext.length childTargetRels),
+        compileRegion? signature source fuelSource child
+            childSourceContext childSourceBinders = some sourceBody →
+        compileRegion? signature target childFuelTarget (regionMap child)
+            childTargetContext childTargetBinders = some targetBody →
+        RegionSimulation model named childDirection
+          (indexRelation childContext)
+          (sourceBody.renameRelations
+            (relationMap childBinderWitness))
           targetBody) →
       ∀ (sourceItems : ItemSeq signature
           (sourceContext.extend region).length sourceRels)
@@ -1070,6 +1143,7 @@ theorem compileOccurrence_denote
     (fuelSource fuelTarget : Nat) (region : Fin source.regionCount)
     (sourceContext : WireContext source) (targetContext : WireContext target)
     (context : simulation.ContextWitness sourceContext targetContext)
+    (atRegion : simulation.AtRegion context region)
     (sourceNodup : sourceContext.Nodup)
     (targetNodup : targetContext.Nodup)
     (sourceBinders : BinderContext source sourceRels)
@@ -1128,7 +1202,7 @@ theorem compileOccurrence_denote
         simulation.occurrenceMap_node region regular node nodeRegion
       rw [mapped] at targetCompiled
       exact simulation.nodeSemantic direction region sourceContext targetContext
-        context sourceNodup targetNodup sourceBinders targetBinders allowed
+        context atRegion sourceNodup targetNodup sourceBinders targetBinders allowed
         binderWitness node targetNode regular mapped
         nodeRegion sourceItem targetItem sourceCompiled targetCompiled
   | child child =>
@@ -1249,6 +1323,98 @@ theorem compileOccurrence_denote
                         bodies sourceEnv targetEnv
                           (relationValue, relEnv) environments targetDenotes⟩
 
+/-- Lift an arbitrary pointwise occurrence simulation to the compiled
+conjunction.  This is the focused-rewrite seam: the occurrence map need not be
+the regular frame map, so retained material may be reparented through freshly
+inserted wrappers. -/
+theorem compileOccurrences_denote_of_pointwise
+    {source target : ConcreteDiagram}
+    {sourceRels targetRels : RelCtx}
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : SimulationDirection)
+    (sourceRecurse : ∀ {rels : RelCtx},
+      (region : Fin source.regionCount) → (context : WireContext source) →
+        BinderContext source rels →
+          Option (Region signature context.length rels))
+    (targetRecurse : ∀ {rels : RelCtx},
+      (region : Fin target.regionCount) → (context : WireContext target) →
+        BinderContext target rels →
+          Option (Region signature context.length rels))
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceBinders : BinderContext source sourceRels)
+    (targetBinders : BinderContext target targetRels)
+    (relation : ContextIndexRelation sourceContext.length targetContext.length)
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (mapOccurrence : LocalOccurrence source.regionCount source.nodeCount →
+      LocalOccurrence target.regionCount target.nodeCount)
+    (occurrences : List
+      (LocalOccurrence source.regionCount source.nodeCount))
+    (pointwise : ∀ occurrence, occurrence ∈ occurrences →
+      ∀ (sourceItem : Item signature sourceContext.length sourceRels)
+        (targetItem : Item signature targetContext.length targetRels),
+      compileOccurrenceWith? signature source sourceRecurse sourceContext
+          sourceBinders occurrence = some sourceItem →
+      compileOccurrenceWith? signature target targetRecurse targetContext
+          targetBinders (mapOccurrence occurrence) = some targetItem →
+      ItemSimulation model named direction relation
+        (sourceItem.renameRelations relationMap) targetItem)
+    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
+    (targetItems : ItemSeq signature targetContext.length targetRels)
+    (sourceCompiled : compileOccurrencesWith? signature source sourceRecurse
+      sourceContext sourceBinders occurrences = some sourceItems)
+    (targetCompiled : compileOccurrencesWith? signature target targetRecurse
+      targetContext targetBinders (occurrences.map mapOccurrence) =
+        some targetItems) :
+    ItemSeqSimulation model named direction relation
+      (sourceItems.renameRelations relationMap) targetItems := by
+  induction occurrences generalizing sourceItems targetItems with
+  | nil =>
+      simp [compileOccurrencesWith?] at sourceCompiled targetCompiled
+      subst sourceItems
+      subst targetItems
+      intro sourceEnv targetEnv relEnv environments
+      cases direction <;>
+        simp [ItemSeq.renameRelations, SimulationDirection.Entails]
+  | cons occurrence rest induction =>
+      simp only [compileOccurrencesWith?, List.map_cons]
+        at sourceCompiled targetCompiled
+      cases sourceHeadResult : compileOccurrenceWith? signature source
+          sourceRecurse sourceContext sourceBinders occurrence with
+      | none => simp [sourceHeadResult] at sourceCompiled
+      | some sourceHead =>
+          cases sourceTailResult : compileOccurrencesWith? signature source
+              sourceRecurse sourceContext sourceBinders rest with
+          | none => simp [sourceHeadResult, sourceTailResult] at sourceCompiled
+          | some sourceTail =>
+              simp [sourceHeadResult, sourceTailResult] at sourceCompiled
+              subst sourceItems
+              cases targetHeadResult : compileOccurrenceWith? signature target
+                  targetRecurse targetContext targetBinders
+                  (mapOccurrence occurrence) with
+              | none => simp [targetHeadResult] at targetCompiled
+              | some targetHead =>
+                  cases targetTailResult : compileOccurrencesWith?
+                      signature target targetRecurse targetContext targetBinders
+                      (rest.map mapOccurrence) with
+                  | none =>
+                      simp [targetHeadResult, targetTailResult] at targetCompiled
+                  | some targetTail =>
+                      simp [targetHeadResult, targetTailResult] at targetCompiled
+                      subst targetItems
+                      have head := pointwise occurrence (by simp) sourceHead
+                        targetHead sourceHeadResult targetHeadResult
+                      have tail := induction
+                        (fun current currentMember sourceItem targetItem =>
+                          pointwise current (by simp [currentMember])
+                            sourceItem targetItem)
+                        sourceTail targetTail sourceTailResult targetTailResult
+                      intro sourceEnv targetEnv relEnv environments
+                      exact direction.entails_and
+                        (head sourceEnv targetEnv relEnv environments)
+                        (tail sourceEnv targetEnv relEnv environments)
+
 /-- Lift pointwise mapped-occurrence simulation to the compiled conjunction. -/
 theorem compileOccurrences_denote
     (simulation : ConcreteSemanticSimulation signature source target model named)
@@ -1256,6 +1422,7 @@ theorem compileOccurrences_denote
     (fuelSource fuelTarget : Nat) (region : Fin source.regionCount)
     (sourceContext : WireContext source) (targetContext : WireContext target)
     (context : simulation.ContextWitness sourceContext targetContext)
+    (atRegion : simulation.AtRegion context region)
     (sourceNodup : sourceContext.Nodup)
     (targetNodup : targetContext.Nodup)
     (sourceBinders : BinderContext source sourceRels)
@@ -1349,7 +1516,8 @@ theorem compileOccurrences_denote
                       subst targetItems
                       have head := simulation.compileOccurrence_denote direction
                         fuelSource fuelTarget region sourceContext targetContext
-                        context sourceNodup targetNodup sourceBinders targetBinders
+                        context atRegion sourceNodup targetNodup sourceBinders
+                        targetBinders
                         allowed regular binderWitness
                         sourceBindersCover targetBindersCover sourceEnumeration
                         targetEnumeration
@@ -1507,6 +1675,24 @@ theorem compileRegion_denote
                       context sourceBinders targetBinders atRegion focused allowed
                       binderWitness sourceExact targetExact sourceBindersCover
                       targetBindersCover sourceEnumeration targetEnumeration recurse
+                      (by
+                        intro childDirection child childSourceRels
+                          childTargetRels childSourceBinders childTargetBinders
+                          childFuelTarget childSourceContext childTargetContext
+                          childContext
+                          childAt childAllowed childBinderWitness
+                          childSourceBindersCover childTargetBindersCover
+                          childSourceEnumeration childTargetEnumeration
+                          childSourceExact childTargetExact sourceChild
+                          targetChild sourceChildCompiled targetChildCompiled
+                        exact induction childDirection childFuelTarget child
+                          childSourceContext childTargetContext childContext
+                          childAt childSourceBinders childTargetBinders
+                          childAllowed childBinderWitness
+                          childSourceBindersCover childTargetBindersCover
+                          childSourceEnumeration childTargetEnumeration
+                          childSourceExact childTargetExact sourceChild targetChild
+                          sourceChildCompiled targetChildCompiled)
                       sourceItems targetItems sourceItemsResult targetItemsResult
           · rw [simulation.localOccurrences_map region focused] at targetCompiled
             let extendedContext := simulation.extendContext sourceContext targetContext
@@ -1592,7 +1778,10 @@ theorem compileRegion_denote
                         targetChildCompiled
                     have itemSemantics := simulation.compileOccurrences_denote
                       direction fuelSource fuelTarget region sourceExtended
-                      targetExtended extendedContext sourceExact.nodup
+                      targetExtended extendedContext
+                      (simulation.at_extended sourceContext targetContext context
+                        region focused sourceExact targetExact atRegion)
+                      sourceExact.nodup
                       targetExact.nodup sourceBinders targetBinders allowed focused
                       binderWitness sourceBindersCover targetBindersCover
                       sourceEnumeration targetEnumeration recurse
@@ -1610,8 +1799,10 @@ theorem compileRegion_denote
                       (simulation.localTransport direction fuelSource fuelTarget
                         sourceContext targetContext context sourceBinders
                         targetBinders binderWitness region atRegion focused
-                        allowed sourceExact targetExact sourceItems targetItems
-                        sourceItemsResult targetItemsCompiled itemSemantics)
+                        allowed sourceExact targetExact sourceBindersCover
+                        targetBindersCover sourceEnumeration targetEnumeration
+                        sourceItems targetItems sourceItemsResult
+                        targetItemsCompiled itemSemantics)
 
 /-- Root ambient/local partitions and their proof-dependent semantic
 transport. -/
@@ -1692,6 +1883,42 @@ structure RootContextSimulation
           childTargetBinders = some targetBody →
       RegionSimulation model named childDirection
         (simulation.indexRelation context)
+        (sourceBody.renameRelations
+          (simulation.relationMap childBinderWitness))
+        targetBody) →
+    (∀ {childDirection : SimulationDirection}
+      {child : Fin source.regionCount}
+      {childSourceRels childTargetRels : RelCtx}
+      {childSourceBinders : BinderContext source childSourceRels}
+      {childTargetBinders : BinderContext target childTargetRels}
+      (childFuelTarget : Nat)
+      (childSourceContext : WireContext source)
+      (childTargetContext : WireContext target)
+      (childContext :
+        simulation.ContextWitness childSourceContext childTargetContext),
+      simulation.AtRegion childContext child →
+      simulation.Allowed childDirection child →
+      (childBinderWitness :
+        simulation.BinderWitness childSourceBinders childTargetBinders) →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers (simulation.regionMap child) →
+      BinderContext.Enumeration source childSourceBinders child →
+      BinderContext.Enumeration target childTargetBinders
+        (simulation.regionMap child) →
+      (childSourceContext.extend child).Exact child →
+      (childTargetContext.extend (simulation.regionMap child)).Exact
+        (simulation.regionMap child) →
+      ∀ (sourceBody : Region signature
+          childSourceContext.length childSourceRels)
+        (targetBody : Region signature
+          childTargetContext.length childTargetRels),
+      compileRegion? signature source source.regionCount child
+          childSourceContext childSourceBinders = some sourceBody →
+      compileRegion? signature target childFuelTarget
+          (simulation.regionMap child) childTargetContext
+          childTargetBinders = some targetBody →
+      RegionSimulation model named childDirection
+        (simulation.indexRelation childContext)
         (sourceBody.renameRelations
           (simulation.relationMap childBinderWitness))
         targetBody) →
@@ -1873,7 +2100,27 @@ theorem compileRoot_denote
                 sourceChild targetChild sourceChildCompiled targetChildCompiled
             simpa only [Region.renameRelations_empty] using
               rootContext.focusedRootKernel rootContext.atRoot focused allowed
-                recurse sourceItems targetItems sourceItemsResult targetItemsResult
+                recurse
+                (by
+                  intro childDirection child childSourceRels childTargetRels
+                    childSourceBinders childTargetBinders childFuelTarget
+                    childSourceContext childTargetContext childContext childAt
+                    childAllowed
+                    childBinderWitness childSourceBindersCover
+                    childTargetBindersCover childSourceEnumeration
+                    childTargetEnumeration childSourceExact childTargetExact
+                    sourceChild targetChild sourceChildCompiled
+                    targetChildCompiled
+                  exact simulation.compileRegion_denote childDirection
+                    source.regionCount childFuelTarget child
+                    childSourceContext childTargetContext childContext childAt
+                    childSourceBinders childTargetBinders childAllowed
+                    childBinderWitness childSourceBindersCover
+                    childTargetBindersCover childSourceEnumeration
+                    childTargetEnumeration childSourceExact childTargetExact
+                    sourceChild targetChild sourceChildCompiled
+                    targetChildCompiled)
+                sourceItems targetItems sourceItemsResult targetItemsResult
 
   · rw [simulation.localOccurrences_map source.root focused]
         at targetCompiled
@@ -1943,7 +2190,8 @@ theorem compileRoot_denote
                 sourceChild targetChild sourceChildCompiled targetChildCompiled
             have itemSemantics := simulation.compileOccurrences_denote direction
               source.regionCount target.regionCount source.root sourceRootContext
-              targetRootContext rootContext.context sourceExact.nodup
+              targetRootContext rootContext.context rootContext.atRoot
+              sourceExact.nodup
               targetRootExact.nodup BinderContext.empty BinderContext.empty
               allowed focused simulation.binders_empty
               (BinderContext.empty_covers_root simulation.source_wellFormed)

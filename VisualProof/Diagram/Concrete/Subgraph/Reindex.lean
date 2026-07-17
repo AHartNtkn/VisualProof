@@ -116,6 +116,34 @@ theorem origin_injective (domain : SurvivorDomain size) :
     Function.Injective domain.origin :=
   FilteredFiber.origin_injective domain.survives
 
+/-- Canonical equivalence between dense survivor carriers selected by
+extensionally equal predicates. -/
+def equivOfSurvivesIff (source target : SurvivorDomain size)
+    (same : ∀ original,
+      target.survives original = true ↔ source.survives original = true) :
+    FiniteEquiv source.Carrier target.Carrier :=
+  FiniteEquiv.restrictLists (FiniteEquiv.refl (Fin size))
+    source.enumeration target.enumeration
+    source.enumeration_nodup target.enumeration_nodup (by
+      intro original
+      simp only [FiniteEquiv.refl_apply, mem_enumeration]
+      exact same original)
+
+/-- The survivor equivalence preserves the represented original identifier. -/
+@[simp] theorem origin_equivOfSurvivesIff
+    (source target : SurvivorDomain size)
+    (same : ∀ original,
+      target.survives original = true ↔ source.survives original = true)
+    (index : source.Carrier) :
+    target.origin (equivOfSurvivesIff source target same index) =
+      source.origin index := by
+  exact FiniteEquiv.restrictLists_spec (FiniteEquiv.refl (Fin size))
+    source.enumeration target.enumeration
+    source.enumeration_nodup target.enumeration_nodup (by
+      intro original
+      simp only [FiniteEquiv.refl_apply, mem_enumeration]
+      exact same original) index
+
 /-- Restrict a dependent family to surviving origins. -/
 def pullback {family : Fin size → Sort u} (domain : SurvivorDomain size)
     (values : (original : Fin size) → family original) :

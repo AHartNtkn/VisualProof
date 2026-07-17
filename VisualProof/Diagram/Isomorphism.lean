@@ -154,6 +154,251 @@ mutual
         ItemSeqIso signature ambient rels source target
 end
 
+/-- Proof-relevant presentation of a region isomorphism retaining the exact
+item-position equivalence. This is used when a client must replace one mapped
+item instead of merely consuming the propositional isomorphism. -/
+inductive RegionIsoPresentation (signature : List Nat) :
+    {sourceWires targetWires : Nat} →
+    (ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)) →
+    (rels : RelCtx) → Region signature sourceWires rels →
+    Region signature targetWires rels → Type
+  | mk {sourceLocal targetLocal : Nat}
+      {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+      {sourceItems : ItemSeq signature (sourceWires + sourceLocal) rels}
+      {targetItems : ItemSeq signature (targetWires + targetLocal) rels}
+      (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
+      (positions : FiniteEquiv (Fin sourceItems.length)
+        (Fin targetItems.length))
+      (items : ∀ index, ItemIso signature
+        (extendWireEquiv ambient localEquiv) rels
+        (sourceItems.get index) (targetItems.get (positions index))) :
+      RegionIsoPresentation signature ambient rels
+        (.mk sourceLocal sourceItems) (.mk targetLocal targetItems)
+
+def RegionIsoPresentation.iso
+    (presentation : RegionIsoPresentation signature ambient rels source target) :
+    RegionIso signature ambient rels source target := by
+  cases presentation with
+  | mk localEquiv positions items =>
+      exact .mk localEquiv (.permute positions items)
+
+
+def ItemSeq.replaceAt :
+    (items : ItemSeq signature wires rels) →
+    Fin items.length → Item signature wires rels →
+      ItemSeq signature wires rels
+  | .nil, index, _ => Fin.elim0 index
+  | .cons head tail, index, replacement =>
+      Fin.cases (.cons replacement tail)
+        (fun rest => .cons head (ItemSeq.replaceAt tail rest replacement)) index
+
+@[simp] theorem ItemSeq.replaceAt_length
+    (items : ItemSeq signature wires rels) (index : Fin items.length)
+    (replacement : Item signature wires rels) :
+    (items.replaceAt index replacement).length = items.length := by
+  cases items with
+  | nil => exact Fin.elim0 index
+  | cons head tail =>
+      induction index using Fin.cases with
+      | zero => rfl
+      | succ rest => simp [ItemSeq.replaceAt, ItemSeq.length,
+          ItemSeq.replaceAt_length tail rest replacement]
+termination_by items.length
+decreasing_by simp_all [ItemSeq.length]
+
+theorem ItemSeq.get_replaceAt_same
+    (items : ItemSeq signature wires rels) (index : Fin items.length)
+    (replacement : Item signature wires rels) :
+    (items.replaceAt index replacement).get
+        (Fin.cast (items.replaceAt_length index replacement).symm index) =
+      replacement := by
+  cases items with
+  | nil => exact Fin.elim0 index
+  | cons head tail =>
+      induction index using Fin.cases with
+      | zero => rfl
+      | succ rest => simpa [ItemSeq.replaceAt, ItemSeq.get] using
+          ItemSeq.get_replaceAt_same tail rest replacement
+termination_by items.length
+decreasing_by simp_all [ItemSeq.length]
+
+theorem ItemSeq.get_replaceAt_of_ne
+    (items : ItemSeq signature wires rels) (index other : Fin items.length)
+    (replacement : Item signature wires rels) (hne : other ≠ index) :
+    (items.replaceAt index replacement).get
+        (Fin.cast (items.replaceAt_length index replacement).symm other) =
+      items.get other := by
+  cases items with
+  | nil => exact Fin.elim0 index
+  | cons head tail =>
+      induction index using Fin.cases with
+      | zero =>
+          induction other using Fin.cases with
+          | zero => exact False.elim (hne rfl)
+          | succ otherRest => rfl
+      | succ indexRest =>
+          induction other using Fin.cases with
+          | zero => rfl
+          | succ otherRest => simpa [ItemSeq.replaceAt, ItemSeq.get] using
+            ItemSeq.get_replaceAt_of_ne tail indexRest otherRest replacement (by
+              intro heq
+              apply hne
+              subst otherRest
+              rfl)
+termination_by items.length
+decreasing_by simp_all [ItemSeq.length]
+
+theorem ItemSeqIso.replaceAt
+    {source : ItemSeq signature sourceWires rels}
+    {target : ItemSeq signature targetWires rels}
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    (positions : FiniteEquiv (Fin source.length) (Fin target.length))
+    (sourceIndex : Fin source.length) (targetIndex : Fin target.length)
+    (itemIsos : ∀ i, i ≠ sourceIndex → ItemIso signature wire rels
+      (source.get i) (target.get (positions i)))
+    (sourceReplacement : Item signature sourceWires rels)
+    (targetReplacement : Item signature targetWires rels)
+    (mapped : positions sourceIndex = targetIndex)
+    (replacement : ItemIso signature wire rels sourceReplacement
+      targetReplacement) :
+    ItemSeqIso signature wire rels
+      (source.replaceAt sourceIndex sourceReplacement)
+      (target.replaceAt targetIndex targetReplacement) := by
+      have hmapped := mapped
+      let sourceCast : Fin (source.replaceAt sourceIndex sourceReplacement).length →
+          Fin source.length :=
+        Fin.cast (source.replaceAt_length sourceIndex sourceReplacement)
+      let targetCast : Fin target.length →
+          Fin (target.replaceAt targetIndex targetReplacement).length :=
+        Fin.cast (target.replaceAt_length targetIndex targetReplacement).symm
+      let replacedPositions : FiniteEquiv
+          (Fin (source.replaceAt sourceIndex sourceReplacement).length)
+          (Fin (target.replaceAt targetIndex targetReplacement).length) := {
+        toFun := fun index => Fin.cast
+          (target.replaceAt_length targetIndex targetReplacement).symm
+          (positions (Fin.cast
+            (source.replaceAt_length sourceIndex sourceReplacement) index))
+        invFun := fun index => Fin.cast
+          (source.replaceAt_length sourceIndex sourceReplacement).symm
+          (positions.invFun (Fin.cast
+            (target.replaceAt_length targetIndex targetReplacement) index))
+        left_inv := by
+          intro index
+          apply Fin.ext
+          simpa using congrArg Fin.val
+            (positions.left_inv (Fin.cast
+              (source.replaceAt_length sourceIndex sourceReplacement) index))
+        right_inv := by
+          intro index
+          apply Fin.ext
+          simpa using congrArg Fin.val
+            (positions.right_inv (Fin.cast
+              (target.replaceAt_length targetIndex targetReplacement) index))
+      }
+      refine ItemSeqIso.permute replacedPositions ?_
+      intro index
+      let original := sourceCast index
+      by_cases hindex : original = sourceIndex
+      · have htarget : positions original = targetIndex := by
+          simpa [hindex] using hmapped
+        have hsourceIndex : index = Fin.cast
+            (source.replaceAt_length sourceIndex sourceReplacement).symm
+            sourceIndex := by
+          apply Fin.ext
+          simpa [original, sourceCast] using congrArg Fin.val hindex
+        have htargetIndex : replacedPositions index = Fin.cast
+            (target.replaceAt_length targetIndex targetReplacement).symm
+            targetIndex := by
+          apply Fin.ext
+          simpa [replacedPositions, original, sourceCast] using
+            congrArg Fin.val htarget
+        rw [hsourceIndex]
+        have htargetIndex' : replacedPositions
+            (Fin.cast
+              (source.replaceAt_length sourceIndex sourceReplacement).symm
+              sourceIndex) =
+            Fin.cast
+              (target.replaceAt_length targetIndex targetReplacement).symm
+              targetIndex := by
+          apply Fin.ext
+          simpa [replacedPositions] using congrArg Fin.val mapped
+        rw [htargetIndex',
+          ItemSeq.get_replaceAt_same, ItemSeq.get_replaceAt_same]
+        exact replacement
+      · have htarget : positions original ≠ targetIndex := by
+          intro heq
+          apply hindex
+          exact positions.injective (heq.trans hmapped.symm)
+        have hsourceIndex : index = Fin.cast
+            (source.replaceAt_length sourceIndex sourceReplacement).symm
+            original := by
+          apply Fin.ext
+          rfl
+        have htargetIndex : replacedPositions index = Fin.cast
+            (target.replaceAt_length targetIndex targetReplacement).symm
+            (positions original) := by
+          apply Fin.ext
+          rfl
+        rw [hsourceIndex]
+        have htargetIndex' : replacedPositions
+            (Fin.cast
+              (source.replaceAt_length sourceIndex sourceReplacement).symm
+              original) =
+            Fin.cast
+              (target.replaceAt_length targetIndex targetReplacement).symm
+              (positions original) := by
+          apply Fin.ext
+          rfl
+        rw [htargetIndex',
+          ItemSeq.get_replaceAt_of_ne source sourceIndex original
+            sourceReplacement hindex,
+          ItemSeq.get_replaceAt_of_ne target targetIndex (positions original)
+            targetReplacement htarget]
+        simpa using itemIsos original hindex
+
+/-- A proof-relevant permutation of a compiler frame with one distinguished
+position omitted.  The omitted item is supplied by the recursively aligned
+child, so siblings may move freely without assuming the subtree currently in
+the hole is already isomorphic. -/
+structure ItemSeqIso.Frame
+    {source : ItemSeq signature sourceWires rels}
+    {target : ItemSeq signature targetWires rels}
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (sourceIndex : Fin source.length) (targetIndex : Fin target.length) where
+  positions : FiniteEquiv (Fin source.length) (Fin target.length)
+  mapped : positions sourceIndex = targetIndex
+  siblings : ∀ index, index ≠ sourceIndex →
+    ItemIso signature wire rels
+      (source.get index) (target.get (positions index))
+
+theorem ItemSeqIso.Frame.replaceAt
+    {source : ItemSeq signature sourceWires rels}
+    {target : ItemSeq signature targetWires rels}
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {sourceIndex : Fin source.length} {targetIndex : Fin target.length}
+    (frame : ItemSeqIso.Frame wire sourceIndex targetIndex)
+    (sourceReplacement : Item signature sourceWires rels)
+    (targetReplacement : Item signature targetWires rels)
+    (replacement : ItemIso signature wire rels sourceReplacement
+      targetReplacement) :
+    ItemSeqIso signature wire rels
+      (source.replaceAt sourceIndex sourceReplacement)
+      (target.replaceAt targetIndex targetReplacement) :=
+  ItemSeqIso.replaceAt frame.positions sourceIndex targetIndex frame.siblings
+    sourceReplacement targetReplacement frame.mapped replacement
+
+/-- Change only the definitional presentation of a frame's wire equivalence. -/
+def ItemSeqIso.Frame.castWire
+    {source : ItemSeq signature sourceWires rels}
+    {target : ItemSeq signature targetWires rels}
+    {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {sourceIndex : Fin source.length} {targetIndex : Fin target.length}
+    (equality : first = second)
+    (frame : ItemSeqIso.Frame first sourceIndex targetIndex) :
+    ItemSeqIso.Frame second sourceIndex targetIndex := by
+  subst second
+  exact frame
+
 private def RegionIsoReflMotive {signature : List Nat}
     {wires : Nat} (rels : RelCtx) (region : Region signature wires rels) : Prop :=
   RegionIso signature (FiniteEquiv.refl (Fin wires)) rels region region
@@ -251,9 +496,37 @@ private theorem regionIsoReflRec
     regionIsoReflCase equationIsoReflCase atomIsoReflCase namedIsoReflCase
     cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase region
 
+private theorem itemIsoReflRec
+    (item : Item signature wires rels) : ItemIsoReflMotive rels item := by
+  apply Item.rec
+    (motive_1 := fun _ rels region => RegionIsoReflMotive rels region)
+    (motive_2 := fun _ rels item => ItemIsoReflMotive rels item)
+    (motive_3 := fun _ rels items => ItemSeqIsoReflMotive rels items)
+    regionIsoReflCase equationIsoReflCase atomIsoReflCase namedIsoReflCase
+    cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase item
+
+private theorem itemSeqIsoReflRec
+    (items : ItemSeq signature wires rels) :
+    ItemSeqIsoReflMotive rels items := by
+  apply ItemSeq.rec
+    (motive_1 := fun _ rels region => RegionIsoReflMotive rels region)
+    (motive_2 := fun _ rels item => ItemIsoReflMotive rels item)
+    (motive_3 := fun _ rels items => ItemSeqIsoReflMotive rels items)
+    regionIsoReflCase equationIsoReflCase atomIsoReflCase namedIsoReflCase
+    cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase items
+
 theorem RegionIso.refl (region : Region signature wires rels) :
     RegionIso signature (FiniteEquiv.refl (Fin wires)) rels region region :=
   regionIsoReflRec region
+
+theorem ItemIso.refl (item : Item signature wires rels) :
+    ItemIso signature (FiniteEquiv.refl (Fin wires)) rels item item :=
+  itemIsoReflRec item
+
+theorem ItemSeqIso.refl (items : ItemSeq signature wires rels) :
+    ItemSeqIso signature (FiniteEquiv.refl (Fin wires)) rels items items :=
+  ItemSeqIso.permute (FiniteEquiv.refl (Fin items.length))
+    (itemSeqIsoReflRec items)
 
 private def RegionIsoSymmMotive {signature : List Nat}
     {sourceWires targetWires : Nat}
@@ -413,6 +686,19 @@ private theorem regionIsoSymmRec
     regionIsoSymmCase equationIsoSymmCase atomIsoSymmCase namedIsoSymmCase
     cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
 
+private theorem itemSeqIsoSymmRec
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {source : ItemSeq signature sourceWires rels}
+    {target : ItemSeq signature targetWires rels}
+    (iso : ItemSeqIso signature wire rels source target) :
+    ItemSeqIsoSymmMotive wire rels source target iso := by
+  apply ItemSeqIso.rec
+    (motive_1 := RegionIsoSymmMotive)
+    (motive_2 := ItemIsoSymmMotive)
+    (motive_3 := ItemSeqIsoSymmMotive)
+    regionIsoSymmCase equationIsoSymmCase atomIsoSymmCase namedIsoSymmCase
+    cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
+
 theorem RegionIso.symm
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Region signature sourceWires rels}
@@ -420,6 +706,14 @@ theorem RegionIso.symm
     (iso : RegionIso signature wire rels source target) :
     RegionIso signature wire.symm rels target source :=
   regionIsoSymmRec iso
+
+theorem ItemSeqIso.symm
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {source : ItemSeq signature sourceWires rels}
+    {target : ItemSeq signature targetWires rels}
+    (iso : ItemSeqIso signature wire rels source target) :
+    ItemSeqIso signature wire.symm rels target source :=
+  itemSeqIsoSymmRec iso
 
 private def RegionIsoTransMotive {signature : List Nat}
     {sourceWires middleWires : Nat}
@@ -629,6 +923,36 @@ private theorem regionIsoTransRec
     regionIsoTransCase equationIsoTransCase atomIsoTransCase namedIsoTransCase
     cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
 
+private theorem itemSeqIsoTransRec
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {source : ItemSeq signature sourceWires rels}
+    {middle : ItemSeq signature middleWires rels}
+    (first : ItemSeqIso signature firstWire rels source middle) :
+    ItemSeqIsoTransMotive firstWire rels source middle first := by
+  unfold ItemSeqIsoTransMotive
+  intro targetWires secondWire target second
+  exact ItemSeqIso.rec
+    (motive_1 := RegionIsoTransMotive)
+    (motive_2 := ItemIsoTransMotive)
+    (motive_3 := ItemSeqIsoTransMotive)
+    regionIsoTransCase equationIsoTransCase atomIsoTransCase namedIsoTransCase
+    cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
+
+private theorem itemIsoTransRec
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {source : Item signature sourceWires rels}
+    {middle : Item signature middleWires rels}
+    (first : ItemIso signature firstWire rels source middle) :
+    ItemIsoTransMotive firstWire rels source middle first := by
+  unfold ItemIsoTransMotive
+  intro targetWires secondWire target second
+  exact ItemIso.rec
+    (motive_1 := RegionIsoTransMotive)
+    (motive_2 := ItemIsoTransMotive)
+    (motive_3 := ItemSeqIsoTransMotive)
+    regionIsoTransCase equationIsoTransCase atomIsoTransCase namedIsoTransCase
+    cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
+
 theorem RegionIso.trans
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
@@ -639,6 +963,28 @@ theorem RegionIso.trans
     (second : RegionIso signature secondWire rels middle target) :
     RegionIso signature (firstWire.trans secondWire) rels source target :=
   regionIsoTransRec first second
+
+theorem ItemIso.trans
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
+    {source : Item signature sourceWires rels}
+    {middle : Item signature middleWires rels}
+    {target : Item signature targetWires rels}
+    (first : ItemIso signature firstWire rels source middle)
+    (second : ItemIso signature secondWire rels middle target) :
+    ItemIso signature (firstWire.trans secondWire) rels source target :=
+  itemIsoTransRec first second
+
+theorem ItemSeqIso.trans
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
+    {source : ItemSeq signature sourceWires rels}
+    {middle : ItemSeq signature middleWires rels}
+    {target : ItemSeq signature targetWires rels}
+    (first : ItemSeqIso signature firstWire rels source middle)
+    (second : ItemSeqIso signature secondWire rels middle target) :
+    ItemSeqIso signature (firstWire.trans secondWire) rels source target :=
+  itemSeqIsoTransRec first second
 
 theorem denoteItemSeq_iff_get
     (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)

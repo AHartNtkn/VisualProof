@@ -5,54 +5,18 @@ import type { DiagramWithBoundary } from '../boundary'
 import { positionalPortKey } from '../canonical/shape'
 import { termShapeKey } from '../canonical/shape'
 import { termsMatchModuloBetaEta } from '../canonical/matchkey'
-import { refinedColors } from '../canonical/explore'
-import { mkSelection, type SubgraphSelection } from './selection'
+import type { ConversionCertificate } from '../../term/certificate'
+import { checkOccurrenceCertificate } from './occurrence-certificate'
+import type { OccurrenceCertificate } from './occurrence-certificate'
+
+export type { OccurrenceCertificate } from './occurrence-certificate'
 
 /** Production-neutral exploration counters. Reset by callers that measure. */
 export const __benchCounter = { n: 0, permutations: 0 }
 
-type FallbackPermutation = {
-  readonly values: readonly number[]
-  readonly isLast: boolean
-}
-
-/** Lazily yield every permutation of [0, m) except the identity, marking the final yield without lookahead. */
-function* nonIdentityPermutations(m: number): Generator<FallbackPermutation> {
-  let total = 1n
-  for (let factor = 2; factor <= m; factor++) total *= BigInt(factor)
-  total-- // identity is not yielded
-  let yielded = 0n
-  const arr = Array.from({ length: m }, (_, i) => i)
-  function* permute(k: number): Generator<FallbackPermutation> {
-    if (k === m) {
-      if (arr.some((v, i) => v !== i)) {
-        __benchCounter.permutations++
-        yielded++
-        yield { values: [...arr], isLast: yielded === total }
-      }
-      return
-    }
-    for (let i = k; i < m; i++) {
-      ;[arr[k], arr[i]] = [arr[i]!, arr[k]!]
-      yield* permute(k + 1)
-      ;[arr[k], arr[i]] = [arr[i]!, arr[k]!]
-    }
-  }
-  yield* permute(0)
-}
-
 export type MatchMode = 'exact' | 'betaEta'
 
-export type Occurrence = {
-  /** Host region the pattern root maps to. */
-  readonly region: RegionId
-  readonly regionMap: ReadonlyMap<RegionId, RegionId>
-  readonly nodeMap: ReadonlyMap<NodeId, NodeId>
-  /** Every pattern wire (boundary included) to its host wire. */
-  readonly wireMap: ReadonlyMap<WireId, WireId>
-  /** Host wires carrying the boundary, index-aligned with pattern.boundary. */
-  readonly attachments: readonly WireId[]
-}
+export type Occurrence = OccurrenceCertificate
 
 export type UndecidedPair = {
   readonly patternNode: NodeId
@@ -135,18 +99,14 @@ function buildIdx(d: Diagram): Idx {
 /**
  * Exploration-driven occurrence search. The pattern's effective-root items are
  * matched against a host region, its nested regions corresponding exactly, and
- * the interior filled by a guided walk: pattern items are visited in canonical
- * (refined-color, id) order and, WITHIN a group of indistinguishable siblings,
- * their host images are forced into strictly increasing candidate order. That
- * collapses the factorial of interchangeable assignments the old backtracking
- * matcher paid for — same-color pattern siblings are related by a pattern
- * automorphism, so every permutation of their images yields the same
- * occurrence, and only the one increasing representative is explored.
+ * the interior filled by exhaustive finite injection enumeration. Candidate
+ * order is deterministic but has no semantic role: every region, node, and
+ * otherwise-undetermined internal wire assignment is explored.
  *
- * Wire images stay determined by the port-partition invariant (each endpoint
- * lies on exactly one host wire), so wires are verified, not searched; bare
- * wires are indistinguishable and paired canonically. Occurrences are
- * deduplicated by footprint. In `betaEta` mode (default) term-node comparison
+ * Endpointful wire images are determined by the port-partition invariant (each
+ * endpoint lies on exactly one host wire). Bare internal wire images are finite
+ * choices and are therefore enumerated rather than canonically guessed.
+ * Occurrences are deduplicated by footprint. In `betaEta` mode (default) term-node comparison
  * is modulo beta-eta with the fuel + `undecided` contract; in `exact` mode it
  * is name-blind structural (de Bruijn) equality with no fuel and no undecided.
  *
@@ -238,11 +198,6 @@ export function findOccurrences(
   const hIdx = buildIdx(host)
   const pIdx = buildIdx(pd)
 
-  // Pattern refined colors (boundary pinned: the anchor). Same color ⟹
-  // indistinguishable ⟹ freely interchangeable, which is what licenses the
-  // increasing-order symmetry break below.
-  const pColors = refinedColors(pd, pattern.boundary)
-
   // stubs must form a pure chain root → s1 → … → sk: nothing else lives on it
   let effectiveRoot: RegionId = pd.root
   {
@@ -269,17 +224,8 @@ export function findOccurrences(
       throw new DiagramError(`open binder stub(s) ${[...stubSet].map((s) => `'${s}'`).join(', ')} are not on the root chain`)
     }
   }
-  // Pattern items visited in (refined-color, id) order so indistinguishable
-  // siblings are consecutive; the symmetry break then applies along each
-  // same-color run.
-  const byColor = <T extends string>(ids: readonly T[], colors: ReadonlyMap<T, number>): T[] =>
-    [...ids].sort((a, b) => {
-      const ca = colors.get(a)!
-      const cb = colors.get(b)!
-      return ca !== cb ? ca - cb : a < b ? -1 : a > b ? 1 : 0
-    })
-  const rootRegions = byColor(pIdx.childrenOf.get(effectiveRoot)!, pColors.region)
-  const rootNodes = byColor(pIdx.nodesIn.get(effectiveRoot)!, pColors.node)
+  const rootRegions = [...pIdx.childrenOf.get(effectiveRoot)!].sort()
+  const rootNodes = [...pIdx.nodesIn.get(effectiveRoot)!].sort()
 
   const binderImage = new Map(openBinders)
   const regionMap = new Map<RegionId, RegionId>()
@@ -291,7 +237,7 @@ export function findOccurrences(
   // any separator can alias across the id boundary (proven soundness bug).
   const undecided: UndecidedPair[] = []
   const undecidedSeen = new Map<NodeId, Set<NodeId>>()
-  const verdictCache = new Map<NodeId, Map<NodeId, boolean>>()
+  const verdictCache = new Map<NodeId, Map<NodeId, ConversionCertificate | false>>()
 
   const matches: Occurrence[] = []
   const footprints = new Set<string>()
@@ -317,10 +263,10 @@ export function findOccurrences(
     explorationSteps,
   }
 
-  function termVerdict(pn: NodeId, hn: NodeId): boolean {
+  function termVerdict(pn: NodeId, hn: NodeId): ConversionCertificate | false {
     const cached = verdictCache.get(pn)?.get(hn)
     if (cached !== undefined) return cached
-    const setVerdict = (v: boolean): boolean => {
+    const setVerdict = (v: ConversionCertificate | false): ConversionCertificate | false => {
       let inner = verdictCache.get(pn)
       if (inner === undefined) {
         inner = new Map()
@@ -333,7 +279,9 @@ export function findOccurrences(
     const ht = host.nodes[hn]!
     if (pt.kind !== 'term' || ht.kind !== 'term') return setVerdict(false)
     if (mode === 'exact') {
-      return setVerdict(termShapeKey(pt.term) === termShapeKey(ht.term))
+      return setVerdict(termShapeKey(pt.term) === termShapeKey(ht.term)
+        ? { leftSteps: [], rightSteps: [] }
+        : false)
     }
     const v = termsMatchModuloBetaEta(pt.term, ht.term, fuel)
     if (v.status === 'undecided') {
@@ -348,7 +296,7 @@ export function findOccurrences(
       }
       return setVerdict(false)
     }
-    return setVerdict(v.status === 'match')
+    return setVerdict(v.status === 'match' ? v.certificate : false)
   }
 
   function nodeCompatible(pn: NodeId, hn: NodeId): boolean {
@@ -370,7 +318,7 @@ export function findOccurrences(
         return pnode.defId === hnode.defId && pnode.arity === hnode.arity
       }
       case 'term':
-        return termVerdict(pn, hn)
+        return termVerdict(pn, hn) !== false
     }
   }
 
@@ -405,26 +353,18 @@ export function findOccurrences(
       nodeMap.delete(pn)
       usedNodes.delete(hn)
     }
-    const doNodes = () => assignRuns(pNodes, (id) => pColors.node.get(id)!, placeNode, nodeCand.length, 0, done)
-    assignRuns(pRegions, (id) => pColors.region.get(id)!, placeRegion, regionCand.length, 0, doNodes)
+    const doNodes = () => assignInjective(pNodes, placeNode, nodeCand.length, 0, done)
+    assignInjective(pRegions, placeRegion, regionCand.length, 0, doNodes)
   }
 
   /**
-   * Assign a phase's pre-sorted pattern items to host candidates run by run.
-   * Same-color siblings form a run; the run is explored subset by subset, and
-   * for each subset the CANONICAL (identity) bijection is tried first — every
-   * assignment that permutes interchangeable siblings collapses to it, which is
-   * where the old matcher's factorial died. Only if a subset's canonical
-   * bijection yields NO occurrence does the run fall back to the remaining
-   * bijections of that same subset. That scoped fallback keeps completeness
-   * UNCONDITIONAL where refinement color is coarser than the true automorphism
-   * orbit — believed impossible for these port-hypergraphs, so it never fires
-   * on real diagrams and the common case stays polynomial — the same shape as
-   * the `undecided` contract: a documented, tested boundary, not an assumption.
+   * Exhaustively assign an ordered pattern list into host candidate positions.
+   * `place` owns compatibility and global injectivity. Enumerating positions in
+   * source order visits every total injection; footprint deduplication happens
+   * only after a complete checked candidate has been constructed.
    */
-  function assignRuns(
+  function assignInjective(
     items: readonly string[],
-    colorOf: (id: string) => number,
     place: (item: string, k: number, cont: () => void) => void,
     candCount: number,
     i: number,
@@ -432,64 +372,10 @@ export function findOccurrences(
   ): void {
     if (explorationExhausted) return
     if (i === items.length) { done(); return }
-    let b = i + 1
-    while (b < items.length && colorOf(items[b]!) === colorOf(items[i]!)) b++
-    const after = () => assignRuns(items, colorOf, place, candCount, b, done)
-    placeRun(items, place, candCount, i, b, after)
-  }
-
-  /** Enumerate injections of run items [a,b) into host candidates: subset, then canonical bijection, then permutation fallback. */
-  function placeRun(
-    items: readonly string[],
-    place: (item: string, k: number, cont: () => void) => void,
-    candCount: number,
-    a: number,
-    b: number,
-    cont: () => void,
-  ): void {
-    if (explorationExhausted) return
-    const m = b - a
-    const bindPerm = (indices: readonly number[], perm: readonly number[]): void => {
-      const step = (t: number): void => {
-        if (explorationExhausted) return
-        if (t === m) { cont(); return }
-        place(items[a + t]!, indices[perm[t]!]!, () => step(t + 1))
-      }
-      step(0)
-    }
-    const bindSubset = (indices: readonly number[]): void => {
-      const identity = indices.map((_, t) => t)
-      const before = matches.length
-      bindPerm(indices, identity)
-      if (m > 1 && matches.length === before && !explorationExhausted) {
-        const permutations = nonIdentityPermutations(m)
-        while (!explorationExhausted) {
-          // Iterator advancement itself can perform factorial traversal before
-          // yielding. Never request another permutation unless at least its
-          // first placement probe can be funded.
-          if (explorationRemaining === 0) {
-            explorationExhausted = true
-            break
-          }
-          const next = permutations.next()
-          if (next.done) break
-          bindPerm(indices, next.value.values)
-          if (next.value.isLast) break
-        }
-      }
-    }
-    // increasing index combinations of size m (each host subset once)
-    const chooseSubset = (t: number, start: number, chosen: number[]): void => {
+    for (let k = 0; k < candCount; k++) {
       if (explorationExhausted) return
-      if (t === m) { bindSubset(chosen); return }
-      for (let k = start; k <= candCount - (m - t); k++) {
-        if (explorationExhausted) return
-        chosen.push(k)
-        chooseSubset(t + 1, k + 1, chosen)
-        chosen.pop()
-      }
+      place(items[i]!, k, () => assignInjective(items, place, candCount, i + 1, done))
     }
-    chooseSubset(0, 0, [])
   }
 
   /** Exact correspondence: equal counts, then guided interior assignment. */
@@ -504,7 +390,7 @@ export function findOccurrences(
     if (pIdx.bareScoped.get(pr)!.length !== hIdx.bareScoped.get(hr)!.length) return
     regionMap.set(pr, hr)
     usedRegions.add(hr)
-    assignContainer(byColor(pChildren, pColors.region), byColor(pNodes, pColors.node), hr, k)
+    assignContainer([...pChildren].sort(), [...pNodes].sort(), hr, k)
     regionMap.delete(pr)
     usedRegions.delete(hr)
   }
@@ -533,26 +419,6 @@ export function findOccurrences(
       if (usedImages.has(hw)) return
       usedImages.add(hw)
       wireMap.set(wid, hw)
-    }
-
-    for (const [prId, hrId] of regionMap) {
-      // bare BOUNDARY wires are seam anchors, not internal content — they are
-      // resolved from the seed below, never paired against host bare wires here
-      const pBare = pIdx.bareScoped.get(prId)!.filter((w) => !boundarySet.has(w))
-      const hBare = hIdx.bareScoped.get(hrId)!
-      if (prId === effectiveRoot) {
-        if (pBare.length > hBare.length) return
-      } else if (pBare.length !== hBare.length) {
-        return
-      }
-      // bare wires are indistinguishable: nested regions biject over the same
-      // sets (any pairing → same footprint); at the ROOT, canonical first-k
-      // pairing deliberately collapses the isomorphic choices of host bare
-      // wires into one occurrence
-      for (let jj = 0; jj < pBare.length; jj++) {
-        wireMap.set(pBare[jj]!, hBare[jj]!)
-        usedImages.add(hBare[jj]!)
-      }
     }
 
     const attachments: WireId[] = []
@@ -599,43 +465,76 @@ export function findOccurrences(
       attachments.push(hw)
     }
 
-    // JSON.stringify, never join: id strings may contain any separator
-    const fp = JSON.stringify([
-      [...regionMap.values()].sort(),
-      [...nodeMap.values()].sort(),
-      [...wireMap.values()].sort(),
-      attachments,
-    ])
-    if (footprints.has(fp)) return
-    footprints.add(fp)
-    matches.push(Object.freeze({
-      region: R,
-      regionMap: new Map(regionMap),
-      nodeMap: new Map(nodeMap),
-      wireMap,
-      attachments: Object.freeze(attachments),
-    }))
-  }
-}
+    const boundaryImages = new Set(
+      [...wireMap].filter(([patternWire]) => boundarySet.has(patternWire)).map(([, hostWire]) => hostWire),
+    )
+    const bareChoices: { patternWire: WireId; candidates: readonly WireId[] }[] = []
+    for (const [prId, hrId] of regionMap) {
+      const pBare = pIdx.bareScoped.get(prId)!.filter((w) => !boundarySet.has(w))
+      const hBare = hIdx.bareScoped.get(hrId)!
+      if (prId === effectiveRoot) {
+        if (pBare.length > hBare.length) return
+      } else if (pBare.length !== hBare.length) {
+        return
+      }
+      for (const patternWire of pBare) bareChoices.push({ patternWire, candidates: hBare })
+    }
 
-/**
- * The host selection an occurrence denotes: the pattern's direct contents
- * mapped through the occurrence's images (boundary wires excluded — they are
- * the seam, not the selection). This is what a citation or backward inverse
- * acts on.
- */
-export function occurrenceSelection(pattern: DiagramWithBoundary, occ: Occurrence, host: Diagram): SubgraphSelection {
-  const pd = pattern.diagram
-  const boundary = new Set(pattern.boundary)
-  const regions: RegionId[] = []
-  for (const [rid, r] of Object.entries(pd.regions)) {
-    if (r.kind !== 'sheet' && r.parent === pd.root) regions.push(occ.regionMap.get(rid)!)
+    const assignBare = (index: number): void => {
+      if (explorationExhausted) return
+      if (index === bareChoices.length) {
+        recordOccurrence()
+        return
+      }
+      const choice = bareChoices[index]!
+      for (const hostWire of choice.candidates) {
+        if (!spendExploration()) return
+        if (usedImages.has(hostWire) || boundaryImages.has(hostWire)) continue
+        usedImages.add(hostWire)
+        wireMap.set(choice.patternWire, hostWire)
+        assignBare(index + 1)
+        wireMap.delete(choice.patternWire)
+        usedImages.delete(hostWire)
+        if (explorationExhausted) return
+      }
+    }
+
+    // The empty bare-wire assignment is a completed candidate and consumes no
+    // synthetic probe. Nonempty assignments spend one probe per image choice.
+    assignBare(0)
+
+    function recordOccurrence(): void {
+      // JSON.stringify, never join: id strings may contain any separator.
+      // Sorted image sets plus the ordered attachment vector are the declared
+      // matcher footprint; raw source-map association is intentionally absent.
+      const fp = JSON.stringify([
+        [...regionMap.values()].sort(),
+        [...nodeMap.values()].sort(),
+        [...wireMap.values()].sort(),
+        attachments,
+      ])
+      if (footprints.has(fp)) return
+      footprints.add(fp)
+      const occurrence: Occurrence = Object.freeze({
+        region: R,
+        regionMap: new Map(regionMap),
+        nodeMap: new Map(nodeMap),
+        wireMap: new Map(wireMap),
+        attachments: Object.freeze([...attachments]),
+        binderMap: new Map(binderImage),
+        termCertificates: new Map(
+          [...nodeMap].flatMap(([patternNode, hostNode]) => {
+            if (pd.nodes[patternNode]?.kind !== 'term') return []
+            const certificate = termVerdict(patternNode, hostNode)
+            return certificate === false ? [] : [[patternNode, certificate] as const]
+          }),
+        ),
+      })
+      const checked = checkOccurrenceCertificate(host, pattern, occurrence, { openBinders })
+      if (!checked.ok) {
+        throw new DiagramError(`matcher constructed an invalid occurrence certificate: ${checked.reason}`)
+      }
+      matches.push(occurrence)
+    }
   }
-  const nodes = Object.entries(pd.nodes)
-    .filter(([, n]) => n.region === pd.root)
-    .map(([id]) => occ.nodeMap.get(id)!)
-  const wires = Object.entries(pd.wires)
-    .filter(([id, w]) => w.scope === pd.root && !boundary.has(id))
-    .map(([id]) => occ.wireMap.get(id)!)
-  return mkSelection(host, { region: occ.region, regions, nodes, wires })
 }

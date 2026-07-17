@@ -8,6 +8,7 @@ import { convertible } from '../../kernel/term/convert'
 import type { ConversionCertificate } from '../../kernel/term/certificate'
 import { parseTerm } from '../../kernel/term/parse'
 import { applyConversion } from '../../kernel/rules/conversion'
+import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import { termNodeAt } from '../../kernel/rules/access'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
@@ -68,6 +69,12 @@ export function erasureStep(d: Diagram, sel: SubgraphSelection): ProofStep {
   return { rule: 'erasure', sel: erasureSelection(d, sel) }
 }
 
+/** Interactive construction of a replayable, fuel-free deiteration step. */
+export function deiterationStep(d: Diagram, sel: SubgraphSelection, fuel: number): ProofStep {
+  const evidence = findDeiterationEvidence(d, sel, fuel)
+  return { rule: 'deiteration', sel, ...evidence }
+}
+
 export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel: number): ProofStep | null {
   const byKind = (kind: ActionDescriptor['kind']): ActionDescriptor | undefined =>
     discovery.actions.find((action) => action.kind === kind)
@@ -77,7 +84,7 @@ export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel
     case 'doubleCutElim': return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
     case 'vacuousElim': return { rule: 'vacuousElim', region: discovery.sel.regions[0]! }
     case 'erase': return erasureStep(d, discovery.sel)
-    case 'deiterate': return { rule: 'deiteration', sel: discovery.sel, fuel }
+    case 'deiterate': return deiterationStep(d, discovery.sel, fuel)
     default: throw new Error(`'${action.kind}' is not a contextual deletion`)
   }
 }
@@ -469,7 +476,9 @@ export class ProofMoveController {
       }); return
       case 'vacuousElim': row(action.label, () => this.#commit({ rule: 'vacuousElim', region: sel.regions[0]! })); return
       case 'iterate': row('Copy by dragging the selection', null); return
-      case 'deiterate': row(action.label, () => this.#commit({ rule: 'deiteration', sel, fuel: this.#options.fuel() })); return
+      case 'deiterate': row(action.label, () => this.#commit(
+        deiterationStep(this.#options.diagram(), sel, this.#options.fuel()),
+      )); return
       case 'convert': this.#appendConversions(row, sel.nodes[0]!); return
       case 'instantiate': {
         row('Instantiate with', null)

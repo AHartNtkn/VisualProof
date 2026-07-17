@@ -3,7 +3,7 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
+import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../../../src/kernel/rules/vacuous'
 
 const p = (s: string) => parseTerm(s)
@@ -36,7 +36,8 @@ describe('open iteration / deiteration', () => {
         Object.entries(iterated.wires).filter(([, wv]) =>
           wv.scope === cut).map(([id]) => id),
     })
-    const back = applyDeiteration(iterated, copySel, 100)
+    const evidence = findDeiterationEvidence(iterated, copySel, 100)
+    const back = applyDeiteration(iterated, copySel, evidence.justifier, evidence.certificate)
     expect(exploreForm(back)).toBe(exploreForm(d))
   })
 
@@ -65,7 +66,7 @@ describe('open iteration / deiteration', () => {
     const d = h.build()
     // only ONE R-application exists: deiterating it must fail (no justifier)
     const sel = mkSelection(d, { region: rB, regions: [], nodes: [n1, a1], wires: [] })
-    expect(() => applyDeiteration(d, sel, 100)).toThrowError(/no justifying occurrence/)
+    expect(() => findDeiterationEvidence(d, sel, 100)).toThrowError(/no justifying occurrence/)
   })
 })
 
