@@ -1516,7 +1516,7 @@ private theorem binderEnumeration_owner_eq_of_relEq
   rw [hbindersEq]
   exact sourceEnumeration.lookup index
 
-private theorem compiledNestedHostRelation_factor
+theorem compiledNestedHostRelation_factor
     (input : Input signature) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -1563,7 +1563,7 @@ private theorem compiledNestedHostRelation_factor
   have hsigma := Option.some.inj (hhost.symm.trans hsource)
   exact eq_of_heq (Sigma.ext_iff.mp hsigma).2
 
-private theorem compiledNestedHostWire_factor
+theorem compiledNestedHostWire_factor
     (input : Input signature) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -1665,7 +1665,7 @@ private theorem compiledNestedHostWire_factor
   simpa [compilerLeafOuterWire, compilerLeafInheritedWireOfHole,
     sourceIndex, FiniteEquiv.trans_apply] using hcast
 
-private theorem regionIso_of_renamed_relEq
+theorem regionIso_of_renamed_relEq
     {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
     {sourceWires targetWires : Nat}
@@ -1678,7 +1678,7 @@ private theorem regionIso_of_renamed_relEq
   subst targetRels
   simpa [relationRenamingOfEq, Region.renameRelations_id] using iso
 
-private theorem Region.castRels_eq_renameRelations
+theorem Region.castRels_eq_renameRelations
     {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
     (region : Region signature wires targetRels) :
@@ -1687,7 +1687,7 @@ private theorem Region.castRels_eq_renameRelations
   subst targetRels
   simp [relationRenamingOfEq, Region.renameRelations_id]
 
-private theorem relationRenamingOfEq_apply_symm
+theorem relationRenamingOfEq_apply_symm
     {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
     {arity : Nat} (relation : Theory.RelVar targetRels arity) :
