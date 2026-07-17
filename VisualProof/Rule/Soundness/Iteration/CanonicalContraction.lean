@@ -289,6 +289,26 @@ structure ProperIterationAnchorContraction
   route : Splice.RegionRoute
     (iterationInput input selection target).coalesceFrameRaw
     selection.val.anchor target path
+  flatWitness : Region.ContextPath
+    (Region.mk 0
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.items) path
+  flatReplacement : Region signature flatWitness.toFocus.holeWires
+    flatWitness.toFocus.holeRels
+  flatEquivalent : ∀ (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (environment : Fin
+      (iterationCoalescedAnchorView input selection target hadmissible
+        |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length →
+      model.Carrier)
+    (relEnv : RelEnv model.Carrier
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).focus.holeRels),
+    denoteItemSeq model named environment relEnv
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.items ↔
+      denoteRegion model named environment relEnv
+        (flatWitness.toFocus.context.fill flatReplacement)
   witness : Region.ContextPath root path
   replacement : Region signature witness.toFocus.holeWires
     witness.toFocus.holeRels
@@ -2040,6 +2060,9 @@ theorem properIterationAnchorContraction_complete
     rootEq := ?_
     path := alignment.targetPath
     route := alignmentPath.symm ▸ route
+    flatWitness := alignment.targetWitness
+    flatReplacement := canonicalActual
+    flatEquivalent := itemsEquiv
     witness := scopedWitness
     replacement := scopedReplacement
     actualRelsEq := scopedActualRelsEq
