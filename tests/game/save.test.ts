@@ -1,120 +1,287 @@
 import { describe, expect, it } from 'vitest'
-import { parseTerm } from '../../src/kernel/term/parse'
-import { buildCatalog } from '../../src/game/catalog'
-import { openingCatalog, openingCatalogSource } from '../../src/game/content'
-import { recordCompletion, emptyProgress } from '../../src/game/progress'
-import { applyGameStep, moveCursor, startPuzzle } from '../../src/game/session'
-import { loadGame, saveGame } from '../../src/game/save'
-import { puzzleId } from '../../src/game/types'
-import { minimalPuzzle, minimalSource } from './catalog-fixture'
-import { fourVeils } from './fixtures'
+import { stepToJson } from '../../src/kernel/proof/json'
+import { buildCatalog, type GameCatalog } from '../../src/game/catalog'
+import { createInitialGameState, type GameControllerState } from '../../src/game/controller-state'
+import { reduceGame, type GameAction } from '../../src/game/controller'
+import { decodeGameSave, encodeGameSave, startGame } from '../../src/game/save'
+import {
+  controllerCatalog,
+  controllerSource,
+  FIRST,
+  FIRST_CULTURE,
+  SECOND,
+  SECOND_CULTURE,
+} from './controller-fixture'
 
-const fixture = fourVeils()
-const puzzle = minimalPuzzle({
-  id: puzzleId('four-veils'), name: { professional: 'Four Veils' }, goal: fixture.goal,
-  witness: fixture.eliminations.map((region) => ({ rule: 'doubleCutElim' as const, region })),
-})
-const source = minimalSource()
-const catalog = buildCatalog({
-  ...source,
-  cultures: [{ ...source.cultures[0]!, gateway: puzzle.id }],
-  puzzles: [puzzle],
-})
-const authority = {
-  context: { ...catalog.source.context, theorems: new Map() },
+const catalog = controllerCatalog()
+
+const fresh = (authority: GameCatalog = catalog): GameControllerState =>
+  createInitialGameState(authority, { reducedMotion: false })
+
+const act = (
+  state: GameControllerState,
+  action: GameAction,
+  authority: GameCatalog = catalog,
+): GameControllerState => reduceGame(authority, state, action).state
+
+const select = (state: GameControllerState, puzzle: typeof FIRST | typeof SECOND) =>
+  act(state, { kind: 'selectPuzzle', puzzle })
+
+const move = (
+  state: GameControllerState,
+  puzzle: typeof FIRST | typeof SECOND,
+  index: number,
+) => act(state, { kind: 'applyStep', step: catalog.puzzle(puzzle).witness[index]! })
+
+const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+function richPuzzleState(): GameControllerState {
+  let state = select(fresh(), FIRST)
+  state = move(state, FIRST, 0)
+  state = move(state, FIRST, 1)
+  state = move(state, FIRST, 2)
+  state = act(state, { kind: 'levelSelection' })
+  state = select(state, FIRST)
+  state = move(state, FIRST, 0)
+  state = act(state, { kind: 'levelSelection' })
+  state = select(state, SECOND)
+  state = move(state, SECOND, 0)
+  state = move(state, SECOND, 1)
+  state = act(state, { kind: 'moveTimeline', cursor: 0 })
+  state = act(state, {
+    kind: 'openTeacher',
+    intervention: catalog.puzzle(SECOND).teacher[0]!,
+  })
+  state = act(state, { kind: 'acknowledgeTeacher' })
+  state = act(state, { kind: 'setCultureScroll', culture: FIRST_CULTURE, scroll: 19.5 })
+  state = act(state, { kind: 'selectCulture', culture: SECOND_CULTURE })
+  state = act(state, { kind: 'setCultureScroll', culture: SECOND_CULTURE, scroll: 83 })
+  state = act(state, { kind: 'setReducedMotion', value: true })
+  state = act(state, { kind: 'setFullscreen', value: false })
+  return act(state, { kind: 'setTextSize', value: 'large' })
 }
 
-describe('versioned game save', () => {
-  it('round-trips the permanent four-veils artifact with all retained states after rewind', () => {
-    const opening = openingCatalog()
-    const fourVeils = opening.puzzle(puzzleId('four-veils'))
-    const openingAuthority = {
-      context: { ...opening.source.context, theorems: new Map() },
-    }
-    let session = startPuzzle(fourVeils)
-    for (const step of fourVeils.witness) {
-      session = applyGameStep(session, step, openingAuthority).session
-    }
-    session = moveCursor(session, 1)
-    const progress = recordCompletion(emptyProgress(), puzzleId('two-veils'))
-    const encoded = saveGame(opening, progress, session)
-    const loaded = loadGame(opening, JSON.parse(JSON.stringify(encoded)))
-    expect([...loaded.progress.completed]).toEqual([puzzleId('two-veils')])
-    expect(loaded.active?.timeline.states).toEqual(session.timeline.states)
-    expect(loaded.active?.timeline.states).toHaveLength(3)
-    expect(loaded.active?.timeline.steps).toEqual(fourVeils.witness)
-    expect(loaded.active?.timeline.cursor).toBe(1)
+describe('strict per-puzzle game save', () => {
+  it('round-trips every timeline and cursor plus controller mode, culture, scroll, acknowledgements, and settings', () => {
+    const state = richPuzzleState()
+    const encoded = encodeGameSave(catalog, state)
+    const loaded = decodeGameSave(catalog, plain(encoded))
+
+    expect(loaded.mode).toBe('puzzle')
+    expect(loaded.activePuzzle).toBe(SECOND)
+    expect(loaded.completed).toEqual(state.completed)
+    expect(loaded.firstAttempts).toEqual(state.firstAttempts)
+    expect(loaded.firstAttempts.get(SECOND)?.timeline).toMatchObject({
+      cursor: 0,
+      states: expect.any(Array),
+      steps: expect.any(Array),
+    })
+    expect(loaded.firstAttempts.get(SECOND)?.timeline.states).toHaveLength(3)
+    expect(loaded.firstAttempts.get(SECOND)?.timeline.steps).toHaveLength(2)
+    expect(loaded.replays).toEqual(state.replays)
+    expect(loaded.replays.get(FIRST)?.timeline.cursor).toBe(1)
+    expect(loaded.acknowledgedTeachers).toEqual(state.acknowledgedTeachers)
+    expect(loaded.selectedCulture).toBe(SECOND_CULTURE)
+    expect(loaded.scrollByCulture).toEqual(state.scrollByCulture)
+    expect(loaded.settings).toEqual(state.settings)
   })
 
-  it('keeps a save valid when only cultural history drifts', () => {
-    const opening = openingCatalog()
-    const progress = recordCompletion(emptyProgress(), puzzleId('two-veils'))
-    const encoded = saveGame(opening, progress, null)
-    const source = openingCatalogSource()
-    const changed = buildCatalog({
+  it('round-trips a completion receipt with exact move count and replay identity', () => {
+    let state = select(fresh(), FIRST)
+    state = move(state, FIRST, 0)
+    state = move(state, FIRST, 1)
+    state = move(state, FIRST, 2)
+
+    const loaded = decodeGameSave(catalog, plain(encodeGameSave(catalog, state)))
+    expect(loaded.mode).toBe('completion')
+    expect(loaded.activePuzzle).toBe(FIRST)
+    expect(loaded.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: false })
+    expect(loaded.firstAttempts.has(FIRST)).toBe(false)
+  })
+
+  it('uses caller OS preference only for fresh startup and rejects an invalid supplied save', () => {
+    expect(startGame(catalog, { save: null, reducedMotion: true }).settings).toMatchObject({
+      reducedMotion: true,
+      fullscreen: true,
+      textSize: 'medium',
+    })
+    expect(() => startGame(catalog, {
+      save: { format: 'cursebreaker-save', version: 2 },
+      reducedMotion: false,
+    })).toThrow(/unsupported game save format or version/)
+  })
+
+  it('keeps the first catalog culture selected and saveable even when its archive is gated', () => {
+    const source = controllerSource()
+    const gatedFirst = buildCatalog({
       ...source,
-      cultures: source.cultures.map((culture, index) => index === 0
-        ? { ...culture, historicalSummary: `${culture.historicalSummary} Changed.` }
+      cultures: source.cultures.map((culture) => culture.id === FIRST_CULTURE
+        ? { ...culture, unlocksAfter: [SECOND] }
         : culture),
     })
+    const initial = fresh(gatedFirst)
 
-    expect(() => loadGame(changed, encoded)).not.toThrow()
+    expect(initial.selectedCulture).toBe(FIRST_CULTURE)
+    expect(decodeGameSave(gatedFirst, encodeGameSave(gatedFirst, initial)).selectedCulture)
+      .toBe(FIRST_CULTURE)
   })
 
-  it('round-trips a term-bearing kernel step through its JSON wire format', () => {
-    const step = {
-      rule: 'closedTermIntro' as const,
-      region: fixture.goal.diagram.root,
-      term: parseTerm('\\x. x'),
+  it('refuses a forged locked selection for any non-first culture', () => {
+    const source = controllerSource()
+    const gatedSecond = buildCatalog({
+      ...source,
+      cultures: source.cultures.map((culture) => culture.id === SECOND_CULTURE
+        ? { ...culture, unlocksAfter: [FIRST] }
+        : culture),
+    })
+    const forged: any = plain(encodeGameSave(gatedSecond, fresh(gatedSecond)))
+    forged.selectedCulture = SECOND_CULTURE
+
+    expect(() => decodeGameSave(gatedSecond, forged)).toThrow(/selected culture.*locked/)
+  })
+
+  it('replays serialized steps and refuses forged steps', () => {
+    const encoded: any = plain(encodeGameSave(catalog, richPuzzleState()))
+    encoded.attempts[SECOND].steps[0] = { rule: 'doubleCutElim', region: 'forged-region' }
+
+    expect(() => decodeGameSave(catalog, encoded)).toThrow(/invalid saved timeline|unknown region/)
+  })
+
+  it('refuses a locked active puzzle', () => {
+    const source = controllerSource()
+    const locked = buildCatalog({
+      ...source,
+      puzzles: source.puzzles.map((puzzle) => puzzle.id === SECOND
+        ? { ...puzzle, prerequisites: [FIRST] }
+        : puzzle),
+    })
+    const encoded: any = plain(encodeGameSave(locked, fresh(locked)))
+    encoded.mode = 'puzzle'
+    encoded.activePuzzle = SECOND
+    encoded.attempts[SECOND] = { steps: [], cursor: 0 }
+    encoded.puzzleFingerprints[SECOND] = locked.puzzleFingerprint(SECOND)
+
+    expect(() => decodeGameSave(locked, encoded)).toThrow(/locked/)
+  })
+
+  it('refuses a locked inactive first attempt in archive mode', () => {
+    const source = controllerSource()
+    const locked = buildCatalog({
+      ...source,
+      puzzles: source.puzzles.map((puzzle) => puzzle.id === SECOND
+        ? { ...puzzle, prerequisites: [FIRST] }
+        : puzzle),
+    })
+    const encoded: any = plain(encodeGameSave(locked, fresh(locked)))
+    encoded.attempts[SECOND] = { steps: [], cursor: 0 }
+    encoded.puzzleFingerprints[SECOND] = locked.puzzleFingerprint(SECOND)
+
+    expect(() => decodeGameSave(locked, encoded)).toThrow(/first attempt.*locked/)
+  })
+
+  it('refuses first-attempt and replay misclassification', () => {
+    let completed = select(fresh(), FIRST)
+    for (let index = 0; index < 3; index += 1) completed = move(completed, FIRST, index)
+    const completedSave: any = plain(encodeGameSave(catalog, completed))
+    completedSave.attempts[FIRST] = { steps: [], cursor: 0 }
+    expect(() => decodeGameSave(catalog, completedSave)).toThrow(/first attempt.*completed puzzle/)
+
+    const incompleteSave: any = plain(encodeGameSave(catalog, fresh()))
+    incompleteSave.replays[SECOND] = { steps: [], cursor: 0 }
+    incompleteSave.puzzleFingerprints[SECOND] = catalog.puzzleFingerprint(SECOND)
+    expect(() => decodeGameSave(catalog, incompleteSave)).toThrow(/replay.*incomplete puzzle/)
+  })
+
+  it('refuses cursor bounds and unfinished timelines that already reach blank', () => {
+    const cursor: any = plain(encodeGameSave(catalog, richPuzzleState()))
+    cursor.attempts[SECOND].cursor = 3
+    expect(() => decodeGameSave(catalog, cursor)).toThrow(/cursor.*outside/)
+
+    const completedTimeline: any = plain(encodeGameSave(catalog, fresh()))
+    completedTimeline.attempts[FIRST] = {
+      steps: catalog.puzzle(FIRST).witness.map(stepToJson),
+      cursor: 0,
     }
-    const session = applyGameStep(startPuzzle(puzzle), step, authority).session
-    const encoded = saveGame(catalog, emptyProgress(), session)
-    expect(encoded.active?.steps[0]).toMatchObject({ rule: step.rule, term: expect.any(String) })
-    const loaded = loadGame(catalog, JSON.parse(JSON.stringify(encoded)))
-    expect(loaded.active?.timeline.steps).toEqual([step])
-    expect(loaded.active?.timeline.states).toHaveLength(2)
-    expect(loaded.active?.timeline.states[1]).toBeDefined()
+    completedTimeline.puzzleFingerprints[FIRST] = catalog.puzzleFingerprint(FIRST)
+    expect(() => decodeGameSave(catalog, completedTimeline)).toThrow(/unfinished timeline.*completion/)
   })
 
-  it('refuses catalog drift and unknown completion ids', () => {
-    const encoded = saveGame(catalog, emptyProgress(), startPuzzle(puzzle))
-    expect(() => loadGame(catalog, {
-      ...encoded,
-      puzzleFingerprints: { ...encoded.puzzleFingerprints, [puzzle.id]: 'drifted' },
-    })).toThrow(/puzzle logical fingerprint does not match/)
-    expect(() => loadGame(catalog, { ...encoded, completed: ['unknown-puzzle'] }))
-      .toThrow(/unknown puzzle/)
+  it('refuses unknown IDs, unknown fields, and missing or extra fingerprints', () => {
+    const unknownId: any = plain(encodeGameSave(catalog, fresh()))
+    unknownId.completed = ['unknown-puzzle']
+    unknownId.puzzleFingerprints['unknown-puzzle'] = 'forged'
+    expect(() => decodeGameSave(catalog, unknownId)).toThrow(/unknown puzzle/)
+
+    const unknownField: any = plain(encodeGameSave(catalog, fresh()))
+    unknownField.extra = true
+    expect(() => decodeGameSave(catalog, unknownField)).toThrow(/unknown field 'extra'/)
+    const nestedUnknown: any = plain(encodeGameSave(catalog, fresh()))
+    nestedUnknown.settings.extra = true
+    expect(() => decodeGameSave(catalog, nestedUnknown)).toThrow(/unknown field 'extra'/)
+
+    const referenced = plain(encodeGameSave(catalog, select(fresh(), FIRST))) as any
+    delete referenced.puzzleFingerprints[FIRST]
+    expect(() => decodeGameSave(catalog, referenced)).toThrow(/missing logical fingerprint/)
+    const extra = plain(encodeGameSave(catalog, fresh())) as any
+    extra.puzzleFingerprints[FIRST] = catalog.puzzleFingerprint(FIRST)
+    expect(() => decodeGameSave(catalog, extra)).toThrow(/unreferenced logical fingerprint/)
   })
 
-  it('refuses an invalid cursor and a forged proof-assistant step', () => {
-    const encoded = saveGame(catalog, emptyProgress(), startPuzzle(puzzle))
-    expect(() => loadGame(catalog, {
-      ...encoded,
-      active: { puzzle: puzzle.id, steps: [], cursor: 2 },
-    })).toThrow(/active cursor/)
-    expect(() => loadGame(catalog, {
-      ...encoded,
-      active: {
-        puzzle: puzzle.id, cursor: 1,
-        steps: [{
-          rule: 'theorem', name: 'forged', direction: 'forward',
-          at: {
-            sel: { region: fixture.goal.diagram.root, regions: [], nodes: [], wires: [] },
-            args: [],
-          },
-        }],
-      },
-    })).toThrow(/unknown theorem|invalid game step/)
+  it('refuses logical fingerprint drift while allowing presentation-only catalog changes', () => {
+    const state = select(fresh(), FIRST)
+    const encoded: any = plain(encodeGameSave(catalog, state))
+    encoded.puzzleFingerprints[FIRST] = 'drifted'
+    expect(() => decodeGameSave(catalog, encoded)).toThrow(/logical fingerprint does not match/)
+
+    const source = controllerSource()
+    const changedPresentation = buildCatalog({
+      ...source,
+      cultures: source.cultures.map((culture) => ({
+        ...culture,
+        name: `${culture.name} renamed`,
+        historicalSummary: `${culture.historicalSummary} Revised presentation.`,
+      })),
+      puzzles: source.puzzles.map((puzzle) => ({
+        ...puzzle,
+        name: { ...puzzle.name, professional: `${puzzle.name.professional} renamed` },
+        provenance: { ...puzzle.provenance, summary: `${puzzle.provenance.summary} Revised.` },
+        teacher: puzzle.teacher.map((teacher) => ({ ...teacher, text: `${teacher.text} Revised.` })),
+      })),
+    })
+    expect(() => decodeGameSave(changedPresentation, encodeGameSave(catalog, state))).not.toThrow()
   })
 
-  it('refuses an unknown rule before it can create an invalid timeline state', () => {
-    const encoded = saveGame(catalog, emptyProgress(), startPuzzle(puzzle))
-    expect(() => loadGame(catalog, {
-      ...encoded,
-      active: {
-        puzzle: puzzle.id, cursor: 1,
-        steps: [{ rule: 'unknown-rule' }],
-      },
-    })).toThrow(/invalid game step/)
+  it('refuses invalid scroll, settings, and mode/receipt combinations', () => {
+    const negativeScroll: any = plain(encodeGameSave(catalog, fresh()))
+    negativeScroll.scrollByCulture[FIRST_CULTURE] = -1
+    expect(() => decodeGameSave(catalog, negativeScroll)).toThrow(/scroll.*nonnegative finite/)
+    const missingScroll: any = plain(encodeGameSave(catalog, fresh()))
+    delete missingScroll.scrollByCulture[SECOND_CULTURE]
+    expect(() => decodeGameSave(catalog, missingScroll)).toThrow(/scroll.*every catalog culture/)
+
+    for (const settings of [
+      { reducedMotion: 'yes', fullscreen: true, textSize: 'medium' },
+      { reducedMotion: false, fullscreen: 1, textSize: 'medium' },
+      { reducedMotion: false, fullscreen: true, textSize: 'huge' },
+      { reducedMotion: false, fullscreen: true, textSize: ['medium'] },
+    ]) {
+      const invalid: any = plain(encodeGameSave(catalog, fresh()))
+      invalid.settings = settings
+      expect(() => decodeGameSave(catalog, invalid)).toThrow(/settings/)
+    }
+
+    const archiveWithActive: any = plain(encodeGameSave(catalog, fresh()))
+    archiveWithActive.activePuzzle = FIRST
+    expect(() => decodeGameSave(catalog, archiveWithActive)).toThrow(/archive mode/)
+    const completionWithoutReceipt: any = plain(encodeGameSave(catalog, fresh()))
+    completionWithoutReceipt.mode = 'completion'
+    completionWithoutReceipt.activePuzzle = FIRST
+    expect(() => decodeGameSave(catalog, completionWithoutReceipt)).toThrow(/completion receipt/)
+
+    let completed = select(fresh(), FIRST)
+    for (let index = 0; index < 3; index += 1) completed = move(completed, FIRST, index)
+    const impossibleReceipt: any = plain(encodeGameSave(catalog, completed))
+    impossibleReceipt.completionReceipt.moves = 0
+    expect(() => decodeGameSave(catalog, impossibleReceipt)).toThrow(/moves must be a positive integer/)
   })
 })

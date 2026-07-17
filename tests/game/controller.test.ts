@@ -1,0 +1,324 @@
+import { readFileSync } from 'node:fs'
+import { describe, expect, it } from 'vitest'
+import { buildCatalog, type GameCatalog } from '../../src/game/catalog'
+import {
+  createInitialGameState,
+  type GameControllerState,
+} from '../../src/game/controller-state'
+import { reduceGame } from '../../src/game/controller'
+import {
+  controllerCatalog,
+  controllerSource,
+  FIRST,
+  FIRST_CULTURE,
+  SECOND,
+  SECOND_CULTURE,
+} from './controller-fixture'
+
+const catalog = controllerCatalog()
+
+const fresh = (reducedMotion = false): GameControllerState =>
+  createInitialGameState(catalog, { reducedMotion })
+
+const transition = (
+  state: GameControllerState,
+  action: Parameters<typeof reduceGame>[2],
+  authority: GameCatalog = catalog,
+) => reduceGame(authority, state, action)
+
+const select = (state: GameControllerState, puzzle: typeof FIRST | typeof SECOND) =>
+  transition(state, { kind: 'selectPuzzle', puzzle }).state
+
+const applyWitness = (
+  state: GameControllerState,
+  puzzle: typeof FIRST | typeof SECOND,
+  index: number,
+) => transition(state, { kind: 'applyStep', step: catalog.puzzle(puzzle).witness[index]! }).state
+
+describe('authoritative game controller', () => {
+  it('starts in the archive with caller-owned reduced motion and first-launch defaults', () => {
+    const state = fresh(true)
+
+    expect(state.mode).toBe('archive')
+    expect(state.activePuzzle).toBeNull()
+    expect(state.completed.size).toBe(0)
+    expect(state.firstAttempts.size).toBe(0)
+    expect(state.replays.size).toBe(0)
+    expect(state.selectedCulture).toBe(FIRST_CULTURE)
+    expect([...state.scrollByCulture]).toEqual([
+      [FIRST_CULTURE, 0],
+      [SECOND_CULTURE, 0],
+    ])
+    expect(state.settings).toEqual({
+      reducedMotion: true,
+      fullscreen: true,
+      textSize: 'medium',
+    })
+  })
+
+  it('moves through archive, puzzle, completion, and back to archive', () => {
+    let state = select(fresh(), FIRST)
+    expect(state.mode).toBe('puzzle')
+    expect(state.activePuzzle).toBe(FIRST)
+
+    state = applyWitness(state, FIRST, 0)
+    state = applyWitness(state, FIRST, 1)
+    state = applyWitness(state, FIRST, 2)
+    expect(state.mode).toBe('completion')
+    expect(state.activePuzzle).toBe(FIRST)
+    expect(state.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: false })
+
+    state = transition(state, { kind: 'levelSelection' }).state
+    expect(state.mode).toBe('archive')
+    expect(state.activePuzzle).toBeNull()
+    expect(state.completionReceipt).toBeNull()
+  })
+
+  it('applies Escape precedence for editor, teacher, pause settings, pause, and no transient', () => {
+    const puzzle = catalog.puzzle(FIRST)
+    const intervention = puzzle.teacher[0]!
+    let state = select(fresh(), FIRST)
+
+    state = transition(state, { kind: 'openTeacher', intervention }).state
+    expect(state.transient?.kind).toBe('teacher')
+    state = transition(state, { kind: 'escape' }).state
+    expect(state.transient).toBeNull()
+
+    state = transition(state, { kind: 'openEditor' }).state
+    expect(state.transient?.kind).toBe('editor')
+    state = transition(state, { kind: 'escape' }).state
+    expect(state.transient).toBeNull()
+
+    state = transition(state, { kind: 'escape' }).state
+    expect(state.transient).toEqual({ kind: 'pause', presentation: 'menu' })
+    state = transition(state, { kind: 'openPauseSettings' }).state
+    expect(state.transient).toEqual({ kind: 'pause', presentation: 'settings' })
+    state = transition(state, { kind: 'escape' }).state
+    expect(state.transient).toEqual({ kind: 'pause', presentation: 'menu' })
+    state = transition(state, { kind: 'escape' }).state
+    expect(state.transient).toBeNull()
+  })
+
+  it('never leaves mutually exclusive transients competing for input', () => {
+    const intervention = catalog.puzzle(FIRST).teacher[0]!
+    let state = select(fresh(), FIRST)
+    state = transition(state, { kind: 'openTeacher', intervention }).state
+    state = transition(state, { kind: 'openEditor' }).state
+    expect(state.transient).toEqual({ kind: 'editor' })
+    state = transition(state, { kind: 'openTeacher', intervention }).state
+    expect(state.transient).toMatchObject({ kind: 'teacher', intervention })
+    state = transition(state, { kind: 'openPause' }).state
+    expect(state.transient).toEqual({ kind: 'pause', presentation: 'menu' })
+  })
+
+  it('supports pause resume, settings, level selection, and typed exit request without restart', () => {
+    let state = select(fresh(), FIRST)
+    state = transition(state, { kind: 'openPause' }).state
+    state = transition(state, { kind: 'resume' }).state
+    expect(state.transient).toBeNull()
+
+    state = transition(state, { kind: 'openPause' }).state
+    state = transition(state, { kind: 'openPauseSettings' }).state
+    expect(state.transient).toEqual({ kind: 'pause', presentation: 'settings' })
+    const exit = transition(state, { kind: 'exitGame' })
+    expect(exit.state).toBe(state)
+    expect(exit.effects).toEqual([{ kind: 'saveBeforeExitAndExitRequested' }])
+
+    state = transition(state, { kind: 'levelSelection' }).state
+    expect(state.mode).toBe('archive')
+    expect(state.activePuzzle).toBeNull()
+  })
+
+  it('refuses proof and timeline input atomically while pause owns input', () => {
+    let state = select(fresh(), FIRST)
+    state = transition(state, { kind: 'openPause' }).state
+    const timeline = state.firstAttempts.get(FIRST)?.timeline
+
+    expect(() => transition(state, {
+      kind: 'applyStep', step: catalog.puzzle(FIRST).witness[0]!,
+    })).toThrow(/pause.*owns input/)
+    expect(() => transition(state, { kind: 'moveTimeline', cursor: 0 }))
+      .toThrow(/pause.*owns input/)
+    expect(state.firstAttempts.get(FIRST)?.timeline).toBe(timeline)
+    expect(state.transient).toEqual({ kind: 'pause', presentation: 'menu' })
+  })
+
+  it('keeps first attempts for different puzzles independent and resumes each exact session', () => {
+    let state = select(fresh(), FIRST)
+    state = applyWitness(state, FIRST, 0)
+    const firstSession = state.firstAttempts.get(FIRST)!
+    state = transition(state, { kind: 'levelSelection' }).state
+
+    state = select(state, SECOND)
+    state = applyWitness(state, SECOND, 0)
+    const secondSession = state.firstAttempts.get(SECOND)!
+    state = transition(state, { kind: 'levelSelection' }).state
+    state = select(state, FIRST)
+
+    expect(state.firstAttempts.size).toBe(2)
+    expect(state.firstAttempts.get(FIRST)).toEqual(firstSession)
+    expect(state.firstAttempts.get(SECOND)).toEqual(secondSession)
+    expect(state.activePuzzle).toBe(FIRST)
+  })
+
+  it('keeps completed replay attempts independent and clears only the replay that completes', () => {
+    let state = fresh()
+    for (const puzzle of [FIRST, SECOND] as const) {
+      state = select(state, puzzle)
+      state = applyWitness(state, puzzle, 0)
+      state = applyWitness(state, puzzle, 1)
+      state = applyWitness(state, puzzle, 2)
+      state = transition(state, { kind: 'levelSelection' }).state
+    }
+    state = select(state, FIRST)
+    state = applyWitness(state, FIRST, 0)
+    state = transition(state, { kind: 'levelSelection' }).state
+    state = select(state, SECOND)
+    state = applyWitness(state, SECOND, 0)
+    state = transition(state, { kind: 'levelSelection' }).state
+
+    state = select(state, FIRST)
+    state = applyWitness(state, FIRST, 1)
+    state = applyWitness(state, FIRST, 2)
+
+    expect(state.mode).toBe('completion')
+    expect(state.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: true })
+    expect(state.replays.has(FIRST)).toBe(false)
+    expect(state.replays.get(SECOND)?.timeline.cursor).toBe(1)
+    expect(state.completed).toEqual(new Set([FIRST, SECOND]))
+  })
+
+  it('retains future on rewind, branches only the active puzzle, and uses cursor zero as restart', () => {
+    let state = select(fresh(), FIRST)
+    state = applyWitness(state, FIRST, 0)
+    state = applyWitness(state, FIRST, 1)
+    state = transition(state, { kind: 'levelSelection' }).state
+    state = select(state, SECOND)
+    state = applyWitness(state, SECOND, 0)
+    state = applyWitness(state, SECOND, 1)
+    state = transition(state, { kind: 'moveTimeline', cursor: 0 }).state
+
+    expect(state.firstAttempts.get(SECOND)?.timeline.cursor).toBe(0)
+    expect(state.firstAttempts.get(SECOND)?.timeline.states).toHaveLength(3)
+    expect(state.firstAttempts.get(SECOND)?.timeline.steps).toHaveLength(2)
+    const untouchedFirst = state.firstAttempts.get(FIRST)
+    state = transition(state, {
+      kind: 'applyStep',
+      step: catalog.puzzle(SECOND).witness[2]!,
+    }).state
+
+    expect(state.firstAttempts.get(SECOND)?.timeline.cursor).toBe(1)
+    expect(state.firstAttempts.get(SECOND)?.timeline.states).toHaveLength(2)
+    expect(state.firstAttempts.get(SECOND)?.timeline.steps).toHaveLength(1)
+    expect(state.firstAttempts.get(FIRST)).toBe(untouchedFirst)
+  })
+
+  it('refuses locked selection atomically with a domain effect', () => {
+    const source = controllerSource()
+    const lockedCatalog = buildCatalog({
+      ...source,
+      puzzles: source.puzzles.map((puzzle) => puzzle.id === SECOND
+        ? { ...puzzle, prerequisites: [FIRST] }
+        : puzzle),
+    })
+    const before = createInitialGameState(lockedCatalog, { reducedMotion: false })
+    const result = reduceGame(lockedCatalog, before, { kind: 'selectPuzzle', puzzle: SECOND })
+
+    expect(result.state).toBe(before)
+    expect(result.effects).toEqual([{
+      kind: 'selectionRefused', puzzle: SECOND, reason: 'locked',
+    }])
+  })
+
+  it('completes first attempts and replays atomically with exact retained-path move counts', () => {
+    let first = select(fresh(), FIRST)
+    first = applyWitness(first, FIRST, 0)
+    first = applyWitness(first, FIRST, 1)
+    first = transition(first, { kind: 'openEditor' }).state
+    const completed = applyWitness(first, FIRST, 2)
+
+    expect(completed.completed).toEqual(new Set([FIRST]))
+    expect(completed.firstAttempts.has(FIRST)).toBe(false)
+    expect(completed.mode).toBe('completion')
+    expect(completed.transient).toBeNull()
+    expect(completed.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: false })
+
+    let replay = transition(completed, { kind: 'levelSelection' }).state
+    replay = select(replay, FIRST)
+    replay = applyWitness(replay, FIRST, 0)
+    replay = applyWitness(replay, FIRST, 1)
+    replay = applyWitness(replay, FIRST, 2)
+    expect(replay.completed).toEqual(new Set([FIRST]))
+    expect(replay.replays.has(FIRST)).toBe(false)
+    expect(replay.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: true })
+  })
+
+  it('starts a fresh replay after a completed replay was cleared', () => {
+    let state = select(fresh(), FIRST)
+    for (let index = 0; index < 3; index += 1) state = applyWitness(state, FIRST, index)
+    state = transition(state, { kind: 'levelSelection' }).state
+    state = select(state, FIRST)
+    for (let index = 0; index < 3; index += 1) state = applyWitness(state, FIRST, index)
+    state = transition(state, { kind: 'levelSelection' }).state
+
+    expect(state.replays.has(FIRST)).toBe(false)
+    state = select(state, FIRST)
+    expect(state.replays.get(FIRST)?.timeline.cursor).toBe(0)
+    expect(state.replays.get(FIRST)?.timeline.states).toHaveLength(1)
+  })
+
+  it('persists once-only acknowledgement without changing a nonblocking timeline', () => {
+    let state = select(fresh(), FIRST)
+    state = applyWitness(state, FIRST, 0)
+    const timeline = state.firstAttempts.get(FIRST)?.timeline
+    const intervention = catalog.puzzle(FIRST).teacher[0]!
+    state = transition(state, { kind: 'openTeacher', intervention }).state
+    state = transition(state, { kind: 'acknowledgeTeacher' }).state
+
+    expect(state.acknowledgedTeachers).toEqual(new Set([intervention.id]))
+    expect(state.transient).toBeNull()
+    expect(state.firstAttempts.get(FIRST)?.timeline).toBe(timeline)
+  })
+
+  it('does not change controller state when a proof move is invalid', () => {
+    const state = select(fresh(), FIRST)
+    expect(() => transition(state, {
+      kind: 'applyStep',
+      step: { rule: 'doubleCutElim', region: 'forged-region' },
+    })).toThrow()
+    expect(state.firstAttempts.get(FIRST)?.timeline).toMatchObject({ cursor: 0, steps: [] })
+    expect(state.transient).toBeNull()
+  })
+
+  it('persists culture scroll independently and emits fullscreen platform intent', () => {
+    let state = fresh()
+    state = transition(state, { kind: 'setCultureScroll', culture: FIRST_CULTURE, scroll: 17.25 }).state
+    state = transition(state, { kind: 'selectCulture', culture: SECOND_CULTURE }).state
+    state = transition(state, { kind: 'setCultureScroll', culture: SECOND_CULTURE, scroll: 91 }).state
+    state = transition(state, { kind: 'setReducedMotion', value: true }).state
+    state = transition(state, { kind: 'setTextSize', value: 'large' }).state
+    const fullscreen = transition(state, { kind: 'setFullscreen', value: false })
+
+    expect(fullscreen.state.selectedCulture).toBe(SECOND_CULTURE)
+    expect(fullscreen.state.scrollByCulture.get(FIRST_CULTURE)).toBe(17.25)
+    expect(fullscreen.state.scrollByCulture.get(SECOND_CULTURE)).toBe(91)
+    expect(fullscreen.state.settings).toEqual({
+      reducedMotion: true, fullscreen: false, textSize: 'large',
+    })
+    expect(fullscreen.effects).toEqual([{ kind: 'fullscreenRequested', fullscreen: false }])
+  })
+
+  it('contains no platform/view authority and exposes no restart or reset command', () => {
+    const source = [
+      'src/game/controller-state.ts',
+      'src/game/controller.ts',
+      'src/game/save.ts',
+    ].map((path) => readFileSync(path, 'utf8')).join('\n')
+
+    for (const forbidden of ['electron', 'localStorage', "from '../app", "from '../view", 'document.', 'window.']) {
+      expect(source).not.toContain(forbidden)
+    }
+    expect(source).not.toMatch(/kind:\s*['"](?:restart|reset)/i)
+    expect(source).not.toMatch(/\b(?:restart|reset)(?:Puzzle|Game|Timeline)\b/)
+  })
+})

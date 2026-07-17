@@ -3,8 +3,9 @@ import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { buildCatalog } from '../../src/game/catalog'
 import { artifactTheoremName } from '../../src/game/artifact-theorem'
 import { blankDiagram, isBlank } from '../../src/game/blank'
-import { emptyProgress } from '../../src/game/progress'
-import { loadGame, saveGame } from '../../src/game/save'
+import { createInitialGameState } from '../../src/game/controller-state'
+import { reduceGame } from '../../src/game/controller'
+import { decodeGameSave, encodeGameSave } from '../../src/game/save'
 import { applyGameStep, currentDiagram, startPuzzle } from '../../src/game/session'
 import {
   cultureId, GameDomainError, performanceId, puzzleId,
@@ -546,9 +547,16 @@ describe('verified game catalog', () => {
     let session = startPuzzle(ownedPuzzle)
     for (const step of ownedPuzzle.witness) session = applyGameStep(session, step, authority).session
     expect(isBlank(currentDiagram(session))).toBe(true)
-    const save = saveGame(catalog, emptyProgress(), session)
+    const controller = reduceGame(
+      catalog,
+      createInitialGameState(catalog, { reducedMotion: false }),
+      { kind: 'selectPuzzle', puzzle: puzzle.id },
+    ).state
+    const save = encodeGameSave(catalog, controller)
     expect(save.puzzleFingerprints).toEqual({ [puzzle.id]: catalog.puzzleFingerprint(puzzle.id) })
-    expect(isBlank(currentDiagram(loadGame(catalog, save).active!))).toBe(true)
+    const loaded = decodeGameSave(catalog, save)
+    expect(exploreForm(currentDiagram(loaded.firstAttempts.get(puzzle.id)!)))
+      .toBe(originalGoalForm)
 
     expect(() => (catalog.source.cultures as CultureDefinition[]).push(mutableCulture)).toThrow()
     expect(() => (catalog.source.puzzles as PuzzleDefinition[]).push(mutablePuzzle)).toThrow()
