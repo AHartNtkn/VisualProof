@@ -2264,11 +2264,19 @@ theorem applyIteration_sound
     (happly : applyIteration input selection target = .ok receipt) :
     SuccessfulReceiptSound context orientation input
       (.iteration selection target) receipt := by
-  by_cases hproper : target ≠ selection.val.anchor ∧
-      selection.val.anchor ≠ input.val.root ∧
-      (iterationInput input selection target).binderSpine.proxyCount ≠ 0
-  · exact applyIteration_sound_proper_nonempty context orientation input
-      selection target receipt happly hproper.1 hproper.2.1 hproper.2.2
+  by_cases targetNe : target ≠ selection.val.anchor
+  · by_cases anchorNeRoot : selection.val.anchor ≠ input.val.root
+    · by_cases hnonempty :
+        (iterationInput input selection target).binderSpine.proxyCount ≠ 0
+      · exact applyIteration_sound_proper_nonempty context orientation input
+          selection target receipt happly targetNe anchorNeRoot hnonempty
+      · have hzero :
+            (iterationInput input selection target).binderSpine.proxyCount = 0 :=
+          Nat.eq_zero_of_not_pos (fun positive =>
+            hnonempty (Nat.ne_of_gt positive))
+        exact applyIteration_sound_proper_zero context orientation input
+          selection target receipt happly targetNe anchorNeRoot hzero
+    · sorry
   · sorry
 
 /-- Every successful deiteration receipt preserves ordered-open semantics. -/
