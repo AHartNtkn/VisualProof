@@ -121,6 +121,187 @@ theorem iterationExposedAttachment_eq_fragmentOrigin
   simp [ConcreteDiagram.fragmentWireOrigin, FragmentLayout.boundaryWire,
     FragmentLayout.internalWireCount]
 
+/-- In the empty-spine branch, the executable exposed-wire substitution and
+the extraction context relation select the same coalesced anchor wire. -/
+theorem iterationRootWire_sameWire
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (patternIndex : Fin
+      (iterationInput input selection target).pattern.val.exposedWires.length)
+    (hostIndex : Fin
+      (((iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.inheritedWires.extend selection.val.anchor).map
+          (iterationCoalescedFrameIso input selection target).wires).length)
+    (related : (extractionContextRelation input selection
+      ({} : FragmentLayout input.val selection)
+      (iterationInput input selection target).pattern.val.exposedWires
+      (((iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.inheritedWires.extend selection.val.anchor).map
+          (iterationCoalescedFrameIso input selection target).wires)
+      ).Rel patternIndex hostIndex) :
+    let spliceInput := iterationInput input selection target
+    let anchorView := iterationCoalescedAnchorView input selection target
+      hadmissible
+    let sourceContext :=
+      anchorView.compilerLeaf.inheritedWires.extend selection.val.anchor
+    let iso := iterationCoalescedFrameIso input selection target
+    let targetContext := sourceContext.map iso.wires
+    let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+        (Fin targetContext.length) :=
+      FiniteEquiv.finCast (List.length_map iso.wires).symm
+    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    (host.compilerLeaf.inheritedWires.extend target).get
+        (spliceInput.plugLayout.exposedWireRenaming hadmissible host
+          patternIndex) =
+      sourceContext.get (wireEquiv.symm hostIndex) := by
+  dsimp only
+  let spliceInput := iterationInput input selection target
+  let layout : FragmentLayout input.val selection := {}
+  let anchorView := iterationCoalescedAnchorView input selection target
+    hadmissible
+  let sourceContext :=
+    anchorView.compilerLeaf.inheritedWires.extend selection.val.anchor
+  let iso := iterationCoalescedFrameIso input selection target
+  let targetContext := sourceContext.map iso.wires
+  let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length) :=
+    FiniteEquiv.finCast (List.length_map iso.wires).symm
+  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  have actualGet := spliceInput.plugLayout.exposedWireRenaming_spec
+    hadmissible host patternIndex
+  have attachmentOrigin := iterationExposedAttachment_eq_fragmentOrigin input
+    selection target patternIndex
+  dsimp only at attachmentOrigin
+  have originEq : input.val.fragmentWireOrigin selection layout
+      (spliceInput.pattern.val.exposedWires.get patternIndex) =
+        targetContext.get hostIndex := related
+  have targetGet : targetContext.get hostIndex =
+      iso.wires (sourceContext.get (wireEquiv.symm hostIndex)) := by
+    simp only [targetContext, List.get_eq_getElem, List.getElem_map]
+    apply congrArg iso.wires
+    congr 1
+  have quotientSource : spliceInput.quotientWire
+      (targetContext.get hostIndex) =
+        sourceContext.get (wireEquiv.symm hostIndex) := by
+    apply iso.wires.injective
+    change iterationQuotientWireEquiv input selection target
+        (spliceInput.quotientWire (targetContext.get hostIndex)) =
+      iterationQuotientWireEquiv input selection target
+        (sourceContext.get (wireEquiv.symm hostIndex))
+    rw [iterationQuotientWireEquiv_quotientWire]
+    exact targetGet
+  exact actualGet.trans
+    (attachmentOrigin.trans
+      ((congrArg spliceInput.quotientWire originEq).trans quotientSource))
+
+/-- The executable empty-spine wire map factors through the retained route's
+terminal inherited-wire map. -/
+theorem iterationRootWireFactor
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    {keptItems : ItemSeq signature
+      ((iterationCoalescedAnchorView input selection target hadmissible)
+        |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).focus.holeRels}
+    {path : List Nat}
+    (route : Splice.RegionRoute
+      (iterationInput input selection target).coalesceFrameRaw
+      selection.val.anchor target path)
+    {compiledPath : List Nat}
+    {witness : Region.ContextPath (Region.mk 0 keptItems) compiledPath}
+    (terminal : CompiledRouteTerminal
+      ((iterationInput input selection target).coalesceFrame hadmissible)
+      (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+        (iterationInput input selection target).coalesceFrameRaw
+        selection.val.anchor
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.inheritedWires
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.binders
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.fuel
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.items
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.itemsComputation
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.wiresExact
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.bindersCover
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.binderEnumeration)
+      keptItems route compiledPath witness)
+    (patternIndex : Fin
+      (iterationInput input selection target).pattern.val.exposedWires.length)
+    (hostIndex : Fin
+      (((iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.inheritedWires.extend selection.val.anchor).map
+          (iterationCoalescedFrameIso input selection target).wires).length)
+    (related : (extractionContextRelation input selection
+      ({} : FragmentLayout input.val selection)
+      (iterationInput input selection target).pattern.val.exposedWires
+      (((iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.inheritedWires.extend selection.val.anchor).map
+          (iterationCoalescedFrameIso input selection target).wires)
+      ).Rel patternIndex hostIndex) :
+    let spliceInput := iterationInput input selection target
+    let anchorView := iterationCoalescedAnchorView input selection target
+      hadmissible
+    let sourceContext :=
+      anchorView.compilerLeaf.inheritedWires.extend selection.val.anchor
+    let iso := iterationCoalescedFrameIso input selection target
+    let targetContext := sourceContext.map iso.wires
+    let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+        (Fin targetContext.length) :=
+      FiniteEquiv.finCast (List.length_map iso.wires).symm
+    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    spliceInput.plugLayout.exposedWireRenaming hadmissible host patternIndex =
+      host.compilerLeaf.inheritedWires.outerIndex target
+        (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+          witness terminal.leaf host.intrinsicPath host.compilerLeaf
+          (terminal.inheritedIndex (wireEquiv.symm hostIndex))) := by
+  dsimp only
+  apply compiledRouteTerminal_hostIndex_eq
+    ((iterationInput input selection target).coalesceFrame hadmissible)
+    (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      (iterationInput input selection target).coalesceFrameRaw
+      selection.val.anchor
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.inheritedWires
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.binders
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.fuel
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.items
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.itemsComputation
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.wiresExact
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.bindersCover
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).compilerLeaf.binderEnumeration)
+    keptItems route terminal
+    (Splice.Input.compiledSpliceHostView
+      (iterationInput input selection target) hadmissible).intrinsicPath
+    (Splice.Input.compiledSpliceHostView
+      (iterationInput input selection target) hadmissible).compilerLeaf
+    ((FiniteEquiv.finCast (List.length_map
+      (iterationCoalescedFrameIso input selection target).wires).symm).symm
+        hostIndex)
+    ((iterationInput input selection target).plugLayout.exposedWireRenaming
+      hadmissible
+      (Splice.Input.compiledSpliceHostView
+        (iterationInput input selection target) hadmissible) patternIndex)
+  exact iterationRootWire_sameWire input selection target hadmissible
+    patternIndex hostIndex related
+
 /-- The concrete wire selected by the executable terminal wire map is the
 same coalesced anchor wire selected by extraction's context relation. -/
 theorem iterationTerminalWire_sameWire

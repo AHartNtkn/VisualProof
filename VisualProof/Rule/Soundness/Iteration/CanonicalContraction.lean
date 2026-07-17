@@ -229,6 +229,43 @@ noncomputable def iterationActualSpliceOfNonempty
       hnonempty relation
   Region.spliceAt targetLocal targetItems material actualWire actualRelation
 
+/-- Exact executor splice at the canonical host focus for an empty binder
+spine.  The copied pattern is its compiled open root. -/
+noncomputable def iterationActualSpliceOfEmpty
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible) :
+    let spliceInput := iterationInput input selection target
+    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    Region signature host.focus.holeWires host.focus.holeRels :=
+  let spliceInput := iterationInput input selection target
+  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+  let targetLocal :=
+    (ConcreteElaboration.exactScopeWires spliceInput.coalesceFrameRaw
+      spliceInput.site).length
+  let targetLength :
+      (host.compilerLeaf.inheritedWires.extend spliceInput.site).length =
+        host.focus.holeWires + targetLocal :=
+    (ConcreteElaboration.WireContext.length_extend
+      host.compilerLeaf.inheritedWires spliceInput.site).trans
+      (congrArg (fun outer => outer + targetLocal)
+        host.compilerLeaf.inheritedLength)
+  let targetItems : ItemSeq signature
+      (host.focus.holeWires + targetLocal) host.focus.holeRels :=
+    host.compilerLeaf.items.castWiresEq targetLength
+  let material := ConcreteElaboration.finishRoot
+    spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
+    pattern.items
+  let actualWire : Fin spliceInput.pattern.val.exposedWires.length →
+      Fin (host.focus.holeWires + targetLocal) := fun index =>
+    Fin.cast targetLength
+      (spliceInput.plugLayout.exposedWireRenaming hadmissible host index)
+  let actualRelation : RelationRenaming [] host.focus.holeRels :=
+    Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels
+  Region.spliceAt targetLocal targetItems material actualWire actualRelation
+
 /-- Complete scoped contraction certificate for proper-target, nonempty
 iteration at the selection anchor.  The replacement is tied by intrinsic
 isomorphism to the executor's exact splice, while `equivalent` records the
@@ -858,6 +895,211 @@ theorem properRoute_actualSpliceIso
               hadmissible hnonempty route terminal hrels hbinders relation
           refine ⟨sourceLocal, sourceItems, rfl, ?_⟩
           simpa [iterationActualSpliceOfNonempty, spliceInput, host, pattern,
+            targetLocal, targetLength, targetItems, material, actualWire,
+            actualRelation] using
+            (RegionIso.spliceAt_renameRelations hostItemsIso material
+              (fun index => Fin.castAdd sourceLocal (routeWire index))
+              actualWire wireFactor routeRelation actualRelation
+              relationFactor)
+
+/-- Empty-spine route-native splice identified with the executor's exact
+canonical-host splice. -/
+theorem properRoute_rootActualSpliceIso
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (hencloses : input.val.Encloses selection.val.anchor target)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0)
+    {keptItems : ItemSeq signature
+      ((iterationCoalescedAnchorView input selection target hadmissible)
+        |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).focus.holeRels}
+    {path : List Nat}
+    (route : Splice.RegionRoute
+      (iterationInput input selection target).coalesceFrameRaw
+      selection.val.anchor target path)
+    {compiledPath : List Nat}
+    {witness : Region.ContextPath (Region.mk 0 keptItems) compiledPath}
+    (terminal : CompiledRouteTerminal
+      ((iterationInput input selection target).coalesceFrame hadmissible)
+      (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+        (iterationInput input selection target).coalesceFrameRaw
+        selection.val.anchor
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.inheritedWires
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.binders
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.fuel
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.items
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.itemsComputation
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.wiresExact
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.bindersCover
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.binderEnumeration)
+      keptItems route compiledPath witness) :
+    let spliceInput := iterationInput input selection target
+    let anchorView := iterationCoalescedAnchorView input selection target
+      hadmissible
+    let sourceContext := anchorView.compilerLeaf.inheritedWires.extend
+      selection.val.anchor
+    let iso := iterationCoalescedFrameIso input selection target
+    let targetContext := sourceContext.map iso.wires
+    let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    let hostIndex := iterationRootAnchorIndex input selection target
+      hadmissible hzero
+    let sourceContextWire : FiniteEquiv (Fin sourceContext.length)
+        (Fin targetContext.length) :=
+      FiniteEquiv.finCast (List.length_map iso.wires).symm
+    let routeWire : Fin spliceInput.pattern.val.exposedWires.length →
+        Fin witness.toFocus.holeWires := fun index =>
+      Fin.cast terminal.leaf.inheritedLength
+        (terminal.inheritedIndex (sourceContextWire.symm (hostIndex index)))
+    let routeRelation : RelationRenaming [] witness.toFocus.holeRels :=
+      Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+    let targetLocal :=
+      (ConcreteElaboration.exactScopeWires spliceInput.coalesceFrameRaw
+        spliceInput.site).length
+    let targetLength :
+        (host.compilerLeaf.inheritedWires.extend spliceInput.site).length =
+          host.focus.holeWires + targetLocal :=
+      (ConcreteElaboration.WireContext.length_extend
+        host.compilerLeaf.inheritedWires spliceInput.site).trans
+        (congrArg (fun outer => outer + targetLocal)
+          host.compilerLeaf.inheritedLength)
+    let targetItems : ItemSeq signature
+        (host.focus.holeWires + targetLocal) host.focus.holeRels :=
+      host.compilerLeaf.items.castWiresEq targetLength
+    let actualWire : Fin spliceInput.pattern.val.exposedWires.length →
+        Fin (host.focus.holeWires + targetLocal) := fun index =>
+      Fin.cast targetLength
+        (spliceInput.plugLayout.exposedWireRenaming hadmissible host index)
+    let actualRelation : RelationRenaming [] host.focus.holeRels :=
+      Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels
+    let material := ConcreteElaboration.finishRoot
+      spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
+      pattern.items
+    ∃ (sourceLocal : Nat)
+      (sourceItems : ItemSeq signature
+        (witness.toFocus.holeWires + sourceLocal)
+        witness.toFocus.holeRels)
+      (sourceBody : witness.toFocus.body = Region.mk sourceLocal sourceItems),
+      let hrels := Classical.choose
+        (coalescedRouteTerminal_hostLexical input selection target hadmissible
+          hencloses route terminal)
+      let relationWire :=
+        Splice.Input.compilerLeafOuterWire witness terminal.leaf
+          host.intrinsicPath host.compilerLeaf
+          (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+            witness terminal.leaf host.intrinsicPath host.compilerLeaf)
+      RegionIso signature relationWire host.focus.holeRels
+        ((Region.spliceAt sourceLocal sourceItems material
+          (fun index => Fin.castAdd sourceLocal (routeWire index))
+          routeRelation).renameRelations
+            (Splice.Input.relationRenamingOfEq hrels))
+        (iterationActualSpliceOfEmpty input selection target hadmissible) := by
+  dsimp only
+  let spliceInput := iterationInput input selection target
+  let anchorView := iterationCoalescedAnchorView input selection target
+    hadmissible
+  let sourceContext := anchorView.compilerLeaf.inheritedWires.extend
+    selection.val.anchor
+  let iso := iterationCoalescedFrameIso input selection target
+  let targetContext := sourceContext.map iso.wires
+  let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let hostIndex := iterationRootAnchorIndex input selection target
+    hadmissible hzero
+  let sourceContextWire : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length) :=
+    FiniteEquiv.finCast (List.length_map iso.wires).symm
+  let routeWire : Fin spliceInput.pattern.val.exposedWires.length →
+      Fin witness.toFocus.holeWires := fun index =>
+    Fin.cast terminal.leaf.inheritedLength
+      (terminal.inheritedIndex (sourceContextWire.symm (hostIndex index)))
+  let routeRelation : RelationRenaming [] witness.toFocus.holeRels :=
+    Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+  let targetLocal :=
+    (ConcreteElaboration.exactScopeWires spliceInput.coalesceFrameRaw
+      spliceInput.site).length
+  let targetLength :
+      (host.compilerLeaf.inheritedWires.extend spliceInput.site).length =
+        host.focus.holeWires + targetLocal :=
+    (ConcreteElaboration.WireContext.length_extend
+      host.compilerLeaf.inheritedWires spliceInput.site).trans
+      (congrArg (fun outer => outer + targetLocal)
+        host.compilerLeaf.inheritedLength)
+  let targetItems : ItemSeq signature
+      (host.focus.holeWires + targetLocal) host.focus.holeRels :=
+    host.compilerLeaf.items.castWiresEq targetLength
+  let actualWire : Fin spliceInput.pattern.val.exposedWires.length →
+      Fin (host.focus.holeWires + targetLocal) := fun index =>
+    Fin.cast targetLength
+      (spliceInput.plugLayout.exposedWireRenaming hadmissible host index)
+  let actualRelation : RelationRenaming [] host.focus.holeRels :=
+    Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels
+  let material := ConcreteElaboration.finishRoot
+    spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
+    pattern.items
+  let lexical := coalescedRouteTerminal_hostLexical input selection target
+    hadmissible hencloses route terminal
+  let hrels := Classical.choose lexical
+  have hbinders : HEq terminal.leaf.binders host.compilerLeaf.binders :=
+    Classical.choose_spec lexical
+  let inherited :=
+    Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+      witness terminal.leaf host.intrinsicPath host.compilerLeaf
+  let relationWire := Splice.Input.compilerLeafOuterWire witness terminal.leaf
+    host.intrinsicPath host.compilerLeaf inherited
+  have bodyIso := Splice.Input.compilerLeaf_regionIso_sameDiagram
+    (spliceInput.coalesceFrameRaw_wellFormed hadmissible)
+    witness terminal.leaf host.intrinsicPath host.compilerLeaf hrels hbinders
+  have targetBodyEq : host.intrinsicPath.toFocus.body =
+      Region.mk targetLocal targetItems := by
+    rw [host.compilerLeaf.bodyComputation]
+    simp only [ConcreteElaboration.finishRegion, Region.castWiresEq_mk,
+      ItemSeq.castWiresEq_trans]
+    rfl
+  cases sourceBodyEq : witness.toFocus.body with
+  | mk sourceLocal sourceItems =>
+      rw [sourceBodyEq, targetBodyEq] at bodyIso
+      cases bodyIso with
+      | mk localWire hostItemsIso =>
+          have wireFactor :
+              (extendWireEquiv relationWire localWire).toFun ∘
+                  (fun index => Fin.castAdd sourceLocal
+                    (routeWire index)) = actualWire := by
+            funext index
+            have actualFactor := iterationRootWireFactor input selection target
+              hadmissible route terminal index (hostIndex index)
+              (iterationRootAnchorIndex_related input selection target
+                hadmissible hzero index)
+            dsimp only [actualWire]
+            dsimp only at actualFactor
+            rw [actualFactor]
+            apply Fin.ext
+            simp [routeWire, relationWire, sourceContextWire, inherited, host,
+              spliceInput, Splice.Input.compilerLeafOuterWire,
+              ConcreteElaboration.WireContext.outerIndex,
+              FiniteEquiv.finCast]
+            congr 2
+          have relationFactor : ∀ {arity}
+              (relation : RelVar [] arity),
+              actualRelation relation =
+                Splice.Input.relationRenamingOfEq hrels
+                  (routeRelation relation) := by
+            intro arity relation
+            exact Fin.elim0 relation.index
+          refine ⟨sourceLocal, sourceItems, rfl, ?_⟩
+          simpa [iterationActualSpliceOfEmpty, spliceInput, host, pattern,
             targetLocal, targetLength, targetItems, material, actualWire,
             actualRelation] using
             (RegionIso.spliceAt_renameRelations hostItemsIso material
