@@ -40,7 +40,8 @@ Seyric-to-Myratic switch and assert:
 
 - exactly one dossier sheet exists;
 - no outgoing dossier exists;
-- only Myratic header, tabs, and records paint after selection;
+- only the active Myratic header and records paint after selection, while its
+  navigation still shows both culture-selection tabs;
 - the active sheet retains a translation-only rigid matrix and monotonic travel;
 - rapid replacement, reduced motion, and paused motion preserve the same one-sheet
   ownership model.
