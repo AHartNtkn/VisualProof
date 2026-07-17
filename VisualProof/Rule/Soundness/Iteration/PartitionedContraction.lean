@@ -157,6 +157,423 @@ theorem iterationTerminalAnchorIndex_related
   exact (iterationTerminalAnchorIndex_get input selection target hadmissible
     hnonempty index).symm
 
+/-- Every exposed wire of an empty-spine extracted root occurs in the full
+selection-anchor context. -/
+theorem iterationRootAnchorMember
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0)
+    (index : Fin
+      (iterationInput input selection target).pattern.val.exposedWires.length) :
+    input.val.fragmentWireOrigin selection
+        ({} : FragmentLayout input.val selection)
+        ((iterationInput input selection target).pattern.val.exposedWires.get
+          index) ∈
+      (((iterationCoalescedAnchorView input selection target hadmissible)
+        |>.compilerLeaf.inheritedWires.extend selection.val.anchor).map
+          (iterationCoalescedFrameIso input selection target).wires) := by
+  let spliceInput := iterationInput input selection target
+  let layout : FragmentLayout input.val selection := {}
+  let anchorView := iterationCoalescedAnchorView input selection target
+    hadmissible
+  let sourceContext :=
+    anchorView.compilerLeaf.inheritedWires.extend selection.val.anchor
+  let targetContext := sourceContext.map
+    (iterationCoalescedFrameIso input selection target).wires
+  have bodyEq : layout.bodyContainer = spliceInput.pattern.val.diagram.root :=
+    layout.bodyContainer_eq_root_of_proxyCount_eq_zero hzero
+  have fragmentExact : ConcreteElaboration.WireContext.Exact
+      spliceInput.pattern.val.rootWires layout.bodyContainer := by
+    rw [bodyEq]
+    exact ConcreteElaboration.openRootWires_exact spliceInput.pattern.property
+  have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+      selection.val.anchor :=
+    anchorView.compilerLeaf.wiresExact.mapIso
+      (iterationCoalescedFrameIso input selection target)
+  apply (targetExact.mem_iff _).2
+  apply fragmentWireOrigin_scope_encloses_anchor input selection layout
+  apply (fragmentExact.mem_iff _).1
+  apply List.mem_append.mpr
+  exact Or.inl (List.get_mem _ index)
+
+/-- Canonical anchor-context index of an exposed wire of the empty-spine
+extracted root. -/
+noncomputable def iterationRootAnchorIndex
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0)
+    (index : Fin
+      (iterationInput input selection target).pattern.val.exposedWires.length) :
+    Fin (((iterationCoalescedAnchorView input selection target hadmissible)
+      |>.compilerLeaf.inheritedWires.extend selection.val.anchor).map
+        (iterationCoalescedFrameIso input selection target).wires).length :=
+  Classical.choose (indexOf?_complete
+    (iterationRootAnchorMember input selection target hadmissible hzero index))
+
+theorem iterationRootAnchorIndex_get
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0)
+    (index : Fin
+      (iterationInput input selection target).pattern.val.exposedWires.length) :
+    (((iterationCoalescedAnchorView input selection target hadmissible)
+      |>.compilerLeaf.inheritedWires.extend selection.val.anchor).map
+        (iterationCoalescedFrameIso input selection target).wires).get
+          (iterationRootAnchorIndex input selection target hadmissible hzero
+            index) =
+      input.val.fragmentWireOrigin selection
+        ({} : FragmentLayout input.val selection)
+        ((iterationInput input selection target).pattern.val.exposedWires.get
+          index) := by
+  classical
+  unfold iterationRootAnchorIndex
+  exact indexOf?_sound (Classical.choose_spec (indexOf?_complete
+    (iterationRootAnchorMember input selection target hadmissible hzero index)))
+
+theorem iterationRootAnchorIndex_related
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0)
+    (index : Fin
+      (iterationInput input selection target).pattern.val.exposedWires.length) :
+    (extractionContextRelation input selection
+      ({} : FragmentLayout input.val selection)
+      (iterationInput input selection target).pattern.val.exposedWires
+      (((iterationCoalescedAnchorView input selection target hadmissible)
+        |>.compilerLeaf.inheritedWires.extend selection.val.anchor).map
+          (iterationCoalescedFrameIso input selection target).wires)
+    ).Rel index (iterationRootAnchorIndex input selection target hadmissible
+      hzero index) := by
+  unfold extractionContextRelation
+  exact (iterationRootAnchorIndex_get input selection target hadmissible hzero
+    index).symm
+
+/-- Empty-spine counterpart of `partitionedRoute_copyTransport`: the selected
+anchor supplies the extracted open root at every route-reachable valuation. -/
+theorem partitionedRoute_rootCopyTransport
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0)
+    {selectedItems : ItemSeq signature
+      ((iterationCoalescedAnchorView input selection target hadmissible)
+        |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).focus.holeRels}
+    (selectedCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+          (iterationInput input selection target).coalesceFrameRaw
+          (ConcreteElaboration.compileRegion? signature
+            (iterationInput input selection target).coalesceFrameRaw
+            (iterationCoalescedAnchorView input selection target hadmissible
+              ).compilerLeaf.fuel)
+          ((iterationCoalescedAnchorView input selection target hadmissible)
+            |>.compilerLeaf.inheritedWires.extend selection.val.anchor)
+          (iterationCoalescedAnchorView input selection target hadmissible
+            ).compilerLeaf.binders
+          (selectedOccurrences input.val selection) = some selectedItems)
+    {keptItems : ItemSeq signature
+      ((iterationCoalescedAnchorView input selection target hadmissible)
+        |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).focus.holeRels}
+    {path : List Nat}
+    (route : Splice.RegionRoute
+      (iterationInput input selection target).coalesceFrameRaw
+      selection.val.anchor target path)
+    {compiledPath : List Nat}
+    {witness : Region.ContextPath (Region.mk 0 keptItems) compiledPath}
+    (terminal : CompiledRouteTerminal
+      ((iterationInput input selection target).coalesceFrame hadmissible)
+      (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+        (iterationInput input selection target).coalesceFrameRaw
+        selection.val.anchor
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.inheritedWires
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.binders
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.fuel
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.items
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.itemsComputation
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.wiresExact
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.bindersCover
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.binderEnumeration)
+      keptItems route compiledPath witness)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature) :
+    let spliceInput := iterationInput input selection target
+    let layout : FragmentLayout input.val selection := {}
+    let anchorView := iterationCoalescedAnchorView input selection target
+      hadmissible
+    let sourceContext := anchorView.compilerLeaf.inheritedWires.extend
+      selection.val.anchor
+    let iso := iterationCoalescedFrameIso input selection target
+    let targetContext := sourceContext.map iso.wires
+    let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+    let hostIndex := iterationRootAnchorIndex input selection target
+      hadmissible hzero
+    let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+        (Fin targetContext.length) :=
+      FiniteEquiv.finCast (List.length_map iso.wires).symm
+    let routeWire : Fin spliceInput.pattern.val.exposedWires.length →
+        Fin witness.toFocus.holeWires := fun index =>
+      Fin.cast terminal.leaf.inheritedLength
+        (terminal.inheritedIndex (wireEquiv.symm (hostIndex index)))
+    let routeRelation : RelationRenaming [] witness.toFocus.holeRels :=
+      Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+    ∀ (sourceEnv : Fin sourceContext.length → model.Carrier)
+      (sourceRelEnv : RelEnv model.Carrier anchorView.focus.holeRels),
+      denoteRegion model named sourceEnv sourceRelEnv
+          (Region.mk 0 selectedItems) →
+        ∀ (holeEnv : Fin witness.toFocus.holeWires → model.Carrier)
+          (holeRelEnv : RelEnv model.Carrier witness.toFocus.holeRels),
+          witness.toFocus.context.Reachable sourceEnv sourceRelEnv
+              holeEnv holeRelEnv →
+            denoteRegion model named (holeEnv ∘ routeWire)
+              (RelEnv.pullback routeRelation holeRelEnv)
+              (ConcreteElaboration.finishRoot
+                spliceInput.pattern.val.exposedWires
+                spliceInput.pattern.val.hiddenWires pattern.items) := by
+  dsimp only
+  let spliceInput := iterationInput input selection target
+  let layout : FragmentLayout input.val selection := {}
+  let anchorView := iterationCoalescedAnchorView input selection target
+    hadmissible
+  let sourceContext := anchorView.compilerLeaf.inheritedWires.extend
+    selection.val.anchor
+  let iso := iterationCoalescedFrameIso input selection target
+  let targetContext := sourceContext.map iso.wires
+  let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+  let hostIndex := iterationRootAnchorIndex input selection target
+    hadmissible hzero
+  let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length) :=
+    FiniteEquiv.finCast (List.length_map iso.wires).symm
+  let routeWire : Fin spliceInput.pattern.val.exposedWires.length →
+      Fin witness.toFocus.holeWires := fun index =>
+    Fin.cast terminal.leaf.inheritedLength
+      (terminal.inheritedIndex (wireEquiv.symm (hostIndex index)))
+  let routeRelation : RelationRenaming [] witness.toFocus.holeRels :=
+    Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+  obtain ⟨semanticItems, semanticCompiled, selectedSemantic⟩ :=
+    coalescedAnchorSelected_entails_root input selection target hadmissible
+      hzero
+  have itemsEq : semanticItems = selectedItems := by
+    exact Option.some.inj (semanticCompiled.symm.trans selectedCompiled)
+  subst semanticItems
+  intro sourceEnv sourceRelEnv selectedDenotes holeEnv holeRelEnv reachable
+  have outerValues := reachable.outerWire
+  have environments :
+      (extractionContextRelation input selection layout
+        spliceInput.pattern.val.exposedWires targetContext).EnvironmentsAgree
+        (holeEnv ∘ routeWire)
+        (fun index => sourceEnv (wireEquiv.symm index)) := by
+    intro patternIndex targetIndex related
+    have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+        selection.val.anchor := anchorView.compilerLeaf.wiresExact.mapIso iso
+    have targetIndexEq : hostIndex patternIndex = targetIndex := by
+      apply Fin.ext
+      apply (List.getElem_inj targetExact.nodup).mp
+      have chosen := iterationRootAnchorIndex_related input selection target
+        hadmissible hzero patternIndex
+      exact chosen.symm.trans related
+    subst targetIndex
+    change holeEnv
+        (Fin.cast terminal.leaf.inheritedLength
+          (terminal.inheritedIndex (wireEquiv.symm (hostIndex patternIndex)))) =
+      sourceEnv (wireEquiv.symm (hostIndex patternIndex))
+    have intrinsic := terminal.inheritedIndex_intrinsic
+      (wireEquiv.symm (hostIndex patternIndex))
+    have retained := congrFun outerValues
+      (wireEquiv.symm (hostIndex patternIndex))
+    exact (congrArg holeEnv intrinsic).trans retained
+  have renamedMaterial := selectedSemantic model named sourceEnv sourceRelEnv
+    (holeEnv ∘ routeWire) environments
+    ((denoteRegion_mk_zero_iff model named sourceEnv sourceRelEnv
+      selectedItems).1 selectedDenotes)
+  let anchorRelation : RelationRenaming [] anchorView.focus.holeRels :=
+    Splice.Input.PlugLayout.emptyRelationRenaming anchorView.focus.holeRels
+  have rawMaterial :=
+    (denoteRegion_renameRelations model named anchorRelation
+      (RelEnv.pullback anchorRelation sourceRelEnv) sourceRelEnv
+      (RelEnv.pullback_agrees anchorRelation sourceRelEnv)
+      (holeEnv ∘ routeWire)
+      (ConcreteElaboration.finishRoot spliceInput.pattern.val.exposedWires
+        spliceInput.pattern.val.hiddenWires pattern.items)).mp renamedMaterial
+  have emptyPulled : RelEnv.pullback anchorRelation sourceRelEnv =
+      RelEnv.pullback routeRelation holeRelEnv := by
+    apply RelEnv.eq_of_lookup
+    intro arity relation
+    exact Fin.elim0 relation.index
+  exact emptyPulled ▸ rawMaterial
+
+/-- Contraction at the retained route for an empty binder spine.  The copied
+material is the compiled open root, with exposed wires mapped into the route
+hole and hidden root wires left existential. -/
+theorem partitionedRoute_rootSplice_equiv
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0)
+    {selectedItems keptItems : ItemSeq signature
+      ((iterationCoalescedAnchorView input selection target hadmissible)
+        |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).focus.holeRels}
+    (selectedCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+          (iterationInput input selection target).coalesceFrameRaw
+          (ConcreteElaboration.compileRegion? signature
+            (iterationInput input selection target).coalesceFrameRaw
+            (iterationCoalescedAnchorView input selection target hadmissible
+              ).compilerLeaf.fuel)
+          ((iterationCoalescedAnchorView input selection target hadmissible)
+            |>.compilerLeaf.inheritedWires.extend selection.val.anchor)
+          (iterationCoalescedAnchorView input selection target hadmissible
+            ).compilerLeaf.binders
+          (selectedOccurrences input.val selection) = some selectedItems)
+    {path : List Nat}
+    (route : Splice.RegionRoute
+      (iterationInput input selection target).coalesceFrameRaw
+      selection.val.anchor target path)
+    {compiledPath : List Nat}
+    {witness : Region.ContextPath (Region.mk 0 keptItems) compiledPath}
+    (terminal : CompiledRouteTerminal
+      ((iterationInput input selection target).coalesceFrame hadmissible)
+      (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+        (iterationInput input selection target).coalesceFrameRaw
+        selection.val.anchor
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.inheritedWires
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.binders
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.fuel
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.items
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.itemsComputation
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.wiresExact
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.bindersCover
+        (iterationCoalescedAnchorView input selection target hadmissible
+          ).compilerLeaf.binderEnumeration)
+      keptItems route compiledPath witness)
+    {hostLocal : Nat}
+    {hostItems : ItemSeq signature (witness.toFocus.holeWires + hostLocal)
+      witness.toFocus.holeRels}
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceEnv : Fin ((iterationCoalescedAnchorView input selection target
+      hadmissible).compilerLeaf.inheritedWires.extend
+        selection.val.anchor).length → model.Carrier)
+    (sourceRelEnv : RelEnv model.Carrier
+      (iterationCoalescedAnchorView input selection target hadmissible
+        ).focus.holeRels) :
+    let spliceInput := iterationInput input selection target
+    let anchorView := iterationCoalescedAnchorView input selection target
+      hadmissible
+    let sourceContext := anchorView.compilerLeaf.inheritedWires.extend
+      selection.val.anchor
+    let iso := iterationCoalescedFrameIso input selection target
+    let targetContext := sourceContext.map iso.wires
+    let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+    let hostIndex := iterationRootAnchorIndex input selection target
+      hadmissible hzero
+    let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+        (Fin targetContext.length) :=
+      FiniteEquiv.finCast (List.length_map iso.wires).symm
+    let routeWire : Fin spliceInput.pattern.val.exposedWires.length →
+        Fin witness.toFocus.holeWires := fun index =>
+      Fin.cast terminal.leaf.inheritedLength
+        (terminal.inheritedIndex (wireEquiv.symm (hostIndex index)))
+    let wireMap : Fin spliceInput.pattern.val.exposedWires.length →
+        Fin (witness.toFocus.holeWires + hostLocal) := fun index =>
+      Fin.castAdd hostLocal (routeWire index)
+    let relationMap : RelationRenaming [] witness.toFocus.holeRels :=
+      Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+    let material := ConcreteElaboration.finishRoot
+      spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
+      pattern.items
+    denoteRegion model named sourceEnv sourceRelEnv
+        ((Region.mk 0 selectedItems).conjoin
+          (witness.toFocus.context.fill (Region.mk hostLocal hostItems))) ↔
+      denoteRegion model named sourceEnv sourceRelEnv
+        ((Region.mk 0 selectedItems).conjoin
+          (witness.toFocus.context.fill
+            (Region.spliceAt hostLocal hostItems material wireMap
+              relationMap))) := by
+  dsimp only
+  let spliceInput := iterationInput input selection target
+  let anchorView := iterationCoalescedAnchorView input selection target
+    hadmissible
+  let sourceContext := anchorView.compilerLeaf.inheritedWires.extend
+    selection.val.anchor
+  let iso := iterationCoalescedFrameIso input selection target
+  let targetContext := sourceContext.map iso.wires
+  let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+  let hostIndex := iterationRootAnchorIndex input selection target
+    hadmissible hzero
+  let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length) :=
+    FiniteEquiv.finCast (List.length_map iso.wires).symm
+  let routeWire : Fin spliceInput.pattern.val.exposedWires.length →
+      Fin witness.toFocus.holeWires := fun index =>
+    Fin.cast terminal.leaf.inheritedLength
+      (terminal.inheritedIndex (wireEquiv.symm (hostIndex index)))
+  let wireMap : Fin spliceInput.pattern.val.exposedWires.length →
+      Fin (witness.toFocus.holeWires + hostLocal) := fun index =>
+    Fin.castAdd hostLocal (routeWire index)
+  let relationMap : RelationRenaming [] witness.toFocus.holeRels :=
+    Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+  let material := ConcreteElaboration.finishRoot
+    spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
+    pattern.items
+  have copyTransport := partitionedRoute_rootCopyTransport input selection
+    target hadmissible hzero selectedCompiled route terminal model named
+  have contraction := ancestorSpliceCopy_sound
+    (.hole : DiagramContext signature sourceContext.length
+      sourceContext.length anchorView.focus.holeRels anchorView.focus.holeRels)
+    witness.toFocus.context (Region.mk 0 selectedItems) hostLocal hostItems
+    material wireMap relationMap model named sourceEnv sourceRelEnv
+    (by
+      intro ancestorEnv ancestorRelEnv ancestorDenotes holeEnv holeRelEnv
+        reachable hostEnv hostDenotes
+      have supplied := copyTransport ancestorEnv ancestorRelEnv ancestorDenotes
+        holeEnv holeRelEnv reachable
+      have envEq : extendWireEnv holeEnv hostEnv ∘ wireMap =
+          holeEnv ∘ routeWire := by
+        funext index
+        simp [wireMap, extendWireEnv]
+      rw [envEq]
+      change denoteRegion model named (holeEnv ∘ routeWire)
+        (RelEnv.pullback relationMap holeRelEnv) material
+      exact supplied)
+  exact contraction
+
 /-- The selected anchor block supplies the extracted terminal material under
 every valuation reachable through the retained route.  The wire and relation
 maps in the conclusion are the route-native factors later identified with the

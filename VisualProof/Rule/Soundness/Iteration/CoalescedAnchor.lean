@@ -286,4 +286,103 @@ theorem coalescedAnchorSelected_entails_terminal
     pattern.leaf.itemsComputation targetCompiled
   exact terminalSimulation fragmentEnv targetEnv relEnv environments targetRegion
 
+/-- The selected coalesced anchor block semantically supplies the extracted
+open root when the binder spine is empty.  Exposed positions remain ambient;
+hidden root wires are provided by the root simulation's existential local
+environment. -/
+theorem coalescedAnchorSelected_entails_root
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0) :
+    let spliceInput := iterationInput input selection target
+    let layout : FragmentLayout input.val selection := {}
+    let anchorView := iterationCoalescedAnchorView input selection target
+      hadmissible
+    let sourceLeaf := anchorView.compilerLeaf
+    let sourceContext := sourceLeaf.inheritedWires.extend selection.val.anchor
+    let iso := iterationCoalescedFrameIso input selection target
+    let targetContext := sourceContext.map iso.wires
+    let targetBinders : ConcreteElaboration.BinderContext input.val
+        anchorView.focus.holeRels := fun binder => sourceLeaf.binders binder
+    let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+        (Fin targetContext.length) :=
+      FiniteEquiv.finCast (List.length_map iso.wires).symm
+    let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+    ∃ sourceItems : ItemSeq signature sourceContext.length
+        anchorView.focus.holeRels,
+      ConcreteElaboration.compileOccurrencesWith? signature
+          spliceInput.coalesceFrameRaw
+          (ConcreteElaboration.compileRegion? signature
+            spliceInput.coalesceFrameRaw sourceLeaf.fuel)
+          sourceContext sourceLeaf.binders
+          (selectedOccurrences input.val selection) = some sourceItems ∧
+      ∀ (model : Lambda.LambdaModel)
+        (named : NamedEnv model.Carrier signature)
+        (sourceEnv : Fin sourceContext.length → model.Carrier)
+        (relEnv : RelEnv model.Carrier anchorView.focus.holeRels)
+        (fragmentEnv : Fin spliceInput.pattern.val.exposedWires.length →
+          model.Carrier),
+        (extractionContextRelation input selection layout
+          spliceInput.pattern.val.exposedWires targetContext).EnvironmentsAgree
+            fragmentEnv (fun index => sourceEnv (wireEquiv.symm index)) →
+        denoteItemSeq model named sourceEnv relEnv sourceItems →
+        denoteRegion model named fragmentEnv relEnv
+          ((ConcreteElaboration.finishRoot
+              spliceInput.pattern.val.exposedWires
+              spliceInput.pattern.val.hiddenWires pattern.items
+            ).renameRelations
+              (Splice.Input.PlugLayout.emptyRelationRenaming
+                anchorView.focus.holeRels)) := by
+  dsimp only
+  let spliceInput := iterationInput input selection target
+  let layout : FragmentLayout input.val selection := {}
+  let anchorView := iterationCoalescedAnchorView input selection target
+    hadmissible
+  let sourceLeaf := anchorView.compilerLeaf
+  let sourceContext := sourceLeaf.inheritedWires.extend selection.val.anchor
+  let iso := iterationCoalescedFrameIso input selection target
+  let targetContext := sourceContext.map iso.wires
+  let targetBinders : ConcreteElaboration.BinderContext input.val
+      anchorView.focus.holeRels := fun binder => sourceLeaf.binders binder
+  have binderAgreement : ConcreteElaboration.BinderContextsAgree iso
+      sourceLeaf.binders targetBinders := by
+    intro binder
+    rfl
+  let targetCover : targetBinders.Covers selection.val.anchor :=
+    sourceLeaf.bindersCover.mapIso iso binderAgreement
+  let targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val targetBinders selection.val.anchor :=
+    sourceLeaf.binderEnumeration.mapIso iso binderAgreement
+  let wireEquiv : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length) :=
+    FiniteEquiv.finCast (List.length_map iso.wires).symm
+  let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+  obtain ⟨sourceItems, targetItems, targetFuel, sourceCompiled,
+      targetCompiled, selectedIso⟩ :=
+    coalescedAnchorSelected_iso input selection target hadmissible
+  have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+      selection.val.anchor := sourceLeaf.wiresExact.mapIso iso
+  refine ⟨sourceItems, sourceCompiled, ?_⟩
+  intro model named sourceEnv relEnv fragmentEnv environments sourceDenotes
+  let targetEnv : Fin targetContext.length → model.Carrier :=
+    fun index => sourceEnv (wireEquiv.symm index)
+  have isoEnvironments : EnvironmentsAgree wireEquiv sourceEnv targetEnv := by
+    intro index
+    exact congrArg sourceEnv (wireEquiv.left_inv index)
+  have targetDenotes : denoteItemSeq model named targetEnv relEnv targetItems :=
+    (selectedIso.denotation model named sourceEnv targetEnv relEnv
+      isoEnvironments).mp sourceDenotes
+  have targetRegion : denoteRegion model named targetEnv relEnv
+      (Region.mk 0 targetItems) :=
+    (denoteRegion_mk_zero_iff model named targetEnv relEnv targetItems).2
+      targetDenotes
+  have rootSimulation := extractionCompileRoot_selected_denote
+    input selection layout hzero model named targetFuel targetContext
+    targetBinders targetEnumeration targetCover targetExact pattern.items
+    targetItems pattern.computation targetCompiled
+  exact rootSimulation fragmentEnv targetEnv relEnv environments targetRegion
+
 end VisualProof.Rule.IterationSoundness
