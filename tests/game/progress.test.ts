@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildCatalog } from '../../src/game/catalog'
 import {
-  availableVellums, emptyProgress, isCultureUnlocked, isRequired, isUnlocked, recordCompletion,
+  emptyProgress, isCultureUnlocked, isRequired, isUnlocked, recordCompletion,
 } from '../../src/game/progress'
 import { cultureId, puzzleId, type PuzzleDefinition } from '../../src/game/types'
 import { minimalPuzzle, minimalSource } from './catalog-fixture'
@@ -9,23 +9,22 @@ import { minimalPuzzle, minimalSource } from './catalog-fixture'
 const first = minimalPuzzle({ name: { professional: 'Two Veils' } })
 const second: PuzzleDefinition = {
   ...first, id: puzzleId('veil-retrieval'), name: { professional: 'Veil Retrieval' },
-  prerequisites: [first.id], grantsVellum: false,
+  prerequisites: [first.id],
 }
 const third: PuzzleDefinition = {
   ...first, id: puzzleId('third-artifact'), name: { professional: 'Third Artifact' },
-  prerequisites: [second.id], grantsVellum: false,
+  prerequisites: [second.id],
 }
 const fourth: PuzzleDefinition = {
   ...first, id: puzzleId('fourth-artifact'), name: { professional: 'Fourth Artifact' },
-  prerequisites: [third.id], grantsVellum: false,
+  prerequisites: [third.id],
 }
 const fifth: PuzzleDefinition = {
   ...first, id: puzzleId('culture-gate'), name: { professional: 'Culture Gate' },
-  prerequisites: [fourth.id], grantsVellum: false,
+  prerequisites: [fourth.id],
 }
 const sixth: PuzzleDefinition = {
   ...first, id: puzzleId('elective-artifact'), name: { professional: 'Elective Artifact' },
-  grantsVellum: false,
 }
 const secondCulture = {
   ...minimalSource().cultures[0]!,
@@ -40,7 +39,6 @@ const seventh: PuzzleDefinition = {
   id: secondCulture.gateway,
   culture: secondCulture.id,
   name: { professional: 'Second Gateway' },
-  grantsVellum: false,
 }
 const source = minimalSource()
 const firstCulture = { ...source.cultures[0]!, gateway: first.id }
@@ -77,11 +75,5 @@ describe('durable game progression', () => {
     for (const required of [first, second, third, fourth, fifth, seventh]) {
       expect(isRequired(catalog, required.id)).toBe(true)
     }
-  })
-
-  it('offers vellums only for completed puzzles that grant them', () => {
-    let progress = recordCompletion(emptyProgress(), first.id)
-    progress = recordCompletion(progress, second.id)
-    expect([...availableVellums(catalog, progress)]).toEqual([first.id])
   })
 })

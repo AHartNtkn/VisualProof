@@ -19,23 +19,17 @@ const opening: TeacherIntervention = {
   text: 'Begin with the innermost pair.',
   repeat: 'once',
 }
-const reachedTwoVeils: TeacherIntervention = {
-  id: 'inner-pair-removed',
+const recognizedUnwinnable: TeacherIntervention = {
+  id: 'empty-veil-trap',
   performance: fixturePerformanceId,
   trigger: {
-    kind: 'proofState',
+    kind: 'recognizedUnwinnable',
     state: twoVeils().goal,
     demonstration: [{ rule: 'doubleCutElim', region: four.eliminations[0]! }],
   },
-  text: 'That route leaves the older paired form.',
+  text: 'That route cannot reach blank. Return on the timeline.',
   repeat: 'once',
   recovery: 'timeline',
-}
-const stalledTwo: TeacherIntervention = {
-  id: 'stalled-two',
-  trigger: { kind: 'stalled', level: 2 },
-  text: 'Use the timeline to compare the two forms.',
-  repeat: 'repeatable',
 }
 const completion: TeacherIntervention = {
   id: 'completion',
@@ -49,23 +43,21 @@ const puzzle = minimalPuzzle({
     { rule: 'doubleCutElim', region: four.eliminations[0]! },
     { rule: 'doubleCutElim', region: four.eliminations[1]! },
   ],
-  teacher: [opening, reachedTwoVeils, stalledTwo, completion],
+  teacher: [opening, recognizedUnwinnable, completion],
 })
 const authority: GameRuntimeAuthority = {
-  context: { relations: new Map() },
-  puzzle: () => puzzle,
-  canUseVellum: () => false,
+  context: { relations: new Map(), theorems: new Map() },
 }
 
-describe('teacher interventions', () => {
-  it('matches opening and suppresses a seen once-only intervention', () => {
+describe('teacher presentations', () => {
+  it('offers opening mechanic instruction as a modal and suppresses it once seen', () => {
     expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, new Set()))
-      .toEqual([opening])
+      .toEqual([{ intervention: opening, presentation: { kind: 'modalInstruction' } }])
     expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, new Set([opening.id])))
       .toEqual([])
   })
 
-  it('matches a committed diagram by canonical proof state', () => {
+  it('offers an exact authored unwinnable state as nonblocking timeline-recovery commentary', () => {
     const transition = applyGameStep(
       startPuzzle(puzzle),
       { rule: 'doubleCutElim', region: four.eliminations[0]! },
@@ -74,33 +66,27 @@ describe('teacher interventions', () => {
 
     expect(teacherInterventionsFor(
       puzzle,
-      { kind: 'proofState', diagram: currentDiagram(transition.session) },
+      { kind: 'recognizedUnwinnable', diagram: currentDiagram(transition.session) },
       new Set(),
-    )).toEqual([reachedTwoVeils])
+    )).toEqual([{
+      intervention: recognizedUnwinnable,
+      presentation: { kind: 'nonblockingCommentary', recovery: 'timeline' },
+    }])
     expect(teacherInterventionsFor(
       puzzle,
-      { kind: 'proofState', diagram: four.goal.diagram },
+      { kind: 'recognizedUnwinnable', diagram: four.goal.diagram },
       new Set(),
     )).toEqual([])
   })
 
-  it('matches stalled levels and completion only to their exact signal kinds', () => {
-    expect(teacherInterventionsFor(puzzle, { kind: 'stalled', level: 1 }, new Set()))
-      .toEqual([])
-    expect(teacherInterventionsFor(puzzle, { kind: 'stalled', level: 2 }, new Set()))
-      .toEqual([stalledTwo])
+  it('offers completion through completion-owned commentary only', () => {
     expect(teacherInterventionsFor(puzzle, { kind: 'completion' }, new Set()))
-      .toEqual([completion])
+      .toEqual([{
+        intervention: completion,
+        presentation: { kind: 'completionCommentary' },
+      }])
     expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, new Set()))
-      .not.toContain(completion)
-  })
-
-  it('keeps a seen repeatable intervention available', () => {
-    expect(teacherInterventionsFor(
-      puzzle,
-      { kind: 'stalled', level: 2 },
-      new Set([stalledTwo.id]),
-    )).toEqual([stalledTwo])
+      .not.toContainEqual(expect.objectContaining({ intervention: completion }))
   })
 
   it('leaves invalid-step refusal outside the teacher signal path', () => {
@@ -114,7 +100,10 @@ describe('teacher interventions', () => {
         { rule: 'doubleCutElim', region: 'missing-region' },
         authority,
       )
-      signal = { kind: 'proofState', diagram: currentDiagram(transition.session) }
+      signal = {
+        kind: 'recognizedUnwinnable',
+        diagram: currentDiagram(transition.session),
+      }
     }).toThrow()
     expect(currentDiagram(unchanged)).toBe(before)
     expect(signal).toBeUndefined()

@@ -1,7 +1,5 @@
 import type { GameCatalog } from './catalog'
-import {
-  GameDomainError, type CultureId, type PuzzleDefinition, type PuzzleId,
-} from './types'
+import { type CultureId, type PuzzleId } from './types'
 import { meetsUnlockConditions } from './unlock'
 
 export type GameProgress = { readonly completed: ReadonlySet<PuzzleId> }
@@ -41,13 +39,3 @@ export function requiredPuzzles(catalog: GameCatalog): ReadonlySet<PuzzleId> {
 
 export const isRequired = (catalog: GameCatalog, id: PuzzleId): boolean =>
   requiredPuzzles(catalog).has(id)
-
-export function availableVellums(catalog: GameCatalog, progress: GameProgress): ReadonlySet<PuzzleId> {
-  const available = new Set<PuzzleId>()
-  for (const id of progress.completed) {
-    let puzzle: PuzzleDefinition
-    try { puzzle = catalog.puzzle(id) } catch { throw new GameDomainError(`progress names unknown puzzle '${id}'`) }
-    if (puzzle.grantsVellum) available.add(id)
-  }
-  return available
-}

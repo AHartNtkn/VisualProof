@@ -1,16 +1,16 @@
 import type { GameCatalog } from './catalog'
 import { stepFromJson, stepToJson } from '../kernel/proof/json'
-import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
+import { artifactTheoremContext } from './artifact-theorem'
 import { emptyProgress, isUnlocked, recordCompletion, type GameProgress } from './progress'
 import { applyGameStep, moveCursor, startPuzzle, type GameRuntimeAuthority, type GameSession } from './session'
-import { GameDomainError, puzzleId, type GameStep, type PuzzleId } from './types'
+import { GameDomainError, type GameStep, type PuzzleId } from './types'
 
 export type SerializedGameStep = Readonly<Record<string, unknown>>
 
-export type GameSaveV1 = {
+export type GameSaveV2 = {
   readonly format: 'cursebreaker-save'
-  readonly version: 1
-  readonly catalogFingerprint: string
+  readonly version: 2
+  readonly puzzleFingerprints: Readonly<Record<string, string>>
   readonly completed: readonly PuzzleId[]
   readonly active?: {
     readonly puzzle: PuzzleId
@@ -31,72 +31,11 @@ const record = (value: unknown, label: string): Record<string, unknown> => {
   return value as Record<string, unknown>
 }
 
-const onlyKeys = (value: Record<string, unknown>, allowed: readonly string[], label: string): void => {
-  for (const key of Object.keys(value)) {
-    if (!allowed.includes(key)) throw new GameDomainError(`${label} has unknown field '${key}'`)
-  }
-}
-
-const string = (value: unknown, label: string): string => {
-  if (typeof value !== 'string') throw new GameDomainError(`${label} must be a string`)
-  return value
-}
-
-const strings = (value: unknown, label: string): string[] => {
-  if (!Array.isArray(value)) throw new GameDomainError(`${label} must be an array`)
-  return value.map((item, index) => string(item, `${label}[${index}]`))
-}
-
-const selection = (value: unknown): SubgraphSelection => {
-  const decoded = record(value, 'vellum selection')
-  onlyKeys(decoded, ['region', 'regions', 'nodes', 'wires'], 'vellum selection')
-  return {
-    region: string(decoded.region, 'vellum selection.region'),
-    regions: strings(decoded.regions, 'vellum selection.regions'),
-    nodes: strings(decoded.nodes, 'vellum selection.nodes'),
-    wires: strings(decoded.wires, 'vellum selection.wires'),
-  }
-}
-
-const gameStepToJson = (step: GameStep): SerializedGameStep => {
-  if (step.rule === 'vellumManifest') {
-    return { rule: step.rule, puzzle: step.puzzle, region: step.region }
-  }
-  if (step.rule === 'vellumDissolve') {
-    return {
-      rule: step.rule,
-      puzzle: step.puzzle,
-      selection: {
-        region: step.selection.region,
-        regions: [...step.selection.regions],
-        nodes: [...step.selection.nodes],
-        wires: [...step.selection.wires],
-      },
-    }
-  }
-  return record(stepToJson(step), 'serialized kernel step')
-}
+const gameStepToJson = (step: GameStep): SerializedGameStep =>
+  record(stepToJson(step), 'serialized kernel step')
 
 const gameStepFromJson = (value: unknown, index: number): GameStep => {
   try {
-    const step = record(value, 'game step')
-    const rule = string(step.rule, 'game step.rule')
-    if (rule === 'vellumManifest') {
-      onlyKeys(step, ['rule', 'puzzle', 'region'], 'vellumManifest step')
-      return {
-        rule,
-        puzzle: puzzleId(string(step.puzzle, 'vellumManifest step.puzzle')),
-        region: string(step.region, 'vellumManifest step.region'),
-      }
-    }
-    if (rule === 'vellumDissolve') {
-      onlyKeys(step, ['rule', 'puzzle', 'selection'], 'vellumDissolve step')
-      return {
-        rule,
-        puzzle: puzzleId(string(step.puzzle, 'vellumDissolve step.puzzle')),
-        selection: selection(step.selection),
-      }
-    }
     return stepFromJson(value)
   } catch (error) {
     throw new GameDomainError(
@@ -109,11 +48,16 @@ export function saveGame(
   catalog: GameCatalog,
   progress: GameProgress,
   active: GameSession | null,
-): GameSaveV1 {
+): GameSaveV2 {
+  const referenced = new Set<PuzzleId>(progress.completed)
+  if (active !== null) referenced.add(active.puzzle)
+  const puzzleFingerprints = Object.fromEntries(
+    [...referenced].sort().map((id) => [id, catalog.puzzleFingerprint(id)]),
+  )
   const base = {
     format: 'cursebreaker-save' as const,
-    version: 1 as const,
-    catalogFingerprint: catalog.fingerprint,
+    version: 2 as const,
+    puzzleFingerprints,
     completed: [...progress.completed].sort(),
   }
   return active === null ? base : {
@@ -128,11 +72,15 @@ export function saveGame(
 
 export function loadGame(catalog: GameCatalog, value: unknown): LoadedGame {
   const root = record(value, 'save')
-  if (root.format !== 'cursebreaker-save' || root.version !== 1) {
+  if (root.format !== 'cursebreaker-save' || root.version !== 2) {
     throw new GameDomainError('unsupported game save format or version')
   }
-  if (root.catalogFingerprint !== catalog.fingerprint) {
-    throw new GameDomainError('save catalog fingerprint does not match the bundled catalog')
+  const savedFingerprints = record(root.puzzleFingerprints, 'save puzzleFingerprints')
+  const verifyFingerprint = (id: PuzzleId): void => {
+    catalog.puzzle(id)
+    if (savedFingerprints[id] !== catalog.puzzleFingerprint(id)) {
+      throw new GameDomainError(`save puzzle logical fingerprint does not match '${id}'`)
+    }
   }
   if (!Array.isArray(root.completed) || !root.completed.every((id) => typeof id === 'string')) {
     throw new GameDomainError('save completed must be an array of puzzle ids')
@@ -140,7 +88,7 @@ export function loadGame(catalog: GameCatalog, value: unknown): LoadedGame {
   let progress = emptyProgress()
   for (const raw of root.completed) {
     const id = raw as PuzzleId
-    catalog.puzzle(id)
+    verifyFingerprint(id)
     progress = recordCompletion(progress, id)
   }
   if (root.active === undefined) return { progress, active: null }
@@ -151,14 +99,17 @@ export function loadGame(catalog: GameCatalog, value: unknown): LoadedGame {
     throw new GameDomainError('save active session has invalid puzzle, steps, or cursor')
   }
   const puzzle = catalog.puzzle(active.puzzle as PuzzleId)
+  verifyFingerprint(puzzle.id)
   if (!isUnlocked(catalog, progress, puzzle.id)) {
     throw new GameDomainError(`active puzzle '${puzzle.id}' is locked by incomplete prerequisites`)
   }
   const steps = active.steps.map(gameStepFromJson)
   const authority: GameRuntimeAuthority = {
-    context: catalog.source.context,
-    puzzle: (id) => catalog.puzzle(id),
-    canUseVellum: (id) => progress.completed.has(id) && catalog.puzzle(id).grantsVellum,
+    context: artifactTheoremContext(
+      catalog.source.puzzles,
+      progress.completed,
+      catalog.source.context,
+    ),
   }
   let session = startPuzzle(puzzle)
   for (const step of steps) session = applyGameStep(session, step, authority).session

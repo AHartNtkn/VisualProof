@@ -3,6 +3,7 @@ import type { KeySample } from '../../app/interact/viewport'
 import type { Vec2 } from '../../view/vec'
 import { DARK } from '../../view/paint'
 import { openingCatalog } from '../content'
+import { artifactTheoremContext } from '../artifact-theorem'
 import { emptyProgress, isUnlocked, recordCompletion, type GameProgress } from '../progress'
 import {
   applyGameStep,
@@ -70,9 +71,13 @@ export function mountCursebreaker(options: CursebreakerMountOptions): MountedCur
 
   let session: GameSession = startPuzzle(catalog.puzzle(selected))
   const authority: GameRuntimeAuthority = {
-    context: catalog.source.context,
-    puzzle: (id) => catalog.puzzle(id),
-    canUseVellum: (id) => progress.completed.has(id) && catalog.puzzle(id).grantsVellum,
+    get context() {
+      return artifactTheoremContext(
+        catalog.source.puzzles,
+        progress.completed,
+        catalog.source.context,
+      )
+    },
   }
   const motionPreferences = defaultMotionPreferences(
     window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
@@ -155,7 +160,7 @@ export function mountCursebreaker(options: CursebreakerMountOptions): MountedCur
     side: 'backward',
     diagram: () => currentDiagram(session),
     boundary: () => [],
-    context: () => ({ relations: catalog.source.context.relations, theorems: new Map() }),
+    context: () => authority.context,
     theme: () => DARK,
     fuel: () => 256,
     prepare: (step) => {

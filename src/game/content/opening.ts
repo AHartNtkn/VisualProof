@@ -11,7 +11,6 @@ import {
   type GameCatalogSource,
   type PerformanceDefinition,
   type PuzzleDefinition,
-  type TeacherIntervention,
 } from '../types'
 
 const SEYRIC = cultureId('seyric-horizon')
@@ -245,7 +244,6 @@ function twoVeils(): PuzzleDefinition {
     },
     goal: closed(builder),
     prerequisites: [],
-    grantsVellum: true,
     witness: [{ rule: 'doubleCutElim', region: outer }],
     learning: {
       introduces: [RELEASE_PAIRED_VEILS], practices: [], retrieves: [], assesses: [],
@@ -267,19 +265,11 @@ function fourVeils(): PuzzleDefinition {
   builder.cut(third)
   const goal = closed(builder)
   const first: ProofStep = { rule: 'doubleCutElim', region: third }
-  const intermediate = mkDiagramWithBoundary(backward(goal.diagram, first), [])
-  const teacher: readonly TeacherIntervention[] = [
-    {
+  const teacher = [{
       id: 'opening-repeated-veils', performance: RESOLVE_REPEATED_VEILS,
       trigger: { kind: 'opening' }, repeat: 'once',
       text: 'There are two paired veils here. Either pair may be lifted first.',
-    },
-    {
-      id: 'timeline-after-first-pair', performance: RESOLVE_REPEATED_VEILS,
-      trigger: { kind: 'proofState', state: intermediate, demonstration: [first] }, repeat: 'once',
-      text: 'The lever beneath the lens records each state. You may draw it back to compare another route.',
-    },
-  ]
+    }] as const
   return {
     id: FOUR_VEILS,
     culture: SEYRIC,
@@ -290,7 +280,6 @@ function fourVeils(): PuzzleDefinition {
     },
     goal,
     prerequisites: [TWO_VEILS],
-    grantsVellum: true,
     witness: [first, { rule: 'doubleCutElim', region: outer }],
     learning: {
       introduces: [RESOLVE_REPEATED_VEILS], practices: [RELEASE_PAIRED_VEILS],
@@ -325,7 +314,6 @@ function forkedVeil(): PuzzleDefinition {
     },
     goal,
     prerequisites: [FOUR_VEILS],
-    grantsVellum: true,
     witness: [eraseSibling, { rule: 'doubleCutElim', region: outer }],
     learning: {
       introduces: [CLEAR_DARK_FIELD], practices: [], retrieves: [RELEASE_PAIRED_VEILS],
@@ -339,7 +327,7 @@ function forkedVeil(): PuzzleDefinition {
       },
       {
         id: 'empty-veil-trap', performance: CLEAR_DARK_FIELD,
-        trigger: { kind: 'proofState', state: trap, demonstration: [eraseCore] }, repeat: 'once',
+        trigger: { kind: 'recognizedUnwinnable', state: trap, demonstration: [eraseCore] }, repeat: 'once',
         recovery: 'timeline',
         text: 'An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.',
       },
@@ -374,7 +362,6 @@ function echoedVeil(): PuzzleDefinition {
     },
     goal,
     prerequisites: [FORKED_VEIL],
-    grantsVellum: true,
     witness: [deiterate, eraseSupport, { rule: 'doubleCutElim', region: outer }],
     learning: {
       introduces: [LIFT_SUPPORTED_ECHO], practices: [CLEAR_DARK_FIELD],
@@ -386,11 +373,6 @@ function echoedVeil(): PuzzleDefinition {
         id: 'opening-supported-echo', performance: LIFT_SUPPORTED_ECHO,
         trigger: { kind: 'opening' }, repeat: 'once',
         text: 'The inner fragment is an exact echo of the older form outside it. Where the older form remains, the echo may be lifted.',
-      },
-      {
-        id: 'stalled-supported-echo', performance: LIFT_SUPPORTED_ECHO,
-        trigger: { kind: 'stalled', level: 1 }, repeat: 'once',
-        text: 'Compare the innermost fragment with the form in the surrounding field. The match must be exact.',
       },
     ],
   }
@@ -424,7 +406,6 @@ function singleMarkReturn(): PuzzleDefinition {
     },
     goal,
     prerequisites: [ECHOED_VEIL],
-    grantsVellum: true,
     witness: [
       deiterate,
       erasePremise,
@@ -489,7 +470,6 @@ function twoMarkProjection(): PuzzleDefinition {
     },
     goal,
     prerequisites: [SINGLE_MARK_RETURN],
-    grantsVellum: true,
     witness: [
       deiterate,
       eraseQ,
@@ -509,11 +489,7 @@ function twoMarkProjection(): PuzzleDefinition {
       ],
       rulesUsed: ['deiteration', 'erasure', 'vacuousElim', 'doubleCutElim'],
     },
-    teacher: [{
-      id: 'stalled-nested-rings', performance: DISTINGUISH_NESTED_OWNERS,
-      trigger: { kind: 'stalled', level: 1 }, repeat: 'once',
-      text: 'Trace each color back to its own ring before removing anything.',
-    }],
+    teacher: [],
   }
 }
 
@@ -532,7 +508,6 @@ function blankWitness(): PuzzleDefinition {
     },
     goal: closed(builder),
     prerequisites: [],
-    grantsVellum: true,
     witness: [{
       rule: 'comprehensionInstantiate', bubble: hollow, comp: blank,
       attachments: [], binders: {},

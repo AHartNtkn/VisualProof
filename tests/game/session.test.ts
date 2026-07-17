@@ -11,9 +11,7 @@ const puzzle = minimalPuzzle({
   witness: fixture.eliminations.map((region) => ({ rule: 'doubleCutElim' as const, region })),
 })
 const authority = {
-  context: { relations: new Map() },
-  puzzle(id: string) { if (id !== puzzle.id) throw new Error('unknown fixture puzzle'); return puzzle },
-  canUseVellum() { return false },
+  context: { relations: new Map(), theorems: new Map() },
 }
 
 describe('backward game session', () => {

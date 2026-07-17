@@ -16,9 +16,7 @@ const puzzleIds = [
 ] as const
 
 const authorityFor = (catalog: ReturnType<typeof openingCatalog>) => ({
-  context: catalog.source.context,
-  puzzle: catalog.puzzle,
-  canUseVellum: () => false,
+  context: { ...catalog.source.context, theorems: new Map() },
 })
 
 const rules = (id: typeof puzzleIds[number]) =>
@@ -401,39 +399,27 @@ describe('permanent opening catalog', () => {
     ])
     expect(puzzle('four-veils').teacher.map(({ trigger, text, recovery }) => [trigger.kind, text, recovery])).toEqual([
       ['opening', 'There are two paired veils here. Either pair may be lifted first.', undefined],
-      ['proofState', 'The lever beneath the lens records each state. You may draw it back to compare another route.', undefined],
     ])
     expect(puzzle('forked-veil').teacher.map(({ trigger, text, recovery }) => [trigger.kind, text, recovery])).toEqual([
       ['opening', 'A dark field does not preserve every fragment drawn within it. You may clear away a complete fragment to expose a simpler form.', undefined],
-      ['proofState', 'An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.', 'timeline'],
+      ['recognizedUnwinnable', 'An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.', 'timeline'],
     ])
     expect(puzzle('echoed-veil').teacher.map(({ trigger, text }) => [trigger.kind, text])).toEqual([
       ['opening', 'The inner fragment is an exact echo of the older form outside it. Where the older form remains, the echo may be lifted.'],
-      ['stalled', 'Compare the innermost fragment with the form in the surrounding field. The match must be exact.'],
     ])
     expect(puzzle('single-mark-return').teacher.map(({ trigger, text }) => [trigger.kind, text])).toEqual([
       ['opening', 'This colored mark belongs to the ring surrounding it. The veil changes where it appears, not which ring owns it.'],
       ['completion', 'Good. The Seyric rings are ownership marks, not ornament. That distinction will matter among the Myratic finds.'],
     ])
-    expect(puzzle('two-mark-projection').teacher.map(({ trigger, text }) => [trigger.kind, text])).toEqual([
-      ['stalled', 'Trace each color back to its own ring before removing anything.'],
-    ])
+    expect(puzzle('two-mark-projection').teacher).toEqual([])
     expect(puzzle('blank-witness').teacher.map(({ trigger, text }) => [trigger.kind, text])).toEqual([
       ['opening', 'The Myratic hollow is deliberate. It asks for an entire seal-pattern. Open the loupe and place the blank sheet within it.'],
       ['completion', 'Precisely. To a Myratic seal, even an unwritten sheet is a complete pattern.'],
     ])
 
-    const timelineState = puzzle('four-veils').teacher[1]!.trigger
-    expect(timelineState.kind).toBe('proofState')
-    if (timelineState.kind === 'proofState') {
-      expect(Object.values(timelineState.state.diagram.regions)
-        .filter((region) => region.kind === 'cut')).toHaveLength(2)
-      expect(timelineState.demonstration.map((step) => step.rule)).toEqual(['doubleCutElim'])
-    }
-
     const emptyVeilTrap = puzzle('forked-veil').teacher[1]!.trigger
-    expect(emptyVeilTrap.kind).toBe('proofState')
-    if (emptyVeilTrap.kind === 'proofState') {
+    expect(emptyVeilTrap.kind).toBe('recognizedUnwinnable')
+    if (emptyVeilTrap.kind === 'recognizedUnwinnable') {
       expect(Object.values(emptyVeilTrap.state.diagram.regions)
         .filter((region) => region.kind === 'cut')).toHaveLength(1)
       expect(Object.keys(emptyVeilTrap.state.diagram.nodes)).toHaveLength(0)
@@ -532,18 +518,19 @@ describe('permanent opening catalog', () => {
       expect(secondErasure.sel.nodes).not.toBe(firstErasure.sel.nodes)
       expect(secondErasure.sel.wires).not.toBe(firstErasure.sel.wires)
     }
-    expect(second.puzzles[1]!.teacher).not.toBe(first.puzzles[1]!.teacher)
-    expect(second.puzzles[1]!.teacher[1]).not.toBe(first.puzzles[1]!.teacher[1])
-    expect(second.puzzles[1]!.teacher[1]!.trigger).not.toBe(first.puzzles[1]!.teacher[1]!.trigger)
-    const firstProofState = first.puzzles[1]!.teacher[1]!.trigger
-    const secondProofState = second.puzzles[1]!.teacher[1]!.trigger
-    expect(firstProofState.kind).toBe('proofState')
-    expect(secondProofState.kind).toBe('proofState')
-    if (firstProofState.kind === 'proofState' && secondProofState.kind === 'proofState') {
-      expect(secondProofState.state).not.toBe(firstProofState.state)
-      expect(secondProofState.state.diagram).not.toBe(firstProofState.state.diagram)
-      expect(secondProofState.demonstration).not.toBe(firstProofState.demonstration)
-      expect(secondProofState.demonstration[0]).not.toBe(firstProofState.demonstration[0])
+    expect(second.puzzles[2]!.teacher).not.toBe(first.puzzles[2]!.teacher)
+    expect(second.puzzles[2]!.teacher[1]).not.toBe(first.puzzles[2]!.teacher[1])
+    expect(second.puzzles[2]!.teacher[1]!.trigger).not.toBe(first.puzzles[2]!.teacher[1]!.trigger)
+    const firstUnwinnable = first.puzzles[2]!.teacher[1]!.trigger
+    const secondUnwinnable = second.puzzles[2]!.teacher[1]!.trigger
+    expect(firstUnwinnable.kind).toBe('recognizedUnwinnable')
+    expect(secondUnwinnable.kind).toBe('recognizedUnwinnable')
+    if (firstUnwinnable.kind === 'recognizedUnwinnable'
+      && secondUnwinnable.kind === 'recognizedUnwinnable') {
+      expect(secondUnwinnable.state).not.toBe(firstUnwinnable.state)
+      expect(secondUnwinnable.state.diagram).not.toBe(firstUnwinnable.state.diagram)
+      expect(secondUnwinnable.demonstration).not.toBe(firstUnwinnable.demonstration)
+      expect(secondUnwinnable.demonstration[0]).not.toBe(firstUnwinnable.demonstration[0])
     }
     expect(second.puzzles[0]!.learning).not.toBe(first.puzzles[0]!.learning)
     expect(second.puzzles[0]!.learning.introduces).not.toBe(first.puzzles[0]!.learning.introduces)

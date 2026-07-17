@@ -47,7 +47,7 @@ export function minimalPuzzle(overrides: Partial<PuzzleDefinition> = {}): Puzzle
       summary: 'A fixture artifact used for catalog validation.',
       function: 'Supports a minimal verified witness.',
     },
-    goal: fixture.goal, prerequisites: [], grantsVellum: true,
+    goal: fixture.goal, prerequisites: [],
     witness: [{ rule: 'doubleCutElim', region: fixture.eliminations[0]! }],
     learning: {
       introduces: [fixturePerformanceId], practices: [], retrieves: [], assesses: [],

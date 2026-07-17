@@ -5,7 +5,7 @@ import { openingCatalog, openingCatalogSource } from '../../src/game/content'
 import { recordCompletion, emptyProgress } from '../../src/game/progress'
 import { applyGameStep, moveCursor, startPuzzle } from '../../src/game/session'
 import { loadGame, saveGame } from '../../src/game/save'
-import { puzzleId, type PuzzleId } from '../../src/game/types'
+import { puzzleId } from '../../src/game/types'
 import { minimalPuzzle, minimalSource } from './catalog-fixture'
 import { fourVeils } from './fixtures'
 
@@ -21,9 +21,7 @@ const catalog = buildCatalog({
   puzzles: [puzzle],
 })
 const authority = {
-  context: catalog.source.context,
-  puzzle: (id: PuzzleId) => catalog.puzzle(id),
-  canUseVellum: () => false,
+  context: { ...catalog.source.context, theorems: new Map() },
 }
 
 describe('versioned game save', () => {
@@ -31,9 +29,7 @@ describe('versioned game save', () => {
     const opening = openingCatalog()
     const fourVeils = opening.puzzle(puzzleId('four-veils'))
     const openingAuthority = {
-      context: opening.source.context,
-      puzzle: (id: PuzzleId) => opening.puzzle(id),
-      canUseVellum: () => false,
+      context: { ...opening.source.context, theorems: new Map() },
     }
     let session = startPuzzle(fourVeils)
     for (const step of fourVeils.witness) {
@@ -50,9 +46,10 @@ describe('versioned game save', () => {
     expect(loaded.active?.timeline.cursor).toBe(1)
   })
 
-  it('refuses a permanent opening save when only cultural history drifts', () => {
+  it('keeps a save valid when only cultural history drifts', () => {
     const opening = openingCatalog()
-    const encoded = saveGame(opening, emptyProgress(), null)
+    const progress = recordCompletion(emptyProgress(), puzzleId('two-veils'))
+    const encoded = saveGame(opening, progress, null)
     const source = openingCatalogSource()
     const changed = buildCatalog({
       ...source,
@@ -61,8 +58,7 @@ describe('versioned game save', () => {
         : culture),
     })
 
-    expect(changed.fingerprint).not.toBe(opening.fingerprint)
-    expect(() => loadGame(changed, encoded)).toThrow(/catalog fingerprint does not match/)
+    expect(() => loadGame(changed, encoded)).not.toThrow()
   })
 
   it('round-trips a term-bearing kernel step through its JSON wire format', () => {
@@ -81,15 +77,17 @@ describe('versioned game save', () => {
   })
 
   it('refuses catalog drift and unknown completion ids', () => {
-    const encoded = saveGame(catalog, emptyProgress(), null)
-    expect(() => loadGame(catalog, { ...encoded, catalogFingerprint: 'drifted' }))
-      .toThrow(/catalog fingerprint does not match/)
+    const encoded = saveGame(catalog, emptyProgress(), startPuzzle(puzzle))
+    expect(() => loadGame(catalog, {
+      ...encoded,
+      puzzleFingerprints: { ...encoded.puzzleFingerprints, [puzzle.id]: 'drifted' },
+    })).toThrow(/puzzle logical fingerprint does not match/)
     expect(() => loadGame(catalog, { ...encoded, completed: ['unknown-puzzle'] }))
       .toThrow(/unknown puzzle/)
   })
 
   it('refuses an invalid cursor and a forged proof-assistant step', () => {
-    const encoded = saveGame(catalog, emptyProgress(), null)
+    const encoded = saveGame(catalog, emptyProgress(), startPuzzle(puzzle))
     expect(() => loadGame(catalog, {
       ...encoded,
       active: { puzzle: puzzle.id, steps: [], cursor: 2 },
@@ -98,13 +96,19 @@ describe('versioned game save', () => {
       ...encoded,
       active: {
         puzzle: puzzle.id, cursor: 1,
-        steps: [{ rule: 'theorem', name: 'forged', direction: 'forward', at: {} }],
+        steps: [{
+          rule: 'theorem', name: 'forged', direction: 'forward',
+          at: {
+            sel: { region: fixture.goal.diagram.root, regions: [], nodes: [], wires: [] },
+            args: [],
+          },
+        }],
       },
     })).toThrow(/unknown theorem|invalid game step/)
   })
 
   it('refuses an unknown rule before it can create an invalid timeline state', () => {
-    const encoded = saveGame(catalog, emptyProgress(), null)
+    const encoded = saveGame(catalog, emptyProgress(), startPuzzle(puzzle))
     expect(() => loadGame(catalog, {
       ...encoded,
       active: {
@@ -112,16 +116,5 @@ describe('versioned game save', () => {
         steps: [{ rule: 'unknown-rule' }],
       },
     })).toThrow(/invalid game step/)
-  })
-
-  it('refuses replay of an unavailable vellum', () => {
-    const encoded = saveGame(catalog, emptyProgress(), null)
-    expect(() => loadGame(catalog, {
-      ...encoded,
-      active: {
-        puzzle: puzzle.id, cursor: 1,
-        steps: [{ rule: 'vellumManifest', puzzle: puzzle.id, region: fixture.goal.diagram.root }],
-      },
-    })).toThrow(/solved seal .* is not available/)
   })
 })

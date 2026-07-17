@@ -1,4 +1,6 @@
 import { exploreForm, exploreLabeling } from '../kernel/diagram/canonical/explore'
+import { stepToJson } from '../kernel/proof/json'
+import { artifactTheorem, artifactTheoremContext } from './artifact-theorem'
 import { assertClosedGoal, isBlank } from './blank'
 import { applyGameStep, currentDiagram, startPuzzle } from './session'
 import {
@@ -9,13 +11,13 @@ import {
   type PerformanceId,
   type PuzzleDefinition,
   type PuzzleId,
-  type TeacherTrigger,
 } from './types'
 import { meetsUnlockConditions } from './unlock'
 
 export type GameCatalog = {
   readonly source: GameCatalogSource
   readonly fingerprint: string
+  puzzleFingerprint(id: PuzzleId): string
   puzzle(id: PuzzleId): PuzzleDefinition
   culture(id: CultureId): CultureDefinition
 }
@@ -48,6 +50,16 @@ const hash = (text: string): string => {
     value = Math.imul(value, 0x01000193)
   }
   return (value >>> 0).toString(16).padStart(8, '0')
+}
+
+const stableValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (value === null || typeof value !== 'object') return value
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, entry]) => [key, stableValue(entry)]),
+  )
 }
 
 const immutableCatalogMutation = (): never => {
@@ -172,23 +184,21 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
         case 'opening':
         case 'completion':
           break
-        case 'stalled':
-          if (!Number.isSafeInteger(trigger.level) || trigger.level < 1 || trigger.level > 3) {
+        case 'recognizedUnwinnable':
+          if (intervention.recovery !== 'timeline') {
             throw new GameDomainError(
-              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' stalled level must be a safe integer from 1 through 3`,
+              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' unwinnable commentary must recover through the timeline`,
             )
           }
-          break
-        case 'proofState':
           if (trigger.demonstration.length === 0) {
             throw new GameDomainError(
-              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' proof-state demonstration must be nonempty`,
+              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' unwinnable-state demonstration must be nonempty`,
             )
           }
           assertClosedGoal(trigger.state)
           if (isBlank(trigger.state.diagram)) {
             throw new GameDomainError(
-              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' proof state must not be canonical blank; completion owns that event`,
+              `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' unwinnable state must not be canonical blank; completion owns that event`,
             )
           }
           break
@@ -337,7 +347,7 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
   }
 
   const verified = new Set<PuzzleId>()
-  const prerequisiteClosure = (puzzle: PuzzleDefinition): ReadonlySet<PuzzleId> => {
+  const prerequisiteClosure = (puzzle: PuzzleDefinition): Set<PuzzleId> => {
     const closure = new Set<PuzzleId>()
     const add = (id: PuzzleId): void => {
       if (closure.has(id)) return
@@ -348,25 +358,27 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
     return closure
   }
   for (const puzzle of order) {
-    const allowed = prerequisiteClosure(puzzle)
-    const authority = {
-      context: snapshot.context,
-      puzzle(id: PuzzleId) {
-        const found = byId.get(id)
-        if (found === undefined) throw new GameDomainError(`unknown puzzle '${id}'`)
-        return found
-      },
-      canUseVellum(id: PuzzleId) {
-        return allowed.has(id) && verified.has(id) && byId.get(id)?.grantsVellum === true
-      },
+    const completedPrerequisites = prerequisiteClosure(puzzle)
+    for (const id of completedPrerequisites) {
+      if (!verified.has(id)) {
+        throw new GameDomainError(
+          `puzzle '${puzzle.id}' prerequisite artifact '${id}' was not verified before use`,
+        )
+      }
     }
+    const context = artifactTheoremContext(
+      snapshot.puzzles,
+      completedPrerequisites,
+      snapshot.context,
+    )
+    const authority = { context }
     let session = startPuzzle(puzzle)
     for (const step of puzzle.witness) session = applyGameStep(session, step, authority).session
     if (!isBlank(currentDiagram(session))) {
       throw new GameDomainError(`puzzle '${puzzle.id}' witness does not reach blank`)
     }
     for (const intervention of puzzle.teacher) {
-      if (intervention.trigger.kind !== 'proofState') continue
+      if (intervention.trigger.kind !== 'recognizedUnwinnable') continue
       let demonstration = startPuzzle(puzzle)
       for (const step of intervention.trigger.demonstration) {
         demonstration = applyGameStep(demonstration, step, authority).session
@@ -375,106 +387,44 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
       const declared = exploreForm(intervention.trigger.state.diagram)
       if (reached !== declared) {
         throw new GameDomainError(
-          `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' demonstration does not reach its declared proof state`,
+          `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' demonstration does not reach its declared unwinnable state`,
         )
       }
     }
+    artifactTheorem(puzzle, context)
     verified.add(puzzle.id)
   }
 
-  const teacherTriggerFingerprint = (trigger: TeacherTrigger): object => {
-    switch (trigger.kind) {
-      case 'opening':
-      case 'completion':
-        return { kind: trigger.kind }
-      case 'stalled':
-        return { kind: trigger.kind, level: trigger.level }
-      case 'proofState':
-        return { kind: trigger.kind, state: exploreForm(trigger.state.diagram) }
-      default: {
-        const exhaustive: never = trigger
-        throw new GameDomainError(`unknown teacher trigger '${String(exhaustive)}'`)
+  const relationLogic = [...snapshot.context.relations]
+    .map(([name, relation]) => {
+      const canonical = exploreLabeling(relation.diagram, relation.boundary)
+      return {
+        name,
+        boundary: relation.boundary.map((wire) => canonical.wireOrd.get(wire)!),
+        diagram: canonical.form,
       }
+    })
+    .sort((left, right) => left.name.localeCompare(right.name))
+  const logicalFingerprints = new Map(snapshot.puzzles.map((puzzle) => {
+    const logicalInput = {
+      id: puzzle.id,
+      goal: exploreForm(puzzle.goal.diagram),
+      prerequisites: [...puzzle.prerequisites].sort(),
+      relations: relationLogic,
+      witness: puzzle.witness.map((step) => stableValue(stepToJson(step))),
     }
-  }
-
-  const fingerprintInput = {
-    cultures: [...snapshot.cultures]
-      .map((culture) => ({
-        id: culture.id,
-        name: culture.name,
-        relativeAge: culture.relativeAge,
-        historicalSummary: culture.historicalSummary,
-        lineage: [...culture.lineage].sort(),
-        isolation: culture.isolation,
-        sealingVocabulary: culture.sealingVocabulary,
-        unlocksAfter: [...culture.unlocksAfter].sort(),
-        gateway: culture.gateway,
-      }))
-      .sort((a, b) => a.id.localeCompare(b.id)),
-    performances: [...snapshot.performances]
-      .map((performance) => ({
-        id: performance.id,
-        description: performance.description,
-        prerequisites: [...performance.prerequisites].sort(),
-        knowledgePoints: performance.knowledgePoints.map((point) => ({
-          id: point.id,
-          instruction: point.instruction,
-          commonError: point.commonError,
-          correction: point.correction,
-        })),
-        masteryEvidence: performance.masteryEvidence,
-        remediation: [...performance.remediation].sort(),
-      }))
-      .sort((a, b) => a.id.localeCompare(b.id)),
-    relations: [...snapshot.context.relations]
-      .map(([name, relation]) => {
-        const canonical = exploreLabeling(relation.diagram, relation.boundary)
-        return {
-          name,
-          boundary: relation.boundary.map((wire) => canonical.wireOrd.get(wire)!),
-          diagram: canonical.form,
-        }
-      })
-      .sort((a, b) => a.name.localeCompare(b.name)),
-    puzzles: [...snapshot.puzzles]
-      .map((puzzle) => ({
-        id: puzzle.id,
-        culture: puzzle.culture,
-        name: {
-          professional: puzzle.name.professional,
-          curatorShorthand: puzzle.name.curatorShorthand,
-          accession: puzzle.name.accession,
-        },
-        provenance: {
-          summary: puzzle.provenance.summary,
-          function: puzzle.provenance.function,
-          findspot: puzzle.provenance.findspot,
-          attributedTo: puzzle.provenance.attributedTo,
-        },
-        prerequisites: [...puzzle.prerequisites].sort(), grantsVellum: puzzle.grantsVellum,
-        goal: exploreForm(puzzle.goal.diagram), witness: puzzle.witness,
-        learning: {
-          introduces: [...puzzle.learning.introduces].sort(),
-          practices: [...puzzle.learning.practices].sort(),
-          retrieves: [...puzzle.learning.retrieves].sort(),
-          assesses: [...puzzle.learning.assesses].sort(),
-          rulesUsed: [...new Set(puzzle.learning.rulesUsed)].sort(),
-        },
-        teacher: puzzle.teacher.map((intervention) => ({
-          id: intervention.id,
-          performance: intervention.performance,
-          text: intervention.text,
-          repeat: intervention.repeat,
-          recovery: intervention.recovery,
-          trigger: teacherTriggerFingerprint(intervention.trigger),
-        })),
-      }))
-      .sort((a, b) => a.id.localeCompare(b.id)),
-  }
+    return [puzzle.id, hash(JSON.stringify(logicalInput))] as const
+  }))
+  const fingerprintInput = [...logicalFingerprints]
+    .sort(([left], [right]) => left.localeCompare(right))
   return {
     source: snapshot,
     fingerprint: hash(JSON.stringify(fingerprintInput)),
+    puzzleFingerprint(id: PuzzleId) {
+      const fingerprint = logicalFingerprints.get(id)
+      if (fingerprint === undefined) throw new GameDomainError(`unknown puzzle '${id}'`)
+      return fingerprint
+    },
     puzzle(id: PuzzleId) {
       const puzzle = byId.get(id)
       if (puzzle === undefined) throw new GameDomainError(`unknown puzzle '${id}'`)

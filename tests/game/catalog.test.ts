@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { buildCatalog } from '../../src/game/catalog'
+import { artifactTheoremName } from '../../src/game/artifact-theorem'
 import { blankDiagram, isBlank } from '../../src/game/blank'
 import { emptyProgress } from '../../src/game/progress'
 import { loadGame, saveGame } from '../../src/game/save'
@@ -20,7 +21,7 @@ const reachedTwoVeils = {
   id: 'inner-pair-removed',
   performance: fixturePerformanceId,
   trigger: {
-    kind: 'proofState',
+    kind: 'recognizedUnwinnable',
     state: twoVeils().goal,
     demonstration: [{ rule: 'doubleCutElim', region: four.eliminations[0]! }],
   },
@@ -271,7 +272,7 @@ describe('verified game catalog', () => {
     }
   })
 
-  it('accepts a reachable canonical proof-state teacher intervention', () => {
+  it('accepts a reachable canonical recognized-unwinnable teacher intervention', () => {
     expect(() => buildCatalog({ ...minimalSource(), puzzles: [fourPuzzle] })).not.toThrow()
   })
 
@@ -298,18 +299,7 @@ describe('verified game catalog', () => {
     })).toThrow(/teacher intervention.*unknown performance/)
   })
 
-  it('rejects invalid stalled teacher levels', () => {
-    expect(() => buildCatalog({
-      ...minimalSource(), puzzles: [minimalPuzzle({
-        teacher: [{
-          id: 'bad-level', trigger: { kind: 'stalled', level: 4 },
-          text: 'Try another view.', repeat: 'once',
-        } as unknown as TeacherIntervention],
-      })],
-    })).toThrow(/stalled level.*1 through 3/)
-  })
-
-  it('rejects malformed or unreachable proof-state teacher triggers', () => {
+  it('rejects malformed or unreachable recognized-unwinnable teacher triggers', () => {
     expect(() => buildCatalog({
       ...minimalSource(), puzzles: [minimalPuzzle({
         teacher: [{
@@ -317,7 +307,7 @@ describe('verified game catalog', () => {
           trigger: { ...reachedTwoVeils.trigger, demonstration: [] },
         }],
       })],
-    })).toThrow(/proof-state demonstration.*nonempty/)
+    })).toThrow(/unwinnable-state demonstration.*nonempty/)
 
     expect(() => buildCatalog({
       ...minimalSource(), puzzles: [minimalPuzzle({
@@ -349,7 +339,7 @@ describe('verified game catalog', () => {
           ...reachedTwoVeils,
           trigger: {
             ...reachedTwoVeils.trigger,
-            demonstration: [{ rule: 'doubleCutElim', region: 'missing-region' }],
+            demonstration: [{ rule: 'doubleCutElim' as const, region: 'missing-region' }],
           },
         }],
       })],
@@ -364,7 +354,46 @@ describe('verified game catalog', () => {
           trigger: { ...reachedTwoVeils.trigger, state: four.goal },
         }],
       }],
-    })).toThrow(/demonstration does not reach its declared proof state/)
+    })).toThrow(/demonstration does not reach its declared unwinnable state/)
+  })
+
+  it('verifies theorem witnesses only against completed prerequisites', () => {
+    const prerequisite = minimalPuzzle({ id: puzzleId('prerequisite-artifact') })
+    const theoremWitness = {
+      rule: 'theorem' as const,
+      name: artifactTheoremName(prerequisite.id),
+      direction: 'reverse' as const,
+      at: {
+        sel: {
+          region: prerequisite.goal.diagram.root,
+          regions: [fixture.eliminations[0]!],
+          nodes: [],
+          wires: [],
+        },
+        args: [],
+      },
+    }
+    const dependent = minimalPuzzle({
+      id: puzzleId('dependent-artifact'),
+      prerequisites: [prerequisite.id],
+      witness: [theoremWitness],
+      learning: { ...minimalPuzzle().learning, rulesUsed: ['theorem'] },
+    })
+    const validSource = {
+      ...minimalSource(),
+      cultures: [{ ...culture, gateway: prerequisite.id }],
+      puzzles: [dependent, prerequisite],
+    }
+
+    expect(() => buildCatalog(validSource)).not.toThrow()
+    expect(() => buildCatalog({
+      ...validSource,
+      puzzles: [{
+        ...dependent,
+        prerequisites: [],
+        witness: [{ ...theoremWitness, name: artifactTheoremName(dependent.id) }],
+      }, prerequisite],
+    })).toThrow(/unknown theorem/)
   })
 
   it('requires declared rules to exactly equal witness rules', () => {
@@ -379,7 +408,7 @@ describe('verified game catalog', () => {
     })).toThrow(/rulesUsed.*witness/)
   })
 
-  it('fingerprints teacher copy and cultural history', () => {
+  it('excludes artifact, culture, and teacher prose from each puzzle logical fingerprint', () => {
     const original = buildCatalog(minimalSource())
     const changedTeacher = buildCatalog({
       ...minimalSource(),
@@ -395,72 +424,20 @@ describe('verified game catalog', () => {
       cultures: [{ ...culture, historicalSummary: 'Changed cultural history.' }],
     })
 
-    expect(changedTeacher.fingerprint).not.toBe(original.fingerprint)
-    expect(changedHistory.fingerprint).not.toBe(original.fingerprint)
-  })
-
-  it('fingerprints proof-state teacher authority and authored intervention order', () => {
-    const original = buildCatalog({ ...minimalSource(), puzzles: [fourPuzzle] })
-    const removed = buildCatalog({
-      ...minimalSource(), puzzles: [{ ...fourPuzzle, teacher: [] }],
-    })
-    const changedTrigger = buildCatalog({
-      ...minimalSource(), puzzles: [{
-        ...fourPuzzle,
-        teacher: [{ ...reachedTwoVeils, trigger: { kind: 'completion' } }],
-      }],
-    })
-    const opening: TeacherIntervention = {
-      id: 'opening-four', trigger: { kind: 'opening' },
-      text: 'Begin with the innermost pair.', repeat: 'repeatable',
-    }
-    const ordered = buildCatalog({
-      ...minimalSource(), puzzles: [{ ...fourPuzzle, teacher: [opening, reachedTwoVeils] }],
-    })
-    const reordered = buildCatalog({
-      ...minimalSource(), puzzles: [{ ...fourPuzzle, teacher: [reachedTwoVeils, opening] }],
-    })
-    const alternateDemonstration = buildCatalog({
-      ...minimalSource(), puzzles: [{
-        ...fourPuzzle,
-        teacher: [{
-          ...reachedTwoVeils,
-          trigger: {
-            ...reachedTwoVeils.trigger,
-            demonstration: [{ rule: 'doubleCutElim', region: four.eliminations[1]! }],
-          },
-        }],
-      }],
-    })
-
-    expect(removed.fingerprint).not.toBe(original.fingerprint)
-    expect(changedTrigger.fingerprint).not.toBe(original.fingerprint)
-    expect(reordered.fingerprint).not.toBe(ordered.fingerprint)
-    expect(alternateDemonstration.fingerprint).toBe(original.fingerprint)
-  })
-
-  it('fingerprints structured metadata independently of object property insertion order', () => {
-    const original = buildCatalog({
+    const changedArtifact = buildCatalog({
       ...minimalSource(),
       puzzles: [minimalPuzzle({
-        name: {
-          professional: 'Fixture artifact', curatorShorthand: 'Fixture', accession: 'FX-1',
-        },
-      })],
-    })
-    const reordered = buildCatalog({
-      ...minimalSource(),
-      puzzles: [minimalPuzzle({
-        name: {
-          accession: 'FX-1', curatorShorthand: 'Fixture', professional: 'Fixture artifact',
-        },
+        name: { professional: 'Renamed artifact' },
+        provenance: { summary: 'Changed provenance.', function: 'Changed function.' },
       })],
     })
 
-    expect(reordered.fingerprint).toBe(original.fingerprint)
+    expect(changedTeacher.puzzleFingerprint(puzzle.id)).toBe(original.puzzleFingerprint(puzzle.id))
+    expect(changedHistory.puzzleFingerprint(puzzle.id)).toBe(original.puzzleFingerprint(puzzle.id))
+    expect(changedArtifact.puzzleFingerprint(puzzle.id)).toBe(original.puzzleFingerprint(puzzle.id))
   })
 
-  it('fingerprints canonical relation content independently of map insertion order', () => {
+  it('fingerprints canonical goal, prerequisite availability, relation logic, and witness replay data', () => {
     const other = fourVeils().goal
     const withRelations = (relations: ReadonlyMap<string, typeof fixture.goal>) => buildCatalog({
       ...minimalSource(), context: { relations },
@@ -470,8 +447,40 @@ describe('verified game catalog', () => {
     const reordered = withRelations(new Map([['beta', other], ['alpha', fixture.goal]]))
     const changed = withRelations(new Map([['alpha', fixture.goal], ['beta', fixture.goal]]))
 
-    expect(reordered.fingerprint).toBe(original.fingerprint)
-    expect(changed.fingerprint).not.toBe(original.fingerprint)
+    const changedGoalFixture = fourVeils()
+    const changedGoal = buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({
+        goal: changedGoalFixture.goal,
+        witness: changedGoalFixture.eliminations.map((region) => ({
+          rule: 'doubleCutElim' as const,
+          region,
+        })),
+      })],
+    })
+    const prerequisite = minimalPuzzle({ id: puzzleId('logical-prerequisite') })
+    const withPrerequisite = buildCatalog({
+      ...minimalSource(),
+      cultures: [{ ...culture, gateway: prerequisite.id }],
+      puzzles: [prerequisite, minimalPuzzle({ prerequisites: [prerequisite.id] })],
+    })
+    const reversedWitness = buildCatalog({
+      ...minimalSource(),
+      puzzles: [minimalPuzzle({
+        goal: changedGoalFixture.goal,
+        witness: [...changedGoalFixture.eliminations].reverse().map((region) => ({
+          rule: 'doubleCutElim' as const,
+          region,
+        })),
+      })],
+    })
+
+    expect(reordered.puzzleFingerprint(puzzle.id)).toBe(original.puzzleFingerprint(puzzle.id))
+    expect(changed.puzzleFingerprint(puzzle.id)).not.toBe(original.puzzleFingerprint(puzzle.id))
+    expect(changedGoal.puzzleFingerprint(puzzle.id)).not.toBe(original.puzzleFingerprint(puzzle.id))
+    expect(withPrerequisite.puzzleFingerprint(puzzle.id)).not.toBe(original.puzzleFingerprint(puzzle.id))
+    expect(reversedWitness.puzzleFingerprint(puzzle.id))
+      .not.toBe(changedGoal.puzzleFingerprint(puzzle.id))
   })
 
   it('owns one immutable snapshot independent of every caller alias', () => {
@@ -503,7 +512,6 @@ describe('verified game catalog', () => {
     mutablePuzzle.id = puzzleId('mutated-puzzle')
     mutablePuzzle.culture = cultureId('mutated-culture')
     mutablePuzzle.name.professional = 'Mutated puzzle'
-    mutablePuzzle.grantsVellum = false
     mutablePuzzle.goal = fourVeils().goal
     prerequisites.push(puzzleId('missing'))
     witness.length = 0
@@ -524,7 +532,6 @@ describe('verified game catalog', () => {
     expect(catalog.source.puzzles).toHaveLength(1)
     expect(catalog.puzzle(puzzle.id)).toMatchObject({
       name: originalPuzzleName,
-      grantsVellum: true,
       prerequisites: [],
     })
     expect(catalog.puzzle(puzzle.id).witness).toHaveLength(1)
@@ -534,15 +541,13 @@ describe('verified game catalog', () => {
     expect(exploreForm(catalog.source.context.relations.get('veil')!.diagram)).toBe(originalRelationForm)
     const ownedPuzzle = catalog.puzzle(puzzle.id)
     const authority = {
-      context: catalog.source.context,
-      puzzle: (id: PuzzleId) => catalog.puzzle(id),
-      canUseVellum: () => false,
+      context: { ...catalog.source.context, theorems: new Map() },
     }
     let session = startPuzzle(ownedPuzzle)
     for (const step of ownedPuzzle.witness) session = applyGameStep(session, step, authority).session
     expect(isBlank(currentDiagram(session))).toBe(true)
     const save = saveGame(catalog, emptyProgress(), session)
-    expect(save.catalogFingerprint).toBe(fingerprint)
+    expect(save.puzzleFingerprints).toEqual({ [puzzle.id]: catalog.puzzleFingerprint(puzzle.id) })
     expect(isBlank(currentDiagram(loadGame(catalog, save).active!))).toBe(true)
 
     expect(() => (catalog.source.cultures as CultureDefinition[]).push(mutableCulture)).toThrow()

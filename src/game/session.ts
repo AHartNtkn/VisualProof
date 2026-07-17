@@ -1,8 +1,7 @@
 import type { Diagram } from '../kernel/diagram/diagram'
-import { applyStep } from '../kernel/proof/step'
+import { applyStep, type ProofContext } from '../kernel/proof/step'
 import { isBlank } from './blank'
-import { dissolveSeal, manifestSeal } from './vellum'
-import { GameDomainError, type GameRuleContext, type GameStep, type PuzzleDefinition, type PuzzleId } from './types'
+import { GameDomainError, type GameStep, type PuzzleDefinition, type PuzzleId } from './types'
 
 export type GameTimeline = {
   readonly states: readonly Diagram[]
@@ -21,9 +20,7 @@ export type GameTransition = {
 }
 
 export type GameRuntimeAuthority = {
-  readonly context: GameRuleContext
-  puzzle(id: PuzzleId): PuzzleDefinition
-  canUseVellum(id: PuzzleId): boolean
+  readonly context: ProofContext
 }
 
 export function startPuzzle(puzzle: PuzzleDefinition): GameSession {
@@ -52,18 +49,7 @@ export function applyGameStep(
   if (isBlank(current)) {
     throw new GameDomainError('cannot apply a game step from canonical blank')
   }
-  let next: Diagram
-  if (step.rule === 'vellumManifest' || step.rule === 'vellumDissolve') {
-    if (!authority.canUseVellum(step.puzzle)) {
-      throw new GameDomainError(`solved seal '${step.puzzle}' is not available`)
-    }
-    const puzzle = authority.puzzle(step.puzzle)
-    next = step.rule === 'vellumManifest'
-      ? manifestSeal(current, step.region, puzzle)
-      : dissolveSeal(current, step.selection, puzzle)
-  } else {
-    next = applyStep(current, step, { theorems: new Map(), relations: authority.context.relations }, 'backward')
-  }
+  const next = applyStep(current, step, authority.context, 'backward')
   const states = session.timeline.states.slice(0, session.timeline.cursor + 1)
   const steps = session.timeline.steps.slice(0, session.timeline.cursor)
   const updated: GameSession = {

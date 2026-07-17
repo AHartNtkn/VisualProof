@@ -1,6 +1,4 @@
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
-import type { RegionId } from '../kernel/diagram/diagram'
-import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofStep, ProofContext } from '../kernel/proof/step'
 
 export type PuzzleId = string & { readonly __puzzleId: unique symbol }
@@ -30,13 +28,7 @@ export const performanceId = (value: string): PerformanceId => {
 
 export class GameDomainError extends Error {}
 
-export type GameKernelStep = ProofStep
-
-export type VellumStep =
-  | { readonly rule: 'vellumManifest'; readonly puzzle: PuzzleId; readonly region: RegionId }
-  | { readonly rule: 'vellumDissolve'; readonly puzzle: PuzzleId; readonly selection: SubgraphSelection }
-
-export type GameStep = GameKernelStep | VellumStep
+export type GameStep = ProofStep
 
 export type GameRuleContext = Pick<ProofContext, 'relations'>
 
@@ -72,21 +64,28 @@ export type ArtifactProvenance = {
 export type TeacherTrigger =
   | { readonly kind: 'opening' }
   | { readonly kind: 'completion' }
-  | { readonly kind: 'stalled'; readonly level: 1 | 2 | 3 }
   | {
-      readonly kind: 'proofState'
+      readonly kind: 'recognizedUnwinnable'
       readonly state: DiagramWithBoundary
       readonly demonstration: readonly GameStep[]
     }
 
-export type TeacherIntervention = {
+type TeacherInterventionBase = {
   readonly id: string
   readonly performance?: PerformanceId
-  readonly trigger: TeacherTrigger
   readonly text: string
   readonly repeat: 'once' | 'repeatable'
-  readonly recovery?: 'timeline'
 }
+
+export type TeacherIntervention =
+  | TeacherInterventionBase & {
+      readonly trigger: Extract<TeacherTrigger, { readonly kind: 'opening' | 'completion' }>
+      readonly recovery?: never
+    }
+  | TeacherInterventionBase & {
+      readonly trigger: Extract<TeacherTrigger, { readonly kind: 'recognizedUnwinnable' }>
+      readonly recovery: 'timeline'
+    }
 
 export type PuzzleLearning = {
   readonly introduces: readonly PerformanceId[]
@@ -103,7 +102,6 @@ export type PuzzleDefinition = {
   readonly provenance: ArtifactProvenance
   readonly goal: DiagramWithBoundary
   readonly prerequisites: readonly PuzzleId[]
-  readonly grantsVellum: boolean
   readonly witness: readonly GameStep[]
   readonly learning: PuzzleLearning
   readonly teacher: readonly TeacherIntervention[]

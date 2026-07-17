@@ -1,6 +1,6 @@
 export * from './types'
 export * from './blank'
-export * from './vellum'
+export * from './artifact-theorem'
 export * from './session'
 export * from './progress'
 export * from './catalog'
