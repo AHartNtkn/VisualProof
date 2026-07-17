@@ -1,7 +1,7 @@
 # Independent Editor Loupe Design
 
 **Date:** 2026-07-17  
-**Status:** Design approved in conversation; pending written-spec review  
+**Status:** Approved  
 **Scope:** Circular editor geometry in the main assistant, followed by a faithful game presentation of the approved clean-loupe mock
 
 ## Outcome
@@ -157,6 +157,10 @@ The instrument contains no persistent editor controls. Existing keyboard and
 contextual construction behavior remains authoritative. A transient spawn
 palette or refusal may appear when the existing interaction invokes it; that is
 not embedded loupe chrome.
+
+In particular, the current right-click popup for choosing which node to spawn
+remains mechanically unchanged in this work. Its eventual redesign is a
+separate task and is not a prerequisite for the loupe.
 
 Host-to-draft connection feedback appears only during the existing hover or
 active gesture. No idle thread or line links the loupe to the host proof. Active
