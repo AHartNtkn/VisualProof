@@ -895,11 +895,16 @@ theorem extractionCompileRoot_selected_denote
     (extendWireEnv fragmentOuter fragmentHidden) relEnv
     ((fragmentItems.renameWires (Fin.cast rootLengthEq.symm)).renameRelations
       (Splice.Input.PlugLayout.emptyRelationRenaming hostRels))
-  rw [ItemSeq.renameWires_renameRelations fragmentItems
-    (Fin.cast rootLengthEq.symm)
-    (fun {arity} =>
-      (Splice.Input.PlugLayout.emptyRelationRenaming hostRels :
-        RelVar [] arity → RelVar hostRels arity))]
-  exact renamedDenote
+  have commute :
+      (fragmentItems.renameWires
+          (Fin.cast rootLengthEq.symm)).renameRelations
+          (Splice.Input.PlugLayout.emptyRelationRenaming hostRels) =
+        (fragmentItems.renameRelations
+          (Splice.Input.PlugLayout.emptyRelationRenaming hostRels)).renameWires
+          (Fin.cast rootLengthEq.symm) :=
+    ItemSeq.renameWires_renameRelations fragmentItems
+      (Fin.cast rootLengthEq.symm)
+      (Splice.Input.PlugLayout.emptyRelationRenaming hostRels)
+  exact commute.symm ▸ renamedDenote
 
 end VisualProof.Rule.IterationSoundness
