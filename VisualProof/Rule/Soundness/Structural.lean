@@ -4,6 +4,7 @@ import VisualProof.Rule.Soundness.Modal.EliminationRootSimulation
 import VisualProof.Rule.Soundness.Modal.VacuousEliminationRootSimulation
 import VisualProof.Rule.Soundness.Modal.VacuousRoot
 import VisualProof.Rule.Soundness.Iteration.OpenRoute
+import VisualProof.Rule.Soundness.Iteration.ZeroOpenRoute
 import VisualProof.Rule.Soundness.WireJoin
 
 namespace VisualProof.Rule
@@ -2210,6 +2211,45 @@ private theorem applyIteration_sound_proper_nonempty
     IterationSoundness.properIterationOpenTargetAlignment_complete certificate
   have semantic := IterationSoundness.properIterationOpen_output_equiv
     hsplice sourceRoot hnonempty certificate alignment Lambda.canonicalModel
+    (Theory.interpretDefinitions context.definitions) args
+  simpa only [DirectedEntailment, StepTag.semanticMode,
+    iterationOperationalOpen] using semantic
+
+/-- Receipt bridge for the proper nested, empty-spine iteration case. -/
+private theorem applyIteration_sound_proper_zero
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (receipt : StepReceipt input)
+    (happly : applyIteration input selection target = .ok receipt)
+    (targetNe : target ≠ selection.val.anchor)
+    (anchorNeRoot : selection.val.anchor ≠ input.val.root)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount =
+      0) :
+    SuccessfulReceiptSound context orientation input
+      (.iteration selection target) receipt := by
+  have realizes := applyIteration_realizes happly
+  have success := applyIteration_success input selection target receipt happly
+  let hsplice := success.2.2
+  let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot _mapped _htransport =>
+      iterationOperationalOpen input selection target hadmissible boundary
+        sourceRoot)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
+        htransport)
+  intro boundary sourceRoot mapped htransport _valid args
+  obtain ⟨certificate⟩ :=
+    IterationSoundness.properIterationRootOpenAnchorContraction_complete input
+      selection target hadmissible success.1 success.2.1 targetNe hzero
+      boundary sourceRoot anchorNeRoot
+  obtain ⟨alignment⟩ :=
+    IterationSoundness.properIterationRootOpenTargetAlignment_complete
+      certificate
+  have semantic := IterationSoundness.properIterationRootOpen_output_equiv
+    hsplice sourceRoot hzero certificate alignment Lambda.canonicalModel
     (Theory.interpretDefinitions context.definitions) args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
