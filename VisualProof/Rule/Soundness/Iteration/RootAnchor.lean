@@ -200,6 +200,124 @@ structure OrderedRootItemContraction
       denoteRegion model named environment relEnv
         (witness.toFocus.context.fill replacement)
 
+/-- Denotation is invariant under transport of an item sequence and its
+relation environment across the same relation-context equality. -/
+theorem denoteItemSeq_castRels_iff
+    {source target : RelCtx} (equality : source = target)
+    (items : ItemSeq signature wires source)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (environment : Fin wires → model.Carrier)
+    (targetRelEnv : RelEnv model.Carrier target) :
+    denoteItemSeq model named environment targetRelEnv (equality ▸ items) ↔
+      denoteItemSeq model named environment
+        (equality.symm ▸ targetRelEnv) items := by
+  subst target
+  rfl
+
+/-- The transported contraction is a pointwise equivalence in the exact
+ordered-open root-wire environment. -/
+theorem OrderedRootItemContraction.pointwise_equiv
+    {checked : CheckedOpenDiagram signature}
+    {compiled : Splice.Input.OpenRootCompilerItems checked}
+    (contraction : OrderedRootItemContraction checked compiled)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (environment : Fin checked.val.rootWires.length → model.Carrier) :
+    let modified : Region signature checked.val.rootWires.length [] :=
+      contraction.relsEq ▸
+        contraction.witness.toFocus.context.fill contraction.replacement
+    denoteItemSeq (relCtx := []) model named environment
+        (PUnit.unit : RelEnv model.Carrier []) compiled.items ↔
+      denoteRegion (relCtx := []) model named environment
+        (PUnit.unit : RelEnv model.Carrier []) modified := by
+  dsimp only
+  let sourceRelEnv : RelEnv model.Carrier contraction.rels :=
+    contraction.relsEq.symm ▸
+      (PUnit.unit : RelEnv model.Carrier [])
+  have sourceItems :
+      denoteItemSeq model named environment sourceRelEnv contraction.items ↔
+        denoteItemSeq (relCtx := []) model named environment
+          (PUnit.unit : RelEnv model.Carrier []) compiled.items := by
+    rw [contraction.items_eq]
+    simpa [sourceRelEnv] using
+      (denoteItemSeq_castRels_iff contraction.relsEq.symm compiled.items
+        model named environment sourceRelEnv)
+  exact sourceItems.symm.trans
+    ((contraction.equivalent model named environment sourceRelEnv).trans
+      (denoteRegion_castRels_iff contraction.relsEq
+        (contraction.witness.toFocus.context.fill contraction.replacement)
+        model named environment
+        (PUnit.unit : RelEnv model.Carrier [])).symm)
+
+/-- Closing the transported root-item contraction over the hidden root wires
+preserves the complete ordered-open semantics, including repeated boundary
+aliases through the unchanged boundary assignment. -/
+theorem OrderedRootItemContraction.wholeOpen_equiv
+    {checked : CheckedOpenDiagram signature}
+    {compiled : Splice.Input.OpenRootCompilerItems checked}
+    (contraction : OrderedRootItemContraction checked compiled)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin checked.val.boundary.length → model.Carrier) :
+    let source := checked.elaborate
+    let modifiedRoot : Region signature checked.val.rootWires.length [] :=
+      contraction.relsEq ▸
+        contraction.witness.toFocus.context.fill contraction.replacement
+    let rootEq : checked.val.rootWires.length =
+        checked.val.exposedWires.length + checked.val.hiddenWires.length := by
+      simp [OpenConcreteDiagram.rootWires]
+    let modifiedBody : Region signature checked.val.exposedWires.length [] :=
+      Region.adjoinAt checked.val.hiddenWires.length .nil
+        (modifiedRoot.castWiresEq rootEq)
+    denoteOpen model named source args ↔
+      denoteOpen model named (Splice.replaceOpenBody source modifiedBody)
+        args := by
+  dsimp only
+  let modifiedRoot : Region signature checked.val.rootWires.length [] :=
+    contraction.relsEq ▸
+      contraction.witness.toFocus.context.fill contraction.replacement
+  let rootEq : checked.val.rootWires.length =
+      checked.val.exposedWires.length + checked.val.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  let modifiedBody : Region signature checked.val.exposedWires.length [] :=
+    Region.adjoinAt checked.val.hiddenWires.length .nil
+      (modifiedRoot.castWiresEq rootEq)
+  have bodyEquiv : ∀ env : Fin checked.val.exposedWires.length →
+      model.Carrier,
+      denoteRegion (relCtx := []) model named env
+          (PUnit.unit : RelEnv model.Carrier []) checked.elaborate.body ↔
+        denoteRegion (relCtx := []) model named env
+          (PUnit.unit : RelEnv model.Carrier []) modifiedBody := by
+    intro env
+    rw [compiled.elaborate_body]
+    rw [show modifiedBody =
+      Region.adjoinAt checked.val.hiddenWires.length .nil
+        (modifiedRoot.castWiresEq rootEq) from rfl]
+    rw [Region.denote_adjoinAt]
+    simp only [ConcreteElaboration.finishRoot, denoteRegion_mk,
+      ItemSeq.castWiresEq_eq_renameWires, denoteItemSeq_nil, true_and,
+      Region.castWiresEq_eq_renameWires, denoteRegion_renameWires]
+    constructor
+    · rintro ⟨hiddenEnv, source⟩
+      refine ⟨hiddenEnv, ?_⟩
+      let fullEnvironment := extendWireEnv env hiddenEnv
+      have sourceRaw := (denoteItemSeq_renameWires (relCtx := []) model named
+        (Fin.cast rootEq) fullEnvironment
+        (PUnit.unit : RelEnv model.Carrier []) compiled.items).mp source
+      exact (contraction.pointwise_equiv model named
+        (fullEnvironment ∘ Fin.cast rootEq)).mp sourceRaw
+    · rintro ⟨hiddenEnv, target⟩
+      refine ⟨hiddenEnv, ?_⟩
+      let fullEnvironment := extendWireEnv env hiddenEnv
+      have targetRaw := (contraction.pointwise_equiv model named
+        (fullEnvironment ∘ Fin.cast rootEq)).mpr target
+      exact (denoteItemSeq_renameWires (relCtx := []) model named
+        (Fin.cast rootEq) fullEnvironment
+        (PUnit.unit : RelEnv model.Carrier []) compiled.items).mpr targetRaw
+  exact (Splice.denote_replaceOpenBody_iff checked.elaborate modifiedBody
+    model named args (fun env => (bodyEquiv env).symm)).symm
+
 /-- The closed anchor compiler items at a root selection and the ordered-open
 root compiler items are the same occurrence block up to the exact root-wire
 coordinate equivalence. -/
