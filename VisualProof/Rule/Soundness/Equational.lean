@@ -1,6 +1,6 @@
 import VisualProof.Rule.Soundness
 import VisualProof.Rule.Soundness.Congruence
-import VisualProof.Rule.Soundness.Equational.AnchoredWireRoot
+import VisualProof.Rule.Soundness.Equational.AnchoredWireOpen
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule
@@ -2226,20 +2226,6 @@ theorem applyCongruenceJoin_sound
       (.congruenceJoin first second payload) receipt := by
   exact CongruenceSoundness.applyCongruenceJoin_sound
     context orientation input first second payload receipt happly
-
-/-- Every successful anchored-wire split receipt is semantically equivalent. -/
-theorem applyAnchoredWireSplit_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
-    (wire : Fin input.val.wireCount) (witness : Fin input.val.nodeCount)
-    (endpoints : List (Diagram.CEndpoint input.val.nodeCount))
-    (target : Fin input.val.regionCount)
-    (receipt : StepReceipt input)
-    (happly :
-      applyAnchoredWireSplit input wire witness endpoints target = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
-      (.anchoredWireSplit wire witness endpoints target) receipt := by
-  sorry
 
 /-- Every successful anchored-wire contraction receipt is equivalent. -/
 theorem applyAnchoredWireContract_sound

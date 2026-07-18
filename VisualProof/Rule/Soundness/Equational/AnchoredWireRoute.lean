@@ -386,7 +386,10 @@ private theorem split_target_fresh_local_get
             (Fin.castAdd 1) ++ [Fin.last input.val.wireCount] := by
     rw [anchoredWireSplitRaw_exactScopeWires, if_pos rfl]
     have one : VisualProof.Data.Finite.allFin 1 = [(0 : Fin 1)] := by
-      native_decide
+      rw [VisualProof.Data.Finite.allFin_eq_finRange,
+        show [(0 : Fin 1)] = [Fin.last 0] by rfl,
+        List.finRange_succ_last]
+      simp
     rw [one]
     simp only [List.map_singleton]
     congr 2
@@ -428,7 +431,10 @@ private theorem split_target_old_local_get
             (Fin.castAdd 1) ++ [Fin.last input.val.wireCount] := by
     rw [anchoredWireSplitRaw_exactScopeWires, if_pos rfl]
     have one : VisualProof.Data.Finite.allFin 1 = [(0 : Fin 1)] := by
-      native_decide
+      rw [VisualProof.Data.Finite.allFin_eq_finRange,
+        show [(0 : Fin 1)] = [Fin.last 0] by rfl,
+        List.finRange_succ_last]
+      simp
     rw [one]
     simp only [List.map_singleton]
     congr 2
@@ -505,7 +511,10 @@ theorem SplitContextCollapse.extend_index_local_old_at_target
               (Fin.castAdd 1) ++ [Fin.last input.val.wireCount] := by
       rw [anchoredWireSplitRaw_exactScopeWires, if_pos rfl]
       have one : VisualProof.Data.Finite.allFin 1 = [(0 : Fin 1)] := by
-        native_decide
+        rw [VisualProof.Data.Finite.allFin_eq_finRange,
+          show [(0 : Fin 1)] = [Fin.last 0] by rfl,
+          List.finRange_succ_last]
+        simp
       rw [one]
       simp only [List.map_singleton]
       congr 2
