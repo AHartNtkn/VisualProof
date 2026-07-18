@@ -351,16 +351,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       this.#proof?.setReducedMotion(next.settings.reducedMotion)
     }
 
-    const previousHasFolio = previous.mode === 'archive' || previous.mode === 'puzzle'
-    const nextHasFolio = next.mode === 'archive' || next.mode === 'puzzle'
-    if (previousHasFolio && !nextHasFolio) {
-      this.#folio?.dispose()
-      this.#folio = null
-    } else if (!previousHasFolio && nextHasFolio) {
-      this.#mountFolio()
-    } else if (nextHasFolio && !keepLiveFolio) {
-      this.#folio?.update(projectFolio(this.#catalog, next, next.mode as 'archive' | 'puzzle'))
-    }
+    if (!keepLiveFolio) this.#folio?.update(projectFolio(this.#catalog, next, next.mode))
   }
 
   #reconcileRoot(): void {
@@ -371,7 +362,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
   }
 
   #mountFolio(): void {
-    if (this.#folio !== null || this.#state.mode === 'completion') return
+    if (this.#folio !== null) return
     this.#folio = mountFolioView({
       host: this.#environment.folioHost,
       projection: projectFolio(this.#catalog, this.#state, this.#state.mode),
@@ -507,7 +498,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
   }
 
   #folioInputAllowed(): boolean {
-    return this.#state.transient === null
+    return this.#state.mode !== 'completion' && this.#state.transient === null
   }
 
   #enqueueSave(document: unknown): void {

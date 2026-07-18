@@ -119,6 +119,40 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
+  it('keeps the same inert folio and record positions visible beneath completion', async () => {
+    const page = await openFixture()
+    try {
+      const first = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles()[0]!)
+      await page.evaluate(() => {
+        (window as any).__persistentCompletionFolio = document.querySelector('.curse-folio')
+      })
+      const before = await page.locator(`[data-puzzle="${first}"]`).boundingBox()
+      if (before === null) throw new Error('first folio record has no initial bounds')
+      await page.locator(`[data-puzzle="${first}"]`).click()
+      await page.evaluate(() => {
+        const fixture = window.__authoritativeRuntimeFixture
+        fixture.witness(0)
+        fixture.witness(1)
+        fixture.witness(2)
+      })
+      await page.waitForSelector('.curse-completion')
+
+      expect(await page.evaluate(() =>
+        (window as any).__persistentCompletionFolio === document.querySelector('.curse-folio')))
+        .toBe(true)
+      const record = page.locator(`[data-puzzle="${first}"]`)
+      expect(await record.getAttribute('data-status')).toBe('completed')
+      expect(await record.getAttribute('data-affordance')).toBe('inert')
+      const after = await record.boundingBox()
+      if (after === null) throw new Error('completed folio record disappeared')
+      expect(after).toEqual(before)
+      const stateBeforeClick = await page.evaluate(() => window.__authoritativeRuntimeFixture.state())
+      await record.click({ force: true })
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state()))
+        .toEqual(stateBeforeClick)
+    } finally { await page.close() }
+  })
+
   it('renders the approved desktop workspace rectangles at both reference viewports', async () => {
     const page = await openFixture()
     try {
@@ -273,10 +307,17 @@ describe('authoritative production renderer runtime', () => {
       expect(await page.locator('.curse-production-timeline-control').count()).toBe(1)
       expect(await page.locator('.curse-production-timeline-control').getAttribute('aria-disabled'))
         .toBe('true')
+      const folio = page.locator('.curse-folio')
+      expect(await folio.count()).toBe(1)
+      expect(await folio.getAttribute('data-mode')).toBe('completion')
+      expect(await folio.getAttribute('data-cover')).toBe('open')
+      const completedRecord = folio.locator('[data-puzzle="first-artifact"]')
+      expect(await completedRecord.getAttribute('data-status')).toBe('completed')
+      expect(await completedRecord.getAttribute('data-affordance')).toBe('inert')
       await completion.locator('button').click()
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
         .toBe('archive')
-      expect(await page.locator('.curse-folio').count()).toBe(1)
+      expect(await folio.count()).toBe(1)
     } finally { await page.close() }
   })
 

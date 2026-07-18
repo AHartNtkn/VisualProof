@@ -28,7 +28,7 @@ export type FolioCultureProjection = {
 }
 
 export type FolioProjection = {
-  readonly mode: Extract<GamePrimaryMode, 'archive' | 'puzzle'>
+  readonly mode: GamePrimaryMode
   readonly selectedCulture: CultureId
   readonly selectedScroll: number
   readonly reducedMotion: boolean
@@ -40,6 +40,7 @@ const recordAffordance = (
   status: FolioRecordStatus,
 ): FolioRecordAffordance => {
   if (mode === 'puzzle') return status === 'completed' ? 'drag-theorem' : 'inert'
+  if (mode === 'completion') return 'inert'
   return status === 'locked' ? 'resist' : 'select'
 }
 

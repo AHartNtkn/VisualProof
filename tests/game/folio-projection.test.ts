@@ -103,4 +103,22 @@ describe('production excavation folio projection', () => {
     expect(projection.cultures[1]!.records.every(({ affordance }) => affordance === 'inert'))
       .toBe(true)
   })
+
+  it('preserves catalog order and progress while making completion records inert', () => {
+    const catalog = buildCatalog(largeSource())
+    const initial = createInitialGameState(catalog, { reducedMotion: false })
+    const completed = new Set(catalog.source.puzzles.slice(0, 6).map(({ id }) => id))
+    const projection = projectFolio(catalog, { ...initial, completed }, 'completion')
+
+    expect(projection.mode).toBe('completion')
+    expect(projection.cultures[0]!.records.map(({ id }) => id)).toEqual(
+      catalog.source.puzzles.slice(0, 18).map(({ id }) => id),
+    )
+    expect(projection.cultures[0]!.records.slice(0, 7).map(({ status }) => status)).toEqual([
+      ...Array.from({ length: 6 }, () => 'completed'),
+      'unlocked',
+    ])
+    expect(projection.cultures.flatMap(({ records }) => records)
+      .every(({ affordance }) => affordance === 'inert')).toBe(true)
+  })
 })

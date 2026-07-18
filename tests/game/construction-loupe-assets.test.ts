@@ -35,5 +35,6 @@ describe('approved Candidate A production layers', () => {
     expect(css).toMatch(/construction-loupe__art[^}]*pointer-events:\s*none/s)
     expect(css).toMatch(/construction-loupe__art--optics[^}]*mix-blend-mode/s)
     expect(css).toMatch(/construction-loupe__canvas[^}]*clip-path:\s*circle/s)
+    expect(runtime).toMatch(/paint\([^\n]+\)\.filter\(\(shape\) => shape\.kind !== 'frame'\)/)
   })
 })

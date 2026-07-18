@@ -164,7 +164,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const recordItems = new Map<PuzzleId, HTMLLIElement>()
   const cultureElements = new Map<CultureId, HTMLButtonElement>()
   let current = options.projection
-  let coverState: 'open' | 'closed' = current.mode === 'puzzle' ? 'open' : 'closed'
+  let coverState: 'open' | 'closed' = current.mode === 'archive' ? 'closed' : 'open'
   let activeDrag: ActiveDrag | null = null
   let returningSource: HTMLElement | null = null
   let recordGeneration = 0

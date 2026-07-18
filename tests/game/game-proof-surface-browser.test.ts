@@ -57,6 +57,28 @@ describe('rendered game proof surface', () => {
     } finally { await page.close() }
   })
 
+  it('keeps keyboard focus without a rectangular canvas border beneath the gasket', async () => {
+    const page = await openFixture()
+    try {
+      const canvas = page.locator('.curse-game-proof-canvas')
+      await canvas.focus()
+      const style = await canvas.evaluate((node) => {
+        const computed = getComputedStyle(node)
+        return {
+          borderTopWidth: computed.borderTopWidth,
+          outlineStyle: computed.outlineStyle,
+          outlineWidth: computed.outlineWidth,
+        }
+      })
+      expect(style).toEqual({
+        borderTopWidth: '0px',
+        outlineStyle: 'none',
+        outlineWidth: '0px',
+      })
+      expect(await canvas.evaluate((node) => node === document.activeElement)).toBe(true)
+    } finally { await page.close() }
+  })
+
   it('opens the one game loupe, blocks proof shortcuts beneath it, and gives Escape to editor close', async () => {
     const page = await openFixture()
     try {

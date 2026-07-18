@@ -355,7 +355,7 @@ export class ConstructionLoupe {
     if (this.#disposed || !this.#surface.syncSize()) return
     this.#interaction.advance(this.#connection === null)
     const theme = this.#host.theme()
-    const shapes = [...paint(this.#engine, theme)]
+    const shapes: Shape[] = paint(this.#engine, theme).filter((shape) => shape.kind !== 'frame')
     for (const hit of this.#interaction.selection) shapes.push(...itemShapes(this.#engine, hit, theme.interaction.selection))
     if (this.#interaction.hover !== null) shapes.push(...itemShapes(this.#engine, this.#interaction.hover, theme.interaction.hover))
     for (const id of this.#interaction.pins) {

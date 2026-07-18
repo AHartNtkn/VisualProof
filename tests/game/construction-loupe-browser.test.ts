@@ -80,6 +80,33 @@ describe('rendered circular construction loupe', () => {
     } finally { await page.close() }
   })
 
+  it('does not paint the generic rounded-square proof frame inside the circular loupe', async () => {
+    const page = await openFixture()
+    try {
+      const framePixels = await page.locator('.cursebreaker-construction-loupe__canvas')
+        .evaluate((node) => {
+          const canvas = node as HTMLCanvasElement
+          const pixels = canvas.getContext('2d')!.getImageData(
+            0,
+            0,
+            canvas.width,
+            canvas.height,
+          ).data
+          let count = 0
+          for (let index = 0; index < pixels.length; index += 4) {
+            if (
+              pixels[index] === 0x4a
+              && pixels[index + 1] === 0x50
+              && pixels[index + 2] === 0x58
+              && pixels[index + 3] !== 0
+            ) count += 1
+          }
+          return count
+        })
+      expect(framePixels).toBe(0)
+    } finally { await page.close() }
+  })
+
   it('moves by the rim, resizes proportionally by the terminal, and keeps the terminal reachable', async () => {
     const page = await openFixture()
     try {

@@ -26,4 +26,12 @@ describe('game-owned proof surface boundaries', () => {
     expect(combined).not.toMatch(/fillRect\s*\(/)
     expect(combined).not.toMatch(/Applicable theorems|Closed theorems|citation cycle|armed reference|citeTheorem/i)
   })
+
+  it('leaves the gasket as the sole outer boundary while retaining canvas focus', () => {
+    const css = source('proof-surface.css')
+    expect(css).toMatch(/curse-game-proof-canvas[^}]*border:\s*0[^}]*outline:\s*0/s)
+    expect(source('proof-surface.ts')).toMatch(
+      /paint\([^\n]+\)\.filter\(\(shape\) => shape\.kind !== 'frame'\)/,
+    )
+  })
 })
