@@ -486,6 +486,456 @@ theorem compiledRootItems_sameDiagramFrame
     hwf contextsAgree targetExact bindersAgree
     (occurrences.get occurrenceIndex) (List.get_mem _ _) sourceGet targetGet'
 
+/-- Read the compiler equation at the exact focus selected by the first step
+of a concrete root route. -/
+theorem compiledRootItems_focus_computation
+    {diagram : ConcreteDiagram}
+    {context : ConcreteElaboration.WireContext diagram}
+    {items : ItemSeq signature context.length []}
+    (itemsComputation : ConcreteElaboration.compileOccurrencesWith? signature
+      diagram
+      (ConcreteElaboration.compileRegion? signature diagram
+        diagram.regionCount)
+      context ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences diagram diagram.root) =
+        some items)
+    {child : Fin diagram.regionCount}
+    (position : Fin (ConcreteElaboration.localOccurrences diagram
+      diagram.root).length)
+    (positionEq : VisualProof.Data.Finite.indexOf?
+      (ConcreteElaboration.localOccurrences diagram diagram.root)
+      (.child child) = some position)
+    (focus : ItemSeq.Focus items)
+    (atFocus : items.focusAt? position.val = some focus) :
+    ConcreteElaboration.compileOccurrenceWith? signature diagram
+      (ConcreteElaboration.compileRegion? signature diagram
+        diagram.regionCount)
+      context ConcreteElaboration.BinderContext.empty (.child child) =
+        some focus.item := by
+  obtain ⟨compiledFocus, compiledAt, compiled⟩ :=
+    Splice.compiledOccurrence_focus diagram
+      (ConcreteElaboration.compileRegion? signature diagram
+        diagram.regionCount)
+      context ([] : Theory.RelCtx) ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences diagram diagram.root) items
+      (.child child) position itemsComputation positionEq
+  have focusEq : compiledFocus = focus := by
+    exact Option.some.inj (compiledAt.symm.trans atFocus)
+  simpa [focusEq] using compiled
+
+/-- Align two successful recursive child compilations along the same concrete
+route, while exposing the caller's exact inherited-wire equivalence. -/
+theorem compiledChild_sameRouteContextIso
+    (input : CheckedDiagram signature)
+    {start target : Fin input.val.regionCount} {path : List Nat}
+    (route : Splice.RegionRoute input.val start target path)
+    {sourceContext targetContext :
+      ConcreteElaboration.WireContext input.val}
+    {rels : Theory.RelCtx}
+    {sourceBinders targetBinders :
+      ConcreteElaboration.BinderContext input.val rels}
+    {sourceBody : Region signature sourceContext.length rels}
+    {targetBody : Region signature targetContext.length rels}
+    (sourceComputation : ConcreteElaboration.compileRegion? signature input.val
+      input.val.regionCount start sourceContext sourceBinders = some sourceBody)
+    (targetComputation : ConcreteElaboration.compileRegion? signature input.val
+      input.val.regionCount start targetContext targetBinders = some targetBody)
+    (sourceExact : (sourceContext.extend start).Exact start)
+    (targetExact : (targetContext.extend start).Exact start)
+    (sourceCover : sourceBinders.Covers start)
+    (targetCover : targetBinders.Covers start)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val sourceBinders start)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val targetBinders start)
+    (bindersEq : sourceBinders = targetBinders)
+    (wire : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length))
+    (wireSpec : ∀ index,
+      targetContext.get (wire index) = sourceContext.get index)
+    (sourceWitness : Region.ContextPath sourceBody path)
+    (targetWitness : Region.ContextPath targetBody path) :
+    Nonempty (Splice.Input.PairedCompilerContextAlignment wire
+      sourceWitness targetWitness) := by
+  obtain ⟨sourceResult⟩ := Splice.compileRegion_route_context_complete input
+    route sourceComputation sourceExact sourceCover sourceEnumeration
+  obtain ⟨targetResult⟩ := Splice.compileRegion_route_context_complete input
+    route targetComputation targetExact targetCover targetEnumeration
+  have sourceInheritedEq : sourceResult.state.inheritedWires = sourceContext :=
+    sourceResult.inherited_eq
+  have targetInheritedEq : targetResult.state.inheritedWires = targetContext :=
+    targetResult.inherited_eq
+  let traceWire :=
+    (FiniteEquiv.finCast (congrArg List.length sourceInheritedEq)).trans
+      (wire.trans
+        (FiniteEquiv.finCast (congrArg List.length targetInheritedEq).symm))
+  have traceWireSpec : ∀ index,
+      targetResult.state.inheritedWires.get (traceWire index) =
+        sourceResult.state.inheritedWires.get index := by
+    intro index
+    let sourceIndex := Fin.cast
+      (congrArg List.length sourceInheritedEq) index
+    have sourceGet : sourceResult.state.inheritedWires.get index =
+        sourceContext.get sourceIndex := by
+      simpa [sourceIndex, List.get_eq_getElem] using
+        List.get_of_eq sourceInheritedEq index
+    have targetGet : targetResult.state.inheritedWires.get (traceWire index) =
+        targetContext.get (wire sourceIndex) := by
+      simpa [traceWire, sourceIndex, FiniteEquiv.finCast,
+        List.get_eq_getElem] using
+        List.get_of_eq targetInheritedEq (traceWire index)
+    exact targetGet.trans ((wireSpec sourceIndex).trans sourceGet.symm)
+  have traceBindersEq : sourceResult.state.binders =
+      targetResult.state.binders :=
+    sourceResult.binders_eq.trans
+      (bindersEq.trans targetResult.binders_eq.symm)
+  obtain ⟨traceAlignment⟩ := compilerTrace_sameRouteContextIso input.property
+    sourceResult.state targetResult.state sourceResult.trace targetResult.trace
+      traceWire traceWireSpec traceBindersEq
+  have sourceWitnessEq : sourceResult.witness = sourceWitness :=
+    Region.ContextPath.unique sourceResult.witness sourceWitness
+  have targetWitnessEq : targetResult.witness = targetWitness :=
+    Region.ContextPath.unique targetResult.witness targetWitness
+  have outerEq : Splice.Input.compilerBodyOuterWire sourceResult.state
+      targetResult.state traceWire = wire := by
+    apply FiniteEquiv.ext
+    intro index
+    apply Fin.ext
+    rfl
+  subst sourceWitness
+  subst targetWitness
+  exact ⟨outerEq ▸ traceAlignment.alignment⟩
+
+/-- The two exact root-context presentations of one successful compiler run
+align at the executor's concrete route.  In particular, the selected route is
+not allowed to drift to an isomorphic sibling. -/
+theorem compiledRootItems_sameRouteContextIso
+    (input : CheckedDiagram signature)
+    {sourceContext targetContext :
+      ConcreteElaboration.WireContext input.val}
+    (sourceExact : sourceContext.Exact input.val.root)
+    (targetExact : targetContext.Exact input.val.root)
+    {sourceItems : ItemSeq signature sourceContext.length []}
+    {targetItems : ItemSeq signature targetContext.length []}
+    (sourceComputation : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val
+      (ConcreteElaboration.compileRegion? signature input.val
+        input.val.regionCount)
+      sourceContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences input.val input.val.root) =
+        some sourceItems)
+    (targetComputation : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val
+      (ConcreteElaboration.compileRegion? signature input.val
+        input.val.regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences input.val input.val.root) =
+        some targetItems)
+    (wire : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length))
+    (wireSpec : ∀ index,
+      targetContext.get (wire index) = sourceContext.get index)
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Splice.RegionRoute input.val input.val.root target path)
+    (targetNeRoot : target ≠ input.val.root)
+    (sourceWitness : Region.ContextPath (Region.mk 0 sourceItems) path)
+    (targetWitness : Region.ContextPath (Region.mk 0 targetItems) path) :
+    Nonempty (Splice.Input.PairedCompilerContextAlignment wire
+      sourceWitness targetWitness) := by
+  cases route with
+  | here => exact False.elim (targetNeRoot rfl)
+  | @step _ child target rest parent position positionEq tail =>
+      cases childKind : input.val.regions child with
+      | sheet =>
+          simp [childKind, CRegion.parent?] at parent
+      | cut childParent =>
+          have childParentEq : childParent = input.val.root := by
+            simpa [childKind, CRegion.parent?] using parent
+          subst childParent
+          cases sourceWitness with
+          | @cut _ _ _ _ _ _ sourceFocus sourceAt sourceChildBody
+              sourceIsCut sourceNested =>
+              cases targetWitness with
+              | @cut _ _ _ _ _ _ targetFocus targetAt targetChildBody
+                  targetIsCut targetNested =>
+                  have sourceOccurrence :=
+                    compiledRootItems_focus_computation sourceComputation
+                      position positionEq sourceFocus sourceAt
+                  have targetOccurrence :=
+                    compiledRootItems_focus_computation targetComputation
+                      position positionEq targetFocus targetAt
+                  have sourceChildComputation :
+                      ConcreteElaboration.compileRegion? signature input.val
+                        input.val.regionCount child sourceContext
+                        ConcreteElaboration.BinderContext.empty =
+                          some sourceChildBody := by
+                    rw [sourceIsCut] at sourceOccurrence
+                    simp only [ConcreteElaboration.compileOccurrenceWith?,
+                      childKind] at sourceOccurrence
+                    obtain ⟨compiledBody, bodyComputation, itemEq⟩ :=
+                      Option.bind_eq_some_iff.mp sourceOccurrence
+                    have bodyEq : compiledBody = sourceChildBody :=
+                      Item.cut.inj (Option.some.inj itemEq)
+                    simpa [bodyEq] using bodyComputation
+                  have targetChildComputation :
+                      ConcreteElaboration.compileRegion? signature input.val
+                        input.val.regionCount child targetContext
+                        ConcreteElaboration.BinderContext.empty =
+                          some targetChildBody := by
+                    rw [targetIsCut] at targetOccurrence
+                    simp only [ConcreteElaboration.compileOccurrenceWith?,
+                      childKind] at targetOccurrence
+                    obtain ⟨compiledBody, bodyComputation, itemEq⟩ :=
+                      Option.bind_eq_some_iff.mp targetOccurrence
+                    have bodyEq : compiledBody = targetChildBody :=
+                      Item.cut.inj (Option.some.inj itemEq)
+                    simpa [bodyEq] using bodyComputation
+                  let rootCover :=
+                    ConcreteElaboration.BinderContext.empty_covers_root
+                      input.property
+                  let rootEnumeration :=
+                    ConcreteElaboration.BinderContext.Enumeration.empty
+                      input.val
+                  obtain ⟨childAlignment⟩ :=
+                    compiledChild_sameRouteContextIso input tail
+                      sourceChildComputation targetChildComputation
+                      (sourceExact.extend_child input.property parent)
+                      (targetExact.extend_child input.property parent)
+                      (ConcreteElaboration.BinderContext.covers_cut_child
+                        rootCover childKind)
+                      (ConcreteElaboration.BinderContext.covers_cut_child
+                        rootCover childKind)
+                      (rootEnumeration.cutChild input.property childKind)
+                      (rootEnumeration.cutChild input.property childKind)
+                      rfl wire wireSpec sourceNested targetNested
+                  let sourceIndex : Fin sourceItems.length :=
+                    ⟨position.val,
+                      ItemSeq.focusAt?_index_lt sourceItems position.val
+                        sourceFocus sourceAt⟩
+                  let targetIndex : Fin targetItems.length :=
+                    ⟨position.val,
+                      ItemSeq.focusAt?_index_lt targetItems position.val
+                        targetFocus targetAt⟩
+                  obtain ⟨frame⟩ := compiledRootItems_sameDiagramFrame
+                    input.property targetExact sourceComputation
+                      targetComputation wire wireSpec sourceIndex targetIndex rfl
+                  let localWire := FiniteEquiv.refl (Fin 0)
+                  have extendedEq : extendWireEquiv wire localWire = wire := by
+                    apply FiniteEquiv.ext
+                    intro index
+                    refine Fin.addCases (fun outer => ?_)
+                      (fun localIndex => Fin.elim0 localIndex) index
+                    rw [extendWireEquiv_outer]
+                    apply Fin.ext
+                    rfl
+                  let frame' := ItemSeqIso.Frame.castWire extendedEq.symm frame
+                  have childContexts : DiagramContextIso signature
+                      (extendWireEquiv wire localWire) childAlignment.holeWire
+                      [] sourceNested.toFocus.holeRels
+                      sourceNested.toFocus.context
+                      (childAlignment.holeRelsEq.symm ▸
+                        targetNested.toFocus.context) := by
+                    rw [extendedEq]
+                    exact childAlignment.contexts
+                  have targetContextTransport :
+                      childAlignment.holeRelsEq.symm ▸
+                          DiagramContext.cut 0 targetFocus.before
+                            targetFocus.after targetNested.toFocus.context =
+                        DiagramContext.cut 0 targetFocus.before
+                          targetFocus.after
+                          (childAlignment.holeRelsEq.symm ▸
+                            targetNested.toFocus.context) := by
+                    exact DiagramContext.cut_transport_holeRels
+                      childAlignment.holeRelsEq targetFocus.before
+                        targetFocus.after targetNested.toFocus.context
+                  have cutContexts := DiagramContextIso.cutFrame localWire
+                    sourceFocus targetFocus sourceAt targetAt frame'
+                    sourceNested.toFocus.context
+                    (childAlignment.holeRelsEq.symm ▸
+                      targetNested.toFocus.context) childContexts
+                  exact ⟨{
+                    holeRelsEq := childAlignment.holeRelsEq
+                    holeWire := childAlignment.holeWire
+                    contexts := by
+                      simpa only [Region.ContextPath.toFocus,
+                        targetContextTransport] using cutContexts
+                  }⟩
+              | @bubble _ _ _ _ _ _ _ targetFocus targetAt targetChildBody
+                  targetIsBubble targetNested =>
+                  have targetOccurrence :=
+                    compiledRootItems_focus_computation targetComputation
+                      position positionEq targetFocus targetAt
+                  rw [targetIsBubble] at targetOccurrence
+                  simp only [ConcreteElaboration.compileOccurrenceWith?,
+                    childKind] at targetOccurrence
+                  obtain ⟨compiledBody, bodyComputation, itemEq⟩ :=
+                    Option.bind_eq_some_iff.mp targetOccurrence
+                  have impossible := Option.some.inj itemEq
+                  contradiction
+          | @bubble _ _ _ _ _ _ _ sourceFocus sourceAt sourceChildBody
+              sourceIsBubble sourceNested =>
+              have sourceOccurrence :=
+                compiledRootItems_focus_computation sourceComputation
+                  position positionEq sourceFocus sourceAt
+              rw [sourceIsBubble] at sourceOccurrence
+              simp only [ConcreteElaboration.compileOccurrenceWith?, childKind]
+                at sourceOccurrence
+              obtain ⟨compiledBody, bodyComputation, itemEq⟩ :=
+                Option.bind_eq_some_iff.mp sourceOccurrence
+              have impossible := Option.some.inj itemEq
+              contradiction
+      | bubble childParent arity =>
+          have childParentEq : childParent = input.val.root := by
+            simpa [childKind, CRegion.parent?] using parent
+          subst childParent
+          cases sourceWitness with
+          | @cut _ _ _ _ _ _ sourceFocus sourceAt sourceChildBody
+              sourceIsCut sourceNested =>
+              have sourceOccurrence :=
+                compiledRootItems_focus_computation sourceComputation
+                  position positionEq sourceFocus sourceAt
+              rw [sourceIsCut] at sourceOccurrence
+              simp only [ConcreteElaboration.compileOccurrenceWith?, childKind]
+                at sourceOccurrence
+              obtain ⟨compiledBody, bodyComputation, itemEq⟩ :=
+                Option.bind_eq_some_iff.mp sourceOccurrence
+              have impossible := Option.some.inj itemEq
+              contradiction
+          | @bubble _ _ _ sourceArity _ _ _ sourceFocus sourceAt
+              sourceChildBody
+              sourceIsBubble sourceNested =>
+              cases targetWitness with
+              | @cut _ _ _ _ _ _ targetFocus targetAt targetChildBody
+                  targetIsCut targetNested =>
+                  have targetOccurrence :=
+                    compiledRootItems_focus_computation targetComputation
+                      position positionEq targetFocus targetAt
+                  rw [targetIsCut] at targetOccurrence
+                  simp only [ConcreteElaboration.compileOccurrenceWith?,
+                    childKind] at targetOccurrence
+                  obtain ⟨compiledBody, bodyComputation, itemEq⟩ :=
+                    Option.bind_eq_some_iff.mp targetOccurrence
+                  have impossible := Option.some.inj itemEq
+                  contradiction
+              | @bubble _ _ _ targetArity _ _ _ targetFocus targetAt
+                  targetChildBody
+                  targetIsBubble targetNested =>
+                  have sourceOccurrence :=
+                    compiledRootItems_focus_computation sourceComputation
+                      position positionEq sourceFocus sourceAt
+                  have targetOccurrence :=
+                    compiledRootItems_focus_computation targetComputation
+                      position positionEq targetFocus targetAt
+                  rw [sourceIsBubble] at sourceOccurrence
+                  simp only [ConcreteElaboration.compileOccurrenceWith?,
+                    childKind] at sourceOccurrence
+                  obtain ⟨sourceCompiledBody, sourceBodyComputation,
+                      sourceItemEq⟩ :=
+                    Option.bind_eq_some_iff.mp sourceOccurrence
+                  have sourceBubbleEq :=
+                    Item.bubble.inj (Option.some.inj sourceItemEq)
+                  have sourceArityEq : arity = sourceArity :=
+                    sourceBubbleEq.1
+                  subst sourceArity
+                  have sourceBodyEq : sourceCompiledBody = sourceChildBody :=
+                    eq_of_heq sourceBubbleEq.2
+                  rw [targetIsBubble] at targetOccurrence
+                  simp only [ConcreteElaboration.compileOccurrenceWith?,
+                    childKind] at targetOccurrence
+                  obtain ⟨targetCompiledBody, targetBodyComputation,
+                      targetItemEq⟩ :=
+                    Option.bind_eq_some_iff.mp targetOccurrence
+                  have targetBubbleEq :=
+                    Item.bubble.inj (Option.some.inj targetItemEq)
+                  have targetArityEq : arity = targetArity :=
+                    targetBubbleEq.1
+                  subst targetArity
+                  have targetBodyEq : targetCompiledBody = targetChildBody :=
+                    eq_of_heq targetBubbleEq.2
+                  have sourceChildComputation :
+                      ConcreteElaboration.compileRegion? signature input.val
+                        input.val.regionCount child sourceContext
+                        (ConcreteElaboration.BinderContext.empty.push child
+                          arity) = some sourceChildBody := by
+                    simpa [sourceBodyEq] using sourceBodyComputation
+                  have targetChildComputation :
+                      ConcreteElaboration.compileRegion? signature input.val
+                        input.val.regionCount child targetContext
+                        (ConcreteElaboration.BinderContext.empty.push child
+                          arity) = some targetChildBody := by
+                    simpa [targetBodyEq] using targetBodyComputation
+                  let rootCover :=
+                    ConcreteElaboration.BinderContext.empty_covers_root
+                      input.property
+                  let rootEnumeration :=
+                    ConcreteElaboration.BinderContext.Enumeration.empty
+                      input.val
+                  obtain ⟨childAlignment⟩ :=
+                    compiledChild_sameRouteContextIso input tail
+                      sourceChildComputation targetChildComputation
+                      (sourceExact.extend_child input.property parent)
+                      (targetExact.extend_child input.property parent)
+                      (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                        rootCover childKind)
+                      (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                        rootCover childKind)
+                      (rootEnumeration.bubbleChild input.property childKind)
+                      (rootEnumeration.bubbleChild input.property childKind)
+                      rfl wire wireSpec sourceNested targetNested
+                  let sourceIndex : Fin sourceItems.length :=
+                    ⟨position.val,
+                      ItemSeq.focusAt?_index_lt sourceItems position.val
+                        sourceFocus sourceAt⟩
+                  let targetIndex : Fin targetItems.length :=
+                    ⟨position.val,
+                      ItemSeq.focusAt?_index_lt targetItems position.val
+                        targetFocus targetAt⟩
+                  obtain ⟨frame⟩ := compiledRootItems_sameDiagramFrame
+                    input.property targetExact sourceComputation
+                      targetComputation wire wireSpec sourceIndex targetIndex rfl
+                  let localWire := FiniteEquiv.refl (Fin 0)
+                  have extendedEq : extendWireEquiv wire localWire = wire := by
+                    apply FiniteEquiv.ext
+                    intro index
+                    refine Fin.addCases (fun outer => ?_)
+                      (fun localIndex => Fin.elim0 localIndex) index
+                    rw [extendWireEquiv_outer]
+                    apply Fin.ext
+                    rfl
+                  let frame' := ItemSeqIso.Frame.castWire extendedEq.symm frame
+                  have childContexts : DiagramContextIso signature
+                      (extendWireEquiv wire localWire) childAlignment.holeWire
+                      (arity :: []) sourceNested.toFocus.holeRels
+                      sourceNested.toFocus.context
+                      (childAlignment.holeRelsEq.symm ▸
+                        targetNested.toFocus.context) := by
+                    rw [extendedEq]
+                    exact childAlignment.contexts
+                  have targetContextTransport :
+                      childAlignment.holeRelsEq.symm ▸
+                          DiagramContext.bubble 0 targetFocus.before
+                            targetFocus.after arity
+                            targetNested.toFocus.context =
+                        DiagramContext.bubble 0 targetFocus.before
+                          targetFocus.after arity
+                          (childAlignment.holeRelsEq.symm ▸
+                            targetNested.toFocus.context) := by
+                    exact DiagramContext.bubble_transport_holeRels
+                      childAlignment.holeRelsEq targetFocus.before
+                        targetFocus.after targetNested.toFocus.context
+                  have bubbleContexts := DiagramContextIso.bubbleFrame
+                    localWire sourceFocus targetFocus sourceAt targetAt frame'
+                    sourceNested.toFocus.context
+                    (childAlignment.holeRelsEq.symm ▸
+                      targetNested.toFocus.context) childContexts
+                  exact ⟨{
+                    holeRelsEq := childAlignment.holeRelsEq
+                    holeWire := childAlignment.holeWire
+                    contexts := by
+                      simpa only [Region.ContextPath.toFocus,
+                        targetContextTransport] using bubbleContexts
+                  }⟩
+
 /-- The closed anchor compiler items at a root selection and the ordered-open
 root compiler items are the same occurrence block up to the exact root-wire
 coordinate equivalence. -/
