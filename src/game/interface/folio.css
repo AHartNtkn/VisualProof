@@ -9,6 +9,7 @@
     url('../../../assets/interface/generated/excavation-folio/folio-shell.png')
     center / 100% 100% no-repeat;
   color: #332c24;
+  font-family: Georgia, 'Times New Roman', serif;
   filter: drop-shadow(0.8rem 1.1rem 1.3rem rgb(2 2 5 / 58%));
   isolation: isolate;
   perspective: 110rem;
@@ -89,16 +90,11 @@
   line-height: 1.25;
 }
 
-.dossier-title {
-  margin: 0 0 0.35rem;
-  font: 700 0.78rem/1.1 Georgia, serif;
-  letter-spacing: 0.065em;
-  text-transform: uppercase;
-}
-
 .dossier-note {
-  margin: 0 0 0.3rem;
-  font: italic 0.62rem/1.25 Georgia, serif;
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .culture-tabs {
@@ -562,7 +558,4 @@
     gap: 0.15rem;
   }
 
-  .dossier-note {
-    display: none;
-  }
 }

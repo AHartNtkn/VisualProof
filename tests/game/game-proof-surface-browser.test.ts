@@ -30,7 +30,7 @@ afterAll(async () => {
 })
 
 const openFixture = async (): Promise<Page> => {
-  const page = await browser.newPage({ viewport: { width: 1600, height: 720 } })
+  const page = await browser.newPage({ viewport: { width: 1600, height: 900 } })
   await page.goto(fixtureUrl)
   await page.waitForSelector('.curse-game-proof-canvas')
   return page
@@ -108,7 +108,9 @@ describe('rendered game proof surface', () => {
           return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
         })
         renderedCenters.push(center.x)
-        await page.mouse.click(center.x, center.y)
+        const rail = await slider.boundingBox()
+        if (rail === null) throw new Error('timeline slider has no rendered box')
+        await page.mouse.click(center.x, rail.y + rail.height / 2)
         expect((await page.evaluate(() => window.__gameProofSurfaceFixture.timeline())).requests.at(-1)).toBe(cursor)
       }
       await page.evaluate(() => window.__gameProofSurfaceFixture.selectParameter())

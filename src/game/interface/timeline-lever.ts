@@ -117,8 +117,8 @@ export function mountTimelineLever(
     const position = leverHandleFraction(cursor, timeline.states.length)
     handleSlot.style.setProperty('--curse-timeline-position', String(position))
     handleSlot.style.setProperty(
-      '--curse-timeline-handle-center',
-      `${(TIMELINE_TRACK_START + position * TIMELINE_TRACK_SPAN) * 100}%`,
+      '--curse-timeline-handle-shift',
+      `${(TIMELINE_TRACK_START + position * TIMELINE_TRACK_SPAN - 0.5) * 100}%`,
     )
     rail.setAttribute('aria-valuemin', '0')
     rail.setAttribute('aria-valuemax', String(last))

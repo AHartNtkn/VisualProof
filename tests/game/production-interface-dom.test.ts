@@ -103,6 +103,10 @@ describe('production excavation folio DOM view', () => {
     expect(sheet.getAttribute('tabindex')).toBe('0')
     expect(root.querySelectorAll('.curse-folio-page')).toHaveLength(0)
     expect(sheet.scrollTop).toBe(85)
+    expect(root.querySelector('.dossier-title')!.textContent)
+      .toBe('Excavation archive · First dossier')
+    expect(root.querySelector(`[data-culture="${FIRST_CULTURE}"]`)!
+      .querySelector('.curse-folio-culture-label')!.textContent).toBe('First')
 
     root.querySelector(`[data-puzzle="${COMPLETED}"]`)!.dispatchEvent(new Event('click'))
     root.querySelector(`[data-puzzle="${AVAILABLE}"]`)!.dispatchEvent(new Event('click'))
@@ -388,6 +392,9 @@ describe('production lens DOM ownership and approved assets', () => {
     expect(lensCss).toMatch(/\.curse-production-gasket\s*{[^}]*inset: 0;/s)
     expect(lensCss).toMatch(/\.curse-production-timeline\s*{[^}]*inset: 0;[^}]*width: 100%;[^}]*height: 100%;/s)
     expect(lensCss).toMatch(/\.curse-production-timeline\s*{[^}]*pointer-events: none;/s)
-    expect(lensCss).toMatch(/\.curse-production-timeline-handle-slot\s*{[^}]*pointer-events: auto;/s)
+    expect(lensCss).toMatch(/\.curse-production-timeline-housing\s*{[^}]*inset: 0;[^}]*width: 100%;[^}]*height: 100%;/s)
+    expect(lensCss).toMatch(/\.curse-production-timeline-handle-slot\s*{[^}]*inset: 0;[^}]*width: 100%;[^}]*height: 100%;/s)
+    expect(lensCss).toMatch(/\.curse-production-timeline-handle\s*{[^}]*inset: 0;[^}]*width: 100%;[^}]*height: 100%;/s)
+    expect(lensCss).toMatch(/\.curse-production-timeline-control\s*{[^}]*pointer-events: auto;/s)
   })
 })

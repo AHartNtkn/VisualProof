@@ -97,40 +97,40 @@
 
 .curse-production-timeline-housing {
   position: absolute;
-  right: 17%;
-  bottom: 4.6%;
-  left: 17%;
-  height: 11%;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   object-fit: fill;
 }
 
 .curse-production-timeline-handle-slot {
   position: absolute;
-  right: 23.6%;
-  bottom: 6.8%;
-  left: 23.6%;
-  height: 6.6%;
-  pointer-events: auto;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
   --curse-timeline-position: 0.5;
-  --curse-timeline-handle-center: 50%;
+  --curse-timeline-handle-shift: 0%;
 }
 
 .curse-production-timeline-handle {
   position: absolute;
-  top: 50%;
-  left: var(--curse-timeline-handle-center);
-  width: 17%;
-  transform: translate(-50%, -50%);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+  transform: translateX(var(--curse-timeline-handle-shift));
   pointer-events: none;
 }
 
 .curse-production-timeline-control {
   position: absolute;
   z-index: 2;
-  top: 0;
-  bottom: 0;
+  top: 84.7%;
+  bottom: 2.6%;
   left: 0;
   width: 100%;
+  pointer-events: auto;
   cursor: ew-resize;
   touch-action: none;
   outline: none;
@@ -149,6 +149,10 @@
   left: var(--curse-folio-left);
   width: var(--curse-folio-width);
   transition: left 220ms ease;
+}
+
+.curse-production-folio-host.is-folio-drag-owner {
+  transition: none;
 }
 
 .curse-production-folio-drawer-toggle {

@@ -89,6 +89,7 @@ describe('production timeline control', () => {
     expect(control.getAttribute('aria-valuenow')).toBe('0')
     expect(control.getAttribute('aria-valuetext')).toBe('Original seal')
     expect(slot.style.getPropertyValue('--curse-timeline-position')).toBe('0')
+    expect(slot.style.getPropertyValue('--curse-timeline-handle-shift')).toBe('-41.5%')
 
     current = timeline(3)
     mounted.refresh()
@@ -96,6 +97,8 @@ describe('production timeline control', () => {
     expect(control.getAttribute('aria-valuenow')).toBe('3')
     expect(control.getAttribute('aria-valuetext')).toBe('Recorded state 3')
     expect(slot.style.getPropertyValue('--curse-timeline-position')).toBe('0.75')
+    expect(Number.parseFloat(slot.style.getPropertyValue('--curse-timeline-handle-shift')))
+      .toBeCloseTo(20.75)
   })
 
   it('routes standard slider keys as clamped cursor requests', () => {

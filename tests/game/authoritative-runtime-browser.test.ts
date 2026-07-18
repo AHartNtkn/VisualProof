@@ -90,6 +90,8 @@ describe('authoritative production renderer runtime', () => {
             aperture: rectangle('.curse-production-aperture'),
             gasket: rectangle('.curse-production-gasket'),
             timeline: rectangle('.curse-production-timeline'),
+            timelineHousing: rectangle('.curse-production-timeline-housing'),
+            timelineHandleLayer: rectangle('.curse-production-timeline-handle-slot'),
           }
         })
         expect(rectangles.lens).toEqual({
@@ -111,6 +113,8 @@ describe('authoritative production renderer runtime', () => {
         expect(rectangles.aperture.height).toBeCloseTo(viewport.height * 0.7278, 0)
         expect(rectangles.gasket).toEqual(rectangles.lens)
         expect(rectangles.timeline).toEqual(rectangles.lens)
+        expect(rectangles.timelineHousing).toEqual(rectangles.lens)
+        expect(rectangles.timelineHandleLayer).toEqual(rectangles.lens)
       }
 
       await assertRectangles(

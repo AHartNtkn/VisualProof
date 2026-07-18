@@ -93,6 +93,11 @@ const snapshotRect = (node: HTMLElement): RectSnapshot | null => {
   return { left, top, width, height }
 }
 
+const culturePresentationName = (culture: CultureId): string => {
+  const name = culture.split('-').find((part) => part.length > 0) ?? culture
+  return `${name[0]!.toUpperCase()}${name.slice(1)}`
+}
+
 export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const document = options.host.ownerDocument
   const root = element(document, 'section', 'curse-folio folio-foundation')
@@ -117,7 +122,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const cultures = element(document, 'nav', 'culture-tabs curse-folio-cultures')
   cultures.setAttribute('aria-label', 'Cultural dossiers')
   const dossierHeader = element(document, 'header', 'dossier-header')
-  const dossierTitle = element(document, 'h2', 'dossier-title')
+  const dossierTitle = element(document, 'p', 'dossier-title')
   const dossierNote = element(document, 'p', 'dossier-note')
   dossierHeader.append(dossierTitle, dossierNote)
   const sheet = element(document, 'div', 'record-grid')
@@ -308,20 +313,11 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   }
 
   const positionInspection = (sample: FolioDragSample): void => {
-    inspectionPositioner.style.setProperty('--folio-drag-x', `${sample.clientX}px`)
-    inspectionPositioner.style.setProperty('--folio-drag-y', `${sample.clientY}px`)
-    const painted = snapshotRect(inspectionPositioner)
-    if (painted === null || painted.width === 0 || painted.height === 0) return
-    const paintedCenterX = painted.left + painted.width / 2
-    const paintedCenterY = painted.top + painted.height / 2
-    inspectionPositioner.style.setProperty(
-      '--folio-drag-x',
-      `${sample.clientX + sample.clientX - paintedCenterX}px`,
-    )
-    inspectionPositioner.style.setProperty(
-      '--folio-drag-y',
-      `${sample.clientY + sample.clientY - paintedCenterY}px`,
-    )
+    const containingBlock = snapshotRect(inspectionStage)
+    const left = containingBlock?.left ?? 0
+    const top = containingBlock?.top ?? 0
+    inspectionPositioner.style.setProperty('--folio-drag-x', `${sample.clientX - left}px`)
+    inspectionPositioner.style.setProperty('--folio-drag-y', `${sample.clientY - top}px`)
   }
 
   const clearInspection = (generation: number): void => {
@@ -335,6 +331,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     inspectionRecord.replaceChildren()
     delete inspectionRecord.dataset.liftedPuzzle
     delete inspectionRecord.dataset.status
+    options.host.classList.remove('is-folio-drag-owner')
   }
 
   const returnRecord = (drag: ActiveDrag): void => {
@@ -381,6 +378,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       || !inputAllowed()
     ) return
     event.preventDefault()
+    options.host.classList.add('is-folio-drag-owner')
     const sample = dragSample(event)
     const drag: ActiveDrag = {
       puzzle: record.id,
@@ -447,7 +445,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
         cultureElements.set(culture.id, control)
       }
       const label = control.querySelector<HTMLElement>('.curse-folio-culture-label')
-      if (label !== null) label.textContent = culture.name
+      if (label !== null) label.textContent = culturePresentationName(culture.id)
       control.setAttribute('aria-pressed', String(culture.id === current.selectedCulture))
       if (culture.unlocked) control.removeAttribute('aria-disabled')
       else control.setAttribute('aria-disabled', 'true')
@@ -490,7 +488,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       sheet.replaceChildren()
       return
     }
-    dossierTitle.textContent = selected.name
+    dossierTitle.textContent = `Excavation archive · ${culturePresentationName(selected.id)} dossier`
     dossierNote.textContent = selected.historicalSummary
     sheet.setAttribute('aria-label', `${selected.name} artifact records`)
     const records = selected.records.map((record, index) => {
@@ -575,6 +573,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       inspectionPositioner.style.removeProperty('--folio-drag-x')
       inspectionPositioner.style.removeProperty('--folio-drag-y')
       inspectionStage.setAttribute('aria-hidden', 'true')
+      options.host.classList.remove('is-folio-drag-owner')
       clearRestriction()
       listeners.abort()
       motion.settleAll()
