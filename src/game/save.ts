@@ -13,9 +13,11 @@ import { isCultureUnlocked, isUnlocked } from './progress'
 import { applyGameStep, moveCursor, startPuzzle, type GameSession } from './session'
 import {
   GameDomainError,
+  teacherAcknowledgementIdentity,
   type CultureId,
   type GameStep,
   type PuzzleId,
+  type TeacherAcknowledgementIdentity,
 } from './types'
 
 export type SerializedGameStep = Readonly<Record<string, unknown>>
@@ -32,7 +34,7 @@ export type GameSave = {
   readonly completed: readonly PuzzleId[]
   readonly attempts: Readonly<Record<string, SerializedGameTimeline>>
   readonly replays: Readonly<Record<string, SerializedGameTimeline>>
-  readonly acknowledgedTeachers: readonly string[]
+  readonly acknowledgedTeachers: readonly TeacherAcknowledgementIdentity[]
   readonly mode: GamePrimaryMode
   readonly activePuzzle: PuzzleId | null
   readonly completionReceipt: CompletionReceipt | null
@@ -132,7 +134,8 @@ export function encodeGameSave(catalog: GameCatalog, state: GameControllerState)
     completed: [...state.completed].sort(),
     attempts: sortedTimelineRecord(state.firstAttempts),
     replays: sortedTimelineRecord(state.replays),
-    acknowledgedTeachers: [...state.acknowledgedTeachers].sort(),
+    acknowledgedTeachers: [...state.acknowledgedTeachers]
+      .map((identity) => ({ ...identity })),
     mode: state.mode,
     activePuzzle: state.activePuzzle,
     completionReceipt: state.completionReceipt,
@@ -279,6 +282,50 @@ const readReceipt = (
   return { puzzle, moves: receipt.moves as number, replay: receipt.replay }
 }
 
+const readTeacherAcknowledgements = (
+  catalog: GameCatalog,
+  value: unknown,
+): readonly TeacherAcknowledgementIdentity[] => {
+  if (!Array.isArray(value)) {
+    throw new GameDomainError('save acknowledgedTeachers must be an array')
+  }
+  const seen = new Set<string>()
+  return value.map((entry, index) => {
+    const saved = strictRecord(
+      entry,
+      `save acknowledged teacher ${index}`,
+      ['puzzle', 'intervention'],
+    )
+    const puzzle = readPuzzleId(
+      catalog,
+      saved.puzzle,
+      `save acknowledged teacher ${index} puzzle`,
+    )
+    if (typeof saved.intervention !== 'string') {
+      throw new GameDomainError(
+        `save acknowledged teacher ${index} intervention must be a string`,
+      )
+    }
+    const intervention = catalog.puzzle(puzzle).teacher.find((candidate) =>
+      candidate.id === saved.intervention
+      && candidate.repeat === 'once')
+    if (intervention === undefined) {
+      throw new GameDomainError(
+        `acknowledged teacher intervention '${puzzle}:${saved.intervention}' is unknown or repeatable`,
+      )
+    }
+    const identity = teacherAcknowledgementIdentity(puzzle, intervention.id)
+    const key = JSON.stringify([identity.puzzle, identity.intervention])
+    if (seen.has(key)) {
+      throw new GameDomainError(
+        `save acknowledgedTeachers has duplicate '${identity.puzzle}:${identity.intervention}'`,
+      )
+    }
+    seen.add(key)
+    return identity
+  })
+}
+
 const validateCompletedClosure = (
   catalog: GameCatalog,
   completed: ReadonlySet<PuzzleId>,
@@ -354,20 +401,7 @@ export function decodeGameSave(catalog: GameCatalog, value: unknown): GameContro
     : readPuzzleId(catalog, root.activePuzzle, 'save active puzzle')
   validateMode(catalog, mode, activePuzzle, receipt, completed, attempts, replays)
 
-  const acknowledgedEntries = uniqueStrings(
-    root.acknowledgedTeachers,
-    'save acknowledgedTeachers',
-  )
-  const onceOnlyTeacherIds = new Set(
-    catalog.source.puzzles.flatMap((puzzle) => puzzle.teacher
-      .filter((intervention) => intervention.repeat === 'once')
-      .map((intervention) => intervention.id)),
-  )
-  for (const id of acknowledgedEntries) {
-    if (!onceOnlyTeacherIds.has(id)) {
-      throw new GameDomainError(`acknowledged teacher intervention '${id}' is unknown or repeatable`)
-    }
-  }
+  const acknowledgedTeachers = readTeacherAcknowledgements(catalog, root.acknowledgedTeachers)
 
   const selectedCulture = readCultureId(catalog, root.selectedCulture, 'save selected culture')
   const firstCulture = catalog.source.cultures[0]
@@ -416,7 +450,7 @@ export function decodeGameSave(catalog: GameCatalog, value: unknown): GameContro
     completed,
     firstAttempts: attempts,
     replays,
-    acknowledgedTeachers: new Set(acknowledgedEntries),
+    acknowledgedTeachers,
     completionReceipt: receipt,
     selectedCulture,
     scrollByCulture,

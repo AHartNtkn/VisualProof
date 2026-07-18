@@ -9,6 +9,8 @@ import { applyGameStep, moveCursor, startPuzzle } from './session'
 import type { TeacherPresentationIntent } from './teaching'
 import {
   GameDomainError,
+  isTeacherAcknowledged,
+  teacherAcknowledgementIdentity,
   type CultureId,
   type GameStep,
   type PuzzleId,
@@ -227,13 +229,18 @@ export function reduceGame(
           `puzzle '${puzzle.id}' has no authored teacher intervention '${action.intervention.id}'`,
         )
       }
-      if (intervention.repeat === 'once' && state.acknowledgedTeachers.has(intervention.id)) {
+      const identity = teacherAcknowledgementIdentity(puzzle.id, intervention.id)
+      if (intervention.repeat === 'once' && isTeacherAcknowledged(
+        state.acknowledgedTeachers,
+        identity,
+      )) {
         return result(state)
       }
       return result({
         ...state,
         transient: {
           kind: 'teacher',
+          identity,
           intervention,
           presentation: teacherPresentation(intervention),
         },
@@ -244,7 +251,8 @@ export function reduceGame(
         throw new GameDomainError('teacher acknowledgement requires a presented intervention')
       }
       const acknowledgedTeachers = state.transient.intervention.repeat === 'once'
-        ? new Set(state.acknowledgedTeachers).add(state.transient.intervention.id)
+        && !isTeacherAcknowledged(state.acknowledgedTeachers, state.transient.identity)
+        ? [...state.acknowledgedTeachers, state.transient.identity]
         : state.acknowledgedTeachers
       return result({ ...state, acknowledgedTeachers, transient: null })
     }

@@ -3,6 +3,7 @@ import {
   applyGameStep,
   currentDiagram,
   startPuzzle,
+  teacherAcknowledgementIdentity,
   teacherInterventionsFor,
   type GameRuntimeAuthority,
   type TeacherIntervention,
@@ -48,12 +49,19 @@ const puzzle = minimalPuzzle({
 const authority: GameRuntimeAuthority = {
   context: { relations: new Map(), theorems: new Map() },
 }
+const openingIdentity = teacherAcknowledgementIdentity(puzzle.id, opening.id)
+const recognizedIdentity = teacherAcknowledgementIdentity(puzzle.id, recognizedUnwinnable.id)
+const completionIdentity = teacherAcknowledgementIdentity(puzzle.id, completion.id)
 
 describe('teacher presentations', () => {
   it('offers opening mechanic instruction as a modal and suppresses it once seen', () => {
-    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, new Set()))
-      .toEqual([{ intervention: opening, presentation: { kind: 'modalInstruction' } }])
-    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, new Set([opening.id])))
+    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, []))
+      .toEqual([{
+        identity: openingIdentity,
+        intervention: opening,
+        presentation: { kind: 'modalInstruction' },
+      }])
+    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, [openingIdentity]))
       .toEqual([])
   })
 
@@ -67,25 +75,27 @@ describe('teacher presentations', () => {
     expect(teacherInterventionsFor(
       puzzle,
       { kind: 'recognizedUnwinnable', diagram: currentDiagram(transition.session) },
-      new Set(),
+      [],
     )).toEqual([{
+      identity: recognizedIdentity,
       intervention: recognizedUnwinnable,
       presentation: { kind: 'nonblockingCommentary', recovery: 'timeline' },
     }])
     expect(teacherInterventionsFor(
       puzzle,
       { kind: 'recognizedUnwinnable', diagram: four.goal.diagram },
-      new Set(),
+      [],
     )).toEqual([])
   })
 
   it('offers completion through completion-owned commentary only', () => {
-    expect(teacherInterventionsFor(puzzle, { kind: 'completion' }, new Set()))
+    expect(teacherInterventionsFor(puzzle, { kind: 'completion' }, []))
       .toEqual([{
+        identity: completionIdentity,
         intervention: completion,
         presentation: { kind: 'completionCommentary' },
       }])
-    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, new Set()))
+    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, []))
       .not.toContainEqual(expect.objectContaining({ intervention: completion }))
   })
 

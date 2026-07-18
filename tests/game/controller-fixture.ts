@@ -13,6 +13,7 @@ export const FIRST = puzzleId('first-artifact')
 export const SECOND = puzzleId('second-artifact')
 export const FIRST_CULTURE = cultureId('oldest-tradition')
 export const SECOND_CULTURE = cultureId('second-tradition')
+export const SHARED_TEACHER_ID = 'shared-opening'
 
 function longPuzzle(
   id: typeof FIRST | typeof SECOND,
@@ -36,7 +37,7 @@ function longPuzzle(
       { rule: 'doubleCutElim', region: outer },
     ],
     teacher: [{
-      id: `opening-${id}`,
+      id: SHARED_TEACHER_ID,
       trigger: { kind: 'opening' },
       text: `Opening instruction for ${id}.`,
       repeat: 'once',

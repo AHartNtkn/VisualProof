@@ -11,6 +11,7 @@ import {
   FIRST_CULTURE,
   SECOND,
   SECOND_CULTURE,
+  SHARED_TEACHER_ID,
 } from './controller-fixture'
 
 const catalog = controllerCatalog()
@@ -84,6 +85,45 @@ describe('strict per-puzzle game save', () => {
     expect(loaded.selectedCulture).toBe(SECOND_CULTURE)
     expect(loaded.scrollByCulture).toEqual(state.scrollByCulture)
     expect(loaded.settings).toEqual(state.settings)
+  })
+
+  it('round-trips shared local teacher ids as independent puzzle-qualified acknowledgements', () => {
+    let state = select(fresh(), SECOND)
+    state = act(state, {
+      kind: 'openTeacher', intervention: catalog.puzzle(SECOND).teacher[0]!,
+    })
+    state = act(state, { kind: 'acknowledgeTeacher' })
+    state = act(state, { kind: 'levelSelection' })
+    state = select(state, FIRST)
+    state = act(state, {
+      kind: 'openTeacher', intervention: catalog.puzzle(FIRST).teacher[0]!,
+    })
+    state = act(state, { kind: 'acknowledgeTeacher' })
+
+    const encoded = encodeGameSave(catalog, state)
+    expect(encoded.acknowledgedTeachers).toEqual([
+      { puzzle: SECOND, intervention: SHARED_TEACHER_ID },
+      { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
+    ])
+    const loaded = decodeGameSave(catalog, plain(encoded))
+    expect(loaded.acknowledgedTeachers).toEqual(state.acknowledgedTeachers)
+  })
+
+  it('strictly rejects bare, duplicate, and cross-puzzle teacher acknowledgements', () => {
+    const base: any = plain(encodeGameSave(catalog, fresh()))
+    base.acknowledgedTeachers = [SHARED_TEACHER_ID]
+    expect(() => decodeGameSave(catalog, base)).toThrow(/acknowledged teacher/)
+
+    const duplicate: any = plain(encodeGameSave(catalog, fresh()))
+    duplicate.acknowledgedTeachers = [
+      { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
+      { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
+    ]
+    expect(() => decodeGameSave(catalog, duplicate)).toThrow(/duplicate/)
+
+    const crossPuzzle: any = plain(encodeGameSave(catalog, fresh()))
+    crossPuzzle.acknowledgedTeachers = [{ puzzle: FIRST, intervention: 'not-authored-here' }]
+    expect(() => decodeGameSave(catalog, crossPuzzle)).toThrow(/unknown or repeatable/)
   })
 
   it('round-trips a completion receipt with exact move count and replay identity', () => {

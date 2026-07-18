@@ -1,6 +1,12 @@
 import type { Diagram } from '../kernel/diagram/diagram'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
-import type { PuzzleDefinition, TeacherIntervention } from './types'
+import {
+  isTeacherAcknowledged,
+  teacherAcknowledgementIdentity,
+  type PuzzleDefinition,
+  type TeacherAcknowledgementIdentity,
+  type TeacherIntervention,
+} from './types'
 
 export type TeacherSignal =
   | { readonly kind: 'opening' }
@@ -13,6 +19,7 @@ export type TeacherPresentationIntent =
   | { readonly kind: 'completionCommentary' }
 
 export type PresentedTeacherIntervention = {
+  readonly identity: TeacherAcknowledgementIdentity
   readonly intervention: TeacherIntervention
   readonly presentation: TeacherPresentationIntent
 }
@@ -30,10 +37,11 @@ const presentationFor = (intervention: TeacherIntervention): TeacherPresentation
 export function teacherInterventionsFor(
   puzzle: PuzzleDefinition,
   signal: TeacherSignal,
-  seen: ReadonlySet<string>,
+  acknowledged: readonly TeacherAcknowledgementIdentity[],
 ): readonly PresentedTeacherIntervention[] {
   return puzzle.teacher.flatMap((intervention) => {
-    if (intervention.repeat === 'once' && seen.has(intervention.id)) return []
+    const identity = teacherAcknowledgementIdentity(puzzle.id, intervention.id)
+    if (intervention.repeat === 'once' && isTeacherAcknowledged(acknowledged, identity)) return []
     const trigger = intervention.trigger
     if (trigger.kind !== signal.kind) return []
     let matches: boolean
@@ -44,6 +52,6 @@ export function teacherInterventionsFor(
         matches = signal.kind === 'recognizedUnwinnable'
           && exploreForm(trigger.state.diagram) === exploreForm(signal.diagram)
     }
-    return matches ? [{ intervention, presentation: presentationFor(intervention) }] : []
+    return matches ? [{ identity, intervention, presentation: presentationFor(intervention) }] : []
   })
 }

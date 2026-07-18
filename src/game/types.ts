@@ -87,6 +87,23 @@ export type TeacherIntervention =
       readonly recovery: 'timeline'
     }
 
+export type TeacherAcknowledgementIdentity = {
+  readonly puzzle: PuzzleId
+  readonly intervention: string
+}
+
+export const teacherAcknowledgementIdentity = (
+  puzzle: PuzzleId,
+  intervention: string,
+): TeacherAcknowledgementIdentity => ({ puzzle, intervention })
+
+export const isTeacherAcknowledged = (
+  acknowledged: readonly TeacherAcknowledgementIdentity[],
+  identity: TeacherAcknowledgementIdentity,
+): boolean => acknowledged.some((candidate) =>
+  candidate.puzzle === identity.puzzle
+  && candidate.intervention === identity.intervention)
+
 export type PuzzleLearning = {
   readonly introduces: readonly PerformanceId[]
   readonly practices: readonly PerformanceId[]

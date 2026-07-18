@@ -5,6 +5,7 @@ import {
   GameDomainError,
   type CultureId,
   type PuzzleId,
+  type TeacherAcknowledgementIdentity,
 } from './types'
 
 export type GamePrimaryMode = 'archive' | 'puzzle' | 'completion'
@@ -34,7 +35,7 @@ export type GameControllerState = {
   readonly completed: ReadonlySet<PuzzleId>
   readonly firstAttempts: ReadonlyMap<PuzzleId, GameSession>
   readonly replays: ReadonlyMap<PuzzleId, GameSession>
-  readonly acknowledgedTeachers: ReadonlySet<string>
+  readonly acknowledgedTeachers: readonly TeacherAcknowledgementIdentity[]
   readonly completionReceipt: CompletionReceipt | null
   readonly selectedCulture: CultureId
   readonly scrollByCulture: ReadonlyMap<CultureId, number>
@@ -58,7 +59,7 @@ export function createInitialGameState(
     completed: new Set(),
     firstAttempts: new Map(),
     replays: new Map(),
-    acknowledgedTeachers: new Set(),
+    acknowledgedTeachers: [],
     completionReceipt: null,
     selectedCulture: firstCulture.id,
     scrollByCulture: new Map(catalog.source.cultures.map((culture) => [culture.id, 0] as const)),

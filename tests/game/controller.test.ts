@@ -13,6 +13,7 @@ import {
   FIRST_CULTURE,
   SECOND,
   SECOND_CULTURE,
+  SHARED_TEACHER_ID,
 } from './controller-fixture'
 
 const catalog = controllerCatalog()
@@ -275,9 +276,36 @@ describe('authoritative game controller', () => {
     state = transition(state, { kind: 'openTeacher', intervention }).state
     state = transition(state, { kind: 'acknowledgeTeacher' }).state
 
-    expect(state.acknowledgedTeachers).toEqual(new Set([intervention.id]))
+    expect(state.acknowledgedTeachers).toEqual([{
+      puzzle: FIRST,
+      intervention: SHARED_TEACHER_ID,
+    }])
     expect(state.transient).toBeNull()
     expect(state.firstAttempts.get(FIRST)?.timeline).toBe(timeline)
+  })
+
+  it('acknowledges the same local teacher id independently for each puzzle', () => {
+    let state = select(fresh(), FIRST)
+    const firstIntervention = catalog.puzzle(FIRST).teacher[0]!
+    const secondIntervention = catalog.puzzle(SECOND).teacher[0]!
+    expect(firstIntervention.id).toBe(SHARED_TEACHER_ID)
+    expect(secondIntervention.id).toBe(SHARED_TEACHER_ID)
+
+    state = transition(state, { kind: 'openTeacher', intervention: firstIntervention }).state
+    state = transition(state, { kind: 'acknowledgeTeacher' }).state
+    state = transition(state, { kind: 'levelSelection' }).state
+    state = select(state, SECOND)
+    state = transition(state, { kind: 'openTeacher', intervention: secondIntervention }).state
+
+    expect(state.transient).toMatchObject({
+      kind: 'teacher',
+      identity: { puzzle: SECOND, intervention: SHARED_TEACHER_ID },
+    })
+    state = transition(state, { kind: 'acknowledgeTeacher' }).state
+    expect(state.acknowledgedTeachers).toEqual([
+      { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
+      { puzzle: SECOND, intervention: SHARED_TEACHER_ID },
+    ])
   })
 
   it('does not change controller state when a proof move is invalid', () => {
