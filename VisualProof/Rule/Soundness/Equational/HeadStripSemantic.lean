@@ -11,6 +11,31 @@ open Theory
 
 namespace HeadStripSoundness
 
+theorem identityBinderWitness_relationMap_eq_identity
+    {source target : ConcreteDiagram}
+    {sourceBinders : ConcreteElaboration.BinderContext source rels}
+    {targetBinders : ConcreteElaboration.BinderContext target rels}
+    (witness : ConcreteElaboration.IdentityBinderWitness source target
+      sourceBinders targetBinders) :
+    (ConcreteElaboration.IdentityBinderWitness.relationMap witness :
+      RelationRenaming rels rels) =
+        (ConcreteElaboration.identityRelationRenaming rels :
+          RelationRenaming rels rels) := by
+  rcases witness with ⟨relationContextsEq, bindersEq⟩
+  have equalityProof : relationContextsEq = rfl := Subsingleton.elim _ _
+  cases equalityProof
+  apply @funext
+  intro arity
+  funext relation
+  rfl
+
+theorem renameRelations_identityRelationRenaming
+    (items : ItemSeq signature wires rels) :
+    items.renameRelations
+        (ConcreteElaboration.identityRelationRenaming rels) = items := by
+  change items.renameRelations (fun relation => relation) = items
+  exact ItemSeq.renameRelations_id items
+
 private theorem allFin_succ_last (n : Nat) :
     allFin (n + 1) = (allFin n).map (Fin.castAdd 1) ++ [Fin.last n] := by
   rw [allFin_eq_finRange, allFin_eq_finRange, List.finRange_succ_last]
@@ -1821,7 +1846,11 @@ theorem source_common_environment
       Lambda.canonicalModel.eval
           (payload.firstTerm.mapFree payload.firstPort) common =
         Lambda.canonicalModel.eval
-          (payload.secondTerm.mapFree payload.secondPort) common := by
+          (payload.secondTerm.mapFree payload.secondPort) common ∧
+      (∀ port index, context.get index = payload.firstWire port →
+        env index = common (payload.firstPort port)) ∧
+      (∀ port index, context.get index = payload.secondWire port →
+        env index = common (payload.secondPort port)) := by
   obtain ⟨firstOutput, firstFree, firstOutputResult, firstFreeResult,
       firstEquation⟩ :=
     CongruenceSoundness.compiled_items_term_node_equation context binders fuel
@@ -1879,20 +1908,50 @@ theorem source_common_environment
   obtain ⟨common, firstCommon, secondCommon⟩ :=
     payload.exists_common_environment (env ∘ firstFree)
       (env ∘ secondFree) aligned
-  refine ⟨common, ?_⟩
-  rw [Lambda.LambdaModel.eval_mapFree,
-    Lambda.LambdaModel.eval_mapFree]
-  exact (congrArg
-    (fun environment =>
-      Lambda.canonicalModel.eval payload.firstTerm environment)
-    firstCommon).trans
-      (firstEquation.symm.trans
-        ((congrArg env outputIndexEq).trans
-          (secondEquation.trans
-            (congrArg
-              (fun environment =>
-                Lambda.canonicalModel.eval payload.secondTerm environment)
-              secondCommon.symm))))
+  refine ⟨common, ?_, ?_, ?_⟩
+  · rw [Lambda.LambdaModel.eval_mapFree,
+      Lambda.LambdaModel.eval_mapFree]
+    exact (congrArg
+      (fun environment =>
+        Lambda.canonicalModel.eval payload.firstTerm environment)
+      firstCommon).trans
+        (firstEquation.symm.trans
+          ((congrArg env outputIndexEq).trans
+            (secondEquation.trans
+              (congrArg
+                (fun environment =>
+                  Lambda.canonicalModel.eval payload.secondTerm environment)
+                secondCommon.symm))))
+  · intro port index indexGet
+    have resolved := sequenceFin_sound firstFreeResult port
+    obtain ⟨wire, occurs, wireGet⟩ :=
+      ConcreteElaboration.resolvePort?_sound resolved
+    have wireEq : wire = payload.firstWire port :=
+      ConcreteElaboration.endpoint_wire_unique
+        input.property.wire_endpoints_are_disjoint occurs
+          (payload.firstWire_occurs port)
+    have indexEq : index = firstFree port := by
+      apply Fin.ext
+      exact (List.getElem_inj exact.nodup).mp (by
+        simpa only [List.get_eq_getElem] using
+          indexGet.trans (wireEq.symm.trans wireGet.symm))
+    rw [indexEq]
+    exact (congrFun firstCommon port).symm
+  · intro port index indexGet
+    have resolved := sequenceFin_sound secondFreeResult port
+    obtain ⟨wire, occurs, wireGet⟩ :=
+      ConcreteElaboration.resolvePort?_sound resolved
+    have wireEq : wire = payload.secondWire port :=
+      ConcreteElaboration.endpoint_wire_unique
+        input.property.wire_endpoints_are_disjoint occurs
+          (payload.secondWire_occurs port)
+    have indexEq : index = secondFree port := by
+      apply Fin.ext
+      exact (List.getElem_inj exact.nodup).mp (by
+        simpa only [List.get_eq_getElem] using
+          indexGet.trans (wireEq.symm.trans wireGet.symm))
+    rw [indexEq]
+    exact (congrFun secondCommon port).symm
 
 def sourceOpen (input : CheckedDiagram signature)
     (boundary : List (Fin input.val.wireCount)) : OpenConcreteDiagram where
