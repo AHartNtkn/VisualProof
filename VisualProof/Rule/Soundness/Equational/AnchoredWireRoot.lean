@@ -188,6 +188,332 @@ theorem anchoredWireSplitRawOpen_rootWires
     anchoredWireSplitRawOpen_hiddenWires]
   rfl
 
+theorem anchoredWireSplitRawOpen_rootWires_of_ne
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (hne : input.val.root ≠ target) :
+    (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires =
+      (anchoredWireSplitSourceOpen input boundary).rootWires.map
+        (Fin.castAdd 1 : Fin input.val.wireCount →
+          Fin (input.val.wireCount + 1)) := by
+  rw [anchoredWireSplitRawOpen_rootWires, if_neg hne]
+  simp only [List.append_nil]
+  unfold OpenConcreteDiagram.rootWires
+  exact (List.map_append).symm
+
+theorem anchoredWireSplitRaw_rootCollapseAway_index_val
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (hne : input.val.root ≠ target)
+    (collapse : SplitContextCollapse input wire endpoints target term
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires
+      (anchoredWireSplitSourceOpen input boundary).rootWires)
+    (sourceNodup :
+      (anchoredWireSplitSourceOpen input boundary).rootWires.Nodup)
+    (index : Fin (anchoredWireSplitRawOpen input boundary wire endpoints target
+      term).rootWires.length) :
+    (collapse.indexMap index).val = index.val := by
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+    term
+  have rootEq : expanded.rootWires = source.rootWires.map (Fin.castAdd 1) :=
+    anchoredWireSplitRawOpen_rootWires_of_ne input boundary wire endpoints target
+      term hne
+  let mappedIndex : Fin (source.rootWires.map (Fin.castAdd 1)).length :=
+    Fin.cast (congrArg List.length rootEq) index
+  let sourceIndex : Fin source.rootWires.length :=
+    Fin.cast (by simp) mappedIndex
+  have targetGet : expanded.rootWires.get index =
+      (source.rootWires.get sourceIndex).castSucc := by
+    have transported := get_of_eq rootEq mappedIndex
+    have indexEq : Fin.cast (congrArg List.length rootEq).symm mappedIndex =
+        index := by
+      apply Fin.ext
+      rfl
+    rw [indexEq] at transported
+    change expanded.rootWires.get index =
+      Fin.castAdd 1 (source.rootWires.get sourceIndex)
+    have mappedGet : (source.rootWires.map (Fin.castAdd 1)).get mappedIndex =
+        Fin.castAdd 1 (source.rootWires.get sourceIndex) := by
+      let expected : Fin (source.rootWires.map (Fin.castAdd 1)).length :=
+        Fin.cast (List.length_map (as := source.rootWires) (Fin.castAdd 1)).symm
+          sourceIndex
+      have mappedEq : mappedIndex = expected := by
+        apply Fin.ext
+        rfl
+      rw [mappedEq]
+      simpa only [List.get_eq_getElem, Fin.val_cast] using
+        (List.getElem_map (l := source.rootWires) (i := sourceIndex.val)
+          (Fin.castAdd 1))
+    exact transported.trans mappedGet
+  have collapseGet := collapse.get index
+  change source.rootWires.get (collapse.indexMap index) =
+    splitWireCollapse input wire (expanded.rootWires.get index) at collapseGet
+  rw [targetGet] at collapseGet
+  have splitGet : splitWireCollapse input wire
+      (source.rootWires.get sourceIndex).castSucc =
+        source.rootWires.get sourceIndex := by
+    simpa [source, anchoredWireSplitSourceOpen] using
+      splitWireCollapse_old input wire (source.rootWires.get sourceIndex)
+  rw [splitGet] at collapseGet
+  have indexEq : collapse.indexMap index = sourceIndex := by
+    apply Fin.ext
+    exact (List.getElem_inj sourceNodup).mp (by
+      simpa only [List.get_eq_getElem] using collapseGet)
+  rw [indexEq]
+  rfl
+
+def anchoredWireSplitRawOpenExternalClass
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (external : Fin
+      (anchoredWireSplitSourceOpen input boundary).exposedWires.length) :
+    Fin (anchoredWireSplitRawOpen input boundary wire endpoints target
+      term).exposedWires.length :=
+  Fin.cast (by
+    rw [anchoredWireSplitRawOpen_exposedWires]
+    exact (List.length_map _).symm) external
+
+theorem anchoredWireSplitRawOpenExternalClass_val
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (external : Fin
+      (anchoredWireSplitSourceOpen input boundary).exposedWires.length) :
+    (anchoredWireSplitRawOpenExternalClass input boundary wire endpoints target
+      term external).val = external.val := rfl
+
+private theorem extendWireEnv_cast_lengths
+    {sourceOuter targetOuter sourceLocal targetLocal : Nat}
+    (ambientLength : sourceOuter = targetOuter)
+    (localLength : sourceLocal = targetLocal)
+    (outerEnv : Fin targetOuter → D)
+    (localEnv : Fin targetLocal → D) :
+    extendWireEnv (outerEnv ∘ Fin.cast ambientLength)
+        (localEnv ∘ Fin.cast localLength) =
+      extendWireEnv outerEnv localEnv ∘
+        Fin.cast (by omega) := by
+  subst targetOuter
+  subst targetLocal
+  rfl
+
+private theorem rootEnvironment_cast_lengths
+    {source target : ConcreteDiagram}
+    (sourceAmbient sourceLocals : ConcreteElaboration.WireContext source)
+    (targetAmbient targetLocals : ConcreteElaboration.WireContext target)
+    (ambientLength : sourceAmbient.length = targetAmbient.length)
+    (localLength : sourceLocals.length = targetLocals.length)
+    (targetOuter : Fin targetAmbient.length → D)
+    (targetLocal : Fin targetLocals.length → D) :
+    ConcreteElaboration.rootEnvironment sourceAmbient sourceLocals
+        (targetOuter ∘ Fin.cast ambientLength)
+        (targetLocal ∘ Fin.cast localLength) =
+      ConcreteElaboration.rootEnvironment targetAmbient targetLocals
+        targetOuter targetLocal ∘
+          Fin.cast (by
+            rw [List.length_append, List.length_append,
+              ambientLength, localLength]) := by
+  unfold ConcreteElaboration.rootEnvironment
+  rw [extendWireEnv_cast_lengths ambientLength localLength]
+  funext index
+  apply congrArg (extendWireEnv targetOuter targetLocal)
+  apply Fin.ext
+  rfl
+
+theorem anchoredWireSplitRaw_rootEnvironmentAway_collapse
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (hne : input.val.root ≠ target)
+    (collapse : SplitContextCollapse input wire endpoints target term
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires
+      (anchoredWireSplitSourceOpen input boundary).rootWires)
+    (sourceNodup :
+      (anchoredWireSplitSourceOpen input boundary).rootWires.Nodup)
+    (targetOuter : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+      target term).exposedWires.length → D)
+    (targetLocal : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+      target term).hiddenWires.length → D) :
+    let source := anchoredWireSplitSourceOpen input boundary
+    let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+      term
+    let ambientLength : source.exposedWires.length =
+        expanded.exposedWires.length := by
+      rw [anchoredWireSplitRawOpen_exposedWires]
+      exact (List.length_map _).symm
+    let localLength : source.hiddenWires.length =
+        expanded.hiddenWires.length := by
+      rw [anchoredWireSplitRawOpen_hiddenWires, if_neg hne, List.append_nil]
+      exact (List.length_map _).symm
+    ConcreteElaboration.rootEnvironment source.exposedWires source.hiddenWires
+          (targetOuter ∘ Fin.cast ambientLength)
+          (targetLocal ∘ Fin.cast localLength) ∘ collapse.indexMap =
+      ConcreteElaboration.rootEnvironment expanded.exposedWires
+        expanded.hiddenWires targetOuter targetLocal := by
+  dsimp only
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+    term
+  let ambientLength : source.exposedWires.length =
+      expanded.exposedWires.length := by
+    rw [anchoredWireSplitRawOpen_exposedWires]
+    exact (List.length_map _).symm
+  let localLength : source.hiddenWires.length =
+      expanded.hiddenWires.length := by
+    rw [anchoredWireSplitRawOpen_hiddenWires, if_neg hne, List.append_nil]
+    exact (List.length_map _).symm
+  have casted := rootEnvironment_cast_lengths source.exposedWires
+    source.hiddenWires expanded.exposedWires expanded.hiddenWires ambientLength
+    localLength targetOuter targetLocal
+  rw [casted]
+  funext index
+  apply congrArg (ConcreteElaboration.rootEnvironment expanded.exposedWires
+    expanded.hiddenWires targetOuter targetLocal)
+  apply Fin.ext
+  exact anchoredWireSplitRaw_rootCollapseAway_index_val input boundary wire
+    endpoints target term hne collapse sourceNodup index
+
+theorem anchoredWireSplitRaw_finishRoot_away_equiv
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (hne : input.val.root ≠ target)
+    (collapse : SplitContextCollapse input wire endpoints target term
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires
+      (anchoredWireSplitSourceOpen input boundary).rootWires)
+    (sourceNodup :
+      (anchoredWireSplitSourceOpen input boundary).rootWires.Nodup)
+    (sourceItems : ItemSeq signature
+      (anchoredWireSplitSourceOpen input boundary).rootWires.length [])
+    (targetItems : ItemSeq signature (anchoredWireSplitRawOpen input boundary
+      wire endpoints target term).rootWires.length [])
+    (itemsEquiv : ∀ (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (sourceRaw : Fin
+        (anchoredWireSplitSourceOpen input boundary).rootWires.length →
+          model.Carrier)
+      (targetRaw : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+        target term).rootWires.length → model.Carrier),
+      sourceRaw ∘ collapse.indexMap = targetRaw →
+        (denoteItemSeq (relCtx := []) model named sourceRaw PUnit.unit
+            sourceItems ↔
+          denoteItemSeq (relCtx := []) model named targetRaw PUnit.unit
+            targetItems))
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (targetOuter : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+      target term).exposedWires.length → model.Carrier) :
+    let source := anchoredWireSplitSourceOpen input boundary
+    let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+      term
+    denoteRegion (relCtx := []) model named
+        (targetOuter ∘ anchoredWireSplitRawOpenExternalClass input boundary wire
+          endpoints target term) PUnit.unit
+        (ConcreteElaboration.finishRoot source.exposedWires source.hiddenWires
+          sourceItems) ↔
+      denoteRegion (relCtx := []) model named targetOuter PUnit.unit
+        (ConcreteElaboration.finishRoot expanded.exposedWires
+          expanded.hiddenWires targetItems) := by
+  dsimp only
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+    term
+  let ambientLength : source.exposedWires.length =
+      expanded.exposedWires.length := by
+    rw [anchoredWireSplitRawOpen_exposedWires]
+    exact (List.length_map _).symm
+  let localLength : source.hiddenWires.length =
+      expanded.hiddenWires.length := by
+    rw [anchoredWireSplitRawOpen_hiddenWires, if_neg hne, List.append_nil]
+    exact (List.length_map _).symm
+  have externalEq : anchoredWireSplitRawOpenExternalClass input boundary wire
+      endpoints target term = Fin.cast ambientLength := by
+    funext external
+    apply Fin.ext
+    rfl
+  rw [externalEq]
+  unfold ConcreteElaboration.finishRoot
+  simp only [denoteRegion_mk]
+  constructor
+  · rintro ⟨sourceLocal, sourceDenotes⟩
+    let targetLocal : Fin expanded.hiddenWires.length → model.Carrier :=
+      sourceLocal ∘ Fin.cast localLength.symm
+    refine ⟨targetLocal, ?_⟩
+    rw [ItemSeq.castWiresEq_eq_renameWires] at sourceDenotes ⊢
+    have sourceRawDenotes := (denoteItemSeq_renameWires (relCtx := []) model
+      named (Fin.cast (List.length_append (as := source.exposedWires)
+        (bs := source.hiddenWires)))
+      (extendWireEnv (targetOuter ∘ Fin.cast ambientLength) sourceLocal)
+      PUnit.unit sourceItems).1 sourceDenotes
+    let sourceRaw := ConcreteElaboration.rootEnvironment source.exposedWires
+      source.hiddenWires (targetOuter ∘ Fin.cast ambientLength) sourceLocal
+    let targetRaw := ConcreteElaboration.rootEnvironment expanded.exposedWires
+      expanded.hiddenWires targetOuter targetLocal
+    have localRecover : targetLocal ∘ Fin.cast localLength = sourceLocal := by
+      funext index
+      rfl
+    have rawAgrees := anchoredWireSplitRaw_rootEnvironmentAway_collapse input
+      boundary wire endpoints target term hne collapse sourceNodup targetOuter
+      targetLocal
+    dsimp only at rawAgrees
+    rw [localRecover] at rawAgrees
+    change sourceRaw ∘ collapse.indexMap = targetRaw at rawAgrees
+    have targetRawDenotes := (itemsEquiv model named sourceRaw targetRaw
+      rawAgrees).mp (by
+        simpa [sourceRaw, ConcreteElaboration.rootEnvironment] using
+          sourceRawDenotes)
+    apply (denoteItemSeq_renameWires (relCtx := []) model named
+      (Fin.cast (List.length_append (as := expanded.exposedWires)
+        (bs := expanded.hiddenWires)))
+      (extendWireEnv targetOuter targetLocal) PUnit.unit targetItems).2
+    simpa [targetRaw, ConcreteElaboration.rootEnvironment] using
+      targetRawDenotes
+  · rintro ⟨targetLocal, targetDenotes⟩
+    let sourceLocal : Fin source.hiddenWires.length → model.Carrier :=
+      targetLocal ∘ Fin.cast localLength
+    refine ⟨sourceLocal, ?_⟩
+    rw [ItemSeq.castWiresEq_eq_renameWires] at targetDenotes ⊢
+    have targetRawDenotes := (denoteItemSeq_renameWires (relCtx := []) model
+      named (Fin.cast (List.length_append (as := expanded.exposedWires)
+        (bs := expanded.hiddenWires)))
+      (extendWireEnv targetOuter targetLocal) PUnit.unit targetItems).1
+        targetDenotes
+    let sourceRaw := ConcreteElaboration.rootEnvironment source.exposedWires
+      source.hiddenWires (targetOuter ∘ Fin.cast ambientLength) sourceLocal
+    let targetRaw := ConcreteElaboration.rootEnvironment expanded.exposedWires
+      expanded.hiddenWires targetOuter targetLocal
+    have rawAgrees := anchoredWireSplitRaw_rootEnvironmentAway_collapse input
+      boundary wire endpoints target term hne collapse sourceNodup targetOuter
+      targetLocal
+    dsimp only at rawAgrees
+    change sourceRaw ∘ collapse.indexMap = targetRaw at rawAgrees
+    have sourceRawDenotes := (itemsEquiv model named sourceRaw targetRaw
+      rawAgrees).mpr (by
+        simpa [targetRaw, ConcreteElaboration.rootEnvironment] using
+          targetRawDenotes)
+    apply (denoteItemSeq_renameWires (relCtx := []) model named
+      (Fin.cast (List.length_append (as := source.exposedWires)
+        (bs := source.hiddenWires)))
+      (extendWireEnv (targetOuter ∘ Fin.cast ambientLength) sourceLocal)
+      PUnit.unit sourceItems).2
+    simpa [sourceRaw, ConcreteElaboration.rootEnvironment] using
+      sourceRawDenotes
+
 theorem anchoredWireSplitRawOpen_wellFormed
     (input : CheckedDiagram signature)
     (boundary : List (Fin input.val.wireCount))
