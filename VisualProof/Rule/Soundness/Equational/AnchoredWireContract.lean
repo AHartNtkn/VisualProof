@@ -1223,6 +1223,138 @@ theorem compileRegion_moveEndpoint_regionSimulation
       · simp [moveEndpointsRaw, same]
     · simp [moveEndpointsRaw, sourceEq, targetEq]
 
+theorem moveEndpointsRaw_climb
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoints : List (CEndpoint input.nodeCount))
+    (steps : Nat) (region : Fin input.regionCount) :
+    (moveEndpointsRaw input sourceWire targetWire endpoints).climb steps region =
+      input.climb steps region := by
+  induction steps generalizing region with
+  | zero => rfl
+  | succ steps ih =>
+      simp only [ConcreteDiagram.climb]
+      rw [moveEndpointsRaw_regions]
+      cases kind : input.regions region with
+      | sheet => rfl
+      | cut parent => exact ih parent
+      | bubble parent arity => exact ih parent
+
+theorem moveEndpointsRaw_encloses_iff
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoints : List (CEndpoint input.nodeCount))
+    (ancestor descendant : Fin input.regionCount) :
+    (moveEndpointsRaw input sourceWire targetWire endpoints).Encloses
+        ancestor descendant ↔ input.Encloses ancestor descendant := by
+  unfold ConcreteDiagram.Encloses
+  constructor <;> rintro ⟨steps, equality⟩ <;>
+    exact ⟨steps, by simpa [moveEndpointsRaw_climb] using equality⟩
+
+theorem moveEndpointsRaw_mem_exactScopeWires_iff
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoints : List (CEndpoint input.nodeCount))
+    (region : Fin input.regionCount) (wire : Fin input.wireCount) :
+    wire ∈ ConcreteElaboration.exactScopeWires
+        (moveEndpointsRaw input sourceWire targetWire endpoints) region ↔
+      wire ∈ ConcreteElaboration.exactScopeWires input region := by
+  constructor
+  · intro member
+    have scope := (ConcreteElaboration.mem_exactScopeWires
+      (moveEndpointsRaw input sourceWire targetWire endpoints) region wire).mp
+      member
+    rw [moveEndpointsRaw_wire_scope] at scope
+    exact (ConcreteElaboration.mem_exactScopeWires input region wire).mpr scope
+  · intro member
+    have scope :=
+      (ConcreteElaboration.mem_exactScopeWires input region wire).mp member
+    apply (ConcreteElaboration.mem_exactScopeWires
+      (moveEndpointsRaw input sourceWire targetWire endpoints) region wire).mpr
+    rw [moveEndpointsRaw_wire_scope]
+    exact scope
+
+@[simp] theorem moveEndpointsRaw_exactScopeWires
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoints : List (CEndpoint input.nodeCount))
+    (region : Fin input.regionCount) :
+    ConcreteElaboration.exactScopeWires
+      (moveEndpointsRaw input sourceWire targetWire endpoints) region =
+      ConcreteElaboration.exactScopeWires input region := by
+  unfold ConcreteElaboration.exactScopeWires
+  congr 1
+  funext candidate
+  rw [moveEndpointsRaw_wire_scope]
+  rfl
+
+@[simp] theorem moveEndpointsRaw_localOccurrences
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoints : List (CEndpoint input.nodeCount))
+    (region : Fin input.regionCount) :
+    ConcreteElaboration.localOccurrences
+        (moveEndpointsRaw input sourceWire targetWire endpoints) region =
+      ConcreteElaboration.localOccurrences input region := by
+  unfold ConcreteElaboration.localOccurrences
+  simp only [moveEndpointsRaw_nodes, moveEndpointsRaw_regions]
+  rfl
+
+def moveEndpointsRaw_route
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoints : List (CEndpoint input.nodeCount))
+    {start target : Fin input.regionCount} {path : List Nat}
+    (route : Diagram.Splice.RegionRoute input start target path) :
+    Diagram.Splice.RegionRoute
+      (moveEndpointsRaw input sourceWire targetWire endpoints) start target path := by
+  induction route with
+  | here region =>
+      exact Diagram.Splice.RegionRoute.here
+        (d := moveEndpointsRaw input sourceWire targetWire endpoints) region
+  | @step start child target rest parent position positionEq tail induction =>
+      exact Diagram.Splice.RegionRoute.step
+        (d := moveEndpointsRaw input sourceWire targetWire endpoints)
+        (hparent := by simpa only [moveEndpointsRaw_regions] using parent)
+        (position := position)
+        (hposition := by
+          simpa only [moveEndpointsRaw_localOccurrences] using positionEq)
+        induction
+
+theorem moveEndpointsRaw_route_hasCutDepth
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoints : List (CEndpoint input.nodeCount))
+    {start target : Fin input.regionCount} {path : List Nat}
+    (route : Diagram.Splice.RegionRoute input start target path)
+    {depth : Nat} (routeDepth : route.HasCutDepth depth) :
+    (moveEndpointsRaw_route input sourceWire targetWire endpoints route).HasCutDepth
+      depth := by
+  induction routeDepth with
+  | here => exact Diagram.Splice.RegionRoute.HasCutDepth.here _
+  | @cut start child target rest depth hparent position hposition tail childKind
+      tailDepth induction =>
+      exact Diagram.Splice.RegionRoute.HasCutDepth.cut
+        (d := moveEndpointsRaw input sourceWire targetWire endpoints)
+        (hparent := by simpa only [moveEndpointsRaw_regions] using hparent)
+        (position := position)
+        (hposition := by
+          simpa only [moveEndpointsRaw_localOccurrences] using hposition)
+        (child_is_cut := by
+          simpa only [moveEndpointsRaw_regions] using childKind)
+        (tail_depth := induction)
+  | @bubble start child target rest depth arity hparent position hposition tail
+      childKind tailDepth induction =>
+      exact Diagram.Splice.RegionRoute.HasCutDepth.bubble
+        (d := moveEndpointsRaw input sourceWire targetWire endpoints)
+        (hparent := by simpa only [moveEndpointsRaw_regions] using hparent)
+        (position := position)
+        (hposition := by
+          simpa only [moveEndpointsRaw_localOccurrences] using hposition)
+        (child_is_bubble := by
+          simpa only [moveEndpointsRaw_regions] using childKind)
+        (tail_depth := induction)
+
 end AnchoredWireContractSoundness
 
 end VisualProof.Rule
