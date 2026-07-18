@@ -298,6 +298,7 @@ export class ConstructionLoupe {
       },
       pointerChanged: (client) => this.#pointerChanged('draft', client),
       keyDown: (sample) => this.keyDown(sample, isConstructionTextEntry(document.activeElement)),
+      keyScope: 'window',
       selectionChanged: host.changed,
       selectionCommitted: host.changed,
       mapClient: (client) => this.clientMapping(client),
@@ -315,7 +316,8 @@ export class ConstructionLoupe {
   get playingGesture(): boolean { return this.#connection?.moved ?? false }
 
   hostClaim(sample: PointerSample): PointerClaim | null {
-    return this.#connectionClaim('host', sample)
+    const claim = this.#connectionClaim('host', sample)
+    return claim === null ? null : { ...claim, still: 'claim' }
   }
 
   hostPointerChanged(client: Vec2): void { this.#pointerChanged('host', client) }
@@ -577,8 +579,13 @@ export class ConstructionLoupe {
 
   #pointerChanged(surface: SurfaceKind, client: Vec2): void {
     const endpoint = this.#endpointAtClient(client)
-    if (surface === 'draft') this.#draftHoverWire = endpoint?.kind === 'draft' ? endpoint.wire : null
-    else this.#hostHoverWire = endpoint?.kind === 'host' ? endpoint.wire : null
+    if (surface === 'draft') {
+      this.#draftHoverWire = endpoint?.kind === 'draft' ? endpoint.wire : null
+      this.#hostHoverWire = null
+    } else {
+      this.#hostHoverWire = endpoint?.kind === 'host' ? endpoint.wire : null
+      this.#draftHoverWire = null
+    }
     this.#host.changed()
   }
 

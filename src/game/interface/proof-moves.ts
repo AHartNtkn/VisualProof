@@ -33,6 +33,14 @@ export type GameProofAction =
   | { readonly kind: 'relUnfold'; readonly label: string }
   | { readonly kind: 'relFold'; readonly label: string }
 
+export type GameProofActionInput =
+  | { readonly kind: 'term'; readonly source: string }
+  | { readonly kind: 'arity'; readonly arity: number }
+  | { readonly kind: 'target'; readonly region: RegionId }
+  | { readonly kind: 'conversion'; readonly source: string }
+  | { readonly kind: 'construction' }
+  | { readonly kind: 'relation'; readonly name: string }
+
 /** Read-only affordance discovery. Kernel appliers remain commit authority. */
 export function gameProofActions(
   diagram: Diagram,
@@ -348,6 +356,75 @@ export class GameProofMoveController {
     return true
   }
 
+  /** Shared behavioral dispatcher used by rendered menu routes and focused tests. */
+  invokeAction(
+    action: GameProofAction,
+    selection: SubgraphSelection,
+    input?: GameProofActionInput,
+  ): boolean {
+    switch (action.kind) {
+      case 'erase':
+        this.#commit({ rule: 'erasure', sel: erasureSelection(this.#options.diagram(), selection) })
+        return true
+      case 'insert':
+        if (input?.kind !== 'term') { this.#openTermInsertion(selection.region); return true }
+        this.#commit(this.#termInsertionStep(selection.region, input.source))
+        return true
+      case 'doubleCutWrap':
+        this.#commit({ rule: 'doubleCutIntro', sel: selection })
+        return true
+      case 'doubleCutElim':
+        this.#commit({ rule: 'doubleCutElim', region: selection.regions[0]! })
+        return true
+      case 'vacuousWrap':
+        if (input?.kind !== 'arity') { this.#openArityPrompt(selection); return true }
+        if (!Number.isInteger(input.arity) || input.arity < 0) throw new Error(`'${input.arity}' is not a valid arity`)
+        this.#commit({ rule: 'vacuousIntro', sel: selection, arity: input.arity })
+        return true
+      case 'vacuousElim':
+        this.#commit({ rule: 'vacuousElim', region: selection.regions[0]! })
+        return true
+      case 'iterate':
+        if (input?.kind !== 'target') return false
+        this.#commit({ rule: 'iteration', sel: selection, target: input.region })
+        return true
+      case 'deiterate':
+        this.#commit({ rule: 'deiteration', sel: selection, fuel: this.#options.fuel() })
+        return true
+      case 'convert': {
+        if (input?.kind !== 'conversion') return false
+        const node = selection.nodes[0]!
+        const term = parseTerm(input.source)
+        const conversion = applyConversion(this.#options.diagram(), node, term, this.#options.fuel())
+        this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, attachments: {} })
+        return true
+      }
+      case 'instantiate': {
+        const bubble = selection.regions[0]!
+        if (input?.kind === 'construction') {
+          this.#options.openConstruction(bubble, this.#lastPointer)
+          return true
+        }
+        if (input?.kind !== 'relation') return false
+        this.#commit({
+          rule: 'comprehensionInstantiate', bubble,
+          comp: foldedComprehension(this.#options.context(), input.name), attachments: [], binders: {},
+        })
+        return true
+      }
+      case 'relUnfold':
+        this.#commit({ rule: 'relUnfold', node: selection.nodes[0]! })
+        return true
+      case 'relFold':
+        if (input?.kind !== 'relation') return false
+        this.#commit({
+          rule: 'relFold', sel: selection, defId: input.name,
+          args: inferFoldArgs(this.#options.diagram(), selection, input.name, this.#options.context()),
+        })
+        return true
+    }
+  }
+
   overlay(): readonly Shape[] {
     const drag = this.#drag
     if (drag === null || !drag.moved) return []
@@ -429,14 +506,15 @@ export class GameProofMoveController {
     selection: SubgraphSelection,
   ): void {
     switch (action.kind) {
-      case 'erase': row(action.label, () => this.#commit({ rule: 'erasure', sel: erasureSelection(this.#options.diagram(), selection) })); return
-      case 'insert': row(action.label, () => this.#openTermInsertion(selection.region)); return
-      case 'doubleCutWrap': row(action.label, () => this.#commit({ rule: 'doubleCutIntro', sel: selection })); return
-      case 'doubleCutElim': row(action.label, () => this.#commit({ rule: 'doubleCutElim', region: selection.regions[0]! })); return
-      case 'vacuousWrap': row(action.label, () => this.#openArityPrompt(selection)); return
-      case 'vacuousElim': row(action.label, () => this.#commit({ rule: 'vacuousElim', region: selection.regions[0]! })); return
+      case 'erase':
+      case 'insert':
+      case 'doubleCutWrap':
+      case 'doubleCutElim':
+      case 'vacuousWrap':
+      case 'vacuousElim':
+      case 'deiterate':
+      case 'relUnfold': row(action.label, () => { this.invokeAction(action, selection) }); return
       case 'iterate': row(action.label, null); return
-      case 'deiterate': row(action.label, () => this.#commit({ rule: 'deiteration', sel: selection, fuel: this.#options.fuel() })); return
       case 'convert': this.#appendConversions(row, selection.nodes[0]!); return
       case 'instantiate': {
         const bubble = selection.regions[0]!
@@ -444,27 +522,19 @@ export class GameProofMoveController {
         const arity = value.kind === 'bubble' ? value.arity : -1
         row('Construct a new relation…', () => {
           this.#closeMenu()
-          this.#options.openConstruction(bubble, this.#lastPointer)
+          this.invokeAction(action, selection, { kind: 'construction' })
         })
         for (const [name, relation] of this.#options.context().relations) {
-          if (relation.boundary.length === arity) row(`Use ${name}`, () => this.#commit({
-            rule: 'comprehensionInstantiate',
-            bubble,
-            comp: foldedComprehension(this.#options.context(), name),
-            attachments: [],
-            binders: {},
-          }))
+          if (relation.boundary.length === arity) row(`Use ${name}`, () => {
+            this.invokeAction(action, selection, { kind: 'relation', name })
+          })
         }
         return
       }
-      case 'relUnfold': row(action.label, () => this.#commit({ rule: 'relUnfold', node: selection.nodes[0]! })); return
       case 'relFold': {
-        for (const name of this.#options.context().relations.keys()) row(`Fold into ${name}`, () => this.#commit({
-          rule: 'relFold',
-          sel: selection,
-          defId: name,
-          args: inferFoldArgs(this.#options.diagram(), selection, name, this.#options.context()),
-        }))
+        for (const name of this.#options.context().relations.keys()) row(`Fold into ${name}`, () => {
+          this.invokeAction(action, selection, { kind: 'relation', name })
+        })
       }
     }
   }
@@ -480,16 +550,17 @@ export class GameProofMoveController {
 
   #openTermInsertion(region: RegionId): void {
     this.#openTextPrompt('Insertion term', (value) => {
-      const builder = new DiagramBuilder()
-      builder.termNode(builder.root, parseTerm(value))
-      this.#commit({
-        rule: 'insertion',
-        region,
-        pattern: mkDiagramWithBoundary(builder.build(), []),
-        attachments: [],
-        binders: {},
-      })
+      this.#commit(this.#termInsertionStep(region, value))
     })
+  }
+
+  #termInsertionStep(region: RegionId, source: string): ProofStep {
+    const builder = new DiagramBuilder()
+    builder.termNode(builder.root, parseTerm(source))
+    return {
+      rule: 'insertion', region,
+      pattern: mkDiagramWithBoundary(builder.build(), []), attachments: [], binders: {},
+    }
   }
 
   #openArityPrompt(selection: SubgraphSelection): void {
@@ -514,8 +585,15 @@ export class GameProofMoveController {
     }
     button.addEventListener('click', run)
     input.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter') run()
-      else if (event.key === 'Escape') this.#closePrompt()
+      if (event.key === 'Enter') {
+        event.preventDefault()
+        event.stopPropagation()
+        run()
+      } else if (event.key === 'Escape') {
+        event.preventDefault()
+        event.stopPropagation()
+        this.#closePrompt()
+      }
     })
     prompt.append(input, button)
     this.#prompt = prompt

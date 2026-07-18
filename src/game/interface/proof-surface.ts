@@ -222,6 +222,11 @@ export class GameProofViewport {
   }
 
   dropArtifact(artifact: PuzzleDefinition, client: Vec2): ArtifactDropPlan {
+    if (this.#disposed) return {
+      ok: false,
+      code: 'invalid-drop-target',
+      reason: 'the proof surface is closed',
+    }
     if (!this.#inputAllowed()) {
       const result: ArtifactDropPlan = {
         ok: false,
@@ -247,7 +252,7 @@ export class GameProofViewport {
   }
 
   openConstruction(bubble: RegionId, invocation: Vec2): boolean {
-    if (this.#construction !== null || !this.#inputAllowed()) return false
+    if (this.#disposed || this.#construction !== null || !this.#inputAllowed()) return false
     let construction: ConstructionLoupe
     construction = new ConstructionLoupe({
       mount: this.#model.overlayHost ?? this.#model.host.ownerDocument.body,

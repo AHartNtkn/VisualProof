@@ -36,11 +36,17 @@ export type ArtifactDropRequest = {
   readonly fuel: number
 }
 
-const occurrenceContains = (occurrence: Occurrence, hit: Hit): boolean => {
+const occurrenceContains = (
+  occurrence: Occurrence,
+  hit: Hit,
+  pattern: PuzzleDefinition['goal'],
+): boolean => {
   switch (hit.kind) {
     case 'node': return [...occurrence.nodeMap.values()].includes(hit.id)
     case 'wire': return [...occurrence.wireMap.values()].includes(hit.id)
-    case 'region': return [...occurrence.regionMap.values()].includes(hit.id)
+    case 'region': return [...occurrence.regionMap]
+      .some(([patternRegion, hostRegion]) =>
+        pattern.diagram.regions[patternRegion]?.kind !== 'sheet' && hostRegion === hit.id)
   }
 }
 
@@ -95,7 +101,7 @@ export function planArtifactDrop(request: ArtifactDropRequest): ArtifactDropPlan
 
   if (target.hit !== null) {
     const selected = occurrences
-      .filter((occurrence) => occurrenceContains(occurrence, target.hit!))
+      .filter((occurrence) => occurrenceContains(occurrence, target.hit!, theorem.rhs))
       .sort((a, b) => occurrenceKey(a).localeCompare(occurrenceKey(b)))[0]
     if (selected !== undefined) {
       const step: Extract<ProofStep, { readonly rule: 'theorem' }> = {

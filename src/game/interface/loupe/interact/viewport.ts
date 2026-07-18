@@ -72,6 +72,9 @@ export type InteractiveViewportOptions = {
   readonly inputAllowed?: () => boolean
   readonly physicsEnabled?: () => boolean
   readonly zoomEnabled?: () => boolean
+  /** Proof input is focus-scoped. A modal editor can instead retain its
+      lifecycle shortcuts while the pointer temporarily crosses its host. */
+  readonly keyScope?: 'focused' | 'window'
 }
 
 const CLICK_SLOP_PX = 3
@@ -458,6 +461,8 @@ export class InteractiveViewport {
 
   #keyDown = (event: KeyboardEvent): void => {
     this.#modifierChanged(event)
+    if (this.#opts.keyScope !== 'window'
+      && this.#opts.canvas.ownerDocument.activeElement !== this.#opts.canvas) return
     const target = event.target
     if (target instanceof this.#window.HTMLInputElement
       || target instanceof this.#window.HTMLTextAreaElement

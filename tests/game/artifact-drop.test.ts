@@ -136,6 +136,23 @@ describe('completed artifact drop authority', () => {
     expect(rightPlan.ok && rightPlan.step.at.sel.regions).toEqual([right])
   })
 
+  it('does not treat the shared positive container as either occurrence footprint', () => {
+    const host = new DiagramBuilder()
+    const left = host.cut(host.root)
+    host.cut(left)
+    const right = host.cut(host.root)
+    host.cut(right)
+    const diagram = host.build()
+
+    expect(planArtifactDrop({
+      artifact,
+      diagram,
+      context: completed,
+      target: { hit: { kind: 'region', id: host.root }, containingRegion: host.root },
+      fuel: 256,
+    })).toMatchObject({ ok: false, code: 'no-legal-artifact-operation' })
+  })
+
   it('validates candidates without mutating the supplied diagram', () => {
     const before = JSON.stringify(artifact.goal.diagram)
     planArtifactDrop({

@@ -17,6 +17,11 @@
   background-size: cover;
 }
 
+.curse-production-environment .curse-decoration,
+.curse-production-desk {
+  pointer-events: none;
+}
+
 .curse-production-lens {
   position: absolute;
   z-index: 1;
@@ -95,12 +100,13 @@
   position: absolute;
   inset: 20% 10%;
   --curse-timeline-position: 0.5;
+  --curse-timeline-handle-center: 50%;
 }
 
 .curse-production-timeline-handle {
   position: absolute;
   top: 50%;
-  left: calc(8.5% + var(--curse-timeline-position) * 83%);
+  left: var(--curse-timeline-handle-center);
   width: 17%;
   transform: translate(-50%, -50%);
   pointer-events: none;
@@ -109,7 +115,10 @@
 .curse-production-timeline-control {
   position: absolute;
   z-index: 2;
-  inset: 0;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 100%;
   cursor: ew-resize;
   touch-action: none;
   outline: none;

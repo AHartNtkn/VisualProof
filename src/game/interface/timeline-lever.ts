@@ -1,5 +1,8 @@
 import type { GameTimeline } from '../session'
 
+export const TIMELINE_TRACK_START = 0.085
+export const TIMELINE_TRACK_SPAN = 0.83
+
 export const leverHandleFraction = (cursor: number, stateCount: number): number =>
   stateCount <= 1 ? 0.5 : Math.max(0, Math.min(stateCount - 1, cursor)) / (stateCount - 1)
 
@@ -48,10 +51,15 @@ export function mountTimelineLever(
     }
     const timeline = getTimeline()
     const rect = rail.getBoundingClientRect()
-    onMove(leverCursorAt(event.clientX, rect.left, rect.width, timeline.states.length))
+    onMove(leverCursorAt(
+      event.clientX,
+      rect.left + rect.width * TIMELINE_TRACK_START,
+      rect.width * TIMELINE_TRACK_SPAN,
+      timeline.states.length,
+    ))
   }
   const down = (event: PointerEvent): void => {
-    if (event.button !== 0 || !inputAllowed()) return
+    if (event.button !== 0 || draggingPointer !== null || !inputAllowed()) return
     draggingPointer = event.pointerId
     rail.setPointerCapture(event.pointerId)
     requestAt(event)
@@ -59,7 +67,12 @@ export function mountTimelineLever(
   const moving = (event: PointerEvent): void => {
     if (draggingPointer === event.pointerId) requestAt(event)
   }
-  const up = (event: PointerEvent): void => cancelDrag(event.pointerId)
+  const up = (event: PointerEvent): void => {
+    if (draggingPointer !== event.pointerId) return
+    requestAt(event)
+    cancelDrag(event.pointerId)
+  }
+  const cancelled = (event: PointerEvent): void => cancelDrag(event.pointerId)
   const lost = (event: PointerEvent): void => {
     if (draggingPointer === event.pointerId) draggingPointer = null
   }
@@ -84,7 +97,7 @@ export function mountTimelineLever(
   rail.addEventListener('pointerdown', down)
   rail.addEventListener('pointermove', moving)
   rail.addEventListener('pointerup', up)
-  rail.addEventListener('pointercancel', up)
+  rail.addEventListener('pointercancel', cancelled)
   rail.addEventListener('lostpointercapture', lost)
   rail.addEventListener('keydown', keydown)
 
@@ -92,7 +105,12 @@ export function mountTimelineLever(
     const timeline = getTimeline()
     const last = Math.max(0, timeline.states.length - 1)
     const cursor = Math.max(0, Math.min(last, timeline.cursor))
-    handleSlot.style.setProperty('--curse-timeline-position', String(leverHandleFraction(cursor, timeline.states.length)))
+    const position = leverHandleFraction(cursor, timeline.states.length)
+    handleSlot.style.setProperty('--curse-timeline-position', String(position))
+    handleSlot.style.setProperty(
+      '--curse-timeline-handle-center',
+      `${(TIMELINE_TRACK_START + position * TIMELINE_TRACK_SPAN) * 100}%`,
+    )
     rail.setAttribute('aria-valuemin', '0')
     rail.setAttribute('aria-valuemax', String(last))
     rail.setAttribute('aria-valuenow', String(cursor))
@@ -111,7 +129,7 @@ export function mountTimelineLever(
       rail.removeEventListener('pointerdown', down)
       rail.removeEventListener('pointermove', moving)
       rail.removeEventListener('pointerup', up)
-      rail.removeEventListener('pointercancel', up)
+      rail.removeEventListener('pointercancel', cancelled)
       rail.removeEventListener('lostpointercapture', lost)
       rail.removeEventListener('keydown', keydown)
       rail.remove()

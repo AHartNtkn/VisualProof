@@ -154,6 +154,20 @@ describe('production timeline control', () => {
     expect(moves).toEqual([2])
   })
 
+  it('rejects a second concurrent pointer and samples the final allowed pointerup coordinate', () => {
+    const slot = new FakeElement(document)
+    const moves: number[] = []
+    const control = mountTimelineLever(
+      slot as unknown as HTMLElement, () => timeline(1, 8), (cursor) => moves.push(cursor),
+    ).element as unknown as FakeElement
+    control.rect = { left: 100, width: 700 }
+    control.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 243, pointerId: 1 }))
+    control.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 800, pointerId: 2 }))
+    control.dispatchEvent(eventWith('pointerup', { clientX: 657.5, pointerId: 1 }))
+    expect(moves).toEqual([1, 6])
+    expect(control.released).toEqual([1])
+  })
+
   it('handles pointer cancellation/lost capture and removes all ownership on disposal', () => {
     const slot = new FakeElement(document)
     const moves: number[] = []
