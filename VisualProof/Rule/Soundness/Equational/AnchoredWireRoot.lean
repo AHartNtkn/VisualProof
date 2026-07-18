@@ -649,6 +649,116 @@ def anchoredWireSplitRaw_binderEnumeration
   lookup := enumeration.lookup
   lookup_owner := enumeration.lookup_owner
 
+/-- The zero-route witness extractor is independent of the root wire ordering.
+Recompile the same occurrences in the canonical exact root context, transport
+their denotation through the compiler-certified context isomorphism, and map
+the resulting equation back to exposed-then-hidden ordered-open coordinates. -/
+theorem anchoredWireSplit_root_witness_value_of_zero_route
+    (checked : CheckedOpenDiagram signature)
+    (wire : Fin checked.val.diagram.wireCount)
+    (witness : Fin checked.val.diagram.nodeCount)
+    (witnessRegion : Fin checked.val.diagram.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (witnessShape : checked.val.diagram.nodes witness =
+      .term witnessRegion 0 term)
+    (witnessOccurs : checked.val.diagram.EndpointOccurs wire
+      { node := witness, port := .output })
+    {path : List Nat}
+    (route : Diagram.Splice.RegionRoute checked.val.diagram
+      checked.val.diagram.root witnessRegion path)
+    (routeZero : route.HasCutDepth 0)
+    (items : ItemSeq signature checked.val.rootWires.length [])
+    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+      checked.val.diagram
+      (ConcreteElaboration.compileRegion? signature checked.val.diagram
+        checked.val.diagram.regionCount)
+      checked.val.rootWires ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences checked.val.diagram
+        checked.val.diagram.root) = some items)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (raw : Fin checked.val.rootWires.length → model.Carrier)
+    (itemsDenote : denoteItemSeq (relCtx := []) model named raw PUnit.unit
+      items) :
+    ∀ index, checked.val.rootWires.get index = wire →
+      raw index = model.eval term Fin.elim0 := by
+  let closed : CheckedDiagram signature :=
+    ⟨checked.val.diagram, checked.property.diagram_well_formed⟩
+  let exactContext :=
+    ConcreteElaboration.exactScopeWires checked.val.diagram
+      checked.val.diagram.root
+  have exact : ConcreteElaboration.WireContext.Exact exactContext
+      checked.val.diagram.root := by
+    simpa [exactContext, ConcreteElaboration.WireContext.extend] using
+      ConcreteElaboration.closedRootWires_exact
+        checked.property.diagram_well_formed
+  obtain ⟨closedBody, closedBodyCompiled⟩ :=
+    ConcreteElaboration.compileRoot?_complete
+      checked.property.diagram_well_formed
+      ([] : ConcreteElaboration.WireContext checked.val.diagram) exactContext
+      (by simpa using exact)
+  simp only [ConcreteElaboration.compileRoot?] at closedBodyCompiled
+  cases exactItemsResult : ConcreteElaboration.compileOccurrencesWith?
+      signature checked.val.diagram
+      (ConcreteElaboration.compileRegion? signature checked.val.diagram
+        checked.val.diagram.regionCount)
+      exactContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences checked.val.diagram
+        checked.val.diagram.root) with
+  | none => simp [exactItemsResult] at closedBodyCompiled
+  | some exactItems =>
+    let wireEquiv := Diagram.exactContextToOpenRootWireEquiv checked
+      exactContext exact
+    have itemIso := Diagram.compiledOpenRootItemsIsoFromExactContext checked
+      exactContext exact exactItemsResult compiled
+    let exactRaw : Fin exactContext.length → model.Carrier :=
+      raw ∘ wireEquiv
+    have environmentsAgree : EnvironmentsAgree wireEquiv exactRaw raw := by
+      intro index
+      rfl
+    have exactDenotes : denoteItemSeq (relCtx := []) model named exactRaw
+        PUnit.unit exactItems :=
+      (itemIso.denotation model named exactRaw raw PUnit.unit
+        environmentsAgree).mpr itemsDenote
+    have exactCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+        closed.val
+        (ConcreteElaboration.compileRegion? signature closed.val
+          closed.val.regionCount)
+        (ConcreteElaboration.WireContext.extend
+          ([] : ConcreteElaboration.WireContext closed.val) closed.val.root)
+        ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences closed.val closed.val.root) =
+          some exactItems := by
+      simpa [closed, exactContext, ConcreteElaboration.WireContext.extend] using
+        exactItemsResult
+    have exactEquation := anchoredWireSplit_witness_value_of_zero_route closed
+      wire witness witnessRegion term witnessShape witnessOccurs route routeZero
+      ([] : ConcreteElaboration.WireContext closed.val)
+      ConcreteElaboration.BinderContext.empty closed.val.regionCount exactItems
+      exactCompiled
+      (by simpa [closed, exactContext,
+        ConcreteElaboration.WireContext.extend] using exact)
+      (ConcreteElaboration.BinderContext.empty_covers_root closed.property)
+      (ConcreteElaboration.BinderContext.Enumeration.empty closed.val)
+      model named Fin.elim0 exactRaw PUnit.unit (by
+        rw [ConcreteElaboration.extendedEnvironment_nil_eq_cast]
+        exact exactDenotes)
+    intro index indexGet
+    let exactIndex : Fin exactContext.length := wireEquiv.symm index
+    have mappedIndex : wireEquiv exactIndex = index := wireEquiv.right_inv index
+    have exactGet : exactContext.get exactIndex = wire := by
+      have specification := Diagram.exactContextToOpenRootWireEquiv_spec checked
+        exactContext exact exactIndex
+      rw [mappedIndex] at specification
+      exact specification.symm.trans indexGet
+    have value := exactEquation exactIndex (by
+      simpa [closed, exactContext, ConcreteElaboration.WireContext.extend] using
+        exactGet)
+    rw [ConcreteElaboration.extendedEnvironment_nil_eq_cast] at value
+    change raw (wireEquiv exactIndex) = model.eval term Fin.elim0 at value
+    rw [mappedIndex] at value
+    exact value
+
 /-- A complete semantic kernel at one certified availability region. -/
 def AnchoredAvailableKernel
     (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
