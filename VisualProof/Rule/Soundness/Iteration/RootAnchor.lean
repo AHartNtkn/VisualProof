@@ -276,6 +276,122 @@ structure ProperIterationOrderedRootContraction
           (contraction.actualWire index)) =
       terminalWires.get (Fin.cast terminalLength.symm index)
 
+/-- Exact inherited-wire transport from the canonical coalesced-open target
+leaf to the ordered-root contraction's terminal hole coordinate. -/
+noncomputable def ProperIterationOrderedRootContraction.terminalSourceWire
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {target : Fin input.val.regionCount}
+    {hadmissible : (iterationInput input selection target).Admissible}
+    {sourceBoundary : List (Fin input.val.wireCount)}
+    {sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.val.wires wire).scope = input.val.root}
+    {actualRels : RelCtx}
+    {actual : Region signature
+      (Splice.Input.compiledSpliceHostView
+        (iterationInput input selection target) hadmissible).focus.holeWires
+      actualRels}
+    (certificate : ProperIterationOrderedRootContraction input selection target
+      hadmissible sourceBoundary sourceRoot actual) :
+    FiniteEquiv
+      (Fin (Splice.Input.compiledSpliceCoalescedOpenView
+        (iterationInput input selection target) hadmissible sourceBoundary
+        sourceRoot).focus.holeWires)
+      (Fin (certificate.contraction.toOrderedRootItemContraction.witness.toFocus.holeWires)) :=
+  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView
+    (iterationInput input selection target) hadmissible sourceBoundary
+      sourceRoot
+  let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf
+    (iterationInput input selection target) hadmissible sourceBoundary
+      sourceRoot certificate.targetNeRoot
+  (FiniteEquiv.finCast sourceLeaf.inheritedLength.symm).trans
+    ((FiniteEquiv.finCast
+      (congrArg List.length certificate.terminalCanonical).symm).trans
+      (FiniteEquiv.finCast certificate.terminalLength))
+
+/-- The ordered-root contraction and the executor's canonical coalesced-open
+compiler choose the same concrete outer-wire map at the insertion site. -/
+theorem ProperIterationOrderedRootContraction.actualWire_eq_compilerOuterWire
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {target : Fin input.val.regionCount}
+    {hadmissible : (iterationInput input selection target).Admissible}
+    {sourceBoundary : List (Fin input.val.wireCount)}
+    {sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.val.wires wire).scope = input.val.root}
+    {actualRels : RelCtx}
+    {actual : Region signature
+      (Splice.Input.compiledSpliceHostView
+        (iterationInput input selection target) hadmissible).focus.holeWires
+      actualRels}
+    (certificate : ProperIterationOrderedRootContraction input selection target
+      hadmissible sourceBoundary sourceRoot actual) :
+    let spliceInput := iterationInput input selection target
+    let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+      hadmissible sourceBoundary sourceRoot
+    let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+      hadmissible sourceBoundary sourceRoot certificate.targetNeRoot
+    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    certificate.terminalSourceWire.trans certificate.contraction.actualWire =
+      Splice.Input.compilerLeafOuterWire sourceView.intrinsicPath sourceLeaf
+        host.intrinsicPath host.compilerLeaf
+        (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+          sourceView.intrinsicPath sourceLeaf host.intrinsicPath
+          host.compilerLeaf) := by
+  dsimp only
+  let spliceInput := iterationInput input selection target
+  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+    hadmissible sourceBoundary sourceRoot
+  let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+    hadmissible sourceBoundary sourceRoot certificate.targetNeRoot
+  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let canonicalWire := Splice.Input.compilerLeafOuterWire
+    sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
+      (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+        sourceView.intrinsicPath sourceLeaf host.intrinsicPath
+          host.compilerLeaf)
+  apply FiniteEquiv.ext
+  intro index
+  apply Fin.ext
+  apply (List.getElem_inj (by
+    have nodup := host.compilerLeaf.wiresExact.nodup
+    rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+    exact nodup.1)).mp
+  change host.compilerLeaf.inheritedWires.get
+      (Fin.cast host.compilerLeaf.inheritedLength.symm
+        ((certificate.terminalSourceWire.trans
+          certificate.contraction.actualWire) index)) =
+    host.compilerLeaf.inheritedWires.get
+      (Fin.cast host.compilerLeaf.inheritedLength.symm
+        (canonicalWire index))
+  have certificateSpec := certificate.actualWireSpec
+    (certificate.terminalSourceWire index)
+  have canonicalSpec := compilerLeafOuterWire_sameSite_spec
+    sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
+      index
+  have certificateTerminal :
+      host.compilerLeaf.inheritedWires.get
+          (Fin.cast host.compilerLeaf.inheritedLength.symm
+            (certificate.contraction.actualWire
+              (certificate.terminalSourceWire index))) =
+        certificate.terminalWires.get
+          (Fin.cast certificate.terminalLength.symm
+            (certificate.terminalSourceWire index)) := by
+    exact certificateSpec
+  have terminalCoordinate :
+      certificate.terminalWires.get
+          (Fin.cast certificate.terminalLength.symm
+            (certificate.terminalSourceWire index)) =
+        sourceLeaf.inheritedWires.get
+          (Fin.cast sourceLeaf.inheritedLength.symm index) := by
+    let sourceIndex := Fin.cast sourceLeaf.inheritedLength.symm index
+    have reference := VisualProof.Rule.get_of_eq
+      certificate.terminalCanonical sourceIndex
+    simpa [ProperIterationOrderedRootContraction.terminalSourceWire,
+      sourceIndex, FiniteEquiv.trans, List.get_eq_getElem] using reference
+  simpa [canonicalWire, FiniteEquiv.trans] using
+    certificateTerminal.trans (terminalCoordinate.trans canonicalSpec.symm)
+
 /-- Denotation is invariant under transport of an item sequence and its
 relation environment across the same relation-context equality. -/
 theorem denoteItemSeq_castRels_iff
