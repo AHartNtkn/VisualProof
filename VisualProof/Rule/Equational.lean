@@ -341,11 +341,11 @@ def HeadStripPayload.secondAddedNode
   Fin.natAdd input.val.nodeCount
     (Fin.natAdd payload.argumentIndices.length position)
 
-private def headStripLiftEndpoint (added : Nat)
+def headStripLiftEndpoint (added : Nat)
     (endpoint : Diagram.CEndpoint nodes) : Diagram.CEndpoint (nodes + added) :=
   { node := Fin.castAdd added endpoint.node, port := endpoint.port }
 
-private def HeadStripPayload.firstAddedFreeEndpoints
+def HeadStripPayload.firstAddedFreeEndpoints
     (payload : HeadStripPayload input first second)
     (wire : Fin input.val.wireCount) :
     List (Diagram.CEndpoint (input.val.nodeCount +
@@ -359,7 +359,7 @@ private def HeadStripPayload.firstAddedFreeEndpoints
       else
         none
 
-private def HeadStripPayload.secondAddedFreeEndpoints
+def HeadStripPayload.secondAddedFreeEndpoints
     (payload : HeadStripPayload input first second)
     (wire : Fin input.val.wireCount) :
     List (Diagram.CEndpoint (input.val.nodeCount +
