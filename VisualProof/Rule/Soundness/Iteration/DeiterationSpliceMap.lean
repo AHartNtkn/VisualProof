@@ -283,6 +283,21 @@ noncomputable def deiterationQuotientEquiv
       (Splice.Decomposition.originalQuotientWireEquiv
         (deiterationDecomposition input selection)).symm
 
+theorem deiterationQuotientEquiv_origin
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (wire : (deiterationReinsertInput input selection witness).wireQuotient.Carrier) :
+    Splice.Decomposition.originalQuotientWireEquiv
+        (deiterationDecomposition input selection)
+        (deiterationQuotientEquiv input selection witness wire) =
+      iterationQuotientWireEquiv
+        (deiterationRemoved input selection)
+        (deiterationRetainedSelection input selection witness)
+        (deiterationReinsertTarget input selection) wire := by
+  exact (Splice.Decomposition.originalQuotientWireEquiv
+    (deiterationDecomposition input selection)).right_inv _
+
 noncomputable def deiterationOutputRegionEquiv
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
@@ -317,5 +332,78 @@ noncomputable def deiterationOutputWireEquiv
         (deiterationDecomposition input selection)).plugLayout.plugRaw.wireCount) :=
   finiteSumEquiv (deiterationQuotientEquiv input selection witness)
     (deiterationInternalWireEquiv input selection witness)
+
+@[simp] theorem deiterationOutputRegionEquiv_frame
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (region : Fin (deiterationRemoved input selection).val.regionCount) :
+    deiterationOutputRegionEquiv input selection witness
+        ((deiterationReinsertInput input selection witness).plugLayout.frameRegion region) =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).plugLayout.frameRegion region := by
+  exact finiteSumEquiv_left _ _ region
+
+@[simp] theorem deiterationOutputRegionEquiv_material
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (region :
+      (deiterationReinsertInput input selection witness).plugLayout.materialRegions.Carrier) :
+    deiterationOutputRegionEquiv input selection witness
+        ((deiterationReinsertInput input selection witness).plugLayout.materialRegion region) =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).plugLayout.materialRegion
+          (deiterationMaterialEquiv input selection witness region) := by
+  exact finiteSumEquiv_right _ _ region
+
+@[simp] theorem deiterationOutputNodeEquiv_frame
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (node : Fin (deiterationRemoved input selection).val.nodeCount) :
+    deiterationOutputNodeEquiv input selection witness
+        ((deiterationReinsertInput input selection witness).plugLayout.frameNode node) =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).plugLayout.frameNode node := by
+  exact finiteSumEquiv_left _ _ node
+
+@[simp] theorem deiterationOutputNodeEquiv_pattern
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (node : Fin
+      (deiterationReinsertInput input selection witness).pattern.val.diagram.nodeCount) :
+    deiterationOutputNodeEquiv input selection witness
+        ((deiterationReinsertInput input selection witness).plugLayout.patternNode node) =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).plugLayout.patternNode
+          ((deiterationPatternOccurrenceEquiv input selection witness).diagram.nodes node) := by
+  exact finiteSumEquiv_right _ _ node
+
+@[simp] theorem deiterationOutputWireEquiv_quotient
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (wire : (deiterationReinsertInput input selection witness).wireQuotient.Carrier) :
+    deiterationOutputWireEquiv input selection witness
+        ((deiterationReinsertInput input selection witness).plugLayout.frameWire wire) =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).plugLayout.frameWire
+          (deiterationQuotientEquiv input selection witness wire) := by
+  exact finiteSumEquiv_left _ _ wire
+
+@[simp] theorem deiterationOutputWireEquiv_internal
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (wire :
+      (deiterationReinsertInput input selection witness).plugLayout.internalWires.Carrier) :
+    deiterationOutputWireEquiv input selection witness
+        ((deiterationReinsertInput input selection witness).plugLayout.internalWire wire) =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).plugLayout.internalWire
+          (deiterationInternalWireEquiv input selection witness wire) := by
+  exact finiteSumEquiv_right _ _ wire
 
 end VisualProof.Rule.IterationSoundness
