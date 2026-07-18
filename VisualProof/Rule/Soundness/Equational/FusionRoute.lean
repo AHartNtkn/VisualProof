@@ -1419,6 +1419,278 @@ theorem consumerItems_entails
     (beforeSimulation sourceEnv targetEnv relEnv agrees) focusEquiv
     (afterSimulation sourceEnv targetEnv relEnv agrees)
 
+theorem producerEquation_extended
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (producerRegion consumerRegion : Fin input.val.regionCount)
+    (producerPorts consumerPorts : Nat)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (producerShape : input.val.nodes producer =
+      .term producerRegion producerPorts producerTerm)
+    (consumerShape : input.val.nodes consumer =
+      .term consumerRegion consumerPorts consumerTerm)
+    (scope : producerRegion = (input.val.wires consumedWire).scope)
+    (producerResolved : resolveNodeFreeWires? input producer producerPorts =
+      some producerWire)
+    (endpoints :
+      (input.val.wires consumedWire).endpoints = [
+          { node := producer, port := CPort.output },
+          { node := consumer, port := CPort.free consumedPort.val }] ∨
+      (input.val.wires consumedWire).endpoints = [
+          { node := consumer, port := CPort.free consumedPort.val },
+          { node := producer, port := CPort.output }])
+    (source : ConcreteElaboration.WireContext input.val)
+    (sourceExact : (source.extend consumerRegion).Exact consumerRegion)
+    (consumedIndex : Fin source.length)
+    (consumedGet : source.get consumedIndex = consumedWire)
+    (producerIndex : Fin producerPorts → Fin source.length)
+    (producerGet : ∀ port, source.get (producerIndex port) = producerWire port)
+    (model : Lambda.LambdaModel)
+    (sourceOuter : Fin source.length → model.Carrier)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+      consumerRegion).length → model.Carrier)
+    (producerEquation : sourceOuter consumedIndex =
+      model.eval producerTerm (sourceOuter ∘ producerIndex)) :
+    fusionExtendedEnv source consumerRegion sourceOuter sourceLocal
+        (visibleIndex input.val (source.extend consumerRegion) consumerRegion
+          sourceExact consumedWire
+          (consumedWire_encloses_consumer input consumedWire producer consumer
+            consumedPort.val consumerRegion consumerPorts consumerTerm
+            consumerShape endpoints)) =
+      model.eval producerTerm (fun port ↦
+        fusionExtendedEnv source consumerRegion sourceOuter sourceLocal
+          (visibleIndex input.val (source.extend consumerRegion) consumerRegion
+            sourceExact (producerWire port)
+            (producerWire_encloses_consumer input consumedWire producer consumer
+              consumedPort.val producerRegion consumerRegion producerPorts
+              consumerPorts producerTerm consumerTerm producerWire producerShape
+              consumerShape scope producerResolved endpoints port))) := by
+  have consumedOuterGet : (source.extend consumerRegion).get
+      (source.outerIndex consumerRegion consumedIndex) = consumedWire := by
+    simpa only [List.get_eq_getElem] using
+      (source.extend_outer consumerRegion consumedIndex).trans consumedGet
+  have consumedIndexEq := index_eq_visibleIndex_of_get input.val
+    (source.extend consumerRegion) consumerRegion sourceExact consumedWire
+    (consumedWire_encloses_consumer input consumedWire producer consumer
+      consumedPort.val consumerRegion consumerPorts consumerTerm consumerShape
+      endpoints) (source.outerIndex consumerRegion consumedIndex)
+    consumedOuterGet
+  rw [← consumedIndexEq, fusionExtendedEnv_outer, producerEquation]
+  apply congrArg (model.eval producerTerm)
+  funext port
+  have producerOuterGet : (source.extend consumerRegion).get
+      (source.outerIndex consumerRegion (producerIndex port)) =
+        producerWire port := by
+    simpa only [List.get_eq_getElem] using
+      (source.extend_outer consumerRegion (producerIndex port)).trans
+        (producerGet port)
+  have producerIndexEq := index_eq_visibleIndex_of_get input.val
+    (source.extend consumerRegion) consumerRegion sourceExact
+    (producerWire port)
+    (producerWire_encloses_consumer input consumedWire producer consumer
+      consumedPort.val producerRegion consumerRegion producerPorts consumerPorts
+      producerTerm consumerTerm producerWire producerShape consumerShape scope
+      producerResolved endpoints port)
+    (source.outerIndex consumerRegion (producerIndex port)) producerOuterGet
+  simp only [Function.comp_apply]
+  rw [← producerIndexEq, fusionExtendedEnv_outer]
+
+theorem consumerRegion_entails
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (producerRegion consumerRegion : Fin input.val.regionCount)
+    (producerPorts consumerPorts : Nat)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (producerShape : input.val.nodes producer =
+      .term producerRegion producerPorts producerTerm)
+    (consumerShape : input.val.nodes consumer =
+      .term consumerRegion consumerPorts consumerTerm)
+    (scope : producerRegion = (input.val.wires consumedWire).scope)
+    (producerResolved : resolveNodeFreeWires? input producer producerPorts =
+      some producerWire)
+    (consumerResolved : resolveNodeFreeWires? input consumer consumerPorts =
+      some consumerWire)
+    (endpoints :
+      (input.val.wires consumedWire).endpoints = [
+          { node := producer, port := CPort.output },
+          { node := consumer, port := CPort.free consumedPort.val }] ∨
+      (input.val.wires consumedWire).endpoints = [
+          { node := consumer, port := CPort.free consumedPort.val },
+          { node := producer, port := CPort.output }])
+    (producerEnclosesConsumer : input.val.Encloses producerRegion consumerRegion)
+    (regionNe : consumerRegion ≠ producerRegion)
+    (targetWellFormed :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (fuel : Nat)
+    (source : ConcreteElaboration.WireContext input.val)
+    (target : ConcreteElaboration.WireContext
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort))
+    (context : Context input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort source target)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (sourceExact : (source.extend consumerRegion).Exact consumerRegion)
+    (targetExact : (target.extend consumerRegion).Exact consumerRegion)
+    (consumedIndex : Fin source.length)
+    (consumedGet : source.get consumedIndex = consumedWire)
+    (producerIndex : Fin producerPorts → Fin source.length)
+    (producerGet : ∀ port, source.get (producerIndex port) = producerWire port)
+    (sourceBody : Region signature source.length rels)
+    (targetBody : Region signature target.length rels)
+    (sourceCompiled : ConcreteElaboration.compileRegion? signature input.val
+      (fuel + 1) consumerRegion source binders = some sourceBody)
+    (targetCompiled : ConcreteElaboration.compileRegion? signature
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      (fuel + 1) consumerRegion target binders = some targetBody)
+    (sourceOuter : Fin source.length → model.Carrier)
+    (targetOuter : Fin target.length → model.Carrier)
+    (relEnv : RelEnv model.Carrier rels)
+    (outerAgrees : context.indexRelation.EnvironmentsAgree sourceOuter targetOuter)
+    (producerEquation : sourceOuter consumedIndex =
+      model.eval producerTerm (sourceOuter ∘ producerIndex)) :
+    direction.Entails
+      (denoteRegion model named sourceOuter relEnv sourceBody)
+      (denoteRegion model named targetOuter relEnv targetBody) := by
+  simp only [ConcreteElaboration.compileRegion?] at sourceCompiled targetCompiled
+  cases sourceItemsResult : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val (ConcreteElaboration.compileRegion? signature input.val fuel)
+      (source.extend consumerRegion) binders
+      (ConcreteElaboration.localOccurrences input.val consumerRegion) with
+  | none => simp [sourceItemsResult] at sourceCompiled
+  | some sourceItems =>
+    simp [sourceItemsResult] at sourceCompiled
+    subst sourceBody
+    cases targetItemsResult : ConcreteElaboration.compileOccurrencesWith? signature
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        (ConcreteElaboration.compileRegion? signature
+          (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+            producerTerm consumerTerm producerWire consumerWire consumedPort) fuel)
+        (target.extend consumerRegion) binders
+        (ConcreteElaboration.localOccurrences
+          (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+            producerTerm consumerTerm producerWire consumerWire consumedPort)
+          consumerRegion) with
+    | none => simp [targetItemsResult] at targetCompiled
+    | some targetItems =>
+      simp [targetItemsResult] at targetCompiled
+      subst targetBody
+      have outerEq : sourceOuter ∘ context.sourceIndex = targetOuter := by
+        simpa [Context.indexRelation] using outerAgrees
+      cases direction with
+      | forward =>
+        intro sourceDenotes
+        unfold ConcreteElaboration.finishRegion at sourceDenotes ⊢
+        simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
+          at sourceDenotes ⊢
+        obtain ⟨sourceLocal, sourceCast⟩ := sourceDenotes
+        let targetLocal := fusionTargetLocalEnv context consumerRegion sourceExact
+          targetExact sourceOuter sourceLocal
+        refine ⟨targetLocal, ?_⟩
+        let sourceRaw := fusionExtendedEnv source consumerRegion sourceOuter
+          sourceLocal
+        let targetRaw := fusionExtendedEnv target consumerRegion targetOuter
+          targetLocal
+        have sourceRawItems := (denoteItemSeq_renameWires model named
+          (Fin.cast (ConcreteElaboration.WireContext.length_extend source
+            consumerRegion)) (extendWireEnv sourceOuter sourceLocal) relEnv
+          sourceItems).mp sourceCast
+        change denoteItemSeq model named sourceRaw relEnv sourceItems at sourceRawItems
+        have extendedAgrees :
+            ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+              (context.extend consumerRegion sourceExact targetExact).indexRelation
+              sourceRaw targetRaw := by
+          simpa [Context.indexRelation, sourceRaw, targetRaw, targetLocal,
+            outerEq] using
+            (fusionExtendedEnv_forward context consumerRegion sourceExact
+              targetExact sourceOuter sourceLocal)
+        have consumedValue := producerEquation_extended input consumedWire
+          producer consumer producerRegion consumerRegion producerPorts
+          consumerPorts producerTerm consumerTerm producerWire consumedPort
+          producerShape consumerShape scope producerResolved endpoints source
+          sourceExact consumedIndex consumedGet producerIndex producerGet model
+          sourceOuter sourceLocal producerEquation
+        have targetRawItems := consumerItems_entails input consumedWire producer
+          consumer hdistinct producerRegion consumerRegion producerPorts
+          consumerPorts producerTerm consumerTerm producerWire consumerWire
+          consumedPort producerShape consumerShape scope producerResolved
+          consumerResolved endpoints producerEnclosesConsumer regionNe
+          targetWellFormed model named .forward fuel (source.extend consumerRegion)
+          (target.extend consumerRegion) sourceExact targetExact
+          (context.extend consumerRegion sourceExact targetExact) binders
+          sourceItems targetItems sourceItemsResult targetItemsResult sourceRaw
+          targetRaw relEnv extendedAgrees consumedValue sourceRawItems
+        exact (denoteItemSeq_renameWires model named
+          (Fin.cast (ConcreteElaboration.WireContext.length_extend target
+            consumerRegion)) (extendWireEnv targetOuter targetLocal) relEnv
+          targetItems).mpr targetRawItems
+      | backward =>
+        intro targetDenotes
+        unfold ConcreteElaboration.finishRegion at targetDenotes ⊢
+        simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
+          at targetDenotes ⊢
+        obtain ⟨targetLocal, targetCast⟩ := targetDenotes
+        let sourceLocal := fusionSourceLocalEnvOfNe input consumedWire producer
+          consumer hdistinct producerRegion consumerRegion producerTerm
+          consumerTerm producerWire consumerWire consumedPort scope
+          consumerRegion regionNe targetLocal
+        refine ⟨sourceLocal, ?_⟩
+        let sourceRaw := fusionExtendedEnv source consumerRegion sourceOuter
+          sourceLocal
+        let targetRaw := fusionExtendedEnv target consumerRegion targetOuter
+          targetLocal
+        have targetRawItems := (denoteItemSeq_renameWires model named
+          (Fin.cast (ConcreteElaboration.WireContext.length_extend target
+            consumerRegion)) (extendWireEnv targetOuter targetLocal) relEnv
+          targetItems).mp targetCast
+        change denoteItemSeq model named targetRaw relEnv targetItems at targetRawItems
+        have extendedAgrees :
+            ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+              (context.extend consumerRegion sourceExact targetExact).indexRelation
+              sourceRaw targetRaw := by
+          simpa [Context.indexRelation, sourceRaw, targetRaw, sourceLocal] using
+            (fusionExtendedEnv_backward_of_ne context producerRegion scope
+              consumerRegion regionNe sourceExact targetExact sourceOuter
+              targetOuter outerEq targetLocal)
+        have consumedValue := producerEquation_extended input consumedWire
+          producer consumer producerRegion consumerRegion producerPorts
+          consumerPorts producerTerm consumerTerm producerWire consumedPort
+          producerShape consumerShape scope producerResolved endpoints source
+          sourceExact consumedIndex consumedGet producerIndex producerGet model
+          sourceOuter sourceLocal producerEquation
+        have sourceRawItems := consumerItems_entails input consumedWire producer
+          consumer hdistinct producerRegion consumerRegion producerPorts
+          consumerPorts producerTerm consumerTerm producerWire consumerWire
+          consumedPort producerShape consumerShape scope producerResolved
+          consumerResolved endpoints producerEnclosesConsumer regionNe
+          targetWellFormed model named .backward fuel
+          (source.extend consumerRegion) (target.extend consumerRegion)
+          sourceExact targetExact
+          (context.extend consumerRegion sourceExact targetExact) binders
+          sourceItems targetItems sourceItemsResult targetItemsResult sourceRaw
+          targetRaw relEnv extendedAgrees consumedValue targetRawItems
+        exact (denoteItemSeq_renameWires model named
+          (Fin.cast (ConcreteElaboration.WireContext.length_extend source
+            consumerRegion)) (extendWireEnv sourceOuter sourceLocal) relEnv
+          sourceItems).mpr sourceRawItems
+
 end FusionSoundness
 
 end VisualProof.Rule
