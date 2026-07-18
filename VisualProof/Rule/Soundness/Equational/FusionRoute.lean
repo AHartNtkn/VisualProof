@@ -638,6 +638,59 @@ theorem directChild_encloses
   rw [parentEq]
   rfl
 
+theorem sibling_not_encloses_descendant
+    (input : ConcreteDiagram) (wellFormed : input.WellFormed signature)
+    {parent selected other descendant : Fin input.regionCount}
+    (selectedParent : (input.regions selected).parent? = some parent)
+    (otherParent : (input.regions other).parent? = some parent)
+    (selectedDescendant : input.Encloses selected descendant)
+    (distinct : other ≠ selected) :
+    ¬ input.Encloses other descendant := by
+  intro otherDescendant
+  obtain ⟨selectedSteps, selectedClimb⟩ := selectedDescendant
+  obtain ⟨otherSteps, otherClimb⟩ := otherDescendant
+  obtain ⟨rootSteps, parentRoot⟩ := wellFormed.all_regions_reach_root parent
+  have selectedParentClimb :
+      input.climb (selectedSteps.val + 1) descendant = some parent := by
+    apply ConcreteElaboration.climb_add selectedClimb
+    simp [ConcreteDiagram.climb, selectedParent]
+  have otherParentClimb :
+      input.climb (otherSteps.val + 1) descendant = some parent := by
+    apply ConcreteElaboration.climb_add otherClimb
+    simp [ConcreteDiagram.climb, otherParent]
+  have selectedRoot :
+      input.climb ((selectedSteps.val + 1) + rootSteps.val) descendant =
+        some input.root :=
+    ConcreteElaboration.climb_add selectedParentClimb parentRoot
+  have otherRoot :
+      input.climb ((otherSteps.val + 1) + rootSteps.val) descendant =
+        some input.root :=
+    ConcreteElaboration.climb_add otherParentClimb parentRoot
+  have stepsEq :=
+    ConcreteElaboration.ParentTraversal.climb_to_root_steps_unique input
+      wellFormed.root_is_sheet selectedRoot otherRoot
+  have sameSteps : selectedSteps.val = otherSteps.val := by omega
+  rw [sameSteps] at selectedClimb
+  exact distinct (Option.some.inj (otherClimb.symm.trans selectedClimb))
+
+theorem frame_entails
+    (direction : ConcreteElaboration.SimulationDirection)
+    (before : direction.Entails sourceBefore targetBefore)
+    (focus : sourceFocus ↔ targetFocus)
+    (after : direction.Entails sourceAfter targetAfter) :
+    direction.Entails
+      (sourceBefore ∧ sourceFocus ∧ sourceAfter)
+      (targetBefore ∧ targetFocus ∧ targetAfter) := by
+  cases direction with
+  | forward =>
+      rintro ⟨sourceBeforeProof, sourceFocusProof, sourceAfterProof⟩
+      exact ⟨before sourceBeforeProof, focus.mp sourceFocusProof,
+        after sourceAfterProof⟩
+  | backward =>
+      rintro ⟨targetBeforeProof, targetFocusProof, targetAfterProof⟩
+      exact ⟨before targetBeforeProof, focus.mpr targetFocusProof,
+        after targetAfterProof⟩
+
 /-- A subtree containing neither endpoint of fusion is semantically unchanged
 apart from stable node/wire compaction.  This is the side-branch kernel used by
 the selected producer-to-consumer route. -/
@@ -944,6 +997,150 @@ theorem compileRegion_awaySimulation
                 (fusionExtendedEnv_backward_of_ne context producerRegion scope
                   region regionNeProducer sourceExact targetExact sourceOuter
                   targetOuter outerEq targetLocal)
+
+/-- Package an away child region as the cut/bubble item expected by its
+parent's ordered occurrence compiler. -/
+theorem childOccurrence_awaySimulation
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (producerRegion consumerRegion : Fin input.val.regionCount)
+    (producerPorts consumerPorts : Nat)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (producerShape : input.val.nodes producer =
+      .term producerRegion producerPorts producerTerm)
+    (consumerShape : input.val.nodes consumer =
+      .term consumerRegion consumerPorts consumerTerm)
+    (scope : producerRegion = (input.val.wires consumedWire).scope)
+    (targetWellFormed :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (fuel : Nat)
+    (parent child : Fin input.val.regionCount)
+    (source : ConcreteElaboration.WireContext input.val)
+    (target : ConcreteElaboration.WireContext
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort))
+    (context : Context input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort source target)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (parentEq : (input.val.regions child).parent? = some parent)
+    (producerAway : ¬ input.val.Encloses child producerRegion)
+    (consumerAway : ¬ input.val.Encloses child consumerRegion)
+    (sourceExact : (source.extend child).Exact child)
+    (targetExact : (target.extend child).Exact child)
+    (sourceItem : Item signature source.length rels)
+    (targetItem : Item signature target.length rels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith? signature
+      input.val (ConcreteElaboration.compileRegion? signature input.val fuel)
+      source binders (.child child) = some sourceItem)
+    (targetCompiled : ConcreteElaboration.compileOccurrenceWith? signature
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      (ConcreteElaboration.compileRegion? signature
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort) fuel)
+      target binders (.child child) = some targetItem) :
+    ConcreteElaboration.ItemSimulation model named direction
+      context.indexRelation sourceItem targetItem := by
+  cases kind : input.val.regions child with
+  | sheet =>
+      simp [ConcreteElaboration.compileOccurrenceWith?, kind] at sourceCompiled
+  | cut actualParent =>
+      have actualParentEq : actualParent = parent := by
+        rw [kind] at parentEq
+        exact Option.some.inj parentEq
+      subst actualParent
+      simp only [ConcreteElaboration.compileOccurrenceWith?, kind,
+        fusionRaw_regions] at sourceCompiled targetCompiled
+      cases sourceResult : ConcreteElaboration.compileRegion? signature input.val
+          fuel child source binders with
+      | none => simp [sourceResult] at sourceCompiled
+      | some sourceBody =>
+        simp [sourceResult] at sourceCompiled
+        subst sourceItem
+        cases targetResult : ConcreteElaboration.compileRegion? signature
+            (fusionRaw input consumedWire producer consumer hdistinct
+              consumerRegion producerTerm consumerTerm producerWire consumerWire
+              consumedPort) fuel child target binders with
+        | none => simp [targetResult] at targetCompiled
+        | some targetBody =>
+          simp [targetResult] at targetCompiled
+          subst targetItem
+          have bodies := compileRegion_awaySimulation input consumedWire producer
+            consumer hdistinct producerRegion consumerRegion producerPorts
+            consumerPorts producerTerm consumerTerm producerWire consumerWire
+            consumedPort producerShape consumerShape scope targetWellFormed model
+            named direction.flip fuel child source target context binders
+            producerAway consumerAway sourceExact targetExact sourceBody
+            targetBody sourceResult targetResult
+          intro sourceEnv targetEnv relEnv environments
+          have bodyEntailment := bodies sourceEnv targetEnv relEnv environments
+          simp only [cut_denotes_negation]
+          cases direction with
+          | forward =>
+              exact fun sourceNot targetDenotes ↦
+                sourceNot (bodyEntailment targetDenotes)
+          | backward =>
+              exact fun targetNot sourceDenotes ↦
+                targetNot (bodyEntailment sourceDenotes)
+  | bubble actualParent arity =>
+      have actualParentEq : actualParent = parent := by
+        rw [kind] at parentEq
+        exact Option.some.inj parentEq
+      subst actualParent
+      simp only [ConcreteElaboration.compileOccurrenceWith?, kind,
+        fusionRaw_regions] at sourceCompiled targetCompiled
+      cases sourceResult : ConcreteElaboration.compileRegion? signature input.val
+          fuel child source (binders.push child arity) with
+      | none => simp [sourceResult] at sourceCompiled
+      | some sourceBody =>
+        simp [sourceResult] at sourceCompiled
+        subst sourceItem
+        change (ConcreteElaboration.compileRegion? signature
+          (fusionRaw input consumedWire producer consumer hdistinct
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort) fuel child target (binders.push child arity)).bind
+              (fun body ↦ some (Item.bubble arity body)) =
+                some targetItem at targetCompiled
+        cases targetResult : ConcreteElaboration.compileRegion? signature
+            (fusionRaw input consumedWire producer consumer hdistinct
+              consumerRegion producerTerm consumerTerm producerWire consumerWire
+              consumedPort) fuel child target (binders.push child arity) with
+        | none => simp [targetResult] at targetCompiled
+        | some targetBody =>
+          simp [targetResult] at targetCompiled
+          subst targetItem
+          have bodies := compileRegion_awaySimulation input consumedWire producer
+            consumer hdistinct producerRegion consumerRegion producerPorts
+            consumerPorts producerTerm consumerTerm producerWire consumerWire
+            consumedPort producerShape consumerShape scope targetWellFormed model
+            named direction fuel child source target context
+            (binders.push child arity) producerAway consumerAway sourceExact
+            targetExact sourceBody targetBody sourceResult targetResult
+          intro sourceEnv targetEnv relEnv environments
+          simp only [bubble_denotes_exists]
+          cases direction with
+          | forward =>
+              rintro ⟨relationValue, sourceDenotes⟩
+              exact ⟨relationValue,
+                bodies sourceEnv targetEnv (relationValue, relEnv) environments
+                  sourceDenotes⟩
+          | backward =>
+              rintro ⟨relationValue, targetDenotes⟩
+              exact ⟨relationValue,
+                bodies sourceEnv targetEnv (relationValue, relEnv) environments
+                  targetDenotes⟩
 
 end FusionSoundness
 
