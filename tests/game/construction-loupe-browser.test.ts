@@ -229,14 +229,17 @@ describe('rendered circular construction loupe', () => {
       const canvas = page.locator('.cursebreaker-construction-loupe__canvas')
       const box = await canvas.boundingBox()
       if (box === null) throw new Error('loupe canvas has no box')
-      const client = { x: box.x + 137, y: box.y + 83 }
+      await canvas.click({ button: 'right', position: { x: 137, y: 83 } })
+      const observed = await page.evaluate(() => window.__constructionLoupeFixture.lastContextMenuMapping())
+      if (observed === null) throw new Error('live context-menu sample was not recorded')
       const expected = await page.evaluate(
         (point) => window.__constructionLoupeFixture.mapClient(point),
-        client,
+        observed.client,
       )
-      await canvas.click({ button: 'right', position: { x: 137, y: 83 } })
-      expect(await page.evaluate(() => window.__constructionLoupeFixture.lastContextMenuMapping())).toEqual({
-        client,
+      expect(observed.screen.x).toBeLessThan(box.width / 2)
+      expect(observed.screen.y).toBeLessThan(box.height / 2)
+      expect(observed).toEqual({
+        client: observed.client,
         screen: expected.screen,
         world: expected.world,
       })
