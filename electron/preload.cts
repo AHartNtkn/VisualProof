@@ -1,4 +1,17 @@
 const { contextBridge, ipcRenderer } = require('electron') as typeof import('electron')
-const { createPlatformApi } = require('./preload-api.cjs') as typeof import('./preload-api.cjs')
 
-contextBridge.exposeInMainWorld('cursebreakerPlatform', createPlatformApi(ipcRenderer))
+contextBridge.exposeInMainWorld('cursebreakerPlatform', Object.freeze({
+  loadSave: (): Promise<unknown | null> =>
+    ipcRenderer.invoke('cursebreaker:load-save') as Promise<unknown | null>,
+  writeSave: (document: unknown): Promise<void> =>
+    ipcRenderer.invoke('cursebreaker:write-save', document) as Promise<void>,
+  setFullscreen: (fullscreen: boolean): Promise<boolean> =>
+    ipcRenderer.invoke('cursebreaker:set-fullscreen', fullscreen) as Promise<boolean>,
+  requestExit: (document: unknown): Promise<void> =>
+    ipcRenderer.invoke('cursebreaker:request-exit', document) as Promise<void>,
+  onExitRequested: (callback: () => void): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('cursebreaker:exit-requested', listener)
+    return () => ipcRenderer.removeListener('cursebreaker:exit-requested', listener)
+  },
+}))

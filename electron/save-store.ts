@@ -127,9 +127,12 @@ export class SaveStore {
     await this.fileOps.mkdir(this.directory, { recursive: true, mode: 0o700 })
     const temporaryPath = path.join(this.directory, `.save-${process.pid}-${randomUUID()}.tmp`)
     let temporaryFile: FileHandle | undefined
+    let temporaryCreated = false
     let renamed = false
+    let primaryFailure: { error: unknown } | undefined
     try {
       temporaryFile = await this.fileOps.open(temporaryPath, 'wx', 0o600)
+      temporaryCreated = true
       await temporaryFile.writeFile(encoded, { encoding: 'utf8' })
       await temporaryFile.sync()
       await temporaryFile.close()
@@ -137,15 +140,22 @@ export class SaveStore {
       await this.fileOps.rename(temporaryPath, this.savePath)
       renamed = true
       await syncDirectory(this.fileOps, this.directory)
+    } catch (error) {
+      primaryFailure = { error }
     } finally {
-      await closeFile(temporaryFile)
-      if (!renamed) {
+      try {
+        await closeFile(temporaryFile)
+      } catch (error) {
+        primaryFailure ??= { error }
+      }
+      if (temporaryCreated && !renamed) {
         try {
           await this.fileOps.unlink(temporaryPath)
         } catch (error) {
-          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+          if ((error as NodeJS.ErrnoException).code !== 'ENOENT') primaryFailure ??= { error }
         }
       }
     }
+    if (primaryFailure !== undefined) throw primaryFailure.error
   }
 }

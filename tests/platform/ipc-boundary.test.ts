@@ -50,6 +50,26 @@ describe('main-process IPC boundary', () => {
     expect(harness.store.writeSave).not.toHaveBeenCalled()
   })
 
+  test('rejects missing and trailing arguments on every invoke channel', async () => {
+    const module = await loadIpcBoundaryModule()
+    expect(module).not.toBeNull()
+    const harness = createHarness()
+    module.registerPlatformIpc({ ...harness, rendererUrl: harness.mainFrame.url, maxSaveBytes: 64 })
+    const event = { sender: harness.webContents, senderFrame: harness.mainFrame }
+
+    await expect(harness.handlers.get('cursebreaker:load-save')?.(event, 'trailing')).rejects.toThrow(/argument/i)
+    await expect(harness.handlers.get('cursebreaker:write-save')?.(event)).rejects.toThrow(/argument/i)
+    await expect(harness.handlers.get('cursebreaker:write-save')?.(event, { revision: 1 }, 'trailing')).rejects.toThrow(/argument/i)
+    await expect(harness.handlers.get('cursebreaker:set-fullscreen')?.(event)).rejects.toThrow(/argument/i)
+    await expect(harness.handlers.get('cursebreaker:set-fullscreen')?.(event, true, 'trailing')).rejects.toThrow(/argument/i)
+    await expect(harness.handlers.get('cursebreaker:request-exit')?.(event)).rejects.toThrow(/argument/i)
+    await expect(harness.handlers.get('cursebreaker:request-exit')?.(event, { revision: 1 }, 'trailing')).rejects.toThrow(/argument/i)
+    expect(harness.store.loadSave).not.toHaveBeenCalled()
+    expect(harness.store.writeSave).not.toHaveBeenCalled()
+    expect(harness.window.setFullScreen).not.toHaveBeenCalled()
+    expect(harness.quit).not.toHaveBeenCalled()
+  })
+
   test('returns authoritative fullscreen state', async () => {
     const module = await loadIpcBoundaryModule()
     expect(module).not.toBeNull()

@@ -6,6 +6,7 @@ describe('desktop build and package contract', () => {
   test('pins Electron tooling and provides renderer, Electron, desktop, development, and Linux package scripts', async () => {
     const packageDocument = JSON.parse(await readFile('package.json', 'utf8'))
 
+    expect(packageDocument.engines.node).toBe('>=22.12.0')
     expect(packageDocument.main).toBe('dist-electron/main.js')
     expect(packageDocument.devDependencies.electron).toBe('43.1.1')
     expect(packageDocument.devDependencies['electron-builder']).toBe('26.15.3')

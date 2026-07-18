@@ -2,24 +2,37 @@ import { readFile } from 'node:fs/promises'
 import ts from 'typescript'
 import { describe, expect, test, vi } from 'vitest'
 
-async function loadPreloadApiModule(): Promise<any> {
-  const source = await readFile('electron/preload-api.cts', 'utf8')
-  const compiled = ts.transpileModule(source, {
+async function compilePreload(): Promise<string> {
+  const source = await readFile('electron/preload.cts', 'utf8')
+  return ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText
-  const commonJsModule = { exports: {} as Record<string, unknown> }
-  Function('exports', 'module', compiled)(commonJsModule.exports, commonJsModule)
-  return commonJsModule.exports
+}
+
+async function executeCompiledPreload() {
+  const compiled = await compilePreload()
+  const exposed: Array<[string, Record<string, (...arguments_: any[]) => unknown>]> = []
+  const transport = { invoke: vi.fn(), on: vi.fn(), removeListener: vi.fn() }
+  const sandboxRequire = vi.fn((moduleName: string) => {
+    if (moduleName !== 'electron') throw new Error(`Sandbox preload required unsupported module ${moduleName}`)
+    return {
+      contextBridge: { exposeInMainWorld: (name: string, api: Record<string, (...arguments_: any[]) => unknown>) => exposed.push([name, api]) },
+      ipcRenderer: transport,
+    }
+  })
+  Function('require', 'exports', 'module', compiled)(sandboxRequire, {}, { exports: {} })
+  return { compiled, exposed, sandboxRequire, transport }
 }
 
 describe('isolated preload API', () => {
-  test('exposes exactly five narrow capabilities and never raw IPC', async () => {
-    const module = await loadPreloadApiModule()
-    expect(module).not.toBeNull()
-    const transport = { invoke: vi.fn(), on: vi.fn(), removeListener: vi.fn() }
-    const api = module.createPlatformApi(transport)
+  test('the compiled sandbox preload is self-contained and exposes exactly five narrow capabilities', async () => {
+    const { compiled, exposed, sandboxRequire } = await executeCompiledPreload()
+    const api = exposed[0]?.[1]
 
-    expect(Object.keys(api).sort()).toEqual([
+    expect(compiled).not.toMatch(/require\(["']\.\.?\//)
+    expect(sandboxRequire.mock.calls).toEqual([['electron']])
+    expect(exposed[0]?.[0]).toBe('cursebreakerPlatform')
+    expect(Object.keys(api ?? {}).sort()).toEqual([
       'loadSave',
       'onExitRequested',
       'requestExit',
@@ -32,20 +45,19 @@ describe('isolated preload API', () => {
   })
 
   test('maps calls to fixed internal channels and returns an unsubscribe function', async () => {
-    const module = await loadPreloadApiModule()
-    expect(module).not.toBeNull()
-    const transport = { invoke: vi.fn(), on: vi.fn(), removeListener: vi.fn() }
-    const api = module.createPlatformApi(transport)
+    const { exposed, transport } = await executeCompiledPreload()
+    const api = exposed[0]?.[1]
+    expect(api).toBeDefined()
     const callback = vi.fn()
 
-    await api.loadSave()
-    await api.writeSave({ revision: 1 })
-    await api.setFullscreen(false)
-    await api.requestExit({ revision: 2 })
-    const unsubscribe = api.onExitRequested(callback)
+    await api?.loadSave?.()
+    await api?.writeSave?.({ revision: 1 })
+    await api?.setFullscreen?.(false)
+    await api?.requestExit?.({ revision: 2 })
+    const unsubscribe = api?.onExitRequested?.(callback) as (() => void) | undefined
     const listener = transport.on.mock.calls[0]?.[1]
     listener?.({ sender: 'hidden' })
-    unsubscribe()
+    unsubscribe?.()
 
     expect(transport.invoke.mock.calls).toEqual([
       ['cursebreaker:load-save'],

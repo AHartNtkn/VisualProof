@@ -1,7 +1,7 @@
-import { mkdtemp, readFile, readdir, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, readFile, readdir, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
-import { afterEach, describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
 const temporaryDirectories: string[] = []
 
@@ -61,6 +61,67 @@ describe('atomic save store', () => {
     await expect(failingStore.writeSave({ revision: 'new' })).rejects.toThrow('simulated rename failure')
     await expect(store.loadSave()).resolves.toEqual({ revision: 'prior' })
     await expect(readdir(directory)).resolves.toEqual(['foreign.tmp', 'save.json'])
+  })
+
+  test('an exclusive-open collision never unlinks a temporary file it did not create', async () => {
+    const module = await loadSaveStoreModule()
+    expect(module).not.toBeNull()
+    const directory = await makeDirectory()
+    const collision = Object.assign(new Error('simulated exclusive-open collision'), { code: 'EEXIST' })
+    const unlinkSpy = vi.fn(async () => undefined)
+    const store = new module.SaveStore({
+      directory,
+      fileOps: {
+        open: vi.fn(async () => { throw collision }),
+        unlink: unlinkSpy,
+      },
+    })
+
+    await expect(store.writeSave({ revision: 1 })).rejects.toBe(collision)
+    expect(unlinkSpy).not.toHaveBeenCalled()
+  })
+
+  test('a temporary close failure still cleans up its owned temp without swallowing the primary error', async () => {
+    const module = await loadSaveStoreModule()
+    expect(module).not.toBeNull()
+    const directory = await makeDirectory()
+    const closeFailure = new Error('simulated temporary close failure')
+    const unlinkedPaths: string[] = []
+    const store = new module.SaveStore({
+      directory,
+      fileOps: {
+        open: async (...arguments_: Parameters<typeof open>) => {
+          const handle = await open(...arguments_)
+          const openedPath = String(arguments_[0])
+          if (!path.basename(openedPath).startsWith('.save-')) return handle
+          let physicallyClosed = false
+          return new Proxy(handle, {
+            get(target, property) {
+              if (property === 'close') {
+                return async () => {
+                  if (!physicallyClosed) {
+                    physicallyClosed = true
+                    await target.close()
+                  }
+                  throw closeFailure
+                }
+              }
+              const value = Reflect.get(target, property, target)
+              return typeof value === 'function' ? value.bind(target) : value
+            },
+          })
+        },
+        unlink: async (target: Parameters<typeof unlink>[0]) => {
+          unlinkedPaths.push(String(target))
+          await unlink(target)
+        },
+      },
+    })
+
+    await expect(store.writeSave({ revision: 1 })).rejects.toBe(closeFailure)
+    expect(unlinkedPaths).toHaveLength(1)
+    expect(path.basename(unlinkedPaths[0] ?? '')).toMatch(/^\.save-.*\.tmp$/)
+    await expect(readdir(directory)).resolves.toEqual([])
   })
 
   test.each([

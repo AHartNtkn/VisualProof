@@ -51,27 +51,40 @@ function validateDocument(document: unknown, maxSaveBytes: number): void {
   serializeSaveDocument(document, maxSaveBytes)
 }
 
+function assertArgumentCount(channel: string, arguments_: readonly unknown[], expected: number): void {
+  if (arguments_.length !== expected) {
+    throw new TypeError(`${channel} expected ${expected} argument${expected === 1 ? '' : 's'}`)
+  }
+}
+
 export function registerPlatformIpc(options: PlatformIpcOptions): void {
-  options.ipcMain.handle('cursebreaker:load-save', async (event) => {
+  options.ipcMain.handle('cursebreaker:load-save', async (event, ...arguments_) => {
     assertTrustedSender(event, options)
+    assertArgumentCount('loadSave', arguments_, 0)
     return options.store.loadSave()
   })
 
-  options.ipcMain.handle('cursebreaker:write-save', async (event, document) => {
+  options.ipcMain.handle('cursebreaker:write-save', async (event, ...arguments_) => {
     assertTrustedSender(event, options)
+    assertArgumentCount('writeSave', arguments_, 1)
+    const document = arguments_[0]
     validateDocument(document, options.maxSaveBytes)
     await options.store.writeSave(document)
   })
 
-  options.ipcMain.handle('cursebreaker:set-fullscreen', async (event, fullscreen) => {
+  options.ipcMain.handle('cursebreaker:set-fullscreen', async (event, ...arguments_) => {
     assertTrustedSender(event, options)
+    assertArgumentCount('setFullscreen', arguments_, 1)
+    const fullscreen = arguments_[0]
     if (typeof fullscreen !== 'boolean') throw new TypeError('Fullscreen must be a boolean')
     options.window.setFullScreen(fullscreen)
     return options.window.isFullScreen()
   })
 
-  options.ipcMain.handle('cursebreaker:request-exit', async (event, document) => {
+  options.ipcMain.handle('cursebreaker:request-exit', async (event, ...arguments_) => {
     assertTrustedSender(event, options)
+    assertArgumentCount('requestExit', arguments_, 1)
+    const document = arguments_[0]
     validateDocument(document, options.maxSaveBytes)
     await options.store.writeSave(document)
     options.exitCoordinator.confirmSavedExit()
