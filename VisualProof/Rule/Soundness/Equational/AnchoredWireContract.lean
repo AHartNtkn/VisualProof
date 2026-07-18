@@ -407,21 +407,118 @@ theorem moveEndpointRaw_mem_exactScopeWires_iff
     rw [moveEndpointRaw_wire_scope]
     exact scope
 
-theorem moveEndpointRaw_covered
+@[simp] theorem moveEndpointRaw_exactScopeWires
     (input : ConcreteDiagram)
     (sourceWire targetWire : Fin input.wireCount)
-    (endpoint current : CEndpoint input.nodeCount)
-    (distinct : sourceWire ≠ targetWire)
-    (covered : ∃ wire, input.EndpointOccurs wire current) :
-    ∃ wire, (moveEndpointRaw input sourceWire targetWire endpoint).EndpointOccurs
-      wire current := by
-  by_cases selected : current = endpoint
-  · subst current
-    exact ⟨targetWire, moveEndpointRaw_selected_occurs_target input sourceWire
-      targetWire endpoint distinct⟩
-  · obtain ⟨wire, occurs⟩ := covered
-    exact ⟨wire, (moveEndpointRaw_other_occurs_iff input sourceWire
-      targetWire endpoint current selected wire).mpr occurs⟩
+    (endpoint : CEndpoint input.nodeCount)
+    (region : Fin input.regionCount) :
+    ConcreteElaboration.exactScopeWires
+        (moveEndpointRaw input sourceWire targetWire endpoint) region =
+      ConcreteElaboration.exactScopeWires input region := by
+  unfold ConcreteElaboration.exactScopeWires
+  congr 1
+  funext candidate
+  rw [moveEndpointRaw_wire_scope]
+  rfl
+
+@[simp] theorem moveEndpointRaw_localOccurrences
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (region : Fin input.regionCount) :
+    ConcreteElaboration.localOccurrences
+        (moveEndpointRaw input sourceWire targetWire endpoint) region =
+      ConcreteElaboration.localOccurrences input region := by
+  unfold ConcreteElaboration.localOccurrences
+  simp only [moveEndpointRaw_nodes, moveEndpointRaw_regions]
+  rfl
+
+def moveEndpointRaw_route
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    {start target : Fin input.regionCount} {path : List Nat}
+    (route : Diagram.Splice.RegionRoute input start target path) :
+    Diagram.Splice.RegionRoute
+      (moveEndpointRaw input sourceWire targetWire endpoint) start target path := by
+  induction route with
+  | here region =>
+      exact Diagram.Splice.RegionRoute.here
+        (d := moveEndpointRaw input sourceWire targetWire endpoint) region
+  | @step start child target rest parent position positionEq tail induction =>
+      exact Diagram.Splice.RegionRoute.step
+        (d := moveEndpointRaw input sourceWire targetWire endpoint)
+        (hparent := by simpa only [moveEndpointRaw_regions] using parent)
+        (position := position)
+        (hposition := by
+          simpa only [moveEndpointRaw_localOccurrences] using positionEq)
+        induction
+
+theorem moveEndpointRaw_route_hasCutDepth
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    {start target : Fin input.regionCount} {path : List Nat}
+    (route : Diagram.Splice.RegionRoute input start target path)
+    {depth : Nat} (routeDepth : route.HasCutDepth depth) :
+    (moveEndpointRaw_route input sourceWire targetWire endpoint route).HasCutDepth
+      depth := by
+  induction routeDepth with
+  | here => exact Diagram.Splice.RegionRoute.HasCutDepth.here _
+  | @cut start child target rest depth hparent position hposition tail childKind
+      tailDepth induction =>
+      exact Diagram.Splice.RegionRoute.HasCutDepth.cut
+        (d := moveEndpointRaw input sourceWire targetWire endpoint)
+        (hparent := by simpa only [moveEndpointRaw_regions] using hparent)
+        (position := position)
+        (hposition := by
+          simpa only [moveEndpointRaw_localOccurrences] using hposition)
+        (child_is_cut := by
+          simpa only [moveEndpointRaw_regions] using childKind)
+        (tail_depth := induction)
+  | @bubble start child target rest depth arity hparent position hposition tail
+      childKind tailDepth induction =>
+      exact Diagram.Splice.RegionRoute.HasCutDepth.bubble
+        (d := moveEndpointRaw input sourceWire targetWire endpoint)
+        (hparent := by simpa only [moveEndpointRaw_regions] using hparent)
+        (position := position)
+        (hposition := by
+          simpa only [moveEndpointRaw_localOccurrences] using hposition)
+        (child_is_bubble := by
+          simpa only [moveEndpointRaw_regions] using childKind)
+        (tail_depth := induction)
+
+theorem moveEndpointRaw_extendedEnvironment_outer
+    (input : ConcreteDiagram)
+    (context : ConcreteElaboration.WireContext input)
+    (region : Fin input.regionCount)
+    (outerEnv : Fin context.length → D)
+    (localEnv : Fin (ConcreteElaboration.exactScopeWires input region).length → D)
+    (index : Fin context.length) :
+    ConcreteElaboration.extendedEnvironment context region outerEnv localEnv
+        (context.outerIndex region index) =
+      outerEnv index := by
+  unfold ConcreteElaboration.extendedEnvironment
+    ConcreteElaboration.WireContext.outerIndex
+  change extendWireEnv outerEnv localEnv (Fin.castAdd _ index) = outerEnv index
+  exact Fin.addCases_left index
+
+theorem moveEndpointRaw_extendedEnvironment_local
+    (input : ConcreteDiagram)
+    (context : ConcreteElaboration.WireContext input)
+    (region : Fin input.regionCount)
+    (outerEnv : Fin context.length → D)
+    (localEnv : Fin (ConcreteElaboration.exactScopeWires input region).length → D)
+    (index : Fin (ConcreteElaboration.exactScopeWires input region).length) :
+    ConcreteElaboration.extendedEnvironment context region outerEnv localEnv
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend context region).symm
+          (Fin.natAdd context.length index)) =
+      localEnv index := by
+  unfold ConcreteElaboration.extendedEnvironment
+  change extendWireEnv outerEnv localEnv (Fin.natAdd context.length index) =
+    localEnv index
+  exact Fin.addCases_right index
 
 /-- The lexical relation used exactly below a certified endpoint-move site.
 It retains ordinary wire identity and additionally relates the moved source
@@ -456,6 +553,245 @@ theorem endpointMoveRelation_environmentsAgree
   rcases related with moved | ordinary
   · exact movedWire sourceIndex targetIndex moved.1 moved.2
   · exact sameWire sourceIndex targetIndex ordinary
+
+/-- A context pair below an endpoint-move comparison site.  Both anchor wires
+are already inherited there, so every deeper existential extension preserves
+the coalescing relation without any additional semantic choice. -/
+structure EndpointMoveContext
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (sourceContext : ConcreteElaboration.WireContext input)
+    (targetContext : ConcreteElaboration.WireContext
+      (moveEndpointRaw input sourceWire targetWire endpoint)) : Prop where
+  contexts_eq : sourceContext = targetContext
+  source_mem : sourceWire ∈ sourceContext
+  target_mem : targetWire ∈ sourceContext
+
+def EndpointMoveContext.extend
+    (context : EndpointMoveContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (region : Fin input.regionCount) :
+    EndpointMoveContext input sourceWire targetWire endpoint
+      (sourceContext.extend region) (targetContext.extend region) := by
+  refine {
+    contexts_eq := ?_
+    source_mem := List.mem_append_left _ context.source_mem
+    target_mem := List.mem_append_left _ context.target_mem
+  }
+  rw [ConcreteElaboration.WireContext.extend,
+    ConcreteElaboration.WireContext.extend, context.contexts_eq,
+    moveEndpointRaw_exactScopeWires]
+  rfl
+
+theorem EndpointMoveContext.extended_agreement
+    (context : EndpointMoveContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (region : Fin input.regionCount)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact : (targetContext.extend region).Exact region)
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (outerAgrees : (endpointMoveRelation input sourceWire targetWire
+      sourceContext targetContext).EnvironmentsAgree sourceOuter targetOuter)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input region).length → D) :
+    ∃ targetLocal : Fin (ConcreteElaboration.exactScopeWires
+        (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D,
+      (endpointMoveRelation input sourceWire targetWire
+        (sourceContext.extend region) (targetContext.extend region)
+        ).EnvironmentsAgree
+          (ConcreteElaboration.extendedEnvironment sourceContext region
+            sourceOuter sourceLocal)
+          (ConcreteElaboration.extendedEnvironment targetContext region
+            targetOuter targetLocal) := by
+  rcases context with ⟨contextsEq, sourceMem, targetMem⟩
+  subst targetContext
+  let localEq := moveEndpointRaw_exactScopeWires input sourceWire targetWire
+    endpoint region
+  let targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D :=
+    sourceLocal ∘ Fin.cast (congrArg List.length localEq)
+  refine ⟨targetLocal, ?_⟩
+  let extendedEq :
+      @ConcreteElaboration.WireContext.extend input sourceContext region =
+        @ConcreteElaboration.WireContext.extend
+          (moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region := by
+    unfold ConcreteElaboration.WireContext.extend
+    exact congrArg (List.append sourceContext) localEq.symm
+  have outerEq : sourceOuter = targetOuter := by
+    funext index
+    exact outerAgrees index index (Or.inr rfl)
+  have completeEq : ∀ sourceIndex,
+      ConcreteElaboration.extendedEnvironment sourceContext region
+          sourceOuter sourceLocal sourceIndex =
+        ConcreteElaboration.extendedEnvironment
+          (diagram := moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region targetOuter targetLocal
+          (Fin.cast (congrArg List.length extendedEq) sourceIndex) := by
+    intro sourceIndex
+    let sourceSplit := Fin.cast
+      (ConcreteElaboration.WireContext.length_extend sourceContext region)
+      sourceIndex
+    have sourceRecover : Fin.cast
+        (ConcreteElaboration.WireContext.length_extend sourceContext region).symm
+        sourceSplit = sourceIndex := by
+      apply Fin.ext
+      rfl
+    rw [← sourceRecover]
+    refine Fin.addCases (fun outer => ?_) (fun sourceLocalIndex => ?_)
+      sourceSplit
+    · let sourceActual := Fin.cast
+          (ConcreteElaboration.WireContext.length_extend
+            sourceContext region).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires input region).length outer)
+      let targetActual := Fin.cast (congrArg List.length extendedEq) sourceActual
+      let sourceOuterIndex := sourceContext.outerIndex region outer
+      let targetOuterIndex :=
+        @ConcreteElaboration.WireContext.outerIndex
+          (moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region outer
+      have sourceIndexEq : sourceActual = sourceOuterIndex := by
+        apply Fin.ext
+        rfl
+      have targetIndexEq : targetActual = targetOuterIndex := by
+        apply Fin.ext
+        rfl
+      change ConcreteElaboration.extendedEnvironment sourceContext region
+          sourceOuter sourceLocal sourceActual =
+        ConcreteElaboration.extendedEnvironment
+          (diagram := moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region targetOuter targetLocal targetActual
+      calc
+        _ = ConcreteElaboration.extendedEnvironment sourceContext region
+            sourceOuter sourceLocal sourceOuterIndex :=
+          congrArg _ sourceIndexEq
+        _ = sourceOuter outer :=
+          moveEndpointRaw_extendedEnvironment_outer input sourceContext region
+            sourceOuter sourceLocal outer
+        _ = targetOuter outer := congrFun outerEq outer
+        _ = ConcreteElaboration.extendedEnvironment
+            (diagram := moveEndpointRaw input sourceWire targetWire endpoint)
+            sourceContext region targetOuter targetLocal targetOuterIndex :=
+          (moveEndpointRaw_extendedEnvironment_outer
+            (moveEndpointRaw input sourceWire targetWire endpoint) sourceContext
+            region targetOuter targetLocal outer).symm
+        _ = _ := congrArg _ targetIndexEq.symm
+    · let sourceActual := Fin.cast
+          (ConcreteElaboration.WireContext.length_extend
+            sourceContext region).symm
+          (Fin.natAdd sourceContext.length sourceLocalIndex)
+      let targetLocalIndex : Fin (ConcreteElaboration.exactScopeWires
+          (moveEndpointRaw input sourceWire targetWire endpoint) region).length :=
+        Fin.cast (congrArg List.length localEq).symm sourceLocalIndex
+      let targetActual := Fin.cast (congrArg List.length extendedEq) sourceActual
+      let targetLocalActual := Fin.cast
+        (@ConcreteElaboration.WireContext.length_extend
+          (moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region).symm
+        (Fin.natAdd sourceContext.length targetLocalIndex)
+      have targetIndexEq : targetActual = targetLocalActual := by
+        apply Fin.ext
+        rfl
+      have localValueEq : sourceLocal sourceLocalIndex =
+          targetLocal targetLocalIndex := by
+        simp only [targetLocal, Function.comp_apply, targetLocalIndex]
+        congr 1
+      change ConcreteElaboration.extendedEnvironment sourceContext region
+          sourceOuter sourceLocal sourceActual =
+        ConcreteElaboration.extendedEnvironment
+          (diagram := moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region targetOuter targetLocal targetActual
+      calc
+        _ = sourceLocal sourceLocalIndex :=
+          moveEndpointRaw_extendedEnvironment_local input sourceContext region
+            sourceOuter sourceLocal sourceLocalIndex
+        _ = targetLocal targetLocalIndex := localValueEq
+        _ = ConcreteElaboration.extendedEnvironment
+            (diagram := moveEndpointRaw input sourceWire targetWire endpoint)
+            sourceContext region targetOuter targetLocal targetLocalActual :=
+          (moveEndpointRaw_extendedEnvironment_local
+            (moveEndpointRaw input sourceWire targetWire endpoint) sourceContext
+            region targetOuter targetLocal targetLocalIndex).symm
+        _ = _ := congrArg _ targetIndexEq.symm
+  apply endpointMoveRelation_environmentsAgree input sourceWire targetWire
+  · intro sourceIndex targetIndex sameWire
+    let targetAsSource : Fin
+        (@ConcreteElaboration.WireContext.extend input sourceContext region).length :=
+      Fin.cast (congrArg List.length extendedEq).symm targetIndex
+    have targetGetEq :
+        (@ConcreteElaboration.WireContext.extend input sourceContext region).get
+            targetAsSource =
+          (@ConcreteElaboration.WireContext.extend
+            (moveEndpointRaw input sourceWire targetWire endpoint)
+            sourceContext region).get targetIndex := by
+      have transported := List.get_of_eq extendedEq targetAsSource
+      simpa only [targetAsSource, List.get_eq_getElem, Fin.val_cast] using
+        transported
+    have indexEq : sourceIndex = targetAsSource := by
+      apply Fin.ext
+      exact (List.getElem_inj sourceExact.nodup).mp (by
+        simpa only [List.get_eq_getElem] using sameWire.trans targetGetEq.symm)
+    have targetIndexEq :
+        Fin.cast (congrArg List.length extendedEq) sourceIndex = targetIndex := by
+      apply Fin.ext
+      simpa only [targetAsSource, Fin.val_cast] using congrArg Fin.val indexEq
+    rw [← targetIndexEq]
+    exact completeEq sourceIndex
+  · intro sourceIndex targetIndex sourceGet targetGet
+    obtain ⟨sourceOuterIndex, sourceOuterGet⟩ := List.get_of_mem sourceMem
+    obtain ⟨targetOuterIndex, targetOuterGet⟩ := List.get_of_mem targetMem
+    have sourceExtendedGet : (sourceContext.extend region).get
+        (sourceContext.outerIndex region sourceOuterIndex) = sourceWire := by
+      simpa only [List.get_eq_getElem] using
+        (sourceContext.extend_outer region sourceOuterIndex).trans sourceOuterGet
+    have targetExtendedGet :
+        (@ConcreteElaboration.WireContext.extend
+          (moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region).get
+        (@ConcreteElaboration.WireContext.outerIndex
+          (moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region targetOuterIndex) = targetWire := by
+      simpa only [List.get_eq_getElem] using
+        (@ConcreteElaboration.WireContext.extend_outer
+          (moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region targetOuterIndex).trans targetOuterGet
+    have sourceIndexEq : sourceIndex =
+        sourceContext.outerIndex region sourceOuterIndex := by
+      apply Fin.ext
+      exact (List.getElem_inj sourceExact.nodup).mp (by
+        simpa only [List.get_eq_getElem] using
+          sourceGet.trans sourceExtendedGet.symm)
+    have targetIndexEq : targetIndex =
+        @ConcreteElaboration.WireContext.outerIndex
+          (moveEndpointRaw input sourceWire targetWire endpoint)
+          sourceContext region targetOuterIndex := by
+      apply Fin.ext
+      exact (List.getElem_inj targetExact.nodup).mp (by
+        simpa only [List.get_eq_getElem] using
+          targetGet.trans targetExtendedGet.symm)
+    rw [sourceIndexEq, targetIndexEq,
+      moveEndpointRaw_extendedEnvironment_outer,
+      moveEndpointRaw_extendedEnvironment_outer]
+    exact outerAgrees sourceOuterIndex targetOuterIndex
+      (Or.inl ⟨sourceOuterGet, targetOuterGet⟩)
+
+theorem moveEndpointRaw_covered
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint current : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (covered : ∃ wire, input.EndpointOccurs wire current) :
+    ∃ wire, (moveEndpointRaw input sourceWire targetWire endpoint).EndpointOccurs
+      wire current := by
+  by_cases selected : current = endpoint
+  · subst current
+    exact ⟨targetWire, moveEndpointRaw_selected_occurs_target input sourceWire
+      targetWire endpoint distinct⟩
+  · obtain ⟨wire, occurs⟩ := covered
+    exact ⟨wire, (moveEndpointRaw_other_occurs_iff input sourceWire
+      targetWire endpoint current selected wire).mpr occurs⟩
 
 theorem endpointMoveRelation_of_anchor_values
     (input : ConcreteDiagram)
