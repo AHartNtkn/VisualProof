@@ -1,0 +1,118 @@
+.cursebreaker-construction-loupe {
+  position: fixed;
+  z-index: 52;
+  border-radius: 50%;
+  isolation: isolate;
+  touch-action: none;
+}
+
+.cursebreaker-construction-loupe__instructions {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.cursebreaker-construction-loupe__canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: 50%;
+  outline: 0;
+  background: rgb(4 7 13 / 88%);
+  clip-path: circle(50% at 50% 50%);
+}
+
+.cursebreaker-construction-loupe__canvas:focus-visible {
+  box-shadow: inset 0 0 0 2px rgb(123 233 255 / 72%);
+}
+
+.cursebreaker-construction-loupe__art {
+  position: absolute;
+  left: -19.67%;
+  top: -22.22%;
+  z-index: 3;
+  display: block;
+  width: 155.56%;
+  height: 155.56%;
+  max-width: none;
+  user-select: none;
+  pointer-events: none;
+}
+
+.cursebreaker-construction-loupe__art--optics {
+  z-index: 2;
+  mix-blend-mode: screen;
+  filter: brightness(1.05) saturate(.92);
+  transition: filter 180ms ease;
+}
+
+.cursebreaker-construction-loupe__art--rim,
+.cursebreaker-construction-loupe__art--handle {
+  z-index: 4;
+}
+
+.cursebreaker-construction-loupe__rim-hit {
+  position: absolute;
+  inset: -4%;
+  z-index: 6;
+  width: 108%;
+  height: 108%;
+  overflow: visible;
+  touch-action: none;
+  pointer-events: auto;
+}
+
+.cursebreaker-construction-loupe__rim-hit-stroke {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 7;
+  pointer-events: stroke;
+  cursor: grab;
+}
+
+.cursebreaker-construction-loupe__rim-hit-stroke:active {
+  cursor: grabbing;
+}
+
+.cursebreaker-construction-loupe__terminal-hit {
+  position: absolute;
+  left: 114%;
+  top: 114%;
+  z-index: 7;
+  width: max(18px, 5.2%);
+  aspect-ratio: 1;
+  border-radius: 50%;
+  translate: -50% -50%;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.cursebreaker-construction-loupe__gesture {
+  position: fixed;
+  inset: 0;
+  z-index: 58;
+  width: 100vw;
+  height: 100vh;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.cursebreaker-construction-loupe__join-gesture {
+  stroke: rgb(98 231 255 / 88%);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px rgb(42 203 255 / 62%));
+}
+
+.cursebreaker-construction-loupe.is-reduced-motion .cursebreaker-construction-loupe__art--optics {
+  transition: none;
+}
