@@ -231,6 +231,51 @@ structure OrderedRootItemContractionAgainst
     (toOrderedRootItemContraction.replacement.renameRelations
       (Splice.Input.relationRenamingOfEq actualRelsEq)) actual
 
+/-- Executor-facing root contraction with the terminal concrete-wire law
+needed to identify its replacement with the canonical compiled splice. -/
+structure ProperIterationOrderedRootContraction
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (hadmissible : (iterationInput input selection target).Admissible)
+    (sourceBoundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.val.wires wire).scope = input.val.root)
+    {actualRels : RelCtx}
+    (actual : Region signature
+      (Splice.Input.compiledSpliceHostView
+        (iterationInput input selection target) hadmissible).focus.holeWires
+      actualRels) where
+  contraction : OrderedRootItemContractionAgainst
+    (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+      (iterationInput input selection target) hadmissible sourceBoundary
+      sourceRoot)
+    (Splice.Input.compiledSpliceOpenRootItems
+      (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+        (iterationInput input selection target) hadmissible sourceBoundary
+        sourceRoot)) actual
+  targetNeRoot : target ≠
+    (iterationInput input selection target).coalesceFrameRaw.root
+  terminalWires : List (Fin
+    (iterationInput input selection target).coalesceFrameRaw.wireCount)
+  terminalLength : terminalWires.length =
+    contraction.toOrderedRootItemContraction.witness.toFocus.holeWires
+  terminalCanonical : terminalWires =
+    (Splice.Input.compiledSpliceCoalescedNestedLeaf
+      (iterationInput input selection target) hadmissible sourceBoundary
+      sourceRoot targetNeRoot).inheritedWires
+  actualWireSpec : ∀ index : Fin
+      contraction.toOrderedRootItemContraction.witness.toFocus.holeWires,
+    (Splice.Input.compiledSpliceHostView
+        (iterationInput input selection target) hadmissible
+      ).compilerLeaf.inheritedWires.get
+        (Fin.cast
+          (Splice.Input.compiledSpliceHostView
+            (iterationInput input selection target) hadmissible
+          ).compilerLeaf.inheritedLength.symm
+          (contraction.actualWire index)) =
+      terminalWires.get (Fin.cast terminalLength.symm index)
+
 /-- Denotation is invariant under transport of an item sequence and its
 relation environment across the same relation-context equality. -/
 theorem denoteItemSeq_castRels_iff

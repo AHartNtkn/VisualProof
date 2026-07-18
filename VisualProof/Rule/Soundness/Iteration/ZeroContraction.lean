@@ -83,6 +83,7 @@ structure ProperIterationRootAnchorContraction
       (iterationInput input selection target) hadmissible).focus.holeWires)
   terminalWires : List (Fin
     (iterationInput input selection target).coalesceFrameRaw.wireCount)
+  flatTerminalWires_eq_terminalWires : flatTerminalWires = terminalWires
   terminalLength : terminalWires.length = witness.toFocus.holeWires
   actualWireSpec : ∀ index : Fin witness.toFocus.holeWires,
     (Splice.Input.compiledSpliceHostView
@@ -776,6 +777,7 @@ theorem properIterationRootAnchorContraction_complete
     actualRelsEq := scopedActualRelsEq
     actualWire := scopedActualWire
     terminalWires := fullRouteResult.trace.leaf.inheritedWires
+    flatTerminalWires_eq_terminalWires := rfl
     terminalLength := terminalLength
     actualWireSpec := by
       intro index
