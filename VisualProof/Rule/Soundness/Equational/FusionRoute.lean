@@ -757,7 +757,7 @@ theorem compileRegion_awaySimulation
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature) :
     ∀ (direction : ConcreteElaboration.SimulationDirection)
-      {rels : RelCtx} (fuel : Nat)
+      {rels : RelCtx} (fuelSource fuelTarget : Nat)
       (region : Fin input.val.regionCount)
       (source : ConcreteElaboration.WireContext input.val)
       (target : ConcreteElaboration.WireContext
@@ -773,26 +773,31 @@ theorem compileRegion_awaySimulation
       (target.extend region).Exact region →
       ∀ (sourceBody : Region signature source.length rels)
         (targetBody : Region signature target.length rels),
-      ConcreteElaboration.compileRegion? signature input.val fuel region source
+      ConcreteElaboration.compileRegion? signature input.val fuelSource region source
           binders = some sourceBody →
       ConcreteElaboration.compileRegion? signature
           (fusionRaw input consumedWire producer consumer hdistinct
             consumerRegion producerTerm consumerTerm producerWire consumerWire
             consumedPort)
-          fuel region target binders = some targetBody →
+          fuelTarget region target binders = some targetBody →
       ConcreteElaboration.RegionSimulation model named direction
         context.indexRelation sourceBody targetBody := by
-  intro direction rels fuel
-  induction fuel generalizing direction rels with
+  intro direction rels fuelSource
+  induction fuelSource generalizing direction rels with
   | zero =>
-      intro region source target context binders producerAway consumerAway
+      intro fuelTarget region source target context binders producerAway consumerAway
         sourceExact targetExact sourceBody targetBody sourceCompiled
         targetCompiled
       simp [ConcreteElaboration.compileRegion?] at sourceCompiled
   | succ childFuel ih =>
-      intro region source target context binders producerAway consumerAway
+      intro fuelTarget region source target context binders producerAway consumerAway
         sourceExact targetExact sourceBody targetBody sourceCompiled
         targetCompiled
+      have fuelTargetNe : fuelTarget ≠ 0 := by
+        intro equality
+        subst fuelTarget
+        simp [ConcreteElaboration.compileRegion?] at targetCompiled
+      obtain ⟨targetChildFuel, rfl⟩ := Nat.exists_eq_succ_of_ne_zero fuelTargetNe
       have regionNeProducer : region ≠ producerRegion := by
         intro equality
         subst region
@@ -820,7 +825,7 @@ theorem compileRegion_awaySimulation
               (ConcreteElaboration.compileRegion? signature
                 (fusionRaw input consumedWire producer consumer hdistinct
                   consumerRegion producerTerm consumerTerm producerWire
-                  consumerWire consumedPort) childFuel)
+                  consumerWire consumedPort) targetChildFuel)
               (target.extend region) binders
               (ConcreteElaboration.localOccurrences
                 (fusionRaw input consumedWire producer consumer hdistinct
@@ -839,7 +844,7 @@ theorem compileRegion_awaySimulation
                 (ConcreteElaboration.compileRegion? signature
                   (fusionRaw input consumedWire producer consumer hdistinct
                     consumerRegion producerTerm consumerTerm producerWire
-                    consumerWire consumedPort) childFuel)
+                    consumerWire consumedPort) targetChildFuel)
                 (target.extend region) binders
                 ((ConcreteElaboration.localOccurrences input.val region).map
                   (mapOccurrence input producer)) = some targetItems := by
@@ -852,7 +857,7 @@ theorem compileRegion_awaySimulation
             (ConcreteElaboration.compileRegion? signature
               (fusionRaw input consumedWire producer consumer hdistinct
                 consumerRegion producerTerm consumerTerm producerWire
-                consumerWire consumedPort) childFuel)
+                consumerWire consumedPort) targetChildFuel)
             (source.extend region) (target.extend region) extendedContext
             sourceExact.nodup binders
             (ConcreteElaboration.localOccurrences input.val region)
@@ -926,12 +931,12 @@ theorem compileRegion_awaySimulation
                           (fusionRaw input consumedWire producer consumer
                             hdistinct consumerRegion producerTerm consumerTerm
                             producerWire consumerWire consumedPort)
-                          childFuel child (target.extend region) binders with
+                          targetChildFuel child (target.extend region) binders with
                     | none => simp [targetChildResult] at targetItemCompiled
                     | some targetChild =>
                       simp [targetChildResult] at targetItemCompiled
                       subst targetItem
-                      have bodies := ih direction.flip child
+                      have bodies := ih direction.flip targetChildFuel child
                         (source.extend region) (target.extend region)
                         extendedContext binders childProducerAway
                         childConsumerAway sourceChildExact targetChildExact
@@ -967,7 +972,7 @@ theorem compileRegion_awaySimulation
                       (fusionRaw input consumedWire producer consumer hdistinct
                         consumerRegion producerTerm consumerTerm producerWire
                         consumerWire consumedPort)
-                      childFuel child (target.extend region)
+                      targetChildFuel child (target.extend region)
                         (binders.push child arity)).bind
                           (fun body ↦ some (Item.bubble arity body)) =
                             some targetItem at targetItemCompiled
@@ -976,14 +981,14 @@ theorem compileRegion_awaySimulation
                           (fusionRaw input consumedWire producer consumer
                             hdistinct consumerRegion producerTerm consumerTerm
                             producerWire consumerWire consumedPort)
-                          childFuel child (target.extend region)
+                          targetChildFuel child (target.extend region)
                           (binders.push child arity) with
                     | none =>
                         simp [targetChildResult] at targetItemCompiled
                     | some targetChild =>
                       simp [targetChildResult] at targetItemCompiled
                       subst targetItem
-                      have bodies := ih direction child
+                      have bodies := ih direction targetChildFuel child
                         (source.extend region) (target.extend region)
                         extendedContext (binders.push child arity)
                         childProducerAway childConsumerAway
@@ -1063,7 +1068,7 @@ theorem childOccurrence_awaySimulation
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (fuel : Nat)
+    (fuelSource fuelTarget : Nat)
     (parent child : Fin input.val.regionCount)
     (source : ConcreteElaboration.WireContext input.val)
     (target : ConcreteElaboration.WireContext
@@ -1081,14 +1086,14 @@ theorem childOccurrence_awaySimulation
     (sourceItem : Item signature source.length rels)
     (targetItem : Item signature target.length rels)
     (sourceCompiled : ConcreteElaboration.compileOccurrenceWith? signature
-      input.val (ConcreteElaboration.compileRegion? signature input.val fuel)
+      input.val (ConcreteElaboration.compileRegion? signature input.val fuelSource)
       source binders (.child child) = some sourceItem)
     (targetCompiled : ConcreteElaboration.compileOccurrenceWith? signature
       (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
         producerTerm consumerTerm producerWire consumerWire consumedPort)
       (ConcreteElaboration.compileRegion? signature
         (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
-          producerTerm consumerTerm producerWire consumerWire consumedPort) fuel)
+          producerTerm consumerTerm producerWire consumerWire consumedPort) fuelTarget)
       target binders (.child child) = some targetItem) :
     ConcreteElaboration.ItemSimulation model named direction
       context.indexRelation sourceItem targetItem := by
@@ -1103,7 +1108,7 @@ theorem childOccurrence_awaySimulation
       simp only [ConcreteElaboration.compileOccurrenceWith?, kind,
         fusionRaw_regions] at sourceCompiled targetCompiled
       cases sourceResult : ConcreteElaboration.compileRegion? signature input.val
-          fuel child source binders with
+          fuelSource child source binders with
       | none => simp [sourceResult] at sourceCompiled
       | some sourceBody =>
         simp [sourceResult] at sourceCompiled
@@ -1111,7 +1116,7 @@ theorem childOccurrence_awaySimulation
         cases targetResult : ConcreteElaboration.compileRegion? signature
             (fusionRaw input consumedWire producer consumer hdistinct
               consumerRegion producerTerm consumerTerm producerWire consumerWire
-              consumedPort) fuel child target binders with
+              consumedPort) fuelTarget child target binders with
         | none => simp [targetResult] at targetCompiled
         | some targetBody =>
           simp [targetResult] at targetCompiled
@@ -1120,7 +1125,7 @@ theorem childOccurrence_awaySimulation
             consumer hdistinct producerRegion consumerRegion producerPorts
             consumerPorts producerTerm consumerTerm producerWire consumerWire
             consumedPort producerShape consumerShape scope targetWellFormed model
-            named direction.flip fuel child source target context binders
+            named direction.flip fuelSource fuelTarget child source target context binders
             producerAway consumerAway sourceExact targetExact sourceBody
             targetBody sourceResult targetResult
           intro sourceEnv targetEnv relEnv environments
@@ -1141,7 +1146,7 @@ theorem childOccurrence_awaySimulation
       simp only [ConcreteElaboration.compileOccurrenceWith?, kind,
         fusionRaw_regions] at sourceCompiled targetCompiled
       cases sourceResult : ConcreteElaboration.compileRegion? signature input.val
-          fuel child source (binders.push child arity) with
+          fuelSource child source (binders.push child arity) with
       | none => simp [sourceResult] at sourceCompiled
       | some sourceBody =>
         simp [sourceResult] at sourceCompiled
@@ -1149,13 +1154,13 @@ theorem childOccurrence_awaySimulation
         change (ConcreteElaboration.compileRegion? signature
           (fusionRaw input consumedWire producer consumer hdistinct
             consumerRegion producerTerm consumerTerm producerWire consumerWire
-            consumedPort) fuel child target (binders.push child arity)).bind
+            consumedPort) fuelTarget child target (binders.push child arity)).bind
               (fun body ↦ some (Item.bubble arity body)) =
                 some targetItem at targetCompiled
         cases targetResult : ConcreteElaboration.compileRegion? signature
             (fusionRaw input consumedWire producer consumer hdistinct
               consumerRegion producerTerm consumerTerm producerWire consumerWire
-              consumedPort) fuel child target (binders.push child arity) with
+              consumedPort) fuelTarget child target (binders.push child arity) with
         | none => simp [targetResult] at targetCompiled
         | some targetBody =>
           simp [targetResult] at targetCompiled
@@ -1164,7 +1169,7 @@ theorem childOccurrence_awaySimulation
             consumer hdistinct producerRegion consumerRegion producerPorts
             consumerPorts producerTerm consumerTerm producerWire consumerWire
             consumedPort producerShape consumerShape scope targetWellFormed model
-            named direction fuel child source target context
+            named direction fuelSource fuelTarget child source target context
             (binders.push child arity) producerAway consumerAway sourceExact
             targetExact sourceBody targetBody sourceResult targetResult
           intro sourceEnv targetEnv relEnv environments
@@ -1221,7 +1226,7 @@ theorem consumerItems_entails
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (fuel : Nat)
+    (fuelSource fuelTarget : Nat)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext
       (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
@@ -1235,7 +1240,7 @@ theorem consumerItems_entails
     (sourceItems : ItemSeq signature sourceContext.length rels)
     (targetItems : ItemSeq signature targetContext.length rels)
     (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
-      input.val (ConcreteElaboration.compileRegion? signature input.val fuel)
+      input.val (ConcreteElaboration.compileRegion? signature input.val fuelSource)
       sourceContext binders
       (ConcreteElaboration.localOccurrences input.val consumerRegion) =
         some sourceItems)
@@ -1244,7 +1249,7 @@ theorem consumerItems_entails
         producerTerm consumerTerm producerWire consumerWire consumedPort)
       (ConcreteElaboration.compileRegion? signature
         (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
-          producerTerm consumerTerm producerWire consumerWire consumedPort) fuel)
+          producerTerm consumerTerm producerWire consumerWire consumedPort) fuelTarget)
       targetContext binders
       (ConcreteElaboration.localOccurrences
         (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
@@ -1293,7 +1298,7 @@ theorem consumerItems_entails
     consumerPorts producerTerm consumerTerm producerWire consumerWire
     consumedPort producerShape consumerShape consumerRegion regionNe
   have sourceFramed : ConcreteElaboration.compileOccurrencesWith? signature
-      input.val (ConcreteElaboration.compileRegion? signature input.val fuel)
+      input.val (ConcreteElaboration.compileRegion? signature input.val fuelSource)
       sourceContext binders
       (before ++ .node consumer :: after) = some sourceItems := by
     rw [← localEq]
@@ -1301,14 +1306,14 @@ theorem consumerItems_entails
   obtain ⟨sourceBefore, sourceFocus, sourceAfter, sourceBeforeCompiled,
       sourceFocusCompiled, sourceAfterCompiled, sourceItemsEq⟩ :=
     compileOccurrencesWith?_frame_split
-      (ConcreteElaboration.compileRegion? signature input.val fuel)
+      (ConcreteElaboration.compileRegion? signature input.val fuelSource)
       sourceContext binders before after (.node consumer) sourceItems sourceFramed
   have targetFramed : ConcreteElaboration.compileOccurrencesWith? signature
       (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
         producerTerm consumerTerm producerWire consumerWire consumedPort)
       (ConcreteElaboration.compileRegion? signature
         (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
-          producerTerm consumerTerm producerWire consumerWire consumedPort) fuel)
+          producerTerm consumerTerm producerWire consumerWire consumedPort) fuelTarget)
       targetContext binders
       (before.map (mapOccurrence input producer) ++
         mapOccurrence input producer (.node consumer) ::
@@ -1320,7 +1325,7 @@ theorem consumerItems_entails
     compileOccurrencesWith?_frame_split
       (ConcreteElaboration.compileRegion? signature
         (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
-          producerTerm consumerTerm producerWire consumerWire consumedPort) fuel)
+          producerTerm consumerTerm producerWire consumerWire consumedPort) fuelTarget)
       targetContext binders (before.map (mapOccurrence input producer))
       (after.map (mapOccurrence input producer))
       (mapOccurrence input producer (.node consumer)) targetItems targetFramed
@@ -1333,7 +1338,7 @@ theorem consumerItems_entails
       ∀ (sourceFrame : ItemSeq signature sourceContext.length rels)
         (targetFrame : ItemSeq signature targetContext.length rels),
       ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val fuel)
+          (ConcreteElaboration.compileRegion? signature input.val fuelSource)
           sourceContext binders frame = some sourceFrame →
       ConcreteElaboration.compileOccurrencesWith? signature
           (fusionRaw input consumedWire producer consumer hdistinct
@@ -1342,7 +1347,7 @@ theorem consumerItems_entails
           (ConcreteElaboration.compileRegion? signature
             (fusionRaw input consumedWire producer consumer hdistinct
               consumerRegion producerTerm consumerTerm producerWire consumerWire
-              consumedPort) fuel)
+              consumedPort) fuelTarget)
           targetContext binders (frame.map (mapOccurrence input producer)) =
             some targetFrame →
       ConcreteElaboration.ItemSeqSimulation model named direction
@@ -1352,10 +1357,10 @@ theorem consumerItems_entails
     apply compileOccurrences_frameSimulation input consumedWire producer consumer
       hdistinct consumerRegion producerTerm consumerTerm producerWire consumerWire
       consumedPort model named direction
-      (ConcreteElaboration.compileRegion? signature input.val fuel)
+      (ConcreteElaboration.compileRegion? signature input.val fuelSource)
       (ConcreteElaboration.compileRegion? signature
         (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
-          producerTerm consumerTerm producerWire consumerWire consumedPort) fuel)
+          producerTerm consumerTerm producerWire consumerWire consumedPort) fuelTarget)
       sourceContext targetContext context sourceExact.nodup binders frame
     · intro node member
       have localMember := localMembership (.node node) member
@@ -1397,7 +1402,7 @@ theorem consumerItems_entails
         hdistinct producerRegion consumerRegion producerPorts consumerPorts
         producerTerm consumerTerm producerWire consumerWire consumedPort
         producerShape consumerShape scope targetWellFormed model named direction
-        fuel consumerRegion child sourceContext targetContext context binders
+        fuelSource fuelTarget consumerRegion child sourceContext targetContext context binders
         parent producerAway consumerAway sourceChildExact targetChildExact
         sourceItem targetItem sourceItemCompiled targetItemCompiled
     · exact sourceFrameCompiled
@@ -1546,7 +1551,7 @@ theorem consumerRegion_entails
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (fuel : Nat)
+    (fuelSource fuelTarget : Nat)
     (source : ConcreteElaboration.WireContext input.val)
     (target : ConcreteElaboration.WireContext
       (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
@@ -1564,11 +1569,11 @@ theorem consumerRegion_entails
     (sourceBody : Region signature source.length rels)
     (targetBody : Region signature target.length rels)
     (sourceCompiled : ConcreteElaboration.compileRegion? signature input.val
-      (fuel + 1) consumerRegion source binders = some sourceBody)
+      (fuelSource + 1) consumerRegion source binders = some sourceBody)
     (targetCompiled : ConcreteElaboration.compileRegion? signature
       (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
         producerTerm consumerTerm producerWire consumerWire consumedPort)
-      (fuel + 1) consumerRegion target binders = some targetBody)
+      (fuelTarget + 1) consumerRegion target binders = some targetBody)
     (sourceOuter : Fin source.length → model.Carrier)
     (targetOuter : Fin target.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1580,7 +1585,7 @@ theorem consumerRegion_entails
       (denoteRegion model named targetOuter relEnv targetBody) := by
   simp only [ConcreteElaboration.compileRegion?] at sourceCompiled targetCompiled
   cases sourceItemsResult : ConcreteElaboration.compileOccurrencesWith? signature
-      input.val (ConcreteElaboration.compileRegion? signature input.val fuel)
+      input.val (ConcreteElaboration.compileRegion? signature input.val fuelSource)
       (source.extend consumerRegion) binders
       (ConcreteElaboration.localOccurrences input.val consumerRegion) with
   | none => simp [sourceItemsResult] at sourceCompiled
@@ -1592,7 +1597,7 @@ theorem consumerRegion_entails
           producerTerm consumerTerm producerWire consumerWire consumedPort)
         (ConcreteElaboration.compileRegion? signature
           (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
-            producerTerm consumerTerm producerWire consumerWire consumedPort) fuel)
+            producerTerm consumerTerm producerWire consumerWire consumedPort) fuelTarget)
         (target.extend consumerRegion) binders
         (ConcreteElaboration.localOccurrences
           (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
@@ -1642,7 +1647,7 @@ theorem consumerRegion_entails
           consumerPorts producerTerm consumerTerm producerWire consumerWire
           consumedPort producerShape consumerShape scope producerResolved
           consumerResolved endpoints producerEnclosesConsumer regionNe
-          targetWellFormed model named .forward fuel (source.extend consumerRegion)
+          targetWellFormed model named .forward fuelSource fuelTarget (source.extend consumerRegion)
           (target.extend consumerRegion) sourceExact targetExact
           (context.extend consumerRegion sourceExact targetExact) binders
           sourceItems targetItems sourceItemsResult targetItemsResult sourceRaw
@@ -1690,7 +1695,7 @@ theorem consumerRegion_entails
           consumerPorts producerTerm consumerTerm producerWire consumerWire
           consumedPort producerShape consumerShape scope producerResolved
           consumerResolved endpoints producerEnclosesConsumer regionNe
-          targetWellFormed model named .backward fuel
+          targetWellFormed model named .backward fuelSource fuelTarget
           (source.extend consumerRegion) (target.extend consumerRegion)
           sourceExact targetExact
           (context.extend consumerRegion sourceExact targetExact) binders
@@ -1743,7 +1748,7 @@ theorem compileRegion_route_entails
     (producerEnclosesStart : input.val.Encloses producerRegion start)
     (startNeProducer : start ≠ producerRegion) :
     ∀ (direction : ConcreteElaboration.SimulationDirection)
-      {rels : RelCtx} (fuel : Nat)
+      {rels : RelCtx} (fuelSource fuelTarget : Nat)
       (source : ConcreteElaboration.WireContext input.val)
       (target : ConcreteElaboration.WireContext
         (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
@@ -1761,11 +1766,11 @@ theorem compileRegion_route_entails
       (sourceBody : Region signature source.length rels)
       (targetBody : Region signature target.length rels)
       (sourceCompiled : ConcreteElaboration.compileRegion? signature input.val
-        (fuel + 1) start source binders = some sourceBody)
+        (fuelSource + 1) start source binders = some sourceBody)
       (targetCompiled : ConcreteElaboration.compileRegion? signature
         (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
           producerTerm consumerTerm producerWire consumerWire consumedPort)
-        (fuel + 1) start target binders = some targetBody)
+        (fuelTarget + 1) start target binders = some targetBody)
       (sourceOuter : Fin source.length → model.Carrier)
       (targetOuter : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels)
@@ -1778,7 +1783,7 @@ theorem compileRegion_route_entails
         (denoteRegion model named targetOuter relEnv targetBody) := by
   induction route with
   | here region =>
-      intro direction rels fuel source target context binders sourceExact
+      intro direction rels fuelSource fuelTarget source target context binders sourceExact
         targetExact consumedIndex consumedGet producerIndex producerGet
         sourceBody targetBody sourceCompiled targetCompiled sourceOuter
         targetOuter relEnv outerAgrees producerEquation
@@ -1787,12 +1792,12 @@ theorem compileRegion_route_entails
         consumerTerm producerWire consumerWire consumedPort producerShape
         consumerShape scope producerResolved consumerResolved endpoints
         producerEnclosesStart startNeProducer targetWellFormed model named
-        direction fuel source target context binders sourceExact targetExact
+        direction fuelSource fuelTarget source target context binders sourceExact targetExact
         consumedIndex consumedGet producerIndex producerGet sourceBody targetBody
         sourceCompiled targetCompiled sourceOuter targetOuter relEnv outerAgrees
         producerEquation
   | @step start child targetRegion rest hparent position hposition tail ih =>
-      intro direction rels fuel source target context binders sourceExact
+      intro direction rels fuelSource fuelTarget source target context binders sourceExact
         targetExact consumedIndex consumedGet producerIndex producerGet
         sourceBody targetBody sourceCompiled targetCompiled sourceOuter
         targetOuter relEnv outerAgrees producerEquation
@@ -1807,7 +1812,7 @@ theorem compileRegion_route_entails
       simp only [ConcreteElaboration.compileRegion?] at sourceCompiled targetCompiled
       cases sourceItemsResult : ConcreteElaboration.compileOccurrencesWith?
           signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val fuel)
+          (ConcreteElaboration.compileRegion? signature input.val fuelSource)
           (source.extend start) binders
           (ConcreteElaboration.localOccurrences input.val start) with
       | none => simp [sourceItemsResult] at sourceCompiled
@@ -1827,7 +1832,7 @@ theorem compileRegion_route_entails
             (ConcreteElaboration.compileRegion? signature
               (fusionRaw input consumedWire producer consumer hdistinct
                 targetRegion producerTerm consumerTerm producerWire
-                consumerWire consumedPort) fuel)
+                consumerWire consumedPort) fuelTarget)
             (target.extend start) binders
             (ConcreteElaboration.localOccurrences
               (fusionRaw input consumedWire producer consumer hdistinct
@@ -1840,7 +1845,7 @@ theorem compileRegion_route_entails
           let extendedContext := context.extend start sourceExact targetExact
           have sourceFramed : ConcreteElaboration.compileOccurrencesWith?
               signature input.val
-              (ConcreteElaboration.compileRegion? signature input.val fuel)
+              (ConcreteElaboration.compileRegion? signature input.val fuelSource)
               (source.extend start) binders
               (before ++ .child child :: after) = some sourceItems := by
             rw [← localEq]
@@ -1848,7 +1853,7 @@ theorem compileRegion_route_entails
           obtain ⟨sourceBefore, sourceFocus, sourceAfter,
               sourceBeforeCompiled, sourceFocusCompiled, sourceAfterCompiled,
               sourceItemsEq⟩ := compileOccurrencesWith?_frame_split
-            (ConcreteElaboration.compileRegion? signature input.val fuel)
+            (ConcreteElaboration.compileRegion? signature input.val fuelSource)
             (source.extend start) binders before after (.child child)
             sourceItems sourceFramed
           have targetFramed : ConcreteElaboration.compileOccurrencesWith?
@@ -1859,7 +1864,7 @@ theorem compileRegion_route_entails
               (ConcreteElaboration.compileRegion? signature
                 (fusionRaw input consumedWire producer consumer hdistinct
                   targetRegion producerTerm consumerTerm producerWire
-                  consumerWire consumedPort) fuel)
+                  consumerWire consumedPort) fuelTarget)
               (target.extend start) binders
               (before.map (mapOccurrence input producer) ++
                 mapOccurrence input producer (.child child) ::
@@ -1873,7 +1878,7 @@ theorem compileRegion_route_entails
             (ConcreteElaboration.compileRegion? signature
               (fusionRaw input consumedWire producer consumer hdistinct
                 targetRegion producerTerm consumerTerm producerWire
-                consumerWire consumedPort) fuel)
+                consumerWire consumedPort) fuelTarget)
             (target.extend start) binders
             (before.map (mapOccurrence input producer))
             (after.map (mapOccurrence input producer))
@@ -1889,7 +1894,7 @@ theorem compileRegion_route_entails
               ∀ (sourceFrame : ItemSeq signature (source.extend start).length rels)
                 (targetFrame : ItemSeq signature (target.extend start).length rels),
               ConcreteElaboration.compileOccurrencesWith? signature input.val
-                  (ConcreteElaboration.compileRegion? signature input.val fuel)
+                  (ConcreteElaboration.compileRegion? signature input.val fuelSource)
                   (source.extend start) binders frame = some sourceFrame →
               ConcreteElaboration.compileOccurrencesWith? signature
                   (fusionRaw input consumedWire producer consumer hdistinct
@@ -1898,7 +1903,7 @@ theorem compileRegion_route_entails
                   (ConcreteElaboration.compileRegion? signature
                     (fusionRaw input consumedWire producer consumer hdistinct
                       targetRegion producerTerm consumerTerm producerWire
-                      consumerWire consumedPort) fuel)
+                      consumerWire consumedPort) fuelTarget)
                   (target.extend start) binders
                   (frame.map (mapOccurrence input producer)) = some targetFrame →
               ConcreteElaboration.ItemSeqSimulation model named direction
@@ -1908,11 +1913,11 @@ theorem compileRegion_route_entails
             apply compileOccurrences_frameSimulation input consumedWire producer
               consumer hdistinct targetRegion producerTerm consumerTerm
               producerWire consumerWire consumedPort model named direction
-              (ConcreteElaboration.compileRegion? signature input.val fuel)
+              (ConcreteElaboration.compileRegion? signature input.val fuelSource)
               (ConcreteElaboration.compileRegion? signature
                 (fusionRaw input consumedWire producer consumer hdistinct
                   targetRegion producerTerm consumerTerm producerWire
-                  consumerWire consumedPort) fuel)
+                  consumerWire consumedPort) fuelTarget)
               (source.extend start) (target.extend start) extendedContext
               sourceExact.nodup binders frame
             · intro node member
@@ -1963,7 +1968,7 @@ theorem compileRegion_route_entails
                 consumer hdistinct producerRegion targetRegion producerPorts
                 consumerPorts producerTerm consumerTerm producerWire consumerWire
                 consumedPort producerShape consumerShape scope targetWellFormed
-                model named direction fuel start other (source.extend start)
+                model named direction fuelSource fuelTarget start other (source.extend start)
                 (target.extend start) extendedContext binders otherParent
                 producerAway consumerAway sourceChildExact targetChildExact
                 sourceItem targetItem sourceItemCompiled targetItemCompiled
@@ -2011,13 +2016,22 @@ theorem compileRegion_route_entails
               input.property hparent) producerEnclosesStart
           have outerEq : sourceOuter ∘ context.sourceIndex = targetOuter := by
             simpa [Context.indexRelation] using outerAgrees
-          have fuelNe : fuel ≠ 0 := by
+          have sourceFuelNe : fuelSource ≠ 0 := by
             intro equality
-            subst fuel
+            subst fuelSource
             cases kind : input.val.regions child <;>
               simp [ConcreteElaboration.compileOccurrenceWith?, kind,
                 ConcreteElaboration.compileRegion?] at sourceFocusCompiled
-          obtain ⟨childFuel, rfl⟩ := Nat.exists_eq_succ_of_ne_zero fuelNe
+          have targetFuelNe : fuelTarget ≠ 0 := by
+            intro equality
+            subst fuelTarget
+            cases kind : input.val.regions child <;>
+              simp [ConcreteElaboration.compileOccurrenceWith?, kind,
+                ConcreteElaboration.compileRegion?] at targetFocusCompiled
+          obtain ⟨sourceChildFuel, rfl⟩ :=
+            Nat.exists_eq_succ_of_ne_zero sourceFuelNe
+          obtain ⟨targetChildFuel, rfl⟩ :=
+            Nat.exists_eq_succ_of_ne_zero targetFuelNe
           cases direction with
           | forward =>
             intro sourceDenotes
@@ -2077,7 +2091,7 @@ theorem compileRegion_route_entails
                     mapOccurrence_child, fusionRaw_regions]
                     at sourceFocusCompiled targetFocusCompiled
                   cases sourceChildResult :
-                      ConcreteElaboration.compileRegion? signature input.val (childFuel + 1)
+                      ConcreteElaboration.compileRegion? signature input.val (sourceChildFuel + 1)
                         child (source.extend start) binders with
                   | none => simp [sourceChildResult] at sourceFocusCompiled
                   | some sourceChildBody =>
@@ -2087,7 +2101,7 @@ theorem compileRegion_route_entails
                         signature
                         (fusionRaw input consumedWire producer consumer hdistinct
                           targetRegion producerTerm consumerTerm producerWire
-                          consumerWire consumedPort) (childFuel + 1) child
+                          consumerWire consumedPort) (targetChildFuel + 1) child
                         (target.extend start) binders with
                     | none => simp [targetChildResult] at targetFocusCompiled
                     | some targetChildBody =>
@@ -2095,7 +2109,7 @@ theorem compileRegion_route_entails
                       subst targetFocus
                       have bodyEntails := ih consumerShape targetWellFormed
                         producerEnclosesChild childNeProducer
-                        .backward childFuel (source.extend start)
+                        .backward sourceChildFuel targetChildFuel (source.extend start)
                         (target.extend start)
                         extendedContext binders sourceChildExact targetChildExact
                         childConsumed childConsumedGet childProducer
@@ -2114,7 +2128,7 @@ theorem compileRegion_route_entails
                     mapOccurrence_child, fusionRaw_regions]
                     at sourceFocusCompiled targetFocusCompiled
                   cases sourceChildResult :
-                      ConcreteElaboration.compileRegion? signature input.val (childFuel + 1)
+                      ConcreteElaboration.compileRegion? signature input.val (sourceChildFuel + 1)
                         child (source.extend start) (binders.push child arity) with
                   | none => simp [sourceChildResult] at sourceFocusCompiled
                   | some sourceChildBody =>
@@ -2123,7 +2137,7 @@ theorem compileRegion_route_entails
                     change (ConcreteElaboration.compileRegion? signature
                       (fusionRaw input consumedWire producer consumer hdistinct
                         targetRegion producerTerm consumerTerm producerWire
-                        consumerWire consumedPort) (childFuel + 1) child
+                        consumerWire consumedPort) (targetChildFuel + 1) child
                       (target.extend start) (binders.push child arity)).bind
                         (fun body ↦ some (Item.bubble arity body)) =
                           some targetFocus at targetFocusCompiled
@@ -2131,7 +2145,7 @@ theorem compileRegion_route_entails
                         signature
                         (fusionRaw input consumedWire producer consumer hdistinct
                           targetRegion producerTerm consumerTerm producerWire
-                          consumerWire consumedPort) (childFuel + 1) child
+                          consumerWire consumedPort) (targetChildFuel + 1) child
                         (target.extend start) (binders.push child arity) with
                     | none => simp [targetChildResult] at targetFocusCompiled
                     | some targetChildBody =>
@@ -2141,7 +2155,7 @@ theorem compileRegion_route_entails
                       rintro ⟨relationValue, sourceChildDenotes⟩
                       exact ⟨relationValue,
                         ih consumerShape targetWellFormed producerEnclosesChild
-                          childNeProducer .forward childFuel
+                          childNeProducer .forward sourceChildFuel targetChildFuel
                           (source.extend start) (target.extend start)
                           extendedContext (binders.push child arity)
                           sourceChildExact targetChildExact childConsumed
@@ -2216,7 +2230,7 @@ theorem compileRegion_route_entails
                     mapOccurrence_child, fusionRaw_regions]
                     at sourceFocusCompiled targetFocusCompiled
                   cases sourceChildResult :
-                      ConcreteElaboration.compileRegion? signature input.val (childFuel + 1)
+                      ConcreteElaboration.compileRegion? signature input.val (sourceChildFuel + 1)
                         child (source.extend start) binders with
                   | none => simp [sourceChildResult] at sourceFocusCompiled
                   | some sourceChildBody =>
@@ -2226,7 +2240,7 @@ theorem compileRegion_route_entails
                         signature
                         (fusionRaw input consumedWire producer consumer hdistinct
                           targetRegion producerTerm consumerTerm producerWire
-                          consumerWire consumedPort) (childFuel + 1) child
+                          consumerWire consumedPort) (targetChildFuel + 1) child
                         (target.extend start) binders with
                     | none => simp [targetChildResult] at targetFocusCompiled
                     | some targetChildBody =>
@@ -2234,7 +2248,7 @@ theorem compileRegion_route_entails
                       subst targetFocus
                       have bodyEntails := ih consumerShape targetWellFormed
                         producerEnclosesChild childNeProducer
-                        .forward childFuel (source.extend start)
+                        .forward sourceChildFuel targetChildFuel (source.extend start)
                         (target.extend start)
                         extendedContext binders sourceChildExact targetChildExact
                         childConsumed childConsumedGet childProducer
@@ -2253,7 +2267,7 @@ theorem compileRegion_route_entails
                     mapOccurrence_child, fusionRaw_regions]
                     at sourceFocusCompiled targetFocusCompiled
                   cases sourceChildResult :
-                      ConcreteElaboration.compileRegion? signature input.val (childFuel + 1)
+                      ConcreteElaboration.compileRegion? signature input.val (sourceChildFuel + 1)
                         child (source.extend start) (binders.push child arity) with
                   | none => simp [sourceChildResult] at sourceFocusCompiled
                   | some sourceChildBody =>
@@ -2262,7 +2276,7 @@ theorem compileRegion_route_entails
                     change (ConcreteElaboration.compileRegion? signature
                       (fusionRaw input consumedWire producer consumer hdistinct
                         targetRegion producerTerm consumerTerm producerWire
-                        consumerWire consumedPort) (childFuel + 1) child
+                        consumerWire consumedPort) (targetChildFuel + 1) child
                       (target.extend start) (binders.push child arity)).bind
                         (fun body ↦ some (Item.bubble arity body)) =
                           some targetFocus at targetFocusCompiled
@@ -2270,7 +2284,7 @@ theorem compileRegion_route_entails
                         signature
                         (fusionRaw input consumedWire producer consumer hdistinct
                           targetRegion producerTerm consumerTerm producerWire
-                          consumerWire consumedPort) (childFuel + 1) child
+                          consumerWire consumedPort) (targetChildFuel + 1) child
                         (target.extend start) (binders.push child arity) with
                     | none => simp [targetChildResult] at targetFocusCompiled
                     | some targetChildBody =>
@@ -2280,7 +2294,7 @@ theorem compileRegion_route_entails
                       rintro ⟨relationValue, targetChildDenotes⟩
                       exact ⟨relationValue,
                         ih consumerShape targetWellFormed producerEnclosesChild
-                          childNeProducer .backward childFuel
+                          childNeProducer .backward sourceChildFuel targetChildFuel
                           (source.extend start) (target.extend start)
                           extendedContext (binders.push child arity)
                           sourceChildExact targetChildExact childConsumed
