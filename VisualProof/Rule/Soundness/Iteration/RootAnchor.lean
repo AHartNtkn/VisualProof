@@ -166,6 +166,16 @@ theorem ItemSeqIso.transportRootContraction
         (modifiedIso.denotation model named sourceEnvironment targetEnvironment
           relEnv environmentsAgree))
 
+/-- The explicit item-family cast and ordinary equality transport are the
+same change of relation-context index. -/
+theorem ItemSeq.castRelationEq_eq_transport
+    {sourceRels targetRels : RelCtx}
+    (relsEq : sourceRels = targetRels)
+    (items : ItemSeq signature wires sourceRels) :
+    cast (congrArg (ItemSeq signature wires) relsEq) items = relsEq ▸ items := by
+  subst targetRels
+  rfl
+
 /-- Pull a target-relation item isomorphism back to the source relation
 context on both endpoints. -/
 def ItemSeqIso.pullRelationEq
@@ -178,7 +188,8 @@ def ItemSeqIso.pullRelationEq
       (cast (congrArg (ItemSeq signature sourceWires) relsEq) sourceItems)
       targetItems) :
     ItemSeqIso signature wire sourceRels sourceItems
-      (relsEq.symm ▸ targetItems) := by
+      (cast (congrArg (ItemSeq signature targetWires) relsEq.symm)
+        targetItems) := by
   subst targetRels
   exact iso
 
@@ -760,6 +771,7 @@ theorem compiledRootItems_sameRouteContextIso
                       simpa only [Region.ContextPath.toFocus,
                         targetContextTransport] using cutContexts
                   }⟩
+
               | @bubble _ _ _ _ _ _ _ targetFocus targetAt targetChildBody
                   targetIsBubble targetNested =>
                   have targetOccurrence :=
@@ -936,6 +948,104 @@ theorem compiledRootItems_sameRouteContextIso
                         targetContextTransport] using bubbleContexts
                   }⟩
 
+/-- Transport a root-item contraction along a designated compiler-route
+alignment.  Unlike the generic isomorphism transport, this keeps the
+executor's concrete route fixed. -/
+theorem ItemSeqIso.transportRootContractionAlong
+    {sourceItems : ItemSeq signature sourceWires rels}
+    {targetItems : ItemSeq signature targetWires rels}
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (iso : ItemSeqIso signature wire rels sourceItems targetItems)
+    {path : List Nat}
+    (sourceWitness : Region.ContextPath (Region.mk 0 sourceItems) path)
+    (targetWitness : Region.ContextPath (Region.mk 0 targetItems) path)
+    (alignment : Splice.Input.PairedCompilerContextAlignment wire
+      sourceWitness targetWitness)
+    (sourceReplacement : Region signature sourceWitness.toFocus.holeWires
+      sourceWitness.toFocus.holeRels)
+    (sourceEquivalent : ∀ (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (sourceEnvironment : Fin sourceWires → model.Carrier)
+      (relEnv : RelEnv model.Carrier rels),
+      denoteItemSeq model named sourceEnvironment relEnv sourceItems ↔
+        denoteRegion model named sourceEnvironment relEnv
+          (sourceWitness.toFocus.context.fill sourceReplacement)) :
+    Nonempty (RootItemContractionTransport wire iso sourceWitness
+      sourceReplacement) := by
+  let targetReplacement : Region signature
+      targetWitness.toFocus.holeWires targetWitness.toFocus.holeRels :=
+    alignment.holeRelsEq ▸
+      sourceReplacement.renameWires alignment.holeWire
+  have replacementIso : RegionIso signature alignment.holeWire
+      sourceWitness.toFocus.holeRels sourceReplacement
+      (alignment.holeRelsEq.symm ▸ targetReplacement) := by
+    have renamed := RegionIso.renameWiresEquiv sourceReplacement
+      alignment.holeWire
+    have castBack := Region.castRels_symm_cast alignment.holeRelsEq.symm
+      (sourceReplacement.renameWires alignment.holeWire)
+    exact castBack.symm ▸ renamed
+  have filledIsoCore := alignment.contexts.fill replacementIso
+  have targetFill := DiagramContext.fill_castHoleRels
+    alignment.holeRelsEq.symm targetWitness.toFocus.context targetReplacement
+  have filledIso : RegionIso signature wire rels
+      (sourceWitness.toFocus.context.fill sourceReplacement)
+      (targetWitness.toFocus.context.fill targetReplacement) :=
+    targetFill ▸ filledIsoCore
+  refine ⟨{
+    targetPath := path
+    targetWitness := targetWitness
+    holeRelsEq := alignment.holeRelsEq.symm
+    holeWire := alignment.holeWire
+    targetReplacement := targetReplacement
+    targetReplacement_eq := rfl
+    replacementIso := replacementIso
+    equivalent := ?_
+  }⟩
+  intro model named targetEnvironment relEnv
+  let sourceEnvironment : Fin sourceWires → model.Carrier :=
+    fun index => targetEnvironment (wire index)
+  have environmentsAgree : EnvironmentsAgree wire sourceEnvironment
+      targetEnvironment := by
+    intro index
+    rfl
+  exact (iso.denotation model named sourceEnvironment targetEnvironment relEnv
+    environmentsAgree).symm.trans
+      ((sourceEquivalent model named sourceEnvironment relEnv).trans
+        (filledIso.denotation model named sourceEnvironment targetEnvironment
+          relEnv environmentsAgree))
+
+/-- Change the relation-context index of a flattened root item block without
+changing its intrinsic route. -/
+def Region.ContextPath.castRootItemsRelsEq
+    {sourceRels targetRels : Theory.RelCtx}
+    (relsEq : sourceRels = targetRels)
+    {items : ItemSeq signature wires sourceRels} {path : List Nat}
+    (witness : Region.ContextPath (Region.mk 0 items) path) :
+    Region.ContextPath (Region.mk 0
+      (cast (congrArg (ItemSeq signature wires) relsEq) items)) path := by
+  subst targetRels
+  exact witness
+
+/-- Remove equal root relation-context casts from both sides of a paired
+compiler alignment. -/
+def Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq
+    {sourceRels targetRels : Theory.RelCtx}
+    (relsEq : sourceRels = targetRels)
+    {sourceItems : ItemSeq signature sourceWires sourceRels}
+    {targetItems : ItemSeq signature targetWires targetRels}
+    {path : List Nat}
+    (sourceWitness : Region.ContextPath (Region.mk 0 sourceItems) path)
+    (targetWitness : Region.ContextPath (Region.mk 0 targetItems) path)
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (alignment : Splice.Input.PairedCompilerContextAlignment wire
+      (VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+        relsEq sourceWitness) targetWitness) :
+    Splice.Input.PairedCompilerContextAlignment wire sourceWitness
+      (VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+        relsEq.symm targetWitness) := by
+  subst targetRels
+  exact alignment
+
 /-- The closed anchor compiler items at a root selection and the ordered-open
 root compiler items are the same occurrence block up to the exact root-wire
 coordinate equivalence. -/
@@ -959,6 +1069,17 @@ theorem coalescedRootAnchorItemsIso
     let wire := exactContextToOpenRootWireEquiv ordered
       sourceContext (hanchor ▸ anchorView.compilerLeaf.wiresExact)
     ∃ hrels : anchorView.focus.holeRels = [],
+      ConcreteElaboration.compileOccurrencesWith? signature
+          spliceInput.coalesceFrameRaw
+          (ConcreteElaboration.compileRegion? signature
+            spliceInput.coalesceFrameRaw
+            spliceInput.coalesceFrameRaw.regionCount)
+          sourceContext ConcreteElaboration.BinderContext.empty
+          (ConcreteElaboration.localOccurrences spliceInput.coalesceFrameRaw
+            spliceInput.coalesceFrameRaw.root) =
+        some (cast (congrArg
+          (ItemSeq signature sourceContext.length) hrels)
+          anchorView.compilerLeaf.items) ∧
       ItemSeqIso signature wire []
         (cast (congrArg (ItemSeq signature sourceContext.length) hrels)
           anchorView.compilerLeaf.items)
@@ -1013,7 +1134,7 @@ theorem coalescedRootAnchorItemsIso
           anchorView.compilerLeaf.items) := by
     simpa [sourceContext, hfuel, hanchor, Splice.SiteView.compilerLeaf] using
       sourceComputation
-  refine ⟨hrels, ?_⟩
+  refine ⟨hrels, sourceComputation', ?_⟩
   have iso := compiledOpenRootItemsIsoFromExactContext ordered sourceContext
     sourceExact sourceComputation' orderedItems.computation
   simpa [wire] using iso
@@ -1029,6 +1150,7 @@ theorem properIterationRootAnchorItems_nonempty_complete
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.val.wires wire).scope = input.val.root)
     (hanchor : selection.val.anchor = input.val.root)
+    (targetNe : target ≠ selection.val.anchor)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
     (closed : ProperIterationAnchorContraction input selection target
@@ -1045,7 +1167,8 @@ theorem properIterationRootAnchorItems_nonempty_complete
     (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
   let compiled := Splice.Input.compiledSpliceOpenRootItems ordered
-  obtain ⟨hrels, itemIso⟩ := coalescedRootAnchorItemsIso input selection
+  obtain ⟨hrels, sourceComputation, itemIso⟩ :=
+    coalescedRootAnchorItemsIso input selection
     target hadmissible sourceBoundary sourceRoot hanchor
   let anchorView := iterationCoalescedAnchorView input selection target
     hadmissible
@@ -1063,12 +1186,58 @@ theorem properIterationRootAnchorItems_nonempty_complete
     simpa [ordered, compiled, anchorView, sourceContext, sourceExact, wire,
       sourceContext] using itemIso
   let targetItems : ItemSeq signature ordered.val.rootWires.length
-      anchorView.focus.holeRels := hrels.symm ▸ compiled.items
+      anchorView.focus.holeRels :=
+    cast (congrArg (ItemSeq signature ordered.val.rootWires.length)
+      hrels.symm) compiled.items
   have pulledIso : ItemSeqIso signature wire anchorView.focus.holeRels
       anchorView.compilerLeaf.items targetItems :=
     ItemSeqIso.pullRelationEq hrels wire itemIso'
-  obtain ⟨transport⟩ := ItemSeqIso.transportRootContraction wire pulledIso
-    closed.flatWitness closed.flatReplacement closed.flatEquivalent
+  have targetNeRoot : target ≠
+      (iterationInput input selection target).coalesceFrameRaw.root := by
+    simpa [Splice.Input.coalesceFrameRaw, hanchor] using targetNe
+  have rootRoute : Splice.RegionRoute
+      (iterationInput input selection target).coalesceFrameRaw
+      (iterationInput input selection target).coalesceFrameRaw.root target
+      closed.path := by
+    simpa [Splice.Input.coalesceFrameRaw, hanchor] using closed.route
+  obtain ⟨targetWitnessRaw⟩ :=
+    VisualProof.Rule.IterationSoundness.Splice.Input.OpenRootCompilerItems.routeWitness_complete
+      compiled rootRoute targetNeRoot
+  let sourceWitnessRawType : Region.ContextPath
+      (Region.mk 0
+        (cast (congrArg (ItemSeq signature sourceContext.length) hrels)
+          anchorView.compilerLeaf.items)) closed.path :=
+    VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+      hrels closed.flatWitness
+  let targetExact := Splice.openRootWires_exact ordered
+  have sourceComputation' : ConcreteElaboration.compileOccurrencesWith?
+      signature (iterationInput input selection target).coalesceFrameRaw
+      (ConcreteElaboration.compileRegion? signature
+        (iterationInput input selection target).coalesceFrameRaw
+        (iterationInput input selection target).coalesceFrameRaw.regionCount)
+      sourceContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences
+        (iterationInput input selection target).coalesceFrameRaw
+        (iterationInput input selection target).coalesceFrameRaw.root) =
+        some (cast
+          (congrArg (ItemSeq signature sourceContext.length) hrels)
+          anchorView.compilerLeaf.items) := by
+    simpa [anchorView, sourceContext] using sourceComputation
+  obtain ⟨alignmentRaw⟩ := compiledRootItems_sameRouteContextIso
+    ((iterationInput input selection target).coalesceFrame hadmissible)
+    sourceExact targetExact sourceComputation' compiled.computation wire
+    (exactContextToOpenRootWireEquiv_spec ordered sourceContext sourceExact)
+    rootRoute targetNeRoot sourceWitnessRawType targetWitnessRaw
+  let targetWitness :=
+    VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+      hrels.symm targetWitnessRaw
+  let alignment :=
+    VisualProof.Rule.IterationSoundness.Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq
+      hrels
+      closed.flatWitness targetWitnessRaw wire alignmentRaw
+  obtain ⟨transport⟩ := ItemSeqIso.transportRootContractionAlong wire
+    pulledIso closed.flatWitness targetWitness alignment
+      closed.flatReplacement closed.flatEquivalent
   let targetActualRelsEq :=
     transport.holeRelsEq.trans closed.flatActualRelsEq
   let targetActualWire := transport.holeWire.symm.trans closed.flatActualWire
@@ -1089,7 +1258,7 @@ theorem properIterationRootAnchorItems_nonempty_complete
     rels := anchorView.focus.holeRels
     relsEq := hrels
     items := targetItems
-    items_eq := rfl
+    items_eq := ItemSeq.castRelationEq_eq_transport hrels.symm compiled.items
     path := transport.targetPath
     witness := transport.targetWitness
     replacement := transport.targetReplacement
@@ -1110,6 +1279,7 @@ theorem properIterationRootAnchorItems_zero_complete
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.val.wires wire).scope = input.val.root)
     (hanchor : selection.val.anchor = input.val.root)
+    (targetNe : target ≠ selection.val.anchor)
     (closed : ProperIterationRootAnchorContraction input selection target
       hadmissible) :
     let ordered := Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -1123,7 +1293,8 @@ theorem properIterationRootAnchorItems_zero_complete
     (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
   let compiled := Splice.Input.compiledSpliceOpenRootItems ordered
-  obtain ⟨hrels, itemIso⟩ := coalescedRootAnchorItemsIso input selection
+  obtain ⟨hrels, sourceComputation, itemIso⟩ :=
+    coalescedRootAnchorItemsIso input selection
     target hadmissible sourceBoundary sourceRoot hanchor
   let anchorView := iterationCoalescedAnchorView input selection target
     hadmissible
@@ -1141,12 +1312,57 @@ theorem properIterationRootAnchorItems_zero_complete
     simpa [ordered, compiled, anchorView, sourceContext, sourceExact, wire,
       sourceContext] using itemIso
   let targetItems : ItemSeq signature ordered.val.rootWires.length
-      anchorView.focus.holeRels := hrels.symm ▸ compiled.items
+      anchorView.focus.holeRels :=
+    cast (congrArg (ItemSeq signature ordered.val.rootWires.length)
+      hrels.symm) compiled.items
   have pulledIso : ItemSeqIso signature wire anchorView.focus.holeRels
       anchorView.compilerLeaf.items targetItems :=
     ItemSeqIso.pullRelationEq hrels wire itemIso'
-  obtain ⟨transport⟩ := ItemSeqIso.transportRootContraction wire pulledIso
-    closed.flatWitness closed.flatReplacement closed.flatEquivalent
+  have targetNeRoot : target ≠
+      (iterationInput input selection target).coalesceFrameRaw.root := by
+    simpa [Splice.Input.coalesceFrameRaw, hanchor] using targetNe
+  have rootRoute : Splice.RegionRoute
+      (iterationInput input selection target).coalesceFrameRaw
+      (iterationInput input selection target).coalesceFrameRaw.root target
+      closed.path := by
+    simpa [Splice.Input.coalesceFrameRaw, hanchor] using closed.route
+  obtain ⟨targetWitnessRaw⟩ :=
+    VisualProof.Rule.IterationSoundness.Splice.Input.OpenRootCompilerItems.routeWitness_complete
+      compiled rootRoute targetNeRoot
+  let sourceWitnessRawType : Region.ContextPath
+      (Region.mk 0
+        (cast (congrArg (ItemSeq signature sourceContext.length) hrels)
+          anchorView.compilerLeaf.items)) closed.path :=
+    VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+      hrels closed.flatWitness
+  let targetExact := Splice.openRootWires_exact ordered
+  have sourceComputation' : ConcreteElaboration.compileOccurrencesWith?
+      signature (iterationInput input selection target).coalesceFrameRaw
+      (ConcreteElaboration.compileRegion? signature
+        (iterationInput input selection target).coalesceFrameRaw
+        (iterationInput input selection target).coalesceFrameRaw.regionCount)
+      sourceContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences
+        (iterationInput input selection target).coalesceFrameRaw
+        (iterationInput input selection target).coalesceFrameRaw.root) =
+        some (cast
+          (congrArg (ItemSeq signature sourceContext.length) hrels)
+          anchorView.compilerLeaf.items) := by
+    simpa [anchorView, sourceContext] using sourceComputation
+  obtain ⟨alignmentRaw⟩ := compiledRootItems_sameRouteContextIso
+    ((iterationInput input selection target).coalesceFrame hadmissible)
+    sourceExact targetExact sourceComputation' compiled.computation wire
+    (exactContextToOpenRootWireEquiv_spec ordered sourceContext sourceExact)
+    rootRoute targetNeRoot sourceWitnessRawType targetWitnessRaw
+  let targetWitness :=
+    VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+      hrels.symm targetWitnessRaw
+  let alignment :=
+    VisualProof.Rule.IterationSoundness.Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq
+      hrels closed.flatWitness targetWitnessRaw wire alignmentRaw
+  obtain ⟨transport⟩ := ItemSeqIso.transportRootContractionAlong wire
+    pulledIso closed.flatWitness targetWitness alignment
+      closed.flatReplacement closed.flatEquivalent
   let targetActualRelsEq :=
     transport.holeRelsEq.trans closed.flatActualRelsEq
   let targetActualWire := transport.holeWire.symm.trans closed.flatActualWire
@@ -1166,7 +1382,7 @@ theorem properIterationRootAnchorItems_zero_complete
     rels := anchorView.focus.holeRels
     relsEq := hrels
     items := targetItems
-    items_eq := rfl
+    items_eq := ItemSeq.castRelationEq_eq_transport hrels.symm compiled.items
     path := transport.targetPath
     witness := transport.targetWitness
     replacement := transport.targetReplacement
