@@ -70,11 +70,6 @@
   transform-origin: 10% 48%;
 }
 
-.curse-folio.is-motion-dossier[data-motion-dossier-kind="replace"]
-  .curse-folio-dossier {
-  animation: dossier-enter var(--motion-dossier-duration) var(--paper-ease) both;
-}
-
 .curse-folio-dossier-header {
   display: grid;
   grid-template-columns: minmax(7rem, 0.8fr) minmax(11rem, 1.5fr);
@@ -169,47 +164,19 @@
   transform: rotate(-2deg);
 }
 
-.curse-folio-record[data-status="locked"]::after {
+.curse-folio-record-guard {
   position: absolute;
   z-index: 2;
   inset: 0.22rem;
   background:
     url('../../../assets/interface/generated/excavation-folio/restricted-sleeve.png')
     center / 100% 100% no-repeat;
-  content: '';
+  opacity: 0;
+  pointer-events: none;
+}
+
+.curse-folio-record[data-status="locked"] .curse-folio-record-guard {
   opacity: 0.9;
-}
-
-@keyframes curse-restriction-record {
-  0%, 100% { transform: translateX(0) rotate(0deg); }
-  42% { transform: translateX(0.16rem) rotate(0.18deg); }
-}
-
-@keyframes curse-restriction-guard {
-  0%, 100% { filter: brightness(1); transform: translateX(0) rotate(0deg) skewX(0deg); }
-  24% { filter: brightness(1.08); transform: translateX(0.42rem) rotate(0.45deg) skewX(0deg); }
-  48% { filter: brightness(1.04); transform: translateX(0.18rem) rotate(0deg) skewX(-1.2deg); }
-  76% { filter: brightness(1.02); transform: translateX(-0.16rem) rotate(-0.16deg) skewX(0deg); }
-}
-
-.curse-folio.is-motion-restriction[data-motion-restriction-kind="refuse"]
-  .is-restriction-target {
-  animation: curse-restriction-record var(--motion-restriction-duration) linear both;
-}
-
-.curse-folio.is-motion-restriction[data-motion-restriction-kind="refuse"]
-  .curse-folio-record.is-restriction-target::after {
-  animation: curse-restriction-guard var(--motion-restriction-duration) linear both;
-}
-
-.curse-folio.is-motion-restriction[data-motion-restriction-kind="reduced"]
-  .is-restriction-target {
-  animation: curse-restriction-depth var(--motion-restriction-duration) ease-out both;
-}
-
-@keyframes curse-restriction-depth {
-  0%, 100% { filter: brightness(1); }
-  50% { filter: brightness(1.08) contrast(0.98); }
 }
 
 .curse-folio-record[data-affordance="drag-theorem"] { cursor: grab; touch-action: none; }
@@ -224,9 +191,4 @@
   filter: drop-shadow(0.75rem 1rem 0.8rem rgb(3 2 4 / 54%));
   transform-origin: 50% 50%;
   transform: translate(calc(var(--folio-drag-x) - 50%), calc(var(--folio-drag-y) - 50%)) rotate(-1deg);
-}
-
-.curse-folio.is-motion-dossier[data-motion-dossier-kind="reduced"]
-  .curse-folio-dossier {
-  animation: reduced-depth var(--motion-dossier-duration) ease-out both;
 }

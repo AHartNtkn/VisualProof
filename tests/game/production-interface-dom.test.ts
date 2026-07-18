@@ -86,7 +86,12 @@ describe('production excavation folio DOM view', () => {
     const root = view.element as unknown as FakeElement
     const dossier = root.querySelector('.curse-folio-dossier')!
     const sheet = root.querySelector('.curse-folio-sheet')!
+    const lockedRecord = root.querySelector(`[data-puzzle="${LOCKED}"]`)!
+    const lockedCulture = root.querySelector(`[data-culture="${SECOND_CULTURE}"]`)!
     expect(root.querySelectorAll('.curse-folio-dossier')).toHaveLength(1)
+    expect(dossier.classList.contains('active-dossier')).toBe(true)
+    expect(lockedRecord.querySelector('.record-guard')).not.toBeNull()
+    expect(lockedCulture.querySelector('.record-guard')).not.toBeNull()
     expect(sheet.getAttribute('role')).toBe('list')
     expect(sheet.getAttribute('tabindex')).toBe('0')
     expect(root.querySelectorAll('.curse-folio-page')).toHaveLength(0)
@@ -168,7 +173,10 @@ describe('production excavation folio DOM view', () => {
     expect(root.style.getPropertyValue('--motion-dossier-duration')).toBe('260ms')
 
     view.resistCulture(SECOND_CULTURE)
-    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([320])
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([260, 320])
+    expect(clock.waits[0]!.signal.aborted).toBe(false)
+    expect(root.dataset.motionDossierTarget).toBe(SECOND_CULTURE)
+    expect(root.dataset.motionDossierKind).toBe('replace')
     expect(root.dataset.motionRestrictionTarget).toBe(SECOND_CULTURE)
     expect(root.dataset.motionRestrictionKind).toBe('refuse')
 
@@ -179,7 +187,10 @@ describe('production excavation folio DOM view', () => {
     expect(root.style.getPropertyValue('--motion-dossier-duration')).toBe('90ms')
 
     view.resistPuzzle(LOCKED)
-    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([90])
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([90, 90])
+    expect(clock.waits[0]!.signal.aborted).toBe(false)
+    expect(root.dataset.motionDossierTarget).toBe(FIRST_CULTURE)
+    expect(root.dataset.motionDossierKind).toBe('reduced')
     expect(root.dataset.motionRestrictionTarget).toBe(LOCKED)
     expect(root.dataset.motionRestrictionKind).toBe('reduced')
 
@@ -282,6 +293,7 @@ describe('production lens DOM ownership and approved assets', () => {
     const folioSource = readFileSync('src/game/interface/folio-view.ts', 'utf8')
     const lensSource = readFileSync('src/game/interface/lens-environment.ts', 'utf8')
     const folioCss = readFileSync('src/game/interface/folio.css', 'utf8')
+    const motionCss = readFileSync('src/game/interface/folio-motion.css', 'utf8')
     const lensCss = readFileSync('src/game/interface/lens-environment.css', 'utf8')
     for (const asset of [
       'desk/natural-indigo-hardwood.png',
@@ -293,8 +305,9 @@ describe('production lens DOM ownership and approved assets', () => {
     expect(lensSource).not.toMatch(/central-lens\/(?:frame|glass|shadow|lever-housing|lever-handle)\.png/)
     expect(lensSource).toContain("import './lens-environment.css'")
     expect(folioSource).toContain("import './folio-motion.css'")
-    expect(folioCss).toContain('[data-motion-dossier-kind="replace"]')
-    expect(folioCss).toContain('--motion-dossier-duration')
+    expect([...folioCss.matchAll(/@keyframes\s+([\w-]+)/g)]).toEqual([])
+    expect([...motionCss.matchAll(/@keyframes\s+reduced-depth\b/g)]).toHaveLength(1)
+    expect([...`${folioCss}\n${motionCss}`.matchAll(/brightness\(1\.04\)/g)]).toHaveLength(1)
     expect(folioCss).toContain('scrollbar-width: none')
     expect(folioCss).toContain('clearance-slip.png')
     expect(folioCss).toContain('restricted-sleeve.png')

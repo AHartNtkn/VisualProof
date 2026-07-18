@@ -237,6 +237,27 @@ describe('production folio motion coordinator', () => {
     expect(root.dataset.motionDossierTarget).toBeUndefined()
   })
 
+  it('settles restriction without disturbing a concurrent dossier owner', async () => {
+    const { root, clock, motion } = fixture()
+    const dossier = motion.dossier(cultureId('seyric'), false)
+    const dossierWait = clock.waits[0]!
+    const restriction = motion.restrictedRefusal(puzzleId('chamber-seal'), false)
+
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([260, 320])
+    motion.settleRestriction()
+
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([260])
+    expect(dossierWait.signal.aborted).toBe(false)
+    expect(root.classList.contains('is-motion-dossier')).toBe(true)
+    expect(root.dataset.motionDossierTarget).toBe('seyric')
+    expect(root.classList.contains('is-motion-restriction')).toBe(false)
+    expect(root.dataset.motionRestrictionTarget).toBeUndefined()
+    await restriction
+
+    clock.tick()
+    await dossier
+  })
+
   it('settles every active channel and removes every descriptor synchronously', async () => {
     const { root, clock, motion } = fixture()
     const active = [

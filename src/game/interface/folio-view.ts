@@ -70,7 +70,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   root.setAttribute('aria-label', 'Excavation folio')
   const cultures = element(document, 'nav', 'curse-folio-cultures')
   cultures.setAttribute('aria-label', 'Cultural dossiers')
-  const dossier = element(document, 'section', 'curse-folio-dossier')
+  const dossier = element(document, 'section', 'curse-folio-dossier active-dossier')
   root.append(cultures, dossier)
   options.host.append(root)
 
@@ -91,7 +91,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     restrictionGeneration += 1
     restrictionTarget?.classList.remove('is-restriction-target')
     restrictionTarget = null
-    motion.settleAll()
+    motion.settleRestriction()
   }
 
   const resist = (
@@ -172,8 +172,10 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     accession.textContent = record.accession ?? 'Catalog entry pending accession'
     const summary = element(document, 'span', 'curse-folio-record-summary')
     summary.textContent = record.summary
+    const guard = element(document, 'span', 'curse-folio-record-guard record-guard')
+    guard.setAttribute('aria-hidden', 'true')
     identity.append(name, accession, summary)
-    node.append(mount, identity)
+    node.append(mount, identity, guard)
 
     if (record.affordance === 'select') {
       listen(node, 'click', () => { if (inputAllowed()) options.onSelectPuzzle(record.id) })
@@ -223,7 +225,9 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       const control = element(document, 'button', 'curse-folio-culture-tab')
       control.type = 'button'
       control.dataset.culture = culture.id
-      control.textContent = culture.name
+      const label = element(document, 'span', 'curse-folio-culture-label record-guard')
+      label.textContent = culture.name
+      control.append(label)
       control.setAttribute('aria-pressed', String(culture.id === current.selectedCulture))
       if (!culture.unlocked) control.setAttribute('aria-disabled', 'true')
       listen(control, 'click', () => {
@@ -291,6 +295,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       cancelActiveDrag()
       clearRestriction()
       renderListeners.abort()
+      motion.settleAll()
       root.remove()
     },
   }

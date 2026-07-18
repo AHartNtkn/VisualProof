@@ -94,6 +94,10 @@ export class FolioMotion {
     return this.run('packet', 'myratic', 'release', reducedMotion)
   }
 
+  settleRestriction(): void {
+    this.cancel('restriction')
+  }
+
   settleAll(): void {
     for (const channel of this.channels()) this.cancel(channel)
   }
