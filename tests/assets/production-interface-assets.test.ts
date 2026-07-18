@@ -1,4 +1,5 @@
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -38,6 +39,27 @@ const expectedRuntimeAssets = [
 ] as const
 
 describe('production interface asset authority', () => {
+  it('has no displaced review or reproduction authority', () => {
+    const forbidden = [
+      'review',
+      'tests/review',
+      'assets/interface/source',
+      'assets/interface/manifest.json',
+      'scripts/assets/manifest.ts',
+      'scripts/assets/promote-interface.ts',
+      'scripts/assets/build-editor-loupe-layers.ts',
+      'scripts/assets/build-editor-loupe-study.py',
+      'scripts/assets/build-excavation-folio-assets.py',
+      'scripts/assets/blender',
+      'scripts/assets/render-interface.sh',
+      'scripts/assets/verify-render-reproducibility.sh',
+    ]
+
+    for (const path of forbidden) {
+      expect(existsSync(resolve(path)), path).toBe(false)
+    }
+  })
+
   it('semantically validates only assets consumed by the game', () => {
     expect(validateProductionInterfaceAssets(process.cwd())).toEqual([])
     const paths = PRODUCTION_INTERFACE_ASSETS.map(({ path }) => path)
