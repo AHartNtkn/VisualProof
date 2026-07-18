@@ -9,6 +9,202 @@ open Theory
 
 namespace HeadStripSoundness
 
+theorem regularExactScopeLength
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (region : Fin input.val.regionCount) (regular : region ≠ payload.region) :
+    (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+        region).length =
+      (ConcreteElaboration.exactScopeWires input.val region).length := by
+  rw [headStripRaw_exactScopeWires, if_neg regular, List.append_nil]
+  exact List.length_map _
+
+noncomputable def extendedWireMapRegular
+    (embedding : ContextEmbedding input payload source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ payload.region) :
+    Fin (source.extend region).length → Fin (target.extend region).length :=
+  fun index =>
+    Fin.cast
+      ((congrArg (fun localCount => target.length + localCount)
+          (regularExactScopeLength input payload region regular).symm).trans
+        (ConcreteElaboration.WireContext.length_extend target region).symm)
+      (extendWireRenaming embedding.index
+        (ConcreteElaboration.exactScopeWires input.val region).length
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend source region) index))
+
+theorem extendedWireMapRegular_spec
+    (embedding : ContextEmbedding input payload source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ payload.region)
+    (index : Fin (source.extend region).length) :
+    (target.extend region).get
+        (extendedWireMapRegular embedding region regular index) =
+      Fin.castAdd payload.argumentIndices.length
+        ((source.extend region).get index) := by
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend source region) index
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend source region).symm
+      split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · have mapped : extendedWireMapRegular embedding region regular
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend source region).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires input.val region).length
+            outer)) =
+        Fin.cast
+          (ConcreteElaboration.WireContext.length_extend target region).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires
+              (headStripRaw input payload) region).length
+            (embedding.index outer)) := by
+      apply Fin.ext
+      simp [extendedWireMapRegular, extendWireRenaming]
+    rw [mapped]
+    simpa [ConcreteElaboration.WireContext.extend] using embedding.get outer
+  · let lengthEq := regularExactScopeLength input payload region regular
+    have mapped : extendedWireMapRegular embedding region regular
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend source region).symm
+          (Fin.natAdd source.length localIndex)) =
+        Fin.cast
+          (ConcreteElaboration.WireContext.length_extend target region).symm
+          (Fin.natAdd target.length (Fin.cast lengthEq.symm localIndex)) := by
+      apply Fin.ext
+      simp [extendedWireMapRegular, extendWireRenaming]
+    rw [mapped]
+    have exactWires := headStripRaw_exactScopeWires input payload region
+    rw [if_neg regular] at exactWires
+    simp only [List.append_nil] at exactWires
+    simp [ConcreteElaboration.WireContext.extend, exactWires]
+    exact List.getElem_map _
+
+theorem ContextEmbedding.extend_index_eq_map_regular
+    (embedding : ContextEmbedding input payload source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ payload.region)
+    (targetNodup : (target.extend region).Nodup)
+    (index : Fin (source.extend region).length) :
+    (embedding.extend region).index index =
+      extendedWireMapRegular embedding region regular index := by
+  symm
+  apply Fin.ext
+  exact (List.getElem_inj targetNodup).mp (by
+    simpa only [List.get_eq_getElem] using
+      (extendedWireMapRegular_spec embedding region regular index).trans
+        ((embedding.extend region).get index).symm)
+
+theorem regularExtendWireEnv
+    (embedding : ContextEmbedding input payload source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ payload.region)
+    (outer : Fin target.length → D)
+    (localEnv : Fin (ConcreteElaboration.exactScopeWires
+      (headStripRaw input payload) region).length → D) :
+    (extendWireEnv outer localEnv ∘
+        Fin.cast (ConcreteElaboration.WireContext.length_extend target region)) ∘
+        extendedWireMapRegular embedding region regular =
+      extendWireEnv (outer ∘ embedding.index)
+          (localEnv ∘ Fin.cast
+            (regularExactScopeLength input payload region regular).symm) ∘
+        Fin.cast
+          (ConcreteElaboration.WireContext.length_extend source region) := by
+  funext wire
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend source region) wire
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend source region).symm
+      split = wire := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outerIndex => ?_) (fun localIndex => ?_) split
+  · simp [extendedWireMapRegular, extendWireEnv, extendWireRenaming,
+      Function.comp_def]
+  · simp [extendedWireMapRegular, extendWireEnv, extendWireRenaming,
+      Function.comp_def]
+    rw [show Fin.cast _ (Fin.natAdd target.length localIndex) =
+        Fin.natAdd target.length
+          (Fin.cast
+            (regularExactScopeLength input payload region regular).symm
+            localIndex) by
+      apply Fin.ext
+      rfl]
+    exact Fin.addCases_right _
+
+theorem regularLocalSelection
+    (direction : ConcreteElaboration.SimulationDirection)
+    (embedding : ContextEmbedding input payload source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ payload.region)
+    (targetExact : (target.extend region).Exact region)
+    (model : Lambda.LambdaModel) :
+    ∀ (sourceOuter : Fin source.length → model.Carrier)
+      (targetOuter : Fin target.length → model.Carrier),
+      ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+          (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+          sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal,
+            ∃ targetLocal,
+              ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+                (ConcreteElaboration.ContextIndexRelation.forwardMap
+                  (embedding.extend region).index)
+                (ConcreteElaboration.extendedEnvironment source region
+                  sourceOuter sourceLocal)
+                (ConcreteElaboration.extendedEnvironment target region
+                  targetOuter targetLocal)
+        | .backward => ∀ targetLocal,
+            ∃ sourceLocal,
+              ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+                (ConcreteElaboration.ContextIndexRelation.forwardMap
+                  (embedding.extend region).index)
+                (ConcreteElaboration.extendedEnvironment source region
+                  sourceOuter sourceLocal)
+                (ConcreteElaboration.extendedEnvironment target region
+                  targetOuter targetLocal) := by
+  intro sourceOuter targetOuter outerAgrees
+  have outerEq : sourceOuter = targetOuter ∘ embedding.index :=
+    (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      embedding.index sourceOuter targetOuter).mp outerAgrees
+  let lengthEq := regularExactScopeLength input payload region regular
+  cases direction with
+  | forward =>
+      intro sourceLocal
+      let targetLocal := sourceLocal ∘ Fin.cast lengthEq
+      refine ⟨targetLocal, ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        (embedding.extend region).index _ _).mpr
+      have localEq : targetLocal ∘ Fin.cast lengthEq.symm = sourceLocal := by
+        funext localIndex
+        simp [targetLocal]
+      have environment := regularExtendWireEnv embedding region regular
+        targetOuter targetLocal
+      have indexEq : (embedding.extend region).index =
+          extendedWireMapRegular embedding region regular := by
+        funext index
+        exact embedding.extend_index_eq_map_regular region regular
+          targetExact.nodup index
+      unfold ConcreteElaboration.extendedEnvironment
+      rw [indexEq, environment, localEq, outerEq]
+  | backward =>
+      intro targetLocal
+      let sourceLocal := targetLocal ∘ Fin.cast lengthEq.symm
+      refine ⟨sourceLocal, ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        (embedding.extend region).index _ _).mpr
+      have environment := regularExtendWireEnv embedding region regular
+        targetOuter targetLocal
+      have indexEq : (embedding.extend region).index =
+          extendedWireMapRegular embedding region regular := by
+        funext index
+        exact embedding.extend_index_eq_map_regular region regular
+          targetExact.nodup index
+      unfold ConcreteElaboration.extendedEnvironment
+      rw [indexEq, environment, outerEq]
+
 theorem focusedLocalTransport
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
@@ -310,6 +506,150 @@ theorem focusedLocalTransport
       simp only [denoteItemSeq_append]
       exact ⟨targetNodeDenotes, firstDenotes, secondDenotes,
         targetChildDenotes⟩
+
+noncomputable def semanticSimulation
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (named : NamedEnv Lambda.Individual signature) :
+    ConcreteElaboration.ConcreteSemanticSimulation signature input.val
+      (headStripRaw input payload) Lambda.canonicalModel named where
+  source_wellFormed := input.property
+  target_wellFormed := targetWellFormed
+  regionMap := id
+  binderMap := id
+  Distinguished := fun region => region = payload.region
+  occurrenceMap := fun _ _ occurrence => liftOccurrence payload occurrence
+  occurrenceMap_node := by
+    intro region regular node nodeRegion
+    exact ⟨Fin.castAdd
+      (payload.argumentIndices.length + payload.argumentIndices.length) node,
+      rfl⟩
+  occurrenceMap_child := by
+    intro region regular child
+    rfl
+  root_eq := rfl
+  region_shape := by
+    intro parent regular child childParent
+    cases kind : input.val.regions child <;> simp [headStripRaw, kind]
+  localOccurrences_map := by
+    intro region regular
+    exact headStripRaw_regular_localOccurrences input payload region regular
+  BinderWitness := fun {sourceRels targetRels} sourceBinders targetBinders =>
+    ConcreteElaboration.IdentityBinderWitness input.val
+      (headStripRaw input payload) sourceBinders targetBinders
+  relationMap := fun witness =>
+    ConcreteElaboration.IdentityBinderWitness.relationMap witness
+  binders_empty := ⟨rfl, HEq.rfl⟩
+  binders_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    exact ⟨rfl, HEq.rfl⟩
+  relationMap_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming] using
+        (RelationRenaming.lift_id_fun (source := sourceRels) arity).symm
+  Allowed := fun _ _ => True
+  allowed_cut := by simp
+  allowed_bubble := by simp
+  ContextWitness := ContextEmbedding input payload
+  AtRegion := fun _ _ => True
+  indexRelation := fun embedding =>
+    ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index
+  extendContext := by
+    intro source target embedding region regular sourceExact targetExact
+    exact embedding.extend region
+  extendFocusedContext := by
+    intro source target embedding region focused sourceExact targetExact
+    exact embedding.extend region
+  at_child := by simp
+  at_extended := by simp
+  at_focused_child := by simp
+  localTransport := by
+    intro sourceRels targetRels direction fuelSource fuelTarget source target
+      embedding sourceBinders targetBinders binderWitness region atRegion regular
+      allowed sourceExact targetExact sourceBindersCover targetBindersCover
+      sourceEnumeration targetEnumeration sourceItems targetItems sourceCompiled
+      targetCompiled itemSemantics
+    exact ConcreteElaboration.directionalLocalTransport_of_agreement direction
+      source target region region
+      (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (embedding.extend region).index)
+      Lambda.canonicalModel named
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems
+      (regularLocalSelection direction embedding region regular targetExact
+        Lambda.canonicalModel)
+      itemSemantics
+  nodeSemantic := by
+    intro sourceRels targetRels direction region source target embedding atRegion
+      sourceNodup targetNodup sourceBinders targetBinders allowed binderWitness
+      sourceNode targetNode regular mapped nodeRegion sourceItem targetItem
+      sourceCompiled targetCompiled
+    have targetNodeEq : targetNode = Fin.castAdd
+        (payload.argumentIndices.length + payload.argumentIndices.length)
+        sourceNode :=
+      ConcreteElaboration.LocalOccurrence.node.inj mapped.symm
+    subst targetNode
+    have mappedCompile := compileNode_old input payload targetWellFormed source
+      target embedding sourceBinders targetBinders binderWitness targetNodup
+      sourceNode
+    rw [sourceCompiled] at mappedCompile
+    simp only [Option.map_some] at mappedCompile
+    rw [targetCompiled] at mappedCompile
+    have itemEq : targetItem =
+        (sourceItem.renameWires embedding.index).renameRelations
+          (ConcreteElaboration.IdentityBinderWitness.relationMap
+            binderWitness) :=
+      Option.some.inj mappedCompile
+    subst targetItem
+    intro sourceEnv targetEnv relEnv environments
+    have environmentEq : sourceEnv = targetEnv ∘ embedding.index :=
+      (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        embedding.index sourceEnv targetEnv).mp environments
+    rw [environmentEq]
+    have wireSemantic := denoteItem_renameWires Lambda.canonicalModel named
+      embedding.index targetEnv relEnv
+      (sourceItem.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+    cases direction with
+    | forward =>
+        simpa only [Item.renameWires_renameRelations] using wireSemantic.mpr
+    | backward =>
+        simpa only [Item.renameWires_renameRelations] using wireSemantic.mp
+  focusedRegionKernel := by
+    intro sourceRels targetRels direction fuelSource fuelTarget region source
+      target embedding sourceBinders targetBinders atRegion focused allowed
+      binderWitness sourceExact targetExact sourceBindersCover
+      targetBindersCover sourceEnumeration targetEnumeration recurse recurseAt
+      sourceItems targetItems sourceCompiled targetCompiled
+    subst region
+    rw [ConcreteElaboration.finishRegion_renameRelations source payload.region
+      (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
+      sourceItems]
+    apply ConcreteElaboration.finishRegion_denote direction source target
+      payload.region payload.region
+      (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      Lambda.canonicalModel named
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems
+    exact focusedLocalTransport input payload targetWellFormed named direction
+      fuelSource fuelTarget source target embedding sourceBinders targetBinders
+      binderWitness sourceExact targetExact sourceBindersCover
+      targetBindersCover sourceEnumeration targetEnumeration recurse sourceItems
+      targetItems sourceCompiled targetCompiled
 
 end HeadStripSoundness
 
