@@ -140,6 +140,30 @@ private theorem directParent_encloses
   rw [moveEndpointRaw_exactScopeWires]
   rfl
 
+private theorem extendWireEnv_transport
+    {D : Sort u} {outer sourceLocalCount targetLocalCount : Nat}
+    (countEq : targetLocalCount = sourceLocalCount)
+    (sourceLocal : Fin sourceLocalCount → D)
+    (targetLocal : Fin targetLocalCount → D)
+    (localValues : ∀ index,
+      targetLocal index = sourceLocal (Fin.cast countEq index))
+    (sourceIndex : Fin (outer + sourceLocalCount))
+    (targetIndex : Fin (outer + targetLocalCount))
+    (indexValue : sourceIndex.val = targetIndex.val) :
+    ∀ outerEnv,
+      extendWireEnv outerEnv sourceLocal sourceIndex =
+        extendWireEnv outerEnv targetLocal targetIndex := by
+  subst targetLocalCount
+  have targetLocalEq : targetLocal = sourceLocal := by
+    funext index
+    simpa using localValues index
+  subst targetLocal
+  have indexEq : sourceIndex = targetIndex := by
+    apply Fin.ext
+    exact indexValue
+  subst targetIndex
+  exact fun _ => rfl
+
 structure EndpointMoveAwayContext
     (input : ConcreteDiagram)
     (sourceWire targetWire : Fin input.wireCount)
@@ -169,31 +193,114 @@ def extend
   exact ⟨(moveEndpointRaw_context_extend input sourceWire targetWire endpoint
     sourceContext region).symm⟩
 
-end EndpointMoveAwayContext
-
-private theorem extendWireEnv_transport
-    {D : Type} {outer sourceLocalCount targetLocalCount : Nat}
-    (countEq : targetLocalCount = sourceLocalCount)
-    (sourceLocal : Fin sourceLocalCount → D)
-    (targetLocal : Fin targetLocalCount → D)
-    (localValues : ∀ index,
-      targetLocal index = sourceLocal (Fin.cast countEq index))
-    (sourceIndex : Fin (outer + sourceLocalCount))
-    (targetIndex : Fin (outer + targetLocalCount))
-    (indexValue : sourceIndex.val = targetIndex.val) :
-    ∀ outerEnv,
-      extendWireEnv outerEnv sourceLocal sourceIndex =
-        extendWireEnv outerEnv targetLocal targetIndex := by
-  subst targetLocalCount
-  have targetLocalEq : targetLocal = sourceLocal := by
-    funext index
-    simpa using localValues index
-  subst targetLocal
-  have indexEq : sourceIndex = targetIndex := by
-    apply Fin.ext
-    exact indexValue
+theorem extended_agreement
+    (context : EndpointMoveAwayContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (region : Fin input.regionCount)
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (outerAgrees : context.indexRelation.EnvironmentsAgree sourceOuter targetOuter)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input region).length → D) :
+    ∃ targetLocal : Fin (ConcreteElaboration.exactScopeWires
+        (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D,
+      (context.extend region).indexRelation.EnvironmentsAgree
+        (ConcreteElaboration.extendedEnvironment sourceContext region
+          sourceOuter sourceLocal)
+        (ConcreteElaboration.extendedEnvironment targetContext region
+          targetOuter targetLocal) := by
+  rcases context with ⟨contextsEq⟩
+  cases contextsEq
+  have outerEq : sourceOuter = targetOuter := by
+    simpa only [indexRelation,
+      ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap,
+      Function.comp_id] using outerAgrees
+  let countEq := congrArg List.length
+    (moveEndpointRaw_exactScopeWires input sourceWire targetWire endpoint region)
+  let targetLocal := fun index => sourceLocal (Fin.cast countEq index)
+  refine ⟨targetLocal, ?_⟩
+  unfold indexRelation ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+    ConcreteElaboration.ContextIndexRelation.forwardMap
+  intro sourceIndex targetIndex related
   subst targetIndex
-  exact fun _ => rfl
+  subst targetOuter
+  simp only [ConcreteElaboration.extendedEnvironment, targetLocal,
+    Function.comp_apply]
+  apply extendWireEnv_transport countEq sourceLocal targetLocal
+  · intro localIndex
+    rfl
+  · rfl
+
+theorem extended_agreement_backward
+    (context : EndpointMoveAwayContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (region : Fin input.regionCount)
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (outerAgrees : context.indexRelation.EnvironmentsAgree sourceOuter targetOuter)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D) :
+    ∃ sourceLocal : Fin (ConcreteElaboration.exactScopeWires input region).length → D,
+      (context.extend region).indexRelation.EnvironmentsAgree
+        (ConcreteElaboration.extendedEnvironment sourceContext region
+          sourceOuter sourceLocal)
+        (ConcreteElaboration.extendedEnvironment targetContext region
+          targetOuter targetLocal) := by
+  rcases context with ⟨contextsEq⟩
+  cases contextsEq
+  have outerEq : sourceOuter = targetOuter := by
+    simpa only [indexRelation,
+      ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap,
+      Function.comp_id] using outerAgrees
+  let countEq := congrArg List.length
+    (moveEndpointRaw_exactScopeWires input sourceWire targetWire endpoint region)
+  let sourceLocal := fun index => targetLocal (Fin.cast countEq.symm index)
+  refine ⟨sourceLocal, ?_⟩
+  unfold indexRelation ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+    ConcreteElaboration.ContextIndexRelation.forwardMap
+  intro sourceIndex targetIndex related
+  subst targetIndex
+  subst targetOuter
+  simp only [ConcreteElaboration.extendedEnvironment, sourceLocal,
+    Function.comp_apply]
+  apply extendWireEnv_transport countEq sourceLocal targetLocal
+  · intro localIndex
+    apply congrArg targetLocal
+    apply Fin.ext
+    rfl
+  · rfl
+
+theorem endpoint_relation_of_coalesced
+    (context : EndpointMoveAwayContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (sourceExact : sourceContext.Exact region)
+    (sourceEnv : Fin sourceContext.length → D)
+    (targetEnv : Fin targetContext.length → D)
+    (identityAgrees : context.indexRelation.EnvironmentsAgree
+      sourceEnv targetEnv)
+    (coalesced : ∀ sourceIndex targetIndex,
+      sourceContext.get sourceIndex = sourceWire →
+      sourceContext.get targetIndex = targetWire →
+      sourceEnv sourceIndex = sourceEnv targetIndex) :
+    (endpointMoveRelation input sourceWire targetWire sourceContext targetContext
+      ).EnvironmentsAgree sourceEnv targetEnv := by
+  rcases context with ⟨contextsEq⟩
+  cases contextsEq
+  have envEq : sourceEnv = targetEnv := by
+    simpa only [indexRelation,
+      ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap,
+      Function.comp_id] using identityAgrees
+  subst targetEnv
+  apply endpointMoveRelation_environmentsAgree input sourceWire targetWire
+  · intro sourceIndex targetIndex sameWire
+    have indexEq : sourceIndex = targetIndex := by
+      apply Fin.ext
+      exact (List.getElem_inj sourceExact.nodup).mp (by
+        simpa only [List.get_eq_getElem] using sameWire)
+    subst targetIndex
+    rfl
+  · exact coalesced
+
+end EndpointMoveAwayContext
 
 /-- Outside the subtree containing the moved endpoint, the authoritative
 compiler is simulated with the identity lexical relation. -/
@@ -763,6 +870,207 @@ theorem compileOccurrences_moveEndpoint_away_itemSeqSimulation
                             environments targetDenotes⟩
   · exact sourceCompiled
   · exact targetCompiled
+
+/-- At a site where both wire identities are visible and the surrounding
+denotation coalesces their values, moving the selected endpoint preserves the
+finished region in both directions. -/
+theorem finishRegion_moveEndpoint_equiv_of_coalesced
+    (input : ConcreteDiagram)
+    (wellFormed : input.WellFormed signature)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (sourceOccurs : input.EndpointOccurs sourceWire endpoint)
+    (targetWellFormed :
+      (moveEndpointRaw input sourceWire targetWire endpoint).WellFormed signature)
+    (region : Fin input.regionCount)
+    (sourceWireVisible : input.Encloses (input.wires sourceWire).scope region)
+    (targetWireVisible : input.Encloses (input.wires targetWire).scope region)
+    {rels : RelCtx}
+    (fuelSource fuelTarget : Nat)
+    (sourceContext : ConcreteElaboration.WireContext input)
+    (targetContext : ConcreteElaboration.WireContext
+      (moveEndpointRaw input sourceWire targetWire endpoint))
+    (context : EndpointMoveAwayContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (sourceBinders : ConcreteElaboration.BinderContext input rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (moveEndpointRaw input sourceWire targetWire endpoint) rels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      sourceBinders targetBinders)
+    (sourceCover : sourceBinders.Covers region)
+    (targetCover : targetBinders.Covers region)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration input
+      sourceBinders region)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      targetBinders region)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact : (targetContext.extend region).Exact region)
+    (sourceItems : ItemSeq signature (sourceContext.extend region).length rels)
+    (targetItems : ItemSeq signature (targetContext.extend region).length rels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature input
+      (ConcreteElaboration.compileRegion? signature input fuelSource)
+      (sourceContext.extend region) sourceBinders
+      (ConcreteElaboration.localOccurrences input region) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      (ConcreteElaboration.compileRegion? signature
+        (moveEndpointRaw input sourceWire targetWire endpoint) fuelTarget)
+      (targetContext.extend region) targetBinders
+      (ConcreteElaboration.localOccurrences
+        (moveEndpointRaw input sourceWire targetWire endpoint) region) =
+        some targetItems)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceCoalesced : ∀ sourceOuter sourceLocal relEnv,
+      denoteItemSeq model named
+          (ConcreteElaboration.extendedEnvironment sourceContext region
+            sourceOuter sourceLocal) relEnv sourceItems →
+      ∀ sourceIndex targetIndex,
+        (sourceContext.extend region).get sourceIndex = sourceWire →
+        (sourceContext.extend region).get targetIndex = targetWire →
+        ConcreteElaboration.extendedEnvironment sourceContext region
+            sourceOuter sourceLocal sourceIndex =
+          ConcreteElaboration.extendedEnvironment sourceContext region
+            sourceOuter sourceLocal targetIndex)
+    (targetCoalesced : ∀ targetOuter targetLocal relEnv,
+      denoteItemSeq model named
+          (ConcreteElaboration.extendedEnvironment targetContext region
+            targetOuter targetLocal) relEnv targetItems →
+      ∀ sourceIndex targetIndex,
+        (targetContext.extend region).get sourceIndex = sourceWire →
+        (targetContext.extend region).get targetIndex = targetWire →
+        ConcreteElaboration.extendedEnvironment targetContext region
+            targetOuter targetLocal sourceIndex =
+          ConcreteElaboration.extendedEnvironment targetContext region
+            targetOuter targetLocal targetIndex) :
+    ∀ sourceOuter targetOuter relEnv,
+      context.indexRelation.EnvironmentsAgree sourceOuter targetOuter →
+      (denoteRegion model named sourceOuter relEnv
+          (ConcreteElaboration.finishRegion input sourceContext region sourceItems) ↔
+        denoteRegion model named targetOuter relEnv
+          (ConcreteElaboration.finishRegion
+            (moveEndpointRaw input sourceWire targetWire endpoint)
+            targetContext region targetItems)) := by
+  intro sourceOuter targetOuter relEnv outerAgrees
+  let extendedContext := context.extend region
+  let moveContext : EndpointMoveContext input sourceWire targetWire endpoint
+      (sourceContext.extend region) (targetContext.extend region) := {
+    contexts_eq := extendedContext.contexts_eq
+    source_mem := (sourceExact.mem_iff sourceWire).2 sourceWireVisible
+    target_mem := (sourceExact.mem_iff targetWire).2 targetWireVisible
+  }
+  have identityRelationRenamingEq :
+      (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness :
+        RelationRenaming rels rels) =
+          (fun {arity} (relation : RelVar rels arity) => relation) := by
+    rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
+    rfl
+  have semantic : ∀ direction,
+      ConcreteElaboration.ItemSeqSimulation model named direction
+        (endpointMoveRelation input sourceWire targetWire
+          (sourceContext.extend region) (targetContext.extend region))
+        (sourceItems.renameRelations
+          (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+        targetItems := by
+    intro direction
+    simpa only [identityRelationRenamingEq, ItemSeq.renameRelations_id] using
+      (compileOccurrences_moveEndpoint_itemSeqSimulation input wellFormed
+        sourceWire targetWire endpoint distinct sourceOccurs targetWellFormed model
+        named direction fuelSource fuelTarget region (sourceContext.extend region)
+        (targetContext.extend region) moveContext sourceExact.nodup
+        targetExact.nodup sourceBinders targetBinders binderWitness sourceCover
+        targetCover sourceEnumeration targetEnumeration sourceExact targetExact
+        sourceItems targetItems sourceCompiled targetCompiled)
+  have transport : ∀ direction relEnv,
+      ConcreteElaboration.DirectionalLocalTransport direction sourceContext
+        targetContext region region context.indexRelation model named relEnv
+        (sourceItems.renameRelations
+          (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+        targetItems := by
+    intro direction currentRelEnv currentSourceOuter currentTargetOuter
+      currentOuterAgrees
+    cases direction with
+    | forward =>
+        intro sourceLocal sourceDenotes
+        obtain ⟨targetLocal, identityAgrees⟩ :=
+          context.extended_agreement region currentSourceOuter
+            currentTargetOuter currentOuterAgrees sourceLocal
+        have sourceDenotesRaw : denoteItemSeq model named
+            (ConcreteElaboration.extendedEnvironment sourceContext region
+              currentSourceOuter sourceLocal) currentRelEnv sourceItems := by
+          simpa only [identityRelationRenamingEq, ItemSeq.renameRelations_id] using
+            sourceDenotes
+        have endpointAgrees := extendedContext.endpoint_relation_of_coalesced
+          sourceExact
+          (ConcreteElaboration.extendedEnvironment sourceContext region
+            currentSourceOuter sourceLocal)
+          (ConcreteElaboration.extendedEnvironment targetContext region
+            currentTargetOuter targetLocal)
+          identityAgrees
+          (sourceCoalesced currentSourceOuter sourceLocal currentRelEnv
+            sourceDenotesRaw)
+        exact ⟨targetLocal,
+          semantic .forward _ _ currentRelEnv endpointAgrees sourceDenotes⟩
+    | backward =>
+        intro targetLocal targetDenotes
+        obtain ⟨sourceLocal, identityAgrees⟩ :=
+          context.extended_agreement_backward region currentSourceOuter
+            currentTargetOuter currentOuterAgrees targetLocal
+        have targetCoal := targetCoalesced currentTargetOuter targetLocal
+          currentRelEnv targetDenotes
+        have sourceCoal : ∀ sourceIndex targetIndex,
+            (sourceContext.extend region).get sourceIndex = sourceWire →
+            (sourceContext.extend region).get targetIndex = targetWire →
+            ConcreteElaboration.extendedEnvironment sourceContext region
+                currentSourceOuter sourceLocal sourceIndex =
+              ConcreteElaboration.extendedEnvironment sourceContext region
+                currentSourceOuter sourceLocal targetIndex := by
+          intro sourceIndex targetIndex sourceGet targetGet
+          let sourceAtTarget : Fin (targetContext.extend region).length :=
+            Fin.cast (congrArg List.length extendedContext.contexts_eq) sourceIndex
+          let targetAtTarget : Fin (targetContext.extend region).length :=
+            Fin.cast (congrArg List.length extendedContext.contexts_eq) targetIndex
+          have sourceTransported :
+              (sourceContext.extend region).get sourceIndex =
+                (targetContext.extend region).get sourceAtTarget := by
+            have transported := List.get_of_eq extendedContext.contexts_eq sourceIndex
+            simpa only [sourceAtTarget, List.get_eq_getElem, Fin.val_cast] using
+              transported
+          have targetTransported :
+              (sourceContext.extend region).get targetIndex =
+                (targetContext.extend region).get targetAtTarget := by
+            have transported := List.get_of_eq extendedContext.contexts_eq targetIndex
+            simpa only [targetAtTarget, List.get_eq_getElem, Fin.val_cast] using
+              transported
+          have sourceToTarget := identityAgrees sourceIndex sourceAtTarget (by rfl)
+          have targetToTarget := identityAgrees targetIndex targetAtTarget (by rfl)
+          exact sourceToTarget.trans ((targetCoal sourceAtTarget targetAtTarget
+            (sourceTransported.symm.trans sourceGet)
+            (targetTransported.symm.trans targetGet)).trans targetToTarget.symm)
+        have endpointAgrees := extendedContext.endpoint_relation_of_coalesced
+          sourceExact
+          (ConcreteElaboration.extendedEnvironment sourceContext region
+            currentSourceOuter sourceLocal)
+          (ConcreteElaboration.extendedEnvironment targetContext region
+            currentTargetOuter targetLocal)
+          identityAgrees sourceCoal
+        exact ⟨sourceLocal,
+          semantic .backward _ _ currentRelEnv endpointAgrees targetDenotes⟩
+  have forward := ConcreteElaboration.finishRegion_denote .forward sourceContext
+    targetContext region region context.indexRelation model named
+    (sourceItems.renameRelations
+      (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+    targetItems (transport .forward) sourceOuter targetOuter relEnv outerAgrees
+  have backward := ConcreteElaboration.finishRegion_denote .backward sourceContext
+    targetContext region region context.indexRelation model named
+    (sourceItems.renameRelations
+      (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+    targetItems (transport .backward) sourceOuter targetOuter relEnv outerAgrees
+  rw [identityRelationRenamingEq, ItemSeq.renameRelations_id] at forward backward
+  exact ⟨forward, backward⟩
 
 end AnchoredWireContractSoundness
 
