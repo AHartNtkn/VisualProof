@@ -1052,6 +1052,29 @@ theorem targetHiddenLength
   rw [List.length_append, List.length_map]
   rfl
 
+def rootForwardLocal
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D)
+    (fresh : Fin (rootFresh input payload).length → D) :
+    Fin (targetOpen input payload boundary).hiddenWires.length → D :=
+  fun index => Fin.addCases sourceLocal fresh
+    (Fin.cast (targetHiddenLength input payload boundary) index)
+
+def rootBackwardLocal
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (targetLocal : Fin
+      (targetOpen input payload boundary).hiddenWires.length → D) :
+    Fin (sourceOpen input boundary).hiddenWires.length → D :=
+  fun index => targetLocal
+    (Fin.cast (targetHiddenLength input payload boundary).symm
+      (Fin.castAdd (rootFresh input payload).length index))
+
 theorem rootEnvironment_forward
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
@@ -1064,10 +1087,9 @@ theorem rootEnvironment_forward
     (fresh : Fin (rootFresh input payload).length → D)
     (outerEq : sourceOuter = targetOuter ∘
       exposedIndex input payload boundary) :
-    let lengthEq := targetHiddenLength input payload boundary
     let targetLocal : Fin
         (targetOpen input payload boundary).hiddenWires.length → D :=
-      fun index => Fin.addCases sourceLocal fresh (Fin.cast lengthEq index)
+      rootForwardLocal input payload boundary sourceLocal fresh
     ConcreteElaboration.rootEnvironment
         (sourceOpen input boundary).exposedWires
         (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal =
@@ -1129,7 +1151,7 @@ theorem rootEnvironment_forward
               (Fin.natAdd (sourceOpen input boundary).exposedWires.length
                 localIndex))))
     rw [targetIndexEq]
-    simp [extendWireEnv]
+    simp [rootForwardLocal, extendWireEnv]
 
 theorem rootEnvironment_backward
     (input : CheckedDiagram signature)
@@ -1142,10 +1164,8 @@ theorem rootEnvironment_backward
     (targetLocal : Fin (targetOpen input payload boundary).hiddenWires.length → D)
     (outerEq : sourceOuter = targetOuter ∘
       exposedIndex input payload boundary) :
-    let lengthEq := targetHiddenLength input payload boundary
     let sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D :=
-      fun index => targetLocal (Fin.cast lengthEq.symm
-        (Fin.castAdd (rootFresh input payload).length index))
+      rootBackwardLocal input payload boundary targetLocal
     ConcreteElaboration.rootEnvironment
         (sourceOpen input boundary).exposedWires
         (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal =
@@ -1210,6 +1230,757 @@ theorem rootEnvironment_backward
                 localIndex))))
     rw [targetIndexEq]
     simp [extendWireEnv]
+
+def rootFreshLocalIndex
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (rootSite : input.val.root = payload.region)
+    (position : Fin payload.argumentIndices.length) :
+    Fin (targetOpen input payload boundary).hiddenWires.length :=
+  ⟨(sourceOpen input boundary).hiddenWires.length + position.val, by
+    rw [targetHiddenLength]
+    simp [rootFresh, rootSite, allFin_eq_finRange]⟩
+
+def rootFreshIndex
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (rootSite : input.val.root = payload.region)
+    (position : Fin payload.argumentIndices.length) :
+    Fin (targetOpen input payload boundary).rootWires.length :=
+  Fin.cast (by simp [OpenConcreteDiagram.rootWires])
+    (Fin.natAdd (targetOpen input payload boundary).exposedWires.length
+      (rootFreshLocalIndex input payload boundary rootSite position))
+
+theorem rootFreshIndex_get
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (rootSite : input.val.root = payload.region)
+    (position : Fin payload.argumentIndices.length) :
+    (targetOpen input payload boundary).rootWires.get
+        (rootFreshIndex input payload boundary rootSite position) =
+      Fin.natAdd input.val.wireCount position := by
+  unfold rootFreshIndex OpenConcreteDiagram.rootWires
+  rw [show List.get
+      ((targetOpen input payload boundary).exposedWires ++
+        (targetOpen input payload boundary).hiddenWires)
+      (Fin.cast (by simp)
+        (Fin.natAdd (targetOpen input payload boundary).exposedWires.length
+          (rootFreshLocalIndex input payload boundary rootSite position))) =
+      (targetOpen input payload boundary).hiddenWires.get
+        (rootFreshLocalIndex input payload boundary rootSite position) by
+    simp]
+  simp [targetOpen_hiddenWires, rootSite, rootFreshLocalIndex,
+    allFin_eq_finRange, List.get_eq_getElem]
+  refine (List.getElem_append_right
+    (as := List.map (Fin.castAdd payload.argumentIndices.length)
+      (sourceOpen input boundary).hiddenWires)
+    (bs := List.map (Fin.natAdd input.val.wireCount)
+      (List.finRange payload.argumentIndices.length))
+    (i := (sourceOpen input boundary).hiddenWires.length + position.val)
+    (by simp)).trans ?_
+  simp
+
+theorem rootForwardFreshValue
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (rootSite : input.val.root = payload.region)
+    (targetOuter : Fin
+      (targetOpen input payload boundary).exposedWires.length → D)
+    (sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D)
+    (fresh : Fin (rootFresh input payload).length → D)
+    (position : Fin payload.argumentIndices.length)
+    (index : Fin (targetOpen input payload boundary).rootWires.length)
+    (indexGet : (targetOpen input payload boundary).rootWires.get index =
+      Fin.natAdd input.val.wireCount position) :
+    ConcreteElaboration.rootEnvironment
+        (targetOpen input payload boundary).exposedWires
+        (targetOpen input payload boundary).hiddenWires targetOuter
+        (rootForwardLocal input payload boundary sourceLocal fresh) index =
+      fresh (Fin.cast (by
+        simp [rootFresh, rootSite, allFin_eq_finRange]) position) := by
+  have canonicalGet := rootFreshIndex_get input payload boundary rootSite position
+  have indexEq : index =
+      rootFreshIndex input payload boundary rootSite position := by
+    apply Fin.ext
+    exact (List.getElem_inj
+      (targetCheckedOpen input payload boundary sourceRoot
+        targetWellFormed).val.rootWires_nodup).mp (by
+      simpa only [List.get_eq_getElem] using indexGet.trans canonicalGet.symm)
+  subst index
+  unfold ConcreteElaboration.rootEnvironment
+  simp only [Function.comp_apply]
+  rw [show Fin.cast List.length_append
+      (rootFreshIndex input payload boundary rootSite position) =
+        Fin.natAdd (targetOpen input payload boundary).exposedWires.length
+          (rootFreshLocalIndex input payload boundary rootSite position) by
+    apply Fin.ext
+    rfl]
+  simp [extendWireEnv]
+  unfold rootForwardLocal
+  rw [show Fin.cast (targetHiddenLength input payload boundary)
+      (rootFreshLocalIndex input payload boundary rootSite position) =
+        Fin.natAdd (sourceOpen input boundary).hiddenWires.length
+          (Fin.cast (by
+            simp [rootFresh, rootSite, allFin_eq_finRange]) position) by
+    apply Fin.ext
+    rfl]
+  simp
+
+theorem rootForwardOldValue
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (sourceOuter : Fin
+      (sourceOpen input boundary).exposedWires.length → D)
+    (targetOuter : Fin
+      (targetOpen input payload boundary).exposedWires.length → D)
+    (outerEq : sourceOuter = targetOuter ∘
+      exposedIndex input payload boundary)
+    (sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D)
+    (fresh : Fin (rootFresh input payload).length → D)
+    (wire : Fin input.val.wireCount)
+    (targetIndex : Fin (targetOpen input payload boundary).rootWires.length)
+    (targetGet : (targetOpen input payload boundary).rootWires.get targetIndex =
+      Fin.castAdd payload.argumentIndices.length wire) :
+    ∃ sourceIndex : Fin (sourceOpen input boundary).rootWires.length,
+      (sourceOpen input boundary).rootWires.get sourceIndex = wire ∧
+      ConcreteElaboration.rootEnvironment
+          (targetOpen input payload boundary).exposedWires
+          (targetOpen input payload boundary).hiddenWires targetOuter
+          (rootForwardLocal input payload boundary sourceLocal fresh)
+          targetIndex =
+        ConcreteElaboration.rootEnvironment
+          (sourceOpen input boundary).exposedWires
+          (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal
+          sourceIndex := by
+  let embedding := rootEmbedding input payload boundary sourceRoot
+    targetWellFormed
+  have targetMember : Fin.castAdd payload.argumentIndices.length wire ∈
+      (targetOpen input payload boundary).rootWires := by
+    rw [← targetGet]
+    exact List.get_mem _ targetIndex
+  have sourceMember : wire ∈ (sourceOpen input boundary).rootWires :=
+    (embedding.mem_old wire).mp targetMember
+  obtain ⟨sourceIndex, sourceLookup⟩ :=
+    ConcreteElaboration.WireContext.lookup?_complete sourceMember
+  have sourceGet := ConcreteElaboration.WireContext.lookup?_sound sourceLookup
+  have mappedGet := embedding.get sourceIndex
+  have targetIndexEq : targetIndex = embedding.index sourceIndex := by
+    apply Fin.ext
+    exact (List.getElem_inj
+      (targetCheckedOpen input payload boundary sourceRoot
+        targetWellFormed).val.rootWires_nodup).mp (by
+      simpa only [List.get_eq_getElem] using targetGet.trans
+        (mappedGet.trans (congrArg
+          (Fin.castAdd payload.argumentIndices.length) sourceGet)).symm)
+  refine ⟨sourceIndex, sourceGet, ?_⟩
+  rw [targetIndexEq]
+  have environment := rootEnvironment_forward input payload boundary sourceOuter
+    targetOuter sourceLocal fresh outerEq
+  change _ = _
+  exact congrFun environment.symm sourceIndex
+
+theorem focusedRootTransport
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (named : NamedEnv Lambda.Individual signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (rootSite : input.val.root = payload.region)
+    (recurse : ∀ {childDirection : ConcreteElaboration.SimulationDirection}
+      {child : Fin input.val.regionCount}
+      {childSourceRels childTargetRels : RelCtx}
+      {childSourceBinders : ConcreteElaboration.BinderContext
+        input.val childSourceRels}
+      {childTargetBinders : ConcreteElaboration.BinderContext
+        (headStripRaw input payload) childTargetRels}
+      {sourceBody : Region signature
+        (sourceOpen input boundary).rootWires.length childSourceRels}
+      {targetBody : Region signature
+        (targetOpen input payload boundary).rootWires.length childTargetRels},
+      (input.val.regions child).parent? = some input.val.root →
+      ((headStripRaw input payload).regions child).parent? =
+        some (headStripRaw input payload).root →
+      True →
+      (childBinderWitness : ConcreteElaboration.IdentityBinderWitness input.val
+        (headStripRaw input payload) childSourceBinders childTargetBinders) →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers child →
+      ConcreteElaboration.BinderContext.Enumeration input.val
+        childSourceBinders child →
+      ConcreteElaboration.BinderContext.Enumeration
+        (headStripRaw input payload) childTargetBinders child →
+      ConcreteElaboration.compileRegion? signature input.val
+          input.val.regionCount child (sourceOpen input boundary).rootWires
+          childSourceBinders = some sourceBody →
+      ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
+          (headStripRaw input payload).regionCount child
+          (targetOpen input payload boundary).rootWires childTargetBinders =
+        some targetBody →
+      ConcreteElaboration.RegionSimulation Lambda.canonicalModel named
+        childDirection
+        (ConcreteElaboration.ContextIndexRelation.forwardMap
+          (rootEmbedding input payload boundary sourceRoot
+            targetWellFormed).index)
+        (sourceBody.renameRelations
+          (ConcreteElaboration.IdentityBinderWitness.relationMap
+            childBinderWitness)) targetBody)
+    (sourceItems : ItemSeq signature
+      (sourceOpen input boundary).rootWires.length [])
+    (targetItems : ItemSeq signature
+      (targetOpen input payload boundary).rootWires.length [])
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val (ConcreteElaboration.compileRegion? signature input.val
+        input.val.regionCount) (sourceOpen input boundary).rootWires
+      ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences input.val input.val.root) =
+        some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (headStripRaw input payload)
+      (ConcreteElaboration.compileRegion? signature
+        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+      (targetOpen input payload boundary).rootWires
+      ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences (headStripRaw input payload)
+        (headStripRaw input payload).root) = some targetItems) :
+    ConcreteElaboration.DirectionalRootTransport direction
+      (sourceOpen input boundary).exposedWires
+      (sourceOpen input boundary).hiddenWires
+      (targetOpen input payload boundary).exposedWires
+      (targetOpen input payload boundary).hiddenWires
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (exposedIndex input payload boundary))
+      Lambda.canonicalModel named sourceItems targetItems := by
+  let sourceContext := (sourceOpen input boundary).rootWires
+  let targetContext := (targetOpen input payload boundary).rootWires
+  let embedding := rootEmbedding input payload boundary sourceRoot
+    targetWellFormed
+  have sourceCompiledFocus : ConcreteElaboration.compileOccurrencesWith?
+      signature input.val (ConcreteElaboration.compileRegion? signature
+        input.val input.val.regionCount) sourceContext
+      ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences input.val payload.region) =
+        some sourceItems := by
+    simpa [sourceContext, rootSite] using sourceCompiled
+  have targetCompiledFocus : ConcreteElaboration.compileOccurrencesWith?
+      signature (headStripRaw input payload)
+      (ConcreteElaboration.compileRegion? signature
+        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences (headStripRaw input payload)
+        payload.region) = some targetItems := by
+    simpa [targetContext, headStripRaw, rootSite] using targetCompiled
+  rw [source_localOccurrences] at sourceCompiledFocus
+  obtain ⟨sourceNodeItems, sourceChildItems, sourceNodeCompiled,
+      sourceChildCompiled, sourceItemsEq⟩ :=
+    ConcreteElaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => ConcreteElaboration.compileRegion? signature input.val
+        input.val.regionCount)
+      sourceContext ConcreteElaboration.BinderContext.empty
+      (sourceNodeOccurrences input payload.region)
+      (sourceChildOccurrences input payload.region)
+      sourceItems sourceCompiledFocus
+  rw [headStripRaw_focused_localOccurrences] at targetCompiledFocus
+  have targetCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
+      (headStripRaw input payload)
+      (ConcreteElaboration.compileRegion? signature
+        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      ((sourceNodeOccurrences input payload.region).map
+          (liftOccurrence payload) ++
+        (firstAddedOccurrences payload ++ secondAddedOccurrences payload ++
+          (sourceChildOccurrences input payload.region).map
+            (liftOccurrence payload))) = some targetItems := by
+    simpa only [List.append_assoc] using targetCompiledFocus
+  obtain ⟨targetNodeItems, targetRestItems, targetNodeCompiled,
+      targetRestCompiled, targetItemsEq⟩ :=
+    ConcreteElaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => ConcreteElaboration.compileRegion? signature
+        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      ((sourceNodeOccurrences input payload.region).map (liftOccurrence payload))
+      (firstAddedOccurrences payload ++ secondAddedOccurrences payload ++
+        (sourceChildOccurrences input payload.region).map
+          (liftOccurrence payload)) targetItems targetCompiled'
+  have targetRestCompiled' : ConcreteElaboration.compileOccurrencesWith?
+      signature (headStripRaw input payload)
+      (ConcreteElaboration.compileRegion? signature
+        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (firstAddedOccurrences payload ++
+        (secondAddedOccurrences payload ++
+          (sourceChildOccurrences input payload.region).map
+            (liftOccurrence payload))) = some targetRestItems := by
+    simpa only [List.append_assoc] using targetRestCompiled
+  obtain ⟨firstItems, targetTailItems, firstCompiled, targetTailCompiled,
+      targetRestItemsEq⟩ :=
+    ConcreteElaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => ConcreteElaboration.compileRegion? signature
+        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (firstAddedOccurrences payload)
+      (secondAddedOccurrences payload ++
+        (sourceChildOccurrences input payload.region).map
+          (liftOccurrence payload)) targetRestItems targetRestCompiled'
+  obtain ⟨secondItems, targetChildItems, secondCompiled, targetChildCompiled,
+      targetTailItemsEq⟩ :=
+    ConcreteElaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => ConcreteElaboration.compileRegion? signature
+        (headStripRaw input payload) (headStripRaw input payload).regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (secondAddedOccurrences payload)
+      ((sourceChildOccurrences input payload.region).map (liftOccurrence payload))
+      targetTailItems targetTailCompiled
+  have sourceExact : ConcreteElaboration.WireContext.Exact sourceContext
+      payload.region := by
+    rw [← rootSite]
+    exact ConcreteElaboration.openRootWires_exact
+      (sourceCheckedOpen input boundary sourceRoot).property
+  have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+      payload.region := by
+    rw [← rootSite]
+    simpa [targetContext, headStripRaw] using
+      (ConcreteElaboration.openRootWires_exact
+        (targetCheckedOpen input payload boundary sourceRoot
+          targetWellFormed).property)
+  have sourceCover :
+      (ConcreteElaboration.BinderContext.empty :
+        ConcreteElaboration.BinderContext input.val []).Covers
+          payload.region := by
+    rw [← rootSite]
+    exact ConcreteElaboration.BinderContext.empty_covers_root input.property
+  have targetCover :
+      (ConcreteElaboration.BinderContext.empty :
+        ConcreteElaboration.BinderContext (headStripRaw input payload) []).Covers
+          payload.region := by
+    rw [← rootSite]
+    simpa [headStripRaw] using
+      (ConcreteElaboration.BinderContext.empty_covers_root targetWellFormed)
+  have sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val ConcreteElaboration.BinderContext.empty payload.region := by
+    rw [← rootSite]
+    exact ConcreteElaboration.BinderContext.Enumeration.empty input.val
+  have targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (headStripRaw input payload) ConcreteElaboration.BinderContext.empty
+      payload.region := by
+    rw [← rootSite]
+    simpa [headStripRaw] using
+      (ConcreteElaboration.BinderContext.Enumeration.empty
+        (headStripRaw input payload))
+  have oldSimulation := oldNodeOccurrences_simulation input payload
+    targetWellFormed Lambda.canonicalModel named direction
+    (ConcreteElaboration.compileRegion? signature input.val input.val.regionCount)
+    (ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
+      (headStripRaw input payload).regionCount)
+    sourceContext targetContext embedding ConcreteElaboration.BinderContext.empty
+    ConcreteElaboration.BinderContext.empty ⟨rfl, HEq.rfl⟩ targetExact.nodup
+    sourceNodeItems targetNodeItems sourceNodeCompiled targetNodeCompiled
+  have childSimulation := childOccurrences_simulation input payload
+    Lambda.canonicalModel named direction
+    (ConcreteElaboration.compileRegion? signature input.val input.val.regionCount)
+    (ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
+      (headStripRaw input payload).regionCount)
+    sourceContext targetContext embedding ConcreteElaboration.BinderContext.empty
+    ConcreteElaboration.BinderContext.empty ⟨rfl, HEq.rfl⟩
+    (fun child parent sourceItem targetItem sourceOccurrence targetOccurrence =>
+      childOccurrence_simulation input payload targetWellFormed
+        Lambda.canonicalModel named direction input.val.regionCount
+        (headStripRaw input payload).regionCount sourceContext targetContext
+        embedding ConcreteElaboration.BinderContext.empty
+        ConcreteElaboration.BinderContext.empty ⟨rfl, HEq.rfl⟩ sourceCover
+        targetCover sourceEnumeration targetEnumeration (by
+          intro childDirection child childSourceRels childTargetRels
+            childSourceBinders childTargetBinders sourceBody targetBody
+            sourceParent targetParent allowed childWitness sourceCovers
+            targetCovers sourceEnum targetEnum sourceResult targetResult
+          exact recurse (by simpa [rootSite] using sourceParent)
+            (by simpa [headStripRaw, rootSite] using targetParent) allowed
+            childWitness sourceCovers targetCovers sourceEnum targetEnum
+            sourceResult targetResult)
+        child parent sourceItem targetItem sourceOccurrence targetOccurrence)
+    sourceChildItems targetChildItems sourceChildCompiled targetChildCompiled
+  have oldSimulation' : ConcreteElaboration.ItemSeqSimulation
+      Lambda.canonicalModel named direction
+      (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      sourceNodeItems targetNodeItems := by
+    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming,
+      renameRelations_identityRelationRenaming] using oldSimulation
+  have childSimulation' : ConcreteElaboration.ItemSeqSimulation
+      Lambda.canonicalModel named direction
+      (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      sourceChildItems targetChildItems := by
+    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming,
+      renameRelations_identityRelationRenaming] using childSimulation
+  rw [sourceItemsEq, targetItemsEq, targetRestItemsEq, targetTailItemsEq]
+  intro sourceOuter targetOuter relEnv outerAgrees
+  rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+    at outerAgrees
+  cases direction with
+  | backward =>
+      intro targetLocal targetDenotes
+      let sourceLocal := rootBackwardLocal input payload boundary targetLocal
+      let sourceEnv := ConcreteElaboration.rootEnvironment
+        (sourceOpen input boundary).exposedWires
+        (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal
+      let targetEnv := ConcreteElaboration.rootEnvironment
+        (targetOpen input payload boundary).exposedWires
+        (targetOpen input payload boundary).hiddenWires targetOuter targetLocal
+      have completeEq := rootEnvironment_backward input payload boundary
+        sourceOuter targetOuter targetLocal outerAgrees
+      have completeAgrees :
+          ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+            (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+            sourceEnv targetEnv := by
+        rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+        have indexEq : embedding.index = rootIndex input payload boundary := rfl
+        rw [indexEq]
+        simpa [sourceEnv, targetEnv, sourceLocal] using completeEq
+      refine ⟨sourceLocal, ?_⟩
+      change denoteItemSeq Lambda.canonicalModel named targetEnv relEnv
+        (targetNodeItems.append
+          (firstItems.append (secondItems.append targetChildItems)))
+        at targetDenotes
+      have targetParts := (denoteItemSeq_append Lambda.canonicalModel named
+        targetEnv relEnv targetNodeItems
+        (firstItems.append (secondItems.append targetChildItems))).mp
+          targetDenotes
+      have targetTailParts := (denoteItemSeq_append Lambda.canonicalModel named
+        targetEnv relEnv firstItems (secondItems.append targetChildItems)).mp
+          targetParts.2
+      have targetLastParts := (denoteItemSeq_append Lambda.canonicalModel named
+        targetEnv relEnv secondItems targetChildItems).mp targetTailParts.2
+      apply (denoteItemSeq_append Lambda.canonicalModel named sourceEnv relEnv
+        sourceNodeItems sourceChildItems).mpr
+      exact ⟨oldSimulation' sourceEnv targetEnv relEnv completeAgrees
+          targetParts.1,
+        childSimulation' sourceEnv targetEnv relEnv completeAgrees
+          targetLastParts.2⟩
+  | forward =>
+      intro sourceLocal sourceDenotes
+      let sourceEnv := ConcreteElaboration.rootEnvironment
+        (sourceOpen input boundary).exposedWires
+        (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal
+      change denoteItemSeq Lambda.canonicalModel named sourceEnv relEnv
+        (sourceNodeItems.append sourceChildItems) at sourceDenotes
+      obtain ⟨common, evaluationsEqual, firstValues, secondValues⟩ :=
+        source_common_environment input payload sourceContext
+          ConcreteElaboration.BinderContext.empty input.val.regionCount
+          (sourceNodeItems.append sourceChildItems) (by
+            simpa [sourceItemsEq, sourceContext] using sourceCompiledFocus)
+          sourceExact named sourceEnv relEnv sourceDenotes
+      let fresh : Fin payload.argumentIndices.length → Lambda.Individual :=
+        fun position => Lambda.canonicalModel.eval
+          ((payload.firstArgument
+            (payload.argumentIndices.get position)).mapFree payload.firstPort)
+          common
+      have freshLength : (rootFresh input payload).length =
+          payload.argumentIndices.length := by
+        simp [rootFresh, rootSite, allFin_eq_finRange]
+      let rootFreshValues : Fin (rootFresh input payload).length →
+          Lambda.Individual := fun position => fresh (Fin.cast freshLength position)
+      let targetLocal := rootForwardLocal input payload boundary sourceLocal
+        rootFreshValues
+      let targetEnv := ConcreteElaboration.rootEnvironment
+        (targetOpen input payload boundary).exposedWires
+        (targetOpen input payload boundary).hiddenWires targetOuter targetLocal
+      have completeEq := rootEnvironment_forward input payload boundary
+        sourceOuter targetOuter sourceLocal rootFreshValues outerAgrees
+      have completeAgrees :
+          ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+            (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+            sourceEnv targetEnv := by
+        rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+        have indexEq : embedding.index = rootIndex input payload boundary := rfl
+        rw [indexEq]
+        simpa [sourceEnv, targetEnv, targetLocal] using completeEq
+      refine ⟨targetLocal, ?_⟩
+      have sourceParts := (denoteItemSeq_append Lambda.canonicalModel named
+        sourceEnv relEnv sourceNodeItems sourceChildItems).mp sourceDenotes
+      have targetNodeDenotes := oldSimulation' sourceEnv targetEnv relEnv
+        completeAgrees sourceParts.1
+      have targetChildDenotes := childSimulation' sourceEnv targetEnv relEnv
+        completeAgrees sourceParts.2
+      have firstDenotes := firstAddedOccurrences_denote input payload
+        targetWellFormed
+        (ConcreteElaboration.compileRegion? signature
+          (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        targetContext ConcreteElaboration.BinderContext.empty
+        (allFin payload.argumentIndices.length) firstItems (by
+          simpa [firstAddedOccurrences] using firstCompiled)
+        common targetEnv
+        (fun position index getWire => by
+          have freshValue := rootForwardFreshValue input payload boundary
+            sourceRoot targetWellFormed rootSite targetOuter sourceLocal
+            rootFreshValues position index getWire
+          simpa [targetEnv, targetLocal, rootFreshValues, fresh] using freshValue)
+        (fun port index getWire => by
+          obtain ⟨sourceIndex, sourceGet, valueEq⟩ := rootForwardOldValue input
+            payload boundary sourceRoot targetWellFormed sourceOuter targetOuter
+            outerAgrees sourceLocal rootFreshValues (payload.firstWire port)
+            index getWire
+          have transported : targetEnv index = sourceEnv sourceIndex := by
+            simpa [targetEnv, targetLocal, sourceEnv] using valueEq
+          exact transported.trans (firstValues port sourceIndex sourceGet))
+        named relEnv
+      have secondDenotes := secondAddedOccurrences_denote input payload
+        targetWellFormed
+        (ConcreteElaboration.compileRegion? signature
+          (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        targetContext ConcreteElaboration.BinderContext.empty
+        (allFin payload.argumentIndices.length) secondItems (by
+          simpa [secondAddedOccurrences] using secondCompiled)
+        common targetEnv
+        (fun position index getWire => by
+          have freshValue := rootForwardFreshValue input payload boundary
+            sourceRoot targetWellFormed rootSite targetOuter sourceLocal
+            rootFreshValues position index getWire
+          have transported : targetEnv index = fresh position := by
+            simpa [targetEnv, targetLocal, rootFreshValues, fresh] using freshValue
+          exact transported.trans
+            (payload.originalArgumentEvaluationsEqual common evaluationsEqual
+              (payload.argumentIndices.get position)))
+        (fun port index getWire => by
+          obtain ⟨sourceIndex, sourceGet, valueEq⟩ := rootForwardOldValue input
+            payload boundary sourceRoot targetWellFormed sourceOuter targetOuter
+            outerAgrees sourceLocal rootFreshValues (payload.secondWire port)
+            index getWire
+          have transported : targetEnv index = sourceEnv sourceIndex := by
+            simpa [targetEnv, targetLocal, sourceEnv] using valueEq
+          exact transported.trans (secondValues port sourceIndex sourceGet))
+        named relEnv
+      apply (denoteItemSeq_append Lambda.canonicalModel named targetEnv relEnv
+        targetNodeItems
+        (firstItems.append (secondItems.append targetChildItems))).mpr
+      refine ⟨targetNodeDenotes, ?_⟩
+      apply (denoteItemSeq_append Lambda.canonicalModel named targetEnv relEnv
+        firstItems (secondItems.append targetChildItems)).mpr
+      refine ⟨firstDenotes, ?_⟩
+      exact (denoteItemSeq_append Lambda.canonicalModel named targetEnv relEnv
+        secondItems targetChildItems).mpr ⟨secondDenotes, targetChildDenotes⟩
+
+noncomputable def rootContext
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (named : NamedEnv Lambda.Individual signature)
+    (direction : ConcreteElaboration.SimulationDirection) :
+    let simulation := semanticSimulation input payload targetWellFormed named
+    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+      simulation direction
+      (sourceOpen input boundary).exposedWires
+      (sourceOpen input boundary).hiddenWires
+      (targetOpen input payload boundary).exposedWires
+      (targetOpen input payload boundary).hiddenWires := by
+  let simulation := semanticSimulation input payload targetWellFormed named
+  let embedding := rootEmbedding input payload boundary sourceRoot
+    targetWellFormed
+  refine {
+    outer := ConcreteElaboration.ContextIndexRelation.forwardMap
+      (exposedIndex input payload boundary)
+    context := ?_
+    atRoot := True.intro
+    atRootChild := by
+      intro regular child parent
+      trivial
+    atFocusedRootChild := by
+      intro focused child sourceParent targetParent
+      trivial
+    transport := ?_
+    focusedRootKernel := ?_
+  }
+  · simpa only [OpenConcreteDiagram.rootWires] using embedding
+  · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
+      itemSemantics
+    refine ConcreteElaboration.directionalRootTransport_of_agreement direction
+      (sourceOpen input boundary).exposedWires
+      (sourceOpen input boundary).hiddenWires
+      (targetOpen input payload boundary).exposedWires
+      (targetOpen input payload boundary).hiddenWires
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (exposedIndex input payload boundary))
+      (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      Lambda.canonicalModel named
+      (sourceItems.renameRelations
+        (simulation.relationMap simulation.binders_empty))
+      targetItems ?_ itemSemantics
+    intro sourceOuter targetOuter outerAgrees
+    rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+      at outerAgrees
+    have rootNe : input.val.root ≠ payload.region := regular
+    have rootFreshEmpty : rootFresh input payload = [] := by
+      simp [rootFresh, rootNe]
+    cases direction with
+    | forward =>
+        intro sourceLocal
+        let fresh : Fin (rootFresh input payload).length → Lambda.Individual :=
+          fun index => nomatch (rootFreshEmpty ▸ index)
+        let targetLocal := rootForwardLocal input payload boundary sourceLocal
+          fresh
+        refine ⟨targetLocal, ?_⟩
+        apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+          embedding.index _ _).mpr
+        have indexEq : embedding.index = rootIndex input payload boundary := rfl
+        rw [indexEq]
+        exact rootEnvironment_forward input payload boundary sourceOuter
+          targetOuter sourceLocal fresh outerAgrees
+    | backward =>
+        intro targetLocal
+        let sourceLocal := rootBackwardLocal input payload boundary targetLocal
+        refine ⟨sourceLocal, ?_⟩
+        apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+          embedding.index _ _).mpr
+        have indexEq : embedding.index = rootIndex input payload boundary := rfl
+        rw [indexEq]
+        exact rootEnvironment_backward input payload boundary sourceOuter
+          targetOuter targetLocal outerAgrees
+  · intro atRoot distinguished allowed recurse recurseAt sourceItems targetItems
+      sourceCompiled targetCompiled
+    have rootSite : input.val.root = payload.region := distinguished
+    have sourceCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
+        input.val (ConcreteElaboration.compileRegion? signature input.val
+          input.val.regionCount) (sourceOpen input boundary).rootWires
+        ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences input.val input.val.root) =
+          some sourceItems := by
+      simpa only [OpenConcreteDiagram.rootWires] using sourceCompiled
+    have targetCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
+        (headStripRaw input payload)
+        (ConcreteElaboration.compileRegion? signature
+          (headStripRaw input payload) (headStripRaw input payload).regionCount)
+        (targetOpen input payload boundary).rootWires
+        ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences (headStripRaw input payload)
+          (headStripRaw input payload).root) = some targetItems := by
+      simpa only [OpenConcreteDiagram.rootWires] using targetCompiled
+    have relationMapEq :
+        (fun {arity} =>
+          (semanticSimulation input payload targetWellFormed named).relationMap
+            (semanticSimulation input payload targetWellFormed named).binders_empty :
+          RelationRenaming [] []) = fun {arity} relation => relation := by
+      rfl
+    rw [relationMapEq, Region.renameRelations_id]
+    apply ConcreteElaboration.finishRoot_denote direction
+      (sourceOpen input boundary).exposedWires
+      (sourceOpen input boundary).hiddenWires
+      (targetOpen input payload boundary).exposedWires
+      (targetOpen input payload boundary).hiddenWires
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (exposedIndex input payload boundary)) Lambda.canonicalModel named
+      sourceItems targetItems
+    exact focusedRootTransport input payload boundary sourceRoot
+      targetWellFormed named direction rootSite recurse sourceItems targetItems
+      sourceCompiled' targetCompiled'
+
+theorem boundaryWitness
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceArgs : Fin boundary.length → model.Carrier) :
+    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+      direction (sourceCheckedOpen input boundary sourceRoot).elaborate
+      (targetCheckedOpen input payload boundary sourceRoot
+        targetWellFormed).elaborate
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        (exposedIndex input payload boundary))
+      model named sourceArgs
+      (sourceArgs ∘ Fin.cast (boundaryLengthEq input payload boundary)) := by
+  cases direction with
+  | forward =>
+      intro sourceAssignment sourceArgsEq sourceDenotes
+      let targetAssignment : BoundaryAssignment
+          (targetCheckedOpen input payload boundary sourceRoot
+            targetWellFormed).elaborate model.Carrier := {
+        args := sourceArgs ∘ Fin.cast (boundaryLengthEq input payload boundary)
+        classes := sourceAssignment.classes ∘
+          sourceExposedIndex input payload boundary
+        agrees := by
+          intro targetPosition
+          let sourcePosition := Fin.cast
+            (boundaryLengthEq input payload boundary) targetPosition
+          have classEq := boundaryClass
+            (input := input) (payload := payload) (boundary := boundary)
+            sourcePosition
+          have positionEq : Fin.cast
+              (boundaryLengthEq input payload boundary).symm sourcePosition =
+                targetPosition := by
+            apply Fin.ext
+            rfl
+          rw [positionEq] at classEq
+          change sourceAssignment.classes
+              (sourceExposedIndex input payload boundary
+                ((targetOpen input payload boundary).boundaryClass
+                  targetPosition)) = sourceArgs sourcePosition
+          rw [← classEq, sourceExposedIndex_exposedIndex]
+          have sourceAgrees := sourceAssignment.agrees sourcePosition
+          change sourceAssignment.classes
+              ((sourceOpen input boundary).boundaryClass sourcePosition) =
+            sourceAssignment.args sourcePosition at sourceAgrees
+          rw [sourceArgsEq] at sourceAgrees
+          exact sourceAgrees
+      }
+      refine ⟨targetAssignment, rfl, ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        _ _ _).mpr
+      funext sourceClass
+      simp only [targetAssignment, Function.comp_apply]
+      rw [sourceExposedIndex_exposedIndex]
+  | backward =>
+      intro targetAssignment targetArgsEq targetDenotes
+      let sourceAssignment : BoundaryAssignment
+          (sourceCheckedOpen input boundary sourceRoot).elaborate
+          model.Carrier := {
+        args := sourceArgs
+        classes := targetAssignment.classes ∘
+          exposedIndex input payload boundary
+        agrees := by
+          intro sourcePosition
+          change targetAssignment.classes
+              (exposedIndex input payload boundary
+                ((sourceOpen input boundary).boundaryClass sourcePosition)) =
+            sourceArgs sourcePosition
+          rw [boundaryClass]
+          have targetAgrees := targetAssignment.agrees
+            (Fin.cast (boundaryLengthEq input payload boundary).symm
+              sourcePosition)
+          rw [targetArgsEq] at targetAgrees
+          exact targetAgrees
+      }
+      refine ⟨sourceAssignment, rfl, ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        _ _ _).mpr
+      rfl
 
 end HeadStripSoundness
 

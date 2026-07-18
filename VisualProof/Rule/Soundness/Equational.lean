@@ -2,6 +2,7 @@ import VisualProof.Rule.Soundness
 import VisualProof.Rule.Soundness.Congruence
 import VisualProof.Rule.Soundness.Equational.AnchoredWireContractInterface
 import VisualProof.Rule.Soundness.Equational.AnchoredWireContractCoalescedCompactionOpen
+import VisualProof.Rule.Soundness.Equational.HeadStripSimulation
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule
@@ -2524,7 +2525,63 @@ theorem applyHeadStrip_sound
     (happly : applyHeadStrip input payload = .ok receipt) :
     SuccessfulReceiptSound context orientation input
       (.headStrip first second payload) receipt := by
-  sorry
+  have realizes := applyHeadStrip_realizes happly
+  have targetWellFormed : (headStripRaw input payload).WellFormed signature :=
+    realizes.result_eq ▸ receipt.result.property
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot mapped htransport =>
+      HeadStripSoundness.targetCheckedOpen input payload boundary sourceRoot
+        targetWellFormed)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      realizes.operationalIso_to_rawResultOpen htransport
+        (boundary.map (Fin.castAdd payload.argumentIndices.length))
+        (HeadStripSoundness.expectedTransport input payload boundary sourceRoot))
+  intro boundary sourceRoot mapped htransport valid args
+  let source := HeadStripSoundness.sourceCheckedOpen input boundary sourceRoot
+  let target := HeadStripSoundness.targetCheckedOpen input payload boundary
+    sourceRoot targetWellFormed
+  let model := Lambda.canonicalModel
+  let named := Theory.interpretDefinitions context.definitions
+  let simulation := HeadStripSoundness.semanticSimulation input payload
+    targetWellFormed named
+  let targetArgs := args ∘ Fin.cast
+    (HeadStripSoundness.boundaryLengthEq input payload boundary)
+  have forwardAllowed : simulation.Allowed .forward input.val.root := by
+    trivial
+  have backwardAllowed : simulation.Allowed .backward input.val.root := by
+    trivial
+  have forwardSemantic :=
+    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source target model named simulation .forward
+      (HeadStripSoundness.rootContext input payload boundary sourceRoot
+        targetWellFormed named .forward)
+      forwardAllowed args targetArgs
+      (HeadStripSoundness.boundaryWitness input payload boundary sourceRoot
+        targetWellFormed .forward model named args)
+  have backwardSemantic :=
+    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source target model named simulation .backward
+      (HeadStripSoundness.rootContext input payload boundary sourceRoot
+        targetWellFormed named .backward)
+      backwardAllowed args targetArgs
+      (HeadStripSoundness.boundaryWitness input payload boundary sourceRoot
+        targetWellFormed .backward model named args)
+  dsimp only
+  unfold DirectedEntailment
+  simp only [Step.tag, StepTag.semanticMode]
+  cases orientation with
+  | forward =>
+      intro sourceDenotes
+      have targetDenotes := forwardSemantic sourceDenotes
+      simpa [source, target, targetArgs, model, named,
+        HeadStripSoundness.sourceCheckedOpen,
+        HeadStripSoundness.targetCheckedOpen] using targetDenotes
+  | backward =>
+      intro targetDenotes
+      apply backwardSemantic
+      simpa [source, target, targetArgs, model, named,
+        HeadStripSoundness.sourceCheckedOpen,
+        HeadStripSoundness.targetCheckedOpen] using targetDenotes
 
 /-- Every successful fusion receipt is semantically equivalent. -/
 theorem applyFusion_sound
