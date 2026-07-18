@@ -262,6 +262,167 @@ def moveEndpointsRaw (input : ConcreteDiagram)
       · simp [moveEndpointRaw, same]
     · simp [moveEndpointRaw, sourceEq, targetEq]
 
+theorem moveEndpointRaw_selected_occurs_target
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire) :
+    (moveEndpointRaw input sourceWire targetWire endpoint).EndpointOccurs
+      targetWire endpoint := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [moveEndpointRaw, if_neg distinct.symm, if_pos]
+  exact List.mem_append_right _ (List.mem_singleton.mpr rfl)
+
+theorem moveEndpointRaw_selected_not_occurs_source
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount) :
+    ¬ (moveEndpointRaw input sourceWire targetWire endpoint).EndpointOccurs
+      sourceWire endpoint := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [moveEndpointRaw, if_pos]
+  intro member
+  have kept := (List.mem_filter.mp member).2
+  exact (of_decide_eq_true kept) rfl
+
+theorem moveEndpointRaw_other_occurs_iff
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint current : CEndpoint input.nodeCount)
+    (different : current ≠ endpoint)
+    (candidate : Fin input.wireCount) :
+    (moveEndpointRaw input sourceWire targetWire endpoint).EndpointOccurs
+        candidate current ↔
+      input.EndpointOccurs candidate current := by
+  unfold ConcreteDiagram.EndpointOccurs
+  by_cases sourceEq : candidate = sourceWire
+  · subst candidate
+    simp only [moveEndpointRaw, if_pos]
+    constructor
+    · exact fun member => (List.mem_filter.mp member).1
+    · intro member
+      exact List.mem_filter.mpr ⟨member, decide_eq_true different⟩
+  · by_cases targetEq : candidate = targetWire
+    · subst candidate
+      simp only [moveEndpointRaw, if_neg sourceEq, if_pos]
+      constructor
+      · intro member
+        rcases List.mem_append.mp member with member | same
+        · exact member
+        · exact False.elim (different (List.mem_singleton.mp same))
+      · exact fun member => List.mem_append_left _ member
+    · simp only [moveEndpointRaw, if_neg sourceEq, if_neg targetEq]
+      exact Iff.rfl
+
+theorem moveEndpointRaw_selected_occurs_iff
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (sourceOccurs : input.EndpointOccurs sourceWire endpoint)
+    (disjoint : input.WireEndpointsAreDisjoint)
+    (candidate : Fin input.wireCount) :
+    (moveEndpointRaw input sourceWire targetWire endpoint).EndpointOccurs
+        candidate endpoint ↔
+      candidate = targetWire := by
+  have targetNotOccurs : ¬ input.EndpointOccurs targetWire endpoint := by
+    intro targetOccurs
+    exact distinct (ConcreteElaboration.endpoint_wire_unique disjoint
+      sourceOccurs targetOccurs)
+  unfold ConcreteDiagram.EndpointOccurs at sourceOccurs targetNotOccurs ⊢
+  by_cases sourceEq : candidate = sourceWire
+  · subst candidate
+    simp only [moveEndpointRaw, if_pos]
+    constructor
+    · intro member
+      exact False.elim ((of_decide_eq_true (List.mem_filter.mp member).2) rfl)
+    · intro same
+      exact False.elim (distinct same)
+  · by_cases targetEq : candidate = targetWire
+    · subst candidate
+      simp only [moveEndpointRaw, if_neg sourceEq, if_pos]
+      constructor
+      · intro _
+        trivial
+      · intro _
+        exact List.mem_append_right _ (List.mem_singleton.mpr rfl)
+    · simp only [moveEndpointRaw, if_neg sourceEq, if_neg targetEq]
+      constructor
+      · intro candidateOccurs
+        have same := ConcreteElaboration.endpoint_wire_unique disjoint
+          sourceOccurs candidateOccurs
+        exact False.elim (sourceEq same.symm)
+      · intro equality
+        exact False.elim (targetEq equality)
+
+theorem moveEndpointRaw_climb
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (steps : Nat) (region : Fin input.regionCount) :
+    (moveEndpointRaw input sourceWire targetWire endpoint).climb steps region =
+      input.climb steps region := by
+  induction steps generalizing region with
+  | zero => rfl
+  | succ steps ih =>
+      simp only [ConcreteDiagram.climb]
+      rw [moveEndpointRaw_regions]
+      cases kind : input.regions region with
+      | sheet => rfl
+      | cut parent => exact ih parent
+      | bubble parent arity => exact ih parent
+
+theorem moveEndpointRaw_encloses_iff
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (ancestor descendant : Fin input.regionCount) :
+    (moveEndpointRaw input sourceWire targetWire endpoint).Encloses
+        ancestor descendant ↔
+      input.Encloses ancestor descendant := by
+  unfold ConcreteDiagram.Encloses
+  constructor <;> rintro ⟨steps, equality⟩ <;>
+    exact ⟨steps, by simpa [moveEndpointRaw_climb] using equality⟩
+
+theorem moveEndpointRaw_mem_exactScopeWires_iff
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (region : Fin input.regionCount) (wire : Fin input.wireCount) :
+    wire ∈ ConcreteElaboration.exactScopeWires
+        (moveEndpointRaw input sourceWire targetWire endpoint) region ↔
+      wire ∈ ConcreteElaboration.exactScopeWires input region := by
+  constructor
+  · intro member
+    have scope := (ConcreteElaboration.mem_exactScopeWires
+      (moveEndpointRaw input sourceWire targetWire endpoint) region wire).mp
+        member
+    rw [moveEndpointRaw_wire_scope] at scope
+    exact (ConcreteElaboration.mem_exactScopeWires input region wire).mpr scope
+  · intro member
+    have scope := (ConcreteElaboration.mem_exactScopeWires input region wire).mp
+      member
+    apply (ConcreteElaboration.mem_exactScopeWires
+      (moveEndpointRaw input sourceWire targetWire endpoint) region wire).mpr
+    rw [moveEndpointRaw_wire_scope]
+    exact scope
+
+theorem moveEndpointRaw_covered
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint current : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (covered : ∃ wire, input.EndpointOccurs wire current) :
+    ∃ wire, (moveEndpointRaw input sourceWire targetWire endpoint).EndpointOccurs
+      wire current := by
+  by_cases selected : current = endpoint
+  · subst current
+    exact ⟨targetWire, moveEndpointRaw_selected_occurs_target input sourceWire
+      targetWire endpoint distinct⟩
+  · obtain ⟨wire, occurs⟩ := covered
+    exact ⟨wire, (moveEndpointRaw_other_occurs_iff input sourceWire
+      targetWire endpoint current selected wire).mpr occurs⟩
+
 @[simp] theorem moveEndpointsRaw_regions
     (input : ConcreteDiagram) (sourceWire targetWire : Fin input.wireCount)
     (endpoints : List (CEndpoint input.nodeCount)) :
