@@ -53,6 +53,19 @@ structure ProperIterationRootAnchorContraction
   flatActualWire : FiniteEquiv (Fin flatWitness.toFocus.holeWires)
     (Fin (Splice.Input.compiledSpliceHostView
       (iterationInput input selection target) hadmissible).focus.holeWires)
+  flatTerminalWires : List (Fin
+    (iterationInput input selection target).coalesceFrameRaw.wireCount)
+  flatTerminalLength : flatTerminalWires.length =
+    flatWitness.toFocus.holeWires
+  flatActualWireSpec : ∀ index : Fin flatWitness.toFocus.holeWires,
+    (Splice.Input.compiledSpliceHostView
+        (iterationInput input selection target) hadmissible
+      ).compilerLeaf.inheritedWires.get
+        (Fin.cast
+          (Splice.Input.compiledSpliceHostView
+            (iterationInput input selection target) hadmissible
+          ).compilerLeaf.inheritedLength.symm (flatActualWire index)) =
+      flatTerminalWires.get (Fin.cast flatTerminalLength.symm index)
   flatActualIso : RegionIso signature flatActualWire
     (Splice.Input.compiledSpliceHostView
       (iterationInput input selection target) hadmissible).focus.holeRels
@@ -699,6 +712,62 @@ theorem properIterationRootAnchorContraction_complete
     flatEquivalent := itemsEquiv
     flatActualRelsEq := targetActualRelsEq
     flatActualWire := bridgeWire
+    flatTerminalWires := fullRouteResult.trace.leaf.inheritedWires
+    flatTerminalLength := terminalLength.trans holeWiresEq
+    flatActualWireSpec := by
+      intro index
+      let scopedIndex := Fin.cast holeWiresEq.symm index
+      let retainedIndex : Fin retained.toFocus.holeWires := Fin.cast
+        (terminalLength.symm.trans
+          ((congrArg List.length terminalFullWiresEq).symm.trans
+            terminal.leaf.inheritedLength)) scopedIndex
+      have core := compilerLeafOuterWire_sameSite_spec retained terminal.leaf
+        host.intrinsicPath host.compilerLeaf retainedIndex
+      let targetIndex := Fin.cast holeWiresEq scopedIndex
+      let alignedIndex := alignment.holeWire.symm targetIndex
+      have alignedVal : alignedIndex.val = scopedIndex.val := by
+        have preserved := alignmentWire alignedIndex
+        have mapped : alignment.holeWire alignedIndex = targetIndex :=
+          alignment.holeWire.apply_symm_apply targetIndex
+        rw [mapped] at preserved
+        exact preserved.symm
+      have retainedArgumentEq :
+          retained.appendRootItemsRightHoleWire alignedIndex =
+            retainedIndex := by
+        apply Fin.ext
+        calc
+          (retained.appendRootItemsRightHoleWire alignedIndex).val =
+              alignedIndex.val := by cases retained <;> rfl
+          _ = scopedIndex.val := alignedVal
+          _ = retainedIndex.val := rfl
+      have actualWireEq : scopedActualWire scopedIndex =
+          relationWire retainedIndex := by
+        change relationWire
+            (retained.appendRootItemsRightHoleWire
+              (alignment.holeWire.symm
+                (Fin.cast holeWiresEq scopedIndex))) = _
+        exact congrArg relationWire retainedArgumentEq
+      have bridgeWireEq : bridgeWire index = scopedActualWire scopedIndex := by
+        apply Fin.ext
+        rfl
+      have hostIndexEq :
+          Fin.cast host.compilerLeaf.inheritedLength.symm
+              (bridgeWire index) =
+            Fin.cast host.compilerLeaf.inheritedLength.symm
+              (relationWire retainedIndex) :=
+        congrArg (Fin.cast host.compilerLeaf.inheritedLength.symm)
+          (bridgeWireEq.trans actualWireEq)
+      have terminalGetEq :
+          terminal.leaf.inheritedWires.get
+              (Fin.cast terminal.leaf.inheritedLength.symm retainedIndex) =
+            fullRouteResult.trace.leaf.inheritedWires.get
+              (Fin.cast (terminalLength.trans holeWiresEq).symm index) := by
+        have transported := List.get_of_eq terminalFullWiresEq
+          (Fin.cast terminal.leaf.inheritedLength.symm retainedIndex)
+        rw [transported]
+        congr 1
+      rw [hostIndexEq]
+      exact core.trans terminalGetEq
     flatActualIso := by
       simpa [canonicalActual] using
         (RegionIso.pulledBack_to_actual targetActualRelsEq bridgeWire actual)
