@@ -108,12 +108,11 @@ Author the first puzzle’s four direct interface paragraphs from actual product
 
 Run the Step 2 command. Expected: all three files pass with no warnings.
 
-- [ ] **Step 5: Commit the completed domain slice**
+- [ ] **Step 5: Carry the green domain slice directly into Task 2**
 
-```bash
-git add src/game/types.ts src/game/catalog.ts src/game/teaching.ts src/game/content/opening.ts tests/game/catalog.test.ts tests/game/teaching.test.ts tests/game/opening-content.test.ts tests/game/catalog-fixture.ts tests/game/controller-fixture.ts tests/game/runtime-catalog-fixture.ts
-git commit -m "feat: model authored guidance as pages"
-```
+Do not commit a revision in which the displaced controller/save imports are
+broken. Keep the passing focused domain tests as evidence, then complete Task 2
+and commit the full domain/controller/save ownership replacement together.
 
 ---
 
@@ -190,8 +189,8 @@ Run the Step 3 command. Expected: both files pass.
 - [ ] **Step 7: Commit controller/save replacement**
 
 ```bash
-git add src/game/controller-state.ts src/game/controller.ts src/game/save.ts tests/game/controller.test.ts tests/game/save.test.ts
-git commit -m "feat: deliver passive guidance atomically"
+git add src/game/types.ts src/game/catalog.ts src/game/teaching.ts src/game/content/opening.ts src/game/controller-state.ts src/game/controller.ts src/game/save.ts tests/game/catalog.test.ts tests/game/teaching.test.ts tests/game/opening-content.test.ts tests/game/catalog-fixture.ts tests/game/controller-fixture.ts tests/game/runtime-catalog-fixture.ts tests/game/controller.test.ts tests/game/save.test.ts
+git commit -m "feat: deliver passive paged guidance"
 ```
 
 ---
