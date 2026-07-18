@@ -236,6 +236,40 @@
   border-color: rgb(73 60 40 / 52%);
 }
 
+.curse-completion {
+  inset: auto;
+  top: 50%;
+  left: 50%;
+  width: min(50rem, calc(100vw - 4rem));
+  min-height: min(36rem, calc(100vh - 4rem));
+  padding: clamp(3rem, 8vh, 5rem);
+  background:
+    linear-gradient(145deg, rgb(35 38 43 / 98%), rgb(13 16 22 / 99%)),
+    repeating-linear-gradient(90deg, transparent 0 19px, rgb(255 255 255 / 2%) 20px);
+  border: 1.1rem solid rgb(74 66 53 / 94%);
+  border-radius: .3rem;
+  box-shadow:
+    0 0 0 .14rem rgb(190 169 117 / 42%),
+    1rem 1.2rem 0 rgb(19 16 15 / 62%),
+    0 2.2rem 5rem rgb(0 0 0 / 70%),
+    inset 0 0 3rem rgb(0 0 0 / 34%);
+  transform: translate(-50%, -50%);
+}
+
+.curse-completion-line {
+  color: #d1b66f;
+}
+
+.curse-completion h1 {
+  color: #f0e7d3;
+}
+
+.curse-completion .curse-presentation-action {
+  color: #e5dac2;
+  background: rgb(42 38 35 / 82%);
+  border-color: rgb(193 166 104 / 50%);
+}
+
 .curse-production-environment[data-reduced-motion="true"] .curse-pause-scrim {
   backdrop-filter: none;
 }

@@ -280,6 +280,39 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
+  it('uses Released mount as the sole completion treatment', async () => {
+    const page = await openFixture('completion')
+    try {
+      const presentation = page.locator('.curse-game-presentation')
+      const completion = page.locator('.curse-completion')
+      const style = await completion.evaluate((node) => {
+        const computed = getComputedStyle(node)
+        return {
+          borderLeftWidth: computed.borderLeftWidth,
+          borderRadius: computed.borderRadius,
+          boxShadow: computed.boxShadow,
+        }
+      })
+      expect(await presentation.getAttribute('data-completion-candidate')).toBeNull()
+      expect(style.borderLeftWidth).toBe('17px')
+      expect(style.borderRadius).toBe('4.8px')
+      expect(style.boxShadow).not.toBe('none')
+      expect(await completion.locator('[data-completion-line]').textContent())
+        .toBe('Restoration complete')
+      expect(await completion.locator('h1').textContent())
+        .toBe('first-artifact professional name')
+      expect(await completion.locator('[data-completion-moves]').textContent()).toBe('3 moves')
+      expect(await completion.locator('[data-completion-response]').textContent()).not.toBe('')
+      expect(await completion.locator('button').allTextContents())
+        .toEqual(['Return to level selection'])
+      expect(await page.locator('.curse-production-timeline-control').getAttribute('aria-disabled'))
+        .toBe('true')
+      await completion.locator('button').click()
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
+        .toBe('archive')
+    } finally { await page.close() }
+  })
+
   it('applies the saved interface text size to rendered game text', async () => {
     const page = await openFixture()
     try {
