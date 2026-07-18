@@ -25,7 +25,7 @@
 ## File and responsibility map
 
 - `src/game/types.ts`: authored intervention pages and delivery identity.
-- `src/game/catalog.ts`: page validation, completion-page cardinality, immutable snapshot, and logical fingerprint authority.
+- `src/game/catalog.ts`: page validation, completion-page cardinality, immutable snapshot, and preservation of presentation-independent logical fingerprints.
 - `src/game/teaching.ts`: pure semantic trigger matching that returns passive guidance candidates.
 - `src/game/content/opening.ts`: shipped tutorial and authored guidance pages.
 - `src/game/controller-state.ts`: active guidance/page and delivered-guidance state.
@@ -59,7 +59,7 @@
 
 - [ ] **Step 1: Write failing domain and content tests**
 
-Add catalog cases that reject `pages: []`, `pages: ['']`, leading/trailing whitespace, embedded `\n`, and completion interventions with more than one page. Assert changing page order or text changes the puzzle fingerprint. Replace teaching expectations with passive candidates and delivered identities. Pin the first puzzle’s ordered pages:
+Add catalog cases that reject `pages: []`, `pages: ['']`, leading/trailing whitespace, embedded `\n`, and completion interventions with more than one page. Assert changing page order or wording does not change the puzzle’s logical fingerprint. Replace teaching expectations with passive candidates and delivered identities. Pin the first puzzle’s ordered pages:
 
 ```ts
 expect(puzzle('two-veils').teacher[0]!.pages).toEqual([
@@ -100,7 +100,7 @@ export type GuidanceDeliveryIdentity = {
 }
 ```
 
-Validate every page with `nonBlank`, reject `page.includes('\n')`, require exactly one page for completion triggers, and include ordered pages in fingerprint input. Rename the matcher to return `{ identity, intervention }` without modal/nonmodal presentation intents. Convert every fixture and shipped intervention to `pages`.
+Validate every page with `nonBlank`, reject `page.includes('\n')`, and require exactly one page for completion triggers. Keep ordered pages out of the proof-logical puzzle fingerprint. Rename the matcher to return `{ identity, intervention }` without modal/nonmodal presentation intents. Convert every fixture and shipped intervention to `pages`.
 
 Author the first puzzle’s four direct interface paragraphs from actual production behavior. The final paragraph names the discovered “Eliminate the double cut” action and Delete/Backspace alternative; earlier pages do not name a logical proof move.
 
