@@ -514,6 +514,77 @@ theorem anchoredWireSplitRaw_finishRoot_away_equiv
     simpa [sourceRaw, ConcreteElaboration.rootEnvironment] using
       sourceRawDenotes
 
+theorem anchoredWireSplitRaw_compileRootOccurrencesAway
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target parent selected : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (selectedParent : (input.val.regions selected).parent? = some parent)
+    {rest : List Nat}
+    (tail : Diagram.Splice.RegionRoute input.val selected target rest)
+    (fuel : Nat)
+    (original : ConcreteElaboration.WireContext input.val)
+    (expanded : ConcreteElaboration.WireContext
+      (anchoredWireSplitRaw input wire endpoints target term))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (originalExact : original.Exact parent)
+    (expandedExact : expanded.Exact parent)
+    (occurrences : List (ConcreteElaboration.LocalOccurrence
+      input.val.regionCount input.val.nodeCount))
+    (localMembership : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ ConcreteElaboration.localOccurrences input.val parent)
+    (away : ConcreteElaboration.LocalOccurrence.child selected ∉ occurrences) :
+    ConcreteElaboration.compileOccurrencesWith? signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
+        original binders occurrences =
+      (ConcreteElaboration.compileOccurrencesWith? signature
+        (anchoredWireSplitRaw input wire endpoints target term)
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        expanded binders (occurrences.map (splitOldOccurrence input))).map
+          (ItemSeq.renameWires collapse.indexMap) := by
+  apply compileOccurrencesWith?_collapse
+  intro occurrence member
+  apply anchoredWireSplitRaw_compileOccurrenceWith?_collapse input wire
+    endpoints target term selectedOccurs targetWellFormed parent expanded
+    original collapse expandedExact originalExact
+    (ConcreteElaboration.compileRegion? signature input.val fuel)
+    (ConcreteElaboration.compileRegion? signature
+      (anchoredWireSplitRaw input wire endpoints target term) fuel)
+    binders occurrence (localMembership occurrence member)
+  intro childRels child childBinders occurrenceEq
+  subst occurrence
+  have childParent :=
+    (ConcreteElaboration.mem_localOccurrences_child input.val parent child).mp
+      (localMembership (.child child) member)
+  have childNe : child ≠ selected := by
+    intro equality
+    subst child
+    exact away member
+  have childNotAbove : ¬ input.val.Encloses child target :=
+    split_sibling_not_encloses_descendant input.val input.property selectedParent
+      childParent (regionRoute_encloses input.val input.property tail) childNe
+  have originalChildExact := originalExact.extend_child input.property childParent
+  have targetChildParent :
+      ((anchoredWireSplitRaw input wire endpoints target term).regions child).parent? =
+        some parent := by
+    simpa only [anchoredWireSplitRaw_regions] using childParent
+  have expandedChildExact :=
+    expandedExact.extend_child targetWellFormed targetChildParent
+  exact anchoredWireSplitRaw_compileRegion?_collapse_of_not_encloses input wire
+    endpoints target term selectedOccurs targetWellFormed wireEnclosesTarget fuel
+    child original expanded collapse childBinders childNotAbove
+    originalChildExact expandedChildExact
+
 theorem anchoredWireSplitRawOpen_wellFormed
     (input : CheckedDiagram signature)
     (boundary : List (Fin input.val.wireCount))
@@ -1147,6 +1218,435 @@ theorem anchoredWireSplitRaw_compileRegion_route_to_available
                       sourceChildResult targetChildResult model named sourceRaw
                       targetRaw (relation, relEnv) agrees
                     exact ⟨relation, childEquiv.mpr targetChildDenotes⟩
+
+/-- A certified descendant availability lifts through the compiler's actual
+ordered-open root frame. -/
+theorem anchoredWireSplitRaw_compileRoot_route_to_available
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ old, old ∈ boundary →
+      (input.val.wires old).scope = input.val.root)
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target available : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    {rootPath availableTargetPath : List Nat}
+    (route : Diagram.Splice.RegionRoute input.val input.val.root available
+      rootPath)
+    (rootNe : input.val.root ≠ available)
+    (availableRoute : Diagram.Splice.RegionRoute input.val available target
+      availableTargetPath)
+    (site : AnchoredAvailableKernel input wire endpoints target available term
+      targetWellFormed)
+    (sourceBody : Region signature
+      (anchoredWireSplitSourceOpen input boundary).exposedWires.length [])
+    (targetBody : Region signature (anchoredWireSplitRawOpen input boundary wire
+      endpoints target term).exposedWires.length [])
+    (sourceCompiled : ConcreteElaboration.compileRoot? signature input.val
+      (anchoredWireSplitSourceOpen input boundary).exposedWires
+      (anchoredWireSplitSourceOpen input boundary).hiddenWires = some sourceBody)
+    (targetCompiled : ConcreteElaboration.compileRoot? signature
+      (anchoredWireSplitRaw input wire endpoints target term)
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).exposedWires
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).hiddenWires =
+        some targetBody)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (targetOuter : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+      target term).exposedWires.length → model.Carrier) :
+    denoteRegion (relCtx := []) model named
+        (targetOuter ∘ anchoredWireSplitRawOpenExternalClass input boundary wire
+          endpoints target term) PUnit.unit sourceBody ↔
+      denoteRegion (relCtx := []) model named targetOuter PUnit.unit targetBody := by
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+    term
+  have sourceWellFormed : source.WellFormed signature := {
+    diagram_well_formed := input.property
+    boundary_is_root_scoped := sourceRoot
+  }
+  have expandedWellFormed : expanded.WellFormed signature :=
+    anchoredWireSplitRawOpen_wellFormed input boundary sourceRoot wire endpoints
+      target term targetWellFormed
+  have sourceExact := OpenConcreteDiagram.rootWires_exact source sourceWellFormed
+  have expandedExact := OpenConcreteDiagram.rootWires_exact expanded
+    expandedWellFormed
+  let collapse := SplitContextCollapse.ofExact input wire endpoints target term
+    wireEnclosesTarget input.val.root expanded.rootWires source.rootWires
+    expandedExact sourceExact
+  have rootTargetNe : input.val.root ≠ target := by
+    intro equality
+    subst target
+    have rootAbove := regionRoute_encloses input.val input.property route
+    have availableAbove :=
+      regionRoute_encloses input.val input.property availableRoute
+    have availableEq := ConcreteElaboration.checked_encloses_antisymm
+      input.property availableAbove rootAbove
+    exact rootNe availableEq.symm
+  cases route with
+  | here => exact (rootNe rfl).elim
+  | @step _ child _ rest parentEq position positionEq tail =>
+    change ConcreteElaboration.compileRoot? signature input.val
+        source.exposedWires source.hiddenWires = some sourceBody at sourceCompiled
+    change ConcreteElaboration.compileRoot? signature expanded.diagram
+        expanded.exposedWires expanded.hiddenWires = some targetBody at targetCompiled
+    simp only [ConcreteElaboration.compileRoot?] at sourceCompiled targetCompiled
+    change (ConcreteElaboration.compileOccurrencesWith? signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val
+          input.val.regionCount)
+        source.rootWires ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences input.val input.val.root)).bind
+          (fun items => some (ConcreteElaboration.finishRoot source.exposedWires
+            source.hiddenWires items)) = some sourceBody at sourceCompiled
+    change (ConcreteElaboration.compileOccurrencesWith? signature expanded.diagram
+        (ConcreteElaboration.compileRegion? signature expanded.diagram
+          input.val.regionCount)
+        expanded.rootWires ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences expanded.diagram input.val.root)).bind
+          (fun items => some (ConcreteElaboration.finishRoot expanded.exposedWires
+            expanded.hiddenWires items)) = some targetBody at targetCompiled
+    cases sourceItemsResult : ConcreteElaboration.compileOccurrencesWith?
+        signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val
+          input.val.regionCount)
+        source.rootWires ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences input.val input.val.root) with
+    | none => simp [sourceItemsResult] at sourceCompiled
+    | some sourceItems =>
+      simp [sourceItemsResult] at sourceCompiled
+      subst sourceBody
+      cases targetItemsResult : ConcreteElaboration.compileOccurrencesWith?
+          signature expanded.diagram
+          (ConcreteElaboration.compileRegion? signature expanded.diagram
+            input.val.regionCount)
+          expanded.rootWires ConcreteElaboration.BinderContext.empty
+          (ConcreteElaboration.localOccurrences expanded.diagram input.val.root) with
+      | none => simp [expanded, targetItemsResult] at targetCompiled
+      | some targetItems =>
+        simp [expanded, targetItemsResult] at targetCompiled
+        subst targetBody
+        obtain ⟨before, after, localEq, beforeAway, afterAway⟩ :=
+          localOccurrences_split_at_child input.val input.val.root child position
+            positionEq
+        have targetLocalEq : ConcreteElaboration.localOccurrences
+              expanded.diagram input.val.root =
+            (before ++ .child child :: after).map (splitOldOccurrence input) := by
+          change ConcreteElaboration.localOccurrences
+              (anchoredWireSplitRaw input wire endpoints target term)
+              input.val.root = _
+          rw [anchoredWireSplitRaw_localOccurrences_of_ne input wire endpoints
+            target input.val.root term rootTargetNe, localEq]
+        have sourceFramed := sourceItemsResult
+        rw [localEq] at sourceFramed
+        obtain ⟨sourceBefore, sourceFocus, sourceAfter, sourceBeforeCompiled,
+            sourceFocusCompiled, sourceAfterCompiled, sourceItemsEq⟩ :=
+          compileOccurrencesWith?_frame_split
+            (ConcreteElaboration.compileRegion? signature input.val
+              input.val.regionCount)
+            source.rootWires ConcreteElaboration.BinderContext.empty before after
+            (.child child) sourceItems sourceFramed
+        have targetFramed := targetItemsResult
+        rw [targetLocalEq, List.map_append, List.map_cons] at targetFramed
+        obtain ⟨targetBefore, targetFocus, targetAfter, targetBeforeCompiled,
+            targetFocusCompiled, targetAfterCompiled, targetItemsEq⟩ :=
+          compileOccurrencesWith?_frame_split
+            (ConcreteElaboration.compileRegion? signature expanded.diagram
+              input.val.regionCount)
+            expanded.rootWires ConcreteElaboration.BinderContext.empty
+            (before.map (splitOldOccurrence input))
+            (after.map (splitOldOccurrence input))
+            (splitOldOccurrence input (.child child)) targetItems targetFramed
+        dsimp only [expanded, anchoredWireSplitRawOpen] at targetBeforeCompiled targetFocusCompiled targetAfterCompiled
+        have beforeMap := anchoredWireSplitRaw_compileRootOccurrencesAway input
+          wire endpoints target input.val.root child term selectedOccurs
+          targetWellFormed wireEnclosesTarget parentEq
+          (tail.trans availableRoute) input.val.regionCount source.rootWires
+          expanded.rootWires collapse ConcreteElaboration.BinderContext.empty
+          sourceExact expandedExact before (by
+            intro occurrence member
+            rw [localEq]
+            simp [member]) beforeAway
+        dsimp only [expanded, anchoredWireSplitRawOpen] at beforeMap
+        rw [sourceBeforeCompiled] at beforeMap
+        have beforeMapped := congrArg
+          (Option.map (ItemSeq.renameWires collapse.indexMap))
+          targetBeforeCompiled
+        have beforeEq : sourceBefore =
+            targetBefore.renameWires collapse.indexMap :=
+          Option.some.inj (beforeMap.trans beforeMapped)
+        have afterMap := anchoredWireSplitRaw_compileRootOccurrencesAway input
+          wire endpoints target input.val.root child term selectedOccurs
+          targetWellFormed wireEnclosesTarget parentEq
+          (tail.trans availableRoute) input.val.regionCount source.rootWires
+          expanded.rootWires collapse ConcreteElaboration.BinderContext.empty
+          sourceExact expandedExact after (by
+            intro occurrence member
+            rw [localEq]
+            simp [member]) afterAway
+        dsimp only [expanded, anchoredWireSplitRawOpen] at afterMap
+        rw [sourceAfterCompiled] at afterMap
+        have afterMapped := congrArg
+          (Option.map (ItemSeq.renameWires collapse.indexMap))
+          targetAfterCompiled
+        have afterEq : sourceAfter =
+            targetAfter.renameWires collapse.indexMap :=
+          Option.some.inj (afterMap.trans afterMapped)
+        cases countEq : input.val.regionCount with
+        | zero =>
+          let impossible : Fin 0 := Fin.cast (by simpa [countEq]) child
+          exact Fin.elim0 impossible
+        | succ childFuel =>
+          change (input.val.regions child).parent? = some input.val.root at parentEq
+          cases childKind : input.val.regions child with
+          | sheet => simp [childKind, CRegion.parent?] at parentEq
+          | cut parent =>
+            have parentIsRoot : parent = input.val.root := by
+              simpa [childKind, CRegion.parent?] using parentEq
+            subst parent
+            simp only [ConcreteElaboration.compileOccurrenceWith?, childKind,
+              splitOldOccurrence, anchoredWireSplitRaw_regions]
+              at sourceFocusCompiled targetFocusCompiled
+            rw [countEq] at sourceFocusCompiled targetFocusCompiled
+            cases sourceChildResult : ConcreteElaboration.compileRegion?
+                signature input.val (childFuel + 1) child source.rootWires
+                ConcreteElaboration.BinderContext.empty with
+            | none => simp [sourceChildResult] at sourceFocusCompiled
+            | some sourceChild =>
+              simp [sourceChildResult] at sourceFocusCompiled
+              subst sourceFocus
+              cases targetChildResult : ConcreteElaboration.compileRegion?
+                  signature (anchoredWireSplitRaw input wire endpoints target term)
+                  (childFuel + 1) child
+                  expanded.rootWires ConcreteElaboration.BinderContext.empty with
+              | none =>
+                dsimp only [expanded, anchoredWireSplitRawOpen] at targetChildResult
+                have bindEq := congrArg
+                  (fun result => result.bind (fun body => some (Item.cut body)))
+                  targetChildResult
+                simp only [Option.bind_none] at bindEq
+                have impossible := bindEq.symm.trans targetFocusCompiled
+                simp at impossible
+              | some targetChild =>
+                dsimp only [expanded, anchoredWireSplitRawOpen] at targetChildResult
+                have bindEq := congrArg
+                  (fun result => result.bind (fun body => some (Item.cut body)))
+                  targetChildResult
+                simp only [Option.bind_some] at bindEq
+                have focusEq : Item.cut targetChild = targetFocus :=
+                  Option.some.inj (bindEq.symm.trans targetFocusCompiled)
+                subst targetFocus
+                rw [sourceItemsEq, targetItemsEq]
+                change ItemSeq signature
+                    (anchoredWireSplitSourceOpen input boundary).rootWires.length
+                    [] at sourceBefore sourceAfter
+                change Region signature
+                    (anchoredWireSplitSourceOpen input boundary).rootWires.length
+                    [] at sourceChild
+                change ItemSeq signature
+                    (anchoredWireSplitRawOpen input boundary wire endpoints target
+                      term).rootWires.length [] at targetBefore targetAfter
+                change Region signature
+                    (anchoredWireSplitRawOpen input boundary wire endpoints target
+                      term).rootWires.length [] at targetChild
+                apply anchoredWireSplitRaw_finishRoot_away_equiv input boundary
+                  wire endpoints target term rootTargetNe collapse
+                  sourceExact.nodup
+                  (sourceBefore.append (.cons (.cut sourceChild) sourceAfter))
+                  (targetBefore.append (.cons (.cut targetChild) targetAfter)) _
+                  model named targetOuter
+                intro currentModel currentNamed sourceRaw targetRaw rawAgrees
+                rw [denoteItemSeq_frame, denoteItemSeq_frame]
+                constructor
+                · rintro ⟨beforeDenotes, focusDenotes, afterDenotes⟩
+                  have childEquiv :=
+                    anchoredWireSplitRaw_compileRegion_route_to_available input
+                      wire endpoints target available term selectedOccurs
+                      targetWellFormed wireEnclosesTarget tail availableRoute site
+                      childFuel source.rootWires expanded.rootWires collapse
+                      ConcreteElaboration.BinderContext.empty
+                      (ConcreteElaboration.BinderContext.covers_cut_child
+                        (ConcreteElaboration.BinderContext.empty_covers_root
+                          input.property) childKind)
+                      ((ConcreteElaboration.BinderContext.Enumeration.empty
+                        input.val).cutChild input.property childKind)
+                      (sourceExact.extend_child input.property parentEq)
+                      (expandedExact.extend_child targetWellFormed (by
+                        simpa only [anchoredWireSplitRaw_regions] using parentEq))
+                      sourceChild targetChild sourceChildResult targetChildResult
+                      currentModel currentNamed sourceRaw targetRaw PUnit.unit
+                      rawAgrees
+                  refine ⟨?_, (not_congr childEquiv).mp focusDenotes, ?_⟩
+                  · have renamed : denoteItemSeq (relCtx := []) currentModel
+                        currentNamed sourceRaw PUnit.unit
+                        (targetBefore.renameWires collapse.indexMap) := by
+                      exact beforeEq ▸ beforeDenotes
+                    have transported := (denoteItemSeq_renameWires
+                      (relCtx := []) currentModel currentNamed collapse.indexMap
+                      sourceRaw PUnit.unit targetBefore).1 renamed
+                    exact rawAgrees ▸ transported
+                  · have renamed : denoteItemSeq (relCtx := []) currentModel
+                        currentNamed sourceRaw PUnit.unit
+                        (targetAfter.renameWires collapse.indexMap) := by
+                      exact afterEq ▸ afterDenotes
+                    have transported := (denoteItemSeq_renameWires
+                      (relCtx := []) currentModel currentNamed collapse.indexMap
+                      sourceRaw PUnit.unit targetAfter).1 renamed
+                    exact rawAgrees ▸ transported
+                · rintro ⟨beforeDenotes, focusDenotes, afterDenotes⟩
+                  have childEquiv :=
+                    anchoredWireSplitRaw_compileRegion_route_to_available input
+                      wire endpoints target available term selectedOccurs
+                      targetWellFormed wireEnclosesTarget tail availableRoute site
+                      childFuel source.rootWires expanded.rootWires collapse
+                      ConcreteElaboration.BinderContext.empty
+                      (ConcreteElaboration.BinderContext.covers_cut_child
+                        (ConcreteElaboration.BinderContext.empty_covers_root
+                          input.property) childKind)
+                      ((ConcreteElaboration.BinderContext.Enumeration.empty
+                        input.val).cutChild input.property childKind)
+                      (sourceExact.extend_child input.property parentEq)
+                      (expandedExact.extend_child targetWellFormed (by
+                        simpa only [anchoredWireSplitRaw_regions] using parentEq))
+                      sourceChild targetChild sourceChildResult targetChildResult
+                      currentModel currentNamed sourceRaw targetRaw PUnit.unit
+                      rawAgrees
+                  refine ⟨?_, (not_congr childEquiv).mpr focusDenotes, ?_⟩
+                  · rw [beforeEq]
+                    apply (denoteItemSeq_renameWires (relCtx := []) currentModel
+                      currentNamed collapse.indexMap sourceRaw PUnit.unit
+                      targetBefore).2
+                    exact rawAgrees.symm ▸ beforeDenotes
+                  · rw [afterEq]
+                    apply (denoteItemSeq_renameWires (relCtx := []) currentModel
+                      currentNamed collapse.indexMap sourceRaw PUnit.unit
+                      targetAfter).2
+                    exact rawAgrees.symm ▸ afterDenotes
+          | bubble parent arity =>
+            have parentIsRoot : parent = input.val.root := by
+              simpa [childKind, CRegion.parent?] using parentEq
+            subst parent
+            simp only [ConcreteElaboration.compileOccurrenceWith?, childKind,
+              splitOldOccurrence, anchoredWireSplitRaw_regions]
+              at sourceFocusCompiled targetFocusCompiled
+            rw [countEq] at sourceFocusCompiled targetFocusCompiled
+            cases sourceChildResult : ConcreteElaboration.compileRegion?
+                signature input.val (childFuel + 1) child source.rootWires
+                (ConcreteElaboration.BinderContext.empty.push child arity) with
+            | none => simp [sourceChildResult] at sourceFocusCompiled
+            | some sourceChild =>
+              simp [sourceChildResult] at sourceFocusCompiled
+              subst sourceFocus
+              cases targetChildResult : ConcreteElaboration.compileRegion?
+                  signature (anchoredWireSplitRaw input wire endpoints target term)
+                  (childFuel + 1) child
+                  expanded.rootWires
+                  (ConcreteElaboration.BinderContext.empty.push child arity) with
+              | none =>
+                dsimp only [expanded, anchoredWireSplitRawOpen] at targetChildResult
+                have bindEq := congrArg
+                  (fun result => result.bind
+                    (fun body => some (Item.bubble arity body)))
+                  targetChildResult
+                simp only [Option.bind_none] at bindEq
+                have impossible := bindEq.symm.trans targetFocusCompiled
+                simp at impossible
+              | some targetChild =>
+                dsimp only [expanded, anchoredWireSplitRawOpen] at targetChildResult
+                have bindEq := congrArg
+                  (fun result => result.bind
+                    (fun body => some (Item.bubble arity body)))
+                  targetChildResult
+                simp only [Option.bind_some] at bindEq
+                have focusEq : Item.bubble arity targetChild = targetFocus :=
+                  Option.some.inj (bindEq.symm.trans targetFocusCompiled)
+                subst targetFocus
+                rw [sourceItemsEq, targetItemsEq]
+                change ItemSeq signature
+                    (anchoredWireSplitSourceOpen input boundary).rootWires.length
+                    [] at sourceBefore sourceAfter
+                change Region signature
+                    (anchoredWireSplitSourceOpen input boundary).rootWires.length
+                    [arity] at sourceChild
+                change ItemSeq signature
+                    (anchoredWireSplitRawOpen input boundary wire endpoints target
+                      term).rootWires.length [] at targetBefore targetAfter
+                change Region signature
+                    (anchoredWireSplitRawOpen input boundary wire endpoints target
+                      term).rootWires.length [arity] at targetChild
+                apply anchoredWireSplitRaw_finishRoot_away_equiv input boundary
+                  wire endpoints target term rootTargetNe collapse
+                  sourceExact.nodup
+                  (sourceBefore.append
+                    (.cons (.bubble arity sourceChild) sourceAfter))
+                  (targetBefore.append
+                    (.cons (.bubble arity targetChild) targetAfter)) _ model
+                  named targetOuter
+                intro currentModel currentNamed sourceRaw targetRaw rawAgrees
+                rw [denoteItemSeq_frame, denoteItemSeq_frame]
+                have childEquiv : ∀ relation : Relation currentModel.Carrier arity,
+                    denoteRegion (relCtx := [arity]) currentModel currentNamed sourceRaw
+                        (relation, PUnit.unit) sourceChild ↔
+                      denoteRegion (relCtx := [arity]) currentModel currentNamed targetRaw
+                        (relation, PUnit.unit) targetChild := by
+                  intro relation
+                  exact anchoredWireSplitRaw_compileRegion_route_to_available
+                    input wire endpoints target available term selectedOccurs
+                    targetWellFormed wireEnclosesTarget tail availableRoute site
+                    childFuel source.rootWires expanded.rootWires collapse
+                    (ConcreteElaboration.BinderContext.empty.push child arity)
+                    (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                      (ConcreteElaboration.BinderContext.empty_covers_root
+                        input.property) childKind)
+                    ((ConcreteElaboration.BinderContext.Enumeration.empty
+                      input.val).bubbleChild input.property childKind)
+                    (sourceExact.extend_child input.property parentEq)
+                    (expandedExact.extend_child targetWellFormed (by
+                      simpa only [anchoredWireSplitRaw_regions] using parentEq))
+                    sourceChild targetChild sourceChildResult targetChildResult
+                    currentModel currentNamed sourceRaw targetRaw
+                    (relation, PUnit.unit) rawAgrees
+                constructor
+                · rintro ⟨beforeDenotes, ⟨relation, focusDenotes⟩,
+                    afterDenotes⟩
+                  refine ⟨?_, ⟨relation, (childEquiv relation).mp focusDenotes⟩,
+                    ?_⟩
+                  · have renamed : denoteItemSeq (relCtx := []) currentModel
+                        currentNamed sourceRaw PUnit.unit
+                        (targetBefore.renameWires collapse.indexMap) := by
+                      exact beforeEq ▸ beforeDenotes
+                    have transported := (denoteItemSeq_renameWires
+                      (relCtx := []) currentModel currentNamed collapse.indexMap
+                      sourceRaw PUnit.unit targetBefore).1 renamed
+                    exact rawAgrees ▸ transported
+                  · have renamed : denoteItemSeq (relCtx := []) currentModel
+                        currentNamed sourceRaw PUnit.unit
+                        (targetAfter.renameWires collapse.indexMap) := by
+                      exact afterEq ▸ afterDenotes
+                    have transported := (denoteItemSeq_renameWires
+                      (relCtx := []) currentModel currentNamed collapse.indexMap
+                      sourceRaw PUnit.unit targetAfter).1 renamed
+                    exact rawAgrees ▸ transported
+                · rintro ⟨beforeDenotes, ⟨relation, focusDenotes⟩,
+                    afterDenotes⟩
+                  refine ⟨?_, ⟨relation, (childEquiv relation).mpr focusDenotes⟩,
+                    ?_⟩
+                  · rw [beforeEq]
+                    apply (denoteItemSeq_renameWires (relCtx := []) currentModel
+                      currentNamed collapse.indexMap sourceRaw PUnit.unit
+                      targetBefore).2
+                    exact rawAgrees.symm ▸ beforeDenotes
+                  · rw [afterEq]
+                    apply (denoteItemSeq_renameWires (relCtx := []) currentModel
+                      currentNamed collapse.indexMap sourceRaw PUnit.unit
+                      targetAfter).2
+                    exact rawAgrees.symm ▸ afterDenotes
 
 end AnchoredWireSoundness
 
