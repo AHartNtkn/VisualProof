@@ -1134,6 +1134,62 @@ noncomputable def endpointMoveSimulation
       focused
     exact False.elim focused
 
+theorem compileRegion_moveEndpoint_regionSimulation
+    (input : ConcreteDiagram)
+    (wellFormed : input.WellFormed signature)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (sourceOccurs : input.EndpointOccurs sourceWire endpoint)
+    (targetWellFormed :
+      (moveEndpointRaw input sourceWire targetWire endpoint).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    {sourceRels targetRels : RelCtx}
+    (fuelSource fuelTarget : Nat)
+    (region : Fin input.regionCount)
+    (sourceContext : ConcreteElaboration.WireContext input)
+    (targetContext : ConcreteElaboration.WireContext
+      (moveEndpointRaw input sourceWire targetWire endpoint))
+    (context : EndpointMoveContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (sourceBinders : ConcreteElaboration.BinderContext input sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (moveEndpointRaw input sourceWire targetWire endpoint) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      sourceBinders targetBinders)
+    (sourceCover : sourceBinders.Covers region)
+    (targetCover : targetBinders.Covers region)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration input
+      sourceBinders region)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      targetBinders region)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact : (targetContext.extend region).Exact region)
+    (sourceBody : Region signature sourceContext.length sourceRels)
+    (targetBody : Region signature targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileRegion? signature input
+      fuelSource region sourceContext sourceBinders = some sourceBody)
+    (targetCompiled : ConcreteElaboration.compileRegion? signature
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      fuelTarget region targetContext targetBinders = some targetBody) :
+    ConcreteElaboration.RegionSimulation model named direction
+      (endpointMoveRelation input sourceWire targetWire sourceContext
+        targetContext)
+      (sourceBody.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetBody := by
+  let simulation := endpointMoveSimulation input wellFormed sourceWire targetWire
+    endpoint distinct sourceOccurs targetWellFormed model named
+  exact simulation.compileRegion_denote direction fuelSource fuelTarget region
+    sourceContext targetContext context (by trivial) sourceBinders targetBinders
+    (by trivial) binderWitness sourceCover targetCover sourceEnumeration
+    targetEnumeration sourceExact targetExact sourceBody targetBody sourceCompiled
+    targetCompiled
+
 @[simp] theorem moveEndpointsRaw_regions
     (input : ConcreteDiagram) (sourceWire targetWire : Fin input.wireCount)
     (endpoints : List (CEndpoint input.nodeCount)) :
