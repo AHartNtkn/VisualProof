@@ -956,6 +956,261 @@ noncomputable def rootEmbedding
       rw [headStripRaw_oldWire_scope]
       exact scope
 
+theorem targetExposedLength
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    (targetOpen input payload boundary).exposedWires.length =
+      (sourceOpen input boundary).exposedWires.length := by
+  rw [targetOpen_exposedWires]
+  exact List.length_map _
+
+def exposedIndex
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    Fin (sourceOpen input boundary).exposedWires.length →
+      Fin (targetOpen input payload boundary).exposedWires.length :=
+  Fin.cast (targetExposedLength input payload boundary).symm
+
+def sourceExposedIndex
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    Fin (targetOpen input payload boundary).exposedWires.length →
+      Fin (sourceOpen input boundary).exposedWires.length :=
+  Fin.cast (targetExposedLength input payload boundary)
+
+@[simp] theorem exposedIndex_sourceExposedIndex
+    (index : Fin (targetOpen input payload boundary).exposedWires.length) :
+    exposedIndex input payload boundary
+      (sourceExposedIndex input payload boundary index) = index := by
+  apply Fin.ext
+  rfl
+
+@[simp] theorem sourceExposedIndex_exposedIndex
+    (index : Fin (sourceOpen input boundary).exposedWires.length) :
+    sourceExposedIndex input payload boundary
+      (exposedIndex input payload boundary index) = index := by
+  apply Fin.ext
+  rfl
+
+theorem exposedIndex_get
+    (index : Fin (sourceOpen input boundary).exposedWires.length) :
+    (targetOpen input payload boundary).exposedWires.get
+        (exposedIndex input payload boundary index) =
+      Fin.castAdd payload.argumentIndices.length
+        ((sourceOpen input boundary).exposedWires.get index) := by
+  let mapped := (sourceOpen input boundary).exposedWires.map
+    (Fin.castAdd payload.argumentIndices.length)
+  let mappedIndex : Fin mapped.length := Fin.cast
+    (List.length_map (f := Fin.castAdd payload.argumentIndices.length)
+      (as := (sourceOpen input boundary).exposedWires)).symm index
+  have transported := List.get_of_eq
+    (targetOpen_exposedWires input payload boundary)
+    (exposedIndex input payload boundary index)
+  rw [transported]
+  change mapped.get mappedIndex = _
+  simp [mapped, mappedIndex, List.get_eq_getElem]
+
+theorem boundaryLengthEq
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    (targetOpen input payload boundary).boundary.length =
+      (sourceOpen input boundary).boundary.length := by
+  simp [targetOpen, sourceOpen]
+
+theorem boundaryClass
+    (position : Fin (sourceOpen input boundary).boundary.length) :
+    exposedIndex input payload boundary
+        ((sourceOpen input boundary).boundaryClass position) =
+      (targetOpen input payload boundary).boundaryClass
+        (Fin.cast (boundaryLengthEq input payload boundary).symm position) := by
+  apply OpenConcreteDiagram.boundaryClass_complete
+  rw [exposedIndex_get, OpenConcreteDiagram.boundaryClass_sound]
+  simp [targetOpen, sourceOpen, List.get_eq_getElem]
+
+theorem targetHiddenLength
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    (targetOpen input payload boundary).hiddenWires.length =
+      (sourceOpen input boundary).hiddenWires.length +
+        (rootFresh input payload).length := by
+  rw [targetOpen_hiddenWires]
+  change (List.map (Fin.castAdd payload.argumentIndices.length :
+      Fin input.val.wireCount →
+        Fin (input.val.wireCount + payload.argumentIndices.length))
+      (sourceOpen input boundary).hiddenWires ++
+        rootFresh input payload).length = _
+  rw [List.length_append, List.length_map]
+  rfl
+
+theorem rootEnvironment_forward
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceOuter : Fin (sourceOpen input boundary).exposedWires.length → D)
+    (targetOuter : Fin
+      (targetOpen input payload boundary).exposedWires.length → D)
+    (sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D)
+    (fresh : Fin (rootFresh input payload).length → D)
+    (outerEq : sourceOuter = targetOuter ∘
+      exposedIndex input payload boundary) :
+    let lengthEq := targetHiddenLength input payload boundary
+    let targetLocal : Fin
+        (targetOpen input payload boundary).hiddenWires.length → D :=
+      fun index => Fin.addCases sourceLocal fresh (Fin.cast lengthEq index)
+    ConcreteElaboration.rootEnvironment
+        (sourceOpen input boundary).exposedWires
+        (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal =
+      ConcreteElaboration.rootEnvironment
+          (targetOpen input payload boundary).exposedWires
+          (targetOpen input payload boundary).hiddenWires targetOuter
+          targetLocal ∘ rootIndex input payload boundary := by
+  dsimp only
+  funext index
+  unfold ConcreteElaboration.rootEnvironment
+  let split := Fin.cast List.length_append index
+  have recover : Fin.cast List.length_append.symm split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · rw [outerEq]
+    simp only [Function.comp_apply]
+    simp [extendWireEnv]
+    change targetOuter (exposedIndex input payload boundary outer) =
+      extendWireEnv targetOuter _
+        (Fin.cast List.length_append
+          (rootIndex input payload boundary
+            (Fin.cast List.length_append.symm
+              (Fin.castAdd (sourceOpen input boundary).hiddenWires.length
+                outer))))
+    have targetIndexEq :
+        Fin.cast List.length_append
+          (rootIndex input payload boundary
+            (Fin.cast List.length_append.symm
+              (Fin.castAdd (sourceOpen input boundary).hiddenWires.length
+                outer))) =
+        Fin.castAdd (targetOpen input payload boundary).hiddenWires.length
+          (exposedIndex input payload boundary outer) := by
+      apply Fin.ext
+      rfl
+    rw [targetIndexEq]
+    simp [extendWireEnv]
+  · have targetIndexEq :
+        Fin.cast List.length_append
+          (rootIndex input payload boundary
+            (Fin.cast List.length_append.symm
+              (Fin.natAdd (sourceOpen input boundary).exposedWires.length
+                localIndex))) =
+        Fin.natAdd (targetOpen input payload boundary).exposedWires.length
+          (Fin.cast (targetHiddenLength input payload boundary).symm
+            (Fin.castAdd (rootFresh input payload).length localIndex)) := by
+      apply Fin.ext
+      change (sourceOpen input boundary).exposedWires.length + localIndex.val =
+        (targetOpen input payload boundary).exposedWires.length + localIndex.val
+      rw [targetExposedLength]
+    simp only [Function.comp_apply]
+    simp [extendWireEnv]
+    change sourceLocal localIndex =
+      extendWireEnv targetOuter _
+        (Fin.cast List.length_append
+          (rootIndex input payload boundary
+            (Fin.cast List.length_append.symm
+              (Fin.natAdd (sourceOpen input boundary).exposedWires.length
+                localIndex))))
+    rw [targetIndexEq]
+    simp [extendWireEnv]
+
+theorem rootEnvironment_backward
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceOuter : Fin (sourceOpen input boundary).exposedWires.length → D)
+    (targetOuter : Fin
+      (targetOpen input payload boundary).exposedWires.length → D)
+    (targetLocal : Fin (targetOpen input payload boundary).hiddenWires.length → D)
+    (outerEq : sourceOuter = targetOuter ∘
+      exposedIndex input payload boundary) :
+    let lengthEq := targetHiddenLength input payload boundary
+    let sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D :=
+      fun index => targetLocal (Fin.cast lengthEq.symm
+        (Fin.castAdd (rootFresh input payload).length index))
+    ConcreteElaboration.rootEnvironment
+        (sourceOpen input boundary).exposedWires
+        (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal =
+      ConcreteElaboration.rootEnvironment
+          (targetOpen input payload boundary).exposedWires
+          (targetOpen input payload boundary).hiddenWires targetOuter
+          targetLocal ∘ rootIndex input payload boundary := by
+  dsimp only
+  funext index
+  unfold ConcreteElaboration.rootEnvironment
+  let split := Fin.cast List.length_append index
+  have recover : Fin.cast List.length_append.symm split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · rw [outerEq]
+    simp only [Function.comp_apply]
+    simp [extendWireEnv]
+    change targetOuter (exposedIndex input payload boundary outer) =
+      extendWireEnv targetOuter targetLocal
+        (Fin.cast List.length_append
+          (rootIndex input payload boundary
+            (Fin.cast List.length_append.symm
+              (Fin.castAdd (sourceOpen input boundary).hiddenWires.length
+                outer))))
+    have targetIndexEq :
+        Fin.cast List.length_append
+          (rootIndex input payload boundary
+            (Fin.cast List.length_append.symm
+              (Fin.castAdd (sourceOpen input boundary).hiddenWires.length
+                outer))) =
+        Fin.castAdd (targetOpen input payload boundary).hiddenWires.length
+          (exposedIndex input payload boundary outer) := by
+      apply Fin.ext
+      rfl
+    rw [targetIndexEq]
+    simp [extendWireEnv]
+  · have targetIndexEq :
+        Fin.cast List.length_append
+          (rootIndex input payload boundary
+            (Fin.cast List.length_append.symm
+              (Fin.natAdd (sourceOpen input boundary).exposedWires.length
+                localIndex))) =
+        Fin.natAdd (targetOpen input payload boundary).exposedWires.length
+          (Fin.cast (targetHiddenLength input payload boundary).symm
+            (Fin.castAdd (rootFresh input payload).length localIndex)) := by
+      apply Fin.ext
+      change (sourceOpen input boundary).exposedWires.length + localIndex.val =
+        (targetOpen input payload boundary).exposedWires.length + localIndex.val
+      rw [targetExposedLength]
+    simp only [Function.comp_apply]
+    simp [extendWireEnv]
+    change targetLocal
+        (Fin.cast (targetHiddenLength input payload boundary).symm
+          (Fin.castAdd (rootFresh input payload).length localIndex)) =
+      extendWireEnv targetOuter targetLocal
+        (Fin.cast List.length_append
+          (rootIndex input payload boundary
+            (Fin.cast List.length_append.symm
+              (Fin.natAdd (sourceOpen input boundary).exposedWires.length
+                localIndex))))
+    rw [targetIndexEq]
+    simp [extendWireEnv]
+
 end HeadStripSoundness
 
 end VisualProof.Rule
