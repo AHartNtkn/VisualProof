@@ -162,6 +162,120 @@ theorem fusionRaw_localOccurrences_map_of_ne
   intro child _
   rfl
 
+/-- Lift the unchanged-node compiler kernel and a caller-supplied child
+simulation across an ordered frame occurrence list.  Route induction uses
+this for the material before and after its selected child. -/
+theorem compileOccurrences_frameSimulation
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (sourceRecurse : ∀ {relations : RelCtx},
+      Fin input.val.regionCount →
+      (recurseContext : ConcreteElaboration.WireContext input.val) →
+      ConcreteElaboration.BinderContext input.val relations →
+      Option (Region signature recurseContext.length relations))
+    (targetRecurse : ∀ {relations : RelCtx},
+      Fin input.val.regionCount →
+      (recurseContext : ConcreteElaboration.WireContext
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)) →
+      ConcreteElaboration.BinderContext
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        relations →
+      Option (Region signature recurseContext.length relations))
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort))
+    (context : Context input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort sourceContext targetContext)
+    (sourceNodup : sourceContext.Nodup)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (occurrences : List (ConcreteElaboration.LocalOccurrence
+      input.val.regionCount input.val.nodeCount))
+    (nodesAway : ∀ node, .node node ∈ occurrences →
+      node ≠ producer ∧ node ≠ consumer)
+    (childSimulation : ∀ child,
+      .child child ∈ occurrences →
+      ∀ (sourceItem : Item signature sourceContext.length rels)
+        (targetItem : Item signature targetContext.length rels),
+      ConcreteElaboration.compileOccurrenceWith? signature input.val
+          sourceRecurse sourceContext binders (.child child) = some sourceItem →
+      ConcreteElaboration.compileOccurrenceWith? signature
+          (fusionRaw input consumedWire producer consumer hdistinct
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort)
+          targetRecurse targetContext binders
+          (mapOccurrence input producer (.child child)) = some targetItem →
+      ConcreteElaboration.ItemSimulation model named direction
+        context.indexRelation sourceItem targetItem)
+    (sourceItems : ItemSeq signature sourceContext.length rels)
+    (targetItems : ItemSeq signature targetContext.length rels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val sourceRecurse sourceContext binders occurrences =
+        some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      targetRecurse targetContext binders
+      (occurrences.map (mapOccurrence input producer)) = some targetItems) :
+    ConcreteElaboration.ItemSeqSimulation model named direction
+      context.indexRelation sourceItems targetItems := by
+  have lifted :=
+    ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+      model named direction sourceRecurse targetRecurse sourceContext
+      targetContext binders binders context.indexRelation
+      (ConcreteElaboration.identityRelationRenaming rels)
+      (mapOccurrence input producer) occurrences (by
+        intro occurrence member sourceItem targetItem sourceOccurrence
+          targetOccurrence
+        cases occurrence with
+        | node node =>
+            obtain ⟨survives, notConsumer⟩ := nodesAway node member
+            simp only [ConcreteElaboration.compileOccurrenceWith?,
+              mapOccurrence_node input producer node survives]
+              at sourceOccurrence targetOccurrence
+            have simulation := unchangedNode_itemSimulation input consumedWire
+              producer consumer node hdistinct survives notConsumer
+              consumerRegion producerTerm consumerTerm producerWire consumerWire
+              consumedPort sourceContext targetContext context sourceNodup binders
+              sourceItem targetItem sourceOccurrence targetOccurrence model named
+              direction
+            have mapEq :
+                (ConcreteElaboration.identityRelationRenaming rels :
+                  RelationRenaming rels rels) =
+                (fun {arity} (relation : RelVar rels arity) ↦ relation) := rfl
+            rw [mapEq, Item.renameRelations_id]
+            exact simulation
+        | child child =>
+            have simulation := childSimulation child member sourceItem targetItem
+              sourceOccurrence targetOccurrence
+            have mapEq :
+                (ConcreteElaboration.identityRelationRenaming rels :
+                  RelationRenaming rels rels) =
+                (fun {arity} (relation : RelVar rels arity) ↦ relation) := rfl
+            rw [mapEq, Item.renameRelations_id]
+            exact simulation)
+      sourceItems targetItems sourceCompiled targetCompiled
+  have relationMapEq :
+      (ConcreteElaboration.identityRelationRenaming rels :
+        RelationRenaming rels rels) =
+      (fun {arity} (relation : RelVar rels arity) ↦ relation) := rfl
+  rw [relationMapEq, ItemSeq.renameRelations_id] at lifted
+  exact lifted
+
 end FusionSoundness
 
 end VisualProof.Rule

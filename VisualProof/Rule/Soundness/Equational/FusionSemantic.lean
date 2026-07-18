@@ -716,6 +716,36 @@ def indexRelation
     ConcreteElaboration.ContextIndexRelation source.length target.length :=
   ConcreteElaboration.ContextIndexRelation.backwardMap context.sourceIndex
 
+noncomputable def extend
+    (context : Context input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort source target)
+    (region : Fin input.val.regionCount)
+    (sourceExact : (source.extend region).Exact region)
+    (targetExact : (target.extend region).Exact region) :
+    Context input consumedWire producer consumer hdistinct consumerRegion
+      producerTerm consumerTerm producerWire consumerWire consumedPort
+      (source.extend region) (target.extend region) :=
+  ofExact input consumedWire producer consumer hdistinct consumerRegion
+    producerTerm consumerTerm producerWire consumerWire consumedPort region
+    (source.extend region) (target.extend region) sourceExact targetExact
+
+theorem sourceIndex_eq_of_get
+    (context : Context input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort source target)
+    (sourceNodup : source.Nodup)
+    (targetIndex : Fin target.length)
+    (sourceIndex : Fin source.length)
+    (same : source.get sourceIndex =
+      (fusionWireDomain input.val consumedWire).origin
+        (target.get targetIndex)) :
+    context.sourceIndex targetIndex = sourceIndex := by
+  apply Fin.ext
+  exact (List.getElem_inj sourceNodup).mp (by
+    simpa only [List.get_eq_getElem] using
+      (context.get targetIndex).trans same.symm)
+
 end Context
 
 /-- At the consumer node, the producer equation turns the executor's concrete
