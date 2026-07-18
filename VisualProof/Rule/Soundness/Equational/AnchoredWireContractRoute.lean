@@ -420,6 +420,68 @@ noncomputable def endpointMoveAwaySimulation
       focused
     exact False.elim focused
 
+theorem compileNode_moveEndpoint_itemSimulation_of_node_ne
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (sourceContext : ConcreteElaboration.WireContext input)
+    (targetContext : ConcreteElaboration.WireContext
+      (moveEndpointRaw input sourceWire targetWire endpoint))
+    (context : EndpointMoveAwayContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (sourceBinders : ConcreteElaboration.BinderContext input sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (moveEndpointRaw input sourceWire targetWire endpoint) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      sourceBinders targetBinders)
+    (node : Fin input.nodeCount)
+    (nodeNe : node ≠ endpoint.node)
+    (sourceItem : Item signature sourceContext.length sourceRels)
+    (targetItem : Item signature targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileNode? signature input
+      sourceContext sourceBinders node = some sourceItem)
+    (targetCompiled : ConcreteElaboration.compileNode? signature
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      targetContext targetBinders node = some targetItem)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection) :
+    ConcreteElaboration.ItemSimulation model named direction
+      context.indexRelation
+      (sourceItem.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItem := by
+  rcases context with ⟨contextsEq⟩
+  cases contextsEq
+  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+    (source := input)
+    (target := moveEndpointRaw input sourceWire targetWire endpoint)
+    model named direction sourceContext sourceContext
+    (ConcreteElaboration.ContextIndexRelation.forwardMap id)
+    sourceBinders targetBinders
+    (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
+    node node id id
+  · rw [moveEndpointRaw_nodes]
+    cases input.nodes node <;> rfl
+  · intro port sourceIndex targetIndex sourceResolved targetResolved
+    have resolved := moveEndpointRaw_resolvePort_eq_of_ne input sourceWire
+      targetWire endpoint sourceContext node port (by
+        intro equality
+        exact nodeNe (congrArg CEndpoint.node equality))
+    rw [sourceResolved, targetResolved] at resolved
+    change sourceIndex = targetIndex
+    apply Fin.ext
+    exact congrArg Fin.val (Option.some.inj resolved).symm
+  · intro nodeOwner binder arity sourceRelation sourceAtom sourceLookup
+    rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming] using sourceLookup
+  · exact sourceCompiled
+  · exact targetCompiled
+
 theorem compileRegion_moveEndpoint_away_regionSimulation
     (input : ConcreteDiagram)
     (wellFormed : input.WellFormed signature)
@@ -473,6 +535,234 @@ theorem compileRegion_moveEndpoint_away_regionSimulation
     (by trivial) binderWitness sourceCover targetCover sourceEnumeration
     targetEnumeration sourceExact targetExact sourceBody targetBody sourceCompiled
     targetCompiled
+
+/-- A selected occurrence frame that excludes the moved endpoint's subtree
+is simulated pointwise under the identity lexical relation. -/
+theorem compileOccurrences_moveEndpoint_away_itemSeqSimulation
+    (input : ConcreteDiagram)
+    (wellFormed : input.WellFormed signature)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (targetWellFormed :
+      (moveEndpointRaw input sourceWire targetWire endpoint).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    {sourceRels targetRels : RelCtx}
+    (fuelSource fuelTarget : Nat)
+    (region : Fin input.regionCount)
+    (sourceContext : ConcreteElaboration.WireContext input)
+    (targetContext : ConcreteElaboration.WireContext
+      (moveEndpointRaw input sourceWire targetWire endpoint))
+    (context : EndpointMoveAwayContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (sourceExact : sourceContext.Exact region)
+    (targetExact : targetContext.Exact region)
+    (sourceBinders : ConcreteElaboration.BinderContext input sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (moveEndpointRaw input sourceWire targetWire endpoint) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      sourceBinders targetBinders)
+    (sourceCover : sourceBinders.Covers region)
+    (targetCover : targetBinders.Covers region)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration input
+      sourceBinders region)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      targetBinders region)
+    (occurrences : List
+      (ConcreteElaboration.LocalOccurrence input.regionCount input.nodeCount))
+    (members : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ ConcreteElaboration.localOccurrences input region)
+    (away : ∀ occurrence, occurrence ∈ occurrences →
+      match occurrence with
+      | .node node => node ≠ endpoint.node
+      | .child child =>
+          ¬ input.Encloses child (input.nodes endpoint.node).region)
+    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
+    (targetItems : ItemSeq signature targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature input
+      (ConcreteElaboration.compileRegion? signature input fuelSource)
+      sourceContext sourceBinders occurrences = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      (ConcreteElaboration.compileRegion? signature
+        (moveEndpointRaw input sourceWire targetWire endpoint) fuelTarget)
+      targetContext targetBinders (occurrences.map id) = some targetItems) :
+    ConcreteElaboration.ItemSeqSimulation model named direction
+      context.indexRelation
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems := by
+  apply ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+    model named direction
+    (ConcreteElaboration.compileRegion? signature input fuelSource)
+    (ConcreteElaboration.compileRegion? signature
+      (moveEndpointRaw input sourceWire targetWire endpoint) fuelTarget)
+    sourceContext targetContext sourceBinders targetBinders
+    context.indexRelation
+    (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
+    id occurrences
+  · intro occurrence member sourceItem targetItem sourceOccurrenceCompiled
+      targetOccurrenceCompiled
+    have occurrenceAway := away occurrence member
+    cases occurrence with
+    | node node =>
+        exact compileNode_moveEndpoint_itemSimulation_of_node_ne input sourceWire
+          targetWire endpoint sourceContext targetContext context sourceBinders
+          targetBinders binderWitness node occurrenceAway sourceItem targetItem
+          sourceOccurrenceCompiled targetOccurrenceCompiled model named direction
+    | child child =>
+        have childParent :=
+          (ConcreteElaboration.mem_localOccurrences_child input region child).mp
+            (members (.child child) member)
+        cases childKind : input.regions child with
+        | sheet =>
+            simp [ConcreteElaboration.compileOccurrenceWith?, childKind]
+              at sourceOccurrenceCompiled
+        | cut actualParent =>
+            have parentEq : actualParent = region := by
+              rw [childKind] at childParent
+              exact Option.some.inj childParent
+            subst actualParent
+            have targetKind :
+                (moveEndpointRaw input sourceWire targetWire endpoint).regions
+                    child = .cut region := by
+              simpa only [moveEndpointRaw_regions] using childKind
+            cases sourceResult : ConcreteElaboration.compileRegion? signature
+                input fuelSource child sourceContext sourceBinders with
+            | none =>
+                simp [ConcreteElaboration.compileOccurrenceWith?, childKind,
+                  sourceResult] at sourceOccurrenceCompiled
+            | some sourceBody =>
+                simp [ConcreteElaboration.compileOccurrenceWith?, childKind,
+                  sourceResult] at sourceOccurrenceCompiled
+                subst sourceItem
+                cases targetResult : ConcreteElaboration.compileRegion? signature
+                    (moveEndpointRaw input sourceWire targetWire endpoint)
+                    fuelTarget child targetContext targetBinders with
+                | none =>
+                    simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                      targetResult] at targetOccurrenceCompiled
+                | some targetBody =>
+                    simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                      targetResult] at targetOccurrenceCompiled
+                    subst targetItem
+                    have bodies :=
+                      compileRegion_moveEndpoint_away_regionSimulation input
+                        wellFormed sourceWire targetWire endpoint targetWellFormed
+                        model named direction.flip fuelSource fuelTarget child
+                        sourceContext targetContext context occurrenceAway
+                        sourceBinders targetBinders binderWitness
+                        (ConcreteElaboration.BinderContext.covers_cut_child
+                          sourceCover childKind)
+                        (ConcreteElaboration.BinderContext.covers_cut_child
+                          targetCover targetKind)
+                        (sourceEnumeration.cutChild wellFormed childKind)
+                        (targetEnumeration.cutChild targetWellFormed targetKind)
+                        (sourceExact.extend_child wellFormed childParent)
+                        (targetExact.extend_child targetWellFormed (by
+                          simpa only [moveEndpointRaw_regions] using childParent))
+                        sourceBody targetBody sourceResult targetResult
+                    intro sourceEnv targetEnv relEnv environments
+                    have bodyEntailment := bodies sourceEnv targetEnv relEnv
+                      environments
+                    simp only [Item.renameRelations, cut_denotes_negation]
+                    cases direction with
+                    | forward =>
+                        exact fun sourceNot targetDenotes =>
+                          sourceNot (bodyEntailment targetDenotes)
+                    | backward =>
+                        exact fun targetNot sourceDenotes =>
+                          targetNot (bodyEntailment sourceDenotes)
+        | bubble actualParent arity =>
+            have parentEq : actualParent = region := by
+              rw [childKind] at childParent
+              exact Option.some.inj childParent
+            subst actualParent
+            have targetKind :
+                (moveEndpointRaw input sourceWire targetWire endpoint).regions
+                    child = .bubble region arity := by
+              simpa only [moveEndpointRaw_regions] using childKind
+            let sourcePushed := sourceBinders.push child arity
+            let targetPushed := targetBinders.push child arity
+            cases sourceResult : ConcreteElaboration.compileRegion? signature
+                input fuelSource child sourceContext sourcePushed with
+            | none =>
+                simp [ConcreteElaboration.compileOccurrenceWith?, childKind,
+                  sourcePushed, sourceResult] at sourceOccurrenceCompiled
+            | some sourceBody =>
+                simp [ConcreteElaboration.compileOccurrenceWith?, childKind,
+                  sourcePushed, sourceResult] at sourceOccurrenceCompiled
+                subst sourceItem
+                cases targetResult : ConcreteElaboration.compileRegion? signature
+                    (moveEndpointRaw input sourceWire targetWire endpoint)
+                    fuelTarget child targetContext targetPushed with
+                | none =>
+                    simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                      targetPushed, targetResult] at targetOccurrenceCompiled
+                | some targetBody =>
+                    simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                      targetPushed, targetResult] at targetOccurrenceCompiled
+                    subst targetItem
+                    let pushedWitness : ConcreteElaboration.IdentityBinderWitness
+                        input (moveEndpointRaw input sourceWire targetWire endpoint)
+                        sourcePushed targetPushed := by
+                      rcases binderWitness with
+                        ⟨relationContextsEq, bindersEq⟩
+                      subst targetRels
+                      cases bindersEq
+                      exact ⟨rfl, HEq.rfl⟩
+                    have bodies :=
+                      compileRegion_moveEndpoint_away_regionSimulation input
+                        wellFormed sourceWire targetWire endpoint targetWellFormed
+                        model named direction fuelSource fuelTarget child
+                        sourceContext targetContext context occurrenceAway
+                        sourcePushed targetPushed pushedWitness
+                        (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                          sourceCover childKind)
+                        (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                          targetCover targetKind)
+                        (sourceEnumeration.bubbleChild wellFormed childKind)
+                        (targetEnumeration.bubbleChild targetWellFormed targetKind)
+                        (sourceExact.extend_child wellFormed childParent)
+                        (targetExact.extend_child targetWellFormed (by
+                          simpa only [moveEndpointRaw_regions] using childParent))
+                        sourceBody targetBody sourceResult targetResult
+                    have pushedMap :
+                        (ConcreteElaboration.IdentityBinderWitness.relationMap
+                          pushedWitness : RelationRenaming
+                            (arity :: sourceRels) (arity :: targetRels)) =
+                          (RelationRenaming.lift
+                            (ConcreteElaboration.IdentityBinderWitness.relationMap
+                              binderWitness) arity : RelationRenaming
+                                (arity :: sourceRels) (arity :: targetRels)) := by
+                      rcases binderWitness with
+                        ⟨relationContextsEq, bindersEq⟩
+                      subst targetRels
+                      cases bindersEq
+                      simpa [pushedWitness,
+                        ConcreteElaboration.IdentityBinderWitness.relationMap,
+                        ConcreteElaboration.identityRelationRenaming] using
+                          (RelationRenaming.lift_id_fun
+                            (source := sourceRels) arity).symm
+                    rw [pushedMap] at bodies
+                    intro sourceEnv targetEnv relEnv environments
+                    simp only [Item.renameRelations, bubble_denotes_exists]
+                    cases direction with
+                    | forward =>
+                        rintro ⟨relationValue, sourceDenotes⟩
+                        exact ⟨relationValue,
+                          bodies sourceEnv targetEnv (relationValue, relEnv)
+                            environments sourceDenotes⟩
+                    | backward =>
+                        rintro ⟨relationValue, targetDenotes⟩
+                        exact ⟨relationValue,
+                          bodies sourceEnv targetEnv (relationValue, relEnv)
+                            environments targetDenotes⟩
+  · exact sourceCompiled
+  · exact targetCompiled
 
 end AnchoredWireContractSoundness
 
