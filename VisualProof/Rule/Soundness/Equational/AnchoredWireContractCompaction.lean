@@ -550,6 +550,26 @@ def anchoredContractExpandedIso
               originalNe]
             simp [moveEndpointsRaw, originalNe, keepEq]
 
+/-- The executor-certified endpoint batch supplies well-formedness for the
+reinserted pre-compaction carrier through the explicit graph isomorphism. -/
+def anchoredContractExpandedRaw_wellFormed
+    (input : CheckedDiagram signature)
+    (redundant : Fin input.val.nodeCount)
+    (redundantRegion : Fin input.val.regionCount)
+    (redundantTerm : Lambda.Term 0 (Fin 0))
+    (drop keep : Fin input.val.wireCount)
+    (shape : input.val.nodes redundant =
+      .term redundantRegion 0 redundantTerm)
+    (redundantOccurs : input.val.EndpointOccurs drop
+      { node := redundant, port := .output })
+    (batchWellFormed :
+      (moveEndpointsRaw input.val drop keep
+        (movedEndpoints input redundant drop)).WellFormed signature) :
+    (anchoredContractExpandedRaw input redundant redundantRegion redundantTerm
+      drop keep).WellFormed signature :=
+  (anchoredContractExpandedIso input redundant redundantRegion redundantTerm
+    drop keep shape redundantOccurs).symm.wellFormed_transport batchWellFormed
+
 end AnchoredWireContractSoundness
 
 end VisualProof.Rule
