@@ -320,6 +320,95 @@ theorem compileRoot_moveEndpoint_equiv_of_anchor_data
             data.termValues sourceItems targetItems sourceItemsEq targetItemsEq
             model named outer
 
+def endpointMoveSourceCheckedOpen
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (boundaryRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root) :
+    CheckedOpenDiagram signature :=
+  ⟨endpointMoveSourceOpen input boundary,
+    endpointMoveSourceOpen_wellFormed input boundary boundaryRoot⟩
+
+def endpointMoveTargetCheckedOpen
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (boundaryRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (sourceWire targetWire : Fin input.val.wireCount)
+    (endpoint : CEndpoint input.val.nodeCount)
+    (targetWellFormed :
+      (moveEndpointRaw input.val sourceWire targetWire endpoint).WellFormed
+        signature) : CheckedOpenDiagram signature :=
+  ⟨endpointMoveTargetOpen input sourceWire targetWire endpoint boundary,
+    endpointMoveTargetOpen_wellFormed input sourceWire targetWire endpoint
+      boundary boundaryRoot targetWellFormed⟩
+
+/-- One ordered endpoint move preserves denotation at the exact ordered open
+boundary; repeated aliases use the same boundary-class assignment. -/
+theorem moveEndpointOpen_denote_iff_of_anchor_data
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (boundaryRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (sourceWire targetWire : Fin input.val.wireCount)
+    (endpoint : CEndpoint input.val.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (sourceOccurs : input.val.EndpointOccurs sourceWire endpoint)
+    (targetWellFormed :
+      (moveEndpointRaw input.val sourceWire targetWire endpoint).WellFormed
+        signature)
+    (data : OrderedEndpointAnchorData input sourceWire targetWire endpoint)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin boundary.length → model.Carrier) :
+    (endpointMoveSourceCheckedOpen input boundary boundaryRoot).denote model
+        named args ↔
+      (endpointMoveTargetCheckedOpen input boundary boundaryRoot sourceWire
+        targetWire endpoint targetWellFormed).denote model named args := by
+  let source := endpointMoveSourceCheckedOpen input boundary boundaryRoot
+  let target := endpointMoveTargetCheckedOpen input boundary boundaryRoot
+    sourceWire targetWire endpoint targetWellFormed
+  obtain ⟨sourceBody, sourceCompiled, sourceElaborated⟩ :=
+    CheckedOpenDiagram.elaborate_body_computation source
+  obtain ⟨targetBody, targetCompiled, targetElaborated⟩ :=
+    CheckedOpenDiagram.elaborate_body_computation target
+  have bodyEquiv := compileRoot_moveEndpoint_equiv_of_anchor_data input boundary
+    boundaryRoot sourceWire targetWire endpoint distinct sourceOccurs
+    targetWellFormed data sourceBody targetBody sourceCompiled targetCompiled
+    model named
+  change source.denote model named args ↔ target.denote model named args
+  constructor
+  · intro sourceDenotes
+    change denoteOpen model named source.elaborate args at sourceDenotes
+    rcases sourceDenotes with ⟨sourceAssignment, sourceArgs, sourceBodyDenotes⟩
+    let targetAssignment : BoundaryAssignment target.elaborate model.Carrier := {
+      args := sourceAssignment.args
+      classes := sourceAssignment.classes
+      agrees := by
+        intro position
+        exact sourceAssignment.agrees position
+    }
+    refine ⟨targetAssignment, sourceArgs, ?_⟩
+    rw [targetElaborated]
+    apply (bodyEquiv sourceAssignment.classes).mp
+    rw [sourceElaborated] at sourceBodyDenotes
+    exact sourceBodyDenotes
+  · intro targetDenotes
+    change denoteOpen model named target.elaborate args at targetDenotes
+    rcases targetDenotes with ⟨targetAssignment, targetArgs, targetBodyDenotes⟩
+    let sourceAssignment : BoundaryAssignment source.elaborate model.Carrier := {
+      args := targetAssignment.args
+      classes := targetAssignment.classes
+      agrees := by
+        intro position
+        exact targetAssignment.agrees position
+    }
+    refine ⟨sourceAssignment, targetArgs, ?_⟩
+    rw [sourceElaborated]
+    apply (bodyEquiv targetAssignment.classes).mpr
+    rw [targetElaborated] at targetBodyDenotes
+    exact targetBodyDenotes
+
 end AnchoredWireContractSoundness
 
 end VisualProof.Rule
