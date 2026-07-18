@@ -1982,7 +1982,7 @@ noncomputable def reassemble_original_iso
         (originalQuotientWireEquiv decomposition quotient) :=
   originalWireEquiv_frame decomposition quotient
 
-private theorem touchingWire_scope_encloses_anchor
+theorem touchingWire_scope_encloses_anchor
     (host : CheckedDiagram signature)
     (selection : CheckedSelection host.val)
     (index : Fin selection.touchingWires.length) :
