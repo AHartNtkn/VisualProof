@@ -1,6 +1,6 @@
 import VisualProof.Rule.Soundness
 import VisualProof.Rule.Soundness.Congruence
-import VisualProof.Rule.Soundness.Equational.AnchoredWireOpen
+import VisualProof.Rule.Soundness.Equational.AnchoredWireContract
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule
