@@ -41,25 +41,47 @@ export function interfaceLayout(width: number, height: number): ProductionInterf
   const safeHeight = Math.max(1, height)
   const compact = safeWidth < COMPACT_BREAKPOINT
   const visibleHandle = 52
-  const folioWidth = compact
-    ? Math.min(420, Math.max(visibleHandle, safeWidth - 48))
-    : Math.min(420, Math.max(340, safeWidth * 0.28))
-  const availableLeft = compact ? 0 : folioWidth
-  const availableWidth = compact ? safeWidth : Math.max(1, safeWidth - folioWidth)
+  if (!compact) {
+    const lensSize = safeHeight
+    const lensCenterX = Math.max(safeWidth / 2, safeWidth - lensSize / 2)
+    const folioWidth = Math.max(
+      0,
+      Math.min(
+        lensCenterX - lensSize * 0.3638,
+        lensCenterX - lensSize * 0.4712,
+      ),
+    )
+    return {
+      compact: false,
+      folio: {
+        presentation: 'open',
+        left: 0,
+        width: folioWidth,
+        visibleHandle,
+      },
+      lens: {
+        left: lensCenterX - lensSize / 2,
+        top: 0,
+        size: lensSize,
+      },
+    }
+  }
+
+  const folioWidth = Math.min(420, Math.max(visibleHandle, safeWidth - 48))
   const lensSize = Math.max(
     1,
-    Math.min(safeHeight - SAFE_EDGE * 2, availableWidth - SAFE_EDGE * 2),
+    Math.min(safeHeight - SAFE_EDGE * 2, safeWidth - SAFE_EDGE * 2),
   )
   return {
-    compact,
+    compact: true,
     folio: {
-      presentation: compact ? 'drawer' : 'open',
-      left: compact ? visibleHandle - folioWidth : 0,
+      presentation: 'drawer',
+      left: visibleHandle - folioWidth,
       width: folioWidth,
       visibleHandle,
     },
     lens: {
-      left: availableLeft + (availableWidth - lensSize) / 2,
+      left: (safeWidth - lensSize) / 2,
       top: (safeHeight - lensSize) / 2,
       size: lensSize,
     },

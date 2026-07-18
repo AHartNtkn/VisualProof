@@ -174,11 +174,15 @@ describe('production lens DOM ownership and approved assets', () => {
     })
     const root = lens.element as unknown as FakeElement
     const stage = root.querySelector('.curse-production-lens')!
+    const aperture = root.querySelector('.curse-production-aperture')!
     expect(stage.children.map(({ className }) => className)).toEqual([
-      'curse-production-substrate curse-decoration',
-      'curse-production-proof-slot',
+      'curse-production-aperture',
       'curse-production-gasket curse-decoration',
       'curse-production-timeline',
+    ])
+    expect(aperture.children.map(({ className }) => className)).toEqual([
+      'curse-production-substrate curse-decoration',
+      'curse-production-proof-slot',
     ])
     expect(root.children.map(({ className }) => className)).toEqual([
       'curse-production-desk',
@@ -186,9 +190,18 @@ describe('production lens DOM ownership and approved assets', () => {
       'curse-production-folio-host',
       'curse-production-folio-drawer-toggle',
     ])
-    expect(lens.proofCanvasSlot).toBe(stage.children[1])
+    expect(lens.proofCanvasSlot).toBe(aperture.children[1])
     expect(lens.folioHost).toBe(root.children[2])
     expect(root.querySelector('.curse-production-timeline-handle-slot')).not.toBeNull()
+    expect(stage.style.getPropertyValue('--curse-lens-left')).toBe('600px')
+    expect(stage.style.getPropertyValue('--curse-lens-top')).toBe('0px')
+    expect(stage.style.getPropertyValue('--curse-lens-size')).toBe('1000px')
+    expect(lens.folioHost.style.getPropertyValue('--curse-folio-width')).toBe('628.8px')
+
+    lens.setLayout(1920, 1080)
+    expect(stage.style.getPropertyValue('--curse-lens-left')).toBe('840px')
+    expect(stage.style.getPropertyValue('--curse-lens-top')).toBe('0px')
+    expect(stage.style.getPropertyValue('--curse-lens-size')).toBe('1080px')
   })
 
   it('references only the approved lens assets and imports production CSS from runtime modules', () => {
@@ -208,5 +221,12 @@ describe('production lens DOM ownership and approved assets', () => {
     expect(folioCss).toContain('clearance-slip.png')
     expect(folioCss).toContain('restricted-sleeve.png')
     expect(lensCss).toContain('background: #07090c')
+    expect(lensCss).toMatch(/\.curse-production-aperture\s*{[^}]*inset: 7\.57% 13\.62% 19\.65%;/s)
+    expect(lensCss).toMatch(/\.curse-production-proof-slot\s*{[^}]*inset: 0;/s)
+    expect(lensCss).toMatch(/\.curse-production-substrate\s*{[^}]*top: -8%;[^}]*left: -8%;[^}]*width: 116%;[^}]*height: 116%;/s)
+    expect(lensCss).toMatch(/\.curse-production-gasket\s*{[^}]*inset: 0;/s)
+    expect(lensCss).toMatch(/\.curse-production-timeline\s*{[^}]*inset: 0;[^}]*width: 100%;[^}]*height: 100%;/s)
+    expect(lensCss).toMatch(/\.curse-production-timeline\s*{[^}]*pointer-events: none;/s)
+    expect(lensCss).toMatch(/\.curse-production-timeline-handle-slot\s*{[^}]*pointer-events: auto;/s)
   })
 })

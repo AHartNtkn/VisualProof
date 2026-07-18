@@ -55,6 +55,75 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
+  it('renders the approved desktop workspace rectangles at both reference viewports', async () => {
+    const page = await openFixture()
+    try {
+      await page.waitForFunction(() => Array.from(
+        document.querySelectorAll<HTMLImageElement>('.curse-decoration'),
+      ).every((image) => image.complete && image.naturalWidth > 0))
+
+      const assertRectangles = async (
+        viewport: { width: number, height: number },
+        expected: { lensLeft: number, folioWidth: number },
+      ): Promise<void> => {
+        await page.setViewportSize(viewport)
+        await page.waitForFunction(({ lensLeft, lensSize }) => {
+          const lens = document.querySelector<HTMLElement>('.curse-production-lens')
+            ?.getBoundingClientRect()
+          return lens !== undefined
+            && Math.abs(lens.left - lensLeft) < 1
+            && Math.abs(lens.top) < 1
+            && Math.abs(lens.width - lensSize) < 1
+            && Math.abs(lens.height - lensSize) < 1
+        }, { lensLeft: expected.lensLeft, lensSize: viewport.height })
+
+        const rectangles = await page.evaluate(() => {
+          const rectangle = (selector: string): Record<'x' | 'y' | 'width' | 'height', number> => {
+            const node = document.querySelector<HTMLElement>(selector)
+            if (node === null) throw new Error(`workspace geometry node missing: ${selector}`)
+            const { x, y, width, height } = node.getBoundingClientRect()
+            return { x, y, width, height }
+          }
+          return {
+            lens: rectangle('.curse-production-lens'),
+            folio: rectangle('.curse-production-folio-host'),
+            aperture: rectangle('.curse-production-aperture'),
+            gasket: rectangle('.curse-production-gasket'),
+            timeline: rectangle('.curse-production-timeline'),
+          }
+        })
+        expect(rectangles.lens).toEqual({
+          x: expected.lensLeft,
+          y: 0,
+          width: viewport.height,
+          height: viewport.height,
+        })
+        expect(rectangles.folio.x).toBe(0)
+        expect(rectangles.folio.y).toBe(0)
+        expect(rectangles.folio.width).toBeCloseTo(expected.folioWidth, 0)
+        expect(rectangles.folio.height).toBe(viewport.height)
+        expect(rectangles.aperture.x).toBeCloseTo(
+          expected.lensLeft + viewport.height * 0.1362,
+          0,
+        )
+        expect(rectangles.aperture.y).toBeCloseTo(viewport.height * 0.0757, 0)
+        expect(rectangles.aperture.width).toBeCloseTo(viewport.height * 0.7276, 0)
+        expect(rectangles.aperture.height).toBeCloseTo(viewport.height * 0.7278, 0)
+        expect(rectangles.gasket).toEqual(rectangles.lens)
+        expect(rectangles.timeline).toEqual(rectangles.lens)
+      }
+
+      await assertRectangles(
+        { width: 1600, height: 1000 },
+        { lensLeft: 600, folioWidth: Math.min(736.2, 628.8) },
+      )
+      await assertRectangles(
+        { width: 1920, height: 1080 },
+        { lensLeft: 840, folioWidth: Math.min(987.096, 871.104) },
+      )
+    } finally { await page.close() }
+  })
+
   it('restores an active puzzle save exactly before mounting its stateful views', async () => {
     const page = await openFixture('restore')
     try {

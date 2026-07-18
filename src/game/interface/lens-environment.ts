@@ -54,6 +54,7 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
 
   const stage = element(document, 'section', 'curse-production-lens')
   stage.setAttribute('aria-label', 'Seal examination lens')
+  const aperture = element(document, 'div', 'curse-production-aperture')
   const substrate = decoration(document, 'curse-production-substrate', substrateAsset)
   const proofCanvasSlot = element(document, 'div', 'curse-production-proof-slot')
   const gasket = decoration(document, 'curse-production-gasket', gasketAsset)
@@ -69,9 +70,10 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
     'curse-production-timeline-handle',
     timelineHandleAsset,
   )
+  aperture.append(substrate, proofCanvasSlot)
   timelineHandleSlot.append(timelineHandle)
   timeline.append(timelineHousing, timelineHandleSlot)
-  stage.append(substrate, proofCanvasSlot, gasket, timeline)
+  stage.append(aperture, gasket, timeline)
 
   const folioHost = element(document, 'aside', 'curse-production-folio-host')
   folioHost.setAttribute('aria-label', 'Excavation archive')
