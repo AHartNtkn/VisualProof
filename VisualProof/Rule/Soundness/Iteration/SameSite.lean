@@ -729,4 +729,286 @@ theorem sameSite_coalescedFocus_equiv_zero
   simpa [spliceInput, sourceView, sourceLeaf, host, wire, hostEnvironment,
     rawPulled] using combined.trans compiledActualSem.symm
 
+/-- A same-site nonempty contraction lifts through the unchanged ordered-open
+context and the executable nested-source transport. -/
+theorem sameSite_nested_compiledSource_equiv_nonempty
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {target : Fin input.val.regionCount}
+    {hadmissible : (iterationInput input selection target).Admissible}
+    {sourceBoundary : List (Fin input.val.wireCount)}
+    {sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.val.wires wire).scope = input.val.root}
+    (targetEq : target = selection.val.anchor)
+    (targetNotSelected : ¬ selection.val.SelectsRegion target)
+    (hnested : target ≠ input.val.root)
+    (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
+      ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin
+      (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+        (iterationInput input selection target) hadmissible sourceBoundary
+        sourceRoot).val.boundary.length → model.Carrier) :
+    denoteOpen model named
+        (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+          (iterationInput input selection target) hadmissible sourceBoundary
+          sourceRoot).elaborate args ↔
+      denoteOpen model named
+        (Splice.Input.compiledSpliceNestedSourceOfNonempty
+          (iterationInput input selection target)
+          (iterationInput input selection target).plugLayout hadmissible
+          sourceBoundary sourceRoot hnested hnonempty) args := by
+  let spliceInput := iterationInput input selection target
+  let source := (Splice.Input.PlugLayout.checkedCoalescedOpenRoot spliceInput
+    hadmissible sourceBoundary sourceRoot).elaborate
+  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+    hadmissible sourceBoundary sourceRoot
+  obtain ⟨hrels, terminalBinders⟩ :=
+    Splice.Input.compiledSpliceCoalescedHost_terminalLexical spliceInput
+      hadmissible sourceBoundary sourceRoot hnested
+  let compiledActual :=
+    Splice.Input.compiledSpliceCoalescedActualOfNonempty spliceInput
+      spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hnested
+      hnonempty hrels
+  let compiledBody := sourceView.focus.context.fill compiledActual
+  have focusEquiv := sameSite_coalescedFocus_equiv_nonempty input selection
+    target hadmissible targetEq targetNotSelected hnested hnonempty
+    sourceBoundary sourceRoot
+  have bodyEquiv : ∀ environment : Fin source.externalClasses → model.Carrier,
+      denoteRegion (relCtx := []) model named environment PUnit.unit
+          source.body ↔
+        denoteRegion (relCtx := []) model named environment PUnit.unit
+          compiledBody := by
+    intro environment
+    rw [← sourceView.rebuild]
+    exact DiagramContext.fill_equiv sourceView.focus.context
+      sourceView.focus.body compiledActual model named environment PUnit.unit
+      (fun holeEnvironment holeRelations =>
+        focusEquiv model named holeEnvironment holeRelations)
+  have replacement := Splice.denote_replaceOpenBody_iff source compiledBody
+    model named args (fun environment => (bodyEquiv environment).symm)
+  have actualIso := Splice.Input.compiledSpliceNestedActualIsoOfNonempty
+    spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
+    hnested hnonempty hrels terminalBinders
+  exact replacement.symm.trans (by
+    simpa [Splice.Input.compiledSpliceNestedCoalescedActualOpenOfNonempty,
+      source, sourceView, compiledBody, compiledActual, spliceInput] using
+      actualIso.denoteOpen_iff model named args)
+
+/-- Empty-spine counterpart of
+`sameSite_nested_compiledSource_equiv_nonempty`. -/
+theorem sameSite_nested_compiledSource_equiv_zero
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {target : Fin input.val.regionCount}
+    {hadmissible : (iterationInput input selection target).Admissible}
+    {sourceBoundary : List (Fin input.val.wireCount)}
+    {sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.val.wires wire).scope = input.val.root}
+    (targetEq : target = selection.val.anchor)
+    (targetNotSelected : ¬ selection.val.SelectsRegion target)
+    (hnested : target ≠ input.val.root)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin
+      (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+        (iterationInput input selection target) hadmissible sourceBoundary
+        sourceRoot).val.boundary.length → model.Carrier) :
+    denoteOpen model named
+        (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+          (iterationInput input selection target) hadmissible sourceBoundary
+          sourceRoot).elaborate args ↔
+      denoteOpen model named
+        (Splice.Input.compiledSpliceNestedSourceOfEmpty
+          (iterationInput input selection target)
+          (iterationInput input selection target).plugLayout hadmissible
+          sourceBoundary sourceRoot hnested hzero) args := by
+  let spliceInput := iterationInput input selection target
+  let source := (Splice.Input.PlugLayout.checkedCoalescedOpenRoot spliceInput
+    hadmissible sourceBoundary sourceRoot).elaborate
+  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+    hadmissible sourceBoundary sourceRoot
+  obtain ⟨hrels, terminalBinders⟩ :=
+    Splice.Input.compiledSpliceCoalescedHost_terminalLexical spliceInput
+      hadmissible sourceBoundary sourceRoot hnested
+  let compiledActual :=
+    Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
+      spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hnested
+      hzero hrels
+  let compiledBody := sourceView.focus.context.fill compiledActual
+  have focusEquiv := sameSite_coalescedFocus_equiv_zero input selection target
+    hadmissible targetEq targetNotSelected hnested hzero sourceBoundary
+    sourceRoot
+  have bodyEquiv : ∀ environment : Fin source.externalClasses → model.Carrier,
+      denoteRegion (relCtx := []) model named environment PUnit.unit
+          source.body ↔
+        denoteRegion (relCtx := []) model named environment PUnit.unit
+          compiledBody := by
+    intro environment
+    rw [← sourceView.rebuild]
+    exact DiagramContext.fill_equiv sourceView.focus.context
+      sourceView.focus.body compiledActual model named environment PUnit.unit
+      (fun holeEnvironment holeRelations =>
+        focusEquiv model named holeEnvironment holeRelations)
+  have replacement := Splice.denote_replaceOpenBody_iff source compiledBody
+    model named args (fun environment => (bodyEquiv environment).symm)
+  have actualIso := Splice.Input.compiledSpliceNestedActualIsoOfEmpty
+    spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
+    hnested hzero hrels terminalBinders
+  exact replacement.symm.trans (by
+    simpa [Splice.Input.compiledSpliceNestedCoalescedActualOpenOfEmpty,
+      source, sourceView, compiledBody, compiledActual, spliceInput] using
+      actualIso.denoteOpen_iff model named args)
+
+/-- Result-facing same-site iteration for a nested target and nonempty binder
+spine, preserving the caller's ordered boundary exactly. -/
+theorem sameSite_nested_output_equiv_nonempty
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {target : Fin input.val.regionCount}
+    {result : CheckedDiagram signature}
+    (hsplice : Splice.Input.spliceChecked signature
+      (iterationInput input selection target) = .ok result)
+    {sourceBoundary : List (Fin input.val.wireCount)}
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetEq : target = selection.val.anchor)
+    (targetNotSelected : ¬ selection.val.SelectsRegion target)
+    (hnested : target ≠ input.val.root)
+    (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
+      ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin sourceBoundary.length → model.Carrier) :
+    let source : OpenProofState signature := {
+      diagram := input
+      boundary := sourceBoundary
+      boundary_root_scoped := sourceRoot
+    }
+    let output := Splice.Input.PlugLayout.checkedOutputOpenRoot
+      (iterationInput input selection target)
+      (iterationInput input selection target).plugLayout
+      (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
+    source.denote model named args ↔
+      output.denote model named
+        (args ∘ Fin.cast (by
+          change (sourceBoundary.map _).length = sourceBoundary.length
+          exact List.length_map (as := sourceBoundary) _)) := by
+  dsimp only
+  let spliceInput := iterationInput input selection target
+  let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
+  let source : OpenProofState signature := {
+    diagram := input
+    boundary := sourceBoundary
+    boundary_root_scoped := sourceRoot
+  }
+  let coalesced := Splice.Input.PlugLayout.checkedCoalescedOpenRoot spliceInput
+    hadmissible sourceBoundary sourceRoot
+  let output := Splice.Input.PlugLayout.checkedOutputOpenRoot spliceInput
+    spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
+  let coalescedArity : coalesced.val.boundary.length =
+      sourceBoundary.length := by
+    change (sourceBoundary.map _).length = sourceBoundary.length
+    exact List.length_map (as := sourceBoundary) _
+  let compilerArgs : Fin coalesced.val.boundary.length → model.Carrier :=
+    args ∘ Fin.cast coalescedArity
+  have frameIso := iterationCoalescedOpenIso input selection target
+    sourceBoundary
+  have frameEquiv := frameIso.denote_iff coalesced.property
+    source.asCheckedOpen.property model named compilerArgs
+  have sourceToCoalesced : source.denote model named args ↔
+      coalesced.denote model named compilerArgs := by
+    symm
+    simpa [source, coalesced, compilerArgs, coalescedArity,
+      CheckedOpenDiagram.denote, OpenProofState.denote, Function.comp_def] using
+      frameEquiv
+  have contraction := sameSite_nested_compiledSource_equiv_nonempty
+    targetEq targetNotSelected hnested hnonempty model named compilerArgs
+  have executable := Splice.Input.spliceChecked_open_denotation_iff
+    spliceInput hsplice sourceBoundary sourceRoot model named compilerArgs
+  dsimp only at executable
+  rw [denoteOpen_castArity] at executable
+  have hsite : spliceInput.site ≠ spliceInput.frame.val.root := by
+    simpa [spliceInput, Splice.Input.coalesceFrameRaw] using hnested
+  exact sourceToCoalesced.trans (contraction.trans (by
+    simpa [spliceInput, hadmissible, coalesced, output, compilerArgs,
+      coalescedArity, Splice.Input.compiledSpliceSourceOpen, hsite,
+      hnonempty, CheckedOpenDiagram.denote, Function.comp_def] using
+      executable))
+
+/-- Empty-spine counterpart of `sameSite_nested_output_equiv_nonempty`. -/
+theorem sameSite_nested_output_equiv_zero
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {target : Fin input.val.regionCount}
+    {result : CheckedDiagram signature}
+    (hsplice : Splice.Input.spliceChecked signature
+      (iterationInput input selection target) = .ok result)
+    {sourceBoundary : List (Fin input.val.wireCount)}
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetEq : target = selection.val.anchor)
+    (targetNotSelected : ¬ selection.val.SelectsRegion target)
+    (hnested : target ≠ input.val.root)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin sourceBoundary.length → model.Carrier) :
+    let source : OpenProofState signature := {
+      diagram := input
+      boundary := sourceBoundary
+      boundary_root_scoped := sourceRoot
+    }
+    let output := Splice.Input.PlugLayout.checkedOutputOpenRoot
+      (iterationInput input selection target)
+      (iterationInput input selection target).plugLayout
+      (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
+    source.denote model named args ↔
+      output.denote model named
+        (args ∘ Fin.cast (by
+          change (sourceBoundary.map _).length = sourceBoundary.length
+          exact List.length_map (as := sourceBoundary) _)) := by
+  dsimp only
+  let spliceInput := iterationInput input selection target
+  let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
+  let source : OpenProofState signature := {
+    diagram := input
+    boundary := sourceBoundary
+    boundary_root_scoped := sourceRoot
+  }
+  let coalesced := Splice.Input.PlugLayout.checkedCoalescedOpenRoot spliceInput
+    hadmissible sourceBoundary sourceRoot
+  let output := Splice.Input.PlugLayout.checkedOutputOpenRoot spliceInput
+    spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
+  let coalescedArity : coalesced.val.boundary.length =
+      sourceBoundary.length := by
+    change (sourceBoundary.map _).length = sourceBoundary.length
+    exact List.length_map (as := sourceBoundary) _
+  let compilerArgs : Fin coalesced.val.boundary.length → model.Carrier :=
+    args ∘ Fin.cast coalescedArity
+  have frameIso := iterationCoalescedOpenIso input selection target
+    sourceBoundary
+  have frameEquiv := frameIso.denote_iff coalesced.property
+    source.asCheckedOpen.property model named compilerArgs
+  have sourceToCoalesced : source.denote model named args ↔
+      coalesced.denote model named compilerArgs := by
+    symm
+    simpa [source, coalesced, compilerArgs, coalescedArity,
+      CheckedOpenDiagram.denote, OpenProofState.denote, Function.comp_def] using
+      frameEquiv
+  have contraction := sameSite_nested_compiledSource_equiv_zero targetEq
+    targetNotSelected hnested hzero model named compilerArgs
+  have executable := Splice.Input.spliceChecked_open_denotation_iff
+    spliceInput hsplice sourceBoundary sourceRoot model named compilerArgs
+  dsimp only at executable
+  rw [denoteOpen_castArity] at executable
+  have hsite : spliceInput.site ≠ spliceInput.frame.val.root := by
+    simpa [spliceInput, Splice.Input.coalesceFrameRaw] using hnested
+  exact sourceToCoalesced.trans (contraction.trans (by
+    simpa [spliceInput, hadmissible, coalesced, output, compilerArgs,
+      coalescedArity, Splice.Input.compiledSpliceSourceOpen, hsite, hzero,
+      CheckedOpenDiagram.denote, Function.comp_def] using executable))
+
 end VisualProof.Rule.IterationSoundness
