@@ -52,8 +52,10 @@ All in-puzzle guidance follows the approved passive-edge-note contract in
 `2026-07-18-passive-guidance-design.md`. Opening and specifically recognized
 unwinnable interventions never become input-owning transients, never capture
 focus, never block proof/timeline/folio input, and expose no acknowledgement or
-close action. Completion commentary is resolved into the dedicated completion
-response rather than opening a second competing surface.
+close action. Multi-page notes may expose one optional Next action; it changes
+only the visible paragraph and is never required for progression. Completion
+commentary is resolved into the dedicated completion response rather than opening
+a second competing surface.
 
 ## Visual review candidates
 
