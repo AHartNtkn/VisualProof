@@ -294,6 +294,394 @@ theorem anchoredWireSplitRawOpenExternalClass_val
     (anchoredWireSplitRawOpenExternalClass input boundary wire endpoints target
       term external).val = external.val := rfl
 
+private theorem rootWires_get_rootExposedIndex
+    (openDiagram : OpenConcreteDiagram)
+    (index : Fin openDiagram.exposedWires.length) :
+    openDiagram.rootWires.get
+        (Splice.Input.TwoInputPresentation.rootExposedIndex openDiagram index) =
+      openDiagram.exposedWires.get index := by
+  simpa [Splice.Input.TwoInputPresentation.rootExposedIndex,
+    OpenConcreteDiagram.rootWires, List.get_eq_getElem] using
+      (List.getElem_append_left
+        (l₂ := openDiagram.hiddenWires) index.isLt)
+
+theorem anchoredWireSplitRaw_rootExposed_get
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (index : Fin
+      (anchoredWireSplitSourceOpen input boundary).exposedWires.length) :
+    let source := anchoredWireSplitSourceOpen input boundary
+    let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+      term
+    expanded.rootWires.get
+        (Splice.Input.TwoInputPresentation.rootExposedIndex expanded
+          (anchoredWireSplitRawOpenExternalClass input boundary wire endpoints
+            target term index)) =
+      (source.rootWires.get
+        (Splice.Input.TwoInputPresentation.rootExposedIndex source index)).castSucc := by
+  dsimp only
+  rw [rootWires_get_rootExposedIndex, rootWires_get_rootExposedIndex]
+  let exposedEq := anchoredWireSplitRawOpen_exposedWires input boundary wire
+    endpoints target term
+  let targetIndex := anchoredWireSplitRawOpenExternalClass input boundary wire
+    endpoints target term index
+  let mappedIndex : Fin
+      ((anchoredWireSplitSourceOpen input boundary).exposedWires.map
+        (Fin.castAdd 1)).length :=
+    Fin.cast (congrArg List.length exposedEq) targetIndex
+  have transported := get_of_eq exposedEq mappedIndex
+  have recover :
+      Fin.cast (congrArg List.length exposedEq).symm mappedIndex =
+        targetIndex := by
+    apply Fin.ext
+    rfl
+  rw [recover] at transported
+  have mappedGet :
+      ((anchoredWireSplitSourceOpen input boundary).exposedWires.map
+        (Fin.castAdd 1)).get mappedIndex =
+      ((anchoredWireSplitSourceOpen input boundary).exposedWires.get
+        index).castSucc := by
+    let expected : Fin
+        ((anchoredWireSplitSourceOpen input boundary).exposedWires.map
+          (Fin.castAdd 1)).length :=
+      Fin.cast (List.length_map (as :=
+        (anchoredWireSplitSourceOpen input boundary).exposedWires)
+        (Fin.castAdd 1)).symm index
+    have mappedEq : mappedIndex = expected := by
+      apply Fin.ext
+      rfl
+    rw [mappedEq]
+    simpa only [List.get_eq_getElem, Fin.val_cast] using
+      (List.getElem_map (l :=
+        (anchoredWireSplitSourceOpen input boundary).exposedWires)
+        (i := index.val) (Fin.castAdd 1))
+  exact transported.trans mappedGet
+
+theorem anchoredWireSplitRaw_rootCollapse_exposed
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires
+      (anchoredWireSplitSourceOpen input boundary).rootWires)
+    (sourceNodup :
+      (anchoredWireSplitSourceOpen input boundary).rootWires.Nodup)
+    (index : Fin (anchoredWireSplitRawOpen input boundary wire endpoints target
+      term).exposedWires.length) :
+    let source := anchoredWireSplitSourceOpen input boundary
+    let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+      term
+    let sourceIndex : Fin source.exposedWires.length :=
+      Fin.cast (by
+        rw [anchoredWireSplitRawOpen_exposedWires]
+        exact List.length_map _) index
+    collapse.indexMap
+        (Splice.Input.TwoInputPresentation.rootExposedIndex expanded index) =
+      Splice.Input.TwoInputPresentation.rootExposedIndex source sourceIndex := by
+  dsimp only
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+    term
+  let sourceIndex : Fin source.exposedWires.length :=
+    Fin.cast (by
+      rw [anchoredWireSplitRawOpen_exposedWires]
+      exact List.length_map _) index
+  let targetRootIndex :=
+    Splice.Input.TwoInputPresentation.rootExposedIndex expanded index
+  let sourceRootIndex :=
+    Splice.Input.TwoInputPresentation.rootExposedIndex source sourceIndex
+  have targetGet : expanded.rootWires.get targetRootIndex =
+      (source.rootWires.get sourceRootIndex).castSucc := by
+    rw [rootWires_get_rootExposedIndex, rootWires_get_rootExposedIndex]
+    let exposedEq := anchoredWireSplitRawOpen_exposedWires input boundary wire
+      endpoints target term
+    let mappedIndex : Fin
+        ((anchoredWireSplitSourceOpen input boundary).exposedWires.map
+          (Fin.castAdd 1)).length :=
+      Fin.cast (congrArg List.length exposedEq) index
+    have transported := get_of_eq exposedEq mappedIndex
+    have recover :
+        Fin.cast (congrArg List.length exposedEq).symm mappedIndex = index := by
+      apply Fin.ext
+      rfl
+    rw [recover] at transported
+    have mappedGet :
+        ((anchoredWireSplitSourceOpen input boundary).exposedWires.map
+          (Fin.castAdd 1)).get mappedIndex =
+        ((anchoredWireSplitSourceOpen input boundary).exposedWires.get
+          sourceIndex).castSucc := by
+      let expected : Fin
+          ((anchoredWireSplitSourceOpen input boundary).exposedWires.map
+            (Fin.castAdd 1)).length :=
+        Fin.cast (List.length_map (as :=
+          (anchoredWireSplitSourceOpen input boundary).exposedWires)
+          (Fin.castAdd 1)).symm sourceIndex
+      have mappedEq : mappedIndex = expected := by
+        apply Fin.ext
+        rfl
+      rw [mappedEq]
+      simpa only [List.get_eq_getElem, Fin.val_cast] using
+        (List.getElem_map (l :=
+          (anchoredWireSplitSourceOpen input boundary).exposedWires)
+          (i := sourceIndex.val) (Fin.castAdd 1))
+    exact transported.trans mappedGet
+  have collapseGet := collapse.get targetRootIndex
+  change source.rootWires.get (collapse.indexMap targetRootIndex) =
+    splitWireCollapse input wire (expanded.rootWires.get targetRootIndex) at collapseGet
+  have splitGet : splitWireCollapse input wire
+      (source.rootWires.get sourceRootIndex).castSucc =
+        source.rootWires.get sourceRootIndex := by
+    exact splitWireCollapse_old input wire
+      (source.rootWires.get sourceRootIndex)
+  rw [targetGet, splitGet] at collapseGet
+  apply Fin.ext
+  exact (List.getElem_inj sourceNodup).mp (by
+    simpa only [List.get_eq_getElem] using collapseGet)
+
+theorem anchoredWireSplitRaw_rootOldIndex_exposed
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires
+      (anchoredWireSplitSourceOpen input boundary).rootWires)
+    (expandedNodup :
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires.Nodup)
+    (index : Fin
+      (anchoredWireSplitSourceOpen input boundary).exposedWires.length) :
+    let source := anchoredWireSplitSourceOpen input boundary
+    let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+      term
+    collapse.oldIndex
+        (Splice.Input.TwoInputPresentation.rootExposedIndex source index) =
+      Splice.Input.TwoInputPresentation.rootExposedIndex expanded
+        (anchoredWireSplitRawOpenExternalClass input boundary wire endpoints
+          target term index) := by
+  dsimp only
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+    term
+  let sourceRootIndex :=
+    Splice.Input.TwoInputPresentation.rootExposedIndex source index
+  let targetRootIndex :=
+    Splice.Input.TwoInputPresentation.rootExposedIndex expanded
+      (anchoredWireSplitRawOpenExternalClass input boundary wire endpoints target
+        term index)
+  have oldGet := collapse.old_get sourceRootIndex
+  change expanded.rootWires.get (collapse.oldIndex sourceRootIndex) =
+    (source.rootWires.get sourceRootIndex).castSucc at oldGet
+  have targetGet : expanded.rootWires.get targetRootIndex =
+      (source.rootWires.get sourceRootIndex).castSucc :=
+    anchoredWireSplitRaw_rootExposed_get input boundary wire endpoints target
+      term index
+  apply Fin.ext
+  exact (List.getElem_inj expandedNodup).mp (by
+    simpa only [List.get_eq_getElem] using oldGet.trans targetGet.symm)
+
+theorem anchoredWireSplitRaw_rootEnvironment_collapse_forward
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires
+      (anchoredWireSplitSourceOpen input boundary).rootWires)
+    (sourceNodup :
+      (anchoredWireSplitSourceOpen input boundary).rootWires.Nodup)
+    (model : Lambda.LambdaModel)
+    (targetOuter : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+      target term).exposedWires.length → model.Carrier)
+    (sourceLocal : Fin
+      (anchoredWireSplitSourceOpen input boundary).hiddenWires.length →
+        model.Carrier) :
+    let source := anchoredWireSplitSourceOpen input boundary
+    let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+      term
+    let sourceOuter := targetOuter ∘
+      anchoredWireSplitRawOpenExternalClass input boundary wire endpoints target
+        term
+    let sourceRaw := ConcreteElaboration.rootEnvironment source.exposedWires
+      source.hiddenWires sourceOuter sourceLocal
+    ∃ targetLocal : Fin expanded.hiddenWires.length → model.Carrier,
+      sourceRaw ∘ collapse.indexMap =
+        ConcreteElaboration.rootEnvironment expanded.exposedWires
+          expanded.hiddenWires targetOuter targetLocal := by
+  dsimp only
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+    term
+  let sourceOuter := targetOuter ∘
+    anchoredWireSplitRawOpenExternalClass input boundary wire endpoints target
+      term
+  let sourceRaw := ConcreteElaboration.rootEnvironment source.exposedWires
+    source.hiddenWires sourceOuter sourceLocal
+  let targetComplete : Fin expanded.rootWires.length → model.Carrier :=
+    sourceRaw ∘ collapse.indexMap
+  let targetLocal : Fin expanded.hiddenWires.length → model.Carrier :=
+    fun index => targetComplete
+      (Splice.Input.TwoInputPresentation.rootHiddenIndex expanded index)
+  refine ⟨targetLocal, ?_⟩
+  have outerEq : (
+      fun index => targetComplete
+        (Splice.Input.TwoInputPresentation.rootExposedIndex expanded index)) =
+      targetOuter := by
+    funext index
+    let sourceIndex : Fin source.exposedWires.length :=
+      Fin.cast (by
+        rw [anchoredWireSplitRawOpen_exposedWires]
+        exact List.length_map _) index
+    have mapped := anchoredWireSplitRaw_rootCollapse_exposed input boundary wire
+      endpoints target term collapse sourceNodup index
+    change collapse.indexMap
+        (Splice.Input.TwoInputPresentation.rootExposedIndex expanded index) =
+      Splice.Input.TwoInputPresentation.rootExposedIndex source sourceIndex at mapped
+    simp only [targetComplete, Function.comp_apply, mapped, sourceRaw,
+      Splice.Input.TwoInputPresentation.rootEnvironment_rootExposedIndex,
+      sourceOuter]
+    apply congrArg targetOuter
+    apply Fin.ext
+    rfl
+  have complete :=
+    Splice.Input.TwoInputPresentation.rootEnvironment_of_complete expanded
+      targetComplete
+  rw [outerEq] at complete
+  change ConcreteElaboration.rootEnvironment expanded.exposedWires
+      expanded.hiddenWires targetOuter targetLocal = targetComplete at complete
+  exact complete.symm
+
+theorem anchoredWireSplitRaw_rootEnvironment_uncollapse
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires
+      (anchoredWireSplitSourceOpen input boundary).rootWires)
+    (expandedNodup :
+      (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires.Nodup)
+    (model : Lambda.LambdaModel)
+    (targetOuter : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+      target term).exposedWires.length → model.Carrier)
+    (targetLocal : Fin
+      (anchoredWireSplitRawOpen input boundary wire endpoints target
+        term).hiddenWires.length → model.Carrier)
+    (termValue : model.Carrier)
+    (targetOldValue : ∀ index,
+      (anchoredWireSplitRawOpen input boundary wire endpoints target
+        term).rootWires.get index = wire.castSucc →
+      ConcreteElaboration.rootEnvironment
+          (anchoredWireSplitRawOpen input boundary wire endpoints target
+            term).exposedWires
+          (anchoredWireSplitRawOpen input boundary wire endpoints target
+            term).hiddenWires targetOuter targetLocal index = termValue)
+    (targetFreshValue : ∀ index,
+      (anchoredWireSplitRawOpen input boundary wire endpoints target
+        term).rootWires.get index = Fin.last input.val.wireCount →
+      ConcreteElaboration.rootEnvironment
+          (anchoredWireSplitRawOpen input boundary wire endpoints target
+            term).exposedWires
+          (anchoredWireSplitRawOpen input boundary wire endpoints target
+            term).hiddenWires targetOuter targetLocal index = termValue) :
+    let source := anchoredWireSplitSourceOpen input boundary
+    let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+      term
+    let sourceOuter := targetOuter ∘
+      anchoredWireSplitRawOpenExternalClass input boundary wire endpoints target
+        term
+    let targetRaw := ConcreteElaboration.rootEnvironment expanded.exposedWires
+      expanded.hiddenWires targetOuter targetLocal
+    ∃ sourceLocal : Fin source.hiddenWires.length → model.Carrier,
+      ConcreteElaboration.rootEnvironment source.exposedWires source.hiddenWires
+          sourceOuter sourceLocal ∘ collapse.indexMap = targetRaw := by
+  dsimp only
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints target
+    term
+  let sourceOuter := targetOuter ∘
+    anchoredWireSplitRawOpenExternalClass input boundary wire endpoints target
+      term
+  let targetRaw := ConcreteElaboration.rootEnvironment expanded.exposedWires
+    expanded.hiddenWires targetOuter targetLocal
+  let sourceComplete : Fin source.rootWires.length → model.Carrier :=
+    fun index => targetRaw (collapse.oldIndex index)
+  let sourceLocal : Fin source.hiddenWires.length → model.Carrier :=
+    fun index => sourceComplete
+      (Splice.Input.TwoInputPresentation.rootHiddenIndex source index)
+  refine ⟨sourceLocal, ?_⟩
+  have outerEq : (
+      fun index => sourceComplete
+        (Splice.Input.TwoInputPresentation.rootExposedIndex source index)) =
+      sourceOuter := by
+    funext index
+    have mapped := anchoredWireSplitRaw_rootOldIndex_exposed input boundary wire
+      endpoints target term collapse expandedNodup index
+    dsimp only at mapped
+    change targetRaw (collapse.oldIndex
+      (Splice.Input.TwoInputPresentation.rootExposedIndex source index)) =
+        sourceOuter index
+    rw [mapped]
+    change ConcreteElaboration.rootEnvironment expanded.exposedWires
+        expanded.hiddenWires targetOuter targetLocal
+          (Splice.Input.TwoInputPresentation.rootExposedIndex expanded
+            (anchoredWireSplitRawOpenExternalClass input boundary wire endpoints
+              target term index)) =
+      targetOuter (anchoredWireSplitRawOpenExternalClass input boundary wire
+        endpoints target term index)
+    exact Splice.Input.TwoInputPresentation.rootEnvironment_rootExposedIndex
+      expanded targetOuter targetLocal _
+  have sourceCompleteEq :=
+    Splice.Input.TwoInputPresentation.rootEnvironment_of_complete source
+      sourceComplete
+  rw [outerEq] at sourceCompleteEq
+  change ConcreteElaboration.rootEnvironment source.exposedWires
+      source.hiddenWires sourceOuter sourceLocal = sourceComplete at sourceCompleteEq
+  rw [sourceCompleteEq]
+  funext targetIndex
+  change targetRaw (collapse.oldIndex (collapse.indexMap targetIndex)) =
+    targetRaw targetIndex
+  refine Fin.lastCases (motive := fun candidate =>
+      expanded.rootWires.get targetIndex = candidate →
+        targetRaw (collapse.oldIndex (collapse.indexMap targetIndex)) =
+          targetRaw targetIndex) ?_ (fun old oldEq => ?_)
+    (expanded.rootWires.get targetIndex) rfl
+  · intro freshEq
+    have collapseGet := collapse.get targetIndex
+    change source.rootWires.get (collapse.indexMap targetIndex) =
+      splitWireCollapse input wire (expanded.rootWires.get targetIndex) at collapseGet
+    rw [freshEq, splitWireCollapse_fresh] at collapseGet
+    have oldGet := collapse.old_get (collapse.indexMap targetIndex)
+    change expanded.rootWires.get
+        (collapse.oldIndex (collapse.indexMap targetIndex)) =
+      (source.rootWires.get (collapse.indexMap targetIndex)).castSucc at oldGet
+    rw [collapseGet] at oldGet
+    exact (targetOldValue _ oldGet).trans
+      (targetFreshValue _ freshEq).symm
+  ·
+    have collapseGet := collapse.get targetIndex
+    change source.rootWires.get (collapse.indexMap targetIndex) =
+      splitWireCollapse input wire (expanded.rootWires.get targetIndex) at collapseGet
+    rw [oldEq, splitWireCollapse_old] at collapseGet
+    have oldGet := collapse.old_get (collapse.indexMap targetIndex)
+    change expanded.rootWires.get
+        (collapse.oldIndex (collapse.indexMap targetIndex)) =
+      (source.rootWires.get (collapse.indexMap targetIndex)).castSucc at oldGet
+    rw [collapseGet] at oldGet
+    have indexEq : collapse.oldIndex (collapse.indexMap targetIndex) =
+        targetIndex := by
+      apply Fin.ext
+      exact (List.getElem_inj expandedNodup).mp (by
+        simpa only [List.get_eq_getElem] using oldGet.trans oldEq.symm)
+    rw [indexEq]
+
 private theorem extendWireEnv_cast_lengths
     {sourceOuter targetOuter sourceLocal targetLocal : Nat}
     (ambientLength : sourceOuter = targetOuter)
@@ -758,6 +1146,173 @@ theorem anchoredWireSplit_root_witness_value_of_zero_route
     change raw (wireEquiv exactIndex) = model.eval term Fin.elim0 at value
     rw [mappedIndex] at value
     exact value
+
+/-- Root-site item equivalence lifted through the authoritative ordered-open
+`finishRoot` semantics.  Forward transport chooses the fresh hidden value from
+the old wire; inverse transport is justified by the retained old witness and
+the inserted fresh equation. -/
+theorem anchoredWireSplitRaw_finishRoot_at_root_equiv
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ old, old ∈ boundary →
+      (input.val.wires old).scope = input.val.root)
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints input.val.root term).WellFormed
+        signature)
+    (wireEnclosesRoot :
+      input.val.Encloses (input.val.wires wire).scope input.val.root)
+    (sourceItems : ItemSeq signature
+      (anchoredWireSplitSourceOpen input boundary).rootWires.length [])
+    (targetItems : ItemSeq signature
+      (anchoredWireSplitRawOpen input boundary wire endpoints input.val.root
+        term).rootWires.length [])
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val
+      (ConcreteElaboration.compileRegion? signature input.val
+        input.val.regionCount)
+      (anchoredWireSplitSourceOpen input boundary).rootWires
+      ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences input.val input.val.root) =
+        some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (anchoredWireSplitRaw input wire endpoints input.val.root term)
+      (ConcreteElaboration.compileRegion? signature
+        (anchoredWireSplitRaw input wire endpoints input.val.root term)
+        input.val.regionCount)
+      (anchoredWireSplitRawOpen input boundary wire endpoints input.val.root
+        term).rootWires ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences
+        (anchoredWireSplitRaw input wire endpoints input.val.root term)
+        input.val.root) = some targetItems)
+    (sourceWitness : ∀ (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (raw : Fin (anchoredWireSplitSourceOpen input boundary).rootWires.length →
+        model.Carrier),
+      denoteItemSeq (relCtx := []) model named raw PUnit.unit sourceItems →
+      ∀ index,
+        (anchoredWireSplitSourceOpen input boundary).rootWires.get index = wire →
+        raw index = model.eval term Fin.elim0)
+    (targetWitness : ∀ (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (raw : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+        input.val.root term).rootWires.length → model.Carrier),
+      denoteItemSeq (relCtx := []) model named raw PUnit.unit targetItems →
+      ∀ index,
+        (anchoredWireSplitRawOpen input boundary wire endpoints input.val.root
+          term).rootWires.get index = wire.castSucc →
+        raw index = model.eval term Fin.elim0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (targetOuter : Fin (anchoredWireSplitRawOpen input boundary wire endpoints
+      input.val.root term).exposedWires.length → model.Carrier) :
+    let source := anchoredWireSplitSourceOpen input boundary
+    let expanded := anchoredWireSplitRawOpen input boundary wire endpoints
+      input.val.root term
+    denoteRegion (relCtx := []) model named
+        (targetOuter ∘ anchoredWireSplitRawOpenExternalClass input boundary wire
+          endpoints input.val.root term) PUnit.unit
+        (ConcreteElaboration.finishRoot source.exposedWires source.hiddenWires
+          sourceItems) ↔
+      denoteRegion (relCtx := []) model named targetOuter PUnit.unit
+        (ConcreteElaboration.finishRoot expanded.exposedWires
+          expanded.hiddenWires targetItems) := by
+  dsimp only
+  let source := anchoredWireSplitSourceOpen input boundary
+  let expanded := anchoredWireSplitRawOpen input boundary wire endpoints
+    input.val.root term
+  have sourceWellFormed : source.WellFormed signature := {
+    diagram_well_formed := input.property
+    boundary_is_root_scoped := sourceRoot
+  }
+  have expandedWellFormed : expanded.WellFormed signature :=
+    anchoredWireSplitRawOpen_wellFormed input boundary sourceRoot wire endpoints
+      input.val.root term targetWellFormed
+  have sourceExact := OpenConcreteDiagram.rootWires_exact source sourceWellFormed
+  have expandedExact := OpenConcreteDiagram.rootWires_exact expanded
+    expandedWellFormed
+  let collapse := SplitContextCollapse.ofExact input wire endpoints input.val.root
+    term wireEnclosesRoot input.val.root expanded.rootWires source.rootWires
+    expandedExact sourceExact
+  let sourceOuter := targetOuter ∘
+    anchoredWireSplitRawOpenExternalClass input boundary wire endpoints
+      input.val.root term
+  unfold ConcreteElaboration.finishRoot
+  simp only [denoteRegion_mk]
+  constructor
+  · rintro ⟨sourceLocal, sourceDenotes⟩
+    rw [ItemSeq.castWiresEq_eq_renameWires] at sourceDenotes
+    have sourceRawDenotes := (denoteItemSeq_renameWires (relCtx := []) model
+      named (Fin.cast (List.length_append (as := source.exposedWires)
+        (bs := source.hiddenWires)))
+      (extendWireEnv sourceOuter sourceLocal) PUnit.unit sourceItems).1
+        sourceDenotes
+    let sourceRaw := ConcreteElaboration.rootEnvironment source.exposedWires
+      source.hiddenWires sourceOuter sourceLocal
+    change denoteItemSeq (relCtx := []) model named sourceRaw PUnit.unit
+      sourceItems at sourceRawDenotes
+    obtain ⟨targetLocal, rawAgrees⟩ :=
+      anchoredWireSplitRaw_rootEnvironment_collapse_forward input boundary wire
+        endpoints input.val.root term collapse sourceExact.nodup model
+        targetOuter sourceLocal
+    refine ⟨targetLocal, ?_⟩
+    rw [ItemSeq.castWiresEq_eq_renameWires]
+    apply (denoteItemSeq_renameWires (relCtx := []) model named
+      (Fin.cast (List.length_append (as := expanded.exposedWires)
+        (bs := expanded.hiddenWires)))
+      (extendWireEnv targetOuter targetLocal) PUnit.unit targetItems).2
+    let targetRaw := ConcreteElaboration.rootEnvironment expanded.exposedWires
+      expanded.hiddenWires targetOuter targetLocal
+    change denoteItemSeq (relCtx := []) model named targetRaw PUnit.unit
+      targetItems
+    exact (anchoredWireSplitRaw_target_items_equiv input wire endpoints
+      input.val.root term selectedOccurs targetWellFormed wireEnclosesRoot
+      input.val.regionCount source.rootWires expanded.rootWires collapse
+      ConcreteElaboration.BinderContext.empty sourceExact expandedExact
+      sourceItems targetItems sourceCompiled targetCompiled model named sourceRaw
+      targetRaw PUnit.unit rawAgrees
+      (sourceWitness model named sourceRaw)).mp sourceRawDenotes
+  · rintro ⟨targetLocal, targetDenotes⟩
+    rw [ItemSeq.castWiresEq_eq_renameWires] at targetDenotes
+    have targetRawDenotes := (denoteItemSeq_renameWires (relCtx := []) model
+      named (Fin.cast (List.length_append (as := expanded.exposedWires)
+        (bs := expanded.hiddenWires)))
+      (extendWireEnv targetOuter targetLocal) PUnit.unit targetItems).1
+        targetDenotes
+    let targetRaw := ConcreteElaboration.rootEnvironment expanded.exposedWires
+      expanded.hiddenWires targetOuter targetLocal
+    change denoteItemSeq (relCtx := []) model named targetRaw PUnit.unit
+      targetItems at targetRawDenotes
+    have oldValue := targetWitness model named targetRaw targetRawDenotes
+    have freshValue := anchoredWireSplitRaw_fresh_value_of_target_items input
+      wire endpoints input.val.root term targetWellFormed input.val.regionCount
+      expanded.rootWires ConcreteElaboration.BinderContext.empty expandedExact
+      targetItems targetCompiled model named targetRaw PUnit.unit targetRawDenotes
+    obtain ⟨sourceLocal, rawAgrees⟩ :=
+      anchoredWireSplitRaw_rootEnvironment_uncollapse input boundary wire
+        endpoints input.val.root term collapse expandedExact.nodup model
+        targetOuter targetLocal (model.eval term Fin.elim0) oldValue freshValue
+    refine ⟨sourceLocal, ?_⟩
+    rw [ItemSeq.castWiresEq_eq_renameWires]
+    apply (denoteItemSeq_renameWires (relCtx := []) model named
+      (Fin.cast (List.length_append (as := source.exposedWires)
+        (bs := source.hiddenWires)))
+      (extendWireEnv sourceOuter sourceLocal) PUnit.unit sourceItems).2
+    let sourceRaw := ConcreteElaboration.rootEnvironment source.exposedWires
+      source.hiddenWires sourceOuter sourceLocal
+    change denoteItemSeq (relCtx := []) model named sourceRaw PUnit.unit
+      sourceItems
+    exact (anchoredWireSplitRaw_target_items_equiv input wire endpoints
+      input.val.root term selectedOccurs targetWellFormed wireEnclosesRoot
+      input.val.regionCount source.rootWires expanded.rootWires collapse
+      ConcreteElaboration.BinderContext.empty sourceExact expandedExact
+      sourceItems targetItems sourceCompiled targetCompiled model named sourceRaw
+      targetRaw PUnit.unit rawAgrees
+      (sourceWitness model named sourceRaw)).mpr targetRawDenotes
 
 /-- A complete semantic kernel at one certified availability region. -/
 def AnchoredAvailableKernel

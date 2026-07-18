@@ -250,6 +250,112 @@ theorem anchoredWireSplitRaw_freshOccurrence_denotes_iff
           · intro property
             exact property output rfl
 
+/-- A denoted complete target-site item block assigns the serialized closed
+term to every context position carrying the freshly inserted wire. -/
+theorem anchoredWireSplitRaw_fresh_value_of_target_items
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (fuel : Nat)
+    (context : ConcreteElaboration.WireContext
+      (anchoredWireSplitRaw input wire endpoints target term))
+    (binders : ConcreteElaboration.BinderContext
+      (anchoredWireSplitRaw input wire endpoints target term) rels)
+    (exact : context.Exact target)
+    (items : ItemSeq signature context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (anchoredWireSplitRaw input wire endpoints target term)
+      (ConcreteElaboration.compileRegion? signature
+        (anchoredWireSplitRaw input wire endpoints target term) fuel)
+      context binders
+      (ConcreteElaboration.localOccurrences
+        (anchoredWireSplitRaw input wire endpoints target term) target) =
+          some items)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (raw : Fin context.length → model.Carrier)
+    (relEnv : RelEnv model.Carrier rels)
+    (itemsDenote : denoteItemSeq model named raw relEnv items) :
+    ∀ index, context.get index = Fin.last input.val.wireCount →
+      raw index = model.eval term Fin.elim0 := by
+  let sourceNodes :=
+    (filterFin fun old => decide ((input.val.nodes old).region = target)).map
+      (fun old => ConcreteElaboration.LocalOccurrence.node
+        (regions := input.val.regionCount) old)
+  let sourceChildren :=
+    (filterFin fun child =>
+      decide ((input.val.regions child).parent? = some target)).map
+        (ConcreteElaboration.LocalOccurrence.child (nodes := input.val.nodeCount))
+  let targetBefore := sourceNodes.map (splitOldOccurrence input)
+  let targetAfter := sourceChildren.map (splitOldOccurrence input)
+  let fresh : ConcreteElaboration.LocalOccurrence input.val.regionCount
+      (input.val.nodeCount + 1) := .node (Fin.last input.val.nodeCount)
+  have targetOccurrences :
+      ConcreteElaboration.localOccurrences
+          (anchoredWireSplitRaw input wire endpoints target term) target =
+        targetBefore ++ fresh :: targetAfter := by
+    rw [anchoredWireSplitRaw_localOccurrences_at_target]
+    simp [sourceNodes, sourceChildren, targetBefore, targetAfter, fresh,
+      splitOldOccurrence, Function.comp_def]
+  have framed := compiled
+  rw [targetOccurrences] at framed
+  obtain ⟨beforeItems, freshItem, afterItems, _, freshCompiled, _, itemsEq⟩ :=
+    compileOccurrencesWith?_frame_split
+      (ConcreteElaboration.compileRegion? signature
+        (anchoredWireSplitRaw input wire endpoints target term) fuel)
+      context binders targetBefore targetAfter fresh items framed
+  have frameDenotes : denoteItemSeq model named raw relEnv
+      (beforeItems.append (.cons freshItem afterItems)) := by
+    rw [← itemsEq]
+    exact itemsDenote
+  rw [denoteItemSeq_frame] at frameDenotes
+  have freshListCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+          (anchoredWireSplitRaw input wire endpoints target term)
+          (ConcreteElaboration.compileRegion? signature
+            (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        context binders [fresh] = some (.cons freshItem .nil) := by
+    simp [ConcreteElaboration.compileOccurrencesWith?, freshCompiled]
+  have freshDenotes : denoteItemSeq model named raw relEnv
+      (.cons freshItem .nil) := by
+    simpa [denoteItemSeq_append] using frameDenotes.2.1
+  have freshEquation :=
+    (anchoredWireSplitRaw_freshOccurrence_denotes_iff input wire endpoints
+      target term context binders
+      (ConcreteElaboration.compileRegion? signature
+        (anchoredWireSplitRaw input wire endpoints target term) fuel)
+      (.cons freshItem .nil) freshListCompiled model named raw relEnv).1
+        freshDenotes
+  have freshOccurs :
+      (anchoredWireSplitRaw input wire endpoints target term).EndpointOccurs
+        (Fin.last input.val.wireCount)
+        { node := Fin.last input.val.nodeCount, port := .output } := by
+    unfold ConcreteDiagram.EndpointOccurs
+    simp only [anchoredWireSplitRaw, Fin.lastCases_last]
+    exact List.mem_cons_self
+  obtain ⟨freshOutput, freshOutputResult⟩ :=
+    ConcreteElaboration.resolvePort?_complete exact.covers
+      targetWellFormed.wire_scopes_enclose (by
+        exact anchoredWireSplitRaw_freshNode input wire endpoints target term ▸
+          rfl) ⟨Fin.last input.val.wireCount, freshOccurs⟩
+  have outputValue := freshEquation freshOutput freshOutputResult
+  obtain ⟨outputWire, outputOccurs, outputGet⟩ :=
+    ConcreteElaboration.resolvePort?_sound freshOutputResult
+  have outputWireEq : outputWire = Fin.last input.val.wireCount :=
+    ConcreteElaboration.endpoint_wire_unique
+      targetWellFormed.wire_endpoints_are_disjoint outputOccurs freshOccurs
+  rw [outputWireEq] at outputGet
+  intro index indexGet
+  have indexEq : index = freshOutput := by
+    apply Fin.ext
+    exact (List.getElem_inj exact.nodup).mp (by
+      simpa only [List.get_eq_getElem] using indexGet.trans outputGet.symm)
+  simpa [indexEq] using outputValue
+
 private theorem split_target_local_length
     (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
     (endpoints : List (CEndpoint input.val.nodeCount))
