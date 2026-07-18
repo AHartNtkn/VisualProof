@@ -56,16 +56,40 @@ export const PRODUCTION_INTERFACE_ASSETS = [
     token: 'excavation-folio/dossier-sheet.png',
   },
   {
+    path: 'assets/interface/generated/excavation-folio/guard-leaf.png',
+    width: 780, height: 670, colorType: 'rgba',
+    consumer: 'src/game/interface/folio.css',
+    token: 'excavation-folio/guard-leaf.png',
+  },
+  {
     path: 'assets/interface/generated/excavation-folio/mount-photo.png',
     width: 720, height: 460, colorType: 'rgba',
     consumer: 'src/game/interface/folio.css',
     token: 'excavation-folio/mount-photo.png',
   },
   {
+    path: 'assets/interface/generated/excavation-folio/mount-rubbing.png',
+    width: 720, height: 460, colorType: 'rgba',
+    consumer: 'src/game/interface/folio.css',
+    token: 'excavation-folio/mount-rubbing.png',
+  },
+  {
+    path: 'assets/interface/generated/excavation-folio/mount-tracing.png',
+    width: 720, height: 460, colorType: 'rgba',
+    consumer: 'src/game/interface/folio.css',
+    token: 'excavation-folio/mount-tracing.png',
+  },
+  {
     path: 'assets/interface/generated/excavation-folio/clearance-slip.png',
     width: 500, height: 180, colorType: 'rgba',
     consumer: 'src/game/interface/folio.css',
     token: 'excavation-folio/clearance-slip.png',
+  },
+  {
+    path: 'assets/interface/generated/excavation-folio/priority-band.png',
+    width: 620, height: 170, colorType: 'rgba',
+    consumer: 'src/game/interface/folio.css',
+    token: 'excavation-folio/priority-band.png',
   },
   {
     path: 'assets/interface/generated/excavation-folio/restricted-sleeve.png',

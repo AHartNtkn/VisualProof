@@ -46,9 +46,9 @@ const projection = (mode: FolioProjection['mode']): FolioProjection => ({
       unlocked: true,
       scroll: 85,
       records: [
-        { id: COMPLETED, name: 'Completed', accession: 'A-1', summary: 'Cleared.', status: 'completed', affordance: mode === 'archive' ? 'select' : 'drag-theorem' },
-        { id: AVAILABLE, name: 'Available', accession: null, summary: 'Available.', status: 'unlocked', affordance: mode === 'archive' ? 'select' : 'inert' },
-        { id: LOCKED, name: 'Locked', accession: null, summary: 'Restricted.', status: 'locked', affordance: mode === 'archive' ? 'resist' : 'inert' },
+        { id: COMPLETED, name: 'Completed', accession: 'A-1', summary: 'Cleared.', status: 'completed', affordance: mode === 'archive' ? 'select' : 'drag-theorem', priority: false, restrictedPacket: false },
+        { id: AVAILABLE, name: 'Available', accession: null, summary: 'Available.', status: 'unlocked', affordance: mode === 'archive' ? 'select' : 'inert', priority: true, restrictedPacket: false },
+        { id: LOCKED, name: 'Locked', accession: null, summary: 'Restricted.', status: 'locked', affordance: mode === 'archive' ? 'resist' : 'inert', priority: false, restrictedPacket: true },
       ],
     },
     {
@@ -63,7 +63,7 @@ const projection = (mode: FolioProjection['mode']): FolioProjection => ({
 })
 
 describe('production excavation folio DOM view', () => {
-  it('keeps one active dossier, a continuous accessible sheet, and immediate archive affordances', () => {
+  it('owns the approved physical folio hierarchy and immediate archive affordances', () => {
     const document = new FakeDocument()
     const host = new FakeElement(document)
     const selected: string[] = []
@@ -84,12 +84,19 @@ describe('production excavation folio DOM view', () => {
       onTheoremDragCancel: () => {},
     })
     const root = view.element as unknown as FakeElement
-    const dossier = root.querySelector('.curse-folio-dossier')!
-    const sheet = root.querySelector('.curse-folio-sheet')!
+    const dossier = root.querySelector('.active-dossier')!
+    const sheet = root.querySelector('.record-grid')!
     const lockedRecord = root.querySelector(`[data-puzzle="${LOCKED}"]`)!
     const lockedCulture = root.querySelector(`[data-culture="${SECOND_CULTURE}"]`)!
-    expect(root.querySelectorAll('.curse-folio-dossier')).toHaveLength(1)
-    expect(dossier.classList.contains('active-dossier')).toBe(true)
+    expect(root.querySelectorAll('.folio-board-lower')).toHaveLength(1)
+    expect(root.querySelectorAll('.dossier-underlay')).toHaveLength(2)
+    expect(root.querySelectorAll('.guard-leaf-layer')).toHaveLength(1)
+    expect(root.querySelectorAll('.active-dossier')).toHaveLength(1)
+    expect(root.querySelectorAll('.folio-cover')).toHaveLength(1)
+    expect(root.querySelectorAll('.inspection-stage')).toHaveLength(1)
+    expect(root.querySelectorAll('.record-grid')).toHaveLength(1)
+    expect(root.querySelectorAll('.curse-folio-dossier')).toHaveLength(0)
+    expect(root.querySelectorAll('.curse-folio-sheet')).toHaveLength(0)
     expect(lockedRecord.querySelector('.record-guard')).not.toBeNull()
     expect(lockedCulture.querySelector('.record-guard')).not.toBeNull()
     expect(sheet.getAttribute('role')).toBe('list')
@@ -106,17 +113,19 @@ describe('production excavation folio DOM view', () => {
     expect(cultures).toEqual([])
 
     view.update({ ...projection('archive'), selectedCulture: SECOND_CULTURE, selectedScroll: 0 })
-    expect(root.querySelector('.curse-folio-dossier')).toBe(dossier)
-    expect(root.querySelectorAll('.curse-folio-dossier')).toHaveLength(1)
+    expect(root.querySelector('.active-dossier')).toBe(dossier)
+    expect(root.querySelectorAll('.active-dossier')).toHaveLength(1)
   })
 
   it('never navigates in puzzle mode and exposes drag lifecycle only for completed records', () => {
     const document = new FakeDocument()
     const host = new FakeElement(document)
     const calls: string[] = []
+    const clock = new PendingMotionClock()
     const view = mountFolioView({
       host: host as unknown as HTMLElement,
       projection: projection('puzzle'),
+      motionClock: clock,
       onSelectPuzzle: () => calls.push('navigate'),
       onRefusePuzzle: () => calls.push('refuse'),
       onSelectCulture: () => {},
@@ -130,20 +139,28 @@ describe('production excavation folio DOM view', () => {
     const root = view.element as unknown as FakeElement
     const completed = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
     const available = root.querySelector(`[data-puzzle="${AVAILABLE}"]`)!
+    const positioner = root.querySelector('.inspection-positioner')!
 
     available.dispatchEvent(new Event('click'))
     available.dispatchEvent(eventWith('pointerdown', { button: 0, pointerId: 4, clientX: 10, clientY: 20 }))
     completed.dispatchEvent(eventWith('pointerdown', { button: 0, pointerId: 7, clientX: 30, clientY: 40 }))
     completed.dispatchEvent(eventWith('pointermove', { pointerId: 7, clientX: 44, clientY: 55 }))
-    expect(completed.classList.contains('is-theorem-lifted')).toBe(true)
-    expect(completed.style.getPropertyValue('--folio-drag-x')).toBe('44px')
+    expect(completed.classList.contains('is-inspection-source')).toBe(true)
+    expect(positioner.classList.contains('is-theorem-lifted')).toBe(true)
+    expect(positioner.style.getPropertyValue('--folio-drag-x')).toBe('44px')
+    expect(positioner.style.getPropertyValue('--folio-drag-y')).toBe('55px')
     completed.dispatchEvent(eventWith('pointerup', { pointerId: 7, clientX: 50, clientY: 60 }))
-    expect(completed.classList.contains('is-theorem-lifted')).toBe(false)
+    expect(positioner.classList.contains('is-theorem-lifted')).toBe(false)
+    expect(positioner.classList.contains('is-returning')).toBe(true)
+    expect(root.dataset.motionRecordTarget).toBe(COMPLETED)
+    expect(root.dataset.motionRecordKind).toBe('return')
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([340])
     expect(calls).toEqual([
       `start:${COMPLETED}`,
       `move:${COMPLETED}`,
       `end:${COMPLETED}`,
     ])
+    view.dispose()
   })
 
   it('drives full and reduced dossier and refusal motion through the complete authority', () => {
@@ -167,13 +184,13 @@ describe('production excavation folio DOM view', () => {
     const root = view.element as unknown as FakeElement
 
     view.update({ ...projection('archive'), selectedCulture: SECOND_CULTURE })
-    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([260])
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([380, 260])
     expect(root.dataset.motionDossierTarget).toBe(SECOND_CULTURE)
     expect(root.dataset.motionDossierKind).toBe('replace')
     expect(root.style.getPropertyValue('--motion-dossier-duration')).toBe('260ms')
 
     view.resistCulture(SECOND_CULTURE)
-    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([260, 320])
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([380, 260, 320])
     expect(clock.waits[0]!.signal.aborted).toBe(false)
     expect(root.dataset.motionDossierTarget).toBe(SECOND_CULTURE)
     expect(root.dataset.motionDossierKind).toBe('replace')
@@ -181,13 +198,13 @@ describe('production excavation folio DOM view', () => {
     expect(root.dataset.motionRestrictionKind).toBe('refuse')
 
     view.update({ ...projection('archive'), reducedMotion: true })
-    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([90])
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([380, 90])
     expect(root.dataset.motionDossierTarget).toBe(FIRST_CULTURE)
     expect(root.dataset.motionDossierKind).toBe('reduced')
     expect(root.style.getPropertyValue('--motion-dossier-duration')).toBe('90ms')
 
     view.resistPuzzle(LOCKED)
-    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([90, 90])
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([380, 90, 90])
     expect(clock.waits[0]!.signal.aborted).toBe(false)
     expect(root.dataset.motionDossierTarget).toBe(FIRST_CULTURE)
     expect(root.dataset.motionDossierKind).toBe('reduced')
@@ -205,13 +222,14 @@ describe('production excavation folio DOM view', () => {
     }
   })
 
-  it('cancels an active drag exactly once before update or disposal removes its record', () => {
+  it('cancels an active drag exactly once before update or disposal removes its record', async () => {
     const document = new FakeDocument()
     const host = new FakeElement(document)
     const calls: string[] = []
     const view = mountFolioView({
       host: host as unknown as HTMLElement,
       projection: projection('puzzle'),
+      motionClock: { wait: async () => {} },
       onSelectPuzzle: () => {},
       onRefusePuzzle: () => {},
       onSelectCulture: () => {},
@@ -230,10 +248,13 @@ describe('production excavation folio DOM view', () => {
     view.update(projection('puzzle'))
     expect(calls).toEqual(['cancel'])
     expect(first.hasPointerCapture(11)).toBe(false)
-    expect(first.classList.contains('is-theorem-lifted')).toBe(false)
-    expect(first.style.getPropertyValue('--folio-drag-x')).toBe('')
+    expect(first.classList.contains('is-inspection-source')).toBe(true)
     first.dispatchEvent(eventWith('pointercancel', { pointerId: 11, clientX: 30, clientY: 40 }))
     expect(calls).toEqual(['cancel'])
+
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(first.classList.contains('is-inspection-source')).toBe(false)
 
     const second = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
     second.dispatchEvent(eventWith('pointerdown', {
@@ -242,8 +263,51 @@ describe('production excavation folio DOM view', () => {
     view.dispose()
     expect(calls).toEqual(['cancel', 'cancel'])
     expect(second.hasPointerCapture(12)).toBe(false)
-    expect(second.classList.contains('is-theorem-lifted')).toBe(false)
-    expect(second.style.getPropertyValue('--folio-drag-y')).toBe('')
+    expect(root.querySelector('.inspection-positioner')!.classList.contains('is-theorem-lifted'))
+      .toBe(false)
+  })
+
+  it('owns local cover state and detects a real restricted packet release', async () => {
+    const document = new FakeDocument()
+    const host = new FakeElement(document)
+    const view = mountFolioView({
+      host: host as unknown as HTMLElement,
+      projection: projection('archive'),
+      motionClock: { wait: async () => {} },
+      onSelectPuzzle: () => {},
+      onRefusePuzzle: () => {},
+      onSelectCulture: () => {},
+      onRefuseCulture: () => {},
+      onScroll: () => {},
+      onTheoremDragStart: () => {},
+      onTheoremDragMove: () => {},
+      onTheoremDragEnd: () => {},
+      onTheoremDragCancel: () => {},
+    })
+    const root = view.element as unknown as FakeElement
+    const cover = root.querySelector('.folio-cover')!
+    expect(root.dataset.cover).toBe('open')
+    expect(root.dataset.motionCoverKind).toBe('open')
+    await Promise.resolve()
+    await Promise.resolve()
+    cover.dispatchEvent(new Event('click'))
+    expect(root.dataset.cover).toBe('closed')
+    expect(root.dataset.motionCoverKind).toBe('close')
+
+    const released = projection('archive')
+    const firstCulture = released.cultures[0]!
+    const releasedRecords = firstCulture.records.map((record) => record.id === LOCKED
+      ? { ...record, status: 'unlocked' as const, affordance: 'select' as const }
+      : record)
+    view.update({
+      ...released,
+      cultures: [{ ...firstCulture, records: releasedRecords }, ...released.cultures.slice(1)],
+    })
+    expect(root.dataset.restriction).toBe('released')
+    expect(root.dataset.motionPacketKind).toBe('release')
+    expect(root.querySelector(`[data-puzzle="${LOCKED}"]`)!.dataset.packetState)
+      .toBe('released')
+    view.dispose()
   })
 })
 
@@ -309,6 +373,12 @@ describe('production lens DOM ownership and approved assets', () => {
     expect([...motionCss.matchAll(/@keyframes\s+reduced-depth\b/g)]).toHaveLength(1)
     expect([...`${folioCss}\n${motionCss}`.matchAll(/brightness\(1\.04\)/g)]).toHaveLength(1)
     expect(folioCss).toContain('scrollbar-width: none')
+    for (const asset of [
+      'guard-leaf.png',
+      'mount-rubbing.png',
+      'mount-tracing.png',
+      'priority-band.png',
+    ]) expect(folioCss).toContain(asset)
     expect(folioCss).toContain('clearance-slip.png')
     expect(folioCss).toContain('restricted-sleeve.png')
     expect(lensCss).toContain('background: #07090c')

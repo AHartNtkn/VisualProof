@@ -89,21 +89,27 @@ describe('production interface rendered geometry', () => {
       await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
       await page.mouse.down()
       await page.mouse.move(980, 350)
-      const lifted = await source.boundingBox()
+      const lifted = await page.locator('.inspection-positioner.is-theorem-lifted').boundingBox()
       if (lifted === null) throw new Error('lifted record has no rendered box')
       expect(lifted.x + lifted.width / 2).toBeCloseTo(980, 0)
       expect(lifted.y + lifted.height / 2).toBeCloseTo(350, 0)
 
       await page.evaluate(() => window.__productionInterfaceFixture.replaceDragView())
-      expect(await page.evaluate(() => window.__productionInterfaceFixture.dragCleanup())).toEqual({
+      expect(await page.evaluate(() => window.__productionInterfaceFixture.dragCleanup()))
+        .toMatchObject({
         cancellations: 1,
-        connected: false,
+        connected: true,
         lifted: false,
-        x: '',
-        y: '',
+        returning: true,
+        sourceHidden: true,
+        recordMotionKind: 'reduced',
         captured: false,
       })
       await page.mouse.up()
+      await page.waitForFunction(() => {
+        const cleanup = window.__productionInterfaceFixture.dragCleanup()
+        return !cleanup.returning && !cleanup.sourceHidden
+      })
 
       await page.setViewportSize({ width: 760, height: 900 })
       await page.evaluate(() => {
@@ -122,7 +128,8 @@ describe('production interface rendered geometry', () => {
       )
       await page.mouse.down()
       await page.mouse.move(900, 420)
-      const compactOffsetLifted = await replacement.boundingBox()
+      const compactOffsetLifted = await page
+        .locator('.inspection-positioner.is-theorem-lifted').boundingBox()
       if (compactOffsetLifted === null) throw new Error('compact-offset lift has no rendered box')
       expect(compactOffsetLifted.x + compactOffsetLifted.width / 2).toBeCloseTo(900, 0)
       expect(compactOffsetLifted.y + compactOffsetLifted.height / 2).toBeCloseTo(420, 0)
@@ -131,6 +138,9 @@ describe('production interface rendered geometry', () => {
         cancellations: 2,
         connected: false,
         lifted: false,
+        returning: false,
+        sourceHidden: false,
+        recordMotionKind: '',
         x: '',
         y: '',
         captured: false,

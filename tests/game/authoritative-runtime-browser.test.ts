@@ -124,6 +124,52 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
+  it('renders the approved physical folio layers and first six records as two columns by three rows', async () => {
+    const page = await openFixture('long')
+    try {
+      await page.setViewportSize({ width: 1600, height: 1000 })
+      const presentation = await page.evaluate(() => {
+        const root = document.querySelector<HTMLElement>('.curse-folio')
+        if (root === null) throw new Error('physical folio root missing')
+        const records = Array.from(root.querySelectorAll<HTMLElement>('.curse-folio-record'))
+          .slice(0, 6)
+          .map((record) => {
+            const { x, y, width, height } = record.getBoundingClientRect()
+            return { x, y, width, height }
+          })
+        const count = (selector: string): number => root.querySelectorAll(selector).length
+        return {
+          counts: {
+            lowerBoard: count('.folio-board-lower'),
+            underlays: count('.dossier-underlay'),
+            guardLeaf: count('.guard-leaf-layer'),
+            activeDossier: count('.active-dossier'),
+            cover: count('.folio-cover'),
+            stage: count('.inspection-stage'),
+            sheet: count('.record-grid'),
+          },
+          records,
+        }
+      })
+      expect(presentation.counts).toEqual({
+        lowerBoard: 1,
+        underlays: 2,
+        guardLeaf: 1,
+        activeDossier: 1,
+        cover: 1,
+        stage: 1,
+        sheet: 1,
+      })
+      expect(presentation.records).toHaveLength(6)
+      const columns = [...new Set(presentation.records.map(({ x }) => Math.round(x)))]
+      const rows = [...new Set(presentation.records.map(({ y }) => Math.round(y)))]
+      expect(columns).toHaveLength(2)
+      expect(rows).toHaveLength(3)
+      expect(presentation.records.every(({ width, height }) => width > 0 && height > 0))
+        .toBe(true)
+    } finally { await page.close() }
+  })
+
   it('restores an active puzzle save exactly before mounting its stateful views', async () => {
     const page = await openFixture('restore')
     try {
@@ -372,7 +418,7 @@ describe('authoritative production renderer runtime', () => {
         fixture.witness(0)
         fixture.witness(1)
       })
-      await page.locator('.curse-folio-sheet').focus()
+      await page.locator('.record-grid').focus()
       await page.keyboard.press('Control+Z')
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().cursor)).toBe(2)
       await page.locator('.curse-game-proof-canvas').focus()
@@ -447,7 +493,7 @@ describe('authoritative production renderer runtime', () => {
   it('keeps the actual scrolling sheet alive and restores each culture scroll after switching', async () => {
     const page = await openFixture('long')
     try {
-      const firstSheet = await page.locator('.curse-folio-sheet').elementHandle()
+      const firstSheet = await page.locator('.record-grid').elementHandle()
       if (firstSheet === null) throw new Error('first culture sheet missing')
       await firstSheet.evaluate((sheet) => {
         sheet.scrollTop = 90
@@ -459,16 +505,16 @@ describe('authoritative production renderer runtime', () => {
       }))).toEqual({ connected: true, scrollTop: 90 })
 
       await page.locator('.curse-folio-culture-tab').nth(1).click()
-      const secondSheet = page.locator('.curse-folio-sheet')
+      const secondSheet = page.locator('.record-grid')
       await secondSheet.evaluate((sheet) => {
         sheet.scrollTop = 55
         sheet.dispatchEvent(new Event('scroll'))
       })
       await page.waitForFunction(() => window.__authoritativeRuntimeFixture.state().selectedScroll === 55)
       await page.locator('.curse-folio-culture-tab').nth(0).click()
-      expect(await page.locator('.curse-folio-sheet').evaluate((sheet) => sheet.scrollTop)).toBe(90)
+      expect(await page.locator('.record-grid').evaluate((sheet) => sheet.scrollTop)).toBe(90)
       await page.locator('.curse-folio-culture-tab').nth(1).click()
-      expect(await page.locator('.curse-folio-sheet').evaluate((sheet) => sheet.scrollTop)).toBe(55)
+      expect(await page.locator('.record-grid').evaluate((sheet) => sheet.scrollTop)).toBe(55)
     } finally { await page.close() }
   })
 
@@ -494,7 +540,13 @@ describe('authoritative production renderer runtime', () => {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
       await page.mouse.down()
       await page.mouse.move(target.x, target.y)
+      const lifted = await page.locator('.inspection-positioner.is-theorem-lifted').boundingBox()
+      if (lifted === null) throw new Error('lifted theorem record has no presentation bounds')
+      expect(lifted.x + lifted.width / 2).toBeCloseTo(target.x, 0)
+      expect(lifted.y + lifted.height / 2).toBeCloseTo(target.y, 0)
       await page.mouse.up()
+      expect(await page.locator('.curse-folio').getAttribute('data-motion-record-kind'))
+        .toBe('return')
       expect(await page.evaluate(({ manifest }) => {
         const fixture = window.__authoritativeRuntimeFixture
         const save = fixture.writes().at(-1) as any
@@ -511,6 +563,10 @@ describe('authoritative production renderer runtime', () => {
       })
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().proofRebuilds))
         .toBeGreaterThan(beforeManifest.proofRebuilds!)
+      await page.waitForFunction((puzzle) => {
+        const source = document.querySelector<HTMLElement>(`[data-puzzle="${puzzle}"]`)
+        return source !== null && !source.classList.contains('is-inspection-source')
+      }, artifact)
 
       const before = await page.evaluate(() => ({
         cursor: window.__authoritativeRuntimeFixture.state().cursor,

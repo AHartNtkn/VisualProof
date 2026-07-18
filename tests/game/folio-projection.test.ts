@@ -66,8 +66,30 @@ describe('production excavation folio projection', () => {
       ...Array.from({ length: 11 }, () => 'resist'),
     ])
     expect(archive.cultures[1]!.unlocked).toBe(false)
+    expect(archive.cultures[0]!.records.some(({ restrictedPacket }) => restrictedPacket))
+      .toBe(false)
+    expect(archive.cultures[1]!.records.filter(({ restrictedPacket }) => restrictedPacket))
+      .toEqual([expect.objectContaining({
+        id: catalog.source.cultures[1]!.gateway,
+        status: 'locked',
+      })])
     expect(archive.selectedCulture).toBe(FIELD)
     expect(archive.selectedScroll).toBe(312)
+  })
+
+  it('keeps restricted packet identity stable across its locked-to-unlocked transition', () => {
+    const catalog = buildCatalog(largeSource())
+    const initial = createInitialGameState(catalog, { reducedMotion: false })
+    const packet = catalog.source.cultures[1]!.gateway
+    const sealed = projectFolio(catalog, initial, 'archive').cultures[1]!.records
+      .find(({ restrictedPacket }) => restrictedPacket)
+    const released = projectFolio(catalog, {
+      ...initial,
+      completed: new Set(catalog.source.puzzles.map(({ id }) => id)),
+    }, 'archive').cultures[1]!.records.find(({ restrictedPacket }) => restrictedPacket)
+
+    expect(sealed).toMatchObject({ id: packet, restrictedPacket: true, status: 'locked' })
+    expect(released).toMatchObject({ id: packet, restrictedPacket: true, status: 'completed' })
   })
 
   it('allows theorem dragging only from completed records while a puzzle is active', () => {

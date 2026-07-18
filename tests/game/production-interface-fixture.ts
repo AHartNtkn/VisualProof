@@ -24,6 +24,8 @@ const projection: FolioProjection = {
       summary: 'A completed record used to verify drag geometry.',
       status: 'completed',
       affordance: 'drag-theorem',
+      priority: false,
+      restrictedPacket: false,
     }],
   }],
 }
@@ -68,6 +70,9 @@ declare global {
         cancellations: number
         connected: boolean
         lifted: boolean
+        returning: boolean
+        sourceHidden: boolean
+        recordMotionKind: string
         x: string
         y: string
         captured: boolean
@@ -85,9 +90,17 @@ window.__productionInterfaceFixture = {
   dragCleanup: () => ({
     cancellations: cancellations.length,
     connected: draggedRecord?.isConnected ?? false,
-    lifted: draggedRecord?.classList.contains('is-theorem-lifted') ?? false,
-    x: draggedRecord?.style.getPropertyValue('--folio-drag-x') ?? '',
-    y: draggedRecord?.style.getPropertyValue('--folio-drag-y') ?? '',
+    lifted: lens.folioHost.querySelector('.inspection-positioner')
+      ?.classList.contains('is-theorem-lifted') ?? false,
+    returning: lens.folioHost.querySelector('.inspection-positioner')
+      ?.classList.contains('is-returning') ?? false,
+    sourceHidden: draggedRecord?.classList.contains('is-inspection-source') ?? false,
+    recordMotionKind: lens.folioHost.querySelector<HTMLElement>('.curse-folio')
+      ?.dataset.motionRecordKind ?? '',
+    x: lens.folioHost.querySelector<HTMLElement>('.inspection-positioner')
+      ?.style.getPropertyValue('--folio-drag-x') ?? '',
+    y: lens.folioHost.querySelector<HTMLElement>('.inspection-positioner')
+      ?.style.getPropertyValue('--folio-drag-y') ?? '',
     captured: draggedRecord !== null && pointerId !== null
       ? draggedRecord.hasPointerCapture(pointerId)
       : false,

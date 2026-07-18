@@ -13,6 +13,8 @@ export type FolioRecordProjection = {
   readonly summary: string
   readonly status: FolioRecordStatus
   readonly affordance: FolioRecordAffordance
+  readonly priority: boolean
+  readonly restrictedPacket: boolean
 }
 
 export type FolioCultureProjection = {
@@ -65,6 +67,9 @@ export function projectFolio(
           summary: puzzle.provenance.summary,
           status,
           affordance: recordAffordance(mode, status),
+          priority: puzzle.id === culture.gateway,
+          restrictedPacket:
+            culture.unlocksAfter.length > 0 && puzzle.id === culture.gateway,
         }
       }),
   }))
