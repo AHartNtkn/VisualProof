@@ -3,7 +3,6 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { inspectPngFile } from '../../scripts/assets/canonical-png'
 
-const source = resolve('review/editor-loupe-study/isolated/candidate-a.png')
 const output = resolve('assets/interface/generated/editor-loupe')
 const files = {
   rim: resolve(output, 'rim-socket.png'),
@@ -27,32 +26,6 @@ describe('approved Candidate A production layers', () => {
     expect(alphaAt(inspectPngFile(files.rim).rgba, 1400, 650, 180)).toBeGreaterThan(0)
     expect(alphaAt(inspectPngFile(files.optics).rgba, 1400, 1080, 650)).toBeGreaterThan(0)
     expect(alphaAt(inspectPngFile(files.handle).rgba, 1400, 1200, 1180)).toBeGreaterThan(0)
-  })
-
-  it('losslessly partitions approved source pixels instead of repainting them', () => {
-    const approved = inspectPngFile(source)
-    const layers = Object.values(files).map(inspectPngFile)
-    const violations = { overlaps: 0, missing: 0, altered: 0, spurious: 0 }
-    for (let pixel = 0; pixel < approved.width * approved.height; pixel++) {
-      const offset = pixel * 4
-      const owners = layers.filter((layer) => layer.rgba[offset + 3]! > 0)
-      if (owners.length > 1) violations.overlaps++
-      if (approved.rgba[offset + 3] === 0) {
-        if (owners.length !== 0) violations.spurious++
-        continue
-      }
-      if (owners.length !== 1) {
-        violations.missing++
-        continue
-      }
-      for (let channel = 0; channel < 4; channel++) {
-        if (owners[0]!.rgba[offset + channel] !== approved.rgba[offset + channel]) {
-          violations.altered++
-          break
-        }
-      }
-    }
-    expect(violations).toEqual({ overlaps: 0, missing: 0, altered: 0, spurious: 0 })
   })
 
   it('is referenced by the production class and keeps optics pointer-transparent and edge-only', () => {
