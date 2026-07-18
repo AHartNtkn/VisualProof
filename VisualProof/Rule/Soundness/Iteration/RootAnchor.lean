@@ -382,6 +382,110 @@ theorem Splice.Input.OpenRootCompilerItems.routeWitness_complete
     rfl
   exact ⟨bodyEq ▸ relocated⟩
 
+/-- Two successful root occurrence compilations of the same concrete diagram
+have a frame at the same concrete occurrence position.  This retains the
+compiler's identity occurrence order instead of forgetting it behind the
+permutation allowed by `ItemSeqIso`. -/
+theorem compiledRootItems_sameDiagramFrame
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {sourceContext targetContext : ConcreteElaboration.WireContext diagram}
+    (targetExact : targetContext.Exact diagram.root)
+    {sourceItems : ItemSeq signature sourceContext.length []}
+    {targetItems : ItemSeq signature targetContext.length []}
+    (sourceComputation : ConcreteElaboration.compileOccurrencesWith? signature
+      diagram
+      (ConcreteElaboration.compileRegion? signature diagram
+        diagram.regionCount)
+      sourceContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences diagram diagram.root) =
+        some sourceItems)
+    (targetComputation : ConcreteElaboration.compileOccurrencesWith? signature
+      diagram
+      (ConcreteElaboration.compileRegion? signature diagram
+        diagram.regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences diagram diagram.root) =
+        some targetItems)
+    (wire : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length))
+    (wireSpec : ∀ index,
+      targetContext.get (wire index) = sourceContext.get index)
+    (sourceIndex : Fin sourceItems.length)
+    (targetIndex : Fin targetItems.length)
+    (indexValEq : sourceIndex.val = targetIndex.val) :
+    Nonempty (ItemSeqIso.Frame wire sourceIndex targetIndex) := by
+  let occurrences := ConcreteElaboration.localOccurrences diagram diagram.root
+  have sourceLength := ConcreteElaboration.compileOccurrencesWith?_length
+    (ConcreteElaboration.compileRegion? signature diagram diagram.regionCount)
+    sourceContext ConcreteElaboration.BinderContext.empty sourceComputation
+  have targetLength := ConcreteElaboration.compileOccurrencesWith?_length
+    (ConcreteElaboration.compileRegion? signature diagram diagram.regionCount)
+    targetContext ConcreteElaboration.BinderContext.empty targetComputation
+  let positions : FiniteEquiv (Fin sourceItems.length)
+      (Fin targetItems.length) :=
+    (FiniteEquiv.finCast sourceLength).trans
+      (FiniteEquiv.finCast targetLength.symm)
+  have mapped : positions sourceIndex = targetIndex := by
+    apply Fin.ext
+    exact indexValEq
+  refine ⟨{
+    positions := positions
+    mapped := mapped
+    siblings := ?_
+  }⟩
+  intro index _
+  let occurrenceIndex : Fin occurrences.length := Fin.cast sourceLength index
+  have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
+    (ConcreteElaboration.compileRegion? signature diagram diagram.regionCount)
+    sourceContext ConcreteElaboration.BinderContext.empty sourceComputation
+    occurrenceIndex
+  have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
+    (ConcreteElaboration.compileRegion? signature diagram diagram.regionCount)
+    targetContext ConcreteElaboration.BinderContext.empty targetComputation
+    occurrenceIndex
+  have sourcePosition : Fin.cast sourceLength.symm occurrenceIndex = index := by
+    apply Fin.ext
+    rfl
+  have targetPosition : Fin.cast targetLength.symm occurrenceIndex =
+      positions index := by
+    apply Fin.ext
+    rfl
+  rw [sourcePosition] at sourceGet
+  rw [targetPosition] at targetGet
+  let concreteIso := ConcreteIso.refl diagram
+  have contextsAgree : ConcreteElaboration.WireContextsAgree concreteIso
+      sourceContext targetContext wire := by
+    intro contextIndex
+    simpa [concreteIso] using wireSpec contextIndex
+  have bindersAgree : ConcreteElaboration.BinderContextsAgree concreteIso
+      (ConcreteElaboration.BinderContext.empty :
+        ConcreteElaboration.BinderContext diagram [])
+      ConcreteElaboration.BinderContext.empty := by
+    intro binder
+    rfl
+  have targetGet' : ConcreteElaboration.compileOccurrenceWith? signature
+      diagram
+      (ConcreteElaboration.compileRegion? signature diagram
+        diagram.regionCount)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.renameOccurrence concreteIso
+        (occurrences.get occurrenceIndex)) =
+        some (targetItems.get (positions index)) := by
+    cases hoccurrence : occurrences.get occurrenceIndex with
+    | node node =>
+        rw [hoccurrence] at targetGet
+        simpa [concreteIso, ConcreteIso.refl,
+          ConcreteElaboration.renameOccurrence, FiniteEquiv.refl] using
+            targetGet
+    | child child =>
+        rw [hoccurrence] at targetGet
+        simpa [concreteIso, ConcreteIso.refl,
+          ConcreteElaboration.renameOccurrence, FiniteEquiv.refl] using
+            targetGet
+  exact ConcreteElaboration.compileOccurrenceWith?_equivariant concreteIso
+    hwf contextsAgree targetExact bindersAgree
+    (occurrences.get occurrenceIndex) (List.get_mem _ _) sourceGet targetGet'
+
 /-- The closed anchor compiler items at a root selection and the ordered-open
 root compiler items are the same occurrence block up to the exact root-wire
 coordinate equivalence. -/
