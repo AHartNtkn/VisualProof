@@ -2447,6 +2447,124 @@ theorem spawnNodeRaw_compileOldOccurrencesAtSite
     (hsource.extend_child hinput hparent)
     (htargetExact.extend_child htarget hparent)
 
+/-- At the appended node's actual region, all old occurrences compile through
+the old-wire embedding even when the fresh wire was introduced at an ancestor
+scope. -/
+theorem spawnNodeRaw_compileOldOccurrencesAtNodeSite
+    (input : ConcreteDiagram) (node : CNode input.regionCount)
+    (scope : Fin input.regionCount) (portCount : Nat)
+    (port : Fin portCount → CPort)
+    (hinput : input.WellFormed signature)
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (scopeEnclosesNode : input.Encloses scope node.region)
+    (fuel : Nat)
+    (source : ConcreteElaboration.WireContext input)
+    (target : ConcreteElaboration.WireContext
+      (spawnNodeRaw input node scope portCount port))
+    (embedding : SpawnContextEmbedding input node scope portCount port
+      source target)
+    (binders : ConcreteElaboration.BinderContext input rels)
+    (hsource : (source.extend node.region).Exact node.region)
+    (htargetExact : (target.extend node.region).Exact node.region) :
+    ConcreteElaboration.compileOccurrencesWith? signature
+        (spawnNodeRaw input node scope portCount port)
+        (ConcreteElaboration.compileRegion? signature
+          (spawnNodeRaw input node scope portCount port) fuel)
+        (target.extend node.region) binders
+        ((ConcreteElaboration.localOccurrences input node.region).map
+          (spawnNodeRaw_oldOccurrence input)) =
+      (ConcreteElaboration.compileOccurrencesWith? signature input
+        (ConcreteElaboration.compileRegion? signature input fuel)
+        (source.extend node.region) binders
+        (ConcreteElaboration.localOccurrences input node.region)).map
+          (ItemSeq.renameWires (embedding.extend node.region).index) := by
+  apply ConcreteElaboration.compileOccurrencesWith?_map
+  intro occurrence hmem
+  apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
+    (source.extend node.region) (target.extend node.region)
+    (embedding.extend node.region)
+    (ConcreteElaboration.compileRegion? signature input fuel)
+    (ConcreteElaboration.compileRegion? signature
+      (spawnNodeRaw input node scope portCount port) fuel)
+    binders occurrence htargetExact.nodup htarget.wire_endpoints_are_disjoint
+  intro childRels child childBinders heq
+  subst occurrence
+  have hparent :=
+    (ConcreteElaboration.mem_localOccurrences_child input node.region child).mp
+      hmem
+  have hchildNotAbove : ¬ input.Encloses child node.region :=
+    ConcreteElaboration.checked_direct_child_not_encloses_parent hinput hparent
+  exact spawnNodeRaw_compileRegion?_old_of_not_encloses_node input node scope
+    portCount port hinput htarget scopeEnclosesNode fuel child
+    (source.extend node.region) (target.extend node.region)
+    (embedding.extend node.region) childBinders hchildNotAbove
+    (hsource.extend_child hinput hparent)
+    (htargetExact.extend_child htarget hparent)
+
+/-- A prefix or suffix away from the focused routed child compiles unchanged
+when the appended node lies below a distinct wire-introduction scope. -/
+theorem spawnNodeRaw_compileOccurrencesAwayFromNode
+    (input : ConcreteDiagram) (node : CNode input.regionCount)
+    (scope parent selected : Fin input.regionCount) (portCount : Nat)
+    (port : Fin portCount → CPort)
+    (hinput : input.WellFormed signature)
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (scopeEnclosesNode : input.Encloses scope node.region)
+    (hparent : (input.regions selected).parent? = some parent)
+    {rest : List Nat}
+    (tail : Diagram.Splice.RegionRoute input selected node.region rest)
+    (fuel : Nat)
+    (source : ConcreteElaboration.WireContext input)
+    (target : ConcreteElaboration.WireContext
+      (spawnNodeRaw input node scope portCount port))
+    (embedding : SpawnContextEmbedding input node scope portCount port
+      source target)
+    (binders : ConcreteElaboration.BinderContext input rels)
+    (hsourceExact : (source.extend parent).Exact parent)
+    (htargetExact : (target.extend parent).Exact parent)
+    (occurrences : List (ConcreteElaboration.LocalOccurrence
+      input.regionCount input.nodeCount))
+    (hlocal : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ ConcreteElaboration.localOccurrences input parent)
+    (haway : ConcreteElaboration.LocalOccurrence.child selected ∉ occurrences) :
+    ConcreteElaboration.compileOccurrencesWith? signature
+        (spawnNodeRaw input node scope portCount port)
+        (ConcreteElaboration.compileRegion? signature
+          (spawnNodeRaw input node scope portCount port) fuel)
+        (target.extend parent) binders
+        (occurrences.map (spawnNodeRaw_oldOccurrence input)) =
+      (ConcreteElaboration.compileOccurrencesWith? signature input
+        (ConcreteElaboration.compileRegion? signature input fuel)
+        (source.extend parent) binders occurrences).map
+          (ItemSeq.renameWires (embedding.extend parent).index) := by
+  apply ConcreteElaboration.compileOccurrencesWith?_map
+  intro occurrence hmem
+  apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
+    (source.extend parent) (target.extend parent) (embedding.extend parent)
+    (ConcreteElaboration.compileRegion? signature input fuel)
+    (ConcreteElaboration.compileRegion? signature
+      (spawnNodeRaw input node scope portCount port) fuel)
+    binders occurrence htargetExact.nodup
+    htarget.wire_endpoints_are_disjoint
+  intro childRels child childBinders heq
+  subst occurrence
+  have hchildParent :=
+    (ConcreteElaboration.mem_localOccurrences_child input parent child).mp
+      (hlocal (.child child) hmem)
+  have hchildNe : child ≠ selected := by
+    intro equality
+    subst child
+    exact haway hmem
+  have hselectedNode := regionRoute_encloses input hinput tail
+  have hchildNotAbove := checked_sibling_not_encloses_descendant input hinput
+    hparent hchildParent hselectedNode hchildNe
+  exact spawnNodeRaw_compileRegion?_old_of_not_encloses_node input node scope
+    portCount port hinput htarget scopeEnclosesNode fuel child
+    (source.extend parent) (target.extend parent) (embedding.extend parent)
+    childBinders hchildNotAbove
+    (hsourceExact.extend_child hinput hchildParent)
+    (htargetExact.extend_child htarget hchildParent)
+
 /-- At a root spawn, all pre-existing direct occurrences compile through the
 old root-wire prefix.  Direct children are handled by the strict-descendant
 compiler theorem; the fresh node is intentionally excluded. -/
