@@ -9,6 +9,46 @@ open Theory
 
 namespace AnchoredWireSoundness
 
+theorem anchoredWireSplitRaw_bindersCover
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    {rels : RelCtx} (binders : ConcreteElaboration.BinderContext input.val rels)
+    (region : Fin input.val.regionCount)
+    (cover : ConcreteElaboration.BinderContext.Covers
+      (d := input.val) binders region) :
+    ConcreteElaboration.BinderContext.Covers
+      (d := anchoredWireSplitRaw input wire endpoints target term)
+      binders region := by
+  intro binder parent arity binderKind encloses
+  apply cover binder parent arity
+  · simpa only [anchoredWireSplitRaw_regions] using binderKind
+  · exact (anchoredWireSplitRaw_encloses_iff input wire endpoints target term
+      binder region).mp encloses
+
+def anchoredWireSplitRaw_binderEnumeration
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    {rels : RelCtx} (binders : ConcreteElaboration.BinderContext input.val rels)
+    (region : Fin input.val.regionCount)
+    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val binders region) :
+    ConcreteElaboration.BinderContext.Enumeration
+      (anchoredWireSplitRaw input wire endpoints target term) binders region where
+  binder := enumeration.binder
+  binder_injective := enumeration.binder_injective
+  bubble := by
+    intro index
+    obtain ⟨parent, kind⟩ := enumeration.bubble index
+    exact ⟨parent, by simpa only [anchoredWireSplitRaw_regions] using kind⟩
+  encloses := by
+    intro index
+    exact (anchoredWireSplitRaw_encloses_iff input wire endpoints target term
+      (enumeration.binder index) region).mpr (enumeration.encloses index)
+  lookup := enumeration.lookup
+  lookup_owner := enumeration.lookup_owner
+
 /-- A complete semantic kernel at one certified availability region. -/
 def AnchoredAvailableKernel
     (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
@@ -25,6 +65,9 @@ def AnchoredAvailableKernel
     (collapse : SplitContextCollapse input wire endpoints target term
       expanded original)
     (binders : ConcreteElaboration.BinderContext input.val rels)
+    (bindersCover : binders.Covers available)
+    (binderEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val binders available)
     (originalExact : (original.extend available).Exact available)
     (expandedExact : (expanded.extend available).Exact available)
     (sourceBody : Region signature original.length rels)
@@ -41,6 +84,128 @@ def AnchoredAvailableKernel
     sourceOuter ∘ collapse.indexMap = targetOuter →
       (denoteRegion model named sourceOuter relEnv sourceBody ↔
         denoteRegion model named targetOuter relEnv targetBody)
+
+theorem anchoredWireSplitRaw_certified_available_kernel
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (witness : Fin input.val.nodeCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target available witnessRegion : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (witnessShape : input.val.nodes witness = .term witnessRegion 0 term)
+    (witnessOccurs : input.val.EndpointOccurs wire
+      { node := witness, port := .output })
+    (witnessKept : { node := witness, port := CPort.output } ∉ endpoints)
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed signature)
+    (wireEnclosesAvailable :
+      input.val.Encloses (input.val.wires wire).scope available)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    {witnessPath targetPath : List Nat}
+    (witnessRoute : Diagram.Splice.RegionRoute input.val available witnessRegion
+      witnessPath)
+    (witnessZero : witnessRoute.HasCutDepth 0)
+    (sameDepth : concreteCutDepth input.val available =
+      concreteCutDepth input.val witnessRegion)
+    (targetRoute : Diagram.Splice.RegionRoute input.val available target
+      targetPath) :
+    AnchoredAvailableKernel input wire endpoints target available term
+      targetWellFormed := by
+  let targetChecked : CheckedDiagram signature :=
+    ⟨anchoredWireSplitRaw input wire endpoints target term, targetWellFormed⟩
+  have targetWitnessEncloses : targetChecked.val.Encloses available witnessRegion :=
+    (anchoredWireSplitRaw_encloses_iff input wire endpoints target term
+      available witnessRegion).mpr
+      (regionRoute_encloses input.val input.property witnessRoute)
+  obtain ⟨targetWitnessPath, ⟨targetWitnessRoute⟩⟩ :=
+    Diagram.Splice.regionRoute_complete_of_encloses targetChecked.val available
+      witnessRegion targetWitnessEncloses
+  obtain ⟨targetWitnessDepth, targetWitnessDepthProof⟩ :=
+    targetWitnessRoute.hasCutDepth_exists targetWellFormed
+  have depthPreserve : ∀ fuel (region : Fin input.val.regionCount),
+      concreteCutDepthAux targetChecked.val fuel region =
+        concreteCutDepthAux input.val fuel region := by
+    intro fuel
+    induction fuel with
+    | zero => intro region; rfl
+    | succ fuel ih =>
+        intro region
+        simp only [concreteCutDepthAux]
+        rw [show targetChecked.val.regions region = input.val.regions region by
+          simp [targetChecked, anchoredWireSplitRaw_regions]]
+        cases kind : input.val.regions region with
+        | sheet => rfl
+        | cut parent => simp only [ih]
+        | bubble parent arity => simp only [ih]
+  have targetSameDepth : concreteCutDepth targetChecked.val available =
+      concreteCutDepth targetChecked.val witnessRegion := by
+    unfold concreteCutDepth
+    rw [depthPreserve, depthPreserve]
+    exact sameDepth
+  have targetDepthZero := CongruenceSoundness.route_cutDepth_zero_of_equal
+    targetChecked targetWitnessRoute targetWitnessDepth targetWitnessDepthProof
+    targetSameDepth
+  subst targetWitnessDepth
+  have targetWitnessShape : targetChecked.val.nodes witness.castSucc =
+      .term witnessRegion 0 term := by
+    simpa [targetChecked, witnessShape] using
+      anchoredWireSplitRaw_oldNode input wire endpoints target term witness
+  have targetWitnessOccurs : targetChecked.val.EndpointOccurs wire.castSucc
+      { node := witness.castSucc, port := .output } := by
+    simpa using (anchoredWireSplitRaw_old_oldEndpointOccurs_iff input wire wire
+      endpoints target term { node := witness, port := .output }).mpr
+        ⟨witnessOccurs, fun _ => witnessKept⟩
+  intro rels fuel original expanded collapse binders bindersCover
+    binderEnumeration originalExact expandedExact sourceBody targetBody
+    sourceCompiled targetCompiled model named sourceOuter targetOuter relEnv
+    outerAgrees
+  simp only [ConcreteElaboration.compileRegion?] at sourceCompiled targetCompiled
+  cases sourceItemsResult :
+      ConcreteElaboration.compileOccurrencesWith? signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
+        (original.extend available) binders
+        (ConcreteElaboration.localOccurrences input.val available) with
+  | none => simp [sourceItemsResult] at sourceCompiled
+  | some sourceItems =>
+    simp [sourceItemsResult] at sourceCompiled
+    subst sourceBody
+    cases targetItemsResult :
+        ConcreteElaboration.compileOccurrencesWith? signature targetChecked.val
+          (ConcreteElaboration.compileRegion? signature targetChecked.val fuel)
+          (expanded.extend available) binders
+          (ConcreteElaboration.localOccurrences targetChecked.val available) with
+    | none => simp [targetChecked, targetItemsResult] at targetCompiled
+    | some targetItems =>
+      simp [targetChecked, targetItemsResult] at targetCompiled
+      subst targetBody
+      apply anchoredWireSplitRaw_available_route_equiv input wire endpoints target
+        term selectedOccurs targetWellFormed wireEnclosesAvailable
+        wireEnclosesTarget targetRoute fuel original expanded collapse binders
+        originalExact expandedExact sourceItems targetItems sourceItemsResult
+        (by simpa [targetChecked] using targetItemsResult) model named sourceOuter
+        targetOuter relEnv outerAgrees
+      · intro sourceLocal sourceDenotes
+        apply anchoredWireSplit_witness_value_of_zero_route input wire witness
+          witnessRegion term witnessShape witnessOccurs witnessRoute witnessZero
+          original binders fuel sourceItems sourceItemsResult originalExact
+          bindersCover binderEnumeration model named sourceOuter sourceLocal relEnv
+        simpa [ConcreteElaboration.extendedEnvironment, splitExtendedEnv] using
+          sourceDenotes
+      · intro targetLocal targetDenotes
+        apply anchoredWireSplit_witness_value_of_zero_route targetChecked
+          wire.castSucc witness.castSucc witnessRegion term targetWitnessShape
+          targetWitnessOccurs targetWitnessRoute targetWitnessDepthProof expanded binders
+          fuel targetItems (by simpa [targetChecked] using targetItemsResult)
+          expandedExact (anchoredWireSplitRaw_bindersCover input wire endpoints
+            target term binders available bindersCover)
+          (anchoredWireSplitRaw_binderEnumeration input wire endpoints target term
+            binders available binderEnumeration)
+          model named
+          targetOuter targetLocal relEnv
+        simpa [ConcreteElaboration.extendedEnvironment, splitExtendedEnv] using
+          targetDenotes
 
 theorem anchoredWireSplitRaw_finishRegion_frame_equiv_of_ne
     (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
@@ -208,6 +373,9 @@ theorem anchoredWireSplitRaw_compileRegion_route_to_available
       (collapse : SplitContextCollapse input wire endpoints target term
         expanded original)
       (binders : ConcreteElaboration.BinderContext input.val rels)
+      (bindersCover : binders.Covers start)
+      (binderEnumeration : ConcreteElaboration.BinderContext.Enumeration
+        input.val binders start)
       (originalExact : (original.extend start).Exact start)
       (expandedExact : (expanded.extend start).Exact start)
       (sourceBody : Region signature original.length rels)
@@ -228,7 +396,8 @@ theorem anchoredWireSplitRaw_compileRegion_route_to_available
   induction route with
   | here => exact site
   | @step start child available rest hparent position hposition tail ih =>
-      intro rels fuel original expanded collapse binders originalExact
+      intro rels fuel original expanded collapse binders bindersCover
+        binderEnumeration originalExact
         expandedExact sourceBody targetBody sourceCompiled targetCompiled model
         named sourceOuter targetOuter relEnv outerAgrees
       have startNe : start ≠ target := by
@@ -375,7 +544,11 @@ theorem anchoredWireSplitRaw_compileRegion_route_to_available
                     (original.extend start)
                     (expanded.extend start)
                     (collapse.extend wireEnclosesTarget start expandedExact
-                      originalExact) binders childOriginalExact childExpandedExact
+                      originalExact) binders
+                    (ConcreteElaboration.BinderContext.covers_cut_child
+                      bindersCover childKind)
+                    (binderEnumeration.cutChild input.property childKind)
+                    childOriginalExact childExpandedExact
                     sourceChild targetChild sourceChildResult targetChildResult
                     model named sourceRaw targetRaw relEnv agrees
                   exact not_congr childEquiv
@@ -425,6 +598,9 @@ theorem anchoredWireSplitRaw_compileRegion_route_to_available
                       (expanded.extend start)
                       (collapse.extend wireEnclosesTarget start expandedExact
                         originalExact) (binders.push child arity)
+                      (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                        bindersCover childKind)
+                      (binderEnumeration.bubbleChild input.property childKind)
                       childOriginalExact childExpandedExact sourceChild targetChild
                       sourceChildResult targetChildResult model named sourceRaw
                       targetRaw (relation, relEnv) agrees
@@ -435,6 +611,9 @@ theorem anchoredWireSplitRaw_compileRegion_route_to_available
                       (expanded.extend start)
                       (collapse.extend wireEnclosesTarget start expandedExact
                         originalExact) (binders.push child arity)
+                      (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                        bindersCover childKind)
+                      (binderEnumeration.bubbleChild input.property childKind)
                       childOriginalExact childExpandedExact sourceChild targetChild
                       sourceChildResult targetChildResult model named sourceRaw
                       targetRaw (relation, relEnv) agrees

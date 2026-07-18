@@ -5,7 +5,7 @@ import VisualProof.Rule.NamedReference
 
 namespace VisualProof.Rule
 
-private def concreteCutDepthAux (diagram : Diagram.ConcreteDiagram) :
+def concreteCutDepthAux (diagram : Diagram.ConcreteDiagram) :
     Nat → Fin diagram.regionCount → Nat
   | 0, _ => 0
   | fuel + 1, region =>
