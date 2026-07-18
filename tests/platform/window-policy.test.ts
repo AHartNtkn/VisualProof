@@ -28,6 +28,7 @@ describe('Electron window policy', () => {
     expect(module.secureWindowOptions('/absolute/preload.cjs', false)).toMatchObject({
       frame: false,
       fullscreen: false,
+      show: false,
       webPreferences: {
         preload: '/absolute/preload.cjs',
         nodeIntegration: false,

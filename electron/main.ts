@@ -4,6 +4,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { installExitCoordinator } from './exit-coordinator.js'
 import { EXIT_REQUESTED_CHANNEL, registerPlatformIpc } from './ipc-boundary.js'
 import { DEFAULT_MAX_SAVE_BYTES, SaveStore } from './save-store.js'
+import { installStartupCoordinator } from './startup-coordinator.js'
 import { initialFullscreenFromSave, installWindowSecurity, secureWindowOptions } from './window-policy.js'
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url))
@@ -21,6 +22,14 @@ async function createMainWindow(): Promise<void> {
     secureWindowOptions(preloadPath, initialFullscreenFromSave(savedDocument)),
   )
   installWindowSecurity(mainWindow.webContents, rendererUrl)
+  const startupCoordinator = installStartupCoordinator({
+    window: mainWindow,
+    timeoutMs: 15_000,
+    onFailure: (error) => {
+      console.error('Failed to start Cursebreaker', error)
+      app.exit(1)
+    },
+  })
   const exitCoordinator = installExitCoordinator({
     app,
     window: mainWindow,
@@ -33,6 +42,7 @@ async function createMainWindow(): Promise<void> {
     window: mainWindow,
     store: saveStore,
     exitCoordinator,
+    startupCoordinator,
     rendererUrl,
     maxSaveBytes: DEFAULT_MAX_SAVE_BYTES,
     quit: () => app.quit(),

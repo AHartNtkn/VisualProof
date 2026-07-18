@@ -22,7 +22,8 @@ async function boot(): Promise<void> {
   const host = document.getElementById('cursebreaker')
   if (!(host instanceof HTMLElement)) throw new Error("missing <main id='cursebreaker'>")
 
-  const mounted = await mountCursebreaker({ host, platform: cursebreakerPlatform() })
+  const platform = cursebreakerPlatform()
+  const mounted = await mountCursebreaker({ host, platform })
   if (new URLSearchParams(window.location.search).has('debug')) {
     window.__cursebreakerDebug = {
       state: () => mounted.debug(),
@@ -32,27 +33,15 @@ async function boot(): Promise<void> {
       dispose: () => mounted.dispose(),
     }
   }
+  await platform.rendererReady()
 }
 
-function showLaunchFailure(error: unknown): void {
+async function reportLaunchFailure(error: unknown): Promise<void> {
   console.error('Failed to start Cursebreaker', error)
-
-  const host = document.getElementById('cursebreaker')
-  if (!(host instanceof HTMLElement)) return
-
-  const failure = document.createElement('section')
-  failure.className = 'curse-launch-failure'
-  failure.setAttribute('role', 'alert')
-
-  const heading = document.createElement('h1')
-  heading.textContent = 'Cursebreaker could not start'
-
-  const message = document.createElement('p')
-  message.textContent = 'Close this window and try again.'
-
-  failure.append(heading, message)
-  host.dataset.launchState = 'failed'
-  host.replaceChildren(failure)
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error)
+  await cursebreakerPlatform().reportStartupFailure(message)
 }
 
-void boot().catch(showLaunchFailure)
+void boot().catch(reportLaunchFailure).catch((error: unknown) => {
+  console.error('Failed to report Cursebreaker startup failure', error)
+})

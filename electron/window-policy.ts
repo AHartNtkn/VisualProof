@@ -19,6 +19,7 @@ export function secureWindowOptions(preload: string, fullscreen: boolean) {
   return {
     frame: false,
     fullscreen,
+    show: false,
     webPreferences: {
       preload,
       nodeIntegration: false,

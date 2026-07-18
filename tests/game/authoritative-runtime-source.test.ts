@@ -17,6 +17,7 @@ describe('authoritative renderer source boundary', () => {
     expect(combined).not.toMatch(/(?:\.\.\/)+app(?:\/|')|localStorage|ProofFrontViewport/)
     expect(combined).not.toMatch(/central-lens\/(?:frame|glass|shadow|lever-housing|lever-handle)\.png/)
     expect(style).not.toMatch(/curse-lens-(?:frame|glass|shadow|optics)/)
+    expect(combined).not.toMatch(/curse-launch-failure|Close this window and try again|could not start/i)
   })
 
   it('allows only runtime style attributes in addition to the restricted renderer policy', () => {

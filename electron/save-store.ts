@@ -23,6 +23,7 @@ export interface SaveStoreOptions {
   directory: string
   maxBytes?: number
   fileOps?: Partial<FileOperations>
+  quarantineId?: () => string
 }
 
 const defaultFileOperations: FileOperations = { mkdir, open, readFile, rename, unlink }
@@ -103,12 +104,14 @@ export class SaveStore {
   readonly maxBytes: number
   private readonly directory: string
   private readonly fileOps: FileOperations
+  private readonly quarantineId: () => string
 
   constructor(options: SaveStoreOptions) {
     this.directory = path.resolve(options.directory)
     this.savePath = path.join(this.directory, 'save.json')
     this.maxBytes = options.maxBytes ?? DEFAULT_MAX_SAVE_BYTES
     this.fileOps = { ...defaultFileOperations, ...options.fileOps }
+    this.quarantineId = options.quarantineId ?? randomUUID
   }
 
   async loadSave(): Promise<unknown | null> {
@@ -119,7 +122,47 @@ export class SaveStore {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null
       throw error
     }
-    return JSON.parse(encoded) as unknown
+    try {
+      return JSON.parse(encoded) as unknown
+    } catch (error) {
+      if (error instanceof SyntaxError) return encoded
+      throw error
+    }
+  }
+
+  async replaceInvalidSave(document: unknown): Promise<void> {
+    serializeSaveDocument(document, this.maxBytes)
+    await this.fileOps.mkdir(this.directory, { recursive: true, mode: 0o700 })
+    const rejectedPath = path.join(
+      this.directory,
+      `rejected-save-${this.quarantineId()}.json`,
+    )
+    let reservation: FileHandle | undefined
+    let reservationCreated = false
+    let moved = false
+    try {
+      reservation = await this.fileOps.open(rejectedPath, 'wx', 0o600)
+      reservationCreated = true
+      await reservation.close()
+      reservation = undefined
+      await this.fileOps.rename(this.savePath, rejectedPath)
+      moved = true
+      await syncDirectory(this.fileOps, this.directory)
+    } catch (error) {
+      await closeFile(reservation)
+      if (reservationCreated && !moved) {
+        try {
+          await this.fileOps.unlink(rejectedPath)
+        } catch (cleanupError) {
+          if ((cleanupError as NodeJS.ErrnoException).code !== 'ENOENT') throw cleanupError
+        }
+      }
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        throw new Error('Cannot replace invalid save: no authoritative save exists', { cause: error })
+      }
+      throw error
+    }
+    await this.writeSave(document)
   }
 
   async writeSave(document: unknown): Promise<void> {

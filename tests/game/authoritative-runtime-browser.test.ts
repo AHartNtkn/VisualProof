@@ -348,13 +348,30 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('rejects a malformed save loudly without mounting or overwriting it', async () => {
+  it('quarantines a malformed save, installs a current replacement, and opens the archive', async () => {
     const page = await openFixture('corrupt')
     try {
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.launchError()))
-        .toMatch(/CursebreakerLaunchError: .*save/i)
-      expect(await page.locator('.curse-production-environment').count()).toBe(0)
+        .toBeNull()
+      expect(await page.locator('.curse-production-environment').count()).toBe(1)
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
+        .toBe('archive')
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.writes())).toEqual([])
+      const replacements = await page.evaluate(() =>
+        window.__authoritativeRuntimeFixture.invalidSaveReplacements())
+      expect(replacements).toHaveLength(1)
+      expect(replacements[0]).toMatchObject({ format: 'cursebreaker-save', version: 4, mode: 'archive' })
+    } finally { await page.close() }
+  })
+
+  it('does not disguise an unexpected decoder fault as a rejected save', async () => {
+    const page = await openFixture('decoder-fault')
+    try {
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.launchError()))
+        .toMatch(/Could not restore the game save: fixture decoder fault/)
+      expect(await page.evaluate(() =>
+        window.__authoritativeRuntimeFixture.invalidSaveReplacements())).toEqual([])
+      expect(await page.locator('.curse-production-environment').count()).toBe(0)
     } finally { await page.close() }
   })
 

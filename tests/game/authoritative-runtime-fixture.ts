@@ -78,6 +78,7 @@ const deferred = (): Deferred => {
 }
 
 const writes: unknown[] = []
+const invalidSaveReplacements: unknown[] = []
 const writeGates: Deferred[] = []
 const fullscreenRequests: boolean[] = []
 const exits: unknown[] = []
@@ -90,6 +91,11 @@ let unsubscribed = false
 const platform: CursebreakerPlatform = {
   async loadSave() {
     if (scenario === 'corrupt') return { format: 'damaged-user-save' }
+    if (scenario === 'decoder-fault') {
+      return new Proxy({}, {
+        ownKeys() { throw new Error('fixture decoder fault') },
+      })
+    }
     return scenario === 'restore' ? restoredSave()
       : scenario === 'completion' ? completedSave()
         : null
@@ -101,6 +107,11 @@ const platform: CursebreakerPlatform = {
     writeGates.push(gate)
     await gate.promise
   },
+  async replaceInvalidSave(document) {
+    invalidSaveReplacements.push(document)
+  },
+  async rendererReady() {},
+  async reportStartupFailure(_message) {},
   async setFullscreen(fullscreen) {
     fullscreenRequests.push(fullscreen)
     if (fullscreenGate !== null) await fullscreenGate.promise
@@ -171,6 +182,7 @@ const fixture = {
   launchError: () => launchError,
   state: () => stateProjection(requireMounted().debug()),
   writes: () => writes,
+  invalidSaveReplacements: () => invalidSaveReplacements,
   fullscreenRequests: () => fullscreenRequests,
   exits: () => exits,
   gateWrites: (value: boolean) => { gateWrites = value },

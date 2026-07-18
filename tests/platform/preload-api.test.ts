@@ -25,7 +25,7 @@ async function executeCompiledPreload() {
 }
 
 describe('isolated preload API', () => {
-  test('the compiled sandbox preload is self-contained and exposes exactly five narrow capabilities', async () => {
+  test('the compiled sandbox preload is self-contained and exposes rejected-save replacement narrowly', async () => {
     const { compiled, exposed, sandboxRequire } = await executeCompiledPreload()
     const api = exposed[0]?.[1]
 
@@ -35,6 +35,9 @@ describe('isolated preload API', () => {
     expect(Object.keys(api ?? {}).sort()).toEqual([
       'loadSave',
       'onExitRequested',
+      'rendererReady',
+      'replaceInvalidSave',
+      'reportStartupFailure',
       'requestExit',
       'setFullscreen',
       'writeSave',
@@ -52,6 +55,9 @@ describe('isolated preload API', () => {
 
     await api?.loadSave?.()
     await api?.writeSave?.({ revision: 1 })
+    await api?.replaceInvalidSave?.({ revision: 4 })
+    await api?.rendererReady?.()
+    await api?.reportStartupFailure?.('fixture bootstrap exploded')
     await api?.setFullscreen?.(false)
     await api?.requestExit?.({ revision: 2 })
     const unsubscribe = api?.onExitRequested?.(callback) as (() => void) | undefined
@@ -62,6 +68,9 @@ describe('isolated preload API', () => {
     expect(transport.invoke.mock.calls).toEqual([
       ['cursebreaker:load-save'],
       ['cursebreaker:write-save', { revision: 1 }],
+      ['cursebreaker:replace-invalid-save', { revision: 4 }],
+      ['cursebreaker:renderer-ready'],
+      ['cursebreaker:startup-failed', 'fixture bootstrap exploded'],
       ['cursebreaker:set-fullscreen', false],
       ['cursebreaker:request-exit', { revision: 2 }],
     ])

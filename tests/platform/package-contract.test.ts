@@ -12,6 +12,7 @@ describe('desktop build and package contract', () => {
     expect(packageDocument.devDependencies['electron-builder']).toBe('26.15.3')
     expect(packageDocument.scripts).toMatchObject({
       app: 'npm run build:desktop && electron .',
+      'test:desktop-startup': 'npm run build:desktop && xvfb-run -a node --import tsx scripts/validate-desktop-startup.ts',
       'build:renderer': expect.any(String),
       'build:electron': expect.any(String),
       'build:desktop': expect.any(String),

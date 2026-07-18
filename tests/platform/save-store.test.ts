@@ -30,6 +30,16 @@ describe('atomic save store', () => {
     await expect(store.loadSave()).resolves.toBeNull()
   })
 
+  test('returns malformed JSON as a rejected document so game recovery can quarantine it', async () => {
+    const module = await loadSaveStoreModule()
+    expect(module).not.toBeNull()
+    const directory = await makeDirectory()
+    const store = new module.SaveStore({ directory })
+    await writeFile(path.join(directory, 'save.json'), '{"broken":', 'utf8')
+
+    await expect(store.loadSave()).resolves.toBe('{"broken":')
+  })
+
   test('writes, reads, and overwrites one JSON document', async () => {
     const module = await loadSaveStoreModule()
     expect(module).not.toBeNull()
@@ -40,6 +50,52 @@ describe('atomic save store', () => {
 
     await store.writeSave({ revision: 2 })
     await expect(store.loadSave()).resolves.toEqual({ revision: 2 })
+  })
+
+  test('quarantines a rejected document before installing its validated replacement', async () => {
+    const module = await loadSaveStoreModule()
+    expect(module).not.toBeNull()
+    const directory = await makeDirectory()
+    const store = new module.SaveStore({ directory })
+    const rejected = { format: 'cursebreaker-save', version: 3, acknowledgedTeachers: ['old'] }
+    const replacement = { format: 'cursebreaker-save', version: 4 }
+    await store.writeSave(rejected)
+
+    await store.replaceInvalidSave(replacement)
+
+    await expect(store.loadSave()).resolves.toEqual(replacement)
+    const files = await readdir(directory)
+    expect(files).toContain('save.json')
+    const quarantined = files.filter((name) => /^rejected-save-[\da-f-]+\.json$/.test(name))
+    expect(quarantined).toHaveLength(1)
+    await expect(readFile(path.join(directory, quarantined[0]!), 'utf8'))
+      .resolves.toBe(JSON.stringify(rejected))
+  })
+
+  test('does not create a replacement when there is no rejected authoritative save', async () => {
+    const module = await loadSaveStoreModule()
+    expect(module).not.toBeNull()
+    const directory = await makeDirectory()
+    const store = new module.SaveStore({ directory })
+
+    await expect(store.replaceInvalidSave({ revision: 4 })).rejects.toThrow(/no authoritative save/i)
+
+    await expect(readdir(directory)).resolves.toEqual([])
+  })
+
+  test('never overwrites an existing quarantine artifact on a name collision', async () => {
+    const module = await loadSaveStoreModule()
+    expect(module).not.toBeNull()
+    const directory = await makeDirectory()
+    const store = new module.SaveStore({ directory, quarantineId: () => 'collision' })
+    await store.writeSave({ revision: 3 })
+    const collisionPath = path.join(directory, 'rejected-save-collision.json')
+    await writeFile(collisionPath, 'foreign retained evidence', 'utf8')
+
+    await expect(store.replaceInvalidSave({ revision: 4 })).rejects.toMatchObject({ code: 'EEXIST' })
+
+    await expect(store.loadSave()).resolves.toEqual({ revision: 3 })
+    await expect(readFile(collisionPath, 'utf8')).resolves.toBe('foreign retained evidence')
   })
 
   test('a failed atomic rename preserves the prior save and removes only its own temporary file', async () => {

@@ -16,6 +16,7 @@ import {
 import type { CursebreakerPlatform } from '../platform'
 import { decodeGameSave, encodeGameSave } from '../save'
 import { currentDiagram, type GameSession } from '../session'
+import { GameDomainError } from '../types'
 import {
   EMPTY_ARCHIVE_SUBSTRATE_SEED,
   puzzleSubstrateSeed,
@@ -622,6 +623,11 @@ export async function mountCursebreaker(
   options: CursebreakerMountOptions,
 ): Promise<MountedCursebreaker> {
   const catalog = options.catalog ?? openingCatalog()
+  const freshState = async (): Promise<GameControllerState> =>
+    (await import('../controller-state')).createInitialGameState(catalog, {
+      reducedMotion: options.host.ownerDocument.defaultView
+        ?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+    })
   let saved: unknown | null
   try {
     saved = await options.platform.loadSave()
@@ -629,15 +635,28 @@ export async function mountCursebreaker(
     throw new CursebreakerLaunchError(`Could not load the game save: ${errorText(error)}`)
   }
   let state: GameControllerState
-  try {
-    state = saved === null
-      ? (await import('../controller-state')).createInitialGameState(catalog, {
-        reducedMotion: options.host.ownerDocument.defaultView
-          ?.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
-      })
-      : decodeGameSave(catalog, saved)
-  } catch (error) {
-    throw new CursebreakerLaunchError(`Could not restore the game save: ${errorText(error)}`)
+  if (saved === null) {
+    state = await freshState()
+  } else {
+    try {
+      state = decodeGameSave(catalog, saved)
+    } catch (error) {
+      if (!(error instanceof GameDomainError)) {
+        throw new CursebreakerLaunchError(
+          `Could not restore the game save: ${errorText(error)}`,
+          { cause: error },
+        )
+      }
+      try {
+        state = await freshState()
+        await options.platform.replaceInvalidSave(encodeGameSave(catalog, state))
+      } catch (replacementError) {
+        throw new CursebreakerLaunchError(
+          `Could not replace an invalid game save: ${errorText(replacementError)}`,
+          { cause: error },
+        )
+      }
+    }
   }
   return new CursebreakerRuntime({ ...options, catalog, state })
 }

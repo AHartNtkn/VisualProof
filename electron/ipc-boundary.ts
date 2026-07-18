@@ -20,10 +20,16 @@ interface WindowLike {
 interface StoreLike {
   loadSave(): Promise<unknown | null>
   writeSave(document: unknown): Promise<void>
+  replaceInvalidSave(document: unknown): Promise<void>
 }
 
 interface ExitCoordinatorLike {
   confirmSavedExit(): void
+}
+
+interface StartupCoordinatorLike {
+  rendererReady(): void
+  rendererFailed(message: string): void
 }
 
 export interface PlatformIpcOptions {
@@ -31,6 +37,7 @@ export interface PlatformIpcOptions {
   window: WindowLike
   store: StoreLike
   exitCoordinator: ExitCoordinatorLike
+  startupCoordinator: StartupCoordinatorLike
   rendererUrl: string
   maxSaveBytes: number
   quit(): void
@@ -57,6 +64,13 @@ function assertArgumentCount(channel: string, arguments_: readonly unknown[], ex
   }
 }
 
+function readStartupFailureMessage(value: unknown): string {
+  if (typeof value !== 'string' || value.trim().length === 0 || value.length > 4_096) {
+    throw new TypeError('Startup failure message must be a nonempty string of at most 4096 characters')
+  }
+  return value
+}
+
 export function registerPlatformIpc(options: PlatformIpcOptions): void {
   options.ipcMain.handle('cursebreaker:load-save', async (event, ...arguments_) => {
     assertTrustedSender(event, options)
@@ -70,6 +84,26 @@ export function registerPlatformIpc(options: PlatformIpcOptions): void {
     const document = arguments_[0]
     validateDocument(document, options.maxSaveBytes)
     await options.store.writeSave(document)
+  })
+
+  options.ipcMain.handle('cursebreaker:replace-invalid-save', async (event, ...arguments_) => {
+    assertTrustedSender(event, options)
+    assertArgumentCount('replaceInvalidSave', arguments_, 1)
+    const document = arguments_[0]
+    validateDocument(document, options.maxSaveBytes)
+    await options.store.replaceInvalidSave(document)
+  })
+
+  options.ipcMain.handle('cursebreaker:renderer-ready', async (event, ...arguments_) => {
+    assertTrustedSender(event, options)
+    assertArgumentCount('rendererReady', arguments_, 0)
+    options.startupCoordinator.rendererReady()
+  })
+
+  options.ipcMain.handle('cursebreaker:startup-failed', async (event, ...arguments_) => {
+    assertTrustedSender(event, options)
+    assertArgumentCount('reportStartupFailure', arguments_, 1)
+    options.startupCoordinator.rendererFailed(readStartupFailureMessage(arguments_[0]))
   })
 
   options.ipcMain.handle('cursebreaker:set-fullscreen', async (event, ...arguments_) => {

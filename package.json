@@ -19,6 +19,7 @@
     "emit:theories": "tsx scripts/emit-theories.ts",
     "demo": "vite demo",
     "app": "npm run build:desktop && electron .",
+    "test:desktop-startup": "npm run build:desktop && xvfb-run -a node --import tsx scripts/validate-desktop-startup.ts",
     "e2e": "playwright test",
     "build:renderer": "vite build app",
     "build:electron": "tsc -p tsconfig.electron.json",

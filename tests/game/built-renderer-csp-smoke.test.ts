@@ -8,6 +8,8 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 type RendererProbe = {
   readonly loadSaveCalls: number
+  readonly readyCalls: number
+  readonly startupFailures: readonly string[]
   readonly violations: readonly string[]
 }
 
@@ -56,13 +58,26 @@ const openBuiltRenderer = async (loadMode: 'success' | 'load-error' = 'success')
       cursebreakerPlatform: {
         loadSave(): Promise<null>
         writeSave(document: unknown): Promise<void>
+        replaceInvalidSave(document: unknown): Promise<void>
+        rendererReady(): Promise<void>
+        reportStartupFailure(message: string): Promise<void>
         setFullscreen(fullscreen: boolean): Promise<boolean>
         requestExit(document: unknown): Promise<void>
         onExitRequested(callback: () => void): () => void
       }
-      __builtRendererProbe: { loadSaveCalls: number; violations: string[] }
+      __builtRendererProbe: {
+        loadSaveCalls: number
+        readyCalls: number
+        startupFailures: string[]
+        violations: string[]
+      }
     }
-    const probe = { loadSaveCalls: 0, violations: [] as string[] }
+    const probe = {
+      loadSaveCalls: 0,
+      readyCalls: 0,
+      startupFailures: [] as string[],
+      violations: [] as string[],
+    }
     Object.defineProperty(runtimeWindow, '__builtRendererProbe', { value: probe })
     Object.defineProperty(runtimeWindow, 'cursebreakerPlatform', {
       value: {
@@ -72,6 +87,9 @@ const openBuiltRenderer = async (loadMode: 'success' | 'load-error' = 'success')
           return null
         },
         async writeSave(_document: unknown) {},
+        async replaceInvalidSave(_document: unknown) {},
+        async rendererReady() { probe.readyCalls += 1 },
+        async reportStartupFailure(message: string) { probe.startupFailures.push(message) },
         async setFullscreen(fullscreen: boolean) { return fullscreen },
         async requestExit(_document: unknown) {},
         onExitRequested(_callback: () => void) { return () => {} },
@@ -86,6 +104,13 @@ const openBuiltRenderer = async (loadMode: 'success' | 'load-error' = 'success')
     await page.waitForFunction(() => {
       const runtimeWindow = window as typeof window & { __cursebreakerDebug?: unknown }
       return runtimeWindow.__cursebreakerDebug !== undefined
+    })
+  } else {
+    await page.waitForFunction(() => {
+      const runtimeWindow = window as typeof window & {
+        __builtRendererProbe: { startupFailures: string[] }
+      }
+      return runtimeWindow.__builtRendererProbe.startupFailures.length > 0
     })
   }
   return { page, pageErrors }
@@ -161,6 +186,8 @@ describe('built renderer production CSP', () => {
         window as typeof window & { __builtRendererProbe: RendererProbe }
       ).__builtRendererProbe)
       expect(probe.loadSaveCalls).toBe(1)
+      expect(probe.readyCalls).toBe(1)
+      expect(probe.startupFailures).toEqual([])
       expect(probe.violations).toEqual([])
       expect(pageErrors).toEqual([])
     } finally {
@@ -168,14 +195,18 @@ describe('built renderer production CSP', () => {
     }
   })
 
-  it('renders an accessible diagnostic instead of an empty black host when startup fails', async () => {
+  it('reports a fatal startup error without rendering a restart surface', async () => {
     const { page, pageErrors } = await openBuiltRenderer('load-error')
     try {
-      const alert = page.locator('.curse-launch-failure[role="alert"]')
-      await expect.poll(() => alert.count()).toBe(1)
-      await expect.poll(() => alert.textContent()).toContain('Cursebreaker could not start')
-      await expect.poll(() => page.locator('#cursebreaker').getAttribute('data-launch-state'))
-        .toBe('failed')
+      expect(await page.locator('.curse-launch-failure').count()).toBe(0)
+      expect(await page.locator('#cursebreaker').getAttribute('data-launch-state')).toBeNull()
+      expect(await page.locator('#cursebreaker').evaluate((host) => host.childElementCount)).toBe(0)
+      const probe = await page.evaluate(() => (
+        window as typeof window & { __builtRendererProbe: RendererProbe }
+      ).__builtRendererProbe)
+      expect(probe.readyCalls).toBe(0)
+      expect(probe.startupFailures).toHaveLength(1)
+      expect(probe.startupFailures[0]).toMatch(/Could not load the game save: fixture load failure/)
       expect(pageErrors).toEqual([])
     } finally {
       await page.close()
