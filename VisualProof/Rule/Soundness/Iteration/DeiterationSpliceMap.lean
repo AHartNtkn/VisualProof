@@ -298,6 +298,56 @@ theorem deiterationQuotientEquiv_origin
   exact (Splice.Decomposition.originalQuotientWireEquiv
     (deiterationDecomposition input selection)).right_inv _
 
+theorem deiterationBinderTarget_alignment
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (index : Fin
+      (deiterationReinsertInput input selection witness).binderSpine.proxyCount) :
+    (deiterationReinsertInput input selection witness).binderTarget index =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).binderTarget
+          (Fin.cast (deiterationPattern_proxyCount_eq input selection witness) index) := by
+  let domains := deiterationDomains input selection
+  let sourceLayout := deiterationRetainedLayout input selection witness
+  let justifierLayout := deiterationOriginalLayout input selection witness
+  let targetLayout : FragmentLayout input.val selection := {}
+  let externalEq := deiterationExternalLengthEq input selection witness
+  let sameEq := congrArg List.length witness.sameExternalBinders
+  let targetIndex :=
+    Fin.cast (deiterationPattern_proxyCount_eq input selection witness) index
+  apply domains.regions.origin_injective
+  change domains.regions.origin
+      ((deiterationReinsertInput input selection witness).binderTarget index) =
+    domains.regions.origin
+      ((Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).binderTarget targetIndex)
+  have listsEq : justifierLayout.externalBinders = targetLayout.externalBinders := by
+    exact witness.sameExternalBinders
+  calc
+    domains.regions.origin
+        ((deiterationReinsertInput input selection witness).binderTarget index) =
+      justifierLayout.externalBinders.get (Fin.cast externalEq index) := by
+        change domains.regions.origin (sourceLayout.externalBinders.get index) = _
+        exact deiterationRetained_externalBinder_get_origin input selection witness index
+    _ = targetLayout.externalBinders.get targetIndex := by
+      have transported := List.get_of_eq listsEq (Fin.cast externalEq index)
+      simpa only [List.get_eq_getElem, Fin.val_cast] using transported
+    _ = domains.regions.origin
+        ((Splice.Decomposition.originalFragmentInput
+          (deiterationDecomposition input selection)).binderTarget targetIndex) := by
+      symm
+      change domains.regions.origin
+          (Splice.Decomposition.originalBinderTarget
+            (deiterationDecomposition input selection) targetIndex) = _
+      unfold Splice.Decomposition.originalBinderTarget
+      change (deiterationDecomposition input selection).frameDomains.regions.origin
+          ((deiterationDecomposition input selection).frameDomains.regions.index
+            ((deiterationDecomposition input selection).extraction.raw.layout
+              |>.externalBinders.get targetIndex) _) = _
+      rw [(deiterationDecomposition input selection).frameDomains.regions.origin_index]
+      rfl
+
 noncomputable def deiterationOutputRegionEquiv
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
@@ -356,6 +406,133 @@ noncomputable def deiterationOutputWireEquiv
         (deiterationDecomposition input selection)).plugLayout.materialRegion
           (deiterationMaterialEquiv input selection witness region) := by
   exact finiteSumEquiv_right _ _ region
+
+theorem deiterationOutputRegionEquiv_body
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (region : Fin
+      (deiterationReinsertInput input selection witness).pattern.val.diagram.regionCount) :
+    deiterationOutputRegionEquiv input selection witness
+        ((deiterationReinsertInput input selection witness).plugLayout.bodyRegion region) =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).plugLayout.bodyRegion
+          ((deiterationPatternOccurrenceEquiv input selection witness).diagram.regions
+            region) := by
+  let source := deiterationReinsertInput input selection witness
+  let target := Splice.Decomposition.originalFragmentInput
+    (deiterationDecomposition input selection)
+  let occurrence := deiterationPatternOccurrenceEquiv input selection witness
+  let sourceLayout := source.plugLayout
+  let targetLayout := target.plugLayout
+  by_cases sourceMaterial : source.binderSpine.IsMaterialRegion region
+  · have targetMaterial : target.binderSpine.IsMaterialRegion
+        (occurrence.diagram.regions region) :=
+      (deiterationPattern_material_iff input selection witness region).mpr sourceMaterial
+    let material := sourceLayout.materialIndex region sourceMaterial
+    have sourceOrigin : sourceLayout.materialRegions.origin material = region := by
+      exact sourceLayout.materialRegions.origin_index region
+        ((sourceLayout.materialRegions_survives_iff region).2 sourceMaterial)
+    have materialEq : deiterationMaterialEquiv input selection witness material =
+        targetLayout.materialIndex (occurrence.diagram.regions region) targetMaterial := by
+      apply targetLayout.materialRegions.origin_injective
+      rw [deiterationMaterialEquiv_origin input selection witness material,
+        sourceOrigin]
+      exact targetLayout.materialRegions.origin_index
+        (occurrence.diagram.regions region)
+        ((targetLayout.materialRegions_survives_iff _).2 targetMaterial) |>.symm
+    rw [sourceLayout.bodyRegion_material region sourceMaterial,
+      targetLayout.bodyRegion_material (occurrence.diagram.regions region) targetMaterial]
+    change deiterationOutputRegionEquiv input selection witness
+        (sourceLayout.materialRegion material) =
+      targetLayout.materialRegion
+        (targetLayout.materialIndex (occurrence.diagram.regions region) targetMaterial)
+    rw [deiterationOutputRegionEquiv_material, materialEq]
+  · have targetNonmaterial : ¬ target.binderSpine.IsMaterialRegion
+        (occurrence.diagram.regions region) := by
+      intro targetMaterial
+      exact sourceMaterial
+        ((deiterationPattern_material_iff input selection witness region).mp
+          targetMaterial)
+    rw [sourceLayout.bodyRegion_nonmaterial region sourceMaterial,
+      targetLayout.bodyRegion_nonmaterial (occurrence.diagram.regions region)
+        targetNonmaterial]
+    rw [deiterationOutputRegionEquiv_frame]
+    change targetLayout.frameRegion source.site = targetLayout.frameRegion target.site
+    apply congrArg targetLayout.frameRegion
+    rfl
+
+private theorem binderRegion_eq_body_of_no_proxy
+    (layout : Splice.Input.PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (notProxy : ∀ index, region ≠ input.binderSpine.proxy index) :
+    layout.binderRegion region = layout.bodyRegion region := by
+  have lookupNone : layout.proxyIndex? region = none := by
+    unfold Splice.Input.PlugLayout.proxyIndex?
+    cases lookup : indexOf? layout.proxies region with
+    | none => simp [lookup]
+    | some found =>
+        have foundEq := indexOf?_sound lookup
+        have member : region ∈ layout.proxies := by
+          rw [← foundEq]
+          exact List.get_mem _ _
+        rw [Splice.Input.PlugLayout.proxies, List.mem_map] at member
+        obtain ⟨index, _, equality⟩ := member
+        exact False.elim (notProxy index equality.symm)
+  unfold Splice.Input.PlugLayout.binderRegion
+  rw [lookupNone]
+
+theorem deiterationOutputRegionEquiv_binder
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection)
+    (region : Fin
+      (deiterationReinsertInput input selection witness).pattern.val.diagram.regionCount) :
+    deiterationOutputRegionEquiv input selection witness
+        ((deiterationReinsertInput input selection witness).plugLayout.binderRegion region) =
+      (Splice.Decomposition.originalFragmentInput
+        (deiterationDecomposition input selection)).plugLayout.binderRegion
+          ((deiterationPatternOccurrenceEquiv input selection witness).diagram.regions
+            region) := by
+  let source := deiterationReinsertInput input selection witness
+  let target := Splice.Decomposition.originalFragmentInput
+    (deiterationDecomposition input selection)
+  let occurrence := deiterationPatternOccurrenceEquiv input selection witness
+  let sourceLayout := source.plugLayout
+  let targetLayout := target.plugLayout
+  by_cases isProxy : ∃ index, region = source.binderSpine.proxy index
+  · obtain ⟨index, equality⟩ := isProxy
+    subst region
+    let targetIndex := Fin.cast
+      (deiterationPattern_proxyCount_eq input selection witness) index
+    rw [sourceLayout.binderRegion_proxy index,
+      deiterationPattern_proxy_alignment input selection witness index,
+      targetLayout.binderRegion_proxy targetIndex,
+      deiterationOutputRegionEquiv_frame]
+    exact congrArg targetLayout.frameRegion
+      (deiterationBinderTarget_alignment input selection witness index)
+  · have sourceNoProxy : ∀ index, region ≠ source.binderSpine.proxy index := by
+      intro index equality
+      exact isProxy ⟨index, equality⟩
+    have targetNoProxy : ∀ index,
+        occurrence.diagram.regions region ≠ target.binderSpine.proxy index := by
+      intro targetIndex equality
+      let sourceIndex := Fin.cast
+        (deiterationPattern_proxyCount_eq input selection witness).symm targetIndex
+      have aligned := deiterationPattern_proxy_alignment input selection witness sourceIndex
+      have castEq : Fin.cast
+          (deiterationPattern_proxyCount_eq input selection witness) sourceIndex =
+          targetIndex := by
+        apply Fin.ext
+        rfl
+      rw [castEq] at aligned
+      apply sourceNoProxy sourceIndex
+      apply occurrence.diagram.regions.injective
+      exact equality.trans aligned.symm
+    rw [binderRegion_eq_body_of_no_proxy sourceLayout region sourceNoProxy,
+      binderRegion_eq_body_of_no_proxy targetLayout
+        (occurrence.diagram.regions region) targetNoProxy]
+    exact deiterationOutputRegionEquiv_body input selection witness region
 
 @[simp] theorem deiterationOutputNodeEquiv_frame
     (input : CheckedDiagram signature)
