@@ -9,6 +9,209 @@ open Theory
 
 namespace AnchoredWireSoundness
 
+private theorem anchored_eraseDups_map_injective
+    [BEq α] [LawfulBEq α] [BEq β] [LawfulBEq β]
+    (f : α → β) (hinjective : Function.Injective f) :
+    ∀ values : List α, (values.map f).eraseDups = values.eraseDups.map f
+  | [] => rfl
+  | head :: tail => by
+      rw [List.map_cons, List.eraseDups_cons, List.eraseDups_cons,
+        List.map_cons]
+      congr 1
+      rw [← anchored_eraseDups_map_injective f hinjective
+        (tail.filter fun value => !value == head)]
+      apply congrArg List.eraseDups
+      rw [List.filter_map]
+      apply congrArg (List.map f)
+      apply congrArg (fun predicate => List.filter predicate tail)
+      funext value
+      apply Bool.eq_iff_iff.mpr
+      simp [hinjective.eq_iff]
+termination_by values => values.length
+decreasing_by
+  simpa using Nat.lt_succ_of_le (List.length_filter_le _ tail)
+
+/-- The exact ordered-open result of anchored wire splitting.  Only old wire
+identities may occur at the serialized boundary; the fresh factor wire is
+internal. -/
+def anchoredWireSplitSourceOpen
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount)) : OpenConcreteDiagram where
+  diagram := input.val
+  boundary := boundary
+
+def anchoredWireSplitRawOpen
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0)) :
+    OpenConcreteDiagram where
+  diagram := anchoredWireSplitRaw input wire endpoints target term
+  boundary := boundary.map (Fin.castAdd 1)
+
+theorem anchoredWireSplitRawOpen_exposedWires
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0)) :
+    (anchoredWireSplitRawOpen input boundary wire endpoints target term).exposedWires =
+      (anchoredWireSplitSourceOpen input boundary).exposedWires.map
+        (Fin.castAdd 1) := by
+  unfold anchoredWireSplitRawOpen OpenConcreteDiagram.exposedWires
+  have hinjective : Function.Injective
+      (Fin.castAdd 1 : Fin input.val.wireCount → Fin (input.val.wireCount + 1)) :=
+    by
+      intro left right equality
+      apply Fin.ext
+      exact congrArg (fun value : Fin (input.val.wireCount + 1) => value.val)
+        equality
+  simpa [anchoredWireSplitSourceOpen] using
+    anchored_eraseDups_map_injective (Fin.castAdd 1) hinjective boundary
+
+theorem anchoredWireSplitRawOpen_hiddenWires
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0)) :
+    (anchoredWireSplitRawOpen input boundary wire endpoints target term).hiddenWires =
+      (anchoredWireSplitSourceOpen input boundary).hiddenWires.map
+          (Fin.castAdd 1 : Fin input.val.wireCount →
+            Fin (input.val.wireCount + 1)) ++
+        if input.val.root = target then
+          [Fin.last input.val.wireCount]
+        else [] := by
+  let source := anchoredWireSplitSourceOpen input boundary
+  unfold OpenConcreteDiagram.hiddenWires
+  change List.filter
+      (fun candidate => decide
+        (candidate ∉
+          (anchoredWireSplitRawOpen input boundary wire endpoints target term).exposedWires))
+      (ConcreteElaboration.exactScopeWires
+        (anchoredWireSplitRaw input wire endpoints target term) input.val.root) = _
+  rw [anchoredWireSplitRaw_exactScopeWires,
+    anchoredWireSplitRawOpen_exposedWires]
+  have hold :
+      List.filter
+          (fun candidate => decide
+            (candidate ∉ source.exposedWires.map (Fin.castAdd 1)))
+          ((ConcreteElaboration.exactScopeWires input.val input.val.root).map
+            (Fin.castAdd 1)) =
+        source.hiddenWires.map (Fin.castAdd 1) := by
+    unfold OpenConcreteDiagram.hiddenWires
+    rw [List.filter_map]
+    apply congrArg (List.map (Fin.castAdd 1))
+    apply congrArg (fun predicate => List.filter predicate
+      (ConcreteElaboration.exactScopeWires input.val input.val.root))
+    funext candidate
+    simp only [Function.comp_apply]
+    apply Bool.eq_iff_iff.mpr
+    simp only [decide_eq_true_eq]
+    constructor
+    · intro notMapped member
+      exact notMapped (List.mem_map.mpr ⟨candidate, member, rfl⟩)
+    · intro notSource mapped
+      rcases List.mem_map.mp mapped with ⟨old, oldMember, equality⟩
+      have oldEq : old = candidate := by
+        apply Fin.ext
+        exact congrArg
+          (fun value : Fin (input.val.wireCount + 1) => value.val) equality
+      exact notSource (by simpa [oldEq] using oldMember)
+  by_cases atRoot : input.val.root = target
+  · simp only [if_pos atRoot]
+    have split := List.filter_append
+      (p := fun candidate => decide
+        (candidate ∉ source.exposedWires.map (Fin.castAdd 1)))
+      ((ConcreteElaboration.exactScopeWires input.val input.val.root).map
+        (Fin.castAdd 1))
+      ((allFin 1).map (Fin.natAdd input.val.wireCount))
+    apply Eq.trans split
+    rw [hold]
+    congr 1
+    have freshNot : Fin.last input.val.wireCount ∉
+        source.exposedWires.map (Fin.castAdd 1) := by
+      intro exposed
+      rcases List.mem_map.mp exposed with ⟨old, _, equality⟩
+      have values := congrArg
+        (fun value : Fin (input.val.wireCount + 1) => value.val) equality
+      simp at values
+      have oldLt : old.val < input.val.wireCount := by
+        simpa [source, anchoredWireSplitSourceOpen] using old.isLt
+      omega
+    have suffix : (allFin 1).map (Fin.natAdd input.val.wireCount) =
+        [Fin.last input.val.wireCount] := by
+      simp [allFin_eq_finRange]
+      constructor
+      · rfl
+      · apply Fin.ext
+        rfl
+    calc
+      List.filter
+          (fun candidate => decide
+            (candidate ∉ source.exposedWires.map (Fin.castAdd 1)))
+          ((allFin 1).map (Fin.natAdd input.val.wireCount)) =
+          List.filter
+            (fun candidate => decide
+              (candidate ∉ source.exposedWires.map (Fin.castAdd 1)))
+            [Fin.last input.val.wireCount] :=
+        congrArg (List.filter (fun candidate => decide
+          (candidate ∉ source.exposedWires.map (Fin.castAdd 1)))) suffix
+      _ = [Fin.last input.val.wireCount] := by
+        apply List.filter_eq_self.mpr
+        intro fresh member
+        have freshEq := List.mem_singleton.mp member
+        subst fresh
+        exact decide_eq_true freshNot
+  · simp only [if_neg atRoot, List.append_nil]
+    exact hold
+
+theorem anchoredWireSplitRawOpen_rootWires
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0)) :
+    (anchoredWireSplitRawOpen input boundary wire endpoints target term).rootWires =
+      (anchoredWireSplitSourceOpen input boundary).exposedWires.map
+          (Fin.castAdd 1 : Fin input.val.wireCount →
+            Fin (input.val.wireCount + 1)) ++
+        ((anchoredWireSplitSourceOpen input boundary).hiddenWires.map
+            (Fin.castAdd 1 : Fin input.val.wireCount →
+              Fin (input.val.wireCount + 1)) ++
+          if input.val.root = target then
+            [Fin.last input.val.wireCount]
+          else []) := by
+  unfold OpenConcreteDiagram.rootWires
+  rw [anchoredWireSplitRawOpen_exposedWires,
+    anchoredWireSplitRawOpen_hiddenWires]
+  rfl
+
+theorem anchoredWireSplitRawOpen_wellFormed
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ old, old ∈ boundary →
+      (input.val.wires old).scope = input.val.root)
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature) :
+    (anchoredWireSplitRawOpen input boundary wire endpoints target term).WellFormed
+      signature := by
+  constructor
+  · exact targetWellFormed
+  · intro candidate member
+    rcases List.mem_map.mp member with ⟨old, oldMember, rfl⟩
+    have oldRoot := sourceRoot old oldMember
+    change ((anchoredWireSplitRaw input wire endpoints target term).wires
+      old.castSucc).scope =
+        (anchoredWireSplitRaw input wire endpoints target term).root
+    simpa only [anchoredWireSplitRaw_oldWire_scope,
+      anchoredWireSplitRaw_root] using oldRoot
+
 theorem anchoredWireSplitRaw_bindersCover
     (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
     (endpoints : List (CEndpoint input.val.nodeCount))
