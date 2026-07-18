@@ -21,7 +21,7 @@ theorem compileRegion_moveEndpoint_route_equiv_of_kernel
     (focus : Fin input.val.regionCount)
     (focusEnclosesEndpoint : input.val.Encloses focus
       (input.val.nodes endpoint.node).region)
-    (kernel : ∀ {rels : RelCtx} (fuelSource fuelTarget : Nat)
+    (kernel : ∀ {rels : RelCtx} (fuel : Nat)
       (sourceContext : ConcreteElaboration.WireContext input.val)
       (targetContext : ConcreteElaboration.WireContext
         (moveEndpointRaw input.val sourceWire targetWire endpoint))
@@ -46,13 +46,13 @@ theorem compileRegion_moveEndpoint_route_equiv_of_kernel
       (targetItems : ItemSeq signature (targetContext.extend focus).length rels)
       (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
         input.val
-        (ConcreteElaboration.compileRegion? signature input.val fuelSource)
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
         (sourceContext.extend focus) sourceBinders
         (ConcreteElaboration.localOccurrences input.val focus) = some sourceItems)
       (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
         (moveEndpointRaw input.val sourceWire targetWire endpoint)
         (ConcreteElaboration.compileRegion? signature
-          (moveEndpointRaw input.val sourceWire targetWire endpoint) fuelTarget)
+          (moveEndpointRaw input.val sourceWire targetWire endpoint) fuel)
         (targetContext.extend focus) targetBinders
         (ConcreteElaboration.localOccurrences
           (moveEndpointRaw input.val sourceWire targetWire endpoint) focus) =
@@ -138,7 +138,7 @@ theorem compileRegion_moveEndpoint_route_equiv_of_kernel
         | some targetItems =>
           simp [targetItemsResult] at targetCompiled
           subst targetBody
-          exact kernel fuel fuel sourceContext targetContext context sourceBinders
+          exact kernel fuel sourceContext targetContext context sourceBinders
             targetBinders binderWitness sourceCover targetCover sourceEnumeration
             targetEnumeration sourceExact targetExact sourceItems targetItems
             sourceItemsResult (by simpa only [moveEndpointRaw_localOccurrences]

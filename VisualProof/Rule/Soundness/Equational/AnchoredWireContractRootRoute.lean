@@ -57,13 +57,58 @@ private theorem rootEnvironment_agreement_backward
   apply Fin.ext
   rfl
 
-/-- Lift a complete shallow-site kernel through the first root child while
-preserving the ordered-open boundary partition. -/
-theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
+/-- A semantic kernel for the one root child containing the moved endpoint.
+The evidence proposition may inspect the complete ordered root denotation, so
+root-local anchor equations can be used without changing the compiler. -/
+def RootChildSemanticKernel
     (input : CheckedDiagram signature)
-    (boundary : List (Fin input.val.wireCount))
-    (boundaryRoot : ∀ wire, wire ∈ boundary →
-      (input.val.wires wire).scope = input.val.root)
+    (sourceWire targetWire : Fin input.val.wireCount)
+    (endpoint : CEndpoint input.val.nodeCount)
+    (child : Fin input.val.regionCount)
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext
+      (moveEndpointRaw input.val sourceWire targetWire endpoint))
+    (evidence : ∀ (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (sourceEnv : Fin sourceContext.length → model.Carrier)
+      (targetEnv : Fin targetContext.length → model.Carrier), Prop) : Prop :=
+  ∀ {rels : RelCtx} (fuel : Nat)
+    (context : EndpointMoveAwayContext input.val sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (sourceBinders : ConcreteElaboration.BinderContext input.val rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (moveEndpointRaw input.val sourceWire targetWire endpoint) rels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
+      (moveEndpointRaw input.val sourceWire targetWire endpoint)
+      sourceBinders targetBinders)
+    (sourceCover : sourceBinders.Covers child)
+    (targetCover : targetBinders.Covers child)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration input.val
+      sourceBinders child)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (moveEndpointRaw input.val sourceWire targetWire endpoint)
+      targetBinders child)
+    (sourceExact : (sourceContext.extend child).Exact child)
+    (targetExact : (targetContext.extend child).Exact child)
+    (sourceBody : Region signature sourceContext.length rels)
+    (targetBody : Region signature targetContext.length rels)
+    (sourceCompiled : ConcreteElaboration.compileRegion? signature input.val
+      (fuel + 1) child sourceContext sourceBinders = some sourceBody)
+    (targetCompiled : ConcreteElaboration.compileRegion? signature
+      (moveEndpointRaw input.val sourceWire targetWire endpoint)
+      (fuel + 1) child targetContext targetBinders = some targetBody)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceEnv : Fin sourceContext.length → model.Carrier)
+    (targetEnv : Fin targetContext.length → model.Carrier)
+    (relEnv : RelEnv model.Carrier rels)
+    (outerAgrees : context.indexRelation.EnvironmentsAgree sourceEnv targetEnv),
+    evidence model named sourceEnv targetEnv →
+      (denoteRegion model named sourceEnv relEnv sourceBody ↔
+        denoteRegion model named targetEnv relEnv targetBody)
+
+theorem rootChildKernel_of_route_kernel
+    (input : CheckedDiagram signature)
     (sourceWire targetWire : Fin input.val.wireCount)
     (endpoint : CEndpoint input.val.nodeCount)
     (targetWellFormed :
@@ -72,7 +117,7 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
     (focus : Fin input.val.regionCount)
     (focusEnclosesEndpoint : input.val.Encloses focus
       (input.val.nodes endpoint.node).region)
-    (kernel : ∀ {rels : RelCtx} (fuelSource fuelTarget : Nat)
+    (kernel : ∀ {rels : RelCtx} (fuel : Nat)
       (sourceContext : ConcreteElaboration.WireContext input.val)
       (targetContext : ConcreteElaboration.WireContext
         (moveEndpointRaw input.val sourceWire targetWire endpoint))
@@ -97,13 +142,13 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
       (targetItems : ItemSeq signature (targetContext.extend focus).length rels)
       (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
         input.val
-        (ConcreteElaboration.compileRegion? signature input.val fuelSource)
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
         (sourceContext.extend focus) sourceBinders
         (ConcreteElaboration.localOccurrences input.val focus) = some sourceItems)
       (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
         (moveEndpointRaw input.val sourceWire targetWire endpoint)
         (ConcreteElaboration.compileRegion? signature
-          (moveEndpointRaw input.val sourceWire targetWire endpoint) fuelTarget)
+          (moveEndpointRaw input.val sourceWire targetWire endpoint) fuel)
         (targetContext.extend focus) targetBinders
         (ConcreteElaboration.localOccurrences
           (moveEndpointRaw input.val sourceWire targetWire endpoint) focus) =
@@ -122,15 +167,49 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
           (ConcreteElaboration.finishRegion
             (moveEndpointRaw input.val sourceWire targetWire endpoint)
             targetContext focus targetItems))
+    {child : Fin input.val.regionCount} {path : List Nat}
+    (route : Diagram.Splice.RegionRoute input.val child focus path)
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext
+      (moveEndpointRaw input.val sourceWire targetWire endpoint))
+    (evidence : ∀ (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (sourceEnv : Fin sourceContext.length → model.Carrier)
+      (targetEnv : Fin targetContext.length → model.Carrier), Prop) :
+    RootChildSemanticKernel input sourceWire targetWire endpoint child
+      sourceContext targetContext evidence := by
+  intro rels fuel context sourceBinders targetBinders binderWitness sourceCover
+    targetCover sourceEnumeration targetEnumeration sourceExact targetExact
+    sourceBody targetBody sourceCompiled targetCompiled model named sourceEnv
+    targetEnv relEnv outerAgrees _
+  exact compileRegion_moveEndpoint_route_equiv_of_kernel input sourceWire
+    targetWire endpoint targetWellFormed focus focusEnclosesEndpoint kernel route
+    fuel sourceContext targetContext context sourceBinders targetBinders
+    binderWitness sourceCover targetCover sourceEnumeration targetEnumeration
+    sourceExact targetExact sourceBody targetBody sourceCompiled targetCompiled
+    model named sourceEnv targetEnv relEnv outerAgrees
+
+/-- Lift a complete shallow-site kernel through the first root child while
+preserving the ordered-open boundary partition. -/
+theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (boundaryRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (sourceWire targetWire : Fin input.val.wireCount)
+    (endpoint : CEndpoint input.val.nodeCount)
+    (targetWellFormed :
+      (moveEndpointRaw input.val sourceWire targetWire endpoint).WellFormed
+        signature)
     (child : Fin input.val.regionCount)
-    {rest : List Nat}
     (parentEq : (input.val.regions child).parent? = some input.val.root)
     (position : Fin (ConcreteElaboration.localOccurrences input.val
       input.val.root).length)
     (positionEq : indexOf? (ConcreteElaboration.localOccurrences input.val
       input.val.root) (ConcreteElaboration.LocalOccurrence.child child) =
         some position)
-    (tail : Diagram.Splice.RegionRoute input.val child focus rest)
+    (childEnclosesEndpoint : input.val.Encloses child
+      (input.val.nodes endpoint.node).region)
     (sourceItems : ItemSeq signature
       (endpointMoveSourceOpen input boundary).rootWires.length [])
     (targetItems : ItemSeq signature
@@ -154,6 +233,20 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
       (ConcreteElaboration.localOccurrences
         (moveEndpointRaw input.val sourceWire targetWire endpoint)
         input.val.root) = some targetItems)
+    (sourceKernel : RootChildSemanticKernel input sourceWire targetWire endpoint
+      child (endpointMoveSourceOpen input boundary).rootWires
+      (endpointMoveTargetOpen input sourceWire targetWire endpoint boundary
+        ).rootWires
+      (fun model named sourceEnv _ =>
+        denoteItemSeq (relCtx := []) model named sourceEnv PUnit.unit
+          sourceItems))
+    (targetKernel : RootChildSemanticKernel input sourceWire targetWire endpoint
+      child (endpointMoveSourceOpen input boundary).rootWires
+      (endpointMoveTargetOpen input sourceWire targetWire endpoint boundary
+        ).rootWires
+      (fun model named _ targetEnv =>
+        denoteItemSeq (relCtx := []) model named targetEnv PUnit.unit
+          targetItems))
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (outer : Fin (endpointMoveSourceOpen input boundary).exposedWires.length →
@@ -189,10 +282,7 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
     localOccurrences_split_at_child input.val input.val.root child position
       positionEq
   have selectedEnclosesEndpoint : input.val.Encloses child
-      (input.val.nodes endpoint.node).region :=
-    ConcreteElaboration.checked_encloses_trans input.property
-      (regionRoute_encloses input.val input.property tail)
-      focusEnclosesEndpoint
+      (input.val.nodes endpoint.node).region := childEnclosesEndpoint
   have sideAway : ∀ occurrences : List (ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount),
       ConcreteElaboration.LocalOccurrence.child child ∉ occurrences →
@@ -358,6 +448,7 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
       change denoteItemSeq (relCtx := []) model named sourceRaw PUnit.unit
         sourceItems at sourceRawDenotes
       change context.indexRelation.EnvironmentsAgree sourceRaw targetRaw at identityAgrees
+      have sourceRootEvidence := sourceRawDenotes
       rw [sourceItemsEq] at sourceRawDenotes
       have sourceFrame := (denoteItemSeq_frame (relCtx := []) model named
         sourceRaw PUnit.unit sourceBefore sourceAfter sourceFocus).mp
@@ -394,10 +485,8 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
               subst targetFocus
               intro targetChildDenotes
               exact sourceFrame.2.1
-                ((compileRegion_moveEndpoint_route_equiv_of_kernel input
-                  sourceWire targetWire endpoint targetWellFormed focus
-                  focusEnclosesEndpoint kernel tail childFuel source.rootWires
-                  target.rootWires context ConcreteElaboration.BinderContext.empty
+                ((sourceKernel childFuel context
+                  ConcreteElaboration.BinderContext.empty
                   ConcreteElaboration.BinderContext.empty binderWitness
                   (ConcreteElaboration.BinderContext.covers_cut_child
                     (ConcreteElaboration.BinderContext.empty_covers_root
@@ -414,7 +503,8 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
                       simpa only [moveEndpointRaw_regions] using childKind))
                   childSourceExact childTargetExact sourceChild targetChild
                   sourceChildResult targetChildResult model named sourceRaw
-                  targetRaw PUnit.unit identityAgrees).mpr targetChildDenotes)
+                  targetRaw PUnit.unit identityAgrees sourceRootEvidence).mpr
+                    targetChildDenotes)
         | bubble actualParent arity =>
           have parentIsRoot : actualParent = input.val.root := by
             simpa [childKind, CRegion.parent?] using parentEq
@@ -458,10 +548,7 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
                   (ConcreteElaboration.BinderContext.empty.push child arity)
                   (ConcreteElaboration.BinderContext.empty.push child arity) :=
                 ⟨rfl, HEq.rfl⟩
-              exact (compileRegion_moveEndpoint_route_equiv_of_kernel input
-                sourceWire targetWire endpoint targetWellFormed focus
-                focusEnclosesEndpoint kernel tail childFuel source.rootWires
-                target.rootWires context
+              exact (sourceKernel childFuel context
                 (ConcreteElaboration.BinderContext.empty.push child arity)
                 (ConcreteElaboration.BinderContext.empty.push child arity)
                 pushedWitness
@@ -480,7 +567,8 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
                     simpa only [moveEndpointRaw_regions] using childKind))
                 childSourceExact childTargetExact sourceChild targetChild
                 sourceChildResult targetChildResult model named sourceRaw targetRaw
-                (relationValue, PUnit.unit) identityAgrees).mp sourceChildDenotes
+                (relationValue, PUnit.unit) identityAgrees sourceRootEvidence).mp
+                  sourceChildDenotes
       refine ⟨targetLocal, ?_⟩
       apply (denoteItemSeq_renameWires (relCtx := []) model named
         (Fin.cast (List.length_append (as := target.exposedWires)
@@ -508,6 +596,7 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
       change denoteItemSeq (relCtx := []) model named targetRaw PUnit.unit
         targetItems at targetRawDenotes
       change context.indexRelation.EnvironmentsAgree sourceRaw targetRaw at identityAgrees
+      have targetRootEvidence := targetRawDenotes
       rw [targetItemsEq] at targetRawDenotes
       have targetFrame := (denoteItemSeq_frame (relCtx := []) model named
         targetRaw PUnit.unit targetBefore targetAfter targetFocus).mp
@@ -544,10 +633,8 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
               subst targetFocus
               intro sourceChildDenotes
               exact targetFrame.2.1
-                ((compileRegion_moveEndpoint_route_equiv_of_kernel input
-                  sourceWire targetWire endpoint targetWellFormed focus
-                  focusEnclosesEndpoint kernel tail childFuel source.rootWires
-                  target.rootWires context ConcreteElaboration.BinderContext.empty
+                ((targetKernel childFuel context
+                  ConcreteElaboration.BinderContext.empty
                   ConcreteElaboration.BinderContext.empty binderWitness
                   (ConcreteElaboration.BinderContext.covers_cut_child
                     (ConcreteElaboration.BinderContext.empty_covers_root
@@ -564,7 +651,8 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
                       simpa only [moveEndpointRaw_regions] using childKind))
                   childSourceExact childTargetExact sourceChild targetChild
                   sourceChildResult targetChildResult model named sourceRaw
-                  targetRaw PUnit.unit identityAgrees).mp sourceChildDenotes)
+                  targetRaw PUnit.unit identityAgrees targetRootEvidence).mp
+                    sourceChildDenotes)
         | bubble actualParent arity =>
           have parentIsRoot : actualParent = input.val.root := by
             simpa [childKind, CRegion.parent?] using parentEq
@@ -608,10 +696,7 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
                   (ConcreteElaboration.BinderContext.empty.push child arity)
                   (ConcreteElaboration.BinderContext.empty.push child arity) :=
                 ⟨rfl, HEq.rfl⟩
-              exact (compileRegion_moveEndpoint_route_equiv_of_kernel input
-                sourceWire targetWire endpoint targetWellFormed focus
-                focusEnclosesEndpoint kernel tail childFuel source.rootWires
-                target.rootWires context
+              exact (targetKernel childFuel context
                 (ConcreteElaboration.BinderContext.empty.push child arity)
                 (ConcreteElaboration.BinderContext.empty.push child arity)
                 pushedWitness
@@ -630,7 +715,8 @@ theorem finishRoot_moveEndpoint_route_step_equiv_of_kernel
                     simpa only [moveEndpointRaw_regions] using childKind))
                 childSourceExact childTargetExact sourceChild targetChild
                 sourceChildResult targetChildResult model named sourceRaw targetRaw
-                (relationValue, PUnit.unit) identityAgrees).mpr targetChildDenotes
+                (relationValue, PUnit.unit) identityAgrees targetRootEvidence).mpr
+                  targetChildDenotes
       refine ⟨sourceLocal, ?_⟩
       apply (denoteItemSeq_renameWires (relCtx := []) model named
         (Fin.cast (List.length_append (as := source.exposedWires)
