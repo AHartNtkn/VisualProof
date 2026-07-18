@@ -1147,6 +1147,59 @@ theorem anchoredWireSplit_root_witness_value_of_zero_route
     rw [mappedIndex] at value
     exact value
 
+/-- A bubble-only witness route remains bubble-only after the split.  Route
+positions may shift at the split site, so the target route is reconstructed
+from enclosure rather than cast positionally. -/
+theorem anchoredWireSplitRaw_zero_route_transport
+    (input : CheckedDiagram signature)
+    (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target start witnessRegion : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (witnessInside : input.val.Encloses start witnessRegion)
+    (sameDepth : concreteCutDepth input.val start =
+      concreteCutDepth input.val witnessRegion) :
+    ∃ path, ∃ route : Diagram.Splice.RegionRoute
+        (anchoredWireSplitRaw input wire endpoints target term) start
+        witnessRegion path,
+      route.HasCutDepth 0 := by
+  let targetChecked : CheckedDiagram signature :=
+    ⟨anchoredWireSplitRaw input wire endpoints target term, targetWellFormed⟩
+  have targetWitnessInside : targetChecked.val.Encloses start witnessRegion :=
+    (anchoredWireSplitRaw_encloses_iff input wire endpoints target term start
+      witnessRegion).mpr witnessInside
+  obtain ⟨path, ⟨route⟩⟩ :=
+    Diagram.Splice.regionRoute_complete_of_encloses targetChecked.val start
+      witnessRegion targetWitnessInside
+  obtain ⟨depth, routeDepth⟩ := route.hasCutDepth_exists targetWellFormed
+  have depthPreserve : ∀ fuel (region : Fin input.val.regionCount),
+      concreteCutDepthAux targetChecked.val fuel region =
+        concreteCutDepthAux input.val fuel region := by
+    intro fuel
+    induction fuel with
+    | zero => intro region; rfl
+    | succ fuel ih =>
+        intro region
+        simp only [concreteCutDepthAux]
+        rw [show targetChecked.val.regions region = input.val.regions region by
+          simp [targetChecked, anchoredWireSplitRaw_regions]]
+        cases kind : input.val.regions region with
+        | sheet => rfl
+        | cut parent => simp only [ih]
+        | bubble parent arity => simp only [ih]
+  have targetSameDepth : concreteCutDepth targetChecked.val start =
+      concreteCutDepth targetChecked.val witnessRegion := by
+    unfold concreteCutDepth
+    rw [depthPreserve, depthPreserve]
+    exact sameDepth
+  have depthZero := CongruenceSoundness.route_cutDepth_zero_of_equal
+    targetChecked route depth routeDepth targetSameDepth
+  subst depth
+  exact ⟨path, route, routeDepth⟩
+
 /-- Root-site item equivalence lifted through the authoritative ordered-open
 `finishRoot` semantics.  Forward transport chooses the fresh hidden value from
 the old wire; inverse transport is justified by the retained old witness and
