@@ -139,6 +139,37 @@
   transition: left 220ms ease;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .curse-production-folio-host { transition: none; }
+.curse-production-folio-drawer-toggle {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  bottom: 0;
+  left: var(--curse-folio-toggle-left, 0);
+  display: none;
+  width: var(--curse-folio-handle, 52px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: e-resize;
+  transition: left 220ms ease;
+}
+
+.curse-production-environment[data-layout="compact"]:not([data-mode="completion"])
+  .curse-production-folio-drawer-toggle {
+  display: block;
+}
+
+.curse-production-environment[data-folio-drawer="open"]
+  .curse-production-folio-drawer-toggle {
+  cursor: w-resize;
+}
+
+.curse-production-folio-drawer-toggle:focus-visible {
+  outline: 2px solid #77e6ff;
+  outline-offset: -3px;
+}
+
+.curse-production-environment[data-reduced-motion="true"] .curse-production-folio-host,
+.curse-production-environment[data-reduced-motion="true"] .curse-production-folio-drawer-toggle {
+  transition: none;
 }

@@ -92,6 +92,7 @@ const host: ConstructionLoupeHost = {
   engine: () => engine,
   view: () => ({ scale: 1, offsetX: 0, offsetY: 0 }),
   context: () => ({ theorems: new Map(), relations: new Map() }),
+  orientation: () => 'forward',
   theme: () => DARK,
   apply: (step) => { state.commits++; state.lastRule = step.rule },
   refuse: () => {},

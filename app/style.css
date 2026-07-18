@@ -5,46 +5,21 @@
 }
 
 html, body, #cursebreaker { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-body { background: radial-gradient(circle at 50% 42%, #171319 0, #0b0b0f 52%, #050608 100%); }
-.curse-lens-stage { position: fixed; isolation: isolate; }
-.curse-decoration { pointer-events: none !important; user-select: none; }
-.curse-lens-shadow, .curse-lens-optics { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: fill; }
-.curse-lens-shadow { z-index: 0; }
-.curse-lens-glass {
-  position: absolute;
-  z-index: 1;
-  left: 13.5%;
-  top: 13.5%;
-  width: 73%;
-  height: 73%;
-  overflow: hidden;
-  border-radius: 10%;
-  background: #0e1013;
-}
-#seal-canvas { display: block; width: 100%; height: 100%; touch-action: none; }
-.curse-lens-optics { z-index: 2; opacity: .72; }
-.curse-lens-frame {
-  position: absolute;
-  z-index: 3;
-  inset: 0;
-  box-sizing: border-box;
-  border: min(13.7vw, 13.7vh) solid transparent;
-  border-image-source: url('../assets/interface/generated/central-lens/frame.png');
-  border-image-slice: 560;
-  border-image-width: 1;
-  border-image-repeat: stretch;
-}
-.curse-timeline { position: absolute; z-index: 4; left: 50%; bottom: 5.4%; width: 38%; height: 8%; transform: translateX(-50%); }
-.curse-timeline-housing { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
-.curse-timeline-rail { position: absolute; left: 11%; right: 11%; top: 26%; height: 48%; cursor: ew-resize; touch-action: none; }
-.curse-timeline-handle { position: absolute; top: 50%; left: calc(var(--curse-lever-position) * 100%); width: 15%; height: auto; transform: translate(-50%, -50%); }
+body { background: #050608; }
+
+.curse-production-environment[data-text-size="small"] { font-size: 0.875rem; }
+.curse-production-environment[data-text-size="medium"] { font-size: 1rem; }
+.curse-production-environment[data-text-size="large"] { font-size: 1.2rem; }
+.curse-production-environment[data-mode="archive"] .curse-production-timeline,
+.curse-production-environment[data-mode="completion"] .curse-production-timeline { visibility: hidden; }
+
 .curse-refusal {
   position: fixed;
-  z-index: 20;
+  z-index: 40;
   max-width: 19rem;
   padding: .55rem .75rem;
   color: #ff9aa8;
-  background: rgba(67, 18, 29, .94);
+  background: rgb(67 18 29 / 94%);
   border: 1px solid #fb7185;
   border-radius: 45% 48% 42% 12% / 52% 46% 45% 18%;
   box-shadow: 0 .4rem 1.4rem #0009;

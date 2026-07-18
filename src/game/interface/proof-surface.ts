@@ -80,6 +80,7 @@ export type GameProofViewportModel = {
   diagram(): Diagram
   boundary(): readonly WireId[]
   context(): ProofContext
+  orientation(): 'forward' | 'backward'
   theme(): Theme
   fuel(): number
   prepare(step: ProofStep): () => void
@@ -214,6 +215,13 @@ export class GameProofViewport {
   }
 
   artifactTargetAt(client: Vec2): ArtifactDropTarget {
+    const rect = this.canvas.getBoundingClientRect()
+    if (
+      client.x < rect.left
+      || client.x >= rect.right
+      || client.y < rect.top
+      || client.y >= rect.bottom
+    ) return { hit: null, containingRegion: null }
     const mapped = this.mapClient(client)
     return {
       hit: hitTest(this.#engine, mapped.world, { scale: this.view.scale }),
@@ -262,6 +270,7 @@ export class GameProofViewport {
       engine: () => this.#engine,
       view: () => this.view,
       context: this.#model.context,
+      orientation: this.#model.orientation,
       theme: this.#model.theme,
       apply: (step) => this.#apply(step),
       refuse: this.#model.refuse,
@@ -284,6 +293,11 @@ export class GameProofViewport {
     if (construction === null) return false
     construction.dispose()
     return true
+  }
+
+  setReducedMotion(enabled: boolean): void {
+    if (this.#disposed) return
+    this.#construction?.setReducedMotion(enabled)
   }
 
   reconcileDiagram(): void {

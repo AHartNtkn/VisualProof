@@ -16,6 +16,7 @@ export type FolioDragSample = {
 export type FolioViewOptions = {
   readonly host: HTMLElement
   readonly projection: FolioProjection
+  readonly inputAllowed?: () => boolean
   readonly motionClock?: FolioMotionClock
   readonly onSelectPuzzle: (puzzle: PuzzleId) => void
   readonly onRefusePuzzle: (puzzle: PuzzleId) => void
@@ -31,6 +32,8 @@ export type FolioViewOptions = {
 export type MountedFolioView = {
   readonly element: HTMLElement
   update(projection: FolioProjection): void
+  resistPuzzle(puzzle: PuzzleId): void
+  resistCulture(culture: CultureId): void
   dispose(): void
 }
 
@@ -79,6 +82,29 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     record: HTMLElement
     lastSample: FolioDragSample
   } | null = null
+  let restrictionTarget: HTMLElement | null = null
+  let restrictionGeneration = 0
+  const inputAllowed = (): boolean => options.inputAllowed?.() ?? true
+
+  const clearRestriction = (): void => {
+    restrictionGeneration += 1
+    restrictionTarget?.classList.remove('is-restriction-target')
+    restrictionTarget = null
+    motion.settleRestriction()
+  }
+
+  const resist = (target: HTMLElement | null, identity: string): void => {
+    if (target === null) return
+    clearRestriction()
+    const generation = restrictionGeneration
+    restrictionTarget = target
+    target.classList.add('is-restriction-target')
+    void motion.restrictedRefusal(identity, current.reducedMotion).finally(() => {
+      if (generation !== restrictionGeneration) return
+      target.classList.remove('is-restriction-target')
+      if (restrictionTarget === target) restrictionTarget = null
+    })
+  }
 
   const listen = (
     target: EventTarget,
@@ -110,7 +136,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     activeDrag = null
     clearDragPresentation(drag)
     const sample = dragSample(event)
-    if (cancelled) options.onTheoremDragCancel(drag.puzzle, sample)
+    if (cancelled || !inputAllowed()) options.onTheoremDragCancel(drag.puzzle, sample)
     else options.onTheoremDragEnd(drag.puzzle, sample)
   }
 
@@ -146,12 +172,12 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     node.append(mount, identity)
 
     if (record.affordance === 'select') {
-      listen(node, 'click', () => options.onSelectPuzzle(record.id))
+      listen(node, 'click', () => { if (inputAllowed()) options.onSelectPuzzle(record.id) })
     } else if (record.affordance === 'resist') {
-      listen(node, 'click', () => options.onRefusePuzzle(record.id))
+      listen(node, 'click', () => { if (inputAllowed()) options.onRefusePuzzle(record.id) })
     } else if (record.affordance === 'drag-theorem') {
       listen(node, 'pointerdown', ((rawEvent: PointerEvent) => {
-        if (rawEvent.button !== 0 || activeDrag !== null) return
+        if (rawEvent.button !== 0 || activeDrag !== null || !inputAllowed()) return
         rawEvent.preventDefault()
         const sample = dragSample(rawEvent)
         activeDrag = {
@@ -182,6 +208,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
 
   const render = (previousCulture: CultureId | null): void => {
     cancelActiveDrag()
+    clearRestriction()
     renderListeners.abort()
     renderListeners = new AbortController()
     root.dataset.mode = current.mode
@@ -196,6 +223,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       control.setAttribute('aria-pressed', String(culture.id === current.selectedCulture))
       if (!culture.unlocked) control.setAttribute('aria-disabled', 'true')
       listen(control, 'click', () => {
+        if (!inputAllowed()) return
         if (culture.unlocked) options.onSelectCulture(culture.id)
         else options.onRefuseCulture(culture.id)
       })
@@ -221,14 +249,15 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     sheet.setAttribute('role', 'list')
     sheet.setAttribute('aria-label', `${selected.name} artifact records`)
     sheet.append(...selected.records.map(recordElement))
-    sheet.scrollTop = current.selectedScroll
     listen(sheet, 'scroll', () => {
+      if (!inputAllowed()) return
       options.onScroll(
         selected.id,
         clampSheetScroll(sheet.scrollTop, sheet.scrollHeight, sheet.clientHeight),
       )
     })
     dossier.replaceChildren(header, sheet)
+    sheet.scrollTop = current.selectedScroll
     if (previousCulture !== null && previousCulture !== selected.id) {
       void motion.replace(selected.id, current.reducedMotion)
     } else if (current.reducedMotion) {
@@ -246,10 +275,19 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       current = next
       render(previousCulture)
     },
+    resistPuzzle(puzzle) {
+      if (disposed) return
+      resist(root.querySelector<HTMLElement>(`[data-puzzle="${puzzle}"]`), puzzle)
+    },
+    resistCulture(culture) {
+      if (disposed) return
+      resist(root.querySelector<HTMLElement>(`[data-culture="${culture}"]`), culture)
+    },
     dispose() {
       if (disposed) return
       disposed = true
       cancelActiveDrag()
+      clearRestriction()
       renderListeners.abort()
       motion.settle()
       root.remove()

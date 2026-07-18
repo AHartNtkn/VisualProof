@@ -38,7 +38,7 @@
   background: #a18f69;
   color: #282118;
   box-shadow: 0 0.2rem 0.35rem rgb(18 12 9 / 40%);
-  font: 700 0.67rem/1.15 Georgia, serif;
+  font: 700 0.67em/1.15 Georgia, serif;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -91,14 +91,14 @@
 
 .curse-folio-dossier-title {
   margin: 0 0 0.45rem;
-  font: 700 0.88rem/1.1 Georgia, serif;
+  font: 700 0.88em/1.1 Georgia, serif;
   letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
 .curse-folio-dossier-note {
   margin: 0 0 0.4rem;
-  font: italic 0.62rem/1.25 Georgia, serif;
+  font: italic 0.62em/1.25 Georgia, serif;
 }
 
 .curse-folio-sheet {
@@ -133,6 +133,7 @@
     0 0.28rem 0.42rem rgb(34 25 19 / 35%),
     inset 0 0 0 0.18rem rgb(235 224 196 / 28%);
   font-family: Georgia, serif;
+  font-size: inherit;
   text-align: left;
   transform-origin: 14% 12%;
 }
@@ -155,9 +156,9 @@
 }
 
 .curse-folio-record-identity { display: flex; flex-direction: column; min-width: 0; }
-.curse-folio-record-name { font-size: 0.74rem; line-height: 1.15; }
-.curse-folio-record-accession { margin-top: 0.25rem; font-size: 0.56rem; }
-.curse-folio-record-summary { margin-top: auto; font-size: 0.58rem; line-height: 1.25; }
+.curse-folio-record-name { font-size: 0.74em; line-height: 1.15; }
+.curse-folio-record-accession { margin-top: 0.25rem; font-size: 0.56em; }
+.curse-folio-record-summary { margin-top: auto; font-size: 0.58em; line-height: 1.25; }
 
 .curse-folio-record[data-status="completed"]::after {
   position: absolute;
@@ -183,6 +184,38 @@
   opacity: 0.9;
 }
 
+@keyframes curse-restriction-record {
+  0%, 100% { transform: translateX(0) rotate(0deg); }
+  42% { transform: translateX(0.16rem) rotate(0.18deg); }
+}
+
+@keyframes curse-restriction-guard {
+  0%, 100% { filter: brightness(1); transform: translateX(0) rotate(0deg) skewX(0deg); }
+  24% { filter: brightness(1.08); transform: translateX(0.42rem) rotate(0.45deg) skewX(0deg); }
+  48% { filter: brightness(1.04); transform: translateX(0.18rem) rotate(0deg) skewX(-1.2deg); }
+  76% { filter: brightness(1.02); transform: translateX(-0.16rem) rotate(-0.16deg) skewX(0deg); }
+}
+
+.curse-folio.is-motion-restriction[data-motion-restriction-kind="refuse"]
+  .is-restriction-target {
+  animation: curse-restriction-record var(--motion-restriction-duration) linear both;
+}
+
+.curse-folio.is-motion-restriction[data-motion-restriction-kind="refuse"]
+  .curse-folio-record.is-restriction-target::after {
+  animation: curse-restriction-guard var(--motion-restriction-duration) linear both;
+}
+
+.curse-folio.is-motion-restriction[data-motion-restriction-kind="reduced"]
+  .is-restriction-target {
+  animation: curse-restriction-depth var(--motion-restriction-duration) ease-out both;
+}
+
+@keyframes curse-restriction-depth {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.08) contrast(0.98); }
+}
+
 .curse-folio-record[data-affordance="drag-theorem"] { cursor: grab; touch-action: none; }
 .curse-folio-record.is-theorem-lifted {
   position: fixed;
@@ -197,6 +230,4 @@
   transform: translate(calc(var(--folio-drag-x) - 50%), calc(var(--folio-drag-y) - 50%)) rotate(-1deg);
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .curse-folio.is-motion-dossier .curse-folio-dossier { animation: none; }
-}
+.curse-folio[data-motion="reduced"].is-motion-dossier .curse-folio-dossier { animation: none; }

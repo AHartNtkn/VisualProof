@@ -8,7 +8,7 @@ import type { Hit } from './loupe/hittest'
 
 export type ArtifactDropTarget = {
   readonly hit: Hit | null
-  readonly containingRegion: RegionId
+  readonly containingRegion: RegionId | null
 }
 
 export type ArtifactDropRefusalCode =
@@ -80,7 +80,7 @@ const validates = (diagram: Diagram, step: ProofStep, context: ProofContext): bo
  */
 export function planArtifactDrop(request: ArtifactDropRequest): ArtifactDropPlan {
   const { artifact, diagram, context, target, fuel } = request
-  if (diagram.regions[target.containingRegion] === undefined) {
+  if (target.containingRegion === null || diagram.regions[target.containingRegion] === undefined) {
     return refusal('invalid-drop-target', 'the dropped artifact is outside the active seal')
   }
   const name = artifactTheoremName(artifact.id)

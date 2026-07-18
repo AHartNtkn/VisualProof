@@ -23,7 +23,9 @@ type ActiveDossierMotion = {
 
 export class FolioDossierMotion {
   private active: ActiveDossierMotion | null = null
+  private activeRestriction: ActiveDossierMotion | null = null
   private generation = 0
+  private restrictionGeneration = 0
 
   constructor(
     private readonly root: HTMLElement,
@@ -55,16 +57,59 @@ export class FolioDossierMotion {
     }
   }
 
+  async restrictedRefusal(target: string, reducedMotion: boolean): Promise<void> {
+    this.restrictionGeneration += 1
+    this.activeRestriction?.controller.abort()
+    this.activeRestriction = null
+    this.settleRestrictionPresentation()
+    const active: ActiveDossierMotion = {
+      controller: new AbortController(),
+      generation: this.restrictionGeneration,
+    }
+    this.activeRestriction = active
+    this.root.classList.add('is-motion-restriction')
+    this.root.dataset.motionRestrictionTarget = target
+    this.root.dataset.motionRestrictionKind = reducedMotion ? 'reduced' : 'refuse'
+    const duration = reducedMotion ? 90 : 320
+    this.root.style.setProperty('--motion-restriction-duration', `${duration}ms`)
+    try {
+      await this.clock.wait(duration, active.controller.signal)
+    } finally {
+      if (
+        this.activeRestriction === active
+        && active.generation === this.restrictionGeneration
+      ) {
+        this.activeRestriction = null
+        this.settleRestrictionPresentation()
+      }
+    }
+  }
+
+  settleRestriction(): void {
+    this.restrictionGeneration += 1
+    this.activeRestriction?.controller.abort()
+    this.activeRestriction = null
+    this.settleRestrictionPresentation()
+  }
+
   settle(): void {
     this.generation += 1
     this.active?.controller.abort()
     this.active = null
     this.settlePresentation()
+    this.settleRestriction()
   }
 
   private settlePresentation(): void {
     this.root.classList.remove('is-motion-dossier')
     delete this.root.dataset.motionDossierTarget
     this.root.style.removeProperty('--folio-dossier-duration')
+  }
+
+  private settleRestrictionPresentation(): void {
+    this.root.classList.remove('is-motion-restriction')
+    delete this.root.dataset.motionRestrictionTarget
+    delete this.root.dataset.motionRestrictionKind
+    this.root.style.removeProperty('--motion-restriction-duration')
   }
 }

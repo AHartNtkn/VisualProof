@@ -94,6 +94,20 @@ describe('completed artifact drop authority', () => {
     })).toMatchObject({ ok: false, code: 'no-legal-artifact-operation' })
   })
 
+  it('refuses an outside-canvas target before theorem matching or insertion', () => {
+    expect(planArtifactDrop({
+      artifact,
+      diagram: artifact.goal.diagram,
+      context: completed,
+      target: { hit: null, containingRegion: null },
+      fuel: 256,
+    })).toEqual({
+      ok: false,
+      code: 'invalid-drop-target',
+      reason: 'the dropped artifact is outside the active seal',
+    })
+  })
+
   it('does not turn a substantive wrong hit into manifestation in an otherwise eligible field', () => {
     const host = new DiagramBuilder()
     const negative = host.cut(host.root)

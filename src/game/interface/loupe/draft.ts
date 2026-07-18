@@ -80,6 +80,7 @@ export type ComprehensionDraft = {
   readonly host: Diagram
   readonly bubble: RegionId
   readonly arity: number
+  readonly orientation: 'forward' | 'backward'
   readonly history: readonly ComprehensionSnapshot[]
   readonly cursor: number
 }
@@ -98,6 +99,7 @@ function bareRelation(arity: number): DiagramWithBoundary {
 export function beginComprehensionDraft(
   host: Diagram,
   bubble: RegionId,
+  orientation: 'forward' | 'backward' = 'forward',
 ): ComprehensionDraft {
   const region = host.regions[bubble]
   if (region === undefined || region.kind !== 'bubble') throw new Error(`'${bubble}' is not a relation bubble`)
@@ -105,6 +107,7 @@ export function beginComprehensionDraft(
     host,
     bubble,
     arity: region.arity,
+    orientation,
     history: [{ relation: bareRelation(region.arity), externalWires: [] }],
     cursor: 0,
   }
@@ -200,6 +203,8 @@ function validateSnapshot(draft: ComprehensionDraft, snapshot: ComprehensionSnap
     draft.bubble,
     materialized.relation,
     materialized.attachments,
+    new Map(),
+    draft.orientation,
   )
 }
 

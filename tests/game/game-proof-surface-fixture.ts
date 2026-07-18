@@ -28,6 +28,7 @@ const surface = new GameProofViewport({
   diagram: () => diagram,
   boundary: () => [],
   context: () => ({ theorems: new Map(), relations: new Map() }),
+  orientation: () => 'forward',
   theme: () => DARK,
   fuel: () => 256,
   prepare: (step: ProofStep) => {

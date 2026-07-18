@@ -43,4 +43,24 @@ describe('production folio dossier motion ownership', () => {
     expect(root.classList.contains('is-motion-dossier')).toBe(false)
     expect(root.dataset.motionDossierTarget).toBeUndefined()
   })
+
+  it('gives the latest locked-selection resistance sole cleanup ownership', async () => {
+    const root = new FakeElement(new FakeDocument())
+    const clock = new ControlledClock()
+    const motion = new FolioDossierMotion(root as unknown as HTMLElement, clock)
+    const first = motion.restrictedRefusal('first-record', false)
+    const second = motion.restrictedRefusal('second-record', false)
+
+    expect(clock.waits[0]!.signal.aborted).toBe(true)
+    expect(root.dataset.motionRestrictionTarget).toBe('second-record')
+    expect(root.dataset.motionRestrictionKind).toBe('refuse')
+    expect(root.classList.contains('is-motion-restriction')).toBe(true)
+    clock.waits[0]!.resolve()
+    await first
+    expect(root.classList.contains('is-motion-restriction')).toBe(true)
+    clock.waits[1]!.resolve()
+    await second
+    expect(root.classList.contains('is-motion-restriction')).toBe(false)
+    expect(root.dataset.motionRestrictionTarget).toBeUndefined()
+  })
 })

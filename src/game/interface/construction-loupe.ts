@@ -114,6 +114,7 @@ export type ConstructionLoupeHost = {
   engine(): Engine
   view(): MutableView
   context(): ProofContext
+  orientation(): 'forward' | 'backward'
   theme(): Theme
   apply(step: ProofStep): void
   refuse(text: string, pointer: Vec2): void
@@ -194,7 +195,7 @@ export class ConstructionLoupe {
 
   constructor(host: ConstructionLoupeHost, bubble: RegionId, invocation: Vec2) {
     this.#host = host
-    this.#draft = beginComprehensionDraft(host.diagram(), bubble)
+    this.#draft = beginComprehensionDraft(host.diagram(), bubble, host.orientation())
     const materialized = materializeComprehensionSnapshot(currentComprehensionDraft(this.#draft))
     this.#engine = mkEngine(materialized.relation.diagram, materialized.relation.boundary)
     seedProject(this.#engine)

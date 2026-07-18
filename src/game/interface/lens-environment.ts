@@ -7,6 +7,7 @@ export type LensEnvironmentOptions = {
   readonly substrateSeed: string
   readonly width: number
   readonly height: number
+  readonly folioDrawerInputAllowed?: () => boolean
 }
 
 export type MountedLensEnvironment = {
@@ -15,6 +16,7 @@ export type MountedLensEnvironment = {
   readonly timelineHandleSlot: HTMLElement
   readonly folioHost: HTMLElement
   setLayout(width: number, height: number): void
+  setFolioDrawerOpen(open: boolean): void
   setSubstrateSeed(seed: string): void
   dispose(): void
 }
@@ -73,19 +75,57 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
 
   const folioHost = element(document, 'aside', 'curse-production-folio-host')
   folioHost.setAttribute('aria-label', 'Excavation archive')
-  root.append(desk, stage, folioHost)
+  const folioDrawerToggle = element(document, 'button', 'curse-production-folio-drawer-toggle')
+  folioDrawerToggle.type = 'button'
+  let compact = false
+  let folioWidth = 0
+  let folioHandle = 0
+  let drawerOpen = true
+  const applyDrawerPresentation = (): void => {
+    const open = !compact || drawerOpen
+    root.dataset.folioDrawer = open ? 'open' : 'closed'
+    folioHost.style.setProperty(
+      '--curse-folio-left',
+      `${open ? 0 : folioHandle - folioWidth}px`,
+    )
+    folioDrawerToggle.style.setProperty(
+      '--curse-folio-toggle-left',
+      `${open && compact ? folioWidth - folioHandle : 0}px`,
+    )
+    folioDrawerToggle.setAttribute('aria-expanded', String(open))
+    folioDrawerToggle.setAttribute(
+      'aria-label',
+      open ? 'Close excavation folio' : 'Open excavation folio',
+    )
+  }
+  const setFolioDrawerOpen = (open: boolean): void => {
+    if (!compact) return
+    drawerOpen = open
+    applyDrawerPresentation()
+  }
+  folioDrawerToggle.addEventListener('click', () => {
+    if (options.folioDrawerInputAllowed?.() === false) return
+    setFolioDrawerOpen(!drawerOpen)
+  })
+  root.append(desk, stage, folioHost, folioDrawerToggle)
   options.host.append(root)
 
   const setLayout = (width: number, height: number): void => {
     const layout = interfaceLayout(width, height)
+    const enteringCompact = layout.compact && !compact
+    compact = layout.compact
+    folioWidth = layout.folio.width
+    folioHandle = layout.folio.visibleHandle
+    if (enteringCompact) drawerOpen = false
+    if (!compact) drawerOpen = true
     root.dataset.layout = layout.compact ? 'compact' : 'desktop'
     root.dataset.folioPresentation = layout.folio.presentation
     stage.style.setProperty('--curse-lens-left', `${layout.lens.left}px`)
     stage.style.setProperty('--curse-lens-top', `${layout.lens.top}px`)
     stage.style.setProperty('--curse-lens-size', `${layout.lens.size}px`)
-    folioHost.style.setProperty('--curse-folio-left', `${layout.folio.left}px`)
     folioHost.style.setProperty('--curse-folio-width', `${layout.folio.width}px`)
     folioHost.style.setProperty('--curse-folio-handle', `${layout.folio.visibleHandle}px`)
+    applyDrawerPresentation()
   }
   const setSubstrateSeed = (seed: string): void => {
     const presentation = substratePresentation(seed)
@@ -113,6 +153,7 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
     timelineHandleSlot,
     folioHost,
     setLayout,
+    setFolioDrawerOpen,
     setSubstrateSeed,
     dispose() {
       if (disposed) return
