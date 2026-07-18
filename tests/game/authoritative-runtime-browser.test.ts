@@ -708,6 +708,28 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
+  it('uses the selected smoked-dark guidance treatment as the sole presentation', async () => {
+    const page = await openFixture('opening')
+    try {
+      const first = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles()[0]!)
+      await page.evaluate((puzzle) => window.__authoritativeRuntimeFixture
+        .dispatch({ kind: 'selectPuzzle', puzzle }), first)
+      const presentation = page.locator('.curse-game-presentation')
+      const style = await page.locator('.curse-guidance-note').evaluate((note) => {
+        const computed = getComputedStyle(note)
+        return {
+          backgroundImage: computed.backgroundImage,
+          color: computed.color,
+          borderRightColor: computed.borderRightColor,
+        }
+      })
+      expect(await presentation.getAttribute('data-guidance-candidate')).toBeNull()
+      expect(style.backgroundImage).toContain('radial-gradient')
+      expect(style.color).toBe('rgb(191, 232, 225)')
+      expect(style.borderRightColor).toBe('rgb(98, 199, 191)')
+    } finally { await page.close() }
+  })
+
   it('keeps proof selection and Escape-to-pause live and allows solving from an unread page', async () => {
     const page = await openFixture('opening')
     try {

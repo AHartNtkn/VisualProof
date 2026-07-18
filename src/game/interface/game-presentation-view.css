@@ -16,14 +16,17 @@
   max-height: calc(var(--curse-guidance-timeline-top) - var(--curse-guidance-top) - 16px);
   padding: .75rem .5rem .6rem;
   overflow: auto;
-  color: #d9d4c6;
+  color: #bfe8e1;
   background:
-    linear-gradient(105deg, rgb(20 22 29 / 94%), rgb(12 14 19 / 89%)),
-    repeating-linear-gradient(0deg, transparent 0 5px, rgb(255 255 255 / 2%) 6px);
-  border: 1px solid rgb(137 154 177 / 42%);
-  border-right: 3px solid #6f8fa7;
-  border-radius: .2rem 0 0 .2rem;
-  box-shadow: 0 .5rem 1.8rem rgb(0 0 0 / 28%);
+    radial-gradient(circle at 100% 0, rgb(48 94 99 / 35%), transparent 62%),
+    linear-gradient(110deg, rgb(8 18 22 / 94%), rgb(8 11 17 / 96%));
+  border: 1px solid rgb(103 174 173 / 52%);
+  border-right: 3px solid #62c7bf;
+  border-radius: 1.2rem 0 0 1.2rem;
+  box-shadow:
+    0 .55rem 1.8rem rgb(0 0 0 / 40%),
+    inset 0 0 1.4rem rgb(76 198 190 / 9%),
+    0 0 .7rem rgb(69 183 177 / 12%);
   pointer-events: none;
 }
 
@@ -40,14 +43,25 @@
   justify-content: space-between;
   min-height: 1.8rem;
   margin-top: .65rem;
-  color: #8fa3b0;
+  color: #71aaa7;
   font: .72em/1.1 Inter, "Avenir Next", system-ui, sans-serif;
   letter-spacing: .04em;
 }
 
 .curse-guidance-footer .curse-presentation-action {
   padding: .25rem .55rem;
+  color: #bfe8e1;
+  background: rgb(10 38 43 / 76%);
+  border-color: rgb(91 176 171 / 55%);
+  border-radius: 999px 0 0 999px;
   pointer-events: auto;
+}
+
+.curse-guidance-footer .curse-presentation-action:hover,
+.curse-guidance-footer .curse-presentation-action:focus-visible {
+  color: #e2fffb;
+  border-color: #62c7bf;
+  box-shadow: 0 0 0 2px rgb(98 199 191 / 20%);
 }
 
 .curse-pause-scrim {
