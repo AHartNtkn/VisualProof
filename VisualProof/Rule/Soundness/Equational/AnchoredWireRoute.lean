@@ -97,6 +97,85 @@ theorem anchoredWireSplitRaw_compileTargetOld_collapse
   rw [sourceCompiled, targetOldCompiled] at mapped
   exact Option.some.inj mapped
 
+/-- The retained target occurrences also collapse when the caller already
+holds complete exact contexts, as at an ordered-open root. -/
+theorem anchoredWireSplitRaw_compileTargetOld_collapse_exact
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (fuel : Nat)
+    (original : ConcreteElaboration.WireContext input.val)
+    (expanded : ConcreteElaboration.WireContext
+      (anchoredWireSplitRaw input wire endpoints target term))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (originalExact : original.Exact target)
+    (expandedExact : expanded.Exact target)
+    (sourceItems : ItemSeq signature original.length rels)
+    (targetOldItems : ItemSeq signature expanded.length rels)
+    (sourceCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
+        original binders
+        (ConcreteElaboration.localOccurrences input.val target) =
+          some sourceItems)
+    (targetOldCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        (anchoredWireSplitRaw input wire endpoints target term)
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        expanded binders
+        ((ConcreteElaboration.localOccurrences input.val target).map
+          (splitOldOccurrence input)) = some targetOldItems) :
+    sourceItems = targetOldItems.renameWires collapse.indexMap := by
+  have mapped := compileOccurrencesWith?_collapse
+    (ConcreteElaboration.compileRegion? signature input.val fuel)
+    (ConcreteElaboration.compileRegion? signature
+      (anchoredWireSplitRaw input wire endpoints target term) fuel)
+    original expanded binders binders (splitOldOccurrence input)
+    collapse.indexMap
+    (ConcreteElaboration.localOccurrences input.val target)
+    (by
+      intro occurrence member
+      apply anchoredWireSplitRaw_compileOccurrenceWith?_collapse input wire
+        endpoints target term selectedOccurs targetWellFormed target expanded
+        original collapse expandedExact originalExact
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        binders occurrence member
+      intro childRels child childBinders occurrenceEq
+      subst occurrence
+      have childParent :=
+        (ConcreteElaboration.mem_localOccurrences_child input.val target child).mp
+          member
+      have childNotAbove : ¬ input.val.Encloses child target :=
+        ConcreteElaboration.checked_direct_child_not_encloses_parent
+          input.property childParent
+      have originalChildExact :=
+        originalExact.extend_child input.property childParent
+      have targetChildParent :
+          ((anchoredWireSplitRaw input wire endpoints target term).regions
+            child).parent? = some target := by
+        simpa only [anchoredWireSplitRaw_regions] using childParent
+      have expandedChildExact :=
+        expandedExact.extend_child targetWellFormed targetChildParent
+      exact anchoredWireSplitRaw_compileRegion?_collapse_of_not_encloses input
+        wire endpoints target term selectedOccurs targetWellFormed
+        wireEnclosesTarget fuel child original expanded collapse childBinders
+        childNotAbove originalChildExact expandedChildExact)
+  rw [sourceCompiled, targetOldCompiled] at mapped
+  exact Option.some.inj mapped
+
 /-- The unmatched split occurrence is exactly the closed equation assigning
 the fresh output wire the denotation of the serialized witness term. -/
 theorem anchoredWireSplitRaw_freshOccurrence_denotes_iff
@@ -703,6 +782,186 @@ theorem splitExtendedEnv_uncollapse_at_target
       rw [targetLocalEq, mapped]
       simp [splitExtendedEnv, splitSourceLocalEnvAtTarget, Function.comp_def,
         extendWireEnv]
+
+/-- Item-level semantic equivalence at the unique split site.  The caller
+supplies an exact coalescing environment and the retained source-witness
+equation; this is the common kernel for lexical regions and ordered roots. -/
+theorem anchoredWireSplitRaw_target_items_equiv
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (fuel : Nat)
+    (original : ConcreteElaboration.WireContext input.val)
+    (expanded : ConcreteElaboration.WireContext
+      (anchoredWireSplitRaw input wire endpoints target term))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (originalExact : original.Exact target)
+    (expandedExact : expanded.Exact target)
+    (sourceItems : ItemSeq signature original.length rels)
+    (targetItems : ItemSeq signature expanded.length rels)
+    (sourceCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
+        original binders
+        (ConcreteElaboration.localOccurrences input.val target) =
+          some sourceItems)
+    (targetCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        (anchoredWireSplitRaw input wire endpoints target term)
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        expanded binders
+        (ConcreteElaboration.localOccurrences
+          (anchoredWireSplitRaw input wire endpoints target term) target) =
+            some targetItems)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceRaw : Fin original.length → model.Carrier)
+    (targetRaw : Fin expanded.length → model.Carrier)
+    (relEnv : RelEnv model.Carrier rels)
+    (rawAgrees : sourceRaw ∘ collapse.indexMap = targetRaw)
+    (sourceWitness : denoteItemSeq model named sourceRaw relEnv sourceItems →
+      ∀ sourceIndex, original.get sourceIndex = wire →
+        sourceRaw sourceIndex = model.eval term Fin.elim0) :
+    denoteItemSeq model named sourceRaw relEnv sourceItems ↔
+      denoteItemSeq model named targetRaw relEnv targetItems := by
+  let sourceNodes :=
+    (filterFin fun old => decide ((input.val.nodes old).region = target)).map
+      (fun old => ConcreteElaboration.LocalOccurrence.node
+        (regions := input.val.regionCount) old)
+  let sourceChildren :=
+    (filterFin fun child =>
+      decide ((input.val.regions child).parent? = some target)).map
+        (ConcreteElaboration.LocalOccurrence.child (nodes := input.val.nodeCount))
+  let targetBefore := sourceNodes.map (splitOldOccurrence input)
+  let targetAfter := sourceChildren.map (splitOldOccurrence input)
+  let fresh : ConcreteElaboration.LocalOccurrence input.val.regionCount
+      (input.val.nodeCount + 1) := .node (Fin.last input.val.nodeCount)
+  have sourceOccurrences :
+      ConcreteElaboration.localOccurrences input.val target =
+        sourceNodes ++ sourceChildren := by rfl
+  have targetOccurrences :
+      ConcreteElaboration.localOccurrences
+          (anchoredWireSplitRaw input wire endpoints target term) target =
+        targetBefore ++ fresh :: targetAfter := by
+    rw [anchoredWireSplitRaw_localOccurrences_at_target]
+    simp [sourceNodes, sourceChildren, targetBefore, targetAfter, fresh,
+      splitOldOccurrence, Function.comp_def]
+  have targetFramed :
+      ConcreteElaboration.compileOccurrencesWith? signature
+          (anchoredWireSplitRaw input wire endpoints target term)
+          (ConcreteElaboration.compileRegion? signature
+            (anchoredWireSplitRaw input wire endpoints target term) fuel)
+          expanded binders (targetBefore ++ fresh :: targetAfter) =
+            some targetItems := by
+    rw [← targetOccurrences]
+    exact targetCompiled
+  obtain ⟨targetBeforeItems, freshItem, targetAfterItems,
+      beforeCompiled, freshCompiled, afterCompiled, targetItemsEq⟩ :=
+    compileOccurrencesWith?_frame_split
+      (ConcreteElaboration.compileRegion? signature
+        (anchoredWireSplitRaw input wire endpoints target term) fuel)
+      expanded binders targetBefore targetAfter fresh targetItems targetFramed
+  let targetOldItems := targetBeforeItems.append targetAfterItems
+  have targetOldCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+          (anchoredWireSplitRaw input wire endpoints target term)
+          (ConcreteElaboration.compileRegion? signature
+            (anchoredWireSplitRaw input wire endpoints target term) fuel)
+          expanded binders
+          ((ConcreteElaboration.localOccurrences input.val target).map
+            (splitOldOccurrence input)) = some targetOldItems := by
+    rw [sourceOccurrences, List.map_append]
+    change ConcreteElaboration.compileOccurrencesWith? signature
+        (anchoredWireSplitRaw input wire endpoints target term)
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        expanded binders (targetBefore ++ targetAfter) = some targetOldItems
+    exact ConcreteElaboration.compileOccurrencesWith?_append
+      (ConcreteElaboration.compileRegion? signature
+        (anchoredWireSplitRaw input wire endpoints target term) fuel)
+      expanded binders targetBefore targetAfter targetBeforeItems
+      targetAfterItems beforeCompiled afterCompiled
+  have oldCollapse := anchoredWireSplitRaw_compileTargetOld_collapse_exact input wire
+    endpoints target term selectedOccurs targetWellFormed wireEnclosesTarget
+    fuel original expanded collapse binders originalExact expandedExact
+    sourceItems targetOldItems sourceCompiled targetOldCompiled
+  have freshListCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+          (anchoredWireSplitRaw input wire endpoints target term)
+          (ConcreteElaboration.compileRegion? signature
+            (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        expanded binders [fresh] = some (.cons freshItem .nil) := by
+    simp [ConcreteElaboration.compileOccurrencesWith?, freshCompiled]
+  have freshOccurs :
+      (anchoredWireSplitRaw input wire endpoints target term).EndpointOccurs
+        (Fin.last input.val.wireCount)
+        { node := Fin.last input.val.nodeCount, port := .output } := by
+    unfold ConcreteDiagram.EndpointOccurs
+    simp only [anchoredWireSplitRaw, Fin.lastCases_last]
+    exact List.mem_cons_self
+  constructor
+  · intro sourceDenotes
+    have oldRenamedDenotes : denoteItemSeq model named sourceRaw relEnv
+        (targetOldItems.renameWires collapse.indexMap) := by
+      rw [← oldCollapse]
+      exact sourceDenotes
+    have oldDenotes : denoteItemSeq model named targetRaw relEnv
+        targetOldItems := by
+      have transported := (denoteItemSeq_renameWires model named
+        collapse.indexMap sourceRaw relEnv targetOldItems).mp oldRenamedDenotes
+      exact rawAgrees ▸ transported
+    have sourceEquation := sourceWitness sourceDenotes
+    have freshDenotes : denoteItemSeq model named targetRaw relEnv
+        (.cons freshItem .nil) := by
+      apply (anchoredWireSplitRaw_freshOccurrence_denotes_iff input wire
+        endpoints target term expanded binders
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        (.cons freshItem .nil) freshListCompiled model named targetRaw relEnv).2
+      intro output outputResult
+      obtain ⟨outputWire, outputOccurs, outputGet⟩ :=
+        ConcreteElaboration.resolvePort?_sound outputResult
+      have outputWireEq : outputWire = Fin.last input.val.wireCount :=
+        ConcreteElaboration.endpoint_wire_unique
+          targetWellFormed.wire_endpoints_are_disjoint outputOccurs freshOccurs
+      rw [outputWireEq] at outputGet
+      have collapseGet := collapse.get output
+      change expanded.get output = Fin.last input.val.wireCount at outputGet
+      rw [outputGet, splitWireCollapse_fresh] at collapseGet
+      have sourceValue := sourceEquation _ collapseGet
+      have targetValue := congrFun rawAgrees output
+      exact targetValue.symm.trans sourceValue
+    rw [targetItemsEq, denoteItemSeq_frame]
+    rw [denoteItemSeq_append] at oldDenotes
+    exact ⟨oldDenotes.1, freshDenotes.1, oldDenotes.2⟩
+  · intro targetDenotes
+    have targetFrame : denoteItemSeq model named targetRaw relEnv
+        (targetBeforeItems.append (.cons freshItem targetAfterItems)) := by
+      rw [← targetItemsEq]
+      exact targetDenotes
+    rw [denoteItemSeq_frame] at targetFrame
+    have oldDenotes : denoteItemSeq model named targetRaw relEnv
+        targetOldItems := by
+      rw [denoteItemSeq_append]
+      exact ⟨targetFrame.1, targetFrame.2.2⟩
+    have sourceRenamedDenotes : denoteItemSeq model named sourceRaw relEnv
+        (targetOldItems.renameWires collapse.indexMap) := by
+      apply (denoteItemSeq_renameWires model named collapse.indexMap sourceRaw
+        relEnv targetOldItems).mpr
+      exact rawAgrees.symm ▸ oldDenotes
+    rw [← oldCollapse] at sourceRenamedDenotes
+    exact sourceRenamedDenotes
 
 /-- Semantic equivalence at the unique split site, assuming the retained
 witness equation has already identified the old wire with the serialized
