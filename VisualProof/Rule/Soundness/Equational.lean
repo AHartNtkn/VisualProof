@@ -1,6 +1,7 @@
 import VisualProof.Rule.Soundness
 import VisualProof.Rule.Soundness.Congruence
 import VisualProof.Rule.Soundness.Equational.AnchoredWireContractInterface
+import VisualProof.Rule.Soundness.Equational.AnchoredWireContractCoalescedCompactionOpen
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule
@@ -2239,7 +2240,279 @@ theorem applyAnchoredWireContract_sound
         .ok receipt) :
     SuccessfulReceiptSound context orientation input
       (.anchoredWireContract redundant survivor certificate) receipt := by
-  sorry
+  obtain ⟨redundantRegion, redundantTerm, survivorRegion, survivorTerm,
+    drop, keep, _nodeDistinct, redundantShape, survivorShape,
+    certificateAccepted, redundantOwner, survivorOwner, distinct, sameDepth,
+    accepted, resultEq⟩ := applyAnchoredWireContract_success input redundant
+      survivor certificate receipt happly
+  obtain ⟨realizedDrop, realizedKeep, realizedRedundantOwner,
+    realizedSurvivorOwner, realizes⟩ := applyAnchoredWireContract_realizes happly
+  have dropEq : realizedDrop = drop := by
+    rw [redundantOwner] at realizedRedundantOwner
+    exact Option.some.inj realizedRedundantOwner.symm
+  have keepEq : realizedKeep = keep := by
+    rw [survivorOwner] at realizedSurvivorOwner
+    exact Option.some.inj realizedSurvivorOwner.symm
+  subst realizedDrop
+  subst realizedKeep
+  have redundantOccurs :=
+    Diagram.ConcreteElaboration.endpointOwner?_sound redundantOwner
+  have survivorOccurs :=
+    Diagram.ConcreteElaboration.endpointOwner?_sound survivorOwner
+  have endpointNodup :=
+    AnchoredWireContractSoundness.movedEndpoints_nodup input redundant drop
+  have sourceOccurs : ∀ endpoint,
+      endpoint ∈ AnchoredWireContractSoundness.movedEndpoints input redundant drop →
+        input.val.EndpointOccurs drop endpoint := fun endpoint member =>
+    AnchoredWireContractSoundness.movedEndpoints_mem_occurs input redundant drop
+      member
+  have targetEncloses : ∀ endpoint,
+      endpoint ∈ AnchoredWireContractSoundness.movedEndpoints input redundant drop →
+        input.val.Encloses (input.val.wires keep).scope
+          (input.val.nodes endpoint.node).region := by
+    intro endpoint member
+    exact (Classical.choice
+      (AnchoredWireContractSoundness.movedEndpoint_availability input redundant
+        drop keep survivorRegion accepted member)).wire_encloses_target
+  have batchWellFormed :
+      (AnchoredWireContractSoundness.moveEndpointsRaw input.val drop keep
+        (AnchoredWireContractSoundness.movedEndpoints input redundant drop)
+        ).WellFormed signature :=
+    AnchoredWireContractSoundness.moveEndpointsRaw_wellFormed input.val
+      input.property drop keep
+      (AnchoredWireContractSoundness.movedEndpoints input redundant drop)
+      distinct endpointNodup sourceOccurs targetEncloses
+  have compactedWellFormed :
+      (anchoredWireContractRaw input redundant drop keep).WellFormed signature := by
+    rw [← resultEq]
+    exact receipt.result.property
+  have certificateEqual : ∀ model : Lambda.LambdaModel,
+      model.eval redundantTerm Fin.elim0 =
+        model.eval survivorTerm Fin.elim0 := fun model =>
+    AnchoredWireContractSoundness.certified_closed_terms_equal redundantTerm
+      survivorTerm certificate certificateAccepted model
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot mapped htransport =>
+      ⟨realizes.rawResultOpen mapped,
+        realizes.rawResultOpen_wellFormed sourceRoot htransport⟩)
+    (operationalIso := fun _boundary _sourceRoot mapped _htransport =>
+      Diagram.OpenConcreteIso.refl (realizes.rawResultOpen mapped))
+  intro boundary sourceRoot mapped htransport valid args
+  have rawTransport := realizes.transportBoundary_expected htransport
+  have rawRoot :=
+    (anchoredWireContractInterfaceTransport input redundant survivor drop keep
+      ).transportBoundary_root_scoped sourceRoot rawTransport
+  let rawMapped := realizes.targetBoundary mapped
+  have sourceBatch :=
+    AnchoredWireContractSoundness.contractionEndpointBatchOpen_denote_iff input
+      redundant survivor redundantRegion survivorRegion redundantTerm survivorTerm
+      drop keep certificate redundantShape survivorShape certificateAccepted
+      redundantOwner survivorOwner distinct sameDepth accepted boundary sourceRoot
+      Lambda.canonicalModel (Theory.interpretDefinitions context.definitions) args
+  have compactedBatch :
+      (AnchoredWireContractSoundness.anchoredContractCompactedOpen input redundant
+        drop keep rawMapped).denote
+          { diagram_well_formed := compactedWellFormed
+            boundary_is_root_scoped := rawRoot }
+          Lambda.canonicalModel
+          (Theory.interpretDefinitions context.definitions)
+          (args ∘ Fin.cast (by
+            exact (anchoredWireContractInterfaceTransport input redundant
+              survivor drop keep).transportBoundary_length rawTransport)) ↔
+        (AnchoredWireContractSoundness.anchoredContractBatchOpen input redundant
+          drop keep boundary).denote
+          { diagram_well_formed := batchWellFormed
+            boundary_is_root_scoped := by
+              intro wire member
+              change ((AnchoredWireContractSoundness.moveEndpointsRaw input.val
+                drop keep (AnchoredWireContractSoundness.movedEndpoints input
+                  redundant drop)).wires wire).scope = input.val.root
+              rw [AnchoredWireContractSoundness.moveEndpointsRaw_wire_scope]
+              exact sourceRoot wire member }
+          Lambda.canonicalModel
+          (Theory.interpretDefinitions context.definitions) args := by
+    by_cases sameSite : (input.val.wires drop).scope = redundantRegion
+    · by_cases rootAvailable :
+          anchoredContractRootAvailable input survivor keep = true
+      · by_cases dropMember : drop ∈ boundary
+        · exact AnchoredWireContractSoundness.anchoredContract_sameSite_coalesced_denote_iff
+              input redundant survivor
+              redundantRegion survivorRegion redundantTerm survivorTerm drop keep
+              redundantShape survivorShape redundantOccurs survivorOccurs distinct
+              sameDepth rootAvailable certificateEqual sameSite boundary sourceRoot
+              dropMember rawMapped rawTransport rawRoot compactedWellFormed
+              batchWellFormed Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              (args ∘ Fin.cast (by
+                exact (anchoredWireContractInterfaceTransport input redundant
+                  survivor drop keep).transportBoundary_length rawTransport))
+        · exact AnchoredWireContractSoundness.anchoredContract_sameSite_hidden_denote_iff
+              input redundant survivor
+              redundantRegion redundantTerm drop keep redundantShape
+              redundantOccurs distinct sameSite boundary sourceRoot dropMember
+              rawMapped rawTransport rawRoot compactedWellFormed batchWellFormed
+              Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              (args ∘ Fin.cast (by
+                exact (anchoredWireContractInterfaceTransport input redundant
+                  survivor drop keep).transportBoundary_length rawTransport))
+      · have unavailable :
+            anchoredContractRootAvailable input survivor keep = false := by
+          cases h : anchoredContractRootAvailable input survivor keep <;> simp_all
+        have dropAbsent := AnchoredWireContractSoundness.anchoredWireContract_hidden_boundary_excludes_drop
+          input redundant
+            survivor drop keep boundary sourceRoot unavailable rawMapped rawTransport
+        exact AnchoredWireContractSoundness.anchoredContract_sameSite_hidden_denote_iff
+            input redundant survivor
+            redundantRegion redundantTerm drop keep redundantShape redundantOccurs
+            distinct sameSite boundary sourceRoot dropAbsent rawMapped rawTransport
+            rawRoot compactedWellFormed batchWellFormed Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions)
+            (args ∘ Fin.cast (by
+              exact (anchoredWireContractInterfaceTransport input redundant
+                survivor drop keep).transportBoundary_length rawTransport))
+    · have regionNeScope :
+          redundantRegion ≠ (input.val.wires drop).scope := Ne.symm sameSite
+      have sourceEncloses : input.val.Encloses (input.val.wires drop).scope
+          redundantRegion := by
+        have encloses := input.property.wire_scopes_enclose drop
+          { node := redundant, port := Diagram.CPort.output } redundantOccurs
+        simpa [redundantShape] using encloses
+      have rawEncloses :
+          (anchoredWireContractRaw input redundant drop keep).Encloses
+            (input.val.wires drop).scope redundantRegion := by
+        obtain ⟨steps, climbed⟩ := sourceEncloses
+        refine ⟨steps, ?_⟩
+        have rawClimb : ∀ fuel (region : Fin input.val.regionCount),
+            (anchoredWireContractRaw input redundant drop keep).climb fuel region =
+              input.val.climb fuel region := by
+          intro fuel
+          induction fuel with
+          | zero => intro region; rfl
+          | succ fuel ih =>
+              intro region
+              simp only [Diagram.ConcreteDiagram.climb]
+              rw [show (anchoredWireContractRaw input redundant drop keep).regions
+                region = input.val.regions region by rfl]
+              cases input.val.regions region <;> simp only [ih] <;> rfl
+        rw [rawClimb]
+        exact climbed
+      obtain ⟨nodePath, ⟨nodeRoute⟩⟩ :=
+        Diagram.Splice.regionRoute_complete_of_encloses
+          (anchoredWireContractRaw input redundant drop keep)
+          (input.val.wires drop).scope redundantRegion rawEncloses
+      obtain ⟨nodeDepth, nodeRouteDepth⟩ :=
+        nodeRoute.hasCutDepth_exists compactedWellFormed
+      have rawDepth : ∀ region : Fin input.val.regionCount,
+          concreteCutDepth (anchoredWireContractRaw input redundant drop keep)
+              region = concreteCutDepth input.val region := by
+        intro region
+        have aux : ∀ fuel (current : Fin input.val.regionCount),
+            concreteCutDepthAux
+                (anchoredWireContractRaw input redundant drop keep) fuel current =
+              concreteCutDepthAux input.val fuel current := by
+          intro fuel
+          induction fuel with
+          | zero => intro current; rfl
+          | succ fuel ih =>
+              intro current
+              simp only [concreteCutDepthAux]
+              rw [show (anchoredWireContractRaw input redundant drop keep).regions
+                current = input.val.regions current by rfl]
+              cases input.val.regions current <;> simp only [ih]
+        unfold concreteCutDepth
+        exact aux _ region
+      have rawSameDepth :
+          concreteCutDepth (anchoredWireContractRaw input redundant drop keep)
+              (input.val.wires drop).scope =
+            concreteCutDepth (anchoredWireContractRaw input redundant drop keep)
+              redundantRegion := by
+        rw [rawDepth, rawDepth]
+        exact sameDepth
+      let compactedChecked : Diagram.CheckedDiagram signature :=
+        ⟨anchoredWireContractRaw input redundant drop keep,
+          compactedWellFormed⟩
+      have nodeDepthZero : nodeDepth = 0 :=
+        CongruenceSoundness.route_cutDepth_zero_of_equal compactedChecked
+          nodeRoute nodeDepth nodeRouteDepth rawSameDepth
+      obtain ⟨rootPath, ⟨rootRoute⟩⟩ :=
+        Diagram.Splice.regionRoute_complete_of_encloses
+          (anchoredWireContractRaw input redundant drop keep)
+          (anchoredWireContractRaw input redundant drop keep).root
+          (input.val.wires drop).scope
+          (compactedWellFormed.all_regions_reach_root
+            (input.val.wires drop).scope)
+      by_cases rootAvailable :
+          anchoredContractRootAvailable input survivor keep = true
+      · by_cases dropMember : drop ∈ boundary
+        · exact AnchoredWireContractSoundness.anchoredContract_routed_coalesced_denote_iff
+              input redundant survivor
+              redundantRegion survivorRegion redundantTerm survivorTerm drop keep
+              redundantShape survivorShape redundantOccurs survivorOccurs distinct
+              sameDepth rootAvailable certificateEqual regionNeScope boundary
+              sourceRoot dropMember rawMapped rawTransport rawRoot
+              compactedWellFormed batchWellFormed rawEncloses nodeRoute
+              nodeRouteDepth nodeDepthZero rootRoute Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              (args ∘ Fin.cast (by
+                exact (anchoredWireContractInterfaceTransport input redundant
+                  survivor drop keep).transportBoundary_length rawTransport))
+        · exact AnchoredWireContractSoundness.anchoredContract_routed_hidden_denote_iff
+              input redundant survivor
+              redundantRegion redundantTerm drop keep redundantShape
+              redundantOccurs distinct regionNeScope boundary sourceRoot dropMember
+              rawMapped rawTransport rawRoot compactedWellFormed batchWellFormed
+              rawEncloses nodeRoute nodeRouteDepth nodeDepthZero rootRoute
+              Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              (args ∘ Fin.cast (by
+                exact (anchoredWireContractInterfaceTransport input redundant
+                  survivor drop keep).transportBoundary_length rawTransport))
+      · have unavailable :
+            anchoredContractRootAvailable input survivor keep = false := by
+          cases h : anchoredContractRootAvailable input survivor keep <;> simp_all
+        have dropAbsent := AnchoredWireContractSoundness.anchoredWireContract_hidden_boundary_excludes_drop
+          input redundant
+            survivor drop keep boundary sourceRoot unavailable rawMapped rawTransport
+        exact AnchoredWireContractSoundness.anchoredContract_routed_hidden_denote_iff
+            input redundant survivor
+            redundantRegion redundantTerm drop keep redundantShape redundantOccurs
+            distinct regionNeScope boundary sourceRoot dropAbsent rawMapped
+            rawTransport rawRoot compactedWellFormed batchWellFormed rawEncloses
+            nodeRoute nodeRouteDepth nodeDepthZero rootRoute Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions)
+            (args ∘ Fin.cast (by
+              exact (anchoredWireContractInterfaceTransport input redundant
+                survivor drop keep).transportBoundary_length rawTransport))
+  dsimp only
+  unfold DirectedEntailment
+  change _ ↔ _
+  have sourceBatch' :
+      (OpenProofState.denote {
+        diagram := input
+        boundary := boundary
+        boundary_root_scoped := sourceRoot
+      } Lambda.canonicalModel
+        (Theory.interpretDefinitions context.definitions) args) ↔
+      (AnchoredWireContractSoundness.anchoredContractBatchOpen input redundant
+        drop keep boundary).denote
+        { diagram_well_formed := batchWellFormed
+          boundary_is_root_scoped := by
+            intro wire member
+            change ((AnchoredWireContractSoundness.moveEndpointsRaw input.val
+              drop keep (AnchoredWireContractSoundness.movedEndpoints input
+                redundant drop)).wires wire).scope = input.val.root
+            rw [AnchoredWireContractSoundness.moveEndpointsRaw_wire_scope]
+            exact sourceRoot wire member }
+        Lambda.canonicalModel
+        (Theory.interpretDefinitions context.definitions) args := by
+    simpa [AnchoredWireContractSoundness.endpointMoveSourceCheckedOpen,
+      AnchoredWireContractSoundness.endpointMoveSourceOpen,
+      AnchoredWireContractSoundness.endpointBatchTargetCheckedOpen,
+      AnchoredWireContractSoundness.endpointBatchTargetOpen,
+      AnchoredWireContractSoundness.anchoredContractBatchOpen] using sourceBatch
+  apply sourceBatch'.trans
+  exact compactedBatch.symm
 
 /-- Every successful head-strip receipt is semantically equivalent. -/
 theorem applyHeadStrip_sound

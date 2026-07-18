@@ -962,6 +962,161 @@ theorem anchoredContract_routed_coalesced_denote_iff
       Function.comp_def] using repartitioned
   exact introduced.trans (relabeled'.trans repartitioned')
 
+/-- Same-site counterpart of `anchoredContract_routed_coalesced_denote_iff`. -/
+theorem anchoredContract_sameSite_coalesced_denote_iff
+    (input : CheckedDiagram signature)
+    (redundant survivor : Fin input.val.nodeCount)
+    (redundantRegion survivorRegion : Fin input.val.regionCount)
+    (redundantTerm survivorTerm : Lambda.Term 0 (Fin 0))
+    (drop keep : Fin input.val.wireCount)
+    (redundantShape : input.val.nodes redundant =
+      .term redundantRegion 0 redundantTerm)
+    (survivorShape : input.val.nodes survivor =
+      .term survivorRegion 0 survivorTerm)
+    (redundantOccurs : input.val.EndpointOccurs drop
+      { node := redundant, port := .output })
+    (survivorOccurs : input.val.EndpointOccurs keep
+      { node := survivor, port := .output })
+    (distinct : drop ≠ keep)
+    (sameDepth : concreteCutDepth input.val (input.val.wires drop).scope =
+      concreteCutDepth input.val redundantRegion)
+    (rootAvailable : anchoredContractRootAvailable input survivor keep = true)
+    (certificateEqual : ∀ model : Lambda.LambdaModel,
+      model.eval redundantTerm Fin.elim0 =
+        model.eval survivorTerm Fin.elim0)
+    (sameSite : (input.val.wires drop).scope = redundantRegion)
+    (boundary : List (Fin input.val.wireCount))
+    (boundaryRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (dropMember : drop ∈ boundary)
+    (mapped : List (Fin
+      (anchoredWireContractRaw input redundant drop keep).wireCount))
+    (transport :
+      (anchoredWireContractInterfaceTransport input redundant survivor drop keep
+        ).transportBoundary boundary = some mapped)
+    (mappedRoot : ∀ wire, wire ∈ mapped →
+      ((anchoredWireContractRaw input redundant drop keep).wires wire).scope =
+        (anchoredWireContractRaw input redundant drop keep).root)
+    (compactedWellFormed :
+      (anchoredWireContractRaw input redundant drop keep).WellFormed signature)
+    (batchWellFormed :
+      (moveEndpointsRaw input.val drop keep
+        (movedEndpoints input redundant drop)).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin mapped.length → model.Carrier) :
+    let compacted := anchoredContractCompactedOpen input redundant drop keep mapped
+    let batch := anchoredContractBatchOpen input redundant drop keep boundary
+    compacted.denote
+        { diagram_well_formed := compactedWellFormed
+          boundary_is_root_scoped := mappedRoot }
+        model named args ↔
+      batch.denote
+        { diagram_well_formed := batchWellFormed
+          boundary_is_root_scoped := by
+            intro wire member
+            change ((moveEndpointsRaw input.val drop keep
+              (movedEndpoints input redundant drop)).wires wire).scope =
+                input.val.root
+            rw [moveEndpointsRaw_wire_scope]
+            exact boundaryRoot wire member }
+        model named (args ∘ Fin.cast (by
+          exact ((anchoredWireContractInterfaceTransport input redundant
+            survivor drop keep).transportBoundary_length transport).symm)) := by
+  dsimp only
+  let compacted := anchoredContractCompactedOpen input redundant drop keep mapped
+  let compactedWf : compacted.WellFormed signature := {
+    diagram_well_formed := compactedWellFormed
+    boundary_is_root_scoped := mappedRoot
+  }
+  let compactedChecked : CheckedOpenDiagram signature := ⟨compacted, compactedWf⟩
+  have expandedWellFormed := anchoredContractExpandedRaw_wellFormed input
+    redundant redundantRegion redundantTerm drop keep redundantShape
+      redundantOccurs batchWellFormed
+  have spawnedWellFormed :
+      (spawnNodeRaw (anchoredWireContractRaw input redundant drop keep)
+        (.term redundantRegion 0 redundantTerm) redundantRegion 1
+        (fun _ => .output)).WellFormed signature := by
+    simpa [anchoredContractExpandedRaw, sameSite] using expandedWellFormed
+  let view := Classical.choice
+    (Diagram.Splice.openSiteView_complete compactedChecked redundantRegion)
+  have introduced := closedTermIntroOpen_equiv compactedChecked redundantRegion
+    redundantTerm spawnedWellFormed view.route view.cutDepth model named args
+  let canonicalExpanded := spawnNodeRawOpen compactedChecked.val
+    (.term redundantRegion 0 redundantTerm) redundantRegion 1
+    (fun _ => .output)
+  let canonicalWf : canonicalExpanded.WellFormed signature :=
+    spawnNodeRawOpen_wellFormed compactedChecked
+      (.term redundantRegion 0 redundantTerm) redundantRegion 1
+      (fun _ => .output) spawnedWellFormed
+  let coalesced := anchoredContractCoalescedBatchOpen input redundant drop keep
+    boundary
+  let coalescedWf : coalesced.WellFormed signature := {
+    diagram_well_formed := batchWellFormed
+    boundary_is_root_scoped := by
+      intro wire member
+      obtain ⟨original, originalMember, equality⟩ := List.mem_map.mp member
+      subst wire
+      exact anchoredContractBoundaryWire_root input drop keep original
+        (movedEndpoints input redundant drop) (boundaryRoot original originalMember)
+        (anchoredContractRootAvailable_keep_root input survivor keep rootAvailable)
+  }
+  let batch := anchoredContractBatchOpen input redundant drop keep boundary
+  let batchWf : batch.WellFormed signature := {
+    diagram_well_formed := batchWellFormed
+    boundary_is_root_scoped := by
+      intro wire member
+      change ((moveEndpointsRaw input.val drop keep
+        (movedEndpoints input redundant drop)).wires wire).scope = input.val.root
+      rw [moveEndpointsRaw_wire_scope]
+      exact boundaryRoot wire member
+  }
+  let canonicalIso : OpenConcreteIso canonicalExpanded coalesced := by
+    simpa [canonicalExpanded, compactedChecked, compacted,
+      anchoredContractExpandedOpen, anchoredContractCompactedOpen,
+      coalesced, sameSite] using
+      anchoredContractCanonicalExpandedBatchOpenIso input redundant survivor
+        redundantRegion redundantTerm drop keep redundantShape redundantOccurs
+        distinct boundary boundaryRoot mapped transport
+  let coalescedLength : coalesced.boundary.length = mapped.length := by
+    calc
+      coalesced.boundary.length = boundary.length := by
+        change (boundary.map
+          (anchoredContractBoundaryWire drop keep)).length = boundary.length
+        exact List.length_map _
+      _ = mapped.length :=
+        ((anchoredWireContractInterfaceTransport input redundant survivor
+          drop keep).transportBoundary_length transport).symm
+  have relabeled := canonicalIso.denote_iff canonicalWf coalescedWf model named
+    (args ∘ Fin.cast (by
+      simp [canonicalExpanded, compactedChecked, compacted,
+        anchoredContractCompactedOpen, spawnNodeRawOpen]))
+  have repartitioned := anchoredContract_coalescedBatch_denote_iff input
+    redundant survivor redundantRegion survivorRegion redundantTerm survivorTerm
+    drop keep redundantShape survivorShape redundantOccurs survivorOccurs distinct
+    sameDepth rootAvailable certificateEqual boundary boundaryRoot dropMember
+    batchWellFormed model named (args ∘ Fin.cast coalescedLength)
+  have relabeled' :
+      canonicalExpanded.denote canonicalWf model named
+          (args ∘ Fin.cast (by
+            simp [canonicalExpanded, compactedChecked, compacted,
+              anchoredContractCompactedOpen, spawnNodeRawOpen])) ↔
+        coalesced.denote coalescedWf model named
+          (args ∘ Fin.cast coalescedLength) := by
+    simpa [canonicalExpanded, compactedChecked, compacted, compactedWf,
+      canonicalIso, canonicalWf, coalesced, coalescedWf,
+      coalescedLength, Function.comp_def] using relabeled
+  have repartitioned' :
+      coalesced.denote coalescedWf model named
+          (args ∘ Fin.cast coalescedLength) ↔
+        batch.denote batchWf model named
+          (args ∘ Fin.cast (by
+            exact ((anchoredWireContractInterfaceTransport input redundant
+              survivor drop keep).transportBoundary_length transport).symm)) := by
+    simpa [coalesced, coalescedWf, batch, batchWf, coalescedLength,
+      Function.comp_def] using repartitioned
+  exact introduced.trans (relabeled'.trans repartitioned')
+
 end AnchoredWireContractSoundness
 
 end VisualProof.Rule
