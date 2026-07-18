@@ -393,6 +393,254 @@ theorem moveEndpointsOpen_denote_iff_of_anchor_data
     sourceWire targetWire endpoints rfl boundary boundaryRoot distinct nodup
     sourceOccurs targetEncloses anchors targetWellFormed model named args
 
+theorem redundant_output_not_mem_movedEndpoints
+    (input : CheckedDiagram signature)
+    (redundant : Fin input.val.nodeCount)
+    (drop : Fin input.val.wireCount) :
+    ({ node := redundant, port := CPort.output } :
+      CEndpoint input.val.nodeCount) ∉ movedEndpoints input redundant drop := by
+  intro member
+  exact (movedEndpoints_ne_redundant input redundant drop member) rfl
+
+theorem survivor_output_not_mem_movedEndpoints
+    (input : CheckedDiagram signature)
+    (redundant survivor : Fin input.val.nodeCount)
+    (drop keep : Fin input.val.wireCount)
+    (survivorOccurs : input.val.EndpointOccurs keep
+      { node := survivor, port := CPort.output })
+    (distinct : drop ≠ keep) :
+    ({ node := survivor, port := CPort.output } :
+      CEndpoint input.val.nodeCount) ∉ movedEndpoints input redundant drop := by
+  intro member
+  exact (movedEndpoint_ne_survivor_output input redundant survivor drop keep
+    { node := survivor, port := CPort.output } member survivorOccurs distinct) rfl
+
+theorem movedEndpoints_nodup
+    (input : CheckedDiagram signature)
+    (redundant : Fin input.val.nodeCount)
+    (drop : Fin input.val.wireCount) :
+    (movedEndpoints input redundant drop).Nodup := by
+  unfold movedEndpoints
+  exact (input.property.endpoints_are_nodup drop).filter fun endpoint =>
+    decide (endpoint ≠ { node := redundant, port := CPort.output })
+
+/-- The contraction gates provide stable ordered anchor data: both certified
+witness outputs remain fixed throughout the endpoint batch. -/
+theorem contractStableEndpointAnchorData_exists
+    (input : CheckedDiagram signature)
+    (redundant survivor : Fin input.val.nodeCount)
+    (redundantRegion survivorRegion : Fin input.val.regionCount)
+    (redundantTerm survivorTerm : Lambda.Term 0 (Fin 0))
+    (drop keep : Fin input.val.wireCount)
+    (endpoint : CEndpoint input.val.nodeCount)
+    (member : endpoint ∈ movedEndpoints input redundant drop)
+    (redundantShape : input.val.nodes redundant =
+      .term redundantRegion 0 redundantTerm)
+    (survivorShape : input.val.nodes survivor =
+      .term survivorRegion 0 survivorTerm)
+    (redundantOccurs : input.val.EndpointOccurs drop
+      { node := redundant, port := CPort.output })
+    (survivorOccurs : input.val.EndpointOccurs keep
+      { node := survivor, port := CPort.output })
+    (distinct : drop ≠ keep)
+    (sameDepth : concreteCutDepth input.val (input.val.wires drop).scope =
+      concreteCutDepth input.val redundantRegion)
+    (availability : AnchoredWireSoundness.SplitAvailability input keep
+      survivorRegion (input.val.nodes endpoint.node).region)
+    (termValues : ∀ model : Lambda.LambdaModel,
+      model.eval redundantTerm Fin.elim0 =
+        model.eval survivorTerm Fin.elim0) :
+    Nonempty (StableOrderedEndpointAnchorData input drop keep
+      (movedEndpoints input redundant drop) endpoint) := by
+  obtain ⟨redundantPath, redundantRoute, redundantZero⟩ :=
+    redundant_zero_route input redundant redundantRegion redundantTerm drop
+      redundantShape redundantOccurs sameDepth
+  obtain ⟨survivorPath, survivorRoute, survivorZero⟩ :=
+    availability.witness_zero_route
+  have redundantNe := movedEndpoints_ne_redundant input redundant drop member
+  have survivorNe := movedEndpoint_ne_survivor_output input redundant survivor
+    drop keep endpoint member survivorOccurs distinct
+  have redundantStable := redundant_output_not_mem_movedEndpoints input
+    redundant drop
+  have survivorStable := survivor_output_not_mem_movedEndpoints input redundant
+    survivor drop keep survivorOccurs distinct
+  rcases movedEndpoint_scopes_comparable input redundant drop keep survivorRegion
+      member availability with dropAbove | keepAbove
+  · obtain ⟨routePath, ⟨route⟩⟩ :=
+      Diagram.Splice.regionRoute_complete_of_encloses input.val
+        (input.val.wires drop).scope availability.available dropAbove
+    obtain ⟨rootPath, ⟨rootRoute⟩⟩ :=
+      Diagram.Splice.regionRoute_complete_of_encloses input.val input.val.root
+        (input.val.wires drop).scope
+        (input.property.all_regions_reach_root (input.val.wires drop).scope)
+    exact ⟨{
+      data := {
+        anchorWire := drop
+        localWire := keep
+        wirePair := Or.inl ⟨rfl, rfl⟩
+        shallow := (input.val.wires drop).scope
+        deep := availability.available
+        anchorWireVisible := ⟨0, rfl⟩
+        sourceWireVisible := dropAbove
+        targetWireVisible := availability.wire_encloses
+        deepEnclosesEndpoint := availability.target_inside
+        anchorWitness := redundant
+        localWitness := survivor
+        anchorWitnessRegion := redundantRegion
+        localWitnessRegion := survivorRegion
+        anchorTerm := redundantTerm
+        localTerm := survivorTerm
+        anchorWitnessShape := redundantShape
+        localWitnessShape := survivorShape
+        anchorWitnessOccurs := redundantOccurs
+        localWitnessOccurs := survivorOccurs
+        anchorWitnessNe := redundantNe.symm
+        localWitnessNe := survivorNe
+        anchorWitnessPath := redundantPath
+        localWitnessPath := survivorPath
+        routePath := routePath
+        rootPath := rootPath
+        anchorWitnessRoute := redundantRoute
+        anchorWitnessZero := redundantZero
+        localWitnessRoute := survivorRoute
+        localWitnessZero := survivorZero
+        route := route
+        rootRoute := rootRoute
+        termValues := termValues
+      }
+      anchorWitnessNotMoved := redundantStable
+      localWitnessNotMoved := survivorStable
+    }⟩
+  · obtain ⟨routePath, ⟨route⟩⟩ :=
+      Diagram.Splice.regionRoute_complete_of_encloses input.val
+        availability.available (input.val.wires drop).scope keepAbove
+    obtain ⟨rootPath, ⟨rootRoute⟩⟩ :=
+      Diagram.Splice.regionRoute_complete_of_encloses input.val input.val.root
+        availability.available
+        (input.property.all_regions_reach_root availability.available)
+    have dropEnclosesEndpoint := input.property.wire_scopes_enclose drop endpoint
+      (movedEndpoints_mem_occurs input redundant drop member)
+    exact ⟨{
+      data := {
+        anchorWire := keep
+        localWire := drop
+        wirePair := Or.inr ⟨rfl, rfl⟩
+        shallow := availability.available
+        deep := (input.val.wires drop).scope
+        anchorWireVisible := availability.wire_encloses
+        sourceWireVisible := ⟨0, rfl⟩
+        targetWireVisible := ConcreteElaboration.checked_encloses_trans
+          input.property availability.wire_encloses keepAbove
+        deepEnclosesEndpoint := dropEnclosesEndpoint
+        anchorWitness := survivor
+        localWitness := redundant
+        anchorWitnessRegion := survivorRegion
+        localWitnessRegion := redundantRegion
+        anchorTerm := survivorTerm
+        localTerm := redundantTerm
+        anchorWitnessShape := survivorShape
+        localWitnessShape := redundantShape
+        anchorWitnessOccurs := survivorOccurs
+        localWitnessOccurs := redundantOccurs
+        anchorWitnessNe := survivorNe
+        localWitnessNe := redundantNe.symm
+        anchorWitnessPath := survivorPath
+        localWitnessPath := redundantPath
+        routePath := routePath
+        rootPath := rootPath
+        anchorWitnessRoute := survivorRoute
+        anchorWitnessZero := survivorZero
+        localWitnessRoute := redundantRoute
+        localWitnessZero := redundantZero
+        route := route
+        rootRoute := rootRoute
+        termValues := fun model => (termValues model).symm
+      }
+      anchorWitnessNotMoved := survivorStable
+      localWitnessNotMoved := redundantStable
+    }⟩
+
+/-- The exact endpoint batch accepted by the serialized contraction executor
+preserves ordered-open denotation before carrier compaction. -/
+theorem contractionEndpointBatchOpen_denote_iff
+    (input : CheckedDiagram signature)
+    (redundant survivor : Fin input.val.nodeCount)
+    (redundantRegion survivorRegion : Fin input.val.regionCount)
+    (redundantTerm survivorTerm : Lambda.Term 0 (Fin 0))
+    (drop keep : Fin input.val.wireCount)
+    (certificate : Lambda.Certificate)
+    (redundantShape : input.val.nodes redundant =
+      .term redundantRegion 0 redundantTerm)
+    (survivorShape : input.val.nodes survivor =
+      .term survivorRegion 0 survivorTerm)
+    (certificateAccepted : Lambda.checkCertificate redundantTerm survivorTerm
+      certificate = true)
+    (redundantOwner : ConcreteElaboration.endpointOwner? input.val
+      { node := redundant, port := CPort.output } = some drop)
+    (survivorOwner : ConcreteElaboration.endpointOwner? input.val
+      { node := survivor, port := CPort.output } = some keep)
+    (distinct : drop ≠ keep)
+    (sameDepth : concreteCutDepth input.val (input.val.wires drop).scope =
+      concreteCutDepth input.val redundantRegion)
+    (accepted : (movedEndpoints input redundant drop).all
+      (fun endpoint => anchorAvailableAt input.val
+        (input.val.wires keep).scope survivorRegion
+        (input.val.nodes endpoint.node).region) = true)
+    (boundary : List (Fin input.val.wireCount))
+    (boundaryRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin boundary.length → model.Carrier) :
+    (endpointMoveSourceCheckedOpen input boundary boundaryRoot).denote model
+        named args ↔
+      (endpointBatchTargetCheckedOpen input drop keep
+        (movedEndpoints input redundant drop) boundary boundaryRoot
+        (moveEndpointsRaw_wellFormed input.val input.property drop keep
+          (movedEndpoints input redundant drop) distinct
+          (movedEndpoints_nodup input redundant drop)
+          (fun _endpoint member =>
+            movedEndpoints_mem_occurs input redundant drop member)
+          (fun _endpoint member =>
+            (Classical.choice (movedEndpoint_availability input redundant drop
+              keep survivorRegion accepted member)).wire_encloses_target)
+        )).denote model named args := by
+  have redundantOccurs := ConcreteElaboration.endpointOwner?_sound redundantOwner
+  have survivorOccurs := ConcreteElaboration.endpointOwner?_sound survivorOwner
+  have endpointNodup : (movedEndpoints input redundant drop).Nodup := by
+    exact movedEndpoints_nodup input redundant drop
+  have sourceOccurs : ∀ endpoint,
+      endpoint ∈ movedEndpoints input redundant drop →
+        input.val.EndpointOccurs drop endpoint := by
+    exact fun endpoint member =>
+      movedEndpoints_mem_occurs input redundant drop member
+  have targetEncloses : ∀ endpoint,
+      endpoint ∈ movedEndpoints input redundant drop →
+        input.val.Encloses (input.val.wires keep).scope
+          (input.val.nodes endpoint.node).region := by
+    intro endpoint member
+    exact (Classical.choice (movedEndpoint_availability input redundant drop
+      keep survivorRegion accepted member)).wire_encloses_target
+  have anchors : ∀ endpoint,
+      (member : endpoint ∈ movedEndpoints input redundant drop) →
+        Nonempty (StableOrderedEndpointAnchorData input drop keep
+          (movedEndpoints input redundant drop) endpoint) := by
+    intro endpoint member
+    let availability := Classical.choice (movedEndpoint_availability input
+      redundant drop keep survivorRegion accepted member)
+    exact contractStableEndpointAnchorData_exists input redundant survivor
+      redundantRegion survivorRegion redundantTerm survivorTerm drop keep
+      endpoint member redundantShape survivorShape redundantOccurs survivorOccurs
+      distinct sameDepth availability
+      (fun currentModel => certified_closed_terms_equal redundantTerm survivorTerm
+        certificate certificateAccepted currentModel)
+  exact moveEndpointsOpen_denote_iff_of_anchor_data input drop keep
+    (movedEndpoints input redundant drop) boundary boundaryRoot distinct
+    endpointNodup sourceOccurs targetEncloses anchors
+    (moveEndpointsRaw_wellFormed input.val input.property drop keep
+      (movedEndpoints input redundant drop) distinct endpointNodup sourceOccurs
+      targetEncloses) model named args
+
 end AnchoredWireContractSoundness
 
 end VisualProof.Rule
