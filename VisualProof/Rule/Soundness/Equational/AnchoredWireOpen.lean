@@ -232,8 +232,9 @@ theorem anchoredWireSplitRaw_compileRoot_equiv
     have site : AnchoredAvailableKernel input wire endpoints target available
         term targetWellFormed :=
       anchoredWireSplitRaw_certified_available_kernel input wire
-      witness endpoints target available witnessRegion term
-      witnessShape witnessOccurs witnessKept selectedOccurs targetWellFormed
+      witness endpoints target available witnessRegion term term
+      witnessShape (fun _ => rfl) witnessOccurs witnessKept selectedOccurs
+      targetWellFormed
       wireEncloses availability.wire_encloses_target witnessRoute
       witnessZero sameDepth targetRoute
     exact anchoredWireSplitRaw_compileRoot_route_to_available input boundary

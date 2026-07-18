@@ -1408,8 +1408,10 @@ theorem anchoredWireSplitRaw_certified_available_kernel
     (witness : Fin input.val.nodeCount)
     (endpoints : List (CEndpoint input.val.nodeCount))
     (target available witnessRegion : Fin input.val.regionCount)
-    (term : Lambda.Term 0 (Fin 0))
-    (witnessShape : input.val.nodes witness = .term witnessRegion 0 term)
+    (term witnessTerm : Lambda.Term 0 (Fin 0))
+    (witnessShape : input.val.nodes witness = .term witnessRegion 0 witnessTerm)
+    (witnessEval : ∀ model : Lambda.LambdaModel,
+      model.eval witnessTerm Fin.elim0 = model.eval term Fin.elim0)
     (witnessOccurs : input.val.EndpointOccurs wire
       { node := witness, port := .output })
     (witnessKept : { node := witness, port := CPort.output } ∉ endpoints)
@@ -1467,7 +1469,7 @@ theorem anchoredWireSplitRaw_certified_available_kernel
     targetSameDepth
   subst targetWitnessDepth
   have targetWitnessShape : targetChecked.val.nodes witness.castSucc =
-      .term witnessRegion 0 term := by
+      .term witnessRegion 0 witnessTerm := by
     simpa [targetChecked, witnessShape] using
       anchoredWireSplitRaw_oldNode input wire endpoints target term witness
   have targetWitnessOccurs : targetChecked.val.EndpointOccurs wire.castSucc
@@ -1505,25 +1507,30 @@ theorem anchoredWireSplitRaw_certified_available_kernel
         (by simpa [targetChecked] using targetItemsResult) model named sourceOuter
         targetOuter relEnv outerAgrees
       · intro sourceLocal sourceDenotes
-        apply anchoredWireSplit_witness_value_of_zero_route input wire witness
-          witnessRegion term witnessShape witnessOccurs witnessRoute witnessZero
+        have extracted := anchoredWireSplit_witness_value_of_zero_route input
+          wire witness witnessRegion witnessTerm witnessShape witnessOccurs
+          witnessRoute witnessZero
           original binders fuel sourceItems sourceItemsResult originalExact
           bindersCover binderEnumeration model named sourceOuter sourceLocal relEnv
-        simpa [ConcreteElaboration.extendedEnvironment, splitExtendedEnv] using
-          sourceDenotes
+          (by simpa [ConcreteElaboration.extendedEnvironment, splitExtendedEnv]
+            using sourceDenotes)
+        intro index indexGet
+        exact (extracted index indexGet).trans (witnessEval model)
       · intro targetLocal targetDenotes
-        apply anchoredWireSplit_witness_value_of_zero_route targetChecked
-          wire.castSucc witness.castSucc witnessRegion term targetWitnessShape
+        have extracted := anchoredWireSplit_witness_value_of_zero_route
+          targetChecked wire.castSucc witness.castSucc witnessRegion witnessTerm
+          targetWitnessShape
           targetWitnessOccurs targetWitnessRoute targetWitnessDepthProof expanded binders
           fuel targetItems (by simpa [targetChecked] using targetItemsResult)
           expandedExact (anchoredWireSplitRaw_bindersCover input wire endpoints
             target term binders available bindersCover)
           (anchoredWireSplitRaw_binderEnumeration input wire endpoints target term
             binders available binderEnumeration)
-          model named
-          targetOuter targetLocal relEnv
-        simpa [ConcreteElaboration.extendedEnvironment, splitExtendedEnv] using
-          targetDenotes
+          model named targetOuter targetLocal relEnv
+          (by simpa [ConcreteElaboration.extendedEnvironment, splitExtendedEnv]
+            using targetDenotes)
+        intro index indexGet
+        exact (extracted index indexGet).trans (witnessEval model)
 
 theorem anchoredWireSplitRaw_finishRegion_frame_equiv_of_ne
     (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
