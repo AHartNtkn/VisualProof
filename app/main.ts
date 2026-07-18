@@ -34,4 +34,25 @@ async function boot(): Promise<void> {
   }
 }
 
-void boot()
+function showLaunchFailure(error: unknown): void {
+  console.error('Failed to start Cursebreaker', error)
+
+  const host = document.getElementById('cursebreaker')
+  if (!(host instanceof HTMLElement)) return
+
+  const failure = document.createElement('section')
+  failure.className = 'curse-launch-failure'
+  failure.setAttribute('role', 'alert')
+
+  const heading = document.createElement('h1')
+  heading.textContent = 'Cursebreaker could not start'
+
+  const message = document.createElement('p')
+  message.textContent = 'Close this window and try again.'
+
+  failure.append(heading, message)
+  host.dataset.launchState = 'failed'
+  host.replaceChildren(failure)
+}
+
+void boot().catch(showLaunchFailure)

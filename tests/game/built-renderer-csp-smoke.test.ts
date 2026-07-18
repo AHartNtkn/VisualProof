@@ -44,14 +44,14 @@ afterAll(async () => {
   if (buildRoot !== undefined) await rm(buildRoot, { recursive: true, force: true })
 })
 
-const openBuiltRenderer = async (): Promise<{
+const openBuiltRenderer = async (loadMode: 'success' | 'load-error' = 'success'): Promise<{
   readonly page: Page
   readonly pageErrors: string[]
 }> => {
   const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
   const pageErrors: string[] = []
   page.on('pageerror', (error) => pageErrors.push(error.message))
-  await page.addInitScript(() => {
+  await page.addInitScript((mode) => {
     const runtimeWindow = window as typeof window & {
       cursebreakerPlatform: {
         loadSave(): Promise<null>
@@ -66,7 +66,11 @@ const openBuiltRenderer = async (): Promise<{
     Object.defineProperty(runtimeWindow, '__builtRendererProbe', { value: probe })
     Object.defineProperty(runtimeWindow, 'cursebreakerPlatform', {
       value: {
-        async loadSave() { probe.loadSaveCalls += 1; return null },
+        async loadSave() {
+          probe.loadSaveCalls += 1
+          if (mode === 'load-error') throw new Error('fixture load failure')
+          return null
+        },
         async writeSave(_document: unknown) {},
         async setFullscreen(fullscreen: boolean) { return fullscreen },
         async requestExit(_document: unknown) {},
@@ -76,12 +80,14 @@ const openBuiltRenderer = async (): Promise<{
     document.addEventListener('securitypolicyviolation', (event) => {
       probe.violations.push(`${event.violatedDirective}: ${event.blockedURI}`)
     })
-  })
+  }, loadMode)
   await page.goto(rendererUrl)
-  await page.waitForFunction(() => {
-    const runtimeWindow = window as typeof window & { __cursebreakerDebug?: unknown }
-    return runtimeWindow.__cursebreakerDebug !== undefined
-  })
+  if (loadMode === 'success') {
+    await page.waitForFunction(() => {
+      const runtimeWindow = window as typeof window & { __cursebreakerDebug?: unknown }
+      return runtimeWindow.__cursebreakerDebug !== undefined
+    })
+  }
   return { page, pageErrors }
 }
 
@@ -156,6 +162,20 @@ describe('built renderer production CSP', () => {
       ).__builtRendererProbe)
       expect(probe.loadSaveCalls).toBe(1)
       expect(probe.violations).toEqual([])
+      expect(pageErrors).toEqual([])
+    } finally {
+      await page.close()
+    }
+  })
+
+  it('renders an accessible diagnostic instead of an empty black host when startup fails', async () => {
+    const { page, pageErrors } = await openBuiltRenderer('load-error')
+    try {
+      const alert = page.locator('.curse-launch-failure[role="alert"]')
+      await expect.poll(() => alert.count()).toBe(1)
+      await expect.poll(() => alert.textContent()).toContain('Cursebreaker could not start')
+      await expect.poll(() => page.locator('#cursebreaker').getAttribute('data-launch-state'))
+        .toBe('failed')
       expect(pageErrors).toEqual([])
     } finally {
       await page.close()

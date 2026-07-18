@@ -7,6 +7,17 @@
 html, body, #cursebreaker { width: 100%; height: 100%; margin: 0; overflow: hidden; }
 body { background: #050608; }
 
+.curse-launch-failure {
+  box-sizing: border-box;
+  display: grid;
+  place-content: center;
+  gap: .5rem;
+  min-height: 100%;
+  padding: 2rem;
+  color: #f5f1e8;
+  text-align: center;
+}
+
 .curse-production-environment[data-text-size="small"] { font-size: 0.875rem; }
 .curse-production-environment[data-text-size="medium"] { font-size: 1rem; }
 .curse-production-environment[data-text-size="large"] { font-size: 1.2rem; }
