@@ -582,23 +582,23 @@ theorem compiledRootItems_focus_computation
 /-- Exact same-route alignment retaining the terminal compiler coordinates
 chosen on both sides. -/
 structure SameRouteContextAlignment
-    {diagram : ConcreteDiagram} {target : Fin diagram.regionCount}
+    {diagram : ConcreteDiagram}
+    {start target : Fin diagram.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {sourceBody : Region signature sourceOuter rels}
     {targetBody : Region signature targetOuter rels}
     {path : List Nat}
     (wire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
     (sourceWitness : Region.ContextPath sourceBody path)
-    (targetWitness : Region.ContextPath targetBody path) where
+    (targetWitness : Region.ContextPath targetBody path)
+    (sourceInitialWires targetInitialWires :
+      ConcreteElaboration.WireContext diagram) where
   alignment : Splice.Input.PairedCompilerContextAlignment wire
     sourceWitness targetWitness
   sourceTerminalLeaf : Splice.Region.ContextPath.CompilerLeaf diagram target
     sourceWitness
   targetTerminalLeaf : Splice.Region.ContextPath.CompilerLeaf diagram target
     targetWitness
-  terminalStart : Fin diagram.regionCount
-  sourceInitialWires : ConcreteElaboration.WireContext diagram
-  targetInitialWires : ConcreteElaboration.WireContext diagram
   terminalWireSpec : ∀ index,
     targetTerminalLeaf.inheritedWires.get
         (Splice.Input.compilerLeafInheritedWireOfHole sourceWitness
@@ -610,8 +610,8 @@ structure SameRouteContextAlignment
       {otherBody : Region signature otherOuter otherRels}
       {otherWitness : Region.ContextPath otherBody otherPath}
       {otherState : Splice.Region.ContextPath.CompilerLeaf diagram
-        terminalStart (.here otherBody)}
-      {otherRoute : Splice.RegionRoute diagram terminalStart target otherPath}
+        start (.here otherBody)}
+      {otherRoute : Splice.RegionRoute diagram start target otherPath}
       (otherTrace : Splice.CompilerTrace signature diagram otherRoute
         otherWitness otherState),
     otherState.inheritedWires = sourceInitialWires →
@@ -621,12 +621,151 @@ structure SameRouteContextAlignment
       {otherBody : Region signature otherOuter otherRels}
       {otherWitness : Region.ContextPath otherBody otherPath}
       {otherState : Splice.Region.ContextPath.CompilerLeaf diagram
-        terminalStart (.here otherBody)}
-      {otherRoute : Splice.RegionRoute diagram terminalStart target otherPath}
+        start (.here otherBody)}
+      {otherRoute : Splice.RegionRoute diagram start target otherPath}
       (otherTrace : Splice.CompilerTrace signature diagram otherRoute
         otherWitness otherState),
     otherState.inheritedWires = targetInitialWires →
       targetTerminalLeaf.inheritedWires = otherTrace.leaf.inheritedWires
+
+/-- Root-route alignment exposing the exact first child and suffix consumed by
+the ordinary recursive compiler after the ordered-open root frame. -/
+structure RootSameRouteContextAlignment
+    {diagram : ConcreteDiagram} {target : Fin diagram.regionCount}
+    {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
+    {sourceBody : Region signature sourceOuter rels}
+    {targetBody : Region signature targetOuter rels}
+    {path : List Nat}
+    (wire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
+    (sourceWitness : Region.ContextPath sourceBody path)
+    (targetWitness : Region.ContextPath targetBody path)
+    (sourceInitialWires targetInitialWires :
+      ConcreteElaboration.WireContext diagram) where
+  terminalStart : Fin diagram.regionCount
+  terminalPath : List Nat
+  terminalParent : (diagram.regions terminalStart).parent? = some diagram.root
+  terminalRoute : Splice.RegionRoute diagram terminalStart target terminalPath
+  sameRoute : SameRouteContextAlignment (diagram := diagram)
+    (start := terminalStart) (target := target)
+    wire sourceWitness targetWitness sourceInitialWires targetInitialWires
+
+/-- Compare the retained source terminal with any authoritative ordinary
+compiler trace that starts at the concrete root. -/
+theorem RootSameRouteContextAlignment.sourceTerminal_eq_rootTrace
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {target : Fin diagram.regionCount}
+    {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
+    {sourceBody : Region signature sourceOuter rels}
+    {targetBody : Region signature targetOuter rels}
+    {path : List Nat}
+    {wire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
+    {sourceWitness : Region.ContextPath sourceBody path}
+    {targetWitness : Region.ContextPath targetBody path}
+    {sourceInitialWires targetInitialWires :
+      ConcreteElaboration.WireContext diagram}
+    (alignment : RootSameRouteContextAlignment (target := target) wire
+      sourceWitness targetWitness sourceInitialWires targetInitialWires)
+    {otherStart : Fin diagram.regionCount}
+    {otherPath : List Nat} {otherRels : Theory.RelCtx} {otherOuter : Nat}
+    {otherBody : Region signature otherOuter otherRels}
+    {otherWitness : Region.ContextPath otherBody otherPath}
+    {otherState : Splice.Region.ContextPath.CompilerLeaf diagram otherStart
+      (.here otherBody)}
+    {otherRoute : Splice.RegionRoute diagram otherStart target otherPath}
+    (otherTrace : Splice.CompilerTrace signature diagram otherRoute
+      otherWitness otherState)
+    (startEq : otherStart = diagram.root)
+    (initialEq : otherState.inheritedWires.extend otherStart =
+      sourceInitialWires) :
+    alignment.sameRoute.sourceTerminalLeaf.inheritedWires =
+      otherTrace.leaf.inheritedWires := by
+  subst otherStart
+  cases otherTrace with
+  | here state =>
+      exact False.elim
+        (ConcreteElaboration.checked_direct_child_not_encloses_parent hwf
+          alignment.terminalParent
+          (Splice.Input.RegionRoute.encloses alignment.terminalRoute hwf))
+  | @cut _ traceChild _ _ traceParent _ _ traceTail _ _ _ _ _ _ _ _ _
+      traceState _ _ traceChildState _ traceInherited _ _ traceTailTrace =>
+      have childEq := Splice.Input.RegionRoute.directChild_eq_of_encloses hwf
+        alignment.terminalParent traceParent
+        (Splice.Input.RegionRoute.encloses alignment.terminalRoute hwf)
+        (Splice.Input.RegionRoute.encloses traceTail hwf)
+      subst traceChild
+      exact alignment.sameRoute.sourceTerminalCoherent traceTailTrace
+        (traceInherited.trans initialEq)
+  | @bubble _ traceChild _ _ traceParent _ _ traceTail _ _ _ _ _ _ _ _ _
+      _ traceState _ _ traceChildState _ traceInherited _ _ traceTailTrace =>
+      have childEq := Splice.Input.RegionRoute.directChild_eq_of_encloses hwf
+        alignment.terminalParent traceParent
+        (Splice.Input.RegionRoute.encloses alignment.terminalRoute hwf)
+        (Splice.Input.RegionRoute.encloses traceTail hwf)
+      subst traceChild
+      exact alignment.sameRoute.sourceTerminalCoherent traceTailTrace
+        (traceInherited.trans initialEq)
+
+/-- Compare the retained target terminal with the canonical ordered-open
+compiler trace. -/
+theorem RootSameRouteContextAlignment.targetTerminal_eq_openTrace
+    {checked : CheckedOpenDiagram signature}
+    (hwf : checked.val.diagram.WellFormed signature)
+    {target : Fin checked.val.diagram.regionCount}
+    {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
+    {sourceBody : Region signature sourceOuter rels}
+    {targetBody : Region signature targetOuter rels}
+    {path : List Nat}
+    {wire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
+    {sourceWitness : Region.ContextPath sourceBody path}
+    {targetWitness : Region.ContextPath targetBody path}
+    {sourceInitialWires targetInitialWires :
+      ConcreteElaboration.WireContext checked.val.diagram}
+    (alignment : RootSameRouteContextAlignment (target := target) wire
+      sourceWitness targetWitness sourceInitialWires targetInitialWires)
+    {openPath : List Nat}
+    {openBody : Region signature checked.val.exposedWires.length []}
+    {openWitness : Region.ContextPath openBody openPath}
+    {openState : Splice.OpenRootCompilerState checked openBody}
+    {openRoute : Splice.RegionRoute checked.val.diagram
+      checked.val.diagram.root target openPath}
+    (openTrace : Splice.OpenCompilerTrace checked openRoute openWitness
+      openState)
+    (targetNeRoot : target ≠ checked.val.diagram.root)
+    (initialEq : checked.val.rootWires = targetInitialWires) :
+    alignment.sameRoute.targetTerminalLeaf.inheritedWires =
+      (openTrace.leaf.nestedOfNe targetNeRoot).inheritedWires := by
+  cases openTrace with
+  | here state => exact False.elim (targetNeRoot rfl)
+  | @cut traceChild _ _ traceParent tracePosition tracePositionEq traceTail
+      traceLocal traceItems traceFocus traceChildBody traceAt traceIsCut
+      traceNested traceState traceLocalCanonical traceItemsCanonical
+      traceChildState traceChildKind traceInherited traceBinders traceFuel
+      traceTailTrace =>
+      have childEq := Splice.Input.RegionRoute.directChild_eq_of_encloses hwf
+        alignment.terminalParent traceParent
+        (Splice.Input.RegionRoute.encloses alignment.terminalRoute hwf)
+        (Splice.Input.RegionRoute.encloses traceTail hwf)
+      subst traceChild
+      have core := alignment.sameRoute.targetTerminalCoherent traceTailTrace
+        (traceInherited.trans initialEq)
+      simpa [Splice.OpenCompilerTrace.leaf,
+        Splice.Region.ContextPath.OpenCompilerLeaf.nestedOfNe,
+        Splice.Region.ContextPath.CompilerLeaf.underCut] using core
+  | @bubble traceChild _ _ traceParent tracePosition tracePositionEq traceTail
+      traceLocal traceArity traceItems traceFocus traceChildBody traceAt
+      traceIsBubble traceNested traceState traceLocalCanonical
+      traceItemsCanonical traceChildState traceChildKind traceInherited
+      traceBinders traceFuel traceTailTrace =>
+      have childEq := Splice.Input.RegionRoute.directChild_eq_of_encloses hwf
+        alignment.terminalParent traceParent
+        (Splice.Input.RegionRoute.encloses alignment.terminalRoute hwf)
+        (Splice.Input.RegionRoute.encloses traceTail hwf)
+      subst traceChild
+      have core := alignment.sameRoute.targetTerminalCoherent traceTailTrace
+        (traceInherited.trans initialEq)
+      simpa [Splice.OpenCompilerTrace.leaf,
+        Splice.Region.ContextPath.OpenCompilerLeaf.nestedOfNe,
+        Splice.Region.ContextPath.CompilerLeaf.underBubble] using core
 
 /-- Align two successful recursive child compilations along the same concrete
 route, while exposing the caller's exact inherited-wire equivalence. -/
@@ -661,7 +800,9 @@ theorem compiledChild_sameRouteContextIso
     (sourceWitness : Region.ContextPath sourceBody path)
     (targetWitness : Region.ContextPath targetBody path) :
     Nonempty (SameRouteContextAlignment (diagram := input.val)
-      (target := target) wire sourceWitness targetWitness) := by
+      (start := start)
+      (target := target) wire sourceWitness targetWitness sourceContext
+        targetContext) := by
   obtain ⟨sourceResult⟩ := Splice.compileRegion_route_context_complete input
     route sourceComputation sourceExact sourceCover sourceEnumeration
   obtain ⟨targetResult⟩ := Splice.compileRegion_route_context_complete input
@@ -714,9 +855,6 @@ theorem compiledChild_sameRouteContextIso
     alignment := alignment
     sourceTerminalLeaf := sourceResult.trace.leaf
     targetTerminalLeaf := targetResult.trace.leaf
-    terminalStart := start
-    sourceInitialWires := sourceContext
-    targetInitialWires := targetContext
     terminalWireSpec := by
       simpa [alignment] using traceAlignment.terminalInheritedWireSpec
     sourceTerminalCoherent := by
@@ -767,8 +905,9 @@ theorem compiledRootItems_sameRouteContextIso
     (targetNeRoot : target ≠ input.val.root)
     (sourceWitness : Region.ContextPath (Region.mk 0 sourceItems) path)
     (targetWitness : Region.ContextPath (Region.mk 0 targetItems) path) :
-    Nonempty (SameRouteContextAlignment (diagram := input.val)
-      (target := target) wire sourceWitness targetWitness) := by
+    Nonempty (RootSameRouteContextAlignment (diagram := input.val)
+      (target := target) wire sourceWitness targetWitness sourceContext
+        targetContext) := by
   cases route with
   | here => exact False.elim (targetNeRoot rfl)
   | @step _ child target rest parent position positionEq tail =>
@@ -892,18 +1031,25 @@ theorem compiledRootItems_sameRouteContextIso
                         targetContextTransport] using cutContexts
                   }
                   exact ⟨{
-                    alignment := rootAlignment
-                    sourceTerminalLeaf := childResult.sourceTerminalLeaf.underCut
-                    targetTerminalLeaf := childResult.targetTerminalLeaf.underCut
-                    terminalStart := childResult.terminalStart
-                    sourceInitialWires := childResult.sourceInitialWires
-                    targetInitialWires := childResult.targetInitialWires
-                    terminalWireSpec := by
-                      simpa [rootAlignment, childAlignment,
-                        Splice.Input.compilerLeafInheritedWireOfHole] using
-                          childResult.terminalWireSpec
-                    sourceTerminalCoherent := childResult.sourceTerminalCoherent
-                    targetTerminalCoherent := childResult.targetTerminalCoherent
+                    terminalStart := child
+                    terminalPath := rest
+                    terminalParent := parent
+                    terminalRoute := tail
+                    sameRoute := {
+                      alignment := rootAlignment
+                      sourceTerminalLeaf :=
+                        childResult.sourceTerminalLeaf.underCut
+                      targetTerminalLeaf :=
+                        childResult.targetTerminalLeaf.underCut
+                      terminalWireSpec := by
+                        simpa [rootAlignment, childAlignment,
+                          Splice.Input.compilerLeafInheritedWireOfHole] using
+                            childResult.terminalWireSpec
+                      sourceTerminalCoherent :=
+                        childResult.sourceTerminalCoherent
+                      targetTerminalCoherent :=
+                        childResult.targetTerminalCoherent
+                    }
                   }⟩
 
               | @bubble _ _ _ _ _ _ _ targetFocus targetAt targetChildBody
@@ -1088,25 +1234,61 @@ theorem compiledRootItems_sameRouteContextIso
                         targetContextTransport] using bubbleContexts
                   }
                   exact ⟨{
-                    alignment := rootAlignment
-                    sourceTerminalLeaf :=
-                      childResult.sourceTerminalLeaf.underBubble
-                    targetTerminalLeaf :=
-                      childResult.targetTerminalLeaf.underBubble
-                    terminalStart := childResult.terminalStart
-                    sourceInitialWires := childResult.sourceInitialWires
-                    targetInitialWires := childResult.targetInitialWires
-                    terminalWireSpec := by
-                      simpa [rootAlignment, childAlignment,
-                        Splice.Input.compilerLeafInheritedWireOfHole] using
-                          childResult.terminalWireSpec
-                    sourceTerminalCoherent := childResult.sourceTerminalCoherent
-                    targetTerminalCoherent := childResult.targetTerminalCoherent
+                    terminalStart := child
+                    terminalPath := rest
+                    terminalParent := parent
+                    terminalRoute := tail
+                    sameRoute := {
+                      alignment := rootAlignment
+                      sourceTerminalLeaf :=
+                        childResult.sourceTerminalLeaf.underBubble
+                      targetTerminalLeaf :=
+                        childResult.targetTerminalLeaf.underBubble
+                      terminalWireSpec := by
+                        simpa [rootAlignment, childAlignment,
+                          Splice.Input.compilerLeafInheritedWireOfHole] using
+                            childResult.terminalWireSpec
+                      sourceTerminalCoherent :=
+                        childResult.sourceTerminalCoherent
+                      targetTerminalCoherent :=
+                        childResult.targetTerminalCoherent
+                    }
                   }⟩
+
+/-- The contraction data transported along one already-designated compiler
+route.  The target path, witness, and hole transport remain parameters rather
+than being re-existentialized, so executor-route identity is definitional. -/
+structure RootItemContractionAlongTransport
+    {sourceItems : ItemSeq signature sourceWires rels}
+    {targetItems : ItemSeq signature targetWires rels}
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (iso : ItemSeqIso signature wire rels sourceItems targetItems)
+    {path : List Nat}
+    (sourceWitness : Region.ContextPath (Region.mk 0 sourceItems) path)
+    (targetWitness : Region.ContextPath (Region.mk 0 targetItems) path)
+    (alignment : Splice.Input.PairedCompilerContextAlignment wire
+      sourceWitness targetWitness)
+    (sourceReplacement : Region signature sourceWitness.toFocus.holeWires
+      sourceWitness.toFocus.holeRels) where
+  targetReplacement : Region signature targetWitness.toFocus.holeWires
+    targetWitness.toFocus.holeRels
+  targetReplacement_eq : targetReplacement =
+    alignment.holeRelsEq ▸
+      sourceReplacement.renameWires alignment.holeWire
+  replacementIso : RegionIso signature alignment.holeWire
+    sourceWitness.toFocus.holeRels sourceReplacement
+    (alignment.holeRelsEq.symm ▸ targetReplacement)
+  equivalent : ∀ (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (targetEnvironment : Fin targetWires → model.Carrier)
+    (relEnv : RelEnv model.Carrier rels),
+    denoteItemSeq model named targetEnvironment relEnv targetItems ↔
+      denoteRegion model named targetEnvironment relEnv
+        (targetWitness.toFocus.context.fill targetReplacement)
 
 /-- Transport a root-item contraction along a designated compiler-route
 alignment.  Unlike the generic isomorphism transport, this keeps the
-executor's concrete route fixed. -/
+executor's concrete route fixed definitionally. -/
 theorem ItemSeqIso.transportRootContractionAlong
     {sourceItems : ItemSeq signature sourceWires rels}
     {targetItems : ItemSeq signature targetWires rels}
@@ -1126,8 +1308,8 @@ theorem ItemSeqIso.transportRootContractionAlong
       denoteItemSeq model named sourceEnvironment relEnv sourceItems ↔
         denoteRegion model named sourceEnvironment relEnv
           (sourceWitness.toFocus.context.fill sourceReplacement)) :
-    Nonempty (RootItemContractionTransport wire iso sourceWitness
-      sourceReplacement) := by
+    Nonempty (RootItemContractionAlongTransport wire iso sourceWitness
+      targetWitness alignment sourceReplacement) := by
   let targetReplacement : Region signature
       targetWitness.toFocus.holeWires targetWitness.toFocus.holeRels :=
     alignment.holeRelsEq ▸
@@ -1147,28 +1329,31 @@ theorem ItemSeqIso.transportRootContractionAlong
       (sourceWitness.toFocus.context.fill sourceReplacement)
       (targetWitness.toFocus.context.fill targetReplacement) :=
     targetFill ▸ filledIsoCore
-  refine ⟨{
-    targetPath := path
-    targetWitness := targetWitness
-    holeRelsEq := alignment.holeRelsEq.symm
-    holeWire := alignment.holeWire
+  have targetEquivalent : ∀ (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (targetEnvironment : Fin targetWires → model.Carrier)
+      (relEnv : RelEnv model.Carrier rels),
+      denoteItemSeq model named targetEnvironment relEnv targetItems ↔
+        denoteRegion model named targetEnvironment relEnv
+          (targetWitness.toFocus.context.fill targetReplacement) := by
+    intro model named targetEnvironment relEnv
+    let sourceEnvironment : Fin sourceWires → model.Carrier :=
+      fun index => targetEnvironment (wire index)
+    have environmentsAgree : EnvironmentsAgree wire sourceEnvironment
+        targetEnvironment := by
+      intro index
+      rfl
+    exact (iso.denotation model named sourceEnvironment targetEnvironment relEnv
+      environmentsAgree).symm.trans
+        ((sourceEquivalent model named sourceEnvironment relEnv).trans
+          (filledIso.denotation model named sourceEnvironment targetEnvironment
+            relEnv environmentsAgree))
+  exact ⟨{
     targetReplacement := targetReplacement
     targetReplacement_eq := rfl
     replacementIso := replacementIso
-    equivalent := ?_
+    equivalent := targetEquivalent
   }⟩
-  intro model named targetEnvironment relEnv
-  let sourceEnvironment : Fin sourceWires → model.Carrier :=
-    fun index => targetEnvironment (wire index)
-  have environmentsAgree : EnvironmentsAgree wire sourceEnvironment
-      targetEnvironment := by
-    intro index
-    rfl
-  exact (iso.denotation model named sourceEnvironment targetEnvironment relEnv
-    environmentsAgree).symm.trans
-      ((sourceEquivalent model named sourceEnvironment relEnv).trans
-        (filledIso.denotation model named sourceEnvironment targetEnvironment
-          relEnv environmentsAgree))
 
 /-- Change the relation-context index of a flattened root item block without
 changing its intrinsic route. -/
@@ -1181,6 +1366,17 @@ def Region.ContextPath.castRootItemsRelsEq
       (cast (congrArg (ItemSeq signature wires) relsEq) items)) path := by
   subst targetRels
   exact witness
+
+@[simp] theorem Region.ContextPath.castRootItemsRelsEq_toFocus_holeWires
+    {sourceRels targetRels : Theory.RelCtx}
+    (relsEq : sourceRels = targetRels)
+    {items : ItemSeq signature wires sourceRels} {path : List Nat}
+    (witness : Region.ContextPath (Region.mk 0 items) path) :
+    (VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+      relsEq witness).toFocus.holeWires =
+      witness.toFocus.holeWires := by
+  subst targetRels
+  rfl
 
 /-- Remove equal root relation-context casts from both sides of a paired
 compiler alignment. -/
@@ -1201,6 +1397,35 @@ def Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq
         relsEq.symm targetWitness) := by
   subst targetRels
   exact alignment
+
+/-- Relation-context casts at a root do not alter the pointwise hole-wire
+permutation retained by the paired compiler alignment. -/
+theorem Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq_holeWire_val
+    {sourceRels targetRels : Theory.RelCtx}
+    (relsEq : sourceRels = targetRels)
+    {sourceItems : ItemSeq signature sourceWires sourceRels}
+    {targetItems : ItemSeq signature targetWires targetRels}
+    {path : List Nat}
+    (sourceWitness : Region.ContextPath (Region.mk 0 sourceItems) path)
+    (targetWitness : Region.ContextPath (Region.mk 0 targetItems) path)
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (alignment : Splice.Input.PairedCompilerContextAlignment wire
+      (VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+        relsEq sourceWitness) targetWitness)
+    (index : Fin
+      (VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq
+        relsEq.symm targetWitness).toFocus.holeWires) :
+    (alignment.holeWire
+      (Fin.cast
+        (Region.ContextPath.castRootItemsRelsEq_toFocus_holeWires
+          relsEq sourceWitness).symm
+        ((Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq
+          relsEq sourceWitness targetWitness wire alignment).holeWire.symm
+            index))).val = index.val := by
+  subst targetRels
+  simpa [Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq,
+    VisualProof.Rule.IterationSoundness.Region.ContextPath.castRootItemsRelsEq]
+    using congrArg Fin.val (alignment.holeWire.apply_symm_apply index)
 
 /-- The closed anchor compiler items at a root selection and the ordered-open
 root compiler items are the same occurrence block up to the exact root-wire
@@ -1315,7 +1540,8 @@ theorem properIterationRootAnchorItems_nonempty_complete
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
     let compiled := Splice.Input.compiledSpliceOpenRootItems ordered
-    Nonempty (OrderedRootItemContractionAgainst ordered compiled
+    Nonempty (ProperIterationOrderedRootContraction input selection target
+      hadmissible sourceBoundary sourceRoot
       (iterationActualSpliceOfNonempty input selection target hadmissible
         hnonempty)) := by
   dsimp only
@@ -1390,13 +1616,13 @@ theorem properIterationRootAnchorItems_nonempty_complete
   let alignment :=
     VisualProof.Rule.IterationSoundness.Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq
       hrels
-      closed.flatWitness targetWitnessRaw wire alignmentRaw.alignment
+      closed.flatWitness targetWitnessRaw wire alignmentRaw.sameRoute.alignment
   obtain ⟨transport⟩ := ItemSeqIso.transportRootContractionAlong wire
     pulledIso closed.flatWitness targetWitness alignment
       closed.flatReplacement closed.flatEquivalent
   let targetActualRelsEq :=
-    transport.holeRelsEq.trans closed.flatActualRelsEq
-  let targetActualWire := transport.holeWire.symm.trans closed.flatActualWire
+    alignment.holeRelsEq.symm.trans closed.flatActualRelsEq
+  let targetActualWire := alignment.holeWire.symm.trans closed.flatActualWire
   have targetActualIso : RegionIso signature targetActualWire
       (Splice.Input.compiledSpliceHostView
         (iterationInput input selection target) hadmissible).focus.holeRels
@@ -1406,23 +1632,124 @@ theorem properIterationRootAnchorItems_nonempty_complete
         hnonempty) := by
     rw [transport.targetReplacement_eq]
     exact RegionIso.transportedReplacement_to_actual
-      transport.holeRelsEq closed.flatActualRelsEq transport.holeWire
+      alignment.holeRelsEq.symm closed.flatActualRelsEq alignment.holeWire
       closed.flatActualWire closed.flatReplacement
       (iterationActualSpliceOfNonempty input selection target hadmissible
         hnonempty) closed.flatActualIso
-  exact ⟨{
+  let sourceAnchorLeaf : Splice.Region.ContextPath.CompilerLeaf
+      (iterationInput input selection target).coalesceFrameRaw
+      selection.val.anchor
+      (.here anchorView.focus.body) :=
+    anchorView.compilerLeaf.atFocus
+  obtain ⟨sourceTerminalResult⟩ := compilerLeaf_routeTrace_complete
+    ((iterationInput input selection target).coalesceFrame hadmissible)
+    sourceAnchorLeaf closed.route
+  have sourceInitialEq :
+      sourceTerminalResult.state.inheritedWires.extend
+          selection.val.anchor =
+        sourceContext := by
+    rw [sourceTerminalResult.inherited_eq]
+    rfl
+  have alignedSourceTerminal :=
+    alignmentRaw.sourceTerminal_eq_rootTrace
+      ((iterationInput input selection target).coalesceFrameRaw_wellFormed
+        hadmissible)
+      sourceTerminalResult.trace hanchor sourceInitialEq
+  have closedTerminalEq : closed.terminalWires =
+      sourceTerminalResult.trace.leaf.inheritedWires := by
+    apply closed.terminalCoherent sourceTerminalResult.trace
+    simpa [sourceAnchorLeaf] using
+      sourceTerminalResult.inherited_eq
+  have sourceTerminalClosed :
+      alignmentRaw.sameRoute.sourceTerminalLeaf.inheritedWires =
+        closed.flatTerminalWires :=
+    alignedSourceTerminal.trans
+      (closedTerminalEq.symm.trans
+        closed.flatTerminalWires_eq_terminalWires.symm)
+  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView
+    (iterationInput input selection target) hadmissible sourceBoundary
+      sourceRoot
+  have targetTerminalCanonical :=
+    alignmentRaw.targetTerminal_eq_openTrace
+      ((iterationInput input selection target).coalesceFrameRaw_wellFormed
+        hadmissible)
+      sourceView.result.trace targetNeRoot (by rfl)
+  let contraction : OrderedRootItemContractionAgainst ordered compiled
+      (iterationActualSpliceOfNonempty input selection target hadmissible
+        hnonempty) := {
     rels := anchorView.focus.holeRels
     relsEq := hrels
     items := targetItems
     items_eq := ItemSeq.castRelationEq_eq_transport hrels.symm compiled.items
-    path := transport.targetPath
-    witness := transport.targetWitness
+    path := closed.path
+    witness := targetWitness
     replacement := transport.targetReplacement
     equivalent := transport.equivalent
     actualRelsEq := targetActualRelsEq
     actualWire := targetActualWire
     actualIso := targetActualIso
+  }
+  have terminalLength :
+      alignmentRaw.sameRoute.targetTerminalLeaf.inheritedWires.length =
+        contraction.toOrderedRootItemContraction.witness.toFocus.holeWires := by
+    rw [show contraction.toOrderedRootItemContraction.witness =
+      targetWitness from rfl]
+    simpa [targetWitness] using
+      alignmentRaw.sameRoute.targetTerminalLeaf.inheritedLength
+  refine ⟨{
+    contraction := contraction
+    targetNeRoot := targetNeRoot
+    terminalWires :=
+      alignmentRaw.sameRoute.targetTerminalLeaf.inheritedWires
+    terminalLength := terminalLength
+    terminalCanonical := by
+      simpa [sourceView,
+        Splice.Input.compiledSpliceCoalescedNestedLeaf] using
+          targetTerminalCanonical
+    actualWireSpec := ?_
   }⟩
+  intro index
+  let closedIndex : Fin closed.flatWitness.toFocus.holeWires :=
+    alignment.holeWire.symm index
+  have hostSpec := closed.flatActualWireSpec closedIndex
+  let closedTerminalIndex : Fin closed.flatTerminalWires.length :=
+    Fin.cast closed.flatTerminalLength.symm closedIndex
+  let sourceTerminalIndex : Fin
+      alignmentRaw.sameRoute.sourceTerminalLeaf.inheritedWires.length :=
+    Fin.cast (congrArg List.length sourceTerminalClosed).symm
+      closedTerminalIndex
+  have closedSourceSpec :=
+    (VisualProof.Rule.get_of_eq sourceTerminalClosed
+      closedTerminalIndex).symm
+  have alignedSpec := alignmentRaw.sameRoute.terminalWireSpec
+    sourceTerminalIndex
+  have targetIndexEq :
+      Splice.Input.compilerLeafInheritedWireOfHole sourceWitnessRawType
+          alignmentRaw.sameRoute.sourceTerminalLeaf targetWitnessRaw
+          alignmentRaw.sameRoute.targetTerminalLeaf
+          alignmentRaw.sameRoute.alignment.holeWire sourceTerminalIndex =
+        Fin.cast terminalLength.symm index := by
+    apply Fin.ext
+    simpa [sourceTerminalIndex, closedTerminalIndex, closedIndex,
+      alignment, targetWitness, sourceWitnessRawType,
+      Splice.Input.compilerLeafInheritedWireOfHole, FiniteEquiv.trans] using
+        (Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq_holeWire_val
+          hrels closed.flatWitness targetWitnessRaw wire
+          alignmentRaw.sameRoute.alignment index)
+  calc
+    _ = closed.flatTerminalWires.get closedTerminalIndex := by
+      simpa [contraction, targetActualWire, closedIndex,
+        closedTerminalIndex, FiniteEquiv.trans] using hostSpec
+    _ = alignmentRaw.sameRoute.sourceTerminalLeaf.inheritedWires.get
+        sourceTerminalIndex := closedSourceSpec
+    _ = alignmentRaw.sameRoute.targetTerminalLeaf.inheritedWires.get
+        (Splice.Input.compilerLeafInheritedWireOfHole sourceWitnessRawType
+          alignmentRaw.sameRoute.sourceTerminalLeaf targetWitnessRaw
+          alignmentRaw.sameRoute.targetTerminalLeaf
+          alignmentRaw.sameRoute.alignment.holeWire sourceTerminalIndex) :=
+      alignedSpec.symm
+    _ = alignmentRaw.sameRoute.targetTerminalLeaf.inheritedWires.get
+        (Fin.cast terminalLength.symm index) := by rw [targetIndexEq]
 
 /-- Transport the zero-spine closed root-anchor certificate into the
 ordered-open root compiler's exact item coordinates. -/
@@ -1442,7 +1769,8 @@ theorem properIterationRootAnchorItems_zero_complete
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
     let compiled := Splice.Input.compiledSpliceOpenRootItems ordered
-    Nonempty (OrderedRootItemContractionAgainst ordered compiled
+    Nonempty (ProperIterationOrderedRootContraction input selection target
+      hadmissible sourceBoundary sourceRoot
       (iterationActualSpliceOfEmpty input selection target hadmissible)) := by
   dsimp only
   let ordered := Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -1515,13 +1843,14 @@ theorem properIterationRootAnchorItems_zero_complete
       hrels.symm targetWitnessRaw
   let alignment :=
     VisualProof.Rule.IterationSoundness.Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq
-      hrels closed.flatWitness targetWitnessRaw wire alignmentRaw.alignment
+      hrels closed.flatWitness targetWitnessRaw wire
+        alignmentRaw.sameRoute.alignment
   obtain ⟨transport⟩ := ItemSeqIso.transportRootContractionAlong wire
     pulledIso closed.flatWitness targetWitness alignment
       closed.flatReplacement closed.flatEquivalent
   let targetActualRelsEq :=
-    transport.holeRelsEq.trans closed.flatActualRelsEq
-  let targetActualWire := transport.holeWire.symm.trans closed.flatActualWire
+    alignment.holeRelsEq.symm.trans closed.flatActualRelsEq
+  let targetActualWire := alignment.holeWire.symm.trans closed.flatActualWire
   have targetActualIso : RegionIso signature targetActualWire
       (Splice.Input.compiledSpliceHostView
         (iterationInput input selection target) hadmissible).focus.holeRels
@@ -1530,22 +1859,122 @@ theorem properIterationRootAnchorItems_zero_complete
       (iterationActualSpliceOfEmpty input selection target hadmissible) := by
     rw [transport.targetReplacement_eq]
     exact RegionIso.transportedReplacement_to_actual
-      transport.holeRelsEq closed.flatActualRelsEq transport.holeWire
+      alignment.holeRelsEq.symm closed.flatActualRelsEq alignment.holeWire
       closed.flatActualWire closed.flatReplacement
       (iterationActualSpliceOfEmpty input selection target hadmissible)
       closed.flatActualIso
-  exact ⟨{
+  let sourceAnchorLeaf : Splice.Region.ContextPath.CompilerLeaf
+      (iterationInput input selection target).coalesceFrameRaw
+      selection.val.anchor
+      (.here anchorView.focus.body) :=
+    anchorView.compilerLeaf.atFocus
+  obtain ⟨sourceTerminalResult⟩ := compilerLeaf_routeTrace_complete
+    ((iterationInput input selection target).coalesceFrame hadmissible)
+    sourceAnchorLeaf closed.route
+  have sourceInitialEq :
+      sourceTerminalResult.state.inheritedWires.extend
+          selection.val.anchor =
+        sourceContext := by
+    rw [sourceTerminalResult.inherited_eq]
+    rfl
+  have alignedSourceTerminal :=
+    alignmentRaw.sourceTerminal_eq_rootTrace
+      ((iterationInput input selection target).coalesceFrameRaw_wellFormed
+        hadmissible)
+      sourceTerminalResult.trace hanchor sourceInitialEq
+  have closedTerminalEq : closed.terminalWires =
+      sourceTerminalResult.trace.leaf.inheritedWires := by
+    apply closed.terminalCoherent sourceTerminalResult.trace
+    simpa [sourceAnchorLeaf] using
+      sourceTerminalResult.inherited_eq
+  have sourceTerminalClosed :
+      alignmentRaw.sameRoute.sourceTerminalLeaf.inheritedWires =
+        closed.flatTerminalWires :=
+    alignedSourceTerminal.trans
+      (closedTerminalEq.symm.trans
+        closed.flatTerminalWires_eq_terminalWires.symm)
+  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView
+    (iterationInput input selection target) hadmissible sourceBoundary
+      sourceRoot
+  have targetTerminalCanonical :=
+    alignmentRaw.targetTerminal_eq_openTrace
+      ((iterationInput input selection target).coalesceFrameRaw_wellFormed
+        hadmissible)
+      sourceView.result.trace targetNeRoot (by rfl)
+  let contraction : OrderedRootItemContractionAgainst ordered compiled
+      (iterationActualSpliceOfEmpty input selection target hadmissible) := {
     rels := anchorView.focus.holeRels
     relsEq := hrels
     items := targetItems
     items_eq := ItemSeq.castRelationEq_eq_transport hrels.symm compiled.items
-    path := transport.targetPath
-    witness := transport.targetWitness
+    path := closed.path
+    witness := targetWitness
     replacement := transport.targetReplacement
     equivalent := transport.equivalent
     actualRelsEq := targetActualRelsEq
     actualWire := targetActualWire
     actualIso := targetActualIso
+  }
+  have terminalLength :
+      alignmentRaw.sameRoute.targetTerminalLeaf.inheritedWires.length =
+        contraction.toOrderedRootItemContraction.witness.toFocus.holeWires := by
+    rw [show contraction.toOrderedRootItemContraction.witness =
+      targetWitness from rfl]
+    simpa [targetWitness] using
+      alignmentRaw.sameRoute.targetTerminalLeaf.inheritedLength
+  refine ⟨{
+    contraction := contraction
+    targetNeRoot := targetNeRoot
+    terminalWires :=
+      alignmentRaw.sameRoute.targetTerminalLeaf.inheritedWires
+    terminalLength := terminalLength
+    terminalCanonical := by
+      simpa [sourceView,
+        Splice.Input.compiledSpliceCoalescedNestedLeaf] using
+          targetTerminalCanonical
+    actualWireSpec := ?_
   }⟩
+  intro index
+  let closedIndex : Fin closed.flatWitness.toFocus.holeWires :=
+    alignment.holeWire.symm index
+  have hostSpec := closed.flatActualWireSpec closedIndex
+  let closedTerminalIndex : Fin closed.flatTerminalWires.length :=
+    Fin.cast closed.flatTerminalLength.symm closedIndex
+  let sourceTerminalIndex : Fin
+      alignmentRaw.sameRoute.sourceTerminalLeaf.inheritedWires.length :=
+    Fin.cast (congrArg List.length sourceTerminalClosed).symm
+      closedTerminalIndex
+  have closedSourceSpec :=
+    (VisualProof.Rule.get_of_eq sourceTerminalClosed
+      closedTerminalIndex).symm
+  have alignedSpec := alignmentRaw.sameRoute.terminalWireSpec
+    sourceTerminalIndex
+  have targetIndexEq :
+      Splice.Input.compilerLeafInheritedWireOfHole sourceWitnessRawType
+          alignmentRaw.sameRoute.sourceTerminalLeaf targetWitnessRaw
+          alignmentRaw.sameRoute.targetTerminalLeaf
+          alignmentRaw.sameRoute.alignment.holeWire sourceTerminalIndex =
+        Fin.cast terminalLength.symm index := by
+    apply Fin.ext
+    simpa [sourceTerminalIndex, closedTerminalIndex, closedIndex,
+      alignment, targetWitness, sourceWitnessRawType,
+      Splice.Input.compilerLeafInheritedWireOfHole, FiniteEquiv.trans] using
+        (Splice.Input.PairedCompilerContextAlignment.pullRootItemRelationEq_holeWire_val
+          hrels closed.flatWitness targetWitnessRaw wire
+          alignmentRaw.sameRoute.alignment index)
+  calc
+    _ = closed.flatTerminalWires.get closedTerminalIndex := by
+      simpa [contraction, targetActualWire, closedIndex,
+        closedTerminalIndex, FiniteEquiv.trans] using hostSpec
+    _ = alignmentRaw.sameRoute.sourceTerminalLeaf.inheritedWires.get
+        sourceTerminalIndex := closedSourceSpec
+    _ = alignmentRaw.sameRoute.targetTerminalLeaf.inheritedWires.get
+        (Splice.Input.compilerLeafInheritedWireOfHole sourceWitnessRawType
+          alignmentRaw.sameRoute.sourceTerminalLeaf targetWitnessRaw
+          alignmentRaw.sameRoute.targetTerminalLeaf
+          alignmentRaw.sameRoute.alignment.holeWire sourceTerminalIndex) :=
+      alignedSpec.symm
+    _ = alignmentRaw.sameRoute.targetTerminalLeaf.inheritedWires.get
+        (Fin.cast terminalLength.symm index) := by rw [targetIndexEq]
 
 end VisualProof.Rule.IterationSoundness
