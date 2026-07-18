@@ -1640,6 +1640,517 @@ theorem anchoredWireSplitRaw_compileRegion_route_equiv_of_inherited
                       ⟨relation, childEquiv.mpr targetChildDenotes⟩,
                       sourceAfterDenotes⟩
 
+/-- At the executor-certified availability region, the retained witness
+equation supplies the value needed by the inherited route theorem.  This
+wrapper also covers a target equal to the availability region and a wire
+whose scope is exactly that region. -/
+theorem anchoredWireSplitRaw_available_route_equiv
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed signature)
+    {available : Fin input.val.regionCount} {path : List Nat}
+    (wireEnclosesAvailable :
+      input.val.Encloses (input.val.wires wire).scope available)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (route : Diagram.Splice.RegionRoute input.val available target path)
+    {rels : RelCtx} (fuel : Nat)
+    (original : ConcreteElaboration.WireContext input.val)
+    (expanded : ConcreteElaboration.WireContext
+      (anchoredWireSplitRaw input wire endpoints target term))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (originalExact : (original.extend available).Exact available)
+    (expandedExact : (expanded.extend available).Exact available)
+    (sourceItems : ItemSeq signature (original.extend available).length rels)
+    (targetItems : ItemSeq signature (expanded.extend available).length rels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val (ConcreteElaboration.compileRegion? signature input.val fuel)
+      (original.extend available) binders
+      (ConcreteElaboration.localOccurrences input.val available) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (anchoredWireSplitRaw input wire endpoints target term)
+      (ConcreteElaboration.compileRegion? signature
+        (anchoredWireSplitRaw input wire endpoints target term) fuel)
+      (expanded.extend available) binders
+      (ConcreteElaboration.localOccurrences
+        (anchoredWireSplitRaw input wire endpoints target term) available) =
+        some targetItems)
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (sourceOuter : Fin original.length → model.Carrier)
+    (targetOuter : Fin expanded.length → model.Carrier)
+    (relEnv : RelEnv model.Carrier rels)
+    (outerAgrees : sourceOuter ∘ collapse.indexMap = targetOuter)
+    (sourceWitness : ∀ sourceLocal,
+      denoteItemSeq model named
+          (splitExtendedEnv original available sourceOuter sourceLocal)
+          relEnv sourceItems →
+      ∀ index, (original.extend available).get index = wire →
+        splitExtendedEnv original available sourceOuter sourceLocal index =
+          model.eval term Fin.elim0)
+    (targetWitness : ∀ targetLocal,
+      denoteItemSeq model named
+          (splitExtendedEnv expanded available targetOuter targetLocal)
+          relEnv targetItems →
+      ∀ index, (expanded.extend available).get index = wire.castSucc →
+        splitExtendedEnv expanded available targetOuter targetLocal index =
+          model.eval term Fin.elim0) :
+    denoteRegion model named sourceOuter relEnv
+        (ConcreteElaboration.finishRegion input.val original available sourceItems) ↔
+      denoteRegion model named targetOuter relEnv
+        (ConcreteElaboration.finishRegion
+          (anchoredWireSplitRaw input wire endpoints target term)
+          expanded available targetItems) := by
+  cases route with
+  | here =>
+      exact anchoredWireSplitRaw_target_site_equiv input wire endpoints target
+        term selectedOccurs targetWellFormed wireEnclosesTarget fuel original
+        expanded collapse binders originalExact expandedExact sourceItems
+        targetItems sourceCompiled targetCompiled model named sourceOuter
+        targetOuter relEnv outerAgrees sourceWitness targetWitness
+  | @step available child target rest hparent position hposition tail =>
+      have availableNe : available ≠ target := by
+        intro equality
+        subst available
+        exact (ConcreteElaboration.checked_direct_child_not_encloses_parent
+          input.property hparent) (regionRoute_encloses input.val input.property tail)
+      obtain ⟨before, after, localEq, beforeAway, afterAway⟩ :=
+        localOccurrences_split_at_child input.val available child position hposition
+      have targetLocalEq :
+          ConcreteElaboration.localOccurrences
+              (anchoredWireSplitRaw input wire endpoints target term) available =
+            (before ++ .child child :: after).map (splitOldOccurrence input) := by
+        rw [anchoredWireSplitRaw_localOccurrences_of_ne input wire endpoints
+          target available term availableNe, localEq]
+      have sourceFramed := sourceCompiled
+      rw [localEq] at sourceFramed
+      obtain ⟨sourceBefore, sourceFocus, sourceAfter, sourceBeforeCompiled,
+          sourceFocusCompiled, sourceAfterCompiled, sourceItemsEq⟩ :=
+        compileOccurrencesWith?_frame_split
+          (ConcreteElaboration.compileRegion? signature input.val fuel)
+          (original.extend available) binders before after (.child child)
+          sourceItems sourceFramed
+      have targetFramed := targetCompiled
+      rw [targetLocalEq, List.map_append, List.map_cons] at targetFramed
+      obtain ⟨targetBefore, targetFocus, targetAfter, targetBeforeCompiled,
+          targetFocusCompiled, targetAfterCompiled, targetItemsEq⟩ :=
+        compileOccurrencesWith?_frame_split
+          (ConcreteElaboration.compileRegion? signature
+            (anchoredWireSplitRaw input wire endpoints target term) fuel)
+          (expanded.extend available) binders
+          (before.map (splitOldOccurrence input))
+          (after.map (splitOldOccurrence input))
+          (splitOldOccurrence input (.child child)) targetItems targetFramed
+      cases fuel with
+      | zero =>
+          cases kind : input.val.regions child <;>
+            simp [ConcreteElaboration.compileOccurrenceWith?, kind,
+              ConcreteElaboration.compileRegion?] at sourceFocusCompiled
+      | succ childFuel =>
+        have beforeMap := anchoredWireSplitRaw_compileOccurrencesAway input wire
+          endpoints target available child term selectedOccurs targetWellFormed
+          wireEnclosesTarget hparent tail (childFuel + 1) original expanded
+          collapse binders originalExact expandedExact before (by
+            intro occurrence member
+            rw [localEq]
+            simp [member]) beforeAway
+        rw [sourceBeforeCompiled, targetBeforeCompiled] at beforeMap
+        have beforeEq : sourceBefore = targetBefore.renameWires
+            (collapse.extend wireEnclosesTarget available expandedExact
+              originalExact).indexMap := Option.some.inj beforeMap
+        have afterMap := anchoredWireSplitRaw_compileOccurrencesAway input wire
+          endpoints target available child term selectedOccurs targetWellFormed
+          wireEnclosesTarget hparent tail (childFuel + 1) original expanded
+          collapse binders originalExact expandedExact after (by
+            intro occurrence member
+            rw [localEq]
+            simp [member]) afterAway
+        rw [sourceAfterCompiled, targetAfterCompiled] at afterMap
+        have afterEq : sourceAfter = targetAfter.renameWires
+            (collapse.extend wireEnclosesTarget available expandedExact
+              originalExact).indexMap := Option.some.inj afterMap
+        have childOriginalExact := originalExact.extend_child input.property hparent
+        have targetParent :
+            ((anchoredWireSplitRaw input wire endpoints target term).regions
+              child).parent? = some available := by
+          simpa only [anchoredWireSplitRaw_regions] using hparent
+        have childExpandedExact :=
+          expandedExact.extend_child targetWellFormed targetParent
+        let childSourceWire : Fin (original.extend available).length :=
+          Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+            ((originalExact.mem_iff wire).mpr wireEnclosesAvailable))
+        have childSourceWireGet :
+            (original.extend available).get childSourceWire = wire :=
+          ConcreteElaboration.WireContext.lookup?_sound
+            (Classical.choose_spec
+              (ConcreteElaboration.WireContext.lookup?_complete
+                ((originalExact.mem_iff wire).mpr wireEnclosesAvailable)))
+        cases childKind : input.val.regions child with
+        | sheet => simp [childKind, CRegion.parent?] at hparent
+        | cut childParent =>
+          have childParentEq : childParent = available := by
+            simpa [childKind, CRegion.parent?] using hparent
+          subst childParent
+          simp only [ConcreteElaboration.compileOccurrenceWith?, childKind,
+            splitOldOccurrence, anchoredWireSplitRaw_regions]
+            at sourceFocusCompiled targetFocusCompiled
+          cases sourceChildResult :
+              ConcreteElaboration.compileRegion? signature input.val
+                (childFuel + 1) child (original.extend available) binders with
+          | none => simp [sourceChildResult] at sourceFocusCompiled
+          | some sourceChild =>
+            simp [sourceChildResult] at sourceFocusCompiled
+            subst sourceFocus
+            cases targetChildResult :
+                ConcreteElaboration.compileRegion? signature
+                  (anchoredWireSplitRaw input wire endpoints target term)
+                  (childFuel + 1) child (expanded.extend available) binders with
+            | none => simp [targetChildResult] at targetFocusCompiled
+            | some targetChild =>
+              simp [targetChildResult] at targetFocusCompiled
+              subst targetFocus
+              constructor
+              · intro sourceDenotes
+                unfold ConcreteElaboration.finishRegion at sourceDenotes ⊢
+                simp only [denoteRegion_mk] at sourceDenotes ⊢
+                obtain ⟨sourceLocal, sourceCast⟩ := sourceDenotes
+                let targetLocal := splitTargetLocalEnv collapse
+                  wireEnclosesTarget available expandedExact originalExact
+                  sourceOuter sourceLocal
+                refine ⟨targetLocal, ?_⟩
+                rw [ItemSeq.castWiresEq_eq_renameWires] at sourceCast
+                let sourceRaw := splitExtendedEnv original available sourceOuter
+                  sourceLocal
+                let targetRaw := splitExtendedEnv expanded available targetOuter
+                  targetLocal
+                have sourceRawItems := (denoteItemSeq_renameWires model named
+                  (Fin.cast (ConcreteElaboration.WireContext.length_extend
+                    original available)) (extendWireEnv sourceOuter sourceLocal)
+                  relEnv sourceItems).mp sourceCast
+                change denoteItemSeq model named sourceRaw relEnv sourceItems
+                  at sourceRawItems
+                have envCollapse := splitExtendedEnv_collapse collapse
+                  wireEnclosesTarget available expandedExact originalExact
+                  sourceOuter sourceLocal
+                rw [outerAgrees] at envCollapse
+                change sourceRaw ∘
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap = targetRaw at envCollapse
+                rw [sourceItemsEq, denoteItemSeq_frame] at sourceRawItems
+                rw [ItemSeq.castWiresEq_eq_renameWires]
+                apply (denoteItemSeq_renameWires model named
+                  (Fin.cast (ConcreteElaboration.WireContext.length_extend
+                    expanded available)) (extendWireEnv targetOuter targetLocal)
+                  relEnv targetItems).mpr
+                change denoteItemSeq model named targetRaw relEnv targetItems
+                rw [targetItemsEq, denoteItemSeq_frame]
+                have childValue := sourceWitness sourceLocal (by
+                  rw [sourceItemsEq, denoteItemSeq_frame]
+                  exact sourceRawItems) childSourceWire childSourceWireGet
+                have childEquiv :=
+                  anchoredWireSplitRaw_compileRegion_route_equiv_of_inherited
+                    input wire endpoints target term selectedOccurs
+                    targetWellFormed wireEnclosesTarget tail childFuel
+                    (original.extend available) (expanded.extend available)
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact) binders childOriginalExact childExpandedExact
+                    childSourceWire childSourceWireGet sourceChild targetChild
+                    sourceChildResult targetChildResult model named sourceRaw
+                    targetRaw relEnv envCollapse childValue
+                have targetBeforeDenotes : denoteItemSeq model named targetRaw
+                    relEnv targetBefore := by
+                  rw [beforeEq] at sourceRawItems
+                  rw [← envCollapse]
+                  exact (denoteItemSeq_renameWires model named
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap sourceRaw relEnv targetBefore).mp
+                        sourceRawItems.1
+                have targetAfterDenotes : denoteItemSeq model named targetRaw
+                    relEnv targetAfter := by
+                  rw [afterEq] at sourceRawItems
+                  rw [← envCollapse]
+                  exact (denoteItemSeq_renameWires model named
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap sourceRaw relEnv targetAfter).mp
+                        sourceRawItems.2.2
+                refine ⟨targetBeforeDenotes, ?_, targetAfterDenotes⟩
+                intro targetChildDenotes
+                exact sourceRawItems.2.1 (childEquiv.mpr targetChildDenotes)
+              · intro targetDenotes
+                unfold ConcreteElaboration.finishRegion at targetDenotes ⊢
+                simp only [denoteRegion_mk] at targetDenotes ⊢
+                obtain ⟨targetLocal, targetCast⟩ := targetDenotes
+                let sourceLocal := splitSourceLocalEnvOfNe input wire endpoints
+                  target available term availableNe targetLocal
+                refine ⟨sourceLocal, ?_⟩
+                rw [ItemSeq.castWiresEq_eq_renameWires] at targetCast
+                let sourceRaw := splitExtendedEnv original available sourceOuter
+                  sourceLocal
+                let targetRaw := splitExtendedEnv expanded available targetOuter
+                  targetLocal
+                have targetRawItems := (denoteItemSeq_renameWires model named
+                  (Fin.cast (ConcreteElaboration.WireContext.length_extend
+                    expanded available)) (extendWireEnv targetOuter targetLocal)
+                  relEnv targetItems).mp targetCast
+                change denoteItemSeq model named targetRaw relEnv targetItems
+                  at targetRawItems
+                have envCollapse := splitExtendedEnv_uncollapse_of_ne collapse
+                  wireEnclosesTarget available availableNe expandedExact
+                  originalExact sourceOuter targetOuter outerAgrees targetLocal
+                change sourceRaw ∘
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap = targetRaw at envCollapse
+                rw [targetItemsEq, denoteItemSeq_frame] at targetRawItems
+                rw [ItemSeq.castWiresEq_eq_renameWires]
+                apply (denoteItemSeq_renameWires model named
+                  (Fin.cast (ConcreteElaboration.WireContext.length_extend
+                    original available)) (extendWireEnv sourceOuter sourceLocal)
+                  relEnv sourceItems).mpr
+                change denoteItemSeq model named sourceRaw relEnv sourceItems
+                rw [sourceItemsEq, denoteItemSeq_frame]
+                let targetWire :=
+                  (collapse.extend wireEnclosesTarget available expandedExact
+                    originalExact).oldIndex childSourceWire
+                have targetWireGet :
+                    (expanded.extend available).get targetWire = wire.castSucc := by
+                  have retained := (collapse.extend wireEnclosesTarget available
+                    expandedExact originalExact).old_get childSourceWire
+                  rw [childSourceWireGet] at retained
+                  exact retained
+                have targetValue := targetWitness targetLocal (by
+                  rw [targetItemsEq, denoteItemSeq_frame]
+                  exact targetRawItems) targetWire targetWireGet
+                have agreesAt := congrFun envCollapse targetWire
+                change sourceRaw
+                    ((collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap targetWire) =
+                  targetRaw targetWire at agreesAt
+                have indexRight := (collapse.extend wireEnclosesTarget available
+                  expandedExact originalExact).indexMap_oldIndex
+                    originalExact.nodup childSourceWire
+                rw [indexRight] at agreesAt
+                have childValue : sourceRaw childSourceWire =
+                    model.eval term Fin.elim0 := agreesAt.trans targetValue
+                have childEquiv :=
+                  anchoredWireSplitRaw_compileRegion_route_equiv_of_inherited
+                    input wire endpoints target term selectedOccurs
+                    targetWellFormed wireEnclosesTarget tail childFuel
+                    (original.extend available) (expanded.extend available)
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact) binders childOriginalExact childExpandedExact
+                    childSourceWire childSourceWireGet sourceChild targetChild
+                    sourceChildResult targetChildResult model named sourceRaw
+                    targetRaw relEnv envCollapse childValue
+                have sourceBeforeDenotes : denoteItemSeq model named sourceRaw
+                    relEnv sourceBefore := by
+                  rw [beforeEq]
+                  apply (denoteItemSeq_renameWires model named
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap sourceRaw relEnv targetBefore).mpr
+                  rw [envCollapse]
+                  exact targetRawItems.1
+                have sourceAfterDenotes : denoteItemSeq model named sourceRaw
+                    relEnv sourceAfter := by
+                  rw [afterEq]
+                  apply (denoteItemSeq_renameWires model named
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap sourceRaw relEnv targetAfter).mpr
+                  rw [envCollapse]
+                  exact targetRawItems.2.2
+                refine ⟨sourceBeforeDenotes, ?_, sourceAfterDenotes⟩
+                intro sourceChildDenotes
+                exact targetRawItems.2.1 (childEquiv.mp sourceChildDenotes)
+        | bubble childParent arity =>
+          have childParentEq : childParent = available := by
+            simpa [childKind, CRegion.parent?] using hparent
+          subst childParent
+          simp only [ConcreteElaboration.compileOccurrenceWith?, childKind,
+            splitOldOccurrence, anchoredWireSplitRaw_regions]
+            at sourceFocusCompiled targetFocusCompiled
+          cases sourceChildResult :
+              ConcreteElaboration.compileRegion? signature input.val
+                (childFuel + 1) child (original.extend available)
+                (binders.push child arity) with
+          | none => simp [sourceChildResult] at sourceFocusCompiled
+          | some sourceChild =>
+            simp [sourceChildResult] at sourceFocusCompiled
+            subst sourceFocus
+            change (ConcreteElaboration.compileRegion? signature
+                (anchoredWireSplitRaw input wire endpoints target term)
+                (childFuel + 1) child (expanded.extend available)
+                (binders.push child arity)).bind
+                  (fun body => some (Item.bubble arity body)) =
+                some targetFocus at targetFocusCompiled
+            cases targetChildResult :
+                ConcreteElaboration.compileRegion? signature
+                  (anchoredWireSplitRaw input wire endpoints target term)
+                  (childFuel + 1) child (expanded.extend available)
+                  (binders.push child arity) with
+            | none => simp [targetChildResult] at targetFocusCompiled
+            | some targetChild =>
+              simp [targetChildResult] at targetFocusCompiled
+              subst targetFocus
+              constructor
+              · intro sourceDenotes
+                unfold ConcreteElaboration.finishRegion at sourceDenotes ⊢
+                simp only [denoteRegion_mk] at sourceDenotes ⊢
+                obtain ⟨sourceLocal, sourceCast⟩ := sourceDenotes
+                let targetLocal := splitTargetLocalEnv collapse
+                  wireEnclosesTarget available expandedExact originalExact
+                  sourceOuter sourceLocal
+                refine ⟨targetLocal, ?_⟩
+                rw [ItemSeq.castWiresEq_eq_renameWires] at sourceCast
+                let sourceRaw := splitExtendedEnv original available sourceOuter
+                  sourceLocal
+                let targetRaw := splitExtendedEnv expanded available targetOuter
+                  targetLocal
+                have sourceRawItems := (denoteItemSeq_renameWires model named
+                  (Fin.cast (ConcreteElaboration.WireContext.length_extend
+                    original available)) (extendWireEnv sourceOuter sourceLocal)
+                  relEnv sourceItems).mp sourceCast
+                change denoteItemSeq model named sourceRaw relEnv sourceItems
+                  at sourceRawItems
+                have envCollapse := splitExtendedEnv_collapse collapse
+                  wireEnclosesTarget available expandedExact originalExact
+                  sourceOuter sourceLocal
+                rw [outerAgrees] at envCollapse
+                change sourceRaw ∘
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap = targetRaw at envCollapse
+                rw [sourceItemsEq, denoteItemSeq_frame] at sourceRawItems
+                rw [ItemSeq.castWiresEq_eq_renameWires]
+                apply (denoteItemSeq_renameWires model named
+                  (Fin.cast (ConcreteElaboration.WireContext.length_extend
+                    expanded available)) (extendWireEnv targetOuter targetLocal)
+                  relEnv targetItems).mpr
+                change denoteItemSeq model named targetRaw relEnv targetItems
+                rw [targetItemsEq, denoteItemSeq_frame]
+                have childValue := sourceWitness sourceLocal (by
+                  rw [sourceItemsEq, denoteItemSeq_frame]
+                  exact sourceRawItems) childSourceWire childSourceWireGet
+                obtain ⟨relation, sourceChildDenotes⟩ := sourceRawItems.2.1
+                have childEquiv :=
+                  anchoredWireSplitRaw_compileRegion_route_equiv_of_inherited
+                    input wire endpoints target term selectedOccurs
+                    targetWellFormed wireEnclosesTarget tail childFuel
+                    (original.extend available) (expanded.extend available)
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact) (binders.push child arity)
+                    childOriginalExact childExpandedExact childSourceWire
+                    childSourceWireGet sourceChild targetChild sourceChildResult
+                    targetChildResult model named sourceRaw targetRaw
+                    (relation, relEnv) envCollapse childValue
+                have targetBeforeDenotes : denoteItemSeq model named targetRaw
+                    relEnv targetBefore := by
+                  rw [beforeEq] at sourceRawItems
+                  rw [← envCollapse]
+                  exact (denoteItemSeq_renameWires model named
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap sourceRaw relEnv targetBefore).mp
+                        sourceRawItems.1
+                have targetAfterDenotes : denoteItemSeq model named targetRaw
+                    relEnv targetAfter := by
+                  rw [afterEq] at sourceRawItems
+                  rw [← envCollapse]
+                  exact (denoteItemSeq_renameWires model named
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap sourceRaw relEnv targetAfter).mp
+                        sourceRawItems.2.2
+                exact ⟨targetBeforeDenotes,
+                  ⟨relation, childEquiv.mp sourceChildDenotes⟩,
+                  targetAfterDenotes⟩
+              · intro targetDenotes
+                unfold ConcreteElaboration.finishRegion at targetDenotes ⊢
+                simp only [denoteRegion_mk] at targetDenotes ⊢
+                obtain ⟨targetLocal, targetCast⟩ := targetDenotes
+                let sourceLocal := splitSourceLocalEnvOfNe input wire endpoints
+                  target available term availableNe targetLocal
+                refine ⟨sourceLocal, ?_⟩
+                rw [ItemSeq.castWiresEq_eq_renameWires] at targetCast
+                let sourceRaw := splitExtendedEnv original available sourceOuter
+                  sourceLocal
+                let targetRaw := splitExtendedEnv expanded available targetOuter
+                  targetLocal
+                have targetRawItems := (denoteItemSeq_renameWires model named
+                  (Fin.cast (ConcreteElaboration.WireContext.length_extend
+                    expanded available)) (extendWireEnv targetOuter targetLocal)
+                  relEnv targetItems).mp targetCast
+                change denoteItemSeq model named targetRaw relEnv targetItems
+                  at targetRawItems
+                have envCollapse := splitExtendedEnv_uncollapse_of_ne collapse
+                  wireEnclosesTarget available availableNe expandedExact
+                  originalExact sourceOuter targetOuter outerAgrees targetLocal
+                change sourceRaw ∘
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap = targetRaw at envCollapse
+                rw [targetItemsEq, denoteItemSeq_frame] at targetRawItems
+                rw [ItemSeq.castWiresEq_eq_renameWires]
+                apply (denoteItemSeq_renameWires model named
+                  (Fin.cast (ConcreteElaboration.WireContext.length_extend
+                    original available)) (extendWireEnv sourceOuter sourceLocal)
+                  relEnv sourceItems).mpr
+                change denoteItemSeq model named sourceRaw relEnv sourceItems
+                rw [sourceItemsEq, denoteItemSeq_frame]
+                let targetWire :=
+                  (collapse.extend wireEnclosesTarget available expandedExact
+                    originalExact).oldIndex childSourceWire
+                have targetWireGet :
+                    (expanded.extend available).get targetWire = wire.castSucc := by
+                  have retained := (collapse.extend wireEnclosesTarget available
+                    expandedExact originalExact).old_get childSourceWire
+                  rw [childSourceWireGet] at retained
+                  exact retained
+                have targetValue := targetWitness targetLocal (by
+                  rw [targetItemsEq, denoteItemSeq_frame]
+                  exact targetRawItems) targetWire targetWireGet
+                have agreesAt := congrFun envCollapse targetWire
+                change sourceRaw
+                    ((collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap targetWire) =
+                  targetRaw targetWire at agreesAt
+                have indexRight := (collapse.extend wireEnclosesTarget available
+                  expandedExact originalExact).indexMap_oldIndex
+                    originalExact.nodup childSourceWire
+                rw [indexRight] at agreesAt
+                have childValue : sourceRaw childSourceWire =
+                    model.eval term Fin.elim0 := agreesAt.trans targetValue
+                obtain ⟨relation, targetChildDenotes⟩ := targetRawItems.2.1
+                have childEquiv :=
+                  anchoredWireSplitRaw_compileRegion_route_equiv_of_inherited
+                    input wire endpoints target term selectedOccurs
+                    targetWellFormed wireEnclosesTarget tail childFuel
+                    (original.extend available) (expanded.extend available)
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact) (binders.push child arity)
+                    childOriginalExact childExpandedExact childSourceWire
+                    childSourceWireGet sourceChild targetChild sourceChildResult
+                    targetChildResult model named sourceRaw targetRaw
+                    (relation, relEnv) envCollapse childValue
+                have sourceBeforeDenotes : denoteItemSeq model named sourceRaw
+                    relEnv sourceBefore := by
+                  rw [beforeEq]
+                  apply (denoteItemSeq_renameWires model named
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap sourceRaw relEnv targetBefore).mpr
+                  rw [envCollapse]
+                  exact targetRawItems.1
+                have sourceAfterDenotes : denoteItemSeq model named sourceRaw
+                    relEnv sourceAfter := by
+                  rw [afterEq]
+                  apply (denoteItemSeq_renameWires model named
+                    (collapse.extend wireEnclosesTarget available expandedExact
+                      originalExact).indexMap sourceRaw relEnv targetAfter).mpr
+                  rw [envCollapse]
+                  exact targetRawItems.2.2
+                exact ⟨sourceBeforeDenotes,
+                  ⟨relation, childEquiv.mpr targetChildDenotes⟩,
+                  sourceAfterDenotes⟩
+
 end AnchoredWireSoundness
 
 end VisualProof.Rule
