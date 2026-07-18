@@ -1201,7 +1201,7 @@ private theorem originalClassWires_eq_singleton
           rw [hclass, htail] at hnodup
           simp at hnodup
 
-private theorem originalCoalescedScope_eq
+theorem originalCoalescedScope_eq
     (decomposition : Decomposition signature host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     (originalFragmentInput decomposition).coalescedScope quotient =
@@ -1219,7 +1219,7 @@ private theorem originalCoalescedScope_eq
       ConcreteDiagram.Encloses.refl]
   · rfl
 
-private theorem originalCoalescedEndpoints_eq
+theorem originalCoalescedEndpoints_eq
     (decomposition : Decomposition signature host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     (originalFragmentInput decomposition).coalescedEndpoints quotient =

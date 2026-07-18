@@ -177,7 +177,7 @@ private theorem iterationClassWires_eq_singleton
           rw [classEq, tailEq] at nodup
           simp at nodup
 
-private theorem iterationCoalescedScope_eq
+theorem iterationCoalescedScope_eq
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -198,7 +198,7 @@ private theorem iterationCoalescedScope_eq
       Splice.Input.chooseOuter, ConcreteDiagram.Encloses.refl]
   · rfl
 
-private theorem iterationCoalescedEndpoints_eq
+theorem iterationCoalescedEndpoints_eq
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
