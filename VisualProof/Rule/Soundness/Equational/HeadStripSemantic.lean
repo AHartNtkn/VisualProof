@@ -1473,6 +1473,279 @@ theorem oldNodeOccurrences_simulation
   | backward =>
       simpa only [Item.renameWires_renameRelations] using wireSemantic.mp
 
+theorem childOccurrence_simulation
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (fuelSource fuelTarget : Nat)
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext
+      (headStripRaw input payload))
+    (embedding : ContextEmbedding input payload sourceContext targetContext)
+    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (headStripRaw input payload) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
+      (headStripRaw input payload) sourceBinders targetBinders)
+    (sourceBindersCover : sourceBinders.Covers payload.region)
+    (targetBindersCover : targetBinders.Covers payload.region)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val sourceBinders payload.region)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (headStripRaw input payload) targetBinders payload.region)
+    (recurse : ∀ {childDirection : ConcreteElaboration.SimulationDirection}
+      {child : Fin input.val.regionCount}
+      {childSourceRels childTargetRels : RelCtx}
+      {childSourceBinders : ConcreteElaboration.BinderContext
+        input.val childSourceRels}
+      {childTargetBinders : ConcreteElaboration.BinderContext
+        (headStripRaw input payload) childTargetRels}
+      {sourceBody : Region signature sourceContext.length childSourceRels}
+      {targetBody : Region signature targetContext.length childTargetRels},
+      (input.val.regions child).parent? = some payload.region →
+      ((headStripRaw input payload).regions child).parent? =
+        some payload.region →
+      True →
+      (childBinderWitness : ConcreteElaboration.IdentityBinderWitness input.val
+        (headStripRaw input payload) childSourceBinders childTargetBinders) →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers child →
+      ConcreteElaboration.BinderContext.Enumeration input.val
+        childSourceBinders child →
+      ConcreteElaboration.BinderContext.Enumeration
+        (headStripRaw input payload) childTargetBinders child →
+      ConcreteElaboration.compileRegion? signature input.val fuelSource child
+          sourceContext childSourceBinders = some sourceBody →
+      ConcreteElaboration.compileRegion? signature (headStripRaw input payload)
+          fuelTarget child targetContext childTargetBinders = some targetBody →
+      ConcreteElaboration.RegionSimulation model named childDirection
+        (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+        (sourceBody.renameRelations
+          (ConcreteElaboration.IdentityBinderWitness.relationMap
+            childBinderWitness)) targetBody)
+    (child : Fin input.val.regionCount)
+    (parent : (input.val.regions child).parent? = some payload.region)
+    (sourceItem : Item signature sourceContext.length sourceRels)
+    (targetItem : Item signature targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith? signature
+      input.val (ConcreteElaboration.compileRegion? signature input.val
+        fuelSource) sourceContext sourceBinders (.child child) =
+      some sourceItem)
+    (targetCompiled : ConcreteElaboration.compileOccurrenceWith? signature
+      (headStripRaw input payload)
+      (ConcreteElaboration.compileRegion? signature
+        (headStripRaw input payload) fuelTarget)
+      targetContext targetBinders (.child child) = some targetItem) :
+    ConcreteElaboration.ItemSimulation model named direction
+      (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      (sourceItem.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItem := by
+  have targetParent : ((headStripRaw input payload).regions child).parent? =
+      some payload.region := parent
+  cases sourceKind : input.val.regions child with
+  | sheet =>
+      simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind]
+        at sourceCompiled
+  | cut actualParent =>
+      have actualParentEq : actualParent = payload.region := by
+        rw [sourceKind] at parent
+        exact Option.some.inj parent
+      subst actualParent
+      have targetKind : (headStripRaw input payload).regions child =
+          .cut payload.region := by
+        exact sourceKind
+      cases sourceResult : ConcreteElaboration.compileRegion? signature
+          input.val fuelSource child sourceContext sourceBinders with
+      | none =>
+          simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+            sourceResult] at sourceCompiled
+      | some sourceBody =>
+          simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+            sourceResult] at sourceCompiled
+          subst sourceItem
+          cases targetResult : ConcreteElaboration.compileRegion? signature
+              (headStripRaw input payload) fuelTarget child targetContext
+              targetBinders with
+          | none =>
+              simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                targetResult] at targetCompiled
+          | some targetBody =>
+              simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                targetResult] at targetCompiled
+              subst targetItem
+              have bodies := recurse (childDirection := direction.flip)
+                parent targetParent True.intro
+                binderWitness
+                (ConcreteElaboration.BinderContext.covers_cut_child
+                  sourceBindersCover sourceKind)
+                (ConcreteElaboration.BinderContext.covers_cut_child
+                  targetBindersCover targetKind)
+                (sourceEnumeration.cutChild input.property sourceKind)
+                (targetEnumeration.cutChild targetWellFormed targetKind)
+                sourceResult targetResult
+              intro sourceEnv targetEnv relEnv environments
+              have bodyEntailment := bodies sourceEnv targetEnv relEnv
+                environments
+              simp only [Item.renameRelations, cut_denotes_negation]
+              cases direction with
+              | forward =>
+                  exact fun sourceNot targetDenotes =>
+                    sourceNot (bodyEntailment targetDenotes)
+              | backward =>
+                  exact fun targetNot sourceDenotes =>
+                    targetNot (bodyEntailment sourceDenotes)
+  | bubble actualParent arity =>
+      have actualParentEq : actualParent = payload.region := by
+        rw [sourceKind] at parent
+        exact Option.some.inj parent
+      subst actualParent
+      have targetKind : (headStripRaw input payload).regions child =
+          .bubble payload.region arity := by
+        exact sourceKind
+      let sourcePushed := sourceBinders.push child arity
+      let targetPushed := targetBinders.push child arity
+      cases sourceResult : ConcreteElaboration.compileRegion? signature
+          input.val fuelSource child sourceContext sourcePushed with
+      | none =>
+          simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+            sourcePushed, sourceResult] at sourceCompiled
+      | some sourceBody =>
+          simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+            sourcePushed, sourceResult] at sourceCompiled
+          subst sourceItem
+          cases targetResult : ConcreteElaboration.compileRegion? signature
+              (headStripRaw input payload) fuelTarget child targetContext
+              targetPushed with
+          | none =>
+              simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                targetPushed, targetResult] at targetCompiled
+          | some targetBody =>
+              simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                targetPushed, targetResult] at targetCompiled
+              subst targetItem
+              let pushedWitness :
+                  ConcreteElaboration.IdentityBinderWitness input.val
+                    (headStripRaw input payload) sourcePushed targetPushed := by
+                rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
+                subst targetRels
+                cases bindersEq
+                exact ⟨rfl, HEq.rfl⟩
+              have bodies := recurse (childDirection := direction)
+                parent targetParent True.intro
+                pushedWitness
+                (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                  sourceBindersCover sourceKind)
+                (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                  targetBindersCover targetKind)
+                (sourceEnumeration.bubbleChild input.property sourceKind)
+                (targetEnumeration.bubbleChild targetWellFormed targetKind)
+                sourceResult targetResult
+              have pushedMap :
+                  (ConcreteElaboration.IdentityBinderWitness.relationMap
+                    pushedWitness : RelationRenaming (arity :: sourceRels)
+                      (arity :: targetRels)) =
+                    (RelationRenaming.lift
+                      (ConcreteElaboration.IdentityBinderWitness.relationMap
+                        binderWitness) arity :
+                      RelationRenaming (arity :: sourceRels)
+                        (arity :: targetRels)) := by
+                cases binderWitness.relationContexts_eq
+                simpa [pushedWitness,
+                  ConcreteElaboration.IdentityBinderWitness.relationMap,
+                  ConcreteElaboration.identityRelationRenaming] using
+                    (RelationRenaming.lift_id_fun
+                      (source := sourceRels) arity).symm
+              rw [pushedMap] at bodies
+              intro sourceEnv targetEnv relEnv environments
+              simp only [Item.renameRelations, bubble_denotes_exists]
+              cases direction with
+              | forward =>
+                  rintro ⟨relationValue, sourceDenotes⟩
+                  exact ⟨relationValue, bodies sourceEnv targetEnv
+                    (relationValue, relEnv) environments sourceDenotes⟩
+              | backward =>
+                  rintro ⟨relationValue, targetDenotes⟩
+                  exact ⟨relationValue, bodies sourceEnv targetEnv
+                    (relationValue, relEnv) environments targetDenotes⟩
+
+theorem childOccurrences_simulation
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (sourceRecurse : ∀ {relations : RelCtx},
+      Fin input.val.regionCount →
+      (recurseContext : ConcreteElaboration.WireContext input.val) →
+      ConcreteElaboration.BinderContext input.val relations →
+      Option (Region signature recurseContext.length relations))
+    (targetRecurse : ∀ {relations : RelCtx},
+      Fin (headStripRaw input payload).regionCount →
+      (recurseContext : ConcreteElaboration.WireContext
+        (headStripRaw input payload)) →
+      ConcreteElaboration.BinderContext
+        (headStripRaw input payload) relations →
+      Option (Region signature recurseContext.length relations))
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext
+      (headStripRaw input payload))
+    (embedding : ContextEmbedding input payload sourceContext targetContext)
+    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (headStripRaw input payload) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
+      (headStripRaw input payload) sourceBinders targetBinders)
+    (pointwise : ∀ child,
+      (input.val.regions child).parent? = some payload.region →
+      ∀ (sourceItem : Item signature sourceContext.length sourceRels)
+        (targetItem : Item signature targetContext.length targetRels),
+      ConcreteElaboration.compileOccurrenceWith? signature input.val
+          sourceRecurse sourceContext sourceBinders (.child child) =
+        some sourceItem →
+      ConcreteElaboration.compileOccurrenceWith? signature
+          (headStripRaw input payload) targetRecurse targetContext
+          targetBinders (.child child) = some targetItem →
+      ConcreteElaboration.ItemSimulation model named direction
+        (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+        (sourceItem.renameRelations
+          (ConcreteElaboration.IdentityBinderWitness.relationMap
+            binderWitness)) targetItem)
+    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
+    (targetItems : ItemSeq signature targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val sourceRecurse sourceContext sourceBinders
+      (sourceChildOccurrences input payload.region) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (headStripRaw input payload) targetRecurse targetContext targetBinders
+      ((sourceChildOccurrences input payload.region).map
+        (liftOccurrence payload)) = some targetItems) :
+    ConcreteElaboration.ItemSeqSimulation model named direction
+      (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems := by
+  apply ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+    model named direction sourceRecurse targetRecurse sourceContext
+    targetContext sourceBinders targetBinders
+    (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+    (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
+    (liftOccurrence payload) (sourceChildOccurrences input payload.region)
+    ?_ sourceItems targetItems sourceCompiled targetCompiled
+  intro occurrence member sourceItem targetItem sourceOccurrence
+    targetOccurrence
+  unfold sourceChildOccurrences filterFin at member
+  obtain ⟨child, childMember, rfl⟩ := List.mem_map.mp member
+  have parent : (input.val.regions child).parent? = some payload.region := by
+    exact of_decide_eq_true ((List.mem_filter.mp childMember).2)
+  exact pointwise child parent sourceItem targetItem sourceOccurrence
+    targetOccurrence
+
 theorem compileNode_old
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
