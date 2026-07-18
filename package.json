@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "assets:validate": "tsx scripts/assets/validate-interface-assets.ts",
-    "presentation:validate": "vitest run tests/game/approved-presentation-browser.test.ts",
+    "presentation:validate": "vitest run tests/game/approved-presentation-browser.test.ts tests/game/folio-motion.test.ts",
     "assets:capture-lens": "node scripts/assets/capture-central-lens.mjs",
     "emit:theories": "tsx scripts/emit-theories.ts",
     "demo": "vite demo",

@@ -230,13 +230,13 @@ describe('permanent opening catalog', () => {
 
     expect(catalog.source.cultures).toEqual([
       {
-        id: cultureId('seyric-horizon'), name: 'The Seyric Horizon', relativeAge: 0,
+        id: cultureId('seyric-horizon'), name: 'The Seyric Horizon', shortName: 'Seyric', relativeAge: 0,
         historicalSummary: 'the earliest secure sealing horizon, known from funerary closures, threshold wards, and stone stoppers. Its self-name is unknown; “Seyric” is the modern archaeological exonym.',
         lineage: [], isolation: 'uncertain', sealingVocabulary: ['veils', 'fields', 'echoes', 'rings', 'marks'],
         unlocksAfter: [], gateway: puzzleId('two-veils'),
       },
       {
-        id: cultureId('myratic-tradition'), name: 'The Myratic Tradition', relativeAge: 1,
+        id: cultureId('myratic-tradition'), name: 'The Myratic Tradition', shortName: 'Myratic', relativeAge: 1,
         historicalSummary: 'the isolated Myrat complex, whose deliberate hollows may stand for complete seal-patterns. No direct Seyric lineage is established. Supplying a pattern is its first technique, not the identity of the whole tradition.',
         lineage: [], isolation: 'isolated', sealingVocabulary: ['hollows', 'patterns'],
         unlocksAfter: [puzzleId('single-mark-return')], gateway: puzzleId('blank-witness'),

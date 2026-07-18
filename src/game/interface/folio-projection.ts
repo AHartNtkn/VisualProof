@@ -20,6 +20,7 @@ export type FolioRecordProjection = {
 export type FolioCultureProjection = {
   readonly id: CultureId
   readonly name: string
+  readonly shortName: string
   readonly historicalSummary: string
   readonly unlocked: boolean
   readonly scroll: number
@@ -51,6 +52,7 @@ export function projectFolio(
   const cultures = catalog.source.cultures.map((culture) => ({
     id: culture.id,
     name: culture.name,
+    shortName: culture.shortName ?? culture.name,
     historicalSummary: culture.historicalSummary,
     unlocked: isCultureUnlocked(catalog, progress, culture.id),
     scroll: state.scrollByCulture.get(culture.id) ?? 0,

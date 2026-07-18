@@ -38,6 +38,70 @@ const open = async (path: string, viewport: { width: number, height: number }): 
   return page
 }
 
+type MotionFrame = {
+  readonly animation: string
+  readonly transform: string
+  readonly opacity: string
+  readonly duration: string
+  readonly x: number
+  readonly y: number
+}
+
+const armMotionTrace = async (page: Page, channel: string, subject: string): Promise<void> => {
+  await page.evaluate(({ channel, subject }) => {
+    delete document.documentElement.dataset.presentationMotionTrace
+    const root = document.querySelector('.curse-folio')
+    if (!(root instanceof HTMLElement)) throw new Error('folio motion root missing')
+    let started = false
+    const frames: Array<{
+      animation: string, transform: string, opacity: string, duration: string, x: number, y: number
+    }> = []
+    const frame = () => {
+      const node = document.querySelector(subject)
+      if (node instanceof HTMLElement) {
+        const style = getComputedStyle(node)
+        const rect = node.getBoundingClientRect()
+        frames.push({
+          animation: style.animationName,
+          transform: style.transform,
+          opacity: style.opacity,
+          duration: style.animationDuration,
+          x: rect.x,
+          y: rect.y,
+        })
+      }
+      if (root.classList.contains(`is-motion-${channel}`)) {
+        requestAnimationFrame(frame)
+      } else {
+        document.documentElement.dataset.presentationMotionTrace = JSON.stringify(frames)
+      }
+    }
+    const observer = new MutationObserver(() => {
+      if (started || !root.classList.contains(`is-motion-${channel}`)) return
+      started = true
+      requestAnimationFrame(frame)
+      observer.disconnect()
+    })
+    observer.observe(root, { attributes: true })
+  }, { channel, subject })
+}
+
+const readMotionTrace = async (page: Page): Promise<readonly MotionFrame[]> => {
+  await page.waitForFunction(() => document.documentElement
+    .dataset.presentationMotionTrace !== undefined)
+  return page.evaluate(() => JSON.parse(document.documentElement
+    .dataset.presentationMotionTrace!))
+}
+
+const expectPaintedMotion = (channel: string, frames: readonly MotionFrame[]): void => {
+  expect(frames.length, `${channel} must paint multiple frames`).toBeGreaterThan(1)
+  expect(new Set(frames.map(({ transform, opacity, x, y }) =>
+    `${transform}|${opacity}|${x.toFixed(2)}|${y.toFixed(2)}`)).size,
+  `${channel} must change painted geometry or opacity`).toBeGreaterThan(1)
+  expect(frames.some(({ animation }) => animation !== 'none'),
+    `${channel} must use authored keyframes`).toBe(true)
+}
+
 describe('approved production presentation conformance', () => {
   it('renders the approved full-lens mechanics and physical dossier composition', async () => {
     const page = await open('/tests/game/approved-presentation-fixture.html', { width: 1600, height: 1000 })
@@ -94,48 +158,20 @@ describe('approved production presentation conformance', () => {
     for (const sample of samples) {
       const page = await open('/tests/game/approved-presentation-fixture.html', { width: 1600, height: 1000 })
       try {
-        await page.evaluate(({ channel, subject }) => {
-          delete document.documentElement.dataset.presentationMotionSample
-          const root = document.querySelector('.curse-folio')
-          if (!(root instanceof HTMLElement)) throw new Error('folio motion root missing')
-          const capture = () => {
-            if (!root.classList.contains(`is-motion-${channel}`)) return
-            const node = document.querySelector(subject)
-            if (!(node instanceof HTMLElement)) return
-            const style = getComputedStyle(node)
-            document.documentElement.dataset.presentationMotionSample = JSON.stringify({
-              animation: style.animationName,
-              transform: style.transform,
-              opacity: style.opacity,
-            })
-          }
-          const observer = new MutationObserver(() => {
-            capture()
-            if (document.documentElement.dataset.presentationMotionSample !== undefined) {
-              observer.disconnect()
-            }
-          })
-          observer.observe(root, { attributes: true })
-          capture()
-        }, { channel: sample.channel, subject: sample.subject })
+        await armMotionTrace(page, sample.channel, sample.subject)
         await sample.trigger(page)
-        await page.waitForFunction(() => document.documentElement
-          .dataset.presentationMotionSample !== undefined)
-        const active = await page.evaluate(() => JSON.parse(document.documentElement
-          .dataset.presentationMotionSample!)) as {
-            animation: string
-            transform: string
-            opacity: string
-          }
-        expect(active.animation, `${sample.channel} subject must own its authored keyframes`)
-          .not.toBe('none')
-        await page.waitForFunction((channel) => !document.querySelector('.curse-folio')
-          ?.classList.contains(`is-motion-${channel}`), sample.channel)
+        const frames = await readMotionTrace(page)
+        expectPaintedMotion(sample.channel, frames)
         const settled = await page.locator(sample.subject).evaluate((node) => ({
+          animation: getComputedStyle(node).animationName,
           transform: getComputedStyle(node).transform,
           opacity: getComputedStyle(node).opacity,
+          visibility: getComputedStyle(node).visibility,
         }))
-        expect(settled).not.toEqual(active)
+        expect(settled.animation).toBe('none')
+        if (sample.channel === 'packet') {
+          expect(settled).toMatchObject({ opacity: '0', visibility: 'hidden' })
+        }
       } finally { await page.close() }
     }
 
@@ -147,17 +183,54 @@ describe('approved production presentation conformance', () => {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
       await page.mouse.down()
       await page.mouse.move(1100, 400)
+      await armMotionTrace(page, 'record', '.inspection-record')
       await page.mouse.up()
       expect(await page.locator('.curse-folio').getAttribute('data-motion-record-kind')).toBe('return')
-      await page.waitForFunction(() => !document.querySelector('.curse-folio')
-        ?.classList.contains('is-motion-record'))
+      expectPaintedMotion('record', await readMotionTrace(page))
+      expect(await page.locator('.inspection-stage').getAttribute('aria-hidden')).toBe('true')
     } finally { await page.close() }
+
+    const interrupted = await open('/tests/game/approved-presentation-fixture.html', { width: 1600, height: 1000 })
+    try {
+      await interrupted.locator('.cover-spine-hit').click()
+      await interrupted.waitForTimeout(110)
+      const jump = await interrupted.evaluate(() => {
+        const surface = document.querySelector('.cover-surface')!.getBoundingClientRect()
+        document.querySelector<HTMLElement>('.cover-spine-hit')!.click()
+        const replacement = document.querySelector('.cover-surface')!.getBoundingClientRect()
+        return Math.hypot(replacement.x - surface.x, replacement.y - surface.y)
+      })
+      expect(jump).toBeLessThan(1)
+    } finally { await interrupted.close() }
+
+    const reduced = await open('/tests/game/approved-presentation-fixture.html?reduced', { width: 1600, height: 1000 })
+    try {
+      await armMotionTrace(reduced, 'dossier', '.active-dossier')
+      await reduced.evaluate(() => window.__approvedPresentationFixture.dossier())
+      const frames = await readMotionTrace(reduced)
+      expect(frames.some(({ animation }) => animation === 'reduced-depth')).toBe(true)
+      expect(frames.some(({ duration }) => duration === '0.09s')).toBe(true)
+      expect(new Set(frames.map(({ x, y, transform }) => `${x.toFixed(2)}|${y.toFixed(2)}|${transform}`)).size)
+        .toBe(1)
+    } finally { await reduced.close() }
   })
 
-  it('renders transparent Dark Slate proof pixels with cyan and binder-neon linework', async () => {
-    const page = await open('/tests/game/game-proof-surface-fixture.html', { width: 1600, height: 900 })
+  it('renders the real controller with the approved timeline and Dark Slate neon proof palette', async () => {
+    const page = await open('/tests/game/authoritative-runtime-fixture.html?scenario=editor', { width: 1600, height: 1000 })
     try {
+      await page.waitForFunction(() => window.__authoritativeRuntimeFixture?.ready === true)
+      expect(await page.locator('.curse-production-timeline').evaluate((node) =>
+        getComputedStyle(node).visibility)).toBe('visible')
+      const first = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles()[0]!)
+      await page.locator(`[data-puzzle="${first}"]`).click()
       await page.waitForSelector('.curse-game-proof-canvas')
+      await page.waitForFunction(() => {
+        const canvas = document.querySelector<HTMLCanvasElement>('.curse-game-proof-canvas')
+        if (canvas === null || canvas.width === 0 || canvas.height === 0) return false
+        const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
+        for (let index = 3; index < data.length; index += 4) if (data[index]! > 0) return true
+        return false
+      })
       const palette = await page.locator('.curse-game-proof-canvas').evaluate((node) => {
         const canvas = node as HTMLCanvasElement
         const data = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data
@@ -165,11 +238,13 @@ describe('approved production presentation conformance', () => {
         let cyan = 0
         let violet = 0
         let lightPaper = 0
+        let darkField = 0
         for (let index = 0; index < data.length; index += 4) {
           const r = data[index]!, g = data[index + 1]!, b = data[index + 2]!, a = data[index + 3]!
           if (a === 0) transparent++
           if (a > 48 && g > 145 && b > 150 && g > r * 1.15) cyan++
           if (a > 48 && b > g * 1.12 && r > g * 1.05) violet++
+          if (a > 4 && r < 80 && g < 90 && b < 100) darkField++
           if (a > 220 && ((r === 250 && g === 247 && b === 238)
             || (r === 232 && g === 228 && b === 216))) lightPaper++
         }
@@ -179,13 +254,39 @@ describe('approved production presentation conformance', () => {
           cyan,
           violet,
           lightPaper,
+          darkField,
         }
       })
+      const slider = page.locator('.curse-production-timeline-control')
+      const handleCenter = async () => page.locator('.curse-production-timeline-handle')
+        .evaluate((node) => {
+          const rect = node.getBoundingClientRect()
+          return rect.x + rect.width / 2
+        })
+      await page.evaluate(() => {
+        window.__authoritativeRuntimeFixture.witness(0)
+        window.__authoritativeRuntimeFixture.witness(1)
+      })
+      await page.evaluate(() => window.__authoritativeRuntimeFixture.settle())
+      await page.waitForFunction(() => !window.__authoritativeRuntimeFixture.state().motionPlaying)
+      const end = await handleCenter()
+      await page.evaluate(() => window.__authoritativeRuntimeFixture
+        .dispatch({ kind: 'moveTimeline', cursor: 0 }))
+      const start = await handleCenter()
+      const rail = await slider.boundingBox()
+      if (rail === null) throw new Error('production timeline rail missing')
+      await slider.click({ position: {
+        x: start + (end - start) / 2 - rail.x,
+        y: rail.height / 2,
+      } })
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().cursor)).toBe(1)
+      expect(await handleCenter()).toBeCloseTo(start + (end - start) / 2, 1)
       expect(palette.background).toBe('rgba(0, 0, 0, 0)')
       expect(palette.transparent).toBeGreaterThan(1000)
       expect(palette.cyan).toBeGreaterThan(20)
       expect(palette.violet).toBeGreaterThan(20)
       expect(palette.lightPaper).toBe(0)
+      expect(palette.darkField).toBeGreaterThan(20)
     } finally { await page.close() }
   })
 })

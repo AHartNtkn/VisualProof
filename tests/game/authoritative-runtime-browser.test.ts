@@ -52,6 +52,8 @@ describe('authoritative production renderer runtime', () => {
       expect(await page.locator('.curse-folio').count()).toBe(1)
       expect(await page.locator('.curse-game-proof-canvas').count()).toBe(0)
       expect(await page.locator('.curse-production-timeline-control').count()).toBe(0)
+      expect(await page.locator('.curse-production-timeline').evaluate((node) =>
+        getComputedStyle(node).visibility)).toBe('visible')
     } finally { await page.close() }
   })
 
@@ -200,6 +202,27 @@ describe('authoritative production renderer runtime', () => {
         .dispatch({ kind: 'setTextSize', value: 'large' }))
       const large = await renderedSize()
       expect(large).toBeGreaterThan(medium)
+    } finally { await page.close() }
+  })
+
+  it('lets compact large-text records grow inside the continuous scrolling sheet', async () => {
+    const page = await openFixture('opening')
+    try {
+      await page.setViewportSize({ width: 760, height: 900 })
+      await page.evaluate(() => window.__authoritativeRuntimeFixture
+        .dispatch({ kind: 'setTextSize', value: 'large' }))
+      const records = await page.locator('.curse-folio-record').evaluateAll((nodes) => nodes
+        .map((node) => ({
+          clientHeight: (node as HTMLElement).clientHeight,
+          scrollHeight: (node as HTMLElement).scrollHeight,
+          faceClientHeight: (node.querySelector('.record-face') as HTMLElement).clientHeight,
+          faceScrollHeight: (node.querySelector('.record-face') as HTMLElement).scrollHeight,
+        })))
+      expect(records).not.toHaveLength(0)
+      expect(records.every(({ clientHeight, scrollHeight, faceClientHeight, faceScrollHeight }) =>
+        scrollHeight <= clientHeight + 1 && faceScrollHeight <= faceClientHeight + 1)).toBe(true)
+      expect(await page.locator('.record-grid').evaluate((sheet) =>
+        (sheet as HTMLElement).scrollHeight > (sheet as HTMLElement).clientHeight)).toBe(true)
     } finally { await page.close() }
   })
 

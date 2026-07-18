@@ -14,6 +14,7 @@ const projection: FolioProjection = {
   cultures: [{
     id: culture,
     name: 'Browser culture',
+    shortName: 'Browser',
     historicalSummary: 'Runtime geometry fixture.',
     unlocked: true,
     scroll: 0,

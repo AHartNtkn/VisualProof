@@ -28,11 +28,12 @@ const baseProjection = (): FolioProjection => ({
   mode: 'puzzle',
   selectedCulture: firstCulture,
   selectedScroll: 0,
-  reducedMotion: false,
+  reducedMotion: new URLSearchParams(location.search).has('reduced'),
   cultures: [
     {
       id: firstCulture,
       name: 'The Seyric Horizon',
+      shortName: 'Seyric',
       historicalSummary: 'Earliest securely excavated sealing horizon; chronology remains under catalog revision.',
       unlocked: true,
       scroll: 0,
@@ -41,6 +42,7 @@ const baseProjection = (): FolioProjection => ({
     {
       id: secondCulture,
       name: 'The Myratic Tradition',
+      shortName: 'Myratic',
       historicalSummary: 'Later archive tradition under conservation review.',
       unlocked: true,
       scroll: 0,

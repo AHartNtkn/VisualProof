@@ -42,6 +42,7 @@ const projection = (mode: FolioProjection['mode']): FolioProjection => ({
     {
       id: FIRST_CULTURE,
       name: 'First culture',
+      shortName: 'First',
       historicalSummary: 'Recovered records from the first field season.',
       unlocked: true,
       scroll: 85,
@@ -54,6 +55,7 @@ const projection = (mode: FolioProjection['mode']): FolioProjection => ({
     {
       id: SECOND_CULTURE,
       name: 'Second culture',
+      shortName: 'Second',
       historicalSummary: 'Restricted records.',
       unlocked: false,
       scroll: 0,
@@ -100,11 +102,15 @@ describe('production excavation folio DOM view', () => {
     expect(lockedRecord.querySelector('.record-guard')).not.toBeNull()
     expect(lockedCulture.querySelector('.record-guard')).not.toBeNull()
     expect(sheet.getAttribute('role')).toBe('list')
+    expect(sheet.tagName).toBe('UL')
     expect(sheet.getAttribute('tabindex')).toBe('0')
     expect(root.querySelectorAll('.curse-folio-page')).toHaveLength(0)
     expect(sheet.scrollTop).toBe(85)
     expect(root.querySelector('.dossier-title')!.textContent)
       .toBe('Excavation archive · First dossier')
+    expect(root.querySelector('.dossier-title')!.tagName).toBe('H2')
+    expect(lockedRecord.tagName).toBe('BUTTON')
+    expect(lockedRecord.getAttribute('role')).toBeNull()
     expect(root.querySelector(`[data-culture="${FIRST_CULTURE}"]`)!
       .querySelector('.curse-folio-culture-label')!.textContent).toBe('First')
 

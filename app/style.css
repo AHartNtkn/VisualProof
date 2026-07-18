@@ -21,7 +21,6 @@ body { background: #050608; }
 .curse-production-environment[data-text-size="small"] { font-size: 0.875rem; }
 .curse-production-environment[data-text-size="medium"] { font-size: 1rem; }
 .curse-production-environment[data-text-size="large"] { font-size: 1.2rem; }
-.curse-production-environment[data-mode="archive"] .curse-production-timeline,
 .curse-production-environment[data-mode="completion"] .curse-production-timeline { visibility: hidden; }
 
 .curse-refusal {

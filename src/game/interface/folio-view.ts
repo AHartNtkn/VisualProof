@@ -93,11 +93,6 @@ const snapshotRect = (node: HTMLElement): RectSnapshot | null => {
   return { left, top, width, height }
 }
 
-const culturePresentationName = (culture: CultureId): string => {
-  const name = culture.split('-').find((part) => part.length > 0) ?? culture
-  return `${name[0]!.toUpperCase()}${name.slice(1)}`
-}
-
 export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const document = options.host.ownerDocument
   const root = element(document, 'section', 'curse-folio folio-foundation')
@@ -122,10 +117,10 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const cultures = element(document, 'nav', 'culture-tabs curse-folio-cultures')
   cultures.setAttribute('aria-label', 'Cultural dossiers')
   const dossierHeader = element(document, 'header', 'dossier-header')
-  const dossierTitle = element(document, 'p', 'dossier-title')
+  const dossierTitle = element(document, 'h2', 'dossier-title')
   const dossierNote = element(document, 'p', 'dossier-note')
   dossierHeader.append(dossierTitle, dossierNote)
-  const sheet = element(document, 'div', 'record-grid')
+  const sheet = element(document, 'ul', 'record-grid')
   sheet.tabIndex = 0
   sheet.setAttribute('tabindex', '0')
   sheet.setAttribute('role', 'list')
@@ -166,6 +161,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const motion = new FolioMotion(root, options.motionClock)
   const listeners = new AbortController()
   const recordElements = new Map<PuzzleId, HTMLElement>()
+  const recordItems = new Map<PuzzleId, HTMLLIElement>()
   const cultureElements = new Map<CultureId, HTMLButtonElement>()
   let current = options.projection
   let coverState: 'open' | 'closed' = current.mode === 'puzzle' ? 'open' : 'closed'
@@ -261,12 +257,9 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     } else {
       delete node.dataset.packetState
     }
-    node.setAttribute('role', 'listitem')
     if (record.status === 'locked') {
-      node.setAttribute('aria-disabled', 'true')
       node.setAttribute('aria-label', `${record.name}. Restricted sleeve closed.`)
     } else {
-      node.removeAttribute('aria-disabled')
       node.removeAttribute('aria-label')
     }
     node.replaceChildren()
@@ -424,6 +417,9 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     }) as EventListener)
     listen(node, 'pointerup', ((event: PointerEvent) => finishDrag(event, false)) as EventListener)
     listen(node, 'pointercancel', ((event: PointerEvent) => finishDrag(event, true)) as EventListener)
+    const item = element(document, 'li', 'folio-record-item')
+    item.append(node)
+    recordItems.set(record.id, item)
     return node
   }
 
@@ -445,7 +441,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
         cultureElements.set(culture.id, control)
       }
       const label = control.querySelector<HTMLElement>('.curse-folio-culture-label')
-      if (label !== null) label.textContent = culturePresentationName(culture.id)
+      if (label !== null) label.textContent = culture.shortName
       control.setAttribute('aria-pressed', String(culture.id === current.selectedCulture))
       if (culture.unlocked) control.removeAttribute('aria-disabled')
       else control.setAttribute('aria-disabled', 'true')
@@ -488,7 +484,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       sheet.replaceChildren()
       return
     }
-    dossierTitle.textContent = `Excavation archive · ${culturePresentationName(selected.id)} dossier`
+    dossierTitle.textContent = `Excavation archive · ${selected.shortName} dossier`
     dossierNote.textContent = selected.historicalSummary
     sheet.setAttribute('aria-label', `${selected.name} artifact records`)
     const records = selected.records.map((record, index) => {
@@ -498,7 +494,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
         recordElements.set(record.id, node)
       }
       syncRecord(node, record, index)
-      return node
+      return recordItems.get(record.id)!
     })
     sheet.replaceChildren(...records)
     sheet.scrollTop = current.selectedScroll

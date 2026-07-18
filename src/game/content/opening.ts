@@ -538,6 +538,7 @@ export function openingCatalogSource(): GameCatalogSource {
       {
         id: SEYRIC,
         name: 'The Seyric Horizon',
+        shortName: 'Seyric',
         relativeAge: 0,
         historicalSummary: 'the earliest secure sealing horizon, known from funerary closures, threshold wards, and stone stoppers. Its self-name is unknown; “Seyric” is the modern archaeological exonym.',
         lineage: [],
@@ -549,6 +550,7 @@ export function openingCatalogSource(): GameCatalogSource {
       {
         id: MYRATIC,
         name: 'The Myratic Tradition',
+        shortName: 'Myratic',
         relativeAge: 1,
         historicalSummary: 'the isolated Myrat complex, whose deliberate hollows may stand for complete seal-patterns. No direct Seyric lineage is established. Supplying a pattern is its first technique, not the identity of the whole tradition.',
         lineage: [],
