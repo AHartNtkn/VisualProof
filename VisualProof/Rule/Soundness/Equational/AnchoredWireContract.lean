@@ -423,6 +423,122 @@ theorem moveEndpointRaw_covered
     exact ⟨wire, (moveEndpointRaw_other_occurs_iff input sourceWire
       targetWire endpoint current selected wire).mpr occurs⟩
 
+/-- The lexical relation used exactly below a certified endpoint-move site.
+It retains ordinary wire identity and additionally relates the moved source
+wire to the retained target wire. -/
+def endpointMoveRelation
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (sourceContext targetContext : List (Fin input.wireCount)) :
+    ConcreteElaboration.ContextIndexRelation sourceContext.length
+      targetContext.length where
+  Rel sourceIndex targetIndex :=
+    (sourceContext.get sourceIndex = sourceWire ∧
+      targetContext.get targetIndex = targetWire) ∨
+    sourceContext.get sourceIndex = targetContext.get targetIndex
+
+theorem resolvedPorts_endpointMove_related
+    (input : ConcreteDiagram)
+    (wellFormed : input.WellFormed signature)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (sourceOccurs : input.EndpointOccurs sourceWire endpoint)
+    (sourceContext targetContext : List (Fin input.wireCount))
+    (node : Fin input.nodeCount) (port : CPort)
+    (sourceIndex : Fin sourceContext.length)
+    (targetIndex : Fin targetContext.length)
+    (sourceResolved : ConcreteElaboration.resolvePort? input sourceContext
+      node port = some sourceIndex)
+    (targetResolved : ConcreteElaboration.resolvePort?
+      (moveEndpointRaw input sourceWire targetWire endpoint) targetContext
+      node port = some targetIndex) :
+    (endpointMoveRelation input sourceWire targetWire sourceContext
+      targetContext).Rel sourceIndex targetIndex := by
+  obtain ⟨sourceOwner, sourceOccurrence, sourceGet⟩ :=
+    ConcreteElaboration.resolvePort?_sound sourceResolved
+  obtain ⟨targetOwner, targetOccurrence, targetGet⟩ :=
+    ConcreteElaboration.resolvePort?_sound targetResolved
+  by_cases selected : ({ node := node, port := port } : CEndpoint input.nodeCount) =
+      endpoint
+  · have sourceOwnerEq : sourceOwner = sourceWire :=
+      ConcreteElaboration.endpoint_wire_unique
+        wellFormed.wire_endpoints_are_disjoint sourceOccurrence
+          (selected ▸ sourceOccurs)
+    have targetOwnerEq : targetOwner = targetWire :=
+      (moveEndpointRaw_selected_occurs_iff input sourceWire targetWire endpoint
+        distinct sourceOccurs wellFormed.wire_endpoints_are_disjoint
+        targetOwner).mp (selected ▸ targetOccurrence)
+    exact Or.inl ⟨sourceGet.trans sourceOwnerEq,
+      targetGet.trans targetOwnerEq⟩
+  · have targetSourceOccurrence : input.EndpointOccurs targetOwner
+        { node := node, port := port } :=
+      (moveEndpointRaw_other_occurs_iff input sourceWire targetWire endpoint
+        { node := node, port := port } selected targetOwner).mp targetOccurrence
+    have ownersEq : sourceOwner = targetOwner :=
+      ConcreteElaboration.endpoint_wire_unique
+        wellFormed.wire_endpoints_are_disjoint sourceOccurrence
+          targetSourceOccurrence
+    exact Or.inr (sourceGet.trans (ownersEq.trans targetGet.symm))
+
+/-- Every unchanged node compiles semantically across a single endpoint move
+once the complete source/target environments agree on ordinary identities
+and on the moved-source/retained-target pair. -/
+theorem compileNode_moveEndpoint_itemSimulation
+    (input : ConcreteDiagram)
+    (wellFormed : input.WellFormed signature)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (sourceOccurs : input.EndpointOccurs sourceWire endpoint)
+    (sourceContext targetContext : List (Fin input.wireCount))
+    (sourceBinders : ConcreteElaboration.BinderContext input sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (moveEndpointRaw input sourceWire targetWire endpoint) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      sourceBinders targetBinders)
+    (node : Fin input.nodeCount)
+    (sourceItem : Item signature sourceContext.length sourceRels)
+    (targetItem : Item signature targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileNode? signature input
+      sourceContext sourceBinders node = some sourceItem)
+    (targetCompiled : ConcreteElaboration.compileNode? signature
+      (moveEndpointRaw input sourceWire targetWire endpoint) targetContext
+      targetBinders node = some targetItem)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection) :
+    ConcreteElaboration.ItemSimulation model named direction
+      (endpointMoveRelation input sourceWire targetWire sourceContext
+        targetContext)
+      (sourceItem.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItem := by
+  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+    (source := input)
+    (target := moveEndpointRaw input sourceWire targetWire endpoint)
+    model named direction sourceContext targetContext
+    (endpointMoveRelation input sourceWire targetWire sourceContext
+      targetContext)
+    sourceBinders targetBinders
+    (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
+    node node id id
+  · rw [moveEndpointRaw_nodes]
+    cases input.nodes node <;> rfl
+  · intro port sourceIndex targetIndex sourceResolved targetResolved
+    exact resolvedPorts_endpointMove_related input wellFormed sourceWire
+      targetWire endpoint distinct sourceOccurs sourceContext targetContext
+      node port sourceIndex targetIndex sourceResolved targetResolved
+  · intro region binder arity sourceRelation nodeShape binderLookup
+    rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming] using binderLookup
+  · exact sourceCompiled
+  · exact targetCompiled
+
 @[simp] theorem moveEndpointsRaw_regions
     (input : ConcreteDiagram) (sourceWire targetWire : Fin input.wireCount)
     (endpoints : List (CEndpoint input.nodeCount)) :
