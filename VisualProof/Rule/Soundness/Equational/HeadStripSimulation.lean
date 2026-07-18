@@ -651,6 +651,311 @@ noncomputable def semanticSimulation
       targetBindersCover sourceEnumeration targetEnumeration recurse sourceItems
       targetItems sourceCompiled targetCompiled
 
+private theorem eraseDups_map_injective
+    [BEq α] [LawfulBEq α] [BEq β] [LawfulBEq β]
+    (f : α → β) (injective : Function.Injective f) :
+    ∀ values : List α, (values.map f).eraseDups = values.eraseDups.map f
+  | [] => rfl
+  | head :: tail => by
+      rw [List.map_cons, List.eraseDups_cons, List.eraseDups_cons,
+        List.map_cons]
+      congr 1
+      rw [← eraseDups_map_injective f injective
+        (tail.filter fun value => !value == head)]
+      apply congrArg List.eraseDups
+      rw [List.filter_map]
+      apply congrArg (List.map f)
+      apply congrArg (fun predicate => List.filter predicate tail)
+      funext value
+      simp only [Function.comp_apply]
+      apply Bool.eq_iff_iff.mpr
+      simp [injective.eq_iff]
+termination_by values => values.length
+decreasing_by
+  simpa using Nat.lt_succ_of_le (List.length_filter_le _ tail)
+
+theorem targetOpen_exposedWires
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    (targetOpen input payload boundary).exposedWires =
+      (sourceOpen input boundary).exposedWires.map
+        (Fin.castAdd payload.argumentIndices.length :
+          Fin input.val.wireCount →
+            Fin (input.val.wireCount + payload.argumentIndices.length)) := by
+  unfold targetOpen sourceOpen OpenConcreteDiagram.exposedWires
+  apply eraseDups_map_injective
+  intro left right equality
+  apply Fin.ext
+  exact congrArg
+    (fun value : Fin (input.val.wireCount +
+      payload.argumentIndices.length) => value.val) equality
+
+theorem targetOpen_hiddenWires
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    (targetOpen input payload boundary).hiddenWires =
+      (sourceOpen input boundary).hiddenWires.map
+          (Fin.castAdd payload.argumentIndices.length :
+            Fin input.val.wireCount →
+              Fin (input.val.wireCount + payload.argumentIndices.length)) ++
+        if input.val.root = payload.region then
+          (allFin payload.argumentIndices.length).map
+            (Fin.natAdd input.val.wireCount)
+        else [] := by
+  unfold OpenConcreteDiagram.hiddenWires
+  change List.filter
+      (fun wire => decide
+        (wire ∉ (targetOpen input payload boundary).exposedWires))
+      (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+        input.val.root) = _
+  rw [headStripRaw_exactScopeWires, targetOpen_exposedWires]
+  have oldPart :
+      List.filter
+          (fun wire => decide
+            (wire ∉ (sourceOpen input boundary).exposedWires.map
+              (Fin.castAdd payload.argumentIndices.length)))
+          (List.map (Fin.castAdd payload.argumentIndices.length)
+            (ConcreteElaboration.exactScopeWires input.val input.val.root)) =
+        List.map (Fin.castAdd payload.argumentIndices.length)
+          (List.filter
+            (fun wire => decide
+              (wire ∉ (sourceOpen input boundary).exposedWires))
+            (ConcreteElaboration.exactScopeWires input.val input.val.root)) := by
+    rw [List.filter_map]
+    apply congrArg (List.map (Fin.castAdd payload.argumentIndices.length))
+    apply congrArg (fun predicate => List.filter predicate
+      (ConcreteElaboration.exactScopeWires input.val input.val.root))
+    funext wire
+    simp only [Function.comp_apply]
+    apply Bool.eq_iff_iff.mpr
+    simp only [decide_eq_true_eq]
+    constructor
+    · intro notMapped sourceMember
+      exact notMapped (List.mem_map.mpr ⟨wire, sourceMember, rfl⟩)
+    · intro notSource mappedMember
+      rcases List.mem_map.mp mappedMember with ⟨old, oldMember, equality⟩
+      have oldEq : old = wire := by
+        apply Fin.ext
+        exact congrArg
+          (fun value : Fin (input.val.wireCount +
+            payload.argumentIndices.length) => value.val) equality
+      exact notSource (by simpa [oldEq] using oldMember)
+  by_cases rootSite : input.val.root = payload.region
+  · rw [if_pos rootSite]
+    have split := List.filter_append
+      (p := fun wire => decide
+        (wire ∉ (sourceOpen input boundary).exposedWires.map
+          (Fin.castAdd payload.argumentIndices.length)))
+      (List.map (Fin.castAdd payload.argumentIndices.length)
+        (ConcreteElaboration.exactScopeWires input.val input.val.root))
+      ((allFin payload.argumentIndices.length).map
+        (Fin.natAdd input.val.wireCount))
+    apply Eq.trans split
+    rw [oldPart]
+    congr 1
+    apply List.filter_eq_self.mpr
+    intro fresh freshMember
+    rcases List.mem_map.mp freshMember with ⟨position, _, rfl⟩
+    apply decide_eq_true
+    intro exposed
+    unfold sourceOpen at exposed
+    rcases List.mem_map.mp exposed with ⟨old, _, equality⟩
+    change Fin.castAdd payload.argumentIndices.length old =
+      Fin.natAdd input.val.wireCount position at equality
+    have values := congrArg
+      (fun value : Fin (input.val.wireCount +
+        payload.argumentIndices.length) => value.val) equality
+    simp only [Fin.val_castAdd, Fin.val_natAdd] at values
+    omega
+  · rw [if_neg rootSite, List.append_nil]
+    simpa [sourceOpen] using oldPart
+
+def rootFresh
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second) :
+    List (Fin (input.val.wireCount + payload.argumentIndices.length)) :=
+  if input.val.root = payload.region then
+    (allFin payload.argumentIndices.length).map
+      (Fin.natAdd input.val.wireCount)
+  else []
+
+theorem targetOpen_rootWires
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    (targetOpen input payload boundary).rootWires =
+      (sourceOpen input boundary).rootWires.map
+          (Fin.castAdd payload.argumentIndices.length :
+            Fin input.val.wireCount →
+              Fin (input.val.wireCount + payload.argumentIndices.length)) ++
+        rootFresh input payload := by
+  unfold OpenConcreteDiagram.rootWires rootFresh
+  rw [targetOpen_exposedWires, targetOpen_hiddenWires]
+  let exposed : List (Fin
+      (input.val.wireCount + payload.argumentIndices.length)) :=
+    (sourceOpen input boundary).exposedWires.map
+      (Fin.castAdd payload.argumentIndices.length)
+  let hidden : List (Fin
+      (input.val.wireCount + payload.argumentIndices.length)) :=
+    (sourceOpen input boundary).hiddenWires.map
+      (Fin.castAdd payload.argumentIndices.length)
+  let fresh : List (Fin
+      (input.val.wireCount + payload.argumentIndices.length)) :=
+    if input.val.root = payload.region then
+    (allFin payload.argumentIndices.length).map
+      (Fin.natAdd input.val.wireCount)
+    else []
+  change exposed ++ (hidden ++ fresh) =
+    List.map (Fin.castAdd payload.argumentIndices.length :
+      Fin input.val.wireCount →
+        Fin (input.val.wireCount + payload.argumentIndices.length))
+      ((sourceOpen input boundary).exposedWires ++
+        (sourceOpen input boundary).hiddenWires) ++ fresh
+  calc
+    exposed ++ (hidden ++ fresh) = (exposed ++ hidden) ++ fresh :=
+      (List.append_assoc _ _ _).symm
+    _ = List.map (Fin.castAdd payload.argumentIndices.length :
+          Fin input.val.wireCount →
+            Fin (input.val.wireCount + payload.argumentIndices.length))
+          ((sourceOpen input boundary).exposedWires ++
+            (sourceOpen input boundary).hiddenWires) ++ fresh := by
+      exact congrArg (fun values => values ++ fresh)
+        (List.map_append
+          (f := Fin.castAdd payload.argumentIndices.length)
+          (l₁ := (sourceOpen input boundary).exposedWires)
+          (l₂ := (sourceOpen input boundary).hiddenWires)).symm
+
+noncomputable def rootIndex
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount)) :
+    Fin (sourceOpen input boundary).rootWires.length →
+      Fin (targetOpen input payload boundary).rootWires.length :=
+  fun index =>
+    let mapped : List (Fin
+        (input.val.wireCount + payload.argumentIndices.length)) :=
+      (sourceOpen input boundary).rootWires.map
+          (Fin.castAdd payload.argumentIndices.length :
+            Fin input.val.wireCount →
+              Fin (input.val.wireCount + payload.argumentIndices.length)) ++
+        rootFresh input payload
+    let mappedIndex : Fin mapped.length := ⟨index.val, by
+        dsimp only [mapped]
+        rw [List.length_append, List.length_map]
+        exact Nat.lt_of_lt_of_le index.isLt (Nat.le_add_right _ _)⟩
+    Fin.cast (congrArg List.length
+      (targetOpen_rootWires input payload boundary)).symm mappedIndex
+
+theorem rootIndex_get
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (index : Fin (sourceOpen input boundary).rootWires.length) :
+    (targetOpen input payload boundary).rootWires.get
+        (rootIndex input payload boundary index) =
+      Fin.castAdd payload.argumentIndices.length
+        ((sourceOpen input boundary).rootWires.get index) := by
+  let mapped := (sourceOpen input boundary).rootWires.map
+      (Fin.castAdd payload.argumentIndices.length :
+        Fin input.val.wireCount →
+          Fin (input.val.wireCount + payload.argumentIndices.length)) ++
+        rootFresh input payload
+  let mappedIndex : Fin mapped.length := ⟨index.val, by
+    simp [mapped]
+    exact Nat.lt_of_lt_of_le index.isLt (Nat.le_add_right _ _)⟩
+  have transported := List.get_of_eq
+    (targetOpen_rootWires input payload boundary)
+      (rootIndex input payload boundary index)
+  rw [transported]
+  let transportedIndex : Fin mapped.length :=
+    Fin.cast (congrArg List.length
+      (targetOpen_rootWires input payload boundary))
+      (rootIndex input payload boundary index)
+  change mapped.get transportedIndex = _
+  have transportedIndexEq : transportedIndex = mappedIndex := by
+    apply Fin.ext
+    rfl
+  rw [transportedIndexEq]
+  have valid : index.val <
+      ((sourceOpen input boundary).rootWires.map
+          (Fin.castAdd payload.argumentIndices.length :
+            Fin input.val.wireCount →
+              Fin (input.val.wireCount + payload.argumentIndices.length)) ++
+        rootFresh input payload).length := by
+    rw [List.length_append, List.length_map]
+    exact Nat.lt_of_lt_of_le index.isLt (Nat.le_add_right _ _)
+  change (((sourceOpen input boundary).rootWires.map
+      (Fin.castAdd payload.argumentIndices.length :
+        Fin input.val.wireCount →
+          Fin (input.val.wireCount + payload.argumentIndices.length)) ++
+        rootFresh input payload)[index.val]'valid) =
+      Fin.castAdd payload.argumentIndices.length
+        (sourceOpen input boundary).rootWires[index.val]
+  rw [List.getElem_append_left (by
+    rw [List.length_map]
+    exact index.isLt)]
+  exact List.getElem_map _
+
+def sourceCheckedOpen
+    (input : CheckedDiagram signature)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root) :
+    CheckedOpenDiagram signature :=
+  ⟨sourceOpen input boundary, input.property, sourceRoot⟩
+
+noncomputable def rootEmbedding
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature) :
+    ContextEmbedding input payload
+      (sourceOpen input boundary).rootWires
+      (targetOpen input payload boundary).rootWires where
+  index := rootIndex input payload boundary
+  get := rootIndex_get input payload boundary
+  mem_old := by
+    intro wire
+    constructor
+    · intro member
+      have scope := (OpenConcreteDiagram.mem_rootWires_iff
+        (targetCheckedOpen input payload boundary sourceRoot
+          targetWellFormed).val
+        (targetCheckedOpen input payload boundary sourceRoot
+          targetWellFormed).property _).mp member
+      change ((headStripRaw input payload).wires
+        (Fin.castAdd payload.argumentIndices.length wire)).scope =
+          input.val.root at scope
+      rw [headStripRaw_oldWire_scope] at scope
+      exact (OpenConcreteDiagram.mem_rootWires_iff
+        (sourceCheckedOpen input boundary sourceRoot).val
+        (sourceCheckedOpen input boundary sourceRoot).property _).mpr scope
+    · intro member
+      have scope := (OpenConcreteDiagram.mem_rootWires_iff
+        (sourceCheckedOpen input boundary sourceRoot).val
+        (sourceCheckedOpen input boundary sourceRoot).property _).mp member
+      apply (OpenConcreteDiagram.mem_rootWires_iff
+        (targetCheckedOpen input payload boundary sourceRoot
+          targetWellFormed).val
+        (targetCheckedOpen input payload boundary sourceRoot
+          targetWellFormed).property _).mpr
+      change ((headStripRaw input payload).wires
+        (Fin.castAdd payload.argumentIndices.length wire)).scope =
+          input.val.root
+      rw [headStripRaw_oldWire_scope]
+      exact scope
+
 end HeadStripSoundness
 
 end VisualProof.Rule
