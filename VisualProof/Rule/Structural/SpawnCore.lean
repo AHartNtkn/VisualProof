@@ -2565,6 +2565,67 @@ theorem spawnNodeRaw_compileOccurrencesAwayFromNode
     (hsourceExact.extend_child hinput hchildParent)
     (htargetExact.extend_child htarget hchildParent)
 
+/-- Open-root analogue of `spawnNodeRaw_compileOccurrencesAwayFromNode`. -/
+theorem spawnNodeRaw_compileRootOccurrencesAwayFromNode
+    (input : ConcreteDiagram) (node : CNode input.regionCount)
+    (scope selected : Fin input.regionCount) (portCount : Nat)
+    (port : Fin portCount → CPort)
+    (hinput : input.WellFormed signature)
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (scopeEnclosesNode : input.Encloses scope node.region)
+    (hparent : (input.regions selected).parent? = some input.root)
+    {rest : List Nat}
+    (tail : Diagram.Splice.RegionRoute input selected node.region rest)
+    (fuel : Nat)
+    (source : ConcreteElaboration.WireContext input)
+    (target : ConcreteElaboration.WireContext
+      (spawnNodeRaw input node scope portCount port))
+    (embedding : SpawnContextEmbedding input node scope portCount port
+      source target)
+    (hsourceExact : source.Exact input.root)
+    (htargetExact : target.Exact input.root)
+    (occurrences : List (ConcreteElaboration.LocalOccurrence
+      input.regionCount input.nodeCount))
+    (hlocal : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ ConcreteElaboration.localOccurrences input input.root)
+    (haway : ConcreteElaboration.LocalOccurrence.child selected ∉ occurrences) :
+    ConcreteElaboration.compileOccurrencesWith? signature
+        (spawnNodeRaw input node scope portCount port)
+        (ConcreteElaboration.compileRegion? signature
+          (spawnNodeRaw input node scope portCount port) fuel)
+        target ConcreteElaboration.BinderContext.empty
+        (occurrences.map (spawnNodeRaw_oldOccurrence input)) =
+      (ConcreteElaboration.compileOccurrencesWith? signature input
+        (ConcreteElaboration.compileRegion? signature input fuel)
+        source ConcreteElaboration.BinderContext.empty occurrences).map
+          (ItemSeq.renameWires embedding.index) := by
+  apply ConcreteElaboration.compileOccurrencesWith?_map
+  intro occurrence hmem
+  apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
+    source target embedding
+    (ConcreteElaboration.compileRegion? signature input fuel)
+    (ConcreteElaboration.compileRegion? signature
+      (spawnNodeRaw input node scope portCount port) fuel)
+    ConcreteElaboration.BinderContext.empty occurrence htargetExact.nodup
+    htarget.wire_endpoints_are_disjoint
+  intro childRels child childBinders heq
+  subst occurrence
+  have hchildParent :=
+    (ConcreteElaboration.mem_localOccurrences_child input input.root child).mp
+      (hlocal (.child child) hmem)
+  have hchildNe : child ≠ selected := by
+    intro equality
+    subst child
+    exact haway hmem
+  have hselectedNode := regionRoute_encloses input hinput tail
+  have hchildNotAbove := checked_sibling_not_encloses_descendant input hinput
+    hparent hchildParent hselectedNode hchildNe
+  exact spawnNodeRaw_compileRegion?_old_of_not_encloses_node input node scope
+    portCount port hinput htarget scopeEnclosesNode fuel child source target
+    embedding childBinders hchildNotAbove
+    (hsourceExact.extend_child hinput hchildParent)
+    (htargetExact.extend_child htarget hchildParent)
+
 /-- At a root spawn, all pre-existing direct occurrences compile through the
 old root-wire prefix.  Direct children are handled by the strict-descendant
 compiler theorem; the fresh node is intentionally excluded. -/
