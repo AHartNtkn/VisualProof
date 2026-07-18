@@ -803,11 +803,461 @@ theorem anchoredWireSplitRaw_exactScopeWires_length_of_ne
     region term hne]
   simp
 
+namespace SplitContextCollapse
+
+/-- Recompute the certified collapse after the authoritative lexical-context
+extension.  Exactness, rather than a positional assumption, determines both
+index maps. -/
+noncomputable def extend
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (region : Fin input.val.regionCount)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region) :
+    SplitContextCollapse input wire endpoints target term
+      (expanded.extend region) (original.extend region) :=
+  ofExact input wire endpoints target term wireEnclosesTarget region
+    (expanded.extend region) (original.extend region) expandedExact
+    originalExact
+
+theorem extend_index_inherited
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (region : Fin input.val.regionCount)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region)
+    (index : Fin expanded.length) :
+    (collapse.extend wireEnclosesTarget region expandedExact originalExact).indexMap
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend expanded region).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires
+              (anchoredWireSplitRaw input wire endpoints target term)
+              region).length index)) =
+      Fin.cast
+        (ConcreteElaboration.WireContext.length_extend original region).symm
+        (Fin.castAdd
+          (ConcreteElaboration.exactScopeWires input.val region).length
+          (collapse.indexMap index)) := by
+  let expandedIndex : Fin (expanded.extend region).length :=
+    Fin.cast
+      (ConcreteElaboration.WireContext.length_extend expanded region).symm
+      (Fin.castAdd
+        (ConcreteElaboration.exactScopeWires
+          (anchoredWireSplitRaw input wire endpoints target term) region).length
+        index)
+  let originalIndex : Fin (original.extend region).length :=
+    Fin.cast
+      (ConcreteElaboration.WireContext.length_extend original region).symm
+      (Fin.castAdd
+        (ConcreteElaboration.exactScopeWires input.val region).length
+        (collapse.indexMap index))
+  change (collapse.extend wireEnclosesTarget region expandedExact
+    originalExact).indexMap expandedIndex = originalIndex
+  have expandedGet :
+      (expanded.extend region).get expandedIndex = expanded.get index := by
+    have indexEq : expandedIndex = expanded.outerIndex region index := by
+      apply Fin.ext
+      rfl
+    rw [indexEq]
+    exact ConcreteElaboration.WireContext.extend_outer expanded region index
+  have originalGet :
+      (original.extend region).get originalIndex =
+        original.get (collapse.indexMap index) := by
+    simp [originalIndex, ConcreteElaboration.WireContext.extend]
+  have mappedGet :=
+    (collapse.extend wireEnclosesTarget region expandedExact originalExact).get
+      expandedIndex
+  rw [expandedGet] at mappedGet
+  apply Fin.ext
+  exact (List.getElem_inj originalExact.nodup).mp (by
+    simpa only [List.get_eq_getElem] using
+      mappedGet.trans ((collapse.get index).symm.trans originalGet.symm))
+
+theorem extend_index_local_of_ne
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (region : Fin input.val.regionCount) (hne : region ≠ target)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region)
+    (index : Fin (ConcreteElaboration.exactScopeWires
+      (anchoredWireSplitRaw input wire endpoints target term) region).length) :
+    (collapse.extend wireEnclosesTarget region expandedExact originalExact).indexMap
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend expanded region).symm
+          (Fin.natAdd expanded.length index)) =
+      Fin.cast
+        (ConcreteElaboration.WireContext.length_extend original region).symm
+        (Fin.natAdd original.length
+          (Fin.cast
+            (anchoredWireSplitRaw_exactScopeWires_length_of_ne input wire
+              endpoints target region term hne)
+            index)) := by
+  let sourceLocal := Fin.cast
+    (anchoredWireSplitRaw_exactScopeWires_length_of_ne input wire endpoints
+      target region term hne) index
+  let expandedIndex : Fin (expanded.extend region).length :=
+    Fin.cast
+      (ConcreteElaboration.WireContext.length_extend expanded region).symm
+      (Fin.natAdd expanded.length index)
+  let originalIndex : Fin (original.extend region).length :=
+    Fin.cast
+      (ConcreteElaboration.WireContext.length_extend original region).symm
+      (Fin.natAdd original.length sourceLocal)
+  change (collapse.extend wireEnclosesTarget region expandedExact
+    originalExact).indexMap expandedIndex = originalIndex
+  have expandedGet :
+      (expanded.extend region).get expandedIndex =
+        (ConcreteElaboration.exactScopeWires
+          (anchoredWireSplitRaw input wire endpoints target term) region).get
+            index := by
+    simpa [expandedIndex] using
+      (ConcreteElaboration.WireContext.extend_local expanded region index)
+  have localGet :
+      (ConcreteElaboration.exactScopeWires
+          (anchoredWireSplitRaw input wire endpoints target term) region).get
+          index =
+        ((ConcreteElaboration.exactScopeWires input.val region).get
+          sourceLocal).castSucc := by
+    let hlist := anchoredWireSplitRaw_exactScopeWires_of_ne input wire
+      endpoints target region term hne
+    let mappedIndex := Fin.cast (congrArg List.length hlist) index
+    have mappedGet := get_of_eq hlist mappedIndex
+    have recovered :
+        Fin.cast (congrArg List.length hlist).symm mappedIndex = index := by
+      apply Fin.ext
+      rfl
+    rw [recovered] at mappedGet
+    simpa [mappedIndex, sourceLocal] using mappedGet
+  have originalGet :
+      (original.extend region).get originalIndex =
+        (ConcreteElaboration.exactScopeWires input.val region).get
+          sourceLocal := by
+    simp [originalIndex, ConcreteElaboration.WireContext.extend]
+  have mappedGet :=
+    (collapse.extend wireEnclosesTarget region expandedExact originalExact).get
+      expandedIndex
+  rw [expandedGet, localGet, splitWireCollapse_old] at mappedGet
+  apply Fin.ext
+  exact (List.getElem_inj originalExact.nodup).mp (by
+    simpa only [List.get_eq_getElem] using mappedGet.trans originalGet.symm)
+
+end SplitContextCollapse
+
+private def splitExtendedEnv
+    (context : ConcreteElaboration.WireContext diagram)
+    (region : Fin diagram.regionCount)
+    (outerEnv : Fin context.length → D)
+    (localEnv : Fin (ConcreteElaboration.exactScopeWires diagram region).length →
+      D) : Fin (context.extend region).length → D :=
+  extendWireEnv outerEnv localEnv ∘
+    Fin.cast (ConcreteElaboration.WireContext.length_extend context region)
+
+private noncomputable def splitTargetLocalEnv
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (region : Fin input.val.regionCount)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region)
+    (sourceOuter : Fin original.length → D)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val region).length
+      → D) :
+    Fin (ConcreteElaboration.exactScopeWires
+      (anchoredWireSplitRaw input wire endpoints target term) region).length → D :=
+  fun localIndex =>
+    splitExtendedEnv original region sourceOuter sourceLocal
+      ((collapse.extend wireEnclosesTarget region expandedExact
+        originalExact).indexMap
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend expanded region).symm
+          (Fin.natAdd expanded.length localIndex)))
+
+private theorem splitExtendedEnv_collapse
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (region : Fin input.val.regionCount)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region)
+    (sourceOuter : Fin original.length → D)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val region).length
+      → D) :
+    splitExtendedEnv original region sourceOuter sourceLocal ∘
+        (collapse.extend wireEnclosesTarget region expandedExact
+          originalExact).indexMap =
+      splitExtendedEnv expanded region
+        (sourceOuter ∘ collapse.indexMap)
+        (splitTargetLocalEnv collapse wireEnclosesTarget region expandedExact
+          originalExact sourceOuter sourceLocal) := by
+  funext targetIndex
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend expanded region) targetIndex
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend expanded region).symm
+      split = targetIndex := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
+  · have mapped := collapse.extend_index_inherited wireEnclosesTarget region
+      expandedExact originalExact inherited
+    simp only [Function.comp_apply, splitExtendedEnv, extendWireEnv]
+    rw [mapped]
+    simp [Function.comp_def]
+  · simp [splitTargetLocalEnv, splitExtendedEnv, Function.comp_def,
+      extendWireEnv]
+
+private noncomputable def splitSourceLocalEnvOfNe
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target region : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0)) (hne : region ≠ target)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (anchoredWireSplitRaw input wire endpoints target term) region).length →
+        D) :
+    Fin (ConcreteElaboration.exactScopeWires input.val region).length → D :=
+  targetLocal ∘ Fin.cast
+    (anchoredWireSplitRaw_exactScopeWires_length_of_ne input wire endpoints
+      target region term hne).symm
+
+private theorem splitExtendedEnv_uncollapse_of_ne
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (region : Fin input.val.regionCount) (hne : region ≠ target)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region)
+    (sourceOuter : Fin original.length → D)
+    (targetOuter : Fin expanded.length → D)
+    (outerAgrees : sourceOuter ∘ collapse.indexMap = targetOuter)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (anchoredWireSplitRaw input wire endpoints target term) region).length →
+        D) :
+    splitExtendedEnv original region sourceOuter
+          (splitSourceLocalEnvOfNe input wire endpoints target region term hne
+            targetLocal) ∘
+        (collapse.extend wireEnclosesTarget region expandedExact
+          originalExact).indexMap =
+      splitExtendedEnv expanded region targetOuter targetLocal := by
+  funext targetIndex
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend expanded region) targetIndex
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend expanded region).symm
+      split = targetIndex := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
+  · have mapped := collapse.extend_index_inherited wireEnclosesTarget region
+      expandedExact originalExact inherited
+    simp only [Function.comp_apply, splitExtendedEnv, extendWireEnv]
+    rw [mapped]
+    simpa [Function.comp_def] using congrFun outerAgrees inherited
+  · have mapped := collapse.extend_index_local_of_ne wireEnclosesTarget
+      region hne expandedExact originalExact localIndex
+    simp only [Function.comp_apply, splitExtendedEnv, extendWireEnv]
+    rw [mapped]
+    simp [splitSourceLocalEnvOfNe, Function.comp_def]
+
+/-- The explicit target-to-source wire renaming below every non-target
+region: inherited indices use the ambient collapse and local old-wire indices
+retain their intrinsic position. -/
+private noncomputable def splitExtendedIndexOfNe
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (region : Fin input.val.regionCount) (hne : region ≠ target) :
+    Fin (expanded.extend region).length → Fin (original.extend region).length :=
+  fun index =>
+    Fin.cast
+      ((congrArg (fun localCount => original.length + localCount)
+          (anchoredWireSplitRaw_exactScopeWires_length_of_ne input wire
+            endpoints target region term hne)).trans
+        (ConcreteElaboration.WireContext.length_extend original region).symm)
+      (extendWireRenaming collapse.indexMap
+        (ConcreteElaboration.exactScopeWires
+          (anchoredWireSplitRaw input wire endpoints target term) region).length
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend expanded region)
+          index))
+
+private theorem splitExtendedIndexOfNe_eq
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (region : Fin input.val.regionCount) (hne : region ≠ target)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region) :
+    (collapse.extend wireEnclosesTarget region expandedExact
+      originalExact).indexMap =
+        splitExtendedIndexOfNe collapse region hne := by
+  funext index
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend expanded region) index
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend expanded region).symm
+      split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
+  · rw [collapse.extend_index_inherited wireEnclosesTarget region
+      expandedExact originalExact inherited]
+    apply Fin.ext
+    simp [splitExtendedIndexOfNe, extendWireRenaming]
+  · rw [collapse.extend_index_local_of_ne wireEnclosesTarget region hne
+      expandedExact originalExact localIndex]
+    apply Fin.ext
+    simp [splitExtendedIndexOfNe, extendWireRenaming]
+
+private theorem split_region_mk_eq_of_local_eq
+    {outer leftLocal rightLocal : Nat}
+    (localEq : leftLocal = rightLocal)
+    (left : ItemSeq signature (outer + leftLocal) rels)
+    (right : ItemSeq signature (outer + rightLocal) rels)
+    (itemsEq : left.castWiresEq
+      (congrArg (fun localCount => outer + localCount) localEq) = right) :
+    Region.mk leftLocal left = Region.mk rightLocal right := by
+  subst rightLocal
+  cases itemsEq
+  rfl
+
+/-- Finishing a non-target region commutes with the exact split collapse. -/
+theorem anchoredWireSplitRaw_finishRegion_of_ne
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target region : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (expanded : ConcreteElaboration.WireContext
+      (anchoredWireSplitRaw input wire endpoints target term))
+    (original : ConcreteElaboration.WireContext input.val)
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (hne : region ≠ target)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region)
+    (items : ItemSeq signature (expanded.extend region).length rels) :
+    ConcreteElaboration.finishRegion input.val original region
+        (items.renameWires
+          (splitExtendedIndexOfNe collapse region hne)) =
+      (ConcreteElaboration.finishRegion
+        (anchoredWireSplitRaw input wire endpoints target term)
+        expanded region items).renameWires collapse.indexMap := by
+  unfold ConcreteElaboration.finishRegion
+  simp only [ItemSeq.castWiresEq_eq_renameWires,
+    ItemSeq.renameWires_comp, Region.renameWires]
+  let localEq := anchoredWireSplitRaw_exactScopeWires_length_of_ne input wire
+    endpoints target region term hne
+  apply split_region_mk_eq_of_local_eq localEq.symm
+  rw [ItemSeq.castWiresEq_eq_renameWires, ItemSeq.renameWires_comp]
+  congr 1
+
 private theorem option_bind_some_eq_map
     (value : Option α) (function : α → β) :
     (value.bind fun current => some (function current)) =
       value.map function := by
   cases value <;> rfl
+
+/-- Converse-oriented sequence map used by collapsing surgeries: compiling
+the source sequence equals compiling its embedded target sequence and then
+collapsing target wire indices. -/
+private theorem compileOccurrencesWith?_collapse
+    {sourceDiagram targetDiagram : ConcreteDiagram}
+    (sourceRecurse : ∀ {rels : RelCtx},
+      (region : Fin sourceDiagram.regionCount) →
+      (context : ConcreteElaboration.WireContext sourceDiagram) →
+      ConcreteElaboration.BinderContext sourceDiagram rels →
+      Option (Region signature context.length rels))
+    (targetRecurse : ∀ {rels : RelCtx},
+      (region : Fin targetDiagram.regionCount) →
+      (context : ConcreteElaboration.WireContext targetDiagram) →
+      ConcreteElaboration.BinderContext targetDiagram rels →
+      Option (Region signature context.length rels))
+    (sourceContext : ConcreteElaboration.WireContext sourceDiagram)
+    (targetContext : ConcreteElaboration.WireContext targetDiagram)
+    (sourceBinders : ConcreteElaboration.BinderContext sourceDiagram rels)
+    (targetBinders : ConcreteElaboration.BinderContext targetDiagram rels)
+    (mapOccurrence : ConcreteElaboration.LocalOccurrence
+        sourceDiagram.regionCount sourceDiagram.nodeCount →
+      ConcreteElaboration.LocalOccurrence
+        targetDiagram.regionCount targetDiagram.nodeCount)
+    (wireMap : Fin targetContext.length → Fin sourceContext.length) :
+    ∀ (occurrences : List (ConcreteElaboration.LocalOccurrence
+        sourceDiagram.regionCount sourceDiagram.nodeCount)),
+      (∀ occurrence, occurrence ∈ occurrences →
+        ConcreteElaboration.compileOccurrenceWith? signature sourceDiagram
+            sourceRecurse sourceContext sourceBinders occurrence =
+          (ConcreteElaboration.compileOccurrenceWith? signature targetDiagram
+            targetRecurse targetContext targetBinders
+            (mapOccurrence occurrence)).map (Item.renameWires wireMap)) →
+      ConcreteElaboration.compileOccurrencesWith? signature sourceDiagram
+          sourceRecurse sourceContext sourceBinders occurrences =
+        (ConcreteElaboration.compileOccurrencesWith? signature targetDiagram
+          targetRecurse targetContext targetBinders
+          (occurrences.map mapOccurrence)).map
+            (ItemSeq.renameWires wireMap) := by
+  intro occurrences occurrenceMap
+  induction occurrences with
+  | nil => rfl
+  | cons occurrence tail ih =>
+      have headMap := occurrenceMap occurrence (by simp)
+      have tailMap := ih (by
+        intro current member
+        exact occurrenceMap current (by simp [member]))
+      cases sourceHead : ConcreteElaboration.compileOccurrenceWith? signature
+          sourceDiagram sourceRecurse sourceContext sourceBinders occurrence with
+      | none =>
+          cases targetHead : ConcreteElaboration.compileOccurrenceWith? signature
+              targetDiagram targetRecurse targetContext targetBinders
+              (mapOccurrence occurrence) with
+          | none =>
+              simp [ConcreteElaboration.compileOccurrencesWith?, sourceHead,
+                targetHead]
+          | some targetItem => simp [sourceHead, targetHead] at headMap
+      | some sourceItem =>
+          cases targetHead : ConcreteElaboration.compileOccurrenceWith? signature
+              targetDiagram targetRecurse targetContext targetBinders
+              (mapOccurrence occurrence) with
+          | none => simp [sourceHead, targetHead] at headMap
+          | some targetItem =>
+              simp [sourceHead, targetHead] at headMap
+              subst sourceItem
+              cases sourceTail : ConcreteElaboration.compileOccurrencesWith?
+                  signature sourceDiagram sourceRecurse sourceContext
+                  sourceBinders tail with
+              | none =>
+                  cases targetTail :
+                      ConcreteElaboration.compileOccurrencesWith? signature
+                        targetDiagram targetRecurse targetContext targetBinders
+                        (tail.map mapOccurrence) with
+                  | none =>
+                      simp [ConcreteElaboration.compileOccurrencesWith?,
+                        sourceHead, targetHead, sourceTail, targetTail]
+                  | some targetItems => simp [sourceTail, targetTail] at tailMap
+              | some sourceItems =>
+                  cases targetTail : ConcreteElaboration.compileOccurrencesWith?
+                      signature targetDiagram targetRecurse targetContext
+                      targetBinders (tail.map mapOccurrence) with
+                  | none => simp [sourceTail, targetTail] at tailMap
+                  | some targetItems =>
+                      simp [sourceTail, targetTail] at tailMap
+                      subst sourceItems
+                      simp [ConcreteElaboration.compileOccurrencesWith?,
+                        sourceHead, targetHead, sourceTail, targetTail,
+                        ItemSeq.renameWires]
 
 /-- Retained direct occurrences compile through the collapse whenever the
 recursive child compilers do.  This is the occurrence-level induction step
@@ -885,6 +1335,287 @@ theorem anchoredWireSplitRaw_compileOccurrenceWith?_collapse
             option_bind_some_eq_map, Option.map_map, Function.comp_def,
             Item.renameWires] using
               congrArg (Option.map (Item.bubble arity)) recursive
+
+private theorem split_direct_child_encloses
+    {diagram : ConcreteDiagram} {parent child : Fin diagram.regionCount}
+    (parentEq : (diagram.regions child).parent? = some parent) :
+    diagram.Encloses parent child := by
+  have positive : 0 < diagram.regionCount :=
+    Nat.lt_of_le_of_lt (Nat.zero_le child.val) child.isLt
+  refine ⟨⟨1, by omega⟩, ?_⟩
+  change (match (diagram.regions child).parent? with
+    | none => none
+    | some directParent => diagram.climb 0 directParent) = some parent
+  rw [parentEq]
+  rfl
+
+/-- Every region outside the ancestor chain of the split target compiles to
+the split result collapsed back to the authoritative source compiler. -/
+theorem anchoredWireSplitRaw_compileRegion?_collapse_of_not_encloses
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target) :
+    ∀ {rels : RelCtx} (fuel : Nat) (region : Fin input.val.regionCount)
+      (original : ConcreteElaboration.WireContext input.val)
+      (expanded : ConcreteElaboration.WireContext
+        (anchoredWireSplitRaw input wire endpoints target term))
+      (collapse : SplitContextCollapse input wire endpoints target term
+        expanded original)
+      (binders : ConcreteElaboration.BinderContext input.val rels),
+      ¬ input.val.Encloses region target →
+      (original.extend region).Exact region →
+      (expanded.extend region).Exact region →
+      ConcreteElaboration.compileRegion? signature input.val fuel region
+          original binders =
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel region
+          expanded binders).map (Region.renameWires collapse.indexMap) := by
+  intro rels fuel
+  induction fuel generalizing rels with
+  | zero =>
+      intro region original expanded collapse binders notAbove originalExact
+        expandedExact
+      rfl
+  | succ fuel ih =>
+      intro region original expanded collapse binders notAbove originalExact
+        expandedExact
+      have regionNe : region ≠ target := by
+        intro regionEq
+        subst region
+        exact notAbove (ConcreteDiagram.Encloses.refl input.val target)
+      simp only [ConcreteElaboration.compileRegion?]
+      rw [anchoredWireSplitRaw_localOccurrences_of_ne input wire endpoints
+        target region term regionNe]
+      let extendedCollapse := collapse.extend wireEnclosesTarget region
+        expandedExact originalExact
+      have occurrenceMap : ∀ occurrence,
+          occurrence ∈ ConcreteElaboration.localOccurrences input.val region →
+          ConcreteElaboration.compileOccurrenceWith? signature input.val
+              (ConcreteElaboration.compileRegion? signature input.val fuel)
+              (original.extend region) binders occurrence =
+            (ConcreteElaboration.compileOccurrenceWith? signature
+              (anchoredWireSplitRaw input wire endpoints target term)
+              (ConcreteElaboration.compileRegion? signature
+                (anchoredWireSplitRaw input wire endpoints target term) fuel)
+              (expanded.extend region) binders
+              (splitOldOccurrence input occurrence)).map
+                (Item.renameWires extendedCollapse.indexMap) := by
+        intro occurrence member
+        apply anchoredWireSplitRaw_compileOccurrenceWith?_collapse input wire
+          endpoints target term selectedOccurs targetWellFormed region
+          (expanded.extend region) (original.extend region) extendedCollapse
+          expandedExact originalExact
+          (ConcreteElaboration.compileRegion? signature input.val fuel)
+          (ConcreteElaboration.compileRegion? signature
+            (anchoredWireSplitRaw input wire endpoints target term) fuel)
+          binders occurrence member
+        intro childRels child childBinders occurrenceEq
+        subst occurrence
+        have parentEq :=
+          (ConcreteElaboration.mem_localOccurrences_child input.val region
+            child).mp member
+        have childNotAbove : ¬ input.val.Encloses child target := by
+          intro childAbove
+          exact notAbove (ConcreteElaboration.checked_encloses_trans
+            input.property (split_direct_child_encloses parentEq) childAbove)
+        have originalChildExact :=
+          originalExact.extend_child input.property parentEq
+        have targetParentEq :
+            ((anchoredWireSplitRaw input wire endpoints target term).regions
+              child).parent? = some region := by
+          simpa only [anchoredWireSplitRaw_regions] using parentEq
+        have expandedChildExact :=
+          expandedExact.extend_child targetWellFormed targetParentEq
+        exact ih child (original.extend region) (expanded.extend region)
+          extendedCollapse childBinders childNotAbove originalChildExact
+          expandedChildExact
+      have sequenceMap := compileOccurrencesWith?_collapse
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        (original.extend region) (expanded.extend region) binders binders
+        (splitOldOccurrence input) extendedCollapse.indexMap
+        (ConcreteElaboration.localOccurrences input.val region) occurrenceMap
+      have extendedIndexEq := splitExtendedIndexOfNe_eq collapse
+        wireEnclosesTarget region regionNe expandedExact originalExact
+      rw [extendedIndexEq] at sequenceMap
+      cases targetItemsResult :
+          ConcreteElaboration.compileOccurrencesWith? signature
+            (anchoredWireSplitRaw input wire endpoints target term)
+            (ConcreteElaboration.compileRegion? signature
+              (anchoredWireSplitRaw input wire endpoints target term) fuel)
+            (expanded.extend region) binders
+            ((ConcreteElaboration.localOccurrences input.val region).map
+              (splitOldOccurrence input)) with
+      | none =>
+          rw [targetItemsResult] at sequenceMap
+          simp only [Option.map_none] at sequenceMap
+          rw [sequenceMap]
+          change none.bind (fun items => some
+              (ConcreteElaboration.finishRegion input.val original region
+                items)) =
+            Option.map (Region.renameWires collapse.indexMap)
+              ((ConcreteElaboration.compileOccurrencesWith? signature
+                (anchoredWireSplitRaw input wire endpoints target term)
+                (ConcreteElaboration.compileRegion? signature
+                  (anchoredWireSplitRaw input wire endpoints target term) fuel)
+                (expanded.extend region) binders
+                ((ConcreteElaboration.localOccurrences input.val region).map
+                  (splitOldOccurrence input))).bind (fun items => some
+                    (ConcreteElaboration.finishRegion
+                      (anchoredWireSplitRaw input wire endpoints target term)
+                      expanded region items)))
+          rw [targetItemsResult]
+          rfl
+      | some targetItems =>
+          rw [targetItemsResult] at sequenceMap
+          simp only [Option.map_some] at sequenceMap
+          rw [sequenceMap]
+          change (some (targetItems.renameWires
+              (splitExtendedIndexOfNe collapse region regionNe))).bind
+              (fun items => some
+                (ConcreteElaboration.finishRegion input.val original region
+                  items)) =
+            Option.map (Region.renameWires collapse.indexMap)
+              ((ConcreteElaboration.compileOccurrencesWith? signature
+                (anchoredWireSplitRaw input wire endpoints target term)
+                (ConcreteElaboration.compileRegion? signature
+                  (anchoredWireSplitRaw input wire endpoints target term) fuel)
+                (expanded.extend region) binders
+                ((ConcreteElaboration.localOccurrences input.val region).map
+                  (splitOldOccurrence input))).bind (fun items => some
+                    (ConcreteElaboration.finishRegion
+                      (anchoredWireSplitRaw input wire endpoints target term)
+                      expanded region items)))
+          rw [targetItemsResult]
+          simp only [Option.bind_some, Option.map_some]
+          exact congrArg some
+            (anchoredWireSplitRaw_finishRegion_of_ne input wire endpoints
+              target region term expanded original collapse wireEnclosesTarget
+              regionNe expandedExact originalExact targetItems)
+
+private theorem split_sibling_not_encloses_descendant
+    (input : ConcreteDiagram) (wellFormed : input.WellFormed signature)
+    {parent selected other descendant : Fin input.regionCount}
+    (selectedParent : (input.regions selected).parent? = some parent)
+    (otherParent : (input.regions other).parent? = some parent)
+    (selectedDescendant : input.Encloses selected descendant)
+    (distinct : other ≠ selected) :
+    ¬ input.Encloses other descendant := by
+  intro otherDescendant
+  obtain ⟨selectedSteps, selectedClimb⟩ := selectedDescendant
+  obtain ⟨otherSteps, otherClimb⟩ := otherDescendant
+  obtain ⟨rootSteps, parentRoot⟩ := wellFormed.all_regions_reach_root parent
+  have selectedParentClimb :
+      input.climb (selectedSteps.val + 1) descendant = some parent := by
+    apply ConcreteElaboration.climb_add selectedClimb
+    simp [ConcreteDiagram.climb, selectedParent]
+  have otherParentClimb :
+      input.climb (otherSteps.val + 1) descendant = some parent := by
+    apply ConcreteElaboration.climb_add otherClimb
+    simp [ConcreteDiagram.climb, otherParent]
+  have selectedRoot :
+      input.climb ((selectedSteps.val + 1) + rootSteps.val) descendant =
+        some input.root :=
+    ConcreteElaboration.climb_add selectedParentClimb parentRoot
+  have otherRoot :
+      input.climb ((otherSteps.val + 1) + rootSteps.val) descendant =
+        some input.root :=
+    ConcreteElaboration.climb_add otherParentClimb parentRoot
+  have stepsEq :=
+    ConcreteElaboration.ParentTraversal.climb_to_root_steps_unique input
+      wellFormed.root_is_sheet selectedRoot otherRoot
+  have sameSteps : selectedSteps.val = otherSteps.val := by omega
+  rw [sameSteps] at selectedClimb
+  exact distinct (Option.some.inj (otherClimb.symm.trans selectedClimb))
+
+/-- Prefixes and suffixes disjoint from the selected route compile entirely
+through the collapse; recursive children are certified side branches. -/
+theorem anchoredWireSplitRaw_compileOccurrencesAway
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target parent selected : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (wireEnclosesTarget :
+      input.val.Encloses (input.val.wires wire).scope target)
+    (selectedParent : (input.val.regions selected).parent? = some parent)
+    {rest : List Nat}
+    (tail : Diagram.Splice.RegionRoute input.val selected target rest)
+    (fuel : Nat)
+    (original : ConcreteElaboration.WireContext input.val)
+    (expanded : ConcreteElaboration.WireContext
+      (anchoredWireSplitRaw input wire endpoints target term))
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (originalExact : (original.extend parent).Exact parent)
+    (expandedExact : (expanded.extend parent).Exact parent)
+    (occurrences : List (ConcreteElaboration.LocalOccurrence
+      input.val.regionCount input.val.nodeCount))
+    (localMembership : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ ConcreteElaboration.localOccurrences input.val parent)
+    (away : ConcreteElaboration.LocalOccurrence.child selected ∉ occurrences) :
+    ConcreteElaboration.compileOccurrencesWith? signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
+        (original.extend parent) binders occurrences =
+      (ConcreteElaboration.compileOccurrencesWith? signature
+        (anchoredWireSplitRaw input wire endpoints target term)
+        (ConcreteElaboration.compileRegion? signature
+          (anchoredWireSplitRaw input wire endpoints target term) fuel)
+        (expanded.extend parent) binders
+        (occurrences.map (splitOldOccurrence input))).map
+          (ItemSeq.renameWires
+            (collapse.extend wireEnclosesTarget parent expandedExact
+              originalExact).indexMap) := by
+  let extendedCollapse := collapse.extend wireEnclosesTarget parent
+    expandedExact originalExact
+  apply compileOccurrencesWith?_collapse
+  intro occurrence member
+  apply anchoredWireSplitRaw_compileOccurrenceWith?_collapse input wire
+    endpoints target term selectedOccurs targetWellFormed parent
+    (expanded.extend parent) (original.extend parent) extendedCollapse
+    expandedExact originalExact
+    (ConcreteElaboration.compileRegion? signature input.val fuel)
+    (ConcreteElaboration.compileRegion? signature
+      (anchoredWireSplitRaw input wire endpoints target term) fuel)
+    binders occurrence (localMembership occurrence member)
+  intro childRels child childBinders occurrenceEq
+  subst occurrence
+  have childParent :=
+      (ConcreteElaboration.mem_localOccurrences_child input.val parent child).mp
+      (localMembership (.child child) member)
+  have childNe : child ≠ selected := by
+    intro childEq
+    subst child
+    exact away member
+  have selectedEnclosesTarget := regionRoute_encloses input.val input.property
+    tail
+  have childNotAbove := split_sibling_not_encloses_descendant input.val
+    input.property selectedParent childParent selectedEnclosesTarget childNe
+  have originalChildExact :=
+    originalExact.extend_child input.property childParent
+  have targetChildParent :
+      ((anchoredWireSplitRaw input wire endpoints target term).regions
+        child).parent? = some parent := by
+    simpa only [anchoredWireSplitRaw_regions] using childParent
+  have expandedChildExact :=
+    expandedExact.extend_child targetWellFormed targetChildParent
+  exact anchoredWireSplitRaw_compileRegion?_collapse_of_not_encloses input wire
+    endpoints target term selectedOccurs targetWellFormed wireEnclosesTarget fuel
+    child (original.extend parent) (expanded.extend parent) extendedCollapse
+    childBinders childNotAbove originalChildExact expandedChildExact
 
 end AnchoredWireSoundness
 
