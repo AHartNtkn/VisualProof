@@ -6,6 +6,7 @@ import {
   clientToLoupeDraft,
   hitConstructionLoupe,
   loupeApertureRect,
+  loupeRimHitWidth,
   loupeTerminalPoint,
   loupeTerminalRadius,
   moveConstructionLoupe,
@@ -18,12 +19,13 @@ const viewport = { width: 1440, height: 900 }
 
 const expectReachable = (geometry: LoupeGeometry, size = viewport): void => {
   const aperture = loupeApertureRect(geometry)
+  const rimWidth = loupeRimHitWidth(geometry.diameter)
   const terminal = loupeTerminalPoint(geometry)
   const terminalRadius = loupeTerminalRadius(geometry.diameter)
-  expect(aperture.left).toBeGreaterThanOrEqual(0)
-  expect(aperture.top).toBeGreaterThanOrEqual(0)
-  expect(aperture.left + aperture.width).toBeLessThanOrEqual(size.width)
-  expect(aperture.top + aperture.height).toBeLessThanOrEqual(size.height)
+  expect(aperture.left - rimWidth).toBeGreaterThanOrEqual(0)
+  expect(aperture.top - rimWidth).toBeGreaterThanOrEqual(0)
+  expect(aperture.left + aperture.width + rimWidth).toBeLessThanOrEqual(size.width)
+  expect(aperture.top + aperture.height + rimWidth).toBeLessThanOrEqual(size.height)
   expect(terminal.x - terminalRadius).toBeGreaterThanOrEqual(0)
   expect(terminal.y - terminalRadius).toBeGreaterThanOrEqual(0)
   expect(terminal.x + terminalRadius).toBeLessThanOrEqual(size.width)

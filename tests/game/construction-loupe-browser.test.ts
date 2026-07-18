@@ -111,6 +111,38 @@ describe('rendered circular construction loupe', () => {
     } finally { await page.close() }
   })
 
+  it('reclamps the complete loupe immediately when the live viewport shrinks', async () => {
+    const page = await openFixture({ width: 1200, height: 820 })
+    try {
+      const root = page.locator('.cursebreaker-construction-loupe')
+      const terminal = page.locator('.cursebreaker-construction-loupe__terminal-hit')
+      const rim = page.locator('.cursebreaker-construction-loupe__rim-hit')
+      const before = await root.boundingBox()
+      if (before === null) throw new Error('loupe has no initial box')
+      expect(before.width).toBeGreaterThan(400)
+
+      await page.setViewportSize({ width: 320, height: 240 })
+      await expect.poll(async () => (await root.boundingBox())?.width ?? Infinity).toBeLessThan(before.width)
+      const after = await root.boundingBox()
+      const terminalAfter = await terminal.boundingBox()
+      const rimAfter = await rim.boundingBox()
+      if (after === null || terminalAfter === null || rimAfter === null) throw new Error('loupe disappeared after resize')
+      expect(after.width).toBeCloseTo(after.height, 2)
+      expect(after.x).toBeGreaterThanOrEqual(0)
+      expect(after.y).toBeGreaterThanOrEqual(0)
+      expect(after.x + after.width).toBeLessThanOrEqual(320)
+      expect(after.y + after.height).toBeLessThanOrEqual(240)
+      expect(rimAfter.x).toBeGreaterThanOrEqual(0)
+      expect(rimAfter.y).toBeGreaterThanOrEqual(0)
+      expect(rimAfter.x + rimAfter.width).toBeLessThanOrEqual(320)
+      expect(rimAfter.y + rimAfter.height).toBeLessThanOrEqual(240)
+      expect(terminalAfter.x).toBeGreaterThanOrEqual(0)
+      expect(terminalAfter.y).toBeGreaterThanOrEqual(0)
+      expect(terminalAfter.x + terminalAfter.width).toBeLessThanOrEqual(320)
+      expect(terminalAfter.y + terminalAfter.height).toBeLessThanOrEqual(240)
+    } finally { await page.close() }
+  })
+
   it('keeps the right-click spawn cascade and keyboard lifecycle', async () => {
     const page = await openFixture()
     try {
@@ -144,6 +176,26 @@ describe('rendered circular construction loupe', () => {
     } finally { await page.close() }
   })
 
+  it('owns keyboard and text-entry input in the canvas document realm', async () => {
+    const page = await openFixture()
+    try {
+      await page.evaluate(() => window.__constructionLoupeFixture.mountInIframe())
+      const frame = page.frameLocator('#loupe-frame')
+      await frame.locator('.cursebreaker-construction-loupe__canvas').focus()
+      await page.keyboard.press('Enter')
+      expect(await page.evaluate(() => window.__constructionLoupeFixture.commits)).toBe(1)
+
+      await page.evaluate(() => window.__constructionLoupeFixture.mountInIframe())
+      const reopened = page.frameLocator('#loupe-frame')
+      await reopened.locator('.cursebreaker-construction-loupe__canvas').click({ button: 'right' })
+      const search = reopened.locator('.vpa-spawn-search')
+      await search.fill('abc')
+      await page.keyboard.press('Backspace')
+      expect(await reopened.locator('.cursebreaker-construction-loupe').count()).toBe(1)
+      expect(await search.inputValue()).toBe('ab')
+    } finally { await page.close() }
+  })
+
   it('maps the rendered canvas exactly and limits reduced motion to decoration', async () => {
     const page = await openFixture()
     try {
@@ -158,6 +210,36 @@ describe('rendered circular construction loupe', () => {
         (node) => getComputedStyle(node).transitionDuration,
       )).toBe('0s')
       expect(await root.boundingBox()).toEqual(before)
+    } finally { await page.close() }
+  })
+
+  it('uses the injected mapper as the live viewport coordinate authority', async () => {
+    const page = await openFixture()
+    try {
+      expect(await page.evaluate(() => window.__constructionLoupeFixture.probeInjectedMapper())).toEqual({
+        screen: { x: 111, y: 222 },
+        world: { x: 333, y: 444 },
+      })
+    } finally { await page.close() }
+  })
+
+  it('feeds a real non-center spawn context through that exact mapping authority', async () => {
+    const page = await openFixture()
+    try {
+      const canvas = page.locator('.cursebreaker-construction-loupe__canvas')
+      const box = await canvas.boundingBox()
+      if (box === null) throw new Error('loupe canvas has no box')
+      const client = { x: box.x + 137, y: box.y + 83 }
+      const expected = await page.evaluate(
+        (point) => window.__constructionLoupeFixture.mapClient(point),
+        client,
+      )
+      await canvas.click({ button: 'right', position: { x: 137, y: 83 } })
+      expect(await page.evaluate(() => window.__constructionLoupeFixture.lastContextMenuMapping())).toEqual({
+        client,
+        screen: expected.screen,
+        world: expected.world,
+      })
     } finally { await page.close() }
   })
 
@@ -190,9 +272,13 @@ declare global {
       commits: number
       lastRule: string | null
       reopen(): void
+      mountInIframe(): Promise<void>
       setReducedMotion(enabled: boolean): void
       centerMapping(): { readonly screen: { readonly x: number; readonly y: number }; readonly canvas: { readonly width: number; readonly height: number } }
+      mapClient(client: { readonly x: number; readonly y: number }): { readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } }
+      lastContextMenuMapping(): null | { readonly client: { readonly x: number; readonly y: number }; readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } }
       history(): { readonly cursor: number; readonly length: number }
+      probeInjectedMapper(): { readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } } | null
     }
   }
 }

@@ -63,10 +63,8 @@
 
 .cursebreaker-construction-loupe__rim-hit {
   position: absolute;
-  inset: -4%;
+  inset: calc(-1 * var(--curse-loupe-rim-hit));
   z-index: 6;
-  width: 108%;
-  height: 108%;
   overflow: visible;
   touch-action: none;
   pointer-events: auto;

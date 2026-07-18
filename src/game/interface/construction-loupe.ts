@@ -30,6 +30,7 @@ import {
   clientToLoupeDraft,
   hitConstructionLoupe,
   loupeApertureRect,
+  loupeRimHitWidth,
   moveConstructionLoupe,
   placeConstructionLoupe,
   resizeConstructionLoupe,
@@ -129,6 +130,11 @@ export type ConstructionLoupeDebug = {
   readonly materializedBoundary: readonly WireId[]
   readonly externalWires: readonly ExternalWireBinding[]
   readonly geometry: LoupeGeometry
+  readonly lastContextMenuMapping: null | {
+    readonly client: Vec2
+    readonly screen: Vec2
+    readonly world: Vec2
+  }
   readonly draftBodies: readonly { readonly node: NodeId; readonly kind: string; readonly x: number; readonly y: number; readonly point: Vec2 }[]
   readonly draftWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
   readonly hostWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
@@ -167,6 +173,7 @@ const itemShapes = (engine: Engine, hit: Hit, stroke: string): Shape[] => {
 
 export class ConstructionLoupe {
   readonly #host: ConstructionLoupeHost
+  readonly #window: Window & typeof globalThis
   readonly #root: HTMLDivElement
   readonly #canvas: HTMLCanvasElement
   readonly #surface: CanvasAdapter
@@ -181,6 +188,8 @@ export class ConstructionLoupe {
   #connection: ConnectionGesture | null = null
   #draftHoverWire: WireId | null = null
   #hostHoverWire: WireId | null = null
+  #lastContextMenuMapping: ConstructionLoupeDebug['lastContextMenuMapping'] = null
+  #geometryVersion = 0
   #disposed = false
 
   constructor(host: ConstructionLoupeHost, bubble: RegionId, invocation: Vec2) {
@@ -190,9 +199,11 @@ export class ConstructionLoupe {
     this.#engine = mkEngine(materialized.relation.diagram, materialized.relation.boundary)
     seedProject(this.#engine)
     const viewport = host.mount.ownerDocument.defaultView
+    if (viewport === null) throw new Error('construction loupe host must belong to a live window')
+    this.#window = viewport
     this.#geometry = placeConstructionLoupe(invocation, {
-      width: viewport?.innerWidth ?? 1280,
-      height: viewport?.innerHeight ?? 720,
+      width: viewport.innerWidth,
+      height: viewport.innerHeight,
     })
 
     const document = host.mount.ownerDocument
@@ -279,6 +290,9 @@ export class ConstructionLoupe {
       claim: (sample) => this.#connectionClaim('draft', sample) ?? this.#construct.claim(sample),
       doubleClick: (sample) => this.#construct.doubleClick(sample),
       contextMenu: (sample) => {
+        this.#lastContextMenuMapping = {
+          client: { ...sample.client }, screen: { ...sample.screen }, world: { ...sample.world },
+        }
         const region = this.#regionAt(sample.world)
         this.#spawn.open({ screen: sample.client, world: sample.world, region }, host.context().relations, boundPredicateOptions(this.#diagram(), region))
       },
@@ -286,10 +300,12 @@ export class ConstructionLoupe {
       keyDown: (sample) => this.keyDown(sample, isConstructionTextEntry(document.activeElement)),
       selectionChanged: host.changed,
       selectionCommitted: host.changed,
+      mapClient: (client) => this.clientMapping(client),
     })
 
     this.#installMove(this.#root)
     this.#installResize(terminal)
+    this.#window.addEventListener('resize', this.#resizeViewport)
     host.openChanged(true)
     host.changed()
     queueMicrotask(() => this.#canvas.focus())
@@ -365,6 +381,11 @@ export class ConstructionLoupe {
       materializedBoundary: [...materialized.relation.boundary],
       externalWires: [...current.externalWires],
       geometry: { center: { ...this.#geometry.center }, diameter: this.#geometry.diameter },
+      lastContextMenuMapping: this.#lastContextMenuMapping === null ? null : {
+        client: { ...this.#lastContextMenuMapping.client },
+        screen: { ...this.#lastContextMenuMapping.screen },
+        world: { ...this.#lastContextMenuMapping.world },
+      },
       draftBodies: [...this.#engine.bodies].map(([node, body]) => ({
         node,
         kind: body.kind,
@@ -383,6 +404,7 @@ export class ConstructionLoupe {
   dispose(): void {
     if (this.#disposed) return
     this.#disposed = true
+    this.#window.removeEventListener('resize', this.#resizeViewport)
     this.#connection = null
     this.#spawn.dispose()
     this.#construct.dispose()
@@ -611,12 +633,19 @@ export class ConstructionLoupe {
   }
 
   #viewportSize(): { readonly width: number; readonly height: number } {
-    const viewport = this.#host.mount.ownerDocument.defaultView
-    return { width: viewport?.innerWidth ?? 1280, height: viewport?.innerHeight ?? 720 }
+    return { width: this.#window.innerWidth, height: this.#window.innerHeight }
+  }
+
+  #resizeViewport = (): void => {
+    if (this.#disposed) return
+    this.#geometryVersion++
+    this.#geometry = moveConstructionLoupe(this.#geometry, { x: 0, y: 0 }, this.#viewportSize())
+    this.#applyGeometry()
   }
 
   #applyGeometry(): void {
     const aperture = loupeApertureRect(this.#geometry)
+    this.#root.style.setProperty('--curse-loupe-rim-hit', `${loupeRimHitWidth(this.#geometry.diameter)}px`)
     Object.assign(this.#root.style, {
       left: `${aperture.left}px`, top: `${aperture.top}px`,
       width: `${aperture.width}px`, height: `${aperture.height}px`,
@@ -624,15 +653,16 @@ export class ConstructionLoupe {
   }
 
   #installMove(rim: HTMLElement): void {
-    let drag: { pointer: number; start: Vec2; geometry: LoupeGeometry } | null = null
+    let drag: { pointer: number; start: Vec2; geometry: LoupeGeometry; version: number } | null = null
     rim.addEventListener('pointerdown', (event) => {
       if (hitConstructionLoupe(this.#geometry, { x: event.clientX, y: event.clientY }) !== 'rim') return
-      drag = { pointer: event.pointerId, start: { x: event.clientX, y: event.clientY }, geometry: this.#geometry }
+      drag = { pointer: event.pointerId, start: { x: event.clientX, y: event.clientY }, geometry: this.#geometry, version: this.#geometryVersion }
       rim.setPointerCapture(event.pointerId)
       event.preventDefault()
     })
     rim.addEventListener('pointermove', (event) => {
       if (drag?.pointer !== event.pointerId) return
+      if (drag.version !== this.#geometryVersion) { drag = null; return }
       this.#geometry = moveConstructionLoupe(drag.geometry, {
         x: event.clientX - drag.start.x,
         y: event.clientY - drag.start.y,
@@ -644,14 +674,15 @@ export class ConstructionLoupe {
   }
 
   #installResize(handle: HTMLElement): void {
-    let drag: { pointer: number; resize: ReturnType<typeof beginLoupeResize> } | null = null
+    let drag: { pointer: number; resize: ReturnType<typeof beginLoupeResize>; version: number } | null = null
     handle.addEventListener('pointerdown', (event) => {
-      drag = { pointer: event.pointerId, resize: beginLoupeResize(this.#geometry) }
+      drag = { pointer: event.pointerId, resize: beginLoupeResize(this.#geometry), version: this.#geometryVersion }
       handle.setPointerCapture(event.pointerId)
       event.preventDefault()
     })
     handle.addEventListener('pointermove', (event) => {
       if (drag?.pointer !== event.pointerId) return
+      if (drag.version !== this.#geometryVersion) { drag = null; return }
       this.#geometry = resizeConstructionLoupe(drag.resize, { x: event.clientX, y: event.clientY }, this.#viewportSize())
       this.#applyGeometry()
     })

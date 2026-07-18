@@ -68,6 +68,7 @@ export type InteractiveViewportOptions = {
   readonly keyDown: (sample: KeySample) => boolean
   readonly selectionChanged: (selected: readonly Hit[]) => void
   readonly selectionCommitted: () => void
+  readonly mapClient: (client: Vec2) => { readonly screen: Vec2; readonly world: Vec2 }
   readonly inputAllowed?: () => boolean
 }
 
@@ -103,6 +104,7 @@ function sameSelection(a: readonly Hit[], b: readonly Hit[]): boolean {
  */
 export class InteractiveViewport {
   readonly #opts: InteractiveViewportOptions
+  readonly #window: Window & typeof globalThis
   readonly #pins = new Set<string>()
   #selected: readonly Hit[] = []
   #hover: Hit | null = null
@@ -113,6 +115,9 @@ export class InteractiveViewport {
   constructor(opts: InteractiveViewportOptions) {
     this.#opts = opts
     const { canvas } = opts
+    const canvasWindow = canvas.ownerDocument.defaultView
+    if (canvasWindow === null) throw new Error('interactive canvas must belong to a live window')
+    this.#window = canvasWindow
     if (canvas.tabIndex < 0) canvas.tabIndex = 0
     canvas.addEventListener('pointerdown', this.#pointerDown)
     canvas.addEventListener('pointermove', this.#pointerMove)
@@ -123,8 +128,8 @@ export class InteractiveViewport {
     canvas.addEventListener('contextmenu', this.#contextMenu)
     canvas.addEventListener('dblclick', this.#doubleClick)
     canvas.addEventListener('wheel', this.#wheel, { passive: false })
-    window.addEventListener('keydown', this.#keyDown)
-    window.addEventListener('keyup', this.#modifierChanged)
+    this.#window.addEventListener('keydown', this.#keyDown)
+    this.#window.addEventListener('keyup', this.#modifierChanged)
   }
 
   get selection(): readonly Hit[] { return this.#selected }
@@ -224,15 +229,8 @@ export class InteractiveViewport {
     canvas.removeEventListener('contextmenu', this.#contextMenu)
     canvas.removeEventListener('dblclick', this.#doubleClick)
     canvas.removeEventListener('wheel', this.#wheel)
-    window.removeEventListener('keydown', this.#keyDown)
-    window.removeEventListener('keyup', this.#modifierChanged)
-  }
-
-  #screen(event: MouseEvent | WheelEvent): Vec2 {
-    const rect = this.#opts.canvas.getBoundingClientRect()
-    const sx = rect.width > 0 ? this.#opts.canvas.width / rect.width : 1
-    const sy = rect.height > 0 ? this.#opts.canvas.height / rect.height : 1
-    return { x: (event.clientX - rect.left) * sx, y: (event.clientY - rect.top) * sy }
+    this.#window.removeEventListener('keydown', this.#keyDown)
+    this.#window.removeEventListener('keyup', this.#modifierChanged)
   }
 
   #client(event: MouseEvent): Vec2 {
@@ -240,12 +238,11 @@ export class InteractiveViewport {
   }
 
   #sample(event: PointerEvent | MouseEvent): PointerSample {
-    const screen = this.#screen(event)
-    const world = this.#world(screen)
     const client = this.#client(event)
+    const { screen, world } = this.#opts.mapClient(client)
     this.#opts.pointerChanged(client)
     return {
-      pointerId: event instanceof PointerEvent ? event.pointerId : 1,
+      pointerId: event instanceof this.#window.PointerEvent ? event.pointerId : 1,
       button: event.button,
       client,
       screen,
@@ -255,14 +252,6 @@ export class InteractiveViewport {
       ctrlKey: event.ctrlKey,
       altKey: event.altKey,
       metaKey: event.metaKey,
-    }
-  }
-
-  #world(screen: Vec2): Vec2 {
-    const { view } = this.#opts
-    return {
-      x: (screen.x - view.offsetX) / view.scale,
-      y: (screen.y - view.offsetY) / view.scale,
     }
   }
 
@@ -467,7 +456,9 @@ export class InteractiveViewport {
   #keyDown = (event: KeyboardEvent): void => {
     this.#modifierChanged(event)
     const target = event.target
-    if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement || (target instanceof HTMLElement && target.isContentEditable)) return
+    if (target instanceof this.#window.HTMLInputElement
+      || target instanceof this.#window.HTMLTextAreaElement
+      || (target instanceof this.#window.HTMLElement && target.isContentEditable)) return
     if (this.#opts.inputAllowed?.() === false) { event.preventDefault(); return }
     const consumed = this.#opts.keyDown({
       key: event.key,
@@ -483,11 +474,10 @@ export class InteractiveViewport {
   #wheel = (event: WheelEvent): void => {
     event.preventDefault()
     if (this.#opts.inputAllowed?.() === false) return
-    const screen = this.#screen(event)
-    const world = this.#world(screen)
-    const delta = event.deltaMode === WheelEvent.DOM_DELTA_LINE
+    const { screen, world } = this.#opts.mapClient(this.#client(event))
+    const delta = event.deltaMode === this.#window.WheelEvent.DOM_DELTA_LINE
       ? event.deltaY * 16
-      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+      : event.deltaMode === this.#window.WheelEvent.DOM_DELTA_PAGE
         ? event.deltaY * this.#opts.canvas.height
         : event.deltaY
     this.#userZoom = normalizeUserZoom(this.#userZoom * Math.exp(-delta * ZOOM_PER_WHEEL_PX))

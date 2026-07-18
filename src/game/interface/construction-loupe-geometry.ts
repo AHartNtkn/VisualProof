@@ -28,19 +28,29 @@ const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(Math.max(min, max), value))
 
 export const loupeTerminalRadius = (diameter: number): number => Math.max(9, diameter * 0.026)
+export const loupeRimHitWidth = (diameter: number): number => Math.max(12, diameter * 0.04)
+
+function reachableSpan(diameter: number): number {
+  const rimExtent = diameter / 2 + loupeRimHitWidth(diameter)
+  const positiveExtent = Math.max(
+    rimExtent,
+    TERMINAL_AXIS_FACTOR * diameter + loupeTerminalRadius(diameter),
+  )
+  return rimExtent + positiveExtent
+}
 
 function maximumReachableDiameter(viewport: ViewportSize): number {
   const size = finiteSize(viewport)
-  // west/north aperture radius + southeast terminal offset and hit radius
-  const baseExtent = 0.5 + TERMINAL_AXIS_FACTOR
-  const proportionalExtent = baseExtent + 0.026
-  return Math.max(Number.EPSILON, Math.min(
-    LOUPE_MAX_DIAMETER,
-    (size.width - 9) / baseExtent,
-    (size.height - 9) / baseExtent,
-    size.width / proportionalExtent,
-    size.height / proportionalExtent,
-  ))
+  const limit = Math.min(size.width, size.height)
+  if (limit < reachableSpan(Number.EPSILON)) throw new RangeError('loupe viewport is too small to keep its controls reachable')
+  let low = Number.EPSILON
+  let high = LOUPE_MAX_DIAMETER
+  for (let iteration = 0; iteration < 64; iteration++) {
+    const candidate = (low + high) / 2
+    if (reachableSpan(candidate) <= limit) low = candidate
+    else high = candidate
+  }
+  return low
 }
 
 function supportedDiameter(requested: number, viewport: ViewportSize): number {
@@ -53,11 +63,13 @@ function clampGeometry(center: Vec2, requestedDiameter: number, viewport: Viewpo
   const size = finiteSize(viewport)
   const diameter = supportedDiameter(requestedDiameter, size)
   const radius = diameter / 2
+  const rimExtent = radius + loupeRimHitWidth(diameter)
   const terminalExtent = TERMINAL_AXIS_FACTOR * diameter + loupeTerminalRadius(diameter)
+  const positiveExtent = Math.max(rimExtent, terminalExtent)
   return {
     center: {
-      x: clamp(center.x, radius, size.width - terminalExtent),
-      y: clamp(center.y, radius, size.height - terminalExtent),
+      x: clamp(center.x, rimExtent, size.width - positiveExtent),
+      y: clamp(center.y, rimExtent, size.height - positiveExtent),
     },
     diameter,
   }
@@ -129,7 +141,7 @@ export function hitConstructionLoupe(geometry: LoupeGeometry, client: Vec2): Lou
   if (Math.hypot(client.x - terminal.x, client.y - terminal.y) <= loupeTerminalRadius(geometry.diameter)) return 'terminal'
   const distance = Math.hypot(client.x - geometry.center.x, client.y - geometry.center.y)
   const radius = geometry.diameter / 2
-  const rimWidth = Math.max(12, geometry.diameter * 0.04)
+  const rimWidth = loupeRimHitWidth(geometry.diameter)
   if (Math.abs(distance - radius) <= rimWidth) return 'rim'
   return distance < radius - rimWidth ? 'aperture' : 'outside'
 }
