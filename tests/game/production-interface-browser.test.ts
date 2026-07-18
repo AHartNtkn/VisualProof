@@ -75,10 +75,12 @@ describe('production interface rendered geometry', () => {
     }
   })
 
-  it('anchors lifted records to client coordinates and cancels replacement/disposal exactly once', async () => {
+  it('anchors actual production-folio records to client coordinates in desktop and compact styling', async () => {
     const page = await openFixture({ width: 1400, height: 900 })
     try {
-      const source = page.locator('#drag-host [data-puzzle="browser-completed-record"]')
+      const source = page.locator(
+        '.curse-production-folio-host [data-puzzle="browser-completed-record"]',
+      )
       const sourceBox = await source.boundingBox()
       if (sourceBox === null) throw new Error('completed drag record has no rendered box')
       await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
@@ -100,10 +102,15 @@ describe('production interface rendered geometry', () => {
       })
       await page.mouse.up()
 
-      await page.locator('#drag-host').evaluate((host) => {
-        host.style.left = '-120px'
+      await page.setViewportSize({ width: 760, height: 900 })
+      await page.evaluate(() => {
+        const fixture = window.__productionInterfaceFixture
+        fixture.setLayout(innerWidth, innerHeight)
+        fixture.setFolioLeft(100)
       })
-      const replacement = page.locator('#drag-host [data-puzzle="browser-completed-record"]')
+      const replacement = page.locator(
+        '.curse-production-folio-host [data-puzzle="browser-completed-record"]',
+      )
       const replacementBox = await replacement.boundingBox()
       if (replacementBox === null) throw new Error('replacement drag record has no rendered box')
       await page.mouse.move(

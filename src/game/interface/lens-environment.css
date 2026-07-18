@@ -114,10 +114,6 @@
   transition: left 220ms ease;
 }
 
-.curse-production-environment[data-layout="compact"] .curse-production-folio-host {
-  filter: drop-shadow(1rem 0 1.6rem rgb(1 2 6 / 60%));
-}
-
 @media (prefers-reduced-motion: reduce) {
   .curse-production-folio-host { transition: none; }
 }

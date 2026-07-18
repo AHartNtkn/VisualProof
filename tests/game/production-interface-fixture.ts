@@ -29,14 +29,16 @@ const projection: FolioProjection = {
 }
 
 const lensHost = document.querySelector<HTMLElement>('#lens-host')!
-const dragHost = document.querySelector<HTMLElement>('#drag-host')!
 const lens = mountLensEnvironment({
   host: lensHost,
   substrateSeed: 'first:0001',
   width: window.innerWidth,
   height: window.innerHeight,
 })
-mountFolioView({
+const cancellations: string[] = []
+let draggedRecord: HTMLElement | null = null
+let pointerId: number | null = null
+const options = {
   host: lens.folioHost,
   projection,
   onSelectPuzzle: () => {},
@@ -44,25 +46,8 @@ mountFolioView({
   onSelectCulture: () => {},
   onRefuseCulture: () => {},
   onScroll: () => {},
-  onTheoremDragStart: () => {},
-  onTheoremDragMove: () => {},
-  onTheoremDragEnd: () => {},
-  onTheoremDragCancel: () => {},
-})
-
-const cancellations: string[] = []
-let draggedRecord: HTMLElement | null = null
-let pointerId: number | null = null
-const options = {
-  host: dragHost,
-  projection,
-  onSelectPuzzle: () => {},
-  onRefusePuzzle: () => {},
-  onSelectCulture: () => {},
-  onRefuseCulture: () => {},
-  onScroll: () => {},
   onTheoremDragStart: (_puzzle: typeof completed, sample: { pointerId: number }) => {
-    draggedRecord = dragHost.querySelector(`[data-puzzle="${completed}"]`)
+    draggedRecord = lens.folioHost.querySelector(`[data-puzzle="${completed}"]`)
     pointerId = sample.pointerId
   },
   onTheoremDragMove: () => {},
@@ -75,6 +60,8 @@ declare global {
   interface Window {
     __productionInterfaceFixture: {
       setSeed(seed: string): void
+      setLayout(width: number, height: number): void
+      setFolioLeft(left: number): void
       replaceDragView(): void
       disposeDragView(): void
       dragCleanup(): {
@@ -91,6 +78,8 @@ declare global {
 
 window.__productionInterfaceFixture = {
   setSeed: (seed) => lens.setSubstrateSeed(seed),
+  setLayout: (width, height) => lens.setLayout(width, height),
+  setFolioLeft: (left) => lens.folioHost.style.setProperty('--curse-folio-left', `${left}px`),
   replaceDragView: () => dragView.update(projection),
   disposeDragView: () => dragView.dispose(),
   dragCleanup: () => ({
