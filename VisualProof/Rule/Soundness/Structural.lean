@@ -5,6 +5,7 @@ import VisualProof.Rule.Soundness.Modal.VacuousEliminationRootSimulation
 import VisualProof.Rule.Soundness.Modal.VacuousRoot
 import VisualProof.Rule.Soundness.Iteration.OpenRoute
 import VisualProof.Rule.Soundness.Iteration.ZeroOpenRoute
+import VisualProof.Rule.Soundness.Iteration.RootAnchorSemantic
 import VisualProof.Rule.Soundness.WireJoin
 
 namespace VisualProof.Rule
@@ -2254,6 +2255,90 @@ private theorem applyIteration_sound_proper_zero
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
+/-- Receipt bridge for a proper root-anchor, nonempty-spine iteration. -/
+private theorem applyIteration_sound_root_nonempty
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (receipt : StepReceipt input)
+    (happly : applyIteration input selection target = .ok receipt)
+    (targetNe : target ≠ selection.val.anchor)
+    (hanchor : selection.val.anchor = input.val.root)
+    (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
+      ≠ 0) :
+    SuccessfulReceiptSound context orientation input
+      (.iteration selection target) receipt := by
+  have realizes := applyIteration_realizes happly
+  have success := applyIteration_success input selection target receipt happly
+  let hsplice := success.2.2
+  let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot _mapped _htransport =>
+      iterationOperationalOpen input selection target hadmissible boundary
+        sourceRoot)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
+        htransport)
+  intro boundary sourceRoot mapped htransport _valid args
+  obtain ⟨closed⟩ :=
+    IterationSoundness.properIterationAnchorContraction_complete input
+      selection target hadmissible success.1 success.2.1 targetNe hnonempty
+  obtain ⟨certificate⟩ :=
+    IterationSoundness.properIterationRootAnchorItems_nonempty_complete input
+      selection target hadmissible boundary sourceRoot hanchor targetNe
+      hnonempty closed
+  obtain ⟨alignment⟩ :=
+    IterationSoundness.properIterationOrderedRootTargetAlignment_complete
+      certificate
+  have semantic :=
+    IterationSoundness.properIterationOrderedRoot_output_equiv_nonempty
+      hsplice sourceRoot hnonempty certificate alignment Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions) args
+  simpa only [DirectedEntailment, StepTag.semanticMode,
+    iterationOperationalOpen] using semantic
+
+/-- Receipt bridge for a proper root-anchor, empty-spine iteration. -/
+private theorem applyIteration_sound_root_zero
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (receipt : StepReceipt input)
+    (happly : applyIteration input selection target = .ok receipt)
+    (targetNe : target ≠ selection.val.anchor)
+    (hanchor : selection.val.anchor = input.val.root)
+    (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0) :
+    SuccessfulReceiptSound context orientation input
+      (.iteration selection target) receipt := by
+  have realizes := applyIteration_realizes happly
+  have success := applyIteration_success input selection target receipt happly
+  let hsplice := success.2.2
+  let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot _mapped _htransport =>
+      iterationOperationalOpen input selection target hadmissible boundary
+        sourceRoot)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
+        htransport)
+  intro boundary sourceRoot mapped htransport _valid args
+  obtain ⟨closed⟩ :=
+    IterationSoundness.properIterationRootAnchorContraction_complete input
+      selection target hadmissible success.1 success.2.1 targetNe hzero
+  obtain ⟨certificate⟩ :=
+    IterationSoundness.properIterationRootAnchorItems_zero_complete input
+      selection target hadmissible boundary sourceRoot hanchor targetNe closed
+  obtain ⟨alignment⟩ :=
+    IterationSoundness.properIterationOrderedRootTargetAlignment_complete
+      certificate
+  have semantic :=
+    IterationSoundness.properIterationOrderedRoot_output_equiv_zero
+      hsplice sourceRoot hzero certificate alignment Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions) args
+  simpa only [DirectedEntailment, StepTag.semanticMode,
+    iterationOperationalOpen] using semantic
+
 /-- Every successful iteration receipt preserves ordered-open semantics. -/
 theorem applyIteration_sound
     (context : ProofContext signature) (orientation : Orientation)
@@ -2276,7 +2361,19 @@ theorem applyIteration_sound
             hnonempty (Nat.ne_of_gt positive))
         exact applyIteration_sound_proper_zero context orientation input
           selection target receipt happly targetNe anchorNeRoot hzero
-    · sorry
+    · have hanchor : selection.val.anchor = input.val.root := by
+        exact Classical.byContradiction (fun distinct =>
+          anchorNeRoot distinct)
+      by_cases hnonempty :
+          (iterationInput input selection target).binderSpine.proxyCount ≠ 0
+      · exact applyIteration_sound_root_nonempty context orientation input
+          selection target receipt happly targetNe hanchor hnonempty
+      · have hzero :
+            (iterationInput input selection target).binderSpine.proxyCount = 0 :=
+          Nat.eq_zero_of_not_pos (fun positive =>
+            hnonempty (Nat.ne_of_gt positive))
+        exact applyIteration_sound_root_zero context orientation input
+          selection target receipt happly targetNe hanchor hzero
   · sorry
 
 /-- Every successful deiteration receipt preserves ordered-open semantics. -/
