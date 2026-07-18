@@ -674,6 +674,218 @@ theorem anchoredWireSplitRaw_compileNode?_collapse
           expanded node.castSucc arity (fun index => .arg index) <;>
         simp [Item.renameWires, Function.comp_def]
 
+/-- Embed every source occurrence into the append-only split result. -/
+def splitOldOccurrence
+    (input : CheckedDiagram signature) :
+    ConcreteElaboration.LocalOccurrence input.val.regionCount
+        input.val.nodeCount →
+      ConcreteElaboration.LocalOccurrence input.val.regionCount
+        (input.val.nodeCount + 1)
+  | .node node => .node node.castSucc
+  | .child child => .child child
+
+/-- Away from the split target, traversal contains exactly the retained source
+occurrences. -/
+theorem anchoredWireSplitRaw_localOccurrences_of_ne
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target region : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (hne : region ≠ target) :
+    ConcreteElaboration.localOccurrences
+        (anchoredWireSplitRaw input wire endpoints target term) region =
+      (ConcreteElaboration.localOccurrences input.val region).map
+        (splitOldOccurrence input) := by
+  simpa [ConcreteElaboration.localOccurrences, anchoredWireSplitRaw,
+    spawnNodeRaw, splitOldOccurrence, spawnNodeRaw_oldOccurrence] using
+      (spawnNodeRaw_localOccurrences_old_of_ne input.val
+        (.term target 0 term) target region 0 Fin.elim0 rfl hne)
+
+/-- At the target, traversal inserts the fresh equation after retained nodes
+and before unchanged child occurrences. -/
+theorem anchoredWireSplitRaw_localOccurrences_at_target
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0)) :
+    ConcreteElaboration.localOccurrences
+        (anchoredWireSplitRaw input wire endpoints target term) target =
+      (filterFin fun old => decide
+          ((input.val.nodes old).region = target)).map
+          (fun old => ConcreteElaboration.LocalOccurrence.node old.castSucc) ++
+        [ConcreteElaboration.LocalOccurrence.node
+          (Fin.last input.val.nodeCount)] ++
+        (filterFin fun child => decide
+          ((input.val.regions child).parent? = some target)).map
+            ConcreteElaboration.LocalOccurrence.child := by
+  have occurrenceShape :=
+    spawnNodeRaw_localOccurrences input.val (.term target 0 term)
+      target target 0 Fin.elim0
+  rw [if_pos (by rfl)] at occurrenceShape
+  simpa [ConcreteElaboration.localOccurrences, anchoredWireSplitRaw,
+    spawnNodeRaw, List.append_assoc] using occurrenceShape
+
+/-- Exact-scope traversal depends only on wire identities and scopes, so the
+split has the same traversal as the canonical one-output spawn. -/
+theorem anchoredWireSplitRaw_exactScopeWires
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target region : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0)) :
+    ConcreteElaboration.exactScopeWires
+        (anchoredWireSplitRaw input wire endpoints target term) region =
+      (ConcreteElaboration.exactScopeWires input.val region).map
+          (Fin.castAdd 1) ++
+        if region = target then
+          (allFin 1).map (Fin.natAdd input.val.wireCount)
+        else [] := by
+  have sameAsSpawn :
+      ConcreteElaboration.exactScopeWires
+          (anchoredWireSplitRaw input wire endpoints target term) region =
+        ConcreteElaboration.exactScopeWires
+          (spawnNodeRaw input.val (.term target 0 term) target 1
+            (fun _ => .output)) region := by
+    unfold ConcreteElaboration.exactScopeWires filterFin
+    apply congrArg (fun predicate => List.filter predicate
+      (allFin (input.val.wireCount + 1)))
+    funext candidate
+    have scopeEq :
+        ((anchoredWireSplitRaw input wire endpoints target term).wires
+            candidate).scope =
+          ((spawnNodeRaw input.val (.term target 0 term) target 1
+            (fun _ => .output)).wires candidate).scope := by
+      refine Fin.lastCases (motive := fun current =>
+          ((anchoredWireSplitRaw input wire endpoints target term).wires
+              current).scope =
+            ((spawnNodeRaw input.val (.term target 0 term) target 1
+              (fun _ => .output)).wires current).scope)
+        ?_ (fun old => ?_) candidate
+      · dsimp
+        rw [anchoredWireSplitRaw_freshWire_scope]
+        have indexEq : Fin.last input.val.wireCount =
+            Fin.natAdd input.val.wireCount (0 : Fin 1) := by
+          apply Fin.ext
+          rfl
+        rw [indexEq, spawnNodeRaw_freshWire_scope]
+      · dsimp
+        rw [anchoredWireSplitRaw_oldWire_scope]
+        have indexEq : old.castSucc = Fin.castAdd 1 old := by
+          apply Fin.ext
+          rfl
+        rw [indexEq, spawnNodeRaw_oldWire_scope]
+    rw [scopeEq]
+    rfl
+  rw [sameAsSpawn]
+  exact spawnNodeRaw_exactScopeWires input.val (.term target 0 term)
+    target region 1 (fun _ => .output)
+
+theorem anchoredWireSplitRaw_exactScopeWires_of_ne
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target region : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0)) (hne : region ≠ target) :
+    ConcreteElaboration.exactScopeWires
+        (anchoredWireSplitRaw input wire endpoints target term) region =
+      (ConcreteElaboration.exactScopeWires input.val region).map
+        (Fin.castAdd 1) := by
+  rw [anchoredWireSplitRaw_exactScopeWires, if_neg hne,
+    List.append_nil]
+
+theorem anchoredWireSplitRaw_exactScopeWires_length_of_ne
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target region : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0)) (hne : region ≠ target) :
+    (ConcreteElaboration.exactScopeWires
+      (anchoredWireSplitRaw input wire endpoints target term) region).length =
+      (ConcreteElaboration.exactScopeWires input.val region).length := by
+  rw [anchoredWireSplitRaw_exactScopeWires_of_ne input wire endpoints target
+    region term hne]
+  simp
+
+private theorem option_bind_some_eq_map
+    (value : Option α) (function : α → β) :
+    (value.bind fun current => some (function current)) =
+      value.map function := by
+  cases value <;> rfl
+
+/-- Retained direct occurrences compile through the collapse whenever the
+recursive child compilers do.  This is the occurrence-level induction step
+used along and away from the selected route. -/
+theorem anchoredWireSplitRaw_compileOccurrenceWith?_collapse
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (endpoints : List (CEndpoint input.val.nodeCount))
+    (target : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
+    (selectedOccurs : ∀ endpoint, endpoint ∈ endpoints →
+      input.val.EndpointOccurs wire endpoint)
+    (targetWellFormed :
+      (anchoredWireSplitRaw input wire endpoints target term).WellFormed
+        signature)
+    (region : Fin input.val.regionCount)
+    (expanded : ConcreteElaboration.WireContext
+      (anchoredWireSplitRaw input wire endpoints target term))
+    (original : ConcreteElaboration.WireContext input.val)
+    (collapse : SplitContextCollapse input wire endpoints target term
+      expanded original)
+    (expandedExact : expanded.Exact region)
+    (originalExact : original.Exact region)
+    (sourceRecurse : ∀ {rels : RelCtx},
+      (child : Fin input.val.regionCount) →
+      (context : ConcreteElaboration.WireContext input.val) →
+      ConcreteElaboration.BinderContext input.val rels →
+      Option (Region signature context.length rels))
+    (targetRecurse : ∀ {rels : RelCtx},
+      (child : Fin input.val.regionCount) →
+      (context : ConcreteElaboration.WireContext
+        (anchoredWireSplitRaw input wire endpoints target term)) →
+      ConcreteElaboration.BinderContext
+        (anchoredWireSplitRaw input wire endpoints target term) rels →
+      Option (Region signature context.length rels))
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+      input.val.nodeCount)
+    (member : occurrence ∈ ConcreteElaboration.localOccurrences input.val
+      region)
+    (hrecurse : ∀ {childRels : RelCtx}
+      (child : Fin input.val.regionCount)
+      (childBinders : ConcreteElaboration.BinderContext input.val childRels),
+      occurrence = .child child →
+      sourceRecurse child original childBinders =
+        (targetRecurse child expanded childBinders).map
+          (Region.renameWires collapse.indexMap)) :
+    ConcreteElaboration.compileOccurrenceWith? signature input.val
+        sourceRecurse original binders occurrence =
+      (ConcreteElaboration.compileOccurrenceWith? signature
+        (anchoredWireSplitRaw input wire endpoints target term)
+        targetRecurse expanded binders (splitOldOccurrence input occurrence)).map
+          (Item.renameWires collapse.indexMap) := by
+  cases occurrence with
+  | node node =>
+      exact anchoredWireSplitRaw_compileNode?_collapse input wire endpoints
+        target term selectedOccurs targetWellFormed region expanded original
+        collapse expandedExact originalExact binders node
+        ((ConcreteElaboration.mem_localOccurrences_node input.val region node).mp
+          member)
+  | child child =>
+      cases childShape : input.val.regions child with
+      | sheet =>
+          simp [ConcreteElaboration.compileOccurrenceWith?, splitOldOccurrence,
+            childShape, anchoredWireSplitRaw]
+      | cut parent =>
+          have recursive := hrecurse child binders rfl
+          simpa [ConcreteElaboration.compileOccurrenceWith?,
+            splitOldOccurrence, anchoredWireSplitRaw_regions, childShape,
+            option_bind_some_eq_map, Option.map_map, Function.comp_def,
+            Item.renameWires] using
+              congrArg (Option.map Item.cut) recursive
+      | bubble parent arity =>
+          have recursive := hrecurse child (binders.push child arity) rfl
+          simpa [ConcreteElaboration.compileOccurrenceWith?,
+            splitOldOccurrence, anchoredWireSplitRaw_regions, childShape,
+            option_bind_some_eq_map, Option.map_map, Function.comp_def,
+            Item.renameWires] using
+              congrArg (Option.map (Item.bubble arity)) recursive
+
 end AnchoredWireSoundness
 
 end VisualProof.Rule
