@@ -1190,6 +1190,117 @@ theorem compileRegion_moveEndpoint_regionSimulation
     targetEnumeration sourceExact targetExact sourceBody targetBody sourceCompiled
     targetCompiled
 
+theorem compileOccurrences_moveEndpoint_itemSeqSimulation
+    (input : ConcreteDiagram)
+    (wellFormed : input.WellFormed signature)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (sourceOccurs : input.EndpointOccurs sourceWire endpoint)
+    (targetWellFormed :
+      (moveEndpointRaw input sourceWire targetWire endpoint).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    {sourceRels targetRels : RelCtx}
+    (fuelSource fuelTarget : Nat)
+    (region : Fin input.regionCount)
+    (sourceContext : ConcreteElaboration.WireContext input)
+    (targetContext : ConcreteElaboration.WireContext
+      (moveEndpointRaw input sourceWire targetWire endpoint))
+    (context : EndpointMoveContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (sourceNodup : sourceContext.Nodup)
+    (targetNodup : targetContext.Nodup)
+    (sourceBinders : ConcreteElaboration.BinderContext input sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (moveEndpointRaw input sourceWire targetWire endpoint) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      sourceBinders targetBinders)
+    (sourceCover : sourceBinders.Covers region)
+    (targetCover : targetBinders.Covers region)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration input
+      sourceBinders region)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      targetBinders region)
+    (sourceExact : sourceContext.Exact region)
+    (targetExact : targetContext.Exact region)
+    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
+    (targetItems : ItemSeq signature targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature input
+      (ConcreteElaboration.compileRegion? signature input fuelSource)
+      sourceContext sourceBinders
+      (ConcreteElaboration.localOccurrences input region) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (moveEndpointRaw input sourceWire targetWire endpoint)
+      (ConcreteElaboration.compileRegion? signature
+        (moveEndpointRaw input sourceWire targetWire endpoint) fuelTarget)
+      targetContext targetBinders
+      (ConcreteElaboration.localOccurrences
+        (moveEndpointRaw input sourceWire targetWire endpoint) region) =
+        some targetItems) :
+    ConcreteElaboration.ItemSeqSimulation model named direction
+      (endpointMoveRelation input sourceWire targetWire sourceContext
+        targetContext)
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems := by
+  let simulation := endpointMoveSimulation input wellFormed sourceWire targetWire
+    endpoint distinct sourceOccurs targetWellFormed model named
+  have regular : ¬ simulation.Distinguished region := by
+    simp [simulation, endpointMoveSimulation]
+  have targetCompiledMapped :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        (moveEndpointRaw input sourceWire targetWire endpoint)
+        (ConcreteElaboration.compileRegion? signature
+          (moveEndpointRaw input sourceWire targetWire endpoint) fuelTarget)
+        targetContext targetBinders
+        ((ConcreteElaboration.localOccurrences input region).map
+          (simulation.occurrenceMap region regular)) = some targetItems := by
+    have mappedIdentity :
+        (ConcreteElaboration.localOccurrences input region).map
+            (simulation.occurrenceMap region regular) =
+          ConcreteElaboration.localOccurrences input region := by
+      have mapFunction : simulation.occurrenceMap region regular = id := by
+        rfl
+      rw [mapFunction]
+      let occurrences := ConcreteElaboration.localOccurrences input region
+      change occurrences.map id = occurrences
+      induction occurrences with
+      | nil => rfl
+      | cons head tail induction =>
+          simp only [List.map_cons]
+          rw [induction]
+          rfl
+    rw [mappedIdentity, ← moveEndpointRaw_localOccurrences]
+    exact targetCompiled
+  apply simulation.compileOccurrences_denote direction fuelSource fuelTarget
+    region sourceContext targetContext context (by trivial) sourceNodup
+    targetNodup sourceBinders targetBinders (by trivial) regular
+    binderWitness sourceCover targetCover sourceEnumeration targetEnumeration
+  · intro childDirection child childSourceRels childTargetRels childSourceBinders
+      childTargetBinders sourceBody targetBody childParent childAllowed
+      childBinderWitness childSourceCover childTargetCover childSourceEnumeration
+      childTargetEnumeration childSourceCompiled childTargetCompiled
+    have targetChildParent :
+        ((moveEndpointRaw input sourceWire targetWire endpoint).regions child
+          ).parent? = some region := by
+      simpa only [moveEndpointRaw_regions] using childParent
+    exact compileRegion_moveEndpoint_regionSimulation input wellFormed sourceWire
+      targetWire endpoint distinct sourceOccurs targetWellFormed model named
+      childDirection fuelSource fuelTarget child sourceContext targetContext
+      context childSourceBinders childTargetBinders childBinderWitness
+      childSourceCover childTargetCover childSourceEnumeration
+      childTargetEnumeration (sourceExact.extend_child wellFormed childParent)
+      (targetExact.extend_child targetWellFormed targetChildParent) sourceBody
+      targetBody childSourceCompiled childTargetCompiled
+  · intro occurrence member
+    exact member
+  · exact sourceCompiled
+  · exact targetCompiledMapped
+
 @[simp] theorem moveEndpointsRaw_regions
     (input : ConcreteDiagram) (sourceWire targetWire : Fin input.wireCount)
     (endpoints : List (CEndpoint input.nodeCount)) :
