@@ -25,6 +25,166 @@ theorem castRels_renameWires_commute
   cases equality
   rfl
 
+theorem extendWireEnv_conjoinLeft_preserve
+    (outerEnvironment : Fin outer → D)
+    (oldLocal : Fin (firstLocal + secondLocal) → D)
+    (newSecond : Fin secondLocal → D) :
+    extendWireEnv outerEnvironment
+          (Fin.addCases
+            (fun index => oldLocal (Fin.castAdd secondLocal index)) newSecond) ∘
+        Region.conjoinLeftWire outer firstLocal secondLocal =
+      extendWireEnv outerEnvironment oldLocal ∘
+        Region.conjoinLeftWire outer firstLocal secondLocal := by
+  funext index
+  refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) index
+  · simp [Region.conjoinLeftWire, extendWireEnv]
+  · simp [Region.conjoinLeftWire, extendWireEnv]
+
+theorem rootReindex_patternLocal_nonempty
+    (input : Splice.Input signature) (layout : Splice.Input.PlugLayout input)
+    (hadmissible : input.Admissible)
+    (sourceBoundary : List (Fin input.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.frame.val.wires wire).scope = input.frame.val.root)
+    (hsite : input.site = input.frame.val.root)
+    (hnonempty : input.binderSpine.proxyCount ≠ 0)
+    (index : Fin (ConcreteElaboration.exactScopeWires
+      input.pattern.val.diagram input.binderSpine.bodyContainer).length) :
+    let host := Splice.Input.compiledSpliceHostView input hadmissible
+    let pattern := Splice.Input.compiledSpliceTerminalView input hnonempty
+    let outputWitness := Splice.Input.compiledSpliceOutputRootWitness input
+      layout hadmissible hsite
+    let outputLeaf := Splice.Input.compiledSpliceOutputRootLeaf input layout
+      hadmissible hsite
+    let castEq := ConcreteElaboration.WireContext.length_extend
+      outputLeaf.inheritedWires (layout.frameRegion input.site)
+    let closedWire :=
+      (layout.siteCombinedWireEquivOfNonempty hadmissible host outputWitness
+        outputLeaf hnonempty).trans (FiniteEquiv.finCast castEq).symm
+    let rootExact : (outputLeaf.inheritedWires.extend
+        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
+      simpa [hsite] using outputLeaf.wiresExact
+    let targetEq : (Splice.Input.PlugLayout.outputOpenRoot input layout
+        sourceBoundary).rootWires.length =
+        (Splice.Input.PlugLayout.outputOpenRoot input layout
+          sourceBoundary).exposedWires.length +
+        (Splice.Input.PlugLayout.outputOpenRoot input layout
+          sourceBoundary).hiddenWires.length := by
+      simp [OpenConcreteDiagram.rootWires]
+    let outputTransport :=
+      (Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv input
+        layout hadmissible sourceBoundary sourceRoot
+        (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+        rootExact).trans (FiniteEquiv.finCast targetEq)
+    let reindex := Splice.Input.PlugLayout.closedSourceToOpenRootReindex
+      closedWire outputTransport
+      (Splice.Input.PlugLayout.rootExposedWireEquiv input layout sourceBoundary)
+      (Splice.Input.PlugLayout.rootLocalWireEquivOfNonempty input layout
+        sourceBoundary hsite hnonempty)
+    let patternLength := ConcreteElaboration.WireContext.length_extend
+      pattern.leaf.inheritedWires input.binderSpine.bodyContainer
+    reindex (layout.patternSeamPreparedWireOfNonempty hadmissible host
+        pattern.witness pattern.leaf hnonempty
+        (Fin.cast patternLength.symm
+          (Fin.natAdd pattern.leaf.inheritedWires.length index))) =
+      Fin.natAdd
+        (Splice.Input.PlugLayout.coalescedOpenRoot input
+          sourceBoundary).exposedWires.length
+        (Fin.natAdd
+          (Splice.Input.PlugLayout.coalescedOpenRoot input
+            sourceBoundary).hiddenWires.length index) := by
+  dsimp only
+  let host := Splice.Input.compiledSpliceHostView input hadmissible
+  let pattern := Splice.Input.compiledSpliceTerminalView input hnonempty
+  let outputWitness := Splice.Input.compiledSpliceOutputRootWitness input
+    layout hadmissible hsite
+  let outputLeaf := Splice.Input.compiledSpliceOutputRootLeaf input layout
+    hadmissible hsite
+  let originalIndex := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend pattern.leaf.inheritedWires
+      input.binderSpine.bodyContainer).symm
+    (Fin.natAdd pattern.leaf.inheritedWires.length index)
+  let sourceIndex := layout.patternSeamPreparedWireOfNonempty hadmissible host
+    pattern.witness pattern.leaf hnonempty originalIndex
+  let castEq := ConcreteElaboration.WireContext.length_extend
+    outputLeaf.inheritedWires (layout.frameRegion input.site)
+  let closedWire :=
+    (layout.siteCombinedWireEquivOfNonempty hadmissible host outputWitness
+      outputLeaf hnonempty).trans (FiniteEquiv.finCast castEq).symm
+  let rootExact : (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
+    simpa [hsite] using outputLeaf.wiresExact
+  let output := Splice.Input.PlugLayout.outputOpenRoot input layout
+    sourceBoundary
+  let targetEq : output.rootWires.length =
+      output.exposedWires.length + output.hiddenWires.length := by
+    simp [output, OpenConcreteDiagram.rootWires]
+  let outputExact :=
+    Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv input layout
+      hadmissible sourceBoundary sourceRoot
+      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+      rootExact
+  let outputTransport := outputExact.trans (FiniteEquiv.finCast targetEq)
+  let ambient := Splice.Input.PlugLayout.rootExposedWireEquiv input layout
+    sourceBoundary
+  let localEquiv := Splice.Input.PlugLayout.rootLocalWireEquivOfNonempty input
+    layout sourceBoundary hsite hnonempty
+  let factored := Fin.natAdd
+    (Splice.Input.PlugLayout.coalescedOpenRoot input
+      sourceBoundary).exposedWires.length
+    (Fin.natAdd
+      (Splice.Input.PlugLayout.coalescedOpenRoot input
+        sourceBoundary).hiddenWires.length index)
+  apply Splice.Input.PlugLayout.closedSourceToOpenRootReindex_eq_of_extend_eq
+  let left := outputTransport (closedWire sourceIndex)
+  let right := extendWireEquiv ambient localEquiv factored
+  have closedEq : closedWire sourceIndex =
+      layout.patternSeamWireMapOfNonempty hadmissible host pattern.witness
+        pattern.leaf outputWitness outputLeaf hnonempty originalIndex := by
+    apply Fin.ext
+    rfl
+  have leftGet : output.rootWires.get (Fin.cast targetEq.symm left) =
+      layout.patternPlugWire
+        ((pattern.leaf.inheritedWires.extend
+          input.binderSpine.bodyContainer).get originalIndex) := by
+    have transportSpec :=
+      Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv_spec input
+        layout hadmissible sourceBoundary sourceRoot
+        (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+        rootExact (closedWire sourceIndex)
+    change output.rootWires.get (outputExact (closedWire sourceIndex)) = _
+    rw [transportSpec, closedEq]
+    exact layout.patternSeamWireMapOfNonempty_spec hadmissible host
+      pattern.witness pattern.leaf outputWitness outputLeaf hnonempty
+      originalIndex
+  have originalGet :
+      (pattern.leaf.inheritedWires.extend
+        input.binderSpine.bodyContainer).get originalIndex =
+        (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+          input.binderSpine.bodyContainer).get index := by
+    simp [originalIndex, ConcreteElaboration.WireContext.extend]
+  have rightGet : output.rootWires.get (Fin.cast targetEq.symm right) =
+      layout.patternPlugWire
+        ((ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+          input.binderSpine.bodyContainer).get index) := by
+    have localSpec :=
+      Splice.Input.PlugLayout.rootLocalWireEquivOfNonempty_pattern_spec input
+        layout sourceBoundary hsite hnonempty index
+    have patternSpec := layout.patternPlugWire_terminal_local hnonempty index
+    simpa [right, factored, ambient, localEquiv, output, targetEq,
+      OpenConcreteDiagram.rootWires, extendWireEquiv] using
+      localSpec.trans patternSpec.symm
+  have positions : Fin.cast targetEq.symm left =
+      Fin.cast targetEq.symm right := by
+    rw [originalGet] at leftGet
+    apply Fin.ext
+    apply (List.getElem_inj output.rootWires_nodup).mp
+    simpa only [List.get_eq_getElem] using
+      leftGet.trans rightGet.symm
+  change left = right
+  apply Fin.ext
+  simpa using congrArg Fin.val positions
+
 /-- Closing a flat zero-local splice under the compiler leaf's locally owned
 wires has the semantics of the ordinary splice at that local-wire boundary. -/
 theorem close_flatSplice_denote_iff_spliceAt
@@ -1010,5 +1170,302 @@ theorem sameSite_nested_output_equiv_zero
     simpa [spliceInput, hadmissible, coalesced, output, compilerArgs,
       coalescedArity, Splice.Input.compiledSpliceSourceOpen, hsite, hzero,
       CheckedOpenDiagram.denote, Function.comp_def] using executable))
+
+theorem sameSite_root_compiledSource_equiv_nonempty
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {target : Fin input.val.regionCount}
+    {hadmissible : (iterationInput input selection target).Admissible}
+    {sourceBoundary : List (Fin input.val.wireCount)}
+    {sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.val.wires wire).scope = input.val.root}
+    (targetEq : target = selection.val.anchor)
+    (targetNotSelected : ¬ selection.val.SelectsRegion target)
+    (hsite : target = input.val.root)
+    (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
+      ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (args : Fin
+      (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+        (iterationInput input selection target) hadmissible sourceBoundary
+        sourceRoot).val.boundary.length → model.Carrier) :
+    denoteOpen model named
+        (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+          (iterationInput input selection target) hadmissible sourceBoundary
+          sourceRoot).elaborate args ↔
+      denoteOpen model named
+        (Splice.Input.compiledSpliceRootSourceOfNonempty
+          (iterationInput input selection target)
+          (iterationInput input selection target).plugLayout hadmissible
+          sourceBoundary sourceRoot (by
+            simpa [Splice.Input.coalesceFrameRaw] using hsite) hnonempty) args := by
+  let spliceInput := iterationInput input selection target
+  have hsite' : spliceInput.site = spliceInput.frame.val.root := by
+    simpa [spliceInput, Splice.Input.coalesceFrameRaw] using hsite
+  constructor
+  · intro coalesced
+    have host := (Splice.Input.compiledSpliceRootHostOfNonempty_denote_iff_coalesced
+      spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
+      hsite' hnonempty model named args).mpr coalesced
+    let rootHost := Splice.Input.compiledSpliceRootHostOfNonempty spliceInput
+      spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hsite'
+      hnonempty
+    let rootSource := Splice.Input.compiledSpliceRootSourceOfNonempty spliceInput
+      spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hsite'
+      hnonempty
+    have host' : denoteOpen model named rootHost args := by
+      simpa [rootHost] using host
+    have hostToSource : denoteOpen model named rootHost args →
+        denoteOpen model named rootSource args := by
+      unfold rootHost rootSource
+      unfold Splice.Input.compiledSpliceRootHostOfNonempty
+        Splice.Input.compiledSpliceRootHostFromItems
+        Splice.Input.compiledSpliceRootSourceOfNonempty
+        Splice.Input.compiledSpliceRootSourceFromItems
+      dsimp only
+      apply Splice.denote_replaceOpenBody_mono
+      intro environment hostBody
+      unfold denoteRegion at hostBody ⊢
+      obtain ⟨oldLocal, oldHost⟩ := hostBody
+      let hostView := Splice.Input.compiledSpliceHostView spliceInput
+        hadmissible
+      let pattern := Splice.Input.compiledSpliceTerminalView spliceInput
+        hnonempty
+      let outputWitness := Splice.Input.compiledSpliceOutputRootWitness
+        spliceInput spliceInput.plugLayout hadmissible hsite'
+      let outputLeaf := Splice.Input.compiledSpliceOutputRootLeaf spliceInput
+        spliceInput.plugLayout hadmissible hsite'
+      let castEq := ConcreteElaboration.WireContext.length_extend
+        outputLeaf.inheritedWires
+          (spliceInput.plugLayout.frameRegion spliceInput.site)
+      let closedWire :=
+        (spliceInput.plugLayout.siteCombinedWireEquivOfNonempty hadmissible
+          hostView outputWitness outputLeaf hnonempty).trans
+          (FiniteEquiv.finCast castEq).symm
+      let rootExact : (outputLeaf.inheritedWires.extend
+          (spliceInput.plugLayout.frameRegion spliceInput.site)).Exact
+          spliceInput.plugLayout.plugRaw.root := by
+        simpa [hsite'] using outputLeaf.wiresExact
+      let outputRootEq : (Splice.Input.PlugLayout.outputOpenRoot spliceInput
+          spliceInput.plugLayout sourceBoundary).rootWires.length =
+          (Splice.Input.PlugLayout.outputOpenRoot spliceInput
+            spliceInput.plugLayout sourceBoundary).exposedWires.length +
+          (Splice.Input.PlugLayout.outputOpenRoot spliceInput
+            spliceInput.plugLayout sourceBoundary).hiddenWires.length := by
+        simp [OpenConcreteDiagram.rootWires]
+      let outputTransport :=
+        (Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv
+          spliceInput spliceInput.plugLayout hadmissible sourceBoundary
+          sourceRoot (outputLeaf.inheritedWires.extend
+            (spliceInput.plugLayout.frameRegion spliceInput.site))
+          rootExact).trans (FiniteEquiv.finCast outputRootEq)
+      let reindex := Splice.Input.PlugLayout.closedSourceToOpenRootReindex
+        closedWire outputTransport
+        (Splice.Input.PlugLayout.rootExposedWireEquiv spliceInput
+          spliceInput.plugLayout sourceBoundary)
+        (Splice.Input.PlugLayout.rootLocalWireEquivOfNonempty spliceInput
+          spliceInput.plugLayout sourceBoundary hsite' hnonempty)
+      let hostSeam := spliceInput.plugLayout.hostSeamPreparedWireOfNonempty
+        hadmissible hostView
+      let hostRel : RelationRenaming hostView.focus.holeRels
+          outputWitness.toFocus.holeRels := fun {arity} relation =>
+        spliceInput.plugLayout.hostRelationRenaming hostView.intrinsicPath
+          hostView.compilerLeaf outputWitness outputLeaf relation
+      let patternSeam :=
+        spliceInput.plugLayout.patternSeamPreparedWireOfNonempty hadmissible
+          hostView pattern.witness pattern.leaf hnonempty
+      let patternRel : RelationRenaming pattern.witness.toFocus.holeRels
+          outputWitness.toFocus.holeRels := fun {arity} relation =>
+        hostRel (spliceInput.plugLayout.coalescedTerminalRelationRenaming
+          hadmissible hostView.intrinsicPath hostView.compilerLeaf
+          pattern.witness pattern.leaf hnonempty relation)
+      let hostPrepared :=
+        (hostView.compilerLeaf.items.renameWires hostSeam).renameRelations
+          hostRel
+      let patternPrepared :=
+        (pattern.leaf.items.renameWires patternSeam).renameRelations patternRel
+      let fullOld := extendWireEnv environment oldLocal
+      let outputRelations : RelEnv model.Carrier outputWitness.toFocus.holeRels :=
+        PUnit.unit
+      let hostRelations : RelEnv model.Carrier hostView.focus.holeRels :=
+        RelEnv.pullback hostRel outputRelations
+      have preparedHost := (denoteItemSeq_renameWires model named reindex
+        fullOld outputRelations
+        ((hostView.compilerLeaf.items.renameWires hostSeam).renameRelations
+          hostRel)).mp (by
+            simpa [hostView, pattern, outputWitness, outputLeaf, castEq,
+              closedWire, rootExact, outputRootEq, outputTransport, reindex,
+              hostSeam, hostRel, fullOld, outputRelations] using oldHost)
+      have seamHost := (denoteItemSeq_renameRelations model named hostRel
+        hostRelations outputRelations
+        (RelEnv.pullback_agrees hostRel outputRelations)
+        (fullOld ∘ reindex)
+        (hostView.compilerLeaf.items.renameWires hostSeam)).mp preparedHost
+      have rawHost := (denoteItemSeq_renameWires model named hostSeam
+        (fullOld ∘ reindex) hostRelations hostView.compilerLeaf.items).mp
+        seamHost
+      have material := sameSite_terminal_available input selection target
+        hadmissible targetEq targetNotSelected hnonempty model named
+        (((fullOld ∘ reindex) ∘ hostSeam)) hostRelations rawHost
+      obtain ⟨materialLocal, materialItems⟩ := material
+      let hidden := (Splice.Input.PlugLayout.coalescedOpenRoot spliceInput
+        sourceBoundary).hiddenWires.length
+      let extra := (ConcreteElaboration.exactScopeWires
+        spliceInput.pattern.val.diagram
+        spliceInput.binderSpine.bodyContainer).length
+      let oldHidden : Fin hidden → model.Carrier := fun index =>
+        oldLocal (Fin.castAdd extra index)
+      let newLocal : Fin (hidden + extra) → model.Carrier :=
+        Fin.addCases oldHidden materialLocal
+      let fullNew := extendWireEnv environment newLocal
+      have hostEnvironmentEq :
+          (fullNew ∘ reindex) ∘ hostSeam =
+            (fullOld ∘ reindex) ∘ hostSeam := by
+        funext index
+        have factor :=
+          Splice.Input.PlugLayout.closedSourceToOpenRootReindex_host_factor_nonempty
+            spliceInput spliceInput.plugLayout hadmissible sourceBoundary
+            sourceRoot hsite' hnonempty index
+        change fullNew (reindex (hostSeam index)) =
+          fullOld (reindex (hostSeam index))
+        rw [factor]
+        unfold Splice.Input.PlugLayout.rootHostOpenEmbedding
+        exact congrFun
+          (extendWireEnv_conjoinLeft_preserve environment oldLocal
+            materialLocal) _
+      have rawHostNew : denoteItemSeq model named
+          (((fullNew ∘ reindex) ∘ hostSeam)) hostRelations
+          hostView.compilerLeaf.items := by
+        rw [hostEnvironmentEq]
+        exact rawHost
+      have seamHostNew := (denoteItemSeq_renameWires model named hostSeam
+        (fullNew ∘ reindex) hostRelations hostView.compilerLeaf.items).mpr
+        rawHostNew
+      have preparedHostNew := (denoteItemSeq_renameRelations model named
+        hostRel hostRelations outputRelations
+        (RelEnv.pullback_agrees hostRel outputRelations)
+        (fullNew ∘ reindex)
+        (hostView.compilerLeaf.items.renameWires hostSeam)).mpr seamHostNew
+      have finalHostNew := (denoteItemSeq_renameWires model named reindex
+        fullNew outputRelations
+        ((hostView.compilerLeaf.items.renameWires hostSeam).renameRelations
+          hostRel)).mpr preparedHostNew
+      refine ⟨newLocal, ?_⟩
+      change denoteItemSeq model named fullNew outputRelations
+        ((hostPrepared.append patternPrepared).renameWires reindex)
+      rw [ItemSeq.renameWires_append, denoteItemSeq_append]
+      refine ⟨?_, ?_⟩
+      · simpa [hostView, outputWitness, outputLeaf, castEq, closedWire,
+          rootExact, outputRootEq, outputTransport, reindex, hostSeam,
+          hostRel, hostPrepared, hidden, extra, newLocal, fullNew,
+          outputRelations] using
+          finalHostNew
+      · let patternLength := ConcreteElaboration.WireContext.length_extend
+          pattern.leaf.inheritedWires spliceInput.binderSpine.bodyContainer
+        let actualWire := spliceInput.plugLayout.bodyTerminalWireRenaming
+          hadmissible hostView pattern.witness pattern.leaf hnonempty
+        let actualRel : RelationRenaming pattern.witness.toFocus.holeRels
+            hostView.focus.holeRels := fun {arity} relation =>
+          spliceInput.plugLayout.coalescedTerminalRelationRenaming hadmissible
+            hostView.intrinsicPath hostView.compilerLeaf pattern.witness
+            pattern.leaf hnonempty relation
+        let materialEnvironment := extendWireEnv
+          ((((fullOld ∘ reindex) ∘ hostSeam) ∘ actualWire))
+          materialLocal
+        let materialRelations : RelEnv model.Carrier
+            pattern.witness.toFocus.holeRels :=
+          RelEnv.pullback actualRel hostRelations
+        have rawPattern := (denoteItemSeq_renameWires model named
+          (Fin.cast patternLength) materialEnvironment materialRelations
+          pattern.leaf.items).mp (by
+            simpa [pattern, hostView, actualWire, actualRel,
+              materialEnvironment, materialRelations,
+              ItemSeq.castWiresEq_eq_renameWires] using materialItems)
+        have patternEnvironmentEq :
+            (fullNew ∘ reindex) ∘ patternSeam =
+              materialEnvironment ∘ Fin.cast patternLength := by
+          funext index
+          let split := Fin.cast patternLength index
+          have recover : Fin.cast patternLength.symm split = index := by
+            apply Fin.ext
+            rfl
+          rw [← recover]
+          refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_)
+            split
+          · have seamEq : patternSeam
+                (Fin.cast patternLength.symm
+                  (Fin.castAdd extra inherited)) =
+              hostSeam (actualWire inherited) := by
+              apply Fin.ext
+              simp [patternSeam, hostSeam, actualWire,
+                Splice.Input.PlugLayout.patternSeamPreparedWireOfNonempty,
+                Splice.Input.PlugLayout.hostSeamPreparedWireOfNonempty,
+                Region.adjoinMaterialWire, Region.adjoinHostWire,
+                extendWireRenaming]
+              rw [Fin.addCases_left]
+              rfl
+            simp only [Function.comp_apply]
+            rw [seamEq]
+            simp [materialEnvironment, extendWireEnv]
+            exact congrFun hostEnvironmentEq (actualWire inherited)
+          · have factor := rootReindex_patternLocal_nonempty spliceInput
+              spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
+              hsite' hnonempty localIndex
+            simp only [Function.comp_apply]
+            rw [factor]
+            have recoverLocal : Fin.cast patternLength
+                (Fin.cast patternLength.symm
+                  (Fin.natAdd pattern.leaf.inheritedWires.length
+                    localIndex)) =
+                Fin.natAdd pattern.leaf.inheritedWires.length localIndex := by
+              apply Fin.ext
+              rfl
+            rw [recoverLocal]
+            dsimp only [fullNew, materialEnvironment, newLocal, hidden]
+            simp only [extendWireEnv]
+            have outerIndexEq :
+                (Fin.natAdd
+                    (Splice.Input.PlugLayout.coalescedOpenRoot spliceInput
+                      sourceBoundary).exposedWires.length
+                    (Fin.natAdd hidden localIndex) :
+                  Fin ((Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+                    spliceInput hadmissible sourceBoundary sourceRoot
+                      ).elaborate.externalClasses + (hidden + extra))) =
+                Fin.natAdd
+                  (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+                    spliceInput hadmissible sourceBoundary sourceRoot
+                      ).elaborate.externalClasses
+                  (Fin.natAdd hidden localIndex) := by
+              apply Fin.ext
+              rfl
+            rw [outerIndexEq, Fin.addCases_right, Fin.addCases_right,
+              Fin.addCases_right]
+        have rawPatternNew : denoteItemSeq model named
+            (((fullNew ∘ reindex) ∘ patternSeam)) materialRelations
+            pattern.leaf.items := by
+          rw [patternEnvironmentEq]
+          exact rawPattern
+        have seamPattern := (denoteItemSeq_renameWires model named
+          patternSeam (fullNew ∘ reindex) materialRelations
+          pattern.leaf.items).mpr rawPatternNew
+        have preparedPattern := (denoteItemSeq_renameRelations model named
+          patternRel materialRelations outputRelations (by
+            intro arity relation
+            exact (RelEnv.pullback_agrees actualRel hostRelations arity
+              relation).trans
+              (RelEnv.pullback_agrees hostRel outputRelations arity
+                (actualRel relation)))
+          (fullNew ∘ reindex)
+          (pattern.leaf.items.renameWires patternSeam)).mpr seamPattern
+        exact (denoteItemSeq_renameWires model named reindex fullNew
+          outputRelations patternPrepared).mpr (by
+            simpa [patternPrepared] using preparedPattern)
+    exact (by
+      simpa [rootSource, spliceInput, Subsingleton.elim hsite hsite'] using
+        hostToSource host')
+  · exact Splice.Input.compiledSpliceRootSourceOfNonempty_projects_coalesced
+      spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
+      hsite' hnonempty model named args
 
 end VisualProof.Rule.IterationSoundness
