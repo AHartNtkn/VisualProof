@@ -9,6 +9,125 @@ open Theory
 
 namespace AnchoredWireContractSoundness
 
+/-- The two executor-certified anchor sites, oriented from the shallower site
+to the deeper site for one moved endpoint.  This packages both comparable-scope
+branches without changing the Boolean availability contract. -/
+structure EndpointAnchorOrder
+    (input : CheckedDiagram signature)
+    (redundant : Fin input.val.nodeCount)
+    (drop keep : Fin input.val.wireCount)
+    (redundantRegion survivorRegion : Fin input.val.regionCount)
+    (endpoint : CEndpoint input.val.nodeCount)
+    (availability : AnchoredWireSoundness.SplitAvailability input keep
+      survivorRegion (input.val.nodes endpoint.node).region) where
+  shallow : Fin input.val.regionCount
+  deep : Fin input.val.regionCount
+  anchorWire : Fin input.val.wireCount
+  localWire : Fin input.val.wireCount
+  wirePair :
+    (anchorWire = drop ∧ localWire = keep) ∨
+      (anchorWire = keep ∧ localWire = drop)
+  anchorWire_encloses_shallow :
+    input.val.Encloses (input.val.wires anchorWire).scope shallow
+  drop_visible_deep : input.val.Encloses (input.val.wires drop).scope deep
+  keep_visible_deep : input.val.Encloses (input.val.wires keep).scope deep
+  deep_encloses_endpoint :
+    input.val.Encloses deep (input.val.nodes endpoint.node).region
+  routePath : List Nat
+  route : Diagram.Splice.RegionRoute input.val shallow deep routePath
+  anchorWitnessPath : List Nat
+  anchorWitnessRegion : Fin input.val.regionCount
+  anchorWitnessRoute : Diagram.Splice.RegionRoute input.val shallow
+    anchorWitnessRegion anchorWitnessPath
+  anchorWitnessZero : anchorWitnessRoute.HasCutDepth 0
+  localWitnessPath : List Nat
+  localWitnessRegion : Fin input.val.regionCount
+  localWitnessRoute : Diagram.Splice.RegionRoute input.val deep
+    localWitnessRegion localWitnessPath
+  localWitnessZero : localWitnessRoute.HasCutDepth 0
+
+/-- Construct the oriented anchor order from exactly the successful executor's
+scope-comparability and zero-route receipts. -/
+theorem endpointAnchorOrder_exists
+    (input : CheckedDiagram signature)
+    (redundant : Fin input.val.nodeCount)
+    (redundantRegion : Fin input.val.regionCount)
+    (redundantTerm : Lambda.Term 0 (Fin 0))
+    (drop keep : Fin input.val.wireCount)
+    (survivorRegion : Fin input.val.regionCount)
+    (endpoint : CEndpoint input.val.nodeCount)
+    (member : endpoint ∈ movedEndpoints input redundant drop)
+    (redundantShape : input.val.nodes redundant =
+      .term redundantRegion 0 redundantTerm)
+    (redundantOccurs : input.val.EndpointOccurs drop
+      { node := redundant, port := .output })
+    (sameDepth : concreteCutDepth input.val (input.val.wires drop).scope =
+      concreteCutDepth input.val redundantRegion)
+    (availability : AnchoredWireSoundness.SplitAvailability input keep
+      survivorRegion (input.val.nodes endpoint.node).region) :
+    Nonempty (EndpointAnchorOrder input redundant drop keep redundantRegion
+      survivorRegion endpoint availability) := by
+  obtain ⟨redundantPath, redundantRoute, redundantZero⟩ :=
+    redundant_zero_route input redundant redundantRegion redundantTerm drop
+      redundantShape redundantOccurs sameDepth
+  obtain ⟨survivorPath, survivorRoute, survivorZero⟩ :=
+    availability.witness_zero_route
+  rcases movedEndpoint_scopes_comparable input redundant drop keep survivorRegion
+      member availability with dropAbove | survivorAbove
+  · obtain ⟨routePath, ⟨route⟩⟩ :=
+      Diagram.Splice.regionRoute_complete_of_encloses input.val
+        (input.val.wires drop).scope availability.available dropAbove
+    exact ⟨{
+      shallow := (input.val.wires drop).scope
+      deep := availability.available
+      anchorWire := drop
+      localWire := keep
+      wirePair := Or.inl ⟨rfl, rfl⟩
+      anchorWire_encloses_shallow := ⟨0, rfl⟩
+      drop_visible_deep := dropAbove
+      keep_visible_deep := availability.wire_encloses
+      deep_encloses_endpoint := availability.target_inside
+      routePath := routePath
+      route := route
+      anchorWitnessPath := redundantPath
+      anchorWitnessRegion := redundantRegion
+      anchorWitnessRoute := redundantRoute
+      anchorWitnessZero := redundantZero
+      localWitnessPath := survivorPath
+      localWitnessRegion := survivorRegion
+      localWitnessRoute := survivorRoute
+      localWitnessZero := survivorZero
+    }⟩
+  · obtain ⟨routePath, ⟨route⟩⟩ :=
+      Diagram.Splice.regionRoute_complete_of_encloses input.val
+        availability.available (input.val.wires drop).scope survivorAbove
+    have dropEnclosesEndpoint : input.val.Encloses
+        (input.val.wires drop).scope (input.val.nodes endpoint.node).region :=
+      input.property.wire_scopes_enclose drop endpoint
+        (movedEndpoints_mem_occurs input redundant drop member)
+    exact ⟨{
+      shallow := availability.available
+      deep := (input.val.wires drop).scope
+      anchorWire := keep
+      localWire := drop
+      wirePair := Or.inr ⟨rfl, rfl⟩
+      anchorWire_encloses_shallow := availability.wire_encloses
+      drop_visible_deep := ⟨0, rfl⟩
+      keep_visible_deep := ConcreteElaboration.checked_encloses_trans
+        input.property availability.wire_encloses survivorAbove
+      deep_encloses_endpoint := dropEnclosesEndpoint
+      routePath := routePath
+      route := route
+      anchorWitnessPath := survivorPath
+      anchorWitnessRegion := survivorRegion
+      anchorWitnessRoute := survivorRoute
+      anchorWitnessZero := survivorZero
+      localWitnessPath := redundantPath
+      localWitnessRegion := redundantRegion
+      localWitnessRoute := redundantRoute
+      localWitnessZero := redundantZero
+    }⟩
+
 /-- When both certified anchors are available at the same compiler site, their
 zero-cut equations and the checked closed-term conversion coalesce the two wire
 values directly. -/
