@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import { inflateSync } from 'node:zlib'
 import { inspectPngFile, type DecodedPng } from './canonical-png'
 
 export type ProductionInterfaceAsset = {
@@ -135,6 +136,17 @@ export const PRODUCTION_INTERFACE_ASSETS = [
 ] as const satisfies readonly ProductionInterfaceAsset[]
 
 const pngSignature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+const crcTable = Array.from({ length: 256 }, (_, value) => {
+  let crc = value
+  for (let bit = 0; bit < 8; bit++) crc = (crc & 1) !== 0 ? 0xedb88320 ^ (crc >>> 1) : crc >>> 1
+  return crc >>> 0
+})
+
+const crc32 = (value: Buffer): number => {
+  let crc = 0xffffffff
+  for (const byte of value) crc = crcTable[(crc ^ byte) & 0xff]! ^ (crc >>> 8)
+  return (crc ^ 0xffffffff) >>> 0
+}
 
 type PngHeader = {
   readonly width: number
@@ -149,19 +161,75 @@ const readPngHeader = (path: string): PngHeader => {
   if (data.length < 33 || !data.subarray(0, 8).equals(pngSignature)) {
     throw new Error('is not a PNG with a complete IHDR chunk')
   }
-  if (data.readUInt32BE(8) !== 13 || data.subarray(12, 16).toString('ascii') !== 'IHDR') {
-    throw new Error('must begin with a 13-byte IHDR chunk')
+  let offset = 8
+  let header: PngHeader | undefined
+  let sawIdat = false
+  let endedIdat = false
+  let sawIend = false
+  const idat: Buffer[] = []
+
+  while (offset < data.length) {
+    if (data.length - offset < 12) throw new Error('has a truncated PNG chunk')
+    const length = data.readUInt32BE(offset)
+    const end = offset + 12 + length
+    if (!Number.isSafeInteger(end) || end > data.length) throw new Error('has an invalid PNG chunk length')
+    const type = data.subarray(offset + 4, offset + 8).toString('ascii')
+    const payload = data.subarray(offset + 8, offset + 8 + length)
+    const expectedCrc = data.readUInt32BE(offset + 8 + length)
+    const actualCrc = crc32(data.subarray(offset + 4, offset + 8 + length))
+    if (actualCrc !== expectedCrc) throw new Error(`has a ${type} chunk CRC mismatch`)
+
+    if (header === undefined) {
+      if (type !== 'IHDR' || length !== 13) throw new Error('must begin with a 13-byte IHDR chunk')
+      const compression = payload[10]
+      const filter = payload[11]
+      if (compression !== 0 || filter !== 0) throw new Error('has unsupported compression or filter fields')
+      header = {
+        width: payload.readUInt32BE(0),
+        height: payload.readUInt32BE(4),
+        bitDepth: payload[8]!,
+        colorType: payload[9]!,
+        interlace: payload[12]!,
+      }
+      if (header.width === 0 || header.height === 0) throw new Error('has invalid zero dimensions')
+    } else if (type === 'IHDR') {
+      throw new Error('has more than one IHDR chunk')
+    }
+
+    if (type === 'IDAT') {
+      if (endedIdat) throw new Error('has non-contiguous IDAT chunks')
+      sawIdat = true
+      idat.push(payload)
+    } else if (sawIdat) {
+      endedIdat = true
+    }
+
+    offset = end
+    if (type === 'IEND') {
+      if (length !== 0) throw new Error('has a nonempty IEND chunk')
+      if (!sawIdat) throw new Error('has no IDAT data')
+      if (offset !== data.length) throw new Error('has trailing bytes after IEND')
+      sawIend = true
+      break
+    }
   }
-  const compression = data[26]
-  const filter = data[27]
-  if (compression !== 0 || filter !== 0) throw new Error('has unsupported compression or filter fields')
-  return {
-    width: data.readUInt32BE(16),
-    height: data.readUInt32BE(20),
-    bitDepth: data[24]!,
-    colorType: data[25]!,
-    interlace: data[28]!,
+  if (header === undefined) throw new Error('has no IHDR chunk')
+  if (!sawIend) throw new Error('has no IEND chunk')
+
+  const bytesPerPixel = header.colorType === 2 ? 3 : header.colorType === 6 ? 4 : undefined
+  if (bytesPerPixel === undefined) throw new Error(`has unsupported PNG color type ${header.colorType}`)
+  const stride = header.width * bytesPerPixel
+  const expectedBytes = header.height * (stride + 1)
+  if (!Number.isSafeInteger(expectedBytes)) throw new Error('has unsafe decoded dimensions')
+  const raw = inflateSync(Buffer.concat(idat))
+  if (raw.length !== expectedBytes) {
+    throw new Error(`has ${raw.length} decoded bytes, expected ${expectedBytes}`)
   }
+  for (let row = 0; row < header.height; row++) {
+    const filter = raw[row * (stride + 1)]!
+    if (filter > 4) throw new Error(`uses unsupported PNG filter ${filter}`)
+  }
+  return header
 }
 
 const alphaAt = (png: DecodedPng, x: number, y: number): number =>

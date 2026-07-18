@@ -1,3 +1,13 @@
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
   PRODUCTION_INTERFACE_ASSETS,
@@ -37,5 +47,34 @@ describe('production interface asset authority', () => {
     expect(paths).not.toContainEqual(expect.stringMatching(
       /central-lens\/(?:frame|glass|shadow|lever-housing|lever-handle)\.png$/,
     ))
+  })
+
+  it('rejects an RGB asset truncated after its PNG header', () => {
+    const root = mkdtempSync(join(tmpdir(), 'cursebreaker-production-assets-'))
+    const truncatedPath = 'assets/interface/generated/desk/natural-indigo-hardwood.png'
+    try {
+      const consumers = new Set<string>()
+      for (const asset of PRODUCTION_INTERFACE_ASSETS) {
+        const destination = resolve(root, asset.path)
+        mkdirSync(dirname(destination), { recursive: true })
+        if (asset.path === truncatedPath) {
+          writeFileSync(destination, readFileSync(resolve(asset.path)).subarray(0, 33))
+        } else {
+          symlinkSync(resolve(asset.path), destination)
+        }
+        consumers.add(asset.consumer)
+      }
+      for (const consumer of consumers) {
+        const destination = resolve(root, consumer)
+        mkdirSync(dirname(destination), { recursive: true })
+        symlinkSync(resolve(consumer), destination)
+      }
+
+      expect(validateProductionInterfaceAssets(root)).toContainEqual(
+        expect.stringMatching(/^assets\/interface\/generated\/desk\/natural-indigo-hardwood\.png .+/),
+      )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
