@@ -936,6 +936,47 @@ theorem transportBoundary_expected
                 realizes.expected_interface_image_eq_some hwire, ih hrest]
               rfl
 
+/-- Completeness of receipt-side ordered transport for a realized operation.
+If the exact operation transports every requested position, the checked
+receipt does too.  This is the inverse existence direction to
+`transportBoundary_expected`; it preserves order and repeated positions. -/
+theorem transportBoundary_receipt_complete
+    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
+    {expectedProvenance : WireProvenance input.val raw}
+    {expectedInterface : InterfaceTransport input.val raw}
+    (realizes : StepReceipt.Realizes receipt raw expectedProvenance
+      expectedInterface)
+    {boundary : List (Fin input.val.wireCount)}
+    {rawMapped : List (Fin raw.wireCount)}
+    (hexpected : expectedInterface.transportBoundary boundary = some rawMapped) :
+    ∃ mapped, receipt.interface.transportBoundary boundary = some mapped := by
+  induction boundary generalizing rawMapped with
+  | nil =>
+      simp [InterfaceTransport.transportBoundary] at hexpected
+      exact ⟨[], rfl⟩
+  | cons wire rest ih =>
+      cases hexactWire : expectedInterface.image? wire with
+      | none =>
+          simp [InterfaceTransport.transportBoundary, hexactWire] at hexpected
+      | some exactWire =>
+          cases hexactRest : expectedInterface.transportBoundary rest with
+          | none =>
+              simp [InterfaceTransport.transportBoundary, hexactWire,
+                hexactRest] at hexpected
+          | some exactRest =>
+              simp [InterfaceTransport.transportBoundary, hexactWire,
+                hexactRest] at hexpected
+              obtain ⟨mappedRest, hmappedRest⟩ := ih hexactRest
+              cases hreceiptWire : receipt.interface.image? wire with
+              | none =>
+                  have halign := realizes.interface_image_eq wire
+                  simp [hreceiptWire, hexactWire] at halign
+              | some mappedWire =>
+                  exact ⟨mappedWire :: mappedRest, by
+                    simp [InterfaceTransport.transportBoundary, hreceiptWire,
+                      hmappedRest]⟩
+
 /-- The canonical ordered open view of the exact raw result witnessed by a
 receipt.  Boundary positions are cast positionwise through `result_eq`; in
 particular, repeated aliases remain repeated. -/

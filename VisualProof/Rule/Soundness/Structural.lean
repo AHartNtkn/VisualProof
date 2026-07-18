@@ -7,7 +7,7 @@ import VisualProof.Rule.Soundness.Iteration.OpenRoute
 import VisualProof.Rule.Soundness.Iteration.ZeroOpenRoute
 import VisualProof.Rule.Soundness.Iteration.RootAnchorSemantic
 import VisualProof.Rule.Soundness.Iteration.SameSite
-import VisualProof.Rule.Soundness.Iteration.DeiterationReinsert
+import VisualProof.Rule.Soundness.Iteration.DeiterationSemantic
 import VisualProof.Rule.Soundness.WireJoin
 
 namespace VisualProof.Rule
@@ -2475,7 +2475,9 @@ theorem applyDeiteration_sound
     (happly : applyDeiteration input selection witness = .ok receipt) :
     SuccessfulReceiptSound context orientation input
       (.deiteration selection witness) receipt := by
-  sorry
+  exact IterationSoundness.deiteration_sound_of_reinsert context orientation
+    input selection witness receipt happly
+    (deiterationReinsert_sound context orientation input selection witness)
 
 /-- Every successful double-cut introduction receipt is equivalent. -/
 theorem applyDoubleCutIntro_sound
