@@ -1,0 +1,118 @@
+.curse-production-environment {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  isolation: isolate;
+  background: #07090c;
+}
+
+.curse-production-desk {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-image:
+    radial-gradient(circle at 55% 42%, rgb(34 31 64 / 18%), rgb(3 4 8 / 52%) 72%),
+    var(--curse-desk-image);
+  background-position: center;
+  background-size: cover;
+}
+
+.curse-production-lens {
+  position: absolute;
+  z-index: 1;
+  left: var(--curse-lens-left);
+  top: var(--curse-lens-top);
+  width: var(--curse-lens-size);
+  height: var(--curse-lens-size);
+  isolation: isolate;
+}
+
+.curse-production-substrate,
+.curse-production-gasket {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.curse-production-substrate {
+  z-index: 0;
+  object-position: var(--curse-substrate-x) var(--curse-substrate-y);
+  background: #07090c;
+  filter:
+    hue-rotate(var(--curse-substrate-hue))
+    saturate(var(--curse-substrate-saturation))
+    brightness(var(--curse-substrate-brightness));
+  transform:
+    rotate(var(--curse-substrate-rotation))
+    scale(var(--curse-substrate-scale));
+}
+
+.curse-production-proof-slot {
+  position: absolute;
+  z-index: 1;
+  inset: 8.7%;
+  overflow: hidden;
+  background: transparent;
+}
+
+.curse-production-proof-slot > canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+}
+
+.curse-production-gasket {
+  z-index: 2;
+  inset: 0;
+  object-fit: fill;
+}
+
+.curse-production-timeline {
+  position: absolute;
+  z-index: 3;
+  right: 17%;
+  bottom: 4.6%;
+  left: 17%;
+  height: 11%;
+}
+
+.curse-production-timeline-housing {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+
+.curse-production-timeline-handle-slot {
+  position: absolute;
+  inset: 20% 10%;
+}
+
+.curse-production-timeline-handle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 17%;
+  transform: translate(-50%, -50%);
+}
+
+.curse-production-folio-host {
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  bottom: 0;
+  left: var(--curse-folio-left);
+  width: var(--curse-folio-width);
+  transition: left 220ms ease;
+}
+
+.curse-production-environment[data-layout="compact"] .curse-production-folio-host {
+  filter: drop-shadow(1rem 0 1.6rem rgb(1 2 6 / 60%));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .curse-production-folio-host { transition: none; }
+}
