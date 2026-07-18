@@ -969,6 +969,12 @@ private def fusionKeepEndpoint (producer consumer : Fin nodes)
     | _ => true
   else true
 
+@[simp] theorem fusionKeepEndpoint_consumer_free
+    (producer consumer : Fin nodes) (port : Nat) :
+    fusionKeepEndpoint producer consumer
+      { node := consumer, port := Diagram.CPort.free port } = false := by
+  simp [fusionKeepEndpoint]
+
 def fusionTerm (producerTerm : Term 0 (Fin producerPorts))
     (consumerTerm : Term 0 (Fin consumerPorts))
     (producerWire : Fin producerPorts → Fin wires)
