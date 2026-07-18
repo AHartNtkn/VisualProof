@@ -10,7 +10,10 @@ beforeAll(async () => {
   server = await createServer({
     root: process.cwd(),
     logLevel: 'silent',
-    server: { host: '127.0.0.1', port: 0, strictPort: false },
+    server: {
+      host: '127.0.0.1', port: 0, strictPort: false,
+      watch: { ignored: ['**/.tools/**', '**/node_modules/**', '**/.git/**'] },
+    },
   })
   await server.listen()
   const address = server.httpServer?.address()

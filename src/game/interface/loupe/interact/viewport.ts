@@ -70,6 +70,8 @@ export type InteractiveViewportOptions = {
   readonly selectionCommitted: () => void
   readonly mapClient: (client: Vec2) => { readonly screen: Vec2; readonly world: Vec2 }
   readonly inputAllowed?: () => boolean
+  readonly physicsEnabled?: () => boolean
+  readonly zoomEnabled?: () => boolean
 }
 
 const CLICK_SLOP_PX = 3
@@ -296,7 +298,8 @@ export class InteractiveViewport {
       ? (!event.shiftKey && !event.ctrlKey && claim !== null ? 'claimed' : null)
       : this.#opts.selectionEnabled()
         ? choosePointerPhase(event, claim !== null)
-        : event.shiftKey ? 'claimed' : event.ctrlKey ? 'physics' : 'claimed'
+        : event.shiftKey ? 'claimed'
+          : event.ctrlKey && this.#opts.physicsEnabled?.() !== false ? 'physics' : 'claimed'
     if (phase === null) return
     const brush = phase === 'selection'
       ? reduceBrush(createBrushState(this.#selected), { kind: 'begin', hit: sample.hit })
@@ -473,7 +476,7 @@ export class InteractiveViewport {
 
   #wheel = (event: WheelEvent): void => {
     event.preventDefault()
-    if (this.#opts.inputAllowed?.() === false) return
+    if (this.#opts.inputAllowed?.() === false || this.#opts.zoomEnabled?.() === false) return
     const { screen, world } = this.#opts.mapClient(this.#client(event))
     const delta = event.deltaMode === this.#window.WheelEvent.DOM_DELTA_LINE
       ? event.deltaY * 16

@@ -94,14 +94,30 @@
 .curse-production-timeline-handle-slot {
   position: absolute;
   inset: 20% 10%;
+  --curse-timeline-position: 0.5;
 }
 
 .curse-production-timeline-handle {
   position: absolute;
   top: 50%;
-  left: 50%;
+  left: calc(8.5% + var(--curse-timeline-position) * 83%);
   width: 17%;
   transform: translate(-50%, -50%);
+  pointer-events: none;
+}
+
+.curse-production-timeline-control {
+  position: absolute;
+  z-index: 2;
+  inset: 0;
+  cursor: ew-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.curse-production-timeline-control:focus-visible {
+  border-radius: 999px;
+  box-shadow: 0 0 0 2px #77e6ff, 0 0 1rem #22b8ffcc;
 }
 
 .curse-production-folio-host {
