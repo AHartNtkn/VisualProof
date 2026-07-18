@@ -775,6 +775,262 @@ theorem zeroRoute_region_denote_equiv
                       outerEnv localEnv) (relation, relEnv)).2 childFreshValue
                       sourceRaw
 
+/-- At the ancestor wire scope, the fresh local existential is chosen once
+and its value is transported through the first bubble into the routed closed
+equation. -/
+theorem ancestorScope_denote_equiv
+    (input : ConcreteDiagram)
+    (region scope : Fin input.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (hinput : input.WellFormed signature)
+    (htarget : (spawnNodeRaw input (.term region 0 term) scope 1
+      (fun _ => .output)).WellFormed signature)
+    (scopeEnclosesRegion : input.Encloses scope region)
+    (regionNeScope : region ≠ scope)
+    {path : List Nat}
+    (route : Diagram.Splice.RegionRoute input scope region path)
+    {depth : Nat} (routeDepth : route.HasCutDepth depth)
+    (depthZero : depth = 0) :
+    ∀ {rels : RelCtx} (fuel : Nat)
+      (source : ConcreteElaboration.WireContext input)
+      (target : ConcreteElaboration.WireContext
+        (spawnNodeRaw input (.term region 0 term) scope 1
+          (fun _ => .output)))
+      (embedding : SpawnContextEmbedding input (.term region 0 term) scope 1
+        (fun _ => .output) source target)
+      (binders : ConcreteElaboration.BinderContext input rels)
+      (hsourceExact : (source.extend scope).Exact scope)
+      (htargetExact : (target.extend scope).Exact scope)
+      (sourceBody : Region signature source.length rels)
+      (targetBody : Region signature target.length rels)
+      (sourceCompiled : ConcreteElaboration.compileRegion? signature input
+        (fuel + 1) scope source binders = some sourceBody)
+      (targetCompiled : ConcreteElaboration.compileRegion? signature
+        (spawnNodeRaw input (.term region 0 term) scope 1
+          (fun _ => .output))
+        (fuel + 1) scope target binders = some targetBody),
+      ∀ (model : Lambda.LambdaModel)
+        (named : NamedEnv model.Carrier signature)
+        (outerEnv : Fin target.length → model.Carrier)
+        (relEnv : RelEnv model.Carrier rels),
+        denoteRegion model named outerEnv relEnv targetBody ↔
+          denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+            sourceBody := by
+  induction routeDepth with
+  | here actualRegion => exact False.elim (regionNeScope rfl)
+  | cut childIsCut tailDepth ih => omega
+  | @bubble routeStart child targetRegion rest tailDepth arity hparent position
+      hposition tail childIsBubble childDepth ih =>
+      intro rels fuel source target embedding binders hsourceExact htargetExact
+        sourceBody targetBody sourceCompiled targetCompiled model named outerEnv
+        relEnv
+      simp only [ConcreteElaboration.compileRegion?]
+        at sourceCompiled targetCompiled
+      cases sourceItemsEq : ConcreteElaboration.compileOccurrencesWith?
+          signature input
+          (ConcreteElaboration.compileRegion? signature input fuel)
+          (source.extend routeStart) binders
+          (ConcreteElaboration.localOccurrences input routeStart) with
+      | none => simp [sourceItemsEq] at sourceCompiled
+      | some sourceItems =>
+        simp [sourceItemsEq] at sourceCompiled
+        subst sourceBody
+        cases targetItemsEq : ConcreteElaboration.compileOccurrencesWith?
+            signature
+            (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+              (fun _ => .output))
+            (ConcreteElaboration.compileRegion? signature
+              (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                (fun _ => .output)) fuel)
+            (target.extend routeStart) binders
+            (ConcreteElaboration.localOccurrences
+              (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                (fun _ => .output)) routeStart) with
+        | none => simp [targetItemsEq] at targetCompiled
+        | some targetItems =>
+          simp [targetItemsEq] at targetCompiled
+          subst targetBody
+          obtain ⟨before, after, localShape, beforeAway, afterAway⟩ :=
+            localOccurrences_split_at_child input routeStart child position
+              hposition
+          have targetLocal :
+              ConcreteElaboration.localOccurrences
+                  (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                    (fun _ => .output)) routeStart =
+                (before ++ .child child :: after).map
+                  (spawnNodeRaw_oldOccurrence input) := by
+            rw [spawnNodeRaw_localOccurrences_old_of_region_ne input
+              (.term targetRegion 0 term) routeStart routeStart 1
+              (fun _ => .output) (by
+                intro equality
+                exact regionNeScope equality.symm), localShape]
+          have sourceFramed :
+              ConcreteElaboration.compileOccurrencesWith? signature input
+                (ConcreteElaboration.compileRegion? signature input fuel)
+                (source.extend routeStart) binders
+                (before ++ .child child :: after) = some sourceItems := by
+            rw [← localShape]
+            exact sourceItemsEq
+          obtain ⟨sourceBefore, sourceFocus, sourceAfter, sourceBeforeCompiled,
+              sourceFocusCompiled, sourceAfterCompiled, sourceItemsShape⟩ :=
+            compileOccurrencesWith?_frame_split
+              (ConcreteElaboration.compileRegion? signature input fuel)
+              (source.extend routeStart) binders before after (.child child)
+              sourceItems sourceFramed
+          have targetFramed :
+              ConcreteElaboration.compileOccurrencesWith? signature
+                (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                  (fun _ => .output))
+                (ConcreteElaboration.compileRegion? signature
+                  (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                    (fun _ => .output)) fuel)
+                (target.extend routeStart) binders
+                (before.map (spawnNodeRaw_oldOccurrence input) ++
+                  spawnNodeRaw_oldOccurrence input (.child child) ::
+                  after.map (spawnNodeRaw_oldOccurrence input)) =
+                some targetItems := by
+            rw [← List.map_cons, ← List.map_append, ← targetLocal]
+            exact targetItemsEq
+          obtain ⟨targetBefore, targetFocus, targetAfter, targetBeforeCompiled,
+              targetFocusCompiled, targetAfterCompiled, targetItemsShape⟩ :=
+            compileOccurrencesWith?_frame_split
+              (ConcreteElaboration.compileRegion? signature
+                (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                  (fun _ => .output)) fuel)
+              (target.extend routeStart) binders
+              (before.map (spawnNodeRaw_oldOccurrence input))
+              (after.map (spawnNodeRaw_oldOccurrence input))
+              (spawnNodeRaw_oldOccurrence input (.child child)) targetItems
+              targetFramed
+          cases fuel with
+          | zero =>
+              simp [ConcreteElaboration.compileOccurrenceWith?, childIsBubble,
+                ConcreteElaboration.compileRegion?] at sourceFocusCompiled
+          | succ childFuel =>
+            simp only [ConcreteElaboration.compileOccurrenceWith?,
+              spawnNodeRaw_oldOccurrence, childIsBubble]
+              at sourceFocusCompiled targetFocusCompiled
+            rw [show (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                (fun _ => .output)).regions child = input.regions child by rfl,
+              childIsBubble] at targetFocusCompiled
+            simp only at targetFocusCompiled
+            change (ConcreteElaboration.compileRegion? signature
+              (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                (fun _ => .output))
+              (childFuel + 1) child (target.extend routeStart)
+              (binders.push child arity)).bind
+                (fun body => some (Item.bubble arity body)) =
+                  some targetFocus at targetFocusCompiled
+            cases sourceChildEq : ConcreteElaboration.compileRegion? signature
+                input (childFuel + 1) child (source.extend routeStart)
+                (binders.push child arity) with
+            | none => simp [sourceChildEq] at sourceFocusCompiled
+            | some sourceChild =>
+              simp [sourceChildEq] at sourceFocusCompiled
+              subst sourceFocus
+              cases targetChildEq : ConcreteElaboration.compileRegion? signature
+                  (spawnNodeRaw input (.term targetRegion 0 term) routeStart 1
+                    (fun _ => .output))
+                  (childFuel + 1) child (target.extend routeStart)
+                  (binders.push child arity) with
+              | none => simp [targetChildEq] at targetFocusCompiled
+              | some targetChild =>
+                simp [targetChildEq] at targetFocusCompiled
+                subst targetFocus
+                have beforeMap := spawnNodeRaw_compileOccurrencesAwayFromNode
+                  input (.term targetRegion 0 term) routeStart routeStart child 1
+                  (fun _ => .output) hinput htarget scopeEnclosesRegion hparent
+                  tail (childFuel + 1) source target embedding binders
+                  hsourceExact htargetExact before (by
+                    intro occurrence member
+                    rw [localShape]
+                    simp [member]) beforeAway
+                rw [sourceBeforeCompiled, targetBeforeCompiled] at beforeMap
+                have beforeItems : targetBefore = sourceBefore.renameWires
+                    (embedding.extend routeStart).index :=
+                  Option.some.inj beforeMap
+                have afterMap := spawnNodeRaw_compileOccurrencesAwayFromNode
+                  input (.term targetRegion 0 term) routeStart routeStart child 1
+                  (fun _ => .output) hinput htarget scopeEnclosesRegion hparent
+                  tail (childFuel + 1) source target embedding binders
+                  hsourceExact htargetExact after (by
+                    intro occurrence member
+                    rw [localShape]
+                    simp [member]) afterAway
+                rw [sourceAfterCompiled, targetAfterCompiled] at afterMap
+                have afterItems : targetAfter = sourceAfter.renameWires
+                    (embedding.extend routeStart).index :=
+                  Option.some.inj afterMap
+                let freshIndex := spawnNodeRaw_freshExtendedIndex input
+                  (.term targetRegion 0 term) routeStart 1 (fun _ => .output)
+                  target 0
+                have freshGet : (target.extend routeStart).get freshIndex =
+                    Fin.natAdd input.wireCount (0 : Fin 1) := by
+                  exact spawnNodeRaw_freshExtendedIndex_get input
+                    (.term targetRegion 0 term) routeStart 1
+                    (fun _ => .output) target 0
+                have scopeEnclosesChild : input.Encloses routeStart child :=
+                  AnchoredWireSoundness.split_direct_child_encloses hparent
+                have childNeScope : child ≠ routeStart := by
+                  intro equality
+                  subst child
+                  exact (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                    hinput hparent) (ConcreteDiagram.Encloses.refl input routeStart)
+                have childSemantic := zeroRoute_region_denote_equiv input
+                  targetRegion routeStart term hinput htarget scopeEnclosesRegion
+                  tail childDepth depthZero scopeEnclosesChild childNeScope
+                  childFuel (source.extend routeStart) (target.extend routeStart)
+                  (embedding.extend routeStart) (binders.push child arity)
+                  (hsourceExact.extend_child hinput hparent)
+                  (htargetExact.extend_child htarget hparent)
+                  sourceChild targetChild sourceChildEq targetChildEq freshIndex
+                  freshGet
+                constructor
+                · intro targetDenotes
+                  refine spawnNodeRaw_finishRegion_site_projects input
+                    (.term targetRegion 0 term) routeStart 1
+                    (fun _ => .output) source target embedding
+                    htargetExact.nodup sourceItems targetItems ?_ model named
+                    outerEnv relEnv targetDenotes
+                  intro currentModel currentNamed rawEnv currentRelEnv
+                    itemsDenote
+                  rw [targetItemsShape, beforeItems, afterItems,
+                    denoteItemSeq_frame] at itemsDenote
+                  rw [sourceItemsShape, ItemSeq.renameWires_append,
+                    ItemSeq.renameWires, denoteItemSeq_frame]
+                  rcases itemsDenote with
+                    ⟨beforeDenotes, ⟨relation, childDenotes⟩, afterDenotes⟩
+                  refine ⟨beforeDenotes, ?_, afterDenotes⟩
+                  refine ⟨relation, ?_⟩
+                  have sourceRaw := (childSemantic currentModel currentNamed
+                    rawEnv (relation, currentRelEnv)).1 childDenotes
+                  exact (denoteRegion_renameWires
+                    (relCtx := arity :: rels) currentModel currentNamed
+                    (embedding.extend routeStart).index rawEnv
+                    (relation, currentRelEnv) sourceChild).2 sourceRaw
+                · intro sourceDenotes
+                  refine spawnNodeRaw_finishRegion_site_reflects input
+                    (.term targetRegion 0 term) routeStart 1
+                    (fun _ => .output) source target embedding
+                    htargetExact.nodup sourceItems targetItems model named
+                    outerEnv relEnv (fun _ => model.eval term Fin.elim0) ?_
+                    sourceDenotes
+                  intro rawEnv freshValue itemsDenote
+                  rw [sourceItemsShape, ItemSeq.renameWires_append,
+                    ItemSeq.renameWires, denoteItemSeq_frame] at itemsDenote
+                  rw [targetItemsShape, beforeItems, afterItems,
+                    denoteItemSeq_frame]
+                  rcases itemsDenote with
+                    ⟨beforeDenotes, ⟨relation, childDenotes⟩, afterDenotes⟩
+                  refine ⟨beforeDenotes, ?_, afterDenotes⟩
+                  refine ⟨relation, ?_⟩
+                  have sourceRaw := (denoteRegion_renameWires
+                    (relCtx := arity :: rels) model named
+                    (embedding.extend routeStart).index rawEnv
+                    (relation, relEnv) sourceChild).1 childDenotes
+                  exact (childSemantic model named rawEnv (relation, relEnv)).2
+                    (freshValue 0) sourceRaw
+
 end RoutedClosedAnchorSoundness
 
 end VisualProof.Rule
