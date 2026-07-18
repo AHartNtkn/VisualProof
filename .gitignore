@@ -5,6 +5,8 @@ node_modules/
 dist/
 demo/dist
 app/dist
+dist-electron/
+release/
 test-results/
 .tools/
 assets/interface/.staging/

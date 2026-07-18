@@ -2,7 +2,9 @@
   "name": "visual-proof-assistant",
   "private": true,
   "version": "0.1.0",
+  "description": "A desktop game of rigorous symbolic restoration.",
   "type": "module",
+  "main": "dist-electron/main.js",
   "engines": {
     "node": ">=20"
   },
@@ -16,14 +18,42 @@
     "emit:theories": "tsx scripts/emit-theories.ts",
     "demo": "vite demo",
     "app": "vite app",
-    "e2e": "playwright test"
+    "e2e": "playwright test",
+    "build:renderer": "vite build app",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "build:desktop": "npm run build:renderer && npm run build:electron",
+    "desktop:dev": "npm run build:desktop && electron .",
+    "package:linux:dir": "npm run build:desktop && electron-builder --linux dir",
+    "package:linux": "npm run build:desktop && electron-builder --linux AppImage deb"
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/node": "^20",
+    "electron": "43.1.1",
+    "electron-builder": "26.15.3",
     "tsx": "^4.22.5",
     "typescript": "^5.5.0",
     "vite": "^5",
     "vitest": "^2.0.0"
+  },
+  "build": {
+    "appId": "com.cursebreaker.game",
+    "productName": "Cursebreaker",
+    "asar": true,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "app/dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "linux": {
+      "category": "Game",
+      "target": [
+        "AppImage",
+        "deb"
+      ]
+    }
   }
 }
