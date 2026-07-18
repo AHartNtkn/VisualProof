@@ -234,4 +234,77 @@ theorem deiterationReinsertInput_admissible
     simpa [deiterationReinsertInput, iterationInput, frame, retained, layout]
       using combined
 
+/-- The certified inverse insertion is accepted by the splice checker for
+every executor-accepted deiteration witness. -/
+theorem deiterationReinsert_complete
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection) :
+    ∃ result, Splice.Input.spliceChecked signature
+      (deiterationReinsertInput input selection witness) = .ok result :=
+  (deiterationReinsertInput input selection witness).spliceChecked_complete
+    (deiterationReinsertInput_admissible input selection witness)
+
+noncomputable def deiterationReinsertResult
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection) : CheckedDiagram signature :=
+  Classical.choose (deiterationReinsert_complete input selection witness)
+
+theorem deiterationReinsertResult_spec
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection) :
+    Splice.Input.spliceChecked signature
+        (deiterationReinsertInput input selection witness) =
+      .ok (deiterationReinsertResult input selection witness) :=
+  Classical.choose_spec (deiterationReinsert_complete input selection witness)
+
+/-- The public iteration executor accepts the certified inverse insertion;
+the enclosing, non-selection, and checked-splice branches are all discharged
+from the deiteration witness rather than assumed. -/
+theorem applyIteration_deiterationReinsert_complete
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection) :
+    ∃ receipt, applyIteration (deiterationRemoved input selection)
+      (deiterationRetainedSelection input selection witness)
+      (deiterationReinsertTarget input selection) = .ok receipt := by
+  unfold applyIteration
+  rw [if_pos (deiterationReinsert_encloses input selection witness)]
+  split
+  · rename_i selected
+    exact False.elim
+      (deiterationReinsert_not_selected input selection witness selected)
+  · split
+    · rename_i error hsplice
+      have accepted : Splice.Input.spliceChecked signature
+          (iterationInput (deiterationRemoved input selection)
+            (deiterationRetainedSelection input selection witness)
+            (deiterationReinsertTarget input selection)) =
+          .ok (deiterationReinsertResult input selection witness) :=
+        deiterationReinsertResult_spec input selection witness
+      rw [hsplice] at accepted
+      contradiction
+    · exact ⟨_, rfl⟩
+
+noncomputable def deiterationReinsertReceipt
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection) :
+    StepReceipt (deiterationRemoved input selection) :=
+  Classical.choose
+    (applyIteration_deiterationReinsert_complete input selection witness)
+
+theorem deiterationReinsertReceipt_spec
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val)
+    (witness : DeiterationWitness input selection) :
+    applyIteration (deiterationRemoved input selection)
+        (deiterationRetainedSelection input selection witness)
+        (deiterationReinsertTarget input selection) =
+      .ok (deiterationReinsertReceipt input selection witness) :=
+  Classical.choose_spec
+    (applyIteration_deiterationReinsert_complete input selection witness)
+
 end VisualProof.Rule.IterationSoundness

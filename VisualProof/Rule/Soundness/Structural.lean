@@ -7,6 +7,7 @@ import VisualProof.Rule.Soundness.Iteration.OpenRoute
 import VisualProof.Rule.Soundness.Iteration.ZeroOpenRoute
 import VisualProof.Rule.Soundness.Iteration.RootAnchorSemantic
 import VisualProof.Rule.Soundness.Iteration.SameSite
+import VisualProof.Rule.Soundness.Iteration.DeiterationReinsert
 import VisualProof.Rule.Soundness.WireJoin
 
 namespace VisualProof.Rule
@@ -2440,6 +2441,29 @@ theorem applyIteration_sound
       exact Classical.byContradiction (fun distinct => targetNe distinct)
     exact applyIteration_sound_same context orientation input selection target
       receipt happly targetEq
+
+/-- The certified survivor occurrence can always be copied back into the
+deiteration hole, and the public iteration theorem supplies its complete
+ordered-open semantic equivalence for every anchor and binder-spine case. -/
+private theorem deiterationReinsert_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : CheckedDiagram signature)
+    (selection : Diagram.CheckedSelection input.val)
+    (witness : DeiterationWitness input selection) :
+    SuccessfulReceiptSound context orientation
+      (IterationSoundness.deiterationRemoved input selection)
+      (.iteration
+        (IterationSoundness.deiterationRetainedSelection input selection
+          witness)
+        (IterationSoundness.deiterationReinsertTarget input selection))
+      (IterationSoundness.deiterationReinsertReceipt input selection
+        witness) :=
+  applyIteration_sound context orientation
+    (IterationSoundness.deiterationRemoved input selection)
+    (IterationSoundness.deiterationRetainedSelection input selection witness)
+    (IterationSoundness.deiterationReinsertTarget input selection)
+    (IterationSoundness.deiterationReinsertReceipt input selection witness)
+    (IterationSoundness.deiterationReinsertReceipt_spec input selection witness)
 
 /-- Every successful deiteration receipt preserves ordered-open semantics. -/
 theorem applyDeiteration_sound
