@@ -119,6 +119,47 @@ describe('production excavation folio DOM view', () => {
       `end:${COMPLETED}`,
     ])
   })
+
+  it('cancels an active drag exactly once before update or disposal removes its record', () => {
+    const document = new FakeDocument()
+    const host = new FakeElement(document)
+    const calls: string[] = []
+    const view = mountFolioView({
+      host: host as unknown as HTMLElement,
+      projection: projection('puzzle'),
+      onSelectPuzzle: () => {},
+      onRefusePuzzle: () => {},
+      onSelectCulture: () => {},
+      onRefuseCulture: () => {},
+      onScroll: () => {},
+      onTheoremDragStart: () => {},
+      onTheoremDragMove: () => {},
+      onTheoremDragEnd: () => calls.push('end'),
+      onTheoremDragCancel: () => calls.push('cancel'),
+    })
+    const root = view.element as unknown as FakeElement
+    const first = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
+    first.dispatchEvent(eventWith('pointerdown', {
+      button: 0, pointerId: 11, clientX: 30, clientY: 40,
+    }))
+    view.update(projection('puzzle'))
+    expect(calls).toEqual(['cancel'])
+    expect(first.hasPointerCapture(11)).toBe(false)
+    expect(first.classList.contains('is-theorem-lifted')).toBe(false)
+    expect(first.style.getPropertyValue('--folio-drag-x')).toBe('')
+    first.dispatchEvent(eventWith('pointercancel', { pointerId: 11, clientX: 30, clientY: 40 }))
+    expect(calls).toEqual(['cancel'])
+
+    const second = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
+    second.dispatchEvent(eventWith('pointerdown', {
+      button: 0, pointerId: 12, clientX: 50, clientY: 60,
+    }))
+    view.dispose()
+    expect(calls).toEqual(['cancel', 'cancel'])
+    expect(second.hasPointerCapture(12)).toBe(false)
+    expect(second.classList.contains('is-theorem-lifted')).toBe(false)
+    expect(second.style.getPropertyValue('--folio-drag-y')).toBe('')
+  })
 })
 
 describe('production lens DOM ownership and approved assets', () => {

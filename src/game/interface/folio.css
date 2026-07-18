@@ -4,10 +4,19 @@
   box-sizing: border-box;
   padding: 4.4rem 1.7rem 1.8rem 3.5rem;
   color: #30281f;
+  isolation: isolate;
+}
+
+.curse-folio::before {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
   background:
     url('../../../assets/interface/generated/excavation-folio/folio-shell.png')
     center / 100% 100% no-repeat;
   filter: drop-shadow(0.8rem 1.1rem 1.3rem rgb(2 2 5 / 58%));
+  content: '';
+  pointer-events: none;
 }
 
 .curse-folio-cultures {
@@ -48,6 +57,7 @@
 
 .curse-folio-dossier {
   position: relative;
+  z-index: 1;
   box-sizing: border-box;
   height: 100%;
   min-height: 0;
@@ -183,11 +193,8 @@
   pointer-events: none;
   cursor: grabbing;
   filter: drop-shadow(0.75rem 1rem 0.8rem rgb(3 2 4 / 54%));
+  transform-origin: 50% 50%;
   transform: translate(calc(var(--folio-drag-x) - 50%), calc(var(--folio-drag-y) - 50%)) rotate(-1deg);
-}
-
-.curse-production-environment[data-layout="compact"] .curse-folio {
-  right: var(--curse-folio-handle);
 }
 
 @media (prefers-reduced-motion: reduce) {

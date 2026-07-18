@@ -37,13 +37,18 @@
 
 .curse-production-substrate {
   z-index: 0;
-  object-position: var(--curse-substrate-x) var(--curse-substrate-y);
+  top: -8%;
+  left: -8%;
+  width: 116%;
+  height: 116%;
+  max-width: none;
   background: #07090c;
   filter:
     hue-rotate(var(--curse-substrate-hue))
     saturate(var(--curse-substrate-saturation))
     brightness(var(--curse-substrate-brightness));
   transform:
+    translate(var(--curse-substrate-crop-x), var(--curse-substrate-crop-y))
     rotate(var(--curse-substrate-rotation))
     scale(var(--curse-substrate-scale));
 }

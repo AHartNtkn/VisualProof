@@ -89,8 +89,14 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
   }
   const setSubstrateSeed = (seed: string): void => {
     const presentation = substratePresentation(seed)
-    substrate.style.setProperty('--curse-substrate-x', `${presentation.positionX}%`)
-    substrate.style.setProperty('--curse-substrate-y', `${presentation.positionY}%`)
+    substrate.style.setProperty(
+      '--curse-substrate-crop-x',
+      `${(presentation.positionX - 50) * 0.35}%`,
+    )
+    substrate.style.setProperty(
+      '--curse-substrate-crop-y',
+      `${(presentation.positionY - 50) * 0.35}%`,
+    )
     substrate.style.setProperty('--curse-substrate-rotation', `${presentation.rotationDegrees}deg`)
     substrate.style.setProperty('--curse-substrate-hue', `${presentation.hueDegrees}deg`)
     substrate.style.setProperty('--curse-substrate-saturation', `${presentation.saturation}`)

@@ -73,7 +73,12 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const motion = new FolioDossierMotion(root, options.motionClock)
   let current = options.projection
   let renderListeners = new AbortController()
-  let activeDrag: { puzzle: PuzzleId; pointerId: number; record: HTMLElement } | null = null
+  let activeDrag: {
+    puzzle: PuzzleId
+    pointerId: number
+    record: HTMLElement
+    lastSample: FolioDragSample
+  } | null = null
 
   const listen = (
     target: EventTarget,
@@ -81,17 +86,32 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     listener: EventListener,
   ): void => target.addEventListener(type, listener, { signal: renderListeners.signal })
 
-  const releaseDrag = (event: PointerEvent, cancelled: boolean): void => {
-    if (activeDrag === null || activeDrag.pointerId !== event.pointerId) return
-    const { puzzle, pointerId, record } = activeDrag
-    activeDrag = null
+  const clearDragPresentation = (
+    drag: NonNullable<typeof activeDrag>,
+  ): void => {
+    const { pointerId, record } = drag
+    if (record.hasPointerCapture(pointerId)) record.releasePointerCapture(pointerId)
     record.classList.remove('is-theorem-lifted')
     record.style.removeProperty('--folio-drag-x')
     record.style.removeProperty('--folio-drag-y')
-    if (record.hasPointerCapture(pointerId)) record.releasePointerCapture(pointerId)
+  }
+
+  const cancelActiveDrag = (): void => {
+    if (activeDrag === null) return
+    const drag = activeDrag
+    activeDrag = null
+    clearDragPresentation(drag)
+    options.onTheoremDragCancel(drag.puzzle, drag.lastSample)
+  }
+
+  const releaseDrag = (event: PointerEvent, cancelled: boolean): void => {
+    if (activeDrag === null || activeDrag.pointerId !== event.pointerId) return
+    const drag = activeDrag
+    activeDrag = null
+    clearDragPresentation(drag)
     const sample = dragSample(event)
-    if (cancelled) options.onTheoremDragCancel(puzzle, sample)
-    else options.onTheoremDragEnd(puzzle, sample)
+    if (cancelled) options.onTheoremDragCancel(drag.puzzle, sample)
+    else options.onTheoremDragEnd(drag.puzzle, sample)
   }
 
   const recordElement = (record: FolioRecordProjection): HTMLElement => {
@@ -133,18 +153,26 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       listen(node, 'pointerdown', ((rawEvent: PointerEvent) => {
         if (rawEvent.button !== 0 || activeDrag !== null) return
         rawEvent.preventDefault()
-        activeDrag = { puzzle: record.id, pointerId: rawEvent.pointerId, record: node }
+        const sample = dragSample(rawEvent)
+        activeDrag = {
+          puzzle: record.id,
+          pointerId: rawEvent.pointerId,
+          record: node,
+          lastSample: sample,
+        }
         node.setPointerCapture(rawEvent.pointerId)
         node.classList.add('is-theorem-lifted')
         node.style.setProperty('--folio-drag-x', `${rawEvent.clientX}px`)
         node.style.setProperty('--folio-drag-y', `${rawEvent.clientY}px`)
-        options.onTheoremDragStart(record.id, dragSample(rawEvent))
+        options.onTheoremDragStart(record.id, sample)
       }) as EventListener)
       listen(node, 'pointermove', ((rawEvent: PointerEvent) => {
         if (activeDrag?.pointerId !== rawEvent.pointerId) return
+        const sample = dragSample(rawEvent)
+        activeDrag.lastSample = sample
         node.style.setProperty('--folio-drag-x', `${rawEvent.clientX}px`)
         node.style.setProperty('--folio-drag-y', `${rawEvent.clientY}px`)
-        options.onTheoremDragMove(record.id, dragSample(rawEvent))
+        options.onTheoremDragMove(record.id, sample)
       }) as EventListener)
       listen(node, 'pointerup', ((event: PointerEvent) => releaseDrag(event, false)) as EventListener)
       listen(node, 'pointercancel', ((event: PointerEvent) => releaseDrag(event, true)) as EventListener)
@@ -153,9 +181,9 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   }
 
   const render = (previousCulture: CultureId | null): void => {
+    cancelActiveDrag()
     renderListeners.abort()
     renderListeners = new AbortController()
-    activeDrag = null
     root.dataset.mode = current.mode
     root.dataset.activeDossier = current.selectedCulture
     root.dataset.motion = current.reducedMotion ? 'reduced' : 'full'
@@ -221,6 +249,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     dispose() {
       if (disposed) return
       disposed = true
+      cancelActiveDrag()
       renderListeners.abort()
       motion.settle()
       root.remove()

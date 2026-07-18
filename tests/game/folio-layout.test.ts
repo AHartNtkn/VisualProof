@@ -40,6 +40,7 @@ describe('production lens and folio layout', () => {
     expect(layout.folio.presentation).toBe('drawer')
     expect(layout.folio.visibleHandle).toBeGreaterThanOrEqual(44)
     expect(layout.folio.left).toBeLessThan(0)
+    expect(layout.folio.left + layout.folio.width).toBe(layout.folio.visibleHandle)
     expect(layout.lens.left + layout.lens.size / 2).toBeCloseTo(380)
     expect(layout.lens.left).toBeGreaterThanOrEqual(16)
     expect(layout.lens.left + layout.lens.size).toBeLessThanOrEqual(744)
