@@ -8,6 +8,7 @@ import { proofSnapshot } from '../../src/app/proof-snapshot'
 function timeline(diagram: ReturnType<typeof mkDiagram>, actions: readonly ProofAction[] = []): ProofTimeline {
   return {
     states: actions.length === 0 ? [diagram] : [diagram, diagram],
+    boundaries: actions.length === 0 ? [[]] : [[], []],
     actions,
     cursor: actions.length,
   }

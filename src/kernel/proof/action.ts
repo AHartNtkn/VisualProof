@@ -2,8 +2,8 @@ import type { Diagram } from '../diagram/diagram'
 import type { NodeId, RegionId, WireId } from '../diagram/diagram'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import { ProofError } from './error'
-import { applyStep } from './step'
-import type { ProofContext, ProofStep } from './step'
+import { applyStepWithReceipt } from './step'
+import type { ProofContext, ProofStep, StepReceipt } from './step'
 
 export type PlacementHint = {
   readonly introducedNode: number
@@ -71,7 +71,7 @@ export function applyAction(
   action: ProofAction,
   ctx: ProofContext,
   orientation: 'forward' | 'backward' = 'forward',
-  afterStep?: (diagram: Diagram, stepIndex: number) => void,
+  afterStep?: (diagram: Diagram, stepIndex: number, receipt: StepReceipt) => void,
 ): Diagram {
   if (action.label.length === 0) throw new ProofError('proof action label must not be empty')
   if (action.steps.length === 0) throw new ProofError(`proof action '${action.label}' must contain at least one step`)
@@ -79,14 +79,16 @@ export function applyAction(
 
   let current = diagram
   for (const [stepIndex, step] of action.steps.entries()) {
+    let receipt: StepReceipt
     try {
-      current = applyStep(current, step, ctx, orientation, reservation)
+      receipt = applyStepWithReceipt(current, step, ctx, orientation, reservation)
+      current = receipt.result
     } catch (error) {
       throw new ProofError(
         `step ${stepIndex} (${step.rule}) failed: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
-    afterStep?.(current, stepIndex)
+    afterStep?.(current, stepIndex, receipt)
   }
 
   const introducedNodes = introducedNodeIds(diagram, current)
@@ -113,7 +115,7 @@ export function replayActions(
   diagram: Diagram,
   actions: readonly ProofAction[],
   ctx: ProofContext,
-  afterStep?: (diagram: Diagram, actionIndex: number, stepIndex: number) => void,
+  afterStep?: (diagram: Diagram, actionIndex: number, stepIndex: number, receipt: StepReceipt) => void,
   orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
   let current = diagram
@@ -124,7 +126,7 @@ export function replayActions(
         action,
         ctx,
         orientation,
-        (next, stepIndex) => afterStep?.(next, actionIndex, stepIndex),
+        (next, stepIndex, receipt) => afterStep?.(next, actionIndex, stepIndex, receipt),
       )
     } catch (error) {
       throw new ProofError(

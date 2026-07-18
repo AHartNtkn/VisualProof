@@ -41,7 +41,11 @@ export function companionFor(state: CompanionState): Companion | null {
   if (state.mode === 'replay') {
     const r = state.replay
     if (r === null) return null
-    return { diagram: r.diagramAt(r.actionCount), boundary: r.boundary, label: 'goal: final state' }
+    return {
+      diagram: r.diagramAt(r.actionCount),
+      boundary: r.boundaryAt(r.actionCount),
+      label: 'goal: final state',
+    }
   }
   return null
 }

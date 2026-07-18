@@ -6,7 +6,7 @@ export type TimelineView = {
   readonly states: readonly Diagram[]
   readonly actions: readonly ProofAction[]
   readonly cursor: number
-  readonly boundary: readonly WireId[]
+  boundaryAt(cursor: number): readonly WireId[]
   readonly inputAllowed?: () => boolean
   moveTo(cursor: number): void
 }

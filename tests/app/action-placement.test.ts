@@ -124,7 +124,7 @@ describe('proof action placement presentation', () => {
     }))
     const replay = mkReplay(theorem, context)
     const replayed = replay.diagramAt(1)
-    const engine = mkEngine(replayed, replay.boundary)
+    const engine = mkEngine(replayed, replay.boundaryAt(1))
     seedProject(engine)
 
     seedActionHistoryPlacements(

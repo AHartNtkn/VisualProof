@@ -6,6 +6,8 @@ import type { Theorem } from '../../src/kernel/proof/theorem'
 import { bootFixture } from './boot-fixture'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
+import { parseTerm } from '../../src/kernel/term/parse'
+import { checkTheorem } from '../../src/kernel/proof/theorem'
 
 const boot = await bootFixture()
 const ctx = boot.ctx
@@ -18,6 +20,37 @@ const thm = (name: string): Theorem => {
 const plusComm = thm('plusComm')
 
 describe('mkReplay', () => {
+  it('replays the transported boundary of root-available anchored contraction', () => {
+    const b = new DiagramBuilder()
+    const redundant = b.termNode(b.root, parseTerm('\\x. x'))
+    const survivor = b.termNode(b.root, parseTerm('\\x. x'))
+    const drop = b.wire(b.root, [{ node: redundant, port: { kind: 'output' } }])
+    const keep = b.wire(b.root, [{ node: survivor, port: { kind: 'output' } }])
+    const lhs = mkDiagramWithBoundary(b.build(), [drop, drop, keep])
+    const action = {
+      label: 'coalesce equal anchors',
+      steps: [{
+        rule: 'anchoredWireContract' as const,
+        redundant,
+        survivor,
+        certificate: { leftSteps: [], rightSteps: [] },
+      }],
+      placements: [],
+    }
+    const empty = { theorems: new Map(), relations: new Map() }
+    const result = replayActions(lhs.diagram, [action], empty)
+    const theorem: Theorem = {
+      name: 'root-coalescence-replay',
+      lhs,
+      rhs: mkDiagramWithBoundary(result, [keep, keep, keep]),
+      actions: [action],
+    }
+    expect(() => checkTheorem(theorem, empty)).not.toThrow()
+    const replay = mkReplay(theorem, empty)
+    expect(replay.boundaryAt(0)).toEqual([drop, drop, keep])
+    expect(replay.boundaryAt(1)).toEqual([keep, keep, keep])
+  })
+
   it('uses one scrub stop for a genuine multi-step action and exposes every constituent in order', () => {
     const b = new DiagramBuilder()
     const lhs = mkDiagramWithBoundary(b.build(), [])
@@ -48,7 +81,7 @@ describe('mkReplay', () => {
   it('step 0 is the left-hand side; the boundary is the lhs boundary', () => {
     const r = mkReplay(plusComm, ctx)
     expect(exploreForm(r.diagramAt(0))).toBe(exploreForm(plusComm.lhs.diagram))
-    expect(r.boundary).toBe(plusComm.lhs.boundary)
+    expect(r.boundaryAt(0)).toBe(plusComm.lhs.boundary)
   })
 
   it('the last step matches an independently replayed result', () => {

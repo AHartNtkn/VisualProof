@@ -7,7 +7,12 @@ import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
 import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
 import { applyClosedTermIntro } from '../../../src/kernel/rules/intro'
-import { applyStep, replayProof } from '../../../src/kernel/proof/step'
+import {
+  applyStep,
+  applyStepWithReceipt,
+  replayProof,
+  transportBoundary,
+} from '../../../src/kernel/proof/step'
 import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
 import { ProofError } from '../../../src/kernel/proof/error'
 
@@ -110,6 +115,60 @@ describe('applyStep mirrors the direct appliers', () => {
     const d = h.build()
     const out = applyStep(d, { rule: 'openTermSpawn', region: cut, term: pp('x') }, ctx)
     expect(Object.values(out.nodes)).toHaveLength(1)
+  })
+})
+
+describe('step interface transport', () => {
+  const anchoredFixture = (survivorBehindCut: boolean) => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const redundant = b.termNode(b.root, pp('\\x. x'))
+    const survivor = b.termNode(survivorBehindCut ? cut : b.root, pp('\\x. x'))
+    const drop = b.wire(b.root, [{ node: redundant, port: { kind: 'output' } }])
+    const keep = b.wire(b.root, [{ node: survivor, port: { kind: 'output' } }])
+    return { diagram: b.build(), redundant, survivor, drop, keep }
+  }
+
+  it('coalesces an anchored contraction boundary exactly when the survivor is root-available', () => {
+    const root = anchoredFixture(false)
+    const rootReceipt = applyStepWithReceipt(root.diagram, {
+      rule: 'anchoredWireContract',
+      redundant: root.redundant,
+      survivor: root.survivor,
+      certificate: { leftSteps: [], rightSteps: [] },
+    }, ctx)
+    expect(rootReceipt.result.wires[root.drop]).toBeUndefined()
+    expect(rootReceipt.interface.image(root.drop)).toBe(root.keep)
+    expect(transportBoundary(rootReceipt.interface, [root.drop, root.drop, root.keep]))
+      .toEqual([root.keep, root.keep, root.keep])
+
+    const shielded = anchoredFixture(true)
+    const shieldedReceipt = applyStepWithReceipt(shielded.diagram, {
+      rule: 'anchoredWireContract',
+      redundant: shielded.redundant,
+      survivor: shielded.survivor,
+      certificate: { leftSteps: [], rightSteps: [] },
+    }, ctx)
+    expect(shieldedReceipt.result.wires[shielded.drop]).toBeUndefined()
+    expect(shieldedReceipt.interface.image(shielded.drop)).toBeUndefined()
+    expect(transportBoundary(shieldedReceipt.interface, [shielded.drop])).toBeUndefined()
+    expect(transportBoundary(shieldedReceipt.interface, [shielded.keep])).toEqual([shielded.keep])
+  })
+
+  it('uses the same coalescing interface authority for wire join', () => {
+    const b = new DiagramBuilder()
+    const outerNode = b.termNode(b.root, pp('\\x. x'))
+    const innerNode = b.termNode(b.root, pp('\\x. x'))
+    const outer = b.wire(b.root, [{ node: outerNode, port: { kind: 'output' } }])
+    const inner = b.wire(b.root, [{ node: innerNode, port: { kind: 'output' } }])
+    const receipt = applyStepWithReceipt(
+      b.build(),
+      { rule: 'wireJoin', a: outer, b: inner },
+      ctx,
+      'backward',
+    )
+    expect(transportBoundary(receipt.interface, [outer, inner, inner]))
+      .toEqual([outer, outer, outer])
   })
 })
 

@@ -53,7 +53,12 @@ function intro(diagram = bare().diagram) {
 describe('authoritative proof timeline', () => {
   it('starts with one state and moves undo/redo without deleting the future', () => {
     const s0 = startTrack(bare(), 'forward', ctx)
-    expect(s0.timeline).toEqual({ states: [s0.origin.diagram], actions: [], cursor: 0 })
+    expect(s0.timeline).toEqual({
+      states: [s0.origin.diagram],
+      boundaries: [s0.origin.boundary],
+      actions: [],
+      cursor: 0,
+    })
 
     const s1 = applyTrack(s0, intro(currentTrack(s0)))
     const undone = undoTrack(s1)

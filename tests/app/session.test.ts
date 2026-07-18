@@ -36,6 +36,41 @@ const TWOc = p('\\f. \\x. f (f x)')
 const ZEROc = p('\\f. \\x. x')
 
 describe('single-track proving', () => {
+  it('transports anchored contraction boundaries at root and rejects cut-shielded coalescence', () => {
+    const fixture = (shielded: boolean) => {
+      const b = new DiagramBuilder()
+      const cut = b.cut(b.root)
+      const redundant = b.termNode(b.root, p('\\x. x'))
+      const survivor = b.termNode(shielded ? cut : b.root, p('\\x. x'))
+      const drop = b.wire(b.root, [{ node: redundant, port: { kind: 'output' } }])
+      const keep = b.wire(b.root, [{ node: survivor, port: { kind: 'output' } }])
+      const step: ProofStep = {
+        rule: 'anchoredWireContract',
+        redundant,
+        survivor,
+        certificate: { leftSteps: [], rightSteps: [] },
+      }
+      return { side: mkDiagramWithBoundary(b.build(), [drop, drop, keep]), drop, keep, step }
+    }
+    const empty = { theorems: new Map(), relations: new Map() }
+
+    const root = fixture(false)
+    const start = startTrack(root.side, 'forward', empty)
+    const contracted = applyTrack(start, root.step)
+    expect(trackBoundary(contracted)).toEqual([root.keep, root.keep, root.keep])
+    expect(trackBoundary(undoTrack(contracted))).toEqual([root.drop, root.drop, root.keep])
+    expect(trackBoundary(redoTrack(undoTrack(contracted))))
+      .toEqual([root.keep, root.keep, root.keep])
+    expect(() => declareTrack(contracted, 'root-coalescence')).not.toThrow()
+
+    const shielded = fixture(true)
+    const blocked = startTrack(shielded.side, 'forward', empty)
+    expect(() => applyTrack(blocked, shielded.step))
+      .toThrowError(new RegExp(`boundary wire '${shielded.drop}' no semantic image`))
+    expect(trackBoundary(blocked)).toEqual([shielded.drop, shielded.drop, shielded.keep])
+    expect(timelineActiveActions(blocked.timeline)).toEqual([])
+  })
+
   it('treats every multi-step gesture as one history position and one undo/redo', () => {
     const ctx = verifyTheory(buildFregeTheory())
     const b = new DiagramBuilder()
@@ -183,9 +218,9 @@ describe('proof session', () => {
     const session = startSession(side, side, ctx)
 
     expect(() => applyForward(session, { rule: 'relUnfold', node: ref }))
-      .toThrowError(new RegExp(`forward step destroyed fixed statement-boundary wire '${w1}'`))
+      .toThrowError(new RegExp(`forward step 0 gives boundary wire '${w1}' no semantic image`))
     expect(() => applyBackward(session, { rule: 'relUnfold', node: ref }))
-      .toThrowError(new RegExp(`backward step destroyed fixed statement-boundary wire '${w1}'`))
+      .toThrowError(new RegExp(`backward step 0 gives boundary wire '${w1}' no semantic image`))
     expect(currentSide(session, 'forward').wires[w0]).toBeDefined()
     expect(currentSide(session, 'forward').wires[w1]).toBeDefined()
     expect(timelineActiveActions(session.forward)).toHaveLength(0)
@@ -211,7 +246,7 @@ describe('proof session', () => {
     const finalOnly = applyAction(initial, action, session.ctx)
     expect(finalOnly.wires[boundary]).toBeDefined()
     expect(() => applyForwardAction(session, action))
-      .toThrowError(new RegExp(`forward step destroyed fixed statement-boundary wire '${boundary}'`))
+      .toThrowError(new RegExp(`forward step 0 gives boundary wire '${boundary}' no semantic image`))
     expect(session.forward.actions).toHaveLength(0)
   })
 

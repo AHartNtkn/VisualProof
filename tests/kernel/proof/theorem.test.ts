@@ -125,7 +125,7 @@ describe('checkTheorem', () => {
         },
       })],
     }
-    expect(() => checkTheorem(destroying, ctx)).toThrowError(/boundary wire .* was destroyed/)
+    expect(() => checkTheorem(destroying, ctx)).toThrowError(/boundary wire .* has no semantic image/)
   })
 })
 
@@ -303,7 +303,7 @@ describe('boundary-wire id resurrection is refused', () => {
       )],
     }
     const c: ProofContext = { theorems: new Map([[T.name, T]]), relations: new Map() }
-    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
+    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' has no semantic image/)
   })
 
   it('a single theorem step cannot destroy and re-mint the boundary id within itself', () => {
@@ -328,6 +328,6 @@ describe('boundary-wire id resurrection is refused', () => {
       })],
     }
     const c: ProofContext = { theorems: new Map([[T.name, T]]), relations: new Map() }
-    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
+    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' has no semantic image/)
   })
 })

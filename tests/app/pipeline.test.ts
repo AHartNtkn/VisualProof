@@ -76,7 +76,11 @@ describe('the full story: prove, adopt, save, reload, cite', () => {
     })
     const rhs = mkDiagramWithBoundary(currentSide(s, 'forward'), [])
     // test-level state surgery to make a met session without re-running
-    s = { ...s, rhs, backward: { states: [rhs.diagram], actions: [], cursor: 0 } }
+    s = {
+      ...s,
+      rhs,
+      backward: { states: [rhs.diagram], boundaries: [rhs.boundary], actions: [], cursor: 0 },
+    }
     const thm = assembleTheorem(s, 'wrapId')
     const s2 = adoptTheorem(s, thm)
     // save, reload, verify, cite

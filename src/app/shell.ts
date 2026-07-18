@@ -291,11 +291,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     return editDiagram
   }
 
-  // Prove-mode sides render their statement boundary as frame exits; an edit
-  // sheet has no boundary. mkEngine ignores boundary ids absent from the
-  // current diagram, so a stale id simply draws no exit.
+  // Proof and replay boundaries are transported with their current diagrams;
+  // an edit sheet has no boundary.
   const currentBoundary = (): readonly WireId[] => {
-    if (mode === 'replay' && replay !== null) return replay.boundary
+    if (mode === 'replay' && replay !== null) return replay.boundaryAt(replayK)
     if (mode === 'prove' && proof !== null) {
       return proof.kind === 'track' ? trackBoundary(proof.track) : sideBoundary(proof.session, proof.side)
     }
@@ -717,13 +716,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     compass.setOpen('library', false)
     interaction.cancelActiveGesture()
     displayed = replay.diagramAt(0)
-    engine = mkEngine(displayed, replay.boundary)
+    engine = mkEngine(displayed, replay.boundaryAt(0))
     // Size the fixed border ONCE from the PROOF-WIDE max content extent (USER RULING
     // 2026-07-06, option (a)): a replay's contents are ALL its steps, so one absolute
     // border fits every step and never resizes as the proof is stepped. Cheap
     // (~150 ms whole-proof scan). Established before seedProject, whose establishFrame
     // then no-ops; every later step carries this same frame via carryOver.
-    const steps = Array.from({ length: replay.actionCount + 1 }, (_, k) => ({ diagram: replay!.diagramAt(k), boundary: replay!.boundary }))
+    const steps = Array.from({ length: replay.actionCount + 1 }, (_, k) => ({
+      diagram: replay!.diagramAt(k),
+      boundary: replay!.boundaryAt(k),
+    }))
     establishProofFrame(engine, steps)
     // proof-wide boundary slot-shift: align the fixed slots to where the ports sit,
     // once, so boundary wires take short exits instead of sweeping the frame. Carried
@@ -746,7 +748,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     replayK = Math.max(0, Math.min(replay.actionCount, k))
     const prevEngine = engine
     displayed = replay.diagramAt(replayK)
-    const next = mkEngine(displayed, replay.boundary)
+    const next = mkEngine(displayed, replay.boundaryAt(replayK))
     carryOver(prevEngine, next)
     seedProject(next)
     engine = next
@@ -1665,7 +1667,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         states: Array.from({ length: replay.actionCount + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
         actions: replay.actions,
         cursor: replayK,
-        boundary: replay.boundary,
+        boundaryAt: (cursor) => replay!.boundaryAt(cursor),
         inputAllowed: () => true,
         moveTo: gotoReplayStep,
       }
@@ -1675,7 +1677,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const active = proof.track
       return {
         ...active.timeline,
-        boundary: trackBoundary(active),
+        boundaryAt: (cursor) => active.timeline.boundaries[cursor]!,
         inputAllowed: () => !mainMotion.playing,
         moveTo: (cursor) => {
           if (proof?.kind !== 'track') return
@@ -1690,7 +1692,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     return {
       ...active,
       name: activeProof.side,
-      boundary: sideBoundary(activeProof.session, activeProof.side),
+      boundaryAt: (cursor) => active.boundaries[cursor]!,
       inputAllowed: () => fixedWorkspace?.playing !== true,
       moveTo: (cursor) => {
         cancelRelationAuthoring()
@@ -1721,7 +1723,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       previewCanvas = document.createElement('canvas')
       const previewSurface = adaptCanvas(previewCanvas)
       previewSurface.resize(520, 340)
-      const previewEngine = mkEngine(transition.after, timeline.boundary)
+      const bounded = Math.max(0, Math.min(timeline.states.length - 1, cursor))
+      const afterIndex = timeline.states.length === 1 ? 0 : bounded === 0 ? 1 : bounded
+      const previewEngine = mkEngine(transition.after, timeline.boundaryAt(afterIndex))
       seedProject(previewEngine)
       for (let i = 0; i < 16; i++) settleStep(previewEngine, null)
       const points: Vec2[] = []

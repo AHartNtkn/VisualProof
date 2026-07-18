@@ -13,7 +13,7 @@ import { applyIteration, applyDeiteration } from '../rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../rules/doublecut'
 import { applyConversionByCertificate } from '../rules/conversion'
 import { applyCongruenceJoin } from '../rules/congruence'
-import { applyAnchoredWireSplit, applyAnchoredWireContract } from '../rules/anchored-wire'
+import { anchorAvailability, applyAnchoredWireSplit, applyAnchoredWireContract } from '../rules/anchored-wire'
 import { applyHeadStrip } from '../rules/headstrip'
 import { applyClosedTermIntro } from '../rules/intro'
 import { applyFusion, applyFission } from '../rules/fusion'
@@ -63,6 +63,48 @@ export type ProofStep =
   | { readonly rule: 'relUnfold'; readonly node: NodeId }
   | { readonly rule: 'relFold'; readonly sel: SubgraphSelection; readonly defId: string; readonly args: readonly WireId[] }
 
+/** Logical transport of source wire identities through one proof step.
+ * Unlike graph provenance, distinct source identities may intentionally
+ * coalesce. An absent image means the identity cannot remain on an open
+ * boundary after this step. */
+export type WireInterfaceTransport = {
+  readonly image: (wire: WireId) => WireId | undefined
+}
+
+/** Authoritative result of executing one serialized proof step. */
+export type StepReceipt = {
+  readonly result: Diagram
+  readonly interface: WireInterfaceTransport
+}
+
+/** Ordered boundary transport. Positions and repeated aliases are preserved. */
+export function transportBoundary(
+  transport: WireInterfaceTransport,
+  boundary: readonly WireId[],
+): readonly WireId[] | undefined {
+  const mapped: WireId[] = []
+  for (const wire of boundary) {
+    const image = transport.image(wire)
+    if (image === undefined) return undefined
+    mapped.push(image)
+  }
+  return mapped
+}
+
+function rootFilteredInterface(
+  target: Diagram,
+  candidate: (wire: WireId) => WireId | undefined,
+): WireInterfaceTransport {
+  return {
+    image(wire) {
+      const mapped = candidate(wire)
+      if (mapped === undefined) return undefined
+      const targetWire = target.wires[mapped]
+      return targetWire !== undefined && targetWire.scope === target.root ? mapped : undefined
+    },
+  }
+}
+
 /**
  * Apply one step. `orientation` is the reasoning direction: 'forward' (the
  * default — replay and forward proving) keeps every gate as stated;
@@ -70,7 +112,7 @@ export type ProofStep =
  * (erasure, atomic spawning, wire joining, theorem citation) — the calculus's cut symmetry.
  * Execution is IDENTICAL either way: one applier per rule, no mirrors.
  */
-export function applyStep(
+function applyStepRaw(
   d: Diagram,
   step: ProofStep,
   ctx: ProofContext,
@@ -108,6 +150,60 @@ export function applyStep(
     case 'relUnfold': return applyRelUnfold(d, step.node, ctx.relations, reservation)
     case 'relFold': return applyRelFold(d, step.sel, step.defId, step.args, ctx.relations, reservation)
   }
+}
+
+/** Execute one step and return its semantic open-interface transport.
+ * Graph operations continue to own concrete mutation; this receipt is the
+ * single authority for carrying an ordered boundary across that mutation. */
+export function applyStepWithReceipt(
+  d: Diagram,
+  step: ProofStep,
+  ctx: ProofContext,
+  orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
+): StepReceipt {
+  const result = applyStepRaw(d, step, ctx, orientation, reservation)
+  let candidate: (wire: WireId) => WireId | undefined =
+    (wire) => result.wires[wire] === undefined ? undefined : wire
+
+  if (step.rule === 'wireJoin') {
+    const aSurvives = result.wires[step.a] !== undefined
+    const retained = aSurvives ? step.a : step.b
+    const absorbed = aSurvives ? step.b : step.a
+    candidate = (wire) => wire === absorbed
+      ? retained
+      : result.wires[wire] === undefined ? undefined : wire
+  } else if (step.rule === 'anchoredWireContract') {
+    const redundant = d.nodes[step.redundant]
+    const survivor = d.nodes[step.survivor]
+    const drop = redundant?.kind === 'term'
+      ? Object.keys(d.wires).find((wire) => d.wires[wire]!.endpoints.some((endpoint) =>
+          endpoint.node === step.redundant && endpoint.port.kind === 'output'))
+      : undefined
+    const keep = survivor?.kind === 'term'
+      ? Object.keys(d.wires).find((wire) => d.wires[wire]!.endpoints.some((endpoint) =>
+          endpoint.node === step.survivor && endpoint.port.kind === 'output'))
+      : undefined
+    const coalescesAtRoot = drop !== undefined
+      && keep !== undefined
+      && anchorAvailability(d, step.survivor) === d.root
+    candidate = (wire) => wire === drop && coalescesAtRoot
+      ? keep
+      : result.wires[wire] === undefined ? undefined : wire
+  }
+
+  return { result, interface: rootFilteredInterface(result, candidate) }
+}
+
+/** Diagram projection for callers that do not carry an open boundary. */
+export function applyStep(
+  d: Diagram,
+  step: ProofStep,
+  ctx: ProofContext,
+  orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
+): Diagram {
+  return applyStepWithReceipt(d, step, ctx, orientation, reservation).result
 }
 
 /**

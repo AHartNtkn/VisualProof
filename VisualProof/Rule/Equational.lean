@@ -674,18 +674,26 @@ def anchoredWireContractProvenance (input : Diagram.CheckedDiagram signature)
     (anchoredContractWireDomain input.val drop) rfl
 
 /-- Logical transport for anchored contraction. The removed redundant output
-identity coalesces with the retained output identity, while graph provenance
-continues to omit the removed identity to remain injective. -/
+identity coalesces with the retained output identity exactly when the
+survivor's closed equality is available at the ordered-open root. Graph
+provenance continues to omit the removed identity to remain injective. -/
 def anchoredWireContractInterfaceTransport
     (input : Diagram.CheckedDiagram signature)
-    (redundant : Fin input.val.nodeCount)
+    (redundant survivor : Fin input.val.nodeCount)
     (drop keep : Fin input.val.wireCount) :
     InterfaceTransport input.val
       (anchoredWireContractRaw input redundant drop keep) :=
   let domain := anchoredContractWireDomain input.val drop
+  let rootAvailable := match input.val.nodes survivor with
+    | .term survivorRegion _ _ => anchorAvailableAt input.val
+        (input.val.wires keep).scope survivorRegion input.val.root
+    | _ => false
   InterfaceTransport.rootFiltered input.val
     (anchoredWireContractRaw input redundant drop keep)
-    (fun wire => if wire = drop then domain.index? keep else domain.index? wire)
+    (fun wire =>
+      if rootAvailable then
+        if wire = drop then domain.index? keep else domain.index? wire
+      else domain.index? wire)
 
 /-- Regression witness for the distinction between graph provenance and the
 logical interface. Contraction removes `drop` from the concrete carrier, but
@@ -693,18 +701,24 @@ both ordered boundary positions are transported to the retained `keep`
 identity. -/
 theorem anchoredWireContract_interface_coalesces
     (input : Diagram.CheckedDiagram signature)
-    (redundant : Fin input.val.nodeCount)
+    (redundant survivor : Fin input.val.nodeCount)
     (drop keep : Fin input.val.wireCount)
+    (survivorRegion : Fin input.val.regionCount)
+    (survivorTerm : Lambda.Term 0 (Fin 0))
+    (hsurvivor : input.val.nodes survivor =
+      .term survivorRegion 0 survivorTerm)
+    (havailable : anchorAvailableAt input.val (input.val.wires keep).scope
+      survivorRegion input.val.root = true)
     (hdistinct : drop ≠ keep)
     (hkeepRoot : (input.val.wires keep).scope = input.val.root) :
     ∃ mapped,
       (anchoredWireContractProvenance input redundant drop keep).image? drop =
           none ∧
-      (anchoredWireContractInterfaceTransport input redundant drop keep).image?
+      (anchoredWireContractInterfaceTransport input redundant survivor drop keep).image?
           drop = some mapped ∧
-      (anchoredWireContractInterfaceTransport input redundant drop keep).image?
+      (anchoredWireContractInterfaceTransport input redundant survivor drop keep).image?
           keep = some mapped ∧
-      (anchoredWireContractInterfaceTransport input redundant drop keep).transportBoundary
+      (anchoredWireContractInterfaceTransport input redundant survivor drop keep).transportBoundary
         [drop, keep] = some [mapped, mapped] := by
   let domain := anchoredContractWireDomain input.val drop
   have hkeep : domain.survives keep = true := by
@@ -730,24 +744,24 @@ theorem anchoredWireContract_interface_coalesces
     simp [anchoredWireContractProvenance, WireProvenance.survivors,
       WireProvenance.rootFiltered, hdrop']
   have hinterfaceDrop :
-      (anchoredWireContractInterfaceTransport input redundant drop keep).image?
+      (anchoredWireContractInterfaceTransport input redundant survivor drop keep).image?
         drop = some mapped := by
     unfold anchoredWireContractInterfaceTransport
       InterfaceTransport.rootFiltered
     dsimp only
-    rw [if_pos rfl, hindex']
+    rw [hsurvivor, if_pos havailable, if_pos rfl, hindex']
     change (if
       ((anchoredWireContractRaw input redundant drop keep).wires mapped).scope =
           (anchoredWireContractRaw input redundant drop keep).root then
         some mapped else none) = some mapped
     rw [if_pos htargetRoot]
   have hinterfaceKeep :
-      (anchoredWireContractInterfaceTransport input redundant drop keep).image?
+      (anchoredWireContractInterfaceTransport input redundant survivor drop keep).image?
         keep = some mapped := by
     unfold anchoredWireContractInterfaceTransport
       InterfaceTransport.rootFiltered
     dsimp only
-    rw [if_neg hdistinct.symm, hindex']
+    rw [hsurvivor, if_pos havailable, if_neg hdistinct.symm, hindex']
     change (if
       ((anchoredWireContractRaw input redundant drop keep).wires mapped).scope =
           (anchoredWireContractRaw input redundant drop keep).root then
@@ -755,6 +769,30 @@ theorem anchoredWireContract_interface_coalesces
     rw [if_pos htargetRoot]
   refine ⟨mapped, hprovenanceDrop, hinterfaceDrop, hinterfaceKeep, ?_⟩
   simp [InterfaceTransport.transportBoundary, hinterfaceDrop, hinterfaceKeep]
+  rfl
+
+/-- A cut-shielded survivor cannot justify coalescing an exposed dropped
+identity; the dropped boundary position therefore has no semantic image. -/
+theorem anchoredWireContract_interface_drops_unavailable
+    (input : Diagram.CheckedDiagram signature)
+    (redundant survivor : Fin input.val.nodeCount)
+    (drop keep : Fin input.val.wireCount)
+    (survivorRegion : Fin input.val.regionCount)
+    (survivorTerm : Lambda.Term 0 (Fin 0))
+    (hsurvivor : input.val.nodes survivor =
+      .term survivorRegion 0 survivorTerm)
+    (hunavailable : anchorAvailableAt input.val (input.val.wires keep).scope
+      survivorRegion input.val.root = false) :
+    (anchoredWireContractInterfaceTransport input redundant survivor drop keep
+      ).image? drop = none := by
+  let domain := anchoredContractWireDomain input.val drop
+  have hdrop : domain.index? drop = none := by
+    rw [domain.index?_eq_none_iff]
+    simp [domain, anchoredContractWireDomain]
+  unfold anchoredWireContractInterfaceTransport
+    InterfaceTransport.rootFiltered
+  dsimp only
+  rw [hsurvivor, if_neg (by simpa using hunavailable), hdrop]
   rfl
 
 def applyAnchoredWireContract (input : Diagram.CheckedDiagram signature)
@@ -788,7 +826,7 @@ def applyAnchoredWireContract (input : Diagram.CheckedDiagram signature)
                       (anchoredWireContractRaw input redundant drop keep)
                       (anchoredWireContractProvenance input redundant drop keep)
                       (anchoredWireContractInterfaceTransport input redundant
-                        drop keep) result hcheck)
+                        survivor drop keep) result hcheck)
                 else .error .binderEscape
               else .error .binderEscape
           | _, _ => .error .invalidWire
@@ -832,7 +870,7 @@ theorem applyAnchoredWireContract_realizes
           { node := survivor, port := .output } = some keep ∧
       result.Realizes (anchoredWireContractRaw input redundant drop keep)
         (anchoredWireContractProvenance input redundant drop keep)
-        (anchoredWireContractInterfaceTransport input redundant drop keep) := by
+        (anchoredWireContractInterfaceTransport input redundant survivor drop keep) := by
   unfold applyAnchoredWireContract at happly
   split at happly <;> try contradiction
   split at happly <;> try contradiction

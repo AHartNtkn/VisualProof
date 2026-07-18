@@ -492,7 +492,7 @@ import { legPaths } from '../../src/view/wires'
 const bootCtx = (await bootFixture()).ctx
 const threeBoundary = (): { diagram: Diagram; boundary: readonly WireId[] } => {
   const r = mkReplay(bootCtx.theorems.get('plusComm')!, bootCtx)
-  return { diagram: r.diagramAt(0), boundary: r.boundary }
+  return { diagram: r.diagramAt(0), boundary: r.boundaryAt(0) }
 }
 function mkArgs(mk: () => { d: Diagram; b: WireId[] }): [Diagram, WireId[]] {
   const { d, b } = mk()

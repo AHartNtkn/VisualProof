@@ -8,6 +8,8 @@ import type { IdReservation } from '../diagram/subgraph/freshId'
 import { exploreForm } from '../diagram/canonical/explore'
 import { RuleError } from '../rules/error'
 import type { ProofContext } from './step'
+import { transportBoundary } from './step'
+import type { StepReceipt } from './step'
 import type { ProofAction } from './action'
 import { replayActions } from './action'
 import { ProofError } from './error'
@@ -34,16 +36,14 @@ export type TheoremApplication = {
 /**
  * Verify a theorem once: replay its steps from lhs.diagram (each applier
  * enforcing its own gate) and require the result, pinned by the lhs boundary,
- * to be isomorphic to the stated rhs respecting boundary order. Boundary
- * wires must survive the proof (keep them as the OUTER wire of any join) and
- * must be root-scoped on both sides (splice's stub invariant).
+ * to be isomorphic to the stated rhs respecting boundary order. Each step's
+ * semantic interface transports the ordered boundary; positions may
+ * coalesce, while a position with no image rejects the proof. Boundary wires
+ * must be root-scoped on both stated sides (splice's stub invariant).
  *
- * Survival is checked after EVERY step, not just at the end: a destroyed
- * boundary id could otherwise be resurrected by a later splice's fresh-id
- * choice, certifying a false theorem through a semantically unrelated wire.
- * Per-step presence suffices because no single applier both deletes a wire
- * and mints fresh wire ids — applyTheorem, the one applier that removes and
- * splices, splices FIRST so its fresh ids avoid the entire pre-removal set.
+ * Transport is checked after EVERY step, not just at the end, so a boundary
+ * identity with no semantic image cannot be replaced later by an unrelated
+ * wire that happens to reuse its identifier.
  */
 export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
   if (thm.lhs.boundary.length !== thm.rhs.boundary.length) {
@@ -59,20 +59,29 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
     }
   }
   const backActions = thm.backActions ?? []
-  const survival = (boundary: readonly WireId[]) => (d: Diagram, actionIndex: number, stepIndex: number): void => {
-    for (const w of boundary) {
-      if (d.wires[w] === undefined) {
-        throw new ProofError(
-          `theorem '${thm.name}': boundary wire '${w}' was destroyed by the proof (action ${actionIndex}, step ${stepIndex})`,
-        )
-      }
+  const carry = (initial: readonly WireId[]) => {
+    let boundary = initial
+    return {
+      afterStep(_d: Diagram, actionIndex: number, stepIndex: number, receipt: StepReceipt): void {
+        const mapped = transportBoundary(receipt.interface, boundary)
+        if (mapped === undefined) {
+          const missing = boundary.find((wire) => receipt.interface.image(wire) === undefined)
+          throw new ProofError(
+            `theorem '${thm.name}': boundary wire '${missing ?? '<unknown>'}' has no semantic image (action ${actionIndex}, step ${stepIndex})`,
+          )
+        }
+        boundary = mapped
+      },
+      boundary: () => boundary,
     }
   }
-  const fwd = replayActions(thm.lhs.diagram, thm.actions, ctx, survival(thm.lhs.boundary))
+  const fwdInterface = carry(thm.lhs.boundary)
+  const fwd = replayActions(thm.lhs.diagram, thm.actions, ctx, fwdInterface.afterStep)
   // the backward half replays from the RHS with flipped gates — each step
   // asserts its result entails its input, so the chain runs rhs-ward
-  const bwd = replayActions(thm.rhs.diagram, backActions, ctx, survival(thm.rhs.boundary), 'backward')
-  if (exploreForm(fwd, thm.lhs.boundary) !== exploreForm(bwd, thm.rhs.boundary)) {
+  const bwdInterface = carry(thm.rhs.boundary)
+  const bwd = replayActions(thm.rhs.diagram, backActions, ctx, bwdInterface.afterStep, 'backward')
+  if (exploreForm(fwd, fwdInterface.boundary()) !== exploreForm(bwd, bwdInterface.boundary())) {
     throw new ProofError(backActions.length === 0
       ? `theorem '${thm.name}': the proof does not arrive at the stated right-hand side`
       : `theorem '${thm.name}': the forward and backward halves do not meet`)

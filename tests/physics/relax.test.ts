@@ -153,7 +153,7 @@ describe('settle — replay steps: content stays anchored, legal, rests, and E i
   const r = mkReplay(plusCommThm, bootCtx)
   for (const k of [0, 16, 32, 48, r.actionCount]) {
     it(`plusComm step ${k} stays anchored, rests legally, E monotone`, () => {
-      const e = mkEngine(r.diagramAt(k), r.boundary)
+      const e = mkEngine(r.diagramAt(k), r.boundaryAt(k))
       settle(e, 1100)
       assertRestsLegalMonotone(`plusComm@${k}`, e, 1.5)
     })
@@ -175,15 +175,15 @@ describe('settle — observed jitter reproductions (live feel reports)', () => {
   // but a few nodes make ~1-wu discrete descents late; its drift bound is measured
   // (2026-07-06) at that larger settled value with margin, per USER test policy.
   const jitterCases: [string, number, number, () => { d: Diagram; b: readonly WireId[] }][] = [
-    ['plusComm@20', 1100, 1.5, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }],
+    ['plusComm@20', 1100, 1.5, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundaryAt(20) } }],
     // budget raised 1100→2500: folding the junction trunk terms into the node
     // gates (the strict-descent dual fix) is correct — E stays perfectly monotone
     // (0.00000 rise/tick) — but it lengthens this fixture's transient. MEASURED:
     // drift decays 4.49→0.52 over ticks 1100→2100 monotonically, resting under the
     // 1.5 bound by ~2100; pinned at 2500 with margin. The BOUND is unchanged — an
     // unconverged tail gets a longer budget, never a looser bound (plan-23 policy).
-    ['succShiftS@24', 2500, 1.5, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }],
-    ['succShiftS@48', 2500, 3, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }],
+    ['succShiftS@24', 2500, 1.5, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundaryAt(24) } }],
+    ['succShiftS@48', 2500, 3, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundaryAt(48) } }],
   ]
   for (const [name, budget, bound, mk] of jitterCases) {
     it(`${name} rests legally with monotone E over 200 post-settle ticks`, () => {
@@ -215,7 +215,7 @@ describe('the leg-solve memo is output-neutral (plan 24 — exact cross-eval sol
     return out
   }
   it('plusComm@20 settles BIT-IDENTICALLY with the leg-solve cache on vs off', () => {
-    const build = (): Engine => { const r = mkReplay(plusCommThm, bootCtx); return mkEngine(r.diagramAt(20), r.boundary) }
+    const build = (): Engine => { const r = mkReplay(plusCommThm, bootCtx); return mkEngine(r.diagramAt(20), r.boundaryAt(20)) }
     let on: number[], off: number[]
     try {
       legCache.enabled = true
@@ -283,15 +283,15 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   // rendering tiny or overflowing. The seed path (app seedProject): proof-wide
   // frame, then applyContentScale sizes THIS step.
   const r = mkReplay(plusCommThm, bootCtx)
-  const steps = Array.from({ length: r.actionCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundary }))
+  const steps = Array.from({ length: r.actionCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundaryAt(k) }))
   // one fixed proof-wide frame, established once (as enterReplay does)
-  const probe = mkEngine(r.diagramAt(0), r.boundary)
+  const probe = mkEngine(r.diagramAt(0), r.boundaryAt(0))
   establishProofFrame(probe, steps)
   const frame = probe.frame!
 
   // build a step through the app seed path and settle it
   const seedStep = (k: number, ticks: number): Engine => {
-    const e = mkEngine(r.diagramAt(k), r.boundary)
+    const e = mkEngine(r.diagramAt(k), r.boundaryAt(k))
     e.frame = frame
     seedProject(e)
     settle(e, ticks)
