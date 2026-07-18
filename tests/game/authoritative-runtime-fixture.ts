@@ -1,4 +1,5 @@
 import { createInitialGameState } from '../../src/game/controller-state'
+import { buildCatalog } from '../../src/game/catalog'
 import '../../app/style.css'
 import { reduceGame, type GameAction } from '../../src/game/controller'
 import {
@@ -35,12 +36,16 @@ window.cancelAnimationFrame = (request: number): void => {
   activeRafs.delete(request)
   nativeCancelAnimationFrame(request)
 }
-const catalog = scenario === 'opening' ? openingCatalog()
+const scenarioCatalog = scenario === 'opening' ? openingCatalog()
   : scenario === 'artifact' ? artifactRuntimeCatalog()
     : scenario === 'editor' ? editorRuntimeCatalog()
       : scenario === 'motion' ? motionRuntimeCatalog()
         : scenario === 'long' ? longRuntimeCatalog()
           : controllerCatalog()
+const catalog = scenario === 'opening' ? scenarioCatalog : buildCatalog({
+  ...scenarioCatalog.source,
+  puzzles: scenarioCatalog.source.puzzles.map((puzzle) => ({ ...puzzle, teacher: [] })),
+})
 
 const restoredSave = (): unknown => {
   let state = createInitialGameState(catalog, { reducedMotion: false })
@@ -51,6 +56,16 @@ const restoredSave = (): unknown => {
   state = reduceGame(catalog, state, { kind: 'setReducedMotion', value: true }).state
   state = reduceGame(catalog, state, { kind: 'setFullscreen', value: false }).state
   state = reduceGame(catalog, state, { kind: 'setTextSize', value: 'large' }).state
+  return encodeGameSave(catalog, state)
+}
+
+const completedSave = (): unknown => {
+  let state = createInitialGameState(catalog, { reducedMotion: false })
+  const first = catalog.source.puzzles[0]!
+  state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first.id }).state
+  for (const step of first.witness) {
+    state = reduceGame(catalog, state, { kind: 'applyStep', step }).state
+  }
   return encodeGameSave(catalog, state)
 }
 
@@ -75,7 +90,9 @@ let unsubscribed = false
 const platform: CursebreakerPlatform = {
   async loadSave() {
     if (scenario === 'corrupt') return { format: 'damaged-user-save' }
-    return scenario === 'restore' ? restoredSave() : null
+    return scenario === 'restore' ? restoredSave()
+      : scenario === 'completion' ? completedSave()
+        : null
   },
   async writeSave(document) {
     writes.push(document)
@@ -114,6 +131,7 @@ const stateProjection = (debug: CursebreakerDebugState) => ({
   selectedScroll: debug.state.scrollByCulture.get(debug.state.selectedCulture),
   settings: debug.state.settings,
   transient: debug.state.transient,
+  guidance: debug.state.guidance,
   substrateSeed: debug.substrateSeed,
   hasProof: debug.proof !== null,
   hasTimeline: debug.timeline !== null,
@@ -131,6 +149,7 @@ const stateProjection = (debug: CursebreakerDebugState) => ({
   construction: debug.proof?.construction ?? null,
   proofRegions: debug.proofRegions,
   proofNodes: debug.proofNodes,
+  selection: debug.proof?.selection ?? [],
   saveFailure: debug.saveFailure,
 })
 
@@ -167,6 +186,19 @@ const fixture = {
     const step = catalog.puzzle(active).witness[index]
     if (step === undefined) throw new Error(`active puzzle has no witness step ${index}`)
     requireMounted().dispatch({ kind: 'applyStep', step })
+  },
+  unwinnable: () => {
+    const active = requireMounted().debug().state.activePuzzle
+    if (active === null) throw new Error('no active puzzle')
+    const intervention = catalog.puzzle(active).teacher.find(
+      ({ trigger }) => trigger.kind === 'recognizedUnwinnable',
+    )
+    if (intervention?.trigger.kind !== 'recognizedUnwinnable') {
+      throw new Error('active puzzle has no recognized unwinnable demonstration')
+    }
+    for (const step of intervention.trigger.demonstration) {
+      requireMounted().dispatch({ kind: 'applyStep', step })
+    }
   },
   puzzles: () => catalog.source.puzzles.map(({ id }) => id),
   settle: () => requireMounted().settled(),

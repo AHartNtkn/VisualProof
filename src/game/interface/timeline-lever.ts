@@ -4,7 +4,7 @@ export const TIMELINE_TRACK_START = 0.085
 export const TIMELINE_TRACK_SPAN = 0.83
 
 export const leverHandleFraction = (cursor: number, stateCount: number): number =>
-  stateCount <= 1 ? 0.5 : Math.max(0, Math.min(stateCount - 1, cursor)) / (stateCount - 1)
+  stateCount <= 1 ? 0 : Math.max(0, Math.min(stateCount - 1, cursor)) / (stateCount - 1)
 
 export const leverCursorAt = (
   clientX: number,
@@ -19,14 +19,22 @@ export const leverCursorAt = (
 
 export type MountedTimelineLever = {
   readonly element: HTMLElement
-  refresh(): void
+  update(projection: TimelineLeverProjection): void
   dispose(): void
 }
+
+export type TimelineLeverProjection =
+  | { readonly kind: 'active'; readonly timeline: GameTimeline }
+  | {
+      readonly kind: 'inactive'
+      readonly position: 'home' | 'complete'
+      readonly moves: number
+    }
 
 /** Mount interaction only; the lens environment owns both approved PNG layers. */
 export function mountTimelineLever(
   handleSlot: HTMLElement,
-  getTimeline: () => GameTimeline,
+  initialProjection: TimelineLeverProjection,
   onMove: (cursor: number) => void,
   inputAllowed: () => boolean = () => true,
 ): MountedTimelineLever {
@@ -38,8 +46,11 @@ export function mountTimelineLever(
   rail.tabIndex = 0
   handleSlot.append(rail)
 
+  let projection = initialProjection
   let draggingPointer: number | null = null
   let lastRequestedCursor: number | null = null
+  const inputTimeline = (): GameTimeline | null =>
+    projection.kind === 'active' && inputAllowed() ? projection.timeline : null
   const cancelDrag = (pointerId: number): void => {
     if (draggingPointer !== pointerId) return
     draggingPointer = null
@@ -47,11 +58,11 @@ export function mountTimelineLever(
     if (rail.hasPointerCapture(pointerId)) rail.releasePointerCapture(pointerId)
   }
   const requestAt = (event: PointerEvent): void => {
-    if (!inputAllowed()) {
+    const timeline = inputTimeline()
+    if (timeline === null) {
       cancelDrag(event.pointerId)
       return
     }
-    const timeline = getTimeline()
     const rect = rail.getBoundingClientRect()
     const cursor = leverCursorAt(
       event.clientX,
@@ -64,7 +75,7 @@ export function mountTimelineLever(
     onMove(cursor)
   }
   const down = (event: PointerEvent): void => {
-    if (event.button !== 0 || draggingPointer !== null || !inputAllowed()) return
+    if (event.button !== 0 || draggingPointer !== null || inputTimeline() === null) return
     draggingPointer = event.pointerId
     lastRequestedCursor = null
     rail.setPointerCapture(event.pointerId)
@@ -86,8 +97,8 @@ export function mountTimelineLever(
     }
   }
   const keydown = (event: KeyboardEvent): void => {
-    if (!inputAllowed()) return
-    const timeline = getTimeline()
+    const timeline = inputTimeline()
+    if (timeline === null) return
     const last = Math.max(0, timeline.states.length - 1)
     let cursor: number
     switch (event.key) {
@@ -110,27 +121,48 @@ export function mountTimelineLever(
   rail.addEventListener('lostpointercapture', lost)
   rail.addEventListener('keydown', keydown)
 
-  const refresh = (): void => {
-    const timeline = getTimeline()
-    const last = Math.max(0, timeline.states.length - 1)
-    const cursor = Math.max(0, Math.min(last, timeline.cursor))
-    const position = leverHandleFraction(cursor, timeline.states.length)
+  const setPosition = (position: number): void => {
     handleSlot.style.setProperty('--curse-timeline-position', String(position))
     handleSlot.style.setProperty(
       '--curse-timeline-handle-shift',
       `${(TIMELINE_TRACK_START + position * TIMELINE_TRACK_SPAN - 0.5) * 100}%`,
     )
+  }
+  const update = (next: TimelineLeverProjection): void => {
+    projection = next
+    if (projection.kind === 'inactive') {
+      if (draggingPointer !== null) cancelDrag(draggingPointer)
+      const complete = projection.position === 'complete'
+      const cursor = complete ? projection.moves : 0
+      setPosition(complete ? 1 : 0)
+      rail.setAttribute('aria-disabled', 'true')
+      rail.tabIndex = -1
+      rail.setAttribute('aria-valuemin', '0')
+      rail.setAttribute('aria-valuemax', String(cursor))
+      rail.setAttribute('aria-valuenow', String(cursor))
+      rail.setAttribute(
+        'aria-valuetext',
+        complete ? `Completed state ${cursor}` : 'Timeline inactive',
+      )
+      return
+    }
+    const timeline = projection.timeline
+    const last = Math.max(0, timeline.states.length - 1)
+    const cursor = Math.max(0, Math.min(last, timeline.cursor))
+    setPosition(leverHandleFraction(cursor, timeline.states.length))
+    rail.setAttribute('aria-disabled', 'false')
+    rail.tabIndex = 0
     rail.setAttribute('aria-valuemin', '0')
     rail.setAttribute('aria-valuemax', String(last))
     rail.setAttribute('aria-valuenow', String(cursor))
     rail.setAttribute('aria-valuetext', cursor === 0 ? 'Original seal' : `Recorded state ${cursor}`)
   }
 
-  refresh()
+  update(initialProjection)
   let disposed = false
   return {
     element: rail,
-    refresh,
+    update,
     dispose: () => {
       if (disposed) return
       disposed = true

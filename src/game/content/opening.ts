@@ -252,7 +252,12 @@ function twoVeils(): PuzzleDefinition {
     teacher: [{
       id: 'opening-paired-veils', performance: RELEASE_PAIRED_VEILS,
       trigger: { kind: 'opening' }, repeat: 'once',
-      text: 'The Seyric makers often laid one veil directly inside another. When nothing separates a pair, both may be lifted together.',
+      pages: [
+        'Move the pointer over a mark in the seal. A glow appears when the mark can be acted on.',
+        'Click a highlighted mark to select it. The selection remains lit after the pointer moves away.',
+        'Click a selected mark again to deselect it. Click the empty field to clear the whole selection.',
+        'Select the outer boundary of the paired veils. Right-click and choose “Eliminate the double cut,” or press Delete or Backspace, to lift both veils and finish the proof.',
+      ],
     }],
   }
 }
@@ -268,7 +273,7 @@ function fourVeils(): PuzzleDefinition {
   const teacher = [{
       id: 'opening-repeated-veils', performance: RESOLVE_REPEATED_VEILS,
       trigger: { kind: 'opening' }, repeat: 'once',
-      text: 'There are two paired veils here. Either pair may be lifted first.',
+      pages: ['There are two paired veils here. Either pair may be lifted first.'],
     }] as const
   return {
     id: FOUR_VEILS,
@@ -323,13 +328,13 @@ function forkedVeil(): PuzzleDefinition {
       {
         id: 'opening-dark-field', performance: CLEAR_DARK_FIELD,
         trigger: { kind: 'opening' }, repeat: 'once',
-        text: 'A dark field does not preserve every fragment drawn within it. You may clear away a complete fragment to expose a simpler form.',
+        pages: ['A dark field does not preserve every fragment drawn within it. You may clear away a complete fragment to expose a simpler form.'],
       },
       {
         id: 'empty-veil-trap', performance: CLEAR_DARK_FIELD,
         trigger: { kind: 'recognizedUnwinnable', state: trap, demonstration: [eraseCore] }, repeat: 'once',
         recovery: 'timeline',
-        text: 'An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.',
+        pages: ['An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.'],
       },
     ],
   }
@@ -372,7 +377,7 @@ function echoedVeil(): PuzzleDefinition {
       {
         id: 'opening-supported-echo', performance: LIFT_SUPPORTED_ECHO,
         trigger: { kind: 'opening' }, repeat: 'once',
-        text: 'The inner fragment is an exact echo of the older form outside it. Where the older form remains, the echo may be lifted.',
+        pages: ['The inner fragment is an exact echo of the older form outside it. Where the older form remains, the echo may be lifted.'],
       },
     ],
   }
@@ -422,12 +427,12 @@ function singleMarkReturn(): PuzzleDefinition {
       {
         id: 'opening-single-ring', performance: TRACE_SINGLE_MARK_OWNERSHIP,
         trigger: { kind: 'opening' }, repeat: 'once',
-        text: 'This colored mark belongs to the ring surrounding it. The veil changes where it appears, not which ring owns it.',
+        pages: ['This colored mark belongs to the ring surrounding it. The veil changes where it appears, not which ring owns it.'],
       },
       {
         id: 'completion-single-ring', performance: TRACE_SINGLE_MARK_OWNERSHIP,
         trigger: { kind: 'completion' }, repeat: 'once',
-        text: 'Good. The Seyric rings are ownership marks, not ornament. That distinction will matter among the Myratic finds.',
+        pages: ['Good. The Seyric rings are ownership marks, not ornament. That distinction will matter among the Myratic finds.'],
       },
     ],
   }
@@ -521,12 +526,12 @@ function blankWitness(): PuzzleDefinition {
       {
         id: 'opening-blank-hollow', performance: SUPPLY_COMPLETE_PATTERN,
         trigger: { kind: 'opening' }, repeat: 'once',
-        text: 'The Myratic hollow is deliberate. It asks for an entire seal-pattern. Open the loupe and place the blank sheet within it.',
+        pages: ['The Myratic hollow is deliberate. It asks for an entire seal-pattern. Open the loupe and place the blank sheet within it.'],
       },
       {
         id: 'completion-blank-hollow', performance: SUPPLY_COMPLETE_PATTERN,
         trigger: { kind: 'completion' }, repeat: 'once',
-        text: 'Precisely. To a Myratic seal, even an unwritten sheet is a complete pattern.',
+        pages: ['Precisely. To a Myratic seal, even an unwritten sheet is a complete pattern.'],
       },
     ],
   }

@@ -5,16 +5,14 @@ import {
   type InterfaceTextSize,
 } from './controller-state'
 import { isCultureUnlocked, isUnlocked } from './progress'
-import { applyGameStep, moveCursor, startPuzzle } from './session'
-import type { TeacherPresentationIntent } from './teaching'
+import { applyGameStep, currentDiagram, moveCursor, startPuzzle } from './session'
+import { guidanceInterventionsFor, type TeacherSignal } from './teaching'
 import {
   GameDomainError,
-  isTeacherAcknowledged,
-  teacherAcknowledgementIdentity,
+  isGuidanceDelivered,
   type CultureId,
   type GameStep,
   type PuzzleId,
-  type TeacherIntervention,
 } from './types'
 
 export type GameAction =
@@ -27,9 +25,7 @@ export type GameAction =
   | { readonly kind: 'openPauseSettings' }
   | { readonly kind: 'levelSelection' }
   | { readonly kind: 'exitGame' }
-  | { readonly kind: 'openTeacher'; readonly intervention: TeacherIntervention }
-  | { readonly kind: 'acknowledgeTeacher' }
-  | { readonly kind: 'closeTeacher' }
+  | { readonly kind: 'advanceGuidancePage' }
   | { readonly kind: 'openEditor' }
   | { readonly kind: 'closeEditor' }
   | { readonly kind: 'selectCulture'; readonly culture: CultureId }
@@ -79,14 +75,6 @@ const activeSession = (state: GameControllerState) => {
   return session
 }
 
-const teacherPresentation = (intervention: TeacherIntervention): TeacherPresentationIntent => {
-  switch (intervention.trigger.kind) {
-    case 'opening': return { kind: 'modalInstruction' }
-    case 'completion': return { kind: 'completionCommentary' }
-    case 'recognizedUnwinnable': return { kind: 'nonblockingCommentary', recovery: 'timeline' }
-  }
-}
-
 const requirePause = (state: GameControllerState): void => {
   if (state.transient?.kind !== 'pause') {
     throw new GameDomainError('pause action requires the pause transient')
@@ -97,11 +85,32 @@ const requireTimelineInputOwner = (state: GameControllerState): void => {
   if (state.transient?.kind === 'pause') {
     throw new GameDomainError('pause transient owns input; proof timeline input is unavailable')
   }
-  if (
-    state.transient?.kind === 'teacher'
-    && state.transient.presentation.kind !== 'nonblockingCommentary'
-  ) {
-    throw new GameDomainError('modal teacher transient owns input; proof timeline input is unavailable')
+}
+
+const withGuidanceFor = (
+  catalog: GameCatalog,
+  state: GameControllerState,
+  signal: TeacherSignal,
+): GameControllerState => {
+  if (state.mode !== 'puzzle' || state.activePuzzle === null) {
+    return state.guidance === null ? state : { ...state, guidance: null }
+  }
+  const presented = guidanceInterventionsFor(
+    catalog.puzzle(state.activePuzzle),
+    signal,
+    state.deliveredGuidance,
+  )[0]
+  if (presented === undefined) {
+    return state.guidance === null ? state : { ...state, guidance: null }
+  }
+  const deliveredGuidance = presented.intervention.repeat === 'once'
+    && !isGuidanceDelivered(state.deliveredGuidance, presented.identity)
+    ? [...state.deliveredGuidance, presented.identity]
+    : state.deliveredGuidance
+  return {
+    ...state,
+    deliveredGuidance,
+    guidance: { ...presented, page: 0 },
   }
 }
 
@@ -119,16 +128,18 @@ export function reduceGame(
       const replay = state.completed.has(puzzle.id)
       const sessions = replay ? state.replays : state.firstAttempts
       const session = sessions.get(puzzle.id) ?? startPuzzle(puzzle)
-      return result({
+      const selected: GameControllerState = {
         ...state,
         mode: 'puzzle',
         activePuzzle: puzzle.id,
         completionReceipt: null,
+        guidance: null,
         transient: null,
         ...(replay
           ? { replays: new Map(state.replays).set(puzzle.id, session) }
           : { firstAttempts: new Map(state.firstAttempts).set(puzzle.id, session) }),
-      })
+      }
+      return result(withGuidanceFor(catalog, selected, { kind: 'opening' }))
     }
     case 'applyStep': {
       requireTimelineInputOwner(state)
@@ -155,6 +166,7 @@ export function reduceGame(
               moves: transition.session.timeline.states.length - 1,
               replay: true,
             },
+            guidance: null,
             transient: null,
           })
         }
@@ -170,28 +182,39 @@ export function reduceGame(
             moves: transition.session.timeline.states.length - 1,
             replay: false,
           },
+          guidance: null,
           transient: null,
         })
       }
       if (replay) {
-        return result({
+        return result(withGuidanceFor(catalog, {
           ...state,
           replays: new Map(state.replays).set(puzzle.id, transition.session),
-        })
+          guidance: null,
+        }, { kind: 'recognizedUnwinnable', diagram: currentDiagram(transition.session) }))
       }
-      return result({
+      return result(withGuidanceFor(catalog, {
         ...state,
         firstAttempts: new Map(state.firstAttempts).set(puzzle.id, transition.session),
-      })
+        guidance: null,
+      }, { kind: 'recognizedUnwinnable', diagram: currentDiagram(transition.session) }))
     }
     case 'moveTimeline': {
       requireTimelineInputOwner(state)
       const puzzle = activePuzzle(catalog, state)
       const session = moveCursor(activeSession(state), action.cursor)
       if (state.completed.has(puzzle.id)) {
-        return result({ ...state, replays: new Map(state.replays).set(puzzle.id, session) })
+        return result(withGuidanceFor(catalog, {
+          ...state,
+          replays: new Map(state.replays).set(puzzle.id, session),
+          guidance: null,
+        }, { kind: 'recognizedUnwinnable', diagram: currentDiagram(session) }))
       }
-      return result({ ...state, firstAttempts: new Map(state.firstAttempts).set(puzzle.id, session) })
+      return result(withGuidanceFor(catalog, {
+        ...state,
+        firstAttempts: new Map(state.firstAttempts).set(puzzle.id, session),
+        guidance: null,
+      }, { kind: 'recognizedUnwinnable', diagram: currentDiagram(session) }))
     }
     case 'escape': {
       if (state.transient === null) {
@@ -216,49 +239,19 @@ export function reduceGame(
         mode: 'archive',
         activePuzzle: null,
         completionReceipt: null,
+        guidance: null,
         transient: null,
       })
     case 'exitGame':
       requirePause(state)
       return result(state, [{ kind: 'saveBeforeExitAndExitRequested' }])
-    case 'openTeacher': {
-      const puzzle = activePuzzle(catalog, state)
-      const intervention = puzzle.teacher.find((candidate) => candidate.id === action.intervention.id)
-      if (intervention === undefined) {
-        throw new GameDomainError(
-          `puzzle '${puzzle.id}' has no authored teacher intervention '${action.intervention.id}'`,
-        )
-      }
-      const identity = teacherAcknowledgementIdentity(puzzle.id, intervention.id)
-      if (intervention.repeat === 'once' && isTeacherAcknowledged(
-        state.acknowledgedTeachers,
-        identity,
-      )) {
+    case 'advanceGuidancePage': {
+      const guidance = state.guidance
+      if (guidance === null || guidance.page >= guidance.intervention.pages.length - 1) {
         return result(state)
       }
-      return result({
-        ...state,
-        transient: {
-          kind: 'teacher',
-          identity,
-          intervention,
-          presentation: teacherPresentation(intervention),
-        },
-      })
+      return result({ ...state, guidance: { ...guidance, page: guidance.page + 1 } })
     }
-    case 'acknowledgeTeacher': {
-      if (state.transient?.kind !== 'teacher') {
-        throw new GameDomainError('teacher acknowledgement requires a presented intervention')
-      }
-      const acknowledgedTeachers = state.transient.intervention.repeat === 'once'
-        && !isTeacherAcknowledged(state.acknowledgedTeachers, state.transient.identity)
-        ? [...state.acknowledgedTeachers, state.transient.identity]
-        : state.acknowledgedTeachers
-      return result({ ...state, acknowledgedTeachers, transient: null })
-    }
-    case 'closeTeacher':
-      if (state.transient?.kind !== 'teacher') return result(state)
-      return result({ ...state, transient: null })
     case 'openEditor':
       activePuzzle(catalog, state)
       return result({ ...state, transient: { kind: 'editor' } })

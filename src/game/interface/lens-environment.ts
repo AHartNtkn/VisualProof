@@ -15,6 +15,7 @@ export type MountedLensEnvironment = {
   readonly proofCanvasSlot: HTMLElement
   readonly timelineHandleSlot: HTMLElement
   readonly folioHost: HTMLElement
+  readonly presentationHost: HTMLElement
   setLayout(width: number, height: number): void
   setFolioDrawerOpen(open: boolean): void
   setSubstrateSeed(seed: string): void
@@ -77,6 +78,7 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
 
   const folioHost = element(document, 'aside', 'curse-production-folio-host')
   folioHost.setAttribute('aria-label', 'Excavation archive')
+  const presentationHost = element(document, 'div', 'curse-production-presentation-host')
   const folioDrawerToggle = element(document, 'button', 'curse-production-folio-drawer-toggle')
   folioDrawerToggle.type = 'button'
   let compact = false
@@ -109,7 +111,7 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
     if (options.folioDrawerInputAllowed?.() === false) return
     setFolioDrawerOpen(!drawerOpen)
   })
-  root.append(desk, stage, folioHost, folioDrawerToggle)
+  root.append(desk, stage, folioHost, folioDrawerToggle, presentationHost)
   options.host.append(root)
 
   const setLayout = (width: number, height: number): void => {
@@ -122,6 +124,16 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
     if (!compact) drawerOpen = true
     root.dataset.layout = layout.compact ? 'compact' : 'desktop'
     root.dataset.folioPresentation = layout.folio.presentation
+    root.style.setProperty(
+      '--curse-guidance-rail-right',
+      `${Math.max(0, width - layout.lens.left - layout.lens.size)}px`,
+    )
+    root.style.setProperty('--curse-guidance-rail-width', `${layout.lens.size * 0.1362}px`)
+    root.style.setProperty('--curse-guidance-top', `${layout.lens.top + 16}px`)
+    root.style.setProperty(
+      '--curse-guidance-timeline-top',
+      `${layout.lens.top + layout.lens.size * 0.847}px`,
+    )
     stage.style.setProperty('--curse-lens-left', `${layout.lens.left}px`)
     stage.style.setProperty('--curse-lens-top', `${layout.lens.top}px`)
     stage.style.setProperty('--curse-lens-size', `${layout.lens.size}px`)
@@ -154,6 +166,7 @@ export function mountLensEnvironment(options: LensEnvironmentOptions): MountedLe
     proofCanvasSlot,
     timelineHandleSlot,
     folioHost,
+    presentationHost,
     setLayout,
     setFolioDrawerOpen,
     setSubstrateSeed,

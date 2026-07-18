@@ -49,11 +49,6 @@ function richPuzzleState(): GameControllerState {
   state = move(state, SECOND, 0)
   state = move(state, SECOND, 1)
   state = act(state, { kind: 'moveTimeline', cursor: 0 })
-  state = act(state, {
-    kind: 'openTeacher',
-    intervention: catalog.puzzle(SECOND).teacher[0]!,
-  })
-  state = act(state, { kind: 'acknowledgeTeacher' })
   state = act(state, { kind: 'setCultureScroll', culture: FIRST_CULTURE, scroll: 19.5 })
   state = act(state, { kind: 'selectCulture', culture: SECOND_CULTURE })
   state = act(state, { kind: 'setCultureScroll', culture: SECOND_CULTURE, scroll: 83 })
@@ -63,7 +58,7 @@ function richPuzzleState(): GameControllerState {
 }
 
 describe('strict per-puzzle game save', () => {
-  it('round-trips every timeline and cursor plus controller mode, culture, scroll, acknowledgements, and settings', () => {
+  it('round-trips every timeline and cursor plus controller mode, culture, scroll, guidance delivery, and settings', () => {
     const state = richPuzzleState()
     const encoded = encodeGameSave(catalog, state)
     const loaded = decodeGameSave(catalog, plain(encoded))
@@ -81,49 +76,59 @@ describe('strict per-puzzle game save', () => {
     expect(loaded.firstAttempts.get(SECOND)?.timeline.steps).toHaveLength(2)
     expect(loaded.replays).toEqual(state.replays)
     expect(loaded.replays.get(FIRST)?.timeline.cursor).toBe(1)
-    expect(loaded.acknowledgedTeachers).toEqual(state.acknowledgedTeachers)
+    expect(loaded.deliveredGuidance).toEqual(state.deliveredGuidance)
+    expect(loaded.guidance).toEqual(state.guidance)
     expect(loaded.selectedCulture).toBe(SECOND_CULTURE)
     expect(loaded.scrollByCulture).toEqual(state.scrollByCulture)
     expect(loaded.settings).toEqual(state.settings)
   })
 
-  it('round-trips shared local teacher ids as independent puzzle-qualified acknowledgements', () => {
+  it('round-trips shared local intervention ids as independent puzzle-qualified deliveries', () => {
     let state = select(fresh(), SECOND)
-    state = act(state, {
-      kind: 'openTeacher', intervention: catalog.puzzle(SECOND).teacher[0]!,
-    })
-    state = act(state, { kind: 'acknowledgeTeacher' })
     state = act(state, { kind: 'levelSelection' })
     state = select(state, FIRST)
-    state = act(state, {
-      kind: 'openTeacher', intervention: catalog.puzzle(FIRST).teacher[0]!,
-    })
-    state = act(state, { kind: 'acknowledgeTeacher' })
 
     const encoded = encodeGameSave(catalog, state)
-    expect(encoded.acknowledgedTeachers).toEqual([
+    expect(encoded.deliveredGuidance).toEqual([
       { puzzle: SECOND, intervention: SHARED_TEACHER_ID },
       { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
     ])
     const loaded = decodeGameSave(catalog, plain(encoded))
-    expect(loaded.acknowledgedTeachers).toEqual(state.acknowledgedTeachers)
+    expect(loaded.deliveredGuidance).toEqual(state.deliveredGuidance)
   })
 
-  it('strictly rejects bare, duplicate, and cross-puzzle teacher acknowledgements', () => {
+  it('strictly rejects bare, duplicate, repeatable, and cross-puzzle guidance deliveries', () => {
     const base: any = plain(encodeGameSave(catalog, fresh()))
-    base.acknowledgedTeachers = [SHARED_TEACHER_ID]
-    expect(() => decodeGameSave(catalog, base)).toThrow(/acknowledged teacher/)
+    base.deliveredGuidance = [SHARED_TEACHER_ID]
+    expect(() => decodeGameSave(catalog, base)).toThrow(/delivered guidance/)
 
     const duplicate: any = plain(encodeGameSave(catalog, fresh()))
-    duplicate.acknowledgedTeachers = [
+    duplicate.deliveredGuidance = [
       { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
       { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
     ]
     expect(() => decodeGameSave(catalog, duplicate)).toThrow(/duplicate/)
 
     const crossPuzzle: any = plain(encodeGameSave(catalog, fresh()))
-    crossPuzzle.acknowledgedTeachers = [{ puzzle: FIRST, intervention: 'not-authored-here' }]
+    crossPuzzle.deliveredGuidance = [{ puzzle: FIRST, intervention: 'not-authored-here' }]
     expect(() => decodeGameSave(catalog, crossPuzzle)).toThrow(/unknown or repeatable/)
+  })
+
+  it('round-trips the exact active guidance page and rejects invalid page ownership', () => {
+    let state = select(fresh(), FIRST)
+    state = act(state, { kind: 'advanceGuidancePage' })
+    const encoded: any = plain(encodeGameSave(catalog, state))
+    expect(encoded.version).toBe(4)
+    expect(encoded.guidance).toEqual({
+      puzzle: FIRST, intervention: SHARED_TEACHER_ID, page: 1,
+    })
+    expect(decodeGameSave(catalog, encoded).guidance).toEqual(state.guidance)
+
+    encoded.guidance.page = 99
+    expect(() => decodeGameSave(catalog, encoded)).toThrow(/guidance.*page/)
+    encoded.guidance.page = 1
+    encoded.guidance.puzzle = SECOND
+    expect(() => decodeGameSave(catalog, encoded)).toThrow(/guidance.*active puzzle/)
   })
 
   it('round-trips a completion receipt with exact move count and replay identity', () => {
@@ -146,7 +151,7 @@ describe('strict per-puzzle game save', () => {
       textSize: 'medium',
     })
     expect(() => startGame(catalog, {
-      save: { format: 'cursebreaker-save', version: 2 },
+      save: { format: 'cursebreaker-save', version: 3 },
       reducedMotion: false,
     })).toThrow(/unsupported game save format or version/)
   })
@@ -285,7 +290,10 @@ describe('strict per-puzzle game save', () => {
         ...puzzle,
         name: { ...puzzle.name, professional: `${puzzle.name.professional} renamed` },
         provenance: { ...puzzle.provenance, summary: `${puzzle.provenance.summary} Revised.` },
-        teacher: puzzle.teacher.map((teacher) => ({ ...teacher, text: `${teacher.text} Revised.` })),
+        teacher: puzzle.teacher.map((teacher) => ({
+          ...teacher,
+          pages: teacher.pages.map((page) => `${page} Revised.`),
+        })),
       })),
     })
     expect(() => decodeGameSave(changedPresentation, encodeGameSave(catalog, state))).not.toThrow()

@@ -43,8 +43,15 @@ const surface = new GameProofViewport({
 })
 const timeline = mountTimelineLever(
   environment.timelineHandleSlot,
-  () => ({ states: timelineStates, steps: [], cursor: timelineCursor }),
-  (cursor) => { timelineCursor = cursor; timelineRequests.push(cursor); timeline.refresh() },
+  { kind: 'active', timeline: { states: timelineStates, steps: [], cursor: timelineCursor } },
+  (cursor) => {
+    timelineCursor = cursor
+    timelineRequests.push(cursor)
+    timeline.update({
+      kind: 'active',
+      timeline: { states: timelineStates, steps: [], cursor: timelineCursor },
+    })
+  },
 )
 
 const resize = (): void => {
@@ -80,7 +87,13 @@ const state = {
     return surface.canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data[3]!
   },
   timeline: () => ({ cursor: timelineCursor, requests: [...timelineRequests] }),
-  setTimelineCursor: (cursor: number): void => { timelineCursor = cursor; timeline.refresh() },
+  setTimelineCursor: (cursor: number): void => {
+    timelineCursor = cursor
+    timeline.update({
+      kind: 'active',
+      timeline: { states: timelineStates, steps: [], cursor: timelineCursor },
+    })
+  },
   disposeAndProbe: () => {
     surface.dispose()
     const snapshot = () => ({

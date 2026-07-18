@@ -1,14 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import {
-  applyGameStep,
-  currentDiagram,
-  startPuzzle,
-  teacherAcknowledgementIdentity,
-  teacherInterventionsFor,
-  type GameRuntimeAuthority,
-  type TeacherIntervention,
-  type TeacherSignal,
-} from '../../src/game'
+import { applyGameStep, currentDiagram, startPuzzle, type GameRuntimeAuthority } from '../../src/game/session'
+import { guidanceInterventionsFor, type TeacherSignal } from '../../src/game/teaching'
+import { guidanceDeliveryIdentity, type TeacherIntervention } from '../../src/game/types'
 import { fixturePerformanceId, minimalPuzzle } from './catalog-fixture'
 import { fourVeils, twoVeils } from './fixtures'
 
@@ -17,7 +10,7 @@ const opening: TeacherIntervention = {
   id: 'opening-four',
   performance: fixturePerformanceId,
   trigger: { kind: 'opening' },
-  text: 'Begin with the innermost pair.',
+  pages: ['Begin with the innermost pair.'],
   repeat: 'once',
 }
 const recognizedUnwinnable: TeacherIntervention = {
@@ -28,14 +21,14 @@ const recognizedUnwinnable: TeacherIntervention = {
     state: twoVeils().goal,
     demonstration: [{ rule: 'doubleCutElim', region: four.eliminations[0]! }],
   },
-  text: 'That route cannot reach blank. Return on the timeline.',
+  pages: ['That route cannot reach blank. Return on the timeline.'],
   repeat: 'once',
   recovery: 'timeline',
 }
 const completion: TeacherIntervention = {
   id: 'completion',
   trigger: { kind: 'completion' },
-  text: 'The form is clear.',
+  pages: ['The form is clear.'],
   repeat: 'once',
 }
 const puzzle = minimalPuzzle({
@@ -49,39 +42,37 @@ const puzzle = minimalPuzzle({
 const authority: GameRuntimeAuthority = {
   context: { relations: new Map(), theorems: new Map() },
 }
-const openingIdentity = teacherAcknowledgementIdentity(puzzle.id, opening.id)
-const recognizedIdentity = teacherAcknowledgementIdentity(puzzle.id, recognizedUnwinnable.id)
-const completionIdentity = teacherAcknowledgementIdentity(puzzle.id, completion.id)
+const openingIdentity = guidanceDeliveryIdentity(puzzle.id, opening.id)
+const recognizedIdentity = guidanceDeliveryIdentity(puzzle.id, recognizedUnwinnable.id)
+const completionIdentity = guidanceDeliveryIdentity(puzzle.id, completion.id)
 
-describe('teacher presentations', () => {
-  it('offers opening mechanic instruction as a modal and suppresses it once seen', () => {
-    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, []))
+describe('passive guidance matching', () => {
+  it('offers opening guidance and suppresses it once delivered', () => {
+    expect(guidanceInterventionsFor(puzzle, { kind: 'opening' }, []))
       .toEqual([{
         identity: openingIdentity,
         intervention: opening,
-        presentation: { kind: 'modalInstruction' },
       }])
-    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, [openingIdentity]))
+    expect(guidanceInterventionsFor(puzzle, { kind: 'opening' }, [openingIdentity]))
       .toEqual([])
   })
 
-  it('offers an exact authored unwinnable state as nonblocking timeline-recovery commentary', () => {
+  it('offers an exact authored unwinnable state as passive recovery guidance', () => {
     const transition = applyGameStep(
       startPuzzle(puzzle),
       { rule: 'doubleCutElim', region: four.eliminations[0]! },
       authority,
     )
 
-    expect(teacherInterventionsFor(
+    expect(guidanceInterventionsFor(
       puzzle,
       { kind: 'recognizedUnwinnable', diagram: currentDiagram(transition.session) },
       [],
     )).toEqual([{
       identity: recognizedIdentity,
       intervention: recognizedUnwinnable,
-      presentation: { kind: 'nonblockingCommentary', recovery: 'timeline' },
     }])
-    expect(teacherInterventionsFor(
+    expect(guidanceInterventionsFor(
       puzzle,
       { kind: 'recognizedUnwinnable', diagram: four.goal.diagram },
       [],
@@ -89,13 +80,12 @@ describe('teacher presentations', () => {
   })
 
   it('offers completion through completion-owned commentary only', () => {
-    expect(teacherInterventionsFor(puzzle, { kind: 'completion' }, []))
+    expect(guidanceInterventionsFor(puzzle, { kind: 'completion' }, []))
       .toEqual([{
         identity: completionIdentity,
         intervention: completion,
-        presentation: { kind: 'completionCommentary' },
       }])
-    expect(teacherInterventionsFor(puzzle, { kind: 'opening' }, []))
+    expect(guidanceInterventionsFor(puzzle, { kind: 'opening' }, []))
       .not.toContainEqual(expect.objectContaining({ intervention: completion }))
   })
 

@@ -39,7 +39,7 @@ function longPuzzle(
     teacher: [{
       id: SHARED_TEACHER_ID,
       trigger: { kind: 'opening' },
-      text: `Opening instruction for ${id}.`,
+      pages: [`Opening instruction for ${id}.`, `Second instruction for ${id}.`],
       repeat: 'once',
     }],
   })

@@ -348,6 +348,7 @@ describe('production lens DOM ownership and approved assets', () => {
       'curse-production-lens',
       'curse-production-folio-host',
       'curse-production-folio-drawer-toggle',
+      'curse-production-presentation-host',
     ])
     expect(lens.proofCanvasSlot).toBe(aperture.children[1])
     expect(lens.folioHost).toBe(root.children[2])

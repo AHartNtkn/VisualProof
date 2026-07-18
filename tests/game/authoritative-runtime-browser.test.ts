@@ -41,7 +41,7 @@ const openFixture = async (
 }
 
 describe('authoritative production renderer runtime', () => {
-  it('starts a null save in archive mode on the empty substrate without proof or timeline', async () => {
+  it('starts a null save in a visible, operable archive around the empty substrate', async () => {
     const page = await openFixture()
     try {
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
@@ -50,10 +50,72 @@ describe('authoritative production renderer runtime', () => {
       })
       expect(await page.locator('.curse-production-environment').count()).toBe(1)
       expect(await page.locator('.curse-folio').count()).toBe(1)
+      expect(await page.locator('.curse-folio-record[data-status="unlocked"]').count())
+        .toBeGreaterThan(0)
       expect(await page.locator('.curse-game-proof-canvas').count()).toBe(0)
-      expect(await page.locator('.curse-production-timeline-control').count()).toBe(0)
+      const timeline = page.locator('.curse-production-timeline-control')
+      expect(await timeline.count()).toBe(1)
+      expect(await timeline.getAttribute('aria-disabled')).toBe('true')
+      expect(await timeline.getAttribute('tabindex')).toBe('-1')
+      expect(await page.locator('.curse-production-timeline-handle-slot').evaluate((node) =>
+        getComputedStyle(node).getPropertyValue('--curse-timeline-position').trim())).toBe('0')
       expect(await page.locator('.curse-production-timeline').evaluate((node) =>
         getComputedStyle(node).visibility)).toBe('visible')
+      expect(await page.locator('.curse-production-timeline-housing').count()).toBe(1)
+      expect(await page.locator('.curse-production-timeline-handle').count()).toBe(1)
+    } finally { await page.close() }
+  })
+
+  it('keeps one slider identity through archive, puzzle, completion, and archive return', async () => {
+    const page = await openFixture()
+    try {
+      await page.evaluate(() => {
+        (window as any).__persistentTimeline = document.querySelector(
+          '.curse-production-timeline-control',
+        )
+      })
+      await page.locator('.curse-production-timeline-control').evaluate((node) => {
+        node.dispatchEvent(new KeyboardEvent('keydown', {
+          key: 'End', bubbles: true, cancelable: true,
+        }))
+        node.dispatchEvent(new PointerEvent('pointerdown', {
+          pointerId: 71, button: 0, clientX: 500, bubbles: true, cancelable: true,
+        }))
+      })
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.writes())).toEqual([])
+
+      const first = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles()[0]!)
+      await page.locator(`[data-puzzle="${first}"]`).click()
+      expect(await page.evaluate(() => (window as any).__persistentTimeline === document.querySelector(
+        '.curse-production-timeline-control',
+      ))).toBe(true)
+      expect(await page.locator('.curse-production-timeline-control').getAttribute('aria-disabled'))
+        .toBe('false')
+
+      await page.evaluate(() => {
+        const fixture = window.__authoritativeRuntimeFixture
+        fixture.witness(0)
+        fixture.witness(1)
+        fixture.witness(2)
+      })
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
+        .toBe('completion')
+      expect(await page.evaluate(() => (window as any).__persistentTimeline === document.querySelector(
+        '.curse-production-timeline-control',
+      ))).toBe(true)
+      expect(await page.locator('.curse-production-timeline-control').getAttribute('aria-disabled'))
+        .toBe('true')
+      expect(await page.locator('.curse-production-timeline-handle-slot').evaluate((node) =>
+        getComputedStyle(node).getPropertyValue('--curse-timeline-position').trim())).toBe('1')
+
+      await page.getByRole('button', { name: 'Return to level selection' }).click()
+      expect(await page.evaluate(() => (window as any).__persistentTimeline === document.querySelector(
+        '.curse-production-timeline-control',
+      ))).toBe(true)
+      expect(await page.locator('.curse-production-timeline-control').getAttribute('aria-disabled'))
+        .toBe('true')
+      expect(await page.locator('.curse-production-timeline-handle-slot').evaluate((node) =>
+        getComputedStyle(node).getPropertyValue('--curse-timeline-position').trim())).toBe('0')
     } finally { await page.close() }
   })
 
@@ -188,6 +250,33 @@ describe('authoritative production renderer runtime', () => {
       })
       expect(await page.locator('.curse-production-environment').getAttribute('data-text-size')).toBe('large')
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.writes())).toEqual([])
+    } finally { await page.close() }
+  })
+
+  it('restores a persisted completion into the dedicated success surface', async () => {
+    const page = await openFixture('completion')
+    try {
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
+        mode: 'completion',
+        hasProof: false,
+        hasTimeline: false,
+      })
+      const completion = page.locator('.curse-completion')
+      expect(await completion.count()).toBe(1)
+      expect(await completion.locator('h1').textContent()).toBe('first-artifact professional name')
+      expect(await completion.locator('[data-completion-moves]').textContent()).toBe('3 moves')
+      expect(await completion.locator('button').allTextContents()).toEqual([
+        'Return to level selection',
+      ])
+      expect(await page.locator('.curse-production-timeline-housing').count()).toBe(1)
+      expect(await page.locator('.curse-production-timeline-handle').count()).toBe(1)
+      expect(await page.locator('.curse-production-timeline-control').count()).toBe(1)
+      expect(await page.locator('.curse-production-timeline-control').getAttribute('aria-disabled'))
+        .toBe('true')
+      await completion.locator('button').click()
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
+        .toBe('archive')
+      expect(await page.locator('.curse-folio').count()).toBe(1)
     } finally { await page.close() }
   })
 
@@ -456,7 +545,38 @@ describe('authoritative production renderer runtime', () => {
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().transient)).toEqual({
         kind: 'pause', presentation: 'menu',
       })
+      const pause = page.locator('.curse-pause-menu')
+      expect(await pause.count()).toBe(1)
+      expect(await pause.getAttribute('role')).toBe('dialog')
+      expect(await pause.locator('button').allTextContents()).toEqual([
+        'Resume',
+        'Level selection',
+        'Settings',
+        'Exit game',
+      ])
+      expect(await page.locator('.curse-game-proof-canvas').count()).toBe(1)
+      await pause.locator('button', { hasText: 'Settings' }).click()
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().transient)).toEqual({
+        kind: 'pause', presentation: 'settings',
+      })
+      const settings = page.locator('.curse-pause-settings')
+      expect(await settings.count()).toBe(1)
+      expect(await settings.locator('[data-setting="reduced-motion"]').count()).toBe(1)
+      expect(await settings.locator('[data-setting="fullscreen"]').count()).toBe(1)
+      expect(await settings.locator('[data-setting="text-size"]').count()).toBe(1)
+      await settings.locator('[data-setting="reduced-motion"] input').click()
+      await settings.locator('[data-setting="fullscreen"] input').click()
+      await settings.locator('[data-setting="text-size"] select').selectOption('large')
+      await page.evaluate(() => window.__authoritativeRuntimeFixture.settle())
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().settings))
+        .toEqual({ reducedMotion: true, fullscreen: false, textSize: 'large' })
+      expect(await page.locator('.curse-production-environment').getAttribute('data-text-size'))
+        .toBe('large')
       await page.keyboard.press('Escape')
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
+        transient: { kind: 'pause', presentation: 'menu' }, proofInstance: instance,
+      })
+      await page.locator('.curse-pause-menu button', { hasText: 'Resume' }).click()
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
         transient: null, proofInstance: instance,
       })
@@ -514,6 +634,146 @@ describe('authoritative production renderer runtime', () => {
         mode: 'archive', activePuzzle: null,
       })
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.writes())).toEqual([])
+    } finally { await page.close() }
+  })
+
+  it('presents optional authored pages without dialog, acknowledgement, or automatic focus', async () => {
+    const page = await openFixture('opening')
+    try {
+      const first = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles()[0]!)
+      await page.locator(`[data-puzzle="${first}"]`).click()
+      const guidance = await page.evaluate(() => window.__authoritativeRuntimeFixture.state().guidance)
+      expect(guidance).toMatchObject({
+        identity: { puzzle: first, intervention: 'opening-paired-veils' },
+        page: 0,
+      })
+      const note = page.locator('.curse-guidance-note')
+      expect(await note.count()).toBe(1)
+      expect(await note.getAttribute('role')).toBeNull()
+      expect(await note.locator('p').count()).toBe(1)
+      expect(await note.locator('p').textContent()).toBe((guidance as any).intervention.pages[0])
+      expect(await note.locator('button').allTextContents()).toEqual(['Next'])
+      expect(await page.locator('[role="dialog"]').count()).toBe(0)
+      expect(await note.evaluate((node) => node.contains(document.activeElement))).toBe(false)
+      expect(await page.locator('.curse-game-proof-canvas').count()).toBe(1)
+
+      for (let expectedPage = 1; expectedPage < 4; expectedPage += 1) {
+        await note.locator('button').click()
+        expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().guidance?.page))
+          .toBe(expectedPage)
+        expect(await note.locator('p').count()).toBe(1)
+      }
+      expect(await note.locator('button').count()).toBe(0)
+      expect(await note.locator('p').textContent()).toMatch(/Eliminate the double cut.*Delete.*Backspace/)
+      await page.evaluate(() => window.__authoritativeRuntimeFixture.settle())
+      expect(await page.evaluate(() => (window.__authoritativeRuntimeFixture.writes().at(-1) as any)
+        .guidance.page)).toBe(3)
+    } finally { await page.close() }
+  })
+
+  it('keeps large-text guidance in the passive edge rail clear of proof, timeline, and drawer', async () => {
+    const page = await openFixture('opening')
+    try {
+      await page.setViewportSize({ width: 760, height: 900 })
+      await page.evaluate(() => window.__authoritativeRuntimeFixture
+        .dispatch({ kind: 'setTextSize', value: 'large' }))
+      const first = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles()[0]!)
+      await page.evaluate((puzzle) => window.__authoritativeRuntimeFixture
+        .dispatch({ kind: 'selectPuzzle', puzzle }), first)
+      const intersections = await page.evaluate(() => {
+        const rectangle = (selector: string): DOMRect => {
+          const node = document.querySelector<HTMLElement>(selector)
+          if (node === null) throw new Error(`guidance geometry node missing: ${selector}`)
+          return node.getBoundingClientRect()
+        }
+        const note = rectangle('.curse-guidance-note')
+        const overlaps = (other: DOMRect): boolean => note.left < other.right
+          && note.right > other.left
+          && note.top < other.bottom
+          && note.bottom > other.top
+        return {
+          proof: overlaps(rectangle('.curse-production-aperture')),
+          timeline: overlaps(rectangle('.curse-production-timeline-control')),
+          drawer: overlaps(rectangle('.curse-production-folio-drawer-toggle')),
+          fullyVisible: note.left >= 0 && note.top >= 0
+            && note.right <= innerWidth && note.bottom <= innerHeight,
+        }
+      })
+      expect(intersections).toEqual({
+        proof: false,
+        timeline: false,
+        drawer: false,
+        fullyVisible: true,
+      })
+    } finally { await page.close() }
+  })
+
+  it('keeps proof selection and Escape-to-pause live and allows solving from an unread page', async () => {
+    const page = await openFixture('opening')
+    try {
+      const first = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles()[0]!)
+      await page.locator(`[data-puzzle="${first}"]`).click()
+      const rim = await page.evaluate(() => window.__authoritativeRuntimeFixture.state()
+        .proofRegions.find((region: any) => region.kind === 'cut')!.rimClient)
+      await page.mouse.move(rim.x, rim.y)
+      await page.mouse.click(rim.x, rim.y)
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().selection.length))
+        .toBeGreaterThan(0)
+      await page.mouse.click(rim.x, rim.y)
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().selection))
+        .toEqual([])
+
+      await page.locator('.curse-game-proof-canvas').focus()
+      await page.keyboard.press('Escape')
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
+        transient: { kind: 'pause', presentation: 'menu' },
+        guidance: { page: 0 },
+      })
+      await page.getByRole('button', { name: 'Resume' }).click()
+      await page.evaluate(() => window.__authoritativeRuntimeFixture.witness(0))
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
+        .toBe('completion')
+      expect(await page.locator('.curse-guidance-note').count()).toBe(0)
+    } finally { await page.close() }
+  })
+
+  it('presents only authored nonblocking commentary for a recognized unwinnable state', async () => {
+    const page = await openFixture('opening')
+    try {
+      const puzzles = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles())
+      for (const puzzle of puzzles.slice(0, 2)) {
+        await page.locator(`[data-puzzle="${puzzle}"]`).click()
+        const count = await page.evaluate(() => window.__authoritativeRuntimeFixture.state().steps.length)
+        const witnessCount = puzzle === puzzles[0] ? 1 : 2
+        expect(count).toBe(0)
+        for (let index = 0; index < witnessCount; index++) {
+          await page.evaluate((step) => window.__authoritativeRuntimeFixture.witness(step), index)
+        }
+        expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
+          .toBe('completion')
+        await page.locator('.curse-completion button').click()
+      }
+
+      await page.locator(`[data-puzzle="${puzzles[2]}"]`).click()
+      await page.evaluate(() => window.__authoritativeRuntimeFixture.unwinnable())
+      const guidance = await page.evaluate(() => window.__authoritativeRuntimeFixture.state().guidance)
+      expect(guidance).toMatchObject({
+        identity: { puzzle: puzzles[2], intervention: 'empty-veil-trap' },
+        page: 0,
+      })
+      const commentary = page.locator('.curse-guidance-note')
+      expect(await commentary.count()).toBe(1)
+      expect(await commentary.getAttribute('role')).toBeNull()
+      expect(await commentary.locator('p').textContent()).toBe(
+        'An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.',
+      )
+      expect(await page.locator('.curse-game-proof-canvas').count()).toBe(1)
+      await page.locator('.curse-production-timeline-control').focus()
+      await page.keyboard.press('Home')
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().cursor)).toBe(0)
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().guidance))
+        .toBeNull()
+      expect(await commentary.count()).toBe(0)
     } finally { await page.close() }
   })
 
@@ -641,6 +901,17 @@ describe('authoritative production renderer runtime', () => {
       await page.mouse.move(target.x, target.y)
       await page.mouse.up()
       await page.waitForFunction(() => window.__authoritativeRuntimeFixture.activeRafs() === 0)
+      const completion = page.locator('.curse-completion')
+      expect(await completion.count()).toBe(1)
+      expect(await completion.locator('[data-completion-line]').textContent())
+        .toBe('Restoration complete')
+      expect(await completion.locator('h1').textContent()).toBe('Dissolve host')
+      expect(await completion.locator('[data-completion-moves]').textContent()).toBe('1 move')
+      expect(await completion.locator('[data-completion-response]').textContent()).not.toBe('')
+      expect(await completion.locator('button').count()).toBe(1)
+      expect(await completion.locator('button').textContent()).toBe('Return to level selection')
+      expect(await page.locator('.curse-production-lens').count()).toBe(1)
+      expect(await page.locator('.curse-production-timeline-housing').count()).toBe(1)
       expect(await page.evaluate(() => {
         const fixture = window.__authoritativeRuntimeFixture
         const save = fixture.writes().at(-1) as any
@@ -664,6 +935,11 @@ describe('authoritative production renderer runtime', () => {
         },
         activeRafs: 0,
       })
+      await completion.locator('button').click()
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
+        .toBe('archive')
+      expect(await page.locator('.curse-folio').count()).toBe(1)
+      expect(await page.locator('.curse-completion').count()).toBe(0)
     } finally { await page.close() }
   })
 
@@ -851,10 +1127,14 @@ describe('authoritative production renderer runtime', () => {
       const drawerToggle = archive.locator('.curse-production-folio-drawer-toggle')
       expect(await drawerToggle.getAttribute('aria-expanded')).toBe('false')
       await archive.keyboard.press('Escape')
-      await drawerToggle.click()
+      await drawerToggle.evaluate((toggle) => toggle.dispatchEvent(new MouseEvent('click', {
+        bubbles: true,
+        cancelable: true,
+      })))
       expect(await drawerToggle.getAttribute('aria-expanded')).toBe('false')
       await archive.setViewportSize({ width: 1400, height: 900 })
-      await archive.locator(`[data-puzzle="${first}"]`).click()
+      await archive.locator(`[data-puzzle="${first}"]`).evaluate((record) =>
+        record.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true })))
       expect(await archive.evaluate(() => ({
         mode: window.__authoritativeRuntimeFixture.state().mode,
         writes: window.__authoritativeRuntimeFixture.writes().length,
@@ -876,10 +1156,11 @@ describe('authoritative production renderer runtime', () => {
       const record = puzzle.locator(`[data-puzzle="${artifact}"]`)
       const box = await record.boundingBox()
       if (box === null) throw new Error('completed artifact record is missing')
-      await puzzle.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-      await puzzle.mouse.down()
+      await record.evaluate((source, { x, y }) => source.dispatchEvent(new PointerEvent(
+        'pointerdown',
+        { pointerId: 29, button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true },
+      )), { x: box.x + box.width / 2, y: box.y + box.height / 2 })
       expect(await record.getAttribute('class')).not.toContain('is-theorem-lifted')
-      await puzzle.mouse.up()
       expect(await puzzle.evaluate(() => window.__authoritativeRuntimeFixture.writes().length)).toBe(writes)
     } finally { await puzzle.close() }
   })

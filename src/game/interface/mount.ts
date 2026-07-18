@@ -6,9 +6,7 @@ import { artifactTheoremContext } from '../artifact-theorem'
 import type { GameCatalog } from '../catalog'
 import { openingCatalog } from '../content'
 import type {
-  CompletionReceipt,
   GameControllerState,
-  GameTransient,
 } from '../controller-state'
 import {
   reduceGame,
@@ -28,6 +26,11 @@ import { projectFolio } from './folio-projection'
 import { gameProofMotionPreferences } from './proof-motion'
 import { GameProofViewport, type GameProofViewportDebug } from './proof-surface'
 import { mountTimelineLever, type MountedTimelineLever } from './timeline-lever'
+import {
+  mountGamePresentationView,
+  type GamePresentationProjection,
+  type MountedGamePresentationView,
+} from './game-presentation-view'
 
 const REFUSAL_LIFETIME_MS = 1_800
 
@@ -35,22 +38,12 @@ export class CursebreakerLaunchError extends Error {
   override readonly name = 'CursebreakerLaunchError'
 }
 
-export type CursebreakerPresentationProjection = {
-  readonly mode: GameControllerState['mode']
-  readonly transient: GameTransient | null
-  readonly completionReceipt: CompletionReceipt | null
-}
-
-export type CursebreakerPresentationPort = {
-  update(projection: CursebreakerPresentationProjection): void
-  dispose(): void
-}
+export type CursebreakerPresentationProjection = GamePresentationProjection
 
 export type CursebreakerMountOptions = {
   readonly host: HTMLElement
   readonly platform: CursebreakerPlatform
   readonly catalog?: GameCatalog
-  readonly presentation?: CursebreakerPresentationPort
 }
 
 export type CursebreakerRect = {
@@ -106,26 +99,11 @@ const sameSession = (left: GameSession | null, right: GameSession | null): boole
 
 const errorText = (error: unknown): string => error instanceof Error ? error.message : String(error)
 
-const presentationProjection = (
-  state: GameControllerState,
-): CursebreakerPresentationProjection => ({
-  mode: state.mode,
-  transient: state.transient,
-  completionReceipt: state.completionReceipt,
-})
-
-const emptyPresentation = (): CursebreakerPresentationPort => ({
-  update: () => {},
-  dispose: () => {},
-})
-
 const proofInputAllowedFor = (state: GameControllerState): boolean => {
   if (state.mode !== 'puzzle') return false
   const transient = state.transient
   return transient === null
     || transient.kind === 'editor'
-    || (transient.kind === 'teacher'
-      && transient.presentation.kind === 'nonblockingCommentary')
 }
 
 /** Sole mutable renderer owner for the production Cursebreaker game. */
@@ -135,11 +113,11 @@ export class CursebreakerRuntime implements MountedCursebreaker {
   readonly #catalog: GameCatalog
   readonly #platform: CursebreakerPlatform
   readonly #environment: MountedLensEnvironment
-  readonly #presentation: CursebreakerPresentationPort
+  readonly #presentation: MountedGamePresentationView
   #state: GameControllerState
   #folio: MountedFolioView | null = null
   #proof: GameProofViewport | null = null
-  #timeline: MountedTimelineLever | null = null
+  readonly #timeline: MountedTimelineLever
   #proofResize: ResizeObserver | null = null
   #frameRequest: number | null = null
   #proofInstance = 0
@@ -159,14 +137,12 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     readonly platform: CursebreakerPlatform
     readonly catalog: GameCatalog
     readonly state: GameControllerState
-    readonly presentation?: CursebreakerPresentationPort
   }) {
     this.#host = options.host
     this.#catalog = options.catalog
     this.#platform = options.platform
     this.#state = options.state
     this.#latestSave = encodeGameSave(this.#catalog, this.#state)
-    this.#presentation = options.presentation ?? emptyPresentation()
     const runtimeWindow = options.host.ownerDocument.defaultView
     if (runtimeWindow === null) throw new Error('Cursebreaker must mount in a live window')
     this.#window = runtimeWindow
@@ -179,10 +155,20 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       height: runtimeWindow.innerHeight,
       folioDrawerInputAllowed: () => this.#folioInputAllowed(),
     })
+    this.#timeline = mountTimelineLever(
+      this.#environment.timelineHandleSlot,
+      this.#timelineProjection(this.#state),
+      (cursor) => this.dispatch({ kind: 'moveTimeline', cursor }),
+      () => this.#timelineInputAllowed(),
+    )
+    this.#presentation = mountGamePresentationView({
+      host: this.#environment.presentationHost,
+      projection: this.#presentationProjection(this.#state),
+      dispatch: (action) => this.dispatch(action),
+    })
     this.#reconcileRoot()
     this.#mountFolio()
     if (this.#state.mode === 'puzzle') this.#mountPuzzle()
-    this.#presentation.update(presentationProjection(this.#state))
 
     this.#window.addEventListener('resize', this.#onResize)
     this.#window.addEventListener('keydown', this.#onKeyDown)
@@ -212,6 +198,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#window.removeEventListener('resize', this.#onResize)
     this.#window.removeEventListener('keydown', this.#onKeyDown)
     this.#disposePuzzle()
+    this.#timeline.dispose()
     this.#folio?.dispose()
     this.#folio = null
     this.#clearRefusal()
@@ -259,7 +246,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
         folioPresentation: this.#environment.element.dataset.folioPresentation,
         lens: rectSnapshot(this.#environment.proofCanvasSlot.parentElement!),
       },
-      presentation: presentationProjection(this.#state),
+      presentation: this.#presentationProjection(this.#state),
       saveFailure: this.#saveFailure === null ? null : errorText(this.#saveFailure),
     }
   }
@@ -320,6 +307,8 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       completed: authoritative.completed,
       firstAttempts: authoritative.firstAttempts,
       replays: authoritative.replays,
+      deliveredGuidance: authoritative.deliveredGuidance,
+      guidance: authoritative.guidance,
       completionReceipt: authoritative.completionReceipt,
       transient: authoritative.mode === 'completion' ? null : current.transient,
     }
@@ -338,7 +327,8 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     }
     this.#reconcileRoot()
     this.#environment.setSubstrateSeed(this.#substrateSeed(next))
-    this.#presentation.update(presentationProjection(next))
+    this.#presentation.update(this.#presentationProjection(next))
+    this.#timeline.update(this.#timelineProjection(next))
 
     if (previous.mode !== next.mode && next.mode === 'archive') {
       this.#environment.setFolioDrawerOpen(true)
@@ -358,7 +348,6 @@ export class CursebreakerRuntime implements MountedCursebreaker {
         this.#proof?.reconcileDiagram()
       }
       this.#proof?.setReducedMotion(next.settings.reducedMotion)
-      this.#timeline?.refresh()
     }
 
     const previousHasFolio = previous.mode === 'archive' || previous.mode === 'puzzle'
@@ -407,6 +396,39 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     })
   }
 
+  #presentationProjection(state: GameControllerState): CursebreakerPresentationProjection {
+    const receipt = state.completionReceipt
+    const completion = receipt === null ? null : (() => {
+      const puzzle = this.#catalog.puzzle(receipt.puzzle)
+      const authored = puzzle.teacher.find(({ trigger }) => trigger.kind === 'completion')?.pages[0]
+      return {
+        receipt,
+        artifactName: puzzle.name.professional,
+        response: authored ?? puzzle.provenance.function,
+      }
+    })()
+    return {
+      mode: state.mode,
+      transient: state.transient,
+      guidance: state.guidance,
+      settings: state.settings,
+      completion,
+    }
+  }
+
+  #timelineProjection(state: GameControllerState): Parameters<MountedTimelineLever['update']>[0] {
+    const session = this.#activeSession(state)
+    if (session !== null) return { kind: 'active', timeline: session.timeline }
+    if (state.mode === 'completion' && state.completionReceipt !== null) {
+      return {
+        kind: 'inactive',
+        position: 'complete',
+        moves: state.completionReceipt.moves,
+      }
+    }
+    return { kind: 'inactive', position: 'home', moves: 0 }
+  }
+
   #mountPuzzle(): void {
     const puzzle = this.#state.activePuzzle === null
       ? null
@@ -440,12 +462,6 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       changed: () => {},
       constructionChanged: (open) => this.dispatch({ kind: open ? 'openEditor' : 'closeEditor' }),
     })
-    this.#timeline = mountTimelineLever(
-      this.#environment.timelineHandleSlot,
-      () => this.#requireActiveSession().timeline,
-      (cursor) => this.dispatch({ kind: 'moveTimeline', cursor }),
-      () => this.#timelineInputAllowed(),
-    )
     this.#proofResize = new this.#window.ResizeObserver((entries) => {
       const entry = entries.find(({ target }) => target === this.#environment.proofCanvasSlot)
       if (entry !== undefined) this.#proof?.resize(entry.contentRect.width, entry.contentRect.height)
@@ -468,8 +484,6 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#frameRequest = null
     this.#proofResize?.disconnect()
     this.#proofResize = null
-    this.#timeline?.dispose()
-    this.#timeline = null
     this.#proof?.dispose()
     this.#proof = null
     this.#activeProofInstance = null
@@ -492,10 +506,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
   }
 
   #folioInputAllowed(): boolean {
-    const transient = this.#state.transient
-    return transient === null
-      || (transient.kind === 'teacher'
-        && transient.presentation.kind === 'nonblockingCommentary')
+    return this.#state.transient === null
   }
 
   #enqueueSave(document: unknown): void {

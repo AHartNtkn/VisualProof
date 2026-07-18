@@ -26,7 +26,7 @@ const reachedTwoVeils = {
     state: twoVeils().goal,
     demonstration: [{ rule: 'doubleCutElim', region: four.eliminations[0]! }],
   },
-  text: 'That route leaves the older paired form.',
+  pages: ['That route leaves the older paired form.'],
   repeat: 'once',
   recovery: 'timeline',
 } satisfies TeacherIntervention
@@ -277,7 +277,7 @@ describe('verified game catalog', () => {
     expect(() => buildCatalog({ ...minimalSource(), puzzles: [fourPuzzle] })).not.toThrow()
   })
 
-  it('rejects duplicate, blank, and unknown teacher intervention metadata', () => {
+  it('rejects duplicate, blank, multiparagraph, and unknown teacher intervention metadata', () => {
     expect(() => buildCatalog({
       ...minimalSource(), puzzles: [minimalPuzzle({
         teacher: [reachedTwoVeils, reachedTwoVeils],
@@ -290,14 +290,40 @@ describe('verified game catalog', () => {
     })).toThrow(/teacher intervention.*id/)
     expect(() => buildCatalog({
       ...minimalSource(), puzzles: [minimalPuzzle({
-        teacher: [{ ...reachedTwoVeils, text: '' }],
+        teacher: [{ ...reachedTwoVeils, pages: [] }],
       })],
-    })).toThrow(/teacher intervention.*text/)
+    })).toThrow(/teacher intervention.*page/)
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{ ...reachedTwoVeils, pages: [''] }],
+      })],
+    })).toThrow(/teacher intervention.*page/)
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{ ...reachedTwoVeils, pages: [' leading space'] }],
+      })],
+    })).toThrow(/teacher intervention.*page/)
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{ ...reachedTwoVeils, pages: ['First paragraph.\n\nSecond paragraph.'] }],
+      })],
+    })).toThrow(/teacher intervention.*single paragraph/)
     expect(() => buildCatalog({
       ...minimalSource(), puzzles: [minimalPuzzle({
         teacher: [{ ...reachedTwoVeils, performance: performanceId('missing') }],
       })],
     })).toThrow(/teacher intervention.*unknown performance/)
+  })
+
+  it('requires completion commentary to remain one concise page', () => {
+    expect(() => buildCatalog({
+      ...minimalSource(), puzzles: [minimalPuzzle({
+        teacher: [{
+          id: 'completion', trigger: { kind: 'completion' }, repeat: 'once',
+          pages: ['First response.', 'Second response.'],
+        }],
+      })],
+    })).toThrow(/completion.*one page/)
   })
 
   it('rejects malformed or unreachable recognized-unwinnable teacher triggers', () => {
@@ -409,14 +435,15 @@ describe('verified game catalog', () => {
     })).toThrow(/rulesUsed.*witness/)
   })
 
-  it('excludes artifact, culture, and teacher prose from each puzzle logical fingerprint', () => {
+  it('excludes artifact, culture, and ordered guidance pages from each puzzle logical fingerprint', () => {
     const original = buildCatalog(minimalSource())
     const changedTeacher = buildCatalog({
       ...minimalSource(),
       puzzles: [minimalPuzzle({
         teacher: [{
           id: 'opening-pair', performance: fixturePerformanceId,
-          trigger: { kind: 'opening' }, text: 'Changed teacher copy.', repeat: 'once',
+          trigger: { kind: 'opening' },
+          pages: ['Changed teacher copy.', 'A second page.'], repeat: 'once',
         }],
       })],
     })

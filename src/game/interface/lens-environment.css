@@ -136,6 +136,10 @@
   outline: none;
 }
 
+.curse-production-timeline-control[aria-disabled="true"] {
+  cursor: default;
+}
+
 .curse-production-timeline-control:focus-visible {
   border-radius: 999px;
   box-shadow: 0 0 0 2px #77e6ff, 0 0 1rem #22b8ffcc;
@@ -153,6 +157,13 @@
 
 .curse-production-folio-host.is-folio-drag-owner {
   transition: none;
+}
+
+.curse-production-presentation-host {
+  position: absolute;
+  z-index: 8;
+  inset: 0;
+  pointer-events: none;
 }
 
 .curse-production-folio-drawer-toggle {

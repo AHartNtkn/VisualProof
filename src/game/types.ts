@@ -73,7 +73,7 @@ export type TeacherTrigger =
 type TeacherInterventionBase = {
   readonly id: string
   readonly performance?: PerformanceId
-  readonly text: string
+  readonly pages: readonly string[]
   readonly repeat: 'once' | 'repeatable'
 }
 
@@ -87,20 +87,20 @@ export type TeacherIntervention =
       readonly recovery: 'timeline'
     }
 
-export type TeacherAcknowledgementIdentity = {
+export type GuidanceDeliveryIdentity = {
   readonly puzzle: PuzzleId
   readonly intervention: string
 }
 
-export const teacherAcknowledgementIdentity = (
+export const guidanceDeliveryIdentity = (
   puzzle: PuzzleId,
   intervention: string,
-): TeacherAcknowledgementIdentity => ({ puzzle, intervention })
+): GuidanceDeliveryIdentity => ({ puzzle, intervention })
 
-export const isTeacherAcknowledged = (
-  acknowledged: readonly TeacherAcknowledgementIdentity[],
-  identity: TeacherAcknowledgementIdentity,
-): boolean => acknowledged.some((candidate) =>
+export const isGuidanceDelivered = (
+  delivered: readonly GuidanceDeliveryIdentity[],
+  identity: GuidanceDeliveryIdentity,
+): boolean => delivered.some((candidate) =>
   candidate.puzzle === identity.puzzle
   && candidate.intervention === identity.intervention)
 

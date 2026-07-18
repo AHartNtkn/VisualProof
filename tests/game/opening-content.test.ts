@@ -394,28 +394,37 @@ describe('permanent opening catalog', () => {
     ])
 
     const puzzle = (id: typeof puzzleIds[number]) => catalog.puzzle(puzzleId(id))
-    expect(puzzle('two-veils').teacher.map(({ trigger, text }) => [trigger.kind, text])).toEqual([
-      ['opening', 'The Seyric makers often laid one veil directly inside another. When nothing separates a pair, both may be lifted together.'],
+    expect(puzzle('two-veils').teacher.map(({ trigger, pages }) => [trigger.kind, pages])).toEqual([
+      ['opening', [
+        'Move the pointer over a mark in the seal. A glow appears when the mark can be acted on.',
+        'Click a highlighted mark to select it. The selection remains lit after the pointer moves away.',
+        'Click a selected mark again to deselect it. Click the empty field to clear the whole selection.',
+        'Select the outer boundary of the paired veils. Right-click and choose “Eliminate the double cut,” or press Delete or Backspace, to lift both veils and finish the proof.',
+      ]],
     ])
-    expect(puzzle('four-veils').teacher.map(({ trigger, text, recovery }) => [trigger.kind, text, recovery])).toEqual([
-      ['opening', 'There are two paired veils here. Either pair may be lifted first.', undefined],
+    expect(puzzle('four-veils').teacher.map(({ trigger, pages, recovery }) => [trigger.kind, pages, recovery])).toEqual([
+      ['opening', ['There are two paired veils here. Either pair may be lifted first.'], undefined],
     ])
-    expect(puzzle('forked-veil').teacher.map(({ trigger, text, recovery }) => [trigger.kind, text, recovery])).toEqual([
-      ['opening', 'A dark field does not preserve every fragment drawn within it. You may clear away a complete fragment to expose a simpler form.', undefined],
-      ['recognizedUnwinnable', 'An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.', 'timeline'],
+    expect(puzzle('forked-veil').teacher.map(({ trigger, pages, recovery }) => [trigger.kind, pages, recovery])).toEqual([
+      ['opening', ['A dark field does not preserve every fragment drawn within it. You may clear away a complete fragment to expose a simpler form.'], undefined],
+      ['recognizedUnwinnable', ['An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.'], 'timeline'],
     ])
-    expect(puzzle('echoed-veil').teacher.map(({ trigger, text }) => [trigger.kind, text])).toEqual([
-      ['opening', 'The inner fragment is an exact echo of the older form outside it. Where the older form remains, the echo may be lifted.'],
+    expect(puzzle('echoed-veil').teacher.map(({ trigger, pages }) => [trigger.kind, pages])).toEqual([
+      ['opening', ['The inner fragment is an exact echo of the older form outside it. Where the older form remains, the echo may be lifted.']],
     ])
-    expect(puzzle('single-mark-return').teacher.map(({ trigger, text }) => [trigger.kind, text])).toEqual([
-      ['opening', 'This colored mark belongs to the ring surrounding it. The veil changes where it appears, not which ring owns it.'],
-      ['completion', 'Good. The Seyric rings are ownership marks, not ornament. That distinction will matter among the Myratic finds.'],
+    expect(puzzle('single-mark-return').teacher.map(({ trigger, pages }) => [trigger.kind, pages])).toEqual([
+      ['opening', ['This colored mark belongs to the ring surrounding it. The veil changes where it appears, not which ring owns it.']],
+      ['completion', ['Good. The Seyric rings are ownership marks, not ornament. That distinction will matter among the Myratic finds.']],
     ])
     expect(puzzle('two-mark-projection').teacher).toEqual([])
-    expect(puzzle('blank-witness').teacher.map(({ trigger, text }) => [trigger.kind, text])).toEqual([
-      ['opening', 'The Myratic hollow is deliberate. It asks for an entire seal-pattern. Open the loupe and place the blank sheet within it.'],
-      ['completion', 'Precisely. To a Myratic seal, even an unwritten sheet is a complete pattern.'],
+    expect(puzzle('blank-witness').teacher.map(({ trigger, pages }) => [trigger.kind, pages])).toEqual([
+      ['opening', ['The Myratic hollow is deliberate. It asks for an entire seal-pattern. Open the loupe and place the blank sheet within it.']],
+      ['completion', ['Precisely. To a Myratic seal, even an unwritten sheet is a complete pattern.']],
     ])
+
+    const firstPages = puzzle('two-veils').teacher[0]!.pages
+    expect(firstPages.slice(0, -1).join(' ')).not.toMatch(/Eliminate the double cut|Delete|Backspace/)
+    expect(firstPages.at(-1)).toMatch(/Eliminate the double cut.*Delete.*Backspace/)
 
     const emptyVeilTrap = puzzle('forked-veil').teacher[1]!.trigger
     expect(emptyVeilTrap.kind).toBe('recognizedUnwinnable')

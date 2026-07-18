@@ -57,7 +57,7 @@ export function minimalPuzzle(overrides: Partial<PuzzleDefinition> = {}): Puzzle
       id: 'opening-pair',
       performance: fixturePerformanceId,
       trigger: { kind: 'opening' },
-      text: 'Look for the nested pair.',
+      pages: ['Look for the nested pair.'],
       repeat: 'once',
     }],
     ...overrides,

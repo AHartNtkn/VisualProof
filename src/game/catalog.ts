@@ -167,10 +167,18 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
     )
     for (const intervention of puzzle.teacher) {
       nonBlank(intervention.id, `puzzle '${puzzle.id}' teacher intervention id`)
-      nonBlank(
-        intervention.text,
-        `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' text`,
-      )
+      if (intervention.pages.length === 0) {
+        throw new GameDomainError(
+          `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' pages must be nonempty`,
+        )
+      }
+      for (const [pageIndex, page] of intervention.pages.entries()) {
+        const label = `puzzle '${puzzle.id}' teacher intervention '${intervention.id}' page ${pageIndex}`
+        nonBlank(page, label)
+        if (page.includes('\n') || page.includes('\r')) {
+          throw new GameDomainError(`${label} must be a single paragraph`)
+        }
+      }
       if (
         intervention.performance !== undefined
         && !performanceById.has(intervention.performance)
@@ -182,7 +190,13 @@ export function buildCatalog(source: GameCatalogSource): GameCatalog {
       const trigger = intervention.trigger
       switch (trigger.kind) {
         case 'opening':
+          break
         case 'completion':
+          if (intervention.pages.length !== 1) {
+            throw new GameDomainError(
+              `puzzle '${puzzle.id}' completion teacher intervention '${intervention.id}' must have one page`,
+            )
+          }
           break
         case 'recognizedUnwinnable':
           if (intervention.recovery !== 'timeline') {

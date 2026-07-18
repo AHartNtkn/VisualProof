@@ -6,6 +6,7 @@ import {
   type GameControllerState,
 } from '../../src/game/controller-state'
 import { reduceGame } from '../../src/game/controller'
+import { applyGameStep, currentDiagram, startPuzzle } from '../../src/game/session'
 import {
   controllerCatalog,
   controllerSource,
@@ -45,6 +46,8 @@ describe('authoritative game controller', () => {
     expect(state.completed.size).toBe(0)
     expect(state.firstAttempts.size).toBe(0)
     expect(state.replays.size).toBe(0)
+    expect(state.guidance).toBeNull()
+    expect(state.deliveredGuidance).toEqual([])
     expect(state.selectedCulture).toBe(FIRST_CULTURE)
     expect([...state.scrollByCulture]).toEqual([
       [FIRST_CULTURE, 0],
@@ -75,18 +78,13 @@ describe('authoritative game controller', () => {
     expect(state.completionReceipt).toBeNull()
   })
 
-  it('applies Escape precedence for editor, teacher, pause settings, pause, and no transient', () => {
-    const puzzle = catalog.puzzle(FIRST)
-    const intervention = puzzle.teacher[0]!
+  it('applies Escape precedence for editor, pause settings, pause, and no transient while guidance remains passive', () => {
     let state = select(fresh(), FIRST)
-
-    state = transition(state, { kind: 'openTeacher', intervention }).state
-    expect(state.transient?.kind).toBe('teacher')
-    state = transition(state, { kind: 'escape' }).state
-    expect(state.transient).toBeNull()
+    const guidance = state.guidance
 
     state = transition(state, { kind: 'openEditor' }).state
     expect(state.transient?.kind).toBe('editor')
+    expect(state.guidance).toBe(guidance)
     state = transition(state, { kind: 'escape' }).state
     expect(state.transient).toBeNull()
 
@@ -98,18 +96,18 @@ describe('authoritative game controller', () => {
     expect(state.transient).toEqual({ kind: 'pause', presentation: 'menu' })
     state = transition(state, { kind: 'escape' }).state
     expect(state.transient).toBeNull()
+    expect(state.guidance).toBe(guidance)
   })
 
-  it('never leaves mutually exclusive transients competing for input', () => {
-    const intervention = catalog.puzzle(FIRST).teacher[0]!
+  it('keeps passive guidance outside mutually exclusive input-owning transients', () => {
     let state = select(fresh(), FIRST)
-    state = transition(state, { kind: 'openTeacher', intervention }).state
+    const guidance = state.guidance
     state = transition(state, { kind: 'openEditor' }).state
     expect(state.transient).toEqual({ kind: 'editor' })
-    state = transition(state, { kind: 'openTeacher', intervention }).state
-    expect(state.transient).toMatchObject({ kind: 'teacher', intervention })
+    expect(state.guidance).toBe(guidance)
     state = transition(state, { kind: 'openPause' }).state
     expect(state.transient).toEqual({ kind: 'pause', presentation: 'menu' })
+    expect(state.guidance).toBe(guidance)
   })
 
   it('supports pause resume, settings, level selection, and typed exit request without restart', () => {
@@ -242,6 +240,7 @@ describe('authoritative game controller', () => {
     expect(completed.firstAttempts.has(FIRST)).toBe(false)
     expect(completed.mode).toBe('completion')
     expect(completed.transient).toBeNull()
+    expect(completed.guidance).toBeNull()
     expect(completed.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: false })
 
     let replay = transition(completed, { kind: 'levelSelection' }).state
@@ -268,44 +267,85 @@ describe('authoritative game controller', () => {
     expect(state.replays.get(FIRST)?.timeline.states).toHaveLength(1)
   })
 
-  it('persists once-only acknowledgement without changing a nonblocking timeline', () => {
+  it('delivers and pages opening guidance without changing the puzzle timeline', () => {
     let state = select(fresh(), FIRST)
-    state = applyWitness(state, FIRST, 0)
     const timeline = state.firstAttempts.get(FIRST)?.timeline
-    const intervention = catalog.puzzle(FIRST).teacher[0]!
-    state = transition(state, { kind: 'openTeacher', intervention }).state
-    state = transition(state, { kind: 'acknowledgeTeacher' }).state
 
-    expect(state.acknowledgedTeachers).toEqual([{
+    expect(state.guidance).toMatchObject({
+      identity: { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
+      page: 0,
+    })
+    expect(state.deliveredGuidance).toEqual([{
       puzzle: FIRST,
       intervention: SHARED_TEACHER_ID,
     }])
-    expect(state.transient).toBeNull()
+    state = transition(state, { kind: 'advanceGuidancePage' }).state
+    expect(state.guidance?.page).toBe(1)
     expect(state.firstAttempts.get(FIRST)?.timeline).toBe(timeline)
+
+    const atLastPage = transition(state, { kind: 'advanceGuidancePage' }).state
+    expect(atLastPage).toBe(state)
+
+    state = applyWitness(state, FIRST, 0)
+    expect(state.guidance).toBeNull()
   })
 
-  it('acknowledges the same local teacher id independently for each puzzle', () => {
+  it('delivers the same local intervention id independently for each puzzle', () => {
     let state = select(fresh(), FIRST)
     const firstIntervention = catalog.puzzle(FIRST).teacher[0]!
     const secondIntervention = catalog.puzzle(SECOND).teacher[0]!
     expect(firstIntervention.id).toBe(SHARED_TEACHER_ID)
     expect(secondIntervention.id).toBe(SHARED_TEACHER_ID)
 
-    state = transition(state, { kind: 'openTeacher', intervention: firstIntervention }).state
-    state = transition(state, { kind: 'acknowledgeTeacher' }).state
     state = transition(state, { kind: 'levelSelection' }).state
     state = select(state, SECOND)
-    state = transition(state, { kind: 'openTeacher', intervention: secondIntervention }).state
 
-    expect(state.transient).toMatchObject({
-      kind: 'teacher',
+    expect(state.guidance).toMatchObject({
       identity: { puzzle: SECOND, intervention: SHARED_TEACHER_ID },
     })
-    state = transition(state, { kind: 'acknowledgeTeacher' }).state
-    expect(state.acknowledgedTeachers).toEqual([
+    expect(state.deliveredGuidance).toEqual([
       { puzzle: FIRST, intervention: SHARED_TEACHER_ID },
       { puzzle: SECOND, intervention: SHARED_TEACHER_ID },
     ])
+  })
+
+  it('replaces opening guidance at an exact recognized state and clears it on rewind', () => {
+    const source = controllerSource()
+    const second = source.puzzles.find((puzzle) => puzzle.id === SECOND)!
+    const firstStep = second.witness[0]!
+    const reached = applyGameStep(startPuzzle(second), firstStep, {
+      context: { relations: source.context.relations, theorems: new Map() },
+    })
+    const authority = buildCatalog({
+      ...source,
+      puzzles: source.puzzles.map((puzzle) => puzzle.id !== SECOND ? puzzle : {
+        ...puzzle,
+        teacher: [...puzzle.teacher, {
+          id: 'recognized-route',
+          trigger: {
+            kind: 'recognizedUnwinnable' as const,
+            state: { diagram: currentDiagram(reached.session), boundary: puzzle.goal.boundary },
+            demonstration: [firstStep],
+          },
+          pages: ['Draw the timeline back before this route.'],
+          repeat: 'repeatable' as const,
+          recovery: 'timeline' as const,
+        }],
+      }),
+    })
+    let state = reduceGame(
+      authority,
+      createInitialGameState(authority, { reducedMotion: false }),
+      { kind: 'selectPuzzle', puzzle: SECOND },
+    ).state
+
+    state = reduceGame(authority, state, { kind: 'applyStep', step: firstStep }).state
+    expect(state.guidance).toMatchObject({
+      identity: { puzzle: SECOND, intervention: 'recognized-route' },
+      page: 0,
+    })
+    state = reduceGame(authority, state, { kind: 'moveTimeline', cursor: 0 }).state
+    expect(state.guidance).toBeNull()
   })
 
   it('does not change controller state when a proof move is invalid', () => {
@@ -315,7 +355,7 @@ describe('authoritative game controller', () => {
       step: { rule: 'doubleCutElim', region: 'forged-region' },
     })).toThrow()
     expect(state.firstAttempts.get(FIRST)?.timeline).toMatchObject({ cursor: 0, steps: [] })
-    expect(state.transient).toBeNull()
+    expect(state.guidance?.page).toBe(0)
   })
 
   it('persists culture scroll independently and emits fullscreen platform intent', () => {

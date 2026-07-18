@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { GameTimeline } from '../../src/game/session'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
-import { leverCursorAt, leverHandleFraction, mountTimelineLever } from '../../src/game/interface/timeline-lever'
+import {
+  leverCursorAt,
+  leverHandleFraction,
+  mountTimelineLever,
+  type TimelineLeverProjection,
+} from '../../src/game/interface/timeline-lever'
 
 class FakeStyle {
   private readonly properties = new Map<string, string>()
@@ -24,6 +29,7 @@ class FakeElement extends EventTarget {
   constructor(ownerDocument: FakeDocument) { super(); this.ownerDocument = ownerDocument }
   append(...children: FakeElement[]): void { for (const child of children) { child.parent = this; this.children.push(child) } }
   setAttribute(name: string, value: string): void { this.attributes.set(name, value) }
+  removeAttribute(name: string): void { this.attributes.delete(name) }
   getAttribute(name: string): string | null { return this.attributes.get(name) ?? null }
   getBoundingClientRect(): DOMRect { return { left: this.rect.left, width: this.rect.width } as DOMRect }
   setPointerCapture(pointerId: number): void { this.capturedPointers.add(pointerId) }
@@ -43,6 +49,7 @@ const diagram: Diagram = { root: 'r0', regions: { r0: { kind: 'sheet' } }, nodes
 const timeline = (cursor: number, stateCount = 5): GameTimeline => ({
   states: Array.from({ length: stateCount }, () => diagram), steps: [], cursor,
 })
+const active = (value: GameTimeline): TimelineLeverProjection => ({ kind: 'active', timeline: value })
 const eventWith = <T extends Record<string, unknown>>(type: string, values: T): Event & T => {
   const event = new Event(type, { cancelable: true })
   for (const [name, value] of Object.entries(values)) Object.defineProperty(event, name, { value })
@@ -58,7 +65,7 @@ describe('production timeline control', () => {
     expect(leverHandleFraction(0, 5)).toBe(0)
     expect(leverHandleFraction(2, 5)).toBe(0.5)
     expect(leverHandleFraction(4, 5)).toBe(1)
-    expect(leverHandleFraction(0, 1)).toBe(0.5)
+    expect(leverHandleFraction(0, 1)).toBe(0)
     expect(leverCursorAt(99, 100, 300, 4)).toBe(0)
     expect(leverCursorAt(250, 100, 300, 4)).toBe(2)
     expect(leverCursorAt(999, 100, 300, 4)).toBe(3)
@@ -70,7 +77,11 @@ describe('production timeline control', () => {
     const approvedHandle = new FakeElement(document)
     approvedHandle.className = 'curse-production-timeline-handle curse-decoration'
     slot.append(approvedHandle)
-    const mounted = mountTimelineLever(slot as unknown as HTMLElement, () => timeline(2), () => {})
+    const mounted = mountTimelineLever(
+      slot as unknown as HTMLElement,
+      active(timeline(2)),
+      () => {},
+    )
     const control = mounted.element as unknown as FakeElement
 
     expect(slot.children).toEqual([approvedHandle, control])
@@ -81,10 +92,42 @@ describe('production timeline control', () => {
     expect(control.children).toEqual([])
   })
 
+  it('keeps one disabled control visible at archive home and completion final positions', () => {
+    const slot = new FakeElement(document)
+    const moves: number[] = []
+    const mounted = mountTimelineLever(
+      slot as unknown as HTMLElement,
+      { kind: 'inactive', position: 'home', moves: 0 },
+      (cursor) => moves.push(cursor),
+    )
+    const control = mounted.element as unknown as FakeElement
+    const identity = control
+
+    expect(control.getAttribute('aria-disabled')).toBe('true')
+    expect(control.tabIndex).toBe(-1)
+    expect(slot.style.getPropertyValue('--curse-timeline-position')).toBe('0')
+    control.dispatchEvent(eventWith('keydown', { key: 'End' }))
+    control.dispatchEvent(eventWith('pointerdown', {
+      button: 0, clientX: 200, pointerId: 1,
+    }))
+    expect(moves).toEqual([])
+
+    mounted.update(active(timeline(2, 4)))
+    expect(mounted.element).toBe(identity as unknown as HTMLElement)
+    expect(control.getAttribute('aria-disabled')).toBe('false')
+    expect(control.tabIndex).toBe(0)
+
+    mounted.update({ kind: 'inactive', position: 'complete', moves: 3 })
+    expect(mounted.element).toBe(identity as unknown as HTMLElement)
+    expect(control.getAttribute('aria-disabled')).toBe('true')
+    expect(control.tabIndex).toBe(-1)
+    expect(slot.style.getPropertyValue('--curse-timeline-position')).toBe('1')
+  })
+
   it('refreshes ARIA and the environment-owned handle position, including cursor-zero restart', () => {
     const slot = new FakeElement(document)
     let current = timeline(0)
-    const mounted = mountTimelineLever(slot as unknown as HTMLElement, () => current, () => {})
+    const mounted = mountTimelineLever(slot as unknown as HTMLElement, active(current), () => {})
     const control = mounted.element as unknown as FakeElement
     expect(control.getAttribute('aria-valuenow')).toBe('0')
     expect(control.getAttribute('aria-valuetext')).toBe('Original seal')
@@ -92,7 +135,7 @@ describe('production timeline control', () => {
     expect(slot.style.getPropertyValue('--curse-timeline-handle-shift')).toBe('-41.5%')
 
     current = timeline(3)
-    mounted.refresh()
+    mounted.update(active(current))
     expect(control.getAttribute('aria-valuemax')).toBe('4')
     expect(control.getAttribute('aria-valuenow')).toBe('3')
     expect(control.getAttribute('aria-valuetext')).toBe('Recorded state 3')
@@ -105,7 +148,12 @@ describe('production timeline control', () => {
     const slot = new FakeElement(document)
     let current = timeline(2)
     const moves: number[] = []
-    const control = mountTimelineLever(slot as unknown as HTMLElement, () => current, (cursor) => moves.push(cursor)).element as unknown as FakeElement
+    const mounted = mountTimelineLever(
+      slot as unknown as HTMLElement,
+      active(current),
+      (cursor) => moves.push(cursor),
+    )
+    const control = mounted.element as unknown as FakeElement
     for (const [key, expected] of [
       ['ArrowLeft', 1], ['ArrowDown', 1], ['ArrowRight', 3], ['ArrowUp', 3], ['Home', 0], ['End', 4],
     ] as const) {
@@ -115,8 +163,10 @@ describe('production timeline control', () => {
       expect(event.defaultPrevented).toBe(true)
     }
     current = timeline(0)
+    mounted.update(active(current))
     control.dispatchEvent(eventWith('keydown', { key: 'ArrowLeft' }))
     current = timeline(4)
+    mounted.update(active(current))
     control.dispatchEvent(eventWith('keydown', { key: 'ArrowRight' }))
     expect(moves.slice(-2)).toEqual([0, 4])
   })
@@ -126,7 +176,10 @@ describe('production timeline control', () => {
     let allowed = false
     const moves: number[] = []
     const control = mountTimelineLever(
-      slot as unknown as HTMLElement, () => timeline(1, 4), (cursor) => moves.push(cursor), () => allowed,
+      slot as unknown as HTMLElement,
+      active(timeline(1, 4)),
+      (cursor) => moves.push(cursor),
+      () => allowed,
     ).element as unknown as FakeElement
     control.rect = { left: 100, width: 300 }
     const blockedKey = eventWith('keydown', { key: 'ArrowRight' })
@@ -144,7 +197,10 @@ describe('production timeline control', () => {
     let allowed = true
     const moves: number[] = []
     const control = mountTimelineLever(
-      slot as unknown as HTMLElement, () => timeline(1, 4), (cursor) => moves.push(cursor), () => allowed,
+      slot as unknown as HTMLElement,
+      active(timeline(1, 4)),
+      (cursor) => moves.push(cursor),
+      () => allowed,
     ).element as unknown as FakeElement
     control.rect = { left: 100, width: 300 }
     control.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 250, pointerId: 8 }))
@@ -161,7 +217,9 @@ describe('production timeline control', () => {
     const slot = new FakeElement(document)
     const moves: number[] = []
     const control = mountTimelineLever(
-      slot as unknown as HTMLElement, () => timeline(1, 8), (cursor) => moves.push(cursor),
+      slot as unknown as HTMLElement,
+      active(timeline(1, 8)),
+      (cursor) => moves.push(cursor),
     ).element as unknown as FakeElement
     control.rect = { left: 100, width: 700 }
     control.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 243, pointerId: 1 }))
@@ -175,7 +233,9 @@ describe('production timeline control', () => {
     const slot = new FakeElement(document)
     const moves: number[] = []
     const control = mountTimelineLever(
-      slot as unknown as HTMLElement, () => timeline(1, 8), (cursor) => moves.push(cursor),
+      slot as unknown as HTMLElement,
+      active(timeline(1, 8)),
+      (cursor) => moves.push(cursor),
     ).element as unknown as FakeElement
     control.rect = { left: 100, width: 700 }
     control.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 326.5, pointerId: 11 }))
@@ -187,7 +247,11 @@ describe('production timeline control', () => {
   it('handles pointer cancellation/lost capture and removes all ownership on disposal', () => {
     const slot = new FakeElement(document)
     const moves: number[] = []
-    const mounted = mountTimelineLever(slot as unknown as HTMLElement, () => timeline(1, 4), (cursor) => moves.push(cursor))
+    const mounted = mountTimelineLever(
+      slot as unknown as HTMLElement,
+      active(timeline(1, 4)),
+      (cursor) => moves.push(cursor),
+    )
     const control = mounted.element as unknown as FakeElement
     control.rect = { left: 100, width: 300 }
     control.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 250, pointerId: 9 }))
