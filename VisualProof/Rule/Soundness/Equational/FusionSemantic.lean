@@ -322,6 +322,33 @@ theorem fusionRaw_old_node_of_ne_consumer
   rw [fusionNodeDomain_origin_mappedNode]
   rw [if_neg notConsumer]
 
+theorem fusionRaw_node_region
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerPorts : Nat)
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (consumerShape : input.val.nodes consumer =
+      .term consumerRegion consumerPorts consumerTerm)
+    (node : Fin (fusionNodeDomain input.val producer).count) :
+    ((fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+      producerTerm consumerTerm producerWire consumerWire consumedPort).nodes
+        node).region =
+      (input.val.nodes
+        ((fusionNodeDomain input.val producer).origin node)).region := by
+  simp only [fusionRaw]
+  split
+  · rename_i equality
+    rw [equality, consumerShape]
+    rfl
+  · rfl
+
 /-- A free endpoint of the rewritten consumer can only come from the compact
 support reconstruction appended by `fusionRaw`; the filtered old endpoint
 prefix deliberately removes every old consumer free endpoint. -/
