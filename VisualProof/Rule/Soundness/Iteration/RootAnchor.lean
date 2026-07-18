@@ -338,6 +338,50 @@ theorem OrderedRootItemContraction.wholeOpen_equiv
   exact (Splice.denote_replaceOpenBody_iff checked.elaborate modifiedBody
     model named args (fun env => (bodyEquiv env).symm)).symm
 
+/-- A proper root-to-descendant compiler route can be read directly in the
+flattened ordered-root item block.  Reclassifying exposed and hidden root
+wires does not change the concrete route positions. -/
+theorem Splice.Input.OpenRootCompilerItems.routeWitness_complete
+    {checked : CheckedOpenDiagram signature}
+    (compiled : Splice.Input.OpenRootCompilerItems checked)
+    {target : Fin checked.val.diagram.regionCount} {path : List Nat}
+    (route : Splice.RegionRoute checked.val.diagram checked.val.diagram.root
+      target path)
+    (_targetNeRoot : target ≠ checked.val.diagram.root) :
+    Nonempty (Region.ContextPath (Region.mk 0 compiled.items) path) := by
+  have hcompile : ConcreteElaboration.compileRoot? signature
+      checked.val.diagram checked.val.exposedWires checked.val.hiddenWires =
+        some (ConcreteElaboration.finishRoot checked.val.exposedWires
+          checked.val.hiddenWires compiled.items) := by
+    have hitems : ConcreteElaboration.compileOccurrencesWith? signature
+        checked.val.diagram
+        (ConcreteElaboration.compileRegion? signature checked.val.diagram
+          checked.val.diagram.regionCount)
+        (checked.val.exposedWires ++ checked.val.hiddenWires)
+        ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences checked.val.diagram
+          checked.val.diagram.root) = some compiled.items := by
+      simpa only [OpenConcreteDiagram.rootWires] using compiled.computation
+    rw [ConcreteElaboration.compileRoot?, hitems]
+    rfl
+  obtain ⟨result⟩ := Splice.compileOpenRoot_route_context_complete checked
+    route hcompile
+  let rootEq : checked.val.rootWires.length =
+      checked.val.exposedWires.length + checked.val.hiddenWires.length := by
+    simp [OpenConcreteDiagram.rootWires]
+  let totalEq : checked.val.exposedWires.length +
+      checked.val.hiddenWires.length = checked.val.rootWires.length + 0 := by
+    simpa using rootEq.symm
+  let relocated := result.witness.relocal totalEq
+  have bodyEq : Region.mk 0
+        ((compiled.items.castWiresEq rootEq).castWiresEq totalEq) =
+      Region.mk 0 compiled.items := by
+    rw [ItemSeq.castWiresEq_trans]
+    have combined : rootEq.trans totalEq = rfl := Subsingleton.elim _ _
+    rw [combined]
+    rfl
+  exact ⟨bodyEq ▸ relocated⟩
+
 /-- The closed anchor compiler items at a root selection and the ordered-open
 root compiler items are the same occurrence block up to the exact root-wire
 coordinate equivalence. -/
