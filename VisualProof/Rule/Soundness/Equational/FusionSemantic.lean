@@ -17,6 +17,23 @@ def mappedConsumer
   (fusionNodeDomain input.val producer).index consumer (by
     simp [fusionNodeDomain, hdistinct.symm])
 
+def mappedNode
+    (input : CheckedDiagram signature)
+    (producer node : Fin input.val.nodeCount)
+    (survives : node ≠ producer) :
+    Fin (fusionNodeDomain input.val producer).count :=
+  (fusionNodeDomain input.val producer).index node (by
+    simp [fusionNodeDomain, survives])
+
+@[simp] theorem fusionNodeDomain_origin_mappedNode
+    (input : CheckedDiagram signature)
+    (producer node : Fin input.val.nodeCount)
+    (survives : node ≠ producer) :
+    (fusionNodeDomain input.val producer).origin
+        (mappedNode input producer node survives) = node := by
+  exact (fusionNodeDomain input.val producer).origin_index node (by
+    simp [fusionNodeDomain, survives])
+
 @[simp] theorem fusionNodeDomain_origin_mappedConsumer
     (input : CheckedDiagram signature)
     (producer consumer : Fin input.val.nodeCount)
@@ -277,6 +294,34 @@ theorem consumerWire_encloses_consumer
   rw [if_pos rfl]
   rfl
 
+theorem fusionRaw_old_node_of_ne_consumer
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer node : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (survives : node ≠ producer)
+    (notConsumer : node ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts) :
+    (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+      producerTerm consumerTerm producerWire consumerWire consumedPort).nodes
+        (mappedNode input producer node survives) = input.val.nodes node := by
+  change (if (fusionNodeDomain input.val producer).origin
+        (mappedNode input producer node survives) = consumer then
+      CNode.term consumerRegion
+        (fusionTerm producerTerm consumerTerm producerWire consumerWire
+          consumedPort).freeSupport.length
+        (fusionTerm producerTerm consumerTerm producerWire consumerWire
+          consumedPort).compact
+    else input.val.nodes ((fusionNodeDomain input.val producer).origin
+      (mappedNode input producer node survives))) = _
+  rw [fusionNodeDomain_origin_mappedNode]
+  rw [if_neg notConsumer]
+
 /-- A free endpoint of the rewritten consumer can only come from the compact
 support reconstruction appended by `fusionRaw`; the filtered old endpoint
 prefix deliberately removes every old consumer free endpoint. -/
@@ -405,6 +450,73 @@ theorem fusionRaw_consumer_output_origin_occurs
       have impossible : CPort.free port = CPort.output :=
         congrArg CEndpoint.port endpointEq
       contradiction
+    · contradiction
+
+/-- Every endpoint of an unchanged survivor node comes from the same source
+endpoint on the source identity represented by the compacted target wire. -/
+theorem fusionRaw_mappedNode_endpoint_origin_occurs
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer node : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (survives : node ≠ producer)
+    (notConsumer : node ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (wire : Fin (fusionWireDomain input.val consumedWire).count)
+    (port : CPort)
+    (occurs :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).EndpointOccurs wire
+        { node := mappedNode input producer node survives, port := port }) :
+    input.val.EndpointOccurs
+      ((fusionWireDomain input.val consumedWire).origin wire)
+      { node := node, port := port } := by
+  let nodes := fusionNodeDomain input.val producer
+  simp only [fusionRaw] at occurs
+  change CEndpoint.mk (mappedNode input producer node survives) port ∈
+    (_ ++ _) at occurs
+  rw [List.mem_append] at occurs
+  rcases occurs with oldOccurs | rebuiltOccurs
+  · obtain ⟨endpoint, endpointOccurs, endpointMapped⟩ :=
+      List.mem_filterMap.mp oldOccurs
+    split at endpointMapped
+    · unfold anchoredContractEndpoint? at endpointMapped
+      obtain ⟨mapped, indexed, endpointEq⟩ :=
+        Option.map_eq_some_iff.mp endpointMapped
+      have mappedEq : mapped = mappedNode input producer node survives :=
+        congrArg CEndpoint.node endpointEq
+      have originEq : nodes.origin mapped = endpoint.node :=
+        (nodes.index?_eq_some_iff endpoint.node mapped).mp (by
+          simpa [nodes] using indexed)
+      have endpointNode : endpoint.node = node := by
+        rw [mappedEq, fusionNodeDomain_origin_mappedNode] at originEq
+        exact originEq.symm
+      have endpointPort : endpoint.port = port :=
+        congrArg CEndpoint.port endpointEq
+      rcases endpoint with ⟨endpointNodeValue, endpointPortValue⟩
+      simp only at endpointNode endpointPort
+      subst endpointNodeValue
+      subst endpointPortValue
+      exact endpointOccurs
+    · contradiction
+  · obtain ⟨candidate, _, candidateMapped⟩ :=
+      List.mem_filterMap.mp rebuiltOccurs
+    split at candidateMapped
+    · have endpointEq := Option.some.inj candidateMapped
+      have mappedEq : mappedConsumer input producer consumer hdistinct =
+          mappedNode input producer node survives :=
+        congrArg CEndpoint.node endpointEq
+      have originEq := congrArg
+        (fusionNodeDomain input.val producer).origin mappedEq
+      rw [fusionNodeDomain_origin_mappedConsumer,
+        fusionNodeDomain_origin_mappedNode] at originEq
+      exact False.elim (notConsumer originEq.symm)
     · contradiction
 
 theorem fusionRaw_climb
@@ -840,6 +952,94 @@ theorem consumerItem_denote_iff
             targetFreeEnv]
           rw [VisualProof.Rule.LambdaModel.eval_compact model mergedGlobal global,
             fusedEval, outputEnv]
+
+/-- Every node other than the deleted producer and rewritten consumer is
+compiled through survivor compaction by the exact context relation. -/
+theorem unchangedNode_itemSimulation
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer node : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (survives : node ≠ producer)
+    (notConsumer : node ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort))
+    (context : Context input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort sourceContext targetContext)
+    (sourceExact : sourceContext.Nodup)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (sourceItem : Item signature sourceContext.length rels)
+    (targetItem : Item signature targetContext.length rels)
+    (sourceCompiled : ConcreteElaboration.compileNode? signature input.val
+      sourceContext binders node = some sourceItem)
+    (targetCompiled : ConcreteElaboration.compileNode? signature
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      targetContext binders (mappedNode input producer node survives) =
+        some targetItem)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection) :
+    ConcreteElaboration.ItemSimulation model named direction
+      context.indexRelation sourceItem targetItem := by
+  have simulation :=
+    ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+      (source := input.val)
+      (target := fusionRaw input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort)
+      model named direction sourceContext targetContext context.indexRelation
+      binders binders (ConcreteElaboration.identityRelationRenaming rels)
+      node (mappedNode input producer node survives) id id
+      (by
+        rw [fusionRaw_old_node_of_ne_consumer input consumedWire producer
+          consumer node hdistinct survives notConsumer consumerRegion producerTerm
+          consumerTerm producerWire consumerWire consumedPort]
+        cases input.val.nodes node <;> rfl)
+      (by
+        intro port sourceIndex targetIndex sourceResolved targetResolved
+        obtain ⟨sourceOwner, sourceOccurs, sourceGet⟩ :=
+          ConcreteElaboration.resolvePort?_sound sourceResolved
+        obtain ⟨targetOwner, targetOccurs, targetGet⟩ :=
+          ConcreteElaboration.resolvePort?_sound targetResolved
+        have originOccurs := fusionRaw_mappedNode_endpoint_origin_occurs input
+          consumedWire producer consumer node hdistinct survives notConsumer
+          consumerRegion producerTerm consumerTerm producerWire consumerWire
+          consumedPort targetOwner port targetOccurs
+        have ownerEq : (fusionWireDomain input.val consumedWire).origin
+            targetOwner = sourceOwner :=
+          ConcreteElaboration.endpoint_wire_unique
+            input.property.wire_endpoints_are_disjoint originOccurs sourceOccurs
+        have targetGet' : targetContext.get targetIndex = targetOwner := by
+          simpa only [List.get_eq_getElem] using targetGet
+        have sourceGet' : sourceContext.get sourceIndex = sourceOwner := by
+          simpa only [List.get_eq_getElem] using sourceGet
+        have mappedGet : sourceContext.get (context.sourceIndex targetIndex) =
+            sourceOwner := by
+          rw [context.get, targetGet', ownerEq]
+        change context.sourceIndex targetIndex = sourceIndex
+        apply Fin.ext
+        exact (List.getElem_inj sourceExact).mp (by
+          simpa only [List.get_eq_getElem] using mappedGet.trans sourceGet'.symm))
+      (by
+        intro region binder arity sourceRelation nodeShape binderLookup
+        simpa [ConcreteElaboration.identityRelationRenaming] using binderLookup)
+      sourceItem targetItem sourceCompiled targetCompiled
+  have relationMapEq :
+      (ConcreteElaboration.identityRelationRenaming rels :
+        RelationRenaming rels rels) =
+      (fun {arity} (relation : RelVar rels arity) ↦ relation) := rfl
+  rw [relationMapEq, Item.renameRelations_id] at simulation
+  exact simulation
 
 end FusionSoundness
 
