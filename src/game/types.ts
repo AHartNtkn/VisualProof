@@ -127,7 +127,7 @@ export type PuzzleDefinition = {
 export type CultureDefinition = {
   readonly id: CultureId
   readonly name: string
-  readonly shortName?: string
+  readonly shortName: string
   readonly relativeAge: number
   readonly historicalSummary: string
   readonly lineage: readonly CultureId[]

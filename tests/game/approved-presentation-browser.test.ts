@@ -129,6 +129,7 @@ describe('approved production presentation conformance', () => {
             '.active-dossier', '.folio-cover', '.inspection-stage']
             .map((selector) => document.querySelectorAll(selector).length),
           records,
+          sheet: rect('.record-grid'),
         }
       })
       expect(result.lens).toEqual({ x: 600, y: 0, width: 1000, height: 1000 })
@@ -140,7 +141,15 @@ describe('approved production presentation conformance', () => {
       expect(result.folioFont).toContain('Georgia')
       expect(result.tabs).toEqual(['Seyric', 'Myratic'])
       expect(result.physicalLayers).toEqual([1, 2, 1, 1, 1, 1])
+      expect(result.records).toHaveLength(6)
       expect(result.records.every(({ width, height }) => width > 0 && height > 0)).toBe(true)
+      expect(new Set(result.records.map(({ x }) => Math.round(x))).size).toBe(2)
+      expect(new Set(result.records.map(({ y }) => Math.round(y))).size).toBe(3)
+      expect(result.records.every(({ x, y, width, height }) =>
+        x >= result.sheet.x - 1
+        && y >= result.sheet.y - 1
+        && x + width <= result.sheet.x + result.sheet.width + 1
+        && y + height <= result.sheet.y + result.sheet.height + 1)).toBe(true)
     } finally { await page.close() }
   })
 
@@ -202,6 +211,52 @@ describe('approved production presentation conformance', () => {
       })
       expect(jump).toBeLessThan(1)
     } finally { await interrupted.close() }
+
+    const recordInterrupted = await open(
+      '/tests/game/approved-presentation-fixture.html',
+      { width: 1600, height: 1000 },
+    )
+    try {
+      const source = recordInterrupted.locator('[data-puzzle="completed-seal"]')
+      const box = await source.boundingBox()
+      if (box === null) throw new Error('completed reversal record missing')
+      await recordInterrupted.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+      await recordInterrupted.mouse.down()
+      await recordInterrupted.evaluate(() => window.__approvedPresentationFixture.recordMotion(true))
+      await recordInterrupted.waitForTimeout(110)
+      const jump = await recordInterrupted.evaluate(() => {
+        const before = document.querySelector('.inspection-record')!.getBoundingClientRect()
+        window.__approvedPresentationFixture.recordMotion(false)
+        const after = document.querySelector('.inspection-record')!.getBoundingClientRect()
+        return Math.hypot(after.x - before.x, after.y - before.y)
+      })
+      expect(jump).toBeLessThan(1)
+      await recordInterrupted.evaluate(() => window.__approvedPresentationFixture.settleRecordMotion())
+      await recordInterrupted.mouse.up()
+    } finally { await recordInterrupted.close() }
+
+    const compactDrag = await open(
+      '/tests/game/approved-presentation-fixture.html',
+      { width: 760, height: 900 },
+    )
+    try {
+      await compactDrag.evaluate(() => window.__approvedPresentationFixture.setFolioDrawerOpen(true))
+      await compactDrag.waitForTimeout(80)
+      const source = compactDrag.locator('[data-puzzle="completed-seal"]')
+      const box = await source.boundingBox()
+      if (box === null) throw new Error('compact moving record missing')
+      const pointer = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+      await compactDrag.mouse.move(pointer.x, pointer.y)
+      await compactDrag.mouse.down()
+      const lifted = await compactDrag.locator('.inspection-positioner.is-theorem-lifted')
+        .boundingBox()
+      if (lifted === null) throw new Error('compact moving lift missing')
+      expect(Math.hypot(
+        lifted.x + lifted.width / 2 - pointer.x,
+        lifted.y + lifted.height / 2 - pointer.y,
+      )).toBeLessThan(1)
+      await compactDrag.mouse.up()
+    } finally { await compactDrag.close() }
 
     const reduced = await open('/tests/game/approved-presentation-fixture.html?reduced', { width: 1600, height: 1000 })
     try {

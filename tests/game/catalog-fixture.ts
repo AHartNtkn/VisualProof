@@ -68,7 +68,7 @@ export function minimalSource(): GameCatalogSource {
   const puzzle = minimalPuzzle()
   return {
     cultures: [{
-      id: fixtureCultureId, name: 'Fixture culture', relativeAge: 0,
+      id: fixtureCultureId, name: 'Fixture culture', shortName: 'Fixture', relativeAge: 0,
       historicalSummary: 'A fixture culture used for catalog validation.',
       lineage: [], isolation: 'connected', sealingVocabulary: ['veil'],
       unlocksAfter: [], gateway: puzzle.id,

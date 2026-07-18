@@ -1,4 +1,5 @@
 import { mountFolioView } from '../../src/game/interface/folio-view'
+import { FolioMotion } from '../../src/game/interface/folio-motion'
 import { mountLensEnvironment } from '../../src/game/interface/lens-environment'
 import type { FolioProjection } from '../../src/game/interface/folio-projection'
 import { cultureId, puzzleId } from '../../src/game/types'
@@ -8,6 +9,12 @@ const secondCulture = cultureId('myratic-tradition')
 const completed = puzzleId('completed-seal')
 const locked = puzzleId('locked-seal')
 const packet = puzzleId('restricted-packet')
+const additionalRecords = [
+  puzzleId('catalog-seal-1'),
+  puzzleId('catalog-seal-2'),
+  puzzleId('catalog-seal-3'),
+  puzzleId('catalog-seal-4'),
+] as const
 
 const record = (
   id: ReturnType<typeof puzzleId>,
@@ -15,7 +22,9 @@ const record = (
   restrictedPacket = false,
 ) => ({
   id,
-  name: id === completed ? 'Completed seal' : id === packet ? 'Restricted packet' : 'Locked seal',
+  name: id === completed
+    ? 'Completed seal'
+    : id === packet ? 'Restricted packet' : id === locked ? 'Locked seal' : 'Catalog seal',
   accession: 'TEST-01',
   summary: 'Production motion and geometry evidence.',
   status,
@@ -37,7 +46,11 @@ const baseProjection = (): FolioProjection => ({
       historicalSummary: 'Earliest securely excavated sealing horizon; chronology remains under catalog revision.',
       unlocked: true,
       scroll: 0,
-      records: [record(completed, 'completed'), record(locked, 'locked')],
+      records: [
+        record(completed, 'completed'),
+        record(locked, 'locked'),
+        ...additionalRecords.map((id) => record(id, 'unlocked')),
+      ],
     },
     {
       id: secondCulture,
@@ -72,6 +85,7 @@ const folio = mountFolioView({
   onTheoremDragEnd: () => {},
   onTheoremDragCancel: () => {},
 })
+const recordMotionProbe = new FolioMotion(folio.element)
 
 const update = (next: FolioProjection): void => {
   projection = next
@@ -92,6 +106,12 @@ const fixture = {
     }),
   }),
   restriction: () => folio.resistPuzzle(locked),
+  recordMotion: (inspecting: boolean) => {
+    void recordMotionProbe.recordInspection(completed, inspecting, false)
+  },
+  settleRecordMotion: () => recordMotionProbe.settleAll(),
+  setLayout: (width: number, height: number) => environment.setLayout(width, height),
+  setFolioDrawerOpen: (open: boolean) => environment.setFolioDrawerOpen(open),
 }
 
 declare global {

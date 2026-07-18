@@ -52,7 +52,7 @@ export function projectFolio(
   const cultures = catalog.source.cultures.map((culture) => ({
     id: culture.id,
     name: culture.name,
-    shortName: culture.shortName ?? culture.name,
+    shortName: culture.shortName,
     historicalSummary: culture.historicalSummary,
     unlocked: isCultureUnlocked(catalog, progress, culture.id),
     scroll: state.scrollByCulture.get(culture.id) ?? 0,
