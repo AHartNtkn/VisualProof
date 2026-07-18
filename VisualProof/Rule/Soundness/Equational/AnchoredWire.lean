@@ -950,7 +950,7 @@ theorem extend_index_local_of_ne
 
 end SplitContextCollapse
 
-private def splitExtendedEnv
+def splitExtendedEnv
     (context : ConcreteElaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (outerEnv : Fin context.length → D)
@@ -959,7 +959,7 @@ private def splitExtendedEnv
   extendWireEnv outerEnv localEnv ∘
     Fin.cast (ConcreteElaboration.WireContext.length_extend context region)
 
-private noncomputable def splitTargetLocalEnv
+noncomputable def splitTargetLocalEnv
     (collapse : SplitContextCollapse input wire endpoints target term
       expanded original)
     (wireEnclosesTarget :
@@ -980,7 +980,7 @@ private noncomputable def splitTargetLocalEnv
           (ConcreteElaboration.WireContext.length_extend expanded region).symm
           (Fin.natAdd expanded.length localIndex)))
 
-private theorem splitExtendedEnv_collapse
+theorem splitExtendedEnv_collapse
     (collapse : SplitContextCollapse input wire endpoints target term
       expanded original)
     (wireEnclosesTarget :
@@ -1016,7 +1016,7 @@ private theorem splitExtendedEnv_collapse
   · simp [splitTargetLocalEnv, splitExtendedEnv, Function.comp_def,
       extendWireEnv]
 
-private noncomputable def splitSourceLocalEnvOfNe
+noncomputable def splitSourceLocalEnvOfNe
     (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
     (endpoints : List (CEndpoint input.val.nodeCount))
     (target region : Fin input.val.regionCount)
@@ -1029,7 +1029,7 @@ private noncomputable def splitSourceLocalEnvOfNe
     (anchoredWireSplitRaw_exactScopeWires_length_of_ne input wire endpoints
       target region term hne).symm
 
-private theorem splitExtendedEnv_uncollapse_of_ne
+theorem splitExtendedEnv_uncollapse_of_ne
     (collapse : SplitContextCollapse input wire endpoints target term
       expanded original)
     (wireEnclosesTarget :
@@ -1073,7 +1073,7 @@ private theorem splitExtendedEnv_uncollapse_of_ne
 /-- The explicit target-to-source wire renaming below every non-target
 region: inherited indices use the ambient collapse and local old-wire indices
 retain their intrinsic position. -/
-private noncomputable def splitExtendedIndexOfNe
+noncomputable def splitExtendedIndexOfNe
     (collapse : SplitContextCollapse input wire endpoints target term
       expanded original)
     (region : Fin input.val.regionCount) (hne : region ≠ target) :
@@ -1091,7 +1091,7 @@ private noncomputable def splitExtendedIndexOfNe
           (ConcreteElaboration.WireContext.length_extend expanded region)
           index))
 
-private theorem splitExtendedIndexOfNe_eq
+theorem splitExtendedIndexOfNe_eq
     (collapse : SplitContextCollapse input wire endpoints target term
       expanded original)
     (wireEnclosesTarget :
@@ -1121,7 +1121,7 @@ private theorem splitExtendedIndexOfNe_eq
     apply Fin.ext
     simp [splitExtendedIndexOfNe, extendWireRenaming]
 
-private theorem split_region_mk_eq_of_local_eq
+theorem split_region_mk_eq_of_local_eq
     {outer leftLocal rightLocal : Nat}
     (localEq : leftLocal = rightLocal)
     (left : ItemSeq signature (outer + leftLocal) rels)
@@ -1165,7 +1165,7 @@ theorem anchoredWireSplitRaw_finishRegion_of_ne
   rw [ItemSeq.castWiresEq_eq_renameWires, ItemSeq.renameWires_comp]
   congr 1
 
-private theorem option_bind_some_eq_map
+theorem option_bind_some_eq_map
     (value : Option α) (function : α → β) :
     (value.bind fun current => some (function current)) =
       value.map function := by
@@ -1174,7 +1174,7 @@ private theorem option_bind_some_eq_map
 /-- Converse-oriented sequence map used by collapsing surgeries: compiling
 the source sequence equals compiling its embedded target sequence and then
 collapsing target wire indices. -/
-private theorem compileOccurrencesWith?_collapse
+theorem compileOccurrencesWith?_collapse
     {sourceDiagram targetDiagram : ConcreteDiagram}
     (sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin sourceDiagram.regionCount) →
@@ -1336,7 +1336,7 @@ theorem anchoredWireSplitRaw_compileOccurrenceWith?_collapse
             Item.renameWires] using
               congrArg (Option.map (Item.bubble arity)) recursive
 
-private theorem split_direct_child_encloses
+theorem split_direct_child_encloses
     {diagram : ConcreteDiagram} {parent child : Fin diagram.regionCount}
     (parentEq : (diagram.regions child).parent? = some parent) :
     diagram.Encloses parent child := by
@@ -1501,7 +1501,7 @@ theorem anchoredWireSplitRaw_compileRegion?_collapse_of_not_encloses
               target region term expanded original collapse wireEnclosesTarget
               regionNe expandedExact originalExact targetItems)
 
-private theorem split_sibling_not_encloses_descendant
+theorem split_sibling_not_encloses_descendant
     (input : ConcreteDiagram) (wellFormed : input.WellFormed signature)
     {parent selected other descendant : Fin input.regionCount}
     (selectedParent : (input.regions selected).parent? = some parent)
