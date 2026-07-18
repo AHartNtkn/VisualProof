@@ -168,6 +168,19 @@ describe('production timeline control', () => {
     expect(control.released).toEqual([1])
   })
 
+  it('emits a stationary pointer gesture exactly once', () => {
+    const slot = new FakeElement(document)
+    const moves: number[] = []
+    const control = mountTimelineLever(
+      slot as unknown as HTMLElement, () => timeline(1, 8), (cursor) => moves.push(cursor),
+    ).element as unknown as FakeElement
+    control.rect = { left: 100, width: 700 }
+    control.dispatchEvent(eventWith('pointerdown', { button: 0, clientX: 326.5, pointerId: 11 }))
+    control.dispatchEvent(eventWith('pointerup', { clientX: 326.5, pointerId: 11 }))
+    expect(moves).toEqual([2])
+    expect(control.released).toEqual([11])
+  })
+
   it('handles pointer cancellation/lost capture and removes all ownership on disposal', () => {
     const slot = new FakeElement(document)
     const moves: number[] = []

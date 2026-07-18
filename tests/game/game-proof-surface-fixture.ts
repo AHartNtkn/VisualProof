@@ -82,10 +82,18 @@ const state = {
   setTimelineCursor: (cursor: number): void => { timelineCursor = cursor; timeline.refresh() },
   disposeAndProbe: () => {
     surface.dispose()
-    const before = { prepared, refusals, changed }
+    const snapshot = () => ({
+      callbacks: { prepared, refusals, changed },
+      debug: surface.debug(),
+      canvas: { width: surface.canvas.width, height: surface.canvas.height },
+    })
+    const before = snapshot()
     const opened = surface.openConstruction(fixture.bubble, { x: 100, y: 100 })
     const drop = surface.dropArtifact(minimalPuzzle(), { x: 100, y: 100 })
-    return { before, after: { prepared, refusals, changed }, opened, drop }
+    surface.reconcileDiagram()
+    surface.cancelActiveGesture()
+    surface.resize(before.canvas.width + 200, before.canvas.height + 100)
+    return { before, after: snapshot(), opened, drop }
   },
 }
 

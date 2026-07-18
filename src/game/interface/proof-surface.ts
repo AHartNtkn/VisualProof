@@ -287,6 +287,7 @@ export class GameProofViewport {
   }
 
   reconcileDiagram(): void {
+    if (this.#disposed) return
     const next = mkEngine(this.#model.diagram(), this.#model.boundary())
     carryOver(this.#engine, next)
     seedProject(next)
@@ -298,11 +299,13 @@ export class GameProofViewport {
   }
 
   cancelActiveGesture(): void {
+    if (this.#disposed) return
     this.interaction.cancelActiveGesture()
     this.#moves.cancel()
   }
 
   resize(width: number, height: number): void {
+    if (this.#disposed) return
     const nextWidth = Math.max(1, Math.round(width))
     const nextHeight = Math.max(1, Math.round(height))
     if (this.canvas.width === nextWidth && this.canvas.height === nextHeight) return

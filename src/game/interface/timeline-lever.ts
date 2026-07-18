@@ -39,9 +39,11 @@ export function mountTimelineLever(
   handleSlot.append(rail)
 
   let draggingPointer: number | null = null
+  let lastRequestedCursor: number | null = null
   const cancelDrag = (pointerId: number): void => {
     if (draggingPointer !== pointerId) return
     draggingPointer = null
+    lastRequestedCursor = null
     if (rail.hasPointerCapture(pointerId)) rail.releasePointerCapture(pointerId)
   }
   const requestAt = (event: PointerEvent): void => {
@@ -51,16 +53,20 @@ export function mountTimelineLever(
     }
     const timeline = getTimeline()
     const rect = rail.getBoundingClientRect()
-    onMove(leverCursorAt(
+    const cursor = leverCursorAt(
       event.clientX,
       rect.left + rect.width * TIMELINE_TRACK_START,
       rect.width * TIMELINE_TRACK_SPAN,
       timeline.states.length,
-    ))
+    )
+    if (cursor === lastRequestedCursor) return
+    lastRequestedCursor = cursor
+    onMove(cursor)
   }
   const down = (event: PointerEvent): void => {
     if (event.button !== 0 || draggingPointer !== null || !inputAllowed()) return
     draggingPointer = event.pointerId
+    lastRequestedCursor = null
     rail.setPointerCapture(event.pointerId)
     requestAt(event)
   }
@@ -74,7 +80,10 @@ export function mountTimelineLever(
   }
   const cancelled = (event: PointerEvent): void => cancelDrag(event.pointerId)
   const lost = (event: PointerEvent): void => {
-    if (draggingPointer === event.pointerId) draggingPointer = null
+    if (draggingPointer === event.pointerId) {
+      draggingPointer = null
+      lastRequestedCursor = null
+    }
   }
   const keydown = (event: KeyboardEvent): void => {
     if (!inputAllowed()) return
