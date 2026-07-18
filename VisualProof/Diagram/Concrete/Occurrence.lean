@@ -57,6 +57,34 @@ def CertifiedCorresponds.ofRenameEq
   | named region definition arity =>
       exact .named region (regions region) definition arity rfl
 
+/-- Precompose certified node correspondence with an exact renaming.  This is
+the certificate-preserving composition needed when a concrete extraction is
+definitionally transported before an independently certified occurrence. -/
+def CertifiedCorresponds.precomposeRenameEq
+    (first : FiniteEquiv (Fin sourceRegions) (Fin middleRegions))
+    (second : FiniteEquiv (Fin middleRegions) (Fin targetRegions))
+    (source : CNode sourceRegions) (middle : CNode middleRegions)
+    (target : CNode targetRegions)
+    (exact : source.rename first = middle)
+    (certified : CertifiedCorresponds second middle target) :
+    CertifiedCorresponds (first.trans second) source target := by
+  subst middle
+  cases source with
+  | term sourceRegion ports sourceTerm =>
+      cases certified with
+      | term _ targetRegion _ _ targetTerm regionEq certificate =>
+          exact .term sourceRegion targetRegion ports sourceTerm targetTerm
+            regionEq certificate
+  | atom sourceRegion sourceBinder =>
+      cases certified with
+      | atom _ _ targetRegion targetBinder regionEq binderEq =>
+          exact .atom sourceRegion sourceBinder targetRegion targetBinder
+            regionEq binderEq
+  | named sourceRegion definition arity =>
+      cases certified with
+      | named _ targetRegion _ _ regionEq =>
+          exact .named sourceRegion targetRegion definition arity regionEq
+
 end CNode
 
 /-- Concrete occurrence equivalence preserves the complete graph and ordered
@@ -97,6 +125,49 @@ def ofConcreteIso {source target : ConcreteDiagram}
   wire_scope_eq := iso.wire_scope_eq
   wire_endpoints_perm := iso.wire_endpoints_perm
 
+/-- Compose an exact-renaming occurrence with an independently certified
+occurrence without synthesizing or trusting a new beta-eta certificate. -/
+def transOfRenameEq {source middle target : ConcreteDiagram}
+    (first : ConcreteOccurrenceEquiv source middle)
+    (second : ConcreteOccurrenceEquiv middle target)
+    (nodes_eq : ∀ node,
+      (source.nodes node).rename first.regions =
+        middle.nodes (first.nodes node)) :
+    ConcreteOccurrenceEquiv source target where
+  regionCount_eq := first.regionCount_eq.trans second.regionCount_eq
+  nodeCount_eq := first.nodeCount_eq.trans second.nodeCount_eq
+  wireCount_eq := first.wireCount_eq.trans second.wireCount_eq
+  regions := first.regions.trans second.regions
+  nodes := first.nodes.trans second.nodes
+  wires := first.wires.trans second.wires
+  root_eq := by simp [first.root_eq, second.root_eq]
+  regions_eq := by
+    intro region
+    calc
+      (source.regions region).rename (first.regions.trans second.regions) =
+          ((source.regions region).rename first.regions).rename
+            second.regions := by rw [CRegion.rename_trans]
+      _ = (middle.regions (first.regions region)).rename second.regions := by
+        rw [first.regions_eq]
+      _ = target.regions (second.regions (first.regions region)) := by
+        rw [second.regions_eq]
+  nodes_correspond := fun node =>
+    CNode.CertifiedCorresponds.precomposeRenameEq first.regions second.regions
+      (source.nodes node) (middle.nodes (first.nodes node))
+      (target.nodes (second.nodes (first.nodes node))) (nodes_eq node)
+      (second.nodes_correspond (first.nodes node))
+  wire_scope_eq := by
+    intro wire
+    exact (congrArg second.regions (first.wire_scope_eq wire)).trans
+      (second.wire_scope_eq (first.wires wire))
+  wire_endpoints_perm := by
+    intro wire
+    have mapped := (first.wire_endpoints_perm wire).map
+      (CEndpoint.rename second.nodes)
+    have combined := mapped.trans
+      (second.wire_endpoints_perm (first.wires wire))
+    simpa only [List.map_map, CEndpoint.rename_trans] using combined
+
 theorem node_region_eq {source target : ConcreteDiagram}
     (equiv : ConcreteOccurrenceEquiv source target)
     (node : Fin source.nodeCount) :
@@ -127,6 +198,20 @@ def ofOpenConcreteIso {source target : OpenConcreteDiagram}
     (iso : OpenConcreteIso source target) : OpenOccurrenceEquiv source target where
   diagram := ConcreteOccurrenceEquiv.ofConcreteIso iso.diagram
   boundary := iso.boundary
+
+/-- Ordered-open composition where the first occurrence is exact on nodes;
+boundary order and repeated positions are composed by literal list maps. -/
+def transOfRenameEq {source middle target : OpenConcreteDiagram}
+    (first : OpenOccurrenceEquiv source middle)
+    (second : OpenOccurrenceEquiv middle target)
+    (nodes_eq : ∀ node,
+      (source.diagram.nodes node).rename first.diagram.regions =
+        middle.diagram.nodes (first.diagram.nodes node)) :
+    OpenOccurrenceEquiv source target where
+  diagram := first.diagram.transOfRenameEq second.diagram nodes_eq
+  boundary := by
+    rw [← second.boundary, ← first.boundary, List.map_map]
+    rfl
 
 theorem boundary_length_eq {source target : OpenConcreteDiagram}
     (equiv : OpenOccurrenceEquiv source target) :
