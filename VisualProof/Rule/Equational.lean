@@ -673,6 +673,18 @@ def anchoredWireContractProvenance (input : Diagram.CheckedDiagram signature)
     (anchoredWireContractRaw input redundant drop keep)
     (anchoredContractWireDomain input.val drop) rfl
 
+/-- The executor-side semantic gate for exposing a contracted identity at the
+ordered-open root.  Naming the gate keeps the receipt map and its soundness
+proof on the same Boolean decision. -/
+def anchoredContractRootAvailable
+    (input : Diagram.CheckedDiagram signature)
+    (survivor : Fin input.val.nodeCount)
+    (keep : Fin input.val.wireCount) : Bool :=
+  match input.val.nodes survivor with
+  | .term survivorRegion _ _ => anchorAvailableAt input.val
+      (input.val.wires keep).scope survivorRegion input.val.root
+  | _ => false
+
 /-- Logical transport for anchored contraction. The removed redundant output
 identity coalesces with the retained output identity exactly when the
 survivor's closed equality is available at the ordered-open root. Graph
@@ -684,10 +696,7 @@ def anchoredWireContractInterfaceTransport
     InterfaceTransport input.val
       (anchoredWireContractRaw input redundant drop keep) :=
   let domain := anchoredContractWireDomain input.val drop
-  let rootAvailable := match input.val.nodes survivor with
-    | .term survivorRegion _ _ => anchorAvailableAt input.val
-        (input.val.wires keep).scope survivorRegion input.val.root
-    | _ => false
+  let rootAvailable := anchoredContractRootAvailable input survivor keep
   InterfaceTransport.rootFiltered input.val
     (anchoredWireContractRaw input redundant drop keep)
     (fun wire =>
@@ -749,7 +758,10 @@ theorem anchoredWireContract_interface_coalesces
     unfold anchoredWireContractInterfaceTransport
       InterfaceTransport.rootFiltered
     dsimp only
-    rw [hsurvivor, if_pos havailable, if_pos rfl, hindex']
+    rw [show anchoredContractRootAvailable input survivor keep = true by
+      simpa [anchoredContractRootAvailable, hsurvivor] using havailable,
+      if_pos rfl, hindex']
+    simp only [if_pos rfl]
     change (if
       ((anchoredWireContractRaw input redundant drop keep).wires mapped).scope =
           (anchoredWireContractRaw input redundant drop keep).root then
@@ -761,7 +773,9 @@ theorem anchoredWireContract_interface_coalesces
     unfold anchoredWireContractInterfaceTransport
       InterfaceTransport.rootFiltered
     dsimp only
-    rw [hsurvivor, if_pos havailable, if_neg hdistinct.symm, hindex']
+    rw [show anchoredContractRootAvailable input survivor keep = true by
+      simpa [anchoredContractRootAvailable, hsurvivor] using havailable,
+      if_neg hdistinct.symm, hindex']
     change (if
       ((anchoredWireContractRaw input redundant drop keep).wires mapped).scope =
           (anchoredWireContractRaw input redundant drop keep).root then
@@ -792,7 +806,8 @@ theorem anchoredWireContract_interface_drops_unavailable
   unfold anchoredWireContractInterfaceTransport
     InterfaceTransport.rootFiltered
   dsimp only
-  rw [hsurvivor, if_neg (by simpa using hunavailable), hdrop]
+  rw [show anchoredContractRootAvailable input survivor keep = false by
+    simpa [anchoredContractRootAvailable, hsurvivor] using hunavailable, hdrop]
   rfl
 
 def applyAnchoredWireContract (input : Diagram.CheckedDiagram signature)
