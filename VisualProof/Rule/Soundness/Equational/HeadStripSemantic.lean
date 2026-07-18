@@ -1,4 +1,5 @@
 import VisualProof.Rule.Equational
+import VisualProof.Rule.Soundness.Congruence
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule
@@ -617,6 +618,210 @@ noncomputable def extend
 
 end ContextEmbedding
 
+theorem focusedExactScopeLength
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second) :
+    (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+        payload.region).length =
+      (ConcreteElaboration.exactScopeWires input.val payload.region).length +
+        payload.argumentIndices.length := by
+  rw [headStripRaw_exactScopeWires]
+  simp only [if_pos]
+  calc
+    (List.map (Fin.castAdd payload.argumentIndices.length)
+          (ConcreteElaboration.exactScopeWires input.val payload.region) ++
+        List.map (Fin.natAdd input.val.wireCount)
+          (allFin payload.argumentIndices.length)).length =
+      (ConcreteElaboration.exactScopeWires input.val payload.region).length +
+        (allFin payload.argumentIndices.length).length := by
+          rw [List.length_append, List.length_map, List.length_map]
+    _ = (ConcreteElaboration.exactScopeWires input.val payload.region).length +
+        payload.argumentIndices.length := by
+      rw [allFin_eq_finRange, List.length_finRange]
+
+noncomputable def extendedWireMapAtFocus
+    (embedding : ContextEmbedding input payload source target) :
+    Fin (source.extend payload.region).length →
+      Fin (target.extend payload.region).length :=
+  fun index =>
+    Fin.cast (ConcreteElaboration.WireContext.length_extend
+      target payload.region).symm
+      (Fin.addCases
+        (fun outer => Fin.castAdd
+          (ConcreteElaboration.exactScopeWires
+            (headStripRaw input payload) payload.region).length
+          (embedding.index outer))
+        (fun localIndex => Fin.natAdd target.length
+          (Fin.cast (focusedExactScopeLength input payload).symm
+            (Fin.castAdd payload.argumentIndices.length localIndex)))
+        (Fin.cast (ConcreteElaboration.WireContext.length_extend
+          source payload.region) index))
+
+theorem extendedWireMapAtFocus_spec
+    (embedding : ContextEmbedding input payload source target)
+    (index : Fin (source.extend payload.region).length) :
+    (target.extend payload.region).get
+        (extendedWireMapAtFocus embedding index) =
+      Fin.castAdd payload.argumentIndices.length
+        ((source.extend payload.region).get index) := by
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend source payload.region) index
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend
+        source payload.region).symm split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · have mapped : extendedWireMapAtFocus embedding
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend
+            source payload.region).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires input.val
+              payload.region).length outer)) =
+      Fin.cast
+        (ConcreteElaboration.WireContext.length_extend
+          target payload.region).symm
+        (Fin.castAdd
+          (ConcreteElaboration.exactScopeWires
+            (headStripRaw input payload) payload.region).length
+          (embedding.index outer)) := by
+      apply Fin.ext
+      simp [extendedWireMapAtFocus]
+    rw [mapped]
+    simpa [ConcreteElaboration.WireContext.extend] using embedding.get outer
+  · let lengthEq := focusedExactScopeLength input payload
+    have mapped : extendedWireMapAtFocus embedding
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend
+            source payload.region).symm
+          (Fin.natAdd source.length localIndex)) =
+      Fin.cast
+        (ConcreteElaboration.WireContext.length_extend
+          target payload.region).symm
+        (Fin.natAdd target.length
+          (Fin.cast lengthEq.symm
+            (Fin.castAdd payload.argumentIndices.length localIndex))) := by
+      apply Fin.ext
+      simp [extendedWireMapAtFocus]
+    rw [mapped]
+    have exactWires := headStripRaw_exactScopeWires input payload payload.region
+    simp [ConcreteElaboration.WireContext.extend, exactWires]
+    change
+      (List.map (Fin.castAdd payload.argumentIndices.length)
+          (ConcreteElaboration.exactScopeWires input.val payload.region) ++
+        List.map (Fin.natAdd input.val.wireCount)
+          (allFin payload.argumentIndices.length))[localIndex.val] =
+      Fin.castAdd payload.argumentIndices.length
+        (ConcreteElaboration.exactScopeWires input.val
+          payload.region)[localIndex.val]
+    rw [List.getElem_append_left (by
+      rw [List.length_map]
+      exact localIndex.isLt)]
+    exact List.getElem_map _
+
+theorem ContextEmbedding.extend_index_eq_map_at_focus
+    (embedding : ContextEmbedding input payload source target)
+    (targetNodup : (target.extend payload.region).Nodup)
+    (index : Fin (source.extend payload.region).length) :
+    (embedding.extend payload.region).index index =
+      extendedWireMapAtFocus embedding index := by
+  symm
+  apply Fin.ext
+  exact (List.getElem_inj targetNodup).mp (by
+    simpa only [List.get_eq_getElem] using
+      (extendedWireMapAtFocus_spec embedding index).trans
+        ((embedding.extend payload.region).get index).symm)
+
+def focusedForwardLocal
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+      payload.region).length → D)
+    (fresh : Fin payload.argumentIndices.length → D) :
+    Fin (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+      payload.region).length → D :=
+  fun index =>
+    Fin.addCases sourceLocal fresh
+      (Fin.cast (focusedExactScopeLength input payload) index)
+
+def focusedBackwardLocal
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (headStripRaw input payload) payload.region).length → D) :
+    Fin (ConcreteElaboration.exactScopeWires input.val
+      payload.region).length → D :=
+  fun index => targetLocal
+    (Fin.cast (focusedExactScopeLength input payload).symm
+      (Fin.castAdd payload.argumentIndices.length index))
+
+theorem focusedForwardExtendedEnvironment
+    (embedding : ContextEmbedding input payload source target)
+    (sourceOuter : Fin source.length → D)
+    (targetOuter : Fin target.length → D)
+    (outerAgrees : sourceOuter = targetOuter ∘ embedding.index)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+      payload.region).length → D)
+    (fresh : Fin payload.argumentIndices.length → D)
+    (targetNodup : (target.extend payload.region).Nodup) :
+    ConcreteElaboration.extendedEnvironment source payload.region
+        sourceOuter sourceLocal =
+      ConcreteElaboration.extendedEnvironment target payload.region
+          targetOuter (focusedForwardLocal input payload sourceLocal fresh) ∘
+        (embedding.extend payload.region).index := by
+  rw [outerAgrees]
+  funext index
+  simp only [Function.comp_apply]
+  rw [embedding.extend_index_eq_map_at_focus targetNodup]
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend source payload.region) index
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend
+        source payload.region).symm split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · simp [ConcreteElaboration.extendedEnvironment, extendedWireMapAtFocus,
+      Diagram.extendWireEnv, Function.comp_def]
+  · simp [ConcreteElaboration.extendedEnvironment, extendedWireMapAtFocus,
+      focusedForwardLocal, Diagram.extendWireEnv, Function.comp_def]
+
+theorem focusedBackwardExtendedEnvironment
+    (embedding : ContextEmbedding input payload source target)
+    (sourceOuter : Fin source.length → D)
+    (targetOuter : Fin target.length → D)
+    (outerAgrees : sourceOuter = targetOuter ∘ embedding.index)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (headStripRaw input payload) payload.region).length → D)
+    (targetNodup : (target.extend payload.region).Nodup) :
+    ConcreteElaboration.extendedEnvironment source payload.region sourceOuter
+        (focusedBackwardLocal input payload targetLocal) =
+      ConcreteElaboration.extendedEnvironment target payload.region targetOuter
+          targetLocal ∘ (embedding.extend payload.region).index := by
+  rw [outerAgrees]
+  funext index
+  simp only [Function.comp_apply]
+  rw [embedding.extend_index_eq_map_at_focus targetNodup]
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend source payload.region) index
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend
+        source payload.region).symm split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · simp [ConcreteElaboration.extendedEnvironment, extendedWireMapAtFocus,
+      Diagram.extendWireEnv, Function.comp_def]
+  · simp [ConcreteElaboration.extendedEnvironment, extendedWireMapAtFocus,
+      focusedBackwardLocal, Diagram.extendWireEnv, Function.comp_def]
+
 theorem compileNode_old
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
@@ -668,6 +873,102 @@ theorem compileNode_old
     cases bindersEq
     simp [ConcreteElaboration.IdentityBinderWitness.relationMap,
       ConcreteElaboration.identityRelationRenaming]
+
+theorem source_common_environment
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (context : ConcreteElaboration.WireContext input.val)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (fuel : Nat)
+    (items : ItemSeq signature context.length rels)
+    (compiled :
+      ConcreteElaboration.compileOccurrencesWith? signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val fuel)
+        context binders
+        (ConcreteElaboration.localOccurrences input.val payload.region) =
+          some items)
+    (exact : context.Exact payload.region)
+    (named : NamedEnv Lambda.Individual signature)
+    (env : Fin context.length → Lambda.Individual)
+    (relEnv : RelEnv Lambda.Individual rels)
+    (itemsDenote : denoteItemSeq Lambda.canonicalModel named env relEnv items) :
+    ∃ common : Fin payload.commonPorts → Lambda.Individual,
+      Lambda.canonicalModel.eval
+          (payload.firstTerm.mapFree payload.firstPort) common =
+        Lambda.canonicalModel.eval
+          (payload.secondTerm.mapFree payload.secondPort) common := by
+  obtain ⟨firstOutput, firstFree, firstOutputResult, firstFreeResult,
+      firstEquation⟩ :=
+    CongruenceSoundness.compiled_items_term_node_equation context binders fuel
+      items compiled exact first payload.firstFreePorts payload.firstTerm
+      payload.firstNode Lambda.canonicalModel named env relEnv itemsDenote
+  obtain ⟨secondOutput, secondFree, secondOutputResult, secondFreeResult,
+      secondEquation⟩ :=
+    CongruenceSoundness.compiled_items_term_node_equation context binders fuel
+      items compiled exact second payload.secondFreePorts payload.secondTerm
+      payload.secondNode Lambda.canonicalModel named env relEnv itemsDenote
+  obtain ⟨firstOwner, firstOwnerOccurs, firstOwnerGet⟩ :=
+    ConcreteElaboration.resolvePort?_sound firstOutputResult
+  obtain ⟨secondOwner, secondOwnerOccurs, secondOwnerGet⟩ :=
+    ConcreteElaboration.resolvePort?_sound secondOutputResult
+  have firstOwnerEq : firstOwner = payload.outputWire :=
+    ConcreteElaboration.endpoint_wire_unique
+      input.property.wire_endpoints_are_disjoint firstOwnerOccurs
+        payload.firstOutput
+  have secondOwnerEq : secondOwner = payload.outputWire :=
+    ConcreteElaboration.endpoint_wire_unique
+      input.property.wire_endpoints_are_disjoint secondOwnerOccurs
+        payload.secondOutput
+  have outputIndexEq : firstOutput = secondOutput := by
+    apply Fin.ext
+    exact (List.getElem_inj exact.nodup).mp (by
+      simpa only [List.get_eq_getElem] using
+        firstOwnerGet.trans (firstOwnerEq.trans
+          (secondOwnerEq.symm.trans secondOwnerGet.symm)))
+  have aligned : ∀ left right,
+      payload.firstPort left = payload.secondPort right →
+        (env ∘ firstFree) left = (env ∘ secondFree) right := by
+    intro left right commonEq
+    have firstResolved := sequenceFin_sound firstFreeResult left
+    have secondResolved := sequenceFin_sound secondFreeResult right
+    obtain ⟨firstWire, firstWireOccurs, firstWireGet⟩ :=
+      ConcreteElaboration.resolvePort?_sound firstResolved
+    obtain ⟨secondWire, secondWireOccurs, secondWireGet⟩ :=
+      ConcreteElaboration.resolvePort?_sound secondResolved
+    have firstWireEq : firstWire = payload.firstWire left :=
+      ConcreteElaboration.endpoint_wire_unique
+        input.property.wire_endpoints_are_disjoint firstWireOccurs
+          (payload.firstWire_occurs left)
+    have secondWireEq : secondWire = payload.secondWire right :=
+      ConcreteElaboration.endpoint_wire_unique
+        input.property.wire_endpoints_are_disjoint secondWireOccurs
+          (payload.secondWire_occurs right)
+    have indexEq : firstFree left = secondFree right := by
+      apply Fin.ext
+      exact (List.getElem_inj exact.nodup).mp (by
+        simpa only [List.get_eq_getElem] using
+          firstWireGet.trans (firstWireEq.trans
+            ((payload.shared_wire left right commonEq).trans
+              (secondWireEq.symm.trans secondWireGet.symm))))
+    simp only [Function.comp_apply, indexEq]
+  obtain ⟨common, firstCommon, secondCommon⟩ :=
+    payload.exists_common_environment (env ∘ firstFree)
+      (env ∘ secondFree) aligned
+  refine ⟨common, ?_⟩
+  rw [Lambda.LambdaModel.eval_mapFree,
+    Lambda.LambdaModel.eval_mapFree]
+  exact (congrArg
+    (fun environment =>
+      Lambda.canonicalModel.eval payload.firstTerm environment)
+    firstCommon).trans
+      (firstEquation.symm.trans
+        ((congrArg env outputIndexEq).trans
+          (secondEquation.trans
+            (congrArg
+              (fun environment =>
+                Lambda.canonicalModel.eval payload.secondTerm environment)
+              secondCommon.symm))))
 
 def sourceOpen (input : CheckedDiagram signature)
     (boundary : List (Fin input.val.wireCount)) : OpenConcreteDiagram where
