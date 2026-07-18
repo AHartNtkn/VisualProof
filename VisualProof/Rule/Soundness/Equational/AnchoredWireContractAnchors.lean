@@ -128,6 +128,25 @@ theorem endpointAnchorOrder_exists
       localWitnessZero := redundantZero
     }⟩
 
+theorem movedEndpoint_ne_survivor_output
+    (input : CheckedDiagram signature)
+    (redundant survivor : Fin input.val.nodeCount)
+    (drop keep : Fin input.val.wireCount)
+    (endpoint : CEndpoint input.val.nodeCount)
+    (member : endpoint ∈ movedEndpoints input redundant drop)
+    (survivorOccurs : input.val.EndpointOccurs keep
+      { node := survivor, port := .output })
+    (distinct : drop ≠ keep) :
+    ({ node := survivor, port := CPort.output } :
+      CEndpoint input.val.nodeCount) ≠ endpoint := by
+  intro equality
+  have endpointOnKeep : input.val.EndpointOccurs keep endpoint := by
+    simpa [equality] using survivorOccurs
+  have ownersEqual := ConcreteElaboration.endpoint_wire_unique
+    input.property.wire_endpoints_are_disjoint
+    (movedEndpoints_mem_occurs input redundant drop member) endpointOnKeep
+  exact distinct ownersEqual
+
 /-- When both certified anchors are available at the same compiler site, their
 zero-cut equations and the checked closed-term conversion coalesce the two wire
 values directly. -/
