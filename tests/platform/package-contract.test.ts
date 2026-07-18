@@ -3,7 +3,7 @@ import path from 'node:path'
 import { describe, expect, test } from 'vitest'
 
 describe('desktop build and package contract', () => {
-  test('pins Electron tooling and provides renderer, Electron, desktop, development, and Linux package scripts', async () => {
+  test('pins Electron tooling and provides one authoritative desktop launcher', async () => {
     const packageDocument = JSON.parse(await readFile('package.json', 'utf8'))
 
     expect(packageDocument.engines.node).toBe('>=22.12.0')
@@ -11,13 +11,15 @@ describe('desktop build and package contract', () => {
     expect(packageDocument.devDependencies.electron).toBe('43.1.1')
     expect(packageDocument.devDependencies['electron-builder']).toBe('26.15.3')
     expect(packageDocument.scripts).toMatchObject({
+      app: 'npm run build:desktop && electron .',
       'build:renderer': expect.any(String),
       'build:electron': expect.any(String),
       'build:desktop': expect.any(String),
-      'desktop:dev': expect.any(String),
       'package:linux:dir': expect.any(String),
       'package:linux': expect.any(String),
     })
+    expect(packageDocument.scripts).not.toHaveProperty('desktop:dev')
+    expect(packageDocument.scripts.app).not.toMatch(/^vite(?:\s|$)/)
     expect(packageDocument.scripts['build:desktop']).toMatch(/build:renderer.*build:electron/)
   })
 
