@@ -1,115 +1,193 @@
-import type { CultureId } from '../types'
+import type { CultureId, PuzzleId } from '../types'
 
 export type FolioMotionClock = {
   wait(milliseconds: number, signal: AbortSignal): Promise<void>
 }
 
+type CoverState = 'open' | 'closed'
+type MotionChannel = 'cover' | 'dossier' | 'record' | 'restriction' | 'packet'
+
+type ActiveMotion = {
+  controller: AbortController
+  cancel: () => void
+}
+
+type InterruptedSnapshot = Record<string, string>
+
+const snapshotSubjects: Partial<
+  Record<
+    MotionChannel,
+    {
+      selector: string
+      properties: Array<{ style: 'transform' | 'boxShadow' | 'filter'; variable: string }>
+    }
+  >
+> = {
+  cover: {
+    selector: '.cover-surface',
+    properties: [{ style: 'transform', variable: '--motion-cover-from-transform' }],
+  },
+  record: {
+    selector: '.inspection-record',
+    properties: [
+      { style: 'transform', variable: '--motion-record-from-transform' },
+      { style: 'boxShadow', variable: '--motion-record-from-shadow' },
+      { style: 'filter', variable: '--motion-record-from-filter' },
+    ],
+  },
+}
+
+const fullDurations: Record<MotionChannel, number> = {
+  cover: 380,
+  dossier: 260,
+  record: 340,
+  restriction: 320,
+  packet: 480,
+}
+const reducedDuration = 90
+
 const browserClock: FolioMotionClock = {
   wait(milliseconds, signal) {
     return new Promise((resolve) => {
-      const timer = window.setTimeout(resolve, milliseconds)
-      signal.addEventListener('abort', () => {
-        window.clearTimeout(timer)
-        resolve()
-      }, { once: true })
+      const timeout = window.setTimeout(resolve, milliseconds)
+      signal.addEventListener(
+        'abort',
+        () => {
+          window.clearTimeout(timeout)
+          resolve()
+        },
+        { once: true },
+      )
     })
   },
 }
 
-type ActiveDossierMotion = {
-  readonly controller: AbortController
-  readonly generation: number
-}
-
-export class FolioDossierMotion {
-  private active: ActiveDossierMotion | null = null
-  private activeRestriction: ActiveDossierMotion | null = null
-  private generation = 0
-  private restrictionGeneration = 0
+export class FolioMotion {
+  private readonly active = new Map<MotionChannel, ActiveMotion>()
 
   constructor(
     private readonly root: HTMLElement,
     private readonly clock: FolioMotionClock = browserClock,
   ) {}
 
-  async replace(culture: CultureId, reducedMotion: boolean): Promise<void> {
-    this.generation += 1
-    this.active?.controller.abort()
-    this.active = null
-    this.settlePresentation()
-    if (reducedMotion) return
+  cover(target: CoverState, reducedMotion: boolean): Promise<void> {
+    return this.run('cover', target, target === 'open' ? 'open' : 'close', reducedMotion)
+  }
 
-    const active: ActiveDossierMotion = {
-      controller: new AbortController(),
-      generation: this.generation,
+  dossier(target: CultureId, reducedMotion: boolean): Promise<void> {
+    return this.run('dossier', target, 'replace', reducedMotion)
+  }
+
+  recordInspection(
+    target: PuzzleId,
+    inspecting: boolean,
+    reducedMotion: boolean,
+  ): Promise<void> {
+    return this.run('record', target, inspecting ? 'inspect' : 'return', reducedMotion)
+  }
+
+  restrictedRefusal(target: PuzzleId | CultureId, reducedMotion: boolean): Promise<void> {
+    return this.run('restriction', target, 'refuse', reducedMotion)
+  }
+
+  packetRelease(reducedMotion: boolean): Promise<void> {
+    return this.run('packet', 'myratic', 'release', reducedMotion)
+  }
+
+  settleAll(): void {
+    for (const channel of this.channels()) this.cancel(channel)
+  }
+
+  private async run(
+    channel: MotionChannel,
+    target: string,
+    kind: string,
+    reducedMotion: boolean,
+  ): Promise<void> {
+    const interruptedSnapshot = this.captureInterruptedSnapshot(channel)
+    this.cancel(channel)
+
+    const duration = reducedMotion ? reducedDuration : fullDurations[channel]
+    const controller = new AbortController()
+    const active: ActiveMotion = {
+      controller,
+      cancel: () => controller.abort(),
     }
-    this.active = active
-    this.root.classList.add('is-motion-dossier')
-    this.root.dataset.motionDossierTarget = culture
-    this.root.style.setProperty('--folio-dossier-duration', '260ms')
+    this.active.set(channel, active)
+    this.applyInterruptedSnapshot(interruptedSnapshot)
+    this.root.classList.add(this.className(channel))
+    this.root.dataset[this.targetKey(channel)] = target
+    this.root.dataset[this.kindKey(channel)] = reducedMotion ? 'reduced' : kind
+    this.root.style.setProperty(this.durationProperty(channel), `${duration}ms`)
+
     try {
-      await this.clock.wait(260, active.controller.signal)
+      await this.clock.wait(duration, controller.signal)
     } finally {
-      if (this.active === active && active.generation === this.generation) {
-        this.active = null
-        this.settlePresentation()
-      }
+      if (this.active.get(channel) === active) this.cleanup(channel)
     }
   }
 
-  async restrictedRefusal(target: string, reducedMotion: boolean): Promise<void> {
-    this.restrictionGeneration += 1
-    this.activeRestriction?.controller.abort()
-    this.activeRestriction = null
-    this.settleRestrictionPresentation()
-    const active: ActiveDossierMotion = {
-      controller: new AbortController(),
-      generation: this.restrictionGeneration,
+  private cancel(channel: MotionChannel): void {
+    const active = this.active.get(channel)
+    if (active !== undefined) {
+      this.active.delete(channel)
+      active.cancel()
     }
-    this.activeRestriction = active
-    this.root.classList.add('is-motion-restriction')
-    this.root.dataset.motionRestrictionTarget = target
-    this.root.dataset.motionRestrictionKind = reducedMotion ? 'reduced' : 'refuse'
-    const duration = reducedMotion ? 90 : 320
-    this.root.style.setProperty('--motion-restriction-duration', `${duration}ms`)
-    try {
-      await this.clock.wait(duration, active.controller.signal)
-    } finally {
-      if (
-        this.activeRestriction === active
-        && active.generation === this.restrictionGeneration
-      ) {
-        this.activeRestriction = null
-        this.settleRestrictionPresentation()
-      }
+    this.cleanup(channel)
+  }
+
+  private cleanup(channel: MotionChannel): void {
+    this.active.delete(channel)
+    delete this.root.dataset[this.targetKey(channel)]
+    delete this.root.dataset[this.kindKey(channel)]
+    this.root.style.removeProperty(this.durationProperty(channel))
+    for (const property of snapshotSubjects[channel]?.properties ?? []) {
+      this.root.style.removeProperty(property.variable)
+    }
+    this.root.classList.remove(this.className(channel))
+  }
+
+  private captureInterruptedSnapshot(channel: MotionChannel): InterruptedSnapshot {
+    if (!this.active.has(channel)) return {}
+    const subject = snapshotSubjects[channel]
+    const element = subject === undefined
+      ? null
+      : this.root.querySelector<HTMLElement>(subject.selector)
+    const view = this.root.ownerDocument.defaultView
+    if (subject === undefined || element === null || view === null) return {}
+    const computed = view.getComputedStyle(element)
+    return Object.fromEntries(
+      subject.properties.map(({ style, variable }) => [variable, computed[style]]),
+    )
+  }
+
+  private applyInterruptedSnapshot(snapshot: InterruptedSnapshot): void {
+    for (const [property, value] of Object.entries(snapshot)) {
+      this.root.style.setProperty(property, value)
     }
   }
 
-  settleRestriction(): void {
-    this.restrictionGeneration += 1
-    this.activeRestriction?.controller.abort()
-    this.activeRestriction = null
-    this.settleRestrictionPresentation()
+  private targetKey(channel: MotionChannel): string {
+    return `motion${capitalize(channel)}Target`
   }
 
-  settle(): void {
-    this.generation += 1
-    this.active?.controller.abort()
-    this.active = null
-    this.settlePresentation()
-    this.settleRestriction()
+  private kindKey(channel: MotionChannel): string {
+    return `motion${capitalize(channel)}Kind`
   }
 
-  private settlePresentation(): void {
-    this.root.classList.remove('is-motion-dossier')
-    delete this.root.dataset.motionDossierTarget
-    this.root.style.removeProperty('--folio-dossier-duration')
+  private durationProperty(channel: MotionChannel): string {
+    return `--motion-${channel}-duration`
   }
 
-  private settleRestrictionPresentation(): void {
-    this.root.classList.remove('is-motion-restriction')
-    delete this.root.dataset.motionRestrictionTarget
-    delete this.root.dataset.motionRestrictionKind
-    this.root.style.removeProperty('--motion-restriction-duration')
+  private className(channel: MotionChannel): string {
+    return `is-motion-${channel}`
   }
+
+  private channels(): MotionChannel[] {
+    return ['cover', 'dossier', 'record', 'restriction', 'packet']
+  }
+}
+
+function capitalize(value: string): string {
+  return `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}`
 }

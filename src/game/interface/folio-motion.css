@@ -1,0 +1,235 @@
+:root {
+  --paper-ease: cubic-bezier(0.2, 0.72, 0.25, 1);
+  --weight-ease: cubic-bezier(0.32, 0.04, 0.22, 1);
+}
+
+@keyframes cover-open {
+  from {
+    transform: var(--motion-cover-from-transform, translateX(0) rotateY(0deg));
+  }
+  to {
+    transform: translateX(var(--cover-open-x)) rotateY(-68deg);
+  }
+}
+
+@keyframes cover-close {
+  from {
+    transform: var(
+      --motion-cover-from-transform,
+      translateX(var(--cover-open-x)) rotateY(-68deg)
+    );
+  }
+  to {
+    transform: translateX(0) rotateY(0deg);
+  }
+}
+
+.is-motion-cover[data-motion-cover-kind="open"] .cover-surface {
+  animation: cover-open var(--motion-cover-duration) var(--weight-ease) both;
+}
+
+.is-motion-cover[data-motion-cover-kind="close"] .cover-surface {
+  animation: cover-close var(--motion-cover-duration) var(--weight-ease) both;
+}
+
+@keyframes dossier-enter {
+  from {
+    box-shadow: 0.86rem 1.15rem 1.35rem rgb(26 19 15 / 42%);
+    transform: translate(0.9rem, -0.3rem);
+  }
+  to {
+    box-shadow: 0.45rem 0.72rem 0.9rem rgb(26 19 15 / 32%);
+    transform: translate(0, 0);
+  }
+}
+
+.is-motion-dossier[data-motion-dossier-kind="replace"] .active-dossier {
+  z-index: 5;
+  animation: dossier-enter var(--motion-dossier-duration) var(--paper-ease) both;
+}
+
+@keyframes record-inspect {
+  from {
+    box-shadow: var(
+      --motion-record-from-shadow,
+      0.18rem 0.28rem 0.38rem rgb(12 7 9 / 30%)
+    );
+    filter: var(--motion-record-from-filter, brightness(0.96) contrast(1.03));
+    transform: var(
+      --motion-record-from-transform,
+      translate(var(--record-source-x), var(--record-source-y))
+        scale(var(--record-source-scale-x), var(--record-source-scale-y))
+        rotate(var(--record-status-rotation))
+    );
+  }
+  to {
+    box-shadow: 1.3rem 2rem 2.8rem rgb(12 7 9 / 58%);
+    filter: none;
+    transform: translate(0, 0) scale(1, 1)
+      rotate(var(--record-status-rotation));
+  }
+}
+
+@keyframes record-return {
+  from {
+    box-shadow: var(
+      --motion-record-from-shadow,
+      1.3rem 2rem 2.8rem rgb(12 7 9 / 58%)
+    );
+    filter: var(--motion-record-from-filter, none);
+    transform: var(
+      --motion-record-from-transform,
+      translate(0, 0) scale(1, 1) rotate(var(--record-status-rotation))
+    );
+  }
+  to {
+    box-shadow: 0.18rem 0.28rem 0.38rem rgb(12 7 9 / 30%);
+    filter: brightness(0.96) contrast(1.03);
+    transform: translate(var(--record-source-x), var(--record-source-y))
+      scale(var(--record-source-scale-x), var(--record-source-scale-y))
+      rotate(var(--record-status-rotation));
+  }
+}
+
+.is-motion-record[data-motion-record-kind="inspect"] .inspection-record {
+  animation: record-inspect var(--motion-record-duration) var(--paper-ease) both;
+}
+
+.is-motion-record[data-motion-record-kind="return"] .inspection-record {
+  animation: record-return var(--motion-record-duration) var(--paper-ease) both;
+}
+
+@keyframes restriction-record {
+  0%, 100% {
+    transform: translateX(0) rotate(0deg);
+  }
+  42% {
+    transform: translateX(0.16rem) rotate(0.18deg);
+  }
+}
+
+@keyframes restriction-guard {
+  0%, 100% {
+    box-shadow: none;
+    transform: translateX(0) rotate(0deg) skewX(0deg);
+  }
+  24% {
+    box-shadow: 0.42rem 0.56rem 0.65rem rgb(20 13 11 / 42%);
+    transform: translateX(0.42rem) rotate(0.45deg) skewX(0deg);
+  }
+  48% {
+    box-shadow: 0.3rem 0.42rem 0.52rem rgb(20 13 11 / 34%);
+    transform: translateX(0.18rem) rotate(0deg) skewX(-1.2deg);
+  }
+  76% {
+    box-shadow: 0.12rem 0.2rem 0.28rem rgb(20 13 11 / 28%);
+    transform: translateX(-0.16rem) rotate(-0.16deg) skewX(0deg);
+  }
+}
+
+.is-motion-restriction[data-motion-restriction-kind="refuse"]
+  .is-restriction-target {
+  animation: restriction-record var(--motion-restriction-duration) linear both;
+}
+
+.is-motion-restriction[data-motion-restriction-kind="refuse"]
+  .is-restriction-target
+  .record-guard {
+  animation: restriction-guard var(--motion-restriction-duration) linear both;
+}
+
+@keyframes packet-guard-release {
+  0% {
+    opacity: 1;
+    transform: translateX(0) rotateY(0deg);
+  }
+  32% {
+    opacity: 1;
+    transform: translateX(-22%) rotateY(-5deg);
+  }
+  72% {
+    opacity: 0.72;
+    transform: translateX(-82%) rotateY(-16deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(-110%) rotateY(-20deg);
+  }
+}
+
+@keyframes packet-tie-release {
+  from {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: translate(1.8rem, 1.4rem) rotate(26deg);
+  }
+}
+
+@keyframes packet-fastener-release {
+  from {
+    opacity: 1;
+    transform: rotate(0deg);
+  }
+  to {
+    opacity: 0;
+    transform: rotate(60deg) translate(0.3rem, 0.2rem);
+  }
+}
+
+@keyframes packet-contents-release {
+  from {
+    transform: translateY(0.15rem);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+.is-motion-packet[data-motion-packet-kind="release"]
+  .restricted-packet
+  .record-guard {
+  visibility: visible;
+  animation: packet-guard-release var(--motion-packet-duration) var(--paper-ease)
+    both;
+}
+
+.is-motion-packet[data-motion-packet-kind="release"] .packet-tie {
+  animation: packet-tie-release var(--motion-packet-duration) var(--paper-ease)
+    both;
+}
+
+.is-motion-packet[data-motion-packet-kind="release"] .packet-fastener {
+  animation: packet-fastener-release var(--motion-packet-duration)
+    var(--paper-ease) both;
+}
+
+.is-motion-packet[data-motion-packet-kind="release"]
+  .restricted-packet
+  .record-face {
+  animation: packet-contents-release var(--motion-packet-duration)
+    var(--paper-ease) both;
+}
+
+@keyframes reduced-depth {
+  0%, 100% {
+    filter: brightness(1) contrast(1);
+  }
+  50% {
+    filter: brightness(1.04) contrast(0.98);
+  }
+}
+
+.is-motion-cover[data-motion-cover-kind="reduced"] .cover-surface,
+.is-motion-dossier[data-motion-dossier-kind="reduced"] .active-dossier,
+.is-motion-record[data-motion-record-kind="reduced"] .inspection-record,
+.is-motion-restriction[data-motion-restriction-kind="reduced"]
+  .is-restriction-target
+  .record-guard,
+.is-motion-packet[data-motion-packet-kind="reduced"]
+  .restricted-packet
+  .record-face {
+  animation: reduced-depth var(--motion-cover-duration, var(--motion-dossier-duration, var(--motion-record-duration, var(--motion-restriction-duration, var(--motion-packet-duration))))) ease-out both;
+}

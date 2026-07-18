@@ -12,6 +12,27 @@ const COMPLETED = puzzleId('completed-record')
 const AVAILABLE = puzzleId('available-record')
 const LOCKED = puzzleId('locked-record')
 
+type PendingMotionWait = {
+  readonly milliseconds: number
+  readonly signal: AbortSignal
+}
+
+class PendingMotionClock {
+  readonly waits: PendingMotionWait[] = []
+
+  wait(milliseconds: number, signal: AbortSignal): Promise<void> {
+    return new Promise((resolve) => {
+      const wait = { milliseconds, signal }
+      this.waits.push(wait)
+      signal.addEventListener('abort', () => {
+        const index = this.waits.indexOf(wait)
+        if (index >= 0) this.waits.splice(index, 1)
+        resolve()
+      }, { once: true })
+    })
+  }
+}
+
 const projection = (mode: FolioProjection['mode']): FolioProjection => ({
   mode,
   selectedCulture: FIRST_CULTURE,
@@ -120,6 +141,59 @@ describe('production excavation folio DOM view', () => {
     ])
   })
 
+  it('drives full and reduced dossier and refusal motion through the complete authority', () => {
+    const document = new FakeDocument()
+    const host = new FakeElement(document)
+    const clock = new PendingMotionClock()
+    const view = mountFolioView({
+      host: host as unknown as HTMLElement,
+      projection: projection('archive'),
+      motionClock: clock,
+      onSelectPuzzle: () => {},
+      onRefusePuzzle: () => {},
+      onSelectCulture: () => {},
+      onRefuseCulture: () => {},
+      onScroll: () => {},
+      onTheoremDragStart: () => {},
+      onTheoremDragMove: () => {},
+      onTheoremDragEnd: () => {},
+      onTheoremDragCancel: () => {},
+    })
+    const root = view.element as unknown as FakeElement
+
+    view.update({ ...projection('archive'), selectedCulture: SECOND_CULTURE })
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([260])
+    expect(root.dataset.motionDossierTarget).toBe(SECOND_CULTURE)
+    expect(root.dataset.motionDossierKind).toBe('replace')
+    expect(root.style.getPropertyValue('--motion-dossier-duration')).toBe('260ms')
+
+    view.resistCulture(SECOND_CULTURE)
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([320])
+    expect(root.dataset.motionRestrictionTarget).toBe(SECOND_CULTURE)
+    expect(root.dataset.motionRestrictionKind).toBe('refuse')
+
+    view.update({ ...projection('archive'), reducedMotion: true })
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([90])
+    expect(root.dataset.motionDossierTarget).toBe(FIRST_CULTURE)
+    expect(root.dataset.motionDossierKind).toBe('reduced')
+    expect(root.style.getPropertyValue('--motion-dossier-duration')).toBe('90ms')
+
+    view.resistPuzzle(LOCKED)
+    expect(clock.waits.map(({ milliseconds }) => milliseconds)).toEqual([90])
+    expect(root.dataset.motionRestrictionTarget).toBe(LOCKED)
+    expect(root.dataset.motionRestrictionKind).toBe('reduced')
+
+    view.dispose()
+    expect(clock.waits).toEqual([])
+    expect(Object.keys(root.dataset).filter(
+      (name) => name !== 'motion' && name.startsWith('motion'),
+    )).toEqual([])
+    for (const channel of ['dossier', 'restriction']) {
+      expect(root.classList.contains(`is-motion-${channel}`)).toBe(false)
+      expect(root.style.getPropertyValue(`--motion-${channel}-duration`)).toBe('')
+    }
+  })
+
   it('cancels an active drag exactly once before update or disposal removes its record', () => {
     const document = new FakeDocument()
     const host = new FakeElement(document)
@@ -205,6 +279,7 @@ describe('production lens DOM ownership and approved assets', () => {
   })
 
   it('references only the approved lens assets and imports production CSS from runtime modules', () => {
+    const folioSource = readFileSync('src/game/interface/folio-view.ts', 'utf8')
     const lensSource = readFileSync('src/game/interface/lens-environment.ts', 'utf8')
     const folioCss = readFileSync('src/game/interface/folio.css', 'utf8')
     const lensCss = readFileSync('src/game/interface/lens-environment.css', 'utf8')
@@ -217,6 +292,9 @@ describe('production lens DOM ownership and approved assets', () => {
     ]) expect(lensSource).toContain(asset)
     expect(lensSource).not.toMatch(/central-lens\/(?:frame|glass|shadow|lever-housing|lever-handle)\.png/)
     expect(lensSource).toContain("import './lens-environment.css'")
+    expect(folioSource).toContain("import './folio-motion.css'")
+    expect(folioCss).toContain('[data-motion-dossier-kind="replace"]')
+    expect(folioCss).toContain('--motion-dossier-duration')
     expect(folioCss).toContain('scrollbar-width: none')
     expect(folioCss).toContain('clearance-slip.png')
     expect(folioCss).toContain('restricted-sleeve.png')

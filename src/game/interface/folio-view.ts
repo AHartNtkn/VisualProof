@@ -4,8 +4,9 @@ import type {
   FolioProjection,
   FolioRecordProjection,
 } from './folio-projection'
-import { FolioDossierMotion, type FolioMotionClock } from './folio-motion'
+import { FolioMotion, type FolioMotionClock } from './folio-motion'
 import './folio.css'
+import './folio-motion.css'
 
 export type FolioDragSample = {
   readonly pointerId: number
@@ -73,7 +74,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   root.append(cultures, dossier)
   options.host.append(root)
 
-  const motion = new FolioDossierMotion(root, options.motionClock)
+  const motion = new FolioMotion(root, options.motionClock)
   let current = options.projection
   let renderListeners = new AbortController()
   let activeDrag: {
@@ -90,10 +91,13 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     restrictionGeneration += 1
     restrictionTarget?.classList.remove('is-restriction-target')
     restrictionTarget = null
-    motion.settleRestriction()
+    motion.settleAll()
   }
 
-  const resist = (target: HTMLElement | null, identity: string): void => {
+  const resist = (
+    target: HTMLElement | null,
+    identity: PuzzleId | CultureId,
+  ): void => {
     if (target === null) return
     clearRestriction()
     const generation = restrictionGeneration
@@ -259,9 +263,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     dossier.replaceChildren(header, sheet)
     sheet.scrollTop = current.selectedScroll
     if (previousCulture !== null && previousCulture !== selected.id) {
-      void motion.replace(selected.id, current.reducedMotion)
-    } else if (current.reducedMotion) {
-      motion.settle()
+      void motion.dossier(selected.id, current.reducedMotion)
     }
   }
 
@@ -289,7 +291,6 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       cancelActiveDrag()
       clearRestriction()
       renderListeners.abort()
-      motion.settle()
       root.remove()
     },
   }
