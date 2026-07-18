@@ -186,12 +186,11 @@ Encode and decode `deliveredGuidance` plus active `{ puzzle, intervention, page 
 
 Run the Step 3 command. Expected: both files pass.
 
-- [ ] **Step 7: Commit controller/save replacement**
+- [ ] **Step 7: Carry the green controller/save slice into Task 3**
 
-```bash
-git add src/game/types.ts src/game/catalog.ts src/game/teaching.ts src/game/content/opening.ts src/game/controller-state.ts src/game/controller.ts src/game/save.ts tests/game/catalog.test.ts tests/game/teaching.test.ts tests/game/opening-content.test.ts tests/game/catalog-fixture.ts tests/game/controller-fixture.ts tests/game/runtime-catalog-fixture.ts tests/game/controller.test.ts tests/game/save.test.ts
-git commit -m "feat: deliver passive paged guidance"
-```
+Do not commit while the displaced runtime still imports deleted modal-teacher
+APIs. Keep the passing domain/controller/save tests as evidence and continue to
+the runtime ownership tasks.
 
 ---
 
@@ -237,12 +236,10 @@ Create the lever once in `CursebreakerRuntime` after the lens environment. Updat
 
 Run the Step 3 command. Expected: both files pass.
 
-- [ ] **Step 7: Commit persistent timeline ownership**
+- [ ] **Step 7: Carry persistent timeline ownership into Task 4**
 
-```bash
-git add src/game/interface/timeline-lever.ts src/game/interface/lens-environment.css src/game/interface/mount.ts tests/game/timeline-lever.test.ts tests/game/authoritative-runtime-browser.test.ts tests/game/authoritative-runtime-fixture.ts
-git commit -m "feat: keep timeline instrument persistent"
-```
+Do not commit until Task 4 has removed every stale runtime/presentation consumer
+of the displaced guidance and puzzle-only timeline models.
 
 ---
 
@@ -315,8 +312,8 @@ Run the Step 4 command. Expected: all three files pass with no browser console e
 - [ ] **Step 8: Commit the mandatory presentation replacement**
 
 ```bash
-git add app/style.css src/game/interface/index.ts src/game/interface/lens-environment.ts src/game/interface/lens-environment.css src/game/interface/game-presentation-view.ts src/game/interface/game-presentation-view.css src/game/interface/mount.ts tests/game/authoritative-runtime-browser.test.ts tests/game/authoritative-runtime-source.test.ts tests/game/production-interface-dom.test.ts
-git commit -m "feat: render passive paged guidance"
+git add app/style.css src/game/types.ts src/game/catalog.ts src/game/teaching.ts src/game/content/opening.ts src/game/controller-state.ts src/game/controller.ts src/game/save.ts src/game/interface/index.ts src/game/interface/lens-environment.ts src/game/interface/lens-environment.css src/game/interface/timeline-lever.ts src/game/interface/game-presentation-view.ts src/game/interface/game-presentation-view.css src/game/interface/mount.ts tests/game/catalog.test.ts tests/game/teaching.test.ts tests/game/opening-content.test.ts tests/game/catalog-fixture.ts tests/game/controller-fixture.ts tests/game/runtime-catalog-fixture.ts tests/game/controller.test.ts tests/game/save.test.ts tests/game/timeline-lever.test.ts tests/game/authoritative-runtime-browser.test.ts tests/game/authoritative-runtime-fixture.ts tests/game/authoritative-runtime-source.test.ts tests/game/production-interface-dom.test.ts
+git commit -m "feat: integrate passive guidance and persistent timeline"
 ```
 
 ---
