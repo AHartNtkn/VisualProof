@@ -822,6 +822,657 @@ theorem focusedBackwardExtendedEnvironment
   · simp [ConcreteElaboration.extendedEnvironment, extendedWireMapAtFocus,
       focusedBackwardLocal, Diagram.extendWireEnv, Function.comp_def]
 
+@[simp] theorem headStripRaw_firstAddedNode
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length) :
+    (headStripRaw input payload).nodes (payload.firstAddedNode position) =
+      .term payload.region
+        (payload.firstArgument
+          (payload.argumentIndices.get position)).freeSupport.length
+        (payload.firstArgument
+          (payload.argumentIndices.get position)).compact := by
+  simp [headStripRaw, HeadStripPayload.firstAddedNode]
+
+@[simp] theorem headStripRaw_secondAddedNode
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length) :
+    (headStripRaw input payload).nodes (payload.secondAddedNode position) =
+      .term payload.region
+        (payload.secondArgument
+          (payload.argumentIndices.get position)).freeSupport.length
+        (payload.secondArgument
+          (payload.argumentIndices.get position)).compact := by
+  simp only [headStripRaw, HeadStripPayload.secondAddedNode,
+    Fin.addCases_right]
+
+theorem headStripRaw_firstAddedOutput_occurs
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length) :
+    (headStripRaw input payload).EndpointOccurs
+      (Fin.natAdd input.val.wireCount position)
+      { node := payload.firstAddedNode position, port := .output } := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [headStripRaw, Fin.addCases_right]
+  exact List.mem_cons_self
+
+theorem headStripRaw_secondAddedOutput_occurs
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length) :
+    (headStripRaw input payload).EndpointOccurs
+      (Fin.natAdd input.val.wireCount position)
+      { node := payload.secondAddedNode position, port := .output } := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [headStripRaw, Fin.addCases_right]
+  exact List.mem_cons.mpr (Or.inr (List.mem_singleton.mpr rfl))
+
+theorem headStripRaw_firstAddedFree_occurs
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length)
+    (port : Fin (payload.firstArgument
+      (payload.argumentIndices.get position)).freeSupport.length) :
+    (headStripRaw input payload).EndpointOccurs
+      (Fin.castAdd payload.argumentIndices.length
+        (payload.firstWire ((payload.firstArgument
+          (payload.argumentIndices.get position)).freeSupport.get port)))
+      { node := payload.firstAddedNode position, port := .free port } := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [headStripRaw, Fin.addCases_left]
+  apply List.mem_append_left
+  apply List.mem_append_right
+  unfold HeadStripPayload.firstAddedFreeEndpoints
+  apply List.mem_flatMap.mpr
+  refine ⟨position, mem_allFin position, ?_⟩
+  apply List.mem_filterMap.mpr
+  refine ⟨port, mem_allFin port, ?_⟩
+  simp
+
+theorem headStripRaw_secondAddedFree_occurs
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length)
+    (port : Fin (payload.secondArgument
+      (payload.argumentIndices.get position)).freeSupport.length) :
+    (headStripRaw input payload).EndpointOccurs
+      (Fin.castAdd payload.argumentIndices.length
+        (payload.secondWire ((payload.secondArgument
+          (payload.argumentIndices.get position)).freeSupport.get port)))
+      { node := payload.secondAddedNode position, port := .free port } := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [headStripRaw, Fin.addCases_left]
+  apply List.mem_append_right
+  unfold HeadStripPayload.secondAddedFreeEndpoints
+  apply List.mem_flatMap.mpr
+  refine ⟨position, mem_allFin position, ?_⟩
+  apply List.mem_filterMap.mpr
+  refine ⟨port, mem_allFin port, ?_⟩
+  simp
+
+theorem firstAddedNode_denote
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (binders : ConcreteElaboration.BinderContext
+      (headStripRaw input payload) rels)
+    (position : Fin payload.argumentIndices.length)
+    (item : Item signature context.length rels)
+    (compiled : ConcreteElaboration.compileNode? signature
+      (headStripRaw input payload) context binders
+      (payload.firstAddedNode position) = some item)
+    (common : Fin payload.commonPorts → Lambda.Individual)
+    (env : Fin context.length → Lambda.Individual)
+    (outputValue : ∀ index, context.get index =
+        Fin.natAdd input.val.wireCount position →
+      env index = Lambda.canonicalModel.eval
+        ((payload.firstArgument
+          (payload.argumentIndices.get position)).mapFree payload.firstPort)
+        common)
+    (freeValue : ∀ port index, context.get index =
+        Fin.castAdd payload.argumentIndices.length (payload.firstWire port) →
+      env index = common (payload.firstPort port))
+    (named : NamedEnv Lambda.Individual signature)
+    (relEnv : RelEnv Lambda.Individual rels) :
+    denoteItem Lambda.canonicalModel named env relEnv item := by
+  let argument := payload.firstArgument (payload.argumentIndices.get position)
+  have nodeShape : (headStripRaw input payload).nodes
+      (payload.firstAddedNode position) =
+    .term payload.region argument.freeSupport.length argument.compact := by
+    simpa only [argument] using headStripRaw_firstAddedNode payload position
+  simp only [ConcreteElaboration.compileNode?, nodeShape] at compiled
+  cases outputResult : ConcreteElaboration.resolvePort?
+      (headStripRaw input payload) context (payload.firstAddedNode position)
+      .output with
+  | none =>
+      simp [outputResult] at compiled
+  | some output =>
+      cases freeResult : ConcreteElaboration.resolvePorts?
+          (headStripRaw input payload) context (payload.firstAddedNode position)
+          argument.freeSupport.length (fun port => .free port) with
+      | none =>
+          simp [outputResult, freeResult] at compiled
+      | some free =>
+          simp [outputResult, freeResult] at compiled
+          subst item
+          obtain ⟨outputWire, outputOccurs, outputGet⟩ :=
+            ConcreteElaboration.resolvePort?_sound outputResult
+          have outputWireEq : outputWire =
+              Fin.natAdd input.val.wireCount position :=
+            ConcreteElaboration.endpoint_wire_unique
+              targetWellFormed.wire_endpoints_are_disjoint outputOccurs
+                (headStripRaw_firstAddedOutput_occurs payload position)
+          have outputEquation := outputValue output (by
+            simpa only [List.get_eq_getElem, outputWireEq] using outputGet)
+          have freeEnvironment : env ∘ free =
+              (common ∘ payload.firstPort) ∘ argument.freeSupport.get := by
+            funext port
+            have resolved := sequenceFin_sound freeResult port
+            obtain ⟨wire, occurs, getWire⟩ :=
+              ConcreteElaboration.resolvePort?_sound resolved
+            have wireEq : wire = Fin.castAdd payload.argumentIndices.length
+                (payload.firstWire (argument.freeSupport.get port)) :=
+              ConcreteElaboration.endpoint_wire_unique
+                targetWellFormed.wire_endpoints_are_disjoint occurs
+                  (headStripRaw_firstAddedFree_occurs payload position port)
+            simpa only [Function.comp_apply] using freeValue
+              (argument.freeSupport.get port) (free port) (by
+                simpa only [List.get_eq_getElem, wireEq] using getWire)
+          rw [denoteItem_equation, outputEquation,
+            Lambda.LambdaModel.eval_mapFree]
+          rw [Lambda.LambdaModel.eval_mapFree]
+          exact (LambdaModel.eval_compact Lambda.canonicalModel argument
+            (common ∘ payload.firstPort)).symm.trans
+              (congrArg
+                (fun environment =>
+                  Lambda.canonicalModel.eval argument.compact environment)
+                freeEnvironment.symm)
+
+theorem secondAddedNode_denote
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (binders : ConcreteElaboration.BinderContext
+      (headStripRaw input payload) rels)
+    (position : Fin payload.argumentIndices.length)
+    (item : Item signature context.length rels)
+    (compiled : ConcreteElaboration.compileNode? signature
+      (headStripRaw input payload) context binders
+      (payload.secondAddedNode position) = some item)
+    (common : Fin payload.commonPorts → Lambda.Individual)
+    (env : Fin context.length → Lambda.Individual)
+    (outputValue : ∀ index, context.get index =
+        Fin.natAdd input.val.wireCount position →
+      env index = Lambda.canonicalModel.eval
+        ((payload.secondArgument
+          (payload.argumentIndices.get position)).mapFree payload.secondPort)
+        common)
+    (freeValue : ∀ port index, context.get index =
+        Fin.castAdd payload.argumentIndices.length (payload.secondWire port) →
+      env index = common (payload.secondPort port))
+    (named : NamedEnv Lambda.Individual signature)
+    (relEnv : RelEnv Lambda.Individual rels) :
+    denoteItem Lambda.canonicalModel named env relEnv item := by
+  let argument := payload.secondArgument (payload.argumentIndices.get position)
+  have nodeShape : (headStripRaw input payload).nodes
+      (payload.secondAddedNode position) =
+    .term payload.region argument.freeSupport.length argument.compact := by
+    simpa only [argument] using headStripRaw_secondAddedNode payload position
+  simp only [ConcreteElaboration.compileNode?, nodeShape] at compiled
+  cases outputResult : ConcreteElaboration.resolvePort?
+      (headStripRaw input payload) context (payload.secondAddedNode position)
+      .output with
+  | none =>
+      simp [outputResult] at compiled
+  | some output =>
+      cases freeResult : ConcreteElaboration.resolvePorts?
+          (headStripRaw input payload) context (payload.secondAddedNode position)
+          argument.freeSupport.length (fun port => .free port) with
+      | none =>
+          simp [outputResult, freeResult] at compiled
+      | some free =>
+          simp [outputResult, freeResult] at compiled
+          subst item
+          obtain ⟨outputWire, outputOccurs, outputGet⟩ :=
+            ConcreteElaboration.resolvePort?_sound outputResult
+          have outputWireEq : outputWire =
+              Fin.natAdd input.val.wireCount position :=
+            ConcreteElaboration.endpoint_wire_unique
+              targetWellFormed.wire_endpoints_are_disjoint outputOccurs
+                (headStripRaw_secondAddedOutput_occurs payload position)
+          have outputEquation := outputValue output (by
+            simpa only [List.get_eq_getElem, outputWireEq] using outputGet)
+          have freeEnvironment : env ∘ free =
+              (common ∘ payload.secondPort) ∘ argument.freeSupport.get := by
+            funext port
+            have resolved := sequenceFin_sound freeResult port
+            obtain ⟨wire, occurs, getWire⟩ :=
+              ConcreteElaboration.resolvePort?_sound resolved
+            have wireEq : wire = Fin.castAdd payload.argumentIndices.length
+                (payload.secondWire (argument.freeSupport.get port)) :=
+              ConcreteElaboration.endpoint_wire_unique
+                targetWellFormed.wire_endpoints_are_disjoint occurs
+                  (headStripRaw_secondAddedFree_occurs payload position port)
+            simpa only [Function.comp_apply] using freeValue
+              (argument.freeSupport.get port) (free port) (by
+                simpa only [List.get_eq_getElem, wireEq] using getWire)
+          rw [denoteItem_equation, outputEquation,
+            Lambda.LambdaModel.eval_mapFree]
+          rw [Lambda.LambdaModel.eval_mapFree]
+          exact (LambdaModel.eval_compact Lambda.canonicalModel argument
+            (common ∘ payload.secondPort)).symm.trans
+              (congrArg
+                (fun environment =>
+                  Lambda.canonicalModel.eval argument.compact environment)
+                freeEnvironment.symm)
+
+theorem firstAddedOccurrences_denote
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (recurse : ∀ {relations : RelCtx},
+      Fin (headStripRaw input payload).regionCount →
+      (recurseContext : ConcreteElaboration.WireContext
+        (headStripRaw input payload)) →
+      ConcreteElaboration.BinderContext
+        (headStripRaw input payload) relations →
+      Option (Region signature recurseContext.length relations))
+    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (binders : ConcreteElaboration.BinderContext
+      (headStripRaw input payload) rels)
+    (positions : List (Fin payload.argumentIndices.length))
+    (items : ItemSeq signature context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (headStripRaw input payload) recurse context binders
+      (positions.map fun position =>
+        ConcreteElaboration.LocalOccurrence.node
+          (payload.firstAddedNode position)) = some items)
+    (common : Fin payload.commonPorts → Lambda.Individual)
+    (env : Fin context.length → Lambda.Individual)
+    (outputValue : ∀ position index, context.get index =
+        Fin.natAdd input.val.wireCount position →
+      env index = Lambda.canonicalModel.eval
+        ((payload.firstArgument
+          (payload.argumentIndices.get position)).mapFree payload.firstPort)
+        common)
+    (freeValue : ∀ port index, context.get index =
+        Fin.castAdd payload.argumentIndices.length (payload.firstWire port) →
+      env index = common (payload.firstPort port))
+    (named : NamedEnv Lambda.Individual signature)
+    (relEnv : RelEnv Lambda.Individual rels) :
+    denoteItemSeq Lambda.canonicalModel named env relEnv items := by
+  induction positions generalizing items with
+  | nil =>
+      simp [ConcreteElaboration.compileOccurrencesWith?] at compiled
+      subst items
+      exact True.intro
+  | cons position rest induction =>
+      simp only [List.map_cons, ConcreteElaboration.compileOccurrencesWith?]
+        at compiled
+      cases headResult : ConcreteElaboration.compileNode? signature
+          (headStripRaw input payload) context binders
+          (payload.firstAddedNode position) with
+      | none => simp [ConcreteElaboration.compileOccurrenceWith?, headResult]
+          at compiled
+      | some head =>
+          cases tailResult : ConcreteElaboration.compileOccurrencesWith?
+              signature (headStripRaw input payload) recurse context binders
+              (rest.map fun current =>
+                ConcreteElaboration.LocalOccurrence.node
+                  (payload.firstAddedNode current)) with
+          | none => simp [ConcreteElaboration.compileOccurrenceWith?, headResult,
+              tailResult] at compiled
+          | some tail =>
+              simp [ConcreteElaboration.compileOccurrenceWith?, headResult,
+                tailResult] at compiled
+              subst items
+              rw [denoteItemSeq_cons]
+              exact ⟨firstAddedNode_denote input payload targetWellFormed
+                context binders position head headResult common env
+                (outputValue position) freeValue named relEnv,
+                induction tail tailResult⟩
+
+theorem secondAddedOccurrences_denote
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (recurse : ∀ {relations : RelCtx},
+      Fin (headStripRaw input payload).regionCount →
+      (recurseContext : ConcreteElaboration.WireContext
+        (headStripRaw input payload)) →
+      ConcreteElaboration.BinderContext
+        (headStripRaw input payload) relations →
+      Option (Region signature recurseContext.length relations))
+    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (binders : ConcreteElaboration.BinderContext
+      (headStripRaw input payload) rels)
+    (positions : List (Fin payload.argumentIndices.length))
+    (items : ItemSeq signature context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (headStripRaw input payload) recurse context binders
+      (positions.map fun position =>
+        ConcreteElaboration.LocalOccurrence.node
+          (payload.secondAddedNode position)) = some items)
+    (common : Fin payload.commonPorts → Lambda.Individual)
+    (env : Fin context.length → Lambda.Individual)
+    (outputValue : ∀ position index, context.get index =
+        Fin.natAdd input.val.wireCount position →
+      env index = Lambda.canonicalModel.eval
+        ((payload.secondArgument
+          (payload.argumentIndices.get position)).mapFree payload.secondPort)
+        common)
+    (freeValue : ∀ port index, context.get index =
+        Fin.castAdd payload.argumentIndices.length (payload.secondWire port) →
+      env index = common (payload.secondPort port))
+    (named : NamedEnv Lambda.Individual signature)
+    (relEnv : RelEnv Lambda.Individual rels) :
+    denoteItemSeq Lambda.canonicalModel named env relEnv items := by
+  induction positions generalizing items with
+  | nil =>
+      simp [ConcreteElaboration.compileOccurrencesWith?] at compiled
+      subst items
+      exact True.intro
+  | cons position rest induction =>
+      simp only [List.map_cons, ConcreteElaboration.compileOccurrencesWith?]
+        at compiled
+      cases headResult : ConcreteElaboration.compileNode? signature
+          (headStripRaw input payload) context binders
+          (payload.secondAddedNode position) with
+      | none => simp [ConcreteElaboration.compileOccurrenceWith?, headResult]
+          at compiled
+      | some head =>
+          cases tailResult : ConcreteElaboration.compileOccurrencesWith?
+              signature (headStripRaw input payload) recurse context binders
+              (rest.map fun current =>
+                ConcreteElaboration.LocalOccurrence.node
+                  (payload.secondAddedNode current)) with
+          | none => simp [ConcreteElaboration.compileOccurrenceWith?, headResult,
+              tailResult] at compiled
+          | some tail =>
+              simp [ConcreteElaboration.compileOccurrenceWith?, headResult,
+                tailResult] at compiled
+              subst items
+              rw [denoteItemSeq_cons]
+              exact ⟨secondAddedNode_denote input payload targetWellFormed
+                context binders position head headResult common env
+                (outputValue position) freeValue named relEnv,
+                induction tail tailResult⟩
+
+def focusedFreshLocalIndex
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length) :
+    Fin (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+      payload.region).length :=
+  Fin.cast (focusedExactScopeLength input payload).symm
+    (Fin.natAdd
+      (ConcreteElaboration.exactScopeWires input.val payload.region).length
+      position)
+
+def focusedFreshExtendedIndex
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (position : Fin payload.argumentIndices.length) :
+    Fin (context.extend payload.region).length :=
+  Fin.cast (ConcreteElaboration.WireContext.length_extend
+      context payload.region).symm
+    (Fin.natAdd context.length
+      (focusedFreshLocalIndex input payload position))
+
+theorem focusedFreshExtendedIndex_get
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (position : Fin payload.argumentIndices.length) :
+    (context.extend payload.region).get
+        (focusedFreshExtendedIndex input payload context position) =
+      Fin.natAdd input.val.wireCount position := by
+  have localGet := ConcreteElaboration.WireContext.extend_local context
+    payload.region (focusedFreshLocalIndex input payload position)
+  rw [show (context.extend payload.region).get
+      (focusedFreshExtendedIndex input payload context position) =
+        (ConcreteElaboration.exactScopeWires (headStripRaw input payload)
+          payload.region).get
+            (focusedFreshLocalIndex input payload position) by
+      simpa [focusedFreshExtendedIndex] using localGet]
+  let oldWires := List.map (Fin.castAdd payload.argumentIndices.length)
+    (ConcreteElaboration.exactScopeWires input.val payload.region)
+  let freshWires := List.map (Fin.natAdd input.val.wireCount)
+    (allFin payload.argumentIndices.length)
+  have exactWires : ConcreteElaboration.exactScopeWires
+      (headStripRaw input payload) payload.region = oldWires ++ freshWires := by
+    simpa [oldWires, freshWires] using
+      headStripRaw_exactScopeWires input payload payload.region
+  let rightIndex : Fin (oldWires ++ freshWires).length :=
+    ⟨oldWires.length + position.val, by
+      simp [oldWires, freshWires, allFin_eq_finRange]⟩
+  have transported := List.get_of_eq exactWires
+    (focusedFreshLocalIndex input payload position)
+  have castEq : Fin.cast (congrArg List.length exactWires)
+      (focusedFreshLocalIndex input payload position) = rightIndex := by
+    apply Fin.ext
+    simp [rightIndex, oldWires, focusedFreshLocalIndex]
+  rw [transported]
+  let transportedIndex : Fin (oldWires ++ freshWires).length :=
+    ⟨(focusedFreshLocalIndex input payload position).val, by
+      exact (Fin.cast (congrArg List.length exactWires)
+        (focusedFreshLocalIndex input payload position)).isLt⟩
+  change (oldWires ++ freshWires).get transportedIndex = _
+  have transportedIndexEq : transportedIndex = rightIndex := by
+    apply Fin.ext
+    exact congrArg Fin.val castEq
+  rw [transportedIndexEq]
+  simp [rightIndex, freshWires, allFin_eq_finRange]
+
+theorem focusedForward_fresh_value
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (context : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (outer : Fin context.length → D)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+      payload.region).length → D)
+    (fresh : Fin payload.argumentIndices.length → D)
+    (nodup : (context.extend payload.region).Nodup)
+    (position : Fin payload.argumentIndices.length)
+    (index : Fin (context.extend payload.region).length)
+    (indexGet : (context.extend payload.region).get index =
+      Fin.natAdd input.val.wireCount position) :
+    ConcreteElaboration.extendedEnvironment context payload.region outer
+        (focusedForwardLocal input payload sourceLocal fresh) index =
+      fresh position := by
+  have freshGet := focusedFreshExtendedIndex_get input payload context position
+  have indexEq : index =
+      focusedFreshExtendedIndex input payload context position := by
+    apply Fin.ext
+    exact (List.getElem_inj nodup).mp (by
+      simpa only [List.get_eq_getElem] using indexGet.trans freshGet.symm)
+  subst index
+  simp [ConcreteElaboration.extendedEnvironment,
+    focusedFreshExtendedIndex, focusedFreshLocalIndex,
+    focusedForwardLocal, Diagram.extendWireEnv, Function.comp_def]
+
+theorem focusedForward_old_value
+    (embedding : ContextEmbedding input payload source target)
+    (sourceOuter : Fin source.length → D)
+    (targetOuter : Fin target.length → D)
+    (outerAgrees : sourceOuter = targetOuter ∘ embedding.index)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+      payload.region).length → D)
+    (fresh : Fin payload.argumentIndices.length → D)
+    (targetNodup : (target.extend payload.region).Nodup)
+    (wire : Fin input.val.wireCount)
+    (targetIndex : Fin (target.extend payload.region).length)
+    (targetGet : (target.extend payload.region).get targetIndex =
+      Fin.castAdd payload.argumentIndices.length wire) :
+    ∃ sourceIndex : Fin (source.extend payload.region).length,
+      (source.extend payload.region).get sourceIndex = wire ∧
+      ConcreteElaboration.extendedEnvironment target payload.region targetOuter
+          (focusedForwardLocal input payload sourceLocal fresh) targetIndex =
+        ConcreteElaboration.extendedEnvironment source payload.region
+          sourceOuter sourceLocal sourceIndex := by
+  have targetMember : Fin.castAdd payload.argumentIndices.length wire ∈
+      target.extend payload.region := by
+    rw [← targetGet]
+    exact List.get_mem _ targetIndex
+  have sourceMember : wire ∈ source.extend payload.region :=
+    ((embedding.extend payload.region).mem_old wire).mp targetMember
+  obtain ⟨sourceIndex, sourceLookup⟩ :=
+    ConcreteElaboration.WireContext.lookup?_complete sourceMember
+  have sourceGet := ConcreteElaboration.WireContext.lookup?_sound sourceLookup
+  have mappedGet := (embedding.extend payload.region).get sourceIndex
+  have targetIndexEq : targetIndex =
+      (embedding.extend payload.region).index sourceIndex := by
+    apply Fin.ext
+    exact (List.getElem_inj targetNodup).mp (by
+      simpa only [List.get_eq_getElem] using targetGet.trans
+        (mappedGet.trans (congrArg
+          (Fin.castAdd payload.argumentIndices.length) sourceGet)).symm)
+  refine ⟨sourceIndex, sourceGet, ?_⟩
+  rw [targetIndexEq]
+  exact congrFun (focusedForwardExtendedEnvironment embedding sourceOuter
+    targetOuter outerAgrees sourceLocal fresh targetNodup).symm
+      sourceIndex
+
+private theorem compileNode_old_core
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (source : ConcreteElaboration.WireContext input.val)
+    (target : ConcreteElaboration.WireContext (headStripRaw input payload))
+    (embedding : ContextEmbedding input payload source target)
+    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (headStripRaw input payload) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
+      (headStripRaw input payload) sourceBinders targetBinders)
+    (targetNodup : target.Nodup)
+    (node : Fin input.val.nodeCount) :
+    ConcreteElaboration.compileNode? signature (headStripRaw input payload)
+        target targetBinders
+        (Fin.castAdd (payload.argumentIndices.length +
+          payload.argumentIndices.length) node) =
+      (ConcreteElaboration.compileNode? signature input.val source sourceBinders
+        node).map (fun item =>
+          (item.renameWires embedding.index).renameRelations
+            (ConcreteElaboration.IdentityBinderWitness.relationMap
+              binderWitness)) := by
+  apply ConcreteElaboration.compileNode?_map source target sourceBinders
+    targetBinders node
+    (Fin.castAdd (payload.argumentIndices.length +
+      payload.argumentIndices.length) node)
+    id id embedding.index
+    (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
+  · rw [headStripRaw_oldNode]
+    cases input.val.nodes node <;> rfl
+  · intro port
+    apply ConcreteElaboration.resolvePort?_map_of_occurrence source target node
+      (Fin.castAdd (payload.argumentIndices.length +
+        payload.argumentIndices.length) node)
+      (Fin.castAdd payload.argumentIndices.length) embedding.index targetNodup
+      embedding.get embedding.mem_old
+    · intro wire candidatePort occurs
+      exact headStripRaw_oldEndpointOccurs_forward input payload wire node
+        candidatePort occurs
+    · intro targetWire candidatePort occurs
+      exact headStripRaw_oldEndpointOccurs_backward input payload targetWire node
+        candidatePort occurs
+    · exact targetWellFormed.wire_endpoints_are_disjoint
+  · intro region binder nodeShape
+    rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    simp [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming]
+
+theorem oldNodeOccurrences_simulation
+    (input : CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second)
+    (targetWellFormed : (headStripRaw input payload).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (sourceRecurse : ∀ {relations : RelCtx},
+      Fin input.val.regionCount →
+      (recurseContext : ConcreteElaboration.WireContext input.val) →
+      ConcreteElaboration.BinderContext input.val relations →
+      Option (Region signature recurseContext.length relations))
+    (targetRecurse : ∀ {relations : RelCtx},
+      Fin (headStripRaw input payload).regionCount →
+      (recurseContext : ConcreteElaboration.WireContext
+        (headStripRaw input payload)) →
+      ConcreteElaboration.BinderContext
+        (headStripRaw input payload) relations →
+      Option (Region signature recurseContext.length relations))
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext
+      (headStripRaw input payload))
+    (embedding : ContextEmbedding input payload sourceContext targetContext)
+    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (headStripRaw input payload) targetRels)
+    (binderWitness : ConcreteElaboration.IdentityBinderWitness input.val
+      (headStripRaw input payload) sourceBinders targetBinders)
+    (targetNodup : targetContext.Nodup)
+    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
+    (targetItems : ItemSeq signature targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val sourceRecurse sourceContext sourceBinders
+      (sourceNodeOccurrences input payload.region) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (headStripRaw input payload) targetRecurse targetContext targetBinders
+      ((sourceNodeOccurrences input payload.region).map
+        (liftOccurrence payload)) = some targetItems) :
+    ConcreteElaboration.ItemSeqSimulation model named direction
+      (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems := by
+  apply ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+    model named direction sourceRecurse targetRecurse sourceContext targetContext
+    sourceBinders targetBinders
+    (ConcreteElaboration.ContextIndexRelation.forwardMap embedding.index)
+    (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
+    (liftOccurrence payload) (sourceNodeOccurrences input payload.region)
+    ?_ sourceItems targetItems sourceCompiled targetCompiled
+  intro occurrence member sourceItem targetItem sourceOccurrence targetOccurrence
+  unfold sourceNodeOccurrences filterFin at member
+  obtain ⟨node, nodeMember, rfl⟩ := List.mem_map.mp member
+  simp only [ConcreteElaboration.compileOccurrenceWith?, liftOccurrence] at sourceOccurrence targetOccurrence
+  have mappedCompile := compileNode_old_core input payload targetWellFormed
+    sourceContext targetContext embedding sourceBinders targetBinders
+    binderWitness targetNodup node
+  rw [sourceOccurrence] at mappedCompile
+  simp only [Option.map_some] at mappedCompile
+  rw [targetOccurrence] at mappedCompile
+  have itemEq : targetItem =
+      (sourceItem.renameWires embedding.index).renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness) :=
+    Option.some.inj mappedCompile
+  subst targetItem
+  intro sourceEnv targetEnv relEnv environments
+  have environmentEq : sourceEnv = targetEnv ∘ embedding.index :=
+    (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      embedding.index sourceEnv targetEnv).mp environments
+  rw [environmentEq]
+  have wireSemantic := denoteItem_renameWires model named embedding.index
+    targetEnv relEnv
+    (sourceItem.renameRelations
+      (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+  cases direction with
+  | forward =>
+      simpa only [Item.renameWires_renameRelations] using wireSemantic.mpr
+  | backward =>
+      simpa only [Item.renameWires_renameRelations] using wireSemantic.mp
+
 theorem compileNode_old
     (input : CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
