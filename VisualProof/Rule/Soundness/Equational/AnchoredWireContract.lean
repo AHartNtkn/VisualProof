@@ -437,6 +437,74 @@ def endpointMoveRelation
       targetContext.get targetIndex = targetWire) ∨
     sourceContext.get sourceIndex = targetContext.get targetIndex
 
+theorem endpointMoveRelation_environmentsAgree
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (sourceContext targetContext : List (Fin input.wireCount))
+    (sourceEnv : Fin sourceContext.length → D)
+    (targetEnv : Fin targetContext.length → D)
+    (sameWire : ∀ sourceIndex targetIndex,
+      sourceContext.get sourceIndex = targetContext.get targetIndex →
+        sourceEnv sourceIndex = targetEnv targetIndex)
+    (movedWire : ∀ sourceIndex targetIndex,
+      sourceContext.get sourceIndex = sourceWire →
+      targetContext.get targetIndex = targetWire →
+        sourceEnv sourceIndex = targetEnv targetIndex) :
+    (endpointMoveRelation input sourceWire targetWire sourceContext
+      targetContext).EnvironmentsAgree sourceEnv targetEnv := by
+  intro sourceIndex targetIndex related
+  rcases related with moved | ordinary
+  · exact movedWire sourceIndex targetIndex moved.1 moved.2
+  · exact sameWire sourceIndex targetIndex ordinary
+
+theorem endpointMoveRelation_of_anchor_values
+    (input : ConcreteDiagram)
+    (sourceWire targetWire : Fin input.wireCount)
+    (sourceContext targetContext : List (Fin input.wireCount))
+    (model : Lambda.LambdaModel)
+    (sourceEnv : Fin sourceContext.length → model.Carrier)
+    (targetEnv : Fin targetContext.length → model.Carrier)
+    (redundantTerm survivorTerm : Lambda.Term 0 (Fin 0))
+    (sameWire : ∀ sourceIndex targetIndex,
+      sourceContext.get sourceIndex = targetContext.get targetIndex →
+        sourceEnv sourceIndex = targetEnv targetIndex)
+    (sourceAnchor : ∀ sourceIndex,
+      sourceContext.get sourceIndex = sourceWire →
+        sourceEnv sourceIndex = model.eval redundantTerm Fin.elim0)
+    (targetAnchor : ∀ targetIndex,
+      targetContext.get targetIndex = targetWire →
+        targetEnv targetIndex = model.eval survivorTerm Fin.elim0)
+    (termValues : model.eval redundantTerm Fin.elim0 =
+      model.eval survivorTerm Fin.elim0) :
+    (endpointMoveRelation input sourceWire targetWire sourceContext
+      targetContext).EnvironmentsAgree sourceEnv targetEnv := by
+  apply endpointMoveRelation_environmentsAgree input sourceWire targetWire
+    sourceContext targetContext sourceEnv targetEnv sameWire
+  intro sourceIndex targetIndex sourceGet targetGet
+  exact (sourceAnchor sourceIndex sourceGet).trans
+    (termValues.trans (targetAnchor targetIndex targetGet).symm)
+
+/-- At every accepted move site, the redundant-wire scope and the certified
+survivor availability region lie on one parent chain.  The executor's source
+well-formedness and availability receipt provide the shared descendant. -/
+theorem movedEndpoint_scopes_comparable
+    (input : CheckedDiagram signature)
+    (redundant : Fin input.val.nodeCount)
+    (drop keep : Fin input.val.wireCount)
+    (survivorRegion : Fin input.val.regionCount)
+    {endpoint : CEndpoint input.val.nodeCount}
+    (member : endpoint ∈ movedEndpoints input redundant drop)
+    (availability : AnchoredWireSoundness.SplitAvailability input keep
+      survivorRegion (input.val.nodes endpoint.node).region) :
+    input.val.Encloses (input.val.wires drop).scope availability.available ∨
+      input.val.Encloses availability.available (input.val.wires drop).scope := by
+  have dropEncloses : input.val.Encloses (input.val.wires drop).scope
+      (input.val.nodes endpoint.node).region :=
+    input.property.wire_scopes_enclose drop endpoint
+      (movedEndpoints_mem_occurs input redundant drop member)
+  exact input.val.enclosingRegions_comparable dropEncloses
+    availability.target_inside
+
 theorem resolvedPorts_endpointMove_related
     (input : ConcreteDiagram)
     (wellFormed : input.WellFormed signature)
