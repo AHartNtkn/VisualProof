@@ -1009,6 +1009,79 @@ theorem anchoredWireSplitRaw_target_site_equiv
     change denoteItemSeq model named sourceRaw relEnv sourceItems
     exact sourceRenamedDenotes
 
+/-- The executor-retained closed witness equation forces the old wire to the
+serialized term value throughout the complete availability-site context. -/
+theorem anchoredWireSplit_witness_value_of_zero_route
+    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (witness : Fin input.val.nodeCount)
+    (witnessRegion : Fin input.val.regionCount)
+    (term : Lambda.Term 0 (Fin 0))
+    (witnessShape : input.val.nodes witness = .term witnessRegion 0 term)
+    (witnessOccurs : input.val.EndpointOccurs wire
+      { node := witness, port := .output })
+    {available : Fin input.val.regionCount} {path : List Nat}
+    (route : Diagram.Splice.RegionRoute input.val available witnessRegion path)
+    (routeZero : route.HasCutDepth 0)
+    {rels : RelCtx}
+    (context : ConcreteElaboration.WireContext input.val)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (fuel : Nat)
+    (items : ItemSeq signature (context.extend available).length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith? signature input.val
+      (ConcreteElaboration.compileRegion? signature input.val fuel)
+      (context.extend available) binders
+      (ConcreteElaboration.localOccurrences input.val available) = some items)
+    (exact : (context.extend available).Exact available)
+    (bindersCover : binders.Covers available)
+    (binderEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val binders available)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (outerEnv : Fin context.length → model.Carrier)
+    (localEnv : Fin (ConcreteElaboration.exactScopeWires
+      input.val available).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier rels)
+    (itemsDenote : denoteItemSeq model named
+      (ConcreteElaboration.extendedEnvironment context available outerEnv localEnv)
+      relEnv items) :
+    ∀ index, (context.extend available).get index = wire →
+      ConcreteElaboration.extendedEnvironment context available outerEnv localEnv
+          index = model.eval term Fin.elim0 := by
+  obtain ⟨descendant⟩ := CongruenceSoundness.denoted_descendant_leaf input
+    route routeZero context binders fuel items compiled exact bindersCover
+    binderEnumeration model named outerEnv localEnv relEnv itemsDenote
+  obtain ⟨output, free, outputResolved, _, outputEquation⟩ :=
+    CongruenceSoundness.compiled_term_node_equation descendant.leaf witness 0
+      term witnessShape model named
+      (ConcreteElaboration.extendedEnvironment descendant.leaf.inheritedWires
+        witnessRegion descendant.outerEnv descendant.localEnv)
+      descendant.relEnv descendant.itemsDenote
+  obtain ⟨outputWire, outputOccurs, outputGet⟩ :=
+    ConcreteElaboration.resolvePort?_sound outputResolved
+  have outputWireEq : outputWire = wire :=
+    ConcreteElaboration.endpoint_wire_unique
+      input.property.wire_endpoints_are_disjoint outputOccurs witnessOccurs
+  rw [outputWireEq] at outputGet
+  have closedEquation :
+      ConcreteElaboration.extendedEnvironment descendant.leaf.inheritedWires
+          witnessRegion descendant.outerEnv descendant.localEnv output =
+        model.eval term Fin.elim0 := by
+    have freeEq : free = Fin.elim0 := by
+      funext index
+      exact Fin.elim0 index
+    subst free
+    have envEq :
+        ConcreteElaboration.extendedEnvironment descendant.leaf.inheritedWires
+            witnessRegion descendant.outerEnv descendant.localEnv ∘ Fin.elim0 =
+          Fin.elim0 := by
+      funext index
+      exact Fin.elim0 index
+    rw [envEq] at outputEquation
+    exact outputEquation
+  intro index indexGet
+  exact (descendant.agrees index output
+    (indexGet.trans outputGet.symm)).trans closedEquation
+
 /-- Once the witness value is present in the inherited context, semantic
 equivalence propagates down every executor route to the split site.  Cuts
 reverse both implications and bubbles preserve them, so no polarity
