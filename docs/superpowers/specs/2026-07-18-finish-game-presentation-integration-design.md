@@ -14,7 +14,7 @@ The approved desk, full-height lens, substrate, gasket, timeline artwork, and fo
 
 ### Archive
 
-The continuous folio remains the level selector. The empty lens substrate is intentional, but the physical timeline housing and handle remain visible. No logical timeline slider is mounted because no timeline exists. The archive is not considered valid unless at least one unlocked record is visible and operable.
+The continuous folio remains the level selector. The empty lens substrate is intentional. The complete timeline slider remains mounted and visible at its home detent, with disabled semantics and no pointer or keyboard effect. The archive is not considered valid unless at least one unlocked record is visible and operable.
 
 ### Puzzle
 
@@ -30,7 +30,17 @@ Completion keeps the physical desk/lens substrate and renders a dedicated succes
 - one concise authored completion-teacher response when available, otherwise the artifact’s authored provenance response;
 - exactly one button, “Return to level selection,” dispatching `levelSelection`.
 
-It contains no rank, score, par, proof recording, review, replay, continue, or restart control. The folio and proof are inactive during completion, but the surrounding physical workspace does not disappear.
+It contains no rank, score, par, proof recording, review, replay, continue, or restart control. The folio and proof are inactive during completion, but the surrounding physical workspace does not disappear. The persistent timeline slider freezes at the completed final detent and remains noninteractive.
+
+### Timeline instrument
+
+The housing, track, handle, detents, and slider control are one permanent
+instrument. They mount once with the lens and retain DOM identity across archive,
+puzzle, completion, pause, settings, editor, and guidance transitions. Puzzle mode
+binds the instrument to the active session timeline. Archive mode displays the
+home detent and completion displays the final detent implied by the completion
+receipt; both are semantically disabled and dispatch no timeline action. No mode
+uses a decorative substitute or hides, disposes, or remounts the slider.
 
 ### Pause and settings
 
@@ -62,9 +72,9 @@ Candidate selection is debug/review configuration only and never appears as a pl
 The presentation view mounts once, updates in place, and disposes all listeners
 and DOM once. Pause and editor transients own input when present; guidance never
 does. Escape closes the topmost input-owning transient, settings returns to pause,
-and otherwise opens pause. Completion accepts only its return action. The
-timeline’s physical artwork is persistent; logical slider input exists only with
-an active puzzle session.
+and otherwise opens pause. Completion accepts only its return action. The complete
+timeline slider is persistent; its state-changing input authority exists only with
+an active puzzle session and no higher-priority input owner.
 
 ## Validation authority
 
@@ -73,6 +83,7 @@ Real-browser tests must drive the actual controller and assert visible semantic
 content, action counts, preserved underlying geometry, input availability, and
 restored saved modes. Tests must cover archive startup, puzzle selection, first
 completion, completion return, persisted completion restoration, pause menu,
-settings changes, passive guidance delivery and clearing, Escape precedence, and
-disposal. Candidate capture tests verify all retained variants use the same real
-projection and actions. The unchanged proof physics battery remains excluded.
+settings changes, passive guidance delivery and clearing, persistent timeline DOM
+identity and inactive behavior, Escape precedence, and disposal. Candidate capture
+tests verify all retained variants use the same real projection and actions. The
+unchanged proof physics battery remains excluded.
