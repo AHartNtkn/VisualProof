@@ -563,7 +563,7 @@ structure EndpointMoveContext
     (endpoint : CEndpoint input.nodeCount)
     (sourceContext : ConcreteElaboration.WireContext input)
     (targetContext : ConcreteElaboration.WireContext
-      (moveEndpointRaw input sourceWire targetWire endpoint)) : Prop where
+      (moveEndpointRaw input sourceWire targetWire endpoint)) : Type where
   contexts_eq : sourceContext = targetContext
   source_mem : sourceWire ∈ sourceContext
   target_mem : targetWire ∈ sourceContext
@@ -584,7 +584,7 @@ def EndpointMoveContext.extend
     moveEndpointRaw_exactScopeWires]
   rfl
 
-theorem EndpointMoveContext.extended_agreement
+theorem EndpointMoveContext.extended_agreement_of_local
     (context : EndpointMoveContext input sourceWire targetWire endpoint
       sourceContext targetContext)
     (region : Fin input.regionCount)
@@ -594,10 +594,14 @@ theorem EndpointMoveContext.extended_agreement
     (targetOuter : Fin targetContext.length → D)
     (outerAgrees : (endpointMoveRelation input sourceWire targetWire
       sourceContext targetContext).EnvironmentsAgree sourceOuter targetOuter)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input region).length → D) :
-    ∃ targetLocal : Fin (ConcreteElaboration.exactScopeWires
-        (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D,
-      (endpointMoveRelation input sourceWire targetWire
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input region).length → D)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D)
+    (localAgrees : ∀ sourceIndex,
+      sourceLocal sourceIndex = targetLocal (Fin.cast
+        (congrArg List.length (moveEndpointRaw_exactScopeWires input sourceWire
+          targetWire endpoint region)).symm sourceIndex)) :
+    (endpointMoveRelation input sourceWire targetWire
         (sourceContext.extend region) (targetContext.extend region)
         ).EnvironmentsAgree
           (ConcreteElaboration.extendedEnvironment sourceContext region
@@ -608,10 +612,6 @@ theorem EndpointMoveContext.extended_agreement
   subst targetContext
   let localEq := moveEndpointRaw_exactScopeWires input sourceWire targetWire
     endpoint region
-  let targetLocal : Fin (ConcreteElaboration.exactScopeWires
-      (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D :=
-    sourceLocal ∘ Fin.cast (congrArg List.length localEq)
-  refine ⟨targetLocal, ?_⟩
   let extendedEq :
       @ConcreteElaboration.WireContext.extend input sourceContext region =
         @ConcreteElaboration.WireContext.extend
@@ -696,8 +696,7 @@ theorem EndpointMoveContext.extended_agreement
         rfl
       have localValueEq : sourceLocal sourceLocalIndex =
           targetLocal targetLocalIndex := by
-        simp only [targetLocal, Function.comp_apply, targetLocalIndex]
-        congr 1
+        exact localAgrees sourceLocalIndex
       change ConcreteElaboration.extendedEnvironment sourceContext region
           sourceOuter sourceLocal sourceActual =
         ConcreteElaboration.extendedEnvironment
@@ -776,6 +775,66 @@ theorem EndpointMoveContext.extended_agreement
       moveEndpointRaw_extendedEnvironment_outer]
     exact outerAgrees sourceOuterIndex targetOuterIndex
       (Or.inl ⟨sourceOuterGet, targetOuterGet⟩)
+
+theorem EndpointMoveContext.extended_agreement
+    (context : EndpointMoveContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (region : Fin input.regionCount)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact : (targetContext.extend region).Exact region)
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (outerAgrees : (endpointMoveRelation input sourceWire targetWire
+      sourceContext targetContext).EnvironmentsAgree sourceOuter targetOuter)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input region).length → D) :
+    ∃ targetLocal : Fin (ConcreteElaboration.exactScopeWires
+        (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D,
+      (endpointMoveRelation input sourceWire targetWire
+        (sourceContext.extend region) (targetContext.extend region)
+        ).EnvironmentsAgree
+          (ConcreteElaboration.extendedEnvironment sourceContext region
+            sourceOuter sourceLocal)
+          (ConcreteElaboration.extendedEnvironment targetContext region
+            targetOuter targetLocal) := by
+  let localEq := moveEndpointRaw_exactScopeWires input sourceWire targetWire
+    endpoint region
+  let targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D :=
+    sourceLocal ∘ Fin.cast (congrArg List.length localEq)
+  refine ⟨targetLocal, context.extended_agreement_of_local region sourceExact
+    targetExact sourceOuter targetOuter outerAgrees sourceLocal targetLocal ?_⟩
+  intro sourceIndex
+  simp only [targetLocal, Function.comp_apply]
+  congr 1
+
+theorem EndpointMoveContext.extended_agreement_backward
+    (context : EndpointMoveContext input sourceWire targetWire endpoint
+      sourceContext targetContext)
+    (region : Fin input.regionCount)
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact : (targetContext.extend region).Exact region)
+    (sourceOuter : Fin sourceContext.length → D)
+    (targetOuter : Fin targetContext.length → D)
+    (outerAgrees : (endpointMoveRelation input sourceWire targetWire
+      sourceContext targetContext).EnvironmentsAgree sourceOuter targetOuter)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (moveEndpointRaw input sourceWire targetWire endpoint) region).length → D) :
+    ∃ sourceLocal : Fin (ConcreteElaboration.exactScopeWires input region).length → D,
+      (endpointMoveRelation input sourceWire targetWire
+        (sourceContext.extend region) (targetContext.extend region)
+        ).EnvironmentsAgree
+          (ConcreteElaboration.extendedEnvironment sourceContext region
+            sourceOuter sourceLocal)
+          (ConcreteElaboration.extendedEnvironment targetContext region
+            targetOuter targetLocal) := by
+  let localEq := moveEndpointRaw_exactScopeWires input sourceWire targetWire
+    endpoint region
+  let sourceLocal : Fin (ConcreteElaboration.exactScopeWires input region).length → D :=
+    targetLocal ∘ Fin.cast (congrArg List.length localEq).symm
+  refine ⟨sourceLocal, context.extended_agreement_of_local region sourceExact
+    targetExact sourceOuter targetOuter outerAgrees sourceLocal targetLocal ?_⟩
+  intro sourceIndex
+  rfl
 
 theorem moveEndpointRaw_covered
     (input : ConcreteDiagram)
@@ -942,6 +1001,138 @@ theorem compileNode_moveEndpoint_itemSimulation
       ConcreteElaboration.identityRelationRenaming] using binderLookup
   · exact sourceCompiled
   · exact targetCompiled
+
+/-- Below an accepted anchor site both coalesced wires are inherited.  The
+authoritative recursive compiler can therefore simulate a single endpoint
+move throughout the whole descendant subdiagram in either direction. -/
+noncomputable def endpointMoveSimulation
+    (input : ConcreteDiagram)
+    (wellFormed : input.WellFormed signature)
+    (sourceWire targetWire : Fin input.wireCount)
+    (endpoint : CEndpoint input.nodeCount)
+    (distinct : sourceWire ≠ targetWire)
+    (sourceOccurs : input.EndpointOccurs sourceWire endpoint)
+    (targetWellFormed :
+      (moveEndpointRaw input sourceWire targetWire endpoint).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature) :
+    ConcreteElaboration.ConcreteSemanticSimulation signature input
+      (moveEndpointRaw input sourceWire targetWire endpoint) model named where
+  source_wellFormed := wellFormed
+  target_wellFormed := targetWellFormed
+  regionMap := id
+  binderMap := id
+  Distinguished := fun _ => False
+  occurrenceMap := fun _ _ occurrence => occurrence
+  occurrenceMap_node := by
+    intro region regular node nodeRegion
+    exact ⟨node, rfl⟩
+  occurrenceMap_child := by
+    intro region regular child
+    rfl
+  root_eq := rfl
+  region_shape := by
+    intro parent regular child childParent
+    rw [moveEndpointRaw_regions]
+    cases kind : input.regions child <;> simp [kind] <;> rfl
+  localOccurrences_map := by
+    intro region regular
+    rw [moveEndpointRaw_localOccurrences]
+    have mapIdentity : (fun occurrence : ConcreteElaboration.LocalOccurrence
+        input.regionCount input.nodeCount => occurrence) = id := rfl
+    rw [mapIdentity]
+    exact (List.map_id _).symm
+  BinderWitness := fun {sourceRels targetRels} sourceBinders targetBinders =>
+    ConcreteElaboration.IdentityBinderWitness
+      (sourceRels := sourceRels) (targetRels := targetRels)
+      input (moveEndpointRaw input sourceWire targetWire endpoint)
+      sourceBinders targetBinders
+  relationMap := fun witness =>
+    ConcreteElaboration.IdentityBinderWitness.relationMap witness
+  binders_empty := {
+    relationContexts_eq := rfl
+    binders_eq := HEq.rfl
+  }
+  binders_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    exact ⟨rfl, HEq.rfl⟩
+  relationMap_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming] using
+        (RelationRenaming.lift_id_fun (source := sourceRels) arity).symm
+  Allowed := fun _ _ => True
+  allowed_cut := by simp
+  allowed_bubble := by simp
+  ContextWitness := EndpointMoveContext input sourceWire targetWire endpoint
+  AtRegion := fun _ _ => True
+  indexRelation := fun context => endpointMoveRelation input sourceWire targetWire
+    _ _
+  extendContext := by
+    intro sourceContext targetContext context region regular sourceExact
+      targetExact
+    exact context.extend region
+  extendFocusedContext := by
+    intro sourceContext targetContext context region focused sourceExact
+      targetExact
+    exact False.elim focused
+  at_child := by simp
+  at_extended := by simp
+  at_focused_child := by
+    intro sourceContext targetContext context parent focused sourceExact
+      targetExact child atParent sourceParent targetParent
+    exact False.elim focused
+  localTransport := by
+    intro sourceRels targetRels direction fuelSource fuelTarget sourceContext
+      targetContext context sourceBinders targetBinders binderWitness region
+      atRegion regular allowed sourceExact targetExact sourceCover targetCover
+      sourceEnumeration targetEnumeration sourceItems targetItems sourceCompiled
+      targetCompiled itemSimulation
+    apply ConcreteElaboration.directionalLocalTransport_of_agreement direction
+      sourceContext targetContext region region
+      (endpointMoveRelation input sourceWire targetWire sourceContext targetContext)
+      (endpointMoveRelation input sourceWire targetWire
+        (sourceContext.extend region) (targetContext.extend region))
+      model named
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems
+    · intro sourceOuter targetOuter outerAgrees
+      cases direction with
+      | forward =>
+          intro sourceLocal
+          exact context.extended_agreement region sourceExact targetExact
+            sourceOuter targetOuter outerAgrees sourceLocal
+      | backward =>
+          intro targetLocal
+          exact context.extended_agreement_backward region sourceExact targetExact
+            sourceOuter targetOuter outerAgrees targetLocal
+    · exact itemSimulation
+  nodeSemantic := by
+    intro sourceRels targetRels direction region sourceContext targetContext
+      context atRegion sourceNodup targetNodup sourceBinders targetBinders allowed
+      binderWitness sourceNode targetNode regular mapped nodeRegion sourceItem
+      targetItem sourceCompiled targetCompiled
+    have targetNodeEq : targetNode = sourceNode := by
+      exact ConcreteElaboration.LocalOccurrence.node.inj mapped.symm
+    subst targetNode
+    exact compileNode_moveEndpoint_itemSimulation input wellFormed sourceWire
+      targetWire endpoint distinct sourceOccurs sourceContext targetContext
+      sourceBinders targetBinders binderWitness sourceNode sourceItem targetItem
+      sourceCompiled targetCompiled model named direction
+  focusedRegionKernel := by
+    intro sourceRels targetRels direction fuelSource fuelTarget region
+      sourceContext targetContext context sourceBinders targetBinders atRegion
+      focused
+    exact False.elim focused
 
 @[simp] theorem moveEndpointsRaw_regions
     (input : ConcreteDiagram) (sourceWire targetWire : Fin input.wireCount)
