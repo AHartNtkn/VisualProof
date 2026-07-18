@@ -583,6 +583,32 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
+  it('uses Registrar folio as the sole pause and settings treatment', async () => {
+    const page = await openFixture()
+    try {
+      await page.keyboard.press('Escape')
+      const presentation = page.locator('.curse-game-presentation')
+      const menu = page.locator('.curse-pause-menu')
+      const style = await menu.evaluate((node) => {
+        const computed = getComputedStyle(node)
+        return {
+          color: computed.color,
+          borderRadius: computed.borderRadius,
+          transform: computed.transform,
+        }
+      })
+      expect(await presentation.getAttribute('data-pause-candidate')).toBeNull()
+      expect(style.color).toBe('rgb(48, 43, 35)')
+      expect(style.borderRadius).toBe('1.28px')
+      expect(style.transform).not.toBe('none')
+      expect(await menu.locator('button').allTextContents()).toEqual([
+        'Resume', 'Level selection', 'Settings', 'Exit game',
+      ])
+      await menu.locator('button', { hasText: 'Settings' }).click()
+      expect(await page.locator('.curse-pause-settings [data-setting]').count()).toBe(3)
+    } finally { await page.close() }
+  })
+
   it('disposes the environment, views, global input, and native exit subscription exactly once', async () => {
     const page = await openFixture()
     try {

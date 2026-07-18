@@ -183,12 +183,57 @@
   line-height: 1.55;
 }
 
-.curse-pause-panel,
 .curse-completion {
   background:
     linear-gradient(145deg, rgb(23 25 31 / 97%), rgb(8 11 16 / 98%)),
     repeating-linear-gradient(0deg, transparent 0 8px, rgb(255 255 255 / 2%) 9px);
   border-radius: .25rem;
+}
+
+.curse-pause-scrim {
+  background: rgb(19 14 12 / 48%);
+  backdrop-filter: blur(1px) sepia(.22);
+}
+
+.curse-pause-panel {
+  position: relative;
+  isolation: isolate;
+  color: #302b23;
+  background:
+    linear-gradient(100deg, rgb(218 207 171 / 99%), rgb(237 226 190 / 99%)),
+    repeating-linear-gradient(0deg, transparent 0 8px, rgb(55 46 31 / 5%) 9px);
+  border-color: rgb(77 63 42 / 58%);
+  border-radius: .08rem;
+  box-shadow: .7rem .8rem 0 rgb(68 54 39 / 55%), 0 1.6rem 4rem rgb(0 0 0 / 60%);
+  transform: rotate(-.35deg);
+}
+
+.curse-pause-panel::before,
+.curse-pause-panel::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: .35rem -.45rem -.5rem .5rem;
+  background: #a79770;
+  border: 1px solid rgb(67 54 37 / 45%);
+  transform: rotate(1.1deg);
+}
+
+.curse-pause-panel::after {
+  inset: -.45rem .4rem .5rem -.5rem;
+  background: #c7b88d;
+  transform: rotate(-.7deg);
+}
+
+.curse-pause-panel h1 {
+  color: #29251e;
+}
+
+.curse-pause-panel .curse-presentation-action,
+.curse-pause-panel .curse-setting select {
+  color: #312b22;
+  background: rgb(177 157 111 / 34%);
+  border-color: rgb(73 60 40 / 52%);
 }
 
 .curse-production-environment[data-reduced-motion="true"] .curse-pause-scrim {
