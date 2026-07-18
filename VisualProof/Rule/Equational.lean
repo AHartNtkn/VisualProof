@@ -635,7 +635,7 @@ def anchoredContractWireDomain (input : Diagram.ConcreteDiagram)
     (drop : Fin input.wireCount) : Diagram.SurvivorDomain input.wireCount where
   survives wire := decide (wire ≠ drop)
 
-private def anchoredContractEndpoint?
+def anchoredContractEndpoint?
     (domain : Diagram.SurvivorDomain nodes)
     (endpoint : Diagram.CEndpoint nodes) :
     Option (Diagram.CEndpoint domain.count) :=

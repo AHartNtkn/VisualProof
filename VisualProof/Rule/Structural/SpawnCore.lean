@@ -125,11 +125,11 @@ instance (orientation : Orientation) (depth : Nat) :
     Decidable (spawnPolarity orientation depth) := by
   cases orientation <;> simp [spawnPolarity] <;> infer_instance
 
-private def spawnLiftEndpoint (endpoint : CEndpoint nodes) :
+def spawnLiftEndpoint (endpoint : CEndpoint nodes) :
     CEndpoint (nodes + 1) :=
   { node := endpoint.node.castSucc, port := endpoint.port }
 
-private def spawnLiftWire (wire : CWire regions nodes) :
+def spawnLiftWire (wire : CWire regions nodes) :
     CWire regions (nodes + 1) :=
   { scope := wire.scope, endpoints := wire.endpoints.map spawnLiftEndpoint }
 
