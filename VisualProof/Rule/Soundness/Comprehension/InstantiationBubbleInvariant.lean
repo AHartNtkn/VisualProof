@@ -98,6 +98,52 @@ theorem BubbleHasPayloadArity.advance
       (by simpa [spliceInput, instantiateSpliceInput,
         Splice.Input.coalesceFrameRaw_regions] using bubbleShape)
 
+/-- At an executor-selected atom site, every covering quotient-host compiler
+context contains the moving relation variable at exactly the payload arity. -/
+theorem coalesced_bubbleRelation_exists
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (node_eq : state.diagram.val.nodes atom = .atom site state.bubble)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (shape : BubbleHasPayloadArity payload state)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw sourceRels)
+    (sourceCover : sourceBinders.Covers site) :
+    ∃ relation : Theory.RelVar sourceRels payload.arity,
+      sourceBinders state.bubble = some ⟨payload.arity, relation⟩ := by
+  obtain ⟨parent, bubbleShape⟩ := shape
+  have coalescedShape :
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw.regions state.bubble =
+        .bubble parent payload.arity := by
+    simpa [instantiateSpliceInput, Splice.Input.coalesceFrameRaw_regions] using
+      bubbleShape
+  have sourceEncloses : state.diagram.val.Encloses state.bubble site := by
+    simpa [node_eq] using state.diagram.property.atom_binders_enclose atom
+  have coalescedEncloses :
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw.Encloses state.bubble site :=
+    ((instantiateSpliceInput comprehension attachments binders payload state
+      site arguments).coalesceFrameRaw_encloses_iff state.bubble site).2
+      sourceEncloses
+  exact sourceCover state.bubble parent payload.arity coalescedShape
+    coalescedEncloses
+
 /-- Every state visited by a successful executor trace carries the moving
 binder's payload arity. -/
 def BubbleShapeEveryStep
