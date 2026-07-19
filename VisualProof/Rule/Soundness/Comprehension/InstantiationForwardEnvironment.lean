@@ -111,6 +111,108 @@ theorem siteTargetLocalOfNonempty_pattern
   rw [FiniteEquiv.symm_apply_apply]
   exact Fin.addCases_right index
 
+/-- The complete target compiler environment built from
+`siteTargetLocalOfNonempty` reads the supplied terminal local valuation at the
+authoritative pattern seam index. -/
+theorem siteTargetEnvironment_patternLocalOfNonempty
+    {signature : List Nat}
+    {input : Splice.Input signature}
+    (layout : Splice.Input.PlugLayout input)
+    (hadmissible : input.Admissible)
+    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    {patternBody : Region signature patternOuter patternRels}
+    {patternPath : List Nat}
+    (patternWitness : Region.ContextPath patternBody patternPath)
+    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+      input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
+      (layout.frameRegion input.site) outputWitness)
+    (hnonempty : input.binderSpine.proxyCount ≠ 0)
+    (outerEnv : Fin outputLeaf.inheritedWires.length → D)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+      input.coalesceFrameRaw input.site).length → D)
+    (patternLocal : Fin (ConcreteElaboration.exactScopeWires
+      input.pattern.val.diagram input.binderSpine.bodyContainer).length → D)
+    (index : Fin (ConcreteElaboration.exactScopeWires
+      input.pattern.val.diagram input.binderSpine.bodyContainer).length) :
+    ConcreteElaboration.extendedEnvironment outputLeaf.inheritedWires
+        (layout.frameRegion input.site) outerEnv
+        (siteTargetLocalOfNonempty layout hnonempty sourceLocal patternLocal)
+        (layout.patternSeamWireMapOfNonempty hadmissible host patternWitness
+          patternLeaf outputWitness outputLeaf hnonempty
+          (Fin.cast
+            (ConcreteElaboration.WireContext.length_extend
+              patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
+            (Fin.natAdd patternLeaf.inheritedWires.length index))) =
+      patternLocal index := by
+  let targetIndex := layout.patternSeamWireMapOfNonempty hadmissible host
+    patternWitness patternLeaf outputWitness outputLeaf hnonempty
+    (Fin.cast
+      (ConcreteElaboration.WireContext.length_extend patternLeaf.inheritedWires
+        input.binderSpine.bodyContainer).symm
+      (Fin.natAdd patternLeaf.inheritedWires.length index))
+  let localIndex := layout.siteLocalWireEquivOfNonempty hnonempty
+    (Fin.natAdd
+      (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+        input.site).length index)
+  let expectedIndex : Fin (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).length :=
+    Fin.cast
+      (ConcreteElaboration.WireContext.length_extend outputLeaf.inheritedWires
+        (layout.frameRegion input.site)).symm
+      (Fin.natAdd outputLeaf.inheritedWires.length localIndex)
+  have targetWire : (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).get targetIndex =
+      layout.patternPlugWire
+        ((patternLeaf.inheritedWires.extend
+          input.binderSpine.bodyContainer).get
+          (Fin.cast
+            (ConcreteElaboration.WireContext.length_extend
+              patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
+            (Fin.natAdd patternLeaf.inheritedWires.length index))) :=
+    layout.patternSeamWireMapOfNonempty_spec hadmissible host patternWitness
+      patternLeaf outputWitness outputLeaf hnonempty _
+  have targetWire' : (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).get targetIndex =
+      layout.patternPlugWire
+        ((ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+          input.binderSpine.bodyContainer).get index) := by
+    simpa only [
+      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local]
+      using
+      targetWire
+  have expectedWire : (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).get expectedIndex =
+      layout.patternPlugWire
+        ((ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+          input.binderSpine.bodyContainer).get index) := by
+    rw [Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local]
+    rw [layout.siteLocalWireEquivOfNonempty_pattern_spec hnonempty]
+    exact (layout.patternPlugWire_terminal_local hnonempty index).symm
+  have indexEq : targetIndex = expectedIndex := by
+    apply Fin.ext
+    apply (List.getElem_inj outputLeaf.wiresExact.nodup).mp
+    simpa only [List.get_eq_getElem] using targetWire'.trans expectedWire.symm
+  change ConcreteElaboration.extendedEnvironment outputLeaf.inheritedWires
+      (layout.frameRegion input.site) outerEnv
+      (siteTargetLocalOfNonempty layout hnonempty sourceLocal patternLocal)
+      targetIndex = patternLocal index
+  rw [indexEq]
+  simp only [ConcreteElaboration.extendedEnvironment, Function.comp_apply]
+  have castEq : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend outputLeaf.inheritedWires
+        (layout.frameRegion input.site)) expectedIndex =
+      Fin.natAdd outputLeaf.inheritedWires.length localIndex := by
+    apply Fin.ext
+    rfl
+  rw [castEq]
+  simp only [extendWireEnv, Fin.addCases_right]
+  exact siteTargetLocalOfNonempty_pattern layout hnonempty sourceLocal
+    patternLocal index
+
 /-- The source host context embeds into the combined nonzero-spine target
 context using the caller's inherited-wire map and the splice's certified host
 local block. -/
