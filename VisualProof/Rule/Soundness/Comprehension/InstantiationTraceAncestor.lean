@@ -7,6 +7,82 @@ open VisualProof.Diagram
 
 namespace InstantiationTrace
 
+/-- Climbing a source frame path through an accepted instantiation trace
+commutes with the composite frame embedding. -/
+theorem regionMap_climb_forward
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result) :
+    ∀ (steps : Nat) (start finish : Fin state.diagram.val.regionCount),
+      state.diagram.val.climb steps start = some finish →
+        result.diagram.val.climb steps (trace.regionMap start) =
+          some (trace.regionMap finish) := by
+  intro steps
+  induction steps with
+  | zero =>
+      intro start finish climbed
+      cases Option.some.inj climbed
+      rfl
+  | succ steps ih =>
+      intro start finish climbed
+      have mappedShape := trace.regionMap_shape start
+      cases sourceShape : state.diagram.val.regions start with
+      | sheet =>
+          simp [ConcreteDiagram.climb, sourceShape, CRegion.parent?] at climbed
+      | cut parent =>
+          rw [sourceShape] at mappedShape
+          have tail : state.diagram.val.climb steps parent = some finish := by
+            simpa [ConcreteDiagram.climb, sourceShape, CRegion.parent?] using
+              climbed
+          simpa [ConcreteDiagram.climb, mappedShape, CRegion.parent?] using
+            ih parent finish tail
+      | bubble parent arity =>
+          rw [sourceShape] at mappedShape
+          have tail : state.diagram.val.climb steps parent = some finish := by
+            simpa [ConcreteDiagram.climb, sourceShape, CRegion.parent?] using
+              climbed
+          simpa [ConcreteDiagram.climb, mappedShape, CRegion.parent?] using
+            ih parent finish tail
+
+/-- The composite frame embedding preserves lexical enclosure. -/
+theorem regionMap_encloses
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    {ancestor region : Fin state.diagram.val.regionCount}
+    (encloses : state.diagram.val.Encloses ancestor region) :
+    result.diagram.val.Encloses (trace.regionMap ancestor)
+      (trace.regionMap region) := by
+  obtain ⟨steps, climbed⟩ := encloses
+  have countLe := VisualProof.Data.Finite.fin_card_le_of_injective
+    trace.regionMap trace.regionMap_injective
+  exact ⟨⟨steps.val, by omega⟩,
+    trace.regionMap_climb_forward steps.val region ancestor climbed⟩
+
 /-- Climbing from a frame region through an accepted instantiation trace stays
 in the composite frame image. -/
 theorem regionMap_climb_backward
