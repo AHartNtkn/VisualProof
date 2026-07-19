@@ -7,6 +7,82 @@ open VisualProof.Diagram
 
 namespace InstantiationSemantic
 
+/-- Canonical nonzero-spine comprehension relation determined by the ordered
+parameter valuation and fixed proxy family, with no arbitrary total wire
+valuation in its interface. -/
+noncomputable def terminalRelationOfParameterValues
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hnonempty : payload.binderSpine.proxyCount ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (parameterValues : Fin attachments.length → model.Carrier)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index)) :
+    Relation model.Carrier payload.arity :=
+  fun relationArguments =>
+    let spliceInput := instantiateSpliceInput comprehension attachments binders
+      payload state site arguments
+    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    ∃ assignment : BoundaryAssignment comprehension.elaborate model.Carrier,
+      assignment.args =
+          Fin.addCases relationArguments parameterValues ∘
+            Fin.cast payload.boundarySplit ∧
+        ∃ relEnv : RelEnv model.Carrier pattern.witness.toFocus.holeRels,
+          TerminalRelationsMatch payload state site arguments hnonempty values
+              relEnv ∧
+            denoteRegion model named
+              (terminalInheritedEnvironment payload state site arguments
+                hnonempty assignment)
+              relEnv
+              (ConcreteElaboration.finishRegion comprehension.val.diagram
+                pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
+                pattern.leaf.items)
+
+theorem terminalRelationOfValues_eq_parameterValues
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hnonempty : payload.binderSpine.proxyCount ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
+    (parameterValues : Fin attachments.length → model.Carrier)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (parameters : wireValue ∘ state.parameters = parameterValues) :
+    terminalRelationOfValues payload state site arguments hnonempty model named
+        wireValue values =
+      terminalRelationOfParameterValues payload state site arguments hnonempty
+        model named parameterValues values := by
+  funext relationArguments
+  apply propext
+  simp only [terminalRelationOfValues, terminalRelationOfParameterValues]
+  rw [parameters]
+
 /-- One ordered valuation for the executor's parameter wires in a concrete
 compiler context.  Repeated parameter wires deliberately read the same
 context entry while retaining their serialized positions. -/

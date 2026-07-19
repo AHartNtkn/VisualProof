@@ -78,6 +78,7 @@ theorem advance_site_child_denotes_fixed
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
     (sourceEnv : Fin sourceContext.length → model.Carrier)
     (targetEnv : Fin targetContext.length → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier targetRels)
@@ -90,11 +91,15 @@ theorem advance_site_child_denotes_fixed
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible)
       targetBinders targetRelEnv values)
+    (targetParameters : ParameterValuesAt
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      targetContext targetEnv parameterValues)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
-        values direction sourceFuel targetFuel child)
+        values parameterValues direction sourceFuel targetFuel child)
     (child : Fin state.diagram.val.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
       (ConcreteElaboration.localOccurrences
@@ -211,7 +216,7 @@ theorem advance_site_child_denotes_fixed
                   relationMap relationSpec)
                 sourceChild targetChild sourceChildResult targetChildResult
                 sourceEnv targetEnv targetRelEnv (by simpa using environmentEq)
-                targetFixed targetProxies
+                targetFixed targetProxies targetParameters
               change ¬ denoteRegion model named sourceEnv
                 (RelEnv.pullback relationMap targetRelEnv) sourceChild
               change ¬ denoteRegion model named targetEnv targetRelEnv
@@ -341,7 +346,7 @@ theorem advance_site_child_denotes_fixed
                 sourceChild targetChild sourceChildResult targetChildResult
                 sourceEnv targetEnv (childRelation, targetRelEnv)
                 (by simpa using environmentEq) childFixed childProxies
-                targetChildDenotes
+                targetParameters targetChildDenotes
               refine ⟨childRelation, ?_⟩
               exact (denoteRegion_renameRelations model named
                 (RelationRenaming.lift relationMap arity)
@@ -426,6 +431,7 @@ theorem advance_site_items_denote_fixed
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
     (sourceOuterEnv : Fin sourceOuter.length → model.Carrier)
     (targetOuterEnv : Fin targetOuter.length → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier targetRels)
@@ -502,36 +508,21 @@ theorem advance_site_items_denote_fixed
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible)
       targetBinders targetRelEnv values)
+    (targetParameters : ParameterValuesAt
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      targetOuter targetOuterEnv parameterValues)
     (nonemptyRelationEq : ∀ hnonempty :
       payload.binderSpine.proxyCount ≠ 0,
-      let spliceInput := instantiateSpliceInput comprehension attachments binders
-        payload state site arguments
-      let targetContext := targetOuter.extend
-        (spliceInput.plugLayout.frameRegion site)
-      let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
-        (spliceInput.plugLayout.frameRegion site) targetOuterEnv targetLocal
-      let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
-        targetContext targetExact targetEnv fallback
-      relationValue = terminalRelationOfValues payload state site arguments
-        hnonempty model named
-        (fun wire => quotientValues (spliceInput.quotientWire wire)) values)
-    (emptyRelationEq : ∀ hzero : payload.binderSpine.proxyCount = 0,
-      let spliceInput := instantiateSpliceInput comprehension attachments binders
-        payload state site arguments
-      let targetContext := targetOuter.extend
-        (spliceInput.plugLayout.frameRegion site)
-      let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
-        (spliceInput.plugLayout.frameRegion site) targetOuterEnv targetLocal
-      let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
-        targetContext targetExact targetEnv fallback
-      relationValue = payload.interpretedRelation model named
-        (fun index => quotientValues
-          (spliceInput.quotientWire (state.parameters index))))
+      relationValue = terminalRelationOfParameterValues payload state site
+        arguments hnonempty model named parameterValues values)
+    (emptyRelationEq : relationValue =
+      payload.interpretedRelation model named parameterValues)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
-        values direction sourceFuel targetFuel child) :
+        values parameterValues direction sourceFuel targetFuel child) :
     ∃ sourceLocal : Fin (ConcreteElaboration.exactScopeWires
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments).coalesceFrameRaw site).length → model.Carrier,
@@ -546,6 +537,15 @@ theorem advance_site_items_denote_fixed
     (spliceInput.plugLayout.frameRegion site)
   let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
     (spliceInput.plugLayout.frameRegion site) targetOuterEnv targetLocal
+  have targetExtendedParameters : ParameterValuesAt
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      targetContext targetEnv parameterValues := by
+    exact ParameterValuesAt.extend
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      targetOuter targetOuterEnv parameterValues targetParameters
+      (spliceInput.plugLayout.frameRegion site) targetLocal
   let outputBody := ConcreteElaboration.finishRegion
     spliceInput.plugLayout.plugRaw targetOuter
     (spliceInput.plugLayout.frameRegion site) fullItems
@@ -572,6 +572,35 @@ theorem advance_site_items_denote_fixed
     have targetEq := siteSourceWireMap_environment spliceInput outputWitness
       outputLeaf sourceContext sourceExact targetEnv fallback index
     exact sourceEq.trans targetEq.symm
+  let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+    targetContext targetExact targetEnv fallback
+  have quotientParameters :
+      (fun index => quotientValues
+        (spliceInput.quotientWire (state.parameters index))) =
+        parameterValues := by
+    funext position
+    exact siteQuotientEnvironment_parameter comprehension attachments binders
+      payload state atom tail site arguments hadmissible targetContext
+      targetExact targetEnv parameterValues targetExtendedParameters fallback
+      position
+  have localNonemptyRelationEq : ∀ hnonempty :
+      payload.binderSpine.proxyCount ≠ 0,
+      relationValue = terminalRelationOfValues payload state site arguments
+        hnonempty model named
+        (fun wire => quotientValues (spliceInput.quotientWire wire)) values := by
+    intro hnonempty
+    exact (nonemptyRelationEq hnonempty).trans
+      (terminalRelationOfValues_eq_parameterValues payload state site arguments
+        hnonempty model named
+        (fun wire => quotientValues (spliceInput.quotientWire wire))
+        parameterValues values (by simpa [Function.comp_def] using
+          quotientParameters)).symm
+  have localEmptyRelationEq : relationValue =
+      payload.interpretedRelation model named
+        (fun index => quotientValues
+          (spliceInput.quotientWire (state.parameters index))) := by
+    rw [quotientParameters]
+    exact emptyRelationEq
   have currentDenotes : ∀ sourceItem,
       ConcreteElaboration.compileNode? signature spliceInput.coalesceFrameRaw
         sourceContext sourceBinders atom = some sourceItem →
@@ -585,7 +614,7 @@ theorem advance_site_items_denote_fixed
         targetEnv targetRelEnv fallback targetItems targetCompiled targetDenotes
         targetFixed sourceContext sourceBinders sourceCover sourceEnumeration
         relationMap relationSpec sourceEnv (congrFun sourceEnvironmentEq)
-        sourceItem sourceItemCompiled (emptyRelationEq hzero)
+        sourceItem sourceItemCompiled localEmptyRelationEq
     · exact advance_current_atom_denotes_nonempty_fixed comprehension attachments
         binders payload state atom tail site arguments node_eq arguments_eq shape
         hzero hadmissible model named relationValue values outputWitness outputLeaf
@@ -593,7 +622,7 @@ theorem advance_site_items_denote_fixed
         targetFixed targetProxies sourceContext sourceBinders sourceCover
         sourceEnumeration relationMap relationSpec sourceEnv
         (congrFun sourceEnvironmentEq) sourceItem sourceItemCompiled
-        (nonemptyRelationEq hzero)
+        (localNonemptyRelationEq hzero)
   refine ⟨sourceLocal, ?_⟩
   have bubbleEnclosesSite : state.diagram.val.Encloses state.bubble site := by
     simpa [node_eq] using state.diagram.property.atom_binders_enclose atom
@@ -611,8 +640,9 @@ theorem advance_site_items_denote_fixed
       targetExact sourceBinders
       targetBinders sourceCover targetCover sourceEnumeration targetEnumeration
       wireMap wireSpec relationMap relationSpec model named relationValue values
+      parameterValues
       sourceEnv targetEnv targetRelEnv environmentEq targetFixed targetProxies
-      childSimulation)
+      targetExtendedParameters childSimulation)
 
 end InstantiationSemantic
 

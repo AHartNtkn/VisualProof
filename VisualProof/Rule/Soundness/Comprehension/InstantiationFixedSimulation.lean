@@ -1,5 +1,6 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceSiteItems
 import VisualProof.Rule.Soundness.Comprehension.InstantiationTargetInvariant
+import VisualProof.Rule.Soundness.Comprehension.InstantiationParameterValues
 
 namespace VisualProof.Rule
 
@@ -247,6 +248,7 @@ def FixedAdvanceRegionSimulation
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (region : Fin state.diagram.val.regionCount) : Prop :=
@@ -318,6 +320,10 @@ def FixedAdvanceRegionSimulation
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible)
         targetBinders targetRelEnv values →
+      ParameterValuesAt
+        (advanceInstantiationState comprehension attachments binders payload
+          state atom tail site arguments hadmissible)
+        targetOuter targetEnv parameterValues →
       direction.Entails
         (denoteRegion model named sourceEnv
           targetRelEnv (sourceBody.renameRelations relationMap))

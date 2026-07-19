@@ -79,6 +79,7 @@ theorem advance_offsite_items_denote_fixed
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
     (sourceEnv : Fin sourceContext.length → model.Carrier)
     (targetEnv : Fin targetContext.length → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier targetRels)
@@ -91,11 +92,15 @@ theorem advance_offsite_items_denote_fixed
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible)
       targetBinders targetRelEnv values)
+    (targetParameters : ParameterValuesAt
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      targetContext targetEnv parameterValues)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
-        values direction sourceFuel targetFuel child)
+        values parameterValues direction sourceFuel targetFuel child)
     (sourceItems : ItemSeq signature sourceContext.length sourceRels)
     (targetItems : ItemSeq signature targetContext.length targetRels)
     (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
@@ -206,8 +211,10 @@ theorem advance_offsite_items_denote_fixed
         targetContext sourceExact targetExact sourceBinders targetBinders
         sourceCover targetCover sourceEnumeration targetEnumeration wireMap
         wireSpec relationMap relationSpec model named relationValue values
+        parameterValues
         sourceEnv targetEnv targetRelEnv environmentEq targetFixed targetProxies
-        childSimulation child occurrenceMember (sourceItems.get sourceItemIndex)
+        targetParameters childSimulation child occurrenceMember
+        (sourceItems.get sourceItemIndex)
         targetItem sourceAt' targetAt targetItemDenotes
 
 end InstantiationSemantic
