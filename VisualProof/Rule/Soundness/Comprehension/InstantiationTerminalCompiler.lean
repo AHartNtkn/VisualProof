@@ -102,6 +102,120 @@ theorem terminalPrepared_denotes_of_output
   rw [denoteItemSeq_append] at preparedDenotes
   exact preparedDenotes.2
 
+/-- Converse seam transport for the nonempty-spine branch.  Once the retained
+host conjunction and the terminal comprehension conjunction denote under the
+single prepared seam environment, the authoritative post-splice compiler
+block denotes.  This is the constructive half needed when replaying an
+instantiation trace forward beneath an intervening cut. -/
+theorem output_denotes_of_host_and_terminalPrepared
+    {signature : List Nat}
+    (input : Splice.Input signature)
+    (layout : Splice.Input.PlugLayout input)
+    (hadmissible : input.Admissible)
+    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    {patternBody : Region signature patternOuter patternRels}
+    {patternPath : List Nat}
+    (patternWitness : Region.ContextPath patternBody patternPath)
+    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+      input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
+      (layout.frameRegion input.site) outputWitness)
+    (hnonempty : input.binderSpine.proxyCount ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (env : Fin (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
+    (hostDenotes :
+      let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
+        outputWitness outputLeaf hnonempty
+      let targetEq := ConcreteElaboration.WireContext.length_extend
+        outputLeaf.inheritedWires (layout.frameRegion input.site)
+      let targetEnv : Fin
+          (outputLeaf.inheritedWires.length +
+            (ConcreteElaboration.exactScopeWires layout.plugRaw
+              (layout.frameRegion input.site)).length) → model.Carrier :=
+        env ∘ Fin.cast targetEq.symm
+      let sourceEnv := targetEnv ∘ combined
+      let hostPrepared :=
+        (host.compilerLeaf.items.renameWires
+          (layout.hostSeamPreparedWireOfNonempty hadmissible host))
+          |>.renameRelations
+            (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+              outputWitness outputLeaf)
+      denoteItemSeq model named sourceEnv relEnv hostPrepared)
+    (terminalDenotes :
+      let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
+        outputWitness outputLeaf hnonempty
+      let targetEq := ConcreteElaboration.WireContext.length_extend
+        outputLeaf.inheritedWires (layout.frameRegion input.site)
+      let targetEnv : Fin
+          (outputLeaf.inheritedWires.length +
+            (ConcreteElaboration.exactScopeWires layout.plugRaw
+              (layout.frameRegion input.site)).length) → model.Carrier :=
+        env ∘ Fin.cast targetEq.symm
+      let sourceEnv := targetEnv ∘ combined
+      let terminalRelations : RelationRenaming
+          patternWitness.toFocus.holeRels outputWitness.toFocus.holeRels :=
+        fun relation =>
+          layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+            outputWitness outputLeaf
+            (layout.coalescedTerminalRelationRenaming hadmissible
+              host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
+              hnonempty relation)
+      let patternPrepared :=
+        (patternLeaf.items.renameWires
+          (layout.patternSeamPreparedWireOfNonempty hadmissible host
+            patternWitness patternLeaf hnonempty)).renameRelations
+          terminalRelations
+      denoteItemSeq model named sourceEnv relEnv patternPrepared) :
+    denoteItemSeq model named env relEnv outputLeaf.items := by
+  dsimp only at hostDenotes terminalDenotes
+  let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
+    outputWitness outputLeaf hnonempty
+  let targetEq := ConcreteElaboration.WireContext.length_extend
+    outputLeaf.inheritedWires (layout.frameRegion input.site)
+  let targetEnv : Fin
+      (outputLeaf.inheritedWires.length +
+        (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (layout.frameRegion input.site)).length) → model.Carrier :=
+    env ∘ Fin.cast targetEq.symm
+  let sourceEnv := targetEnv ∘ combined
+  let hostPrepared :=
+    (host.compilerLeaf.items.renameWires
+      (layout.hostSeamPreparedWireOfNonempty hadmissible host)).renameRelations
+      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+        outputWitness outputLeaf)
+  let terminalRelations : RelationRenaming
+      patternWitness.toFocus.holeRels outputWitness.toFocus.holeRels :=
+    fun relation =>
+      layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+        outputWitness outputLeaf
+        (layout.coalescedTerminalRelationRenaming hadmissible
+          host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
+          hnonempty relation)
+  let patternPrepared :=
+    (patternLeaf.items.renameWires
+      (layout.patternSeamPreparedWireOfNonempty hadmissible host
+        patternWitness patternLeaf hnonempty)).renameRelations terminalRelations
+  have preparedDenotes : denoteItemSeq model named sourceEnv relEnv
+      (hostPrepared.append patternPrepared) := by
+    rw [denoteItemSeq_append]
+    exact ⟨hostDenotes, terminalDenotes⟩
+  have itemsIso := layout.compiledSiteItemsIsoOfNonempty signature input
+    hadmissible host patternWitness patternLeaf outputWitness outputLeaf
+    hnonempty
+  have targetCastDenotes : denoteItemSeq model named targetEnv relEnv
+      (outputLeaf.items.castWiresEq targetEq) := by
+    exact (itemsIso.denotation model named sourceEnv targetEnv relEnv
+      (fun _ => rfl)).mp preparedDenotes
+  rw [ItemSeq.castWiresEq_eq_renameWires,
+    denoteItemSeq_renameWires] at targetCastDenotes
+  simpa [targetEnv, targetEq, Function.comp_def] using targetCastDenotes
+
 /-- Native-context form of `terminalPrepared_denotes_of_output`: both seam
 renamings are interpreted by environment pullback. -/
 theorem terminalItems_denotes_of_output

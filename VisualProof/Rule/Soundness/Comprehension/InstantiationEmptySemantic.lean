@@ -93,6 +93,106 @@ theorem patternRootItems_denotes_of_output
   rw [environmentEq] at patternPreparedDenotes
   exact patternPreparedDenotes
 
+/-- Converse seam transport for the zero-spine branch.  A denoting retained
+host block together with the complete prepared open-pattern root block
+constructs the authoritative post-splice compiler conjunction. -/
+theorem output_denotes_of_host_and_patternRootPrepared
+    {signature : List Nat}
+    (input : Splice.Input signature)
+    (hadmissible : input.Admissible)
+    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
+      (input.plugLayout.frameRegion input.site) outputWitness)
+    (hzero : input.binderSpine.proxyCount = 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (env : Fin (outputLeaf.inheritedWires.extend
+      (input.plugLayout.frameRegion input.site)).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
+    (hostDenotes :
+      let layout := input.plugLayout
+      let targetEq := ConcreteElaboration.WireContext.length_extend
+        outputLeaf.inheritedWires (layout.frameRegion input.site)
+      let targetEnv : Fin
+          (outputLeaf.inheritedWires.length +
+            (ConcreteElaboration.exactScopeWires layout.plugRaw
+              (layout.frameRegion input.site)).length) → model.Carrier :=
+        env ∘ Fin.cast targetEq.symm
+      let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
+        outputWitness outputLeaf hzero
+      let sourceEnv := targetEnv ∘ combined
+      let hostPrepared :=
+        (host.compilerLeaf.items.renameWires
+          (layout.hostSeamPreparedWireOfEmpty hadmissible host)).renameRelations
+          (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+            outputWitness outputLeaf)
+      denoteItemSeq model named sourceEnv relEnv hostPrepared)
+    (patternDenotes :
+      let layout := input.plugLayout
+      let pattern := Splice.Input.compiledSpliceOpenRootItems input.pattern
+      let targetEq := ConcreteElaboration.WireContext.length_extend
+        outputLeaf.inheritedWires (layout.frameRegion input.site)
+      let targetEnv : Fin
+          (outputLeaf.inheritedWires.length +
+            (ConcreteElaboration.exactScopeWires layout.plugRaw
+              (layout.frameRegion input.site)).length) → model.Carrier :=
+        env ∘ Fin.cast targetEq.symm
+      let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
+        outputWitness outputLeaf hzero
+      let sourceEnv := targetEnv ∘ combined
+      let patternRelations : RelationRenaming []
+          outputWitness.toFocus.holeRels :=
+        Splice.Input.PlugLayout.emptyRelationRenaming
+          outputWitness.toFocus.holeRels
+      let patternPrepared :=
+        (pattern.items.renameWires
+          (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
+          |>.renameRelations patternRelations
+      denoteItemSeq model named sourceEnv relEnv patternPrepared) :
+    denoteItemSeq model named env relEnv outputLeaf.items := by
+  dsimp only at hostDenotes patternDenotes
+  let layout := input.plugLayout
+  let pattern := Splice.Input.compiledSpliceOpenRootItems input.pattern
+  let targetEq := ConcreteElaboration.WireContext.length_extend
+    outputLeaf.inheritedWires (layout.frameRegion input.site)
+  let targetEnv : Fin
+      (outputLeaf.inheritedWires.length +
+        (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (layout.frameRegion input.site)).length) → model.Carrier :=
+    env ∘ Fin.cast targetEq.symm
+  let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
+    outputWitness outputLeaf hzero
+  let sourceEnv := targetEnv ∘ combined
+  let hostPrepared :=
+    (host.compilerLeaf.items.renameWires
+      (layout.hostSeamPreparedWireOfEmpty hadmissible host)).renameRelations
+      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+        outputWitness outputLeaf)
+  let patternRelations : RelationRenaming [] outputWitness.toFocus.holeRels :=
+    Splice.Input.PlugLayout.emptyRelationRenaming
+      outputWitness.toFocus.holeRels
+  let patternPrepared :=
+    (pattern.items.renameWires
+      (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
+      |>.renameRelations patternRelations
+  have preparedDenotes : denoteItemSeq model named sourceEnv relEnv
+      (hostPrepared.append patternPrepared) := by
+    rw [denoteItemSeq_append]
+    exact ⟨hostDenotes, patternDenotes⟩
+  have itemsIso := layout.compiledSiteItemsIsoOfEmpty signature input
+    hadmissible host outputWitness outputLeaf hzero pattern.items
+    pattern.computation
+  have targetCastDenotes : denoteItemSeq model named targetEnv relEnv
+      (outputLeaf.items.castWiresEq targetEq) := by
+    exact (itemsIso.denotation model named sourceEnv targetEnv relEnv
+      (fun _ => rfl)).mp preparedDenotes
+  rw [ItemSeq.castWiresEq_eq_renameWires,
+    denoteItemSeq_renameWires] at targetCastDenotes
+  simpa [targetEnv, targetEq, Function.comp_def] using targetCastDenotes
+
 /-- Zero-spine output extraction in checked-open form.  The valuation is the
 same quotient valuation used by the executor, so repeated boundary aliases
 remain repeated rather than being silently separated. -/
