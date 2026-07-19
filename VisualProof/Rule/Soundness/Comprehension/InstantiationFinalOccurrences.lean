@@ -221,7 +221,7 @@ def droppedFrameOccurrenceMap
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region) :
+    (regular : FrameRegular payload region) :
     ConcreteElaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
       ConcreteElaboration.LocalOccurrence
         (dropInstantiationAtomsRaw result).regionCount
@@ -251,7 +251,7 @@ private theorem frameOccurrence_survives_of_regular
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region)
+    (regular : FrameRegular payload region)
     (occurrence : ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount)
     (member : occurrence ∈
@@ -283,7 +283,7 @@ private theorem dropOrigin_droppedFrameOccurrenceMap_of_regular
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region)
+    (regular : FrameRegular payload region)
     (occurrence : ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount)
     (member : occurrence ∈
@@ -322,16 +322,13 @@ theorem dropped_localOccurrences_of_regular
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region) :
+    (regular : FrameRegular payload region) :
     ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
         (copyTrace.regionMap region) =
       (ConcreteElaboration.localOccurrences input.val region).map
         (copyTrace.droppedFrameOccurrenceMap region regular) := by
   let occurrences := ConcreteElaboration.localOccurrences input.val region
-  have outsideBubble : ¬ input.val.Encloses bubble region := by
-    intro enclosed
-    exact regular (ConcreteElaboration.checked_encloses_trans input.property
-      (payload_parent_encloses_bubble payload) enclosed)
+  have outsideBubble : ¬ input.val.Encloses bubble region := regular.1
   have copied :
       ConcreteElaboration.localOccurrences result.diagram.val
           (copyTrace.regionMap region) =
@@ -444,7 +441,7 @@ def finalFrameOccurrenceMap
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region) :
+    (regular : FrameRegular payload region) :
     ConcreteElaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
       ConcreteElaboration.LocalOccurrence
         elimTrace.sourceDiagram.regionCount elimTrace.sourceDiagram.nodeCount
@@ -479,7 +476,7 @@ private theorem vacuousOrigin_finalFrameOccurrenceMap_of_regular
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region)
+    (regular : FrameRegular payload region)
     (occurrence : ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount)
     (member : occurrence ∈
@@ -506,8 +503,7 @@ private theorem vacuousOrigin_finalFrameOccurrenceMap_of_regular
           rw [payload.bubble_eq] at childParent
           exact Option.some.inj (by
             simpa [CRegion.parent?] using childParent)
-        subst region
-        exact regular (ConcreteDiagram.Encloses.refl input.val payload.parent)
+        exact regular.2 parentEq.symm
       have originEq := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
         finalWellFormed child childNeBubble
       exact congrArg ConcreteElaboration.LocalOccurrence.child originEq
@@ -535,7 +531,7 @@ theorem final_localOccurrences_of_regular
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region) :
+    (regular : FrameRegular payload region) :
     ConcreteElaboration.localOccurrences elimTrace.sourceDiagram
         (copyTrace.finalRegionMap elimTrace finalWellFormed region) =
       (ConcreteElaboration.localOccurrences input.val region).map
@@ -545,10 +541,14 @@ theorem final_localOccurrences_of_regular
   have regionNeBubble : region ≠ bubble := by
     intro equal
     subst region
-    exact regular (payload_parent_encloses_bubble payload)
-  have mappedRegular :=
-    copyTrace.finalRegionMap_ne_targetIndex_of_not_enclosed elimTrace
-      finalWellFormed region regular
+    exact regular.1 (ConcreteDiagram.Encloses.refl input.val bubble)
+  have mappedRegular : copyTrace.finalRegionMap elimTrace finalWellFormed
+      region ≠ elimTrace.targetIndex finalWellFormed := by
+    intro mapped
+    rcases (copyTrace.finalRegionMap_eq_targetIndex_iff elimTrace
+      finalWellFormed region).1 mapped with parentEq | bubbleEq
+    · exact regular.2 parentEq
+    · exact regionNeBubble bubbleEq
   have originRegion := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
     finalWellFormed region regionNeBubble
   have promoted := elimTrace.regular_localOccurrences finalWellFormed

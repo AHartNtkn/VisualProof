@@ -7,6 +7,21 @@ open VisualProof.Diagram
 
 namespace InstantiationTrace
 
+/-- Pointwise-preserved source frame: outside the rewritten bubble and away
+from the parent focus where vacuous elimination performs the replacement. -/
+def FrameRegular
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    (region : Fin input.val.regionCount) : Prop :=
+  ¬ input.val.Encloses bubble region ∧ region ≠ payload.parent
+
 /-- A copied region can be the final moving bubble only when it was the
 original quantified bubble. -/
 theorem regionMap_ne_result_bubble
@@ -127,7 +142,7 @@ theorem final_region_parent_of_regular
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
     (parent child : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent parent)
+    (regular : FrameRegular payload parent)
     (childParent : (input.val.regions child).parent? = some parent) :
     (elimTrace.sourceDiagram.regions
         (copyTrace.finalRegionMap elimTrace finalWellFormed child)).parent? =
@@ -135,7 +150,7 @@ theorem final_region_parent_of_regular
   have parentNeBubble : parent ≠ bubble := by
     intro equal
     subst parent
-    exact regular (payload_parent_encloses_bubble payload)
+    exact regular.1 (ConcreteDiagram.Encloses.refl input.val bubble)
   have childNeBubble : child ≠ bubble := by
     intro equal
     subst child
@@ -143,11 +158,15 @@ theorem final_region_parent_of_regular
     rw [payload.bubble_eq] at direct
     have parentEq : payload.parent = parent := by
       exact Option.some.inj (by simpa [CRegion.parent?] using direct)
-    subst parent
-    exact regular (ConcreteDiagram.Encloses.refl input.val payload.parent)
-  have mappedParentRegular :=
-    copyTrace.finalRegionMap_ne_targetIndex_of_not_enclosed elimTrace
-      finalWellFormed parent regular
+    exact regular.2 parentEq.symm
+  have mappedParentRegular :
+      copyTrace.finalRegionMap elimTrace finalWellFormed parent ≠
+        elimTrace.targetIndex finalWellFormed := by
+    intro mapped
+    rcases (copyTrace.finalRegionMap_eq_targetIndex_iff elimTrace
+      finalWellFormed parent).1 mapped with parentEq | bubbleEq
+    · exact regular.2 parentEq
+    · exact parentNeBubble bubbleEq
   have originParent := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
     finalWellFormed parent parentNeBubble
   have originChild := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
@@ -188,7 +207,7 @@ theorem final_region_shape_of_regular
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
     (parent : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent parent)
+    (regular : FrameRegular payload parent)
     (child : Fin input.val.regionCount)
     (childParent : (input.val.regions child).parent? = some parent) :
     elimTrace.sourceDiagram.regions
@@ -204,7 +223,7 @@ theorem final_region_shape_of_regular
   have parentNeBubble : parent ≠ bubble := by
     intro equal
     subst parent
-    exact regular (payload_parent_encloses_bubble payload)
+    exact regular.1 (ConcreteDiagram.Encloses.refl input.val bubble)
   have childNeBubble : child ≠ bubble := by
     intro equal
     subst child
@@ -212,11 +231,15 @@ theorem final_region_shape_of_regular
     rw [payload.bubble_eq] at direct
     have parentEq : payload.parent = parent := by
       exact Option.some.inj (by simpa [CRegion.parent?] using direct)
-    subst parent
-    exact regular (ConcreteDiagram.Encloses.refl input.val payload.parent)
-  have mappedParentRegular :=
-    copyTrace.finalRegionMap_ne_targetIndex_of_not_enclosed elimTrace
-      finalWellFormed parent regular
+    exact regular.2 parentEq.symm
+  have mappedParentRegular :
+      copyTrace.finalRegionMap elimTrace finalWellFormed parent ≠
+        elimTrace.targetIndex finalWellFormed := by
+    intro mapped
+    rcases (copyTrace.finalRegionMap_eq_targetIndex_iff elimTrace
+      finalWellFormed parent).1 mapped with parentEq | bubbleEq
+    · exact regular.2 parentEq
+    · exact parentNeBubble bubbleEq
   have originParent := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
     finalWellFormed parent parentNeBubble
   have originChild := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
@@ -308,15 +331,12 @@ theorem node_outside_bubble_of_regular
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region)
+    (regular : FrameRegular payload region)
     (node : Fin input.val.nodeCount)
     (nodeRegion : (input.val.nodes node).region = region) :
     ¬ input.val.Encloses bubble (input.val.nodes node).region := by
-  intro enclosed
-  apply regular
-  rw [nodeRegion] at enclosed
-  exact ConcreteElaboration.checked_encloses_trans input.property
-    (payload_parent_encloses_bubble payload) enclosed
+  rw [nodeRegion]
+  exact regular.1
 
 /-- Dense final node index of an original node known to lie outside the
 quantified bubble.  Vacuous promotion preserves the compacted node carrier. -/
@@ -366,7 +386,7 @@ theorem finalNodeMap_region
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region)
+    (regular : FrameRegular payload region)
     (node : Fin input.val.nodeCount)
     (nodeRegion : (input.val.nodes node).region = region) :
     (elimTrace.sourceDiagram.nodes
@@ -378,8 +398,15 @@ theorem finalNodeMap_region
     nodeRegion
   have regionNeBubble : region ≠ bubble := by
     intro equal
-    exact regular (by
-      simpa [equal] using payload_parent_encloses_bubble payload)
+    apply regular.1
+    simpa [equal] using ConcreteDiagram.Encloses.refl input.val bubble
+  have mappedRegular : copyTrace.finalRegionMap elimTrace finalWellFormed
+      region ≠ elimTrace.targetIndex finalWellFormed := by
+    intro mapped
+    rcases (copyTrace.finalRegionMap_eq_targetIndex_iff elimTrace
+      finalWellFormed region).1 mapped with parentEq | bubbleEq
+    · exact regular.2 parentEq
+    · exact regionNeBubble bubbleEq
   have originRegion := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
     finalWellFormed region regionNeBubble
   have droppedShape := copyTrace.dropped_node_shape node outside
@@ -394,8 +421,7 @@ theorem finalNodeMap_region
   apply (elimTrace.promotedNode_region_eq_regular_iff finalWellFormed
     (copyTrace.droppedNodeMap node outside)
     (copyTrace.finalRegionMap elimTrace finalWellFormed region)
-    (copyTrace.finalRegionMap_ne_targetIndex_of_not_enclosed elimTrace
-      finalWellFormed region regular)).2
+    mappedRegular).2
   simpa only [originRegion] using droppedRegion
 
 /-- Retained nodes in regular regions preserve their complete constructor,
@@ -421,7 +447,7 @@ theorem final_node_shape_of_regular
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
     (region : Fin input.val.regionCount)
-    (regular : ¬ input.val.Encloses payload.parent region)
+    (regular : FrameRegular payload region)
     (node : Fin input.val.nodeCount)
     (nodeRegion : (input.val.nodes node).region = region) :
     let outside := node_outside_bubble_of_regular payload region regular node
@@ -443,13 +469,17 @@ theorem final_node_shape_of_regular
     nodeRegion
   have regionNeBubble : region ≠ bubble := by
     intro equal
-    exact regular (by
-      simpa [equal] using payload_parent_encloses_bubble payload)
+    apply regular.1
+    simpa [equal] using ConcreteDiagram.Encloses.refl input.val bubble
   have originRegion := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
     finalWellFormed region regionNeBubble
-  have mappedRegular :=
-    copyTrace.finalRegionMap_ne_targetIndex_of_not_enclosed elimTrace
-      finalWellFormed region regular
+  have mappedRegular : copyTrace.finalRegionMap elimTrace finalWellFormed
+      region ≠ elimTrace.targetIndex finalWellFormed := by
+    intro mapped
+    rcases (copyTrace.finalRegionMap_eq_targetIndex_iff elimTrace
+      finalWellFormed region).1 mapped with parentEq | bubbleEq
+    · exact regular.2 parentEq
+    · exact regionNeBubble bubbleEq
   have finalOwner := copyTrace.finalNodeMap_region elimTrace finalWellFormed
     region regular node nodeRegion
   have promotedShape := elimTrace.regular_nodeShape finalWellFormed
@@ -505,9 +535,7 @@ theorem final_node_shape_of_regular
         intro equal
         have binderEncloses := input.property.atom_binders_enclose node
         rw [sourceShape, equal] at binderEncloses
-        apply regular
-        exact ConcreteElaboration.checked_encloses_trans input.property
-          (payload_parent_encloses_bubble payload) binderEncloses
+        exact regular.1 binderEncloses
       have mappedBinderOrigin :=
         copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace finalWellFormed
           sourceBinder binderNeBubble
