@@ -1,8 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalAllowed
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalFocusedKeptCompiler
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalPresentation
+import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalTerminalBinder
 import VisualProof.Rule.Soundness.Comprehension.SameDiagramSemantic
-import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceBackwardExternal
+import VisualProof.Rule.Soundness.Modal.VacuousEliminationSimulation
 
 namespace VisualProof.Rule
 
@@ -379,6 +380,75 @@ noncomputable def finalSemanticSimulation
                 (elimTrace.keptOccurrences finalWellFormed) keptPointwise
                 sourceKeptItems targetKeptItems sourceKeptCompiled
                 targetKeptCompiled
+            let finalScopes := InstantiationSemantic.ParameterScopesAtBubble.afterTrace
+              copyTrace boundaryNodup
+              (InstantiationSemantic.initial_parameterScopesAtBubble payload)
+            let finalShape :=
+              (InstantiationSemantic.initial_bubbleHasPayloadArity payload).afterTrace
+                copyTrace
+            let finalParent := Classical.choose finalShape
+            have finalBubbleShape : result.diagram.val.regions result.bubble =
+                .bubble finalParent payload.arity := Classical.choose_spec finalShape
+            have elimBubbleShape : result.diagram.val.regions result.bubble =
+                .bubble elimTrace.parent elimTrace.arity := by
+              simpa only [InstantiationDrop.raw_regions] using elimTrace.bubble_eq
+            have payloadArityEq : payload.arity = elimTrace.arity :=
+              (CRegion.bubble.inj
+                (finalBubbleShape.symm.trans elimBubbleShape)).2
+            have terminalBubbleShape : result.diagram.val.regions result.bubble =
+                .bubble elimTrace.parent payload.arity := by
+              rw [payloadArityEq]
+              exact elimBubbleShape
+            let terminalContext := terminalPromotedContext elimTrace sourceContext
+            let terminalFocusedContext :=
+              terminalContext.extendFocused finalWellFormed
+            let terminalSelectedContext :=
+              terminalContext.extendSelected finalWellFormed
+            let terminalBinders := InstantiationSemantic.traceBinderContext
+              copyTrace targetBinders
+            have terminalParentCoverState :
+                @ConcreteElaboration.BinderContext.Covers result.diagram.val
+                  targetRels terminalBinders elimTrace.parent := by
+              rw [← copyTrace.regionMap_parent_eq_elimParent elimTrace]
+              exact InstantiationSemantic.traceBinderContext_covers_parent
+                copyTrace targetBinders targetBindersCover
+            have terminalParentCover :
+                @ConcreteElaboration.BinderContext.Covers
+                  (dropInstantiationAtomsRaw result) targetRels terminalBinders
+                  elimTrace.parent :=
+              InstantiationSemantic.binderCover_to_drop result terminalBinders
+                elimTrace.parent terminalParentCoverState
+            let terminalEnumerationState :=
+              InstantiationSemantic.traceBinderEnumeration copyTrace
+                targetBinders payload.parent targetEnumeration
+            have terminalEnumerationStateAtParent :
+                ConcreteElaboration.BinderContext.Enumeration result.diagram.val
+                  terminalBinders elimTrace.parent := by
+              rw [← copyTrace.regionMap_parent_eq_elimParent elimTrace]
+              exact terminalEnumerationState
+            let terminalEnumeration :=
+              InstantiationSemantic.binderEnumeration_to_drop result
+                terminalBinders elimTrace.parent terminalEnumerationStateAtParent
+            have terminalParentExact :=
+              InstantiationSemantic.terminalParent_exact elimTrace
+                finalWellFormed sourceWellFormed sourceContext sourceExact
+            have terminalSelectedExact :=
+              elimTrace.targetSelected_exact finalWellFormed sourceContext
+                terminalParentExact
+            have terminalBubbleCover :=
+              ConcreteElaboration.BinderContext.push_covers_bubble_child
+                terminalParentCover (by
+                  simpa only [InstantiationDrop.raw_regions] using
+                    terminalBubbleShape)
+            have terminalBubbleEnumeration :=
+              terminalEnumeration.bubbleChild finalWellFormed (by
+                simpa only [InstantiationDrop.raw_regions] using
+                  terminalBubbleShape)
+            let terminalBinderWitness :=
+              terminalMappedBinderWitness binderWitness
+            let terminalBubbleBinderWitness :=
+              VacuousElimTrace.MappedBinderWitness.intoBubble
+                terminalBinderWitness payload.arity
             sorry
 
 end InstantiationTrace

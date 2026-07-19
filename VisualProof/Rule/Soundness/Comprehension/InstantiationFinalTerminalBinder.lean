@@ -1,5 +1,6 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalBinder
 import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceBackwardExternal
+import VisualProof.Rule.Soundness.Modal.VacuousEliminationAncestor
 
 namespace VisualProof.Rule
 
@@ -8,6 +9,127 @@ open VisualProof.Diagram
 open VisualProof.Theory
 
 namespace InstantiationSemantic
+
+/-- The inherited context of the promoted focus is exactly the inherited
+context of the terminal parent before the eliminated bubble is reinserted. -/
+theorem terminalParent_exact
+    (trace : VacuousElimTrace input bubble raw)
+    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
+    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+    (sourceExact : (sourceContext.extend
+      (trace.targetIndex targetWellFormed)).Exact
+        (trace.targetIndex targetWellFormed)) :
+    @ConcreteElaboration.WireContext.Exact input
+      (@ConcreteElaboration.WireContext.extend input sourceContext trace.parent)
+      trace.parent := by
+  have sourceNodup :
+      (sourceContext ++ ConcreteElaboration.exactScopeWires
+        trace.sourceDiagram (trace.targetIndex targetWellFormed)).Nodup := by
+    simpa [ConcreteElaboration.WireContext.extend] using sourceExact.nodup
+  have sourceParts := List.nodup_append.mp sourceNodup
+  constructor
+  · rw [ConcreteElaboration.WireContext.extend, List.nodup_append]
+    refine ⟨sourceParts.1,
+      ConcreteElaboration.exactScopeWires_nodup input trace.parent, ?_⟩
+    intro left leftMember right rightMember equality
+    subst right
+    have focusMember := trace.parentWire_mem_focusExact targetWellFormed left
+      rightMember
+    exact sourceParts.2.2 left leftMember left focusMember rfl
+  · intro wire
+    constructor
+    · intro member
+      rcases List.mem_append.mp member with outerMember | localMember
+      · have sourceVisible := (sourceExact.mem_iff wire).1
+            (List.mem_append_left _ outerMember)
+        let sourceScope := (trace.sourceDiagram.wires wire).scope
+        have sourceScopeNe : sourceScope ≠ trace.targetIndex targetWellFormed := by
+          intro equality
+          have focusMember : wire ∈ ConcreteElaboration.exactScopeWires
+              trace.sourceDiagram (trace.targetIndex targetWellFormed) :=
+            (ConcreteElaboration.mem_exactScopeWires _ _ _).2 equality
+          exact sourceParts.2.2 wire outerMember wire focusMember rfl
+        have originalScope : (input.wires wire).scope =
+            trace.origin sourceScope :=
+          (trace.promotedWire_scope_eq_regular_iff targetWellFormed wire
+            sourceScope sourceScopeNe).1 rfl
+        have mapped := trace.sourceEnclosesFocus_iff_forward targetWellFormed
+          sourceWellFormed sourceScope sourceVisible
+        simpa [originalScope] using mapped
+      · have scope : (input.wires wire).scope = trace.parent :=
+          (ConcreteElaboration.mem_exactScopeWires _ _ _).1 localMember
+        rw [scope]
+        exact ConcreteDiagram.Encloses.refl input trace.parent
+    · intro visible
+      by_cases isLocal : (input.wires wire).scope = trace.parent
+      · exact List.mem_append_right sourceContext
+          ((ConcreteElaboration.mem_exactScopeWires _ _ _).2 isLocal)
+      · obtain ⟨sourceAncestor, originEq, sourceVisible⟩ :=
+          trace.sourceEnclosesFocus_iff_backward targetWellFormed
+            sourceWellFormed (input.wires wire).scope visible
+        have sourceAncestorNe :
+            sourceAncestor ≠ trace.targetIndex targetWellFormed := by
+          intro equality
+          subst sourceAncestor
+          have focusOrigin : trace.origin (trace.targetIndex targetWellFormed) =
+              trace.parent := trace.targetIndex_origin targetWellFormed
+          exact isLocal (originEq.symm.trans focusOrigin)
+        have sourceScope : (trace.sourceDiagram.wires wire).scope =
+            sourceAncestor :=
+          (trace.promotedWire_scope_eq_regular_iff targetWellFormed wire
+            sourceAncestor sourceAncestorNe).2 originEq.symm
+        have sourceMember : wire ∈ sourceContext.extend
+            (trace.targetIndex targetWellFormed) :=
+          (sourceExact.mem_iff wire).2 (by simpa [sourceScope] using sourceVisible)
+        rcases List.mem_append.mp sourceMember with outerMember | focusMember
+        · exact List.mem_append_left _ outerMember
+        · have focusScope : (trace.sourceDiagram.wires wire).scope =
+              trace.targetIndex targetWellFormed :=
+            (ConcreteElaboration.mem_exactScopeWires _ _ _).1 focusMember
+          exact False.elim (sourceAncestorNe (sourceScope.symm.trans focusScope))
+
+/-- A binder context covering an executor state also covers the atom-dropped
+compiler view, whose regions and enclosure relation are unchanged. -/
+theorem binderCover_to_drop
+    {signature : List Nat}
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin parameterCount proxyCount)
+    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (region : Fin state.diagram.val.regionCount)
+    (cover : @ConcreteElaboration.BinderContext.Covers state.diagram.val rels
+      context region) :
+    @ConcreteElaboration.BinderContext.Covers (dropInstantiationAtomsRaw state)
+      rels context region := by
+  intro binder parent arity bubbleEq encloses
+  apply cover binder parent arity
+  · simpa only [InstantiationDrop.raw_regions] using bubbleEq
+  · exact (InstantiationDrop.raw_encloses_iff state binder region).1 encloses
+
+/-- Exact binder enumeration is preserved when executor-owned atoms are
+deleted from the compiler view. -/
+def binderEnumeration_to_drop
+    {signature : List Nat}
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin parameterCount proxyCount)
+    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (region : Fin state.diagram.val.regionCount)
+    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+      state.diagram.val context region) :
+    ConcreteElaboration.BinderContext.Enumeration
+      (dropInstantiationAtomsRaw state) context region where
+  binder := enumeration.binder
+  binder_injective := enumeration.binder_injective
+  bubble := by
+    intro index
+    obtain ⟨parent, bubbleEq⟩ := enumeration.bubble index
+    exact ⟨parent, by simpa only [InstantiationDrop.raw_regions] using bubbleEq⟩
+  encloses := by
+    intro index
+    exact (InstantiationDrop.raw_encloses_iff state _ _).2
+      (enumeration.encloses index)
+  lookup := enumeration.lookup
+  lookup_owner := enumeration.lookup_owner
 
 /-- Pull an original lexical binder context forward along the injective frame
 region map.  Executor-created regions carry no unrelated binder. -/
