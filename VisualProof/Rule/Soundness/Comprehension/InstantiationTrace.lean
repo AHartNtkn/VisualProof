@@ -23,7 +23,7 @@ inductive InstantiationTrace
       InstantiationState origin attachments.length
         payload.binderSpine.proxyCount →
       InstantiationState origin attachments.length
-        payload.binderSpine.proxyCount → Prop
+        payload.binderSpine.proxyCount → Type
   | done (fuel state)
       (pending_empty : state.pendingAtoms = []) :
       InstantiationTrace comprehension attachments binders payload fuel state
@@ -51,7 +51,7 @@ inductive InstantiationTrace
         state result
 
 /-- A successful executor run exposes its complete checked-splice trace. -/
-theorem instantiateCopies_success_trace
+def instantiateCopiesSuccessTrace
     {signature : List Nat}
     {input : CheckedDiagram signature}
     {bubble : Fin input.val.regionCount}
