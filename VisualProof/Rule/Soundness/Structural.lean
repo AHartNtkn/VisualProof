@@ -2797,19 +2797,29 @@ theorem applyVacuousElim_sound
         sourceRoot⟩
   let model := Lambda.canonicalModel
   let named := Theory.interpretDefinitions context.definitions
-  let freshForward := fun {sourceRels : RelCtx}
+  let freshForward := fun {sourceRels targetRels : RelCtx}
       (_sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+      (_targetContext : ConcreteElaboration.WireContext input.val)
       (_sourceBinders : ConcreteElaboration.BinderContext
         trace.sourceDiagram sourceRels)
+      (_targetBinders : ConcreteElaboration.BinderContext input.val targetRels)
       (_sourceExact : _sourceContext.Exact
         (trace.targetIndex input.property))
+      (_targetExact : (_targetContext.extend region).Exact region)
       (_sourceCover : _sourceBinders.Covers
         (trace.targetIndex input.property))
+      (_targetCover : _targetBinders.Covers trace.parent)
       (_sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
         trace.sourceDiagram _sourceBinders
           (trace.targetIndex input.property))
+      (_targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+        input.val _targetBinders trace.parent)
+      (_binderWitness : VacuousElimTrace.MappedBinderWitness trace
+        _sourceBinders _targetBinders)
       (_sourceEnvironment : Fin _sourceContext.length → model.Carrier)
-      (_sourceRelations : RelEnv model.Carrier sourceRels) =>
+      (_targetEnvironment : Fin _targetContext.length → model.Carrier)
+      (_sourceRelations : RelEnv model.Carrier sourceRels)
+      (_targetRelations : RelEnv model.Carrier targetRels) =>
     (fun _ => False : Relation model.Carrier trace.arity)
   let simulation := trace.semanticSimulation sourceWellFormed input.property
     model named freshForward

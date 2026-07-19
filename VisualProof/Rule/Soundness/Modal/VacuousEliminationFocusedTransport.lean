@@ -23,7 +23,9 @@ theorem focusedPartition_regionSimulation
     (freshForward :
       (Fin (sourceContext.extend (trace.targetIndex wellFormed)).length →
           model.Carrier) →
+        (Fin (targetContext.extend trace.parent).length → model.Carrier) →
         RelEnv model.Carrier sourceRels →
+        RelEnv model.Carrier targetRels →
           Relation model.Carrier trace.arity)
     (targetSelectedNodup :
       ((targetContext.extend trace.parent).extend bubble).Nodup)
@@ -131,7 +133,8 @@ theorem focusedPartition_regionSimulation
             targetSelectedPulled :=
         selected.targetEnvironment_agrees sourceExact.nodup sourceEnvironment
       let fresh : Relation model.Carrier trace.arity :=
-        freshForward sourceEnvironment sourceRelations
+        freshForward sourceEnvironment targetFocusPulled sourceRelations
+          targetRelations
       have sourceSelectedRenamed :
           denoteItemSeq (relCtx := trace.arity :: targetRels) model named
             sourceEnvironment (fresh, targetRelations)

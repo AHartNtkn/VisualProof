@@ -66,17 +66,7 @@ noncomputable def rootContextSimulation
       (input.wires wire).scope = input.root)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (freshForward : ∀ {sourceRels : RelCtx}
-      (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-      (sourceBinders : ConcreteElaboration.BinderContext
-        trace.sourceDiagram sourceRels),
-      sourceContext.Exact (trace.targetIndex targetWellFormed) →
-        sourceBinders.Covers (trace.targetIndex targetWellFormed) →
-        ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
-          sourceBinders (trace.targetIndex targetWellFormed) →
-      (Fin sourceContext.length → model.Carrier) →
-        RelEnv model.Carrier sourceRels →
-          Relation model.Carrier trace.arity)
+    (freshForward : FreshRelationSelector trace targetWellFormed model)
     (direction : ConcreteElaboration.SimulationDirection) :
     let source : CheckedOpenDiagram signature :=
       ⟨trace.sourceOpen boundary,
@@ -221,10 +211,7 @@ noncomputable def rootContextSimulation
       targetWellFormed model named direction trace.sourceDiagram.regionCount
       input.regionCount source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires
-      (freshForward (source.val.exposedWires ++ source.val.hiddenWires)
-        ConcreteElaboration.BinderContext.empty sourceExact
-        (by simpa only [focused] using sourceCover)
-        (by simpa only [focused] using sourceEnumeration))
+      freshForward
       promoted
       ConcreteElaboration.BinderContext.empty
       ConcreteElaboration.BinderContext.empty simulation.binders_empty
@@ -267,17 +254,7 @@ theorem boundaryWitness
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (freshForward : ∀ {sourceRels : RelCtx}
-      (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-      (sourceBinders : ConcreteElaboration.BinderContext
-        trace.sourceDiagram sourceRels),
-      sourceContext.Exact (trace.targetIndex targetWellFormed) →
-        sourceBinders.Covers (trace.targetIndex targetWellFormed) →
-        ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
-          sourceBinders (trace.targetIndex targetWellFormed) →
-      (Fin sourceContext.length → model.Carrier) →
-        RelEnv model.Carrier sourceRels →
-          Relation model.Carrier trace.arity)
+    (freshForward : FreshRelationSelector trace targetWellFormed model)
     (args : Fin boundary.length → model.Carrier) :
     let source : CheckedOpenDiagram signature :=
       ⟨trace.sourceOpen boundary,

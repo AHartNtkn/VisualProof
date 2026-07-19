@@ -18,9 +18,7 @@ theorem focusedRootItems_transport
     (sourceAmbient sourceLocals :
       ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetAmbient targetLocals : ConcreteElaboration.WireContext input)
-    (freshForward :
-      (Fin (sourceAmbient ++ sourceLocals).length → model.Carrier) →
-        RelEnv model.Carrier [] → Relation model.Carrier trace.arity)
+    (freshForward : FreshRelationSelector trace targetWellFormed model)
     (context : PromotedContextWitness trace
       (sourceAmbient ++ sourceLocals) (targetAmbient ++ targetLocals))
     (sourceBinders : ConcreteElaboration.BinderContext
@@ -283,7 +281,15 @@ theorem focusedRootItems_transport
           rw [baseMapEq, ItemSeq.renameRelations_id] at keptSimulation
           have partitionTransport := trace.focusedRootPartition_transport
             targetWellFormed model named direction sourceAmbient sourceLocals
-            targetAmbient targetLocals freshForward context sourceExact
+            targetAmbient targetLocals
+            (fun sourceEnvironment targetEnvironment sourceRelations
+                targetRelations =>
+              freshForward sourceRoot targetRoot sourceBinders targetBinders
+                sourceExact targetSelectedExact sourceBindersCover
+                targetBindersCover sourceEnumeration targetEnumeration
+                binderWitness sourceEnvironment targetEnvironment
+                sourceRelations targetRelations)
+            context sourceExact
             targetSelectedExact.nodup targetAmbientSubset sourceAmbientSubset
             bubbleBinderWitness.relationMap sourceKeptItems sourceSelectedItems
             targetKeptItems targetSelectedItems keptSimulation

@@ -888,6 +888,36 @@ def intoBubble
 
 end MappedBinderWitness
 
+/-- Environment-sensitive choice of the relation inserted when reconstructing
+the eliminated bubble.  The selector receives both sides of the focused
+compiler correspondence, including the exact pre-bubble target context; this
+is the information needed by comprehension instantiation to choose its one
+trace-wide relation witness. -/
+def FreshRelationSelector
+    (trace : VacuousElimTrace input bubble raw)
+    (targetWellFormed : input.WellFormed signature)
+    (model : Lambda.LambdaModel) :=
+  ∀ {sourceRels targetRels : RelCtx}
+    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      trace.sourceDiagram sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext input targetRels),
+    sourceContext.Exact (trace.targetIndex targetWellFormed) →
+    (targetContext.extend bubble).Exact bubble →
+    sourceBinders.Covers (trace.targetIndex targetWellFormed) →
+    targetBinders.Covers trace.parent →
+    ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
+      sourceBinders (trace.targetIndex targetWellFormed) →
+    ConcreteElaboration.BinderContext.Enumeration input targetBinders
+      trace.parent →
+    (binderWitness : MappedBinderWitness trace sourceBinders targetBinders) →
+    (Fin sourceContext.length → model.Carrier) →
+    (Fin targetContext.length → model.Carrier) →
+    RelEnv model.Carrier sourceRels →
+    RelEnv model.Carrier targetRels →
+    Relation model.Carrier trace.arity
+
 structure PromotedContextWitness
     (trace : VacuousElimTrace input bubble raw)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)

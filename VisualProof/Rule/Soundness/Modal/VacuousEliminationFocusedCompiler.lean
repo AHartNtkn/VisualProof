@@ -140,11 +140,7 @@ theorem focusedItems_regionSimulation
     (sourceExact :
       (sourceContext.extend (trace.targetIndex targetWellFormed)).Exact
         (trace.targetIndex targetWellFormed))
-    (freshForward :
-      (Fin (sourceContext.extend (trace.targetIndex targetWellFormed)).length →
-          model.Carrier) →
-        RelEnv model.Carrier sourceRels →
-          Relation model.Carrier trace.arity)
+    (freshForward : FreshRelationSelector trace targetWellFormed model)
     (targetExact :
       (targetContext.extend trace.parent).Exact trace.parent)
     (sourceBindersCover :
@@ -408,7 +404,16 @@ theorem focusedItems_regionSimulation
           have partitionSimulation :=
             trace.focusedPartition_regionSimulation targetWellFormed model
               named direction sourceContext targetContext context sourceExact
-              freshForward
+              (fun sourceEnvironment targetEnvironment sourceRelations
+                  targetRelations =>
+                freshForward
+                  (sourceContext.extend
+                    (trace.targetIndex targetWellFormed))
+                  (targetContext.extend trace.parent) sourceBinders
+                  targetBinders sourceExact targetSelectedExact
+                  sourceBindersCover targetBindersCover sourceEnumeration
+                  targetEnumeration binderWitness sourceEnvironment
+                  targetEnvironment sourceRelations targetRelations)
               targetSelectedExact.nodup binderWitness.relationMap
               sourceKeptItems sourceSelectedItems targetKeptItems
               targetSelectedItems keptSimulation selectedSimulation
