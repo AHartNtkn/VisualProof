@@ -39,7 +39,12 @@ structure AbstractionDomains (input : CheckedDiagram signature)
     intro wire
     rfl
 
-private def abstractRegion? (input : CheckedDiagram signature)
+/-- The canonical survivor domains used by comprehension abstraction. -/
+def abstractionDomains (input : CheckedDiagram signature)
+    (occurrences : List (AbstractionOccurrence input)) :
+    AbstractionDomains input occurrences := {}
+
+def abstractRegion? (input : CheckedDiagram signature)
     (wrap : CheckedSelection input.val)
     (occurrences : List (AbstractionOccurrence input))
     (domains : AbstractionDomains input occurrences)
@@ -60,7 +65,7 @@ private def abstractRegion? (input : CheckedDiagram signature)
         (domains.regions.index? parent).map fun mapped =>
           .bubble mapped.castSucc arity
 
-private def abstractNode? (input : CheckedDiagram signature)
+def abstractNode? (input : CheckedDiagram signature)
     (wrap : CheckedSelection input.val)
     (occurrences : List (AbstractionOccurrence input))
     (domains : AbstractionDomains input occurrences)
@@ -80,7 +85,7 @@ private def abstractNode? (input : CheckedDiagram signature)
   | .named owner definition arity =>
       (owner? owner).map fun mapped => .named mapped definition arity
 
-private def abstractFrameEndpoints
+def abstractFrameEndpoints
     (input : CheckedDiagram signature)
     (occurrences : List (AbstractionOccurrence input))
     (domains : AbstractionDomains input occurrences)
@@ -90,7 +95,7 @@ private def abstractFrameEndpoints
     (domains.nodes.reindexEndpoint? endpoint).map fun mapped =>
       { node := mapped.node.castAdd occurrences.length, port := mapped.port }
 
-private def abstractAtomEndpoints
+def abstractAtomEndpoints
     (input : CheckedDiagram signature)
     (occurrences : List (AbstractionOccurrence input))
     (domains : AbstractionDomains input occurrences)
@@ -106,14 +111,14 @@ private def abstractAtomEndpoints
         }
       else none
 
-private def comprehensionAbstractRaw?
+def comprehensionAbstractRaw?
     (input : CheckedDiagram signature)
     (wrap : CheckedSelection input.val)
     (comprehension : CheckedOpenDiagram signature)
     (occurrences : List (AbstractionOccurrence input)) :
     Option { raw : ConcreteDiagram //
       raw.wireCount = ({} : AbstractionDomains input occurrences).wires.count } := do
-  let domains : AbstractionDomains input occurrences := {}
+  let domains := abstractionDomains input occurrences
   let bubble : Fin (domains.regions.count + 1) := Fin.last domains.regions.count
   let rootBase ← domains.regions.index? input.val.root
   let parentBase ← domains.regions.index? wrap.val.anchor
@@ -145,6 +150,153 @@ private def comprehensionAbstractRaw?
     nodes := Fin.addCases nodes fun index => .atom (atomOwners index) bubble
     wires := wires
   }, rfl⟩
+
+/-- Proof-relevant execution trace for the batch abstraction constructor.
+This exposes the exact successful choices made by the authoritative raw
+executor without introducing a second graph transformation. -/
+structure AbstractionRawTrace
+    (input : CheckedDiagram signature)
+    (wrap : CheckedSelection input.val)
+    (comprehension : CheckedOpenDiagram signature)
+    (occurrences : List (AbstractionOccurrence input))
+    (raw : ConcreteDiagram) where
+  rootBase : Fin (abstractionDomains input occurrences).regions.count
+  parentBase : Fin (abstractionDomains input occurrences).regions.count
+  regions : Fin (abstractionDomains input occurrences).regions.count →
+    CRegion ((abstractionDomains input occurrences).regions.count + 1)
+  nodes : Fin (abstractionDomains input occurrences).nodes.count →
+    CNode ((abstractionDomains input occurrences).regions.count + 1)
+  atomOwners : Fin occurrences.length →
+    Fin ((abstractionDomains input occurrences).regions.count + 1)
+  wires : Fin (abstractionDomains input occurrences).wires.count →
+    CWire ((abstractionDomains input occurrences).regions.count + 1)
+      ((abstractionDomains input occurrences).nodes.count +
+        occurrences.length)
+  root_result :
+    (abstractionDomains input occurrences).regions.index? input.val.root =
+      some rootBase
+  parent_result :
+    (abstractionDomains input occurrences).regions.index?
+        wrap.val.anchor = some parentBase
+  regions_result :
+    sequenceFin (fun region =>
+      abstractRegion? input wrap occurrences
+        (abstractionDomains input occurrences)
+        (Fin.last (abstractionDomains input occurrences).regions.count)
+        ((abstractionDomains input occurrences).regions.origin region)) =
+      some regions
+  nodes_result :
+    sequenceFin (fun node =>
+      abstractNode? input wrap occurrences
+        (abstractionDomains input occurrences)
+        (Fin.last (abstractionDomains input occurrences).regions.count)
+        ((abstractionDomains input occurrences).nodes.origin node)) =
+      some nodes
+  atomOwners_result :
+    sequenceFin (fun index =>
+      let anchor := (occurrences.get index).selection.val.anchor
+      if anchor = wrap.val.anchor then
+        some (Fin.last
+          (abstractionDomains input occurrences).regions.count)
+      else
+        ((abstractionDomains input occurrences).regions.index? anchor).map
+          Fin.castSucc) = some atomOwners
+  wires_result :
+    sequenceFin (fun wire => do
+      let scopeBase ← (abstractionDomains input occurrences).regions.index?
+        (input.val.wires
+          ((abstractionDomains input occurrences).wires.origin wire)).scope
+      pure {
+        scope := scopeBase.castSucc
+        endpoints := abstractFrameEndpoints input occurrences
+            (abstractionDomains input occurrences) wire ++
+          abstractAtomEndpoints input occurrences
+            (abstractionDomains input occurrences) wire
+      }) = some wires
+  raw_eq : raw = {
+    regionCount :=
+      (abstractionDomains input occurrences).regions.count + 1
+    nodeCount := (abstractionDomains input occurrences).nodes.count +
+      occurrences.length
+    wireCount := (abstractionDomains input occurrences).wires.count
+    root := rootBase.castSucc
+    regions := Fin.lastCases
+      (.bubble parentBase.castSucc comprehension.val.boundary.length) regions
+    nodes := Fin.addCases nodes fun index => .atom (atomOwners index)
+      (Fin.last (abstractionDomains input occurrences).regions.count)
+    wires := wires
+  }
+
+/-- Every accepted raw abstraction result carries its exact constructor
+trace. -/
+theorem comprehensionAbstractRaw?_trace
+    (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
+      Subtype.val = some raw) :
+    Nonempty (AbstractionRawTrace input wrap comprehension occurrences raw) := by
+  rw [Option.map_eq_some_iff] at hraw
+  obtain ⟨result, built, rawEq⟩ := hraw
+  subst raw
+  unfold comprehensionAbstractRaw? at built
+  let domains := abstractionDomains input occurrences
+  let bubble : Fin (domains.regions.count + 1) := Fin.last domains.regions.count
+  change (domains.regions.index? input.val.root).bind (fun rootBase =>
+    (domains.regions.index? wrap.val.anchor).bind (fun parentBase =>
+    (sequenceFin fun region =>
+      abstractRegion? input wrap occurrences domains bubble
+        (domains.regions.origin region)).bind (fun regions =>
+    (sequenceFin fun node =>
+      abstractNode? input wrap occurrences domains bubble
+        (domains.nodes.origin node)).bind (fun nodes =>
+    (sequenceFin fun index =>
+      let anchor := (occurrences.get index).selection.val.anchor
+      if anchor = wrap.val.anchor then some bubble
+      else (domains.regions.index? anchor).map Fin.castSucc).bind
+        (fun atomOwners =>
+    (sequenceFin fun wire => do
+      let scopeBase ← domains.regions.index?
+        (input.val.wires (domains.wires.origin wire)).scope
+      pure {
+        scope := scopeBase.castSucc
+        endpoints := abstractFrameEndpoints input occurrences domains wire ++
+          abstractAtomEndpoints input occurrences domains wire
+      }).bind (fun wires => some ⟨{
+        regionCount := domains.regions.count + 1
+        nodeCount := domains.nodes.count + occurrences.length
+        wireCount := domains.wires.count
+        root := rootBase.castSucc
+        regions := Fin.lastCases
+          (.bubble parentBase.castSucc comprehension.val.boundary.length) regions
+        nodes := Fin.addCases nodes fun index => .atom (atomOwners index) bubble
+        wires := wires
+      }, rfl⟩)))))) = some result at built
+  rw [Option.bind_eq_some_iff] at built
+  obtain ⟨rootBase, rootResult, built⟩ := built
+  rw [Option.bind_eq_some_iff] at built
+  obtain ⟨parentBase, parentResult, built⟩ := built
+  rw [Option.bind_eq_some_iff] at built
+  obtain ⟨regions, regionsResult, built⟩ := built
+  rw [Option.bind_eq_some_iff] at built
+  obtain ⟨nodes, nodesResult, built⟩ := built
+  rw [Option.bind_eq_some_iff] at built
+  obtain ⟨atomOwners, atomOwnersResult, built⟩ := built
+  rw [Option.bind_eq_some_iff] at built
+  obtain ⟨wires, wiresResult, resultEq⟩ := built
+  cases resultEq
+  exact ⟨{
+    rootBase
+    parentBase
+    regions
+    nodes
+    atomOwners
+    wires
+    root_result := rootResult
+    parent_result := parentResult
+    regions_result := regionsResult
+    nodes_result := nodesResult
+    atomOwners_result := atomOwnersResult
+    wires_result := wiresResult
+    raw_eq := rfl
+  }⟩
 
 private def comprehensionAbstractWireProvenance
     (input : CheckedDiagram signature)
