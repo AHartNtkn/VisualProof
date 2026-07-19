@@ -1,5 +1,7 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalAllowed
+import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalFocusedKeptCompiler
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalPresentation
+import VisualProof.Rule.Soundness.Comprehension.SameDiagramSemantic
 
 namespace VisualProof.Rule
 
@@ -223,7 +225,160 @@ noncomputable def finalSemanticSimulation
       binderWitness region regular' sourceNode nodeRegion sourceItem targetItem
       sourceCompiled targetCompiled
   focusedRegionKernel := by
-    sorry
+    intro sourceRels targetRels direction fuelSource fuelTarget region
+      sourceContext targetContext context sourceBinders targetBinders atRegion
+      focused allowed binderWitness sourceExact targetExact sourceBindersCover
+      targetBindersCover sourceEnumeration targetEnumeration recurse recurseAt
+      sourceItems targetItems sourceCompiled targetCompiled
+    have regionFocus : region = elimTrace.targetIndex finalWellFormed := by
+      rcases atRegion with regular | focusEq
+      · exact False.elim (focused regular)
+      · exact focusEq
+    subst region
+    have directionEq := finalAllowed_focus_forward elimTrace.sourceDiagram
+      (elimTrace.targetIndex finalWellFormed) direction allowed
+    subst direction
+    let sourceRecurse : ∀ {rels : RelCtx},
+        (region : Fin elimTrace.sourceDiagram.regionCount) →
+        (context : ConcreteElaboration.WireContext elimTrace.sourceDiagram) →
+        ConcreteElaboration.BinderContext elimTrace.sourceDiagram rels →
+        Option (Region signature context.length rels) :=
+      fun {rels} => ConcreteElaboration.compileRegion? signature
+        elimTrace.sourceDiagram fuelSource
+    let targetRecurse : ∀ {rels : RelCtx},
+        (region : Fin input.val.regionCount) →
+        (context : ConcreteElaboration.WireContext input.val) →
+        ConcreteElaboration.BinderContext input.val rels →
+        Option (Region signature context.length rels) :=
+      fun {rels} => ConcreteElaboration.compileRegion? signature input.val
+        fuelTarget
+    have reverseFocus : copyTrace.reverseRegionMap elimTrace finalWellFormed
+        (elimTrace.targetIndex finalWellFormed) = payload.parent :=
+      copyTrace.reverseRegionMap_targetIndex elimTrace finalWellFormed
+    revert targetCompiled targetItems
+    rw [reverseFocus] at targetExact targetBindersCover targetEnumeration ⊢
+    intro targetItems targetCompiled
+    have targetCompiledAtParent :
+        ConcreteElaboration.compileOccurrencesWith? signature input.val
+          targetRecurse (targetContext.extend payload.parent) targetBinders
+          (ConcreteElaboration.localOccurrences input.val payload.parent) =
+            some targetItems := by
+      simpa [targetRecurse] using targetCompiled
+    obtain ⟨sourcePartitionItems, sourcePartitionCompiled⟩ :=
+      ConcreteElaboration.compileOccurrencesWith?_complete sourceRecurse
+        (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+        sourceBinders
+        (elimTrace.keptOccurrences finalWellFormed ++
+          elimTrace.selectedOccurrences finalWellFormed)
+        (by
+          intro occurrence member
+          exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
+            elimTrace.sourceDiagram sourceRecurse
+            (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+            sourceBinders sourceCompiled
+            ((elimTrace.focusOccurrences_perm_partition
+              finalWellFormed).mem_iff.mp member))
+    obtain ⟨sourceKeptItems, sourceSelectedItems, sourceKeptCompiled,
+        sourceSelectedCompiled, sourcePartitionEq⟩ :=
+      ConcreteElaboration.compileOccurrencesWith?_append_split sourceRecurse
+        (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+        sourceBinders (elimTrace.keptOccurrences finalWellFormed)
+        (elimTrace.selectedOccurrences finalWellFormed) sourcePartitionItems
+        sourcePartitionCompiled
+    obtain ⟨targetPartitionItems, targetPartitionCompiled⟩ :=
+      ConcreteElaboration.compileOccurrencesWith?_complete targetRecurse
+        (targetContext.extend payload.parent) targetBinders
+        ((elimTrace.keptOccurrences finalWellFormed).map
+            (copyTrace.finalFocusOccurrenceMap elimTrace) ++
+          [ConcreteElaboration.LocalOccurrence.child bubble])
+        (by
+          intro occurrence member
+          exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
+            input.val targetRecurse (targetContext.extend payload.parent)
+            targetBinders targetCompiledAtParent
+            ((copyTrace.finalFocusOccurrences_perm elimTrace
+              finalWellFormed).mem_iff.mp member))
+    obtain ⟨targetKeptItems, targetBubbleItems, targetKeptCompiled,
+        targetBubbleCompiled, targetPartitionEq⟩ :=
+      ConcreteElaboration.compileOccurrencesWith?_append_split targetRecurse
+        (targetContext.extend payload.parent) targetBinders
+        ((elimTrace.keptOccurrences finalWellFormed).map
+          (copyTrace.finalFocusOccurrenceMap elimTrace))
+        [ConcreteElaboration.LocalOccurrence.child bubble]
+        targetPartitionItems targetPartitionCompiled
+    simp only [ConcreteElaboration.compileOccurrencesWith?]
+      at targetBubbleCompiled
+    dsimp only [targetRecurse] at targetBubbleCompiled
+    simp only [ConcreteElaboration.compileOccurrenceWith?, payload.bubble_eq]
+      at targetBubbleCompiled
+    cases bubbleResult : ConcreteElaboration.compileRegion? signature input.val
+        fuelTarget bubble (targetContext.extend payload.parent)
+        (targetBinders.push bubble payload.arity) with
+    | none => simp [bubbleResult] at targetBubbleCompiled
+    | some bubbleBody =>
+        simp [bubbleResult] at targetBubbleCompiled
+        subst targetBubbleItems
+        cases fuelTarget with
+        | zero => simp [ConcreteElaboration.compileRegion?] at bubbleResult
+        | succ bubbleFuel =>
+            simp only [ConcreteElaboration.compileRegion?] at bubbleResult
+            obtain ⟨targetSelectedItems, targetSelectedCompiled,
+                bubbleBodyEq⟩ := Option.bind_eq_some_iff.mp bubbleResult
+            have bubbleBodyEq' :
+                ConcreteElaboration.finishRegion input.val
+                    (targetContext.extend payload.parent) bubble
+                    targetSelectedItems = bubbleBody :=
+              Option.some.inj bubbleBodyEq
+            subst bubbleBody
+            let focusedContext := context.down.extendFocused finalWellFormed
+              boundaryNodup
+            have keptPointwise : ∀ occurrence,
+                occurrence ∈ elimTrace.keptOccurrences finalWellFormed →
+                ∀ sourceItem targetItem,
+                ConcreteElaboration.compileOccurrenceWith? signature
+                    elimTrace.sourceDiagram sourceRecurse
+                    (sourceContext.extend
+                      (elimTrace.targetIndex finalWellFormed))
+                    sourceBinders occurrence = some sourceItem →
+                ConcreteElaboration.compileOccurrenceWith? signature input.val
+                    targetRecurse (targetContext.extend payload.parent)
+                    targetBinders
+                    (copyTrace.finalFocusOccurrenceMap elimTrace occurrence) =
+                      some targetItem →
+                ConcreteElaboration.ItemSimulation model named .forward
+                  focusedContext.indexRelation
+                  (sourceItem.renameRelations binderWitness.relationMap)
+                  targetItem := by
+              intro occurrence member sourceItem targetItem sourceOccurrence
+                targetOccurrence
+              exact copyTrace.focusedKeptOccurrence_itemSimulation elimTrace
+                sourceWellFormed finalWellFormed boundaryNodup model named
+                .forward fuelSource (bubbleFuel + 1)
+                (sourceContext.extend
+                  (elimTrace.targetIndex finalWellFormed))
+                (targetContext.extend payload.parent) focusedContext
+                sourceBinders targetBinders binderWitness
+                sourceExact targetExact sourceBindersCover targetBindersCover
+                sourceEnumeration targetEnumeration allowed
+                (fun childFuelTarget childSourceContext childTargetContext
+                    childContext => recurseAt childFuelTarget childSourceContext
+                      childTargetContext (PLift.up childContext)) occurrence
+                member sourceItem targetItem (by
+                  simpa [sourceRecurse] using sourceOccurrence)
+                (by simpa [targetRecurse] using targetOccurrence)
+            have keptSimulation :=
+              ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+                model named .forward sourceRecurse targetRecurse
+                (sourceContext.extend
+                  (elimTrace.targetIndex finalWellFormed))
+                (targetContext.extend payload.parent) sourceBinders
+                targetBinders focusedContext.indexRelation
+                binderWitness.relationMap
+                (copyTrace.finalFocusOccurrenceMap elimTrace)
+                (elimTrace.keptOccurrences finalWellFormed) keptPointwise
+                sourceKeptItems targetKeptItems sourceKeptCompiled
+                targetKeptCompiled
+            sorry
 
 end InstantiationTrace
 
