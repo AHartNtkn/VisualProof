@@ -25,7 +25,7 @@ type Roadmap = {
   readonly format: 'cursebreaker-seyric-roadmap'
   readonly version: 1
   readonly finalTransfer: string
-  readonly stages: readonly { readonly id: Stage; readonly order: number; readonly baselinePuzzles: number }[]
+  readonly stages: readonly { readonly id: Stage; readonly order: number }[]
   readonly skills: readonly Skill[]
   readonly puzzles: readonly Puzzle[]
   readonly internalLabels: readonly { readonly label: string; readonly puzzle: string; readonly reason: string }[]
@@ -33,11 +33,6 @@ type Roadmap = {
 
 const roadmap = roadmapJson as unknown as Roadmap
 const unique = (values: readonly string[]): boolean => new Set(values).size === values.length
-const countByStage = (puzzles: readonly Puzzle[]): Record<Stage, number> => {
-  const counts: Record<Stage, number> = { structural: 0, connective: 0, classical: 0 }
-  for (const puzzle of puzzles) counts[puzzle.stage] += 1
-  return counts
-}
 
 const findCycle = (nodes: readonly { readonly id: string; readonly prerequisites: readonly string[] }[]): readonly string[] | null => {
   const prerequisites = new Map(nodes.map(({ id, prerequisites }) => [id, prerequisites] as const))
@@ -95,26 +90,29 @@ const prerequisiteClosure = (target: string, puzzles: readonly Puzzle[]): Readon
 }
 
 describe('normalized Seyric roadmap', () => {
-  it('owns the approved baseline counts and unique identities', () => {
+  it('owns emitted identities without encoding target counts', () => {
     expect(roadmap.format).toBe('cursebreaker-seyric-roadmap')
     expect(roadmap.version).toBe(1)
     expect(roadmap.stages).toEqual([
-      { id: 'structural', order: 0, baselinePuzzles: 64 },
-      { id: 'connective', order: 1, baselinePuzzles: 51 },
-      { id: 'classical', order: 2, baselinePuzzles: 71 },
+      { id: 'structural', order: 0 },
+      { id: 'connective', order: 1 },
+      { id: 'classical', order: 2 },
     ])
-    expect(roadmap.skills).toHaveLength(49)
-    expect(roadmap.puzzles).toHaveLength(186)
+    expect(roadmap.skills.length).toBeGreaterThan(0)
+    expect(roadmap.puzzles.length).toBeGreaterThan(0)
     expect(unique(roadmap.skills.map(({ id }) => id))).toBe(true)
     expect(unique(roadmap.puzzles.map(({ id }) => id))).toBe(true)
-    expect(countByStage(roadmap.puzzles)).toEqual({
-      structural: 64, connective: 51, classical: 71,
-    })
+    expect(new Set(roadmap.skills.map(({ stage }) => stage))).toEqual(new Set<Stage>([
+      'structural', 'connective', 'classical',
+    ]))
+    expect(new Set(roadmap.puzzles.map(({ stage }) => stage))).toEqual(new Set<Stage>([
+      'structural', 'connective', 'classical',
+    ]))
   })
 
   it('gives every puzzle one primary evidence role and a stable folio position', () => {
     expect(roadmap.puzzles.map(({ folioOrder }) => folioOrder).sort((a, b) => a - b))
-      .toEqual(Array.from({ length: 186 }, (_, index) => index))
+      .toEqual(Array.from({ length: roadmap.puzzles.length }, (_, index) => index))
     for (const puzzle of roadmap.puzzles) {
       expect(puzzle.evidence.filter(({ primary }) => primary)).toHaveLength(1)
       expect(puzzle.evidence[0]?.primary).toBe(true)
@@ -155,11 +153,9 @@ describe('normalized Seyric roadmap', () => {
     }
   })
 
-  it('derives the approved required and optional baseline from final transfer', () => {
+  it('derives required and optional content semantically from final transfer', () => {
     const required = prerequisiteClosure(roadmap.finalTransfer, roadmap.puzzles)
     const optional = roadmap.puzzles.filter(({ id }) => !required.has(id))
-    expect(required.size).toBe(140)
-    expect(optional).toHaveLength(46)
     for (const puzzle of optional) {
       expect(puzzle.evidence.every(({ role }) => role === 'remediation' || role === 'challenge'))
         .toBe(true)

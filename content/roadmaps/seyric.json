@@ -5,18 +5,15 @@
   "stages": [
     {
       "id": "structural",
-      "order": 0,
-      "baselinePuzzles": 64
+      "order": 0
     },
     {
       "id": "connective",
-      "order": 1,
-      "baselinePuzzles": 51
+      "order": 1
     },
     {
       "id": "classical",
-      "order": 2,
-      "baselinePuzzles": 71
+      "order": 2
     }
   ],
   "skills": [

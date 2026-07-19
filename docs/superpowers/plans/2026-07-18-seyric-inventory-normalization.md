@@ -2,19 +2,18 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the inconsistent temporary atlas with one exact content-owned baseline inventory containing 49 skills and 186 uniquely identified Seyric puzzles.
+**Goal:** Replace the inconsistent temporary atlas with one content-owned inventory of distinct Seyric skills and puzzles whose size emerges from the warranted curriculum.
 
-**Architecture:** Three independent stage audits normalize structural, connective, and classical/reference rows into disjoint scratch fragments. The coordinator assembles those fragments into one strict JSON roadmap, derives requiredness from the final-transfer prerequisite closure, and adds direct tests that prove every approved count and evidence relationship.
+**Architecture:** Three independent stage audits normalize structural, connective, and classical/reference rows into disjoint scratch fragments. The coordinator assembles those fragments into one strict JSON roadmap, derives requiredness from the final-transfer prerequisite closure, and adds direct tests that prove identity and evidence relationships without target counts.
 
 **Tech Stack:** Strict JSON, TypeScript, Vitest, existing Cursebreaker content IDs and prerequisite conventions.
 
 ## Global Constraints
 
 - This plan creates inventory content and direct inventory validation only.
-- Preserve all 49 approved skill rows and all six existing Seyric puzzle IDs.
-- The baseline contains exactly 186 unique puzzles: 64 structural, 51 connective, and 71 classical/reference.
-- The baseline final-transfer prerequisite closure contains exactly 140 puzzles; its complement contains exactly 46.
-- Warranted puzzles beyond the baseline are allowed later, but this plan first recovers the approved baseline exactly.
+- Preserve every declared skill row unless evidence warrants changing it, and preserve all six existing Seyric puzzle IDs.
+- Inventory size, stage sizes, and the required/optional split are derived results, never acceptance targets.
+- Add or remove records whenever logical or pedagogical evidence warrants it; never do so to hit a number.
 - A shared puzzle ID is counted once. Internal labels such as `contrast inside I-*` are not puzzle IDs.
 - No production puzzle diagrams, solutions, catalog copy, guidance, or adjacent-system files change in this plan.
 - The temporary source atlas is `/tmp/cursebreaker-seyric-graph-review-20260718/index.html`.
@@ -32,9 +31,9 @@ type SeyricRoadmap = {
   readonly version: 1
   readonly finalTransfer: string
   readonly stages: readonly [
-    { readonly id: 'structural'; readonly order: 0; readonly baselinePuzzles: 64 },
-    { readonly id: 'connective'; readonly order: 1; readonly baselinePuzzles: 51 },
-    { readonly id: 'classical'; readonly order: 2; readonly baselinePuzzles: 71 },
+    { readonly id: 'structural'; readonly order: 0 },
+    { readonly id: 'connective'; readonly order: 1 },
+    { readonly id: 'classical'; readonly order: 2 },
   ]
   readonly skills: readonly SeyricSkill[]
   readonly puzzles: readonly SeyricRoadmapPuzzle[]
@@ -108,9 +107,9 @@ Create `content/roadmaps/seyric.json`:
   "version": 1,
   "finalTransfer": "",
   "stages": [
-    { "id": "structural", "order": 0, "baselinePuzzles": 64 },
-    { "id": "connective", "order": 1, "baselinePuzzles": 51 },
-    { "id": "classical", "order": 2, "baselinePuzzles": 71 }
+    { "id": "structural", "order": 0 },
+    { "id": "connective", "order": 1 },
+    { "id": "classical", "order": 2 }
   ],
   "skills": [],
   "puzzles": [],
@@ -150,7 +149,7 @@ type Roadmap = {
   readonly format: 'cursebreaker-seyric-roadmap'
   readonly version: 1
   readonly finalTransfer: string
-  readonly stages: readonly { readonly id: Stage; readonly order: number; readonly baselinePuzzles: number }[]
+  readonly stages: readonly { readonly id: Stage; readonly order: number }[]
   readonly skills: readonly Skill[]
   readonly puzzles: readonly Puzzle[]
   readonly internalLabels: readonly { readonly label: string; readonly puzzle: string; readonly reason: string }[]
@@ -158,11 +157,6 @@ type Roadmap = {
 
 const roadmap = roadmapJson as unknown as Roadmap
 const unique = (values: readonly string[]): boolean => new Set(values).size === values.length
-const countByStage = (puzzles: readonly Puzzle[]): Record<Stage, number> => {
-  const counts: Record<Stage, number> = { structural: 0, connective: 0, classical: 0 }
-  for (const puzzle of puzzles) counts[puzzle.stage] += 1
-  return counts
-}
 
 const findCycle = (nodes: readonly { readonly id: string; readonly prerequisites: readonly string[] }[]): readonly string[] | null => {
   const prerequisites = new Map(nodes.map(({ id, prerequisites }) => [id, prerequisites] as const))
@@ -220,26 +214,29 @@ const prerequisiteClosure = (target: string, puzzles: readonly Puzzle[]): Readon
 }
 
 describe('normalized Seyric roadmap', () => {
-  it('owns the approved baseline counts and unique identities', () => {
+  it('owns emitted identities without encoding target counts', () => {
     expect(roadmap.format).toBe('cursebreaker-seyric-roadmap')
     expect(roadmap.version).toBe(1)
     expect(roadmap.stages).toEqual([
-      { id: 'structural', order: 0, baselinePuzzles: 64 },
-      { id: 'connective', order: 1, baselinePuzzles: 51 },
-      { id: 'classical', order: 2, baselinePuzzles: 71 },
+      { id: 'structural', order: 0 },
+      { id: 'connective', order: 1 },
+      { id: 'classical', order: 2 },
     ])
-    expect(roadmap.skills).toHaveLength(49)
-    expect(roadmap.puzzles).toHaveLength(186)
+    expect(roadmap.skills.length).toBeGreaterThan(0)
+    expect(roadmap.puzzles.length).toBeGreaterThan(0)
     expect(unique(roadmap.skills.map(({ id }) => id))).toBe(true)
     expect(unique(roadmap.puzzles.map(({ id }) => id))).toBe(true)
-    expect(countByStage(roadmap.puzzles)).toEqual({
-      structural: 64, connective: 51, classical: 71,
-    })
+    expect(new Set(roadmap.skills.map(({ stage }) => stage))).toEqual(new Set<Stage>([
+      'structural', 'connective', 'classical',
+    ]))
+    expect(new Set(roadmap.puzzles.map(({ stage }) => stage))).toEqual(new Set<Stage>([
+      'structural', 'connective', 'classical',
+    ]))
   })
 
   it('gives every puzzle one primary evidence role and a stable folio position', () => {
     expect(roadmap.puzzles.map(({ folioOrder }) => folioOrder).sort((a, b) => a - b))
-      .toEqual(Array.from({ length: 186 }, (_, index) => index))
+      .toEqual(Array.from({ length: roadmap.puzzles.length }, (_, index) => index))
     for (const puzzle of roadmap.puzzles) {
       expect(puzzle.evidence.filter(({ primary }) => primary)).toHaveLength(1)
       expect(puzzle.evidence[0]?.primary).toBe(true)
@@ -280,11 +277,9 @@ describe('normalized Seyric roadmap', () => {
     }
   })
 
-  it('derives the approved required and optional baseline from final transfer', () => {
+  it('derives required and optional content semantically from final transfer', () => {
     const required = prerequisiteClosure(roadmap.finalTransfer, roadmap.puzzles)
     const optional = roadmap.puzzles.filter(({ id }) => !required.has(id))
-    expect(required.size).toBe(140)
-    expect(optional).toHaveLength(46)
     for (const puzzle of optional) {
       expect(puzzle.evidence.every(({ role }) => role === 'remediation' || role === 'challenge'))
         .toBe(true)
@@ -312,7 +307,7 @@ Run:
 npx vitest run tests/game/seyric-roadmap.test.ts
 ```
 
-Expected: FAIL on the first count assertion with `expected [] to have a length of 49`.
+Expected: FAIL because the shell has no emitted skills or puzzles.
 
 Do not commit the empty shell.
 
@@ -323,7 +318,7 @@ Do not commit the empty shell.
 **Files:**
 - Read: `/tmp/cursebreaker-seyric-graph-review-20260718/index.html`
 - Read: `/tmp/cursebreaker-seyric-graph-puzzle-granularity-foundation-20260718-01.md`
-- Scratch output: a JSON fragment containing 23 skills and 64 unique puzzles.
+- Scratch output: a JSON fragment containing every structural skill row and every warranted structural puzzle.
 
 **Interfaces:**
 - Consumes: the roadmap data contract and structural skill rows in the atlas.
@@ -356,17 +351,17 @@ The required nested-owner introduction must remain distinct from optional `two-m
 
 - [ ] **Step 3: Assign structural prerequisites and folio order**
 
-Assign acyclic puzzle prerequisites so introductions precede contrasts and applications, both applications precede delayed retrieval, and independent introductions precede shared mixed puzzles. Assign structural `folioOrder` values `0` through `63`.
+Assign acyclic puzzle prerequisites so introductions precede contrasts and applications, both applications precede delayed retrieval, and independent introductions precede shared mixed puzzles. Assign contiguous structural `folioOrder` values beginning at `0`.
 
 - [ ] **Step 4: Verify the scratch fragment**
 
-The fragment must contain exactly:
+The fragment must prove:
 
 ```text
-skills: 23
-puzzles: 64
-unique puzzle IDs: 64
-folio orders: 0..63
+every declared structural skill represented once
+every warranted structural puzzle represented once
+unique puzzle IDs: emitted puzzle count
+folio orders: contiguous from 0
 existing Seyric IDs preserved: 6/6
 ```
 
@@ -378,7 +373,7 @@ Return the fragment and a list of every raw label classified as internal rather 
 
 **Files:**
 - Read: `/tmp/cursebreaker-seyric-graph-review-20260718/index.html`
-- Scratch output: a JSON fragment containing 13 skills and 51 unique puzzles.
+- Scratch output: a JSON fragment containing every connective skill row and every warranted connective puzzle.
 
 **Interfaces:**
 - Consumes: the roadmap data contract and the accepted structural skill IDs.
@@ -394,17 +389,17 @@ Every label matching `contrast inside I-*` is an internal decision in the named 
 
 - [ ] **Step 3: Assign connective prerequisites and folio order**
 
-Use accepted structural skill and puzzle IDs for cross-stage prerequisites. Within the stage, ensure composition precedes lifting/cases, cases precede distribution, and distribution/idempotence evidence precedes absorption. Assign `folioOrder` values `64` through `114`.
+Use accepted structural skill and puzzle IDs for cross-stage prerequisites. Within the stage, ensure composition precedes lifting/cases, cases precede distribution, and distribution/idempotence evidence precedes absorption. Continue contiguous `folioOrder` values after the structural fragment.
 
 - [ ] **Step 4: Verify the scratch fragment**
 
-The fragment must contain exactly:
+The fragment must prove:
 
 ```text
-skills: 13
-puzzles: 51
-unique puzzle IDs: 51
-folio orders: 64..114
+every declared connective skill represented once
+every warranted connective puzzle represented once
+unique puzzle IDs: emitted puzzle count
+folio orders: contiguous after structural content
 inline contrast labels counted as puzzles: 0
 ```
 
@@ -416,7 +411,7 @@ Return the fragment and the complete internal-label classification.
 
 **Files:**
 - Read: `/tmp/cursebreaker-seyric-graph-review-20260718/index.html`
-- Scratch output: a JSON fragment containing 13 skills and 71 unique puzzles.
+- Scratch output: a JSON fragment containing every classical/reference skill row and every warranted classical/reference puzzle.
 
 **Interfaces:**
 - Consumes: the roadmap data contract plus accepted structural and connective skill IDs.
@@ -432,17 +427,17 @@ Count each shared `SEY-DM-R*`, `SEY-CL-R*`, `SEY-XFER-R*`, `SEY-XFER-V*`, and `S
 
 - [ ] **Step 3: Assign prerequisites, final transfer, and folio order**
 
-Make classical introductions depend on their actual structural/connective prerequisites. Make exact artifact use depend on prior completed artifacts. Set `finalTransfer` to the one unfamiliar mixed transfer puzzle that receives final transfer evidence across the curriculum. Assign `folioOrder` values `115` through `185`.
+Make classical introductions depend on their actual structural/connective prerequisites. Make exact artifact use depend on prior completed artifacts. Set `finalTransfer` to the one unfamiliar mixed transfer puzzle that receives final transfer evidence across the curriculum. Continue contiguous `folioOrder` values after connective content.
 
 - [ ] **Step 4: Verify the scratch fragment**
 
-The fragment must contain exactly:
+The fragment must prove:
 
 ```text
-skills: 13
-puzzles: 71
-unique puzzle IDs: 71
-folio orders: 115..185
+every declared classical/reference skill represented once
+every warranted classical/reference puzzle represented once
+unique puzzle IDs: emitted puzzle count
+folio orders: contiguous after connective content
 final transfer IDs: 1
 ```
 
@@ -458,7 +453,7 @@ Return the fragment and all shared-ID classifications.
 
 **Interfaces:**
 - Consumes: the three accepted stage fragments.
-- Produces: the sole normalized baseline roadmap.
+- Produces: the sole normalized roadmap.
 
 - [ ] **Step 1: Merge the disjoint stage fragments**
 
@@ -472,7 +467,7 @@ Run:
 npx vitest run tests/game/seyric-roadmap.test.ts
 ```
 
-Expected: all six roadmap tests pass. If the closure is not 140/46, correct prerequisite edges based on the evidence-shared spiral; do not mark requiredness separately.
+Expected: all six roadmap tests pass. Audit prerequisite edges from learning dependencies; never change an edge to reach a preferred closure size.
 
 - [ ] **Step 3: Run existing content validation**
 
@@ -504,16 +499,16 @@ git commit -m "content: normalize Seyric puzzle inventory"
 
 - [ ] **Step 1: Record exact normalization results**
 
-The receipt contains these emitted counts:
+The receipt reports the emitted counts as diagnostics, not acceptance targets:
 
 ```text
-skills: 49
-structural skills/puzzles: 23/64
-connective skills/puzzles: 13/51
-classical skills/puzzles: 13/71
-total baseline puzzles: 186
-required final-transfer closure: 140
-optional complement: 46
+skills: actual count
+structural skills/puzzles: actual counts
+connective skills/puzzles: actual counts
+classical skills/puzzles: actual counts
+total puzzles: actual count
+required final-transfer closure: actual count
+optional complement: actual count
 duplicate puzzle IDs: 0
 unclassified source labels: 0
 missing evidence categories: 0
@@ -531,6 +526,7 @@ Confirm explicitly that:
 - nested-owner required evidence does not rely on optional `two-mark-projection`;
 - each skill has introduction, contrast, two applications, retrieval, mixed, and transfer evidence;
 - optional puzzles are outside the final-transfer closure;
+- no inventory, stage, or closure count is treated as a target;
 - no production puzzle content was authored in this normalization plan.
 
 - [ ] **Step 3: Commit the receipt**

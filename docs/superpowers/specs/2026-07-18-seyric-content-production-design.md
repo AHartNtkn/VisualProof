@@ -20,14 +20,12 @@ It does not redesign any adjacent system.
 ## Fixed direction
 
 - Progression uses the evidence-shared spiral.
-- The approved baseline contains 49 skills and 186 individual puzzles.
-- The baseline final-transfer closure contains 140 required puzzles.
-- The baseline contains 46 optional practice, remediation, or challenge puzzles.
-- Baseline stage totals are 64 opening/structural, 51 connective/compositional, and 71 polarity/classical/reference puzzles.
+- The roadmap's current skills and puzzles are an authoring snapshot, not a target count.
+- Inventory size, stage sizes, and the required/optional split emerge from warranted content and prerequisite reachability.
 - The six existing Seyric puzzles remain in their current opening positions.
 - `blank-witness` remains the first Myratic puzzle.
 - The final required Seyric transfer puzzle is the Myratic unlock dependency.
-- When another puzzle is warranted by logical clarity, skill isolation, variation, retrieval, remediation, or transfer quality, it is added without requesting permission. The baseline is not a ceiling.
+- When another puzzle is warranted by logical clarity, skill isolation, variation, retrieval, remediation, or transfer quality, it is added without requesting permission. No numeric baseline constrains that decision.
 
 Family headings, skill rows, internal decisions within a puzzle, and shared evidence labels are not puzzles. Every puzzle has one stable identity and one playable semantic statement.
 
@@ -86,15 +84,15 @@ Shared logical definitions use `content/definitions/*.json`. The integrator upda
 
 The temporary atlas records the intended curriculum but its raw labels do not enumerate consistently. Before authoring new puzzles, the coordinator creates one normalized inventory with these rules:
 
-1. Preserve all 49 approved skill rows.
+1. Preserve every declared skill row unless content evidence warrants splitting, merging, adding, or removing a skill.
 2. Preserve all six existing Seyric puzzle IDs and their positions.
 3. Treat phrases such as `contrast inside I-*` as internal decisions within that puzzle, not separate IDs.
 4. Count a shared puzzle ID once even when it supplies evidence for several skills.
 5. Assign every puzzle one primary skill, one primary evidence role, one stage, and one stable folio position.
 6. Record additional skills for which a shared puzzle supplies evidence.
-7. Reconcile the approved baseline to 64, 51, and 71 puzzles by stage and 186 overall.
-8. Recover the baseline 140-puzzle final-transfer closure and 46 puzzles outside it.
-9. Add any further puzzles warranted during normalization as new stable records rather than hiding them inside baseline records.
+7. Let puzzle and stage counts emerge from the normalized identities; never add, remove, merge, or alias content to hit a number.
+8. Derive the required set from the final-transfer prerequisite closure and verify that every record outside it is genuinely optional practice, remediation, or challenge.
+9. Add any further puzzles warranted during normalization as new stable records rather than hiding them inside existing records.
 
 The normalized inventory is the coordinator's batch authority. The rendered atlas becomes a derived review view, not a second list.
 
@@ -278,9 +276,9 @@ A puzzle that fails any item returns to scratch for correction. Validation expec
 The final report records:
 
 ```text
-baseline skills retained: 49/49
-baseline puzzle IDs retained: 186/186
-additional warranted puzzles: actual count
+roadmap skills represented: actual count
+roadmap puzzle IDs represented: actual count
+warranted additions or removals: itemized, with content rationale
 total accepted puzzles: actual count
 actual required final-transfer closure: actual count
 actual optional puzzles outside closure: actual count
@@ -298,7 +296,7 @@ Completion means every accepted puzzle has complete content and validation evide
 
 ## Delivery order
 
-1. Normalize the 186-puzzle baseline inventory.
+1. Normalize the current puzzle inventory without a target count.
 2. Author and approve the representative feasibility set.
 3. Produce dependency-ordered cohorts through the three-pass review loop.
 4. Integrate and validate each complete cohort.

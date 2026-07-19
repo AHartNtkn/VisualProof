@@ -9,7 +9,11 @@ authority; this document records review evidence only. This normalization author
 inventory metadata, not production puzzle diagrams, solutions, catalog copy, or
 guidance.
 
-## Emitted baseline
+## Emitted snapshot
+
+These figures describe the roadmap at the time of normalization. They are not
+targets, caps, minimums, or acceptance criteria; later authorship may change any of
+them when content evidence warrants it.
 
 | Measure | Emitted result |
 | --- | ---: |
@@ -17,9 +21,9 @@ guidance.
 | Structural skills / puzzles | 23 / 64 |
 | Connective skills / puzzles | 13 / 51 |
 | Classical/reference skills / puzzles | 13 / 71 |
-| Total baseline puzzles | 186 |
-| Required final-transfer closure | 140 |
-| Optional complement | 46 |
+| Total emitted puzzles | 186 |
+| Current final-transfer closure | 140 |
+| Current optional complement | 46 |
 | Duplicate puzzle IDs | 0 |
 | Unclassified source labels | 0 |
 | Missing mastery-evidence categories | 0 |
@@ -30,25 +34,25 @@ prerequisite, and evidence references resolve.
 
 ## Count reconciliation
 
-- Structural source rows supplied 63 distinct puzzle labels. The baseline adds one
-  warranted record, `mixed-structural-synthesis`, to reach 64. It is a bounded
-  optional challenge supporting weakening, projection, and both injection choices;
+- Structural source rows supplied 63 distinct puzzle labels. Content analysis added
+  one warranted record, `mixed-structural-synthesis`, producing 64 current records.
+  It is a bounded optional challenge supporting weakening, projection, and both injection choices;
   its four evidence relationships are `challenge`, not mastery-spine `mixed`
   evidence.
-- Connective rows emit 51 records after shared IDs are stored once and all 13
+- Connective rows currently emit 51 records after shared IDs are stored once and all 13
   `contrast inside I-*` labels are classified as decisions inside their owning
   introductions.
 - Classical/reference rows contain 73 unique raw labels. `SEY-CTR-C01` is an
   internal decision in `SEY-CTR-V01`, and `SEY-DNE-C01` is an internal decision in
-  `SEY-DNE-V01`, producing the accepted 71 records without dropping either source
+  `SEY-DNE-V01`, producing 71 current records without dropping either source
   label.
 
 ## Final-transfer closure
 
 The final transfer is `SEY-XFER-T01` at folio position 172. It depends on
 `SEY-XFER-V01`, `SEY-XFER-V02`, `SEY-XFER-V03`, `SEY-XFER-V04`, and
-`SEY-XFER-R01`. Its prerequisite closure, including itself, contains exactly 140
-records:
+`SEY-XFER-R01`. Its current prerequisite closure, including itself, contains 140
+records as an observed result:
 
 | Stage | Required | Optional |
 | --- | ---: | ---: |
@@ -60,7 +64,7 @@ records:
 These counts are derived only from prerequisite reachability; there is no separate
 requiredness flag. `T3` is genuinely required because `SEY-XFER-I01` depends on it
 and is in the final-transfer closure. `mixed-structural-synthesis` is genuinely
-optional because no required record depends on it. Every record in the 46-item
+optional because no required record depends on it. Every record in the current
 complement has only remediation or challenge evidence.
 
 ## Internal atlas-label ownership
@@ -177,7 +181,7 @@ because each supports only one skill ID in the normalized roadmap.
 | `SEY-XFER-V04` | `exact-reference-selection` (transfer, mixed); `manifest-reference` (transfer, mixed); `dissolve-reference` (transfer, mixed); `structural-variant-transfer` (mixed) |
 | `SEY-XFER-T01` | `structural-variant-transfer` (transfer); `exact-reference-selection` (transfer) |
 
-## Self-audit against the approved design
+## Self-audit against the content design
 
 - No family heading became either a skill or a puzzle.
 - The six existing Seyric puzzle IDs remain exact: `two-veils`, `four-veils`,
@@ -187,7 +191,7 @@ because each supports only one skill ID in the normalized roadmap.
   through required contrast, application/retrieval/mixed, and transfer records.
   Optional `two-mark-projection` contributes challenge evidence only and is not in
   the final-transfer closure.
-- Every one of the 49 skills has at least one introduction, one contrast, two
+- Every currently declared skill has at least one introduction, one contrast, two
   distinct applications, one retrieval, one mixed record, and one transfer record.
 - The complete optional complement lies outside the final-transfer closure and
   consists only of remediation/challenge records. In particular,
@@ -205,8 +209,8 @@ The factual roadmap audit command was:
 node /tmp/cursebreaker-normalization-receipt.7lrx2x/audit.mjs
 ```
 
-It reported 49 skills, 186 puzzles, stage partitions 23/64, 13/51, and
-13/71; 186 unique folio positions from 0 through 185; zero duplicate IDs,
+As observational diagnostics, it reported 49 skills, 186 puzzles, stage partitions
+23/64, 13/51, and 13/71; 186 unique folio positions from 0 through 185; zero duplicate IDs,
 unresolved references, cycles, or missing evidence categories; final transfer
 `SEY-XFER-T01`; closure 140/46 with stage partitions 51/13, 31/20, and
 58/13; `T3` present in closure; and `mixed-structural-synthesis` absent from
@@ -218,8 +222,9 @@ The direct contract test command was:
 npx vitest run tests/game/seyric-roadmap.test.ts
 ```
 
-It passed all 6 tests. The closure test directly asserts 140 required, 46 optional,
-and that every optional record contains only remediation or challenge evidence.
+It passed all 6 tests. The closure test derives required and optional records from
+the graph without cardinality assertions and proves that every optional record
+contains only remediation or challenge evidence.
 
 The final focused commands were:
 
