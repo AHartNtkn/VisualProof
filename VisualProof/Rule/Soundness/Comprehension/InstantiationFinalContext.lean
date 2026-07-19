@@ -93,6 +93,202 @@ noncomputable def indexRelation
       targetContext.length :=
   ConcreteElaboration.ContextIndexRelation.backwardMap witness.sourceIndex
 
+noncomputable def targetEnvironment
+    (witness : FinalContextWitness copyTrace elimTrace sourceContext
+      targetContext)
+    (sourceEnvironment : Fin sourceContext.length → D) :
+    Fin targetContext.length → D :=
+  sourceEnvironment ∘ witness.sourceIndex
+
+theorem targetEnvironment_agrees
+    (witness : FinalContextWitness copyTrace elimTrace sourceContext
+      targetContext)
+    (sourceEnvironment : Fin sourceContext.length → D) :
+    witness.indexRelation.EnvironmentsAgree sourceEnvironment
+      (witness.targetEnvironment sourceEnvironment) := by
+  apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+    _ _ _).2
+  rfl
+
+noncomputable def localSourceIndex
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    {copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result}
+    {raw : ConcreteDiagram}
+    {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw}
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
+    (originalRegion : Fin input.val.regionCount)
+    (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
+      originalRegion = finalRegion)
+    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
+      originalRegion).length) :
+    Fin (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
+      finalRegion).length :=
+  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete (by
+    apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+    have targetScope : (input.val.wires
+        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+          targetIndex)).scope = originalRegion :=
+      (ConcreteElaboration.mem_exactScopeWires _ _ _).1
+        (List.get_mem _ targetIndex)
+    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup]
+    exact (congrArg
+      (copyTrace.finalRegionMap elimTrace finalWellFormed) targetScope).trans
+        mappedRegion))
+
+theorem localSourceIndex_lookup
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    {copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result}
+    {raw : ConcreteDiagram}
+    {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw}
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
+    (originalRegion : Fin input.val.regionCount)
+    (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
+      originalRegion = finalRegion)
+    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
+      originalRegion).length) :
+    ConcreteElaboration.WireContext.lookup?
+        (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
+          finalRegion)
+        (copyTrace.finalWireMap elimTrace
+          ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+            targetIndex)) =
+      some (localSourceIndex finalWellFormed boundaryNodup finalRegion
+        originalRegion mappedRegion targetIndex) :=
+  Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete (by
+    apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+    have targetScope : (input.val.wires
+        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+          targetIndex)).scope = originalRegion :=
+      (ConcreteElaboration.mem_exactScopeWires _ _ _).1
+        (List.get_mem _ targetIndex)
+    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup,
+      targetScope, mappedRegion]))
+
+theorem localSourceIndex_get
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    {copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result}
+    {raw : ConcreteDiagram}
+    {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw}
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
+    (originalRegion : Fin input.val.regionCount)
+    (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
+      originalRegion = finalRegion)
+    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
+      originalRegion).length) :
+    (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
+        finalRegion).get
+        (localSourceIndex finalWellFormed boundaryNodup finalRegion
+          originalRegion mappedRegion targetIndex) =
+      copyTrace.finalWireMap elimTrace
+        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+          targetIndex) :=
+  ConcreteElaboration.WireContext.lookup?_sound
+    (localSourceIndex_lookup finalWellFormed boundaryNodup finalRegion
+      originalRegion mappedRegion targetIndex)
+
+theorem localSourceIndex_injective
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    {copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result}
+    {raw : ConcreteDiagram}
+    {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw}
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
+    (originalRegion : Fin input.val.regionCount)
+    (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
+      originalRegion = finalRegion) :
+    Function.Injective (localSourceIndex finalWellFormed boundaryNodup
+      finalRegion originalRegion mappedRegion) := by
+  intro first second indicesEq
+  have mappedWiresEq : copyTrace.finalWireMap elimTrace
+        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+          first) =
+      copyTrace.finalWireMap elimTrace
+        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+          second) := by
+    rw [← localSourceIndex_get finalWellFormed boundaryNodup finalRegion
+      originalRegion mappedRegion first,
+      ← localSourceIndex_get finalWellFormed boundaryNodup finalRegion
+        originalRegion mappedRegion second, indicesEq]
+  have wiresEq := copyTrace.finalWireMap_injective elimTrace boundaryNodup
+    mappedWiresEq
+  let targetWires := ConcreteElaboration.exactScopeWires input.val
+    originalRegion
+  obtain ⟨canonical, canonicalLookup⟩ :=
+    ConcreteElaboration.WireContext.lookup?_complete
+      (List.get_mem targetWires first)
+  have firstEq : first = canonical :=
+    ConcreteElaboration.WireContext.lookup?_unique
+      (ConcreteElaboration.exactScopeWires_nodup input.val originalRegion)
+      canonicalLookup rfl
+  have secondEq : second = canonical :=
+    ConcreteElaboration.WireContext.lookup?_unique
+      (ConcreteElaboration.exactScopeWires_nodup input.val originalRegion)
+      canonicalLookup wiresEq.symm
+  exact firstEq.trans secondEq.symm
+
 def extendMapped
     {signature : List Nat}
     {input : CheckedDiagram signature}
