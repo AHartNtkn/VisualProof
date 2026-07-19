@@ -354,25 +354,44 @@ theorem dropped_localOccurrences_of_outside
           (copyTrace.droppedOutsideOccurrenceMap region outside)).map
           (InstantiationSemantic.dropOccurrenceOrigin result) =
         occurrences.map copyTrace.frameOccurrenceMap := by
-    induction occurrences with
-    | nil => rfl
-    | cons occurrence rest ih =>
-        have headMember : occurrence ∈ occurrence :: rest := List.mem_cons_self
-        have headEq := dropOrigin_droppedOutsideOccurrenceMap copyTrace region
-          outside occurrence headMember
-        have tailEq :
-            (rest.map
-                (copyTrace.droppedOutsideOccurrenceMap region outside)).map
-                (InstantiationSemantic.dropOccurrenceOrigin result) =
-              rest.map copyTrace.frameOccurrenceMap := by
-          apply ih
-          intro value member
-          exact dropOrigin_droppedOutsideOccurrenceMap copyTrace region outside
-            value (List.mem_cons_of_mem occurrence member)
-        change InstantiationSemantic.dropOccurrenceOrigin result
-              (copyTrace.droppedOutsideOccurrenceMap region outside occurrence) ::
-              _ = copyTrace.frameOccurrenceMap occurrence :: _
-        rw [headEq, tailEq]
+    have pointwise : ∀ occurrence ∈ occurrences,
+        InstantiationSemantic.dropOccurrenceOrigin result
+            (copyTrace.droppedOutsideOccurrenceMap region outside occurrence) =
+          copyTrace.frameOccurrenceMap occurrence := by
+      intro occurrence member
+      exact dropOrigin_droppedOutsideOccurrenceMap copyTrace region outside
+        occurrence member
+    have mapPointwise : ∀ values : List
+        (ConcreteElaboration.LocalOccurrence input.val.regionCount
+          input.val.nodeCount),
+        (∀ occurrence ∈ values,
+          InstantiationSemantic.dropOccurrenceOrigin result
+              (copyTrace.droppedOutsideOccurrenceMap region outside occurrence) =
+            copyTrace.frameOccurrenceMap occurrence) →
+        (values.map
+            (copyTrace.droppedOutsideOccurrenceMap region outside)).map
+            (InstantiationSemantic.dropOccurrenceOrigin result) =
+          values.map copyTrace.frameOccurrenceMap := by
+      intro values allPointwise
+      induction values with
+      | nil => rfl
+      | cons occurrence rest ih =>
+          have headEq := allPointwise occurrence List.mem_cons_self
+          have tailPointwise : ∀ value ∈ rest,
+              InstantiationSemantic.dropOccurrenceOrigin result
+                  (copyTrace.droppedOutsideOccurrenceMap region outside value) =
+                copyTrace.frameOccurrenceMap value := by
+            intro value member
+            exact allPointwise value
+              (List.mem_cons_of_mem occurrence member)
+          have tailEq := ih tailPointwise
+          change InstantiationSemantic.dropOccurrenceOrigin result
+                (copyTrace.droppedOutsideOccurrenceMap region outside
+                  occurrence) :: _ =
+              copyTrace.frameOccurrenceMap occurrence :: _
+          rw [headEq]
+          congr 1
+    exact mapPointwise occurrences pointwise
   apply list_map_cancel (InstantiationSemantic.dropOccurrenceOrigin result)
     (dropOccurrenceOrigin_injective result)
   exact originLeft.trans originRight.symm

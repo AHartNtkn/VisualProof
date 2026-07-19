@@ -176,6 +176,67 @@ theorem wireMap_injective
         quotientEqual
       simpa [spliceInput] using hostEqual
 
+/-- The composite executor frame maps preserve and reflect endpoint ownership
+for every original wire/node pair.  Alias materialization makes each
+intermediate host quotient discrete, so no distinct original wire can acquire
+the mapped endpoint. -/
+theorem endpointOccurs_wireMap_nodeMap_iff
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (wire : Fin state.diagram.val.wireCount)
+    (node : Fin state.diagram.val.nodeCount)
+    (port : CPort) :
+    result.diagram.val.EndpointOccurs (trace.wireMap wire)
+        ⟨trace.nodeMap node, port⟩ ↔
+      state.diagram.val.EndpointOccurs wire ⟨node, port⟩ := by
+  induction trace with
+  | done => rfl
+  | step fuel state result atom tail site candidate arguments checkedInput
+      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+      let spliceInput := instantiateSpliceInput comprehension attachments
+        binders payload state site arguments
+      let layout := spliceInput.plugLayout
+      let quotient := spliceInput.quotientWire wire
+      have restIff := ih (layout.frameWire quotient)
+        (layout.frameNode node)
+      simp only [advanceInstantiationState] at restIff
+      simp only [wireMap, nodeMap, Function.comp_apply]
+      apply restIff.trans
+      constructor
+      · intro occurs
+        obtain ⟨sourceWire, mappedWire, coalescedOccurs⟩ :=
+          layout.plugRaw_frameEndpoint_backward
+            (layout.frameWire quotient) ⟨node, port⟩ (by
+              simpa [Splice.Input.PlugLayout.mapFrameEndpoint] using occurs)
+        have sourceWireEq : sourceWire = quotient :=
+          layout.frameWire_injective mappedWire
+        subst sourceWire
+        change ⟨node, port⟩ ∈ spliceInput.coalescedEndpoints quotient
+          at coalescedOccurs
+        rw [Splice.Input.coalescedEndpoints_eq_of_boundary_nodup spliceInput
+          boundaryNodup] at coalescedOccurs
+        simpa [quotient, spliceInput] using coalescedOccurs
+      · intro occurs
+        have coalesced := spliceInput.endpointOccurs_quotient wire
+          ⟨node, port⟩ occurs
+        have plugged := layout.plugRaw_frameEndpoint_forward quotient
+          ⟨node, port⟩ coalesced
+        simpa [Splice.Input.PlugLayout.mapFrameEndpoint] using plugged
+
 /-- The composite host-wire map carries each retained wire scope through the
 same composite region map. -/
 theorem wireMap_scope
