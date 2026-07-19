@@ -42,24 +42,55 @@ noncomputable def compiledSpliceHostView
   Classical.choice
     (siteView_complete (input.coalesceFrame hadmissible) input.site)
 
-/-- The compiler evidence at the terminal pattern body, packaged so callers
-never choose a path or a leaf proof. -/
-structure TerminalCompilerView (input : Input signature) where
+/-- The compiler evidence at a terminal pattern body.  Its type depends only
+on the pattern and designated spine, so every executor copy of the same
+comprehension shares one canonical semantic presentation. -/
+structure PatternTerminalCompilerView
+    (pattern : CheckedOpenDiagram signature)
+    (binderSpine : BinderSpine pattern.val.diagram) where
   path : List Nat
-  witness : Region.ContextPath input.pattern.elaborate.body path
-  leaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
-    input.binderSpine.bodyContainer witness
+  witness : Region.ContextPath pattern.elaborate.body path
+  leaf : Region.ContextPath.CompilerLeaf pattern.val.diagram
+    binderSpine.bodyContainer witness
+
+/-- Backwards-compatible input-facing name for the pattern-owned view. -/
+abbrev TerminalCompilerView (input : Input signature) :=
+  PatternTerminalCompilerView input.pattern input.binderSpine
+
+/-- A nonempty pattern-owned spine reaches its body through the ordinary
+nested compiler kernel, independently of any host splice. -/
+theorem patternTerminalCompilerView_complete
+    (pattern : CheckedOpenDiagram signature)
+    (binderSpine : BinderSpine pattern.val.diagram)
+    (hnonempty : binderSpine.proxyCount ≠ 0) :
+    Nonempty (PatternTerminalCompilerView pattern binderSpine) := by
+  obtain ⟨view⟩ := openSiteView_complete pattern binderSpine.bodyContainer
+  let terminal : Fin binderSpine.proxyCount :=
+    ⟨binderSpine.proxyCount - 1, by omega⟩
+  have bodyEq := binderSpine.body_eq_terminal_of_nonempty hnonempty
+  rcases view.compilerLeaf.root_or_nested with hroot | leaf
+  · exfalso
+    apply binderSpine.proxy_ne_root terminal
+    exact bodyEq.symm.trans hroot
+  · exact ⟨view.path, view.intrinsicPath, Classical.choice leaf⟩
+
+/-- Canonical terminal compiler evidence owned by the pattern rather than by
+one particular host splice. -/
+noncomputable def compiledPatternTerminalView
+    (pattern : CheckedOpenDiagram signature)
+    (binderSpine : BinderSpine pattern.val.diagram)
+    (_terminalBody : binderSpine.TerminalBodyContract pattern.val)
+    (hnonempty : binderSpine.proxyCount ≠ 0) :
+    PatternTerminalCompilerView pattern binderSpine :=
+  Classical.choice
+    (patternTerminalCompilerView_complete pattern binderSpine hnonempty)
 
 noncomputable def compiledSpliceTerminalView
     (input : Input signature)
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
     TerminalCompilerView input :=
-  let complete := input.patternTerminalCompilerLeaf_complete hnonempty
-  let path := Classical.choose complete
-  let witness := Classical.choose (Classical.choose_spec complete)
-  let leaf := Classical.choice
-    (Classical.choose_spec (Classical.choose_spec complete))
-  ⟨path, witness, leaf⟩
+  compiledPatternTerminalView input.pattern input.binderSpine
+    input.terminalBody hnonempty
 
 /-- The item sequence emitted by the checked open-root compiler. -/
 structure OpenRootCompilerItems (checked : CheckedOpenDiagram signature) where

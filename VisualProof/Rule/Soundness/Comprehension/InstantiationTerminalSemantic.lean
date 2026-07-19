@@ -214,6 +214,46 @@ noncomputable def terminalRelationOfValues
                 pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
                 pattern.leaf.items)
 
+/-- Every executor copy of one comprehension uses the same terminal relation.
+The state, occurrence site, and ordered argument wires only select where that
+relation is applied; its value depends solely on the transported parameter
+values and the fixed family of enclosing proxy relations. -/
+theorem terminalRelationOfValues_eq
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (left right : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (leftSite : Fin left.diagram.val.regionCount)
+    (rightSite : Fin right.diagram.val.regionCount)
+    (leftArguments : Fin payload.arity → Fin left.diagram.val.wireCount)
+    (rightArguments : Fin payload.arity → Fin right.diagram.val.wireCount)
+    (hnonempty : payload.binderSpine.proxyCount ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (leftWire : Fin left.diagram.val.wireCount → model.Carrier)
+    (rightWire : Fin right.diagram.val.wireCount → model.Carrier)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (parameters : leftWire ∘ left.parameters =
+      rightWire ∘ right.parameters) :
+    terminalRelationOfValues payload left leftSite leftArguments hnonempty
+        model named leftWire values =
+      terminalRelationOfValues payload right rightSite rightArguments hnonempty
+        model named rightWire values := by
+  funext relationArguments
+  apply propext
+  simp only [terminalRelationOfValues]
+  rw [parameters]
+  rfl
+
 /-- A denoting actual splice output establishes the target-indexed terminal
 relation at the executor-recorded argument wires. -/
 theorem terminalRelationOfValues_of_output
