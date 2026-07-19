@@ -193,6 +193,9 @@ theorem focusedRootPartition_transport
     (sourceAmbient sourceLocals :
       ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetAmbient targetLocals : ConcreteElaboration.WireContext input)
+    (freshForward :
+      (Fin (sourceAmbient ++ sourceLocals).length → model.Carrier) →
+        RelEnv model.Carrier [] → Relation model.Carrier trace.arity)
     (context : PromotedContextWitness trace
       (sourceAmbient ++ sourceLocals) (targetAmbient ++ targetLocals))
     (sourceExact :
@@ -278,7 +281,8 @@ theorem focusedRootPartition_transport
       have selectedAgreement : selected.indexRelation.EnvironmentsAgree
           sourceEnvironment targetSelectedPulled :=
         selected.targetEnvironment_agrees sourceExact.nodup sourceEnvironment
-      let fresh : Relation model.Carrier trace.arity := fun _ => False
+      let fresh : Relation model.Carrier trace.arity :=
+        freshForward sourceEnvironment ()
       have sourceSelectedRenamed :
           denoteItemSeq (relCtx := [trace.arity]) model named sourceEnvironment
             (fresh, ()) (sourceSelected.renameRelations relationMap) :=

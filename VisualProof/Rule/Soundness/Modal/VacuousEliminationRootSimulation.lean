@@ -66,6 +66,13 @@ noncomputable def rootContextSimulation
       (input.wires wire).scope = input.root)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
+    (freshForward : ∀ {sourceRels : RelCtx}
+      (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+      (sourceBinders : ConcreteElaboration.BinderContext
+        trace.sourceDiagram sourceRels),
+      (Fin sourceContext.length → model.Carrier) →
+        RelEnv model.Carrier sourceRels →
+          Relation model.Carrier trace.arity)
     (direction : ConcreteElaboration.SimulationDirection) :
     let source : CheckedOpenDiagram signature :=
       ⟨trace.sourceOpen boundary,
@@ -75,7 +82,7 @@ noncomputable def rootContextSimulation
       ⟨targetOpen input boundary,
         targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
     let simulation := trace.semanticSimulation sourceWellFormed
-      targetWellFormed model named
+      targetWellFormed model named freshForward
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires := by
@@ -87,7 +94,7 @@ noncomputable def rootContextSimulation
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   let simulation := trace.semanticSimulation sourceWellFormed
-    targetWellFormed model named
+    targetWellFormed model named freshForward
   let promoted := trace.rootContextWitness sourceWellFormed targetWellFormed
     boundary boundaryRoot
   let outerRelation := trace.wireIdentityRelation source.val.exposedWires
@@ -209,7 +216,10 @@ noncomputable def rootContextSimulation
     have transport := trace.focusedRootItems_transport sourceWellFormed
       targetWellFormed model named direction trace.sourceDiagram.regionCount
       input.regionCount source.val.exposedWires source.val.hiddenWires
-      target.val.exposedWires target.val.hiddenWires promoted
+      target.val.exposedWires target.val.hiddenWires
+      (freshForward (source.val.exposedWires ++ source.val.hiddenWires)
+        ConcreteElaboration.BinderContext.empty)
+      promoted
       ConcreteElaboration.BinderContext.empty
       ConcreteElaboration.BinderContext.empty simulation.binders_empty
       sourceExact targetExact
@@ -251,6 +261,13 @@ theorem boundaryWitness
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
+    (freshForward : ∀ {sourceRels : RelCtx}
+      (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+      (sourceBinders : ConcreteElaboration.BinderContext
+        trace.sourceDiagram sourceRels),
+      (Fin sourceContext.length → model.Carrier) →
+        RelEnv model.Carrier sourceRels →
+          Relation model.Carrier trace.arity)
     (args : Fin boundary.length → model.Carrier) :
     let source : CheckedOpenDiagram signature :=
       ⟨trace.sourceOpen boundary,
@@ -260,7 +277,7 @@ theorem boundaryWitness
       ⟨targetOpen input boundary,
         targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
     let root := trace.rootContextSimulation sourceWellFormed targetWellFormed
-      boundary boundaryRoot model named direction
+      boundary boundaryRoot model named freshForward direction
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate target.elaborate root.outer model named
       args args := by
@@ -272,7 +289,7 @@ theorem boundaryWitness
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   let root := trace.rootContextSimulation sourceWellFormed targetWellFormed
-    boundary boundaryRoot model named direction
+    boundary boundaryRoot model named freshForward direction
   have exposedEq : source.val.exposedWires = target.val.exposedWires := rfl
   have sourceRootExact :
       ConcreteElaboration.WireContext.Exact

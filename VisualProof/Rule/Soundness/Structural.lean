@@ -2797,24 +2797,31 @@ theorem applyVacuousElim_sound
         sourceRoot⟩
   let model := Lambda.canonicalModel
   let named := Theory.interpretDefinitions context.definitions
+  let freshForward := fun {sourceRels : RelCtx}
+      (_sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+      (_sourceBinders : ConcreteElaboration.BinderContext
+        trace.sourceDiagram sourceRels)
+      (_sourceEnvironment : Fin _sourceContext.length → model.Carrier)
+      (_sourceRelations : RelEnv model.Carrier sourceRels) =>
+    (fun _ => False : Relation model.Carrier trace.arity)
   let simulation := trace.semanticSimulation sourceWellFormed input.property
-    model named
+    model named freshForward
   have forward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
       target original model named simulation .forward
       (trace.rootContextSimulation sourceWellFormed input.property boundary
-        sourceRoot model named .forward)
+        sourceRoot model named freshForward .forward)
       True.intro args args
       (trace.boundaryWitness sourceWellFormed input.property boundary
-        sourceRoot .forward model named args)
+        sourceRoot .forward model named freshForward args)
   have backward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
       target original model named simulation .backward
       (trace.rootContextSimulation sourceWellFormed input.property boundary
-        sourceRoot model named .backward)
+        sourceRoot model named freshForward .backward)
       True.intro args args
       (trace.boundaryWitness sourceWellFormed input.property boundary
-        sourceRoot .backward model named args)
+        sourceRoot .backward model named freshForward args)
   dsimp only
   unfold DirectedEntailment
   simp only [StepTag.semanticMode]

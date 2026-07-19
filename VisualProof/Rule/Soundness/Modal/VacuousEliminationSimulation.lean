@@ -127,7 +127,14 @@ noncomputable def semanticSimulation
     (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
     (targetWellFormed : input.WellFormed signature)
     (model : Lambda.LambdaModel)
-    (named : NamedEnv model.Carrier signature) :
+    (named : NamedEnv model.Carrier signature)
+    (freshForward : ∀ {sourceRels : RelCtx}
+      (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+      (sourceBinders : ConcreteElaboration.BinderContext
+        trace.sourceDiagram sourceRels),
+      (Fin sourceContext.length → model.Carrier) →
+        RelEnv model.Carrier sourceRels →
+          Relation model.Carrier trace.arity) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
       trace.sourceDiagram input model named where
   source_wellFormed := sourceWellFormed
@@ -358,6 +365,8 @@ noncomputable def semanticSimulation
       exact trace.focusedItems_regionSimulation sourceWellFormed targetWellFormed
         model named direction fuelSource fuelTarget sourceContext targetContext
         context.down sourceBinders targetBinders binderWitness sourceExact
+        (freshForward (sourceContext.extend
+          (trace.targetIndex targetWellFormed)) sourceBinders)
         targetExact sourceBindersCover targetBindersCover sourceEnumeration
         targetEnumeration
         (fun childFuelTarget childSourceContext childTargetContext childContext =>
