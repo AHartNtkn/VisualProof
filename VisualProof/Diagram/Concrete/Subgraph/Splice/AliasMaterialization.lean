@@ -435,6 +435,13 @@ theorem boundary_length {signature : List Nat}
     certificate.result.val.boundary.length = pattern.val.boundary.length := by
   exact raw_boundary_length pattern.val originalSpine.bodyContainer
 
+theorem boundary_nodup {signature : List Nat}
+    {pattern : CheckedOpenDiagram signature}
+    {originalSpine : BinderSpine pattern.val.diagram}
+    (certificate : Certificate pattern originalSpine) :
+    certificate.result.val.boundary.Nodup := by
+  exact raw_boundary_nodup pattern.val originalSpine.bodyContainer
+
 end Certificate
 
 /-- The executor validates the concrete batch it will splice.  The checker is
