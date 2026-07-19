@@ -112,6 +112,90 @@ theorem compiled_atom_iff_comprehension
         (resolvedArguments_wire_eq state atom payload.arity arguments
           arguments_eq context resolvedArguments resolved_eq index)
 
+/-- If the complete local compiler conjunction denotes, the selected
+executor-owned atom supplies the checked comprehension instance.  The atom is
+located in the compiler's authoritative occurrence order rather than by an
+assumed list position. -/
+theorem compiled_items_entail_comprehension
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (node_eq : state.diagram.val.nodes atom = .atom site state.bubble)
+    (arguments_eq : instantiateArguments? state atom payload.arity =
+      some arguments)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
+    {rels : RelCtx}
+    (fuel : Nat)
+    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (relEnv : RelEnv model.Carrier rels)
+    (fixed : FixedRelationAt payload state model named wireValue binderContext
+      relEnv)
+    (relation : RelVar rels payload.arity)
+    (lookup : binderContext state.bubble =
+      some ⟨payload.arity, relation⟩)
+    (environment : Fin context.length → model.Carrier)
+    (environment_eq : ∀ index,
+      environment index = wireValue (context.get index))
+    (items : ItemSeq signature context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+      state.diagram.val
+      (ConcreteElaboration.compileRegion? signature state.diagram.val fuel)
+      context binderContext
+      (ConcreteElaboration.localOccurrences state.diagram.val site) =
+        some items)
+    (denotes : denoteItemSeq model named environment relEnv items) :
+    comprehension.denote model named
+      (fun position => wireValue
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).attachment position)) := by
+  have atom_mem : ConcreteElaboration.LocalOccurrence.node atom ∈
+      ConcreteElaboration.localOccurrences state.diagram.val site := by
+    rw [ConcreteElaboration.mem_localOccurrences_node]
+    change (state.diagram.val.nodes atom).region = site
+    rw [node_eq]
+    rfl
+  obtain ⟨occurrenceIndex, occurrenceIndex_eq⟩ :=
+    indexOf?_complete atom_mem
+  have occurrence_eq :
+      (ConcreteElaboration.localOccurrences state.diagram.val site).get
+          occurrenceIndex =
+        .node atom :=
+    indexOf?_sound occurrenceIndex_eq
+  let itemIndex := Fin.cast
+    (ConcreteElaboration.compileOccurrencesWith?_length
+      (ConcreteElaboration.compileRegion? signature state.diagram.val fuel)
+      context binderContext compiled).symm occurrenceIndex
+  have atom_compiled : ConcreteElaboration.compileNode? signature
+      state.diagram.val context binderContext atom = some (items.get itemIndex) := by
+    have atIndex := ConcreteElaboration.compileOccurrencesWith?_get
+      (ConcreteElaboration.compileRegion? signature state.diagram.val fuel)
+      context binderContext compiled occurrenceIndex
+    rw [occurrence_eq] at atIndex
+    exact atIndex
+  have atom_denotes : denoteItem model named environment relEnv
+      (items.get itemIndex) :=
+    (denoteItemSeq_iff_get model named environment relEnv items).mp denotes
+      itemIndex
+  exact (compiled_atom_iff_comprehension payload state atom site arguments
+    node_eq arguments_eq model named wireValue context binderContext relEnv fixed
+    relation lookup environment environment_eq (items.get itemIndex)
+    atom_compiled).mp atom_denotes
+
 end InstantiationSemantic
 
 end VisualProof.Rule
