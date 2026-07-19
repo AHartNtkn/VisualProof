@@ -5,19 +5,21 @@
 This design governs production of the complete Seyric curriculum.
 
 - Progression: evidence-shared spiral.
-- Curriculum size: exactly 49 distinct skills and 186 distinct puzzles.
-- Myratic gate: exactly 140 required puzzles in the final-transfer prerequisite closure.
-- Optional content: exactly 46 puzzles outside that closure.
-- Stage totals: 64 opening/structural puzzles, 51 connective/compositional puzzles, and 71 polarity/classical/reference puzzles.
+- Approved baseline: 49 distinct skills and 186 distinct puzzles.
+- Baseline Myratic closure: 140 required puzzles leading to the final transfer.
+- Baseline optional content: 46 practice, remediation, or challenge puzzles outside that closure.
+- Baseline stage totals: 64 opening/structural puzzles, 51 connective/compositional puzzles, and 71 polarity/classical/reference puzzles.
+- Warranted expansion is automatic. The coordinator adds puzzles when logical feasibility, evidence density, structural variation, remediation, or transfer quality warrants them, without requesting permission.
 - The existing seven puzzles remain the playable seed. Six belong to Seyric; `blank-witness` remains the initial Myratic puzzle.
 - Proof physics, backward play, canonical-blank completion, artifact theorem semantics, and the passive guidance presentation do not change.
+- Every existing user-facing logical mechanic on `main` is ported into the game. Every move required in the pure propositional layer has a user interaction, whether inherited from `main` or added during engine integration.
 - The dedicated physics battery remains disabled and must not be run.
 
-The total describes individual playable puzzles. Family headings, skill rows, internal decisions within a puzzle, and shared evidence labels do not count as additional puzzles.
+The baseline total describes individual playable puzzles. Family headings, skill rows, internal decisions within a puzzle, and shared evidence labels do not count as additional puzzles. Added puzzles receive new stable identities and the same complete evidence and validation treatment; they are not hidden inside existing slots.
 
 ## Outcome
 
-The production system must turn the corrected Seyric roadmap into 186 individually authored, playable, verified artifacts while keeping the game operational after every accepted cohort. Parallel work must increase throughput without creating competing content authorities, shared-file conflicts, logically invalid witnesses, generic prose, or puzzles that claim to assess a skill they do not require.
+The production system must turn the corrected 186-puzzle Seyric baseline, plus every warranted addition, into individually authored, playable, verified artifacts while keeping the game operational after every accepted cohort. Parallel work must increase throughput without creating competing content authorities, shared-file conflicts, logically invalid witnesses, generic prose, or puzzles that claim to assess a skill they do not require.
 
 The final curriculum must teach and test every selected skill through introduction, nearest-error contrast, at least two structurally varied applications, delayed retrieval, mixed use, and unfamiliar transfer. Requiredness is computed from the final transfer puzzle, never stored as a second hand-maintained flag.
 
@@ -26,8 +28,10 @@ The final curriculum must teach and test every selected skill through introducti
 This phase includes:
 
 - normalization of the 186-puzzle inventory;
+- automatic addition of puzzles warranted by the curriculum or formal evidence;
 - scalable content-fragment ownership and deterministic assembly;
-- game-authorability and shortcut validation;
+- complete porting of main user-facing logical mechanics and centrally validated pure-propositional interaction coverage;
+- logical witness and shortcut validation;
 - formal feasibility spikes for risky proof families;
 - authoring all semantic puzzles, solutions, curriculum records, artifact identities, provenance, and warranted guidance;
 - independent logical, pedagogical, editorial, and runtime review;
@@ -35,7 +39,9 @@ This phase includes:
 
 This phase does not:
 
-- modify proof rules or expose kernel-only rules in the game;
+- modify proof physics to rescue a planned puzzle;
+- use the game worktree's current interaction subset to constrain puzzle content;
+- ask for approval before adding warranted puzzle content;
 - add a theorem picker, armed-reference mode, alternate completion condition, forward-proof mode, proof recording, or generic hints;
 - use procedural filler to reach a count;
 - create new visual assets or character art;
@@ -49,7 +55,7 @@ This phase does not:
 `content/roadmaps/seyric.json` is the build-only planning authority. Its schema is `content/schemas/seyric-roadmap.schema.json`. It contains:
 
 - the 49 stable performance IDs;
-- the 186 stable puzzle IDs;
+- all 186 baseline puzzle IDs and every warranted additional puzzle ID;
 - one primary skill and one primary evidence role for every puzzle;
 - any additional skills for which the puzzle supplies shared evidence;
 - stage and stable folio order;
@@ -102,11 +108,12 @@ The corrected atlas intends 186 puzzles but its raw labels are not internally en
 2. Treat labels such as `contrast inside I-*` as decisions within the named introduction puzzle, not separate puzzle IDs.
 3. Count a shared puzzle ID once, even when it supplies evidence for several skills.
 4. Give every remaining puzzle exactly one primary skill and evidence role.
-5. Reconcile the stage inventories to 64, 51, and 71 without adding filler or collapsing skills.
-6. Compute the final-transfer prerequisite closure and require exactly 140 members.
-7. Prove the other 46 have no outgoing prerequisite path into that closure.
+5. Reconcile the baseline stage inventories to 64, 51, and 71 without adding filler or collapsing skills.
+6. Compute the baseline final-transfer prerequisite closure and recover its 140 intended members.
+7. Recover the baseline 46 optional puzzles and prove they have no outgoing prerequisite path into that closure.
+8. Add new stable puzzle records whenever the normalized evidence graph shows that another isolated example, contrast, variation, retrieval, remediation, or transfer is warranted.
 
-If reconciliation would require removing a selected skill, merging distinct skills, changing the 186 total, or changing the 140/46 gate, normalization stops for a user decision. Mere duplicate-label and internal-label correction does not require another product decision.
+The 186 baseline puzzles cannot be silently removed or collapsed. Removing a selected skill still requires a user decision. Increasing the puzzle count does not: additions are made whenever warranted, and required/optional totals are recomputed from the resulting final-transfer graph. Mere duplicate-label and internal-label correction also does not require another product decision.
 
 ## Production infrastructure gate
 
@@ -118,22 +125,21 @@ Mass authorship cannot begin until the content pipeline proves these capabilitie
 
 The content loader accepts only the fragmented format and assembles the same immutable runtime catalog interface. Existing seven-puzzle content is migrated first, proving no behavioral drift.
 
-### Player-authorable witnesses
+### Interaction parity and propositional completeness
 
-Validation must reject any solution step unavailable through the game interface. The authority is a pure game-layer predicate shared with proof-move routing, not a duplicated string allowlist. It covers:
+Interaction availability is an engine-integration responsibility, not a content-authoring constraint. Before content agents are dispatched, the engine-integration owner:
 
-- erasure;
-- closed single-term insertion;
-- double-cut introduction and elimination;
-- vacuous introduction and elimination;
-- iteration and deiteration;
-- conversion;
-- named or loupe-authored comprehension instantiation;
-- relation fold and unfold;
-- fusion;
-- theorem steps created by completed-record drops.
+1. inventories every user-facing logical mechanic and interaction already available on `main`;
+2. ports each one into the game while preserving its logical behavior;
+3. enumerates the complete pure propositional move vocabulary, including later moves exposed by normalized curriculum and feasibility proofs;
+4. implements a game interaction for every missing required move;
+5. proves the resulting interaction coverage centrally through direct route and rendered-browser tests.
 
-Kernel-only operations remain invalid content witnesses unless a later, separately approved game interaction exposes them.
+Content authors and reviewers are not given an interaction allowlist and do not inspect the game controller to decide what content is permitted. Content validation replays witnesses against the proof calculus. If a valid propositional witness reveals a missing game interaction during central integration, the engine owner adds that interaction; the puzzle is not weakened or rejected to match the temporary port state.
+
+The port copies the mechanics into game ownership; it does not create a runtime dependency on `main`, merge the game into `main`, or leave main as a second game-mechanics authority.
+
+The artifact-record theorem interaction remains game-owned, and the circular construction editor remains the game presentation of construction. These presentation choices do not narrow the available logical curriculum.
 
 ### Definition integrity
 
@@ -159,7 +165,8 @@ Rule-name coverage is not treated as mastery evidence. The roadmap and placement
 - mixed use after all participating skills have independent introductions;
 - transfer evidence without stepwise guidance;
 - remediation pointing to the nearest key prerequisite;
-- exactly 140 required and 46 optional puzzles.
+- preservation of all 186 baseline puzzle roles and all warranted additions;
+- a required/optional split derived from the actual final-transfer closure, with the original 140/46 split retained as baseline evidence rather than a ceiling.
 
 ## Feasibility gate
 
@@ -176,7 +183,7 @@ Before bulk authoring, focused scratch experiments must prove representative puz
 9. exact artifact dissolution;
 10. unfamiliar mixed transfer.
 
-Each spike must demonstrate a closed zero-boundary goal, a complete player-authorable backward witness, readable rendered structure, a load-bearing advertised decision, and no known one-step artifact shortcut. Experimental files remain outside production until accepted. Failure is evidence: the theorem statement is revised within the same skill, or the family stops for a user decision. Proof physics is never changed to rescue a planned puzzle.
+Each spike must demonstrate a closed zero-boundary goal, a complete verified backward witness, readable rendered structure, a load-bearing advertised decision, and no known one-step artifact shortcut. Experimental files remain outside production until accepted. Failure is evidence: the theorem statement is revised, the family receives additional puzzles when more isolation or practice is warranted, or removal of a selected skill stops for a user decision. Proof physics is never changed to rescue a planned puzzle.
 
 ## Cohort structure
 
@@ -199,7 +206,7 @@ After the infrastructure and feasibility gates, production advances in dependenc
 15. Structural-variant retrieval and final unfamiliar transfer.
 16. Optional remediation and challenge closure.
 
-Normalization fixes the exact membership and count of each cohort. Cohort 16 may be interleaved earlier when its prerequisites are available, but those puzzles remain outside the final-transfer closure.
+Normalization fixes the baseline membership of each cohort. Warranted additions are assigned to the earliest cohort whose prerequisites and evidence role they satisfy, or to a new expansion cohort when that keeps review boundaries clearer. Baseline cohort 16 may be interleaved earlier when its prerequisites are available, but its optional puzzles remain outside the final-transfer closure.
 
 ## Agent orchestration
 
@@ -211,7 +218,7 @@ Three authors receive disjoint puzzle IDs and frozen contracts containing:
 
 - primary and shared skill evidence;
 - prerequisites and exact artifact budget;
-- allowed game moves;
+- the logical skill and theorem family, without reference to current interaction-port status;
 - statement family and structural-variation constraint;
 - guidance and copy constraints;
 - required output paths and validation commands.
@@ -220,7 +227,7 @@ Authors write only to unique scratch directories. They return complete bundles a
 
 ### Logic pass
 
-Bundles rotate to an author who did not create them. The reviewer replays the witness, checks every step against game authorability, checks definition and artifact authority, tests advertised load-bearing choices, and searches for obvious or bounded shortcuts.
+Bundles rotate to an author who did not create them. The reviewer replays the witness against the proof calculus, checks definition and artifact authority, tests advertised load-bearing choices, and searches for obvious or bounded shortcuts. The reviewer does not inspect or reason about user-interface coverage.
 
 ### Pedagogy and editorial pass
 
@@ -237,7 +244,7 @@ No worker commits, pushes, opens the desktop on the user's display, or edits ano
 Every accepted puzzle must satisfy all of the following:
 
 - It is semantically distinct from every existing puzzle start.
-- Its complete solution is possible through current player-facing interactions.
+- Its complete solution is valid under the proof calculus and uses the intended theorem and artifact authority.
 - Its intended skill is necessary, not merely mentioned in metadata or incidentally present in a rule-name set.
 - Its structure differs meaningfully from neighboring applications; cosmetic ID, layout, or proposition-name changes do not count as variation.
 - Its prerequisite burden matches its curriculum position.
@@ -254,10 +261,10 @@ Recognition performances use honest semantic variation. They never ask the playe
 
 - A malformed or incomplete bundle never enters the production manifest.
 - A failed witness is repaired at the statement or solution level; validation is not weakened.
-- A kernel-valid but UI-inaccessible witness is rejected.
+- A missing interaction for a valid pure-propositional move creates an engine-integration task and is resolved centrally before the cohort becomes playable; it does not invalidate or narrow the puzzle.
 - A shortcut caused by an earlier artifact requires redesign of the candidate statement, prerequisites, or intended artifact decision. The validator never hides artifacts that runtime could expose.
 - A repeated pedagogy defect returns to the skill graph: split an overloaded performance, add a missing prerequisite, or revise evidence placement. It is not patched with more teacher prose.
-- A feasibility failure that threatens a selected skill, total count, or gate stops for user direction.
+- A feasibility failure is handled by revising the statement or adding warranted isolation and practice puzzles. Only removing a selected skill or changing proof physics requires user direction.
 - A cohort is not partially accepted. Previously accepted cohorts remain playable while defects are corrected in scratch.
 
 ## Validation and completion evidence
@@ -266,7 +273,6 @@ Recognition performances use honest semantic variation. They never ask the playe
 
 - schema validation;
 - semantic diagram construction and exact-definition checks;
-- game-authorability validation;
 - intended witness replay to canonical blank;
 - JSON serialization round trip;
 - exact artifact dependency validation;
@@ -280,6 +286,7 @@ Recognition performances use honest semantic variation. They never ask the playe
 
 - exact cohort membership and prerequisite satisfaction;
 - deterministic assembly with no stale generated files;
+- central proof that every main logical interaction is present in the game and no required pure-propositional move lacks a game interaction;
 - `npm run content:validate`;
 - focused game/controller/save/folio tests;
 - TypeScript check;
@@ -292,25 +299,30 @@ Recognition performances use honest semantic variation. They never ask the playe
 The final receipt must report:
 
 ```text
-skills: 49
-puzzles: 186
-required final-transfer closure: 140
-optional outside closure: 46
-opening/structural: 64
-connective/compositional: 51
-polarity/classical/reference: 71
-puzzle bundles complete: 186/186
-solutions replayed: 186/186
-logic reviews accepted: 186/186
-pedagogy/editorial reviews accepted: 186/186
+baseline skills retained: 49/49
+baseline puzzle IDs retained: 186/186
+additional warranted puzzle IDs: actual count
+total puzzles: computed actual count
+baseline required evidence retained: 140/140
+actual required final-transfer closure: computed actual count
+baseline optional evidence retained: 46/46
+actual optional outside closure: computed actual count
+baseline opening/structural retained: 64/64
+baseline connective/compositional retained: 51/51
+baseline polarity/classical/reference retained: 71/71
+puzzle bundles complete: actual total / actual total
+solutions replayed: actual total / actual total
+logic reviews accepted: actual total / actual total
+pedagogy/editorial reviews accepted: actual total / actual total
 duplicate canonical starts: 0
-UI-inaccessible witness steps: 0
 missing evidence roles: 0
 optional paths into required closure: 0
+main interactions missing from game: 0
+required pure-propositional interactions missing: 0
 packaged validation sidecars or roadmap files: 0
 ```
 
-The final packaged smoke must prove archive ordering, unlocks, required/optional status, completed-record theorem use, timeline rewind, completion, Myratic gating, save persistence, and startup restoration. The work is not complete merely because 186 JSON files exist.
+The final packaged smoke must prove archive ordering, unlocks, required/optional status, completed-record theorem use, timeline rewind, completion, Myratic gating, save persistence, startup restoration, and the integrated interaction vocabulary. The work is not complete merely because the 186 baseline JSON bundles and any additions exist.
 
 ## Delivery sequence
 
@@ -318,9 +330,10 @@ The implementation is divided into separately reviewable projects:
 
 1. Normalize and validate the canonical roadmap.
 2. Rebuild content fragments and deterministic assembly.
-3. Add game-authorability, definition-integrity, artifact-shortcut, and curriculum validators.
-4. Complete and approve feasibility spikes.
-5. Produce cohorts 1–16 through the author/reviewer/integrator loop.
-6. Run the final curriculum and packaged-runtime acceptance pass.
+3. Port every existing user-facing logical mechanic from `main` and complete the pure-propositional interaction surface under central engine ownership.
+4. Add definition-integrity, artifact-shortcut, and curriculum validators.
+5. Complete and approve feasibility spikes, adding puzzles whenever the evidence warrants them.
+6. Produce cohorts 1–16 and any warranted expansion cohorts through the author/reviewer/integrator loop.
+7. Run the final curriculum and packaged-runtime acceptance pass.
 
-No broad content cohort starts before projects 1–4 pass. This front-loads the defects that would otherwise multiply across hundreds of files.
+No broad content cohort starts before projects 1–5 pass. This gives authors a stable logical curriculum while keeping interaction-port reasoning entirely out of their work.
