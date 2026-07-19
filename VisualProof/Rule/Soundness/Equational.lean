@@ -3,6 +3,7 @@ import VisualProof.Rule.Soundness.Congruence
 import VisualProof.Rule.Soundness.Equational.AnchoredWireContractInterface
 import VisualProof.Rule.Soundness.Equational.AnchoredWireContractCoalescedCompactionOpen
 import VisualProof.Rule.Soundness.Equational.HeadStripSimulation
+import VisualProof.Rule.Soundness.Equational.FusionOpen
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule
@@ -2583,6 +2584,132 @@ theorem applyHeadStrip_sound
         HeadStripSoundness.sourceCheckedOpen,
         HeadStripSoundness.targetCheckedOpen] using targetDenotes
 
+private theorem applyFusionOrdered_sound
+    (context : ProofContext signature) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram signature)
+    (wire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount) (consumed : Nat)
+    (endpoints :
+      (input.val.wires wire).endpoints = [
+          { node := producer, port := .output },
+          { node := consumer, port := .free consumed }] ∨
+      (input.val.wires wire).endpoints = [
+          { node := consumer, port := .free consumed },
+          { node := producer, port := .output }])
+    (receipt : StepReceipt input)
+    (happly : applyFusionOrdered input wire producer consumer consumed =
+      .ok receipt) :
+    SuccessfulReceiptSound context orientation input (.fusion wire)
+      receipt := by
+  obtain ⟨hdistinct, producerRegion, producerPorts, producerTerm,
+      consumerRegion, consumerPorts, consumerTerm, hport, producerWires,
+      consumerWires, producerShape, consumerShape, scope, producerResolved,
+      consumerResolved, realizes⟩ := applyFusionOrdered_realizes happly
+  let consumedPort : Fin consumerPorts := ⟨consumed, hport⟩
+  have producerEnclosesConsumer : input.val.Encloses producerRegion
+      consumerRegion := by
+    rw [scope]
+    exact FusionSoundness.consumedWire_encloses_consumer input wire producer
+      consumer consumed consumerRegion consumerPorts consumerTerm consumerShape
+      endpoints
+  have targetWellFormed :
+      (fusionRaw input wire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWires consumerWires consumedPort
+      ).WellFormed signature := realizes.result_eq ▸ receipt.result.property
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot mapped htransport =>
+      FusionSoundness.targetCheckedOpen input wire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWires consumerWires
+        consumedPort (realizes.targetBoundary mapped) (by
+          simpa [fusionRaw] using
+            (fusionInterfaceTransport input wire producer consumer hdistinct
+              consumerRegion producerTerm consumerTerm producerWires
+              consumerWires consumedPort).transportBoundary_root_scoped
+                sourceRoot (realizes.transportBoundary_expected htransport))
+        targetWellFormed)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      realizes.operationalIso_to_rawResultOpen htransport
+        (realizes.targetBoundary mapped)
+        (realizes.transportBoundary_expected htransport))
+  intro boundary sourceRoot mapped htransport valid args
+  let rawMapped := realizes.targetBoundary mapped
+  have rawTransport :
+      (fusionInterfaceTransport input wire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWires consumerWires
+        consumedPort).transportBoundary boundary = some rawMapped :=
+    realizes.transportBoundary_expected htransport
+  have targetRoot : ∀ mappedWire, mappedWire ∈ rawMapped →
+      ((fusionRaw input wire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWires consumerWires
+        consumedPort).wires mappedWire).scope = input.val.root := by
+    simpa [fusionRaw] using
+      (fusionInterfaceTransport input wire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWires consumerWires
+        consumedPort).transportBoundary_root_scoped sourceRoot rawTransport
+  let source := FusionSoundness.sourceCheckedOpen input boundary sourceRoot
+  let target := FusionSoundness.targetCheckedOpen input wire producer consumer
+    hdistinct consumerRegion producerTerm consumerTerm producerWires
+    consumerWires consumedPort rawMapped targetRoot targetWellFormed
+  let model := Lambda.canonicalModel
+  let named := Theory.interpretDefinitions context.definitions
+  let simulation := FusionSoundness.semanticSimulation input wire producer
+    consumer hdistinct producerRegion consumerRegion producerPorts consumerPorts
+    producerTerm consumerTerm producerWires consumerWires consumedPort
+    producerShape consumerShape scope producerResolved consumerResolved endpoints
+    producerEnclosesConsumer targetWellFormed named
+  let targetArgs := args ∘ Fin.cast
+    ((fusionInterfaceTransport input wire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWires consumerWires
+      consumedPort).transportBoundary_length rawTransport)
+  have rootAllowed : FusionSoundness.RegionAllowed input producerRegion
+      input.val.root := by
+    rintro ⟨producerEnclosesRoot, rootNe⟩
+    exact rootNe (Diagram.ConcreteElaboration.checked_encloses_antisymm
+      input.property (input.property.all_regions_reach_root producerRegion)
+        producerEnclosesRoot)
+  have forwardSemantic :=
+    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source target model named simulation .forward
+      (FusionSoundness.rootContext input wire producer consumer hdistinct
+        producerRegion consumerRegion producerPorts consumerPorts producerTerm
+        consumerTerm producerWires consumerWires consumedPort producerShape
+        consumerShape scope producerResolved consumerResolved endpoints
+        producerEnclosesConsumer boundary rawMapped rawTransport sourceRoot
+        targetRoot targetWellFormed named .forward)
+      rootAllowed args targetArgs
+      (FusionSoundness.boundaryWitness input wire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWires consumerWires
+        consumedPort boundary rawMapped rawTransport sourceRoot targetRoot
+        targetWellFormed .forward model named args)
+  have backwardSemantic :=
+    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source target model named simulation .backward
+      (FusionSoundness.rootContext input wire producer consumer hdistinct
+        producerRegion consumerRegion producerPorts consumerPorts producerTerm
+        consumerTerm producerWires consumerWires consumedPort producerShape
+        consumerShape scope producerResolved consumerResolved endpoints
+        producerEnclosesConsumer boundary rawMapped rawTransport sourceRoot
+        targetRoot targetWellFormed named .backward)
+      rootAllowed args targetArgs
+      (FusionSoundness.boundaryWitness input wire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWires consumerWires
+        consumedPort boundary rawMapped rawTransport sourceRoot targetRoot
+        targetWellFormed .backward model named args)
+  dsimp only
+  unfold DirectedEntailment
+  simp only [Step.tag, StepTag.semanticMode]
+  constructor
+  · intro sourceDenotes
+    have targetDenotes := forwardSemantic sourceDenotes
+    simpa [source, target, targetArgs, model, named,
+      FusionSoundness.sourceCheckedOpen,
+      FusionSoundness.targetCheckedOpen] using targetDenotes
+  · intro targetDenotes
+    apply backwardSemantic
+    simpa [source, target, targetArgs, model, named,
+      FusionSoundness.sourceCheckedOpen,
+      FusionSoundness.targetCheckedOpen] using targetDenotes
+
 /-- Every successful fusion receipt is semantically equivalent. -/
 theorem applyFusion_sound
     (context : ProofContext signature) (orientation : Orientation)
@@ -2592,7 +2719,13 @@ theorem applyFusion_sound
     (happly : applyFusion input wire = .ok receipt) :
     SuccessfulReceiptSound context orientation input (.fusion wire)
       receipt := by
-  sorry
+  rcases applyFusion_success happly with
+    ⟨producer, consumer, consumed, endpoints, ordered⟩ |
+      ⟨producer, consumer, consumed, endpoints, ordered⟩
+  · exact applyFusionOrdered_sound context orientation input wire producer
+      consumer consumed (Or.inl endpoints) receipt ordered
+  · exact applyFusionOrdered_sound context orientation input wire producer
+      consumer consumed (Or.inr endpoints) receipt ordered
 
 /-- Every successful fission receipt is semantically equivalent. -/
 theorem applyFission_sound
