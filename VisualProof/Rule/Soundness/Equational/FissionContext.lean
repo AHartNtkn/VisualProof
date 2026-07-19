@@ -34,6 +34,187 @@ private theorem allFin_succ_last (n : Nat) :
       (Fin.last input.val.wireCount)).scope = region := by
   simp [fissionRaw]
 
+theorem fissionRaw_exactScopeWires_mem_old_iff
+    (input : CheckedDiagram signature)
+    (node : Fin input.val.nodeCount)
+    (site candidateRegion : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (wire : Fin input.val.wireCount) :
+    wire.castSucc ∈ ConcreteElaboration.exactScopeWires
+        (fissionRaw input node site producer residual) candidateRegion ↔
+      wire ∈ ConcreteElaboration.exactScopeWires input.val candidateRegion := by
+  constructor
+  · intro member
+    have scope := (ConcreteElaboration.mem_exactScopeWires
+      (fissionRaw input node site producer residual) candidateRegion
+      wire.castSucc).mp member
+    rw [fissionRaw_oldWire_scope] at scope
+    exact (ConcreteElaboration.mem_exactScopeWires input.val candidateRegion
+      wire).mpr scope
+  · intro member
+    have scope := (ConcreteElaboration.mem_exactScopeWires input.val
+      candidateRegion wire).mp member
+    apply (ConcreteElaboration.mem_exactScopeWires
+      (fissionRaw input node site producer residual) candidateRegion
+      wire.castSucc).mpr
+    rw [fissionRaw_oldWire_scope]
+    exact scope
+
+theorem fissionRaw_exactScopeWires
+    (input : CheckedDiagram signature)
+    (node : Fin input.val.nodeCount)
+    (site candidateRegion : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount))) :
+    ConcreteElaboration.exactScopeWires
+        (fissionRaw input node site producer residual) candidateRegion =
+      (ConcreteElaboration.exactScopeWires input.val candidateRegion).map
+          Fin.castSucc ++
+        if candidateRegion = site then [Fin.last input.val.wireCount] else [] := by
+  unfold ConcreteElaboration.exactScopeWires filterFin
+  change List.filter _ (allFin (input.val.wireCount + 1)) = _
+  rw [allFin_succ_last, List.filter_append, List.filter_map]
+  congr 1
+  · apply congrArg (List.map Fin.castSucc)
+    apply congrArg (fun predicate =>
+      List.filter predicate (allFin input.val.wireCount))
+    funext wire
+    simp only [Function.comp_apply]
+    rw [fissionRaw_oldWire_scope]
+    rfl
+  · by_cases equality : candidateRegion = site
+    · subst candidateRegion
+      simp [fissionRaw_freshWire_scope]
+    · have reverse : site ≠ candidateRegion := fun same => equality same.symm
+      simp [fissionRaw_freshWire_scope, equality]
+      exact reverse
+
+/-- The source lexical wire context embedded in the append-only fission wire
+layout.  The target has one additional site-local wire. -/
+structure ContextEmbedding
+    (input : CheckedDiagram signature)
+    (node : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (source : ConcreteElaboration.WireContext input.val)
+    (target : ConcreteElaboration.WireContext
+      (fissionRaw input node site producer residual)) where
+  index : Fin source.length → Fin target.length
+  get : ∀ i, target.get (index i) = (source.get i).castSucc
+  mem_old : ∀ wire : Fin input.val.wireCount,
+    wire.castSucc ∈ target ↔ wire ∈ source
+
+namespace ContextEmbedding
+
+noncomputable def ofMem
+    {input : CheckedDiagram signature}
+    {node : Fin input.val.nodeCount}
+    {site : Fin input.val.regionCount}
+    {producer : Lambda.Term 0 (Fin input.val.wireCount)}
+    {residual : Lambda.Term 0 (Option (Fin input.val.wireCount))}
+    {source : ConcreteElaboration.WireContext input.val}
+    {target : ConcreteElaboration.WireContext
+      (fissionRaw input node site producer residual)}
+    (membership : ∀ wire : Fin input.val.wireCount,
+      wire.castSucc ∈ target ↔ wire ∈ source) :
+    ContextEmbedding input node site producer residual source target where
+  index := fun i => Classical.choose
+    (ConcreteElaboration.WireContext.lookup?_complete
+      ((membership (source.get i)).mpr (List.get_mem source i)))
+  get := by
+    intro i
+    exact ConcreteElaboration.WireContext.lookup?_sound
+      (Classical.choose_spec
+        (ConcreteElaboration.WireContext.lookup?_complete
+          ((membership (source.get i)).mpr (List.get_mem source i))))
+  mem_old := membership
+
+theorem index_eq_of_get
+    (embedding : ContextEmbedding input node site producer residual
+      source target)
+    (targetNodup : target.Nodup) (i : Fin source.length)
+    (candidate : Fin target.length)
+    (candidateGet : target.get candidate = (source.get i).castSucc) :
+    candidate = embedding.index i := by
+  obtain ⟨found, foundResult⟩ :=
+    ConcreteElaboration.WireContext.lookup?_complete
+      (List.get_mem target candidate)
+  have candidateFound := ConcreteElaboration.WireContext.lookup?_unique
+    targetNodup foundResult rfl
+  have embeddingFound := ConcreteElaboration.WireContext.lookup?_unique
+    targetNodup foundResult ((embedding.get i).trans candidateGet.symm)
+  exact candidateFound.trans embeddingFound.symm
+
+theorem index_injective
+    (embedding : ContextEmbedding input node site producer residual
+      source target)
+    (sourceNodup : source.Nodup) : Function.Injective embedding.index := by
+  intro first second equality
+  have wires : source.get first = source.get second := by
+    have castEquality : (source.get first).castSucc =
+        (source.get second).castSucc := by
+      rw [← embedding.get first, ← embedding.get second, equality]
+    apply Fin.ext
+    have values := congrArg
+      (fun value : Fin (input.val.wireCount + 1) => value.val) castEquality
+    simpa only [Fin.val_castSucc] using values
+  apply Fin.ext
+  exact (List.getElem_inj sourceNodup).mp (by
+    simpa only [List.get_eq_getElem] using wires)
+
+noncomputable def extendEnvironment
+    (embedding : ContextEmbedding input node site producer residual
+      source target)
+    (sourceNodup : source.Nodup) (fallback : D)
+    (sourceEnv : Fin source.length → D) : Fin target.length → D :=
+  fun targetIndex =>
+    if witness : ∃ sourceIndex, embedding.index sourceIndex = targetIndex then
+      sourceEnv witness.choose
+    else fallback
+
+theorem extendEnvironment_index
+    (embedding : ContextEmbedding input node site producer residual
+      source target)
+    (sourceNodup : source.Nodup) (fallback : D)
+    (sourceEnv : Fin source.length → D) :
+    embedding.extendEnvironment sourceNodup fallback sourceEnv ∘
+        embedding.index = sourceEnv := by
+  funext sourceIndex
+  simp only [Function.comp_apply, extendEnvironment]
+  split
+  · rename_i witness
+    exact congrArg sourceEnv
+      (embedding.index_injective sourceNodup witness.choose_spec)
+  · rename_i absent
+    exact False.elim (absent ⟨sourceIndex, rfl⟩)
+
+noncomputable def extend
+    (embedding : ContextEmbedding input node site producer residual
+      source target)
+    (region : Fin input.val.regionCount) :
+    ContextEmbedding input node site producer residual
+      (source.extend region) (target.extend region) :=
+  ofMem (by
+    intro wire
+    unfold ConcreteElaboration.WireContext.extend
+    constructor
+    · intro member
+      rcases List.mem_append.mp member with inherited | localMember
+      · exact List.mem_append_left _ ((embedding.mem_old wire).mp inherited)
+      · exact List.mem_append_right _
+          ((fissionRaw_exactScopeWires_mem_old_iff input node site region
+            producer residual wire).mp localMember)
+    · intro member
+      rcases List.mem_append.mp member with inherited | localMember
+      · exact List.mem_append_left _ ((embedding.mem_old wire).mpr inherited)
+      · exact List.mem_append_right _
+          ((fissionRaw_exactScopeWires_mem_old_iff input node site region
+            producer residual wire).mpr localMember))
+
+end ContextEmbedding
+
 @[simp] theorem fissionRaw_oldNode_region
     (input : CheckedDiagram signature)
     (node : Fin input.val.nodeCount)
