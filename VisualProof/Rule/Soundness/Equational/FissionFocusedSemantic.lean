@@ -409,6 +409,97 @@ theorem selectedProducer_item_denote_iff
               rw [sourceFreeValues, residualFreeValues, evaluationEq,
                 model.eval_mapFree, outputValueEq]
 
+theorem producer_item_denotes
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (targetWellFormed :
+      (fissionRaw input selected site producer residual).WellFormed signature)
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext
+      (fissionRaw input selected site producer residual))
+    (embedding : ContextEmbedding input selected site producer residual
+      sourceContext targetContext)
+    (sourceNodup : sourceContext.Nodup)
+    (targetNodup : targetContext.Nodup)
+    (binders : ConcreteElaboration.BinderContext input.val rels)
+    (producerItem : Item signature targetContext.length rels)
+    (producerCompiled : ConcreteElaboration.compileNode? signature
+      (fissionRaw input selected site producer residual) targetContext binders
+      (Fin.last input.val.nodeCount) = some producerItem)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceEnvironment : Fin sourceContext.length → model.Carrier)
+    (targetEnvironment : Fin targetContext.length → model.Carrier)
+    (relEnvironment : RelEnv model.Carrier rels)
+    (agrees : (ConcreteElaboration.ContextIndexRelation.forwardMap
+      embedding.index).EnvironmentsAgree sourceEnvironment targetEnvironment)
+    (freshValue : ∀ index : Fin targetContext.length,
+      targetContext.get index = Fin.last input.val.wireCount →
+      targetEnvironment index = model.eval producer
+        (wireValue sourceContext
+          (model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
+            Lambda.Term 0 (Fin 0)) Fin.elim0) sourceEnvironment)) :
+    denoteItem model named targetEnvironment relEnvironment producerItem := by
+  unfold ConcreteElaboration.compileNode? at producerCompiled
+  rw [fissionRaw_producer_node] at producerCompiled
+  cases outputResult : ConcreteElaboration.resolvePort?
+      (fissionRaw input selected site producer residual) targetContext
+      (Fin.last input.val.nodeCount) .output with
+  | none => simp [outputResult] at producerCompiled
+  | some output =>
+    cases freeResult : ConcreteElaboration.resolvePorts?
+        (fissionRaw input selected site producer residual) targetContext
+        (Fin.last input.val.nodeCount) producer.freeSupport.length
+        (fun port => .free port) with
+    | none => simp [outputResult, freeResult] at producerCompiled
+    | some free =>
+      simp [outputResult, freeResult] at producerCompiled
+      subst producerItem
+      let fallback : model.Carrier := model.eval
+        (Lambda.Term.lam (Lambda.Term.bvar 0) :
+          Lambda.Term 0 (Fin 0)) Fin.elim0
+      let global : Fin input.val.wireCount → model.Carrier :=
+        wireValue sourceContext fallback sourceEnvironment
+      obtain ⟨outputOwner, outputOccurs, outputGet⟩ :=
+        ConcreteElaboration.resolvePort?_sound outputResult
+      have outputOwnerEq : outputOwner = Fin.last input.val.wireCount := by
+        apply ConcreteElaboration.endpoint_wire_unique
+          targetWellFormed.wire_endpoints_are_disjoint outputOccurs
+        exact fissionRaw_producer_output_occurs input selected site producer
+          residual
+      have outputGet' : targetContext.get output =
+          Fin.last input.val.wireCount := by
+        have ownerGet : targetContext.get output = outputOwner := by
+          simpa only [List.get_eq_getElem] using outputGet
+        exact ownerGet.trans outputOwnerEq
+      have freeValues : targetEnvironment ∘ free =
+          global ∘ producer.freeSupport.get := by
+        funext port
+        have resolvedPort := sequenceFin_sound freeResult port
+        obtain ⟨owner, ownerOccurs, ownerGet⟩ :=
+          ConcreteElaboration.resolvePort?_sound resolvedPort
+        have intendedOccurs := fissionRaw_producer_free_occurs input selected
+          site producer residual port
+        have ownerEq : owner = (producer.freeSupport.get port).castSucc :=
+          ConcreteElaboration.endpoint_wire_unique
+            targetWellFormed.wire_endpoints_are_disjoint ownerOccurs
+            intendedOccurs
+        have get' : targetContext.get (free port) =
+            (producer.freeSupport.get port).castSucc := by
+          have ownerGet' : targetContext.get (free port) = owner := by
+            simpa only [List.get_eq_getElem] using ownerGet
+          exact ownerGet'.trans ownerEq
+        simp only [Function.comp_apply, global]
+        exact targetOldValue_eq_of_get embedding sourceNodup targetNodup
+          sourceEnvironment targetEnvironment agrees fallback
+          (producer.freeSupport.get port) (free port) get'
+      simp only [denoteItem_equation, model.eval_mapFree]
+      rw [freeValues, LambdaModel.eval_compact model producer global]
+      exact freshValue output outputGet'
+
 end FissionSoundness
 
 end VisualProof.Rule
