@@ -730,6 +730,482 @@ theorem rootEnvironment_backward_regular
       _ = targetRaw (targetIndex sourceHidden) := rfl
       _ = targetRaw targetAt := congrArg targetRaw hiddenIndexEq
 
+noncomputable def focusedRootBackwardSourceLocal
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (producerRegion consumerRegion : Fin input.val.regionCount)
+    (producerPorts consumerPorts : Nat)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (producerShape : input.val.nodes producer =
+      .term producerRegion producerPorts producerTerm)
+    (scope : producerRegion = (input.val.wires consumedWire).scope)
+    (producerResolved : resolveNodeFreeWires? input producer producerPorts =
+      some producerWire)
+    (endpoints :
+      (input.val.wires consumedWire).endpoints = [
+          { node := producer, port := CPort.output },
+          { node := consumer, port := CPort.free consumedPort.val }] ∨
+      (input.val.wires consumedWire).endpoints = [
+          { node := consumer, port := CPort.free consumedPort.val },
+          { node := producer, port := CPort.output }])
+    (rootSite : input.val.root = producerRegion)
+    (boundary : List (Fin input.val.wireCount))
+    (mapped : List (Fin (fusionWireDomain input.val consumedWire).count))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetRoot : ∀ wire, wire ∈ mapped →
+      ((fusionRaw input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort).wires wire).scope = input.val.root)
+    (targetWellFormed :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).WellFormed signature)
+    (targetExact : ConcreteElaboration.WireContext.Exact
+      (targetCheckedOpen input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort mapped targetRoot targetWellFormed).val.rootWires
+      input.val.root)
+    (model : Lambda.LambdaModel)
+    (targetRaw : Fin (List.length
+      (targetCheckedOpen input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort mapped targetRoot targetWellFormed).val.rootWires)
+      → model.Carrier) :
+    Fin (sourceCheckedOpen input boundary sourceRoot).val.hiddenWires.length →
+      model.Carrier := by
+  let source := sourceCheckedOpen input boundary sourceRoot
+  let target := targetCheckedOpen input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort mapped targetRoot targetWellFormed
+  have targetExactAtProducer : ConcreteElaboration.WireContext.Exact
+      target.val.rootWires producerRegion := by
+    simpa [target, rootSite] using targetExact
+  let producerTargetIndex : Fin producerPorts →
+      Fin target.val.rootWires.length := fun port ↦
+    targetIndexOfSurvivor input consumedWire producer consumer hdistinct
+      producerRegion consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort target.val.rootWires targetExactAtProducer
+      (producerWire port)
+      (producerWire_ne_consumed input consumedWire producer consumer hdistinct
+        producerPorts producerWire consumedPort.val producerResolved endpoints
+        port)
+      (producerWire_encloses_producer input producer producerRegion producerPorts
+        producerTerm producerWire producerShape producerResolved port)
+  let termValue := model.eval producerTerm (targetRaw ∘ producerTargetIndex)
+  exact fun sourceHidden ↦
+    let wire := source.val.hiddenWires.get sourceHidden
+    if selected : wire = consumedWire then termValue
+    else
+      let targetIndex := targetIndexOfSurvivor input consumedWire producer
+        consumer hdistinct producerRegion consumerRegion producerTerm
+        consumerTerm producerWire consumerWire consumedPort target.val.rootWires
+        targetExactAtProducer wire selected (by
+          have wireRoot := (OpenConcreteDiagram.mem_hiddenWires source.val wire).1
+            (List.get_mem source.val.hiddenWires sourceHidden) |>.1
+          have wireProducer : (input.val.wires wire).scope = producerRegion := by
+            have wireRoot' : (input.val.wires wire).scope = input.val.root := by
+              simpa [source] using wireRoot
+            exact wireRoot'.trans rootSite
+          rw [wireProducer]
+          exact ConcreteDiagram.Encloses.refl input.val producerRegion)
+      targetRaw targetIndex
+
+theorem focusedRootBackwardWitness
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (producerRegion consumerRegion : Fin input.val.regionCount)
+    (producerPorts consumerPorts : Nat)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (producerShape : input.val.nodes producer =
+      .term producerRegion producerPorts producerTerm)
+    (scope : producerRegion = (input.val.wires consumedWire).scope)
+    (producerResolved : resolveNodeFreeWires? input producer producerPorts =
+      some producerWire)
+    (endpoints :
+      (input.val.wires consumedWire).endpoints = [
+          { node := producer, port := CPort.output },
+          { node := consumer, port := CPort.free consumedPort.val }] ∨
+      (input.val.wires consumedWire).endpoints = [
+          { node := consumer, port := CPort.free consumedPort.val },
+          { node := producer, port := CPort.output }])
+    (rootSite : input.val.root = producerRegion)
+    (boundary : List (Fin input.val.wireCount))
+    (mapped : List (Fin (fusionWireDomain input.val consumedWire).count))
+    (transport : (fusionInterfaceTransport input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort).transportBoundary boundary = some mapped)
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetRoot : ∀ wire, wire ∈ mapped →
+      ((fusionRaw input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort).wires wire).scope = input.val.root)
+    (targetWellFormed :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (sourceOuter : Fin (sourceOpen input boundary).exposedWires.length →
+      model.Carrier)
+    (targetOuter : Fin (targetOpen input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort mapped).exposedWires.length → model.Carrier)
+    (outerAgrees : ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+      (exposedContext input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort boundary mapped transport).indexRelation
+      sourceOuter targetOuter)
+    (targetLocal : Fin (targetOpen input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort mapped).hiddenWires.length → model.Carrier)
+    (consumedIndex : Fin (sourceOpen input boundary).rootWires.length)
+    (consumedGet : (sourceOpen input boundary).rootWires.get consumedIndex =
+      consumedWire)
+    (producerIndex : Fin producerPorts →
+      Fin (sourceOpen input boundary).rootWires.length)
+    (producerGet : ∀ port,
+      (sourceOpen input boundary).rootWires.get (producerIndex port) =
+        producerWire port) :
+    ∃ sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length →
+        model.Carrier,
+      let source := sourceCheckedOpen input boundary sourceRoot
+      let target := targetCheckedOpen input consumedWire producer consumer
+        hdistinct consumerRegion producerTerm consumerTerm producerWire
+        consumerWire consumedPort mapped targetRoot targetWellFormed
+      let combined := Context.ofExact input consumedWire producer consumer
+        hdistinct consumerRegion producerTerm consumerTerm producerWire
+        consumerWire consumedPort input.val.root source.val.rootWires
+        target.val.rootWires
+        (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+          source)
+        (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+          target)
+      let sourceRaw := ConcreteElaboration.rootEnvironment
+        source.val.exposedWires source.val.hiddenWires sourceOuter sourceLocal
+      let targetRaw := ConcreteElaboration.rootEnvironment
+        target.val.exposedWires target.val.hiddenWires targetOuter targetLocal
+      combined.indexRelation.EnvironmentsAgree sourceRaw targetRaw ∧
+        sourceRaw consumedIndex =
+          model.eval producerTerm (sourceRaw ∘ producerIndex) := by
+  let source := sourceCheckedOpen input boundary sourceRoot
+  let target := targetCheckedOpen input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort mapped targetRoot targetWellFormed
+  let outer := exposedContext input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort boundary mapped transport
+  let sourceExact :=
+    ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      source
+  let targetExact :=
+    ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      target
+  have targetExactAtProducer : ConcreteElaboration.WireContext.Exact
+      target.val.rootWires producerRegion := by
+    simpa [target, targetCheckedOpen, targetOpen, rootSite] using targetExact
+  let combined := Context.ofExact input consumedWire producer consumer
+    hdistinct consumerRegion producerTerm consumerTerm producerWire
+    consumerWire consumedPort input.val.root source.val.rootWires
+    target.val.rootWires sourceExact targetExact
+  let targetRaw : Fin target.val.rootWires.length → model.Carrier :=
+    ConcreteElaboration.rootEnvironment target.val.exposedWires
+      target.val.hiddenWires targetOuter targetLocal
+  let sourceLocal := focusedRootBackwardSourceLocal input consumedWire producer
+    consumer hdistinct producerRegion consumerRegion producerPorts consumerPorts
+    producerTerm consumerTerm producerWire consumerWire consumedPort
+    producerShape scope producerResolved endpoints rootSite boundary mapped
+    sourceRoot targetRoot targetWellFormed
+    (by simpa [target] using targetExact) model (by simpa [target] using targetRaw)
+  let sourceRaw : Fin source.val.rootWires.length → model.Carrier :=
+    ConcreteElaboration.rootEnvironment source.val.exposedWires
+      source.val.hiddenWires sourceOuter sourceLocal
+  have outerEq : sourceOuter ∘ outer.sourceIndex = targetOuter := by
+    simpa [outer, Context.indexRelation] using outerAgrees
+  have agreement : combined.indexRelation.EnvironmentsAgree sourceRaw targetRaw := by
+    apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+      combined.sourceIndex _ _).mpr
+    funext targetFull
+    let lengthEq : target.val.rootWires.length =
+        target.val.exposedWires.length + target.val.hiddenWires.length := by
+      simp [OpenConcreteDiagram.rootWires]
+    let split := Fin.cast lengthEq targetFull
+    have recover : Fin.cast lengthEq.symm split = targetFull := by
+      apply Fin.ext
+      rfl
+    rw [← recover]
+    refine Fin.addCases (fun targetExposed ↦ ?_)
+      (fun targetHidden ↦ ?_) split
+    · let targetAt :=
+        Splice.Input.TwoInputPresentation.rootExposedIndex target.val
+          targetExposed
+      let sourceExposed := outer.sourceIndex targetExposed
+      let sourceAt :=
+        Splice.Input.TwoInputPresentation.rootExposedIndex source.val
+          sourceExposed
+      have combinedEq : combined.sourceIndex targetAt = sourceAt := by
+        apply Context.sourceIndex_eq_of_get combined sourceExact.nodup
+        have sourceGet : source.val.rootWires.get sourceAt =
+            source.val.exposedWires.get sourceExposed := by
+          simpa only [sourceAt] using
+            rootExposedIndex_get source.val sourceExposed
+        have targetGet : target.val.rootWires.get targetAt =
+            target.val.exposedWires.get targetExposed := by
+          simpa only [targetAt] using
+            rootExposedIndex_get target.val targetExposed
+        calc
+          source.val.rootWires.get sourceAt =
+              source.val.exposedWires.get sourceExposed := sourceGet
+          _ = (fusionWireDomain input.val consumedWire).origin
+              (target.val.exposedWires.get targetExposed) := outer.get targetExposed
+          _ = (fusionWireDomain input.val consumedWire).origin
+              (target.val.rootWires.get targetAt) := congrArg _ targetGet.symm
+      change (sourceRaw ∘ combined.sourceIndex) targetAt = targetRaw targetAt
+      rw [Function.comp_apply, combinedEq]
+      exact (Splice.Input.TwoInputPresentation.rootEnvironment_rootExposedIndex
+        source.val sourceOuter sourceLocal sourceExposed).trans
+          ((congrFun outerEq targetExposed).trans
+            (Splice.Input.TwoInputPresentation.rootEnvironment_rootExposedIndex
+              target.val targetOuter targetLocal targetExposed).symm)
+    · let targetAt :=
+        Splice.Input.TwoInputPresentation.rootHiddenIndex target.val targetHidden
+      let targetWire := target.val.hiddenWires.get targetHidden
+      let sourceWire := (fusionWireDomain input.val consumedWire).origin targetWire
+      have targetAtGet : target.val.rootWires.get targetAt = targetWire := by
+        simpa only [targetAt, targetWire] using
+          rootHiddenIndex_get target.val targetHidden
+      have sourceWireRoot : (input.val.wires sourceWire).scope = input.val.root := by
+        have targetWireRoot := (OpenConcreteDiagram.mem_hiddenWires target.val
+          targetWire).1 (List.get_mem target.val.hiddenWires targetHidden) |>.1
+        simpa only [fusionRaw_wire_scope, sourceWire] using targetWireRoot
+      have sourceWireSurvives : sourceWire ≠ consumedWire := by
+        have survives := (fusionWireDomain input.val consumedWire).origin_survives
+          targetWire
+        simpa [sourceWire, fusionWireDomain] using survives
+      have sourceWireAbsent : sourceWire ∉ boundary := by
+        intro sourceMember
+        let mappedWire := (fusionWireDomain input.val consumedWire).index
+          sourceWire (by simp [fusionWireDomain, sourceWireSurvives])
+        have mappedEq : mappedWire = targetWire := by
+          simpa [mappedWire, sourceWire] using
+            (fusionWireDomain input.val consumedWire).index_origin targetWire
+        have image := interface_image_survivor input consumedWire producer
+          consumer hdistinct consumerRegion producerTerm consumerTerm
+          producerWire consumerWire consumedPort sourceWire sourceWireSurvives
+          sourceWireRoot
+        have targetMember := boundary_image_mem
+          (fusionInterfaceTransport input consumedWire producer consumer
+            hdistinct consumerRegion producerTerm consumerTerm producerWire
+            consumerWire consumedPort) boundary mapped transport sourceWire
+            mappedWire sourceMember image
+        rw [mappedEq] at targetMember
+        exact (OpenConcreteDiagram.mem_hiddenWires target.val targetWire).1
+          (List.get_mem target.val.hiddenWires targetHidden) |>.2
+          ((OpenConcreteDiagram.mem_exposedWires target.val targetWire).2
+            targetMember)
+      have sourceHiddenMember : sourceWire ∈ source.val.hiddenWires :=
+        (OpenConcreteDiagram.mem_hiddenWires source.val sourceWire).2
+          ⟨sourceWireRoot, fun exposed ↦ sourceWireAbsent
+            ((OpenConcreteDiagram.mem_exposedWires source.val sourceWire).1
+              exposed)⟩
+      obtain ⟨sourceHidden, sourceLookup⟩ :=
+        ConcreteElaboration.WireContext.lookup?_complete sourceHiddenMember
+      have sourceHiddenGet : source.val.hiddenWires.get sourceHidden =
+          sourceWire := ConcreteElaboration.WireContext.lookup?_sound sourceLookup
+      let sourceAt :=
+        Splice.Input.TwoInputPresentation.rootHiddenIndex source.val sourceHidden
+      have sourceAtGet : source.val.rootWires.get sourceAt = sourceWire :=
+        (rootHiddenIndex_get source.val sourceHidden).trans sourceHiddenGet
+      have combinedEq : combined.sourceIndex targetAt = sourceAt := by
+        apply Context.sourceIndex_eq_of_get combined sourceExact.nodup
+        calc
+          source.val.rootWires.get sourceAt = sourceWire := sourceAtGet
+          _ = (fusionWireDomain input.val consumedWire).origin targetWire := rfl
+          _ = (fusionWireDomain input.val consumedWire).origin
+              (target.val.rootWires.get targetAt) := congrArg _ targetAtGet.symm
+      have sourceVisible : input.val.Encloses
+          (input.val.wires sourceWire).scope producerRegion := by
+        rw [sourceWireRoot, rootSite]
+        exact ConcreteDiagram.Encloses.refl _ _
+      let selectedTarget := targetIndexOfSurvivor input consumedWire producer
+        consumer hdistinct producerRegion consumerRegion producerTerm
+        consumerTerm producerWire consumerWire consumedPort target.val.rootWires
+        targetExactAtProducer sourceWire sourceWireSurvives sourceVisible
+      have selectedTargetEq : selectedTarget = targetAt := by
+        apply Fin.ext
+        exact (List.getElem_inj targetExact.nodup).mp (by
+          apply (fusionWireDomain input.val consumedWire).origin_injective
+          have selectedOrigin := targetIndexOfSurvivor_origin_get input
+            consumedWire producer consumer hdistinct producerRegion
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort target.val.rootWires targetExactAtProducer sourceWire
+            sourceWireSurvives sourceVisible
+          calc
+            (fusionWireDomain input.val consumedWire).origin
+                (target.val.rootWires.get selectedTarget) = sourceWire :=
+              selectedOrigin
+            _ = (fusionWireDomain input.val consumedWire).origin targetWire := rfl
+            _ = (fusionWireDomain input.val consumedWire).origin
+                (target.val.rootWires.get targetAt) := congrArg _ targetAtGet.symm)
+      change (sourceRaw ∘ combined.sourceIndex) targetAt = targetRaw targetAt
+      rw [Function.comp_apply, combinedEq]
+      calc
+        sourceRaw sourceAt = sourceLocal sourceHidden := by
+          simpa only [sourceRaw, sourceAt] using
+            Splice.Input.TwoInputPresentation.rootEnvironment_rootHiddenIndex
+              source.val sourceOuter sourceLocal sourceHidden
+        _ = targetRaw selectedTarget := by
+          simp only [sourceLocal, focusedRootBackwardSourceLocal]
+          have sourceHiddenGetOpen :
+              (sourceCheckedOpen input boundary sourceRoot).val.hiddenWires.get
+                sourceHidden =
+                sourceWire := by
+            simpa [source] using sourceHiddenGet
+          have sourceHiddenNe :
+              (sourceCheckedOpen input boundary sourceRoot).val.hiddenWires.get
+                sourceHidden ≠ consumedWire := by
+            rw [sourceHiddenGetOpen]
+            exact sourceWireSurvives
+          rw [dif_neg sourceHiddenNe]
+          have actualVisible : input.val.Encloses
+              (input.val.wires
+                ((sourceCheckedOpen input boundary sourceRoot).val.hiddenWires.get
+                  sourceHidden)).scope producerRegion := by
+            exact (congrArg (fun wire ↦ input.val.Encloses
+              (input.val.wires wire).scope producerRegion)
+              sourceHiddenGetOpen).mpr sourceVisible
+          let actualTarget := targetIndexOfSurvivor input consumedWire producer
+            consumer hdistinct producerRegion consumerRegion producerTerm
+            consumerTerm producerWire consumerWire consumedPort
+            target.val.rootWires targetExactAtProducer
+            ((sourceCheckedOpen input boundary sourceRoot).val.hiddenWires.get
+              sourceHidden) sourceHiddenNe actualVisible
+          change targetRaw actualTarget = targetRaw selectedTarget
+          apply congrArg targetRaw
+          apply Fin.ext
+          exact (List.getElem_inj (xs := target.val.rootWires)
+            (i := actualTarget.val) (j := selectedTarget.val)
+            (h₀ := actualTarget.isLt) (h₁ := selectedTarget.isLt)
+            targetExact.nodup).mp (by
+            apply (fusionWireDomain input.val consumedWire).origin_injective
+            have actualOrigin := targetIndexOfSurvivor_origin_get input
+              consumedWire producer consumer hdistinct producerRegion
+              consumerRegion producerTerm consumerTerm producerWire consumerWire
+              consumedPort target.val.rootWires targetExactAtProducer
+              ((sourceCheckedOpen input boundary sourceRoot).val.hiddenWires.get
+                sourceHidden)
+              sourceHiddenNe actualVisible
+            have selectedOrigin := targetIndexOfSurvivor_origin_get input
+              consumedWire producer consumer hdistinct producerRegion
+              consumerRegion producerTerm consumerTerm producerWire consumerWire
+              consumedPort target.val.rootWires targetExactAtProducer sourceWire
+              sourceWireSurvives sourceVisible
+            have originsEq := actualOrigin.trans
+              (sourceHiddenGetOpen.trans selectedOrigin.symm)
+            simpa [actualTarget, selectedTarget] using originsEq)
+        _ = targetRaw targetAt := congrArg targetRaw selectedTargetEq
+  have consumedRoot : (input.val.wires consumedWire).scope = input.val.root := by
+    exact scope.symm.trans rootSite.symm
+  have consumedAbsent := consumed_not_mem_boundary input consumedWire producer
+    consumer hdistinct consumerRegion producerTerm consumerTerm producerWire
+    consumerWire consumedPort boundary mapped transport
+  have consumedHiddenMember : consumedWire ∈ source.val.hiddenWires :=
+    (OpenConcreteDiagram.mem_hiddenWires source.val consumedWire).2
+      ⟨consumedRoot, fun exposed ↦ consumedAbsent
+        ((OpenConcreteDiagram.mem_exposedWires source.val consumedWire).1
+          exposed)⟩
+  obtain ⟨consumedHidden, consumedLookup⟩ :=
+    ConcreteElaboration.WireContext.lookup?_complete consumedHiddenMember
+  have consumedHiddenGet : source.val.hiddenWires.get consumedHidden =
+      consumedWire := ConcreteElaboration.WireContext.lookup?_sound consumedLookup
+  let consumedAt :=
+    Splice.Input.TwoInputPresentation.rootHiddenIndex source.val consumedHidden
+  have consumedAtGet : source.val.rootWires.get consumedAt = consumedWire :=
+    (rootHiddenIndex_get source.val consumedHidden).trans consumedHiddenGet
+  have consumedIndexEq : consumedIndex = consumedAt := by
+    apply Fin.ext
+    exact (List.getElem_inj sourceExact.nodup).mp
+      (consumedGet.trans consumedAtGet.symm)
+  have producerValues : ∀ port,
+      sourceRaw (producerIndex port) = targetRaw
+        (targetIndexOfSurvivor input consumedWire producer consumer hdistinct
+          producerRegion consumerRegion producerTerm consumerTerm producerWire
+          consumerWire consumedPort target.val.rootWires targetExactAtProducer
+          (producerWire port)
+          (producerWire_ne_consumed input consumedWire producer consumer
+            hdistinct producerPorts producerWire consumedPort.val
+            producerResolved endpoints port)
+          (producerWire_encloses_producer input producer producerRegion
+            producerPorts producerTerm producerWire producerShape
+            producerResolved port)) := by
+    intro port
+    let targetIndex := targetIndexOfSurvivor input consumedWire producer consumer
+      hdistinct producerRegion consumerRegion producerTerm consumerTerm
+      producerWire consumerWire consumedPort target.val.rootWires
+      targetExactAtProducer (producerWire port)
+      (producerWire_ne_consumed input consumedWire producer consumer hdistinct
+        producerPorts producerWire consumedPort.val producerResolved endpoints
+        port)
+      (producerWire_encloses_producer input producer producerRegion producerPorts
+        producerTerm producerWire producerShape producerResolved port)
+    have combinedEq : combined.sourceIndex targetIndex = producerIndex port := by
+      apply Context.sourceIndex_eq_of_get combined sourceExact.nodup
+      have producerGet' : source.val.rootWires.get (producerIndex port) =
+          producerWire port := by
+        simpa [source, sourceCheckedOpen] using producerGet port
+      calc
+        source.val.rootWires.get (producerIndex port) = producerWire port :=
+          producerGet'
+        _ = (fusionWireDomain input.val consumedWire).origin
+            (target.val.rootWires.get targetIndex) :=
+          (targetIndexOfSurvivor_origin_get input consumedWire producer
+            consumer hdistinct producerRegion consumerRegion producerTerm
+            consumerTerm producerWire consumerWire consumedPort
+            target.val.rootWires targetExactAtProducer (producerWire port)
+            (producerWire_ne_consumed input consumedWire producer consumer
+              hdistinct producerPorts producerWire consumedPort.val
+              producerResolved endpoints port)
+            (producerWire_encloses_producer input producer producerRegion
+              producerPorts producerTerm producerWire producerShape
+              producerResolved port)).symm
+    have agreementEq : sourceRaw ∘ combined.sourceIndex = targetRaw := by
+      simpa [combined, Context.indexRelation] using agreement
+    calc
+      sourceRaw (producerIndex port) =
+          sourceRaw (combined.sourceIndex targetIndex) :=
+        congrArg sourceRaw combinedEq.symm
+      _ = targetRaw targetIndex := congrFun agreementEq targetIndex
+  refine ⟨sourceLocal, agreement, ?_⟩
+  rw [consumedIndexEq]
+  have sourceRawConsumed : sourceRaw consumedAt = sourceLocal consumedHidden := by
+    simpa only [sourceRaw, consumedAt] using
+      Splice.Input.TwoInputPresentation.rootEnvironment_rootHiddenIndex
+        source.val sourceOuter sourceLocal consumedHidden
+  change sourceRaw consumedAt =
+    model.eval producerTerm (sourceRaw ∘ producerIndex)
+  rw [sourceRawConsumed]
+  have consumedHiddenGetOpen :
+      (sourceCheckedOpen input boundary sourceRoot).val.hiddenWires.get
+        consumedHidden = consumedWire := by
+    simpa [source] using consumedHiddenGet
+  simp only [sourceLocal, focusedRootBackwardSourceLocal]
+  rw [dif_pos consumedHiddenGetOpen]
+  apply congrArg (model.eval producerTerm)
+  funext port
+  exact (producerValues port).symm
+
 end FusionSoundness
 
 end VisualProof.Rule
