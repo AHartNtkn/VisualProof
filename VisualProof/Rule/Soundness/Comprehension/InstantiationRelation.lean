@@ -8,10 +8,10 @@ open VisualProof.Theory
 
 namespace InstantiationSemantic
 
-/-- A concrete binder context and its intrinsic environment interpret the
-executor's moving quantified bubble as the one fixed comprehension relation.
-The definition is keyed by concrete binder identity, so it remains meaningful
-under arbitrary intervening cut and bubble scopes. -/
+/-- The moving quantified bubble is interpreted by one fixed relation witness.
+The witness is intentionally abstract here: the receipt-driven terminal-body
+simulation constructs the authoritative witness, including every external proxy
+binder, while this invariant records how the compiler sees it. -/
 def FixedRelationAt
     {signature : List Nat}
     {input : CheckedDiagram signature}
@@ -25,19 +25,17 @@ def FixedRelationAt
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    (model : Lambda.LambdaModel)
-    (named : NamedEnv model.Carrier signature)
-    (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
+    {model : Lambda.LambdaModel}
+    (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels) : Prop :=
   ∀ relation : RelVar rels payload.arity,
     binderContext state.bubble = some ⟨payload.arity, relation⟩ →
-      relEnv.lookup relation =
-        payload.interpretedRelation model named (wireValue ∘ state.parameters)
+      relEnv.lookup relation = relationValue
 
-/-- Immediately inside the quantified bubble, choosing the comprehension as
-the existential relation witness establishes the fixed-relation invariant. -/
+/-- Pushing the selected existential witness establishes the fixed-relation
+invariant immediately inside the quantified bubble. -/
 theorem fixedRelationAt_push
     {signature : List Nat}
     {input : CheckedDiagram signature}
@@ -51,16 +49,14 @@ theorem fixedRelationAt_push
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    (model : Lambda.LambdaModel)
-    (named : NamedEnv model.Carrier signature)
-    (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
+    {model : Lambda.LambdaModel}
+    (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels) :
-    FixedRelationAt payload state model named wireValue
+    FixedRelationAt payload state relationValue
       (binderContext.push state.bubble payload.arity)
-      (payload.interpretedRelation model named
-        (wireValue ∘ state.parameters), relEnv) := by
+      (relationValue, relEnv) := by
   intro relation hlookup
   have hhead :
       (binderContext.push state.bubble payload.arity) state.bubble =
@@ -76,10 +72,9 @@ theorem fixedRelationAt_push
   subst relation
   rfl
 
-/-- Under the fixed binder interpretation, the executor-owned relation atom
-denotes exactly the checked comprehension at that atom's ordered argument
-wires followed by the externally scoped parameter wires. -/
-theorem atom_iff_comprehension
+/-- Under the fixed interpretation, the executor-owned atom denotes exactly
+the chosen relation witness at its receipt-recorded argument wires. -/
+theorem atom_iff_fixedRelation
     {signature : List Nat}
     {input : CheckedDiagram signature}
     {bubble : Fin input.val.regionCount}
@@ -92,49 +87,23 @@ theorem atom_iff_comprehension
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (model : Lambda.LambdaModel)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
+    (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
-    (fixed : FixedRelationAt payload state model named wireValue binderContext
-      relEnv)
+    (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (relation : RelVar rels payload.arity)
     (lookup : binderContext state.bubble =
       some ⟨payload.arity, relation⟩) :
     relEnv.lookup relation (wireValue ∘ arguments) ↔
-      comprehension.denote model named
-        (fun position => wireValue
-          ((instantiateSpliceInput comprehension attachments binders payload
-            state site arguments).attachment position)) := by
+      relationValue (wireValue ∘ arguments) := by
   rw [fixed relation lookup]
-  have boundaryValues :
-      (fun position => wireValue
-        ((instantiateSpliceInput comprehension attachments binders payload
-          state site arguments).attachment position)) =
-      (Fin.addCases (wireValue ∘ arguments)
-        (wireValue ∘ state.parameters) ∘
-          Fin.cast payload.boundarySplit) := by
-    funext position
-    let split := Fin.cast payload.boundarySplit position
-    change wireValue (Fin.addCases arguments state.parameters split) =
-      Fin.addCases (wireValue ∘ arguments) (wireValue ∘ state.parameters)
-        split
-    exact Fin.addCases
-      (fun index => by simp only [Fin.addCases_left, Function.comp_apply])
-      (fun index => by simp only [Fin.addCases_right, Function.comp_apply])
-      split
-  have interpreted := payload.interpretedRelation_apply model named
-    (wireValue ∘ state.parameters) (wireValue ∘ arguments)
-  rw [← boundaryValues] at interpreted
-  exact interpreted
 
-/-- Pointwise form used by compiler kernels after a resolved atom has exposed
-its argument-index vector. -/
-theorem atom_item_iff_comprehension
+/-- Pointwise compiler form of `atom_iff_fixedRelation`. -/
+theorem atom_item_iff_fixedRelation
     {signature : List Nat}
     {input : CheckedDiagram signature}
     {bubble : Fin input.val.regionCount}
@@ -147,16 +116,15 @@ theorem atom_item_iff_comprehension
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
+    (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
-    (fixed : FixedRelationAt payload state model named wireValue binderContext
-      relEnv)
+    (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (relation : RelVar rels payload.arity)
     (lookup : binderContext state.bubble =
       some ⟨payload.arity, relation⟩)
@@ -166,13 +134,10 @@ theorem atom_item_iff_comprehension
     (values : environment ∘ resolvedArguments = wireValue ∘ arguments) :
     denoteItem model named environment relEnv
         (.atom relation resolvedArguments) ↔
-      comprehension.denote model named
-        (fun position => wireValue
-          ((instantiateSpliceInput comprehension attachments binders payload
-            state site arguments).attachment position)) := by
+      relationValue (wireValue ∘ arguments) := by
   rw [denoteItem_atom, values]
-  exact atom_iff_comprehension payload state site arguments model named
-    wireValue binderContext relEnv fixed relation lookup
+  exact atom_iff_fixedRelation payload state arguments model wireValue
+    relationValue binderContext relEnv fixed relation lookup
 
 end InstantiationSemantic
 
