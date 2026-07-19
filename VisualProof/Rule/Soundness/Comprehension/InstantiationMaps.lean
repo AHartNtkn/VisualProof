@@ -140,6 +140,121 @@ theorem nodeMap_injective
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameNode_injective
 
+/-- The composite frame map preserves every retained region constructor and
+maps its parent through the same composite region map. -/
+theorem regionMap_shape
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (region : Fin state.diagram.val.regionCount) :
+    result.diagram.val.regions (trace.regionMap region) =
+      match state.diagram.val.regions region with
+      | .sheet => .sheet
+      | .cut parent => .cut (trace.regionMap parent)
+      | .bubble parent arity => .bubble (trace.regionMap parent) arity := by
+  induction trace with
+  | done fuel state pending_empty =>
+      simp only [regionMap, id_eq]
+      cases state.diagram.val.regions region <;> rfl
+  | step fuel state result atom tail site candidate arguments checkedInput
+      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+      let spliceInput := instantiateSpliceInput comprehension attachments
+        binders payload state site arguments
+      let layout := spliceInput.plugLayout
+      have mapped := ih (layout.frameRegion region)
+      simp only [advanceInstantiationState] at mapped
+      have frameShape : layout.plugRaw.regions (layout.frameRegion region) =
+          match state.diagram.val.regions region with
+          | .sheet => .sheet
+          | .cut parent => .cut (layout.frameRegion parent)
+          | .bubble parent arity =>
+              .bubble (layout.frameRegion parent) arity := by
+        change layout.plugRegion (layout.frameRegion region) = _
+        rw [layout.plugRegion_frameRegion]
+        cases shape : state.diagram.val.regions region <;>
+          simp [Splice.Input.PlugLayout.mapFrameRegion, spliceInput,
+            instantiateSpliceInput, shape] <;> rfl
+      rw [frameShape] at mapped
+      cases shape : state.diagram.val.regions region with
+      | sheet =>
+          simpa [regionMap, shape] using mapped
+      | cut parent =>
+          simpa [regionMap, shape] using mapped
+      | bubble parent arity =>
+          simpa [regionMap, shape] using mapped
+
+/-- The composite frame map preserves every retained node constructor and
+maps all region-valued fields through the composite region map. -/
+theorem nodeMap_shape
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (node : Fin state.diagram.val.nodeCount) :
+    result.diagram.val.nodes (trace.nodeMap node) =
+      match state.diagram.val.nodes node with
+      | .term owner freePorts term =>
+          .term (trace.regionMap owner) freePorts term
+      | .atom owner binder =>
+          .atom (trace.regionMap owner) (trace.regionMap binder)
+      | .named owner definition arity =>
+          .named (trace.regionMap owner) definition arity := by
+  induction trace with
+  | done fuel state pending_empty =>
+      simp only [nodeMap, regionMap, id_eq]
+      cases state.diagram.val.nodes node <;> rfl
+  | step fuel state result atom tail site candidate arguments checkedInput
+      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+      let spliceInput := instantiateSpliceInput comprehension attachments
+        binders payload state site arguments
+      let layout := spliceInput.plugLayout
+      have mapped := ih (layout.frameNode node)
+      simp only [advanceInstantiationState] at mapped
+      have frameShape : layout.plugRaw.nodes (layout.frameNode node) =
+          match state.diagram.val.nodes node with
+          | .term owner freePorts term =>
+              .term (layout.frameRegion owner) freePorts term
+          | .atom owner binder =>
+              .atom (layout.frameRegion owner) (layout.frameRegion binder)
+          | .named owner definition arity =>
+              .named (layout.frameRegion owner) definition arity := by
+        change layout.plugNode (layout.frameNode node) = _
+        rw [layout.plugNode_frameNode]
+        cases shape : state.diagram.val.nodes node <;>
+          simp [Splice.Input.PlugLayout.mapFrameNode, spliceInput,
+            instantiateSpliceInput, shape] <;> rfl
+      rw [frameShape] at mapped
+      cases shape : state.diagram.val.nodes node with
+      | term owner freePorts term =>
+          simpa [nodeMap, regionMap, shape] using mapped
+      | atom owner binder =>
+          simpa [nodeMap, regionMap, shape] using mapped
+      | named owner definition arity =>
+          simpa [nodeMap, regionMap, shape] using mapped
+
 theorem regionMap_bubble
     {signature : List Nat}
     {input : CheckedDiagram signature}
