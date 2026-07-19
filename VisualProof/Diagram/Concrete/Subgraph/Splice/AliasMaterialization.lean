@@ -164,13 +164,84 @@ def materializedBoundaryWire (pattern : OpenConcreteDiagram)
 
 /-- Pure graph normalization: later incidences become distinct root stubs and
 one identity node is appended at the designated terminal body for each. -/
+def rawBoundaryWire (pattern : OpenConcreteDiagram)
+    (position : Fin pattern.boundary.length) :
+    Fin (pattern.diagram.wireCount + repeatCount pattern) :=
+  match repeatIndex? pattern position with
+  | some aliasIndex => aliasWire pattern aliasIndex
+  | none => liftOldWire pattern (pattern.boundary.get position)
+
 def raw (pattern : OpenConcreteDiagram)
     (bodyContainer : Fin pattern.diagram.regionCount) : OpenConcreteDiagram where
   diagram := materializedDiagram pattern bodyContainer
-  boundary := List.ofFn fun position =>
-    match repeatIndex? pattern position with
-    | some aliasIndex => aliasWire pattern aliasIndex
-    | none => liftOldWire pattern (pattern.boundary.get position)
+  boundary := List.ofFn (rawBoundaryWire pattern)
+
+theorem raw_boundary_injective (pattern : OpenConcreteDiagram)
+    : Function.Injective (rawBoundaryWire pattern) := by
+  intro left right equality
+  cases hleft : repeatIndex? pattern left with
+  | none =>
+      cases hright : repeatIndex? pattern right with
+      | none =>
+          simp only [rawBoundaryWire, hleft, hright] at equality
+          have oldEq : pattern.boundary.get left =
+              pattern.boundary.get right := by
+            apply Fin.ext
+            simpa [liftOldWire] using congrArg Fin.val equality
+          by_cases same : left = right
+          · exact same
+          · have valuesDistinct : left.val ≠ right.val := by
+              intro valuesEqual
+              exact same (Fin.ext valuesEqual)
+            rcases Nat.lt_or_gt_of_ne valuesDistinct with
+              leftBefore | rightBefore
+            · have repeated : IsRepeat pattern right :=
+                ⟨left, leftBefore, oldEq⟩
+              have someRight : (repeatIndex? pattern right).isSome = true :=
+                (repeatIndex?_isSome_iff pattern right).2 repeated
+              simp [hright] at someRight
+            · have repeated : IsRepeat pattern left :=
+                ⟨right, rightBefore, oldEq.symm⟩
+              have someLeft : (repeatIndex? pattern left).isSome = true :=
+                (repeatIndex?_isSome_iff pattern left).2 repeated
+              simp [hleft] at someLeft
+      | some rightAlias =>
+          simp only [rawBoundaryWire, hleft, hright] at equality
+          have impossible := congrArg Fin.val equality
+          have oldBound := (pattern.boundary.get left).isLt
+          exfalso
+          simp [liftOldWire, aliasWire] at impossible
+          omega
+  | some leftAlias =>
+      cases hright : repeatIndex? pattern right with
+      | none =>
+          simp only [rawBoundaryWire, hleft, hright] at equality
+          have impossible := congrArg Fin.val equality
+          have oldBound := (pattern.boundary.get right).isLt
+          exfalso
+          simp [liftOldWire, aliasWire] at impossible
+          omega
+      | some rightAlias =>
+          simp only [rawBoundaryWire, hleft, hright] at equality
+          have aliasesEqual : leftAlias = rightAlias := by
+            apply Fin.ext
+            simpa [aliasWire] using congrArg Fin.val equality
+          subst rightAlias
+          have leftSound := indexOf?_sound hleft
+          have rightSound := indexOf?_sound hright
+          exact leftSound.symm.trans rightSound
+
+theorem raw_boundary_nodup (pattern : OpenConcreteDiagram)
+    (bodyContainer : Fin pattern.diagram.regionCount) :
+    (raw pattern bodyContainer).boundary.Nodup := by
+  have boundaryEq : (raw pattern bodyContainer).boundary =
+      (allFin pattern.boundary.length).map (rawBoundaryWire pattern) := by
+    rw [allFin_eq_finRange, List.finRange, List.map_ofFn]
+    rfl
+  rw [boundaryEq]
+  exact (allFin_nodup pattern.boundary.length).map (rawBoundaryWire pattern)
+    (fun first second distinct equality =>
+      distinct (raw_boundary_injective pattern equality))
 
 @[simp] theorem raw_boundary_length (pattern : OpenConcreteDiagram)
     (bodyContainer : Fin pattern.diagram.regionCount) :
@@ -314,14 +385,14 @@ theorem terminalBody {signature : List Nat}
     obtain ⟨position, hposition⟩ := List.mem_ofFn.mp hwire
     cases hrepeat : repeatIndex? pattern.val position with
     | none =>
-        simp only [hrepeat] at hposition
+        simp only [rawBoundaryWire, hrepeat] at hposition
         subst wire
         simpa [raw, materializedDiagram, liftOldWire] using
           contract.boundary_is_root_scoped
             (pattern.val.boundary.get position)
             (List.get_mem pattern.val.boundary position)
     | some aliasIndex =>
-        simp only [hrepeat] at hposition
+        simp only [rawBoundaryWire, hrepeat] at hposition
         subst wire
         simp [raw, materializedDiagram, aliasWire]
 
