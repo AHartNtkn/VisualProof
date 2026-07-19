@@ -7,6 +7,43 @@ open VisualProof.Diagram
 
 namespace InstantiationSemantic
 
+/-- Any exact target-site valuation that agrees with a frame embedding induces
+the original source valuation through the splice quotient.  This is the
+pointwise bridge used to identify the relation witness's ordered arguments and
+parameters with the source atom's arguments and parameters. -/
+theorem siteQuotientEnvironment_of_frameMap
+    {signature : List Nat}
+    (input : Splice.Input signature)
+    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (targetContext : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (sourceExact : sourceContext.Exact input.site)
+    (targetExact : targetContext.Exact
+      (input.plugLayout.frameRegion input.site))
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (wireSpec : ∀ index, targetContext.get (wireMap index) =
+      input.plugLayout.frameWire (sourceContext.get index))
+    (sourceEnv : Fin sourceContext.length → D)
+    (targetEnv : Fin targetContext.length → D)
+    (environmentEq : sourceEnv = targetEnv ∘ wireMap)
+    (fallback : D)
+    (index : Fin sourceContext.length) :
+    Splice.Input.siteQuotientEnvironment input targetContext targetExact
+        targetEnv fallback (sourceContext.get index) =
+      sourceEnv index := by
+  have visible : input.plugLayout.plugRaw.Encloses
+      (input.plugLayout.plugRaw.wires
+        (input.plugLayout.frameWire (sourceContext.get index))).scope
+      (input.plugLayout.frameRegion input.site) :=
+    (input.plugLayout.frameWire_visible_at_region_iff input.site
+      (sourceContext.get index)).2
+      ((sourceExact.mem_iff (sourceContext.get index)).1
+        (List.get_mem sourceContext index))
+  have quotientEq := Splice.Input.siteQuotientEnvironment_eq input
+    targetContext targetExact targetEnv fallback (sourceContext.get index)
+    visible (wireMap index) (wireSpec index)
+  have sourceEq := congrFun environmentEq index
+  exact quotientEq.trans sourceEq.symm
+
 /-- The target local valuation for a nonzero-spine splice is the exact local
 wire equivalence applied to the source host locals followed by the terminal
 comprehension locals supplied by the relation witness. -/
@@ -373,6 +410,319 @@ theorem siteForwardHostEnvironmentsAgreeOfEmpty
     simp
     exact (siteTargetLocalOfEmpty_host layout hzero sourceLocal patternHidden
       localIndex).symm
+
+/-- One native terminal-pattern conjunct transports into the executor's actual
+next-state survivor compiler.  This is the forward half of the authoritative
+seam item isomorphism; it deliberately targets the survivor compiler rather
+than an intrinsic reconstruction of the splice output. -/
+theorem advance_pattern_item_denotes_nonempty_forward
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (host : Splice.SiteView
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrame hadmissible) site)
+    {patternBody : Region signature patternOuter patternRels}
+    {patternPath : List Nat}
+    (patternWitness : Region.ContextPath patternBody patternPath)
+    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+      comprehension.val.diagram payload.binderSpine.bodyContainer
+      patternWitness)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible).diagram.val
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site) outputWitness)
+    (hnonempty : payload.binderSpine.proxyCount ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (env : Fin (outputLeaf.inheritedWires.extend
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
+    (occurrence : ConcreteElaboration.LocalOccurrence
+      comprehension.val.diagram.regionCount comprehension.val.diagram.nodeCount)
+    (occurrenceMember : occurrence ∈ ConcreteElaboration.localOccurrences
+      comprehension.val.diagram payload.binderSpine.bodyContainer)
+    (sourceItem : Item signature
+      (patternLeaf.inheritedWires.extend
+        payload.binderSpine.bodyContainer).length
+      patternWitness.toFocus.holeRels)
+    (targetItem : Item signature
+      (outputLeaf.inheritedWires.extend
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)).length
+      outputWitness.toFocus.holeRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith? signature
+      comprehension.val.diagram
+      (ConcreteElaboration.compileRegion? signature comprehension.val.diagram
+        patternLeaf.fuel)
+      (patternLeaf.inheritedWires.extend payload.binderSpine.bodyContainer)
+      patternLeaf.binders occurrence = some sourceItem)
+    (targetCompiled : ConcreteElaboration.compileOccurrenceWith? signature
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible).diagram.val
+      (compileSurvivorRegion? signature
+        (advanceInstantiationState comprehension attachments binders payload
+          state atom tail site arguments hadmissible) outputLeaf.fuel)
+      (outputLeaf.inheritedWires.extend
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)) outputLeaf.binders
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.mapPatternOccurrence occurrence) =
+        some targetItem)
+    (sourceDenotes :
+      let spliceInput := instantiateSpliceInput comprehension attachments binders
+        payload state site arguments
+      let layout := spliceInput.plugLayout
+      let targetEq := ConcreteElaboration.WireContext.length_extend
+        outputLeaf.inheritedWires (layout.frameRegion site)
+      let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
+        outputWitness outputLeaf hnonempty
+      let targetEnv : Fin
+          (outputLeaf.inheritedWires.length +
+            (ConcreteElaboration.exactScopeWires layout.plugRaw
+              (layout.frameRegion site)).length) → model.Carrier :=
+        env ∘ Fin.cast targetEq.symm
+      let sourceEnv := targetEnv ∘ combined
+      let seam := layout.patternSeamPreparedWireOfNonempty hadmissible host
+        patternWitness patternLeaf hnonempty
+      let relationMap : RelationRenaming patternWitness.toFocus.holeRels
+          outputWitness.toFocus.holeRels := fun relation =>
+        layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+          outputWitness outputLeaf
+          (layout.coalescedTerminalRelationRenaming hadmissible
+            host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
+            hnonempty relation)
+      denoteItem model named (sourceEnv ∘ seam)
+        (RelEnv.pullback relationMap relEnv) sourceItem) :
+    denoteItem model named env relEnv targetItem := by
+  dsimp only at sourceDenotes
+  let spliceInput := instantiateSpliceInput comprehension attachments binders
+    payload state site arguments
+  let layout := spliceInput.plugLayout
+  let next := advanceInstantiationState comprehension attachments binders
+    payload state atom tail site arguments hadmissible
+  have compilerEq := advance_compilePatternOccurrence_eq comprehension
+    attachments binders payload state atom tail site arguments hadmissible
+    outputLeaf.fuel
+    (outputLeaf.inheritedWires.extend (layout.frameRegion site))
+    outputLeaf.binders occurrence occurrenceMember
+  have targetCompiledAuthoritative :
+      ConcreteElaboration.compileOccurrenceWith? signature layout.plugRaw
+        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+          outputLeaf.fuel)
+        (outputLeaf.inheritedWires.extend (layout.frameRegion site))
+        outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
+          some targetItem := by
+    have targetInNext := compilerEq ▸ targetCompiled
+    simpa [next, layout, spliceInput] using targetInNext
+  have itemIso := layout.compilePatternOccurrence_at_seam_iso signature
+    spliceInput hadmissible host patternWitness patternLeaf outputWitness
+    outputLeaf hnonempty occurrence occurrenceMember sourceItem targetItem
+    sourceCompiled targetCompiledAuthoritative
+  let targetEq := ConcreteElaboration.WireContext.length_extend
+    outputLeaf.inheritedWires (layout.frameRegion site)
+  let targetEnv : Fin
+      (outputLeaf.inheritedWires.length +
+        (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (layout.frameRegion site)).length) → model.Carrier :=
+    env ∘ Fin.cast targetEq.symm
+  let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
+    outputWitness outputLeaf hnonempty
+  let seam := layout.patternSeamPreparedWireOfNonempty hadmissible host
+    patternWitness patternLeaf hnonempty
+  let sourceEnv := targetEnv ∘ combined
+  let relationMap : RelationRenaming patternWitness.toFocus.holeRels
+      outputWitness.toFocus.holeRels := fun relation =>
+    layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+      outputWitness outputLeaf
+      (layout.coalescedTerminalRelationRenaming hadmissible
+        host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
+        hnonempty relation)
+  have wirePrepared : denoteItem model named sourceEnv
+      (RelEnv.pullback relationMap relEnv) (sourceItem.renameWires seam) :=
+    (denoteItem_renameWires model named seam sourceEnv
+      (RelEnv.pullback relationMap relEnv) sourceItem).mpr sourceDenotes
+  have prepared : denoteItem model named sourceEnv relEnv
+      ((sourceItem.renameWires seam).renameRelations relationMap) :=
+    (denoteItem_renameRelations model named relationMap
+      (RelEnv.pullback relationMap relEnv) relEnv
+      (RelEnv.pullback_agrees relationMap relEnv) sourceEnv
+      (sourceItem.renameWires seam)).mpr wirePrepared
+  have targetCastDenotes : denoteItem model named targetEnv relEnv
+      (targetItem.castWiresEq targetEq) :=
+    (itemIso.denotation model named sourceEnv targetEnv relEnv
+      (fun _ => rfl)).mp prepared
+  rw [Item.castWiresEq_eq_renameWires, denoteItem_renameWires]
+    at targetCastDenotes
+  simpa [targetEnv, targetEq, Function.comp_def] using targetCastDenotes
+
+/-- Zero-spine counterpart of
+`advance_pattern_item_denotes_nonempty_forward`, using the checked-open root
+compiler and its repeated-alias seam map. -/
+theorem advance_pattern_root_item_denotes_empty_forward
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (host : Splice.SiteView
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrame hadmissible) site)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible).diagram.val
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site) outputWitness)
+    (hzero : payload.binderSpine.proxyCount = 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (env : Fin (outputLeaf.inheritedWires.extend
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
+    (occurrence : ConcreteElaboration.LocalOccurrence
+      comprehension.val.diagram.regionCount comprehension.val.diagram.nodeCount)
+    (occurrenceMember : occurrence ∈ ConcreteElaboration.localOccurrences
+      comprehension.val.diagram comprehension.val.diagram.root)
+    (sourceItem : Item signature
+      (comprehension.val.exposedWires ++ comprehension.val.hiddenWires).length [])
+    (targetItem : Item signature
+      (outputLeaf.inheritedWires.extend
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)).length
+      outputWitness.toFocus.holeRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith? signature
+      comprehension.val.diagram
+      (ConcreteElaboration.compileRegion? signature comprehension.val.diagram
+        comprehension.val.diagram.regionCount)
+      (comprehension.val.exposedWires ++ comprehension.val.hiddenWires)
+      ConcreteElaboration.BinderContext.empty occurrence = some sourceItem)
+    (targetCompiled : ConcreteElaboration.compileOccurrenceWith? signature
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible).diagram.val
+      (compileSurvivorRegion? signature
+        (advanceInstantiationState comprehension attachments binders payload
+          state atom tail site arguments hadmissible) outputLeaf.fuel)
+      (outputLeaf.inheritedWires.extend
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)) outputLeaf.binders
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.mapPatternOccurrence occurrence) =
+        some targetItem)
+    (sourceDenotes :
+      let spliceInput := instantiateSpliceInput comprehension attachments binders
+        payload state site arguments
+      let layout := spliceInput.plugLayout
+      let targetEq := ConcreteElaboration.WireContext.length_extend
+        outputLeaf.inheritedWires (layout.frameRegion site)
+      let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
+        outputWitness outputLeaf hzero
+      let targetEnv : Fin
+          (outputLeaf.inheritedWires.length +
+            (ConcreteElaboration.exactScopeWires layout.plugRaw
+              (layout.frameRegion site)).length) → model.Carrier :=
+        env ∘ Fin.cast targetEq.symm
+      let sourceEnv := targetEnv ∘ combined
+      let seam := layout.patternRootSeamPreparedWireOfEmpty hadmissible host
+      denoteItem (relCtx := []) model named (sourceEnv ∘ seam) PUnit.unit
+        sourceItem) :
+    denoteItem model named env relEnv targetItem := by
+  dsimp only at sourceDenotes
+  let spliceInput := instantiateSpliceInput comprehension attachments binders
+    payload state site arguments
+  let layout := spliceInput.plugLayout
+  let next := advanceInstantiationState comprehension attachments binders
+    payload state atom tail site arguments hadmissible
+  have bodyRoot : payload.binderSpine.bodyContainer =
+      comprehension.val.diagram.root :=
+    payload.binderSpine.body_eq_root_of_empty hzero
+  have bodyMember : occurrence ∈ ConcreteElaboration.localOccurrences
+      comprehension.val.diagram payload.binderSpine.bodyContainer := by
+    simpa [bodyRoot] using occurrenceMember
+  have compilerEq := advance_compilePatternOccurrence_eq comprehension
+    attachments binders payload state atom tail site arguments hadmissible
+    outputLeaf.fuel
+    (outputLeaf.inheritedWires.extend (layout.frameRegion site))
+    outputLeaf.binders occurrence bodyMember
+  have targetCompiledAuthoritative :
+      ConcreteElaboration.compileOccurrenceWith? signature layout.plugRaw
+        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+          outputLeaf.fuel)
+        (outputLeaf.inheritedWires.extend (layout.frameRegion site))
+        outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
+          some targetItem := by
+    have targetInNext := compilerEq ▸ targetCompiled
+    simpa [next, layout, spliceInput] using targetInNext
+  have itemIso := layout.compilePatternRootOccurrence_at_seam_iso signature
+    spliceInput hadmissible host outputWitness outputLeaf hzero occurrence
+    occurrenceMember sourceItem targetItem sourceCompiled
+    targetCompiledAuthoritative
+  let targetEq := ConcreteElaboration.WireContext.length_extend
+    outputLeaf.inheritedWires (layout.frameRegion site)
+  let targetEnv : Fin
+      (outputLeaf.inheritedWires.length +
+        (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (layout.frameRegion site)).length) → model.Carrier :=
+    env ∘ Fin.cast targetEq.symm
+  let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
+    outputWitness outputLeaf hzero
+  let seam := layout.patternRootSeamPreparedWireOfEmpty hadmissible host
+  let sourceEnv := targetEnv ∘ combined
+  let relationMap : RelationRenaming [] outputWitness.toFocus.holeRels :=
+    Splice.Input.PlugLayout.emptyRelationRenaming
+      outputWitness.toFocus.holeRels
+  have wirePrepared : denoteItem (relCtx := []) model named sourceEnv PUnit.unit
+      (sourceItem.renameWires seam) :=
+    (denoteItem_renameWires (relCtx := []) model named seam sourceEnv PUnit.unit
+      sourceItem).mpr sourceDenotes
+  have prepared : denoteItem model named sourceEnv relEnv
+      ((sourceItem.renameWires seam).renameRelations relationMap) :=
+    (denoteItem_renameRelations model named relationMap PUnit.unit relEnv
+      (RelEnv.pullback_agrees relationMap relEnv) sourceEnv
+      (sourceItem.renameWires seam)).mpr wirePrepared
+  have targetCastDenotes : denoteItem model named targetEnv relEnv
+      (targetItem.castWiresEq targetEq) :=
+    (itemIso.denotation model named sourceEnv targetEnv relEnv
+      (fun _ => rfl)).mp prepared
+  rw [Item.castWiresEq_eq_renameWires, denoteItem_renameWires]
+    at targetCastDenotes
+  simpa [targetEnv, targetEq, Function.comp_def] using targetCastDenotes
 
 end InstantiationSemantic
 

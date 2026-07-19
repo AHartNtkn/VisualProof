@@ -47,6 +47,62 @@ def TerminalRelationsMatch
       (terminalRelation_proxy_arity payload state site arguments hnonempty
         relation) ▸ values proxy
 
+private theorem relEnv_eq_of_lookup
+    {rels : RelCtx} {left right : RelEnv D rels}
+    (equal : ∀ {arity : Nat} (relation : RelVar rels arity),
+      left.lookup relation = right.lookup relation) :
+    left = right := by
+  induction rels with
+  | nil => cases left; cases right; rfl
+  | cons head tail induction =>
+      rcases left with ⟨leftHead, leftTail⟩
+      rcases right with ⟨rightHead, rightTail⟩
+      have headEq : leftHead = rightHead := by
+        simpa [RelEnv.lookup] using
+          equal (⟨0, rfl⟩ : RelVar (head :: tail) head)
+      have tailEq : leftTail = rightTail := by
+        apply induction
+        intro arity relation
+        simpa [RelEnv.lookup] using
+          equal (⟨relation.index.succ, relation.hasArity⟩ :
+            RelVar (head :: tail) arity)
+      rw [headEq, tailEq]
+
+/-- The indexed proxy family determines the complete terminal lexical
+relation environment.  In particular, a relation witness cannot choose a
+second interpretation for any terminal binder. -/
+theorem terminalRelationsMatch_unique
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hnonempty : payload.binderSpine.proxyCount ≠ 0)
+    {model : Lambda.LambdaModel}
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (left right : RelEnv model.Carrier
+      (Splice.Input.compiledSpliceTerminalView
+        (instantiateSpliceInput comprehension attachments binders payload state
+          site arguments) hnonempty).witness.toFocus.holeRels)
+    (leftMatch : TerminalRelationsMatch payload state site arguments hnonempty
+      values left)
+    (rightMatch : TerminalRelationsMatch payload state site arguments hnonempty
+      values right) :
+    left = right := by
+  apply relEnv_eq_of_lookup
+  intro arity relation
+  exact (leftMatch relation).trans (rightMatch relation).symm
+
 private theorem relationLookup_cast_back
     {D : Type}
     {rels : RelCtx}
