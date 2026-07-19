@@ -238,6 +238,69 @@ theorem finalRegionMap_root
   rw [mapped]
   exact elimTrace.liftRegion_root finalWellFormed
 
+/-- The copy trace preserves the quantified bubble's parent, and the final
+vacuous receipt identifies that copied parent as its promoted parent. -/
+theorem regionMap_parent_eq_elimParent
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw) :
+    copyTrace.regionMap payload.parent = elimTrace.parent := by
+  have copiedShape := copyTrace.regionMap_shape bubble
+  simp only [initialInstantiationState] at copiedShape
+  rw [payload.bubble_eq] at copiedShape
+  simp only at copiedShape
+  have bubbleMap := copyTrace.regionMap_bubble
+  change copyTrace.regionMap bubble = result.bubble at bubbleMap
+  have eliminatedShape : result.diagram.val.regions result.bubble =
+      .bubble elimTrace.parent elimTrace.arity := by
+    simpa only [InstantiationDrop.raw_regions] using elimTrace.bubble_eq
+  have copiedParent :
+      (result.diagram.val.regions (copyTrace.regionMap bubble)).parent? =
+        some (copyTrace.regionMap payload.parent) := by
+    exact congrArg CRegion.parent? copiedShape
+  have eliminatedParent :
+      (result.diagram.val.regions result.bubble).parent? =
+        some elimTrace.parent := by
+    exact congrArg CRegion.parent? eliminatedShape
+  have sameParent := congrArg
+    (fun region => (result.diagram.val.regions region).parent?) bubbleMap
+  apply Option.some.inj
+  exact copiedParent.symm.trans (sameParent.trans eliminatedParent)
+
+/-- The quantified bubble is an immediate child of the payload parent. -/
+theorem payload_parent_encloses_bubble
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders) :
+    input.val.Encloses payload.parent bubble := by
+  have positive : 0 < input.val.regionCount := Nat.zero_lt_of_lt bubble.isLt
+  refine ⟨⟨1, by omega⟩, ?_⟩
+  have parentEq : (input.val.regions bubble).parent? =
+      some payload.parent := by
+    rw [payload.bubble_eq]
+    rfl
+  simp only [ConcreteDiagram.climb, parentEq]
+
 /-- The original parent of the quantified bubble maps to the final promoted
 focus.  This identifies the unique compiler location at which the complete
 instantiation law is discharged. -/
@@ -263,32 +326,84 @@ theorem finalRegionMap_parent
       (dropInstantiationAtomsRaw result).WellFormed signature) :
     copyTrace.finalRegionMap elimTrace finalWellFormed payload.parent =
       elimTrace.targetIndex finalWellFormed := by
-  have copiedShape := copyTrace.regionMap_shape bubble
-  simp only [initialInstantiationState] at copiedShape
-  rw [payload.bubble_eq] at copiedShape
-  simp only at copiedShape
-  have bubbleMap := copyTrace.regionMap_bubble
-  change copyTrace.regionMap bubble = result.bubble at bubbleMap
-  have eliminatedShape : result.diagram.val.regions result.bubble =
-      .bubble elimTrace.parent elimTrace.arity := by
-    simpa only [InstantiationDrop.raw_regions] using elimTrace.bubble_eq
-  have copiedParent :
-      (result.diagram.val.regions (copyTrace.regionMap bubble)).parent? =
-        some (copyTrace.regionMap payload.parent) := by
-    exact congrArg CRegion.parent? copiedShape
-  have eliminatedParent :
-      (result.diagram.val.regions result.bubble).parent? =
-        some elimTrace.parent := by
-    exact congrArg CRegion.parent? eliminatedShape
-  have sameParent := congrArg
-    (fun region => (result.diagram.val.regions region).parent?) bubbleMap
-  have parentEq : copyTrace.regionMap payload.parent = elimTrace.parent := by
-    apply Option.some.inj
-    exact copiedParent.symm.trans (sameParent.trans eliminatedParent)
   unfold finalRegionMap
-  rw [parentEq]
+  rw [copyTrace.regionMap_parent_eq_elimParent elimTrace]
   exact (elimTrace.liftRegion_eq_targetIndex_iff finalWellFormed
     elimTrace.parent).2 (Or.inl rfl)
+
+/-- The final promotion coalesces exactly the original quantified bubble and
+its parent at the target focus.  Injectivity of the copy trace rules out every
+other preimage. -/
+theorem finalRegionMap_eq_targetIndex_iff
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (region : Fin input.val.regionCount) :
+    copyTrace.finalRegionMap elimTrace finalWellFormed region =
+        elimTrace.targetIndex finalWellFormed ↔
+      region = payload.parent ∨ region = bubble := by
+  unfold finalRegionMap
+  rw [elimTrace.liftRegion_eq_targetIndex_iff]
+  have bubbleMap := copyTrace.regionMap_bubble
+  change copyTrace.regionMap bubble = result.bubble at bubbleMap
+  have parentMap := copyTrace.regionMap_parent_eq_elimParent elimTrace
+  constructor
+  · rintro (mappedParent | mappedBubble)
+    · exact Or.inl (copyTrace.regionMap_injective
+        (mappedParent.trans parentMap.symm))
+    · exact Or.inr (copyTrace.regionMap_injective
+        (mappedBubble.trans bubbleMap.symm))
+  · rintro (rfl | rfl)
+    · exact Or.inl parentMap
+    · exact Or.inr bubbleMap
+
+theorem finalRegionMap_ne_targetIndex_of_not_enclosed
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (region : Fin input.val.regionCount)
+    (regular : ¬ input.val.Encloses payload.parent region) :
+    copyTrace.finalRegionMap elimTrace finalWellFormed region ≠
+      elimTrace.targetIndex finalWellFormed := by
+  intro mapped
+  rcases (copyTrace.finalRegionMap_eq_targetIndex_iff elimTrace
+    finalWellFormed region).1 mapped with parentEq | bubbleEq
+  · subst region
+    exact regular (ConcreteDiagram.Encloses.refl input.val payload.parent)
+  · subst region
+    exact regular (payload_parent_encloses_bubble payload)
 
 theorem finalWireMap_injective
     {signature : List Nat}
