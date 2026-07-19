@@ -331,7 +331,7 @@ def initialInstantiationState
   processedAtoms := []
 }
 
-private def instantiateArguments?
+def instantiateArguments?
     (state : InstantiationState origin p q)
     (node : Fin state.diagram.val.nodeCount) (arity : Nat) :
     Option (Fin arity → Fin state.diagram.val.wireCount) :=
@@ -363,6 +363,52 @@ def instantiateSpliceInput {signature : List Nat}
   binderSpine := payload.binderSpine
   terminalBody := payload.terminalBody
   binderTarget := state.binderTargets
+
+/-- The exact state transition performed after one successful comprehension
+splice.  Keeping this transition proof-relevant lets soundness follow the
+executor's real maps instead of reconstructing a parallel copy operation. -/
+def advanceInstantiationState {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible) :
+    InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount :=
+  let spliceInput := instantiateSpliceInput comprehension attachments binders
+    payload state site arguments
+  let layout := spliceInput.plugLayout
+  let nextDiagram : CheckedDiagram signature :=
+    ⟨layout.plugRaw,
+      Splice.Input.PlugLayout.plugRaw_wellFormed signature spliceInput layout
+        hadmissible⟩
+  {
+    diagram := nextDiagram
+    provenance := state.provenance.compose
+      (spliceFrameWireProvenance spliceInput)
+    interface := state.interface.compose
+      (spliceFrameInterfaceTransport spliceInput)
+    bubble := layout.frameRegion state.bubble
+    parameters := fun index =>
+      layout.frameWire (spliceInput.quotientWire (state.parameters index))
+    binderTargets := fun index =>
+      layout.frameRegion (state.binderTargets index)
+    pendingAtoms := tail.map layout.frameNode
+    processedAtoms := state.processedAtoms.map layout.frameNode ++
+      [layout.frameNode atom]
+  }
 
 def instantiateCopies {signature : List Nat}
     {input : CheckedDiagram signature}
@@ -398,29 +444,9 @@ def instantiateCopies {signature : List Nat}
                     | .ok _ =>
                         have hadmissible : spliceInput.Admissible :=
                           (Splice.Input.checkInput_sound hinput).2
-                        let layout := spliceInput.plugLayout
-                        let nextDiagram : CheckedDiagram signature :=
-                          ⟨layout.plugRaw,
-                            Splice.Input.PlugLayout.plugRaw_wellFormed
-                              signature spliceInput layout hadmissible⟩
-                        let next : InstantiationState origin
-                            attachments.length payload.binderSpine.proxyCount := {
-                          diagram := nextDiagram
-                          provenance := state.provenance.compose
-                            (spliceFrameWireProvenance spliceInput)
-                          interface := state.interface.compose
-                            (spliceFrameInterfaceTransport spliceInput)
-                          bubble := layout.frameRegion state.bubble
-                          parameters := fun index =>
-                            layout.frameWire
-                              (spliceInput.quotientWire (state.parameters index))
-                          binderTargets := fun index =>
-                            layout.frameRegion (state.binderTargets index)
-                          pendingAtoms := tail.map layout.frameNode
-                          processedAtoms :=
-                            state.processedAtoms.map layout.frameNode ++
-                              [layout.frameNode atom]
-                        }
+                        let next := advanceInstantiationState comprehension
+                          attachments binders payload state atom tail site
+                          arguments hadmissible
                         instantiateCopies comprehension attachments binders payload
                           fuel next
               else
@@ -466,7 +492,7 @@ theorem instantiateCopies_success_pendingAtoms_empty
           split at hcopy <;> try contradiction
           rename_i checkedInput hinput
           apply ih _ _ _ hcopy
-          simpa using htail
+          simpa [advanceInstantiationState] using htail
 
 /-- A successful copy run transports the complete owned-atom list through one
 composed total injective node map.  Unlike receipt provenance, this map retains
