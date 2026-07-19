@@ -104,7 +104,7 @@ theorem droppedBubbleView_compileSurvivor
   exact (drop_compileRegion_eq_survivor state (leaf.fuel + 1) state.bubble
     leaf.inheritedWires leaf.binders).symm.trans droppedCompiled
 
-private theorem exact_of_drop
+theorem exact_of_drop
     {signature : List Nat}
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin parameterCount proxyCount)
@@ -749,7 +749,7 @@ private theorem inherited_mem_iff_iso
     rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
     exact nodup.2.2 _ sourceMember _ sourceLocal rfl
 
-private noncomputable def inheritedWireEquivIso
+noncomputable def inheritedWireEquivIso
     {source target : ConcreteDiagram}
     (iso : ConcreteIso source target)
     (region : Fin source.regionCount)
@@ -771,7 +771,7 @@ private noncomputable def inheritedWireEquivIso
     (fun wire => inherited_mem_iff_iso iso region sourceOuter targetOuter
       sourceExact targetExact wire)
 
-private theorem inheritedWireEquivIso_spec
+theorem inheritedWireEquivIso_spec
     {source target : ConcreteDiagram}
     (iso : ConcreteIso source target)
     (region : Fin source.regionCount)
