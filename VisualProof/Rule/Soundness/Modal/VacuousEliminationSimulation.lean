@@ -132,6 +132,10 @@ noncomputable def semanticSimulation
       (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
       (sourceBinders : ConcreteElaboration.BinderContext
         trace.sourceDiagram sourceRels),
+      sourceContext.Exact (trace.targetIndex targetWellFormed) →
+        sourceBinders.Covers (trace.targetIndex targetWellFormed) →
+        ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
+          sourceBinders (trace.targetIndex targetWellFormed) →
       (Fin sourceContext.length → model.Carrier) →
         RelEnv model.Carrier sourceRels →
           Relation model.Carrier trace.arity) :
@@ -366,7 +370,8 @@ noncomputable def semanticSimulation
         model named direction fuelSource fuelTarget sourceContext targetContext
         context.down sourceBinders targetBinders binderWitness sourceExact
         (freshForward (sourceContext.extend
-          (trace.targetIndex targetWellFormed)) sourceBinders)
+          (trace.targetIndex targetWellFormed)) sourceBinders sourceExact
+          sourceBindersCover sourceEnumeration)
         targetExact sourceBindersCover targetBindersCover sourceEnumeration
         targetEnumeration
         (fun childFuelTarget childSourceContext childTargetContext childContext =>

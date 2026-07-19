@@ -2801,6 +2801,13 @@ theorem applyVacuousElim_sound
       (_sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
       (_sourceBinders : ConcreteElaboration.BinderContext
         trace.sourceDiagram sourceRels)
+      (_sourceExact : _sourceContext.Exact
+        (trace.targetIndex input.property))
+      (_sourceCover : _sourceBinders.Covers
+        (trace.targetIndex input.property))
+      (_sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+        trace.sourceDiagram _sourceBinders
+          (trace.targetIndex input.property))
       (_sourceEnvironment : Fin _sourceContext.length → model.Carrier)
       (_sourceRelations : RelEnv model.Carrier sourceRels) =>
     (fun _ => False : Relation model.Carrier trace.arity)

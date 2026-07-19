@@ -70,6 +70,10 @@ noncomputable def rootContextSimulation
       (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
       (sourceBinders : ConcreteElaboration.BinderContext
         trace.sourceDiagram sourceRels),
+      sourceContext.Exact (trace.targetIndex targetWellFormed) →
+        sourceBinders.Covers (trace.targetIndex targetWellFormed) →
+        ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
+          sourceBinders (trace.targetIndex targetWellFormed) →
       (Fin sourceContext.length → model.Carrier) →
         RelEnv model.Carrier sourceRels →
           Relation model.Carrier trace.arity)
@@ -218,7 +222,9 @@ noncomputable def rootContextSimulation
       input.regionCount source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires
       (freshForward (source.val.exposedWires ++ source.val.hiddenWires)
-        ConcreteElaboration.BinderContext.empty)
+        ConcreteElaboration.BinderContext.empty sourceExact
+        (by simpa only [focused] using sourceCover)
+        (by simpa only [focused] using sourceEnumeration))
       promoted
       ConcreteElaboration.BinderContext.empty
       ConcreteElaboration.BinderContext.empty simulation.binders_empty
@@ -265,6 +271,10 @@ theorem boundaryWitness
       (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
       (sourceBinders : ConcreteElaboration.BinderContext
         trace.sourceDiagram sourceRels),
+      sourceContext.Exact (trace.targetIndex targetWellFormed) →
+        sourceBinders.Covers (trace.targetIndex targetWellFormed) →
+        ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
+          sourceBinders (trace.targetIndex targetWellFormed) →
       (Fin sourceContext.length → model.Carrier) →
         RelEnv model.Carrier sourceRels →
           Relation model.Carrier trace.arity)
