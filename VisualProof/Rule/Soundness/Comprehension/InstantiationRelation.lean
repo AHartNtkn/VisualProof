@@ -72,6 +72,54 @@ theorem fixedRelationAt_push
   subst relation
   rfl
 
+/-- Descending through any other relation bubble preserves the selected
+quantified relation; the new head relation is lexically independent. -/
+theorem fixedRelationAt_push_other
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    {model : Lambda.LambdaModel}
+    (relationValue : Relation model.Carrier payload.arity)
+    {rels : RelCtx}
+    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (relEnv : RelEnv model.Carrier rels)
+    (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
+    (child : Fin state.diagram.val.regionCount)
+    (childArity : Nat)
+    (childRelation : Relation model.Carrier childArity)
+    (hne : state.bubble ≠ child) :
+    FixedRelationAt payload state relationValue
+      (binderContext.push child childArity) (childRelation, relEnv) := by
+  intro relation hlookup
+  rw [ConcreteElaboration.BinderContext.push_other binderContext childArity hne]
+    at hlookup
+  cases hold : binderContext state.bubble with
+  | none => simp [hold] at hlookup
+  | some owned =>
+      rcases owned with ⟨ownedArity, ownedRelation⟩
+      simp only [hold, Option.map_some] at hlookup
+      have ownedArityEq : ownedArity = payload.arity := by
+        exact congrArg Sigma.fst (Option.some.inj hlookup)
+      subst ownedArity
+      have relationEq : relation =
+          ConcreteElaboration.BinderContext.liftVar childArity ownedRelation := by
+        have hsigma := Option.some.inj hlookup
+        cases hsigma
+        rfl
+      subst relation
+      simpa [RelEnv.lookup,
+        ConcreteElaboration.BinderContext.liftVar] using
+          fixed ownedRelation hold
+
 /-- Under the fixed interpretation, the executor-owned atom denotes exactly
 the chosen relation witness at its receipt-recorded argument wires. -/
 theorem atom_iff_fixedRelation
