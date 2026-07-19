@@ -1881,6 +1881,218 @@ theorem focusedProducerLocalTransport
         simpa [denoteItem_equation, model.eval_mapFree] using producerEquation
       exact ⟨beforeDenotes, producerDenotes, afterDenotes⟩
 
+/-- Complete recursive semantic simulation for fusion.  The generic compiler
+handles every region not strictly below the producer; the distinguished
+producer kernel owns the route to the consumer. -/
+noncomputable def semanticSimulation
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (producerRegion consumerRegion : Fin input.val.regionCount)
+    (producerPorts consumerPorts : Nat)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (producerShape : input.val.nodes producer =
+      .term producerRegion producerPorts producerTerm)
+    (consumerShape : input.val.nodes consumer =
+      .term consumerRegion consumerPorts consumerTerm)
+    (scope : producerRegion = (input.val.wires consumedWire).scope)
+    (producerResolved : resolveNodeFreeWires? input producer producerPorts =
+      some producerWire)
+    (consumerResolved : resolveNodeFreeWires? input consumer consumerPorts =
+      some consumerWire)
+    (endpoints :
+      (input.val.wires consumedWire).endpoints = [
+          { node := producer, port := CPort.output },
+          { node := consumer, port := CPort.free consumedPort.val }] ∨
+      (input.val.wires consumedWire).endpoints = [
+          { node := consumer, port := CPort.free consumedPort.val },
+          { node := producer, port := CPort.output }])
+    (producerEnclosesConsumer : input.val.Encloses producerRegion consumerRegion)
+    (targetWellFormed :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).WellFormed signature)
+    (named : NamedEnv Lambda.Individual signature) :
+    ConcreteElaboration.ConcreteSemanticSimulation signature input.val
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      Lambda.canonicalModel named where
+  source_wellFormed := input.property
+  target_wellFormed := targetWellFormed
+  regionMap := id
+  binderMap := id
+  Distinguished := fun region ↦ region = producerRegion
+  occurrenceMap := fun _ _ occurrence ↦ mapOccurrence input producer occurrence
+  occurrenceMap_node := by
+    intro region regular node nodeRegion
+    have survives : node ≠ producer := by
+      intro equality
+      subst node
+      rw [producerShape] at nodeRegion
+      exact regular nodeRegion.symm
+    exact ⟨mappedNode input producer node survives,
+      mapOccurrence_node input producer node survives⟩
+  occurrenceMap_child := by
+    intro region regular child
+    exact mapOccurrence_child input producer child
+  root_eq := rfl
+  region_shape := by
+    intro parent regular child childParent
+    rw [fusionRaw_regions]
+    simp only [id_eq]
+    cases kind : input.val.regions child <;> rfl
+  localOccurrences_map := by
+    intro region regular
+    exact fusionRaw_localOccurrences_map_of_ne input consumedWire producer
+      consumer hdistinct producerRegion consumerRegion producerPorts
+      consumerPorts producerTerm consumerTerm producerWire consumerWire
+      consumedPort producerShape consumerShape region regular
+  BinderWitness := fun {sourceRels targetRels} sourceBinders targetBinders ↦
+    ConcreteElaboration.IdentityBinderWitness input.val
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      sourceBinders targetBinders
+  relationMap := fun witness ↦
+    ConcreteElaboration.IdentityBinderWitness.relationMap witness
+  binders_empty := ⟨rfl, HEq.rfl⟩
+  binders_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    exact ⟨rfl, HEq.rfl⟩
+  relationMap_push := by
+    intro sourceRels targetRels sourceBinders targetBinders witness child parent
+      arity kind regular
+    rcases witness with ⟨relationContextsEq, bindersEq⟩
+    subst targetRels
+    cases bindersEq
+    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
+      ConcreteElaboration.identityRelationRenaming] using
+        (RelationRenaming.lift_id_fun (source := sourceRels) arity).symm
+  Allowed := fun _ region ↦ RegionAllowed input producerRegion region
+  allowed_cut := by
+    intro direction child parent kind regular allowed
+    apply regionAllowed_child input producerRegion parent child regular allowed
+    simpa [kind, CRegion.parent?]
+  allowed_bubble := by
+    intro direction child parent arity kind regular allowed
+    apply regionAllowed_child input producerRegion parent child regular allowed
+    simpa [kind, CRegion.parent?]
+  ContextWitness := Context input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort
+  AtRegion := fun _ _ ↦ True
+  indexRelation := fun context ↦ context.indexRelation
+  extendContext := by
+    intro source target context region regular sourceExact targetExact
+    exact context.extend region sourceExact targetExact
+  extendFocusedContext := by
+    intro source target context region focused sourceExact targetExact
+    exact context.extend region sourceExact targetExact
+  at_child := by simp
+  at_extended := by simp
+  at_focused_child := by simp
+  localTransport := by
+    intro sourceRels targetRels direction fuelSource fuelTarget source target
+      context sourceBinders targetBinders binderWitness region atRegion regular
+      allowed sourceExact targetExact sourceBindersCover targetBindersCover
+      sourceEnumeration targetEnumeration sourceItems targetItems sourceCompiled
+      targetCompiled itemSemantics
+    exact ConcreteElaboration.directionalLocalTransport_of_agreement direction
+      source target region region context.indexRelation
+      (context.extend region sourceExact targetExact).indexRelation
+      Lambda.canonicalModel named
+      (sourceItems.renameRelations
+        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+      targetItems
+      (regularLocalSelection input consumedWire producer consumer hdistinct
+        producerRegion consumerRegion producerTerm consumerTerm producerWire
+        consumerWire consumedPort scope direction source target context region
+        regular sourceExact targetExact Lambda.canonicalModel)
+      itemSemantics
+  nodeSemantic := by
+    intro sourceRels targetRels direction region source target context atRegion
+      sourceNodup targetNodup sourceBinders targetBinders allowed binderWitness
+      sourceNode targetNode regular mapped nodeRegion sourceItem targetItem
+      sourceCompiled targetCompiled
+    have relationContextsEq := binderWitness.relationContexts_eq
+    subst targetRels
+    have bindersEq := binderWitness.binders_eq
+    cases bindersEq
+    have survives : sourceNode ≠ producer := by
+      intro equality
+      subst sourceNode
+      rw [producerShape] at nodeRegion
+      exact regular nodeRegion.symm
+    have targetNodeEq : targetNode =
+        mappedNode input producer sourceNode survives := by
+      rw [mapOccurrence_node input producer sourceNode survives] at mapped
+      exact ConcreteElaboration.LocalOccurrence.node.inj mapped.symm
+    subst targetNode
+    have notConsumer : sourceNode ≠ consumer := by
+      intro equality
+      subst sourceNode
+      rw [consumerShape] at nodeRegion
+      have regionEq : region = consumerRegion := nodeRegion.symm
+      subst region
+      by_cases sameSite : consumerRegion = producerRegion
+      · exact regular sameSite
+      · exact allowed ⟨producerEnclosesConsumer, sameSite⟩
+    have relationMapEq :
+        (fun {arity} ↦
+          ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness :
+          RelationRenaming sourceRels sourceRels) =
+        (fun {arity} relation ↦ relation) := by
+      rw [HeadStripSoundness.identityBinderWitness_relationMap_eq_identity]
+      rfl
+    rw [relationMapEq, Item.renameRelations_id]
+    exact unchangedNode_itemSimulation input consumedWire producer consumer
+      sourceNode hdistinct survives notConsumer consumerRegion producerTerm
+      consumerTerm producerWire consumerWire consumedPort source target context
+      sourceNodup sourceBinders sourceItem targetItem sourceCompiled
+      targetCompiled Lambda.canonicalModel named direction
+  focusedRegionKernel := by
+    intro sourceRels targetRels direction fuelSource fuelTarget region source
+      target context sourceBinders targetBinders atRegion focused allowed
+      binderWitness sourceExact targetExact sourceBindersCover
+      targetBindersCover sourceEnumeration targetEnumeration recurse recurseAt
+      sourceItems targetItems sourceCompiled targetCompiled
+    subst region
+    have relationContextsEq := binderWitness.relationContexts_eq
+    subst targetRels
+    have bindersEq := binderWitness.binders_eq
+    cases bindersEq
+    simp only [id_eq] at targetExact targetCompiled ⊢
+    rw [ConcreteElaboration.finishRegion_renameRelations source producerRegion
+      (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness)
+      sourceItems]
+    have relationMapEq :
+        (fun {arity} ↦
+          ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness :
+          RelationRenaming sourceRels sourceRels) =
+        (fun {arity} relation ↦ relation) := by
+      rw [HeadStripSoundness.identityBinderWitness_relationMap_eq_identity]
+      rfl
+    rw [relationMapEq, ItemSeq.renameRelations_id]
+    apply ConcreteElaboration.finishRegion_denote direction source target
+      producerRegion producerRegion context.indexRelation Lambda.canonicalModel
+      named sourceItems targetItems
+    exact focusedProducerLocalTransport input consumedWire producer consumer
+      hdistinct producerRegion consumerRegion producerPorts consumerPorts
+      producerTerm consumerTerm producerWire consumerWire consumedPort
+      producerShape consumerShape scope producerResolved consumerResolved
+      endpoints producerEnclosesConsumer targetWellFormed Lambda.canonicalModel
+      named direction fuelSource fuelTarget source target context sourceBinders
+      sourceExact targetExact sourceItems targetItems sourceCompiled
+      targetCompiled
+
 end FusionSoundness
 
 end VisualProof.Rule
