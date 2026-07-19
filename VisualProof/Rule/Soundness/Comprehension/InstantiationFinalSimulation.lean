@@ -2,6 +2,7 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalAllowed
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalFocusedKeptCompiler
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalPresentation
 import VisualProof.Rule.Soundness.Comprehension.SameDiagramSemantic
+import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceBackwardExternal
 
 namespace VisualProof.Rule
 
