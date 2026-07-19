@@ -9,6 +9,82 @@ open VisualProof.Theory
 
 namespace InstantiationSemantic
 
+/-- Canonical target compiler index of a quotient-host wire visible at the
+distinguished splice site. -/
+noncomputable def siteSourceWireMap
+    (input : Splice.Input signature)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+      input.plugLayout.plugRaw (input.plugLayout.frameRegion input.site)
+      outputWitness)
+    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceExact : sourceContext.Exact input.site) :
+    Fin sourceContext.length →
+      Fin (outputLeaf.inheritedWires.extend
+        (input.plugLayout.frameRegion input.site)).length :=
+  fun index =>
+    outputLeaf.siteWireIndex outputWitness
+      (input.plugLayout.frameWire (sourceContext.get index))
+      ((input.plugLayout.frameWire_visible_at_region_iff input.site
+        (sourceContext.get index)).2
+        ((sourceExact.mem_iff (sourceContext.get index)).1
+          (List.get_mem sourceContext index)))
+
+theorem siteSourceWireMap_spec
+    (input : Splice.Input signature)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+      input.plugLayout.plugRaw (input.plugLayout.frameRegion input.site)
+      outputWitness)
+    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceExact : sourceContext.Exact input.site)
+    (index : Fin sourceContext.length) :
+    (outputLeaf.inheritedWires.extend
+      (input.plugLayout.frameRegion input.site)).get
+        (siteSourceWireMap input outputWitness outputLeaf sourceContext
+          sourceExact index) =
+      input.plugLayout.frameWire (sourceContext.get index) := by
+  exact outputLeaf.siteWireIndex_spec outputWitness _ _
+
+/-- The induced quotient valuation agrees pointwise with the target compiler
+environment along `siteSourceWireMap`. -/
+theorem siteSourceWireMap_environment
+    (input : Splice.Input signature)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+      input.plugLayout.plugRaw (input.plugLayout.frameRegion input.site)
+      outputWitness)
+    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceExact : sourceContext.Exact input.site)
+    (outputEnv : Fin (outputLeaf.inheritedWires.extend
+      (input.plugLayout.frameRegion input.site)).length → D)
+    (fallback : D)
+    (index : Fin sourceContext.length) :
+    let outputContext := outputLeaf.inheritedWires.extend
+      (input.plugLayout.frameRegion input.site)
+    let quotientValues := Splice.Input.siteQuotientEnvironment input
+      outputContext outputLeaf.wiresExact outputEnv fallback
+    outputEnv (siteSourceWireMap input outputWitness outputLeaf sourceContext
+      sourceExact index) = quotientValues (sourceContext.get index) := by
+  dsimp only
+  symm
+  apply Splice.Input.siteQuotientEnvironment_eq input
+    (outputLeaf.inheritedWires.extend
+      (input.plugLayout.frameRegion input.site))
+    outputLeaf.wiresExact outputEnv fallback (sourceContext.get index)
+  · exact (input.plugLayout.frameWire_visible_at_region_iff input.site
+      (sourceContext.get index)).2
+      ((sourceExact.mem_iff (sourceContext.get index)).1
+        (List.get_mem sourceContext index))
+  · exact siteSourceWireMap_spec input outputWitness outputLeaf sourceContext
+      sourceExact index
+
 /-- Semantic simulation for one executor splice under the single
 comprehension relation selected for the complete trace.  Unlike the ordinary
 region simulation interface, this predicate records that the target lexical
