@@ -31,6 +31,60 @@ structure BinderTargetsAtBubble
   target_encloses : ∀ index,
     state.diagram.val.Encloses (state.binderTargets index) state.bubble
 
+/-- The terminal compiler variable and the proxy binder that produced it have
+the same arity. -/
+theorem terminalRelation_proxy_arity
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hnonempty : payload.binderSpine.proxyCount ≠ 0)
+    {arity : Nat}
+    (relation : RelVar
+      (Splice.Input.compiledSpliceTerminalView
+        (instantiateSpliceInput comprehension attachments binders payload state
+          site arguments) hnonempty).witness.toFocus.holeRels arity) :
+    let spliceInput := instantiateSpliceInput comprehension attachments binders
+      payload state site arguments
+    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
+      (spliceInput.plugLayout.terminalBodyBinder_is_proxy pattern.witness
+        pattern.leaf hnonempty relation.index)
+    payload.binderSpine.arity proxy = arity := by
+  let spliceInput := instantiateSpliceInput comprehension attachments binders
+    payload state site arguments
+  let layout := spliceInput.plugLayout
+  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
+    (layout.terminalBodyBinder_is_proxy pattern.witness pattern.leaf hnonempty
+      relation.index)
+  have proxySpec :
+      pattern.leaf.binderEnumeration.binder relation.index =
+        payload.binderSpine.proxy proxy :=
+    Classical.choose_spec
+      (layout.terminalBodyBinder_is_proxy pattern.witness pattern.leaf hnonempty
+        relation.index)
+  obtain ⟨patternParent, patternBubble⟩ :=
+    pattern.leaf.binderEnumeration.bubble relation.index
+  rw [proxySpec] at patternBubble
+  have patternBubble' : comprehension.val.diagram.regions
+      (payload.binderSpine.proxy proxy) =
+        .bubble patternParent
+          (pattern.witness.toFocus.holeRels.get relation.index) := by
+    simpa [spliceInput, instantiateSpliceInput] using patternBubble
+  rw [payload.binderSpine.proxy_region] at patternBubble'
+  exact ((CRegion.bubble.inj patternBubble').2).trans relation.hasArity
+
 /-- A terminal compiler relation variable resolves to the relation owned by
 its certified host binder target at the quantified bubble. -/
 theorem terminalTargetRelation_exists
