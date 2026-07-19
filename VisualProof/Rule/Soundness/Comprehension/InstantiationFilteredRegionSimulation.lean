@@ -9,6 +9,148 @@ open VisualProof.Theory
 
 namespace InstantiationSemantic
 
+open VisualProof.Data.Finite
+
+/-- Successful survivor compilation is enough to recover a successful
+authoritative compilation at the same fuel.  Filtering removes only nodes;
+every recursive child remains in the traversal, so the survivor receipt
+already certifies exactly the recursive fuel needed by the full compiler. -/
+theorem compileRegion?_exists_of_survivor
+    {signature : List Nat}
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin parameterCount proxyCount) :
+    ∀ {rels : RelCtx} (fuel : Nat)
+      (region : Fin state.diagram.val.regionCount)
+      (context : ConcreteElaboration.WireContext state.diagram.val)
+      (binders : ConcreteElaboration.BinderContext state.diagram.val rels),
+      (context.extend region).Exact region →
+      binders.Covers region →
+      (∃ survivorBody, compileSurvivorRegion? signature state fuel region
+        context binders = some survivorBody) →
+      ∃ sourceBody,
+        ConcreteElaboration.compileRegion? signature state.diagram.val fuel
+          region context binders = some sourceBody := by
+  intro rels fuel
+  induction fuel generalizing rels with
+  | zero =>
+      intro region context binders exact cover survivor
+      obtain ⟨survivorBody, survivorCompiled⟩ := survivor
+      simp [compileSurvivorRegion?] at survivorCompiled
+  | succ fuel ih =>
+      intro region context binders exact cover survivor
+      obtain ⟨survivorBody, survivorCompiled⟩ := survivor
+      let extended := context.extend region
+      let occurrences :=
+        ConcreteElaboration.localOccurrences state.diagram.val region
+      unfold compileSurvivorRegion? at survivorCompiled
+      dsimp only at survivorCompiled
+      cases survivorItemsResult :
+          ConcreteElaboration.compileOccurrencesWith? signature
+            state.diagram.val (compileSurvivorRegion? signature state fuel)
+            extended binders
+            (occurrences.filter (dropOccurrenceSurvives state)) with
+      | none =>
+          simp [extended, occurrences, survivorItemsResult] at survivorCompiled
+      | some survivorItems =>
+          have hextended : extended.Exact region := by
+            simpa [extended] using exact
+          have occurrenceSuccess : ∀ occurrence, occurrence ∈ occurrences →
+              ∃ item,
+                ConcreteElaboration.compileOccurrenceWith? signature
+                  state.diagram.val
+                  (ConcreteElaboration.compileRegion? signature
+                    state.diagram.val fuel)
+                  extended binders occurrence = some item := by
+            intro occurrence member
+            cases occurrence with
+            | node node =>
+                have nodeRegion :=
+                  (ConcreteElaboration.mem_localOccurrences_node
+                    state.diagram.val region node).mp member
+                simpa [ConcreteElaboration.compileOccurrenceWith?] using
+                  ConcreteElaboration.compileNode?_complete
+                    state.diagram.property hextended.covers cover nodeRegion
+            | child child =>
+                have childParent :=
+                  (ConcreteElaboration.mem_localOccurrences_child
+                    state.diagram.val region child).mp member
+                have keptMember :
+                    ConcreteElaboration.LocalOccurrence.child child ∈
+                      occurrences.filter (dropOccurrenceSurvives state) := by
+                  exact List.mem_filter.mpr ⟨member, rfl⟩
+                obtain ⟨position, positionEq⟩ := indexOf?_complete keptMember
+                have occurrenceEq :
+                    (occurrences.filter (dropOccurrenceSurvives state)).get
+                        position =
+                      ConcreteElaboration.LocalOccurrence.child child :=
+                  indexOf?_sound positionEq
+                have survivorAt :=
+                  ConcreteElaboration.compileOccurrencesWith?_get
+                    (compileSurvivorRegion? signature state fuel) extended
+                    binders survivorItemsResult position
+                rw [occurrenceEq] at survivorAt
+                cases childKind : state.diagram.val.regions child with
+                | sheet =>
+                    have childRoot :=
+                      state.diagram.property.only_root_is_sheet child childKind
+                    subst child
+                    rw [state.diagram.property.root_is_sheet] at childParent
+                    simp [CRegion.parent?] at childParent
+                | cut parent =>
+                    have parentEq : parent = region := by
+                      simpa [childKind, CRegion.parent?] using childParent
+                    subst parent
+                    cases childSurvivorResult :
+                        compileSurvivorRegion? signature state fuel child
+                          extended binders with
+                    | none =>
+                        simp [ConcreteElaboration.compileOccurrenceWith?,
+                          childKind, childSurvivorResult] at survivorAt
+                    | some childSurvivor =>
+                        obtain ⟨childSource, childSourceResult⟩ :=
+                          ih child extended binders
+                            (hextended.extend_child state.diagram.property
+                              childParent)
+                            (ConcreteElaboration.BinderContext.covers_cut_child
+                              cover childKind)
+                            ⟨childSurvivor, childSurvivorResult⟩
+                        exact ⟨.cut childSource, by
+                          simp [ConcreteElaboration.compileOccurrenceWith?,
+                            childKind, childSourceResult]⟩
+                | bubble parent arity =>
+                    have parentEq : parent = region := by
+                      simpa [childKind, CRegion.parent?] using childParent
+                    subst parent
+                    let pushed := binders.push child arity
+                    cases childSurvivorResult :
+                        compileSurvivorRegion? signature state fuel child
+                          extended pushed with
+                    | none =>
+                        simp [ConcreteElaboration.compileOccurrenceWith?,
+                          childKind, pushed, childSurvivorResult] at survivorAt
+                    | some childSurvivor =>
+                        obtain ⟨childSource, childSourceResult⟩ :=
+                          ih child extended pushed
+                            (hextended.extend_child state.diagram.property
+                              childParent)
+                            (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                              cover childKind)
+                            ⟨childSurvivor, childSurvivorResult⟩
+                        exact ⟨.bubble arity childSource, by
+                          simp [ConcreteElaboration.compileOccurrenceWith?,
+                            childKind, pushed, childSourceResult]⟩
+          obtain ⟨sourceItems, sourceItemsResult⟩ :=
+            ConcreteElaboration.compileOccurrencesWith?_complete
+              (ConcreteElaboration.compileRegion? signature state.diagram.val
+                fuel)
+              extended binders occurrences occurrenceSuccess
+          refine ⟨ConcreteElaboration.finishRegion state.diagram.val context
+            region sourceItems, ?_⟩
+          unfold ConcreteElaboration.compileRegion?
+          dsimp only
+          rw [sourceItemsResult]
+          rfl
+
 /-- Semantic simulation between the authoritative compiler and the executor's
 survivor view of one state.  The only information not present in the filtered
 diagram is supplied as a semantic certificate for each removed atom. -/
