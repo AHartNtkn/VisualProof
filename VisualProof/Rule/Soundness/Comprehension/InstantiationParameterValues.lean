@@ -83,6 +83,40 @@ theorem terminalRelationOfValues_eq_parameterValues
   simp only [terminalRelationOfValues, terminalRelationOfParameterValues]
   rw [parameters]
 
+/-- Once ordered parameter values and proxy relations are fixed, the canonical
+comprehension relation is independent of the executor state, occurrence site,
+and ordered argument wires used to install a copy. -/
+theorem terminalRelationOfParameterValues_eq
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (left right : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (leftSite : Fin left.diagram.val.regionCount)
+    (rightSite : Fin right.diagram.val.regionCount)
+    (leftArguments : Fin payload.arity → Fin left.diagram.val.wireCount)
+    (rightArguments : Fin payload.arity → Fin right.diagram.val.wireCount)
+    (hnonempty : payload.binderSpine.proxyCount ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (parameterValues : Fin attachments.length → model.Carrier)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index)) :
+    terminalRelationOfParameterValues payload left leftSite leftArguments
+        hnonempty model named parameterValues values =
+      terminalRelationOfParameterValues payload right rightSite rightArguments
+        hnonempty model named parameterValues values := by
+  funext relationArguments
+  apply propext
+  rfl
+
 /-- One ordered valuation for the executor's parameter wires in a concrete
 compiler context.  Repeated parameter wires deliberately read the same
 context entry while retaining their serialized positions. -/
