@@ -139,6 +139,124 @@ noncomputable def finalBubblePresentation
       (binderContext.push state.bubble payload.arity)).symm.trans
         droppedCompiled
 
+/-- The certified one-step simulations transport a final presentation back to
+the original quantified bubble under one trace-wide relation contract. -/
+noncomputable def initialBubblePresentationOfFinal
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      (initialInstantiationState payload) result)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (relationValue : Relation model.Carrier payload.arity)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
+    (contract : TraceRelationContract payload input model named relationValue
+      values parameterValues)
+    (finalPresentation : BubblePresentation payload result model named
+      relationValue values parameterValues) :
+    BubblePresentation payload (initialInstantiationState payload) model named
+      relationValue values parameterValues :=
+  bubblePresentation_of_trace trace boundaryNodup model named relationValue
+    values parameterValues
+    (initial_regionSimulationsEveryStep trace model named relationValue values
+      parameterValues contract)
+    finalPresentation
+
+/-- At the exact final compiler focus, package the selected bubble denotation
+and immediately transport it back through the complete accepted copy trace.
+Keeping this composition at the focus preserves the executor-selected relation
+before the surrounding existential semantics hides its witness. -/
+noncomputable def initialBubblePresentationOfFinalFocus
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      (initialInstantiationState payload) result)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (targets : BinderTargetsAtBubble payload result)
+    (scopes : ParameterScopesAtBubble result)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    {rels : RelCtx}
+    (outer : ConcreteElaboration.WireContext result.diagram.val)
+    (outerExactDrop : @ConcreteElaboration.WireContext.Exact
+      (dropInstantiationAtomsRaw result) (outer.extend result.bubble)
+        result.bubble)
+    (dropWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (binderContext : ConcreteElaboration.BinderContext result.diagram.val rels)
+    (parent : Fin result.diagram.val.regionCount)
+    (bubbleShape : result.diagram.val.regions result.bubble =
+      .bubble parent payload.arity)
+    (binderCoverDrop : @ConcreteElaboration.BinderContext.Covers
+      (dropInstantiationAtomsRaw result) rels binderContext parent)
+    (binderEnumerationDrop :
+      ConcreteElaboration.BinderContext.Enumeration
+        (dropInstantiationAtomsRaw result) binderContext parent)
+    (compilerFuel : Nat)
+    (items : ItemSeq signature (outer.extend result.bubble).length
+      (payload.arity :: rels))
+    (itemsCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (dropInstantiationAtomsRaw result)
+      (ConcreteElaboration.compileRegion? signature
+        (dropInstantiationAtomsRaw result) compilerFuel)
+      (outer.extend result.bubble)
+      (binderContext.push result.bubble payload.arity)
+      (ConcreteElaboration.localOccurrences
+        (dropInstantiationAtomsRaw result) result.bubble) = some items)
+    (environment : Fin outer.length → model.Carrier)
+    (relationEnvironment : RelEnv model.Carrier rels)
+    (relationValue : Relation model.Carrier payload.arity)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
+    (contract : TraceRelationContract payload input model named relationValue
+      values parameterValues)
+    (parametersEq : parameterValuesOfExact result scopes outer
+      (dropExact_to_state result (outer.extend result.bubble) result.bubble
+        outerExactDrop) environment = parameterValues)
+    (proxiesEq : proxyRelationsOfParentCover payload result targets
+      binderContext parent bubbleShape
+      (dropCover_to_state result binderContext parent binderCoverDrop)
+      relationEnvironment = values)
+    (denotes : denoteRegion (relCtx := payload.arity :: rels) model named
+      environment (relationValue, relationEnvironment)
+      (ConcreteElaboration.finishRegion result.diagram.val outer result.bubble
+        items)) :
+    BubblePresentation payload (initialInstantiationState payload) model named
+      relationValue values parameterValues := by
+  let finalPresentation := finalBubblePresentation payload result targets scopes
+    model named outer outerExactDrop dropWellFormed binderContext parent
+    bubbleShape binderCoverDrop binderEnumerationDrop compilerFuel items
+    itemsCompiled environment relationEnvironment relationValue denotes
+  have finalPresentation' : BubblePresentation payload result model named
+      relationValue values parameterValues := by
+    simpa only [parametersEq, proxiesEq] using finalPresentation
+  exact initialBubblePresentationOfFinal trace boundaryNodup model named
+    relationValue values parameterValues contract finalPresentation'
+
 end InstantiationSemantic
 
 end VisualProof.Rule
