@@ -116,34 +116,17 @@ theorem advance_site_region_simulation_fixed
         arguments hnonempty model named parameterValues values)
     (emptyRelationEq : relationValue =
       payload.interpretedRelation model named parameterValues)
-    (childSimulation : ∀ direction sourceFuel targetFuel
+    (direction : ConcreteElaboration.SimulationDirection)
+    (sourceFuel targetFuel : Nat)
+    (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
+      state.diagram.val.Encloses state.bubble child →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
         values parameterValues direction sourceFuel targetFuel child) :
-    ∀ direction sourceFuel targetFuel,
-      FixedAdvanceRegionSimulation comprehension attachments binders payload
-        state atom tail site arguments hadmissible model named relationValue
-        values parameterValues direction sourceFuel targetFuel site := by
-  intro direction sourceFuel targetFuel
-  cases sourceFuel with
-  | zero =>
-      unfold FixedAdvanceRegionSimulation
-      intro sourceRels targetRels sourceOuter targetOuter sourceExact targetExact
-        sourceBinders targetBinders sourceCover targetCover sourceEnumeration
-        targetEnumeration outerMap outerSpec relationMap relationSpec sourceBody
-        targetBody sourceCompiled
-      simp [compileSurvivorRegion?] at sourceCompiled
-  | succ sourceFuel =>
-      cases targetFuel with
-      | zero =>
-          unfold FixedAdvanceRegionSimulation
-          intro sourceRels targetRels sourceOuter targetOuter sourceExact
-            targetExact sourceBinders targetBinders sourceCover targetCover
-            sourceEnumeration targetEnumeration outerMap outerSpec relationMap
-            relationSpec sourceBody targetBody sourceCompiled targetCompiled
-          simp [compileSurvivorRegion?] at targetCompiled
-      | succ targetFuel =>
+    FixedAdvanceRegionSimulation comprehension attachments binders payload
+      state atom tail site arguments hadmissible model named relationValue
+      values parameterValues direction (sourceFuel + 1) (targetFuel + 1) site := by
           unfold FixedAdvanceRegionSimulation
           intro sourceRels targetRels sourceOuter targetOuter sourceExact
             targetExact sourceBinders targetBinders sourceCover targetCover
@@ -277,9 +260,8 @@ theorem advance_site_region_simulation_fixed
                             sourceItemsResult targetItemsResult fullItemsCompiled
                             sourceItemsNative targetFixed targetProxies
                             targetParameters emptyRelationEq
-                            (fun direction child =>
-                              childSimulation direction sourceFuel targetFuel
-                                child)
+                            (fun direction child encloses =>
+                              childSimulation direction child encloses)
                         exact (finishRegion_denote_iff
                           next.diagram.val targetOuter (layout.frameRegion site)
                           targetItems model named targetOuterEnv targetRelEnv).mpr
@@ -300,9 +282,8 @@ theorem advance_site_region_simulation_fixed
                             targetItemsResult fullItemsCompiled sourceItemsNative
                             targetFixed targetProxies targetParameters
                             (nonemptyRelationEq hzero)
-                            (fun direction child =>
-                              childSimulation direction sourceFuel targetFuel
-                                child)
+                            (fun direction child encloses =>
+                              childSimulation direction child encloses)
                         exact (finishRegion_denote_iff
                           next.diagram.val targetOuter (layout.frameRegion site)
                           targetItems model named targetOuterEnv targetRelEnv).mpr
@@ -331,8 +312,8 @@ theorem advance_site_region_simulation_fixed
                           targetItems fullItems sourceItemsResult targetItemsResult
                           fullItemsCompiled targetItemsDenote targetFixed
                           targetProxies targetParameters nonemptyRelationEq
-                          emptyRelationEq (fun direction child =>
-                            childSimulation direction sourceFuel targetFuel child)
+                          emptyRelationEq (fun direction child encloses =>
+                            childSimulation direction child encloses)
                       have sourceItemsPrepared :=
                         (denoteItemSeq_renameRelations model named relationMap
                           (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
@@ -346,6 +327,301 @@ theorem advance_site_region_simulation_fixed
                         model named sourceOuterEnv targetRelEnv).mpr
                           ⟨sourceLocal, sourceItemsPrepared⟩
                       exact sourceFinishRename.symm ▸ preparedRegion
+
+/-- Structural recursion lifts the site law through every enclosing region
+inside the moving quantified bubble.  Direct children remain in that bubble,
+so each recursive call carries an explicit enclosure witness. -/
+theorem advance_enclosed_region_simulation_fixed
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (node_eq : state.diagram.val.nodes atom = .atom site state.bubble)
+    (arguments_eq : instantiateArguments? state atom payload.arity =
+      some arguments)
+    (pending_eq : state.pendingAtoms = atom :: tail)
+    (ownedNodup : state.ownedAtoms.Nodup)
+    (shape : BubbleHasPayloadArity payload state)
+    (targets : BinderTargetsAtBubble payload state)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (relationValue : Relation model.Carrier payload.arity)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
+    (nonemptyRelationEq : ∀ hnonempty :
+      payload.binderSpine.proxyCount ≠ 0,
+      relationValue = terminalRelationOfParameterValues payload state site
+        arguments hnonempty model named parameterValues values)
+    (emptyRelationEq : relationValue =
+      payload.interpretedRelation model named parameterValues) :
+    ∀ direction sourceFuel targetFuel
+      (region : Fin state.diagram.val.regionCount),
+      state.diagram.val.Encloses state.bubble region →
+      FixedAdvanceRegionSimulation comprehension attachments binders payload
+        state atom tail site arguments hadmissible model named relationValue
+        values parameterValues direction sourceFuel targetFuel region := by
+  intro direction sourceFuel
+  induction sourceFuel generalizing direction with
+  | zero =>
+      intro targetFuel region bubbleEncloses
+      unfold FixedAdvanceRegionSimulation
+      intro sourceRels targetRels sourceOuter targetOuter sourceExact targetExact
+        sourceBinders targetBinders sourceCover targetCover sourceEnumeration
+        targetEnumeration outerMap outerSpec relationMap relationSpec sourceBody
+        targetBody sourceCompiled
+      simp [compileSurvivorRegion?] at sourceCompiled
+  | succ sourceFuel ih =>
+      intro targetFuel region bubbleEncloses
+      cases targetFuel with
+      | zero =>
+          unfold FixedAdvanceRegionSimulation
+          intro sourceRels targetRels sourceOuter targetOuter sourceExact
+            targetExact sourceBinders targetBinders sourceCover targetCover
+            sourceEnumeration targetEnumeration outerMap outerSpec relationMap
+            relationSpec sourceBody targetBody sourceCompiled targetCompiled
+          simp [compileSurvivorRegion?] at targetCompiled
+      | succ targetFuel =>
+          by_cases atSite : region = site
+          · subst region
+            exact advance_site_region_simulation_fixed comprehension attachments
+              binders payload state atom tail site arguments node_eq arguments_eq
+              pending_eq ownedNodup shape targets hadmissible model named
+              relationValue values parameterValues nonemptyRelationEq
+              emptyRelationEq direction sourceFuel targetFuel
+              (fun childDirection child childEncloses =>
+                ih childDirection targetFuel child childEncloses)
+          · intro sourceOuter targetOuter sourceExact targetExact sourceBinders
+              targetBinders sourceCover targetCover
+              sourceEnumeration targetEnumeration outerMap outerSpec relationMap
+              relationSpec sourceBody targetBody sourceCompiled targetCompiled
+              sourceOuterEnv targetOuterEnv targetRelEnv outerAgrees targetFixed
+              targetProxies targetParameters
+            let spliceInput := instantiateSpliceInput comprehension attachments
+              binders payload state site arguments
+            let layout := spliceInput.plugLayout
+            let coalesced := coalescedInstantiationState comprehension
+              attachments binders payload state site arguments hadmissible
+            let next := advanceInstantiationState comprehension attachments
+              binders payload state atom tail site arguments hadmissible
+            let sourceContext := sourceOuter.extend region
+            let targetContext := targetOuter.extend (layout.frameRegion region)
+            let extendedMap := layout.frameExtendedWireMap region atSite
+              sourceOuter targetOuter outerMap
+            change (ConcreteElaboration.compileOccurrencesWith? signature
+                coalesced.diagram.val
+                (compileSurvivorRegion? signature coalesced sourceFuel)
+                sourceContext sourceBinders
+                ((ConcreteElaboration.localOccurrences coalesced.diagram.val
+                  region).filter (dropOccurrenceSurvives coalesced))).bind
+                    (fun items => some (ConcreteElaboration.finishRegion
+                      coalesced.diagram.val sourceOuter region items)) =
+              some sourceBody at sourceCompiled
+            change (ConcreteElaboration.compileOccurrencesWith? signature
+                next.diagram.val
+                (compileSurvivorRegion? signature next targetFuel)
+                targetContext targetBinders
+                ((ConcreteElaboration.localOccurrences next.diagram.val
+                  (layout.frameRegion region)).filter
+                    (dropOccurrenceSurvives next))).bind
+                      (fun items => some (ConcreteElaboration.finishRegion
+                        next.diagram.val targetOuter (layout.frameRegion region)
+                          items)) = some targetBody at targetCompiled
+            cases sourceItemsResult :
+                ConcreteElaboration.compileOccurrencesWith? signature
+                  coalesced.diagram.val
+                  (compileSurvivorRegion? signature coalesced sourceFuel)
+                  sourceContext sourceBinders
+                  ((ConcreteElaboration.localOccurrences coalesced.diagram.val
+                    region).filter (dropOccurrenceSurvives coalesced)) with
+            | none => rw [sourceItemsResult] at sourceCompiled; contradiction
+            | some sourceItems =>
+                rw [sourceItemsResult] at sourceCompiled
+                have sourceBodyEq := Option.some.inj sourceCompiled
+                subst sourceBody
+                cases targetItemsResult :
+                    ConcreteElaboration.compileOccurrencesWith? signature
+                      next.diagram.val
+                      (compileSurvivorRegion? signature next targetFuel)
+                      targetContext targetBinders
+                      ((ConcreteElaboration.localOccurrences next.diagram.val
+                        (layout.frameRegion region)).filter
+                          (dropOccurrenceSurvives next)) with
+                | none => rw [targetItemsResult] at targetCompiled; contradiction
+                | some targetItems =>
+                    rw [targetItemsResult] at targetCompiled
+                    have targetBodyEq := Option.some.inj targetCompiled
+                    subst targetBody
+                    have extendedSpec := layout.frameExtendedWireMap_spec region
+                      atSite sourceOuter targetOuter outerMap outerSpec
+                    have sourceFinishRename :
+                        (ConcreteElaboration.finishRegion coalesced.diagram.val
+                          sourceOuter region sourceItems).renameRelations
+                            relationMap =
+                          ConcreteElaboration.finishRegion coalesced.diagram.val
+                            sourceOuter region
+                              (sourceItems.renameRelations relationMap) := by
+                      simpa [coalesced] using
+                        ConcreteElaboration.finishRegion_renameRelations
+                          sourceOuter region relationMap sourceItems
+                    cases direction with
+                    | forward =>
+                        intro sourceDenotes
+                        have sourceDenotes' : denoteRegion model named
+                            sourceOuterEnv targetRelEnv
+                            (ConcreteElaboration.finishRegion
+                              coalesced.diagram.val sourceOuter region
+                                (sourceItems.renameRelations relationMap)) :=
+                          sourceFinishRename ▸ sourceDenotes
+                        obtain ⟨sourceLocal, sourceItemsPrepared⟩ :=
+                          (finishRegion_denote_iff coalesced.diagram.val
+                            sourceOuter region
+                            (sourceItems.renameRelations relationMap) model named
+                            sourceOuterEnv targetRelEnv).mp sourceDenotes'
+                        have sourceItemsDenote :=
+                          (denoteItemSeq_renameRelations model named relationMap
+                            (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
+                            (RelEnv.pullback_agrees relationMap targetRelEnv)
+                            (ConcreteElaboration.extendedEnvironment sourceOuter
+                              region sourceOuterEnv sourceLocal) sourceItems).mp
+                                sourceItemsPrepared
+                        let targetLocal := sourceLocal ∘
+                          (layout.frameLocalWireEquiv region atSite).symm
+                        let sourceEnv := ConcreteElaboration.extendedEnvironment
+                          sourceOuter region sourceOuterEnv sourceLocal
+                        let targetEnv := ConcreteElaboration.extendedEnvironment
+                          targetOuter (layout.frameRegion region) targetOuterEnv
+                            targetLocal
+                        have environmentEq : sourceEnv =
+                            targetEnv ∘ extendedMap := by
+                          rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+                            at outerAgrees
+                          funext index
+                          let split := Fin.cast
+                            (ConcreteElaboration.WireContext.length_extend
+                              sourceOuter region) index
+                          have recover : Fin.cast
+                              (ConcreteElaboration.WireContext.length_extend
+                                sourceOuter region).symm split = index := by
+                            apply Fin.ext
+                            rfl
+                          rw [← recover]
+                          refine Fin.addCases (fun outer => ?_)
+                            (fun localIndex => ?_) split <;>
+                            simp [sourceEnv, targetEnv,
+                              ConcreteElaboration.extendedEnvironment,
+                              extendWireEnv, extendedMap,
+                              Splice.Input.PlugLayout.frameExtendedWireMap,
+                              targetLocal, outerAgrees]
+                          exact (congrArg sourceLocal
+                            ((layout.frameLocalWireEquiv region atSite).left_inv
+                              localIndex)).symm
+                        have targetExtendedParameters : ParameterValuesAt next
+                            targetContext targetEnv parameterValues :=
+                          ParameterValuesAt.extend next targetOuter targetOuterEnv
+                            parameterValues targetParameters
+                            (layout.frameRegion region) targetLocal
+                        have targetItemsDenote :=
+                          advance_offsite_items_denote_fixed_forward comprehension
+                            attachments binders payload state atom tail site region
+                            arguments node_eq atSite hadmissible targets
+                            bubbleEncloses sourceFuel targetFuel sourceContext
+                            targetContext sourceExact targetExact sourceBinders
+                            targetBinders sourceCover targetCover sourceEnumeration
+                            targetEnumeration extendedMap extendedSpec relationMap
+                            relationSpec model named relationValue values
+                            parameterValues sourceEnv targetEnv targetRelEnv
+                            environmentEq targetFixed targetProxies
+                            targetExtendedParameters
+                            (fun childDirection child childEncloses =>
+                              ih childDirection targetFuel child childEncloses)
+                            sourceItems targetItems sourceItemsResult
+                            targetItemsResult sourceItemsDenote
+                        exact (finishRegion_denote_iff next.diagram.val
+                          targetOuter (layout.frameRegion region) targetItems
+                          model named targetOuterEnv targetRelEnv).mpr
+                            ⟨targetLocal, targetItemsDenote⟩
+                    | backward =>
+                        intro targetDenotes
+                        obtain ⟨targetLocal, targetItemsDenote⟩ :=
+                          (finishRegion_denote_iff next.diagram.val targetOuter
+                            (layout.frameRegion region) targetItems model named
+                            targetOuterEnv targetRelEnv).mp targetDenotes
+                        let sourceLocal := targetLocal ∘
+                          layout.frameLocalWireEquiv region atSite
+                        let sourceEnv := ConcreteElaboration.extendedEnvironment
+                          sourceOuter region sourceOuterEnv sourceLocal
+                        let targetEnv := ConcreteElaboration.extendedEnvironment
+                          targetOuter (layout.frameRegion region) targetOuterEnv
+                            targetLocal
+                        have environmentEq : sourceEnv =
+                            targetEnv ∘ extendedMap := by
+                          rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+                            at outerAgrees
+                          funext index
+                          let split := Fin.cast
+                            (ConcreteElaboration.WireContext.length_extend
+                              sourceOuter region) index
+                          have recover : Fin.cast
+                              (ConcreteElaboration.WireContext.length_extend
+                                sourceOuter region).symm split = index := by
+                            apply Fin.ext
+                            rfl
+                          rw [← recover]
+                          refine Fin.addCases (fun outer => ?_)
+                            (fun localIndex => ?_) split <;>
+                            simp [sourceEnv, targetEnv,
+                              ConcreteElaboration.extendedEnvironment,
+                              extendWireEnv, extendedMap,
+                              Splice.Input.PlugLayout.frameExtendedWireMap,
+                              sourceLocal, outerAgrees]
+                        have targetExtendedParameters : ParameterValuesAt next
+                            targetContext targetEnv parameterValues :=
+                          ParameterValuesAt.extend next targetOuter targetOuterEnv
+                            parameterValues targetParameters
+                            (layout.frameRegion region) targetLocal
+                        have sourceItemsDenote :=
+                          advance_offsite_items_denote_fixed comprehension
+                            attachments binders payload state atom tail site region
+                            arguments node_eq atSite hadmissible targets
+                            bubbleEncloses sourceFuel targetFuel sourceContext
+                            targetContext sourceExact targetExact sourceBinders
+                            targetBinders sourceCover targetCover sourceEnumeration
+                            targetEnumeration extendedMap extendedSpec relationMap
+                            relationSpec model named relationValue values
+                            parameterValues sourceEnv targetEnv targetRelEnv
+                            environmentEq targetFixed targetProxies
+                            targetExtendedParameters
+                            (fun childDirection child childEncloses =>
+                              ih childDirection targetFuel child childEncloses)
+                            sourceItems targetItems sourceItemsResult
+                            targetItemsResult targetItemsDenote
+                        have sourceItemsPrepared :=
+                          (denoteItemSeq_renameRelations model named relationMap
+                            (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
+                            (RelEnv.pullback_agrees relationMap targetRelEnv)
+                            sourceEnv sourceItems).mpr sourceItemsDenote
+                        have preparedRegion :=
+                          (finishRegion_denote_iff coalesced.diagram.val
+                            sourceOuter region
+                            (sourceItems.renameRelations relationMap) model named
+                            sourceOuterEnv targetRelEnv).mpr
+                              ⟨sourceLocal, sourceItemsPrepared⟩
+                        exact sourceFinishRename.symm ▸ preparedRegion
 
 end InstantiationSemantic
 

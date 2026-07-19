@@ -167,6 +167,7 @@ theorem advance_site_items_denote_empty_fixed_forward
       payload.interpretedRelation model named parameterValues)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
+      state.diagram.val.Encloses state.bubble child →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
         values parameterValues direction sourceFuel targetFuel child) :
@@ -646,6 +647,7 @@ theorem advance_site_items_denote_nonempty_fixed_forward
       state site arguments hnonempty model named parameterValues values)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
+      state.diagram.val.Encloses state.bubble child →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
         values parameterValues direction sourceFuel targetFuel child) :

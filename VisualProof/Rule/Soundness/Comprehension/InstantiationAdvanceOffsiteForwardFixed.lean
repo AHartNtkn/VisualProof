@@ -99,6 +99,7 @@ theorem advance_offsite_items_denote_fixed_forward
       targetContext targetEnv parameterValues)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
+      state.diagram.val.Encloses state.bubble child →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
         values parameterValues direction sourceFuel targetFuel child)

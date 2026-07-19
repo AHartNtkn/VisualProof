@@ -97,6 +97,7 @@ theorem advance_site_child_denotes_fixed
       targetContext targetEnv parameterValues)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
+      state.diagram.val.Encloses state.bubble child →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
         values parameterValues direction sourceFuel targetFuel child)
@@ -140,6 +141,19 @@ theorem advance_site_child_denotes_fixed
   have childParent :=
     (ConcreteElaboration.mem_localOccurrences_child _ _ _).1
       (List.mem_filter.mp member).1
+  have stateChildParent' :
+      (state.diagram.val.regions child).parent? = some parentRegion := by
+    simpa [coalesced, coalescedInstantiationState, spliceInput,
+      Splice.Input.coalesceFrameRaw_regions, CRegion.parent?] using childParent
+  have parentEnclosesChild :
+      state.diagram.val.Encloses parentRegion child := by
+    have hpositive := child.isLt
+    refine ⟨⟨1, by omega⟩, ?_⟩
+    simp [ConcreteDiagram.climb, stateChildParent']
+  have bubbleEnclosesChild :
+      state.diagram.val.Encloses state.bubble child :=
+    ConcreteElaboration.checked_encloses_trans state.diagram.property
+      bubbleEnclosesParent parentEnclosesChild
   cases childKind : coalesced.diagram.val.regions child with
   | sheet =>
       have frameKind : spliceInput.frame.val.regions child = .sheet := by
@@ -190,7 +204,8 @@ theorem advance_site_child_denotes_fixed
               rw [targetChildResult] at targetCompiled
               simp at targetCompiled
               subst targetItem
-              have simulation := childSimulation .forward child sourceContext
+              have simulation := childSimulation .forward child
+                bubbleEnclosesChild sourceContext
                 targetContext
                 (sourceExact.extend_child
                   (spliceInput.coalesceFrameRaw_wellFormed hadmissible)
@@ -319,7 +334,8 @@ theorem advance_site_child_denotes_fixed
               have childProxies := ProxyRelationsAt.push_other payload next
                 targetBinders targetRelEnv values targetProxies
                 (layout.frameRegion child) arity childRelation nextTargetsNe
-              have simulation := childSimulation .backward child sourceContext
+              have simulation := childSimulation .backward child
+                bubbleEnclosesChild sourceContext
                 targetContext
                 (sourceExact.extend_child
                   (spliceInput.coalesceFrameRaw_wellFormed hadmissible)
@@ -520,6 +536,7 @@ theorem advance_site_items_denote_fixed
       payload.interpretedRelation model named parameterValues)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
+      state.diagram.val.Encloses state.bubble child →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model named relationValue
         values parameterValues direction sourceFuel targetFuel child) :
