@@ -8,6 +8,86 @@ open Diagram
 
 namespace FissionSoundness
 
+theorem fissionRaw_selected_output_occurs
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (wire : Fin input.val.wireCount)
+    (occurs : input.val.EndpointOccurs wire
+      { node := selected, port := CPort.output }) :
+    (fissionRaw input selected site producer residual).EndpointOccurs
+      wire.castSucc { node := selected.castSucc, port := CPort.output } := by
+  unfold ConcreteDiagram.EndpointOccurs at occurs ⊢
+  simp only [fissionRaw, Fin.lastCases_castSucc]
+  apply List.mem_append_left
+  apply List.mem_append_left
+  apply List.mem_map.mpr
+  refine ⟨{ node := selected, port := CPort.output }, ?_, rfl⟩
+  exact List.mem_filter.mpr ⟨occurs,
+    fissionKeepEndpoint_output selected selected⟩
+
+theorem fissionRaw_producer_output_occurs
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount))) :
+    (fissionRaw input selected site producer residual).EndpointOccurs
+      (Fin.last input.val.wireCount)
+      { node := Fin.last input.val.nodeCount, port := CPort.output } := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [fissionRaw, Fin.lastCases_last]
+  exact List.mem_cons_self
+
+theorem fissionRaw_producer_free_occurs
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (port : Fin producer.freeSupport.length) :
+    (fissionRaw input selected site producer residual).EndpointOccurs
+      (producer.freeSupport.get port).castSucc
+      { node := Fin.last input.val.nodeCount, port := CPort.free port.val } := by
+  unfold ConcreteDiagram.EndpointOccurs
+  simp only [fissionRaw, Fin.lastCases_castSucc]
+  apply List.mem_append_left
+  apply List.mem_append_right
+  apply List.mem_filterMap.mpr
+  exact ⟨port, mem_allFin port, by simp⟩
+
+theorem fissionRaw_residual_free_occurs
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (port : Fin residual.freeSupport.length) :
+    (fissionRaw input selected site producer residual).EndpointOccurs
+      (match residual.freeSupport.get port with
+        | none => Fin.last input.val.wireCount
+        | some wire => wire.castSucc)
+      { node := selected.castSucc, port := CPort.free port.val } := by
+  cases support : residual.freeSupport.get port with
+  | none =>
+      unfold ConcreteDiagram.EndpointOccurs
+      simp only [fissionRaw, Fin.lastCases_last, List.mem_cons]
+      apply List.mem_cons_of_mem
+      apply List.mem_filterMap.mpr
+      refine ⟨port, mem_allFin port, ?_⟩
+      rw [support]
+      simp
+  | some wire =>
+      unfold ConcreteDiagram.EndpointOccurs
+      simp only [fissionRaw, Fin.lastCases_castSucc]
+      apply List.mem_append_right
+      apply List.mem_filterMap.mpr
+      refine ⟨port, mem_allFin port, ?_⟩
+      rw [support]
+      simp
+
 theorem fissionRaw_otherEndpointOccurs_iff
     (input : CheckedDiagram signature)
     (selected old : Fin input.val.nodeCount)

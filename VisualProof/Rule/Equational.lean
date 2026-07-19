@@ -1357,6 +1357,13 @@ private def fissionKeepEndpoint (node : Fin nodes)
     fissionKeepEndpoint node endpoint = true := by
   simp [fissionKeepEndpoint, different]
 
+@[simp] theorem fissionKeepEndpoint_output
+    (node endpointNode : Fin nodes) :
+    fissionKeepEndpoint node
+      ({ node := endpointNode, port := Diagram.CPort.output } :
+        Diagram.CEndpoint nodes) = true := by
+  simp [fissionKeepEndpoint]
+
 def fissionRaw (input : Diagram.CheckedDiagram signature)
     (node : Fin input.val.nodeCount)
     (region : Fin input.val.regionCount)
