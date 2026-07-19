@@ -1206,6 +1206,374 @@ theorem focusedRootBackwardWitness
   funext port
   exact (producerValues port).symm
 
+/-- At a focused root, the deleted producer equation is discharged by the
+hidden consumed-wire existential.  Every remaining root occurrence is
+transported by the same producer-frame simulation used below the root. -/
+theorem focusedRootTransport
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (producerRegion consumerRegion : Fin input.val.regionCount)
+    (producerPorts consumerPorts : Nat)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (producerShape : input.val.nodes producer =
+      .term producerRegion producerPorts producerTerm)
+    (consumerShape : input.val.nodes consumer =
+      .term consumerRegion consumerPorts consumerTerm)
+    (scope : producerRegion = (input.val.wires consumedWire).scope)
+    (producerResolved : resolveNodeFreeWires? input producer producerPorts =
+      some producerWire)
+    (consumerResolved : resolveNodeFreeWires? input consumer consumerPorts =
+      some consumerWire)
+    (endpoints :
+      (input.val.wires consumedWire).endpoints = [
+          { node := producer, port := CPort.output },
+          { node := consumer, port := CPort.free consumedPort.val }] ∨
+      (input.val.wires consumedWire).endpoints = [
+          { node := consumer, port := CPort.free consumedPort.val },
+          { node := producer, port := CPort.output }])
+    (producerEnclosesConsumer : input.val.Encloses producerRegion consumerRegion)
+    (rootSite : input.val.root = producerRegion)
+    (boundary : List (Fin input.val.wireCount))
+    (mapped : List (Fin (fusionWireDomain input.val consumedWire).count))
+    (transport : (fusionInterfaceTransport input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort).transportBoundary boundary = some mapped)
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetRoot : ∀ wire, wire ∈ mapped →
+      ((fusionRaw input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort).wires wire).scope = input.val.root)
+    (targetWellFormed :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (fuelSource fuelTarget : Nat)
+    (sourceItems : ItemSeq signature
+      (sourceOpen input boundary).rootWires.length [])
+    (targetItems : ItemSeq signature
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).rootWires.length [])
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val (ConcreteElaboration.compileRegion? signature input.val
+        fuelSource) (sourceOpen input boundary).rootWires
+      ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences input.val input.val.root) =
+        some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      (ConcreteElaboration.compileRegion? signature
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        fuelTarget)
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).rootWires ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire
+          consumedPort).root) = some targetItems) :
+    ConcreteElaboration.DirectionalRootTransport direction
+      (sourceOpen input boundary).exposedWires
+      (sourceOpen input boundary).hiddenWires
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).exposedWires
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).hiddenWires
+      (exposedContext input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort boundary mapped transport).indexRelation
+      model named sourceItems targetItems := by
+  let source := sourceCheckedOpen input boundary sourceRoot
+  let target := targetCheckedOpen input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort mapped targetRoot targetWellFormed
+  let sourceContext := source.val.rootWires
+  let targetContext := target.val.rootWires
+  let context := Context.ofExact input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort input.val.root sourceContext targetContext
+    (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      source)
+    (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      target)
+  have sourceExact : ConcreteElaboration.WireContext.Exact sourceContext
+      producerRegion := by
+    rw [← rootSite]
+    simpa [sourceContext, source] using
+      (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+        source)
+  have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+      producerRegion := by
+    rw [← rootSite]
+    simpa [targetContext, target, fusionRaw] using
+      (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+        target)
+  have sourceCompiledFocus : ConcreteElaboration.compileOccurrencesWith?
+      signature input.val (ConcreteElaboration.compileRegion? signature input.val
+        fuelSource) sourceContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences input.val producerRegion) =
+        some sourceItems := by
+    simpa [sourceContext, source, rootSite] using sourceCompiled
+  have targetCompiledFocus : ConcreteElaboration.compileOccurrencesWith?
+      signature
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      (ConcreteElaboration.compileRegion? signature
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        fuelTarget)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (ConcreteElaboration.localOccurrences
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        producerRegion) = some targetItems := by
+    simpa [targetContext, target, fusionRaw, rootSite] using targetCompiled
+  have producerMember : ConcreteElaboration.LocalOccurrence.node producer ∈
+      ConcreteElaboration.localOccurrences input.val producerRegion := by
+    rw [ConcreteElaboration.mem_localOccurrences_node, producerShape]
+    rfl
+  obtain ⟨before, after, localEq⟩ := List.append_of_mem producerMember
+  have decomposedNodup :
+      (before ++ ConcreteElaboration.LocalOccurrence.node producer :: after).Nodup := by
+    rw [← localEq]
+    exact ConcreteElaboration.localOccurrences_nodup input.val producerRegion
+  have producerNotBefore :
+      ConcreteElaboration.LocalOccurrence.node producer ∉ before := by
+    intro member
+    have parts := List.nodup_append.mp decomposedNodup
+    exact parts.2.2 _ member _ (by simp) rfl
+  have producerNotAfter :
+      ConcreteElaboration.LocalOccurrence.node producer ∉ after := by
+    have parts := List.nodup_append.mp decomposedNodup
+    exact (List.nodup_cons.mp parts.2.1).1
+  have sourceFramed : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val (ConcreteElaboration.compileRegion? signature input.val
+        fuelSource) sourceContext ConcreteElaboration.BinderContext.empty
+      (before ++ .node producer :: after) = some sourceItems := by
+    rw [← localEq]
+    exact sourceCompiledFocus
+  obtain ⟨sourceBefore, sourceFocus, sourceAfter, sourceBeforeCompiled,
+      sourceFocusCompiled, sourceAfterCompiled, sourceItemsEq⟩ :=
+    compileOccurrencesWith?_frame_split
+      (ConcreteElaboration.compileRegion? signature input.val fuelSource)
+      sourceContext ConcreteElaboration.BinderContext.empty before after
+      (.node producer) sourceItems sourceFramed
+  have targetLocalEq : ConcreteElaboration.localOccurrences
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      producerRegion =
+        before.map (mapOccurrence input producer) ++
+          after.map (mapOccurrence input producer) := by
+    rw [fusionRaw_producer_localOccurrences input consumedWire producer consumer
+      hdistinct producerRegion consumerRegion producerPorts consumerPorts
+      producerTerm consumerTerm producerWire consumerWire consumedPort
+      producerShape consumerShape, localEq, List.filter_append]
+    have beforeFilter : before.filter (fun occurrence ↦
+        decide (occurrence ≠
+          ConcreteElaboration.LocalOccurrence.node producer)) = before := by
+      apply List.filter_eq_self.mpr
+      intro occurrence member
+      simp only [decide_eq_true_eq]
+      intro equality
+      subst occurrence
+      exact producerNotBefore member
+    have afterFilter : after.filter (fun occurrence ↦
+        decide (occurrence ≠
+          ConcreteElaboration.LocalOccurrence.node producer)) = after := by
+      apply List.filter_eq_self.mpr
+      intro occurrence member
+      simp only [decide_eq_true_eq]
+      intro equality
+      subst occurrence
+      exact producerNotAfter member
+    have focusFilter :
+        (ConcreteElaboration.LocalOccurrence.node producer :: after).filter
+          (fun occurrence ↦ decide (occurrence ≠
+            ConcreteElaboration.LocalOccurrence.node producer)) = after := by
+      rw [List.filter_cons]
+      simp only [ne_eq, not_true_eq_false, decide_false, Bool.false_eq_true,
+        ↓reduceIte]
+      exact afterFilter
+    rw [beforeFilter]
+    rw [focusFilter, List.map_append]
+  have targetFramed : ConcreteElaboration.compileOccurrencesWith? signature
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort)
+      (ConcreteElaboration.compileRegion? signature
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        fuelTarget)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (before.map (mapOccurrence input producer) ++
+        after.map (mapOccurrence input producer)) = some targetItems := by
+    rw [← targetLocalEq]
+    exact targetCompiledFocus
+  obtain ⟨targetBefore, targetAfter, targetBeforeCompiled,
+      targetAfterCompiled, targetItemsEq⟩ :=
+    ConcreteElaboration.compileOccurrencesWith?_append_split
+      (ConcreteElaboration.compileRegion? signature
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        fuelTarget)
+      targetContext ConcreteElaboration.BinderContext.empty
+      (before.map (mapOccurrence input producer))
+      (after.map (mapOccurrence input producer)) targetItems targetFramed
+  obtain ⟨consumedIndex, producerIndex, consumedGet, producerGet,
+      sourceFocusEq⟩ := producerFocus_compiled input consumedWire producer
+    consumer producerRegion producerPorts producerTerm producerWire
+    consumedPort.val producerShape producerResolved endpoints sourceContext
+    ConcreteElaboration.BinderContext.empty
+    (ConcreteElaboration.compileRegion? signature input.val fuelSource)
+    sourceFocus sourceFocusCompiled
+  subst sourceFocus
+  have beforeLocal : ∀ occurrence, occurrence ∈ before →
+      occurrence ∈ ConcreteElaboration.localOccurrences input.val
+        producerRegion := by
+    intro occurrence member
+    rw [localEq]
+    simp [member]
+  have afterLocal : ∀ occurrence, occurrence ∈ after →
+      occurrence ∈ ConcreteElaboration.localOccurrences input.val
+        producerRegion := by
+    intro occurrence member
+    rw [localEq]
+    simp [member]
+  rw [sourceItemsEq, targetItemsEq]
+  intro sourceOuter targetOuter relEnv outerAgrees
+  cases direction with
+  | forward =>
+      intro sourceLocal sourceDenotes
+      obtain ⟨targetLocal, completeAgrees⟩ := rootEnvironment_forward input
+        consumedWire producer consumer hdistinct consumerRegion producerTerm
+        consumerTerm producerWire consumerWire consumedPort boundary mapped
+        transport sourceRoot targetRoot targetWellFormed sourceOuter targetOuter
+        outerAgrees sourceLocal
+      let sourceRaw := ConcreteElaboration.rootEnvironment
+        (sourceOpen input boundary).exposedWires
+        (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal
+      let targetRaw := ConcreteElaboration.rootEnvironment
+        (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort
+          mapped).exposedWires
+        (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort
+          mapped).hiddenWires targetOuter targetLocal
+      change denoteItemSeq model named sourceRaw relEnv
+        (sourceBefore.append
+          (.cons (.equation consumedIndex (producerTerm.mapFree producerIndex))
+            sourceAfter)) at sourceDenotes
+      have sourceParts := (denoteItemSeq_frame model named sourceRaw relEnv
+        sourceBefore sourceAfter
+        (.equation consumedIndex (producerTerm.mapFree producerIndex))).mp
+          sourceDenotes
+      rcases sourceParts with
+        ⟨sourceBeforeDenotes, producerEquation, sourceAfterDenotes⟩
+      have producerEquationRaw : sourceRaw consumedIndex =
+          model.eval producerTerm (sourceRaw ∘ producerIndex) := by
+        simpa [sourceRaw, denoteItem_equation, model.eval_mapFree] using
+          producerEquation
+      have beforeDenotes := producerFrame_entails input consumedWire producer
+        consumer hdistinct producerRegion consumerRegion producerPorts
+        consumerPorts producerTerm consumerTerm producerWire consumerWire
+        consumedPort producerShape consumerShape scope producerResolved
+        consumerResolved endpoints producerEnclosesConsumer targetWellFormed
+        model named .forward fuelSource fuelTarget sourceContext targetContext
+        context sourceExact targetExact ConcreteElaboration.BinderContext.empty
+        before beforeLocal producerNotBefore consumedIndex consumedGet
+        producerIndex producerGet sourceBefore targetBefore sourceBeforeCompiled
+        targetBeforeCompiled sourceRaw targetRaw relEnv completeAgrees
+        producerEquationRaw sourceBeforeDenotes
+      have afterDenotes := producerFrame_entails input consumedWire producer
+        consumer hdistinct producerRegion consumerRegion producerPorts
+        consumerPorts producerTerm consumerTerm producerWire consumerWire
+        consumedPort producerShape consumerShape scope producerResolved
+        consumerResolved endpoints producerEnclosesConsumer targetWellFormed
+        model named .forward fuelSource fuelTarget sourceContext targetContext
+        context sourceExact targetExact ConcreteElaboration.BinderContext.empty
+        after afterLocal producerNotAfter consumedIndex consumedGet producerIndex
+        producerGet sourceAfter targetAfter sourceAfterCompiled
+        targetAfterCompiled sourceRaw targetRaw relEnv completeAgrees
+        producerEquationRaw sourceAfterDenotes
+      refine ⟨targetLocal, ?_⟩
+      change denoteItemSeq model named targetRaw relEnv
+        (targetBefore.append targetAfter)
+      exact (denoteItemSeq_append model named targetRaw relEnv targetBefore
+        targetAfter).mpr ⟨beforeDenotes, afterDenotes⟩
+  | backward =>
+      intro targetLocal targetDenotes
+      obtain ⟨sourceLocal, completeAgrees, producerEquation⟩ :=
+        focusedRootBackwardWitness input consumedWire producer consumer hdistinct
+          producerRegion consumerRegion producerPorts consumerPorts producerTerm
+          consumerTerm producerWire consumerWire consumedPort producerShape scope
+          producerResolved endpoints rootSite boundary mapped transport sourceRoot
+          targetRoot targetWellFormed model sourceOuter targetOuter outerAgrees
+          targetLocal consumedIndex consumedGet producerIndex producerGet
+      let sourceRaw := ConcreteElaboration.rootEnvironment
+        (sourceOpen input boundary).exposedWires
+        (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal
+      let targetRaw := ConcreteElaboration.rootEnvironment
+        (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort
+          mapped).exposedWires
+        (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort
+          mapped).hiddenWires targetOuter targetLocal
+      change denoteItemSeq model named targetRaw relEnv
+        (targetBefore.append targetAfter) at targetDenotes
+      have targetParts := (denoteItemSeq_append model named targetRaw relEnv
+        targetBefore targetAfter).mp targetDenotes
+      rcases targetParts with ⟨targetBeforeDenotes, targetAfterDenotes⟩
+      have beforeDenotes := producerFrame_entails input consumedWire producer
+        consumer hdistinct producerRegion consumerRegion producerPorts
+        consumerPorts producerTerm consumerTerm producerWire consumerWire
+        consumedPort producerShape consumerShape scope producerResolved
+        consumerResolved endpoints producerEnclosesConsumer targetWellFormed
+        model named .backward fuelSource fuelTarget sourceContext targetContext
+        context sourceExact targetExact ConcreteElaboration.BinderContext.empty
+        before beforeLocal producerNotBefore consumedIndex consumedGet
+        producerIndex producerGet sourceBefore targetBefore sourceBeforeCompiled
+        targetBeforeCompiled sourceRaw targetRaw relEnv completeAgrees
+        producerEquation targetBeforeDenotes
+      have afterDenotes := producerFrame_entails input consumedWire producer
+        consumer hdistinct producerRegion consumerRegion producerPorts
+        consumerPorts producerTerm consumerTerm producerWire consumerWire
+        consumedPort producerShape consumerShape scope producerResolved
+        consumerResolved endpoints producerEnclosesConsumer targetWellFormed
+        model named .backward fuelSource fuelTarget sourceContext targetContext
+        context sourceExact targetExact ConcreteElaboration.BinderContext.empty
+        after afterLocal producerNotAfter consumedIndex consumedGet producerIndex
+        producerGet sourceAfter targetAfter sourceAfterCompiled
+        targetAfterCompiled sourceRaw targetRaw relEnv completeAgrees
+        producerEquation targetAfterDenotes
+      refine ⟨sourceLocal, ?_⟩
+      change denoteItemSeq model named sourceRaw relEnv
+        (sourceBefore.append
+          (.cons (.equation consumedIndex (producerTerm.mapFree producerIndex))
+            sourceAfter))
+      have producerDenotes : denoteItem model named sourceRaw relEnv
+          (.equation consumedIndex (producerTerm.mapFree producerIndex)) := by
+        simpa [denoteItem_equation, model.eval_mapFree] using producerEquation
+      exact (denoteItemSeq_frame model named sourceRaw relEnv sourceBefore
+        sourceAfter
+        (.equation consumedIndex (producerTerm.mapFree producerIndex))).mpr
+          ⟨beforeDenotes, producerDenotes, afterDenotes⟩
+
 end FusionSoundness
 
 end VisualProof.Rule
