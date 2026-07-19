@@ -488,6 +488,511 @@ theorem advance_site_items_denote_empty_fixed_forward
       rw [rootEnvironmentEq']
       exact sourceItemDenotes)
 
+/-- Nonzero-spine forward site transport.  The current source atom exposes
+the canonical terminal relation witness; its terminal locals and proxy
+environment are installed through the authoritative executor seam. -/
+theorem advance_site_items_denote_nonempty_fixed_forward
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (node_eq : state.diagram.val.nodes atom = .atom site state.bubble)
+    (arguments_eq : instantiateArguments? state atom payload.arity =
+      some arguments)
+    (pending_eq : state.pendingAtoms = atom :: tail)
+    (ownedNodup : state.ownedAtoms.Nodup)
+    (shape : BubbleHasPayloadArity payload state)
+    (targets : BinderTargetsAtBubble payload state)
+    (hnonempty : payload.binderSpine.proxyCount ≠ 0)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (sourceFuel targetFuel : Nat)
+    (sourceOuter : ConcreteElaboration.WireContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw)
+    (targetOuter : ConcreteElaboration.WireContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw)
+    (sourceExact : (sourceOuter.extend site).Exact site)
+    (targetExact : (targetOuter.extend
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).Exact
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site))
+    (sourceBinders : ConcreteElaboration.BinderContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw targetRels)
+    (sourceCover : sourceBinders.Covers site)
+    (targetCover : targetBinders.Covers
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site))
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw sourceBinders site)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw targetBinders
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site))
+    (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
+    (outerSpec : ∀ index, targetOuter.get (outerMap index) =
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameWire (sourceOuter.get index))
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (relationSpec : ∀ {arity} (relation : RelVar sourceRels arity),
+      targetBinders
+          ((instantiateSpliceInput comprehension attachments binders payload
+            state site arguments).plugLayout.frameRegion
+            (sourceEnumeration.binder relation.index)) =
+        some ⟨arity, relationMap relation⟩)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (relationValue : Relation model.Carrier payload.arity)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
+    (sourceOuterEnv : Fin sourceOuter.length → model.Carrier)
+    (targetOuterEnv : Fin targetOuter.length → model.Carrier)
+    (targetRelEnv : RelEnv model.Carrier targetRels)
+    (outerAgrees :
+      (ConcreteElaboration.ContextIndexRelation.forwardMap outerMap)
+        |>.EnvironmentsAgree sourceOuterEnv targetOuterEnv)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw site).length → model.Carrier)
+    (sourceItems : ItemSeq signature (sourceOuter.extend site).length sourceRels)
+    (targetItems : ItemSeq signature (targetOuter.extend
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).length targetRels)
+    (fullItems : ItemSeq signature (targetOuter.extend
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw
+      (compileSurvivorRegion? signature
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible) sourceFuel)
+      (sourceOuter.extend site) sourceBinders
+      ((ConcreteElaboration.localOccurrences
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible).diagram.val site).filter
+        (dropOccurrenceSurvives
+          (coalescedInstantiationState comprehension attachments binders payload
+            state site arguments hadmissible))) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible).diagram.val
+      (compileSurvivorRegion? signature
+        (advanceInstantiationState comprehension attachments binders payload
+          state atom tail site arguments hadmissible) targetFuel)
+      (targetOuter.extend
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)) targetBinders
+      ((ConcreteElaboration.localOccurrences
+        (advanceInstantiationState comprehension attachments binders payload
+          state atom tail site arguments hadmissible).diagram.val
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)).filter
+        (dropOccurrenceSurvives
+          (advanceInstantiationState comprehension attachments binders payload
+            state atom tail site arguments hadmissible))) = some targetItems)
+    (fullCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw
+      (ConcreteElaboration.compileRegion? signature
+        (instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.plugRaw targetFuel)
+      (targetOuter.extend
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)) targetBinders
+      (ConcreteElaboration.localOccurrences
+        (instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.plugRaw
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)) = some fullItems)
+    (sourceDenotes : denoteItemSeq model named
+      (ConcreteElaboration.extendedEnvironment sourceOuter site sourceOuterEnv
+        sourceLocal)
+      (RelEnv.pullback relationMap targetRelEnv) sourceItems)
+    (targetFixed : FixedRelationAt payload
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      relationValue targetBinders targetRelEnv)
+    (targetProxies : ProxyRelationsAt payload
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      targetBinders targetRelEnv values)
+    (targetParameters : ParameterValuesAt
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      targetOuter targetOuterEnv parameterValues)
+    (relationEq : relationValue = terminalRelationOfParameterValues payload
+      state site arguments hnonempty model named parameterValues values)
+    (childSimulation : ∀ direction
+      (child : Fin state.diagram.val.regionCount),
+      FixedAdvanceRegionSimulation comprehension attachments binders payload
+        state atom tail site arguments hadmissible model named relationValue
+        values parameterValues direction sourceFuel targetFuel child) :
+    ∃ targetLocal : Fin (ConcreteElaboration.exactScopeWires
+        (instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.plugRaw
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)).length → model.Carrier,
+      denoteItemSeq model named
+        (ConcreteElaboration.extendedEnvironment targetOuter
+          ((instantiateSpliceInput comprehension attachments binders payload
+            state site arguments).plugLayout.frameRegion site) targetOuterEnv
+          targetLocal)
+        targetRelEnv targetItems := by
+  let spliceInput := instantiateSpliceInput comprehension attachments binders
+    payload state site arguments
+  let layout := spliceInput.plugLayout
+  let next := advanceInstantiationState comprehension attachments binders
+    payload state atom tail site arguments hadmissible
+  let sourceContext := sourceOuter.extend site
+  let targetContext := targetOuter.extend (layout.frameRegion site)
+  let sourceEnv := ConcreteElaboration.extendedEnvironment sourceOuter site
+    sourceOuterEnv sourceLocal
+  let fallback : model.Carrier :=
+    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
+      Lambda.Term 0 (Fin 0)) Fin.elim0
+  have outerEq : sourceOuterEnv = targetOuterEnv ∘ outerMap := by
+    simpa using outerAgrees
+  let dummyPattern : Fin (ConcreteElaboration.exactScopeWires
+      comprehension.val.diagram payload.binderSpine.bodyContainer).length →
+      model.Carrier := fun _ => fallback
+  let preliminaryLocal := siteTargetLocalOfNonempty layout hnonempty sourceLocal
+    dummyPattern
+  let preliminaryEnv := ConcreteElaboration.extendedEnvironment targetOuter
+    (layout.frameRegion site) targetOuterEnv preliminaryLocal
+  let wireMap := siteForwardHostWireMapOfNonempty layout hnonempty sourceOuter
+    targetOuter outerMap
+  have wireSpec : ∀ index, targetContext.get (wireMap index) =
+      layout.frameWire (sourceContext.get index) :=
+    siteForwardHostWireMapOfNonempty_spec layout hnonempty sourceOuter
+      targetOuter outerMap outerSpec
+  have preliminaryEnvironmentEq : sourceEnv = preliminaryEnv ∘ wireMap :=
+    siteForwardHostEnvironmentsAgreeOfNonempty layout hnonempty sourceOuter
+      targetOuter outerMap sourceOuterEnv targetOuterEnv outerEq sourceLocal
+      dummyPattern
+  let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+    targetContext targetExact preliminaryEnv fallback
+  have quotientAtSource : ∀ index,
+      quotientValues (sourceContext.get index) = sourceEnv index :=
+    siteQuotientEnvironment_of_frameMap spliceInput sourceContext targetContext
+      sourceExact targetExact wireMap wireSpec sourceEnv preliminaryEnv
+      preliminaryEnvironmentEq fallback
+  obtain ⟨sourceRelation, sourceLookup⟩ :=
+    coalesced_bubbleRelation_exists comprehension attachments binders payload
+      state atom site arguments node_eq hadmissible shape sourceBinders
+      sourceCover
+  have sourceFixed := fixedRelationAt_pullback_frame comprehension attachments
+    binders payload state atom tail site arguments hadmissible site sourceBinders
+    targetBinders sourceEnumeration relationMap relationSpec model relationValue
+    targetRelEnv targetFixed
+  have relationTruth := coalesced_survivor_items_entail_fixedRelation
+    comprehension attachments binders payload state atom tail site arguments
+    node_eq arguments_eq pending_eq ownedNodup hadmissible model named
+    quotientValues relationValue sourceFuel sourceContext sourceBinders
+    (RelEnv.pullback relationMap targetRelEnv) sourceFixed sourceRelation
+    sourceLookup sourceEnv (fun index => (quotientAtSource index).symm)
+    sourceItems sourceCompiled sourceDenotes
+  have preliminaryParameters : ParameterValuesAt next targetContext
+      preliminaryEnv parameterValues :=
+    ParameterValuesAt.extend next targetOuter targetOuterEnv parameterValues
+      targetParameters (layout.frameRegion site) preliminaryLocal
+  have quotientParameters :
+      (fun index => quotientValues
+        (spliceInput.quotientWire (state.parameters index))) =
+      parameterValues := by
+    funext position
+    exact siteQuotientEnvironment_parameter comprehension attachments binders
+      payload state atom tail site arguments hadmissible targetContext
+      targetExact preliminaryEnv parameterValues preliminaryParameters fallback
+      position
+  have terminalTruth : terminalRelationOfParameterValues payload state site
+      arguments hnonempty model named parameterValues values
+      (fun index => quotientValues
+        (spliceInput.quotientWire (arguments index))) := by
+    rw [← relationEq]
+    exact relationTruth
+  change ∃ assignment : BoundaryAssignment comprehension.elaborate model.Carrier,
+      assignment.args =
+          Fin.addCases
+            (fun index => quotientValues
+              (spliceInput.quotientWire (arguments index))) parameterValues ∘
+            Fin.cast payload.boundarySplit ∧
+        ∃ relEnv : RelEnv model.Carrier
+            (Splice.Input.compiledSpliceTerminalView spliceInput
+              hnonempty).witness.toFocus.holeRels,
+          TerminalRelationsMatch payload state site arguments hnonempty values
+              relEnv ∧
+            denoteRegion model named
+              (terminalInheritedEnvironment payload state site arguments
+                hnonempty assignment)
+              relEnv
+              (ConcreteElaboration.finishRegion comprehension.val.diagram
+                (Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+                  ).leaf.inheritedWires payload.binderSpine.bodyContainer
+                (Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+                  ).leaf.items) at terminalTruth
+  obtain ⟨assignment, assignmentArgs, terminalRelEnv, terminalRelations,
+    terminalDenotes⟩ := terminalTruth
+  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  change ∃ patternLocal : Fin (ConcreteElaboration.exactScopeWires
+      comprehension.val.diagram payload.binderSpine.bodyContainer).length →
+      model.Carrier,
+    denoteItemSeq model named
+      (extendWireEnv
+        (terminalInheritedEnvironment payload state site arguments hnonempty
+          assignment) patternLocal)
+      terminalRelEnv
+      (pattern.leaf.items.castWiresEq
+        (ConcreteElaboration.WireContext.length_extend
+          pattern.leaf.inheritedWires payload.binderSpine.bodyContainer))
+    at terminalDenotes
+  obtain ⟨patternLocal, terminalItemsDenoteCast⟩ := terminalDenotes
+  have terminalItemsDenote : denoteItemSeq model named
+      (ConcreteElaboration.extendedEnvironment pattern.leaf.inheritedWires
+        payload.binderSpine.bodyContainer
+        (terminalInheritedEnvironment payload state site arguments hnonempty
+          assignment) patternLocal)
+      terminalRelEnv pattern.leaf.items := by
+    rw [ItemSeq.castWiresEq_eq_renameWires, denoteItemSeq_renameWires]
+      at terminalItemsDenoteCast
+    simpa [ConcreteElaboration.extendedEnvironment] using
+      terminalItemsDenoteCast
+  let targetLocal := siteTargetLocalOfNonempty layout hnonempty sourceLocal
+    patternLocal
+  refine ⟨targetLocal, ?_⟩
+  let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+    (layout.frameRegion site) targetOuterEnv targetLocal
+  have environmentEq : sourceEnv = targetEnv ∘ wireMap := by
+    exact siteForwardHostEnvironmentsAgreeOfNonempty layout hnonempty
+      sourceOuter targetOuter outerMap sourceOuterEnv targetOuterEnv outerEq
+      sourceLocal patternLocal
+  let outputBody := ConcreteElaboration.finishRegion layout.plugRaw targetOuter
+    (layout.frameRegion site) fullItems
+  let outputWitness : Region.ContextPath outputBody [] := .here _
+  let outputLeaf := Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+    layout.plugRaw (layout.frameRegion site) targetOuter targetBinders targetFuel
+    fullItems fullCompiled targetExact targetCover targetEnumeration
+  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let finalQuotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+    targetContext targetExact targetEnv fallback
+  let preliminaryAssignment :=
+    spliceInput.patternAttachmentAssignment.map quotientValues
+  let finalAssignment :=
+    spliceInput.patternAttachmentAssignment.map finalQuotientValues
+  have preliminaryAssignmentArgs : assignment.args =
+      preliminaryAssignment.args := by
+    rw [assignmentArgs]
+    funext position
+    let split := Fin.cast payload.boundarySplit position
+    have recover : Fin.cast payload.boundarySplit.symm split = position := by
+      apply Fin.ext
+      rfl
+    rw [← recover]
+    refine Fin.addCases (fun argument => ?_) (fun parameter => ?_) split
+    · simp [preliminaryAssignment, Splice.Input.patternAttachmentAssignment,
+        BoundaryAssignment.map, spliceInput, instantiateSpliceInput]
+    · simpa [preliminaryAssignment,
+        Splice.Input.patternAttachmentAssignment, BoundaryAssignment.map,
+        spliceInput, instantiateSpliceInput] using
+        (congrFun quotientParameters parameter).symm
+  have quotientAssignmentsAgree : preliminaryAssignment.args =
+      finalAssignment.args := by
+    funext position
+    have sourceVisible := spliceInput.quotientAttachment_visible hadmissible
+      position
+    obtain ⟨sourceIndex, sourceIndexLookup⟩ :=
+      ConcreteElaboration.WireContext.lookup?_complete
+        ((sourceExact.mem_iff _).2 sourceVisible)
+    have sourceIndexWire :=
+      ConcreteElaboration.WireContext.lookup?_sound sourceIndexLookup
+    have preliminaryEq := quotientAtSource sourceIndex
+    have finalEq := siteQuotientEnvironment_of_frameMap spliceInput
+      sourceContext targetContext sourceExact targetExact wireMap wireSpec
+      sourceEnv targetEnv environmentEq fallback sourceIndex
+    change quotientValues
+        (spliceInput.quotientWire (spliceInput.attachment position)) =
+      finalQuotientValues
+        (spliceInput.quotientWire (spliceInput.attachment position))
+    rw [← sourceIndexWire]
+    exact preliminaryEq.trans finalEq.symm
+  have assignmentClasses : assignment.classes = finalAssignment.classes :=
+    BoundaryAssignment.classes_eq_of_args_eq assignment finalAssignment
+      (preliminaryAssignmentArgs.trans quotientAssignmentsAgree)
+  let hostRelations : RelationRenaming host.intrinsicPath.toFocus.holeRels
+      targetRels := fun relation =>
+    layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+      outputWitness outputLeaf relation
+  have hostProxies : ProxyRelationsAt payload state host.compilerLeaf.binders
+      (RelEnv.pullback hostRelations targetRelEnv) values :=
+    proxyRelationsAt_host_pullback comprehension attachments binders payload
+      state atom tail site arguments hadmissible host.intrinsicPath
+      host.compilerLeaf outputWitness outputLeaf model values targetRelEnv
+      targetProxies
+  let terminalRelationMap : RelationRenaming
+      pattern.witness.toFocus.holeRels targetRels := fun relation =>
+    hostRelations (layout.coalescedTerminalRelationRenaming hadmissible
+      host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
+      hnonempty relation)
+  have targetTerminalRelations : TerminalRelationsMatch payload state site
+      arguments hnonempty values
+      (RelEnv.pullback terminalRelationMap targetRelEnv) := by
+    exact terminalOutputRelations_match payload state site arguments hnonempty
+      hadmissible values outputWitness outputLeaf targetRelEnv hostProxies
+  have terminalRelEnvEq : terminalRelEnv =
+      RelEnv.pullback terminalRelationMap targetRelEnv :=
+    terminalRelationsMatch_unique payload state site arguments hnonempty values
+      terminalRelEnv (RelEnv.pullback terminalRelationMap targetRelEnv)
+      terminalRelations targetTerminalRelations
+  have canonicalSeamEq := patternTerminalExtendedEnvironment_seam spliceInput
+    hadmissible host pattern.witness pattern.leaf outputWitness outputLeaf
+    hnonempty targetEnv fallback
+  let canonicalInherited : Fin pattern.leaf.inheritedWires.length →
+      model.Carrier := fun index =>
+    finalAssignment.classes (Splice.Input.PlugLayout.exposedWireIndex spliceInput
+      (pattern.leaf.inheritedWires.get index)
+      ((layout.terminalBody_inherited_mem_iff_exposed pattern.witness
+        pattern.leaf hnonempty (pattern.leaf.inheritedWires.get index)).1
+          (List.get_mem _ index)))
+  let canonicalLocal : Fin (ConcreteElaboration.exactScopeWires
+      comprehension.val.diagram payload.binderSpine.bodyContainer).length →
+      model.Carrier := fun index =>
+    targetEnv (layout.patternSeamWireMapOfNonempty hadmissible host
+      pattern.witness pattern.leaf outputWitness outputLeaf hnonempty
+      (Fin.cast
+        (ConcreteElaboration.WireContext.length_extend
+          pattern.leaf.inheritedWires payload.binderSpine.bodyContainer).symm
+        (Fin.natAdd pattern.leaf.inheritedWires.length index)))
+  have canonicalLocalEq : canonicalLocal = patternLocal := by
+    funext index
+    exact siteTargetEnvironment_patternLocalOfNonempty layout hadmissible host
+      pattern.witness pattern.leaf outputWitness outputLeaf hnonempty
+      targetOuterEnv sourceLocal patternLocal index
+  have inheritedEq :
+      terminalInheritedEnvironment payload state site arguments hnonempty
+          assignment = canonicalInherited := by
+    funext index
+    simp only [terminalInheritedEnvironment, canonicalInherited,
+      finalAssignment]
+    exact congrFun assignmentClasses _
+  have terminalEnvironmentEq :
+      ConcreteElaboration.extendedEnvironment pattern.leaf.inheritedWires
+          payload.binderSpine.bodyContainer
+          (terminalInheritedEnvironment payload state site arguments hnonempty
+            assignment) patternLocal =
+        targetEnv ∘ layout.patternSeamWireMapOfNonempty hadmissible host
+          pattern.witness pattern.leaf outputWitness outputLeaf hnonempty := by
+    rw [inheritedEq, ← canonicalLocalEq]
+    simpa [canonicalInherited, canonicalLocal, finalAssignment,
+      finalQuotientValues, targetContext] using canonicalSeamEq
+  have terminalItemsTarget : denoteItemSeq model named
+      (targetEnv ∘ layout.patternSeamWireMapOfNonempty hadmissible host
+        pattern.witness pattern.leaf outputWitness outputLeaf hnonempty)
+      (RelEnv.pullback terminalRelationMap targetRelEnv) pattern.leaf.items := by
+    rw [← terminalEnvironmentEq, ← terminalRelEnvEq]
+    exact terminalItemsDenote
+  exact advance_site_items_denote_forward comprehension attachments binders
+    payload state atom tail site arguments hadmissible sourceFuel targetFuel
+    sourceContext targetContext sourceBinders targetBinders model named sourceEnv
+    targetEnv (RelEnv.pullback relationMap targetRelEnv) targetRelEnv sourceItems
+    targetItems sourceCompiled targetCompiled sourceDenotes
+    (by
+      intro occurrence member notCurrent sourceItem targetItem sourceAt targetAt
+        sourceItemDenotes
+      cases occurrence with
+      | node node =>
+          have nodeRegion :=
+            (ConcreteElaboration.mem_localOccurrences_node _ _ _).1
+              (List.mem_filter.mp member).1
+          have simulation := frameNode_simulation_of_mapped spliceInput
+            hadmissible site sourceContext targetContext sourceExact targetExact
+            sourceBinders targetBinders sourceCover sourceEnumeration wireMap
+            wireSpec relationMap relationSpec node nodeRegion model named .forward
+            sourceItem targetItem
+            (by simpa [ConcreteElaboration.compileOccurrenceWith?] using sourceAt)
+            (by simpa [layout, Splice.Input.PlugLayout.mapFrameOccurrence,
+              ConcreteElaboration.compileOccurrenceWith?] using targetAt)
+          apply simulation sourceEnv targetEnv targetRelEnv
+            (by simpa using environmentEq)
+          exact (denoteItem_renameRelations model named relationMap
+            (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
+            (RelEnv.pullback_agrees relationMap targetRelEnv) sourceEnv
+            sourceItem).mpr sourceItemDenotes
+      | child child =>
+          exact advance_site_child_denotes_fixed_forward comprehension
+            attachments binders payload state atom tail site arguments node_eq
+            hadmissible targets sourceFuel targetFuel site
+            (by simpa [node_eq] using
+              state.diagram.property.atom_binders_enclose atom)
+            sourceContext targetContext sourceExact targetExact sourceBinders
+            targetBinders sourceCover targetCover sourceEnumeration
+            targetEnumeration wireMap wireSpec relationMap relationSpec model
+            named relationValue values parameterValues sourceEnv targetEnv
+            targetRelEnv environmentEq targetFixed targetProxies
+            (ParameterValuesAt.extend next targetOuter targetOuterEnv
+              parameterValues targetParameters (layout.frameRegion site)
+              targetLocal)
+            childSimulation child member sourceItem targetItem sourceAt targetAt
+            sourceItemDenotes)
+    (by
+      intro occurrence member targetItem targetAt
+      obtain ⟨occurrenceIndex, occurrenceIndexEq⟩ := indexOf?_complete member
+      have occurrenceEq := indexOf?_sound occurrenceIndexEq
+      have patternLength := ConcreteElaboration.compileOccurrencesWith?_length
+        (ConcreteElaboration.compileRegion? signature comprehension.val.diagram
+          pattern.leaf.fuel)
+        (pattern.leaf.inheritedWires.extend payload.binderSpine.bodyContainer)
+        pattern.leaf.binders pattern.leaf.itemsComputation
+      let sourceIndex := Fin.cast patternLength.symm occurrenceIndex
+      have sourceAt := ConcreteElaboration.compileOccurrencesWith?_get
+        (ConcreteElaboration.compileRegion? signature comprehension.val.diagram
+          pattern.leaf.fuel)
+        (pattern.leaf.inheritedWires.extend payload.binderSpine.bodyContainer)
+        pattern.leaf.binders pattern.leaf.itemsComputation occurrenceIndex
+      have sourceAt' : ConcreteElaboration.compileOccurrenceWith? signature
+          comprehension.val.diagram
+          (ConcreteElaboration.compileRegion? signature
+            comprehension.val.diagram pattern.leaf.fuel)
+          (pattern.leaf.inheritedWires.extend payload.binderSpine.bodyContainer)
+          pattern.leaf.binders occurrence =
+            some (pattern.leaf.items.get sourceIndex) := by
+        rw [← occurrenceEq]
+        simpa [sourceIndex] using sourceAt
+      have sourceItemDenotes :=
+        (denoteItemSeq_iff_get model named
+          (targetEnv ∘ layout.patternSeamWireMapOfNonempty hadmissible host
+            pattern.witness pattern.leaf outputWitness outputLeaf hnonempty)
+          (RelEnv.pullback terminalRelationMap targetRelEnv)
+          pattern.leaf.items).mp terminalItemsTarget sourceIndex
+      apply advance_pattern_item_denotes_nonempty_forward comprehension
+        attachments binders payload state atom tail site arguments hadmissible
+        host pattern.witness pattern.leaf outputWitness outputLeaf hnonempty
+        model named targetEnv targetRelEnv occurrence member
+        (pattern.leaf.items.get sourceIndex) targetItem sourceAt' targetAt
+      simpa [Splice.Input.PlugLayout.patternSeamWireMapOfNonempty,
+        terminalRelationMap, hostRelations, Function.comp_def] using
+        sourceItemDenotes)
+
 end InstantiationSemantic
 
 end VisualProof.Rule
