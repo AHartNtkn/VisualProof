@@ -67,6 +67,46 @@ theorem quotientFrameValue_comp_quotientWire_of_pattern_denotes
   exact quotientFrameValue_quotientWire_of_pattern_denotes input model named
     frameValue args realizes denotes wire
 
+/-- A concrete boundary assignment already contains all alias equalities
+needed by the attachment quotient; denotation of the pattern body is not
+needed for this narrower conclusion. -/
+theorem quotientWire_value_eq_of_boundaryAssignment
+    (input : Splice.Input signature)
+    (frameValue : Fin input.frame.val.wireCount → D)
+    (assignment : BoundaryAssignment input.pattern.elaborate D)
+    (realizes : ∀ position,
+      frameValue (input.attachment position) = assignment.args position)
+    {left right : Fin input.frame.val.wireCount}
+    (sameClass : input.quotientWire left = input.quotientWire right) :
+    frameValue left = frameValue right := by
+  have aliasConsistent : AliasConsistent input.pattern.elaborate
+      assignment.args :=
+    (boundaryAssignment_iff_aliasConsistent input.pattern.elaborate
+      assignment.args).mp ⟨assignment, rfl⟩
+  have contains : ∀ edge ∈ input.attachmentEdges,
+      frameValue edge.1 = frameValue edge.2 := by
+    intro edge member
+    obtain ⟨leftPosition, rightPosition, boundaryEq, rfl⟩ :=
+      (input.mem_attachmentEdges_iff edge).mp member
+    have classEq : input.pattern.elaborate.boundary leftPosition =
+        input.pattern.elaborate.boundary rightPosition := by
+      change input.pattern.val.boundaryClass leftPosition =
+        input.pattern.val.boundaryClass rightPosition
+      exact (input.pattern.val.boundaryClass_eq_iff
+        leftPosition rightPosition).2 boundaryEq
+    calc
+      frameValue (input.attachment leftPosition) =
+          assignment.args leftPosition := realizes leftPosition
+      _ = assignment.args rightPosition :=
+        aliasConsistent leftPosition rightPosition classEq
+      _ = frameValue (input.attachment rightPosition) :=
+        (realizes rightPosition).symm
+  apply VisualProof.Data.Finite.FinitePartition.least
+    (relation := fun first second => frameValue first = frameValue second)
+    (fun _ => rfl) (fun equality => equality.symm)
+    (fun firstSecond secondThird => firstSecond.trans secondThird) contains
+  exact (input.quotientWire_eq_iff left right).mp sameClass
+
 end InstantiationSemantic
 
 end VisualProof.Rule
