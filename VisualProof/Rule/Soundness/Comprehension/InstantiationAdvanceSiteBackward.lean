@@ -354,6 +354,264 @@ theorem advance_site_child_denotes_fixed
                   childRelation) sourceEnv sourceChild).mp
                     simulation
 
+/-- A denoting target survivor block at the splice site reconstructs the
+source survivor block under the single trace-level relation witness. -/
+theorem advance_site_items_denote_fixed
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (node_eq : state.diagram.val.nodes atom = .atom site state.bubble)
+    (arguments_eq : instantiateArguments? state atom payload.arity =
+      some arguments)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (shape : BubbleHasPayloadArity payload state)
+    (targets : BinderTargetsAtBubble payload state)
+    (sourceFuel targetFuel : Nat)
+    (sourceOuter : ConcreteElaboration.WireContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw)
+    (targetOuter : ConcreteElaboration.WireContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw)
+    (sourceExact : (sourceOuter.extend site).Exact site)
+    (targetExact : (targetOuter.extend
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).Exact
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site))
+    (sourceBinders : ConcreteElaboration.BinderContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw targetRels)
+    (sourceCover : sourceBinders.Covers site)
+    (targetCover : targetBinders.Covers
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site))
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw sourceBinders site)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw targetBinders
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site))
+    (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
+    (outerSpec : ∀ index, targetOuter.get (outerMap index) =
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameWire (sourceOuter.get index))
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (relationSpec : ∀ {arity} (relation : RelVar sourceRels arity),
+      targetBinders
+          ((instantiateSpliceInput comprehension attachments binders payload
+            state site arguments).plugLayout.frameRegion
+            (sourceEnumeration.binder relation.index)) =
+        some ⟨arity, relationMap relation⟩)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (relationValue : Relation model.Carrier payload.arity)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (sourceOuterEnv : Fin sourceOuter.length → model.Carrier)
+    (targetOuterEnv : Fin targetOuter.length → model.Carrier)
+    (targetRelEnv : RelEnv model.Carrier targetRels)
+    (outerAgrees :
+      (ConcreteElaboration.ContextIndexRelation.forwardMap outerMap)
+        |>.EnvironmentsAgree sourceOuterEnv targetOuterEnv)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).length → model.Carrier)
+    (fallback : model.Carrier)
+    (sourceItems : ItemSeq signature (sourceOuter.extend site).length sourceRels)
+    (targetItems : ItemSeq signature (targetOuter.extend
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).length targetRels)
+    (fullItems : ItemSeq signature (targetOuter.extend
+      ((instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.frameRegion site)).length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).coalesceFrameRaw
+      (compileSurvivorRegion? signature
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible) sourceFuel)
+      (sourceOuter.extend site) sourceBinders
+      ((ConcreteElaboration.localOccurrences
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible).diagram.val site).filter
+        (dropOccurrenceSurvives
+          (coalescedInstantiationState comprehension attachments binders
+            payload state site arguments hadmissible))) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible).diagram.val
+      (compileSurvivorRegion? signature
+        (advanceInstantiationState comprehension attachments binders payload
+          state atom tail site arguments hadmissible) targetFuel)
+      (targetOuter.extend
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)) targetBinders
+      ((ConcreteElaboration.localOccurrences
+        (advanceInstantiationState comprehension attachments binders payload
+          state atom tail site arguments hadmissible).diagram.val
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)).filter
+        (dropOccurrenceSurvives
+          (advanceInstantiationState comprehension attachments binders payload
+            state atom tail site arguments hadmissible))) = some targetItems)
+    (fullCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (instantiateSpliceInput comprehension attachments binders payload state
+        site arguments).plugLayout.plugRaw
+      (ConcreteElaboration.compileRegion? signature
+        (instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.plugRaw targetFuel)
+      (targetOuter.extend
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)) targetBinders
+      (ConcreteElaboration.localOccurrences
+        (instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.plugRaw
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site)) = some fullItems)
+    (targetDenotes : denoteItemSeq model named
+      (ConcreteElaboration.extendedEnvironment targetOuter
+        ((instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).plugLayout.frameRegion site) targetOuterEnv targetLocal)
+      targetRelEnv targetItems)
+    (targetFixed : FixedRelationAt payload
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      relationValue targetBinders targetRelEnv)
+    (targetProxies : ProxyRelationsAt payload
+      (advanceInstantiationState comprehension attachments binders payload
+        state atom tail site arguments hadmissible)
+      targetBinders targetRelEnv values)
+    (nonemptyRelationEq : ∀ hnonempty :
+      payload.binderSpine.proxyCount ≠ 0,
+      let spliceInput := instantiateSpliceInput comprehension attachments binders
+        payload state site arguments
+      let targetContext := targetOuter.extend
+        (spliceInput.plugLayout.frameRegion site)
+      let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+        (spliceInput.plugLayout.frameRegion site) targetOuterEnv targetLocal
+      let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+        targetContext targetExact targetEnv fallback
+      relationValue = terminalRelationOfValues payload state site arguments
+        hnonempty model named
+        (fun wire => quotientValues (spliceInput.quotientWire wire)) values)
+    (emptyRelationEq : ∀ hzero : payload.binderSpine.proxyCount = 0,
+      let spliceInput := instantiateSpliceInput comprehension attachments binders
+        payload state site arguments
+      let targetContext := targetOuter.extend
+        (spliceInput.plugLayout.frameRegion site)
+      let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+        (spliceInput.plugLayout.frameRegion site) targetOuterEnv targetLocal
+      let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+        targetContext targetExact targetEnv fallback
+      relationValue = payload.interpretedRelation model named
+        (fun index => quotientValues
+          (spliceInput.quotientWire (state.parameters index))))
+    (childSimulation : ∀ direction
+      (child : Fin state.diagram.val.regionCount),
+      FixedAdvanceRegionSimulation comprehension attachments binders payload
+        state atom tail site arguments hadmissible model named relationValue
+        values direction sourceFuel targetFuel child) :
+    ∃ sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+        (instantiateSpliceInput comprehension attachments binders payload state
+          site arguments).coalesceFrameRaw site).length → model.Carrier,
+      denoteItemSeq model named
+        (ConcreteElaboration.extendedEnvironment sourceOuter site sourceOuterEnv
+          sourceLocal)
+        (RelEnv.pullback relationMap targetRelEnv) sourceItems := by
+  let spliceInput := instantiateSpliceInput comprehension attachments binders
+    payload state site arguments
+  let sourceContext := sourceOuter.extend site
+  let targetContext := targetOuter.extend
+    (spliceInput.plugLayout.frameRegion site)
+  let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+    (spliceInput.plugLayout.frameRegion site) targetOuterEnv targetLocal
+  let outputBody := ConcreteElaboration.finishRegion
+    spliceInput.plugLayout.plugRaw targetOuter
+    (spliceInput.plugLayout.frameRegion site) fullItems
+  let outputWitness : Region.ContextPath outputBody [] := .here _
+  let outputLeaf := Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+    spliceInput.plugLayout.plugRaw (spliceInput.plugLayout.frameRegion site)
+    targetOuter targetBinders targetFuel fullItems fullCompiled targetExact
+    targetCover targetEnumeration
+  obtain ⟨sourceLocal, sourceEnvironmentEq⟩ :=
+    site_sourceLocalEnvironment_exists spliceInput sourceOuter targetOuter
+      sourceExact targetExact outerMap outerSpec sourceOuterEnv targetOuterEnv
+      outerAgrees targetLocal fallback
+  let sourceEnv := ConcreteElaboration.extendedEnvironment sourceOuter site
+    sourceOuterEnv sourceLocal
+  let wireMap := siteSourceWireMap spliceInput outputWitness outputLeaf
+    sourceContext sourceExact
+  have wireSpec : ∀ index, targetContext.get (wireMap index) =
+      spliceInput.plugLayout.frameWire (sourceContext.get index) := by
+    exact siteSourceWireMap_spec spliceInput outputWitness outputLeaf
+      sourceContext sourceExact
+  have environmentEq : sourceEnv = targetEnv ∘ wireMap := by
+    funext index
+    have sourceEq := congrFun sourceEnvironmentEq index
+    have targetEq := siteSourceWireMap_environment spliceInput outputWitness
+      outputLeaf sourceContext sourceExact targetEnv fallback index
+    exact sourceEq.trans targetEq.symm
+  have currentDenotes : ∀ sourceItem,
+      ConcreteElaboration.compileNode? signature spliceInput.coalesceFrameRaw
+        sourceContext sourceBinders atom = some sourceItem →
+      denoteItem model named sourceEnv
+        (RelEnv.pullback relationMap targetRelEnv) sourceItem := by
+    intro sourceItem sourceItemCompiled
+    by_cases hzero : payload.binderSpine.proxyCount = 0
+    · exact advance_current_atom_denotes_empty_fixed comprehension attachments
+        binders payload state atom tail site arguments node_eq arguments_eq shape
+        hzero hadmissible model named relationValue outputWitness outputLeaf
+        targetEnv targetRelEnv fallback targetItems targetCompiled targetDenotes
+        targetFixed sourceContext sourceBinders sourceCover sourceEnumeration
+        relationMap relationSpec sourceEnv (congrFun sourceEnvironmentEq)
+        sourceItem sourceItemCompiled (emptyRelationEq hzero)
+    · exact advance_current_atom_denotes_nonempty_fixed comprehension attachments
+        binders payload state atom tail site arguments node_eq arguments_eq shape
+        hzero hadmissible model named relationValue values outputWitness outputLeaf
+        targetEnv targetRelEnv fallback targetItems targetCompiled targetDenotes
+        targetFixed targetProxies sourceContext sourceBinders sourceCover
+        sourceEnumeration relationMap relationSpec sourceEnv
+        (congrFun sourceEnvironmentEq) sourceItem sourceItemCompiled
+        (nonemptyRelationEq hzero)
+  refine ⟨sourceLocal, ?_⟩
+  exact advance_site_items_denote comprehension attachments binders payload state
+    atom tail site arguments node_eq hadmissible sourceFuel targetFuel
+    sourceContext targetContext sourceExact targetExact sourceBinders
+    targetBinders sourceCover sourceEnumeration wireMap wireSpec relationMap
+    relationSpec model named sourceEnv targetEnv
+    (RelEnv.pullback relationMap targetRelEnv) targetRelEnv environmentEq
+    (RelEnv.pullback_agrees relationMap targetRelEnv) sourceItems targetItems
+    sourceCompiled targetCompiled targetDenotes currentDenotes
+    (advance_site_child_denotes_fixed comprehension attachments binders payload
+      state atom tail site arguments node_eq hadmissible targets sourceFuel
+      targetFuel sourceContext targetContext sourceExact targetExact sourceBinders
+      targetBinders sourceCover targetCover sourceEnumeration targetEnumeration
+      wireMap wireSpec relationMap relationSpec model named relationValue values
+      sourceEnv targetEnv targetRelEnv environmentEq targetFixed targetProxies
+      childSimulation)
+
 end InstantiationSemantic
 
 end VisualProof.Rule
