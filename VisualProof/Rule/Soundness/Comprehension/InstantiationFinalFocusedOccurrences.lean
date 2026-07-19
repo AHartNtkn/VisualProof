@@ -274,6 +274,155 @@ noncomputable def finalFocusOccurrenceMap
         input.val.nodeCount :=
   copyTrace.droppedParentReverseMap ∘ elimTrace.occurrenceMap
 
+/-- Every retained occurrence at the promoted focus has an exact original
+parent occurrence whose forward image is its vacuous-elimination origin. -/
+theorem keptOccurrence_original_preimage
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (occurrence : ConcreteElaboration.LocalOccurrence
+      elimTrace.sourceDiagram.regionCount elimTrace.sourceDiagram.nodeCount)
+    (member : occurrence ∈ elimTrace.keptOccurrences finalWellFormed) :
+    ∃ original,
+      original ∈ ConcreteElaboration.localOccurrences input.val
+        payload.parent ∧
+      copyTrace.droppedParentForwardMap original =
+        elimTrace.occurrenceMap occurrence ∧
+      copyTrace.finalFocusOccurrenceMap elimTrace occurrence = original := by
+  have droppedMember : elimTrace.occurrenceMap occurrence ∈
+      ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
+        (copyTrace.regionMap payload.parent) := by
+    cases occurrence with
+    | node node =>
+        have nodeRegion := elimTrace.kept_node_region finalWellFormed node member
+        apply (ConcreteElaboration.mem_localOccurrences_node
+          (dropInstantiationAtomsRaw result) (copyTrace.regionMap payload.parent)
+          node).2
+        simpa [copyTrace.regionMap_parent_eq_elimParent elimTrace] using
+          nodeRegion
+    | child child =>
+        have childParent := elimTrace.kept_child_parent finalWellFormed child
+          member
+        apply (ConcreteElaboration.mem_localOccurrences_child
+          (dropInstantiationAtomsRaw result) (copyTrace.regionMap payload.parent)
+          (elimTrace.origin child)).2
+        simpa [copyTrace.regionMap_parent_eq_elimParent elimTrace] using
+          childParent
+  rw [copyTrace.dropped_localOccurrences_of_outside payload.parent
+    (payload_bubble_not_encloses_parent payload)] at droppedMember
+  obtain ⟨original, originalMember, forwardEq⟩ := List.mem_map.mp droppedMember
+  refine ⟨original, originalMember, forwardEq, ?_⟩
+  rw [finalFocusOccurrenceMap, Function.comp_apply, ← forwardEq]
+  exact copyTrace.droppedParentReverseMap_forward_of_mem original originalMember
+
+theorem keptNode_original
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (node : Fin elimTrace.sourceDiagram.nodeCount)
+    (member : ConcreteElaboration.LocalOccurrence.node node ∈
+      elimTrace.keptOccurrences finalWellFormed) :
+    ∃ (originalNode : Fin input.val.nodeCount)
+        (originalRegion : (input.val.nodes originalNode).region =
+          payload.parent),
+      copyTrace.finalFocusOccurrenceMap elimTrace (.node node) =
+          .node originalNode ∧
+      copyTrace.droppedNodeMap originalNode
+          (fun enclosed => payload_bubble_not_encloses_parent payload
+            (originalRegion ▸ enclosed)) = node := by
+  obtain ⟨original, originalMember, forwardEq, reverseEq⟩ :=
+    copyTrace.keptOccurrence_original_preimage elimTrace finalWellFormed
+      (.node node) member
+  cases original with
+  | node originalNode =>
+      have originalRegion :=
+        (ConcreteElaboration.mem_localOccurrences_node input.val
+          payload.parent originalNode).1 originalMember
+      refine ⟨originalNode, originalRegion, reverseEq, ?_⟩
+      exact ConcreteElaboration.LocalOccurrence.node.inj
+        (regions := (dropInstantiationAtomsRaw result).regionCount) (by
+          simpa [droppedParentForwardMap, droppedOutsideOccurrenceMap,
+            originalRegion, VacuousElimTrace.occurrenceMap] using forwardEq)
+  | child originalChild =>
+      change ConcreteElaboration.LocalOccurrence.child
+          (copyTrace.regionMap originalChild) =
+        ConcreteElaboration.LocalOccurrence.node node at forwardEq
+      cases forwardEq
+
+theorem keptChild_original
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (child : Fin elimTrace.sourceDiagram.regionCount)
+    (member : ConcreteElaboration.LocalOccurrence.child child ∈
+      elimTrace.keptOccurrences finalWellFormed) :
+    ∃ originalChild,
+      copyTrace.finalFocusOccurrenceMap elimTrace (.child child) =
+          .child originalChild ∧
+      (input.val.regions originalChild).parent? = some payload.parent := by
+  obtain ⟨original, originalMember, forwardEq, reverseEq⟩ :=
+    copyTrace.keptOccurrence_original_preimage elimTrace finalWellFormed
+      (.child child) member
+  cases original with
+  | node originalNode =>
+      have originalRegion :=
+        (ConcreteElaboration.mem_localOccurrences_node input.val
+          payload.parent originalNode).1 originalMember
+      simp [droppedParentForwardMap, droppedOutsideOccurrenceMap,
+        originalRegion, VacuousElimTrace.occurrenceMap] at forwardEq
+  | child originalChild =>
+      refine ⟨originalChild, reverseEq, ?_⟩
+      exact (ConcreteElaboration.mem_localOccurrences_child input.val
+        payload.parent originalChild).1 originalMember
+
 /-- The final focus partitions into retained original-parent occurrences and
 the selected block represented by the one original quantified-bubble child. -/
 theorem finalFocusOccurrences_perm
