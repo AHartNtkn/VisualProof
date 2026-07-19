@@ -423,6 +423,81 @@ theorem keptChild_original
       exact (ConcreteElaboration.mem_localOccurrences_child input.val
         payload.parent originalChild).1 originalMember
 
+theorem keptChild_finalFocus_eq_reverse
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (child : Fin elimTrace.sourceDiagram.regionCount)
+    (member : ConcreteElaboration.LocalOccurrence.child child ∈
+      elimTrace.keptOccurrences finalWellFormed) :
+    copyTrace.finalFocusOccurrenceMap elimTrace (.child child) =
+      .child (copyTrace.reverseRegionMap elimTrace finalWellFormed child) := by
+  obtain ⟨original, originalMember, forwardEq, reverseEq⟩ :=
+    copyTrace.keptOccurrence_original_preimage elimTrace finalWellFormed
+      (.child child) member
+  cases original with
+  | node originalNode =>
+      have originalRegion :=
+        (ConcreteElaboration.mem_localOccurrences_node input.val
+          payload.parent originalNode).1 originalMember
+      simp [droppedParentForwardMap, droppedOutsideOccurrenceMap,
+        originalRegion, VacuousElimTrace.occurrenceMap] at forwardEq
+  | child originalChild =>
+      have childParent :=
+        (ConcreteElaboration.mem_localOccurrences_child input.val
+          payload.parent originalChild).1 originalMember
+      have mappedOrigin : copyTrace.regionMap originalChild =
+          elimTrace.origin child := by
+        exact ConcreteElaboration.LocalOccurrence.child.inj
+          (nodes := result.diagram.val.nodeCount) (by
+            simpa [droppedParentForwardMap, droppedOutsideOccurrenceMap,
+              VacuousElimTrace.occurrenceMap] using forwardEq)
+      have childNeBubble : originalChild ≠ bubble := by
+        intro childBubble
+        subst originalChild
+        apply elimTrace.origin_ne_bubble child
+        exact mappedOrigin.symm.trans copyTrace.regionMap_bubble
+      have finalChild : copyTrace.finalRegionMap elimTrace finalWellFormed
+          originalChild = child := by
+        apply elimTrace.origin_injective
+        rw [copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
+          finalWellFormed originalChild childNeBubble]
+        exact mappedOrigin
+      have childNeParent : originalChild ≠ payload.parent := by
+        intro childParentEq
+        subst originalChild
+        exact (ConcreteElaboration.checked_direct_child_not_encloses_parent
+          input.property childParent)
+          (ConcreteDiagram.Encloses.refl input.val payload.parent)
+      have childRegular : FrameRegular payload originalChild := by
+        constructor
+        · intro bubbleEncloses
+          rcases ConcreteElaboration.encloses_direct_child childParent
+              bubbleEncloses with bubbleChild | bubbleParent
+          · exact childNeBubble bubbleChild.symm
+          · exact payload_bubble_not_encloses_parent payload bubbleParent
+        · exact childNeParent
+      have reverseChild := copyTrace.reverseRegionMap_finalRegionMap elimTrace
+        finalWellFormed originalChild childRegular
+      rw [finalChild] at reverseChild
+      rw [reverseEq, reverseChild]
+
 /-- The final focus partitions into retained original-parent occurrences and
 the selected block represented by the one original quantified-bubble child. -/
 theorem finalFocusOccurrences_perm

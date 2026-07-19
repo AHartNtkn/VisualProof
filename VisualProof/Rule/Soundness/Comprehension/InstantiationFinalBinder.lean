@@ -195,6 +195,83 @@ structure FinalBinderWitness
 
 namespace FinalBinderWitness
 
+def pushAdmissible
+    {copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result}
+    {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw}
+    {finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature}
+    {sourceRels targetRels : RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext
+      elimTrace.sourceDiagram sourceRels}
+    {targetBinders : ConcreteElaboration.BinderContext input.val targetRels}
+    (witness : FinalBinderWitness copyTrace elimTrace finalWellFormed
+      sourceBinders targetBinders)
+    (child : Fin elimTrace.sourceDiagram.regionCount)
+    (arity : Nat)
+    (childAdmissible : copyTrace.FinalAdmissible elimTrace finalWellFormed
+      child) :
+    FinalBinderWitness copyTrace elimTrace finalWellFormed
+      (sourceBinders.push child arity)
+      (targetBinders.push
+        (copyTrace.reverseRegionMap elimTrace finalWellFormed child) arity) where
+  relationMap := RelationRenaming.lift witness.relationMap arity
+  bindersMapped := by
+    intro region binderArity sourceRelation sourceLookup
+    by_cases equality : region = child
+    · subst region
+      simp only [ConcreteElaboration.BinderContext.push_self] at sourceLookup ⊢
+      cases Option.some.inj sourceLookup
+      rfl
+    · rw [ConcreteElaboration.BinderContext.push_other _ arity equality]
+        at sourceLookup
+      cases sourceEq : sourceBinders region with
+      | none => simp [sourceEq] at sourceLookup
+      | some sourceValue =>
+          rcases sourceValue with ⟨actualArity, actualRelation⟩
+          have regionAdmissible := witness.admissible region actualArity
+            actualRelation sourceEq
+          have reverseNe : copyTrace.reverseRegionMap elimTrace finalWellFormed
+              region ≠
+              copyTrace.reverseRegionMap elimTrace finalWellFormed child :=
+            fun reverseEq => equality
+              (copyTrace.reverseRegionMap_injective_of_admissible elimTrace
+                finalWellFormed regionAdmissible childAdmissible reverseEq)
+          rw [ConcreteElaboration.BinderContext.push_other _ arity reverseNe]
+          simp [sourceEq] at sourceLookup
+          rcases sourceLookup with ⟨arityEq, relationEq⟩
+          subst binderArity
+          have relationEq' := eq_of_heq relationEq
+          subst sourceRelation
+          rw [witness.bindersMapped region actualArity actualRelation sourceEq]
+          rfl
+  admissible := by
+    intro region binderArity sourceRelation sourceLookup
+    by_cases equality : region = child
+    · subst region
+      exact childAdmissible
+    · rw [ConcreteElaboration.BinderContext.push_other _ arity equality]
+        at sourceLookup
+      cases sourceEq : sourceBinders region with
+      | none => simp [sourceEq] at sourceLookup
+      | some sourceValue =>
+          rcases sourceValue with ⟨actualArity, actualRelation⟩
+          exact witness.admissible region actualArity actualRelation sourceEq
+
+theorem relationMap_pushAdmissible
+    (witness : FinalBinderWitness copyTrace elimTrace finalWellFormed
+      (sourceRels := sourceRels) (targetRels := targetRels)
+      sourceBinders targetBinders)
+    (child : Fin elimTrace.sourceDiagram.regionCount)
+    (arity : Nat)
+    (childAdmissible : copyTrace.FinalAdmissible elimTrace finalWellFormed
+      child) :
+    ((pushAdmissible witness child arity childAdmissible).relationMap :
+      RelationRenaming (arity :: sourceRels) (arity :: targetRels)) =
+      (RelationRenaming.lift witness.relationMap arity :
+        RelationRenaming (arity :: sourceRels) (arity :: targetRels)) := rfl
+
 def empty
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)

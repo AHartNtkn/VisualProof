@@ -265,6 +265,124 @@ theorem focusedKeptNode_shape
           simp [copyTrace.reverseRegionMap_targetIndex elimTrace
             finalWellFormed, finalOwner]
 
+theorem focusedKeptChild_shape
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (child : Fin elimTrace.sourceDiagram.regionCount)
+    (member : ConcreteElaboration.LocalOccurrence.child child ∈
+      elimTrace.keptOccurrences finalWellFormed) :
+    input.val.regions
+        (copyTrace.reverseRegionMap elimTrace finalWellFormed child) =
+      match elimTrace.sourceDiagram.regions child with
+      | .sheet => .sheet
+      | .cut _ => .cut payload.parent
+      | .bubble _ arity => .bubble payload.parent arity := by
+  obtain ⟨original, originalMember, forwardEq, reverseEq⟩ :=
+    copyTrace.keptOccurrence_original_preimage elimTrace finalWellFormed
+      (.child child) member
+  cases original with
+  | node originalNode =>
+      have originalRegion :=
+        (ConcreteElaboration.mem_localOccurrences_node input.val
+          payload.parent originalNode).1 originalMember
+      simp [droppedParentForwardMap, droppedOutsideOccurrenceMap,
+        originalRegion, VacuousElimTrace.occurrenceMap] at forwardEq
+  | child originalChild =>
+      have originalParent :=
+        (ConcreteElaboration.mem_localOccurrences_child input.val
+          payload.parent originalChild).1 originalMember
+      have mappedOrigin : copyTrace.regionMap originalChild =
+          elimTrace.origin child :=
+        ConcreteElaboration.LocalOccurrence.child.inj
+          (nodes := result.diagram.val.nodeCount) (by
+            simpa [droppedParentForwardMap, droppedOutsideOccurrenceMap,
+              VacuousElimTrace.occurrenceMap] using forwardEq)
+      have focusReverse := copyTrace.keptChild_finalFocus_eq_reverse elimTrace
+        finalWellFormed child member
+      have originalEq : originalChild =
+          copyTrace.reverseRegionMap elimTrace finalWellFormed child :=
+        ConcreteElaboration.LocalOccurrence.child.inj
+          (nodes := input.val.nodeCount) (reverseEq.symm.trans focusReverse)
+      rw [← originalEq]
+      have droppedShape := copyTrace.dropped_region_shape originalChild
+      rw [mappedOrigin] at droppedShape
+      have droppedParent :
+          ((dropInstantiationAtomsRaw result).regions
+            (elimTrace.origin child)).parent? =
+              some (copyTrace.regionMap payload.parent) := by
+        have keptParent := elimTrace.kept_child_parent finalWellFormed child
+          member
+        simpa [copyTrace.regionMap_parent_eq_elimParent elimTrace] using
+          keptParent
+      have promotedShape := elimTrace.focused_regionShape child
+        (copyTrace.regionMap payload.parent) droppedParent
+      cases originalShape : input.val.regions originalChild with
+      | sheet =>
+          rw [originalShape] at originalParent droppedShape
+          simp [CRegion.parent?] at originalParent
+      | cut parent =>
+          have parentEq : parent = payload.parent := by
+            rw [originalShape] at originalParent
+            exact Option.some.inj originalParent
+          subst parent
+          rw [originalShape] at droppedShape
+          simp only [mapRegionShape] at droppedShape
+          cases finalShape : elimTrace.sourceDiagram.regions child with
+          | sheet =>
+              have finalShapePromoted : elimTrace.promotion.regions child =
+                  .sheet := finalShape
+              rw [finalShapePromoted, droppedShape] at promotedShape
+              cases promotedShape
+          | cut finalParent =>
+              rfl
+          | bubble finalParent arity =>
+              have finalShapePromoted : elimTrace.promotion.regions child =
+                  .bubble finalParent arity := finalShape
+              rw [finalShapePromoted, droppedShape] at promotedShape
+              cases promotedShape
+      | bubble parent arity =>
+          have parentEq : parent = payload.parent := by
+            rw [originalShape] at originalParent
+            exact Option.some.inj originalParent
+          subst parent
+          rw [originalShape] at droppedShape
+          simp only [mapRegionShape] at droppedShape
+          cases finalShape : elimTrace.sourceDiagram.regions child with
+          | sheet =>
+              have finalShapePromoted : elimTrace.promotion.regions child =
+                  .sheet := finalShape
+              rw [finalShapePromoted, droppedShape] at promotedShape
+              cases promotedShape
+          | cut finalParent =>
+              have finalShapePromoted : elimTrace.promotion.regions child =
+                  .cut finalParent := finalShape
+              rw [finalShapePromoted, droppedShape] at promotedShape
+              cases promotedShape
+          | bubble finalParent finalArity =>
+              have finalShapePromoted : elimTrace.promotion.regions child =
+                  .bubble finalParent finalArity := finalShape
+              rw [finalShapePromoted] at promotedShape
+              rw [droppedShape] at promotedShape
+              cases promotedShape
+              rfl
+
 theorem focusedKeptNode_endpointOccurs_iff
     {signature : List Nat}
     {input : CheckedDiagram signature}
