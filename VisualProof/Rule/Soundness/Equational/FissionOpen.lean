@@ -448,6 +448,352 @@ def rootBackwardLocal
       (boundary := boundary)).symm
       (Fin.castAdd (rootFresh input site).length index))
 
+theorem rootEnvironment_forward
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (boundary : List (Fin input.val.wireCount))
+    (sourceOuter : Fin (sourceOpen input boundary).exposedWires.length → D)
+    (targetOuter : Fin
+      (targetOpen input selected site producer residual boundary
+        ).exposedWires.length → D)
+    (sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D)
+    (fresh : Fin (rootFresh input site).length → D)
+    (outerEq : sourceOuter = targetOuter ∘
+      exposedIndex (input := input) (selected := selected) (site := site)
+        (producer := producer) (residual := residual) (boundary := boundary)) :
+    let targetLocal : Fin
+        (targetOpen input selected site producer residual boundary
+          ).hiddenWires.length → D :=
+      rootForwardLocal sourceLocal fresh
+    ConcreteElaboration.rootEnvironment
+        (sourceOpen input boundary).exposedWires
+        (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal =
+      ConcreteElaboration.rootEnvironment
+          (targetOpen input selected site producer residual boundary).exposedWires
+          (targetOpen input selected site producer residual boundary).hiddenWires
+          targetOuter targetLocal ∘
+        rootIndex input selected site producer residual boundary := by
+  dsimp only
+  funext index
+  unfold ConcreteElaboration.rootEnvironment
+  let split := Fin.cast List.length_append index
+  have recover : Fin.cast List.length_append.symm split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · rw [outerEq]
+    simp only [Function.comp_apply]
+    simp [extendWireEnv]
+    change targetOuter
+        (exposedIndex (input := input) (selected := selected) (site := site)
+          (producer := producer) (residual := residual) (boundary := boundary)
+          outer) =
+      extendWireEnv targetOuter _
+        (Fin.cast List.length_append
+          (rootIndex input selected site producer residual boundary
+            (Fin.cast List.length_append.symm
+              (Fin.castAdd (sourceOpen input boundary).hiddenWires.length
+                outer))))
+    have targetIndexEq :
+        Fin.cast List.length_append
+          (rootIndex input selected site producer residual boundary
+            (Fin.cast List.length_append.symm
+              (Fin.castAdd (sourceOpen input boundary).hiddenWires.length
+                outer))) =
+        Fin.castAdd
+          (targetOpen input selected site producer residual boundary
+            ).hiddenWires.length
+          (exposedIndex (input := input) (selected := selected) (site := site)
+            (producer := producer) (residual := residual) (boundary := boundary)
+            outer) := by
+      apply Fin.ext
+      rfl
+    rw [targetIndexEq]
+    simp [extendWireEnv]
+  · have targetIndexEq :
+        Fin.cast List.length_append
+          (rootIndex input selected site producer residual boundary
+            (Fin.cast List.length_append.symm
+              (Fin.natAdd (sourceOpen input boundary).exposedWires.length
+                localIndex))) =
+        Fin.natAdd
+          (targetOpen input selected site producer residual boundary
+            ).exposedWires.length
+          (Fin.cast (targetHiddenLength (input := input) (selected := selected)
+            (site := site) (producer := producer) (residual := residual)
+            (boundary := boundary)).symm
+            (Fin.castAdd (rootFresh input site).length localIndex)) := by
+      apply Fin.ext
+      change (sourceOpen input boundary).exposedWires.length + localIndex.val =
+        (targetOpen input selected site producer residual boundary
+          ).exposedWires.length + localIndex.val
+      rw [targetExposedLength]
+    simp only [Function.comp_apply]
+    simp [extendWireEnv]
+    change sourceLocal localIndex =
+      extendWireEnv targetOuter _
+        (Fin.cast List.length_append
+          (rootIndex input selected site producer residual boundary
+            (Fin.cast List.length_append.symm
+              (Fin.natAdd (sourceOpen input boundary).exposedWires.length
+                localIndex))))
+    rw [targetIndexEq]
+    simp [rootForwardLocal, extendWireEnv]
+
+theorem rootEnvironment_backward
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (boundary : List (Fin input.val.wireCount))
+    (sourceOuter : Fin (sourceOpen input boundary).exposedWires.length → D)
+    (targetOuter : Fin
+      (targetOpen input selected site producer residual boundary
+        ).exposedWires.length → D)
+    (targetLocal : Fin
+      (targetOpen input selected site producer residual boundary
+        ).hiddenWires.length → D)
+    (outerEq : sourceOuter = targetOuter ∘
+      exposedIndex (input := input) (selected := selected) (site := site)
+        (producer := producer) (residual := residual) (boundary := boundary)) :
+    let sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D :=
+      rootBackwardLocal targetLocal
+    ConcreteElaboration.rootEnvironment
+        (sourceOpen input boundary).exposedWires
+        (sourceOpen input boundary).hiddenWires sourceOuter sourceLocal =
+      ConcreteElaboration.rootEnvironment
+          (targetOpen input selected site producer residual boundary).exposedWires
+          (targetOpen input selected site producer residual boundary).hiddenWires
+          targetOuter targetLocal ∘
+        rootIndex input selected site producer residual boundary := by
+  dsimp only
+  funext index
+  unfold ConcreteElaboration.rootEnvironment
+  let split := Fin.cast List.length_append index
+  have recover : Fin.cast List.length_append.symm split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · rw [outerEq]
+    simp only [Function.comp_apply]
+    simp [extendWireEnv]
+    change targetOuter
+        (exposedIndex (input := input) (selected := selected) (site := site)
+          (producer := producer) (residual := residual) (boundary := boundary)
+          outer) =
+      extendWireEnv targetOuter targetLocal
+        (Fin.cast List.length_append
+          (rootIndex input selected site producer residual boundary
+            (Fin.cast List.length_append.symm
+              (Fin.castAdd (sourceOpen input boundary).hiddenWires.length
+                outer))))
+    have targetIndexEq :
+        Fin.cast List.length_append
+          (rootIndex input selected site producer residual boundary
+            (Fin.cast List.length_append.symm
+              (Fin.castAdd (sourceOpen input boundary).hiddenWires.length
+                outer))) =
+        Fin.castAdd
+          (targetOpen input selected site producer residual boundary
+            ).hiddenWires.length
+          (exposedIndex (input := input) (selected := selected) (site := site)
+            (producer := producer) (residual := residual) (boundary := boundary)
+            outer) := by
+      apply Fin.ext
+      rfl
+    rw [targetIndexEq]
+    simp [extendWireEnv]
+  · have targetIndexEq :
+        Fin.cast List.length_append
+          (rootIndex input selected site producer residual boundary
+            (Fin.cast List.length_append.symm
+              (Fin.natAdd (sourceOpen input boundary).exposedWires.length
+                localIndex))) =
+        Fin.natAdd
+          (targetOpen input selected site producer residual boundary
+            ).exposedWires.length
+          (Fin.cast (targetHiddenLength (input := input) (selected := selected)
+            (site := site) (producer := producer) (residual := residual)
+            (boundary := boundary)).symm
+            (Fin.castAdd (rootFresh input site).length localIndex)) := by
+      apply Fin.ext
+      change (sourceOpen input boundary).exposedWires.length + localIndex.val =
+        (targetOpen input selected site producer residual boundary
+          ).exposedWires.length + localIndex.val
+      rw [targetExposedLength]
+    simp only [Function.comp_apply]
+    simp [extendWireEnv]
+    change targetLocal
+        (Fin.cast (targetHiddenLength (input := input) (selected := selected)
+          (site := site) (producer := producer) (residual := residual)
+          (boundary := boundary)).symm
+          (Fin.castAdd (rootFresh input site).length localIndex)) =
+      extendWireEnv targetOuter targetLocal
+        (Fin.cast List.length_append
+          (rootIndex input selected site producer residual boundary
+            (Fin.cast List.length_append.symm
+              (Fin.natAdd (sourceOpen input boundary).exposedWires.length
+                localIndex))))
+    rw [targetIndexEq]
+    simp [extendWireEnv]
+
+def rootFreshValueIndex
+    (input : CheckedDiagram signature)
+    (site : Fin input.val.regionCount)
+    (rootSite : input.val.root = site) :
+    Fin (rootFresh input site).length :=
+  ⟨0, by simp [rootFresh, rootSite]⟩
+
+def rootFreshLocalIndex
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (boundary : List (Fin input.val.wireCount))
+    (rootSite : input.val.root = site) :
+    Fin (targetOpen input selected site producer residual boundary
+      ).hiddenWires.length :=
+  ⟨(sourceOpen input boundary).hiddenWires.length, by
+    rw [targetHiddenLength]
+    simp [rootFresh, rootSite]⟩
+
+def rootFreshIndex
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (boundary : List (Fin input.val.wireCount))
+    (rootSite : input.val.root = site) :
+    Fin (targetOpen input selected site producer residual boundary
+      ).rootWires.length :=
+  Fin.cast (by simp [OpenConcreteDiagram.rootWires])
+    (Fin.natAdd
+      (targetOpen input selected site producer residual boundary
+        ).exposedWires.length
+      (rootFreshLocalIndex input selected site producer residual boundary
+        rootSite))
+
+theorem rootFreshIndex_get
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (boundary : List (Fin input.val.wireCount))
+    (rootSite : input.val.root = site) :
+    (targetOpen input selected site producer residual boundary).rootWires.get
+        (rootFreshIndex input selected site producer residual boundary rootSite) =
+      Fin.last input.val.wireCount := by
+  unfold rootFreshIndex OpenConcreteDiagram.rootWires
+  rw [show List.get
+      ((targetOpen input selected site producer residual boundary).exposedWires ++
+        (targetOpen input selected site producer residual boundary).hiddenWires)
+      (Fin.cast (by simp)
+        (Fin.natAdd
+          (targetOpen input selected site producer residual boundary
+            ).exposedWires.length
+          (rootFreshLocalIndex input selected site producer residual boundary
+            rootSite))) =
+      (targetOpen input selected site producer residual boundary).hiddenWires.get
+        (rootFreshLocalIndex input selected site producer residual boundary
+          rootSite) by simp]
+  have hiddenList := targetOpen_hiddenWires input selected site producer residual
+    boundary
+  let rightIndex : Fin
+      (List.map
+          (fun wire : Fin input.val.wireCount => wire.castSucc)
+          (sourceOpen input boundary).hiddenWires ++
+        rootFresh input site).length :=
+    ⟨(sourceOpen input boundary).hiddenWires.length, by
+      rw [rootFresh, if_pos rootSite, List.length_append, List.length_map,
+        List.length_cons, List.length_nil, Nat.add_zero]
+      exact Nat.lt_succ_self _⟩
+  have getEq := get_of_eq hiddenList rightIndex
+  have rightGet :
+      (List.map
+          (fun wire : Fin input.val.wireCount => wire.castSucc)
+          (sourceOpen input boundary).hiddenWires ++
+        rootFresh input site).get rightIndex =
+      Fin.last input.val.wireCount := by
+    simp [List.get_eq_getElem, rightIndex, rootFresh, rootSite]
+    rw [List.getElem_append_right (by
+      rw [List.length_map]
+      exact Nat.le_refl _)]
+    simp
+  have indexEq :
+      rootFreshLocalIndex input selected site producer residual boundary
+          rootSite =
+        Fin.cast (congrArg List.length hiddenList).symm rightIndex := by
+    apply Fin.ext
+    rfl
+  rw [indexEq, getEq]
+  exact rightGet
+
+theorem rootForwardFreshValue
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (boundary : List (Fin input.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetWellFormed :
+      (fissionRaw input selected site producer residual).WellFormed signature)
+    (rootSite : input.val.root = site)
+    (targetOuter : Fin
+      (targetOpen input selected site producer residual boundary
+        ).exposedWires.length → D)
+    (sourceLocal : Fin (sourceOpen input boundary).hiddenWires.length → D)
+    (fresh : Fin (rootFresh input site).length → D)
+    (index : Fin (targetOpen input selected site producer residual boundary
+      ).rootWires.length)
+    (indexGet :
+      (targetOpen input selected site producer residual boundary).rootWires.get
+        index = Fin.last input.val.wireCount) :
+    ConcreteElaboration.rootEnvironment
+        (targetOpen input selected site producer residual boundary).exposedWires
+        (targetOpen input selected site producer residual boundary).hiddenWires
+        targetOuter (rootForwardLocal sourceLocal fresh) index =
+      fresh (rootFreshValueIndex input site rootSite) := by
+  have canonicalGet := rootFreshIndex_get input selected site producer residual
+    boundary rootSite
+  have indexEq : index =
+      rootFreshIndex input selected site producer residual boundary rootSite := by
+    apply Fin.ext
+    exact (List.getElem_inj
+      (targetCheckedOpen input selected site producer residual boundary
+        sourceRoot targetWellFormed).val.rootWires_nodup).mp (by
+      simpa only [List.get_eq_getElem] using indexGet.trans canonicalGet.symm)
+  subst index
+  unfold ConcreteElaboration.rootEnvironment
+  simp only [Function.comp_apply]
+  rw [show Fin.cast List.length_append
+      (rootFreshIndex input selected site producer residual boundary rootSite) =
+        Fin.natAdd
+          (targetOpen input selected site producer residual boundary
+            ).exposedWires.length
+          (rootFreshLocalIndex input selected site producer residual boundary
+            rootSite) by apply Fin.ext; rfl]
+  simp [extendWireEnv]
+  unfold rootForwardLocal
+  rw [show Fin.cast
+      (targetHiddenLength (input := input) (selected := selected) (site := site)
+        (producer := producer) (residual := residual) (boundary := boundary))
+      (rootFreshLocalIndex input selected site producer residual boundary
+        rootSite) =
+        Fin.natAdd (sourceOpen input boundary).hiddenWires.length
+          (rootFreshValueIndex input site rootSite) by apply Fin.ext; rfl]
+  simp
+
 end FissionSoundness
 
 end VisualProof.Rule
