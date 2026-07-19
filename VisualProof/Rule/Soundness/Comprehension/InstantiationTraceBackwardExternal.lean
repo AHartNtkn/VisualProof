@@ -469,6 +469,97 @@ noncomputable def externalAligned_of_trace
     named relationValue values parameterValues simulations externalBinders
     externalRelations targetWireValue targetOwnerMap target)
 
+/-- A fully aligned presentation returned to the initial executor state can be
+recompiled by the authoritative compiler in any exact context for the original
+bubble.  Alignment supplies both environment agreement and binder provenance. -/
+theorem ExternalAlignedBubblePresentation.denoteRecompiled_initial
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {model : Lambda.LambdaModel}
+    {named : NamedEnv model.Carrier signature}
+    {relationValue : Relation model.Carrier payload.arity}
+    {values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index)}
+    {parameterValues : Fin attachments.length → model.Carrier}
+    {wireValue : Fin input.val.wireCount → model.Carrier}
+    {externalRels : RelCtx}
+    {externalBinders : ConcreteElaboration.BinderContext input.val externalRels}
+    {externalRelations : RelEnv model.Carrier externalRels}
+    {ownerMap : Fin input.val.regionCount → Fin input.val.regionCount}
+    (aligned : ExternalAlignedBubblePresentation payload
+      (initialInstantiationState payload) model named relationValue values
+      parameterValues wireValue externalBinders externalRelations ownerMap)
+    (ownerIdentity : ∀ region, ownerMap region = region)
+    (targetOuter : ConcreteElaboration.WireContext input.val)
+    (targetExact : (targetOuter.extend bubble).Exact bubble)
+    (targetCover : externalBinders.Covers bubble)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val externalBinders bubble)
+    (targetFuel : Nat)
+    (targetBody : Region signature targetOuter.length externalRels)
+    (targetCompiled : ConcreteElaboration.compileRegion? signature input.val
+      targetFuel bubble targetOuter externalBinders = some targetBody)
+    (targetEnvironment : Fin targetOuter.length → model.Carrier)
+    (targetAligned : ∀ index, targetEnvironment index =
+      wireValue (targetOuter.get index)) :
+    denoteRegion model named targetEnvironment externalRelations targetBody := by
+  let source := aligned.presentation
+  let context := SameDiagramContext.ofExact bubble source.outer targetOuter
+    source.outerExact targetExact
+  let binderWitness : SameDiagramBinderWitness input.val source.binderContext
+      externalBinders := {
+    relationMap := aligned.relationMap
+    mapped := by
+      intro region arity relation lookup
+      simpa [ownerIdentity region] using
+        aligned.binderAligned region arity relation lookup
+  }
+  have sourceCompiled : ConcreteElaboration.compileRegion? signature input.val
+      source.fuel bubble source.outer source.binderContext = some source.body := by
+    have compilerEq := compileSurvivorRegion_eq_of_clean_subtree
+      (signature := signature) (state := initialInstantiationState payload)
+      source.fuel bubble source.outer source.binderContext (by
+        intro node member
+        exact False.elim (List.not_mem_nil member))
+    have compilerEq' : compileSurvivorRegion? signature
+        (initialInstantiationState payload) source.fuel bubble source.outer
+          source.binderContext =
+        ConcreteElaboration.compileRegion? signature input.val source.fuel
+          bubble source.outer source.binderContext := by
+      simpa [initialInstantiationState] using compilerEq
+    rw [← compilerEq']
+    simpa [source] using source.compiled
+  let simulation := sameDiagramSemanticSimulation input.val input.property
+    model named
+  have bodySimulation := simulation.compileRegion_denote .forward source.fuel
+    targetFuel bubble source.outer targetOuter context trivial
+    source.binderContext externalBinders trivial binderWitness source.binderCover
+    targetCover source.binderEnumeration targetEnumeration source.outerExact
+    targetExact source.body targetBody sourceCompiled targetCompiled
+  have environmentAgreement : context.indexRelation.EnvironmentsAgree
+      source.environment targetEnvironment := by
+    apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      context.index source.environment targetEnvironment).mpr
+    funext index
+    simp only [Function.comp_apply]
+    rw [aligned.wireAligned index, targetAligned (context.index index),
+      context.get index]
+    rfl
+  have sourceRenamed : denoteRegion model named source.environment
+      externalRelations (source.body.renameRelations aligned.relationMap) :=
+    (denoteRegion_renameRelations model named aligned.relationMap
+      source.relationEnvironment externalRelations aligned.relationsAligned
+      source.environment source.body).mpr source.denotes
+  exact bodySimulation source.environment targetEnvironment externalRelations
+    environmentAgreement sourceRenamed
+
 end InstantiationSemantic
 
 end VisualProof.Rule
