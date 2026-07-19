@@ -56,7 +56,7 @@ type SeyricSkill = {
   readonly id: string
   readonly label: string
   readonly stage: SeyricStage
-  readonly mode: 'move' | 'recognition'
+  readonly mode: 'move' | 'recognition' | 'interface'
   readonly prerequisites: readonly string[]
 }
 
@@ -134,7 +134,7 @@ type Skill = {
   readonly id: string
   readonly label: string
   readonly stage: Stage
-  readonly mode: 'move' | 'recognition'
+  readonly mode: 'move' | 'recognition' | 'interface'
   readonly prerequisites: readonly string[]
 }
 type Evidence = { readonly skill: string; readonly role: Role; readonly primary?: boolean }
@@ -156,7 +156,7 @@ type Roadmap = {
   readonly internalLabels: readonly { readonly label: string; readonly puzzle: string; readonly reason: string }[]
 }
 
-const roadmap = roadmapJson as Roadmap
+const roadmap = roadmapJson as unknown as Roadmap
 const unique = (values: readonly string[]): boolean => new Set(values).size === values.length
 const countByStage = (puzzles: readonly Puzzle[]): Record<Stage, number> => {
   const counts: Record<Stage, number> = { structural: 0, connective: 0, classical: 0 }
@@ -254,6 +254,8 @@ describe('normalized Seyric roadmap', () => {
       expect(skill.prerequisites.every((id) => skills.has(id))).toBe(true)
     }
     expect(skills.has('distinguish-nested-owners')).toBe(true)
+    expect(roadmap.skills.find(({ id }) => id === 'rewind-and-compare')?.mode).toBe('interface')
+    expect(roadmap.skills.find(({ id }) => id === 'replace-retained-future')?.mode).toBe('interface')
     expect(puzzles.has('two-mark-projection')).toBe(true)
     for (const puzzle of roadmap.puzzles) {
       expect(puzzle.prerequisites.every((id) => puzzles.has(id))).toBe(true)
@@ -280,8 +282,13 @@ describe('normalized Seyric roadmap', () => {
 
   it('derives the approved required and optional baseline from final transfer', () => {
     const required = prerequisiteClosure(roadmap.finalTransfer, roadmap.puzzles)
+    const optional = roadmap.puzzles.filter(({ id }) => !required.has(id))
     expect(required.size).toBe(140)
-    expect(roadmap.puzzles.length - required.size).toBe(46)
+    expect(optional).toHaveLength(46)
+    for (const puzzle of optional) {
+      expect(puzzle.evidence.every(({ role }) => role === 'remediation' || role === 'challenge'))
+        .toBe(true)
+    }
     expect(required.has(roadmap.finalTransfer)).toBe(true)
   })
 
@@ -324,7 +331,7 @@ Do not commit the empty shell.
 
 - [ ] **Step 1: Extract the 23 structural skill rows**
 
-Record each atlas `skill('structural', ...)` call as one `SeyricSkill`. Preserve its stable skill ID, visible label, `move`/`recognition` mode, and prerequisite skill IDs. Replace prose prerequisite phrases with the exact skill IDs they name; do not create family-heading skills.
+Record each atlas `skill('structural', ...)` call as one `SeyricSkill`. Preserve its stable skill ID, visible label, `move`/`recognition`/`interface` mode, and prerequisite skill IDs. Replace prose prerequisite phrases with the exact skill IDs they name; do not create family-heading skills.
 
 - [ ] **Step 2: Normalize structural evidence labels**
 
