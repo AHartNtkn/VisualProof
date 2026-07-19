@@ -114,8 +114,9 @@ theorem advance_site_region_simulation_fixed
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
         arguments hnonempty model named parameterValues values)
-    (emptyRelationEq : relationValue =
-      payload.interpretedRelation model named parameterValues)
+    (emptyRelationEq : ∀ _hzero :
+      payload.binderSpine.proxyCount = 0,
+      relationValue = payload.interpretedRelation model named parameterValues)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (childSimulation : ∀ direction
@@ -259,7 +260,7 @@ theorem advance_site_region_simulation_fixed
                             sourceLocal sourceItems targetItems fullItems
                             sourceItemsResult targetItemsResult fullItemsCompiled
                             sourceItemsNative targetFixed targetProxies
-                            targetParameters emptyRelationEq
+                            targetParameters (emptyRelationEq hzero)
                             (fun direction child encloses =>
                               childSimulation direction child encloses)
                         exact (finishRegion_denote_iff
@@ -367,8 +368,9 @@ theorem advance_enclosed_region_simulation_fixed
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
         arguments hnonempty model named parameterValues values)
-    (emptyRelationEq : relationValue =
-      payload.interpretedRelation model named parameterValues) :
+    (emptyRelationEq : ∀ _hzero :
+      payload.binderSpine.proxyCount = 0,
+      relationValue = payload.interpretedRelation model named parameterValues) :
     ∀ direction sourceFuel targetFuel
       (region : Fin state.diagram.val.regionCount),
       state.diagram.val.Encloses state.bubble region →

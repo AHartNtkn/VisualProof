@@ -532,8 +532,9 @@ theorem advance_site_items_denote_fixed
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
         arguments hnonempty model named parameterValues values)
-    (emptyRelationEq : relationValue =
-      payload.interpretedRelation model named parameterValues)
+    (emptyRelationEq : ∀ _hzero :
+      payload.binderSpine.proxyCount = 0,
+      relationValue = payload.interpretedRelation model named parameterValues)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
       state.diagram.val.Encloses state.bubble child →
@@ -612,12 +613,14 @@ theorem advance_site_items_denote_fixed
         (fun wire => quotientValues (spliceInput.quotientWire wire))
         parameterValues values (by simpa [Function.comp_def] using
           quotientParameters)).symm
-  have localEmptyRelationEq : relationValue =
-      payload.interpretedRelation model named
+  have localEmptyRelationEq : ∀ hzero :
+      payload.binderSpine.proxyCount = 0,
+      relationValue = payload.interpretedRelation model named
         (fun index => quotientValues
           (spliceInput.quotientWire (state.parameters index))) := by
+    intro hzero
     rw [quotientParameters]
-    exact emptyRelationEq
+    exact emptyRelationEq hzero
   have currentDenotes : ∀ sourceItem,
       ConcreteElaboration.compileNode? signature spliceInput.coalesceFrameRaw
         sourceContext sourceBinders atom = some sourceItem →
@@ -631,7 +634,7 @@ theorem advance_site_items_denote_fixed
         targetEnv targetRelEnv fallback targetItems targetCompiled targetDenotes
         targetFixed sourceContext sourceBinders sourceCover sourceEnumeration
         relationMap relationSpec sourceEnv (congrFun sourceEnvironmentEq)
-        sourceItem sourceItemCompiled localEmptyRelationEq
+        sourceItem sourceItemCompiled (localEmptyRelationEq hzero)
     · exact advance_current_atom_denotes_nonempty_fixed comprehension attachments
         binders payload state atom tail site arguments node_eq arguments_eq shape
         hzero hadmissible model named relationValue values outputWitness outputLeaf
