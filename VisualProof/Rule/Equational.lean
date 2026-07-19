@@ -470,6 +470,14 @@ private def anchoredSplitLiftEndpoint
     (endpoint : Diagram.CEndpoint nodes) : Diagram.CEndpoint (nodes + 1) :=
   { node := endpoint.node.castSucc, port := endpoint.port }
 
+@[simp] theorem anchoredSplitLiftEndpoint_node
+    (endpoint : Diagram.CEndpoint nodes) :
+    (anchoredSplitLiftEndpoint endpoint).node = endpoint.node.castSucc := rfl
+
+@[simp] theorem anchoredSplitLiftEndpoint_port
+    (endpoint : Diagram.CEndpoint nodes) :
+    (anchoredSplitLiftEndpoint endpoint).port = endpoint.port := rfl
+
 def anchoredWireSplitRaw (input : Diagram.CheckedDiagram signature)
     (wire : Fin input.val.wireCount)
     (endpoints : List (Diagram.CEndpoint input.val.nodeCount))
@@ -1342,6 +1350,12 @@ private def fissionKeepEndpoint (node : Fin nodes)
     | .free _ => false
     | _ => true
   else true
+
+@[simp] theorem fissionKeepEndpoint_of_node_ne
+    (node : Fin nodes) (endpoint : Diagram.CEndpoint nodes)
+    (different : endpoint.node ≠ node) :
+    fissionKeepEndpoint node endpoint = true := by
+  simp [fissionKeepEndpoint, different]
 
 def fissionRaw (input : Diagram.CheckedDiagram signature)
     (node : Fin input.val.nodeCount)
