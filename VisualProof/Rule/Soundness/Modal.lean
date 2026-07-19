@@ -1830,7 +1830,7 @@ noncomputable def doubleCutIntroSimulation
       targetExact
     exact LiftedContextWitness.extend witness region
   extendFocusedContext := by
-    intro sourceContext targetContext witness region focused sourceExact
+    intro sourceContext targetContext witness region atRegion focused sourceExact
       targetExact
     exact LiftedContextWitness.extend witness region
   at_child := by simp

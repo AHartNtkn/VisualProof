@@ -375,7 +375,7 @@ noncomputable def endpointMoveAwaySimulation
       targetExact
     exact context.extend region
   extendFocusedContext := by
-    intro sourceContext targetContext context region focused sourceExact
+    intro sourceContext targetContext context region atRegion focused sourceExact
       targetExact
     exact False.elim focused
   at_child := by

@@ -1994,7 +1994,7 @@ noncomputable def semanticSimulation
     intro source target context region regular sourceExact targetExact
     exact context.extend region sourceExact targetExact
   extendFocusedContext := by
-    intro source target context region focused sourceExact targetExact
+    intro source target context region atRegion focused sourceExact targetExact
     exact context.extend region sourceExact targetExact
   at_child := by simp
   at_extended := by simp

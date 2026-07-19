@@ -1898,7 +1898,7 @@ private noncomputable def conversionSimulation
   extendContext := fun source target embedding region _regular sourceExact targetExact =>
     embedding.extend region
   extendFocusedContext := by
-    intro source target embedding region focused sourceExact targetExact
+    intro source target embedding region atRegion focused sourceExact targetExact
     exact False.elim focused
   at_child := by simp
   at_extended := by simp

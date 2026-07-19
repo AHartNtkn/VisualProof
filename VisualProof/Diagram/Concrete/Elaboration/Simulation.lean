@@ -858,8 +858,9 @@ structure ConcreteSemanticSimulation (signature : List Nat)
   frame children, even though pattern material is handled opaquely. -/
   extendFocusedContext : ∀ (sourceContext : WireContext source)
     (targetContext : WireContext target),
-    ContextWitness sourceContext targetContext →
+    (context : ContextWitness sourceContext targetContext) →
       ∀ region,
+        AtRegion context region →
         Distinguished region →
         (sourceContext.extend region).Exact region →
         (targetContext.extend (regionMap region)).Exact (regionMap region) →
@@ -876,7 +877,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (targetExact :
       (targetContext.extend (regionMap parent)).Exact (regionMap parent))
     (child : Fin source.regionCount),
-    AtRegion context parent →
+    (atParent : AtRegion context parent) →
       (source.regions child).parent? = some parent →
       AtRegion
         (extendContext sourceContext targetContext context parent regular
@@ -909,12 +910,12 @@ structure ConcreteSemanticSimulation (signature : List Nat)
     (targetExact :
       (targetContext.extend (regionMap parent)).Exact (regionMap parent))
     (child : Fin source.regionCount),
-    AtRegion context parent →
+    (atParent : AtRegion context parent) →
       (source.regions child).parent? = some parent →
       (target.regions (regionMap child)).parent? = some (regionMap parent) →
       AtRegion
-        (extendFocusedContext sourceContext targetContext context parent focused
-          sourceExact targetExact)
+        (extendFocusedContext sourceContext targetContext context parent
+          atParent focused sourceExact targetExact)
         child
   localTransport : ∀ {sourceRels targetRels : RelCtx} direction
     (fuelSource fuelTarget : Nat)
@@ -1031,7 +1032,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
         RegionSimulation model named childDirection
           (indexRelation
             (extendFocusedContext sourceContext targetContext context region
-              focused sourceExact targetExact))
+              atRegion focused sourceExact targetExact))
           (sourceBody.renameRelations (relationMap childBinderWitness))
           targetBody) →
       -- Focused rewrites may reparent retained material through fresh wrappers.
@@ -1611,7 +1612,7 @@ theorem compileRegion_denote
                     subst targetBody
                     let focusedContext :=
                       simulation.extendFocusedContext sourceContext targetContext
-                        context region focused sourceExact targetExact
+                        context region atRegion focused sourceExact targetExact
                     have recurse : ∀
                         {childDirection : SimulationDirection}
                         {child : Fin source.regionCount}

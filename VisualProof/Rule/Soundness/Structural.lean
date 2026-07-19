@@ -1483,7 +1483,7 @@ private noncomputable def severWireSimulation
   extendContext := fun original expanded collapse region _regular sourceExact targetExact =>
     collapse.extend region
   extendFocusedContext := by
-    intro original expanded collapse region focused sourceExact targetExact
+    intro original expanded collapse region atRegion focused sourceExact targetExact
     exact False.elim focused
   at_child := by simp
   at_extended := by simp

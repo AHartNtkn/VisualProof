@@ -465,7 +465,7 @@ noncomputable def patternConcreteSemanticSimulation
     exact layout.extendPatternContext sourceContext targetContext witness region
       hregion
   extendFocusedContext := by
-    intro sourceContext targetContext witness region focused sourceExact
+    intro sourceContext targetContext witness region atRegion focused sourceExact
       targetExact
     exact none
   at_child := by

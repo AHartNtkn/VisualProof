@@ -645,7 +645,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
       targetExact
     exact .extendRegular witness region regular sourceExact targetExact
   extendFocusedContext := by
-    intro sourceContext targetContext witness region focused sourceExact
+    intro sourceContext targetContext witness region atRegion focused sourceExact
       targetExact
     exact .extendFocused witness region focused sourceExact targetExact
   at_child := by

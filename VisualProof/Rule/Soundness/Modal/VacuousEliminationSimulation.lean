@@ -200,7 +200,7 @@ noncomputable def semanticSimulation
       targetExact
     exact PLift.up (witness.down.extendRegular targetWellFormed region regular)
   extendFocusedContext := by
-    intro sourceContext targetContext witness region focused sourceExact
+    intro sourceContext targetContext witness region atRegion focused sourceExact
       targetExact
     subst region
     have focusOrigin : trace.origin (trace.targetIndex targetWellFormed) =

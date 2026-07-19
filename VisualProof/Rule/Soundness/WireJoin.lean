@@ -1078,7 +1078,7 @@ noncomputable def simulation
     exact witness.extend source.property.diagram_well_formed ordered region
       sourceExact targetExact
   extendFocusedContext := by
-    intro sourceContext targetContext witness region focused sourceExact
+    intro sourceContext targetContext witness region atRegion focused sourceExact
       targetExact
     exact False.elim focused
   at_child := by simp

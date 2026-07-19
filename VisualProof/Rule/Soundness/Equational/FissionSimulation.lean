@@ -309,7 +309,7 @@ noncomputable def semanticSimulation
     intro source target embedding region regular sourceExact targetExact
     exact embedding.extend region
   extendFocusedContext := by
-    intro source target embedding region focused sourceExact targetExact
+    intro source target embedding region atRegion focused sourceExact targetExact
     exact embedding.extend region
   at_child := by simp
   at_extended := by simp

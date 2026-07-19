@@ -672,7 +672,7 @@ noncomputable def vacuousIntroSimulation
       targetExact
     exact witness.extend region
   extendFocusedContext := by
-    intro sourceContext targetContext witness region focused sourceExact
+    intro sourceContext targetContext witness region atRegion focused sourceExact
       targetExact
     exact witness.extend region
   at_child := by simp
