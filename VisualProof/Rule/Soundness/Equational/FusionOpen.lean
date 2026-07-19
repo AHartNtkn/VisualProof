@@ -1574,6 +1574,488 @@ theorem focusedRootTransport
         (.equation consumedIndex (producerTerm.mapFree producerIndex))).mpr
           ⟨beforeDenotes, producerDenotes, afterDenotes⟩
 
+noncomputable def rootContext
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (producerRegion consumerRegion : Fin input.val.regionCount)
+    (producerPorts consumerPorts : Nat)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (producerShape : input.val.nodes producer =
+      .term producerRegion producerPorts producerTerm)
+    (consumerShape : input.val.nodes consumer =
+      .term consumerRegion consumerPorts consumerTerm)
+    (scope : producerRegion = (input.val.wires consumedWire).scope)
+    (producerResolved : resolveNodeFreeWires? input producer producerPorts =
+      some producerWire)
+    (consumerResolved : resolveNodeFreeWires? input consumer consumerPorts =
+      some consumerWire)
+    (endpoints :
+      (input.val.wires consumedWire).endpoints = [
+          { node := producer, port := CPort.output },
+          { node := consumer, port := CPort.free consumedPort.val }] ∨
+      (input.val.wires consumedWire).endpoints = [
+          { node := consumer, port := CPort.free consumedPort.val },
+          { node := producer, port := CPort.output }])
+    (producerEnclosesConsumer : input.val.Encloses producerRegion consumerRegion)
+    (boundary : List (Fin input.val.wireCount))
+    (mapped : List (Fin (fusionWireDomain input.val consumedWire).count))
+    (transport : (fusionInterfaceTransport input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort).transportBoundary boundary = some mapped)
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetRoot : ∀ wire, wire ∈ mapped →
+      ((fusionRaw input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort).wires wire).scope = input.val.root)
+    (targetWellFormed :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).WellFormed signature)
+    (named : NamedEnv Lambda.Individual signature)
+    (direction : ConcreteElaboration.SimulationDirection) :
+    let simulation := semanticSimulation input consumedWire producer consumer
+      hdistinct producerRegion consumerRegion producerPorts consumerPorts
+      producerTerm consumerTerm producerWire consumerWire consumedPort
+      producerShape consumerShape scope producerResolved consumerResolved
+      endpoints producerEnclosesConsumer targetWellFormed named
+    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+      simulation direction
+      (sourceOpen input boundary).exposedWires
+      (sourceOpen input boundary).hiddenWires
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).exposedWires
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).hiddenWires := by
+  let simulation := semanticSimulation input consumedWire producer consumer
+    hdistinct producerRegion consumerRegion producerPorts consumerPorts
+    producerTerm consumerTerm producerWire consumerWire consumedPort
+    producerShape consumerShape scope producerResolved consumerResolved
+    endpoints producerEnclosesConsumer targetWellFormed named
+  let source := sourceCheckedOpen input boundary sourceRoot
+  let target := targetCheckedOpen input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort mapped targetRoot targetWellFormed
+  let outer := exposedContext input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort boundary mapped transport
+  let combined := Context.ofExact input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort input.val.root source.val.rootWires target.val.rootWires
+    (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      source)
+    (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      target)
+  refine {
+    outer := outer.indexRelation
+    context := ?_
+    atRoot := True.intro
+    atRootChild := by
+      intro regular child parent
+      trivial
+    atFocusedRootChild := by
+      intro focused child sourceParent targetParent
+      trivial
+    transport := ?_
+    focusedRootKernel := ?_
+  }
+  · simpa [source, target, OpenConcreteDiagram.rootWires] using combined
+  · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
+      itemSemantics
+    refine ConcreteElaboration.directionalRootTransport_of_agreement direction
+      (sourceOpen input boundary).exposedWires
+      (sourceOpen input boundary).hiddenWires
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).exposedWires
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).hiddenWires outer.indexRelation combined.indexRelation
+      Lambda.canonicalModel named
+      (sourceItems.renameRelations
+        (simulation.relationMap simulation.binders_empty))
+      targetItems ?_ itemSemantics
+    intro sourceOuter targetOuter outerAgrees
+    cases direction with
+    | forward =>
+        intro sourceLocal
+        exact rootEnvironment_forward input consumedWire producer consumer
+          hdistinct consumerRegion producerTerm consumerTerm producerWire
+          consumerWire consumedPort boundary mapped transport sourceRoot
+          targetRoot targetWellFormed sourceOuter targetOuter outerAgrees
+          sourceLocal
+    | backward =>
+        intro targetLocal
+        exact rootEnvironment_backward_regular input consumedWire producer
+          consumer hdistinct producerRegion consumerRegion producerTerm
+          consumerTerm producerWire consumerWire consumedPort scope regular
+          boundary mapped transport sourceRoot targetRoot targetWellFormed
+          sourceOuter targetOuter outerAgrees targetLocal
+  · intro atRoot distinguished allowed recurse recurseAt sourceItems targetItems
+      sourceCompiled targetCompiled
+    have rootSite : input.val.root = producerRegion := distinguished
+    have sourceCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
+        input.val (ConcreteElaboration.compileRegion? signature input.val
+          input.val.regionCount) (sourceOpen input boundary).rootWires
+        ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences input.val input.val.root) =
+          some sourceItems := by
+      simpa only [OpenConcreteDiagram.rootWires] using sourceCompiled
+    have targetCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
+        (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort)
+        (ConcreteElaboration.compileRegion? signature
+          (fusionRaw input consumedWire producer consumer hdistinct
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort)
+          (fusionRaw input consumedWire producer consumer hdistinct
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort).regionCount)
+        (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+          producerTerm consumerTerm producerWire consumerWire consumedPort
+          mapped).rootWires ConcreteElaboration.BinderContext.empty
+        (ConcreteElaboration.localOccurrences
+          (fusionRaw input consumedWire producer consumer hdistinct
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort)
+          (fusionRaw input consumedWire producer consumer hdistinct
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort).root) = some targetItems := by
+      simpa only [OpenConcreteDiagram.rootWires] using targetCompiled
+    have relationMapEq :
+        (fun {arity} ↦ simulation.relationMap simulation.binders_empty :
+          RelationRenaming [] []) = fun {arity} relation ↦ relation := by
+      rfl
+    rw [relationMapEq, Region.renameRelations_id]
+    apply ConcreteElaboration.finishRoot_denote direction
+      (sourceOpen input boundary).exposedWires
+      (sourceOpen input boundary).hiddenWires
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).exposedWires
+      (targetOpen input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+        mapped).hiddenWires outer.indexRelation Lambda.canonicalModel named
+      sourceItems targetItems
+    exact focusedRootTransport input consumedWire producer consumer hdistinct
+      producerRegion consumerRegion producerPorts consumerPorts producerTerm
+      consumerTerm producerWire consumerWire consumedPort producerShape
+      consumerShape scope producerResolved consumerResolved endpoints
+      producerEnclosesConsumer rootSite boundary mapped transport sourceRoot
+      targetRoot targetWellFormed Lambda.canonicalModel named direction
+      input.val.regionCount
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire
+        consumedPort).regionCount sourceItems targetItems sourceCompiled'
+      targetCompiled'
+
+theorem boundaryClass_transport
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (boundary : List (Fin input.val.wireCount))
+    (mapped : List (Fin (fusionWireDomain input.val consumedWire).count))
+    (transport : (fusionInterfaceTransport input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort).transportBoundary boundary = some mapped)
+    (targetPosition : Fin mapped.length) :
+    let lengthEq :=
+      (fusionInterfaceTransport input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort).transportBoundary_length transport
+    (exposedContext input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort boundary mapped transport).sourceIndex
+        ((targetOpen input consumedWire producer consumer hdistinct
+          consumerRegion producerTerm consumerTerm producerWire consumerWire
+          consumedPort mapped).boundaryClass targetPosition) =
+      (sourceOpen input boundary).boundaryClass
+        (Fin.cast lengthEq targetPosition) := by
+  let interface := fusionInterfaceTransport input consumedWire producer consumer
+    hdistinct consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort
+  let source := sourceOpen input boundary
+  let target := targetOpen input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort mapped
+  let outer := exposedContext input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort boundary mapped transport
+  let lengthEq := interface.transportBoundary_length transport
+  let sourcePosition := Fin.cast lengthEq targetPosition
+  apply source.boundaryClass_complete sourcePosition
+  have mappedPosition : Fin.cast lengthEq.symm sourcePosition = targetPosition := by
+    apply Fin.ext
+    rfl
+  have image := interface.transportBoundary_get transport sourcePosition
+  rw [mappedPosition] at image
+  have origin := interface_image_origin input consumedWire producer consumer
+    hdistinct consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort (boundary.get sourcePosition) (mapped.get targetPosition) image
+  calc
+    source.exposedWires.get
+        (outer.sourceIndex (target.boundaryClass targetPosition)) =
+        (fusionWireDomain input.val consumedWire).origin
+          (target.exposedWires.get (target.boundaryClass targetPosition)) :=
+      outer.get (target.boundaryClass targetPosition)
+    _ = (fusionWireDomain input.val consumedWire).origin
+          (mapped.get targetPosition) := by
+      rw [target.boundaryClass_sound targetPosition]
+      rfl
+    _ = boundary.get sourcePosition := origin.symm
+
+theorem exposedSourceIndex_injective
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (boundary : List (Fin input.val.wireCount))
+    (mapped : List (Fin (fusionWireDomain input.val consumedWire).count))
+    (transport : (fusionInterfaceTransport input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort).transportBoundary boundary = some mapped) :
+    Function.Injective
+      (exposedContext input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort boundary mapped transport).sourceIndex := by
+  let source := sourceOpen input boundary
+  let target := targetOpen input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort mapped
+  let outer := exposedContext input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort boundary mapped transport
+  intro left right equality
+  apply Fin.ext
+  exact (List.getElem_inj target.exposedWires_nodup).mp (by
+    apply (fusionWireDomain input.val consumedWire).origin_injective
+    have leftGet := outer.get left
+    rw [equality] at leftGet
+    exact leftGet.symm.trans (outer.get right))
+
+theorem exposedSourceIndex_surjective
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (boundary : List (Fin input.val.wireCount))
+    (mapped : List (Fin (fusionWireDomain input.val consumedWire).count))
+    (transport : (fusionInterfaceTransport input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort).transportBoundary boundary = some mapped) :
+    Function.Surjective
+      (exposedContext input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort boundary mapped transport).sourceIndex := by
+  intro sourceClass
+  obtain ⟨sourcePosition, sourceClassEq⟩ :=
+    (sourceOpen input boundary).boundaryClass_surjective sourceClass
+  let lengthEq :=
+    (fusionInterfaceTransport input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort).transportBoundary_length transport
+  let targetPosition := Fin.cast lengthEq.symm sourcePosition
+  refine ⟨(targetOpen input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort mapped).boundaryClass targetPosition, ?_⟩
+  have transported := boundaryClass_transport input consumedWire producer
+    consumer hdistinct consumerRegion producerTerm consumerTerm producerWire
+    consumerWire consumedPort boundary mapped transport targetPosition
+  have positionEq : Fin.cast lengthEq targetPosition = sourcePosition := by
+    apply Fin.ext
+    rfl
+  dsimp only at transported
+  have transported' :
+      (exposedContext input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort boundary mapped transport).sourceIndex
+          ((targetOpen input consumedWire producer consumer hdistinct
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort mapped).boundaryClass targetPosition) =
+        (sourceOpen input boundary).boundaryClass sourcePosition := by
+    exact transported.trans (congrArg (sourceOpen input boundary).boundaryClass
+      positionEq)
+  exact transported'.trans sourceClassEq
+
+theorem boundaryWitness
+    (input : CheckedDiagram signature)
+    (consumedWire : Fin input.val.wireCount)
+    (producer consumer : Fin input.val.nodeCount)
+    (hdistinct : producer ≠ consumer)
+    (consumerRegion : Fin input.val.regionCount)
+    (producerTerm : Lambda.Term 0 (Fin producerPorts))
+    (consumerTerm : Lambda.Term 0 (Fin consumerPorts))
+    (producerWire : Fin producerPorts → Fin input.val.wireCount)
+    (consumerWire : Fin consumerPorts → Fin input.val.wireCount)
+    (consumedPort : Fin consumerPorts)
+    (boundary : List (Fin input.val.wireCount))
+    (mapped : List (Fin (fusionWireDomain input.val consumedWire).count))
+    (transport : (fusionInterfaceTransport input consumedWire producer consumer
+      hdistinct consumerRegion producerTerm consumerTerm producerWire
+      consumerWire consumedPort).transportBoundary boundary = some mapped)
+    (sourceRoot : ∀ wire, wire ∈ boundary →
+      (input.val.wires wire).scope = input.val.root)
+    (targetRoot : ∀ wire, wire ∈ mapped →
+      ((fusionRaw input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort).wires wire).scope = input.val.root)
+    (targetWellFormed :
+      (fusionRaw input consumedWire producer consumer hdistinct consumerRegion
+        producerTerm consumerTerm producerWire consumerWire consumedPort
+      ).WellFormed signature)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceArgs : Fin boundary.length → model.Carrier) :
+    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+      direction (sourceCheckedOpen input boundary sourceRoot).elaborate
+      (targetCheckedOpen input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort mapped targetRoot targetWellFormed).elaborate
+      (exposedContext input consumedWire producer consumer hdistinct
+        consumerRegion producerTerm consumerTerm producerWire consumerWire
+        consumedPort boundary mapped transport).indexRelation
+      model named sourceArgs
+      (sourceArgs ∘ Fin.cast
+        ((fusionInterfaceTransport input consumedWire producer consumer
+          hdistinct consumerRegion producerTerm consumerTerm producerWire
+          consumerWire consumedPort).transportBoundary_length transport)) := by
+  let source := sourceOpen input boundary
+  let target := targetOpen input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort mapped
+  let outer := exposedContext input consumedWire producer consumer hdistinct
+    consumerRegion producerTerm consumerTerm producerWire consumerWire
+    consumedPort boundary mapped transport
+  let lengthEq :=
+    (fusionInterfaceTransport input consumedWire producer consumer hdistinct
+      consumerRegion producerTerm consumerTerm producerWire consumerWire
+      consumedPort).transportBoundary_length transport
+  have sourceIndexInjective := exposedSourceIndex_injective input consumedWire
+    producer consumer hdistinct consumerRegion producerTerm consumerTerm
+    producerWire consumerWire consumedPort boundary mapped transport
+  have sourceIndexSurjective := exposedSourceIndex_surjective input consumedWire
+    producer consumer hdistinct consumerRegion producerTerm consumerTerm
+    producerWire consumerWire consumedPort boundary mapped transport
+  let targetIndex : Fin source.exposedWires.length →
+      Fin target.exposedWires.length := fun sourceClass ↦
+    Classical.choose (sourceIndexSurjective sourceClass)
+  have targetIndex_right : ∀ sourceClass,
+      outer.sourceIndex (targetIndex sourceClass) = sourceClass := by
+    intro sourceClass
+    exact Classical.choose_spec (sourceIndexSurjective sourceClass)
+  have targetIndex_left : ∀ targetClass,
+      targetIndex (outer.sourceIndex targetClass) = targetClass := by
+    intro targetClass
+    apply sourceIndexInjective
+    exact targetIndex_right (outer.sourceIndex targetClass)
+  cases direction with
+  | forward =>
+      intro sourceAssignment sourceArgsEq sourceDenotes
+      let targetAssignment : BoundaryAssignment
+          (targetCheckedOpen input consumedWire producer consumer hdistinct
+            consumerRegion producerTerm consumerTerm producerWire consumerWire
+            consumedPort mapped targetRoot targetWellFormed).elaborate
+          model.Carrier := {
+        args := sourceArgs ∘ Fin.cast lengthEq
+        classes := sourceAssignment.classes ∘ outer.sourceIndex
+        agrees := by
+          intro targetPosition
+          let sourcePosition := Fin.cast lengthEq targetPosition
+          have classEq := boundaryClass_transport input consumedWire producer
+            consumer hdistinct consumerRegion producerTerm consumerTerm
+            producerWire consumerWire consumedPort boundary mapped transport
+            targetPosition
+          change sourceAssignment.classes
+              (outer.sourceIndex (target.boundaryClass targetPosition)) =
+            sourceArgs sourcePosition
+          dsimp only at classEq
+          rw [classEq]
+          have sourceAgrees := sourceAssignment.agrees sourcePosition
+          change sourceAssignment.classes (source.boundaryClass sourcePosition) =
+            sourceAssignment.args sourcePosition at sourceAgrees
+          rw [sourceArgsEq] at sourceAgrees
+          exact sourceAgrees
+      }
+      refine ⟨targetAssignment, rfl, ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+        outer.sourceIndex _ _).mpr
+      rfl
+  | backward =>
+      intro targetAssignment targetArgsEq targetDenotes
+      let sourceAssignment : BoundaryAssignment
+          (sourceCheckedOpen input boundary sourceRoot).elaborate
+          model.Carrier := {
+        args := sourceArgs
+        classes := targetAssignment.classes ∘ targetIndex
+        agrees := by
+          intro sourcePosition
+          let targetPosition := Fin.cast lengthEq.symm sourcePosition
+          have classEq := boundaryClass_transport input consumedWire producer
+            consumer hdistinct consumerRegion producerTerm consumerTerm
+            producerWire consumerWire consumedPort boundary mapped transport
+            targetPosition
+          have positionEq : Fin.cast lengthEq targetPosition = sourcePosition := by
+            apply Fin.ext
+            rfl
+          dsimp only at classEq
+          have classEq' : outer.sourceIndex (target.boundaryClass targetPosition) =
+              source.boundaryClass sourcePosition :=
+            classEq.trans (congrArg source.boundaryClass positionEq)
+          have inverseEq : targetIndex (source.boundaryClass sourcePosition) =
+              target.boundaryClass targetPosition := by
+            apply sourceIndexInjective
+            change outer.sourceIndex
+                (targetIndex (source.boundaryClass sourcePosition)) =
+              outer.sourceIndex (target.boundaryClass targetPosition)
+            rw [targetIndex_right]
+            exact classEq'.symm
+          change targetAssignment.classes
+              (targetIndex (source.boundaryClass sourcePosition)) =
+            sourceArgs sourcePosition
+          rw [inverseEq]
+          have targetAgrees := targetAssignment.agrees targetPosition
+          change targetAssignment.classes (target.boundaryClass targetPosition) =
+            targetAssignment.args targetPosition at targetAgrees
+          rw [targetArgsEq] at targetAgrees
+          exact targetAgrees.trans (congrArg sourceArgs positionEq)
+      }
+      refine ⟨sourceAssignment, rfl, ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+        outer.sourceIndex _ _).mpr
+      funext targetClass
+      change targetAssignment.classes
+          (targetIndex (outer.sourceIndex targetClass)) =
+        targetAssignment.classes targetClass
+      rw [targetIndex_left]
+
 end FusionSoundness
 
 end VisualProof.Rule
