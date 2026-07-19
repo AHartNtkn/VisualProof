@@ -1,4 +1,5 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvance
+import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Discrete
 
 namespace VisualProof.Rule
 
@@ -139,6 +140,85 @@ theorem nodeMap_injective
       exact ih.comp
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameNode_injective
+
+/-- Alias materialization makes the composite host-wire map injective.  No
+two pre-existing wire identities are coalesced by any accepted copy step. -/
+theorem wireMap_injective
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (boundaryNodup : comprehension.val.boundary.Nodup) :
+    Function.Injective trace.wireMap := by
+  induction trace with
+  | done => exact Function.injective_id
+  | step fuel state result atom tail site candidate arguments checkedInput
+      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+      let spliceInput := instantiateSpliceInput comprehension attachments
+        binders payload state site arguments
+      let layout := spliceInput.plugLayout
+      apply ih.comp
+      intro left right equal
+      have quotientEqual := layout.frameWire_injective equal
+      have hostEqual := congrArg
+        (Splice.Input.discreteQuotientWireEquiv spliceInput boundaryNodup)
+        quotientEqual
+      simpa [spliceInput] using hostEqual
+
+/-- The composite host-wire map carries each retained wire scope through the
+same composite region map. -/
+theorem wireMap_scope
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (wire : Fin state.diagram.val.wireCount) :
+    (result.diagram.val.wires (trace.wireMap wire)).scope =
+      trace.regionMap (state.diagram.val.wires wire).scope := by
+  induction trace with
+  | done => rfl
+  | step fuel state result atom tail site candidate arguments checkedInput
+      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+      let spliceInput := instantiateSpliceInput comprehension attachments
+        binders payload state site arguments
+      let layout := spliceInput.plugLayout
+      let quotient := spliceInput.quotientWire wire
+      have mapped := ih (layout.frameWire quotient)
+      simp only [advanceInstantiationState] at mapped
+      have oneStep :
+          (layout.plugRaw.wires (layout.frameWire quotient)).scope =
+            layout.frameRegion (state.diagram.val.wires wire).scope := by
+        change (layout.plugWire (layout.quotientBlockWire quotient)).scope = _
+        rw [layout.plugWire_quotientBlockWire]
+        have scopeEq := Splice.Input.coalescedScope_eq_of_boundary_nodup
+          spliceInput boundaryNodup quotient
+        rw [scopeEq]
+        simp [quotient, spliceInput] <;> rfl
+      rw [oneStep] at mapped
+      simpa [wireMap, regionMap, quotient] using mapped
 
 /-- The composite frame map preserves every retained region constructor and
 maps its parent through the same composite region map. -/
