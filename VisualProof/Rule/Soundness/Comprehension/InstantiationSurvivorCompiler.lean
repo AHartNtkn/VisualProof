@@ -211,6 +211,40 @@ theorem drop_compileRegion_eq_survivor
                 context region items)
           exact congrArg some (drop_finishRegion state context region items)
 
+/-- Root and local item compilation on the densely compacted executor graph
+is exactly survivor-item compilation on the pre-compaction state.  This is
+the item-sequence form needed by the authoritative open-root compiler. -/
+theorem drop_compileOccurrences_eq_survivor
+    {signature : List Nat}
+    (state : InstantiationState origin parameterCount proxyCount)
+    (fuel : Nat)
+    (region : Fin state.diagram.val.regionCount)
+    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (binders : ConcreteElaboration.BinderContext state.diagram.val rels) :
+    ConcreteElaboration.compileOccurrencesWith? signature
+        (dropInstantiationAtomsRaw state)
+        (ConcreteElaboration.compileRegion? signature
+          (dropInstantiationAtomsRaw state) fuel)
+        context binders
+        (ConcreteElaboration.localOccurrences
+          (dropInstantiationAtomsRaw state) region) =
+      ConcreteElaboration.compileOccurrencesWith? signature state.diagram.val
+        (compileSurvivorRegion? signature state fuel) context binders
+        ((ConcreteElaboration.localOccurrences state.diagram.val region).filter
+          (dropOccurrenceSurvives state)) := by
+  have compiled := drop_compileOccurrences_origin state
+    (ConcreteElaboration.compileRegion? signature
+      (dropInstantiationAtomsRaw state) fuel)
+    (compileSurvivorRegion? signature state fuel)
+    (fun child childContext childBinders =>
+      drop_compileRegion_eq_survivor state fuel child childContext childBinders)
+    context binders
+    (ConcreteElaboration.localOccurrences
+      (dropInstantiationAtomsRaw state) region)
+  rw [dropInstantiationAtomsRaw_localOccurrences_origin state region]
+    at compiled
+  exact compiled
+
 end InstantiationSemantic
 
 end VisualProof.Rule
