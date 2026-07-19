@@ -30,6 +30,7 @@ structure BinderTargetsAtBubble
       .bubble parent (payload.binderSpine.arity index)
   target_encloses : ∀ index,
     state.diagram.val.Encloses (state.binderTargets index) state.bubble
+  target_ne : ∀ index, state.binderTargets index ≠ state.bubble
 
 /-- The terminal compiler variable and the proxy binder that produced it have
 the same arity. -/

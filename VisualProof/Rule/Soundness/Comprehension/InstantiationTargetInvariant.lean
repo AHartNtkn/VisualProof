@@ -45,6 +45,12 @@ theorem BinderTargetsAtBubble.advance
   · intro index
     simpa [advanceInstantiationState, spliceInput, layout] using
       layout.frame_encloses (targets.target_encloses index)
+  · intro index equality
+    apply targets.target_ne index
+    apply layout.frameRegion_injective
+    change layout.frameRegion (state.binderTargets index) =
+      layout.frameRegion state.bubble
+    exact equality
 
 /-- Every nonterminal executor trace state carries the binder-target invariant
 needed to interpret the terminal comprehension body at that copy. -/
@@ -151,6 +157,7 @@ theorem initial_binderTargetsEveryStep
         target_shape := hadmissible.binder_targets_match
         target_encloses := fun index =>
           (payload.binderTargetsProper index).1
+        target_ne := fun index => (payload.binderTargetsProper index).2
       }
       exact ⟨targets, binderTargetsEveryStep_of rest
         (targets.advance payload (initialInstantiationState payload) atom tail
