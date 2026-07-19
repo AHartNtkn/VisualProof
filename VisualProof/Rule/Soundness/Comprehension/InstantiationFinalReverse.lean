@@ -259,6 +259,40 @@ theorem reverseRegionMap_root
     exact copyTrace.reverseRegionMap_finalRegionMap elimTrace finalWellFormed
       input.val.root rootRegular
 
+@[simp] theorem reverseRegionMap_targetIndex
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    {raw : ConcreteDiagram}
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature) :
+    copyTrace.reverseRegionMap elimTrace finalWellFormed
+        (elimTrace.targetIndex finalWellFormed) = payload.parent := by
+  have noPreimage : ¬ copyTrace.FinalRegularPreimage elimTrace
+      finalWellFormed (elimTrace.targetIndex finalWellFormed) := by
+    rintro ⟨candidate, candidateRegular, mapped⟩
+    rcases (copyTrace.finalRegionMap_eq_targetIndex_iff elimTrace
+      finalWellFormed candidate).1 mapped with
+      candidateParent | candidateBubble
+    · exact candidateRegular.2 candidateParent
+    · subst candidate
+      exact candidateRegular.1
+        (ConcreteDiagram.Encloses.refl input.val bubble)
+  simp [reverseRegionMap, noPreimage]
+
 theorem reverseRegionMap_child_of_frameRegular_parent
     {signature : List Nat}
     {input : CheckedDiagram signature}
