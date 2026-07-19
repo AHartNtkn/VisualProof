@@ -267,6 +267,88 @@ noncomputable def traceBinderEnumeration
       exact Classical.choose_spec image
     next notImage => simp at lookup
 
+/-- The canonical external relation map for a copied binder context, extended
+by the moving bubble itself, preserves every intrinsic relation variable. -/
+theorem traceExternalRelationMap_traceBinderContext_push
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      (initialInstantiationState payload) result)
+    {rels : RelCtx}
+    (external : ConcreteElaboration.BinderContext input.val rels)
+    (arity : Nat)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      result.diagram.val
+      ((traceBinderContext trace external).push result.bubble arity)
+      result.bubble)
+    (targetCover : (external.push bubble arity).Covers bubble)
+    (fallback : Fin input.val.regionCount) :
+    (traceExternalRelationMap trace
+        ((traceBinderContext trace external).push result.bubble arity)
+        sourceEnumeration (external.push bubble arity) targetCover fallback :
+      RelationRenaming (arity :: rels) (arity :: rels)) =
+      (ConcreteElaboration.identityRelationRenaming (arity :: rels) :
+        RelationRenaming (arity :: rels) (arity :: rels)) := by
+  apply @funext
+  intro binderArity
+  funext relation
+  let owner := sourceEnumeration.binder relation.index
+  have sourceLookup :
+      (traceBinderContext trace external).push result.bubble arity owner =
+        some ⟨binderArity, relation⟩ := by
+    rcases relation with ⟨index, arityEq⟩
+    subst binderArity
+    simpa [owner] using sourceEnumeration.lookup index
+  have targetLookup :
+      (external.push bubble arity)
+          (traceRegionPreimage trace fallback owner) =
+        some ⟨binderArity, relation⟩ := by
+    by_cases ownerEq : owner = result.bubble
+    · rw [ownerEq] at sourceLookup ⊢
+      have bubbleMap : trace.regionMap bubble = result.bubble := by
+        simpa [initialInstantiationState] using trace.regionMap_bubble
+      have preimageBubble :
+          traceRegionPreimage trace fallback result.bubble = bubble := by
+        rw [← bubbleMap, traceRegionPreimage_image]
+      rw [preimageBubble]
+      simpa only [ConcreteElaboration.BinderContext.push_self] using sourceLookup
+    · rw [ConcreteElaboration.BinderContext.push_other _ arity ownerEq]
+        at sourceLookup
+      unfold traceBinderContext at sourceLookup
+      split at sourceLookup
+      next image =>
+        let source := Classical.choose image
+        have sourceMap : trace.regionMap source = owner :=
+          Classical.choose_spec image
+        have preimageEq : traceRegionPreimage trace fallback owner = source := by
+          rw [← sourceMap, traceRegionPreimage_image]
+        have sourceNe : source ≠ bubble := by
+          intro equality
+          rw [equality] at sourceMap
+          have bubbleMap : trace.regionMap bubble = result.bubble := by
+            simpa [initialInstantiationState] using trace.regionMap_bubble
+          exact ownerEq (sourceMap.symm.trans bubbleMap)
+        rw [preimageEq]
+        rw [ConcreteElaboration.BinderContext.push_other external arity sourceNe]
+        simpa only [source] using sourceLookup
+      next noImage => simp at sourceLookup
+  have mappedLookup := traceExternalRelationMap_spec trace
+    ((traceBinderContext trace external).push result.bubble arity)
+    sourceEnumeration (external.push bubble arity) targetCover fallback relation
+    sourceLookup
+  have pairEq := Option.some.inj (targetLookup.symm.trans mappedLookup)
+  exact (eq_of_heq (Sigma.ext_iff.mp pairEq).2).symm
+
 end InstantiationSemantic
 
 namespace InstantiationTrace
