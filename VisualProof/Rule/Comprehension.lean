@@ -331,6 +331,34 @@ def initialInstantiationState
   processedAtoms := []
 }
 
+/-- Repackage the source comprehension certificate for the checked
+alias-materialized graph used by the executor.  Regions and the designated
+binder spine are unchanged; only boundary wire identities and terminal-body
+identity nodes are added. -/
+def materializedInstantiationPayload
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    (certificate : Splice.AliasMaterialization.Certificate comprehension
+      payload.binderSpine) :
+    ComprehensionInstantiatePayload input bubble certificate.result attachments
+      binders where
+  parent := payload.parent
+  arity := payload.arity
+  bubble_eq := payload.bubble_eq
+  boundarySplit := certificate.boundary_length.trans payload.boundarySplit
+  parameterScopesProper := payload.parameterScopesProper
+  binderSpine := certificate.spine
+  terminalBody := certificate.terminalBody payload.terminalBody
+  binderTargets := payload.binderTargets
+  binderPairsExact := payload.binderPairsExact
+  binderTargetsProper := payload.binderTargetsProper
+
 def instantiateArguments?
     (state : InstantiationState origin p q)
     (node : Fin state.diagram.val.nodeCount) (arity : Nat) :
@@ -814,11 +842,18 @@ def applyComprehensionInstantiate (orientation : Orientation)
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders) : Except StepError (StepReceipt input) :=
   if spawnPolarity orientation (concreteCutDepth input.val bubble) then
-    let initial := initialInstantiationState payload
-    match instantiateCopies comprehension attachments binders payload
-        initial.pendingAtoms.length initial with
-    | .error error => .error error
-    | .ok copied => finishInstantiation copied
+    match Splice.AliasMaterialization.check comprehension payload.binderSpine
+        payload.terminalBody with
+    | .error error => .error (.resultNotWellFormed error)
+    | .ok materialization =>
+        let operational := materialization.result
+        let operationalPayload := materializedInstantiationPayload payload
+          materialization
+        let initial := initialInstantiationState operationalPayload
+        match instantiateCopies operational attachments binders
+            operationalPayload initial.pendingAtoms.length initial with
+        | .error error => .error error
+        | .ok copied => finishInstantiation copied
   else
     .error .wrongPolarity
 
@@ -826,12 +861,20 @@ theorem applyComprehensionInstantiate_success
     (happly : applyComprehensionInstantiate orientation input bubble
       comprehension attachments binders payload = .ok result) :
     spawnPolarity orientation (concreteCutDepth input.val bubble) ∧
-      ∃ copied : InstantiationState input attachments.length
-          payload.binderSpine.proxyCount,
-        let initial := initialInstantiationState payload
-        instantiateCopies comprehension attachments binders payload
-            initial.pendingAtoms.length initial = .ok copied ∧
-          finishInstantiation copied = .ok result := by
+      ∃ materialization : Splice.AliasMaterialization.Certificate comprehension
+          payload.binderSpine,
+        Splice.AliasMaterialization.check comprehension payload.binderSpine
+            payload.terminalBody = .ok materialization ∧
+          let operational := materialization.result
+          let operationalPayload := materializedInstantiationPayload payload
+            materialization
+          ∃ copied : InstantiationState input attachments.length
+              operationalPayload.binderSpine.proxyCount,
+            let initial := initialInstantiationState operationalPayload
+            instantiateCopies operational attachments binders
+                operationalPayload initial.pendingAtoms.length initial =
+                  .ok copied ∧
+              finishInstantiation copied = .ok result := by
   have hpolarity : spawnPolarity orientation
       (concreteCutDepth input.val bubble) := by
     by_cases h : spawnPolarity orientation
@@ -843,8 +886,10 @@ theorem applyComprehensionInstantiate_success
   rw [if_pos hpolarity] at happly
   dsimp only at happly
   split at happly <;> try contradiction
+  rename_i materialization hmaterialization
+  split at happly <;> try contradiction
   rename_i copied hcopied
-  exact ⟨copied, hcopied, happly⟩
+  exact ⟨materialization, hmaterialization, copied, hcopied, happly⟩
 
 theorem applyComprehensionInstantiate_realizes {signature : List Nat}
     {orientation : Orientation}
@@ -860,33 +905,41 @@ theorem applyComprehensionInstantiate_realizes {signature : List Nat}
     (happly : applyComprehensionInstantiate orientation input bubble
       comprehension attachments binders payload = .ok result) :
     spawnPolarity orientation (concreteCutDepth input.val bubble) ∧
-      let initial := initialInstantiationState payload
-      ∃ copied : InstantiationState input attachments.length
-          payload.binderSpine.proxyCount,
-        instantiateCopies comprehension attachments binders payload
-            initial.pendingAtoms.length initial = .ok copied ∧
-          let droppedRaw := dropInstantiationAtomsRaw copied
-          let toDroppedProvenance : WireProvenance input.val droppedRaw :=
-            copied.provenance.compose
-              (WireProvenance.byWireCount copied.diagram.val droppedRaw rfl)
-          let toDroppedInterface : InterfaceTransport input.val droppedRaw :=
-            copied.interface.compose
-              (InterfaceTransport.byWireCount copied.diagram.val droppedRaw rfl)
-          ∃ raw,
-            ∃ hraw : vacuousElimRaw? droppedRaw copied.bubble = some raw,
-              ∃ checked : CheckedDiagram signature,
-                ∃ hcheck : checkWellFormed signature raw = .ok checked,
-                  result = StepReceipt.ofChecked input raw
-                      (toDroppedProvenance.compose
-                        (vacuousElimWireProvenance hraw))
-                      (toDroppedInterface.compose
-                        (vacuousElimInterfaceTransport hraw))
-                      checked hcheck ∧
-                    result.Realizes raw
-                      (toDroppedProvenance.compose
-                        (vacuousElimWireProvenance hraw))
-                      (toDroppedInterface.compose
-                        (vacuousElimInterfaceTransport hraw)) := by
+      ∃ materialization : Splice.AliasMaterialization.Certificate comprehension
+          payload.binderSpine,
+        Splice.AliasMaterialization.check comprehension payload.binderSpine
+            payload.terminalBody = .ok materialization ∧
+          let operational := materialization.result
+          let operationalPayload := materializedInstantiationPayload payload
+            materialization
+          let initial := initialInstantiationState operationalPayload
+          ∃ copied : InstantiationState input attachments.length
+              operationalPayload.binderSpine.proxyCount,
+            instantiateCopies operational attachments binders
+                operationalPayload initial.pendingAtoms.length initial =
+                  .ok copied ∧
+              let droppedRaw := dropInstantiationAtomsRaw copied
+              let toDroppedProvenance : WireProvenance input.val droppedRaw :=
+                copied.provenance.compose
+                  (WireProvenance.byWireCount copied.diagram.val droppedRaw rfl)
+              let toDroppedInterface : InterfaceTransport input.val droppedRaw :=
+                copied.interface.compose
+                  (InterfaceTransport.byWireCount copied.diagram.val droppedRaw rfl)
+              ∃ raw,
+                ∃ hraw : vacuousElimRaw? droppedRaw copied.bubble = some raw,
+                  ∃ checked : CheckedDiagram signature,
+                    ∃ hcheck : checkWellFormed signature raw = .ok checked,
+                      result = StepReceipt.ofChecked input raw
+                          (toDroppedProvenance.compose
+                            (vacuousElimWireProvenance hraw))
+                          (toDroppedInterface.compose
+                            (vacuousElimInterfaceTransport hraw))
+                          checked hcheck ∧
+                        result.Realizes raw
+                          (toDroppedProvenance.compose
+                            (vacuousElimWireProvenance hraw))
+                          (toDroppedInterface.compose
+                            (vacuousElimInterfaceTransport hraw)) := by
   have hpolarity : spawnPolarity orientation
       (concreteCutDepth input.val bubble) := by
     by_cases h : spawnPolarity orientation
@@ -898,8 +951,11 @@ theorem applyComprehensionInstantiate_realizes {signature : List Nat}
   rw [if_pos hpolarity] at happly
   dsimp only at happly
   split at happly <;> try contradiction
+  rename_i materialization hmaterialization
+  split at happly <;> try contradiction
   rename_i copied hcopied
-  exact ⟨copied, hcopied, finishInstantiation_realizes happly⟩
+  exact ⟨materialization, hmaterialization, copied, hcopied,
+    finishInstantiation_realizes happly⟩
 
 namespace ComprehensionInstantiationExamples
 

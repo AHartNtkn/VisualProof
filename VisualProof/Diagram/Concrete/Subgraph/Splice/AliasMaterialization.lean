@@ -329,7 +329,7 @@ theorem terminalBody {signature : List Nat}
 certificate cannot replace the executor construction with another diagram. -/
 structure Certificate {signature : List Nat}
     (pattern : CheckedOpenDiagram signature)
-    (spine : BinderSpine pattern.val.diagram) where
+    (spine : BinderSpine pattern.val.diagram) : Type where
   wellFormed : (raw pattern.val spine.bodyContainer).WellFormed signature
 
 namespace Certificate
@@ -365,6 +365,41 @@ theorem boundary_length {signature : List Nat}
   exact raw_boundary_length pattern.val originalSpine.bodyContainer
 
 end Certificate
+
+/-- The executor validates the concrete batch it will splice.  The checker is
+the same authoritative well-formedness decision used for rule outputs; the
+open-boundary and terminal-body obligations are structural consequences of
+the source contract. -/
+def check {signature : List Nat}
+    (pattern : CheckedOpenDiagram signature)
+    (spine : BinderSpine pattern.val.diagram)
+    (contract : spine.TerminalBodyContract pattern.val) :
+    Except WFError (Certificate pattern spine) :=
+  match hcheck : checkWellFormed signature
+      (materializedDiagram pattern.val spine.bodyContainer) with
+  | .error error => .error error
+  | .ok checked =>
+      let diagramWellFormed :
+          (materializedDiagram pattern.val spine.bodyContainer).WellFormed
+            signature :=
+        checkWellFormed_iff.mp ⟨checked, hcheck,
+          checkWellFormed_preserves_input hcheck⟩
+      .ok {
+        wellFormed := {
+          diagram_well_formed := diagramWellFormed
+          boundary_is_root_scoped :=
+            (terminalBody pattern spine contract).boundary_is_root_scoped
+        }
+      }
+
+theorem check_success {signature : List Nat}
+    {pattern : CheckedOpenDiagram signature}
+    {spine : BinderSpine pattern.val.diagram}
+    {contract : spine.TerminalBodyContract pattern.val}
+    {certificate : Certificate pattern spine}
+    (hcheck : check pattern spine contract = .ok certificate) :
+    certificate.result.val = raw pattern.val spine.bodyContainer := by
+  rfl
 
 end AliasMaterialization
 
