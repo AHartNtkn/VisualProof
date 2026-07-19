@@ -91,6 +91,54 @@ def finalOuterContextWitness
   rw [copyTrace.finalSourceOpen_exposedWires elimTrace boundaryNodup boundary]
   exact List.mem_map.mpr ⟨wire, member, rfl⟩
 
+theorem finalBoundaryLengthEq
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (boundary : List (Fin input.val.wireCount)) :
+    (copyTrace.finalSourceOpen elimTrace boundary).boundary.length =
+      (finalTargetOpen input boundary).boundary.length := by
+  simp [finalSourceOpen, finalTargetOpen]
+
+theorem finalOuter_sourceIndex_boundaryClass
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (boundary : List (Fin input.val.wireCount))
+    (position : Fin (finalTargetOpen input boundary).boundary.length) :
+    let source := copyTrace.finalSourceOpen elimTrace boundary
+    let target := finalTargetOpen input boundary
+    let outer := copyTrace.finalOuterContextWitness elimTrace boundaryNodup
+      boundary
+    outer.sourceIndex (target.boundaryClass position) =
+      source.boundaryClass (Fin.cast
+        (copyTrace.finalBoundaryLengthEq elimTrace boundary).symm position) := by
+  dsimp only
+  let source := copyTrace.finalSourceOpen elimTrace boundary
+  let target := finalTargetOpen input boundary
+  let outer := copyTrace.finalOuterContextWitness elimTrace boundaryNodup
+    boundary
+  symm
+  apply ConcreteElaboration.WireContext.lookup?_unique source.exposedWires_nodup
+    (outer.sourceIndex_lookup (target.boundaryClass position))
+  calc
+    source.exposedWires.get
+        (source.boundaryClass (Fin.cast
+          (copyTrace.finalBoundaryLengthEq elimTrace boundary).symm position)) =
+        source.boundary.get (Fin.cast
+          (copyTrace.finalBoundaryLengthEq elimTrace boundary).symm position) :=
+      source.boundaryClass_sound _
+    _ = copyTrace.finalWireMap elimTrace (target.boundary.get position) := by
+      simp [source, target, finalSourceOpen, finalTargetOpen,
+        List.get_eq_getElem]
+    _ = copyTrace.finalWireMap elimTrace
+        (target.exposedWires.get (target.boundaryClass position)) :=
+      congrArg (copyTrace.finalWireMap elimTrace)
+        (target.boundaryClass_sound position).symm
+
 theorem finalTargetOpen_wellFormed
     (input : CheckedDiagram signature)
     (boundary : List (Fin input.val.wireCount))
