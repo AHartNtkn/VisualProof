@@ -406,6 +406,58 @@ def extendFocused
     (elimTrace.targetIndex finalWellFormed) payload.parent
     (copyTrace.finalRegionMap_parent elimTrace finalWellFormed)
 
+/-- At the promoted focus, both the original parent-local wires and the
+selected bubble-local wires have their certified final images in the single
+source focus context. -/
+def extendSelected
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    {copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result}
+    {raw : ConcreteDiagram}
+    {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw}
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    {sourceContext : ConcreteElaboration.WireContext
+      elimTrace.sourceDiagram}
+    {targetContext : ConcreteElaboration.WireContext input.val}
+    (witness : FinalContextWitness copyTrace elimTrace sourceContext
+      targetContext) :
+    FinalContextWitness copyTrace elimTrace
+      (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+      ((targetContext.extend payload.parent).extend bubble) := by
+  refine ⟨?_⟩
+  intro wire member
+  rcases List.mem_append.mp member with beforeBubble | bubbleLocal
+  · rcases List.mem_append.mp beforeBubble with base | parentLocal
+    · exact List.mem_append_left _ (witness.mapped_mem wire base)
+    · apply List.mem_append_right sourceContext
+      apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+      have scope : (input.val.wires wire).scope = payload.parent :=
+        (ConcreteElaboration.mem_exactScopeWires _ _ _).1 parentLocal
+      rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup,
+        scope]
+      exact copyTrace.finalRegionMap_parent elimTrace finalWellFormed
+  · apply List.mem_append_right sourceContext
+    apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+    have scope : (input.val.wires wire).scope = bubble :=
+      (ConcreteElaboration.mem_exactScopeWires _ _ _).1 bubbleLocal
+    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup,
+      scope]
+    exact copyTrace.finalRegionMap_bubble elimTrace finalWellFormed
+
 end FinalContextWitness
 
 end InstantiationTrace

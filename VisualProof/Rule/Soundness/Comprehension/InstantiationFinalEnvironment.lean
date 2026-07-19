@@ -1,4 +1,5 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalBinder
+import VisualProof.Rule.Soundness.Comprehension.InstantiationCoalescedSiteFiber
 import VisualProof.Rule.Soundness.Modal.EliminationFocusedItems
 
 namespace VisualProof.Rule
@@ -8,6 +9,65 @@ open VisualProof.Diagram
 
 namespace InstantiationTrace
 namespace FinalContextWitness
+
+/-- The selected original parent-and-bubble environment is the restriction of
+the single valuation induced by the exact promoted-focus context. -/
+theorem selectedTargetEnvironment_wireValue
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    {copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result}
+    {raw : ConcreteDiagram}
+    {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
+      result.bubble raw}
+    (finalWellFormed :
+      (dropInstantiationAtomsRaw result).WellFormed signature)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    {sourceContext : ConcreteElaboration.WireContext
+      elimTrace.sourceDiagram}
+    {targetContext : ConcreteElaboration.WireContext input.val}
+    (witness : FinalContextWitness copyTrace elimTrace sourceContext
+      targetContext)
+    (sourceExact : (sourceContext.extend
+      (elimTrace.targetIndex finalWellFormed)).Exact
+        (elimTrace.targetIndex finalWellFormed))
+    (sourceEnvironment : Fin (sourceContext.extend
+      (elimTrace.targetIndex finalWellFormed)).length → D)
+    (fallback : D)
+    (index : Fin ((targetContext.extend payload.parent).extend bubble).length) :
+    let selected := witness.extendSelected finalWellFormed boundaryNodup
+    let wireValue := InstantiationSemantic.exactContextWireValue
+      (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+      (elimTrace.targetIndex finalWellFormed) sourceExact sourceEnvironment
+      fallback
+    selected.targetEnvironment sourceEnvironment index =
+      wireValue (copyTrace.finalWireMap elimTrace
+        (((targetContext.extend payload.parent).extend bubble).get index)) := by
+  dsimp only
+  let selected := witness.extendSelected finalWellFormed boundaryNodup
+  let sourceIndex := selected.sourceIndex index
+  change sourceEnvironment sourceIndex =
+    InstantiationSemantic.exactContextWireValue
+      (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+      (elimTrace.targetIndex finalWellFormed) sourceExact sourceEnvironment
+      fallback
+      (copyTrace.finalWireMap elimTrace
+        (((targetContext.extend payload.parent).extend bubble).get index))
+  rw [← selected.sourceIndex_get index]
+  exact (InstantiationSemantic.exactContextWireValue_get
+    (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+    (elimTrace.targetIndex finalWellFormed) sourceExact sourceEnvironment
+    fallback sourceIndex).symm
 
 /-- Extend a target local valuation across executor-only source wires while
 fixing every certified image of an original local wire. -/
