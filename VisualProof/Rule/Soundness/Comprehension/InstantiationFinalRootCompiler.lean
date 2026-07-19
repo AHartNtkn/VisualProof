@@ -1,205 +1,34 @@
-import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalAllowed
-import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalFocusedKeptCompiler
-import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalPresentation
-import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalTerminalBinder
-import VisualProof.Rule.Soundness.Comprehension.SameDiagramSemantic
-import VisualProof.Rule.Soundness.Modal.VacuousEliminationSimulation
+import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalRootEnvironment
+import VisualProof.Rule.Soundness.Modal.VacuousEliminationRootCompiler
 
 namespace VisualProof.Rule
 
 open VisualProof
-open VisualProof.Data.Finite
 open VisualProof.Diagram
 open VisualProof.Theory
+open DoubleCutElimTrace
 
 namespace InstantiationTrace
 
-theorem transport_symm_transport
-    {A : Sort u} (motive : A → Sort v) {left right : A}
-    (equality : left = right) (value : motive left) :
-    equality.symm ▸ (equality ▸ value) = value := by
-  cases equality
-  rfl
+variable {signature : List Nat}
+  {input : CheckedDiagram signature}
+  {bubble : Fin input.val.regionCount}
+  {comprehension : CheckedOpenDiagram signature}
+  {attachments : List (Fin input.val.wireCount)}
+  {binders : List
+    (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+  {payload : ComprehensionInstantiatePayload input bubble comprehension
+    attachments binders}
+  {fuel : Nat}
+  {result : InstantiationState input attachments.length
+    payload.binderSpine.proxyCount}
+  {raw : ConcreteDiagram}
 
-/-- Dropping the empty processed-atom list of the initial state only changes
-the dense presentation of node identifiers. -/
-noncomputable def initialDropIso
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
-    {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
-    {attachments : List (Fin input.val.wireCount)}
-    {binders : List
-      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
-      attachments binders) :
-    ConcreteIso (dropInstantiationAtomsRaw (initialInstantiationState payload))
-      input.val := by
-  let domain := instantiationAtomDomain (initialInstantiationState payload)
-  have allSurvive : ∀ node, domain.survives node = true := by
-    intro node
-    change decide (node ∉ ([] : List
-      (Fin (initialInstantiationState payload).diagram.val.nodeCount))) = true
-    apply decide_eq_true
-    simp
-  have enumerationEq : domain.enumeration = allFin input.val.nodeCount := by
-    apply List.filter_eq_self.mpr
-    intro node _
-    exact allSurvive node
-  have countEq : domain.count = input.val.nodeCount := by
-    calc
-      domain.count = domain.enumeration.length := rfl
-      _ = (allFin input.val.nodeCount).length :=
-        congrArg List.length enumerationEq
-      _ = input.val.nodeCount := by simp [allFin_eq_finRange]
-  let nodeEquiv : FiniteEquiv domain.Carrier
-      (Fin input.val.nodeCount) := {
-    toFun := domain.origin
-    invFun := fun node => domain.index node (allSurvive node)
-    left_inv := domain.index_origin
-    right_inv := fun node => domain.origin_index node (allSurvive node)
-  }
-  refine {
-    regionCount_eq := rfl
-    nodeCount_eq := countEq
-    wireCount_eq := rfl
-    regions := FiniteEquiv.refl _
-    nodes := nodeEquiv
-    wires := FiniteEquiv.refl _
-    root_eq := rfl
-    regions_eq := by
-      simp [dropInstantiationAtomsRaw, initialInstantiationState]
-    nodes_eq := by
-      intro node
-      simp [dropInstantiationAtomsRaw, initialInstantiationState, nodeEquiv,
-        domain]
-    wire_scope_eq := by
-      intro wire
-      simp [dropInstantiationAtomsRaw, initialInstantiationState]
-    wire_endpoints_perm := ?_
-  }
-  intro wire
-  change
-    ((List.filterMap domain.reindexEndpoint?
-        (input.val.wires wire).endpoints).map
-      (CEndpoint.rename nodeEquiv)).Perm
-        (input.val.wires wire).endpoints
-  have mappedEq :
-      (List.filterMap domain.reindexEndpoint?
-          (input.val.wires wire).endpoints).map
-        (CEndpoint.rename nodeEquiv) =
-          (input.val.wires wire).endpoints := by
-    induction (input.val.wires wire).endpoints with
-    | nil => rfl
-    | cons endpoint tail ih =>
-        have reindexed : domain.reindexEndpoint? endpoint =
-            some { node := domain.index endpoint.node
-                    (allSurvive endpoint.node)
-                   port := endpoint.port } := by
-          unfold SurvivorDomain.reindexEndpoint?
-          rw [domain.index?_index endpoint.node (allSurvive endpoint.node)]
-          rfl
-        have filtered := List.filterMap_cons_some (l := tail) reindexed
-        have mapped := congrArg
-          (List.map (CEndpoint.rename nodeEquiv)) filtered
-        exact mapped.trans (by
-          simp only [List.map_cons]
-          congr 1
-          cases endpoint with
-          | mk node port =>
-              exact congrArg
-                (fun mapped => ({ node := mapped, port := port } :
-                  CEndpoint input.val.nodeCount))
-                (domain.origin_index node (allSurvive node)))
-  rw [mappedEq]
-
-@[simp] private theorem initialDropIso_regions
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
-    {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
-    {attachments : List (Fin input.val.wireCount)}
-    {binders : List
-      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
-      attachments binders)
-    (region : Fin input.val.regionCount) :
-    (initialDropIso payload).regions region = region := rfl
-
-@[simp] private theorem initialDropIso_wires
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
-    {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
-    {attachments : List (Fin input.val.wireCount)}
-    {binders : List
-      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
-      attachments binders)
-    (wire : Fin input.val.wireCount) :
-    (initialDropIso payload).wires wire = wire := rfl
-
-/-- The final root is either the promoted focus or the exact image of the
-regular original root. -/
-theorem finalRoot_admissible
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
-    {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
-    {attachments : List (Fin input.val.wireCount)}
-    {binders : List
-      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
-      attachments binders}
-    {fuel : Nat}
-    {result : InstantiationState input attachments.length
-      payload.binderSpine.proxyCount}
+/-- The promoted root owns the comprehension-instantiation implication on
+the complete exposed/hidden compiler contexts. -/
+theorem focusedRootItems_transport
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
-    (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
-      result.bubble raw)
-    (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature) :
-    copyTrace.FinalAdmissible elimTrace finalWellFormed
-      elimTrace.sourceDiagram.root := by
-  by_cases rootFocus : input.val.root = payload.parent
-  · right
-    rw [← copyTrace.finalRegionMap_root elimTrace finalWellFormed, rootFocus]
-    exact copyTrace.finalRegionMap_parent elimTrace finalWellFormed
-  · left
-    have rootRegular : FrameRegular payload input.val.root := by
-      constructor
-      · intro enclosed
-        have bubbleRoot := ConcreteElaboration.encloses_sheet_eq
-          input.property.root_is_sheet enclosed
-        have sameShape := congrArg input.val.regions bubbleRoot
-        have impossible := payload.bubble_eq.symm.trans
-          (sameShape.trans input.property.root_is_sheet)
-        cases impossible
-      · exact rootFocus
-    exact ⟨input.val.root, rootRegular,
-      copyTrace.finalRegionMap_root elimTrace finalWellFormed⟩
-
-/-- Final-to-original compiler simulation.  All non-focused regions are
-handled pointwise by the certified reverse maps; the promoted focus owns the
-comprehension-instantiation law. -/
-noncomputable def finalSemanticSimulation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
-    {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
-    {attachments : List (Fin input.val.wireCount)}
-    {binders : List
-      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
-      attachments binders}
-    {fuel : Nat}
-    {result : InstantiationState input attachments.length
-      payload.binderSpine.proxyCount}
-    (copyTrace : InstantiationTrace comprehension attachments binders payload
-      fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
@@ -207,165 +36,101 @@ noncomputable def finalSemanticSimulation
       (dropInstantiationAtomsRaw result).WellFormed signature)
     (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature
-      elimTrace.sourceDiagram input.val model named where
-  source_wellFormed := sourceWellFormed
-  target_wellFormed := input.property
-  regionMap := copyTrace.reverseRegionMap elimTrace finalWellFormed
-  binderMap := copyTrace.reverseRegionMap elimTrace finalWellFormed
-  Distinguished := fun region =>
-    ¬ copyTrace.FinalRegularPreimage elimTrace finalWellFormed region
-  occurrenceMap := fun region regular =>
-    copyTrace.reverseOccurrenceMap elimTrace finalWellFormed region
-      (Classical.not_not.mp regular)
-  occurrenceMap_node := by
-    intro region regular node nodeRegion
-    exact copyTrace.reverseOccurrenceMap_node_of_regular elimTrace
-      finalWellFormed region (Classical.not_not.mp regular) node nodeRegion
-  occurrenceMap_child := by
-    intro region regular child
-    rfl
-  root_eq := (copyTrace.reverseRegionMap_root elimTrace finalWellFormed).symm
-  region_shape := by
-    intro parent regular child childParent
-    have shape := copyTrace.reverse_region_shape_of_regular elimTrace
-      finalWellFormed parent (Classical.not_not.mp regular) child childParent
-    cases finalShape : elimTrace.sourceDiagram.regions child <;>
-      simp only [finalShape] at shape ⊢ <;> exact shape
-  localOccurrences_map := by
-    intro region regular
-    exact copyTrace.reverse_localOccurrences elimTrace finalWellFormed region
-      (Classical.not_not.mp regular)
-  BinderWitness := fun sourceBinders targetBinders =>
-    FinalBinderWitness copyTrace elimTrace finalWellFormed sourceBinders
-      targetBinders
-  relationMap := fun witness => witness.relationMap
-  binders_empty := FinalBinderWitness.empty copyTrace elimTrace finalWellFormed
-  binders_push := by
-    intro sourceRels targetRels sourceBinders targetBinders witness child parent
-      arity childKind regular
-    exact witness.push child parent arity childKind
-      (Classical.not_not.mp regular)
-  relationMap_push := by
-    intro sourceRels targetRels sourceBinders targetBinders witness child parent
-      arity childKind regular
-    exact witness.relationMap_push child parent arity childKind
-      (Classical.not_not.mp regular)
-  Allowed := FinalAllowed elimTrace.sourceDiagram
-    (elimTrace.targetIndex finalWellFormed)
-  allowed_cut := by
-    intro direction child parent childKind regular allowed
-    exact finalAllowed_cut elimTrace.sourceDiagram
-      (elimTrace.targetIndex finalWellFormed) direction child parent childKind
-      allowed
-  allowed_bubble := by
-    intro direction child parent arity childKind regular allowed
-    exact finalAllowed_bubble elimTrace.sourceDiagram
-      (elimTrace.targetIndex finalWellFormed) direction child parent arity
-      childKind allowed
-  ContextWitness := fun sourceContext targetContext =>
-    PLift (FinalContextWitness copyTrace elimTrace sourceContext targetContext)
-  AtRegion := fun _ region =>
-    copyTrace.FinalAdmissible elimTrace finalWellFormed region
-  indexRelation := fun witness => witness.down.indexRelation
-  extendContext := by
-    intro sourceContext targetContext witness region regular sourceExact
-      targetExact
-    exact PLift.up (witness.down.extendRegular finalWellFormed boundaryNodup
-      region (Classical.not_not.mp regular))
-  extendFocusedContext := by
-    intro sourceContext targetContext witness region atRegion focused sourceExact
-      targetExact
-    have regionFocus : region = elimTrace.targetIndex finalWellFormed := by
-      rcases atRegion with regular | focus
-      · exact False.elim (focused regular)
-      · exact focus
-    subst region
-    simpa using PLift.up
-      (witness.down.extendFocused finalWellFormed boundaryNodup)
-  at_child := by
-    intro sourceContext targetContext context parent regular sourceExact
-      targetExact child atParent childParent
-    exact copyTrace.child_admissible_of_regular_parent elimTrace
-      finalWellFormed parent child (Classical.not_not.mp regular) childParent
-  at_extended := by
-    intro sourceContext targetContext context region regular sourceExact
-      targetExact atRegion
-    exact atRegion
-  at_focused_child := by
-    intro sourceContext targetContext context parent focused sourceExact
-      targetExact child atParent sourceParent targetParent
-    have parentFocus : parent = elimTrace.targetIndex finalWellFormed := by
-      rcases atParent with parentRegular | parentFocus
-      · exact False.elim (focused parentRegular)
-      · exact parentFocus
-    subst parent
-    left
-    by_cases childRegular : copyTrace.FinalRegularPreimage elimTrace
-        finalWellFormed child
-    · exact childRegular
-    have childFallback : copyTrace.reverseRegionMap elimTrace finalWellFormed
-        child = payload.parent := by
-      simp [reverseRegionMap, childRegular]
-    have selfParent : (input.val.regions payload.parent).parent? =
-        some payload.parent := by
-      simpa [childFallback,
-        copyTrace.reverseRegionMap_targetIndex elimTrace finalWellFormed]
-        using targetParent
-    exact False.elim ((ConcreteElaboration.checked_direct_child_not_encloses_parent
-      input.property selfParent)
-      (ConcreteDiagram.Encloses.refl input.val payload.parent))
-  localTransport := by
-    intro sourceRels targetRels direction fuelSource fuelTarget sourceContext
-      targetContext context sourceBinders targetBinders binderWitness region
-      atRegion regular allowed sourceExact targetExact sourceBindersCover
-      targetBindersCover sourceEnumeration targetEnumeration sourceItems
-      targetItems sourceCompiled targetCompiled itemSemantics relationEnvironment
-    letI : Nonempty model.Carrier :=
-      ConcreteElaboration.lambdaModel_carrier_nonempty model
-    apply ConcreteElaboration.directionalLocalTransport_of_agreement
-      direction sourceContext targetContext region
-      (copyTrace.reverseRegionMap elimTrace finalWellFormed region)
-      context.down.indexRelation
-      (context.down.extendRegular finalWellFormed boundaryNodup region
-        (Classical.not_not.mp regular)).indexRelation
-      model named (sourceItems.renameRelations binderWitness.relationMap)
-      targetItems
-    · exact context.down.regularEnvironmentSelection finalWellFormed
-        boundaryNodup direction sourceContext targetContext region
-        (Classical.not_not.mp regular) sourceExact
-    · exact itemSemantics
-  nodeSemantic := by
-    intro sourceRels targetRels direction region sourceContext targetContext
-      context atRegion sourceNodup targetNodup sourceBinders targetBinders
-      allowed binderWitness sourceNode targetNode regular mapped nodeRegion
-      sourceItem targetItem sourceCompiled targetCompiled
-    let regular' := Classical.not_not.mp regular
-    have canonical := copyTrace.reverseOccurrenceMap_node_eq elimTrace
-      finalWellFormed region regular' sourceNode nodeRegion
-    rw [canonical] at mapped
-    have targetNodeEq := ConcreteElaboration.LocalOccurrence.node.inj mapped
-    subst targetNode
-    exact copyTrace.regularNode_itemSimulation elimTrace sourceWellFormed
-      finalWellFormed boundaryNodup model named direction sourceContext
-      targetContext context.down sourceNodup sourceBinders targetBinders
-      binderWitness region regular' sourceNode nodeRegion sourceItem targetItem
-      sourceCompiled targetCompiled
-  focusedRegionKernel := by
-    intro sourceRels targetRels direction fuelSource fuelTarget region
-      sourceContext targetContext context sourceBinders targetBinders atRegion
-      focused allowed binderWitness sourceExact targetExact sourceBindersCover
-      targetBindersCover sourceEnumeration targetEnumeration recurse recurseAt
-      sourceItems targetItems sourceCompiled targetCompiled
-    have regionFocus : region = elimTrace.targetIndex finalWellFormed := by
-      rcases atRegion with regular | focusEq
-      · exact False.elim (focused regular)
-      · exact focusEq
-    subst region
-    have directionEq := finalAllowed_focus_forward elimTrace.sourceDiagram
-      (elimTrace.targetIndex finalWellFormed) direction allowed
-    subst direction
+    (named : NamedEnv model.Carrier signature)
+    (fuelSource fuelTarget : Nat)
+    (sourceRoot : ConcreteElaboration.WireContext elimTrace.sourceDiagram)
+    (targetRoot : ConcreteElaboration.WireContext input.val)
+    (rootContext : FinalContextWitness copyTrace elimTrace sourceRoot
+      targetRoot)
+    (terminalRoot : ConcreteElaboration.WireContext
+      (dropInstantiationAtomsRaw result))
+    (terminalContext : VacuousElimTrace.PromotedContextWitness elimTrace
+      sourceRoot terminalRoot)
+    (terminalExact : terminalRoot.Exact elimTrace.parent)
+    {sourceRels targetRels : RelCtx}
+    (sourceBinders : ConcreteElaboration.BinderContext
+      elimTrace.sourceDiagram sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext input.val targetRels)
+    (binderWitness : FinalBinderWitness copyTrace elimTrace finalWellFormed
+      sourceBinders targetBinders)
+    (sourceExact : sourceRoot.Exact
+      (elimTrace.targetIndex finalWellFormed))
+    (targetExact : targetRoot.Exact payload.parent)
+    (sourceBindersCover : sourceBinders.Covers
+      (elimTrace.targetIndex finalWellFormed))
+    (targetBindersCover : targetBinders.Covers payload.parent)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      elimTrace.sourceDiagram sourceBinders
+      (elimTrace.targetIndex finalWellFormed))
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val targetBinders payload.parent)
+    (allowed : FinalAllowed elimTrace.sourceDiagram
+      (elimTrace.targetIndex finalWellFormed) .forward
+      (elimTrace.targetIndex finalWellFormed))
+    (recurseAt : ∀
+      {childDirection : ConcreteElaboration.SimulationDirection}
+      {child : Fin elimTrace.sourceDiagram.regionCount}
+      {childSourceRels childTargetRels : RelCtx}
+      {childSourceBinders : ConcreteElaboration.BinderContext
+        elimTrace.sourceDiagram childSourceRels}
+      {childTargetBinders : ConcreteElaboration.BinderContext
+        input.val childTargetRels}
+      (childFuelTarget : Nat)
+      (childSourceContext : ConcreteElaboration.WireContext
+        elimTrace.sourceDiagram)
+      (childTargetContext : ConcreteElaboration.WireContext input.val)
+      (childContext : FinalContextWitness copyTrace elimTrace
+        childSourceContext childTargetContext),
+      copyTrace.FinalAdmissible elimTrace finalWellFormed child →
+      FinalAllowed elimTrace.sourceDiagram
+          (elimTrace.targetIndex finalWellFormed) childDirection child →
+      (childBinderWitness : FinalBinderWitness copyTrace elimTrace
+        finalWellFormed childSourceBinders childTargetBinders) →
+      childSourceBinders.Covers child →
+      childTargetBinders.Covers
+        (copyTrace.reverseRegionMap elimTrace finalWellFormed child) →
+      ConcreteElaboration.BinderContext.Enumeration elimTrace.sourceDiagram
+        childSourceBinders child →
+      ConcreteElaboration.BinderContext.Enumeration input.val
+        childTargetBinders
+          (copyTrace.reverseRegionMap elimTrace finalWellFormed child) →
+      (childSourceContext.extend child).Exact child →
+      (childTargetContext.extend
+        (copyTrace.reverseRegionMap elimTrace finalWellFormed child)).Exact
+          (copyTrace.reverseRegionMap elimTrace finalWellFormed child) →
+      ∀ (sourceBody : Region signature childSourceContext.length
+          childSourceRels)
+        (targetBody : Region signature childTargetContext.length
+          childTargetRels),
+      ConcreteElaboration.compileRegion? signature elimTrace.sourceDiagram
+          fuelSource child childSourceContext childSourceBinders =
+        some sourceBody →
+      ConcreteElaboration.compileRegion? signature input.val childFuelTarget
+          (copyTrace.reverseRegionMap elimTrace finalWellFormed child)
+          childTargetContext childTargetBinders = some targetBody →
+      ConcreteElaboration.RegionSimulation model named childDirection
+        childContext.indexRelation
+        (sourceBody.renameRelations childBinderWitness.relationMap)
+        targetBody)
+    (sourceItems : ItemSeq signature sourceRoot.length sourceRels)
+    (targetItems : ItemSeq signature targetRoot.length targetRels)
+    (sourceCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature
+        elimTrace.sourceDiagram
+        (ConcreteElaboration.compileRegion? signature elimTrace.sourceDiagram
+          fuelSource)
+        sourceRoot sourceBinders
+        (ConcreteElaboration.localOccurrences elimTrace.sourceDiagram
+          (elimTrace.targetIndex finalWellFormed)) = some sourceItems)
+    (targetCompiled :
+      ConcreteElaboration.compileOccurrencesWith? signature input.val
+        (ConcreteElaboration.compileRegion? signature input.val fuelTarget)
+        targetRoot targetBinders
+        (ConcreteElaboration.localOccurrences input.val payload.parent) =
+          some targetItems) :
+    ConcreteElaboration.ItemSeqSimulation model named .forward
+      rootContext.indexRelation
+      (sourceItems.renameRelations binderWitness.relationMap) targetItems := by
     let sourceRecurse : ∀ {rels : RelCtx},
         (region : Fin elimTrace.sourceDiagram.regionCount) →
         (context : ConcreteElaboration.WireContext elimTrace.sourceDiagram) →
@@ -380,21 +145,15 @@ noncomputable def finalSemanticSimulation
         Option (Region signature context.length rels) :=
       fun {rels} => ConcreteElaboration.compileRegion? signature input.val
         fuelTarget
-    have reverseFocus : copyTrace.reverseRegionMap elimTrace finalWellFormed
-        (elimTrace.targetIndex finalWellFormed) = payload.parent :=
-      copyTrace.reverseRegionMap_targetIndex elimTrace finalWellFormed
-    revert targetCompiled targetItems
-    rw [reverseFocus] at targetExact targetBindersCover targetEnumeration ⊢
-    intro targetItems targetCompiled
     have targetCompiledAtParent :
         ConcreteElaboration.compileOccurrencesWith? signature input.val
-          targetRecurse (targetContext.extend payload.parent) targetBinders
+          targetRecurse targetRoot targetBinders
           (ConcreteElaboration.localOccurrences input.val payload.parent) =
             some targetItems := by
       simpa [targetRecurse] using targetCompiled
     obtain ⟨sourcePartitionItems, sourcePartitionCompiled⟩ :=
       ConcreteElaboration.compileOccurrencesWith?_complete sourceRecurse
-        (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+        sourceRoot
         sourceBinders
         (elimTrace.keptOccurrences finalWellFormed ++
           elimTrace.selectedOccurrences finalWellFormed)
@@ -402,34 +161,34 @@ noncomputable def finalSemanticSimulation
           intro occurrence member
           exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
             elimTrace.sourceDiagram sourceRecurse
-            (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+            sourceRoot
             sourceBinders sourceCompiled
             ((elimTrace.focusOccurrences_perm_partition
               finalWellFormed).mem_iff.mp member))
     obtain ⟨sourceKeptItems, sourceSelectedItems, sourceKeptCompiled,
         sourceSelectedCompiled, sourcePartitionEq⟩ :=
       ConcreteElaboration.compileOccurrencesWith?_append_split sourceRecurse
-        (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
+        sourceRoot
         sourceBinders (elimTrace.keptOccurrences finalWellFormed)
         (elimTrace.selectedOccurrences finalWellFormed) sourcePartitionItems
         sourcePartitionCompiled
     obtain ⟨targetPartitionItems, targetPartitionCompiled⟩ :=
       ConcreteElaboration.compileOccurrencesWith?_complete targetRecurse
-        (targetContext.extend payload.parent) targetBinders
+        targetRoot targetBinders
         ((elimTrace.keptOccurrences finalWellFormed).map
             (copyTrace.finalFocusOccurrenceMap elimTrace) ++
           [ConcreteElaboration.LocalOccurrence.child bubble])
         (by
           intro occurrence member
           exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
-            input.val targetRecurse (targetContext.extend payload.parent)
+            input.val targetRecurse targetRoot
             targetBinders targetCompiledAtParent
             ((copyTrace.finalFocusOccurrences_perm elimTrace
               finalWellFormed).mem_iff.mp member))
     obtain ⟨targetKeptItems, targetBubbleItems, targetKeptCompiled,
         targetBubbleCompiled, targetPartitionEq⟩ :=
       ConcreteElaboration.compileOccurrencesWith?_append_split targetRecurse
-        (targetContext.extend payload.parent) targetBinders
+        targetRoot targetBinders
         ((elimTrace.keptOccurrences finalWellFormed).map
           (copyTrace.finalFocusOccurrenceMap elimTrace))
         [ConcreteElaboration.LocalOccurrence.child bubble]
@@ -440,7 +199,7 @@ noncomputable def finalSemanticSimulation
     simp only [ConcreteElaboration.compileOccurrenceWith?, payload.bubble_eq]
       at targetBubbleCompiled
     cases bubbleResult : ConcreteElaboration.compileRegion? signature input.val
-        fuelTarget bubble (targetContext.extend payload.parent)
+        fuelTarget bubble targetRoot
         (targetBinders.push bubble payload.arity) with
     | none => simp [bubbleResult] at targetBubbleCompiled
     | some bubbleBody =>
@@ -454,22 +213,20 @@ noncomputable def finalSemanticSimulation
                 bubbleBodyEq⟩ := Option.bind_eq_some_iff.mp bubbleResult
             have bubbleBodyEq' :
                 ConcreteElaboration.finishRegion input.val
-                    (targetContext.extend payload.parent) bubble
+                    targetRoot bubble
                     targetSelectedItems = bubbleBody :=
               Option.some.inj bubbleBodyEq
             subst bubbleBody
-            let focusedContext := context.down.extendFocused finalWellFormed
-              boundaryNodup
+            let focusedContext := rootContext
             have keptPointwise : ∀ occurrence,
                 occurrence ∈ elimTrace.keptOccurrences finalWellFormed →
                 ∀ sourceItem targetItem,
                 ConcreteElaboration.compileOccurrenceWith? signature
                     elimTrace.sourceDiagram sourceRecurse
-                    (sourceContext.extend
-                      (elimTrace.targetIndex finalWellFormed))
+                    sourceRoot
                     sourceBinders occurrence = some sourceItem →
                 ConcreteElaboration.compileOccurrenceWith? signature input.val
-                    targetRecurse (targetContext.extend payload.parent)
+                    targetRecurse targetRoot
                     targetBinders
                     (copyTrace.finalFocusOccurrenceMap elimTrace occurrence) =
                       some targetItem →
@@ -482,24 +239,22 @@ noncomputable def finalSemanticSimulation
               exact copyTrace.focusedKeptOccurrence_itemSimulation elimTrace
                 sourceWellFormed finalWellFormed boundaryNodup model named
                 .forward fuelSource (bubbleFuel + 1)
-                (sourceContext.extend
-                  (elimTrace.targetIndex finalWellFormed))
-                (targetContext.extend payload.parent) focusedContext
+                sourceRoot
+                targetRoot focusedContext
                 sourceBinders targetBinders binderWitness
                 sourceExact targetExact sourceBindersCover targetBindersCover
                 sourceEnumeration targetEnumeration allowed
                 (fun childFuelTarget childSourceContext childTargetContext
                     childContext => recurseAt childFuelTarget childSourceContext
-                      childTargetContext (PLift.up childContext)) occurrence
+                      childTargetContext childContext) occurrence
                 member sourceItem targetItem (by
                   simpa [sourceRecurse] using sourceOccurrence)
                 (by simpa [targetRecurse] using targetOccurrence)
             have keptSimulation :=
               ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
                 model named .forward sourceRecurse targetRecurse
-                (sourceContext.extend
-                  (elimTrace.targetIndex finalWellFormed))
-                (targetContext.extend payload.parent) sourceBinders
+                sourceRoot
+                targetRoot sourceBinders
                 targetBinders focusedContext.indexRelation
                 binderWitness.relationMap
                 (copyTrace.finalFocusOccurrenceMap elimTrace)
@@ -525,13 +280,12 @@ noncomputable def finalSemanticSimulation
                 .bubble elimTrace.parent payload.arity := by
               rw [payloadArityEq]
               exact elimBubbleShape
-            let terminalContext := terminalPromotedContext elimTrace sourceContext
             let terminalOuter : ConcreteElaboration.WireContext
-                (dropInstantiationAtomsRaw result) := sourceContext
-            let terminalFocusedContext :=
-              terminalContext.extendFocused finalWellFormed
+                (dropInstantiationAtomsRaw result) := terminalRoot
+            let terminalFocusedContext := terminalContext
             let terminalSelectedContext :=
-              terminalContext.extendSelected finalWellFormed
+              terminalContext.extendRootSelected elimTrace finalWellFormed
+                sourceRoot terminalRoot sourceExact
             let terminalBinders := InstantiationSemantic.traceBinderContext
               copyTrace targetBinders
             have terminalParentCoverState :
@@ -557,11 +311,9 @@ noncomputable def finalSemanticSimulation
             let terminalEnumeration :=
               InstantiationSemantic.binderEnumeration_to_drop result
                 terminalBinders elimTrace.parent terminalEnumerationStateAtParent
-            have terminalParentExact :=
-              InstantiationSemantic.terminalParent_exact elimTrace
-                finalWellFormed sourceWellFormed sourceContext sourceExact
+            have terminalParentExact := terminalExact
             have terminalSelectedExact :=
-              elimTrace.targetSelected_exact finalWellFormed sourceContext
+              elimTrace.targetRootSelected_exact finalWellFormed terminalRoot
                 terminalParentExact
             have terminalBubbleCover :=
               ConcreteElaboration.BinderContext.push_covers_bubble_child
@@ -610,8 +362,7 @@ noncomputable def finalSemanticSimulation
                   Option.bind_eq_some_iff.mp terminalCompiled
                 have terminalBodyEq' :
                     ConcreteElaboration.finishRegion result.diagram.val
-                        (@ConcreteElaboration.WireContext.extend
-                          result.diagram.val sourceContext elimTrace.parent)
+                        terminalRoot
                         result.bubble
                         terminalSelectedItems = terminalBody := by
                   exact Option.some.inj terminalBodyEq
@@ -632,15 +383,13 @@ noncomputable def finalSemanticSimulation
                     ∀ sourceItem terminalItem,
                     ConcreteElaboration.compileOccurrenceWith? signature
                         elimTrace.sourceDiagram sourceRecurse
-                        (sourceContext.extend
-                          (elimTrace.targetIndex finalWellFormed))
+                        sourceRoot
                         sourceBinders occurrence = some sourceItem →
                     ConcreteElaboration.compileOccurrenceWith? signature
                         (dropInstantiationAtomsRaw result)
                         (ConcreteElaboration.compileRegion? signature
                           (dropInstantiationAtomsRaw result) terminalBodyFuel)
-                        ((terminalOuter.extend elimTrace.parent).extend
-                          result.bubble)
+                        (terminalRoot.extend result.bubble)
                         (terminalBinders.push result.bubble payload.arity)
                         (elimTrace.occurrenceMap occurrence) =
                           some terminalItem →
@@ -654,10 +403,8 @@ noncomputable def finalSemanticSimulation
                   apply elimTrace.focusedOccurrence_itemSimulation
                     sourceWellFormed finalWellFormed model named .forward
                     fuelSource terminalBodyFuel result.bubble
-                    (sourceContext.extend
-                      (elimTrace.targetIndex finalWellFormed))
-                    ((terminalOuter.extend elimTrace.parent).extend
-                      result.bubble)
+                    sourceRoot
+                    (terminalRoot.extend result.bubble)
                     terminalSelectedContext sourceBinders
                     (terminalBinders.push result.bubble payload.arity)
                     terminalBubbleBinderWitness sourceExact
@@ -697,10 +444,8 @@ noncomputable def finalSemanticSimulation
                     model named .forward sourceRecurse
                     (ConcreteElaboration.compileRegion? signature
                       (dropInstantiationAtomsRaw result) terminalBodyFuel)
-                    (sourceContext.extend
-                      (elimTrace.targetIndex finalWellFormed))
-                    ((terminalOuter.extend elimTrace.parent).extend
-                      result.bubble)
+                    sourceRoot
+                    (terminalRoot.extend result.bubble)
                     sourceBinders
                     (terminalBinders.push result.bubble payload.arity)
                     terminalSelectedContext.indexRelation
@@ -718,41 +463,22 @@ noncomputable def finalSemanticSimulation
                     binderWitness.relationMap sourceRelations targetRelations :=
                   RelEnv.pullback_agrees binderWitness.relationMap
                     targetRelations
-                have sourceOriginalRename :
-                    denoteRegion model named sourceEnvironment targetRelations
-                        ((ConcreteElaboration.finishRegion
-                          elimTrace.sourceDiagram sourceContext
-                          (elimTrace.targetIndex finalWellFormed)
-                          sourceItems).renameRelations
-                            binderWitness.relationMap) ↔
-                      denoteRegion model named sourceEnvironment sourceRelations
-                        (ConcreteElaboration.finishRegion
-                          elimTrace.sourceDiagram sourceContext
-                          (elimTrace.targetIndex finalWellFormed)
-                          sourceItems) :=
-                  denoteRegion_renameRelations model named
+                have sourceItemsDenote :
+                    denoteItemSeq model named sourceEnvironment sourceRelations
+                      sourceItems :=
+                  (denoteItemSeq_renameRelations model named
                     binderWitness.relationMap sourceRelations targetRelations
-                    relationAgreement sourceEnvironment _
-                obtain ⟨sourceLocal, sourceItemsDenote⟩ :=
-                  (DoubleCutElimTrace.finishRegion_denote_iff
-                    elimTrace.sourceDiagram
-                    sourceContext (elimTrace.targetIndex finalWellFormed)
-                    sourceItems model named sourceEnvironment
-                    sourceRelations).mp
-                    (sourceOriginalRename.mp sourceDenotation)
+                    relationAgreement sourceEnvironment sourceItems).mp
+                    sourceDenotation
                 have sourcePermutation :=
                   VisualProof.Rule.ModalSoundness.compileOccurrences_denote_perm
                     elimTrace.sourceDiagram sourceRecurse
-                    (sourceContext.extend
-                      (elimTrace.targetIndex finalWellFormed))
+                    sourceRoot
                     sourceBinders
                     (elimTrace.focusOccurrences_perm_partition
                       finalWellFormed).symm
                     sourceCompiled sourcePartitionCompiled model named
-                let sourceFocusEnvironment :=
-                  ConcreteElaboration.extendedEnvironment sourceContext
-                    (elimTrace.targetIndex finalWellFormed)
-                    sourceEnvironment sourceLocal
+                let sourceFocusEnvironment := sourceEnvironment
                 have sourcePartitionDenote :=
                   (sourcePermutation sourceFocusEnvironment sourceRelations).mp
                     sourceItemsDenote
@@ -773,9 +499,8 @@ noncomputable def finalSemanticSimulation
                     sourceExact.nodup sourceFocusEnvironment
                 let freshTrace : Relation model.Carrier elimTrace.arity :=
                   terminalFresh
-                    (sourceContext.extend
-                      (elimTrace.targetIndex finalWellFormed))
-                    (terminalOuter.extend elimTrace.parent)
+                    sourceRoot
+                    terminalRoot
                     sourceBinders terminalBinders sourceExact
                     terminalSelectedExact sourceBindersCover
                     terminalParentCover sourceEnumeration terminalEnumeration
@@ -808,43 +533,39 @@ noncomputable def finalSemanticSimulation
                       terminalBinderWitness] using sourceSelectedRenamed)
                 let terminalBubbleLocal :=
                   DoubleCutElimTrace.localEnvironmentPart
-                    (terminalOuter.extend elimTrace.parent) result.bubble
+                    terminalRoot result.bubble
                     terminalSelectedEnvironment
                 have terminalSelectedEnvironmentEq :
                     ConcreteElaboration.extendedEnvironment
-                        (terminalOuter.extend elimTrace.parent) result.bubble
+                        terminalRoot result.bubble
                         terminalFocusEnvironment terminalBubbleLocal =
                       terminalSelectedEnvironment := by
                   apply DoubleCutElimTrace.extendedEnvironment_of_parts
                   intro index
-                  exact elimTrace.selectedTargetEnvironment_outer
-                    finalWellFormed sourceContext terminalOuter terminalContext
+                  exact elimTrace.rootSelectedTargetEnvironment_outer
+                    finalWellFormed sourceRoot terminalRoot terminalContext
                     sourceExact sourceFocusEnvironment index
                 have terminalBubbleDenote :
                     denoteRegion (relCtx := payload.arity :: targetRels)
                       model named terminalFocusEnvironment
                       (fresh, targetRelations)
                       (ConcreteElaboration.finishRegion result.diagram.val
-                        (@ConcreteElaboration.WireContext.extend
-                          result.diagram.val sourceContext elimTrace.parent)
+                        terminalRoot
                         result.bubble terminalSelectedItems) := by
                   apply (DoubleCutElimTrace.finishRegion_denote_iff
                     result.diagram.val
-                    (@ConcreteElaboration.WireContext.extend
-                      result.diagram.val sourceContext elimTrace.parent)
+                    terminalRoot
                     result.bubble terminalSelectedItems model named
                     terminalFocusEnvironment
                     (fresh, targetRelations)).mpr
                   refine ⟨terminalBubbleLocal, ?_⟩
                   have stateEnvironmentEq :
                       ConcreteElaboration.extendedEnvironment
-                          (@ConcreteElaboration.WireContext.extend
-                            result.diagram.val sourceContext elimTrace.parent)
+                          terminalRoot
                           result.bubble terminalFocusEnvironment
                           terminalBubbleLocal = terminalSelectedEnvironment := by
                     simpa [terminalOuter] using terminalSelectedEnvironmentEq
-                  rw [stateEnvironmentEq]
-                  exact terminalSelectedDenote
+                  exact stateEnvironmentEq.symm ▸ terminalSelectedDenote
                 have sourceKeptRenamed :
                     denoteItemSeq model named sourceFocusEnvironment
                       targetRelations
@@ -866,7 +587,7 @@ noncomputable def finalSemanticSimulation
                   keptSimulation sourceFocusEnvironment targetFocusEnvironment
                     targetRelations focusedAgreement sourceKeptRenamed
                 have targetBubbleExact :
-                    ((targetContext.extend payload.parent).extend bubble).Exact
+                    (targetRoot.extend bubble).Exact
                       bubble :=
                   targetExact.extend_child input.property (by
                     simp [payload.bubble_eq, CRegion.parent?])
@@ -883,7 +604,7 @@ noncomputable def finalSemanticSimulation
                       model named targetFocusEnvironment
                       (fresh, targetRelations)
                       (ConcreteElaboration.finishRegion input.val
-                        (targetContext.extend payload.parent) bubble
+                        targetRoot bubble
                         targetSelectedItems) := by
                   cases copyTrace with
                   | done traceFuel current pendingEmpty =>
@@ -892,9 +613,9 @@ noncomputable def finalSemanticSimulation
                           ConcreteElaboration.WireContext
                             (dropInstantiationAtomsRaw
                               (initialInstantiationState payload)) :=
-                        terminalOuter.extend elimTrace.parent
+                        terminalRoot
                       let targetOuter :=
-                        targetContext.extend payload.parent
+                        targetRoot
                       have sourceBubbleExact :
                           (sourceOuter.extend bubble).Exact bubble := by
                         simpa [sourceOuter, initialInstantiationState] using
@@ -967,8 +688,7 @@ noncomputable def finalSemanticSimulation
                           (ConcreteElaboration.lambdaModel_carrier_nonempty model)
                       let wireValue :=
                         InstantiationSemantic.exactContextWireValue
-                          (sourceContext.extend
-                            (elimTrace.targetIndex finalWellFormed))
+                          sourceRoot
                           (elimTrace.targetIndex finalWellFormed) sourceExact
                           sourceFocusEnvironment fallback
                       have sourceAligned : ∀ index,
@@ -978,16 +698,14 @@ noncomputable def finalSemanticSimulation
                         change sourceFocusEnvironment
                             (terminalFocusedContext.sourceIndex index) =
                           InstantiationSemantic.exactContextWireValue
-                            (sourceContext.extend
-                              (elimTrace.targetIndex finalWellFormed))
+                            sourceRoot
                             (elimTrace.targetIndex finalWellFormed) sourceExact
                             sourceFocusEnvironment fallback
-                            ((terminalOuter.extend elimTrace.parent).get index)
+                            (terminalRoot.get index)
                         rw [← terminalFocusedContext.sourceIndex_get index]
                         exact
                           (InstantiationSemantic.exactContextWireValue_get
-                            (sourceContext.extend
-                              (elimTrace.targetIndex finalWellFormed))
+                            sourceRoot
                             (elimTrace.targetIndex finalWellFormed) sourceExact
                             sourceFocusEnvironment fallback
                             (terminalFocusedContext.sourceIndex index)).symm
@@ -998,24 +716,21 @@ noncomputable def finalSemanticSimulation
                         have focusedGet :=
                           focusedContext.sourceIndex_get index
                         have focusedGet' :
-                            (sourceContext.extend
-                              (elimTrace.targetIndex finalWellFormed)).get
+                            sourceRoot.get
                                 (focusedContext.sourceIndex index) =
                               targetOuter.get index := by
                           simpa [targetOuter] using focusedGet
                         change sourceFocusEnvironment
                             (focusedContext.sourceIndex index) =
                           InstantiationSemantic.exactContextWireValue
-                            (sourceContext.extend
-                              (elimTrace.targetIndex finalWellFormed))
+                            sourceRoot
                             (elimTrace.targetIndex finalWellFormed) sourceExact
                             sourceFocusEnvironment fallback
                             (targetOuter.get index)
                         rw [← focusedGet']
                         exact
                           (InstantiationSemantic.exactContextWireValue_get
-                            (sourceContext.extend
-                              (elimTrace.targetIndex finalWellFormed))
+                            sourceRoot
                             (elimTrace.targetIndex finalWellFormed) sourceExact
                             sourceFocusEnvironment fallback
                             (focusedContext.sourceIndex index)).symm
@@ -1058,8 +773,7 @@ noncomputable def finalSemanticSimulation
                       let finalTargets := initialTargets.afterTrace wholeTrace
                       let terminalStateExact :=
                         InstantiationSemantic.dropExact_to_state result
-                          ((@ConcreteElaboration.WireContext.extend
-                            result.diagram.val sourceContext elimTrace.parent).extend
+                          (terminalRoot.extend
                             result.bubble)
                           result.bubble terminalSelectedExact
                       let terminalStateCover :=
@@ -1068,8 +782,7 @@ noncomputable def finalSemanticSimulation
                       let parameterValues :=
                         InstantiationSemantic.parameterValuesOfExact result
                           finalScopes
-                          (@ConcreteElaboration.WireContext.extend
-                            result.diagram.val sourceContext elimTrace.parent)
+                          terminalRoot
                           terminalStateExact terminalFocusEnvironment
                       let proxyValues :=
                         InstantiationSemantic.proxyRelationsOfParentCover
@@ -1079,8 +792,7 @@ noncomputable def finalSemanticSimulation
                       let terminalPresentation :=
                         InstantiationSemantic.finalBubblePresentation payload
                           result finalTargets finalScopes model named
-                          (@ConcreteElaboration.WireContext.extend
-                            result.diagram.val sourceContext elimTrace.parent)
+                          terminalRoot
                           terminalSelectedExact finalWellFormed terminalBinders
                           elimTrace.parent terminalBubbleShape
                           terminalParentCover terminalEnumeration
@@ -1092,8 +804,7 @@ noncomputable def finalSemanticSimulation
                           (ConcreteElaboration.lambdaModel_carrier_nonempty model)
                       let terminalWireValue :=
                         InstantiationSemantic.exactContextWireValue
-                          (sourceContext.extend
-                            (elimTrace.targetIndex finalWellFormed))
+                          sourceRoot
                           (elimTrace.targetIndex finalWellFormed) sourceExact
                           sourceFocusEnvironment fallback
                       have terminalWireAligned :
@@ -1101,21 +812,17 @@ noncomputable def finalSemanticSimulation
                         intro index
                         change terminalFocusEnvironment index =
                           terminalWireValue
-                            ((@ConcreteElaboration.WireContext.extend
-                              result.diagram.val sourceContext
-                              elimTrace.parent).get index)
+                            (terminalRoot.get index)
                         change sourceFocusEnvironment
                             (terminalFocusedContext.sourceIndex index) =
                           InstantiationSemantic.exactContextWireValue
-                            (sourceContext.extend
-                              (elimTrace.targetIndex finalWellFormed))
+                            sourceRoot
                             (elimTrace.targetIndex finalWellFormed) sourceExact
                             sourceFocusEnvironment fallback
-                            ((terminalOuter.extend elimTrace.parent).get index)
+                            (terminalRoot.get index)
                         rw [← terminalFocusedContext.sourceIndex_get index]
                         exact (InstantiationSemantic.exactContextWireValue_get
-                          (sourceContext.extend
-                            (elimTrace.targetIndex finalWellFormed))
+                          sourceRoot
                           (elimTrace.targetIndex finalWellFormed) sourceExact
                           sourceFocusEnvironment fallback
                           (terminalFocusedContext.sourceIndex index)).symm
@@ -1130,9 +837,8 @@ noncomputable def finalSemanticSimulation
                           (arguments_eq := arguments_eq) (input_eq := input_eq)
                           (rest := rest)
                           elimTrace finalWellFormed boundaryNodup model named
-                          (sourceContext.extend
-                            (elimTrace.targetIndex finalWellFormed))
-                          (terminalOuter.extend elimTrace.parent)
+                          sourceRoot
+                          terminalRoot
                           sourceBinders terminalBinders sourceExact
                           terminalSelectedExact sourceBindersCover
                           terminalParentCover sourceEnumeration
@@ -1257,41 +963,39 @@ noncomputable def finalSemanticSimulation
                       have targetFocusAligned : ∀ index,
                           targetFocusEnvironment index =
                             (terminalWireValue ∘ wholeTrace.wireMap)
-                              ((targetContext.extend payload.parent).get index) := by
+                              (targetRoot.get index) := by
                         intro index
                         change sourceFocusEnvironment
                             (focusedContext.sourceIndex index) =
                           InstantiationSemantic.exactContextWireValue
-                            (sourceContext.extend
-                              (elimTrace.targetIndex finalWellFormed))
+                            sourceRoot
                             (elimTrace.targetIndex finalWellFormed) sourceExact
                             sourceFocusEnvironment fallback
                             (wholeTrace.finalWireMap elimTrace
-                              ((targetContext.extend payload.parent).get index))
+                              (targetRoot.get index))
                         rw [← focusedContext.sourceIndex_get index]
                         exact (InstantiationSemantic.exactContextWireValue_get
-                          (sourceContext.extend
-                            (elimTrace.targetIndex finalWellFormed))
+                          sourceRoot
                           (elimTrace.targetIndex finalWellFormed) sourceExact
                           sourceFocusEnvironment fallback
                           (focusedContext.sourceIndex index)).symm
                       have targetBubbleCompiledRegion :
                           ConcreteElaboration.compileRegion? signature input.val
                             (bubbleFuel + 1) bubble
-                            (targetContext.extend payload.parent)
+                            targetRoot
                             (targetBinders.push bubble payload.arity) =
                               some (ConcreteElaboration.finishRegion input.val
-                                (targetContext.extend payload.parent) bubble
+                                targetRoot bubble
                                 targetSelectedItems) := by
                         simpa only [ConcreteElaboration.compileRegion?] using
                           bubbleResult
                       exact initialExternal.denoteRecompiled_initial
                         initialOwnerIdentity
-                        (targetContext.extend payload.parent) targetBubbleExact
+                        targetRoot targetBubbleExact
                         targetBubbleCover targetBubbleEnumeration
                         (bubbleFuel + 1)
                         (ConcreteElaboration.finishRegion input.val
-                          (targetContext.extend payload.parent) bubble
+                          targetRoot bubble
                           targetSelectedItems)
                         targetBubbleCompiledRegion targetFocusEnvironment
                         targetFocusAligned
@@ -1300,7 +1004,7 @@ noncomputable def finalSemanticSimulation
                       targetRelations
                       (Item.bubble payload.arity
                         (ConcreteElaboration.finishRegion input.val
-                          (targetContext.extend payload.parent) bubble
+                          targetRoot bubble
                           targetSelectedItems)) := by
                   simp only [bubble_denotes_exists]
                   exact ⟨fresh, targetBubbleDenote⟩
@@ -1314,7 +1018,7 @@ noncomputable def finalSemanticSimulation
                 have targetPermutation :=
                   VisualProof.Rule.ModalSoundness.compileOccurrences_denote_perm
                     input.val targetRecurse
-                    (targetContext.extend payload.parent) targetBinders
+                    targetRoot targetBinders
                     (copyTrace.finalFocusOccurrences_perm elimTrace
                       finalWellFormed).symm
                     targetCompiledAtParent targetPartitionCompiled model named
@@ -1323,69 +1027,14 @@ noncomputable def finalSemanticSimulation
                       targetRelations targetItems :=
                   (targetPermutation targetFocusEnvironment
                     targetRelations).mpr targetPartitionDenote
-                let targetLocal :=
-                  DoubleCutElimTrace.localEnvironmentPart targetContext
-                    payload.parent targetFocusEnvironment
-                have targetFocusOuter : ∀ index,
-                    targetFocusEnvironment
-                        (DoubleCutElimTrace.extendedOuterIndex targetContext
-                          payload.parent index) =
-                      targetEnvironment index := by
-                  intro index
-                  let sourceIndex := context.down.sourceIndex index
-                  let sourceExtendedIndex :=
-                    DoubleCutElimTrace.extendedOuterIndex sourceContext
-                      (elimTrace.targetIndex finalWellFormed) sourceIndex
-                  let targetExtendedIndex :=
-                    DoubleCutElimTrace.extendedOuterIndex targetContext
-                      payload.parent index
-                  have corresponding :
-                      (sourceContext.extend
-                          (elimTrace.targetIndex finalWellFormed)).get
-                            sourceExtendedIndex =
-                        copyTrace.finalWireMap elimTrace
-                          ((targetContext.extend payload.parent).get
-                            targetExtendedIndex) := by
-                    calc
-                      _ = sourceContext.get sourceIndex :=
-                        DoubleCutElimTrace.extendedOuterIndex_get sourceContext
-                          (elimTrace.targetIndex finalWellFormed) sourceIndex
-                      _ = copyTrace.finalWireMap elimTrace
-                          (targetContext.get index) :=
-                        context.down.sourceIndex_get index
-                      _ = _ := congrArg (copyTrace.finalWireMap elimTrace)
-                        (DoubleCutElimTrace.extendedOuterIndex_get targetContext
-                          payload.parent index).symm
-                  have sourceExtendedIndexEq : sourceExtendedIndex =
-                      focusedContext.sourceIndex targetExtendedIndex :=
-                    ConcreteElaboration.WireContext.lookup?_unique
-                      sourceExact.nodup
-                      (focusedContext.sourceIndex_lookup targetExtendedIndex)
-                      corresponding
-                  change sourceFocusEnvironment
-                      (focusedContext.sourceIndex targetExtendedIndex) =
-                    targetEnvironment index
-                  rw [← sourceExtendedIndexEq]
-                  change ConcreteElaboration.extendedEnvironment sourceContext
-                      (elimTrace.targetIndex finalWellFormed)
-                      sourceEnvironment sourceLocal sourceExtendedIndex =
-                    targetEnvironment index
-                  rw [DoubleCutElimTrace.extendedEnvironment_outer]
-                  exact outerAgreement (context.down.sourceIndex index) index
+                have targetEnvironmentEq :
+                    targetFocusEnvironment = targetEnvironment := by
+                  funext index
+                  exact outerAgreement (rootContext.sourceIndex index) index
                     rfl
-                have targetFocusEq :
-                    ConcreteElaboration.extendedEnvironment targetContext
-                        payload.parent targetEnvironment targetLocal =
-                      targetFocusEnvironment := by
-                  apply DoubleCutElimTrace.extendedEnvironment_of_parts
-                  intro index
-                  exact targetFocusOuter index
-                apply (DoubleCutElimTrace.finishRegion_denote_iff input.val
-                  targetContext payload.parent targetItems model named
-                  targetEnvironment targetRelations).mpr
-                refine ⟨targetLocal, ?_⟩
-                rw [targetFocusEq]
+                rw [targetEnvironmentEq] at targetItemsDenote
                 exact targetItemsDenote
+
 
 end InstantiationTrace
 
