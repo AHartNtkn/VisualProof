@@ -729,7 +729,7 @@ def instantiationAtomDomain
     (instantiationAtomDomain state).survives node = false := by
   simp [instantiationAtomDomain, hnode]
 
-private def dropInstantiationAtomsRaw {signature : List Nat}
+def dropInstantiationAtomsRaw {signature : List Nat}
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin p q) : ConcreteDiagram :=
   let nodes := instantiationAtomDomain state

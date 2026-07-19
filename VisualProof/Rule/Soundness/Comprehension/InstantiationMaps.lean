@@ -163,6 +163,30 @@ theorem regionMap_bubble
       pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
       simpa [regionMap, advanceInstantiationState] using ih
 
+theorem regionMap_root
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result) :
+    trace.regionMap state.diagram.val.root = result.diagram.val.root := by
+  induction trace with
+  | done => rfl
+  | step fuel state result atom tail site candidate arguments checkedInput
+      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+      simpa [regionMap, advanceInstantiationState, instantiateSpliceInput,
+        Splice.Input.PlugLayout.plugRaw] using ih
+
 theorem regionMap_binderTargets
     {signature : List Nat}
     {input : CheckedDiagram signature}
@@ -241,6 +265,51 @@ theorem ownedAtoms_eq_map
       exact map_owned_step state.processedAtoms atom tail
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameNode rest.nodeMap
+
+theorem result_pendingAtoms_empty
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result) :
+    result.pendingAtoms = [] := by
+  induction trace with
+  | done fuel state pending_empty => exact pending_empty
+  | step fuel state result atom tail site candidate arguments checkedInput
+      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+      exact ih
+
+theorem initial_processedAtoms_eq_map
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      (initialInstantiationState payload) result) :
+    result.processedAtoms =
+      (boundAtoms input bubble).map trace.nodeMap := by
+  have owned := trace.ownedAtoms_eq_map
+  rw [InstantiationState.ownedAtoms, trace.result_pendingAtoms_empty,
+    List.append_nil] at owned
+  simpa [InstantiationState.ownedAtoms, initialInstantiationState] using owned
 
 end InstantiationTrace
 
