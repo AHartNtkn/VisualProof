@@ -4,6 +4,7 @@ import VisualProof.Rule.Soundness.Equational.AnchoredWireContractInterface
 import VisualProof.Rule.Soundness.Equational.AnchoredWireContractCoalescedCompactionOpen
 import VisualProof.Rule.Soundness.Equational.HeadStripSimulation
 import VisualProof.Rule.Soundness.Equational.FusionOpen
+import VisualProof.Rule.Soundness.Equational.FissionBoundary
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule
@@ -2736,6 +2737,72 @@ theorem applyFission_sound
     (happly : applyFission input node path = .ok receipt) :
     SuccessfulReceiptSound context orientation input (.fission node path)
       receipt := by
-  sorry
+  obtain ⟨region, freePorts, term, portWire, depth, selected, residual,
+    producer, nodeShape, resolved, selectedResult, residualResult,
+    producerResult, realizes⟩ := applyFission_realizes happly
+  have targetWellFormed :
+      (fissionRaw input node region producer residual).WellFormed signature :=
+    realizes.result_eq ▸ receipt.result.property
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := fun boundary sourceRoot mapped htransport =>
+      FissionSoundness.targetCheckedOpen input node region producer residual
+        boundary sourceRoot targetWellFormed)
+    (operationalIso := fun boundary sourceRoot mapped htransport =>
+      realizes.operationalIso_to_rawResultOpen htransport
+        (boundary.map Fin.castSucc)
+        (FissionSoundness.expectedTransport input node region producer residual
+          boundary sourceRoot))
+  intro boundary sourceRoot mapped htransport valid args
+  let source := FissionSoundness.sourceCheckedOpen input boundary sourceRoot
+  let target := FissionSoundness.targetCheckedOpen input node region producer
+    residual boundary sourceRoot targetWellFormed
+  let model := Lambda.canonicalModel
+  let named := Theory.interpretDefinitions context.definitions
+  let simulation := FissionSoundness.semanticSimulation input node region
+    freePorts term portWire depth selected path producer residual nodeShape
+    resolved selectedResult residualResult producerResult targetWellFormed
+    model named
+  let targetArgs := args ∘ Fin.cast
+    (FissionSoundness.boundaryLengthEq (input := input) (selected := node)
+      (site := region) (producer := producer) (residual := residual)
+      (boundary := boundary))
+  have forwardAllowed : simulation.Allowed .forward input.val.root := by
+    trivial
+  have backwardAllowed : simulation.Allowed .backward input.val.root := by
+    trivial
+  have forwardSemantic :=
+    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source target model named simulation .forward
+      (FissionSoundness.rootContext input node region freePorts term portWire
+        depth selected path producer residual nodeShape resolved selectedResult
+        residualResult producerResult boundary sourceRoot targetWellFormed named
+        .forward)
+      forwardAllowed args targetArgs
+      (FissionSoundness.boundaryWitness input node region producer residual
+        boundary sourceRoot targetWellFormed .forward model named args)
+  have backwardSemantic :=
+    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+      source target model named simulation .backward
+      (FissionSoundness.rootContext input node region freePorts term portWire
+        depth selected path producer residual nodeShape resolved selectedResult
+        residualResult producerResult boundary sourceRoot targetWellFormed named
+        .backward)
+      backwardAllowed args targetArgs
+      (FissionSoundness.boundaryWitness input node region producer residual
+        boundary sourceRoot targetWellFormed .backward model named args)
+  dsimp only
+  unfold DirectedEntailment
+  simp only [Step.tag, StepTag.semanticMode]
+  constructor
+  · intro sourceDenotes
+    have targetDenotes := forwardSemantic sourceDenotes
+    simpa [source, target, targetArgs, model, named,
+      FissionSoundness.sourceCheckedOpen,
+      FissionSoundness.targetCheckedOpen] using targetDenotes
+  · intro targetDenotes
+    apply backwardSemantic
+    simpa [source, target, targetArgs, model, named,
+      FissionSoundness.sourceCheckedOpen,
+      FissionSoundness.targetCheckedOpen] using targetDenotes
 
 end VisualProof.Rule
