@@ -85,6 +85,140 @@ theorem siteSourceWireMap_environment
   · exact siteSourceWireMap_spec input outputWitness outputLeaf sourceContext
       sourceExact index
 
+/-- A target local witness at the splice site induces the unique quotient-host
+local witness with the same concrete wire values. -/
+theorem site_sourceLocalEnvironment_exists
+    (input : Splice.Input signature)
+    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (sourceExact : (sourceOuter.extend input.site).Exact input.site)
+    (targetExact : (targetOuter.extend
+      (input.plugLayout.frameRegion input.site)).Exact
+      (input.plugLayout.frameRegion input.site))
+    (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
+    (outerSpec : ∀ index, targetOuter.get (outerMap index) =
+      input.plugLayout.frameWire (sourceOuter.get index))
+    (sourceOuterEnv : Fin sourceOuter.length → D)
+    (targetOuterEnv : Fin targetOuter.length → D)
+    (outerAgrees :
+      (ConcreteElaboration.ContextIndexRelation.forwardMap outerMap)
+        |>.EnvironmentsAgree sourceOuterEnv targetOuterEnv)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      input.plugLayout.plugRaw
+      (input.plugLayout.frameRegion input.site)).length → D)
+    (fallback : D) :
+    let sourceContext := sourceOuter.extend input.site
+    let targetContext := targetOuter.extend
+      (input.plugLayout.frameRegion input.site)
+    let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+      (input.plugLayout.frameRegion input.site) targetOuterEnv targetLocal
+    let quotientValues := Splice.Input.siteQuotientEnvironment input
+      targetContext targetExact targetEnv fallback
+    ∃ sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+        input.coalesceFrameRaw input.site).length → D,
+      ConcreteElaboration.extendedEnvironment sourceOuter input.site
+          sourceOuterEnv sourceLocal =
+        fun index => quotientValues (sourceContext.get index) := by
+  dsimp only
+  let sourceContext := sourceOuter.extend input.site
+  let targetContext := targetOuter.extend
+    (input.plugLayout.frameRegion input.site)
+  let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+    (input.plugLayout.frameRegion input.site) targetOuterEnv targetLocal
+  let quotientValues := Splice.Input.siteQuotientEnvironment input
+    targetContext targetExact targetEnv fallback
+  let sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+      input.coalesceFrameRaw input.site).length → D := fun index =>
+    quotientValues
+      ((ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+        input.site).get index)
+  refine ⟨sourceLocal, ?_⟩
+  funext index
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend sourceOuter input.site) index
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend sourceOuter
+        input.site).symm split = index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · have outerEq : sourceOuterEnv = targetOuterEnv ∘ outerMap := by
+      simpa using outerAgrees
+    let targetIndex : Fin targetContext.length := Fin.cast
+      (ConcreteElaboration.WireContext.length_extend targetOuter
+        (input.plugLayout.frameRegion input.site)).symm
+      (Fin.castAdd
+        (ConcreteElaboration.exactScopeWires input.plugLayout.plugRaw
+          (input.plugLayout.frameRegion input.site)).length (outerMap outer))
+    have targetWire : targetContext.get targetIndex =
+        input.plugLayout.frameWire (sourceOuter.get outer) := by
+      calc
+        targetContext.get targetIndex = targetOuter.get (outerMap outer) := by
+          simpa [targetContext, targetIndex] using
+            (Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer
+              targetOuter (input.plugLayout.frameRegion input.site)
+              (outerMap outer))
+        _ = input.plugLayout.frameWire (sourceOuter.get outer) := outerSpec outer
+    have visible : input.plugLayout.plugRaw.Encloses
+        (input.plugLayout.plugRaw.wires
+          (input.plugLayout.frameWire (sourceOuter.get outer))).scope
+        (input.plugLayout.frameRegion input.site) :=
+      (input.plugLayout.frameWire_visible_at_region_iff input.site
+        (sourceOuter.get outer)).2
+        ((sourceExact.mem_iff (sourceOuter.get outer)).1 (by
+          exact List.mem_append_left _ (List.get_mem sourceOuter outer)))
+    have quotientEq := Splice.Input.siteQuotientEnvironment_eq input
+      targetContext targetExact targetEnv fallback (sourceOuter.get outer)
+      visible targetIndex targetWire
+    have targetValue : targetEnv targetIndex =
+        targetOuterEnv (outerMap outer) := by
+      simp [targetEnv, targetIndex, targetContext,
+        ConcreteElaboration.extendedEnvironment, extendWireEnv]
+    have main : sourceOuterEnv outer =
+        quotientValues (sourceOuter.get outer) := by
+      rw [outerEq]
+      exact targetValue.symm.trans quotientEq.symm
+    simp only [ConcreteElaboration.extendedEnvironment,
+      Function.comp_apply, extendWireEnv]
+    have splitCancel :
+        Fin.cast
+            (ConcreteElaboration.WireContext.length_extend sourceOuter
+              input.site)
+            (Fin.cast
+              (ConcreteElaboration.WireContext.length_extend sourceOuter
+                input.site).symm
+              (Fin.castAdd
+                (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+                  input.site).length outer)) =
+          Fin.castAdd
+            (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+              input.site).length outer := by
+      apply Fin.ext
+      rfl
+    rw [splitCancel, Fin.addCases_left]
+    rw [Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer]
+    exact main
+  · have main : sourceLocal localIndex = quotientValues
+        ((ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+          input.site).get localIndex) := rfl
+    simp only [ConcreteElaboration.extendedEnvironment,
+      Function.comp_apply, extendWireEnv]
+    have splitCancel :
+        Fin.cast
+            (ConcreteElaboration.WireContext.length_extend sourceOuter
+              input.site)
+            (Fin.cast
+              (ConcreteElaboration.WireContext.length_extend sourceOuter
+                input.site).symm
+              (Fin.natAdd sourceOuter.length localIndex)) =
+          Fin.natAdd sourceOuter.length localIndex := by
+      apply Fin.ext
+      rfl
+    rw [splitCancel, Fin.addCases_right]
+    rw [Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local]
+    exact main
+
 /-- Semantic simulation for one executor splice under the single
 comprehension relation selected for the complete trace.  Unlike the ordinary
 region simulation interface, this predicate records that the target lexical
