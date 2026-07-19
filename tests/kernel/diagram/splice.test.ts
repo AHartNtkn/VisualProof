@@ -177,7 +177,7 @@ describe('spliceSubgraph', () => {
     expect(out.wires[hw]?.endpoints).toHaveLength(3) // hn.out + spliced y + spliced x
   })
 
-  it('pushes an intrinsically aliased boundary out by identifying its host attachments once', () => {
+  it('materializes an intrinsically aliased boundary at the splice site without moving host scopes', () => {
     const pb = new DiagramBuilder()
     const pn = pb.termNode(pb.root, p('y'))
     const shared = pb.wire(pb.root, [{ node: pn, port: { kind: 'output' } }])
@@ -191,10 +191,21 @@ describe('spliceSubgraph', () => {
     const inner = hb.wire(cut, [{ node: innerNode, port: { kind: 'output' } }])
     const out = spliceSubgraph(hb.build(), cut, pattern, [inner, outer])
 
-    expect(out.wires[inner]).toBeUndefined()
+    expect(out.wires[inner]?.scope).toBe(cut)
     expect(out.wires[outer]?.scope).toBe(out.root)
-    // Both host endpoints plus the pattern endpoint exactly once. Repeating
-    // the boundary incidence must not copy the same pattern endpoint twice.
-    expect(out.wires[outer]?.endpoints).toHaveLength(3)
+    // The first attachment receives the copied pattern endpoint. The repeated
+    // incidence contributes one local identity node connecting the untouched
+    // host wires, so neither quantifier owner changes.
+    expect(out.wires[inner]?.endpoints).toHaveLength(3)
+    expect(out.wires[outer]?.endpoints).toHaveLength(2)
+    const aliases = Object.entries(out.nodes).filter(([id]) => id.startsWith('alias_'))
+    expect(aliases).toHaveLength(1)
+    expect(aliases[0]![1].region).toBe(cut)
+    expect(out.wires[inner]?.endpoints).toContainEqual({
+      node: aliases[0]![0], port: { kind: 'output' },
+    })
+    expect(out.wires[outer]?.endpoints).toContainEqual({
+      node: aliases[0]![0], port: { kind: 'freeVar', name: 's0' },
+    })
   })
 })

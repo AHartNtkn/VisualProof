@@ -5,6 +5,7 @@ import type { DiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
 import { freshId, type IdReservation } from './freshId'
+import { port } from '../../term/term'
 
 export type SpliceOptions = {
   readonly binderMap?: ReadonlyMap<RegionId, RegionId>
@@ -88,51 +89,18 @@ export function spliceSubgraphMapped(
     }
   }
 
-  // Boundary alias classes induce a quotient on host attachments. Use a tiny
-  // union-find over attachment ids: two host wires are identified exactly when
-  // two positions exposing the same pattern wire attach to them. Distinct
-  // pattern wires may still intentionally attach to one host wire (diagonal
-  // instantiation); that does not add another equivalence edge.
-  const parent = new Map<WireId, WireId>()
-  const find = (w: WireId): WireId => {
-    const p = parent.get(w)
-    if (p === undefined) { parent.set(w, w); return w }
-    if (p === w) return w
-    const root = find(p)
-    parent.set(w, root)
-    return root
-  }
-  const unite = (a: WireId, b: WireId): void => {
-    const ra = find(a), rb = find(b)
-    if (ra !== rb) parent.set(rb, ra)
-  }
+  // A repeated boundary identity is an equality constraint at the application
+  // site, not permission to identify the host wires globally. Keep the first
+  // ordered attachment as the copied pattern wire's representative and record
+  // every later incidence for an explicit local identity node below.
   const firstAttachmentOfStub = new Map<WireId, WireId>()
+  const aliasIncidences: Array<{ representative: WireId; attachment: WireId; position: number }> = []
   pattern.boundary.forEach((stub, i) => {
     const attachment = attachments[i]!
     const first = firstAttachmentOfStub.get(stub)
     if (first === undefined) firstAttachmentOfStub.set(stub, attachment)
-    else unite(first, attachment)
+    else aliasIncidences.push({ representative: first, attachment, position: i })
   })
-  const component = new Map<WireId, WireId[]>()
-  for (const attachment of attachments) {
-    const root = find(attachment)
-    const members = component.get(root)
-    if (members === undefined) component.set(root, [attachment])
-    else if (!members.includes(attachment)) members.push(attachment)
-  }
-  const hostImage = new Map<WireId, WireId>()
-  for (const members of component.values()) {
-    // All attachment scopes enclose atRegion, hence lie on one ancestor chain.
-    // Start with first incidence for stable equal-scope tie-breaking and replace
-    // it only with a strictly outer scope.
-    let survivor = members[0]!
-    for (const id of members.slice(1)) {
-      const candidate = host.wires[id]!
-      const current = host.wires[survivor]!
-      if (candidate.scope !== current.scope && isAncestorOrEqual(host, candidate.scope, current.scope)) survivor = id
-    }
-    for (const id of members) hostImage.set(id, survivor)
-  }
 
   for (const [stub, hb] of binderMap) {
     const ps = pd.regions[stub]
@@ -168,12 +136,17 @@ export function spliceSubgraphMapped(
     takenNodes.add(fresh)
     nodeMap.set(id, fresh)
   }
+  const aliasNodes = aliasIncidences.map(({ representative, attachment, position }) => {
+    const fresh = freshId(takenNodes, `alias_${position}`, options.reserved?.nodes)
+    takenNodes.add(fresh)
+    return { id: fresh, representative, attachment }
+  })
   // Mint against the full PRE-QUOTIENT namespace: a wire removed by the
   // pushout must never be resurrected as unrelated copied content.
   const takenWires = new Set(Object.keys(host.wires))
   const wireMap = new Map<WireId, WireId>()
   pattern.boundary.forEach((stub, index) => {
-    wireMap.set(stub, hostImage.get(attachments[index]!) ?? attachments[index]!)
+    if (!wireMap.has(stub)) wireMap.set(stub, attachments[index]!)
   })
   for (const id of Object.keys(pd.wires)) {
     if (boundarySet.has(id)) continue
@@ -204,21 +177,14 @@ export function spliceSubgraphMapped(
   for (const [id, n] of Object.entries(pd.nodes)) {
     nodes[nodeMap.get(id)!] = rebuildNode(n)
   }
+  for (const alias of aliasNodes) {
+    nodes[alias.id] = { kind: 'term', region: atRegion, term: port('s0') }
+  }
 
   const mapEndpoints = (eps: readonly Endpoint[]): Endpoint[] =>
     eps.map((ep) => ({ node: nodeMap.get(ep.node)!, port: ep.port }))
 
-  const wires: Record<WireId, Wire> = {}
-  for (const [id, w] of Object.entries(host.wires)) {
-    const image = hostImage.get(id) ?? id
-    if (image !== id) continue
-    const merged = Object.entries(host.wires)
-      .filter(([candidate]) => (hostImage.get(candidate) ?? candidate) === id)
-      .flatMap(([, candidate]) => candidate.endpoints)
-    wires[id] = merged.length === w.endpoints.length
-      ? w
-      : { scope: w.scope, endpoints: merged }
-  }
+  const wires: Record<WireId, Wire> = { ...host.wires }
   for (const [id, w] of Object.entries(pd.wires)) {
     if (boundarySet.has(id)) continue
     wires[wireMap.get(id)!] = {
@@ -230,7 +196,7 @@ export function spliceSubgraphMapped(
   pattern.boundary.forEach((stubId, i) => {
     if (copiedBoundary.has(stubId)) return
     copiedBoundary.add(stubId)
-    const hostWireId = hostImage.get(attachments[i]!) ?? attachments[i]!
+    const hostWireId = attachments[i]!
     const stub = pd.wires[stubId]!
     const existing = wires[hostWireId]!
     wires[hostWireId] = {
@@ -238,6 +204,29 @@ export function spliceSubgraphMapped(
       endpoints: [...existing.endpoints, ...mapEndpoints(stub.endpoints)],
     }
   })
+  for (const alias of aliasNodes) {
+    const representative = wires[alias.representative]!
+    const attachment = wires[alias.attachment]!
+    if (alias.representative === alias.attachment) {
+      wires[alias.representative] = {
+        scope: representative.scope,
+        endpoints: [
+          ...representative.endpoints,
+          { node: alias.id, port: { kind: 'output' } },
+          { node: alias.id, port: { kind: 'freeVar', name: 's0' } },
+        ],
+      }
+    } else {
+      wires[alias.representative] = {
+        scope: representative.scope,
+        endpoints: [...representative.endpoints, { node: alias.id, port: { kind: 'output' } }],
+      }
+      wires[alias.attachment] = {
+        scope: attachment.scope,
+        endpoints: [...attachment.endpoints, { node: alias.id, port: { kind: 'freeVar', name: 's0' } }],
+      }
+    }
+  }
 
   return Object.freeze({
     diagram: mkDiagram({ root: host.root, regions, nodes, wires }),
