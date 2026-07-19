@@ -135,6 +135,196 @@ theorem extendWireEnv_at_site
   · simp [extendedWireMapAtSite, extendWireEnv, Function.comp_def]
   · simp [extendedWireMapAtSite, extendWireEnv, Function.comp_def]
 
+theorem exactScopeWires_length_of_ne
+    (input : CheckedDiagram signature)
+    (selected : Fin input.val.nodeCount)
+    (site region : Fin input.val.regionCount)
+    (producer : Lambda.Term 0 (Fin input.val.wireCount))
+    (residual : Lambda.Term 0 (Option (Fin input.val.wireCount)))
+    (regular : region ≠ site) :
+    (ConcreteElaboration.exactScopeWires
+      (fissionRaw input selected site producer residual) region).length =
+      (ConcreteElaboration.exactScopeWires input.val region).length := by
+  rw [fissionRaw_exactScopeWires, if_neg regular, List.append_nil]
+  exact List.length_map _
+
+noncomputable def extendedWireMapOfNe
+    (embedding : ContextEmbedding input selected site producer residual
+      source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ site) :
+    Fin (source.extend region).length → Fin (target.extend region).length :=
+  fun index =>
+    Fin.cast (ConcreteElaboration.WireContext.length_extend target region).symm
+      (Fin.addCases
+        (fun outer => Fin.castAdd
+          (ConcreteElaboration.exactScopeWires
+            (fissionRaw input selected site producer residual) region).length
+          (embedding.index outer))
+        (fun localIndex => Fin.natAdd target.length
+          (Fin.cast (exactScopeWires_length_of_ne input selected site region
+            producer residual regular).symm localIndex))
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend source region) index))
+
+theorem extendedWireMapOfNe_spec
+    (embedding : ContextEmbedding input selected site producer residual
+      source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ site)
+    (index : Fin (source.extend region).length) :
+    (target.extend region).get
+        (extendedWireMapOfNe embedding region regular index) =
+      ((source.extend region).get index).castSucc := by
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend source region) index
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend source region).symm split =
+        index := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
+  · have mapEq : extendedWireMapOfNe embedding region regular
+        (Fin.cast (ConcreteElaboration.WireContext.length_extend source region).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires input.val region).length outer)) =
+        Fin.cast (ConcreteElaboration.WireContext.length_extend target region).symm
+          (Fin.castAdd
+            (ConcreteElaboration.exactScopeWires
+              (fissionRaw input selected site producer residual) region).length
+            (embedding.index outer)) := by
+      apply Fin.ext
+      simp [extendedWireMapOfNe]
+    rw [mapEq]
+    simpa [ConcreteElaboration.WireContext.extend] using embedding.get outer
+  · have mapEq : extendedWireMapOfNe embedding region regular
+        (Fin.cast (ConcreteElaboration.WireContext.length_extend source region).symm
+          (Fin.natAdd source.length localIndex)) =
+        Fin.cast (ConcreteElaboration.WireContext.length_extend target region).symm
+          (Fin.natAdd target.length
+            (Fin.cast (exactScopeWires_length_of_ne input selected site region
+              producer residual regular).symm localIndex)) := by
+      apply Fin.ext
+      simp [extendedWireMapOfNe]
+    rw [mapEq]
+    have scopeList := fissionRaw_exactScopeWires input selected site region
+      producer residual
+    rw [if_neg regular, List.append_nil] at scopeList
+    simp [ConcreteElaboration.WireContext.extend, scopeList]
+    change
+      (List.map Fin.castSucc
+        (ConcreteElaboration.exactScopeWires input.val region))[localIndex.val] =
+        (ConcreteElaboration.exactScopeWires input.val region)[localIndex.val].castSucc
+    exact List.getElem_map _
+
+theorem ContextEmbedding.extend_index_eq_map_of_ne
+    (embedding : ContextEmbedding input selected site producer residual
+      source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ site)
+    (targetNodup : (target.extend region).Nodup)
+    (index : Fin (source.extend region).length) :
+    (embedding.extend region).index index =
+      extendedWireMapOfNe embedding region regular index := by
+  symm
+  apply ContextEmbedding.index_eq_of_get (embedding.extend region) targetNodup
+    index
+  exact extendedWireMapOfNe_spec embedding region regular index
+
+theorem extendWireEnv_of_ne
+    (embedding : ContextEmbedding input selected site producer residual
+      source target)
+    (region : Fin input.val.regionCount) (regular : region ≠ site)
+    (outerEnvironment : Fin target.length → D)
+    (localEnvironment : Fin (ConcreteElaboration.exactScopeWires
+      (fissionRaw input selected site producer residual) region).length → D) :
+    (extendWireEnv outerEnvironment localEnvironment ∘
+        Fin.cast (ConcreteElaboration.WireContext.length_extend target region)) ∘
+        extendedWireMapOfNe embedding region regular =
+      extendWireEnv (outerEnvironment ∘ embedding.index)
+          (localEnvironment ∘ Fin.cast
+            (exactScopeWires_length_of_ne input selected site region producer
+              residual regular).symm) ∘
+        Fin.cast (ConcreteElaboration.WireContext.length_extend source region) := by
+  funext wire
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend source region) wire
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend source region).symm split =
+        wire := by
+    apply Fin.ext
+    rfl
+  rw [← recover]
+  refine Fin.addCases (fun outer => ?_) (fun localWire => ?_) split
+  · simp [extendedWireMapOfNe, extendWireEnv, Function.comp_def]
+  · simp [extendedWireMapOfNe, extendWireEnv, Function.comp_def]
+
+theorem regularLocalSelection
+    (embedding : ContextEmbedding input selected site producer residual
+      source target)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (region : Fin input.val.regionCount) (regular : region ≠ site)
+    (targetExact : (target.extend region).Exact region)
+    (model : Lambda.LambdaModel) :
+    ∀ (sourceOuter : Fin source.length → model.Carrier)
+      (targetOuter : Fin target.length → model.Carrier),
+      (ConcreteElaboration.ContextIndexRelation.forwardMap
+        embedding.index).EnvironmentsAgree sourceOuter targetOuter →
+        match direction with
+        | .forward => ∀ sourceLocal,
+            ∃ targetLocal,
+              (ConcreteElaboration.ContextIndexRelation.forwardMap
+                (embedding.extend region).index).EnvironmentsAgree
+                (ConcreteElaboration.extendedEnvironment source region
+                  sourceOuter sourceLocal)
+                (ConcreteElaboration.extendedEnvironment target region
+                  targetOuter targetLocal)
+        | .backward => ∀ targetLocal,
+            ∃ sourceLocal,
+              (ConcreteElaboration.ContextIndexRelation.forwardMap
+                (embedding.extend region).index).EnvironmentsAgree
+                (ConcreteElaboration.extendedEnvironment source region
+                  sourceOuter sourceLocal)
+                (ConcreteElaboration.extendedEnvironment target region
+                  targetOuter targetLocal) := by
+  intro sourceOuter targetOuter outerAgrees
+  have outerEq : sourceOuter = targetOuter ∘ embedding.index :=
+    (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      embedding.index sourceOuter targetOuter).mp outerAgrees
+  have indexEq : (embedding.extend region).index =
+      extendedWireMapOfNe embedding region regular := by
+    funext index
+    exact embedding.extend_index_eq_map_of_ne region regular targetExact.nodup
+      index
+  cases direction with
+  | forward =>
+      intro sourceLocal
+      let targetLocal := sourceLocal ∘ Fin.cast
+        (exactScopeWires_length_of_ne input selected site region producer
+          residual regular)
+      refine ⟨targetLocal, ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        (embedding.extend region).index _ _).mpr
+      have localEq : targetLocal ∘ Fin.cast
+          (exactScopeWires_length_of_ne input selected site region producer
+            residual regular).symm = sourceLocal := by
+        funext localWire
+        simp [targetLocal]
+      have environmentEq := extendWireEnv_of_ne embedding region regular
+        targetOuter targetLocal
+      unfold ConcreteElaboration.extendedEnvironment
+      rw [indexEq, environmentEq, localEq, outerEq]
+  | backward =>
+      intro targetLocal
+      let sourceLocal := targetLocal ∘ Fin.cast
+        (exactScopeWires_length_of_ne input selected site region producer
+          residual regular).symm
+      refine ⟨sourceLocal, ?_⟩
+      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+        (embedding.extend region).index _ _).mpr
+      have environmentEq := extendWireEnv_of_ne embedding region regular
+        targetOuter targetLocal
+      unfold ConcreteElaboration.extendedEnvironment sourceLocal
+      rw [indexEq, environmentEq, outerEq]
+
 def focusedTargetLocal
     (input : CheckedDiagram signature)
     (selected : Fin input.val.nodeCount)
