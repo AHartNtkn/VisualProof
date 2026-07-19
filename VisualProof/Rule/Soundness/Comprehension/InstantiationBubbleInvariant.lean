@@ -193,6 +193,34 @@ theorem bubbleShapeEveryStep_of
       exact ⟨shape, ih (shape.advance comprehension attachments binders payload
         state atom tail site arguments hadmissible)⟩
 
+/-- The moving quantified bubble has the payload arity at the terminal state of
+an accepted executor trace. -/
+theorem BubbleHasPayloadArity.afterTrace
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {origin : CheckedDiagram signature}
+    {fuel : Nat}
+    {state result : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (shape : BubbleHasPayloadArity payload state) :
+    BubbleHasPayloadArity payload result := by
+  induction trace with
+  | done => exact shape
+  | step fuel state result atom tail site candidate arguments checkedInput
+      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+      exact ih (shape.advance comprehension attachments binders payload state
+        atom tail site arguments hadmissible)
+
 theorem initial_bubbleShapeEveryStep
     {signature : List Nat}
     {input : CheckedDiagram signature}

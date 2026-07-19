@@ -8,6 +8,67 @@ open VisualProof.Theory
 
 namespace InstantiationSemantic
 
+/-- Exact wire contexts are unchanged when already-processed atom nodes are
+deleted; the drop changes neither wire identities nor wire scopes. -/
+theorem dropExact_to_state
+    (state : InstantiationState origin parameterCount proxyCount)
+    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (region : Fin state.diagram.val.regionCount)
+    (exact : @ConcreteElaboration.WireContext.Exact
+      (dropInstantiationAtomsRaw state) context region) :
+    @ConcreteElaboration.WireContext.Exact state.diagram.val context region := by
+  constructor
+  · exact exact.nodup
+  · intro wire
+    constructor
+    · intro member
+      have droppedVisible := (exact.mem_iff wire).1 member
+      exact (InstantiationDrop.raw_encloses_iff state
+        (state.diagram.val.wires wire).scope region).1 (by
+          simpa only [InstantiationDrop.raw_wire_scope] using droppedVisible)
+    · intro visible
+      apply (exact.mem_iff wire).2
+      simpa only [InstantiationDrop.raw_wire_scope] using
+        (InstantiationDrop.raw_encloses_iff state
+          (state.diagram.val.wires wire).scope region).2 visible
+
+/-- Binder coverage is unchanged by processed-atom deletion. -/
+theorem dropCover_to_state
+    (state : InstantiationState origin parameterCount proxyCount)
+    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (region : Fin state.diagram.val.regionCount)
+    (cover : @ConcreteElaboration.BinderContext.Covers
+      (dropInstantiationAtomsRaw state) rels context region) :
+    @ConcreteElaboration.BinderContext.Covers state.diagram.val rels context
+      region := by
+  intro binder parent arity bubbleEq encloses
+  apply cover binder parent arity
+  · simpa only [InstantiationDrop.raw_regions] using bubbleEq
+  · exact (InstantiationDrop.raw_encloses_iff state binder region).2 encloses
+
+/-- Binder enumeration is unchanged by processed-atom deletion. -/
+def dropEnumeration_to_state
+    (state : InstantiationState origin parameterCount proxyCount)
+    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (region : Fin state.diagram.val.regionCount)
+    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+      (dropInstantiationAtomsRaw state) context region) :
+    ConcreteElaboration.BinderContext.Enumeration state.diagram.val context
+      region where
+  binder := enumeration.binder
+  binder_injective := enumeration.binder_injective
+  bubble := by
+    intro index
+    obtain ⟨parent, bubbleEq⟩ := enumeration.bubble index
+    exact ⟨parent, by
+      simpa only [InstantiationDrop.raw_regions] using bubbleEq⟩
+  encloses := by
+    intro index
+    exact (InstantiationDrop.raw_encloses_iff state _ _).1
+      (enumeration.encloses index)
+  lookup := enumeration.lookup
+  lookup_owner := enumeration.lookup_owner
+
 /-- Every certified proxy target has a lexical relation variable in any
 compiler context covering the moving quantified bubble. -/
 theorem proxyRelation_exists_of_cover
@@ -96,6 +157,123 @@ theorem proxyRelationsOfCover_fixed
     rfl
   subst relation
   rfl
+
+/-- Every certified proxy target is already available in a compiler context
+covering the parent of the moving bubble.  Pushing the moving binder therefore
+does not manufacture any proxy relation. -/
+theorem proxyRelation_exists_of_parent_cover
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (targets : BinderTargetsAtBubble payload state)
+    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (parent : Fin state.diagram.val.regionCount)
+    (bubbleShape : state.diagram.val.regions state.bubble =
+      .bubble parent payload.arity)
+    (cover : binderContext.Covers parent)
+    (index : Fin payload.binderSpine.proxyCount) :
+    ∃ relation : RelVar rels (payload.binderSpine.arity index),
+      binderContext (state.binderTargets index) =
+        some ⟨payload.binderSpine.arity index, relation⟩ := by
+  obtain ⟨targetParent, targetShape⟩ := targets.target_shape index
+  have bubbleParent :
+      (state.diagram.val.regions state.bubble).parent? = some parent := by
+    simp [bubbleShape, CRegion.parent?]
+  have targetEnclosesParent :
+      state.diagram.val.Encloses (state.binderTargets index) parent :=
+    (ConcreteElaboration.encloses_direct_child bubbleParent
+      (targets.target_encloses index)).resolve_left (targets.target_ne index)
+  exact cover (state.binderTargets index) targetParent
+    (payload.binderSpine.arity index) targetShape targetEnclosesParent
+
+/-- Canonical proxy values read before the selected bubble binder is pushed. -/
+noncomputable def proxyRelationsOfParentCover
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (targets : BinderTargetsAtBubble payload state)
+    {model : Lambda.LambdaModel}
+    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (parent : Fin state.diagram.val.regionCount)
+    (bubbleShape : state.diagram.val.regions state.bubble =
+      .bubble parent payload.arity)
+    (cover : binderContext.Covers parent)
+    (relationEnvironment : RelEnv model.Carrier rels)
+    (index : Fin payload.binderSpine.proxyCount) :
+    Relation model.Carrier (payload.binderSpine.arity index) :=
+  relationEnvironment.lookup (Classical.choose
+    (proxyRelation_exists_of_parent_cover payload state targets
+      binderContext parent bubbleShape cover index))
+
+/-- Pushing the selected bubble preserves the canonical proxy family obtained
+from its parent compiler context. -/
+theorem proxyRelationsOfParentCover_fixed
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (targets : BinderTargetsAtBubble payload state)
+    {model : Lambda.LambdaModel}
+    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (parent : Fin state.diagram.val.regionCount)
+    (bubbleShape : state.diagram.val.regions state.bubble =
+      .bubble parent payload.arity)
+    (cover : binderContext.Covers parent)
+    (relationEnvironment : RelEnv model.Carrier rels)
+    (relationValue : Relation model.Carrier payload.arity) :
+    ProxyRelationsAt payload state
+      (binderContext.push state.bubble payload.arity)
+      (relationValue, relationEnvironment)
+      (proxyRelationsOfParentCover payload state targets binderContext
+        parent bubbleShape cover relationEnvironment) := by
+  have base : ProxyRelationsAt payload state binderContext relationEnvironment
+      (proxyRelationsOfParentCover payload state targets binderContext parent
+        bubbleShape cover relationEnvironment) := by
+    intro index relation lookup
+    let chosen := Classical.choose
+      (proxyRelation_exists_of_parent_cover payload state targets binderContext
+        parent bubbleShape cover index)
+    have chosenLookup := Classical.choose_spec
+      (proxyRelation_exists_of_parent_cover payload state targets binderContext
+        parent bubbleShape cover index)
+    have sigmaEq := Option.some.inj (lookup.symm.trans chosenLookup)
+    have relationEq : relation = chosen := by
+      cases sigmaEq
+      rfl
+    subst relation
+    rfl
+  apply ProxyRelationsAt.push_other payload state binderContext
+    relationEnvironment
+    (proxyRelationsOfParentCover payload state targets binderContext
+      parent bubbleShape cover relationEnvironment)
+    base
+    state.bubble payload.arity relationValue targets.target_ne
 
 /-- Every inherited parameter occurs in any exact compiler context for the
 moving bubble, outside its bubble-local suffix. -/
