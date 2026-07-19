@@ -104,6 +104,76 @@ theorem compileOccurrencesWith_filter_denotes
                         ih tailItems keptTail tailResult keptTailResult
                           tailRemoved keptDenotes.2⟩
 
+/-- Forget compiled occurrences rejected by a Boolean filter.  This is the
+covariant companion to `compileOccurrencesWith_filter_denotes`; together the
+two lemmas expose exactly the polarity split used when atom deletion crosses
+cuts. -/
+theorem compileOccurrencesWith_filter_denotes_of_all
+    {signature : List Nat}
+    (diagram : ConcreteDiagram)
+    (recurse : ∀ {rels : RelCtx},
+      (region : Fin diagram.regionCount) →
+      (context : ConcreteElaboration.WireContext diagram) →
+      ConcreteElaboration.BinderContext diagram rels →
+      Option (Region signature context.length rels))
+    (context : ConcreteElaboration.WireContext diagram)
+    (binders : ConcreteElaboration.BinderContext diagram rels)
+    (keep : ConcreteElaboration.LocalOccurrence diagram.regionCount
+      diagram.nodeCount → Bool)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (environment : Fin context.length → model.Carrier)
+    (relEnv : RelEnv model.Carrier rels)
+    (occurrences : List (ConcreteElaboration.LocalOccurrence
+      diagram.regionCount diagram.nodeCount))
+    (allItems keptItems : ItemSeq signature context.length rels)
+    (allCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      diagram recurse context binders occurrences = some allItems)
+    (keptCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      diagram recurse context binders (occurrences.filter keep) =
+        some keptItems)
+    (allDenotes : denoteItemSeq model named environment relEnv allItems) :
+    denoteItemSeq model named environment relEnv keptItems := by
+  induction occurrences generalizing allItems keptItems with
+  | nil =>
+      simp only [ConcreteElaboration.compileOccurrencesWith?,
+        List.filter_nil] at allCompiled keptCompiled
+      cases keptCompiled
+      trivial
+  | cons occurrence tail ih =>
+      simp only [ConcreteElaboration.compileOccurrencesWith?] at allCompiled
+      cases headResult : ConcreteElaboration.compileOccurrenceWith? signature
+          diagram recurse context binders occurrence with
+      | none => simp [headResult] at allCompiled
+      | some headItem =>
+          cases tailResult : ConcreteElaboration.compileOccurrencesWith?
+              signature diagram recurse context binders tail with
+          | none => simp [headResult, tailResult] at allCompiled
+          | some tailItems =>
+              simp [headResult, tailResult] at allCompiled
+              subst allItems
+              cases kept : keep occurrence with
+              | false =>
+                  simp only [List.filter_cons, kept, Bool.false_eq_true,
+                    ↓reduceIte] at keptCompiled
+                  exact ih tailItems keptItems tailResult keptCompiled
+                    allDenotes.2
+              | true =>
+                  simp only [List.filter_cons, kept, ↓reduceIte] at keptCompiled
+                  simp only [ConcreteElaboration.compileOccurrencesWith?,
+                    headResult] at keptCompiled
+                  cases keptTailResult :
+                      ConcreteElaboration.compileOccurrencesWith? signature
+                        diagram recurse context binders
+                          (tail.filter keep) with
+                  | none => simp [keptTailResult] at keptCompiled
+                  | some keptTail =>
+                      simp [keptTailResult] at keptCompiled
+                      subst keptItems
+                      exact ⟨allDenotes.1,
+                        ih tailItems keptTail tailResult keptTailResult
+                          allDenotes.2⟩
+
 end InstantiationSemantic
 
 end VisualProof.Rule
