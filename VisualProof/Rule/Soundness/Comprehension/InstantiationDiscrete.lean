@@ -6,6 +6,7 @@ namespace VisualProof.Rule
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
+open VisualProof.Theory
 
 namespace InstantiationSemantic
 
@@ -106,6 +107,87 @@ noncomputable def discreteDroppedStateIso
         (ConcreteIso.refl (dropInstantiationAtomsRaw state)).wire_endpoints_perm
           (wireEquiv quotient)
   }
+
+/-- Authoritative compilation on an alias-free coalesced source agrees with
+compilation on the actual dropped executor state.  The source side is stated
+through the survivor compiler used by the one-step semantic theorem; the
+target side is the ordinary compiler used by diagram denotation. -/
+theorem discreteDroppedRegionIso
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (boundaryNodup : comprehension.val.boundary.Nodup)
+    {sourceRels : Theory.RelCtx}
+    {sourceFuel targetFuel : Nat}
+    {sourceRegion : Fin
+      (dropInstantiationAtomsRaw
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible)).regionCount}
+    {targetRegion : Fin (dropInstantiationAtomsRaw state).regionCount}
+    (regionEq :
+      (discreteDroppedStateIso comprehension attachments binders payload state
+        site arguments hadmissible boundaryNodup).regions sourceRegion =
+        targetRegion)
+    (sourceContext : ConcreteElaboration.WireContext
+      (dropInstantiationAtomsRaw
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible)))
+    (targetContext : ConcreteElaboration.WireContext
+      (dropInstantiationAtomsRaw state))
+    (ambient : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length))
+    (contextsAgree : ConcreteElaboration.WireContextsAgree
+      (discreteDroppedStateIso comprehension attachments binders payload state
+        site arguments hadmissible boundaryNodup)
+      sourceContext targetContext ambient)
+    (targetExact : (targetContext.extend targetRegion).Exact targetRegion)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      (dropInstantiationAtomsRaw
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible)) sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (dropInstantiationAtomsRaw state) sourceRels)
+    (bindersAgree : ConcreteElaboration.BinderContextsAgree
+      (discreteDroppedStateIso comprehension attachments binders payload state
+        site arguments hadmissible boundaryNodup)
+      sourceBinders targetBinders)
+    (sourceBody : Region signature sourceContext.length sourceRels)
+    (targetBody : Region signature targetContext.length sourceRels)
+    (sourceCompiled : compileSurvivorRegion? signature
+      (coalescedInstantiationState comprehension attachments binders payload
+        state site arguments hadmissible)
+      sourceFuel sourceRegion sourceContext sourceBinders = some sourceBody)
+    (targetCompiled : ConcreteElaboration.compileRegion? signature
+      (dropInstantiationAtomsRaw state) targetFuel targetRegion targetContext
+      targetBinders = some targetBody) :
+    RegionIso signature ambient sourceRels sourceBody targetBody := by
+  let coalesced := coalescedInstantiationState comprehension attachments binders
+    payload state site arguments hadmissible
+  let iso := discreteDroppedStateIso comprehension attachments binders payload
+    state site arguments hadmissible boundaryNodup
+  have sourceCompiled' : ConcreteElaboration.compileRegion? signature
+      (dropInstantiationAtomsRaw coalesced) sourceFuel sourceRegion sourceContext
+      sourceBinders = some sourceBody := by
+    exact (drop_compileRegion_eq_survivor coalesced sourceFuel sourceRegion
+      sourceContext sourceBinders).trans (by
+        simpa [coalesced] using sourceCompiled)
+  subst targetRegion
+  exact ConcreteElaboration.compileRegion?_equivariant iso
+    (InstantiationDrop.raw_wellFormed state) contextsAgree targetExact
+    bindersAgree sourceCompiled' targetCompiled
 
 end InstantiationSemantic
 
