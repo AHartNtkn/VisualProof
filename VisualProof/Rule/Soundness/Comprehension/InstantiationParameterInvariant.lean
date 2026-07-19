@@ -128,6 +128,80 @@ theorem initial_parameterScopesAtBubble
   intro position
   simpa [initialInstantiationState] using payload.parameterScopesProper position
 
+/-- Every inherited parameter occurs in the canonical compiler context of the
+final dropped bubble, never in its bubble-local suffix. -/
+theorem parameter_mem_droppedBubbleOuter
+    (state : InstantiationState origin parameterCount proxyCount)
+    (scopes : ParameterScopesAtBubble state)
+    (position : Fin parameterCount) :
+    state.parameters position ∈
+      (droppedBubbleView state).compilerLeaf.inheritedWires := by
+  let view := droppedBubbleView state
+  let leaf := view.compilerLeaf
+  have visible := (scopes position).1
+  have droppedVisible : (dropInstantiationAtomsRaw state).Encloses
+      ((dropInstantiationAtomsRaw state).wires
+        (state.parameters position)).scope state.bubble := by
+    simpa only [InstantiationDrop.raw_wire_scope] using
+      (InstantiationDrop.raw_encloses_iff state
+        (state.diagram.val.wires (state.parameters position)).scope
+        state.bubble).2 visible
+  have member : state.parameters position ∈
+      leaf.inheritedWires.extend state.bubble :=
+    (leaf.wiresExact.mem_iff (state.parameters position)).2 droppedVisible
+  rcases List.mem_append.mp member with inherited | localMember
+  · exact inherited
+  · have localScope :
+        ((dropInstantiationAtomsRaw state).wires
+          (state.parameters position)).scope = state.bubble :=
+      (ConcreteElaboration.mem_exactScopeWires _ _ _).1 localMember
+    exact False.elim ((scopes position).2 (by
+      simpa only [InstantiationDrop.raw_wire_scope] using localScope))
+
+/-- Canonical index of one ordered parameter in the final bubble's inherited
+compiler context. -/
+noncomputable def droppedBubbleParameterIndex
+    (state : InstantiationState origin parameterCount proxyCount)
+    (scopes : ParameterScopesAtBubble state)
+    (position : Fin parameterCount) :
+    Fin (droppedBubbleView state).compilerLeaf.inheritedWires.length :=
+  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+    (parameter_mem_droppedBubbleOuter state scopes position))
+
+@[simp] theorem droppedBubbleParameterIndex_get
+    (state : InstantiationState origin parameterCount proxyCount)
+    (scopes : ParameterScopesAtBubble state)
+    (position : Fin parameterCount) :
+    (droppedBubbleView state).compilerLeaf.inheritedWires.get
+        (droppedBubbleParameterIndex state scopes position) =
+      state.parameters position :=
+  ConcreteElaboration.WireContext.lookup?_sound
+    (Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+      (parameter_mem_droppedBubbleOuter state scopes position)))
+
+/-- Ordered parameter valuation read from the canonical final bubble focus.
+Repeated parameter positions deliberately reuse the same context value. -/
+noncomputable def droppedBubbleParameterValues
+    (state : InstantiationState origin parameterCount proxyCount)
+    (scopes : ParameterScopesAtBubble state)
+    (environment : Fin
+      (droppedBubbleView state).compilerLeaf.inheritedWires.length → D) :
+    Fin parameterCount → D :=
+  fun position => environment
+    (droppedBubbleParameterIndex state scopes position)
+
+theorem droppedBubbleParameterValues_fixed
+    (state : InstantiationState origin parameterCount proxyCount)
+    (scopes : ParameterScopesAtBubble state)
+    (environment : Fin
+      (droppedBubbleView state).compilerLeaf.inheritedWires.length → D) :
+    ParameterValuesAt state
+      (droppedBubbleView state).compilerLeaf.inheritedWires environment
+      (droppedBubbleParameterValues state scopes environment) := by
+  intro position
+  exact ⟨droppedBubbleParameterIndex state scopes position,
+    droppedBubbleParameterIndex_get state scopes position, rfl⟩
+
 end InstantiationSemantic
 
 end VisualProof.Rule
