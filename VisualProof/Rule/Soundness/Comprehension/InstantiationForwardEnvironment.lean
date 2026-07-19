@@ -396,6 +396,38 @@ theorem siteTargetLocalOfEmpty_pattern
   rw [FiniteEquiv.symm_apply_apply]
   exact Fin.addCases_right index
 
+/-- The generic focused zero-spine valuation is the concrete target-local
+valuation used here once its quotient valuation agrees with the supplied host
+locals. -/
+theorem focusedLocalEnvironmentOfEmpty_eq_siteTargetLocal
+    {signature : List Nat}
+    {input : Splice.Input signature}
+    (hzero : input.binderSpine.proxyCount = 0)
+    (values : input.wireQuotient.Carrier → D)
+    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+      input.coalesceFrameRaw input.site).length → D)
+    (patternHidden : Fin input.pattern.val.hiddenWires.length → D)
+    (hostValues : ∀ index, values
+      ((ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+        input.site).get index) = sourceLocal index) :
+    Splice.Input.focusedLocalEnvironmentOfEmpty input hzero values
+        patternHidden =
+      siteTargetLocalOfEmpty input.plugLayout hzero sourceLocal
+        patternHidden := by
+  funext targetIndex
+  let semantic :=
+    (input.plugLayout.siteLocalWireEquivOfEmpty hzero).symm targetIndex
+  have recover : input.plugLayout.siteLocalWireEquivOfEmpty hzero semantic =
+      targetIndex :=
+    (input.plugLayout.siteLocalWireEquivOfEmpty hzero).apply_symm_apply _
+  rw [← recover]
+  refine Fin.addCases (fun hostIndex => ?_) (fun hiddenIndex => ?_) semantic
+  · rw [Splice.Input.focusedLocalEnvironmentOfEmpty_frame,
+      siteTargetLocalOfEmpty_host]
+    exact hostValues hostIndex
+  · rw [Splice.Input.focusedLocalEnvironmentOfEmpty_hidden,
+      siteTargetLocalOfEmpty_pattern]
+
 noncomputable def siteForwardHostWireMapOfEmpty
     {signature : List Nat}
     {input : Splice.Input signature}
