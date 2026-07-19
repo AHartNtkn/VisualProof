@@ -102,6 +102,86 @@ theorem terminalPrepared_denotes_of_output
   rw [denoteItemSeq_append] at preparedDenotes
   exact preparedDenotes.2
 
+/-- Native-context form of `terminalPrepared_denotes_of_output`: both seam
+renamings are interpreted by environment pullback. -/
+theorem terminalItems_denotes_of_output
+    {signature : List Nat}
+    (input : Splice.Input signature)
+    (layout : Splice.Input.PlugLayout input)
+    (hadmissible : input.Admissible)
+    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    {patternBody : Region signature patternOuter patternRels}
+    {patternPath : List Nat}
+    (patternWitness : Region.ContextPath patternBody patternPath)
+    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+      input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
+    {outputBody : Region signature outputOuter outputRels}
+    {outputPath : List Nat}
+    (outputWitness : Region.ContextPath outputBody outputPath)
+    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
+      (layout.frameRegion input.site) outputWitness)
+    (hnonempty : input.binderSpine.proxyCount ≠ 0)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (env : Fin (outputLeaf.inheritedWires.extend
+      (layout.frameRegion input.site)).length → model.Carrier)
+    (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
+    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
+      outputWitness outputLeaf hnonempty
+    let targetEq := ConcreteElaboration.WireContext.length_extend
+      outputLeaf.inheritedWires (layout.frameRegion input.site)
+    let targetEnv : Fin
+        (outputLeaf.inheritedWires.length +
+          (ConcreteElaboration.exactScopeWires layout.plugRaw
+            (layout.frameRegion input.site)).length) → model.Carrier :=
+      env ∘ Fin.cast targetEq.symm
+    let sourceEnv := targetEnv ∘ combined
+    let terminalRelations : RelationRenaming
+        patternWitness.toFocus.holeRels outputWitness.toFocus.holeRels :=
+      fun relation =>
+        layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+          outputWitness outputLeaf
+          (layout.coalescedTerminalRelationRenaming hadmissible
+            host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
+            hnonempty relation)
+    denoteItemSeq model named
+      (sourceEnv ∘ layout.patternSeamPreparedWireOfNonempty hadmissible host
+        patternWitness patternLeaf hnonempty)
+      (RelEnv.pullback terminalRelations relEnv) patternLeaf.items := by
+  dsimp only
+  let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
+    outputWitness outputLeaf hnonempty
+  let targetEq := ConcreteElaboration.WireContext.length_extend
+    outputLeaf.inheritedWires (layout.frameRegion input.site)
+  let targetEnv : Fin
+      (outputLeaf.inheritedWires.length +
+        (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (layout.frameRegion input.site)).length) → model.Carrier :=
+    env ∘ Fin.cast targetEq.symm
+  let sourceEnv := targetEnv ∘ combined
+  let terminalRelations : RelationRenaming
+      patternWitness.toFocus.holeRels outputWitness.toFocus.holeRels :=
+    fun relation =>
+      layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+        outputWitness outputLeaf
+        (layout.coalescedTerminalRelationRenaming hadmissible
+          host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
+          hnonempty relation)
+  have prepared := terminalPrepared_denotes_of_output input layout hadmissible
+    host patternWitness patternLeaf outputWitness outputLeaf hnonempty model
+    named env relEnv denotes
+  change denoteItemSeq model named sourceEnv relEnv
+      ((patternLeaf.items.renameWires
+        (layout.patternSeamPreparedWireOfNonempty hadmissible host
+          patternWitness patternLeaf hnonempty)).renameRelations
+        terminalRelations) at prepared
+  rw [denoteItemSeq_renameRelations model named terminalRelations
+    (RelEnv.pullback terminalRelations relEnv) relEnv
+    (RelEnv.pullback_agrees terminalRelations relEnv)] at prepared
+  rw [denoteItemSeq_renameWires] at prepared
+  exact prepared
+
 end InstantiationSemantic
 
 end VisualProof.Rule
