@@ -12,6 +12,11 @@ abbrev Domains (input : CheckedDiagram signature)
     (occurrences : List (AbstractionOccurrence input)) :=
   abstractionDomains input occurrences
 
+abbrev domains
+    (trace : AbstractionRawTrace input wrap comprehension occurrences raw) :
+    AbstractionDomains input occurrences :=
+  Domains input occurrences
+
 def bubble
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw) :
     Fin (Domains input occurrences).regions.count.succ :=

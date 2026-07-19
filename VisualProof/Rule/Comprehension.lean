@@ -298,7 +298,7 @@ theorem comprehensionAbstractRaw?_trace
     raw_eq := rfl
   }⟩
 
-private def comprehensionAbstractWireProvenance
+def comprehensionAbstractWireProvenance
     (input : CheckedDiagram signature)
     (wrap : CheckedSelection input.val)
     (comprehension : CheckedOpenDiagram signature)
@@ -306,14 +306,14 @@ private def comprehensionAbstractWireProvenance
     (raw : ConcreteDiagram)
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw) : WireProvenance input.val raw :=
-  let domains : AbstractionDomains input occurrences := {}
+  let domains := abstractionDomains input occurrences
   WireProvenance.survivors input.val raw domains.wires (by
     rw [Option.map_eq_some_iff] at hraw
     obtain ⟨witness, _, equality⟩ := hraw
     subst raw
     exact witness.property)
 
-private def comprehensionAbstractInterfaceTransport
+def comprehensionAbstractInterfaceTransport
     (input : CheckedDiagram signature)
     (wrap : CheckedSelection input.val)
     (comprehension : CheckedOpenDiagram signature)
@@ -321,7 +321,7 @@ private def comprehensionAbstractInterfaceTransport
     (raw : ConcreteDiagram)
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw) : InterfaceTransport input.val raw :=
-  let domains : AbstractionDomains input occurrences := {}
+  let domains := abstractionDomains input occurrences
   InterfaceTransport.survivors input.val raw domains.wires (by
     rw [Option.map_eq_some_iff] at hraw
     obtain ⟨witness, _, equality⟩ := hraw
