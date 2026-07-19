@@ -1,4 +1,5 @@
 import VisualProof.Rule.Soundness.Comprehension.SameDiagramSemantic
+import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceAncestor
 
 namespace VisualProof.Rule
 
@@ -32,6 +33,106 @@ noncomputable def traceRegionPreimage
   rw [dif_pos image]
   exact trace.regionMap_injective
     (Classical.choose_spec image)
+
+/-- On every lexical ancestor of the terminal moving bubble, the total trace
+preimage is the genuine source ancestor certified by the frame trace. -/
+theorem traceRegionPreimage_of_encloses
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (fallback : Fin state.diagram.val.regionCount)
+    (region : Fin result.diagram.val.regionCount)
+    (encloses : result.diagram.val.Encloses region result.bubble) :
+    state.diagram.val.Encloses
+        (traceRegionPreimage trace fallback region) state.bubble ∧
+      trace.regionMap (traceRegionPreimage trace fallback region) = region := by
+  obtain ⟨source, sourceEncloses, mapped⟩ :=
+    trace.ancestor_preimage region encloses
+  have chosenEq : traceRegionPreimage trace fallback region = source := by
+    apply trace.regionMap_injective
+    rw [← mapped, traceRegionPreimage_image]
+  rw [chosenEq]
+  exact ⟨sourceEncloses, mapped⟩
+
+private theorem traceExternalRelation_exists
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      result.diagram.val sourceRels)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      result.diagram.val sourceBinders result.bubble)
+    (externalBinders : ConcreteElaboration.BinderContext
+      state.diagram.val externalRels)
+    (externalCover : externalBinders.Covers state.bubble)
+    (fallback : Fin state.diagram.val.regionCount)
+    {arity : Nat} (relation : RelVar sourceRels arity) :
+    ∃ externalRelation : RelVar externalRels arity,
+      externalBinders
+          (traceRegionPreimage trace fallback
+            (sourceEnumeration.binder relation.index)) =
+        some ⟨arity, externalRelation⟩ := by
+  let owner := sourceEnumeration.binder relation.index
+  obtain ⟨targetParent, targetShape⟩ := sourceEnumeration.bubble relation.index
+  rw [relation.hasArity] at targetShape
+  have targetEncloses := sourceEnumeration.encloses relation.index
+  have sourceFacts := traceRegionPreimage_of_encloses trace fallback owner
+    targetEncloses
+  let sourceOwner := traceRegionPreimage trace fallback owner
+  have mappedShape := trace.regionMap_shape sourceOwner
+  rw [sourceFacts.2] at mappedShape
+  cases sourceShape : state.diagram.val.regions sourceOwner with
+  | sheet =>
+      rw [sourceShape] at mappedShape
+      cases targetShape.symm.trans mappedShape
+  | cut parent =>
+      rw [sourceShape] at mappedShape
+      cases targetShape.symm.trans mappedShape
+  | bubble parent sourceArity =>
+      rw [sourceShape] at mappedShape
+      have arityEq : sourceArity = arity :=
+        (CRegion.bubble.inj (mappedShape.symm.trans targetShape)).2
+      subst sourceArity
+      exact externalCover sourceOwner parent arity sourceShape sourceFacts.1
+
+/-- Canonical relation renaming from a terminal compiler binder enumeration
+to any source-state binder context covering the moving bubble. -/
+noncomputable def traceExternalRelationMap
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      result.diagram.val sourceRels)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      result.diagram.val sourceBinders result.bubble)
+    (externalBinders : ConcreteElaboration.BinderContext
+      state.diagram.val externalRels)
+    (externalCover : externalBinders.Covers state.bubble)
+    (fallback : Fin state.diagram.val.regionCount) :
+    RelationRenaming sourceRels externalRels :=
+  fun relation => Classical.choose
+    (traceExternalRelation_exists trace sourceBinders sourceEnumeration
+      externalBinders externalCover fallback relation)
+
+theorem traceExternalRelationMap_spec
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      state result)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      result.diagram.val sourceRels)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      result.diagram.val sourceBinders result.bubble)
+    (externalBinders : ConcreteElaboration.BinderContext
+      state.diagram.val externalRels)
+    (externalCover : externalBinders.Covers state.bubble)
+    (fallback : Fin state.diagram.val.regionCount)
+    {region arity} (relation : RelVar sourceRels arity)
+    (lookup : sourceBinders region = some ⟨arity, relation⟩) :
+    externalBinders (traceRegionPreimage trace fallback region) =
+      some ⟨arity, traceExternalRelationMap trace sourceBinders
+        sourceEnumeration externalBinders externalCover fallback relation⟩ := by
+  have ownerEq : sourceEnumeration.binder relation.index = region :=
+    sourceEnumeration.lookup_owner relation lookup
+  rw [← ownerEq]
+  exact Classical.choose_spec
+    (traceExternalRelation_exists trace sourceBinders sourceEnumeration
+      externalBinders externalCover fallback relation)
 
 /-- A semantic presentation aligned simultaneously with a total state-wire
 valuation and an external relation environment.  `ownerMap` records concrete
@@ -73,6 +174,58 @@ structure ExternalAlignedBubblePresentation
         some ⟨arity, relationMap relation⟩
   relationsAligned : RelEnv.Agrees relationMap
     presentation.relationEnvironment externalRelations
+
+/-- Package a terminal presentation against a source-state lexical
+environment.  Ancestor provenance supplies the binder mapping; callers retain
+control of the semantic relation values through the explicit agreement. -/
+noncomputable def ExternalAlignedBubblePresentation.ofTerminal
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    {externalRels : RelCtx}
+    (trace : InstantiationTrace comprehension attachments binders payload fuel
+      (initialInstantiationState payload) result)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (relationValue : Relation model.Carrier payload.arity)
+    (values : ∀ index,
+      Relation model.Carrier (payload.binderSpine.arity index))
+    (parameterValues : Fin attachments.length → model.Carrier)
+    (wireValue : Fin result.diagram.val.wireCount → model.Carrier)
+    (presentation : BubblePresentation payload result model named relationValue
+      values parameterValues)
+    (wireAligned : presentation.OuterAligned wireValue)
+    (externalBinders : ConcreteElaboration.BinderContext
+      input.val externalRels)
+    (externalCover : externalBinders.Covers bubble)
+    (externalRelations : RelEnv model.Carrier externalRels)
+    (fallback : Fin input.val.regionCount)
+    (relationsAligned : RelEnv.Agrees
+      (traceExternalRelationMap trace presentation.binderContext
+        presentation.binderEnumeration externalBinders externalCover fallback)
+      presentation.relationEnvironment externalRelations) :
+    ExternalAlignedBubblePresentation payload result model named relationValue
+      values parameterValues wireValue externalBinders externalRelations
+      (traceRegionPreimage trace fallback) where
+  presentation := presentation
+  wireAligned := wireAligned
+  relationMap := traceExternalRelationMap trace presentation.binderContext
+    presentation.binderEnumeration externalBinders externalCover fallback
+  binderAligned := by
+    intro region arity relation lookup
+    exact traceExternalRelationMap_spec trace presentation.binderContext
+      presentation.binderEnumeration externalBinders externalCover fallback
+      relation lookup
+  relationsAligned := relationsAligned
 
 theorem coalescedExternalAligned_nonempty
     {signature : List Nat}
