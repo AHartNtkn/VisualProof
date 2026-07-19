@@ -301,6 +301,25 @@ theorem payload_parent_encloses_bubble
     rfl
   simp only [ConcreteDiagram.climb, parentEq]
 
+/-- The quantified bubble cannot enclose its own immediate parent in a checked
+diagram.  This is the exact outside-frame fact needed to transport the
+parent's ordered local traversal through the copy trace. -/
+theorem payload_bubble_not_encloses_parent
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders) :
+    ¬ input.val.Encloses bubble payload.parent := by
+  apply ConcreteElaboration.checked_direct_child_not_encloses_parent
+    input.property
+  rw [payload.bubble_eq]
+  rfl
+
 /-- The original parent of the quantified bubble maps to the final promoted
 focus.  This identifies the unique compiler location at which the complete
 instantiation law is discharged. -/

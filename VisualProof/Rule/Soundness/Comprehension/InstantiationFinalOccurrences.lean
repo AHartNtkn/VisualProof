@@ -202,6 +202,181 @@ theorem dropOccurrenceOrigin_injective
           congr 1
           exact ConcreteElaboration.LocalOccurrence.child.inj equal
 
+/-- Total occurrence map for an arbitrary source region outside the moving
+quantified bubble.  Unlike `droppedFrameOccurrenceMap`, this also applies to
+the quantified bubble's parent, whose child occurrence is needed by the
+focused compiler proof. -/
+def droppedOutsideOccurrenceMap
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    (region : Fin input.val.regionCount)
+    (outside : ¬ input.val.Encloses bubble region) :
+    ConcreteElaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
+      ConcreteElaboration.LocalOccurrence
+        (dropInstantiationAtomsRaw result).regionCount
+        (dropInstantiationAtomsRaw result).nodeCount
+  | .node node =>
+      if nodeRegion : (input.val.nodes node).region = region then
+        .node (copyTrace.droppedNodeMap node (fun enclosed =>
+          outside (nodeRegion ▸ enclosed)))
+      else
+        .child (copyTrace.regionMap region)
+  | .child child => .child (copyTrace.regionMap child)
+
+private theorem frameOccurrence_survives_of_outside
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    (region : Fin input.val.regionCount)
+    (outside : ¬ input.val.Encloses bubble region)
+    (occurrence : ConcreteElaboration.LocalOccurrence
+      input.val.regionCount input.val.nodeCount)
+    (member : occurrence ∈
+      ConcreteElaboration.localOccurrences input.val region) :
+    InstantiationSemantic.dropOccurrenceSurvives result
+        (copyTrace.frameOccurrenceMap occurrence) = true := by
+  cases occurrence with
+  | node node =>
+      have nodeRegion :=
+        (ConcreteElaboration.mem_localOccurrences_node input.val region node).1
+          member
+      exact copyTrace.nodeMap_survives_drop node (fun enclosed =>
+        outside (nodeRegion ▸ enclosed))
+  | child child => rfl
+
+private theorem dropOrigin_droppedOutsideOccurrenceMap
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    (region : Fin input.val.regionCount)
+    (outside : ¬ input.val.Encloses bubble region)
+    (occurrence : ConcreteElaboration.LocalOccurrence
+      input.val.regionCount input.val.nodeCount)
+    (member : occurrence ∈
+      ConcreteElaboration.localOccurrences input.val region) :
+    InstantiationSemantic.dropOccurrenceOrigin result
+        (copyTrace.droppedOutsideOccurrenceMap region outside occurrence) =
+      copyTrace.frameOccurrenceMap occurrence := by
+  cases occurrence with
+  | node node =>
+      have nodeRegion :=
+        (ConcreteElaboration.mem_localOccurrences_node input.val region node).1
+          member
+      simp only [droppedOutsideOccurrenceMap, dif_pos nodeRegion,
+        InstantiationSemantic.dropOccurrenceOrigin, frameOccurrenceMap]
+      exact congrArg ConcreteElaboration.LocalOccurrence.node
+        (copyTrace.droppedNodeMap_origin node (fun enclosed =>
+          outside (nodeRegion ▸ enclosed)))
+  | child child => rfl
+
+/-- Atom compaction preserves the exact ordered local traversal of every
+region outside the moving quantified bubble, including its parent. -/
+theorem dropped_localOccurrences_of_outside
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    {comprehension : CheckedOpenDiagram signature}
+    {attachments : List (Fin input.val.wireCount)}
+    {binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
+    {payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders}
+    {fuel : Nat}
+    {result : InstantiationState input attachments.length
+      payload.binderSpine.proxyCount}
+    (copyTrace : InstantiationTrace comprehension attachments binders payload
+      fuel (initialInstantiationState payload) result)
+    (region : Fin input.val.regionCount)
+    (outside : ¬ input.val.Encloses bubble region) :
+    ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
+        (copyTrace.regionMap region) =
+      (ConcreteElaboration.localOccurrences input.val region).map
+        (copyTrace.droppedOutsideOccurrenceMap region outside) := by
+  let occurrences := ConcreteElaboration.localOccurrences input.val region
+  have copied :
+      ConcreteElaboration.localOccurrences result.diagram.val
+          (copyTrace.regionMap region) =
+        occurrences.map copyTrace.frameOccurrenceMap := by
+    simpa [occurrences, initialInstantiationState] using
+      copyTrace.localOccurrences_frameMap_of_outside region outside
+  have allSurvive :
+      (occurrences.map copyTrace.frameOccurrenceMap).filter
+          (InstantiationSemantic.dropOccurrenceSurvives result) =
+        occurrences.map copyTrace.frameOccurrenceMap := by
+    apply List.filter_eq_self.mpr
+    intro mapped mappedMember
+    obtain ⟨occurrence, member, rfl⟩ := List.mem_map.mp mappedMember
+    exact frameOccurrence_survives_of_outside copyTrace region outside
+      occurrence member
+  have originLeft :
+      (ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
+          (copyTrace.regionMap region)).map
+          (InstantiationSemantic.dropOccurrenceOrigin result) =
+        occurrences.map copyTrace.frameOccurrenceMap := by
+    rw [InstantiationSemantic.dropInstantiationAtomsRaw_localOccurrences_origin,
+      copied, allSurvive]
+  have originRight :
+      (occurrences.map
+          (copyTrace.droppedOutsideOccurrenceMap region outside)).map
+          (InstantiationSemantic.dropOccurrenceOrigin result) =
+        occurrences.map copyTrace.frameOccurrenceMap := by
+    induction occurrences with
+    | nil => rfl
+    | cons occurrence rest ih =>
+        have headMember : occurrence ∈ occurrence :: rest := List.mem_cons_self
+        have headEq := dropOrigin_droppedOutsideOccurrenceMap copyTrace region
+          outside occurrence headMember
+        have tailEq :
+            (rest.map
+                (copyTrace.droppedOutsideOccurrenceMap region outside)).map
+                (InstantiationSemantic.dropOccurrenceOrigin result) =
+              rest.map copyTrace.frameOccurrenceMap := by
+          apply ih
+          intro value member
+          exact dropOrigin_droppedOutsideOccurrenceMap copyTrace region outside
+            value (List.mem_cons_of_mem occurrence member)
+        change InstantiationSemantic.dropOccurrenceOrigin result
+              (copyTrace.droppedOutsideOccurrenceMap region outside occurrence) ::
+              _ = copyTrace.frameOccurrenceMap occurrence :: _
+        rw [headEq, tailEq]
+  apply list_map_cancel (InstantiationSemantic.dropOccurrenceOrigin result)
+    (dropOccurrenceOrigin_injective result)
+  exact originLeft.trans originRight.symm
+
 /-- Total source-frame occurrence map after processed-atom compaction.  The
 fallback branch is irrelevant to a regular local traversal; it makes the map
 total without pretending that nodes inside the rewritten bubble survive. -/
