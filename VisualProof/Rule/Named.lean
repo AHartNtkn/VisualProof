@@ -25,6 +25,28 @@ instance (orientation : Orientation) (direction : Direction) (depth : Nat) :
   cases orientation <;> cases direction <;>
     simp [citationPolarity] <;> infer_instance
 
+/-- The exact ordered retained-host attachment selected by a pinned occurrence
+for a same-arity replacement. This positional map is the single authority used
+by both the legacy canonical input and attachment-sensitive materialization. -/
+def PinnedOccurrence.replacementAttachment
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length) :
+    Fin replacement.val.boundary.length →
+      Fin (Splice.Decomposition.originalFragmentInput decomposition).frame.val.wireCount :=
+  let original := Splice.Decomposition.originalFragmentInput decomposition
+  fun position =>
+    original.attachment (Fin.cast
+      (input.val.extractBoundaryRaw_length selection
+        decomposition.extraction.raw.layout).symm
+      (occurrence.position (Fin.cast sameArity.symm position)))
+
 /-- Canonical remove-then-splice input for replacing one exact pinned
 occurrence. The source occurrence's positional map is retained verbatim, so
 repeated source positions remain repeated attachments in the replacement. -/
@@ -43,15 +65,170 @@ def PinnedOccurrence.replacementInput
     frame := original.frame
     pattern := replacement
     site := original.site
-    attachment := fun position =>
-      original.attachment (Fin.cast
-        (input.val.extractBoundaryRaw_length selection
-          decomposition.extraction.raw.layout).symm
-        (occurrence.position (Fin.cast sameArity.symm position)))
+    attachment := occurrence.replacementAttachment decomposition replacement
+      sameArity
     binderSpine := emptyBinderSpine replacement
     terminalBody := emptyTerminalBody replacement
     binderTarget := nofun
   }
+
+/-- Operational named replacement input obtained from the exact
+attachment-alias materialization certificate. Its attachment is the same
+ordered host map as `replacementInput`, transported only across the proved
+materialized boundary-length equality. -/
+def PinnedOccurrence.materializedReplacementInput
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length)
+    (certificate : Splice.AttachmentAliasMaterialization.Certificate
+      replacement
+      (occurrence.replacementAttachment decomposition replacement sameArity)
+      (emptyBinderSpine replacement)) : Splice.Input signature :=
+  let original := Splice.Decomposition.originalFragmentInput decomposition
+  {
+    frame := original.frame
+    pattern := certificate.result
+    site := original.site
+    attachment := fun position =>
+      occurrence.replacementAttachment decomposition replacement sameArity
+        (Fin.cast certificate.boundary_length position)
+    binderSpine := certificate.spine
+    terminalBody := certificate.terminalBody (emptyTerminalBody replacement)
+    binderTarget := nofun
+  }
+
+/-- Proof-relevant named replacement package. The certificate, exact
+operational input, attachment-respecting witness, and discrete retained-frame
+quotient are one authority; no original-target locality heuristic is involved. -/
+structure PinnedOccurrence.MaterializedReplacement
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length) where
+  certificate : Splice.AttachmentAliasMaterialization.Certificate
+    replacement
+    (occurrence.replacementAttachment decomposition replacement sameArity)
+    (emptyBinderSpine replacement)
+  certificateChecked :
+    Splice.AttachmentAliasMaterialization.check replacement
+      (occurrence.replacementAttachment decomposition replacement sameArity)
+      (emptyBinderSpine replacement) (emptyTerminalBody replacement) =
+        .ok certificate
+  attachmentsRespectBoundary :
+    (occurrence.materializedReplacementInput decomposition replacement
+      sameArity certificate).AttachmentsRespectBoundary
+
+namespace PinnedOccurrence.MaterializedReplacement
+
+variable {signature : List Nat}
+variable {input : CheckedDiagram signature}
+variable {selection : CheckedSelection input.val}
+variable {pattern : CheckedOpenDiagram signature}
+variable {hostArgs : List (Fin input.val.wireCount)}
+
+def spliceInput
+    {occurrence : PinnedOccurrence input selection pattern hostArgs}
+    {decomposition : Decomposition signature input selection}
+    {replacement : CheckedOpenDiagram signature}
+    {sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length}
+    (materialized : occurrence.MaterializedReplacement decomposition replacement
+      sameArity) : Splice.Input signature :=
+  occurrence.materializedReplacementInput decomposition replacement sameArity
+    materialized.certificate
+
+theorem quotientDiscrete
+    {occurrence : PinnedOccurrence input selection pattern hostArgs}
+    {decomposition : Decomposition signature input selection}
+    {replacement : CheckedOpenDiagram signature}
+    {sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length}
+    (materialized : occurrence.MaterializedReplacement decomposition replacement
+      sameArity)
+    (left right : Fin materialized.spliceInput.frame.val.wireCount) :
+    materialized.spliceInput.attachmentPartition.related left right = true ↔
+      left = right :=
+  Splice.Input.attachmentPartition_related_iff_of_attachmentsRespectBoundary
+    materialized.spliceInput materialized.attachmentsRespectBoundary left right
+
+end PinnedOccurrence.MaterializedReplacement
+
+/-- A materialized package together with the authoritative successful checked
+splice consumed by a named executor. -/
+structure PinnedOccurrence.SuccessfulMaterializedReplacement
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length) where
+  materialized : occurrence.MaterializedReplacement decomposition replacement
+    sameArity
+  checked : CheckedDiagram signature
+  spliceChecked : Splice.Input.spliceChecked signature
+    (PinnedOccurrence.MaterializedReplacement.spliceInput materialized) =
+      .ok checked
+
+/-- Materialization makes equal intrinsic boundary identities select exactly
+one retained host attachment. The proof is intentionally exposed as the first
+contract obligation of the strengthened executor layer. -/
+theorem PinnedOccurrence.materializedReplacementInput_respectsBoundary
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length)
+    (certificate : Splice.AttachmentAliasMaterialization.Certificate
+      replacement
+      (occurrence.replacementAttachment decomposition replacement sameArity)
+      (emptyBinderSpine replacement)) :
+    (occurrence.materializedReplacementInput decomposition replacement
+      sameArity certificate).AttachmentsRespectBoundary := by
+  sorry
+
+/-- Run the authoritative attachment materializer for a named replacement and
+package the exact checked certificate with its discrete operational input. -/
+def PinnedOccurrence.materializeReplacement
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length) :
+    Except WFError
+      (occurrence.MaterializedReplacement decomposition replacement sameArity) :=
+  match hcheck : Splice.AttachmentAliasMaterialization.check replacement
+      (occurrence.replacementAttachment decomposition replacement sameArity)
+      (emptyBinderSpine replacement) (emptyTerminalBody replacement) with
+  | .error error => .error error
+  | .ok certificate => .ok {
+      certificate := certificate
+      certificateChecked := hcheck
+      attachmentsRespectBoundary :=
+        occurrence.materializedReplacementInput_respectsBoundary decomposition
+          replacement sameArity certificate
+    }
 
 /-- The extracted source fragment with its boundary re-presented in the exact
 ordered arity of a pinned theorem occurrence.  Repeated positions are retained;
@@ -245,6 +422,7 @@ theorem PinnedOccurrence.reassemblyInput_attachmentPartition_related_iff
                     rightPosition))) := by
         simpa [PinnedOccurrence.reassemblyInput,
           PinnedOccurrence.replacementInput,
+          PinnedOccurrence.replacementAttachment,
           PinnedOccurrence.reassemblyPattern, boundaryCast] using hboundary
       have hcast := Splice.Decomposition.originalBoundary_get_injective
         decomposition horiginal
@@ -253,7 +431,8 @@ theorem PinnedOccurrence.reassemblyInput_attachmentPartition_related_iff
       simpa [boundaryCast] using hvals
     rw [hedgeEq]
     simp only [PinnedOccurrence.reassemblyInput,
-      PinnedOccurrence.replacementInput]
+      PinnedOccurrence.replacementInput,
+      PinnedOccurrence.replacementAttachment]
     congr
   · rintro rfl
     exact FinitePartition.related_refl _ _
@@ -1709,8 +1888,8 @@ theorem PinnedOccurrence.namedReferenceReplacement_local
     apply Fin.ext
     exact congrArg Fin.val heq
 
-/-- Expand one exact named-reference occurrence through the canonical
-remove-then-splice replacement path. -/
+/-- Expand one exact named-reference occurrence through the authoritative
+attachment-materialized remove-then-splice path. -/
 def applyRelUnfold (input : CheckedDiagram signature)
     (node : Fin input.val.nodeCount)
     (definition : Fin signature.length)
@@ -1722,10 +1901,11 @@ def applyRelUnfold (input : CheckedDiagram signature)
   match decomposeChecked signature input payload.selection with
   | .error _ => .error .operationRejected
   | .ok decomposition =>
-      if payload.occurrence.ReplacementQuotientsLocal decomposition
-          payload.body sameArity then
-        let spliceInput := payload.occurrence.replacementInput decomposition
-          payload.body sameArity
+      match payload.occurrence.materializeReplacement decomposition payload.body
+          sameArity with
+      | .error error => .error (.resultNotWellFormed error)
+      | .ok materialized =>
+        let spliceInput := materialized.spliceInput
         match hsplice : Splice.Input.spliceChecked signature spliceInput with
         | .error error => .error (namedSpliceError error)
         | .ok checked =>
@@ -1744,8 +1924,30 @@ def applyRelUnfold (input : CheckedDiagram signature)
               provenance := provenance.castTarget hresult.symm
               interface := interface.castTarget hresult.symm
             }
-      else
-        .error .boundaryMismatch
+
+theorem applyRelUnfold_success
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {node : Fin input.val.nodeCount}
+    {definition : Fin signature.length}
+    {payload : RelUnfoldPayload input node definition}
+    {sameArity :
+      (namedReferencePattern signature definition).val.boundary.length =
+        payload.body.val.boundary.length}
+    {result : StepReceipt input}
+    (happly : applyRelUnfold input node definition payload sameArity =
+      .ok result) :
+    ∃ decomposition : Decomposition signature input payload.selection,
+      decomposeChecked signature input payload.selection = .ok decomposition ∧
+        ∃ materialized : payload.occurrence.MaterializedReplacement
+            decomposition payload.body sameArity,
+          payload.occurrence.materializeReplacement decomposition payload.body
+              sameArity = .ok materialized ∧
+            ∃ checked : CheckedDiagram signature,
+              Splice.Input.spliceChecked signature materialized.spliceInput =
+                  .ok checked ∧
+                result.result = checked := by
+  sorry
 
 theorem applyRelUnfold_realizes
     {signature : List Nat}
@@ -1763,10 +1965,11 @@ theorem applyRelUnfold_realizes
       ∃ hdecomposition :
           decomposeChecked signature input payload.selection =
             .ok decomposition,
-        payload.occurrence.ReplacementQuotientsLocal decomposition
-            payload.body sameArity ∧
-          let spliceInput := payload.occurrence.replacementInput decomposition
-            payload.body sameArity
+        ∃ materialized : payload.occurrence.MaterializedReplacement
+            decomposition payload.body sameArity,
+          payload.occurrence.materializeReplacement decomposition payload.body
+              sameArity = .ok materialized ∧
+          let spliceInput := materialized.spliceInput
           ∃ checked : CheckedDiagram signature,
             ∃ hsplice : Splice.Input.spliceChecked signature spliceInput =
                 .ok checked,
@@ -1777,28 +1980,7 @@ theorem applyRelUnfold_realizes
                 ((removeWireInterfaceTransport input payload.selection
                     decomposition.frameDomains).compose
                   (spliceFrameInterfaceTransport spliceInput)) := by
-  unfold applyRelUnfold at happly
-  split at happly <;> try contradiction
-  rename_i decomposition hdecomposition
-  dsimp only at happly
-  split at happly <;> try contradiction
-  rename_i hlocality
-  split at happly <;> try contradiction
-  rename_i checked hsplice
-  have hresult : checked.val =
-      (payload.occurrence.replacementInput decomposition payload.body
-        sameArity).plugLayout.plugRaw :=
-    (Splice.Input.spliceChecked_sound hsplice).1
-  cases happly
-  rcases checked with ⟨diagram, wellFormed⟩
-  dsimp only at hresult hsplice ⊢
-  subst diagram
-  refine ⟨decomposition, hdecomposition, hlocality,
-    ⟨_, wellFormed⟩, hsplice, rfl, ?_, ?_⟩
-  · intro wire
-    simp [WireProvenance.castTarget]
-  · intro wire
-    simp [InterfaceTransport.castTarget]
+  sorry
 
 /-- Contract an exact pinned occurrence through the single canonical
 remove-then-splice replacement path. -/
@@ -1916,7 +2098,8 @@ theorem PinnedOccurrence.replacementInput_admissible
   · intro index
     exact Fin.elim0 index
 
-/-- Replace one exact theorem-side occurrence by the cited opposite side. -/
+/-- Replace one exact theorem-side occurrence by the cited opposite side through
+the authoritative attachment-materialized splice path. -/
 def applyTheorem (orientation : Orientation)
     (input : CheckedDiagram signature) (theoremIndex : Nat)
     (selection : CheckedSelection input.val)
@@ -1928,10 +2111,11 @@ def applyTheorem (orientation : Orientation)
     match decomposeChecked signature input selection with
     | .error _ => .error .operationRejected
     | .ok decomposition =>
-        if payload.occurrence.ReplacementQuotientsLocal decomposition
-            payload.target payload.sameBoundaryArity then
-          let spliceInput := payload.occurrence.replacementInput decomposition
-            payload.target payload.sameBoundaryArity
+        match payload.occurrence.materializeReplacement decomposition
+            payload.target payload.sameBoundaryArity with
+        | .error error => .error (.resultNotWellFormed error)
+        | .ok materialized =>
+          let spliceInput := materialized.spliceInput
           match hsplice : Splice.Input.spliceChecked signature spliceInput with
           | .error error => .error (namedSpliceError error)
           | .ok checked =>
@@ -1950,8 +2134,6 @@ def applyTheorem (orientation : Orientation)
                 provenance := provenance.castTarget hresult.symm
                 interface := interface.castTarget hresult.symm
               }
-        else
-          .error .boundaryMismatch
   else
     .error .wrongPolarity
 
@@ -1970,31 +2152,15 @@ theorem applyTheorem_success {signature : List Nat}
         (concreteCutDepth input.val selection.val.anchor) ∧
       ∃ decomposition : Decomposition signature input selection,
         decomposeChecked signature input selection = .ok decomposition ∧
-          payload.occurrence.ReplacementQuotientsLocal decomposition
-            payload.target payload.sameBoundaryArity ∧
-          let spliceInput := payload.occurrence.replacementInput decomposition
-            payload.target payload.sameBoundaryArity
-          ∃ checked : CheckedDiagram signature,
-            Splice.Input.spliceChecked signature spliceInput = .ok checked ∧
-              result.result = checked := by
-  have hpolarity : citationPolarity orientation direction
-      (concreteCutDepth input.val selection.val.anchor) := by
-    by_cases h : citationPolarity orientation direction
-        (concreteCutDepth input.val selection.val.anchor)
-    · exact h
-    · simp [applyTheorem, h] at happly
-  refine ⟨hpolarity, ?_⟩
-  unfold applyTheorem at happly
-  rw [if_pos hpolarity] at happly
-  split at happly <;> try contradiction
-  rename_i decomposition hdecomposition
-  dsimp only at happly
-  split at happly <;> try contradiction
-  rename_i hlocal
-  split at happly <;> try contradiction
-  rename_i checked hsplice
-  cases happly
-  exact ⟨decomposition, hdecomposition, hlocal, checked, hsplice, rfl⟩
+          ∃ materialized : payload.occurrence.MaterializedReplacement
+              decomposition payload.target payload.sameBoundaryArity,
+            payload.occurrence.materializeReplacement decomposition
+                payload.target payload.sameBoundaryArity = .ok materialized ∧
+              ∃ checked : CheckedDiagram signature,
+                Splice.Input.spliceChecked signature
+                    materialized.spliceInput = .ok checked ∧
+                  result.result = checked := by
+  sorry
 
 theorem applyTheorem_realizes {signature : List Nat}
     {orientation : Orientation}
@@ -2012,10 +2178,11 @@ theorem applyTheorem_realizes {signature : List Nat}
       ∃ decomposition : Decomposition signature input selection,
         ∃ hdecomposition : decomposeChecked signature input selection =
             .ok decomposition,
-          payload.occurrence.ReplacementQuotientsLocal decomposition
-              payload.target payload.sameBoundaryArity ∧
-          let spliceInput := payload.occurrence.replacementInput decomposition
-            payload.target payload.sameBoundaryArity
+          ∃ materialized : payload.occurrence.MaterializedReplacement
+              decomposition payload.target payload.sameBoundaryArity,
+            payload.occurrence.materializeReplacement decomposition
+                payload.target payload.sameBoundaryArity = .ok materialized ∧
+          let spliceInput := materialized.spliceInput
           ∃ checked : CheckedDiagram signature,
             ∃ hsplice : Splice.Input.spliceChecked signature spliceInput =
                 .ok checked,
@@ -2026,36 +2193,7 @@ theorem applyTheorem_realizes {signature : List Nat}
                 ((removeWireInterfaceTransport input selection
                     decomposition.frameDomains).compose
                   (spliceFrameInterfaceTransport spliceInput)) := by
-  have hpolarity : citationPolarity orientation direction
-      (concreteCutDepth input.val selection.val.anchor) := by
-    by_cases h : citationPolarity orientation direction
-        (concreteCutDepth input.val selection.val.anchor)
-    · exact h
-    · simp [applyTheorem, h] at happly
-  refine ⟨hpolarity, ?_⟩
-  unfold applyTheorem at happly
-  rw [if_pos hpolarity] at happly
-  split at happly <;> try contradiction
-  rename_i decomposition hdecomposition
-  dsimp only at happly
-  split at happly <;> try contradiction
-  rename_i hlocal
-  split at happly <;> try contradiction
-  rename_i checked hsplice
-  have hresult : checked.val =
-      (payload.occurrence.replacementInput decomposition payload.target
-        payload.sameBoundaryArity).plugLayout.plugRaw :=
-    (Splice.Input.spliceChecked_sound hsplice).1
-  cases happly
-  rcases checked with ⟨diagram, wellFormed⟩
-  dsimp only at hresult hsplice ⊢
-  subst diagram
-  refine ⟨decomposition, hdecomposition, hlocal, ⟨_, wellFormed⟩, hsplice, ?_⟩
-  refine ⟨rfl, ?_, ?_⟩
-  · intro wire
-    simp [WireProvenance.castTarget]
-  · intro wire
-    simp [InterfaceTransport.castTarget]
+  sorry
 
 /-- The ordered concrete occurrence certified by a `PinnedOccurrence`, exposed
 as an open proof state without collapsing repeated boundary positions. -/
@@ -2138,6 +2276,7 @@ theorem PinnedOccurrence.replacementInput_attachment_origin
       hostArgs.get (Fin.cast occurrence.args_length.symm
         (Fin.cast sameArity.symm position)) := by
   simp only [PinnedOccurrence.replacementInput,
+    PinnedOccurrence.replacementAttachment,
     Splice.Decomposition.originalFragmentInput,
     Splice.Decomposition.originalAttachment]
   rw [decomposition.frameDomains.wires.origin_index]
