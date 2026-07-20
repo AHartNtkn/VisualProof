@@ -306,7 +306,7 @@ theorem targetEnvironment_local
   exact extendedEnvironment_local sourceContext region sourceOuter sourceLocal
     sourceIndex
 
-/-- Exact survivor contexts admit valuation selection in both semantic
+/-- Exact survivor contexts support valuation selection in both semantic
 directions. Deleted source-local wires are irrelevant to the backward index
 relation and receive an arbitrary carrier value. -/
 theorem regularEnvironmentSelection

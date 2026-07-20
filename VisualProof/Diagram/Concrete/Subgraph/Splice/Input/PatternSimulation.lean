@@ -12,7 +12,7 @@ namespace PlugLayout
 
 /-- Total region map for the input-local pattern simulation.  Retained
 material maps to its actual plug body region; regions removed by the binder
-spine are sent to the plug root and are never admitted by `AtRegion`. -/
+spine are sent to the plug root and are never accepted by `AtRegion`. -/
 def patternSimulationRegionMap (layout : PlugLayout input)
     (region : Fin input.pattern.val.diagram.regionCount) :
     Fin layout.plugRaw.regionCount :=

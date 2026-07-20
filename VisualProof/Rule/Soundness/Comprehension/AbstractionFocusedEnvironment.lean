@@ -7,7 +7,7 @@ open VisualProof.Diagram
 
 namespace AbstractionRawTrace
 
-/-- Exact survivor contexts admit valuation selection even at an occurrence
+/-- Exact survivor contexts support valuation selection even at an occurrence
 anchor.  Deleted source-local wires are unconstrained by the target context
 and are subsequently filled by the occurrence-family witness. -/
 theorem survivorEnvironmentSelection

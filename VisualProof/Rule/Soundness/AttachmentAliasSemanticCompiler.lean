@@ -286,7 +286,7 @@ theorem oldNode_itemSimulation
   rw [relationMapEq, Item.renameRelations_id] at simulation
   exact simulation
 
-/-- Retained nodes also admit the embedding-oriented relation that selects
+/-- Retained nodes also support the embedding-oriented relation that selects
 the canonical lifted-old target position.  This orientation deliberately
 ignores fresh alias positions until the distinguished identity block. -/
 theorem oldNode_itemSimulation_oldIndex

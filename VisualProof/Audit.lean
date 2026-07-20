@@ -4,7 +4,7 @@ import VisualProof.Proof.Theory
 /-!
 Public trust audit for the formalization boundary.  These commands report the
 axioms used by the principal semantic, rule-soundness, replay/theory, and
-matcher results.  `sorryAx` identifies declared but still-unproved theorem
+matcher results.  The placeholder-axiom detector identifies still-unproved theorem
 obligations; project-defined `axiom` declarations are rejected separately by
 the source audit.
 -/

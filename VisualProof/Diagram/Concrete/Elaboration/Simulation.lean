@@ -830,7 +830,7 @@ structure ConcreteSemanticSimulation (signature : List Nat)
   ContextWitness : WireContext source → WireContext target → Type
   /-- Concrete traversal provenance identifying which region is being compiled
   under a validated lexical-context pair.  This prevents focused kernels from
-  being invoked at unrelated distinguished regions that merely admit the same
+  being invoked at unrelated distinguished regions that merely support the same
   wire context. -/
   AtRegion : ∀ {sourceContext : WireContext source}
     {targetContext : WireContext target},

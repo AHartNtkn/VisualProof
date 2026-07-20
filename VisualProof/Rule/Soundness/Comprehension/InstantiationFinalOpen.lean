@@ -74,7 +74,7 @@ theorem finalSourceOpen_exposedWires
     (copyTrace.finalWireMap_injective elimTrace) boundary
 
 /-- Exposed classes are exactly the mapped original exposed classes, with no
-executor-created class admitted to the ordered boundary. -/
+executor-created class accepted into the ordered boundary. -/
 def finalOuterContextWitness
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
