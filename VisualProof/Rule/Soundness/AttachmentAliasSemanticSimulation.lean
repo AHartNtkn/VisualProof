@@ -361,6 +361,190 @@ theorem childOccurrences_simulation
     sourceItems targetItems sourceCompiled targetCompiled
   simpa using result
 
+theorem focusedLocalTransport_backward
+    (pattern : CheckedOpenDiagram signature)
+    (attachment : Fin pattern.val.boundary.length → Host)
+    (spine : BinderSpine pattern.val.diagram)
+    (contract : spine.TerminalBodyContract pattern.val)
+    (bodyNeRoot : spine.bodyContainer ≠ pattern.val.diagram.root)
+    (targetWellFormed :
+      (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
+        signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (fuelSource fuelTarget : Nat)
+    (sourceOuterContext : ConcreteElaboration.WireContext pattern.val.diagram)
+    (targetOuterContext : ConcreteElaboration.WireContext
+      (materializedDiagram pattern.val attachment spine.bodyContainer))
+    (outerCollapse : ContextCollapse pattern attachment spine targetOuterContext
+      sourceOuterContext)
+    (sourceExact : (sourceOuterContext.extend spine.bodyContainer).Exact
+      spine.bodyContainer)
+    (targetExact : (targetOuterContext.extend spine.bodyContainer).Exact
+      spine.bodyContainer)
+    (sourceBinders : ConcreteElaboration.BinderContext pattern.val.diagram rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
+    (bindersEqual : HEq sourceBinders targetBinders)
+    (sourceBindersCover : sourceBinders.Covers spine.bodyContainer)
+    (targetBindersCover : targetBinders.Covers spine.bodyContainer)
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      pattern.val.diagram sourceBinders spine.bodyContainer)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      (materializedDiagram pattern.val attachment spine.bodyContainer)
+      targetBinders spine.bodyContainer)
+    (recurse : ∀ {childDirection : ConcreteElaboration.SimulationDirection}
+      {child : Fin pattern.val.diagram.regionCount}
+      {childRels : RelCtx}
+      {childSourceBinders : ConcreteElaboration.BinderContext
+        pattern.val.diagram childRels}
+      {childTargetBinders : ConcreteElaboration.BinderContext
+        (materializedDiagram pattern.val attachment spine.bodyContainer) childRels}
+      {sourceBody : Region signature
+        (sourceOuterContext.extend spine.bodyContainer).length childRels}
+      {targetBody : Region signature
+        (targetOuterContext.extend spine.bodyContainer).length childRels},
+      (pattern.val.diagram.regions child).parent? = some spine.bodyContainer →
+      ((materializedDiagram pattern.val attachment spine.bodyContainer).regions
+        child).parent? = some spine.bodyContainer →
+      True → HEq childSourceBinders childTargetBinders →
+      childSourceBinders.Covers child → childTargetBinders.Covers child →
+      ConcreteElaboration.BinderContext.Enumeration pattern.val.diagram
+        childSourceBinders child →
+      ConcreteElaboration.BinderContext.Enumeration
+        (materializedDiagram pattern.val attachment spine.bodyContainer)
+        childTargetBinders child →
+      ConcreteElaboration.compileRegion? signature pattern.val.diagram fuelSource
+          child (sourceOuterContext.extend spine.bodyContainer)
+          childSourceBinders = some sourceBody →
+      ConcreteElaboration.compileRegion? signature
+          (materializedDiagram pattern.val attachment spine.bodyContainer)
+          fuelTarget child (targetOuterContext.extend spine.bodyContainer)
+          childTargetBinders = some targetBody →
+      ConcreteElaboration.RegionSimulation model named childDirection
+        (ConcreteElaboration.ContextIndexRelation.forwardMap
+          (extendCollapse pattern attachment spine contract targetOuterContext
+            sourceOuterContext outerCollapse spine.bodyContainer targetExact
+            sourceExact).oldIndex)
+        sourceBody targetBody)
+    (sourceItems : ItemSeq signature
+      (sourceOuterContext.extend spine.bodyContainer).length rels)
+    (targetItems : ItemSeq signature
+      (targetOuterContext.extend spine.bodyContainer).length rels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      pattern.val.diagram
+      (ConcreteElaboration.compileRegion? signature pattern.val.diagram fuelSource)
+      (sourceOuterContext.extend spine.bodyContainer) sourceBinders
+      (ConcreteElaboration.localOccurrences pattern.val.diagram
+        spine.bodyContainer) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (materializedDiagram pattern.val attachment spine.bodyContainer)
+      (ConcreteElaboration.compileRegion? signature
+        (materializedDiagram pattern.val attachment spine.bodyContainer)
+        fuelTarget)
+      (targetOuterContext.extend spine.bodyContainer) targetBinders
+      (ConcreteElaboration.localOccurrences
+        (materializedDiagram pattern.val attachment spine.bodyContainer)
+        spine.bodyContainer) = some targetItems) :
+    ∀ relEnv, ConcreteElaboration.DirectionalLocalTransport .backward
+      sourceOuterContext targetOuterContext spine.bodyContainer spine.bodyContainer
+      (ConcreteElaboration.ContextIndexRelation.forwardMap outerCollapse.oldIndex)
+      model named relEnv sourceItems targetItems := by
+  let extendedCollapse := extendCollapse pattern attachment spine contract
+    targetOuterContext sourceOuterContext outerCollapse spine.bodyContainer
+    targetExact sourceExact
+  rw [source_localOccurrences] at sourceCompiled
+  obtain ⟨sourceNodeItems, sourceChildItems, sourceNodeCompiled,
+      sourceChildCompiled, sourceItemsEq⟩ :=
+    ConcreteElaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => ConcreteElaboration.compileRegion? signature
+        pattern.val.diagram fuelSource)
+      (sourceOuterContext.extend spine.bodyContainer) sourceBinders
+      (sourceNodeOccurrences pattern.val spine.bodyContainer)
+      (sourceChildOccurrences pattern.val spine.bodyContainer)
+      sourceItems sourceCompiled
+  rw [materialized_focused_localOccurrences] at targetCompiled
+  have targetCompiled' : ConcreteElaboration.compileOccurrencesWith? signature
+      (materializedDiagram pattern.val attachment spine.bodyContainer)
+      (ConcreteElaboration.compileRegion? signature
+        (materializedDiagram pattern.val attachment spine.bodyContainer)
+        fuelTarget)
+      (targetOuterContext.extend spine.bodyContainer) targetBinders
+      ((sourceNodeOccurrences pattern.val spine.bodyContainer).map
+          (liftOccurrence pattern.val attachment) ++
+        (aliasOccurrences pattern.val attachment ++
+          (sourceChildOccurrences pattern.val spine.bodyContainer).map
+            (liftOccurrence pattern.val attachment))) = some targetItems := by
+    simpa only [List.append_assoc] using targetCompiled
+  obtain ⟨targetNodeItems, targetRestItems, targetNodeCompiled,
+      targetRestCompiled, targetItemsEq⟩ :=
+    ConcreteElaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => ConcreteElaboration.compileRegion? signature
+        (materializedDiagram pattern.val attachment spine.bodyContainer)
+        fuelTarget)
+      (targetOuterContext.extend spine.bodyContainer) targetBinders
+      ((sourceNodeOccurrences pattern.val spine.bodyContainer).map
+        (liftOccurrence pattern.val attachment))
+      (aliasOccurrences pattern.val attachment ++
+        (sourceChildOccurrences pattern.val spine.bodyContainer).map
+      (liftOccurrence pattern.val attachment)) targetItems targetCompiled'
+  obtain ⟨aliasItems, targetChildItems, aliasCompiled, targetChildCompiled,
+      targetRestItemsEq⟩ :=
+    ConcreteElaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => ConcreteElaboration.compileRegion? signature
+        (materializedDiagram pattern.val attachment spine.bodyContainer)
+        fuelTarget)
+      (targetOuterContext.extend spine.bodyContainer) targetBinders
+      (aliasOccurrences pattern.val attachment)
+      ((sourceChildOccurrences pattern.val spine.bodyContainer).map
+        (liftOccurrence pattern.val attachment)) targetRestItems targetRestCompiled
+  have nodeSimulation := oldNodeOccurrences_simulation pattern attachment spine
+    model named .backward
+    (ConcreteElaboration.compileRegion? signature pattern.val.diagram fuelSource)
+    (ConcreteElaboration.compileRegion? signature
+      (materializedDiagram pattern.val attachment spine.bodyContainer) fuelTarget)
+    (sourceOuterContext.extend spine.bodyContainer)
+    (targetOuterContext.extend spine.bodyContainer) extendedCollapse
+    targetExact.nodup sourceBinders targetBinders bindersEqual sourceNodeItems
+    targetNodeItems sourceNodeCompiled targetNodeCompiled
+  have childSimulation := childOccurrences_simulation pattern attachment spine
+    targetWellFormed model named .backward fuelSource fuelTarget
+    (sourceOuterContext.extend spine.bodyContainer)
+    (targetOuterContext.extend spine.bodyContainer) extendedCollapse sourceBinders
+    targetBinders bindersEqual sourceBindersCover targetBindersCover
+    sourceEnumeration targetEnumeration recurse sourceChildItems targetChildItems
+    sourceChildCompiled targetChildCompiled
+  intro relEnv sourceOuter targetOuter outerAgrees
+  have outerEq : sourceOuter = targetOuter ∘ outerCollapse.oldIndex :=
+    (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      outerCollapse.oldIndex sourceOuter targetOuter).mp outerAgrees
+  subst sourceItems
+  subst targetRestItems
+  subst targetItems
+  simp only [denoteItemSeq_append]
+  intro targetLocalEnv targetDenotes
+  let sourceLocalEnv := sourceLocal pattern attachment spine
+    spine.bodyContainer bodyNeRoot targetLocalEnv
+  refine ⟨sourceLocalEnv, ?_⟩
+  have envOld := extendedEnv_oldIndex pattern attachment spine contract
+    targetOuterContext sourceOuterContext outerCollapse spine.bodyContainer
+    bodyNeRoot targetExact sourceExact sourceOuter targetOuter outerEq
+    targetLocalEnv
+  have extendedAgrees :
+      ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+        (ConcreteElaboration.ContextIndexRelation.forwardMap
+          extendedCollapse.oldIndex)
+        (extendedEnv sourceOuterContext spine.bodyContainer sourceOuter
+          sourceLocalEnv)
+        (extendedEnv targetOuterContext spine.bodyContainer targetOuter
+          targetLocalEnv) :=
+    (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      extendedCollapse.oldIndex _ _).mpr envOld
+  have sourceNodes := nodeSimulation _ _ relEnv extendedAgrees targetDenotes.1
+  have sourceChildren := childSimulation _ _ relEnv extendedAgrees
+    targetDenotes.2.2
+  exact ⟨sourceNodes, sourceChildren⟩
+
 end Semantic
 
 end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
