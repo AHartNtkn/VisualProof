@@ -32,11 +32,11 @@ that `echoed-veil` does not provide well.
 
 Use targeted first-principles reconstruction.
 
-Literal empty-cut deletion is permitted only where the remaining statement is valid
-and worthwhile. Focused semantic evaluation established that this applies only to
-`shallow-edit-legality-contrast`. In every other reconstructed puzzle, the empty cut
-is the load-bearing reason the statement is true, so deleting it alone would produce
-an invalid goal. Those statements must be rebuilt around their assigned point.
+Literal empty-cut deletion initially appeared sufficient for
+`shallow-edit-legality-contrast`, but real-kernel review proved that the remaining
+statement has a shorter destructive proof which bypasses its host-legality point.
+It therefore requires the same complete semantic reconstruction as the other
+load-bearing statements.
 
 Local patches that merely replace the empty cut with another automatic truth witness
 are prohibited. Each replacement starts by defining the player-facing decision and
@@ -99,24 +99,27 @@ completely.
 
 ### `shallow-edit-legality-contrast`
 
-Remove the empty cut directly. Retain the shallow comparison between similar targets
-whose actual host polarity changes which edit is legal. Rebuild the witness against
-the remaining valid statement and ensure both compared hosts contribute to the
-problem rather than one being decorative.
+Retain the shallow comparison between similar targets whose actual host polarity
+changes which edit is legal. Rebuild it as an asymmetric bridge in which one legal
+insertion creates a downstream relationship and both compared hosts contribute.
+A shorter destructive route may not reduce it to ancestor-supported deiteration.
 
 ### `atomic-content-insertion`
 
-Present a negative field that lacks one atomic fragment required to create an exact
-structural relationship used downstream. Inserting that atom must enable a meaningful
-subsequent simplification. No independent contradiction or sufficient branch may
-settle the theorem before the insertion decision.
+Present a positive insertion field within an asymmetric compound or cyclic bridge.
+Inserting one atomic fragment must create a structural relationship used downstream.
+Do not use the disproven compact family in which one homologous occurrence merely
+lacks the atom found in another occurrence. No independent contradiction or
+sufficient branch may settle the theorem before the insertion decision.
 
 ### `atomic-double-cut-selection`
 
 Require the player to choose one exact atomic occurrence for double-cut introduction.
-The created annulus or changed polarity must enable the next useful operation. Nearby
-content must make selecting a larger region or a different atom a materially different
-choice, not merely an illegal click.
+Use a compound interlock: the created annulus or changed authority must enable the
+next useful operation before cleanup. Nearby content must make selecting a larger
+region or a different atom a materially different choice, not merely an illegal
+click. Do not use a compact wrapper/match family whose existing clean double cut can
+be eliminated to expose the same authority.
 
 ### `compound-copy-authority-contrast`
 
@@ -227,6 +230,27 @@ The whitelist is semantic content policy, not a generic engine exception.
 
 The audit supplements rather than replaces replay validation. It does not attempt to
 forbid all alternative proofs or require one authored move sequence.
+
+## Creative-Rule Materiality and Dominance
+
+Evidence gathered after the first reconstruction rejected both witness-rule-name
+checks and a universal ban on alternative destructive proofs.
+
+For every reconstructed creative-rule puzzle:
+
+- the creative step must create identifiable content, authority, or a boundary;
+- a named downstream consumer must be illegal before that step and legal afterward
+  because of the created resource;
+- the consumer must depend on or consume that resource;
+- a nearby atom, wrong owner, or larger selection must not unlock the same consumer;
+- exhaustive destructive closure must record the shortest all-destructive proof;
+- no all-destructive proof may be shorter than or equal in length to the validated
+  causal proof.
+
+Complete destructive unreachability remains preferred for compact introductions, but
+it is not a universal content requirement. A longer alternative proof is compatible
+with an open problem. This validation rejects a dominating shortcut without enforcing
+one intended sequence.
 
 ## Validation
 

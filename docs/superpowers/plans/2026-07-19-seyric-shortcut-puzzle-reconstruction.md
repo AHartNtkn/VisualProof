@@ -13,6 +13,7 @@
 - Do not modify any `echoed-veil` authored surface: puzzle, validation, guidance, catalog, coverage, progression, or runtime projection.
 - Preserve the point, puzzle ID, and artifact identity of reconstructed puzzles; topology, size, silhouette, witness, and prerequisites may change dramatically.
 - Alternative proofs remain welcome. Do not enforce an intended solution or forbid a different valid route.
+- For creative-rule puzzles, prove causal create/consume materiality and reject any all-destructive proof no longer than the validated causal proof; do not ban longer alternatives merely for existing.
 - No reconstructed puzzle may duplicate an existing canonical start or an existing player-facing decision.
 - Permit the identified empty-cut shortcut only in `forked-veil`, unchanged `echoed-veil`, and the deliberately intimidating `atomic-fragment-erasure`.
 - Keep every Seyric goal in the pure propositional culture boundary: arity-zero bubbles in negative context, atom nodes only, and no wires.
@@ -354,6 +355,12 @@ git commit -m "feat(game): add marked-echo deiteration introduction"
 - Consumes: `findEmptyCutShortcutHosts`, canonical puzzle fingerprints, and ordinary backward proof steps.
 - Produces: four valid, shortcut-free, canonically distinct starts whose primary decisions are respectively host legality, atomic insertion, exact atomic wrapping, and parity through ownership rings.
 
+**Post-review evidence amendment:** The first implementation passed witness replay but
+three puzzles had shorter destructive bypasses. Two bounded implementation searches
+and five independent evidence probes rejected the compact homologous-deficit insertion
+and wrapper/match double-cut families. This amendment governs Steps 1–3 wherever the
+original examples conflict with it.
+
 - [ ] **Step 1: Add failing per-point assertions**
 
 Add a shared assertion to `tests/game/content-validation.test.ts`:
@@ -374,22 +381,22 @@ it('keeps reconstructed atomic and polarity problems free of empty-cut truth wit
 })
 ```
 
-Add assertions that the authored solutions contain their preserved primary rules:
+Replace rule-name-presence assertions with semantic materiality and dominance evidence:
 
 ```ts
-const primaryRule = new Map([
-  ['shallow-edit-legality-contrast', 'insertion'],
-  ['atomic-content-insertion', 'insertion'],
-  ['atomic-double-cut-selection', 'doubleCutIntro'],
-  ['polarity-bubble-contrast', 'deiteration'],
-])
-for (const [id, rule] of primaryRule) {
+for (const id of creativeDecisionPuzzles) {
   const evidence = readJson(resolve(process.cwd(), `content/validation/${id}.json`))
-  expect(evidence.solution.some((step: JsonRecord) => step.rule === rule), id).toBe(true)
+  const destructive = shortestDestructiveWitness(catalog.puzzle(id as never).diagram)
+  expect(destructive === undefined || destructive.length > evidence.solution.length, id).toBe(true)
 }
 ```
 
-- [ ] **Step 2: Run the focused test and observe the four current violations**
+For each final topology, add a real-kernel causal counterfactual: its named consumer
+must fail immediately before the creative step, succeed after it because of the
+created resource, and fail after the documented nearby/wrong/larger counterfactual.
+Track semantic descendants rather than relying only on a fresh serialized ID.
+
+- [ ] **Step 2: Run the focused test and observe the three reviewed dominance violations**
 
 Run:
 
@@ -397,7 +404,8 @@ Run:
 npm test -- --run tests/game/content-validation.test.ts
 ```
 
-Expected: FAIL because the current starts still contain the shortcut.
+Expected: FAIL because the three first-pass starts have destructive proofs no longer
+than their causal witnesses. `polarity-bubble-contrast` remains approved.
 
 - [ ] **Step 3: Reconstruct each complete bundle from its point**
 
@@ -405,24 +413,28 @@ Use the following non-negotiable structural contracts:
 
 ```text
 shallow-edit-legality-contrast:
-  Remove r4, the empty cut, from the current start. Replay and replace the witness.
-  Both surviving shallow hosts must contribute to the final proof.
+  Rebuild as an asymmetric shallow bridge. One legal insertion must create a
+  downstream relationship and both compared hosts must contribute. Reject the
+  reviewed destructive route that reduces the start to ancestor deiteration.
 
 atomic-content-insertion:
-  Start with a negative host missing one atom.
-  Inserting that atom must create an exact relationship consumed later.
+  Insert one atom into a positive field inside an asymmetric compound or cyclic bridge.
+  The atom must create an exact relationship consumed later.
+  Do not use the disproven compact homologous-deficit family.
   No pre-existing false conjunct or independently sufficient branch is allowed.
 
 atomic-double-cut-selection:
-  Double-cut introduction must wrap one exact atom and create the useful annulus.
+  Double-cut introduction must wrap one exact atom inside a compound interlock and
+  create authority or an annulus used by a later constructive operation.
   A nearby atom and a larger selectable fragment must produce different consequences.
+  Do not use a clean wrapper/match source that can be eliminated to expose the same authority.
 
 polarity-bubble-contrast:
   Similar owned marks must appear at different cut parity through one or more bubbles.
   Both sides must be needed; removing either complete side may not leave a theorem.
 ```
 
-For each candidate, use a temporary `npx tsx --eval` spike with `DiagramBuilder`, `applyStep(..., 'backward')`, and `isBlank` before replacing the JSON. Compare its `exploreForm` against every catalog start before accepting it. Then replace the puzzle diagram and entire validation witness, and rewrite its coverage `visibleSituation`, `defeats`, and `experientialNeighbors` to name the nearest real neighbors and the different player decision.
+For each candidate, use a temporary `npx tsx --eval` spike with `DiagramBuilder`, `applyStep(..., 'backward')`, and `isBlank` before replacing the JSON. Compare its `exploreForm` against every catalog start before accepting it. Compute its shortest destructive proof and reject it when that path is no longer than the causal proof. Then replace the puzzle diagram and entire validation witness, and rewrite its coverage `visibleSituation`, `defeats`, and `experientialNeighbors` to name the nearest real neighbors and the different player decision.
 
 Set prerequisites exactly as follows and do not make the new puzzle part of the
 Myratic unlock closure:
@@ -476,9 +488,9 @@ git commit -m "feat(game): reconstruct atomic Seyric edit problems"
 - Consumes: the shortcut detector and marked-echo deiteration prerequisite.
 - Produces: four shortcut-free compound problems with different primary decisions.
 
-- [ ] **Step 1: Extend the failing shortcut and primary-rule table**
+- [ ] **Step 1: Extend the shortcut, materiality, and dominance table**
 
-Add these exact mappings to the Task 3 test data:
+Add these exact operation mappings to the Task 3 semantic test data:
 
 ```ts
 const compoundPrimaryRule = new Map([
@@ -489,7 +501,12 @@ const compoundPrimaryRule = new Map([
 ])
 ```
 
-Assert every listed start has no shortcut host and every witness uses its mapped rule.
+Assert every listed start has no shortcut host. For each creative mapping, add the
+same causal pre/post/counterfactual evidence and require its shortest destructive
+proof, when one exists, to be longer than its causal witness. For
+`content-bearing-annulus-choice`, prove instead that the selected elimination
+preserves content consumed later and that the obstructed near-match cannot perform
+the same transition.
 
 - [ ] **Step 2: Run the focused test and observe the current violations**
 
@@ -577,7 +594,7 @@ git commit -m "feat(game): reconstruct compound Seyric workspace problems"
 
 - [ ] **Step 1: Add failing assertions**
 
-Extend the shortcut-free set and rule map:
+Extend the shortcut-free set and semantic operation table:
 
 ```ts
 ['grouped-branch-construction', 'insertion']
@@ -598,6 +615,10 @@ expect(row('useful-vacuous-owner-workspace').experientialNeighbors).toEqual(
   expect.arrayContaining(['double-cut-insertion-workspace', 'nested-owner-introduction']),
 )
 ```
+
+Also add causal pre/post/counterfactual evidence for each created resource and apply
+the same destructive-proof dominance rule. A witness containing `insertion` or
+`vacuousIntro` is not evidence by itself.
 
 - [ ] **Step 2: Run the focused test and observe both violations**
 
