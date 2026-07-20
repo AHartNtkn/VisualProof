@@ -116,7 +116,6 @@ noncomputable def finalFocusRelationSelector
       result.bubble raw)
     (targetWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature) :
     VacuousElimTrace.FreshRelationSelector elimTrace targetWellFormed model := by
@@ -215,7 +214,6 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
       result.bubble raw)
     (targetWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
@@ -283,7 +281,7 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
     let proxyValues := proxyRelationsOfParentCover payload result finalTargets
       targetBinders elimTrace.parent bubbleShape stateCover targetRelations
     (finalFocusRelationSelector wholeTrace elimTrace targetWellFormed
-      boundaryNodup model named) sourceContext targetContext sourceBinders
+      model named) sourceContext targetContext sourceBinders
         targetBinders sourceExact targetExact sourceCover targetCover
         sourceEnumeration targetEnumeration binderWitness sourceEnvironment
         targetEnvironment sourceRelations targetRelations =

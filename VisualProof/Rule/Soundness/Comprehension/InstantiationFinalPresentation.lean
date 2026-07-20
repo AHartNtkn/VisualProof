@@ -156,7 +156,6 @@ noncomputable def initialBubblePresentationOfFinal
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
@@ -169,7 +168,7 @@ noncomputable def initialBubblePresentationOfFinal
       relationValue values parameterValues) :
     BubblePresentation payload (initialInstantiationState payload) model named
       relationValue values parameterValues :=
-  bubblePresentation_of_trace trace boundaryNodup model named relationValue
+  bubblePresentation_of_trace trace model named relationValue
     values parameterValues
     (initial_regionSimulationsEveryStep trace model named relationValue values
       parameterValues contract)
@@ -194,7 +193,6 @@ noncomputable def initialBubblePresentationOfFinalFocus
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (targets : BinderTargetsAtBubble payload result)
     (scopes : ParameterScopesAtBubble result)
     (model : Lambda.LambdaModel)
@@ -254,7 +252,7 @@ noncomputable def initialBubblePresentationOfFinalFocus
   have finalPresentation' : BubblePresentation payload result model named
       relationValue values parameterValues := by
     simpa only [parametersEq, proxiesEq] using finalPresentation
-  exact initialBubblePresentationOfFinal trace boundaryNodup model named
+  exact initialBubblePresentationOfFinal trace model named
     relationValue values parameterValues contract finalPresentation'
 
 end InstantiationSemantic
