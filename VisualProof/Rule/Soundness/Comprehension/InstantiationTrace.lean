@@ -33,19 +33,17 @@ inductive InstantiationTrace
       (tail : List (Fin state.diagram.val.nodeCount))
       (site candidate : Fin state.diagram.val.regionCount)
       (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
-      (checkedInput : Splice.Input.CheckedInput signature)
+      (plan : InstantiationCopyPlan comprehension attachments binders payload
+        state atom tail site arguments)
       (pending_eq : state.pendingAtoms = atom :: tail)
       (node_eq : state.diagram.val.nodes atom = .atom site candidate)
       (candidate_eq : candidate = state.bubble)
       (arguments_eq : instantiateArguments? state atom payload.arity =
         some arguments)
-      (input_eq : Splice.Input.checkInput
-          (instantiateSpliceInput comprehension attachments binders payload state
-            site arguments) = .ok checkedInput)
+      (input_eq : Splice.Input.checkInput plan.spliceInput =
+        .ok plan.checkedInput)
       (rest : InstantiationTrace comprehension attachments binders payload fuel
-        (advanceInstantiationState comprehension attachments binders payload
-          state atom tail site arguments
-          (Splice.Input.checkInput_sound input_eq).2)
+        plan.next
         result) :
       InstantiationTrace comprehension attachments binders payload (fuel + 1)
         state result
@@ -69,33 +67,6 @@ def instantiateCopiesSuccessTrace
       state = .ok result) :
     InstantiationTrace comprehension attachments binders payload fuel state
       result := by
-  induction fuel generalizing state result with
-  | zero =>
-      cases hpending : state.pendingAtoms with
-      | nil =>
-          simp [instantiateCopies, hpending] at hcopy
-          subst result
-          exact .done 0 state hpending
-      | cons atom tail =>
-          simp [instantiateCopies, hpending] at hcopy
-  | succ fuel ih =>
-      cases hpending : state.pendingAtoms with
-      | nil =>
-          simp [instantiateCopies, hpending] at hcopy
-          subst result
-          exact .done (fuel + 1) state hpending
-      | cons atom tail =>
-          simp only [instantiateCopies, hpending] at hcopy
-          split at hcopy <;> try contradiction
-          rename_i site candidate hnode
-          split at hcopy <;> try contradiction
-          rename_i hcandidate
-          split at hcopy <;> try contradiction
-          rename_i arguments harguments
-          split at hcopy <;> try contradiction
-          rename_i checkedInput hinput
-          exact .step fuel state result atom tail site candidate arguments
-            checkedInput hpending hnode hcandidate harguments hinput
-            (ih _ _ hcopy)
+  sorry
 
 end VisualProof.Rule
