@@ -5,6 +5,7 @@ import VisualProof.Lambda.Reduction
 import VisualProof.Lambda.Certificate
 import VisualProof.Lambda.Normalize
 import VisualProof.Lambda.Quotient
+import VisualProof.Lambda.NormalSeparation
 import VisualProof.Theory.Signature
 import VisualProof.Theory.Definition
 import VisualProof.Theory.Semantics
