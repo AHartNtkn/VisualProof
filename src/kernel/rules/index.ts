@@ -25,3 +25,9 @@ export { applyFusion, applyFission } from './fusion'
 export type { AbstractionOccurrence } from './comprehension'
 export { applyComprehensionInstantiate, applyComprehensionAbstract } from './comprehension'
 export { applyVacuousBubbleIntro, applyVacuousBubbleElim } from './vacuous'
+export type { InconsistentCutDiscovery } from './inconsistent-cut'
+export {
+  hasInconsistentCutCandidate,
+  findInconsistentCutEvidence,
+  applyInconsistentCutElim,
+} from './inconsistent-cut'
