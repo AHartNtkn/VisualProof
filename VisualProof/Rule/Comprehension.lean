@@ -667,7 +667,18 @@ theorem materializedInstantiationSpliceInput_respectsBoundary
       payload.binderSpine) :
     (materializedInstantiationSpliceInput comprehension attachments binders
       payload state site arguments certificate).AttachmentsRespectBoundary := by
-  sorry
+  intro left right hboundary
+  exact ((Splice.AttachmentAliasMaterialization.raw_boundary_get_eq_iff
+    comprehension.val
+    (instantiationAttachment comprehension attachments binders payload state
+      arguments)
+    payload.binderSpine.bodyContainer
+    (Fin.cast certificate.boundary_length left)
+    (Fin.cast certificate.boundary_length right)).1 (by
+      simpa [materializedInstantiationSpliceInput, instantiateSpliceInput,
+        materializedInstantiationPayload,
+        Splice.AttachmentAliasMaterialization.Certificate.result] using
+        hboundary)).2
 
 /-- The state transition driven by one exact attachment-materialized splice. -/
 def advanceMaterializedInstantiationState {signature : List Nat}
