@@ -15,6 +15,31 @@ import { termNodeAt } from '../../src/kernel/rules/access'
 const p = (s: string) => parseTerm(s)
 
 describe('applicableActions', () => {
+  it('offers inconsistent-cut elimination structurally at both polarities and orientations', () => {
+    const h = new DiagramBuilder()
+    const positive = h.cut(h.root)
+    const positiveFirst = h.termNode(positive, p('\\x. x'))
+    const positiveSecond = h.termNode(positive, p('\\x. \\y. x'))
+    h.wire(positive, [positiveFirst, positiveSecond]
+      .map((node) => ({ node, port: { kind: 'output' as const } })))
+    const enclosing = h.cut(h.root)
+    const negative = h.cut(enclosing)
+    const negativeFirst = h.termNode(negative, p('\\x. x'))
+    const negativeSecond = h.termNode(negative, p('\\x. \\y. x'))
+    h.wire(negative, [negativeFirst, negativeSecond]
+      .map((node) => ({ node, port: { kind: 'output' as const } })))
+    const d = h.build()
+    const proof = verifyTheory(buildFregeTheory())
+
+    for (const backward of [false, true]) {
+      for (const [region, cut] of [[d.root, positive], [enclosing, negative]] as const) {
+        const selection = mkSelection(d, { region, regions: [cut], nodes: [], wires: [] })
+        expect(applicableActions(d, selection, proof, backward).map((action) => action.kind))
+          .toContain('inconsistentCutElim')
+      }
+    }
+  })
+
   it('offers erasure contextually while spawning remains on the direct canvas interaction', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('\\x. x'))

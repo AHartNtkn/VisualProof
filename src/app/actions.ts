@@ -3,6 +3,7 @@ import { polarity } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
+import { hasInconsistentCutCandidate } from '../kernel/rules/inconsistent-cut'
 
 /**
  * Pure, read-only enumeration of moves the UI may offer for a selection.
@@ -14,6 +15,7 @@ export type ActionDescriptor =
   | { readonly kind: 'erase'; readonly label: string }
   | { readonly kind: 'doubleCutWrap'; readonly label: string }
   | { readonly kind: 'doubleCutElim'; readonly label: string }
+  | { readonly kind: 'inconsistentCutElim'; readonly label: string }
   | { readonly kind: 'abstractWrap'; readonly label: string; readonly needsInput: 'abstraction' }
   | { readonly kind: 'vacuousElim'; readonly label: string }
   | { readonly kind: 'iterate'; readonly label: string; readonly needsTarget: true }
@@ -75,6 +77,9 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
       const wiresIn = Object.values(d.wires).some((w) => w.scope === rid)
       if (children.length === 1 && children[0]![1].kind === 'cut' && !nodesIn && !wiresIn) {
         out.push({ kind: 'doubleCutElim', label: 'Eliminate the double cut' })
+      }
+      if (hasInconsistentCutCandidate(d, rid)) {
+        out.push({ kind: 'inconsistentCutElim', label: 'Eliminate the inconsistent cut' })
       }
     }
     if (r.kind === 'bubble') {

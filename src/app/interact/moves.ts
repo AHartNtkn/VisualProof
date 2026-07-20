@@ -12,6 +12,8 @@ import { parseTerm } from '../../kernel/term/parse'
 import { freePorts } from '../../kernel/term/term'
 import { applyConversion } from '../../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
+import { findInconsistentCutEvidence } from '../../kernel/rules/inconsistent-cut'
+import { RuleError } from '../../kernel/rules/error'
 import { termNodeAt, wireAt } from '../../kernel/rules/access'
 import { mapTermToCommonCarrier, proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
 import type { PortCorrespondence } from '../../kernel/rules/port-correspondence'
@@ -107,18 +109,35 @@ export function deiterationStep(d: Diagram, sel: SubgraphSelection, fuel: number
   return { rule: 'deiteration', sel, ...evidence }
 }
 
+function inconsistentCutStep(d: Diagram, region: RegionId, fuel: number): ProofStep | null {
+  const result = findInconsistentCutEvidence(d, region, fuel)
+  if (result.status === 'certified') {
+    return {
+      rule: 'inconsistentCutElim', region,
+      first: result.first, second: result.second, certificate: result.certificate,
+    }
+  }
+  if (result.status === 'undecided') {
+    throw new RuleError('inconsistency is undecided under the current fuel')
+  }
+  return null
+}
+
 export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel: number): ProofStep | null {
   const byKind = (kind: ActionDescriptor['kind']): ActionDescriptor | undefined =>
     discovery.actions.find((action) => action.kind === kind)
-  const action = byKind('doubleCutElim') ?? byKind('vacuousElim') ?? byKind('erase') ?? byKind('deiterate')
-  if (action === undefined) return null
-  switch (action.kind) {
-    case 'doubleCutElim': return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
-    case 'vacuousElim': return { rule: 'vacuousElim', region: discovery.sel.regions[0]! }
-    case 'erase': return erasureStep(d, discovery.sel)
-    case 'deiterate': return deiterationStep(d, discovery.sel, fuel)
-    default: throw new Error(`'${action.kind}' is not a contextual deletion`)
+  const doubleCut = byKind('doubleCutElim')
+  if (doubleCut !== undefined) return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
+  const vacuous = byKind('vacuousElim')
+  if (vacuous !== undefined) return { rule: 'vacuousElim', region: discovery.sel.regions[0]! }
+  if (byKind('inconsistentCutElim') !== undefined) {
+    const inconsistent = inconsistentCutStep(d, discovery.sel.regions[0]!, fuel)
+    if (inconsistent !== null) return inconsistent
   }
+  const erase = byKind('erase')
+  if (erase !== undefined) return erasureStep(d, discovery.sel)
+  const deiterate = byKind('deiterate')
+  return deiterate === undefined ? null : deiterationStep(d, discovery.sel, fuel)
 }
 
 export function foldedComprehension(ctx: ProofContext, name: string): DiagramWithBoundary {
@@ -531,6 +550,11 @@ export class ProofMoveController {
       case 'erase': row(action.label, () => this.#commit(erasureStep(this.#options.diagram(), sel))); return
       case 'doubleCutWrap': row(action.label, () => this.#commit({ rule: 'doubleCutIntro', sel })); return
       case 'doubleCutElim': row(action.label, () => this.#commit({ rule: 'doubleCutElim', region: sel.regions[0]! })); return
+      case 'inconsistentCutElim': row(action.label, () => {
+        const step = inconsistentCutStep(this.#options.diagram(), sel.regions[0]!, this.#options.fuel())
+        if (step === null) throw new RuleError('no inconsistent pair was found in the selected cut')
+        this.#commit(step)
+      }); return
       case 'abstractWrap': row(action.label, () => {
         this.#closeMenu()
         this.#options.openAbstraction(sel, this.#lastPointer)

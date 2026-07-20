@@ -103,6 +103,79 @@ function fusionController(
   }
 }
 
+function inconsistentCut(
+  firstSource = '\\x. x',
+  secondSource = '\\x. \\y. x',
+  enclosingCut = false,
+) {
+  const b = new DiagramBuilder()
+  const parent = enclosingCut ? b.cut(b.root) : b.root
+  const cut = b.cut(parent)
+  const first = b.termNode(cut, p(firstSource))
+  const second = b.termNode(cut, p(secondSource))
+  const wire = b.wire(cut, [first, second]
+    .map((node) => ({ node, port: { kind: 'output' as const } })))
+  return { diagram: b.build(), parent, cut, first, second, wire }
+}
+
+class MenuElement {
+  textContent = ''
+  className = ''
+  style = { cssText: '' }
+  readonly children: MenuElement[] = []
+  readonly #listeners: Array<() => void> = []
+
+  get childElementCount(): number { return this.children.length }
+  setAttribute(): void {}
+  addEventListener(type: string, listener: () => void): void {
+    if (type === 'click') this.#listeners.push(listener)
+  }
+  append(...children: MenuElement[]): void { this.children.push(...children) }
+  remove(): void {}
+  click(): void { for (const listener of this.#listeners) listener() }
+}
+
+function menuHost(): { readonly host: HTMLElement; readonly appended: MenuElement[] } {
+  const appended: MenuElement[] = []
+  const document = { createElement: () => new MenuElement() }
+  const host = {
+    ownerDocument: document,
+    append: (element: MenuElement) => { appended.push(element) },
+  }
+  return { host: host as unknown as HTMLElement, appended }
+}
+
+function inconsistentController(
+  orientation: 'forward' | 'backward',
+  fuel = 64,
+  host: HTMLElement = { ownerDocument: {} } as HTMLElement,
+) {
+  const fixture = inconsistentCut()
+  const steps: ProofStep[] = []
+  const refusals: string[] = []
+  let selection: Hit[] = [{ kind: 'region', id: fixture.cut }]
+  const controller = new ProofMoveController({
+    host,
+    active: () => true,
+    diagram: () => fixture.diagram,
+    engine: () => mkEngine(fixture.diagram, []),
+    viewScale: () => 1,
+    selection: () => selection,
+    setSelection: (next) => { selection = [...next] },
+    context: () => EMPTY_PROOF_CONTEXT,
+    orientation: () => orientation,
+    apply: (action) => { steps.push(...action.steps) },
+    commitFission: () => {},
+    refuse: (text) => { refusals.push(text) },
+    theme: () => LIGHT,
+    fuel: () => fuel,
+    openComprehension: () => {},
+    openAbstraction: () => {},
+    openSpawn: () => {},
+  })
+  return { ...fixture, controller, steps, refusals }
+}
+
 describe('ProofMoveController context authority', () => {
   it('authenticates construction and every later context callback before branching', () => {
     const forged = { theorems: new Map(), relations: new Map() } as unknown as ProofContext
@@ -115,6 +188,108 @@ describe('ProofMoveController context authority', () => {
 })
 
 describe('shared proof move discovery', () => {
+  it('absorb-normalizes a selected inconsistent cut plus all its contents to the same action and step', () => {
+    const { diagram, cut, first, second, wire } = inconsistentCut()
+    const cutOnly = discoverProofActions(diagram, [{ kind: 'region', id: cut }], ctx(), 'forward')!
+    const withContents = discoverProofActions(diagram, [
+      { kind: 'region', id: cut },
+      { kind: 'node', id: first },
+      { kind: 'node', id: second },
+      { kind: 'wire', id: wire },
+    ], ctx(), 'forward')!
+
+    expect(withContents.sel).toEqual(cutOnly.sel)
+    expect(withContents.actions.map((action) => action.kind)).toContain('inconsistentCutElim')
+    expect(contextualDeleteStep(diagram, withContents, 64))
+      .toEqual(contextualDeleteStep(diagram, cutOnly, 64))
+  })
+
+  it('resolves contextual deletion in double-cut, vacuous, inconsistent, erasure, deiteration order', () => {
+    const inconsistent = inconsistentCut()
+    const found = discoverProofActions(
+      inconsistent.diagram, [{ kind: 'region', id: inconsistent.cut }], ctx(), 'forward',
+    )!
+    const staged = (kinds: Array<'doubleCutElim' | 'vacuousElim' | 'inconsistentCutElim' | 'erase' | 'deiterate'>) => ({
+      ...found,
+      actions: kinds.map((kind) => ({ kind, label: kind })),
+    })
+
+    expect(contextualDeleteStep(inconsistent.diagram, staged([
+      'deiterate', 'erase', 'inconsistentCutElim', 'vacuousElim', 'doubleCutElim',
+    ]), 64)).toEqual({ rule: 'doubleCutElim', region: inconsistent.cut })
+    expect(contextualDeleteStep(inconsistent.diagram, staged([
+      'deiterate', 'erase', 'inconsistentCutElim', 'vacuousElim',
+    ]), 64)).toEqual({ rule: 'vacuousElim', region: inconsistent.cut })
+    expect(contextualDeleteStep(inconsistent.diagram, staged([
+      'deiterate', 'erase', 'inconsistentCutElim',
+    ]), 64)).toMatchObject({ rule: 'inconsistentCutElim', region: inconsistent.cut })
+
+    const duplicate = new DiagramBuilder()
+    const original = duplicate.termNode(duplicate.root, p('y'))
+    const copy = duplicate.termNode(duplicate.root, p('y'))
+    duplicate.wire(duplicate.root, [original, copy]
+      .map((node) => ({ node, port: { kind: 'freeVar' as const, name: 'y' } })))
+    duplicate.wire(duplicate.root, [original, copy]
+      .map((node) => ({ node, port: { kind: 'output' as const } })))
+    const duplicateDiagram = duplicate.build()
+    const forward = discoverProofActions(duplicateDiagram, [{ kind: 'node', id: copy }], ctx(), 'forward')!
+    const backward = discoverProofActions(duplicateDiagram, [{ kind: 'node', id: copy }], ctx(), 'backward')!
+    expect(contextualDeleteStep(duplicateDiagram, forward, 64)?.rule).toBe('erasure')
+    expect(contextualDeleteStep(duplicateDiagram, backward, 64)?.rule).toBe('deiteration')
+  })
+
+  it('uses inconsistent-cut elimination before available positive-region erasure', () => {
+    const fixture = inconsistentCut()
+    const found = discoverProofActions(
+      fixture.diagram, [{ kind: 'region', id: fixture.cut }], ctx(), 'forward',
+    )!
+
+    expect(found.actions.map((action) => action.kind)).toEqual(expect.arrayContaining([
+      'inconsistentCutElim', 'erase',
+    ]))
+    expect(contextualDeleteStep(fixture.diagram, found, 64)).toMatchObject({
+      rule: 'inconsistentCutElim', region: fixture.cut,
+    })
+  })
+
+  it('falls through to erasure when every plausible pair has the same normal form', () => {
+    const fixture = inconsistentCut('\\x. x', '\\renamed. renamed')
+    const found = discoverProofActions(
+      fixture.diagram, [{ kind: 'region', id: fixture.cut }], ctx(), 'forward',
+    )!
+
+    expect(found.actions.map((action) => action.kind)).toContain('inconsistentCutElim')
+    expect(contextualDeleteStep(fixture.diagram, found, 1)?.rule).toBe('erasure')
+  })
+
+  it('refuses final exhaustion without returning a proof step', () => {
+    const fixture = inconsistentCut('(\\x. x x) (\\x. x x)', '\\x. x')
+    const found = discoverProofActions(
+      fixture.diagram, [{ kind: 'region', id: fixture.cut }], ctx(), 'forward',
+    )!
+    let step: ProofStep | null = null
+
+    expect(() => { step = contextualDeleteStep(fixture.diagram, found, 1) })
+      .toThrow(/inconsistency is undecided under the current fuel/)
+    expect(step).toBeNull()
+  })
+
+  it('uses a later certifying pair after an earlier pair exhausts fuel', () => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const exhausted = b.termNode(cut, p('(\\x. x x) (\\x. x x)'))
+    const first = b.termNode(cut, p('\\x. x'))
+    const second = b.termNode(cut, p('\\x. \\y. x'))
+    b.wire(cut, [exhausted, first, second]
+      .map((node) => ({ node, port: { kind: 'output' as const } })))
+    const diagram = b.build()
+    const found = discoverProofActions(diagram, [{ kind: 'region', id: cut }], ctx(), 'forward')!
+
+    expect(contextualDeleteStep(diagram, found, 1)).toMatchObject({
+      rule: 'inconsistentCutElim', region: cut, first, second,
+    })
+  })
+
   it('absorb-normalizes a selected double-cut subtree and chooses its elimination first', () => {
     const b = new DiagramBuilder()
     const outer = b.cut(b.root)
@@ -164,6 +339,48 @@ describe('shared proof move discovery', () => {
     }
     expect(forward).toContain('erase')
     expect(backward).not.toContain('erase')
+  })
+})
+
+describe('inconsistent-cut interaction dispatch', () => {
+  it.each(['Backspace', 'Delete'])('%s authors the same certified action', (pressed) => {
+    const fixture = inconsistentController('forward')
+
+    expect(fixture.controller.keyDown(key(pressed))).toBe(true)
+    expect(fixture.steps).toEqual([{
+      rule: 'inconsistentCutElim',
+      region: fixture.cut,
+      first: fixture.first,
+      second: fixture.second,
+      certificate: { firstSteps: [], secondSteps: [] },
+    }])
+  })
+
+  it('authors the same result through forward and backward controllers', () => {
+    const forward = inconsistentController('forward')
+    const backward = inconsistentController('backward')
+
+    expect(forward.controller.keyDown(key('Delete'))).toBe(true)
+    expect(backward.controller.keyDown(key('Delete'))).toBe(true)
+    expect(backward.steps).toEqual(forward.steps)
+  })
+
+  it('authors and commits the same proof step from the contextual menu', () => {
+    const menu = menuHost()
+    const fixture = inconsistentController('forward', 64, menu.host)
+    const expected = contextualDeleteStep(
+      fixture.diagram,
+      discoverProofActions(fixture.diagram, [{ kind: 'region', id: fixture.cut }], ctx(), 'forward')!,
+      64,
+    )
+
+    expect(fixture.controller.contextMenu(contextPointer({ kind: 'region', id: fixture.cut }))).toBe(true)
+    const action = menu.appended[0]?.children.find((element) =>
+      element.textContent === 'Eliminate the inconsistent cut')
+    expect(action).toBeDefined()
+    action!.click()
+    expect(fixture.steps).toEqual([expected])
+    expect(fixture.refusals).toEqual([])
   })
 })
 
