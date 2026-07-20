@@ -228,6 +228,8 @@ describe('step interface transport', () => {
     expect(rootReceipt.provenance.image(root.retained)).toBe(root.retained)
     expect(rootReceipt.provenance.image(root.absorbed)).toBeUndefined()
     expect(rootReceipt.interface.image(root.absorbed)).toBe(root.retained)
+    expect(transportBoundary(rootReceipt.interface, [root.retained, root.absorbed, root.absorbed]))
+      .toEqual([root.retained, root.retained, root.retained])
 
     const shielded = fixture(true)
     const shieldedReceipt = applyStepWithReceipt(shielded.diagram, {
