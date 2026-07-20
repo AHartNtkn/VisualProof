@@ -114,6 +114,31 @@ theorem targetEnvironment_agrees
     _ _ _).2
   rfl
 
+/-- Transport a context witness across an extension equality without changing
+the represented target wires. -/
+def castTarget
+    (witness : ContextWitness trace sourceContext targetContext)
+    {otherTarget : ConcreteElaboration.WireContext trace.diagram}
+    (equal : otherTarget = targetContext) :
+    ContextWitness trace sourceContext otherTarget := by
+  subst otherTarget
+  exact witness
+
+theorem castTarget_agrees
+    (witness : ContextWitness trace sourceContext targetContext)
+    {otherTarget : ConcreteElaboration.WireContext trace.diagram}
+    (equal : otherTarget = targetContext)
+    (sourceEnvironment : Fin sourceContext.length → D)
+    (targetEnvironment : Fin targetContext.length → D)
+    (agreement : witness.indexRelation.EnvironmentsAgree sourceEnvironment
+      targetEnvironment) :
+    (witness.castTarget equal).indexRelation.EnvironmentsAgree
+      sourceEnvironment
+      (fun index => targetEnvironment
+        (Fin.cast (congrArg List.length equal) index)) := by
+  subst otherTarget
+  simpa [castTarget] using agreement
+
 /-- Extend the origin relation through a surviving source region. Exact local
 wires correspond by compact scope injectivity. -/
 def extend

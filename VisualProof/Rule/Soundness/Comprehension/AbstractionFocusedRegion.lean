@@ -293,6 +293,52 @@ theorem bubble_exactScopeWires_nil
   simp [ConcreteElaboration.WireContext.extend,
     trace.bubble_exactScopeWires_nil]
 
+def emptyBubbleEnvironment
+    (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
+    (D : Type) :
+    Fin (ConcreteElaboration.exactScopeWires trace.diagram
+      trace.bubble).length → D :=
+  fun index => Fin.elim0
+    (Fin.cast (congrArg List.length trace.bubble_exactScopeWires_nil) index)
+
+theorem extendedEnvironment_bubble_empty
+    (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
+    (context : ConcreteElaboration.WireContext trace.diagram)
+    (environment : Fin context.length → D) :
+    ConcreteElaboration.extendedEnvironment context trace.bubble environment
+        (trace.emptyBubbleEnvironment D) =
+      fun index => environment
+        (Fin.cast (congrArg List.length (trace.extend_bubble_eq context))
+          index) := by
+  funext index
+  unfold ConcreteElaboration.extendedEnvironment emptyBubbleEnvironment
+  simp only [Function.comp_apply]
+  let sourceLocal :
+      Fin (ConcreteElaboration.exactScopeWires trace.diagram
+        trace.bubble).length → D := trace.emptyBubbleEnvironment D
+  let countEq :
+      (ConcreteElaboration.exactScopeWires trace.diagram
+        trace.bubble).length = 0 :=
+    congrArg List.length trace.bubble_exactScopeWires_nil
+  have transported := ModalSoundness.extendWireEnv_transport
+    (countEq := countEq.symm)
+    (sourceLocal := sourceLocal)
+    (targetLocal := (Fin.elim0 : Fin 0 → D))
+    (localValues := by
+      intro impossible
+      exact Fin.elim0 impossible)
+    (sourceIndex := Fin.cast
+      (ConcreteElaboration.WireContext.length_extend context trace.bubble)
+      index)
+    (targetIndex := Fin.cast
+      ((congrArg List.length (trace.extend_bubble_eq context)).trans
+        (Nat.add_zero context.length).symm)
+      index)
+    (indexValue := rfl)
+    environment
+  simpa [sourceLocal, emptyBubbleEnvironment, extendWireEnv_zero] using
+    transported
+
 /-- Pointwise semantic transport for surviving material selected directly at
 the wrap and moved beneath the fresh abstraction bubble. -/
 theorem focusedSelectedOccurrence_semantic
