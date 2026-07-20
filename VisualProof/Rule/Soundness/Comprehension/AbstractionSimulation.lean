@@ -181,13 +181,8 @@ noncomputable def semanticSimulation
   at_focused_child := by
     intro sourceContext targetContext context parent focused sourceExact
       targetExact child reachable sourceParent targetParent
-    have parentWrap : parent = wrap.val.anchor := by
-      rcases reachable with wrapRegion | outer
-      · exact wrapRegion
-      · exact False.elim (focused outer.1)
-    subst parent
-    exact trace.reachable_child_of_wrap_focus payload targetWellFormed child
-      sourceParent targetParent
+    exact trace.reachable_child_of_focus targetWellFormed parent child
+      reachable targetParent
   localTransport := by
     intro sourceRels targetRels direction fuelSource fuelTarget sourceContext
       targetContext context sourceBinders targetBinders binderWitness region
