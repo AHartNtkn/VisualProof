@@ -196,12 +196,10 @@ theorem node_shape_of_regular
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent)
     (node : Fin input.val.nodeCount)
-    (nodeRegion : (input.val.nodes node).region = parent) :
-    let survives := trace.node_survives_of_regular parent regular node nodeRegion
+    (nodeRegion : (input.val.nodes node).region = parent)
+    (survives : trace.domains.nodes.survives node = true) :
     trace.diagram.nodes (trace.targetNode node survives) =
       mapNodeShape trace.regionMap (input.val.nodes node) := by
-  dsimp only
-  let survives := trace.node_survives_of_regular parent regular node nodeRegion
   have result := trace.abstractNode?_targetNode node survives
   unfold abstractNode? at result
   have nodeNotDirect : node ∉ wrap.val.directNodes := by
