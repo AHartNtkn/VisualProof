@@ -447,6 +447,198 @@ private theorem materializedOpenCompilerTrace_terminalLexical
               (eq_of_heq hbinders))
           exact ih targetTailTrace sourceEndEq targetEndEq rfl hchildBinders
 
+private theorem materializedRoute_firstChild_eq
+    {signature : List Nat}
+    {Host : Type} [DecidableEq Host]
+    (pattern : CheckedOpenDiagram signature)
+    (attachment : Fin pattern.val.boundary.length → Host)
+    (spine : BinderSpine pattern.val.diagram)
+    (targetWellFormed :
+      (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
+        attachment spine.bodyContainer).WellFormed signature)
+    {sourceStart sourceChild sourceEnd : Fin pattern.val.diagram.regionCount}
+    {targetStart targetChild targetEnd : Fin
+      (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
+        attachment spine.bodyContainer).regionCount}
+    {sourceRest targetRest : List Nat}
+    (sourceParent : (pattern.val.diagram.regions sourceChild).parent? =
+      some sourceStart)
+    (targetParent :
+      ((Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
+        attachment spine.bodyContainer).regions targetChild).parent? =
+          some targetStart)
+    (sourceTail : Splice.RegionRoute pattern.val.diagram sourceChild sourceEnd
+      sourceRest)
+    (targetTail : Splice.RegionRoute
+      (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
+        attachment spine.bodyContainer) targetChild targetEnd targetRest)
+    (sourceEndEq : sourceEnd = spine.bodyContainer)
+    (targetEndEq : targetEnd = spine.bodyContainer)
+    (startEq : targetStart = sourceStart) :
+    targetChild = sourceChild := by
+  have targetParentSource :
+      (pattern.val.diagram.regions targetChild).parent? = some sourceStart := by
+    simpa only [Splice.AttachmentAliasMaterialization.materialized_regions]
+      using (startEq ▸ targetParent)
+  have sourceEncloses : pattern.val.diagram.Encloses sourceChild
+      spine.bodyContainer := by
+    have h := Splice.Input.RegionRoute.encloses sourceTail
+      pattern.property.diagram_well_formed
+    rw [sourceEndEq] at h
+    exact h
+  have targetEncloses : pattern.val.diagram.Encloses targetChild
+      spine.bodyContainer :=
+    (Splice.AttachmentAliasMaterialization.Semantic.materialized_encloses_iff
+      pattern.val attachment spine.bodyContainer targetChild
+        spine.bodyContainer).mp (by
+      have h := Splice.Input.RegionRoute.encloses targetTail targetWellFormed
+      rw [targetEndEq] at h
+      exact h)
+  exact (Splice.Input.RegionRoute.directChild_eq_of_encloses
+    pattern.property.diagram_well_formed sourceParent targetParentSource
+    sourceEncloses targetEncloses).symm
+
+private theorem materializedOpenCompilerTrace_terminalLexical_aligned
+    {signature : List Nat}
+    {Host : Type} [DecidableEq Host]
+    (pattern : CheckedOpenDiagram signature)
+    (attachment : Fin pattern.val.boundary.length → Host)
+    (spine : BinderSpine pattern.val.diagram)
+    (certificate : Splice.AttachmentAliasMaterialization.Certificate pattern
+      attachment spine)
+    {sourceEnd : Fin pattern.val.diagram.regionCount}
+    {targetEnd : Fin certificate.result.val.diagram.regionCount}
+    {sourcePath targetPath : List Nat}
+    {sourceBody : Region signature pattern.val.exposedWires.length []}
+    {targetBody : Region signature certificate.result.val.exposedWires.length []}
+    {sourceRoute : Splice.RegionRoute pattern.val.diagram pattern.val.diagram.root
+      sourceEnd sourcePath}
+    {targetRoute : Splice.RegionRoute certificate.result.val.diagram
+      certificate.result.val.diagram.root targetEnd targetPath}
+    {sourceWitness : Region.ContextPath sourceBody sourcePath}
+    {targetWitness : Region.ContextPath targetBody targetPath}
+    {sourceState : Splice.OpenRootCompilerState pattern sourceBody}
+    {targetState : Splice.OpenRootCompilerState certificate.result targetBody}
+    (sourceTrace : Splice.OpenCompilerTrace pattern sourceRoute sourceWitness
+      sourceState)
+    (targetTrace : Splice.OpenCompilerTrace certificate.result targetRoute
+      targetWitness targetState)
+    (sourceEndEq : sourceEnd = spine.bodyContainer)
+    (targetEndEq : targetEnd = spine.bodyContainer)
+    (sourceProper : spine.bodyContainer ≠ pattern.val.diagram.root)
+    (targetProper : spine.bodyContainer ≠ certificate.result.val.diagram.root) :
+    ∃ hrels : sourceWitness.toFocus.holeRels =
+        targetWitness.toFocus.holeRels,
+      HEq (sourceTrace.leaf.nestedOfNe (sourceEndEq ▸ sourceProper)).binders
+        (targetTrace.leaf.nestedOfNe (targetEndEq ▸ targetProper)).binders := by
+  cases sourceTrace with
+  | here sourceState => exact False.elim (sourceProper sourceEndEq.symm)
+  | @cut sourceChild _ _ sourceParent sourcePosition sourcePositionEq
+      sourceTail sourceLocal sourceItems sourceFocus sourceChildBody sourceAt
+      sourceIsCut sourceNested sourceState sourceLocalCanonical
+      sourceItemsCanonical sourceChildState sourceChildKind sourceInherited
+      sourceBinders sourceFuel sourceTailTrace =>
+      cases targetTrace with
+      | here targetState => exact False.elim (targetProper targetEndEq.symm)
+      | @bubble targetChild _ _ targetParent targetPosition targetPositionEq
+          targetTail targetLocal targetArity targetItems targetFocus
+          targetChildBody targetAt targetIsBubble targetNested targetState
+          targetLocalCanonical targetItemsCanonical targetChildState
+          targetChildKind targetInherited targetBinders targetFuel
+          targetTailTrace =>
+          have hchild := materializedRoute_firstChild_eq pattern attachment spine
+            certificate.wellFormed.diagram_well_formed sourceParent targetParent
+              sourceTail targetTail
+              sourceEndEq targetEndEq rfl
+          subst targetChild
+          have targetKind : pattern.val.diagram.regions sourceChild =
+              .bubble pattern.val.diagram.root targetArity := by
+            simpa only [Splice.AttachmentAliasMaterialization.materialized_regions]
+              using targetChildKind
+          exact False.elim (by
+            have : CRegion.cut pattern.val.diagram.root =
+                CRegion.bubble pattern.val.diagram.root targetArity :=
+              sourceChildKind.symm.trans targetKind
+            contradiction)
+      | @cut targetChild _ _ targetParent targetPosition targetPositionEq
+          targetTail targetLocal targetItems targetFocus targetChildBody targetAt
+          targetIsCut targetNested targetState targetLocalCanonical
+          targetItemsCanonical targetChildState targetChildKind targetInherited
+          targetBinders targetFuel targetTailTrace =>
+          have hchild := materializedRoute_firstChild_eq pattern attachment spine
+            certificate.wellFormed.diagram_well_formed sourceParent targetParent
+              sourceTail targetTail
+              sourceEndEq targetEndEq rfl
+          subst targetChild
+          have hchildBinders : HEq sourceChildState.binders
+              targetChildState.binders := by
+            rw [sourceBinders, targetBinders]
+            exact HEq.rfl
+          obtain ⟨hrels, hleaf⟩ := materializedCompilerTrace_terminalLexical
+            pattern attachment spine certificate.wellFormed.diagram_well_formed
+              sourceTailTrace
+              targetTailTrace sourceEndEq targetEndEq rfl hchildBinders
+          refine ⟨hrels, ?_⟩
+          simpa [Splice.OpenCompilerTrace.leaf,
+            Splice.Region.ContextPath.OpenCompilerLeaf.nestedOfNe,
+            Splice.Region.ContextPath.CompilerLeaf.underCut] using hleaf
+  | @bubble sourceChild _ _ sourceParent sourcePosition sourcePositionEq
+      sourceTail sourceLocal sourceArity sourceItems sourceFocus sourceChildBody
+      sourceAt sourceIsBubble sourceNested sourceState sourceLocalCanonical
+      sourceItemsCanonical sourceChildState sourceChildKind sourceInherited
+      sourceBinders sourceFuel sourceTailTrace =>
+      cases targetTrace with
+      | here targetState => exact False.elim (targetProper targetEndEq.symm)
+      | @cut targetChild _ _ targetParent targetPosition targetPositionEq
+          targetTail targetLocal targetItems targetFocus targetChildBody targetAt
+          targetIsCut targetNested targetState targetLocalCanonical
+          targetItemsCanonical targetChildState targetChildKind targetInherited
+          targetBinders targetFuel targetTailTrace =>
+          have hchild := materializedRoute_firstChild_eq pattern attachment spine
+            certificate.wellFormed.diagram_well_formed sourceParent targetParent
+              sourceTail targetTail
+              sourceEndEq targetEndEq rfl
+          subst targetChild
+          have targetKind : pattern.val.diagram.regions sourceChild =
+              .cut pattern.val.diagram.root := by
+            simpa only [Splice.AttachmentAliasMaterialization.materialized_regions]
+              using targetChildKind
+          exact False.elim (by
+            have : CRegion.bubble pattern.val.diagram.root sourceArity =
+                CRegion.cut pattern.val.diagram.root :=
+              sourceChildKind.symm.trans targetKind
+            contradiction)
+      | @bubble targetChild _ _ targetParent targetPosition targetPositionEq
+          targetTail targetLocal targetArity targetItems targetFocus
+          targetChildBody targetAt targetIsBubble targetNested targetState
+          targetLocalCanonical targetItemsCanonical targetChildState
+          targetChildKind targetInherited targetBinders targetFuel
+          targetTailTrace =>
+          have hchild := materializedRoute_firstChild_eq pattern attachment spine
+            certificate.wellFormed.diagram_well_formed sourceParent targetParent
+              sourceTail targetTail
+              sourceEndEq targetEndEq rfl
+          subst targetChild
+          have targetKind : pattern.val.diagram.regions sourceChild =
+              .bubble pattern.val.diagram.root targetArity := by
+            simpa only [Splice.AttachmentAliasMaterialization.materialized_regions]
+              using targetChildKind
+          have harity : targetArity = sourceArity :=
+            (CRegion.bubble.inj (targetKind.symm.trans sourceChildKind)).2
+          subst targetArity
+          have hchildBinders : HEq sourceChildState.binders
+              targetChildState.binders := by
+            rw [sourceBinders, targetBinders]
+            exact HEq.rfl
+          obtain ⟨hrels, hleaf⟩ := materializedCompilerTrace_terminalLexical
+            pattern attachment spine certificate.wellFormed.diagram_well_formed
+              sourceTailTrace
+              targetTailTrace sourceEndEq targetEndEq rfl hchildBinders
+          refine ⟨hrels, ?_⟩
+          simpa [Splice.OpenCompilerTrace.leaf,
+            Splice.Region.ContextPath.OpenCompilerLeaf.nestedOfNe,
+            Splice.Region.ContextPath.CompilerLeaf.underBubble] using hleaf
+
 /-- Attachment-alias materialization preserves the nonzero-spine terminal
 relation for the exact fixed proxy family.  The ordered boundary remains
 positional: repeated source aliases may materialize as distinct exposed wires,
