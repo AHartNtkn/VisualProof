@@ -46,6 +46,9 @@ theorem applyStep_sound
   | doubleCutElim region =>
       exact applyDoubleCutElim_sound context orientation input region receipt
         happly
+  | inconsistentCutElim region first second payload =>
+      exact applyInconsistentCutElim_sound context orientation input region first
+        second payload receipt happly
   | conversion node payload =>
       exact applyConversion_sound context orientation input node payload receipt
         happly

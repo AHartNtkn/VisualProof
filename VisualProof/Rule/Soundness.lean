@@ -90,6 +90,8 @@ def applyStep (context : ProofContext signature) (orientation : Orientation)
   | .relFold selection definition args payload body_eq =>
       applyRelFold input selection definition args payload
         (relFold_namedReference_arity context definition payload body_eq)
+  | .inconsistentCutElim region first second payload =>
+      applyInconsistentCutElim input region first second payload
 
 def TheoremSchema.Valid (schema : TheoremSchema signature)
     (named : NamedEnv Lambda.Individual signature) : Prop :=

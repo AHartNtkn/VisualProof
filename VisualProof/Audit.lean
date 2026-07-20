@@ -12,8 +12,10 @@ the source audit.
 #print axioms VisualProof.Lambda.checkCertificate_sound
 #print axioms VisualProof.Diagram.iso_denotation
 #print axioms VisualProof.Diagram.Region.denote_spliceAt
+#print axioms VisualProof.Lambda.shared_output_closed_terms_false
 
 #print axioms VisualProof.Rule.applyComprehensionInstantiate_sound
+#print axioms VisualProof.Rule.applyInconsistentCutElim_sound
 #print axioms VisualProof.Rule.applyTheorem_sound
 #print axioms VisualProof.Rule.applyRelUnfold_sound
 #print axioms VisualProof.Rule.applyStep_sound

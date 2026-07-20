@@ -32,6 +32,7 @@ import VisualProof.Rule.Equational
 import VisualProof.Rule.Comprehension
 import VisualProof.Rule.Named
 import VisualProof.Rule.Soundness
+import VisualProof.Rule.Soundness.InconsistentCut
 import VisualProof.Rule.Soundness.All
 import VisualProof.Proof.Replay
 import VisualProof.Proof.Theorem

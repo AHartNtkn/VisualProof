@@ -9,6 +9,7 @@ import VisualProof.Rule.Soundness.Iteration.RootAnchorSemantic
 import VisualProof.Rule.Soundness.Iteration.SameSite
 import VisualProof.Rule.Soundness.Iteration.DeiterationSemantic
 import VisualProof.Rule.Soundness.WireJoin
+import VisualProof.Rule.Soundness.InconsistentCut
 
 namespace VisualProof.Rule
 
