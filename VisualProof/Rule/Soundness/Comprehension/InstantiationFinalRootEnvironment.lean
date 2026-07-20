@@ -229,7 +229,7 @@ theorem finalRootEnvironmentSelection
       let fallback : D := Classical.choice inferInstance
       let sourceEnvironment := combined.sourceEnvironment sourceRootExact.nodup
         targetRootExact.nodup
-        (copyTrace.finalWireMap_injective elimTrace boundaryNodup) fallback
+        (copyTrace.finalWireMap_injective elimTrace) fallback
         targetEnvironment
       let sourceLocal := rootLocalPart source.val.exposedWires
         source.val.hiddenWires sourceEnvironment
@@ -317,7 +317,7 @@ theorem finalRootEnvironmentSelection
                   targetIndex) :=
             combined.sourceEnvironment_sourceIndex sourceRootExact.nodup
               targetRootExact.nodup
-              (copyTrace.finalWireMap_injective elimTrace boundaryNodup)
+              (copyTrace.finalWireMap_injective elimTrace)
               fallback targetEnvironment _
           _ = targetOuter targetIndex := rootEnvironment_outer _ _ _ _ _
           _ = sourceOuter (outer.sourceIndex targetIndex) :=
@@ -326,7 +326,7 @@ theorem finalRootEnvironmentSelection
       rw [sourceEnvironmentEq]
       exact combined.sourceEnvironment_agrees sourceRootExact.nodup
         targetRootExact.nodup
-        (copyTrace.finalWireMap_injective elimTrace boundaryNodup) fallback
+        (copyTrace.finalWireMap_injective elimTrace) fallback
         targetEnvironment
 
 end InstantiationTrace

@@ -72,7 +72,7 @@ theorem finalSourceOpen_exposedWires
         (copyTrace.finalWireMap elimTrace) := by
   unfold finalSourceOpen finalTargetOpen OpenConcreteDiagram.exposedWires
   exact eraseDups_map_injective _
-    (copyTrace.finalWireMap_injective elimTrace boundaryNodup) boundary
+    (copyTrace.finalWireMap_injective elimTrace) boundary
 
 /-- Exposed classes are exactly the mapped original exposed classes, with no
 executor-created class admitted to the ordered boundary. -/
@@ -166,7 +166,7 @@ theorem finalSourceOpen_wellFormed
   change (elimTrace.sourceDiagram.wires
       (copyTrace.finalWireMap elimTrace wire)).scope =
     elimTrace.sourceDiagram.root
-  rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup,
+  rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed,
     boundaryRoot wire wireMember,
     copyTrace.finalRegionMap_root elimTrace finalWellFormed]
 
@@ -201,7 +201,7 @@ def finalRootContextWitness
   change (elimTrace.sourceDiagram.wires
       (copyTrace.finalWireMap elimTrace wire)).scope =
     elimTrace.sourceDiagram.root
-  rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup]
+  rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed]
   have targetScope :=
     (OpenConcreteDiagram.mem_rootWires_iff target.val target.property wire).1
       member
