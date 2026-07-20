@@ -32,7 +32,6 @@ theorem selectedTargetEnvironment_wireValue
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
@@ -45,7 +44,7 @@ theorem selectedTargetEnvironment_wireValue
       (elimTrace.targetIndex finalWellFormed)).length → D)
     (fallback : D)
     (index : Fin ((targetContext.extend payload.parent).extend bubble).length) :
-    let selected := witness.extendSelected finalWellFormed boundaryNodup
+    let selected := witness.extendSelected finalWellFormed
     let wireValue := InstantiationSemantic.exactContextWireValue
       (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
       (elimTrace.targetIndex finalWellFormed) sourceExact sourceEnvironment
@@ -54,7 +53,7 @@ theorem selectedTargetEnvironment_wireValue
       wireValue (copyTrace.finalWireMap elimTrace
         (((targetContext.extend payload.parent).extend bubble).get index)) := by
   dsimp only
-  let selected := witness.extendSelected finalWellFormed boundaryNodup
+  let selected := witness.extendSelected finalWellFormed
   let sourceIndex := selected.sourceIndex index
   change sourceEnvironment sourceIndex =
     InstantiationSemantic.exactContextWireValue
@@ -91,7 +90,6 @@ noncomputable def sourceLocalEnvironment
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -103,7 +101,7 @@ noncomputable def sourceLocalEnvironment
       finalRegion).length → D :=
   fun sourceIndex =>
     if preimage : ∃ targetIndex,
-        localSourceIndex finalWellFormed boundaryNodup finalRegion
+        localSourceIndex finalWellFormed finalRegion
           originalRegion mappedRegion targetIndex = sourceIndex then
       targetLocal (Classical.choose preimage)
     else Classical.choice inferInstance
@@ -128,7 +126,6 @@ theorem sourceLocalEnvironment_image
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -138,18 +135,18 @@ theorem sourceLocalEnvironment_image
       originalRegion).length → D)
     (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
       originalRegion).length) :
-    sourceLocalEnvironment finalWellFormed boundaryNodup finalRegion
+    sourceLocalEnvironment finalWellFormed finalRegion
         originalRegion mappedRegion targetLocal
-        (localSourceIndex finalWellFormed boundaryNodup finalRegion
+        (localSourceIndex finalWellFormed finalRegion
           originalRegion mappedRegion targetIndex) =
       targetLocal targetIndex := by
   let preimage : ∃ candidate,
-      localSourceIndex finalWellFormed boundaryNodup finalRegion
+      localSourceIndex finalWellFormed finalRegion
           originalRegion mappedRegion candidate =
-        localSourceIndex finalWellFormed boundaryNodup finalRegion
+        localSourceIndex finalWellFormed finalRegion
           originalRegion mappedRegion targetIndex := ⟨targetIndex, rfl⟩
   rw [sourceLocalEnvironment, dif_pos preimage]
-  have chosenEq := localSourceIndex_injective finalWellFormed boundaryNodup
+  have chosenEq := localSourceIndex_injective finalWellFormed
     finalRegion originalRegion mappedRegion (Classical.choose_spec preimage)
   rw [chosenEq]
 
@@ -173,7 +170,6 @@ theorem regularTargetEnvironment_outer
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input.val)
@@ -192,7 +188,7 @@ theorem regularTargetEnvironment_outer
     (targetIndex : Fin targetContext.length) :
     let originalRegion := copyTrace.reverseRegionMap elimTrace finalWellFormed
       finalRegion
-    let extended := context.extendRegular finalWellFormed boundaryNodup
+    let extended := context.extendRegular finalWellFormed
       finalRegion regular
     extended.targetEnvironment
         (ConcreteElaboration.extendedEnvironment sourceContext finalRegion
@@ -203,7 +199,7 @@ theorem regularTargetEnvironment_outer
   dsimp only
   let originalRegion := copyTrace.reverseRegionMap elimTrace finalWellFormed
     finalRegion
-  let extended := context.extendRegular finalWellFormed boundaryNodup
+  let extended := context.extendRegular finalWellFormed
     finalRegion regular
   let sourceIndex := context.sourceIndex targetIndex
   let sourceExtendedIndex := DoubleCutElimTrace.extendedOuterIndex
@@ -256,7 +252,6 @@ theorem regularTargetEnvironment_local
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input.val)
@@ -275,23 +270,23 @@ theorem regularTargetEnvironment_local
       finalRegion
     let mappedRegion := copyTrace.finalRegionMap_reverseRegionMap elimTrace
       finalWellFormed finalRegion regular
-    let extended := context.extendRegular finalWellFormed boundaryNodup
+    let extended := context.extendRegular finalWellFormed
       finalRegion regular
     extended.targetEnvironment
         (ConcreteElaboration.extendedEnvironment sourceContext finalRegion
           sourceOuter sourceLocal)
         (DoubleCutElimTrace.extendedLocalIndex targetContext originalRegion
           targetIndex) =
-      sourceLocal (localSourceIndex finalWellFormed boundaryNodup finalRegion
+      sourceLocal (localSourceIndex finalWellFormed finalRegion
         originalRegion mappedRegion targetIndex) := by
   dsimp only
   let originalRegion := copyTrace.reverseRegionMap elimTrace finalWellFormed
     finalRegion
   let mappedRegion := copyTrace.finalRegionMap_reverseRegionMap elimTrace
     finalWellFormed finalRegion regular
-  let extended := context.extendRegular finalWellFormed boundaryNodup
+  let extended := context.extendRegular finalWellFormed
     finalRegion regular
-  let sourceLocalIndex := localSourceIndex finalWellFormed boundaryNodup
+  let sourceLocalIndex := localSourceIndex finalWellFormed
     finalRegion originalRegion mappedRegion targetIndex
   let sourceExtendedIndex := DoubleCutElimTrace.extendedLocalIndex
     sourceContext finalRegion sourceLocalIndex
@@ -309,7 +304,7 @@ theorem regularTargetEnvironment_local
       _ = copyTrace.finalWireMap elimTrace
           ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
             targetIndex) :=
-        localSourceIndex_get finalWellFormed boundaryNodup finalRegion
+        localSourceIndex_get finalWellFormed finalRegion
           originalRegion mappedRegion targetIndex
       _ = _ := congrArg (copyTrace.finalWireMap elimTrace)
         (DoubleCutElimTrace.extendedLocalIndex_get targetContext
@@ -349,7 +344,6 @@ theorem regularEnvironmentSelection
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
@@ -363,7 +357,7 @@ theorem regularEnvironmentSelection
     [Nonempty D] :
     let originalRegion := copyTrace.reverseRegionMap elimTrace finalWellFormed
       finalRegion
-    let extended := context.extendRegular finalWellFormed boundaryNodup
+    let extended := context.extendRegular finalWellFormed
       finalRegion regular
     ∀ (sourceOuter : Fin sourceContext.length → D)
       (targetOuter : Fin targetContext.length → D),
@@ -388,7 +382,7 @@ theorem regularEnvironmentSelection
     finalRegion
   let mappedRegion := copyTrace.finalRegionMap_reverseRegionMap elimTrace
     finalWellFormed finalRegion regular
-  let extended := context.extendRegular finalWellFormed boundaryNodup
+  let extended := context.extendRegular finalWellFormed
     finalRegion regular
   intro sourceOuter targetOuter outerAgreement
   cases direction with
@@ -405,7 +399,7 @@ theorem regularEnvironmentSelection
               (DoubleCutElimTrace.extendedOuterIndex targetContext
                 originalRegion index) = targetOuter index := by
         intro index
-        exact regularTargetEnvironment_outer finalWellFormed boundaryNodup
+        exact regularTargetEnvironment_outer finalWellFormed
           sourceContext targetContext context finalRegion regular sourceExact
           sourceOuter targetOuter outerAgreement sourceLocal index
       have targetEnvironmentEq :=
@@ -415,7 +409,7 @@ theorem regularEnvironmentSelection
       exact extended.targetEnvironment_agrees sourceEnvironment
   | backward =>
       intro targetLocal
-      let sourceLocal := sourceLocalEnvironment finalWellFormed boundaryNodup
+      let sourceLocal := sourceLocalEnvironment finalWellFormed
         finalRegion originalRegion mappedRegion targetLocal
       let sourceEnvironment := ConcreteElaboration.extendedEnvironment
         sourceContext finalRegion sourceOuter sourceLocal
@@ -426,7 +420,7 @@ theorem regularEnvironmentSelection
               (DoubleCutElimTrace.extendedOuterIndex targetContext
                 originalRegion index) = targetOuter index := by
         intro index
-        exact regularTargetEnvironment_outer finalWellFormed boundaryNodup
+        exact regularTargetEnvironment_outer finalWellFormed
           sourceContext targetContext context finalRegion regular sourceExact
           sourceOuter targetOuter outerAgreement sourceLocal index
       have targetLocalValues :
@@ -437,15 +431,15 @@ theorem regularEnvironmentSelection
             (DoubleCutElimTrace.extendedLocalIndex targetContext originalRegion
               index) = targetLocal index
         have localValue := regularTargetEnvironment_local finalWellFormed
-          boundaryNodup sourceContext targetContext context finalRegion regular
+          sourceContext targetContext context finalRegion regular
           sourceExact sourceOuter sourceLocal index
         change targetEnvironment
             (DoubleCutElimTrace.extendedLocalIndex targetContext originalRegion
               index) =
-          sourceLocal (localSourceIndex finalWellFormed boundaryNodup
+          sourceLocal (localSourceIndex finalWellFormed
             finalRegion originalRegion mappedRegion index) at localValue
         rw [localValue]
-        exact sourceLocalEnvironment_image finalWellFormed boundaryNodup
+        exact sourceLocalEnvironment_image finalWellFormed
           finalRegion originalRegion mappedRegion targetLocal index
       have targetEnvironmentEq :=
         DoubleCutElimTrace.extendedEnvironment_of_parts targetContext
