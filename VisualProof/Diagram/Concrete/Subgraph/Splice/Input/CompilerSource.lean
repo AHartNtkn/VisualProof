@@ -52,6 +52,14 @@ structure PatternTerminalCompilerView
   witness : Region.ContextPath pattern.elaborate.body path
   leaf : Region.ContextPath.CompilerLeaf pattern.val.diagram
     binderSpine.bodyContainer witness
+  proper : binderSpine.bodyContainer ≠ pattern.val.diagram.root
+  /-- The retained open compiler trace which produced `witness` and `leaf`.
+  Keeping this evidence prevents independently chosen terminal views from
+  concealing the lexical-alignment obligation across diagram transforms. -/
+  producer : OpenSiteView pattern binderSpine.bodyContainer
+  producer_path : producer.path = path
+  producer_witness : HEq producer.intrinsicPath witness
+  producer_leaf : HEq (producer.compilerLeaf.nestedOfNe proper) leaf
 
 /-- Backwards-compatible input-facing name for the pattern-owned view. -/
 abbrev TerminalCompilerView (input : Input signature) :=
@@ -68,11 +76,12 @@ theorem patternTerminalCompilerView_complete
   let terminal : Fin binderSpine.proxyCount :=
     ⟨binderSpine.proxyCount - 1, by omega⟩
   have bodyEq := binderSpine.body_eq_terminal_of_nonempty hnonempty
-  rcases view.compilerLeaf.root_or_nested with hroot | leaf
-  · exfalso
+  have proper : binderSpine.bodyContainer ≠ pattern.val.diagram.root := by
+    intro hroot
     apply binderSpine.proxy_ne_root terminal
     exact bodyEq.symm.trans hroot
-  · exact ⟨view.path, view.intrinsicPath, Classical.choice leaf⟩
+  exact ⟨view.path, view.intrinsicPath,
+    view.compilerLeaf.nestedOfNe proper, proper, view, rfl, HEq.rfl, HEq.rfl⟩
 
 /-- Canonical terminal compiler evidence owned by the pattern rather than by
 one particular host splice. -/
