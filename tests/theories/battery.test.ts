@@ -41,7 +41,7 @@ describe('bundled theories as shipped artifacts', () => {
     const onePlusOne = ctx.theorems.get('onePlusOne')!
     expect(onePlusOne.lhs.boundary).toHaveLength(0)
     const empty = new DiagramBuilder().build()
-    const inserted = applyTheorem(empty, onePlusOne, {
+    const inserted = applyTheorem(empty, ctx, onePlusOne.name, {
       sel: mkSelection(empty, { region: empty.root, regions: [], nodes: [], wires: [] }),
       args: [],
     }, 'forward')
@@ -58,7 +58,7 @@ describe('bundled theories as shipped artifacts', () => {
     const wo = h.wire(h.root, [{ node: n, port: { kind: 'output' } }])
     const wf = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'f' } }])
     const d = h.build()
-    const out = applyTheorem(d, fixedPoint, {
+    const out = applyTheorem(d, ctx, fixedPoint.name, {
       sel: mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] }),
       args: [wo, wf],
     }, 'forward')

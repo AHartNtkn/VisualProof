@@ -3,7 +3,8 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { applyStep } from '../../../src/kernel/proof/step'
-import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 import {
   applyAction,
   replayActions,
@@ -11,7 +12,7 @@ import {
 } from '../../../src/kernel/proof/action'
 import type { ProofAction } from '../../../src/kernel/proof/action'
 
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 const p = (source: string) => parseTerm(source)
 
 function negativeStart() {

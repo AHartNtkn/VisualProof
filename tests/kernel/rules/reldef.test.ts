@@ -9,7 +9,8 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyRelUnfold, applyRelFold } from '../../../src/kernel/rules/reldef'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { replayProof } from '../../../src/kernel/proof/step'
-import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import { verifyTheory } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 import { stepToJson, stepFromJson } from '../../../src/kernel/proof/json'
 
 const pc = (s: string) => parseTerm(s)
@@ -193,7 +194,7 @@ describe('relUnfold / relFold replay through applyStep', () => {
   it('replays a relUnfold step to the same diagram as the direct applier', () => {
     const relations = new Map([['R', bodyR()]])
     const { d, node } = refHost('R')
-    const ctx: ProofContext = { theorems: new Map(), relations }
+    const ctx = verifyTheory({ relations: Object.fromEntries(relations), theorems: [] })
     const replayed = replayProof(d, [{ rule: 'relUnfold', node }], ctx)
     expect(exploreForm(replayed)).toBe(exploreForm(applyRelUnfold(d, node, relations)))
   })
@@ -201,7 +202,7 @@ describe('relUnfold / relFold replay through applyStep', () => {
   it('replays unfold then fold back to the original', () => {
     const relations = new Map([['R', bodyR()]])
     const { d, node, carrier, wArg } = refHost('R')
-    const ctx: ProofContext = { theorems: new Map(), relations }
+    const ctx = verifyTheory({ relations: Object.fromEntries(relations), theorems: [] })
     const un = applyRelUnfold(d, node, relations)
     const sel = bodySelection(un, carrier, un.root)
     const steps: ProofStep[] = [

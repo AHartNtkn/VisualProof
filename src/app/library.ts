@@ -1,11 +1,10 @@
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext, verifyTheory } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
-import { checkTheorem } from '../kernel/proof/theorem'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { Theory } from '../kernel/proof/store'
-import { loadTheory, assertRefsResolve } from '../kernel/proof/store'
+import { loadTheory } from '../kernel/proof/store'
 import type { BootContext } from './boot'
-import { mergeTheories } from './boot'
 
 /**
  * The library: a uniform view over theory files. There is NO privileged origin
@@ -120,6 +119,10 @@ export function unloadEntry(lib: Library, file: string): Library {
  * caller keeps the prior library.
  */
 export function adoptEntry(lib: Library, thm: Theorem): Library {
+  const current = rebuild(lib).ctx
+  if (current.theorems.has(thm.name) || current.relations.has(thm.name)) {
+    throw new Error(`library conflict: adopted theorem '${thm.name}' duplicates a loaded theorem or a relation`)
+  }
   const next: Library = { ...lib, adopted: [...lib.adopted, thm] }
   rebuild(next)
   return next
@@ -132,6 +135,13 @@ export function adoptEntry(lib: Library, thm: Theorem): Library {
  * throws loudly and the caller keeps the prior library.
  */
 export function defineEntry(lib: Library, name: string, relation: DiagramWithBoundary): Library {
+  const current = rebuild(lib).ctx
+  if (current.relations.has(name)) {
+    throw new Error(`library conflict: defined relation '${name}' duplicates a loaded or defined relation`)
+  }
+  if (current.theorems.has(name)) {
+    throw new Error(`library conflict: defined relation '${name}' duplicates a theorem name`)
+  }
   const next: Library = { ...lib, definedRelations: [...lib.definedRelations, { name, relation }] }
   rebuild(next)
   return next
@@ -147,42 +157,49 @@ export function defineEntry(lib: Library, name: string, relation: DiagramWithBou
 export function rebuild(lib: Library): BootContext {
   const loaded = lib.entries
     .filter((e): e is LoadedEntry => e.status === 'loaded')
-    .map((e) => ({ theory: e.theory, ctx: e.ctx }))
-  const base = mergeTheories(loaded)
-  if (lib.adopted.length === 0 && lib.definedRelations.length === 0) return base
-
-  // Session-defined relations layer onto the merged relations. Names disjoint
-  // from every loaded/defined relation and every loaded theorem; each body's
-  // refs must still resolve against the completed relation set.
-  let relations = base.relations
-  if (lib.definedRelations.length > 0) {
-    const merged: Record<string, DiagramWithBoundary> = { ...base.relations }
-    for (const { name, relation } of lib.definedRelations) {
-      if (merged[name] !== undefined) {
-        throw new Error(`library conflict: defined relation '${name}' duplicates a loaded or defined relation`)
-      }
-      if (base.ctx.theorems.has(name)) {
-        throw new Error(`library conflict: defined relation '${name}' duplicates a theorem name`)
-      }
-      merged[name] = relation
+  for (const entry of loaded) assertProofContext(entry.ctx)
+  const relations: Record<string, DiagramWithBoundary> = {}
+  const theorems: Theorem[] = []
+  const loadedRelations = new Set<string>()
+  const loadedTheorems = new Set<string>()
+  for (const entry of loaded) {
+    for (const name of entry.ctx.theorems.keys()) {
+      if (loadedTheorems.has(name)) throw new Error(`theory merge conflict: duplicate theorem '${name}'`)
+      loadedTheorems.add(name)
     }
-    const relArity = new Map<string, number>()
-    for (const [n, r] of Object.entries(merged)) relArity.set(n, r.boundary.length)
-    for (const { name, relation } of lib.definedRelations) {
-      assertRefsResolve(relation.diagram, relArity, `defined relation '${name}' body`)
+    for (const name of entry.ctx.relations.keys()) {
+      if (loadedRelations.has(name)) throw new Error(`theory merge conflict: duplicate relation '${name}'`)
+      loadedRelations.add(name)
     }
-    relations = merged
   }
-  const ctxRelations = relations === base.relations ? base.ctx.relations : new Map(Object.entries(relations))
-
-  const theorems = new Map(base.ctx.theorems)
-  for (const thm of lib.adopted) {
-    if (theorems.has(thm.name) || relations[thm.name] !== undefined) {
-      throw new Error(`library conflict: adopted theorem '${thm.name}' duplicates a loaded theorem or a relation`)
-    }
-    checkTheorem(thm, { theorems, relations: ctxRelations })
-    theorems.set(thm.name, thm)
+  for (const name of loadedRelations) {
+    if (loadedTheorems.has(name)) throw new Error(`theory merge conflict: '${name}' names both a relation and theorem`)
   }
-
-  return { ctx: { theorems, relations: ctxRelations }, relations }
+  for (const entry of loaded) {
+    for (const [name, relation] of entry.ctx.relations) relations[name] = relation
+  }
+  const allTheoremNames = new Set(loadedTheorems)
+  for (const theorem of lib.adopted) allTheoremNames.add(theorem.name)
+  const definedNames = new Set<string>()
+  for (const { name, relation } of lib.definedRelations) {
+    if (loadedRelations.has(name) || definedNames.has(name)) {
+      throw new Error(`library conflict: defined relation '${name}' duplicates a loaded or defined relation`)
+    }
+    if (allTheoremNames.has(name)) {
+      throw new Error(`library conflict: defined relation '${name}' duplicates a theorem name`)
+    }
+    definedNames.add(name)
+    relations[name] = relation
+  }
+  for (const entry of loaded) theorems.push(...entry.ctx.theorems.values())
+  const adoptedNames = new Set<string>()
+  for (const theorem of lib.adopted) {
+    if (loadedTheorems.has(theorem.name) || adoptedNames.has(theorem.name)
+      || loadedRelations.has(theorem.name) || definedNames.has(theorem.name)) {
+      throw new Error(`library conflict: adopted theorem '${theorem.name}' duplicates a loaded theorem or a relation`)
+    }
+    adoptedNames.add(theorem.name)
+    theorems.push(theorem)
+  }
+  return { ctx: verifyTheory({ relations, theorems }), relations }
 }

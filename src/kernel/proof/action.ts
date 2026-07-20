@@ -3,7 +3,9 @@ import type { NodeId, RegionId, WireId } from '../diagram/diagram'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import { ProofError } from './error'
 import { applyStepWithReceipt } from './step'
-import type { ProofContext, ProofStep, StepReceipt } from './step'
+import type { ProofStep, StepReceipt } from './step'
+import type { ProofContext } from './context'
+import { assertProofContext } from './context'
 
 export type PlacementHint = {
   readonly introducedNode: number
@@ -73,6 +75,7 @@ export function applyAction(
   orientation: 'forward' | 'backward' = 'forward',
   afterStep?: (diagram: Diagram, stepIndex: number, receipt: StepReceipt) => void,
 ): Diagram {
+  assertProofContext(ctx)
   if (action.label.length === 0) throw new ProofError('proof action label must not be empty')
   if (action.steps.length === 0) throw new ProofError(`proof action '${action.label}' must contain at least one step`)
   const reservation = allocationReservation(action.allocation)
@@ -118,6 +121,7 @@ export function replayActions(
   afterStep?: (diagram: Diagram, actionIndex: number, stepIndex: number, receipt: StepReceipt) => void,
   orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
+  assertProofContext(ctx)
   let current = diagram
   for (const [actionIndex, action] of actions.entries()) {
     try {

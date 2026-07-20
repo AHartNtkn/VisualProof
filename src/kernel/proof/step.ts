@@ -22,15 +22,11 @@ import { applyComprehensionInstantiate, applyComprehensionAbstract } from '../ru
 import type { AbstractionOccurrence, ComprehensionBinderPair } from '../rules/comprehension'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../rules/vacuous'
 import { applyRelUnfold, applyRelFold } from '../rules/reldef'
-import type { Theorem, TheoremApplication } from './theorem'
+import type { TheoremApplication } from './theorem'
 import { applyTheorem } from './theorem'
 import { ProofError } from './error'
-
-export type ProofContext = {
-  readonly theorems: ReadonlyMap<string, Theorem>
-  /** Named relations (comprehension bodies) resolvable by relUnfold/relFold. */
-  readonly relations: ReadonlyMap<string, DiagramWithBoundary>
-}
+import type { ProofContext } from './context'
+import { assertProofContext } from './context'
 
 /**
  * One serializable rule application. Replay carries no trust: applyStep calls
@@ -165,9 +161,7 @@ function applyStepRaw(
     case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, step.binders, orientation, reservation)
     case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences, orientation, reservation)
     case 'theorem': {
-      const thm = ctx.theorems.get(step.name)
-      if (thm === undefined) throw new ProofError(`unknown theorem '${step.name}'`)
-      return applyTheorem(d, thm, step.at, step.direction, orientation, reservation)
+      return applyTheorem(d, ctx, step.name, step.at, step.direction, orientation, reservation)
     }
     case 'vacuousIntro': return applyVacuousBubbleIntro(d, step.sel, step.arity, reservation)
     case 'vacuousElim': return applyVacuousBubbleElim(d, step.region)
@@ -186,6 +180,7 @@ export function applyStepWithReceipt(
   orientation: 'forward' | 'backward' = 'forward',
   reservation?: IdReservation,
 ): StepReceipt {
+  assertProofContext(ctx)
   const result = applyStepRaw(d, step, ctx, orientation, reservation)
   const survivingSameId = (wire: WireId): WireId | undefined =>
     d.wires[wire] !== undefined && result.wires[wire] !== undefined ? wire : undefined
@@ -247,6 +242,7 @@ export function applyStep(
   orientation: 'forward' | 'backward' = 'forward',
   reservation?: IdReservation,
 ): Diagram {
+  assertProofContext(ctx)
   return applyStepWithReceipt(d, step, ctx, orientation, reservation).result
 }
 
@@ -262,6 +258,7 @@ export function replayProof(
   onStep?: (d: Diagram, stepIndex: number) => void,
   orientation: 'forward' | 'backward' = 'forward',
 ): Diagram {
+  assertProofContext(ctx)
   let cur = start
   steps.forEach((s, i) => {
     try {

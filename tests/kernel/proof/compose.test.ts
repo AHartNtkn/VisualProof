@@ -6,12 +6,13 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { replayActions } from '../../../src/kernel/proof/action'
 import type { ProofAction } from '../../../src/kernel/proof/action'
-import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 import { composeActions, mapStepIds } from '../../../src/kernel/proof/compose'
 import type { DiagramIso } from '../../../src/kernel/diagram/canonical/explore'
 
 const p = (s: string) => parseTerm(s)
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 const action = (label: string, steps: readonly ProofStep[], placements: ProofAction['placements'] = []): ProofAction => ({
   label, steps, placements,
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { applyAction, type ProofAction } from '../../src/kernel/proof/action'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { theoremFromJson, theoremToJson } from '../../src/kernel/proof/json'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkReplay } from '../../src/app/replay'
@@ -9,7 +10,7 @@ import { mkEngine } from '../../src/view/engine'
 import { seedActionHistoryPlacements } from '../../src/app/proof-placement'
 import { seedProject } from '../../src/view/relax'
 
-const context = { theorems: new Map(), relations: new Map() }
+const context = EMPTY_PROOF_CONTEXT
 
 describe('proof action placement presentation', () => {
   it('restores every surviving placement in the active action-history prefix', () => {

@@ -7,7 +7,8 @@ import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import { exploreForm } from '../diagram/canonical/explore'
 import { RuleError } from '../rules/error'
-import type { ProofContext } from './step'
+import type { ProofContext } from './context'
+import { assertProofContext } from './context'
 import { transportBoundary } from './step'
 import type { StepReceipt } from './step'
 import type { ProofAction } from './action'
@@ -46,6 +47,7 @@ export type TheoremApplication = {
  * wire that happens to reuse its identifier.
  */
 export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
+  assertProofContext(ctx)
   if (thm.lhs.boundary.length !== thm.rhs.boundary.length) {
     throw new ProofError(
       `theorem '${thm.name}': boundary arity mismatch (lhs ${thm.lhs.boundary.length}, rhs ${thm.rhs.boundary.length})`,
@@ -97,6 +99,21 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
  * fingerprints — the same machinery as comprehension abstraction.
  */
 export function applyTheorem(
+  d: Diagram,
+  ctx: ProofContext,
+  name: string,
+  at: TheoremApplication,
+  direction: 'forward' | 'reverse',
+  orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
+): Diagram {
+  assertProofContext(ctx)
+  const thm = ctx.theorems.get(name)
+  if (thm === undefined) throw new ProofError(`unknown theorem '${name}'`)
+  return applyVerifiedTheorem(d, thm, at, direction, orientation, reservation)
+}
+
+function applyVerifiedTheorem(
   d: Diagram,
   thm: Theorem,
   at: TheoremApplication,

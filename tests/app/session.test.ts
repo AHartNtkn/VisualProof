@@ -7,6 +7,7 @@ import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { freePorts, termEq } from '../../src/kernel/term/term'
 import { bootFixture } from './boot-fixture'
 import {
@@ -54,7 +55,7 @@ describe('single-track proving', () => {
       }
       return { side: mkDiagramWithBoundary(b.build(), [drop, drop, keep]), drop, keep, step }
     }
-    const empty = { theorems: new Map(), relations: new Map() }
+    const empty = EMPTY_PROOF_CONTEXT
 
     const root = fixture(false)
     const start = startTrack(root.side, 'forward', empty)
@@ -216,7 +217,7 @@ describe('proof session', () => {
       { node: c1, port: { kind: 'freeVar', name: 'b' } },
     ])
     const side = mkDiagramWithBoundary(host.build(), [w1])
-    const ctx = { theorems: new Map(), relations: new Map([['Alias', aliasBody]]) }
+    const ctx = verifyTheory({ relations: { Alias: aliasBody }, theorems: [] })
     const session = startSession(side, side, ctx)
 
     const forward = applyForward(session, { rule: 'relUnfold', node: ref })
@@ -241,7 +242,7 @@ describe('proof session', () => {
     const boundary = `${root}_intro`
     const node = `${root}_intro`
     const side = mkDiagramWithBoundary(initial, [boundary])
-    const session = startSession(side, side, { theorems: new Map(), relations: new Map() })
+    const session = startSession(side, side, EMPTY_PROOF_CONTEXT)
     const action: ProofAction = {
       label: 'replace the boundary identity',
       steps: [

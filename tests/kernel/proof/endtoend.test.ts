@@ -5,7 +5,7 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import {
-  replayProof, composeActions, singleStepAction, checkTheorem, verifyTheory, loadTheory, theoryToJson,
+  EMPTY_PROOF_CONTEXT, replayProof, composeActions, singleStepAction, checkTheorem, verifyTheory, loadTheory, theoryToJson,
 } from '../../../src/kernel/proof/index'
 import type { ProofStep, Theorem, Theory } from '../../../src/kernel/proof/index'
 
@@ -29,14 +29,14 @@ describe('end to end: a sentence theorem built bidirectionally', () => {
       rule: 'doubleCutIntro',
       sel: mkSelection(backwardStart, { region: backwardStart.root, regions: [], nodes: [], wires: [] }),
     }]
-    const composed = composeActions(blank, backwardStart, tail.map((step) => singleStepAction(step.rule, step)), { theorems: new Map(), relations: new Map() })
+    const composed = composeActions(blank, backwardStart, tail.map((step) => singleStepAction(step.rule, step)), EMPTY_PROOF_CONTEXT)
     const thm: Theorem = {
       name: 'blankToDoubleCut',
       lhs: mkDiagramWithBoundary(blank, []),
       rhs: mkDiagramWithBoundary(goal, []),
       actions: composed,
     }
-    expect(() => checkTheorem(thm, { theorems: new Map(), relations: new Map() })).not.toThrow()
+    expect(() => checkTheorem(thm, EMPTY_PROOF_CONTEXT)).not.toThrow()
   })
 })
 

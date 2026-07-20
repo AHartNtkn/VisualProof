@@ -5,10 +5,10 @@ import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyAction, type ProofAction } from '../../../src/kernel/proof/action'
-import type { ProofContext } from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
 
 const p = (s: string) => parseTerm(s)
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 const deiterate = (d: Parameters<typeof applyDeiteration>[0], sel: Parameters<typeof applyDeiteration>[1], fuel: number) => {
   const evidence = findDeiterationEvidence(d, sel, fuel)

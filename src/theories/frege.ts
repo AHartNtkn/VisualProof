@@ -3,7 +3,8 @@ import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { registerTheorem, verifyTheory } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { Theory } from '../kernel/proof/store'
 import { DerivationCursor } from './macros'
@@ -903,18 +904,12 @@ function deriveOneIsNat(ctx: ProofContext): Theorem {
 
 export function buildFregeTheory(): Theory {
   const relations = buildRelations()
-  const ctx: ProofContext = {
-    theorems: new Map(),
-    relations: new Map(Object.entries(relations)),
-  }
+  const ctx = verifyTheory({ relations, theorems: [] })
   // Map insertion order is dependency order. zeroIsNat and succNat must precede
   // oneIsNat (which cites both); succShiftS must precede plusComm.
   const zeroIsNat = deriveZeroIsNat(ctx)
   const succNat = deriveSuccNat(ctx)
-  const oneIsNat = deriveOneIsNat({
-    theorems: new Map([[zeroIsNat.name, zeroIsNat], [succNat.name, succNat]]),
-    relations: ctx.relations,
-  })
+  const oneIsNat = deriveOneIsNat(registerTheorem(registerTheorem(ctx, zeroIsNat), succNat))
   const theorems: Theorem[] = [
     derivePlusAssoc(ctx),
     derivePlusLeftUnit(ctx),
@@ -925,10 +920,7 @@ export function buildFregeTheory(): Theory {
   ]
   const succShiftS = deriveSuccShiftS(ctx)
   theorems.push(succShiftS)
-  const ctxWithSucc: ProofContext = {
-    theorems: new Map([[succShiftS.name, succShiftS]]),
-    relations: ctx.relations,
-  }
+  const ctxWithSucc = registerTheorem(ctx, succShiftS)
   theorems.push(derivePlusComm(ctxWithSucc))
   return { relations, theorems }
 }

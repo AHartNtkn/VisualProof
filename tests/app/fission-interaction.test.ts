@@ -15,6 +15,7 @@ import { ConstructController } from '../../src/app/interact/construct'
 import { ProofMoveController } from '../../src/app/interact/moves'
 import { wireHitTest } from '../../src/app/hittest'
 import { applyFission, applyFusion } from '../../src/kernel/rules/fusion'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 
 const p = (source: string) => parseTerm(source)
 
@@ -363,7 +364,7 @@ describe('Proof fission integration', () => {
       viewScale: () => 1,
       selection: () => [{ kind: 'node', id: f.node }],
       setSelection: () => {},
-      context: () => ({ theorems: new Map(), relations: new Map() }),
+      context: () => (EMPTY_PROOF_CONTEXT),
       orientation: () => 'forward',
       apply: () => {},
       commitFission: (request) => { requests.push(request) },
@@ -395,7 +396,7 @@ describe('Proof fission integration', () => {
       viewScale: () => 1,
       selection: () => [{ kind: 'node', id: f.node }],
       setSelection: () => {},
-      context: () => ({ theorems: new Map(), relations: new Map() }),
+      context: () => (EMPTY_PROOF_CONTEXT),
       orientation: () => 'forward',
       apply: () => {},
       commitFission: (request) => { fissions.push(request) },

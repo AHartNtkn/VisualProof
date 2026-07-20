@@ -8,6 +8,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 
 const boot = await bootFixture()
 const ctx = boot.ctx
@@ -37,7 +38,7 @@ describe('mkReplay', () => {
       }],
       placements: [],
     }
-    const empty = { theorems: new Map(), relations: new Map() }
+    const empty = EMPTY_PROOF_CONTEXT
     const result = replayActions(lhs.diagram, [action], empty)
     const theorem: Theorem = {
       name: 'root-coalescence-replay',
@@ -60,7 +61,7 @@ describe('mkReplay', () => {
     ]
     const action = { label: 'round trip a double cut', steps, placements: [] }
     const theorem: Theorem = { name: 'multi', lhs, rhs: lhs, actions: [action] }
-    const replay = mkReplay(theorem, { theorems: new Map(), relations: new Map() })
+    const replay = mkReplay(theorem, EMPTY_PROOF_CONTEXT)
 
     expect(replay.actionCount).toBe(1)
     expect(replay.diagramAt(0)).toBe(lhs.diagram)

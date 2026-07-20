@@ -2,7 +2,9 @@ import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { transportBoundary } from '../kernel/proof/step'
-import type { ProofContext, StepReceipt } from '../kernel/proof/step'
+import type { StepReceipt } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext, registerTheorem } from '../kernel/proof/context'
 import type { ProofAction } from '../kernel/proof/action'
 import { applyAction } from '../kernel/proof/action'
 import type { Theorem } from '../kernel/proof/theorem'
@@ -84,14 +86,25 @@ function appendTimeline(
 }
 
 export function startTrack(origin: DiagramWithBoundary, direction: TrackDirection, ctx: ProofContext): TrackSession {
+  assertProofContext(ctx)
   return { origin, direction, ctx, timeline: startTimeline(origin.diagram, origin.boundary) }
 }
 
+function assertTrack(track: TrackSession): void {
+  assertProofContext(track.ctx)
+}
+
+function assertSession(session: ProofSession): void {
+  assertProofContext(session.ctx)
+}
+
 export function currentTrack(track: TrackSession): Diagram {
+  assertTrack(track)
   return timelineCurrent(track.timeline)
 }
 
 export function trackBoundary(track: TrackSession): readonly WireId[] {
+  assertTrack(track)
   return timelineBoundary(track.timeline)
 }
 
@@ -118,6 +131,7 @@ function applyActionWithBoundary(
 }
 
 export function applyTrack(track: TrackSession, action: ProofAction): TrackSession {
+  assertTrack(track)
   const current = currentTrack(track)
   const next = applyActionWithBoundary(
     current,
@@ -134,20 +148,24 @@ export function applyTrack(track: TrackSession, action: ProofAction): TrackSessi
 }
 
 export function moveTrack(track: TrackSession, cursor: number): TrackSession {
+  assertTrack(track)
   return { ...track, timeline: moveTimeline(track.timeline, cursor) }
 }
 
 export function undoTrack(track: TrackSession): TrackSession {
+  assertTrack(track)
   if (track.timeline.cursor === 0) throw new Error(`nothing to undo on the ${track.direction} track`)
   return moveTrack(track, track.timeline.cursor - 1)
 }
 
 export function redoTrack(track: TrackSession): TrackSession {
+  assertTrack(track)
   if (track.timeline.cursor === track.timeline.states.length - 1) throw new Error(`nothing to redo on the ${track.direction} track`)
   return moveTrack(track, track.timeline.cursor + 1)
 }
 
 export function declareTrack(track: TrackSession, name: string): Theorem {
+  assertTrack(track)
   const current = { diagram: currentTrack(track), boundary: trackBoundary(track) }
   const actions = timelineActiveActions(track.timeline)
   const theorem: Theorem = track.direction === 'forward'
@@ -158,11 +176,9 @@ export function declareTrack(track: TrackSession, name: string): Theorem {
 }
 
 export function adoptTrackTheorem(track: TrackSession, theorem: Theorem): TrackSession {
+  assertTrack(track)
   if (track.ctx.theorems.has(theorem.name)) throw new Error(`'${theorem.name}' already names a theorem in this session`)
-  checkTheorem(theorem, track.ctx)
-  const theorems = new Map(track.ctx.theorems)
-  theorems.set(theorem.name, theorem)
-  return { ...track, ctx: { theorems, relations: track.ctx.relations } }
+  return { ...track, ctx: registerTheorem(track.ctx, theorem) }
 }
 
 /**
@@ -170,10 +186,12 @@ export function adoptTrackTheorem(track: TrackSession, theorem: Theorem): TrackS
  * step and restored together with the diagram by history navigation.
  */
 export function sideBoundary(s: ProofSession, side: 'forward' | 'backward'): readonly WireId[] {
+  assertSession(s)
   return timelineBoundary(s[side])
 }
 
 export function startSession(lhs: DiagramWithBoundary, rhs: DiagramWithBoundary, ctx: ProofContext): ProofSession {
+  assertProofContext(ctx)
   return {
     lhs, rhs, ctx,
     forward: startTimeline(lhs.diagram, lhs.boundary),
@@ -182,15 +200,18 @@ export function startSession(lhs: DiagramWithBoundary, rhs: DiagramWithBoundary,
 }
 
 export function currentSide(s: ProofSession, side: 'forward' | 'backward'): Diagram {
+  assertSession(s)
   return timelineCurrent(s[side])
 }
 
 export function moveSide(s: ProofSession, side: 'forward' | 'backward', cursor: number): ProofSession {
+  assertSession(s)
   return { ...s, [side]: moveTimeline(s[side], cursor) }
 }
 
 /** Apply a forward step through the kernel; refusals propagate untouched. */
 export function applyForward(s: ProofSession, action: ProofAction): ProofSession {
+  assertSession(s)
   const next = applyActionWithBoundary(
     currentSide(s, 'forward'),
     sideBoundary(s, 'forward'),
@@ -206,11 +227,13 @@ export function applyForward(s: ProofSession, action: ProofAction): ProofSession
 }
 
 export function undoForward(s: ProofSession): ProofSession {
+  assertSession(s)
   if (s.forward.cursor === 0) throw new Error('nothing to undo on the forward side')
   return moveSide(s, 'forward', s.forward.cursor - 1)
 }
 
 export function redoForward(s: ProofSession): ProofSession {
+  assertSession(s)
   if (s.forward.cursor === s.forward.states.length - 1) throw new Error('nothing to redo on the forward side')
   return moveSide(s, 'forward', s.forward.cursor + 1)
 }
@@ -231,6 +254,7 @@ export function redoForward(s: ProofSession): ProofSession {
  * so a mistake here cannot certify anything.
  */
 export function applyBackward(s: ProofSession, action: ProofAction): ProofSession {
+  assertSession(s)
   const g = currentSide(s, 'backward')
   const gPrime = applyActionWithBoundary(
     g,
@@ -247,16 +271,19 @@ export function applyBackward(s: ProofSession, action: ProofAction): ProofSessio
 }
 
 export function undoBackward(s: ProofSession): ProofSession {
+  assertSession(s)
   if (s.backward.cursor === 0) throw new Error('nothing to undo on the backward side')
   return moveSide(s, 'backward', s.backward.cursor - 1)
 }
 
 export function redoBackward(s: ProofSession): ProofSession {
+  assertSession(s)
   if (s.backward.cursor === s.backward.states.length - 1) throw new Error('nothing to redo on the backward side')
   return moveSide(s, 'backward', s.backward.cursor + 1)
 }
 
 export function meet(s: ProofSession): boolean {
+  assertSession(s)
   return exploreForm(currentSide(s, 'forward'), sideBoundary(s, 'forward'))
     === exploreForm(currentSide(s, 'backward'), sideBoundary(s, 'backward'))
 }
@@ -264,6 +291,7 @@ export function meet(s: ProofSession): boolean {
 /** Both halves AS RECORDED become the theorem (caller runs checkTheorem —
     its dual replay verifies each half from its own end and the meet). */
 export function assembleTheorem(s: ProofSession, name: string): Theorem {
+  assertSession(s)
   if (!meet(s)) throw new Error('the two sides have not met; nothing to assemble')
   return {
     name,
@@ -276,11 +304,7 @@ export function assembleTheorem(s: ProofSession, name: string): Theorem {
 
 /** Verify and add a finished theorem to the session context — citable from now on. */
 export function adoptTheorem(s: ProofSession, thm: Theorem): ProofSession {
-  if (s.ctx.theorems.has(thm.name)) {
-    throw new Error(`'${thm.name}' already names a theorem in this session`)
-  }
-  checkTheorem(thm, s.ctx)
-  const theorems = new Map(s.ctx.theorems)
-  theorems.set(thm.name, thm)
-  return { ...s, ctx: { theorems, relations: s.ctx.relations } }
+  assertSession(s)
+  if (s.ctx.theorems.has(thm.name)) throw new Error(`'${thm.name}' already names a theorem in this session`)
+  return { ...s, ctx: registerTheorem(s.ctx, thm) }
 }

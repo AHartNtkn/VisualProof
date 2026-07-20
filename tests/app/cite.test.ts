@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import type { ProofContext } from '../../src/kernel/proof/step'
+import type { ProofContext } from '../../src/kernel/proof/context'
+import { verifyTheory } from '../../src/kernel/proof/context'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { citationCandidates, citationDirection, citationStep } from '../../src/app/interact/cite'
 
@@ -10,6 +11,12 @@ function unaryPattern(defId: string) {
   const node = b.ref(b.root, defId, 1)
   const boundary = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
   return { side: mkDiagramWithBoundary(b.build(), [boundary]), node }
+}
+
+function unaryRelation() {
+  const builder = new DiagramBuilder()
+  const boundary = builder.wire(builder.root, [])
+  return mkDiagramWithBoundary(builder.build(), [boundary])
 }
 
 function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; second: string; firstWire: string; ctx: ProofContext } {
@@ -34,7 +41,10 @@ function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; 
     first,
     second,
     firstWire,
-    ctx: { relations: new Map(), theorems: new Map([['pRule', theorem], ['qRule', unrelated], ['closed', closed]]) },
+    ctx: verifyTheory({
+      relations: { p: unaryRelation(), q: unaryRelation() },
+      theorems: [theorem, unrelated, closed],
+    }),
   }
 }
 

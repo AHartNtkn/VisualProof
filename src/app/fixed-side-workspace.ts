@@ -1,4 +1,6 @@
-import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
+import type { ProofStep } from '../kernel/proof/step'
 import { singleStepAction, type ProofAction } from '../kernel/proof/action'
 import type { Theme } from '../view/paint'
 import type { Vec2 } from '../view/vec'
@@ -66,6 +68,7 @@ export class FixedSideWorkspace {
   #narrowNotice: HTMLDivElement
 
   constructor(options: FixedSideWorkspaceOptions) {
+    assertProofContext(options.context())
     if (window.innerWidth < MIN_FIXED_WORKSPACE_WIDTH) {
       throw new Error(`fixed-side proving requires a window at least ${MIN_FIXED_WORKSPACE_WIDTH}px wide`)
     }

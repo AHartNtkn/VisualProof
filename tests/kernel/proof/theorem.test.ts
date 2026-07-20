@@ -6,15 +6,27 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { checkTheorem, applyTheorem } from '../../../src/kernel/proof/theorem'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
-import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, registerTheorem, verifyTheory, type ProofContext } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 import type { ProofAction } from '../../../src/kernel/proof/action'
 import { applyAction, replayActions } from '../../../src/kernel/proof/action'
 import { replayProof } from '../../../src/kernel/proof/step'
 import { theoremFromJson, theoremToJson } from '../../../src/kernel/proof/json'
 
 const p = (s: string) => parseTerm(s)
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 const action = (label: string, ...steps: ProofStep[]): ProofAction => ({ label, steps, placements: [] })
+
+function applyCertifiedTheorem(
+  diagram: Parameters<typeof applyTheorem>[0],
+  theorem: Theorem,
+  at: Parameters<typeof applyTheorem>[3],
+  direction: Parameters<typeof applyTheorem>[4],
+  base: ProofContext = EMPTY_PROOF_CONTEXT,
+) {
+  const certified = registerTheorem(base, theorem)
+  return applyTheorem(diagram, certified, theorem.name, at, direction)
+}
 
 /**
  * The running example: P(x) := x = λa.a, Q(x) := x = λa.λb.a.
@@ -146,7 +158,7 @@ describe('applyTheorem', () => {
 
   it('forward at a positive region rewrites the occurrence in one step', () => {
     const { d, hp, hq, v } = host()
-    const out = applyTheorem(d, dropQ(), {
+    const out = applyCertifiedTheorem(d, dropQ(), {
       sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] },
       args: [v],
     }, 'forward')
@@ -166,7 +178,7 @@ describe('applyTheorem', () => {
     const hp = h.termNode(cut, p('\\a. a'))
     const v = h.wire(cut, [{ node: hp, port: { kind: 'output' } }])
     const d = h.build()
-    const strengthened = applyTheorem(d, dropQ(), {
+    const strengthened = applyCertifiedTheorem(d, dropQ(), {
       sel: { region: cut, regions: [], nodes: [hp], wires: [] },
       args: [v],
     }, 'reverse')
@@ -175,7 +187,7 @@ describe('applyTheorem', () => {
     // applying forward inside the cut is refused (negative)
     const [pid] = nodes.find(([, n]) => n.kind === 'term' && n.term.kind === 'lam' && n.term.body.kind === 'bvar')!
     const [qid] = nodes.find(([id]) => id !== pid)!
-    expect(() => applyTheorem(strengthened, dropQ(), {
+    expect(() => applyCertifiedTheorem(strengthened, dropQ(), {
       sel: { region: cut, regions: [], nodes: [pid, qid], wires: [] },
       args: [v],
     }, 'forward')).toThrowError(/requires a positive region/)
@@ -183,7 +195,7 @@ describe('applyTheorem', () => {
 
   it('refuses occurrences that do not match the theorem side', () => {
     const { d, hp, v } = host()
-    expect(() => applyTheorem(d, dropQ(), {
+    expect(() => applyCertifiedTheorem(d, dropQ(), {
       sel: { region: d.root, regions: [], nodes: [hp], wires: [] },
       args: [v],
     }, 'forward')).toThrowError(/not an occurrence of theorem 'dropQ'/)
@@ -193,7 +205,7 @@ describe('applyTheorem', () => {
     const { d, hp, hq, v } = host()
     let caught: unknown
     try {
-      applyTheorem(d, dropQ(), {
+      applyCertifiedTheorem(d, dropQ(), {
         sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] },
         args: [v],
       }, 'reverse')
@@ -214,7 +226,7 @@ describe('applyTheorem', () => {
     const node = host.termNode(host.root, p('\\x. x'))
     const wire = host.wire(host.root, [{ node, port: { kind: 'output' } }])
     const diagram = host.build()
-    expect(() => applyTheorem(diagram, theorem, {
+    expect(() => applyCertifiedTheorem(diagram, theorem, {
       sel: { region: diagram.root, regions: [], nodes: [node], wires: [] },
       args: [wire, wire],
     }, 'forward')).not.toThrow()
@@ -235,18 +247,24 @@ describe('applyTheorem', () => {
       { node, port: { kind: 'arg', index: 1 } },
     ])
     const diagram = host.build()
-    expect(() => applyTheorem(diagram, theorem, {
+    const relationBuilder = new DiagramBuilder()
+    const first = relationBuilder.wire(relationBuilder.root, [])
+    const second = relationBuilder.wire(relationBuilder.root, [])
+    const pairContext = verifyTheory({
+      relations: { Pair: mkDiagramWithBoundary(relationBuilder.build(), [first, second]) },
+      theorems: [],
+    })
+    expect(() => applyCertifiedTheorem(diagram, theorem, {
       sel: { region: diagram.root, regions: [], nodes: [node], wires: [] },
       args: [shared, shared],
-    }, 'forward')).toThrowError(/not an occurrence of theorem 'pairId'/)
+    }, 'forward', pairContext)).toThrowError(/not an occurrence of theorem 'pairId'/)
   })
 })
 
 describe('theorem steps inside proofs (derived rules used natively)', () => {
   it('a registered theorem applies through replayProof without expansion', () => {
     const t = dropQ()
-    const theorems = new Map([[t.name, t]])
-    const c2: ProofContext = { theorems, relations: new Map() }
+    const c2 = registerTheorem(ctx, t)
     const { d, hp, hq, v } = (() => {
       const h = new DiagramBuilder()
       const hp = h.termNode(h.root, p('\\a. a'))
@@ -302,7 +320,7 @@ describe('boundary-wire id resurrection is refused', () => {
         },
       )],
     }
-    const c: ProofContext = { theorems: new Map([[T.name, T]]), relations: new Map() }
+    const c = registerTheorem(ctx, T)
     expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' has no semantic image/)
   })
 
@@ -327,7 +345,7 @@ describe('boundary-wire id resurrection is refused', () => {
         direction: 'forward',
       })],
     }
-    const c: ProofContext = { theorems: new Map([[T.name, T]]), relations: new Map() }
+    const c = registerTheorem(ctx, T)
     expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' has no semantic image/)
   })
 })

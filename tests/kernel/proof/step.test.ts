@@ -13,14 +13,15 @@ import {
   replayProof,
   transportBoundary,
 } from '../../../src/kernel/proof/step'
-import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 import { ProofError } from '../../../src/kernel/proof/error'
 import { proposePortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
 import { termNodeAt } from '../../../src/kernel/rules/access'
 
 const pp = (s: string) => parseTerm(s)
 
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 describe('applyStep mirrors the direct appliers', () => {
   it('erasure step equals applyErasure', () => {

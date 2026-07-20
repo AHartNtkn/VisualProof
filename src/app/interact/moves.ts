@@ -3,7 +3,9 @@ import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/dia
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
-import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof/step'
+import { applyStep, type ProofStep } from '../../kernel/proof/step'
+import type { ProofContext } from '../../kernel/proof/context'
+import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
 import { convertible } from '../../kernel/term/convert'
 import type { ConversionCertificate } from '../../kernel/term/certificate'
 import { parseTerm } from '../../kernel/term/parse'
@@ -59,6 +61,7 @@ export type InstantiationChoice =
   | { readonly kind: 'named'; readonly label: string; readonly name: string }
 
 export function instantiationChoices(ctx: ProofContext, arity: number): readonly InstantiationChoice[] {
+  assertProofContext(ctx)
   const choices: InstantiationChoice[] = [{ kind: 'anonymous', label: 'New relation…' }]
   for (const [name, relation] of ctx.relations) {
     if (relation.boundary.length === arity) choices.push({ kind: 'named', label: name, name })
@@ -77,6 +80,7 @@ export function discoverProofActions(
   ctx: ProofContext,
   orientation: ProofOrientation,
 ): ProofDiscovery | null {
+  assertProofContext(ctx)
   if (hits.length === 0) return null
   try {
     const sel = buildSelection(d, absorbHits(d, hits))
@@ -118,6 +122,7 @@ export function contextualDeleteStep(d: Diagram, discovery: ProofDiscovery, fuel
 }
 
 export function foldedComprehension(ctx: ProofContext, name: string): DiagramWithBoundary {
+  assertProofContext(ctx)
   const relation = ctx.relations.get(name)
   if (relation === undefined) throw new Error(`unknown relation '${name}'`)
   const arity = relation.boundary.length
@@ -130,7 +135,7 @@ export function foldedComprehension(ctx: ProofContext, name: string): DiagramWit
   return mkDiagramWithBoundary(builder.build(), boundary)
 }
 
-const connectionContext: ProofContext = { theorems: new Map(), relations: new Map() }
+const connectionContext = EMPTY_PROOF_CONTEXT
 
 function outputNodes(d: Diagram, wire: WireId): NodeId[] {
   return d.wires[wire]!.endpoints

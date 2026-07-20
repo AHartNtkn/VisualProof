@@ -4,7 +4,8 @@ import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { parseTerm } from '../kernel/term/parse'
 import { applyFission } from '../kernel/rules/fusion'
 import { applyComprehensionInstantiate } from '../kernel/rules/comprehension'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
 import { applyAction, type PlacementHint, type ProofAction } from '../kernel/proof/action'
 import { carryOver, mkEngine, resolvedFrameSlot, type Engine } from '../view/engine'
 import { bubbleHues, paint, type Shape, type Theme } from '../view/paint'
@@ -208,6 +209,7 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
   readonly #opts: SubstituteTransactionOptions
 
   constructor(opts: SubstituteTransactionOptions) {
+    assertProofContext(opts.context())
     const source = opts.diagram()
     const bubble = source.regions[opts.bubble]
     if (bubble === undefined || bubble.kind !== 'bubble') throw new Error(`'${opts.bubble}' is not a relation bubble`)
@@ -483,6 +485,7 @@ export class RelationWorkspace {
     draft: RelationWorkspaceDraft,
     invocation: Vec2,
   ) {
+    assertProofContext(host.context())
     this.#host = host
     this.#transaction = transaction
     if (draft.mode !== transaction.mode) throw new Error(`workspace draft mode '${draft.mode}' does not match transaction mode '${transaction.mode}'`)
@@ -572,7 +575,11 @@ export class RelationWorkspace {
       clearProblem: () => {},
       openSpawn: (sample, region) => this.#spawn.open(
         { screen: sample.client, world: sample.world, region },
-        host.context().relations,
+        (() => {
+          const context = host.context()
+          assertProofContext(context)
+          return context.relations
+        })(),
         boundPredicateOptions(this.#diagram(), region),
       ),
       theme: host.theme,
@@ -608,7 +615,9 @@ export class RelationWorkspace {
       doubleClick: () => false,
       contextMenu: (sample) => {
         const region = this.#regionAt(sample.world)
-        this.#spawn.open({ screen: sample.client, world: sample.world, region }, host.context().relations, boundPredicateOptions(this.#diagram(), region))
+        const context = host.context()
+        assertProofContext(context)
+        this.#spawn.open({ screen: sample.client, world: sample.world, region }, context.relations, boundPredicateOptions(this.#diagram(), region))
       },
       pointerChanged: (client) => this.#pointerChanged('draft', client),
       passiveSample: (sample) => this.#construct.passiveSample(sample),

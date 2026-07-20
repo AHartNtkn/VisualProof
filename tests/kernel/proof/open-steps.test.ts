@@ -4,13 +4,14 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { replayProof } from '../../../src/kernel/proof/step'
-import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 import { composeActions } from '../../../src/kernel/proof/compose'
 import { replayActions, singleStepAction } from '../../../src/kernel/proof/action'
 import { stepToJson, stepFromJson } from '../../../src/kernel/proof/json'
 
 const p = (s: string) => parseTerm(s)
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 describe('open and vacuous proof steps', () => {
   it('replays bound relation spawning and the vacuous pair end to end', () => {

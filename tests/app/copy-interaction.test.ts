@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { applyAction, type ProofAction } from '../../src/kernel/proof/action'
-import type { ProofContext } from '../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine } from '../../src/view/engine'
 import { computeLegs, recomputeRegions } from '../../src/view/index'
@@ -13,7 +13,7 @@ import type { Hit } from '../../src/app/hittest'
 import type { PointerSample } from '../../src/app/interact/viewport'
 
 const p = (source: string) => parseTerm(source)
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 function sample(hit: Hit | null, world = { x: 0, y: 0 }, overrides: Partial<PointerSample> = {}): PointerSample {
   return {

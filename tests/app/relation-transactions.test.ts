@@ -4,6 +4,7 @@ import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../src/kernel/proof/action'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
@@ -11,7 +12,7 @@ import { existentialStubs, legPaths } from '../../src/view/wires'
 import { AbstractTransaction } from '../../src/app/relation-transactions'
 import type { RelationWorkspaceSnapshot } from '../../src/app/relation-workspace-draft'
 
-const context = () => ({ theorems: new Map(), relations: new Map() })
+const context = () => (EMPTY_PROOF_CONTEXT)
 
 function unaryScene() {
   const builder = new DiagramBuilder()

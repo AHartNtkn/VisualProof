@@ -1,7 +1,8 @@
 import type { Diagram } from '../kernel/diagram/diagram'
 import { polarity } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
 
 /**
  * Pure, read-only enumeration of moves the UI may offer for a selection.
@@ -30,6 +31,7 @@ export type ActionDescriptor =
  * orientation. Everything else is direction-free and unchanged.
  */
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
+  assertProofContext(ctx)
   const out: ActionDescriptor[] = []
   const pol = polarity(d, sel.region)
   const eraseSign = backward ? 'negative' : 'positive'

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../src/kernel/proof/action'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { AbstractTransaction } from '../../src/app/relation-transactions'
@@ -23,7 +24,7 @@ describe('provisional abstraction interaction', () => {
         diagram: () => diagram,
         boundary: () => [],
         wrap,
-        context: () => ({ theorems: new Map(), relations: new Map() }),
+        context: () => (EMPTY_PROOF_CONTEXT),
         orientation: configured.orientation,
         apply: (action) => { actions.push(action) },
         cancel: () => { cancelled++ },

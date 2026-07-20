@@ -14,7 +14,9 @@ import {
   type ProofAllocation,
 } from '../kernel/proof/action'
 import { dwbToJson, theoremToJson } from '../kernel/proof/json'
-import { applyStep, type ProofContext, type ProofStep } from '../kernel/proof/step'
+import { applyStep, type ProofStep } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
 import { app, bvar, freePorts, lam, type Term } from '../kernel/term/term'
 import type { PathSeg } from '../kernel/term/reduce'
 import type { Vec2 } from '../view/vec'
@@ -201,6 +203,7 @@ function classifyStructuralError(error: unknown): CopyRefusal {
 }
 
 function validateDestination(destination: CopyDestination): CopyRefusal | null {
+  if (destination.kind === 'proof') assertProofContext(destination.ctx)
   const diagram = destinationDiagram(destination)
   if (diagram.regions[destination.region] === undefined) {
     return deny('invalid-destination', `copy destination region '${destination.region}' does not exist`)

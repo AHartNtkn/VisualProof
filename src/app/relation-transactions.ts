@@ -1,7 +1,8 @@
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import { selectionContents, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
 import { applyAction, type PlacementHint, type ProofAction } from '../kernel/proof/action'
 import type { Engine } from '../view/engine'
 import type { Shape, Theme } from '../view/paint'
@@ -128,6 +129,7 @@ export class AbstractTransaction implements RelationWorkspaceTransaction {
   #markerPoint: Vec2
 
   constructor(opts: AbstractTransactionOptions) {
+    assertProofContext(opts.context())
     this.#opts = opts
     this.#source = opts.diagram()
     this.#boundary = [...opts.boundary()]

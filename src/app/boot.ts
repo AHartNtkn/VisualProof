@@ -1,5 +1,6 @@
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext, verifyTheory } from '../kernel/proof/context'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { Theory } from '../kernel/proof/store'
 
@@ -20,20 +21,32 @@ export type BootContext = {
  * change what a citation means.
  */
 export function mergeTheories(loaded: readonly { theory: Theory; ctx: ProofContext }[]): BootContext {
-  const theorems = new Map<string, Theorem>()
   const relations: Record<string, DiagramWithBoundary> = {}
-  for (const { theory, ctx } of loaded) {
-    for (const [name, thm] of ctx.theorems) {
-      if (theorems.has(name)) throw new Error(`theory merge conflict: duplicate theorem '${name}'`)
-      theorems.set(name, thm)
+  const theorems: Theorem[] = []
+  const theoremNames = new Set<string>()
+  const relationNames = new Set<string>()
+  for (const { ctx } of loaded) {
+    assertProofContext(ctx)
+    for (const name of ctx.theorems.keys()) {
+      if (theoremNames.has(name)) throw new Error(`theory merge conflict: duplicate theorem '${name}'`)
+      theoremNames.add(name)
     }
-    for (const [name, rel] of Object.entries(theory.relations)) {
-      if (relations[name] !== undefined) throw new Error(`theory merge conflict: duplicate relation '${name}'`)
+    for (const name of ctx.relations.keys()) {
+      if (relationNames.has(name)) throw new Error(`theory merge conflict: duplicate relation '${name}'`)
+      relationNames.add(name)
+    }
+  }
+  for (const name of relationNames) {
+    if (theoremNames.has(name)) throw new Error(`theory merge conflict: '${name}' names both a relation and theorem`)
+  }
+  for (const { ctx } of loaded) {
+    assertProofContext(ctx)
+    for (const [name, rel] of ctx.relations) {
       relations[name] = rel
     }
+    for (const theorem of ctx.theorems.values()) {
+      theorems.push(theorem)
+    }
   }
-  return {
-    ctx: { theorems, relations: new Map(Object.entries(relations)) },
-    relations,
-  }
+  return { ctx: verifyTheory({ relations, theorems }), relations }
 }

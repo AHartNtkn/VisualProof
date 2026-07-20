@@ -2,7 +2,8 @@ import { app, lam, bvar, freePorts, port, termEq, type Term } from '../kernel/te
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { applyConversion } from '../kernel/rules/conversion'
-import { type ProofContext, type ProofStep } from '../kernel/proof/step'
+import type { ProofStep } from '../kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT } from '../kernel/proof/context'
 import { replayActions, singleStepAction } from '../kernel/proof/action'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { Theory } from '../kernel/proof/store'
@@ -17,7 +18,7 @@ const TWOp = lam(lam(app(bvar(1), app(bvar(1), bvar(0)))))             // λf x.
 const PLUSp = lam(lam(lam(lam(app(app(bvar(3), bvar(1)), app(app(bvar(2), bvar(1)), bvar(0))))))) // λm n f x. m f (n f x)
 const Yp = lam(app(lam(app(bvar(1), app(bvar(0), bvar(0)))), lam(app(bvar(1), app(bvar(0), bvar(0)))))) // λf. (λx. f (x x)) (λx. f (x x))
 
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx = EMPTY_PROOF_CONTEXT
 
 /**
  * The CLOSED equation 1+1=2: empty sheet ⟹ ∃z. z = (PLUS ONE ONE) ∧ z = TWO —

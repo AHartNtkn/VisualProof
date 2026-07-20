@@ -8,7 +8,7 @@ import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import { mkSelection, selectionContents, type SubgraphSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyAction } from '../../src/kernel/proof/action'
 import { actionFromJson, actionToJson } from '../../src/kernel/proof/json'
-import type { ProofContext } from '../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, verifyTheory, type ProofContext } from '../../src/kernel/proof/context'
 import { parseTerm } from '../../src/kernel/term/parse'
 import {
   planCopy,
@@ -19,7 +19,7 @@ import {
 } from '../../src/app/copy-planner'
 
 const p = (source: string) => parseTerm(source)
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 function refusal(value: CopyPlan | CopyRefusal): CopyRefusal {
   expect(value.kind).toBe('refusal')
@@ -293,7 +293,7 @@ describe('CopyPlanner proof destinations', () => {
     const relationBuilder = new DiagramBuilder()
     relationBuilder.cut(relationBuilder.root)
     const relation = mkDiagramWithBoundary(relationBuilder.build(), [])
-    const relationCtx: ProofContext = { theorems: new Map(), relations: new Map([['single-cut', relation]]) }
+    const relationCtx = verifyTheory({ relations: { 'single-cut': relation }, theorems: [] })
 
     const builder = new DiagramBuilder()
     const sourceRegion = builder.cut(builder.root)
@@ -851,10 +851,10 @@ describe('CopyPlanner refusals and revalidation', () => {
     expect(refusal(revalidateCopy(original, diagram, {
       ...destination, orientation: 'backward',
     })).code).toBe('stale-destination')
-    const changedContext: ProofContext = {
-      theorems: new Map(),
-      relations: new Map([['new-relation', mkDiagramWithBoundary(new DiagramBuilder().build(), [])]]),
-    }
+    const changedContext = verifyTheory({
+      relations: { 'new-relation': mkDiagramWithBoundary(new DiagramBuilder().build(), []) },
+      theorems: [],
+    })
     expect(refusal(revalidateCopy(original, diagram, {
       ...destination, ctx: changedContext,
     })).code).toBe('stale-destination')

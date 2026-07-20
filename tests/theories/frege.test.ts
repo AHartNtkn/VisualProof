@@ -223,6 +223,7 @@ describe('the bundled Frege theory', () => {
 
   it('smoke: oneIsNat inserts a certified nat(1) that then satisfies a plusComm citation', () => {
     const theory = buildFregeTheory()
+    const ctx = verifyTheory(theory)
     const oneIsNat = theory.theorems.find((x) => x.name === 'oneIsNat')!
     const plusComm = theory.theorems.find((x) => x.name === 'plusComm')!
 
@@ -230,7 +231,7 @@ describe('the bundled Frege theory', () => {
     // positive region and it PLANTS its own certified 1 as Zero(z) ∧ Succ(z,s)
     // ∧ nat(s) on fresh existential lines — no host premise needed.
     const d0 = new DiagramBuilder().build()
-    const d = applyTheorem(d0, oneIsNat, {
+    const d = applyTheorem(d0, ctx, oneIsNat.name, {
       sel: mkSelection(d0, { region: d0.root, regions: [], nodes: [], wires: [] }), args: [],
     }, 'forward')
     const natS = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
@@ -258,7 +259,7 @@ describe('the bundled Frege theory', () => {
     })
 
     // feed nat(1) ∧ nat(b) ∧ Plus(s,b,sum) into plusComm → Plus(b,s,sum)
-    const d2 = applyTheorem(d1, plusComm, {
+    const d2 = applyTheorem(d1, ctx, plusComm.name, {
       sel: mkSelection(d1, { region: d1.root, regions: [], nodes: [natS, natB, plusN], wires: [] }), args: [ws, wb, wsum],
     }, 'forward')
     // the Plus now reads (b, s, sum): its first argument rides wb, the crossed 1

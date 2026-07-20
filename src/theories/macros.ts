@@ -3,7 +3,9 @@ import { freePorts, termEq } from '../kernel/term/term'
 import { applyConversion } from '../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import { type ProofContext, type ProofStep } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
+import type { ProofStep } from '../kernel/proof/step'
 import { applyAction, singleStepAction, type ProofAction } from '../kernel/proof/action'
 import type { ConversionCertificate } from '../kernel/term/certificate'
 import { termNodeAt } from '../kernel/rules/access'
@@ -30,6 +32,7 @@ export class DerivationCursor {
   readonly ctx: ProofContext
 
   constructor(d: Diagram, ctx: ProofContext) {
+    assertProofContext(ctx)
     this.cur = d
     this.ctx = ctx
   }

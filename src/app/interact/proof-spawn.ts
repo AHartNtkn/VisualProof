@@ -1,5 +1,7 @@
 import type { Diagram, NodeId, RegionId } from '../../kernel/diagram/diagram'
-import type { ProofContext, ProofStep } from '../../kernel/proof/step'
+import type { ProofContext } from '../../kernel/proof/context'
+import { assertProofContext } from '../../kernel/proof/context'
+import type { ProofStep } from '../../kernel/proof/step'
 import { parseTerm } from '../../kernel/term/parse'
 import { freePorts } from '../../kernel/term/term'
 import type { Vec2 } from '../../view/vec'
@@ -31,6 +33,7 @@ export class ProofSpawnController {
   readonly #cascade: SpawnCascade
 
   constructor(options: ProofSpawnControllerOptions) {
+    assertProofContext(options.context())
     this.#options = options
     this.#cascade = new SpawnCascade({
       host: options.host,
@@ -49,7 +52,9 @@ export class ProofSpawnController {
 
   open(invocation: SpawnInvocation): void {
     const d = this.#options.diagram()
-    this.#cascade.open(invocation, this.#options.context().relations, boundPredicateOptions(d, invocation.region))
+    const context = this.#options.context()
+    assertProofContext(context)
+    this.#cascade.open(invocation, context.relations, boundPredicateOptions(d, invocation.region))
   }
 
   close(): boolean { return this.#cascade.close() }

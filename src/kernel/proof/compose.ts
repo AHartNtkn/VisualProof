@@ -4,7 +4,9 @@ import { exploreIso } from '../diagram/canonical/explore'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
-import type { ProofContext, ProofStep } from './step'
+import type { ProofStep } from './step'
+import type { ProofContext } from './context'
+import { assertProofContext } from './context'
 import { applyStepWithReceipt, transportBoundary } from './step'
 import { allocationReservation, type ProofAction } from './action'
 import { ProofError } from './error'
@@ -164,6 +166,7 @@ export function composeActions(
   ctx: ProofContext,
   options: CompositionOptions = {},
 ): ProofAction[] {
+  assertProofContext(ctx)
   const boundaries = options.boundaries ?? { target: [], source: [] }
   const orientation = options.orientation ?? 'forward'
   if (boundaries.source.length !== boundaries.target.length) {

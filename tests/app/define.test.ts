@@ -6,7 +6,7 @@ import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { applyRelFold, applyRelUnfold } from '../../src/kernel/rules/reldef'
-import type { ProofContext } from '../../src/kernel/proof/step'
+import { verifyTheory } from '../../src/kernel/proof/context'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { emptyDiagram } from '../../src/app/edit'
 import { defineRelation, canonicalArgOrder, inferFoldArgs } from '../../src/app/define'
@@ -73,7 +73,7 @@ describe('defineRelation — refusals (each message observed)', () => {
   it('refuses a name that collides with an existing relation (ctx.relations)', () => {
     const { d, sel, wY, wZ } = sheetBody()
     const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
-    const ctx: ProofContext = { theorems: new Map(), relations: new Map([['R', relation]]) }
+    const ctx = verifyTheory({ relations: { R: relation }, theorems: [] })
     expect(() => defineRelation(d, sel, [wY, wZ], 'R', ctx, {})).toThrow(/relation 'R' already exists/)
   })
 
@@ -89,7 +89,7 @@ describe('defineRelation — refusals (each message observed)', () => {
     const { d, sel, wY, wZ } = sheetBody()
     const empty = mkDiagramWithBoundary(emptyDiagram(), [])
     const thm: Theorem = { name: 'T', lhs: empty, rhs: empty, actions: [] }
-    const ctx: ProofContext = { theorems: new Map([['T', thm]]), relations: new Map() }
+    const ctx = verifyTheory({ relations: {}, theorems: [thm] })
     expect(() => defineRelation(d, sel, [wY, wZ], 'T', ctx, {})).toThrow(/already a theorem/)
   })
 
@@ -158,7 +158,7 @@ describe('inferFoldArgs — the fold arguments come from occurrence matching', (
   it('infers the attachment order that folds, without any user pick', () => {
     const { d, sel, wY, wZ } = sheetBody()
     const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
-    const ctx: ProofContext = { theorems: new Map(), relations: new Map([['R', relation]]) }
+    const ctx = verifyTheory({ relations: { R: relation }, theorems: [] })
     const args = inferFoldArgs(d, sel, 'R', ctx)
     // the body is asymmetric, so exactly one assignment is valid — the pick order
     expect(args).toEqual([wY, wZ])
@@ -175,7 +175,7 @@ describe('inferFoldArgs — the fold arguments come from occurrence matching', (
     const t = b.termNode(b.root, parseTerm('\\x. x'))
     const d2 = b.build()
     const sel2 = mkSelection(d2, { region: b.root, regions: [], nodes: [t], wires: [] })
-    const ctx: ProofContext = { theorems: new Map(), relations: new Map([['R', relation]]) }
+    const ctx = verifyTheory({ relations: { R: relation }, theorems: [] })
     expect(() => inferFoldArgs(d2, sel2, 'R', ctx)).toThrowError(/not an occurrence of 'R'/)
   })
 

@@ -4,6 +4,7 @@ import type { ProofStep } from '../../src/kernel/proof/step'
 import { applyAction } from '../../src/kernel/proof/action'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { verifyTheory } from '../../src/kernel/proof/store'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
 import { computeLegs, recomputeRegions } from '../../src/view/index'
@@ -167,7 +168,7 @@ describe('proof context routing', () => {
       viewScale: () => 1,
       selection: () => [],
       setSelection: () => {},
-      context: () => ({ theorems: new Map(), relations: new Map() }),
+      context: () => (EMPTY_PROOF_CONTEXT),
       orientation: () => 'forward',
       apply: () => {},
       commitFission: () => {},
@@ -200,7 +201,7 @@ describe('proof context routing', () => {
       viewScale: () => 1,
       selection: () => selection,
       setSelection: () => {},
-      context: () => ({ theorems: new Map(), relations: new Map() }),
+      context: () => (EMPTY_PROOF_CONTEXT),
       orientation: () => 'forward',
       apply: () => {},
       commitFission: () => {},
@@ -394,11 +395,11 @@ describe('proof connection resolution', () => {
       viewScale: () => 1,
       selection: () => [],
       setSelection: () => {},
-      context: () => ({ theorems: new Map(), relations: new Map() }),
+      context: () => (EMPTY_PROOF_CONTEXT),
       orientation: () => 'forward',
       apply: (action) => {
         applied.push(...action.steps)
-        diagram = applyAction(diagram, action, { theorems: new Map(), relations: new Map() })
+        diagram = applyAction(diagram, action, EMPTY_PROOF_CONTEXT)
       },
       commitFission: () => {},
       refuse: (text) => { throw new Error(text) },

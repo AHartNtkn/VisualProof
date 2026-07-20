@@ -1,7 +1,8 @@
 import type { Diagram } from '../kernel/diagram/diagram'
 import type { ProofAction } from '../kernel/proof/action'
 import { applyAction, introducedNodeIds } from '../kernel/proof/action'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
 import type { Engine } from '../view/engine'
 import { seedBodyPlacement } from '../view/placement'
 import type { Vec2 } from '../view/vec'
@@ -17,6 +18,7 @@ export function seedActionHistoryPlacements(
   ctx: ProofContext,
   orientation: 'forward' | 'backward',
 ): void {
+  assertProofContext(ctx)
   const placements = new Map<string, Vec2>()
   let current = initial
   for (const action of activeActions) {

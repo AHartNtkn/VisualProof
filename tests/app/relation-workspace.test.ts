@@ -4,7 +4,7 @@ import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkDiagram, type Diagram } from '../../src/kernel/diagram/diagram'
 import type { ProofAction } from '../../src/kernel/proof/action'
-import type { ProofContext } from '../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import {
   applyCapturedRelationConnection,
   applyRelationWorkspaceCopy,
@@ -29,7 +29,7 @@ import {
 } from '../../src/app/relation-workspace-draft'
 import { planCopy } from '../../src/app/copy-planner'
 
-const context = (): ProofContext => ({ theorems: new Map(), relations: new Map() })
+const context = (): ProofContext => (EMPTY_PROOF_CONTEXT)
 
 function hostWithBubble(arity = 2): Diagram {
   return mkDiagram({

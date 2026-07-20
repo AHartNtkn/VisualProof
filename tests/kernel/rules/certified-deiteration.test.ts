@@ -10,7 +10,8 @@ import { checkOccurrenceCertificate } from '../../../src/kernel/diagram/subgraph
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { parseTerm } from '../../../src/kernel/term/parse'
-import { applyStep, type ProofContext, type ProofStep } from '../../../src/kernel/proof/step'
+import { applyStep, type ProofStep } from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
 import { stepFromJson, stepToJson } from '../../../src/kernel/proof/json'
 import {
   applyDeiteration,
@@ -18,7 +19,7 @@ import {
 } from '../../../src/kernel/rules/iteration'
 
 const p = (source: string) => parseTerm(source)
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 function betaEtaCopies() {
   const builder = new DiagramBuilder()

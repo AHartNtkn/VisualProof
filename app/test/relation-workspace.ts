@@ -2,7 +2,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagram, type Diagram, type WireId } from '../../src/kernel/diagram/diagram'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import type { PlacementHint } from '../../src/kernel/proof/action'
-import type { ProofContext } from '../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT, type Shape } from '../../src/view/paint'
@@ -43,7 +43,7 @@ const source: Diagram = mkDiagram({
 })
 let hostEngine = mkEngine(source, [])
 const view: MutableView = { scale: 1, offsetX: 0, offsetY: 0 }
-const context: ProofContext = { theorems: new Map(), relations: new Map() }
+const context: ProofContext = EMPTY_PROOF_CONTEXT
 
 let workspace: RelationWorkspace | null = null
 let cancelCount = 0

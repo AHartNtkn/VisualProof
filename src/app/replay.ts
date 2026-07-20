@@ -1,6 +1,8 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
 import { transportBoundary } from '../kernel/proof/step'
-import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
+import type { ProofStep } from '../kernel/proof/step'
 import { replayActions } from '../kernel/proof/action'
 import type { Theorem } from '../kernel/proof/theorem'
 
@@ -26,6 +28,7 @@ export type Replay = {
 }
 
 export function mkReplay(thm: Theorem, ctx: ProofContext): Replay {
+  assertProofContext(ctx)
   const n = thm.actions.length
   // cache[k] = diagram after k steps; index 0 is the lhs, always present.
   const cache: Diagram[] = [thm.lhs.diagram]

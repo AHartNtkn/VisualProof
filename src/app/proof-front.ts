@@ -1,5 +1,7 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
-import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
+import type { ProofStep } from '../kernel/proof/step'
 import type { ProofAction } from '../kernel/proof/action'
 import type { Engine } from '../view/engine'
 import { carryOver, mkEngine } from '../view/engine'
@@ -116,6 +118,7 @@ export class ProofFrontViewport {
   #rebuilds = 1
 
   constructor(canvas: HTMLCanvasElement, model: ProofFrontModel) {
+    assertProofContext(model.context())
     this.canvas = canvas
     this.side = model.side
     this.#model = model

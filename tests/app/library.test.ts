@@ -51,6 +51,13 @@ function relationCitingNat(): DiagramWithBoundary {
   return mkDiagramWithBoundary(b.build(), [w])
 }
 
+function relationCiting(name: string): DiagramWithBoundary {
+  const builder = new DiagramBuilder()
+  const ref = builder.ref(builder.root, name, 1)
+  const wire = builder.wire(builder.root, [{ node: ref, port: { kind: 'arg', index: 0 } }])
+  return mkDiagramWithBoundary(builder.build(), [wire])
+}
+
 describe('emptyLibrary', () => {
   it('knows nothing: no folder, no entries, no adopted; rebuilds to the empty context', () => {
     const lib = emptyLibrary()
@@ -281,6 +288,33 @@ describe('ref-resolution lifecycle: a defined relation citing a LOADED relation'
     let lib = loadEntry(emptyLibrary(), 'frege.json', fregeJson())
     lib = defineEntry(lib, 'standalone', trivRelation())
     expect(() => unloadEntry(lib, 'frege.json')).not.toThrow()
+  })
+})
+
+describe('session relation prefix verification', () => {
+  it('accepts an earlier session definition and preserves definition order', () => {
+    let lib = defineEntry(emptyLibrary(), 'Base', trivRelation())
+    lib = defineEntry(lib, 'Alias', relationCiting('Base'))
+    expect(Object.keys(rebuild(lib).relations)).toEqual(['Base', 'Alias'])
+  })
+
+  it('atomically rejects self, forward, and cyclic session definitions', () => {
+    const empty = emptyLibrary()
+    expect(() => defineEntry(empty, 'Self', relationCiting('Self'))).toThrowError(/unknown relation 'Self'/)
+    expect(empty.definedRelations).toEqual([])
+
+    expect(() => defineEntry(empty, 'Forward', relationCiting('Later'))).toThrowError(/unknown relation 'Later'/)
+    expect(empty.definedRelations).toEqual([])
+
+    const cyclic = {
+      ...empty,
+      definedRelations: [
+        { name: 'Left', relation: relationCiting('Right') },
+        { name: 'Right', relation: relationCiting('Left') },
+      ],
+    }
+    expect(() => rebuild(cyclic)).toThrowError(/relation 'Left' body: reference node .* unknown relation 'Right'/)
+    expect(empty.definedRelations).toEqual([])
   })
 })
 
