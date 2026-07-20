@@ -116,7 +116,6 @@ theorem finalRootEnvironmentSelection
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
@@ -125,14 +124,13 @@ theorem finalRootEnvironmentSelection
     let source : CheckedOpenDiagram signature :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-          finalWellFormed boundaryNodup boundary boundaryRoot⟩
+          finalWellFormed boundary boundaryRoot⟩
     let target : CheckedOpenDiagram signature :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
-    let outer := copyTrace.finalOuterContextWitness elimTrace boundaryNodup
-      boundary
+    let outer := copyTrace.finalOuterContextWitness elimTrace boundary
     let combined := copyTrace.finalRootContextWitness elimTrace
-      finalWellFormed boundaryNodup boundary boundaryRoot sourceWellFormed
+      finalWellFormed boundary boundaryRoot sourceWellFormed
     ∀ (sourceOuter : Fin source.val.exposedWires.length → D)
       (targetOuter : Fin target.val.exposedWires.length → D),
       outer.indexRelation.EnvironmentsAgree sourceOuter targetOuter →
@@ -155,14 +153,13 @@ theorem finalRootEnvironmentSelection
   let source : CheckedOpenDiagram signature :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-        finalWellFormed boundaryNodup boundary boundaryRoot⟩
+        finalWellFormed boundary boundaryRoot⟩
   let target : CheckedOpenDiagram signature :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
-  let outer := copyTrace.finalOuterContextWitness elimTrace boundaryNodup
-    boundary
+  let outer := copyTrace.finalOuterContextWitness elimTrace boundary
   let combined := copyTrace.finalRootContextWitness elimTrace finalWellFormed
-    boundaryNodup boundary boundaryRoot sourceWellFormed
+    boundary boundaryRoot sourceWellFormed
   have sourceRootExact : ConcreteElaboration.WireContext.Exact
       source.val.rootWires source.val.diagram.root :=
     ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
@@ -241,7 +238,7 @@ theorem finalRootEnvironmentSelection
         apply rootEnvironment_of_parts
         intro sourceIndex
         have exposedEq := copyTrace.finalSourceOpen_exposedWires elimTrace
-          boundaryNodup boundary
+          boundary
         have sourceLengthEq : source.val.exposedWires.length =
             target.val.exposedWires.length := by
           calc
