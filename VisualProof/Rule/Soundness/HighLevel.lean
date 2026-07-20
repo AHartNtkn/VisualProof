@@ -417,24 +417,14 @@ private theorem equivalentPinnedReplacement_compiled
     (frameRoot : ∀ wire, wire ∈ frameBoundary →
       ((occurrence.reassemblyInput decomposition).frame.val.wires wire).scope =
         (occurrence.reassemblyInput decomposition).frame.val.root)
-    (localForward : ∀ sourceArgs,
-      (occurrence.reassemblyInput decomposition).pattern.denote
-          Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) sourceArgs →
-        replacement.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
-          (sourceArgs ∘ Fin.cast
-            (occurrence.reassemblyTwoInputPresentation decomposition
-              replacement sameArity locality).boundary_arity_eq.symm))
-    (localBackward : ∀ targetArgs,
-      replacement.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) targetArgs →
-        (occurrence.reassemblyInput decomposition).pattern.denote
-          Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
-          (targetArgs ∘ Fin.cast
-            (occurrence.reassemblyTwoInputPresentation decomposition
-              replacement sameArity locality).boundary_arity_eq))
+    (localForward :
+      (occurrence.reassemblyTwoInputPresentation decomposition replacement
+        sameArity locality).AttachmentLocalLaw .forward Lambda.canonicalModel
+          (Theory.interpretDefinitions context.definitions))
+    (localBackward :
+      (occurrence.reassemblyTwoInputPresentation decomposition replacement
+        sameArity locality).AttachmentLocalLaw .backward Lambda.canonicalModel
+          (Theory.interpretDefinitions context.definitions))
     (proofArgs : Fin frameBoundary.length → Lambda.Individual) :
     denoteOpen Lambda.canonicalModel
         (Theory.interpretDefinitions context.definitions)
@@ -483,12 +473,12 @@ private theorem equivalentPinnedReplacement_compiled
         locality sourceSplice frameBoundary frameRoot .backward .reverse
         (by simpa [citationPolarity] using heven)
     constructor
-    · exact presentation.compiledSpliceSourceOpen_entails sourceSplice
+    · exact presentation.compiledSpliceSourceOpen_entails_at_attachments sourceSplice
         targetSplice frameBoundary frameRoot rfl rfl .forward .forward
         Lambda.canonicalModel
         (Theory.interpretDefinitions context.definitions) localForward
         forwardAllowed proofArgs
-    · exact presentation.compiledSpliceSourceOpen_entails sourceSplice
+    · exact presentation.compiledSpliceSourceOpen_entails_at_attachments sourceSplice
         targetSplice frameBoundary frameRoot rfl rfl .backward .backward
         Lambda.canonicalModel
         (Theory.interpretDefinitions context.definitions) localBackward
@@ -511,12 +501,12 @@ private theorem equivalentPinnedReplacement_compiled
         locality sourceSplice frameBoundary frameRoot .backward .forward
         (by simpa [citationPolarity] using hodd)
     constructor
-    · exact presentation.compiledSpliceSourceOpen_entails sourceSplice
+    · exact presentation.compiledSpliceSourceOpen_entails_at_attachments sourceSplice
         targetSplice frameBoundary frameRoot rfl rfl .backward .forward
         Lambda.canonicalModel
         (Theory.interpretDefinitions context.definitions) localBackward
         forwardAllowed proofArgs
-    · exact presentation.compiledSpliceSourceOpen_entails sourceSplice
+    · exact presentation.compiledSpliceSourceOpen_entails_at_attachments sourceSplice
         targetSplice frameBoundary frameRoot rfl rfl .forward .backward
         Lambda.canonicalModel
         (Theory.interpretDefinitions context.definitions) localForward
@@ -2507,11 +2497,28 @@ theorem applyRelFold_sound
       apply Fin.ext
       rfl
     simpa [sourceArgsEq] using sourceDenotes
+  let presentation :=
+    payload.occurrence.reassemblyTwoInputPresentation decomposition replacement
+      sameArity locality
+  have localForward' : presentation.AttachmentLocalLaw .forward
+      Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions) :=
+    Diagram.Splice.Input.TwoInputPresentation.LocalLaw.toAttachmentLocalLaw
+      presentation .forward
+      Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions) localForward
+  have localBackward' : presentation.AttachmentLocalLaw .backward
+      Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions) :=
+    Diagram.Splice.Input.TwoInputPresentation.LocalLaw.toAttachmentLocalLaw
+      presentation .backward
+      Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions) localBackward
   have equivalence :=
     equivalentPinnedReplacement_compiled context input selection payload.body
       args payload.occurrence decomposition replacement sameArity locality
-      sourceSplice targetSplice frameBoundary frameRoot localForward
-      localBackward proofArgs
+      sourceSplice targetSplice frameBoundary frameRoot localForward'
+      localBackward' proofArgs
   simpa [DirectedEntailment, Step.tag, StepTag.semanticMode] using equivalence
 
 end VisualProof.Rule
