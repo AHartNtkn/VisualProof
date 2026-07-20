@@ -140,8 +140,8 @@ describe('step round-trips through JSON', () => {
       { rule: 'closedTermIntro', region: 'r1', term: p('\\x. \\y. x') },
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: {} },
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w3', 'w7'], binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: [] },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w3', 'w7'], binders: [] },
       { rule: 'comprehensionAbstract', wrap: sel, comp: pat, occurrences: [{ sel, args: ['w0'] }] },
       { rule: 'theorem', name: 'dropQ', at: { sel, args: ['w0'] }, direction: 'reverse' },
       { rule: 'vacuousIntro', sel, arity: 2 },
@@ -154,7 +154,7 @@ describe('step round-trips through JSON', () => {
 
   it('rejects malformed steps loudly', () => {
     expect(() => stepFromJson({ rule: 'nonsense' })).toThrowError(/malformed proof JSON/)
-    expect(() => stepFromJson({ rule: 'insertion', region: 'r1', pattern: {}, attachments: [], binders: {} }))
+    expect(() => stepFromJson({ rule: 'insertion', region: 'r1', pattern: {}, attachments: [], binders: [] }))
       .toThrowError(/unknown rule 'insertion'/)
     expect(() => stepFromJson({ rule: 'erasure', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, extra: 1 }))
       .toThrowError(/unknown field 'extra'/)
@@ -204,7 +204,7 @@ describe('step round-trips through JSON', () => {
     const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
     const pat = mkDiagramWithBoundary(b.build(), [bw])
     const j = JSON.parse(JSON.stringify(stepToJson(
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: [], binders: [] },
     ))) as Record<string, unknown>
     delete j['attachments']
     expect(() => stepFromJson(j)).toThrowError(/attachments must be an array/)

@@ -338,7 +338,7 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   const g2 = cb.termNode(cb.root, F2term)
   const gbx = cb.wire(cb.root, [{ node: g1, port: { kind: 'freeVar', name: 's0' } }, { node: g2, port: { kind: 'freeVar', name: 's0' } }])
   cb.wire(cb.root, [{ node: g1, port: { kind: 'output' } }, { node: g2, port: { kind: 'output' } }])
-  e.push('D2 instantiate G', { rule: 'comprehensionInstantiate', bubble: rBc, comp: mkDiagramWithBoundary(cb.build(), [gbx]), attachments: [], binders: {} })
+  e.push('D2 instantiate G', { rule: 'comprehensionInstantiate', bubble: rBc, comp: mkDiagramWithBoundary(cb.build(), [gbx]), attachments: [], binders: [] })
 
   const zref = refBy(e, cut1c, 'zero')
   e.push('unfold copy zero', { rule: 'relUnfold', node: zref })
@@ -539,7 +539,7 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   e.push('D0b relUnfold copyA', { rule: 'relUnfold', node: copyRefA })
   const cut1c = e.newCutIn(e.cur.root, snap)
   const rBc = Object.entries(e.cur.regions).find(([, r]) => r.kind === 'bubble' && r.parent === cut1c)![0]
-  e.push('D2 instantiate R(x):=x+b -o- b+x', { rule: 'comprehensionInstantiate', bubble: rBc, comp: buildComp4(), attachments: [wb], binders: {} })
+  e.push('D2 instantiate R(x):=x+b -o- b+x', { rule: 'comprehensionInstantiate', bubble: rBc, comp: buildComp4(), attachments: [wb], binders: [] })
 
   const zref = refBy(e, cut1c, 'zero')
   e.push('unfold copy zero', { rule: 'relUnfold', node: zref })
@@ -815,7 +815,7 @@ function deriveSuccNat(ctx: ProofContext): Theorem {
   const cstub = cb.bubble(cb.root, 1)
   const catom = cb.atom(cstub, cstub)
   const cbx = cb.wire(cb.root, [{ node: catom, port: { kind: 'arg', index: 0 } }])
-  e.push("instantiate R'=R", { rule: 'comprehensionInstantiate', bubble: rBc, comp: mkDiagramWithBoundary(cb.build(), [cbx]), attachments: [], binders: { [cstub]: rBp } })
+  e.push("instantiate R'=R", { rule: 'comprehensionInstantiate', bubble: rBc, comp: mkDiagramWithBoundary(cb.build(), [cbx]), attachments: [], binders: [[cstub, rBp]] })
 
   const skZero = refBy(e, rBp, 'zero')
   const w0s = argWire(e, skZero, 0)

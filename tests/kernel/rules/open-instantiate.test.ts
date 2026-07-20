@@ -34,7 +34,7 @@ describe('open comprehension instantiation', () => {
   it('instantiates ∀R with "x : R′(x)" — atoms rebind to the ENCLOSING bubble', () => {
     const { d, rOuter, rInner, w } = host()
     const { comp, stub } = rPrimeComp()
-    const out = applyComprehensionInstantiate(d, rInner, comp, [], new Map([[stub, rOuter]]))
+    const out = applyComprehensionInstantiate(d, rInner, comp, [], [[stub, rOuter]])
     expect(out.regions[rInner]).toBeUndefined() // dissolved
     const atoms = Object.values(out.nodes).filter((x) => x.kind === 'atom')
     expect(atoms).toHaveLength(1)
@@ -50,7 +50,7 @@ describe('open comprehension instantiation', () => {
     const { d, rInner } = host()
     const { comp, stub } = rPrimeComp()
     // the bubble itself: comprehension would mention the variable being eliminated
-    expect(() => applyComprehensionInstantiate(d, rInner, comp, [], new Map([[stub, rInner]])))
+    expect(() => applyComprehensionInstantiate(d, rInner, comp, [], [[stub, rInner]]))
       .toThrowError(/must properly enclose the instantiated bubble/)
     // a sibling bubble: not on the ancestor chain at all
     const h2 = new DiagramBuilder()
@@ -60,7 +60,7 @@ describe('open comprehension instantiation', () => {
     h2.atom(rI2, rI2)
     const d2 = h2.build()
     const { comp: comp2, stub: stub2 } = rPrimeComp()
-    expect(() => applyComprehensionInstantiate(d2, rI2, comp2, [], new Map([[stub2, sib]])))
+    expect(() => applyComprehensionInstantiate(d2, rI2, comp2, [], [[stub2, sib]]))
       .toThrowError(/must properly enclose the instantiated bubble/)
   })
 
@@ -70,7 +70,7 @@ describe('open comprehension instantiation', () => {
     const b = new DiagramBuilder()
     const stub = b.bubble(b.root, 1)
     const atom = b.atom(stub, stub)
-    const qn = b.termNode(b.root, p('q'))
+    const qn = b.termNode(stub, p('q'))
     const bx = b.wire(b.root, [
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: qn, port: { kind: 'output' } },
@@ -87,7 +87,7 @@ describe('open comprehension instantiation', () => {
     const wParam = h.wire(h.root, [])
     const d = h.build()
 
-    const out = applyComprehensionInstantiate(d, rInner, comp, [wParam], new Map([[stub, rOuter]]))
+    const out = applyComprehensionInstantiate(d, rInner, comp, [wParam], [[stub, rOuter]])
     expect(out.regions[rInner]).toBeUndefined()
     // binder rebinding: the copy's atom binds to the ENCLOSING bubble
     const atoms = Object.entries(out.nodes).filter(([, x]) => x.kind === 'atom')
@@ -122,7 +122,7 @@ describe('open comprehension instantiation', () => {
     h.atom(rPos, rPos)
     const d = h.build()
     const { comp, stub } = rPrimeComp()
-    expect(() => applyComprehensionInstantiate(d, rPos, comp, [], new Map([[stub, 'ghost']])))
+    expect(() => applyComprehensionInstantiate(d, rPos, comp, [], [[stub, 'ghost']]))
       .toThrowError(/requires a negative bubble/)
   })
 })

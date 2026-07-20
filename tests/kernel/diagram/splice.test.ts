@@ -124,17 +124,13 @@ describe('spliceSubgraph', () => {
     expect(cuts).toHaveLength(1)
   })
 
-  it('rejects boundary wires not scoped at the pattern root (the resolved obligation)', () => {
+  it('rejects boundary wires not scoped at the pattern root before splice', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const n = b.termNode(cut, p('\\x. x'))
     const w = b.wire(cut, [{ node: n, port: { kind: 'output' } }]) // scoped INSIDE the cut
-    const pattern = mkDiagramWithBoundary(b.build(), [w])
-    const hostB = new DiagramBuilder()
-    const hn = hostB.termNode(hostB.root, p('\\x. x'))
-    const hw = hostB.wire(hostB.root, [{ node: hn, port: { kind: 'output' } }])
-    expect(() => spliceSubgraph(hostB.build(), 'r0', pattern, [hw]))
-      .toThrowError(/boundary wire 'w0' is not scoped at the pattern root; not spliceable/)
+    expect(() => mkDiagramWithBoundary(b.build(), [w]))
+      .toThrowError(/boundary wire 'w0' must be scoped at the diagram root/)
   })
 
   it('rejects attachment arity mismatches and attachments that cannot reach the splice region', () => {

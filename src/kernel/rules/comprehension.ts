@@ -12,6 +12,91 @@ import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { wireAt } from './access'
 
+export type ComprehensionBinderPair = readonly [pattern: RegionId, host: RegionId]
+
+/**
+ * Check the explicitly designated Lean-style BinderSpine. A nonempty sequence
+ * must be the exact outer-to-inner root prefix named by graph parentage; the
+ * final proxy is the body container. An empty sequence designates the root as
+ * the body and deliberately assigns no special meaning to ordinary root
+ * children.
+ */
+function validateBinderSpine(
+  host: Diagram,
+  bubbleId: RegionId,
+  comp: DiagramWithBoundary,
+  pairs: readonly ComprehensionBinderPair[],
+): ReadonlyMap<RegionId, RegionId> {
+  if (pairs.length === 0) return new Map()
+
+  const pattern = comp.diagram
+  const boundary = new Set(comp.boundary)
+  const patternProxies = new Set<RegionId>()
+  const hostTargets = new Set<RegionId>()
+  const binderMap = new Map<RegionId, RegionId>()
+  let container = pattern.root
+
+  for (const [index, [proxyId, targetId]] of pairs.entries()) {
+    if (patternProxies.has(proxyId)) {
+      throw new RuleError(`comprehension binder spine has duplicate pattern proxy '${proxyId}'`)
+    }
+    if (hostTargets.has(targetId)) {
+      throw new RuleError(`comprehension binder spine has duplicate host target '${targetId}'`)
+    }
+
+    const proxy = pattern.regions[proxyId]
+    if (proxy === undefined) {
+      throw new RuleError(`comprehension binder proxy '${proxyId}' is not a pattern region`)
+    }
+    if (proxy.kind !== 'bubble') {
+      throw new RuleError(`comprehension binder proxy '${proxyId}' is not a bubble`)
+    }
+    const target = host.regions[targetId]
+    if (target === undefined) {
+      throw new RuleError(`comprehension binder target '${targetId}' does not exist`)
+    }
+    if (target.kind !== 'bubble') {
+      throw new RuleError(`comprehension binder target '${targetId}' is not a bubble`)
+    }
+    if (proxy.arity !== target.arity) {
+      throw new RuleError(
+        `comprehension binder arity mismatch: proxy '${proxyId}' has ${proxy.arity}, host target '${targetId}' has ${target.arity}`,
+      )
+    }
+    if (targetId === bubbleId || !isAncestorOrEqual(host, targetId, bubbleId)) {
+      throw new RuleError(
+        `open comprehension binder '${targetId}' must properly enclose the instantiated bubble '${bubbleId}'`,
+      )
+    }
+
+    const label = index === 0 ? 'root' : 'nonterminal proxy'
+    const directChildren = Object.entries(pattern.regions).filter(([, region]) =>
+      region.kind !== 'sheet' && region.parent === container)
+    if (directChildren.length !== 1 || directChildren[0]![0] !== proxyId) {
+      throw new RuleError(
+        `comprehension binder ${label} '${container}' must have proxy '${proxyId}' as its only direct child in the ordered root-prefix`,
+      )
+    }
+    if (Object.values(pattern.nodes).some((node) => node.region === container)) {
+      throw new RuleError(`comprehension binder ${label} '${container}' has node content`)
+    }
+    const nonBoundaryWire = Object.entries(pattern.wires).find(([wireId, wire]) =>
+      wire.scope === container && !boundary.has(wireId))
+    if (nonBoundaryWire !== undefined) {
+      throw new RuleError(
+        `comprehension binder ${label} '${container}' scopes non-boundary wire '${nonBoundaryWire[0]}'`,
+      )
+    }
+
+    patternProxies.add(proxyId)
+    hostTargets.add(targetId)
+    binderMap.set(proxyId, targetId)
+    container = proxyId
+  }
+
+  return binderMap
+}
+
 /**
  * Reparent a node into `region`, preserving its kind-specific payload.
  * Return-typed switch (no default): a new node kind forces a decision here.
@@ -59,7 +144,7 @@ export function applyComprehensionInstantiate(
   bubbleId: RegionId,
   comp: DiagramWithBoundary,
   attachments: readonly WireId[],
-  binders: ReadonlyMap<RegionId, RegionId> = new Map(),
+  binders: readonly ComprehensionBinderPair[] = [],
   orientation: 'forward' | 'backward' = 'forward',
   reservation?: IdReservation,
 ): Diagram {
@@ -89,17 +174,7 @@ export function applyComprehensionInstantiate(
     }
   }
 
-  // Open comprehensions mention relation variables quantified OUTSIDE the
-  // bubble being eliminated — a binder at or below it would let the
-  // comprehension's denotation vary under that very quantifier, which the
-  // instantiation argument (φ(G) ⟹ ∃R.φ(R) for FIXED G) cannot license.
-  for (const hb of binders.values()) {
-    if (hb === bubbleId || !isAncestorOrEqual(d, hb, bubbleId)) {
-      throw new RuleError(
-        `open comprehension binder '${hb}' must properly enclose the instantiated bubble '${bubbleId}'`,
-      )
-    }
-  }
+  const binderMap = validateBinderSpine(d, bubbleId, comp, binders)
   const atoms = Object.entries(d.nodes).filter(
     (entry): entry is [NodeId, Extract<DiagramNode, { kind: 'atom' }>] =>
       entry[1].kind === 'atom' && entry[1].binder === bubbleId,
@@ -111,7 +186,7 @@ export function applyComprehensionInstantiate(
       args.push(wireAt(cur, atomId, { kind: 'arg', index: i }))
     }
     cur = spliceSubgraphMapped(cur, atom.region, comp, [...args, ...attachments], {
-      binderMap: binders,
+      binderMap,
       reserved: reservation,
     }).diagram
     cur = dropNode(cur, atomId)

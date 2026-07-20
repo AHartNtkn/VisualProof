@@ -235,7 +235,7 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
         this.#bubble,
         materialized.relation,
         materialized.attachments,
-        new Map(),
+        [],
         this.#opts.orientation ?? 'forward',
       )
       return { kind: 'ready', code: 'ready', message: 'ready to instantiate' }
@@ -268,7 +268,7 @@ export class SubstituteTransaction implements RelationWorkspaceTransaction {
         bubble: this.#bubble,
         comp: materialized.relation,
         attachments: materialized.attachments,
-        binders: {},
+        binders: [],
       }],
       placements,
     }

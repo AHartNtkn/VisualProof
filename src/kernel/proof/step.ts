@@ -19,7 +19,7 @@ import { applyHeadStrip } from '../rules/headstrip'
 import { applyClosedTermIntro } from '../rules/intro'
 import { applyFusion, applyFission } from '../rules/fusion'
 import { applyComprehensionInstantiate, applyComprehensionAbstract } from '../rules/comprehension'
-import type { AbstractionOccurrence } from '../rules/comprehension'
+import type { AbstractionOccurrence, ComprehensionBinderPair } from '../rules/comprehension'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../rules/vacuous'
 import { applyRelUnfold, applyRelFold } from '../rules/reldef'
 import type { Theorem, TheoremApplication } from './theorem'
@@ -56,7 +56,7 @@ export type ProofStep =
   | { readonly rule: 'closedTermIntro'; readonly region: RegionId; readonly term: Term }
   | { readonly rule: 'fusion'; readonly wire: WireId }
   | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
-  | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary; readonly attachments: readonly WireId[]; readonly binders: Readonly<Record<RegionId, RegionId>> }
+  | { readonly rule: 'comprehensionInstantiate'; readonly bubble: RegionId; readonly comp: DiagramWithBoundary; readonly attachments: readonly WireId[]; readonly binders: readonly ComprehensionBinderPair[] }
   | { readonly rule: 'comprehensionAbstract'; readonly wrap: SubgraphSelection; readonly comp: DiagramWithBoundary; readonly occurrences: readonly AbstractionOccurrence[] }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
   | { readonly rule: 'vacuousIntro'; readonly sel: SubgraphSelection; readonly arity: number }
@@ -162,7 +162,7 @@ function applyStepRaw(
     case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term, reservation)
     case 'fusion': return applyFusion(d, step.wire)
     case 'fission': return applyFission(d, step.node, step.path, reservation)
-    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, new Map(Object.entries(step.binders)), orientation, reservation)
+    case 'comprehensionInstantiate': return applyComprehensionInstantiate(d, step.bubble, step.comp, step.attachments, step.binders, orientation, reservation)
     case 'comprehensionAbstract': return applyComprehensionAbstract(d, step.wrap, step.comp, step.occurrences, orientation, reservation)
     case 'theorem': {
       const thm = ctx.theorems.get(step.name)

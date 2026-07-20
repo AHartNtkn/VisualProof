@@ -528,7 +528,7 @@ export class ProofMoveController {
             this.#closeMenu()
             this.#options.openComprehension(bubble, this.#lastPointer)
           })
-          else row(choice.label, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#options.context(), choice.name), attachments: [], binders: {} }))
+          else row(choice.label, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#options.context(), choice.name), attachments: [], binders: [] }))
         }
         return
       }

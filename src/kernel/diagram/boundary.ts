@@ -14,14 +14,16 @@ export type DiagramWithBoundary = {
   readonly boundary: readonly WireId[]
 }
 
-/**
- * Validates existence only. Boundary wire SCOPE is enforced at
- * the consumption site: spliceSubgraph (subgraph/splice.ts) requires boundary
- * wires to be scoped at the pattern root and rejects others loudly.
- */
+/** Construct an intrinsically root-open diagram interface. */
 export function mkDiagramWithBoundary(diagram: Diagram, boundary: readonly WireId[]): DiagramWithBoundary {
   for (const w of boundary) {
-    if (diagram.wires[w] === undefined) throw new DiagramError(`boundary wire '${w}' does not exist`)
+    const wire = diagram.wires[w]
+    if (wire === undefined) throw new DiagramError(`boundary wire '${w}' does not exist`)
+    if (wire.scope !== diagram.root) {
+      throw new DiagramError(
+        `boundary wire '${w}' must be scoped at the diagram root '${diagram.root}', got '${wire.scope}'`,
+      )
+    }
   }
   return Object.freeze({ diagram, boundary: Object.freeze([...boundary]) })
 }

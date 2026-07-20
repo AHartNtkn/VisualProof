@@ -273,15 +273,12 @@ describe('adversarial ids (soundness and dedup under unconstrained id strings)',
     expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(6)
   })
 
-  it('rejects boundary stubs not scoped at the pattern root (silent never-match hole)', () => {
+  it('rejects boundary stubs not scoped at the pattern root before matching', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const n = b.termNode(cut, p('y'))
     const stub = b.wire(cut, [{ node: n, port: { kind: 'freeVar', name: 'y' } }]) // scoped INSIDE
-    const pattern = mkDiagramWithBoundary(b.build(), [stub])
-    const h = new DiagramBuilder()
-    const host = h.build()
-    expect(() => findOccurrences(host, pattern, { fuel: 100 }))
-      .toThrowError(/boundary wire 'w0' is not scoped at the pattern root/)
+    expect(() => mkDiagramWithBoundary(b.build(), [stub]))
+      .toThrowError(/boundary wire 'w0' must be scoped at the diagram root/)
   })
 })

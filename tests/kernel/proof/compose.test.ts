@@ -331,7 +331,7 @@ describe('composeActions', () => {
     const comp = mkDiagramWithBoundary(c.build(), [bx])
 
     const tail = [action('instantiate comprehension', [
-      { rule: 'comprehensionInstantiate', bubble: bInner, comp, attachments: [], binders: { [stub]: bOuter } },
+      { rule: 'comprehensionInstantiate', bubble: bInner, comp, attachments: [], binders: [[stub, bOuter]] },
     ])]
     const composed = composeActions(da, db, tail, ctx)
     const viaA = replayActions(da, composed, ctx)
@@ -372,7 +372,7 @@ describe('composeActions', () => {
     const comp = mkDiagramWithBoundary(c.build(), [wx, wq])
 
     const tail = [action('instantiate parameterized comprehension', [
-      { rule: 'comprehensionInstantiate', bubble: bBub, comp, attachments: [bParam], binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: bBub, comp, attachments: [bParam], binders: [] },
     ])]
     const composed = composeActions(da, db, tail, ctx)
     const viaA = replayActions(da, composed, ctx)
@@ -495,18 +495,34 @@ describe('mapStepIds', () => {
     const bw = b.wire(b.root, [{ node: bn, port: { kind: 'output' } }])
     const pat = mkDiagramWithBoundary(b.build(), [bw])
     const iso: DiagramIso = {
-      regions: new Map([['r1', 'R1']]),
+      regions: new Map([['r1', 'R1'], ['r2', 'R2'], ['r3', 'R3']]),
       nodes: new Map(),
       wires: new Map([['w0', 'W0'], ['w1', 'W1']]),
     }
     expect(mapStepIds(
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w1', 'w0'], binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['w1', 'w0'], binders: [] },
       iso,
-    )).toEqual({ rule: 'comprehensionInstantiate', bubble: 'R1', comp: pat, attachments: ['W1', 'W0'], binders: {} })
+    )).toEqual({ rule: 'comprehensionInstantiate', bubble: 'R1', comp: pat, attachments: ['W1', 'W0'], binders: [] })
     expect(() => mapStepIds(
-      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['missing'], binders: {} },
+      { rule: 'comprehensionInstantiate', bubble: 'r1', comp: pat, attachments: ['missing'], binders: [] },
       iso,
     )).toThrowError(/cannot map wire 'missing'/)
+    expect(mapStepIds(
+      {
+        rule: 'comprehensionInstantiate',
+        bubble: 'r1',
+        comp: pat,
+        attachments: [],
+        binders: [['10', 'r2'], ['2', 'r3']],
+      },
+      iso,
+    )).toEqual({
+      rule: 'comprehensionInstantiate',
+      bubble: 'R1',
+      comp: pat,
+      attachments: [],
+      binders: [['10', 'R2'], ['2', 'R3']],
+    })
   })
 
   it('remaps BOTH node ids of a headStrip step through the iso', () => {

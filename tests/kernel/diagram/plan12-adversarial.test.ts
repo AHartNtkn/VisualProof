@@ -189,11 +189,8 @@ describe('bare boundary seeded matching — scope gates', () => {
     const b = new DiagramBuilder()
     const c = b.cut(b.root)
     const bw = b.wire(c, []) // bare, but scoped below the root
-    const pattern = mkDiagramWithBoundary(b.build(), [bw])
-    const hb = new DiagramBuilder()
-    const hn = hb.termNode(hb.root, p('\\x. x'))
-    const hw = hb.wire(hb.root, [{ node: hn, port: { kind: 'output' } }])
-    expect(() => findOccurrences(hb.build(), pattern, { fuel: 50, attachments: [hw] })).toThrow(/not scoped at the pattern root/)
+    expect(() => mkDiagramWithBoundary(b.build(), [bw]))
+      .toThrow(/must be scoped at the diagram root/)
   })
 })
 

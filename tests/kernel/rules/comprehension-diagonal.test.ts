@@ -345,7 +345,7 @@ describe('diagonal comprehension: instantiation and the inverse round-trip', () 
         bubble: bub,
         comp,
         attachments: [],
-        binders: {},
+        binders: [],
       })],
     }
     const theory: Theory = { relations: {}, theorems: [thm] }

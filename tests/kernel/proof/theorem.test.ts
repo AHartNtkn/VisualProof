@@ -95,7 +95,7 @@ describe('checkTheorem', () => {
       .toThrowError(/does not arrive at the stated right-hand side/)
   })
 
-  it('rejects arity mismatches and non-root boundary stubs, by name', () => {
+  it('rejects arity mismatches and cannot construct non-root theorem boundaries', () => {
     const t = dropQ()
     const bad: Theorem = { ...t, rhs: mkDiagramWithBoundary(t.rhs.diagram, []) }
     expect(() => checkTheorem(bad, ctx)).toThrowError(/boundary arity mismatch/)
@@ -104,8 +104,8 @@ describe('checkTheorem', () => {
     const cut = n.cut(n.root)
     const nn = n.termNode(cut, p('\\a. a'))
     const nw = n.wire(cut, [{ node: nn, port: { kind: 'output' } }])
-    const nonRoot: Theorem = { ...t, lhs: mkDiagramWithBoundary(n.build(), [nw]), actions: [] }
-    expect(() => checkTheorem(nonRoot, ctx)).toThrowError(/not scoped at the diagram root/)
+    expect(() => mkDiagramWithBoundary(n.build(), [nw]))
+      .toThrowError(/must be scoped at the diagram root/)
   })
 
   it('rejects proofs that destroy a boundary wire', () => {

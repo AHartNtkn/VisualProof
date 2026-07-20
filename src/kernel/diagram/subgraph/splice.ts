@@ -50,10 +50,9 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
  * pushout of the two interfaces, not repeated copying of the same endpoints.
  * The quotient keeps the outermost attachment scope and a deterministic
  * survivor id, then copies each boundary stub's endpoints exactly once.
- * Boundary stubs MUST be scoped
- * at the pattern root (the connection seam's quantifier location after the
- * splice IS the attachment wire's scope — a non-root stub scope would assert
- * a location the splice cannot honor; see boundary.ts). Pattern content gets
+ * Boundary stubs are intrinsically scoped at the pattern root by
+ * DiagramWithBoundary construction. The assertion below is defensive: the
+ * connection seam cannot honor any other scope. Pattern content gets
  * fresh host ids deterministically; the result is re-validated by mkDiagram.
  *
  * With a binder map, mapped stubs are location-transparent layers (not copied
@@ -78,7 +77,7 @@ export function spliceSubgraphMapped(
   const boundarySet = new Set(pattern.boundary)
   for (const b of pattern.boundary) {
     if (pd.wires[b]!.scope !== pd.root) {
-      throw new DiagramError(`boundary wire '${b}' is not scoped at the pattern root; not spliceable`)
+      throw new DiagramError(`invalid DiagramWithBoundary: boundary wire '${b}' is not scoped at the pattern root`)
     }
   }
   for (const a of attachments) {
@@ -112,7 +111,12 @@ export function spliceSubgraphMapped(
     }
   })
 
+  const binderTargets = new Set<RegionId>()
   for (const [stub, hb] of binderMap) {
+    if (binderTargets.has(hb)) {
+      throw new DiagramError(`binder map target '${hb}' is used by more than one stub`)
+    }
+    binderTargets.add(hb)
     const ps = pd.regions[stub]
     if (ps === undefined) throw new DiagramError(`binder map stub '${stub}' is not a pattern region`)
     if (ps.kind !== 'bubble') throw new DiagramError(`binder map stub '${stub}' is not a bubble`)

@@ -202,7 +202,7 @@ describe('substitution transaction', () => {
     expect(actions).toEqual([{
       label: 'substitute relation',
       steps: [expect.objectContaining({
-        rule: 'comprehensionInstantiate', bubble: 'bubble', attachments: ['h1'], binders: {},
+        rule: 'comprehensionInstantiate', bubble: 'bubble', attachments: ['h1'], binders: [],
       })],
       placements: [],
     }])

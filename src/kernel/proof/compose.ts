@@ -123,8 +123,8 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
     case 'fission':
       return { ...step, node: mapId(iso.nodes, step.node, 'node') }
     case 'comprehensionInstantiate': {
-      const binders: Record<string, string> = {}
-      for (const [stub, hb] of Object.entries(step.binders)) binders[stub] = mapId(iso.regions, hb, 'region')
+      const binders = step.binders.map(([stub, host]) =>
+        [stub, mapId(iso.regions, host, 'region')] as const)
       return {
         ...step,
         bubble: mapId(iso.regions, step.bubble, 'region'),

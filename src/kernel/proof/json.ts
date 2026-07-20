@@ -274,7 +274,13 @@ export function stepToJson(s: ProofStep): unknown {
     case 'fission':
       return { rule: s.rule, node: s.node, path: [...s.path] }
     case 'comprehensionInstantiate':
-      return { rule: s.rule, bubble: s.bubble, comp: dwbToJson(s.comp), attachments: [...s.attachments], binders: { ...s.binders } }
+      return {
+        rule: s.rule,
+        bubble: s.bubble,
+        comp: dwbToJson(s.comp),
+        attachments: [...s.attachments],
+        binders: s.binders.map(([pattern, host]) => [pattern, host]),
+      }
     case 'comprehensionAbstract':
       return { rule: s.rule, wrap: selToJson(s.wrap), comp: dwbToJson(s.comp), occurrences: s.occurrences.map(occToJson) }
     case 'theorem':
@@ -379,9 +385,22 @@ export function stepFromJson(j: unknown): ProofStep {
       return { rule, node: str(j.node, 'node'), path: pathFromJson(j.path, 'path') }
     case 'comprehensionInstantiate': {
       assertOnlyKeys(j, ['rule', 'bubble', 'comp', 'attachments', 'binders'], 'comprehensionInstantiate step')
-      if (!isRecord(j.binders)) fail('binders must be an object')
-      const binders: Record<string, string> = {}
-      for (const [k, v] of Object.entries(j.binders)) binders[k] = str(v, `binders['${k}']`)
+      if (!Array.isArray(j.binders)) fail('binders must be an array')
+      const binders: Array<readonly [string, string]> = []
+      const patterns = new Set<string>()
+      const targets = new Set<string>()
+      for (const [index, entry] of j.binders.entries()) {
+        if (!Array.isArray(entry) || entry.length !== 2) {
+          fail(`binders[${index}] must be a [pattern, host] pair`)
+        }
+        const pattern = str(entry[0], `binders[${index}][0]`)
+        const host = str(entry[1], `binders[${index}][1]`)
+        if (patterns.has(pattern)) fail(`binders repeats pattern id '${pattern}'`)
+        if (targets.has(host)) fail(`binders repeats host target '${host}'`)
+        patterns.add(pattern)
+        targets.add(host)
+        binders.push([pattern, host])
+      }
       return { rule, bubble: str(j.bubble, 'bubble'), comp: dwbFromJson(j.comp, 'comp'), attachments: strArray(j.attachments, 'attachments'), binders }
     }
     case 'comprehensionAbstract': {
