@@ -2,6 +2,7 @@ import VisualProof.Rule.Soundness
 import VisualProof.Rule.Comprehension.Semantics
 import VisualProof.Diagram.Concrete.Elaboration.Simulation
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalAllowedRoot
+import VisualProof.Rule.Soundness.Comprehension.AbstractionRoot
 
 namespace VisualProof.Rule
 
@@ -1025,7 +1026,85 @@ theorem applyComprehensionAbstract_sound
     SuccessfulReceiptSound context orientation input
       (.comprehensionAbstract wrap comprehension occurrences payload)
       receipt := by
-  sorry
+  obtain ⟨polarity, raw, hraw, realizes⟩ :=
+    applyComprehensionAbstract_realizes happly
+  let trace := Classical.choice (comprehensionAbstractRaw?_trace hraw)
+  have rawWellFormed : raw.WellFormed signature :=
+    realizes.result_eq ▸ receipt.result.property
+  have targetWellFormed : trace.diagram.WellFormed signature :=
+    Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+      trace.raw_eq_diagram) rawWellFormed
+  let operational := fun
+      (boundary : List (Fin input.val.wireCount))
+      (sourceRoot : ∀ wire, wire ∈ boundary →
+        (input.val.wires wire).scope = input.val.root)
+      (mapped : List (Fin receipt.result.val.wireCount))
+      (htransport : receipt.interface.transportBoundary boundary =
+        some mapped) =>
+    let rawMapped := realizes.targetBoundary mapped
+    let expected := realizes.transportBoundary_expected htransport
+    (⟨trace.targetOpen hraw boundary rawMapped expected,
+      trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
+        sourceRoot rawMapped expected⟩ : CheckedOpenDiagram signature)
+  let operationalIso := fun
+      (boundary : List (Fin input.val.wireCount))
+      (_sourceRoot : ∀ wire, wire ∈ boundary →
+        (input.val.wires wire).scope = input.val.root)
+      (mapped : List (Fin receipt.result.val.wireCount))
+      (htransport : receipt.interface.transportBoundary boundary =
+        some mapped) => by
+    let rawMapped := realizes.targetBoundary mapped
+    let expected := realizes.transportBoundary_expected htransport
+    exact (trace.targetOpenIsoRaw hraw boundary rawMapped expected).trans
+      (realizes.operationalIso_to_rawResultOpen htransport rawMapped expected)
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := operational) (operationalIso := operationalIso)
+  intro boundary sourceRoot mapped htransport valid args
+  let source : OpenProofState signature := {
+    diagram := input
+    boundary := boundary
+    boundary_root_scoped := sourceRoot
+  }
+  let rawMapped := realizes.targetBoundary mapped
+  have expected :
+      (comprehensionAbstractInterfaceTransport input wrap comprehension
+        occurrences raw hraw).transportBoundary boundary = some rawMapped :=
+    realizes.transportBoundary_expected htransport
+  let direction : ConcreteElaboration.SimulationDirection :=
+    match orientation with
+    | .forward => .forward
+    | .backward => .backward
+  have allowedDepth : AbstractionRawTrace.AbstractionDepthAllowed direction
+      (concreteCutDepth input.val wrap.val.anchor) := by
+    cases orientation <;>
+      simpa [direction, AbstractionRawTrace.AbstractionDepthAllowed,
+        erasurePolarity] using polarity
+  have allowed : AbstractionRawTrace.AbstractionAllowed input.val
+      wrap.val.anchor direction input.val.root :=
+    AbstractionRawTrace.allowed_root input wrap.val.anchor direction allowedDepth
+  have semantic := trace.open_denote payload targetWellFormed hraw boundary
+    sourceRoot rawMapped expected direction allowed Lambda.canonicalModel
+    (Theory.interpretDefinitions context.definitions) args
+  let iso := operationalIso boundary sourceRoot mapped htransport
+  have operationalArgsEq :
+      args ∘ Fin.cast (iso.boundary_length_eq.trans
+        ((realizes.rawResultOpen_boundary_length mapped).trans
+          (receipt.interface.transportBoundary_length htransport))) =
+        args ∘ Fin.cast
+          (trace.targetBoundary_length hraw boundary rawMapped expected) := by
+    funext position
+    apply congrArg args
+    apply Fin.ext
+    rfl
+  cases orientation with
+  | forward =>
+      simpa [DirectedEntailment, DirectedImplication, source,
+        OpenProofState.denote, operational, direction, operationalArgsEq]
+        using semantic
+  | backward =>
+      simpa [DirectedEntailment, DirectedImplication, source,
+        OpenProofState.denote, operational, direction, operationalArgsEq]
+        using semantic
 
 /-- Every successful registered-theorem replacement receipt is sound. -/
 theorem applyTheorem_sound
