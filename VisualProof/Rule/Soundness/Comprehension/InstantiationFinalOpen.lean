@@ -65,7 +65,6 @@ theorem finalSourceOpen_exposedWires
       fuel (initialInstantiationState payload) result)
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount)) :
     (copyTrace.finalSourceOpen elimTrace boundary).exposedWires =
       (finalTargetOpen input boundary).exposedWires.map
@@ -81,14 +80,13 @@ def finalOuterContextWitness
       fuel (initialInstantiationState payload) result)
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount)) :
     FinalContextWitness copyTrace elimTrace
       (copyTrace.finalSourceOpen elimTrace boundary).exposedWires
       (finalTargetOpen input boundary).exposedWires := by
   refine ⟨?_⟩
   intro wire member
-  rw [copyTrace.finalSourceOpen_exposedWires elimTrace boundaryNodup boundary]
+  rw [copyTrace.finalSourceOpen_exposedWires elimTrace boundary]
   exact List.mem_map.mpr ⟨wire, member, rfl⟩
 
 theorem finalBoundaryLengthEq
@@ -106,21 +104,18 @@ theorem finalOuter_sourceIndex_boundaryClass
       fuel (initialInstantiationState payload) result)
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount))
     (position : Fin (finalTargetOpen input boundary).boundary.length) :
     let source := copyTrace.finalSourceOpen elimTrace boundary
     let target := finalTargetOpen input boundary
-    let outer := copyTrace.finalOuterContextWitness elimTrace boundaryNodup
-      boundary
+    let outer := copyTrace.finalOuterContextWitness elimTrace boundary
     outer.sourceIndex (target.boundaryClass position) =
       source.boundaryClass (Fin.cast
         (copyTrace.finalBoundaryLengthEq elimTrace boundary).symm position) := by
   dsimp only
   let source := copyTrace.finalSourceOpen elimTrace boundary
   let target := finalTargetOpen input boundary
-  let outer := copyTrace.finalOuterContextWitness elimTrace boundaryNodup
-    boundary
+  let outer := copyTrace.finalOuterContextWitness elimTrace boundary
   symm
   apply ConcreteElaboration.WireContext.lookup?_unique source.exposedWires_nodup
     (outer.sourceIndex_lookup (target.boundaryClass position))
@@ -155,7 +150,6 @@ theorem finalSourceOpen_wellFormed
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
@@ -180,7 +174,6 @@ def finalRootContextWitness
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
@@ -191,7 +184,7 @@ def finalRootContextWitness
   let source : CheckedOpenDiagram signature :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-        finalWellFormed boundaryNodup boundary boundaryRoot⟩
+        finalWellFormed boundary boundaryRoot⟩
   let target : CheckedOpenDiagram signature :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
