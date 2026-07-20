@@ -982,7 +982,122 @@ theorem applyComprehensionInstantiate_sound
     SuccessfulReceiptSound context orientation input
       (.comprehensionInstantiate bubble comprehension attachments binders
         payload) receipt := by
-  sorry
+  obtain ⟨polarity, copied, hcopy, raw, hraw, checked, hcheck, receiptEq,
+      realizes⟩ := applyComprehensionInstantiate_realizes happly
+  let initial := initialInstantiationState payload
+  let copyTrace := instantiateCopiesSuccessTrace comprehension attachments binders
+    payload initial.pendingAtoms.length initial copied hcopy
+  let elimTrace := vacuousElimTrace hraw
+  have finalWellFormed :
+      (dropInstantiationAtomsRaw copied).WellFormed signature :=
+    InstantiationDrop.raw_wellFormed copied
+  have rawWellFormed : raw.WellFormed signature := by
+    exact realizes.result_eq ▸ receipt.result.property
+  have sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature := by
+    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+      elimTrace.promotion.raw_eq_diagram) rawWellFormed
+  let expectedInterface :=
+    (copied.interface.compose
+      (InterfaceTransport.byWireCount copied.diagram.val
+        (dropInstantiationAtomsRaw copied) rfl)).compose
+      (vacuousElimInterfaceTransport hraw)
+  let operationalOpen := fun
+      (boundary : List (Fin input.val.wireCount))
+      (sourceRoot : ∀ wire, wire ∈ boundary →
+        (input.val.wires wire).scope = input.val.root)
+      (_mapped : List (Fin receipt.result.val.wireCount))
+      (_htransport : receipt.interface.transportBoundary boundary =
+        some _mapped) =>
+    (⟨copyTrace.finalSourceOpen elimTrace boundary,
+      copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
+        finalWellFormed boundary sourceRoot⟩ : CheckedOpenDiagram signature)
+  let operationalIso := fun
+      (boundary : List (Fin input.val.wireCount))
+      (sourceRoot : ∀ wire, wire ∈ boundary →
+        (input.val.wires wire).scope = input.val.root)
+      (mapped : List (Fin receipt.result.val.wireCount))
+      (htransport : receipt.interface.transportBoundary boundary =
+        some mapped) => by
+    let rawBoundary := boundary.map fun wire =>
+      Fin.cast (vacuousElimRaw?_wireCount hraw).symm
+        (copyTrace.wireMap wire)
+    let rawOpen : OpenConcreteDiagram := {
+      diagram := raw
+      boundary := rawBoundary
+    }
+    let toRaw : OpenConcreteIso
+        (copyTrace.finalSourceOpen elimTrace boundary) rawOpen := {
+      diagram := VacuousElimTrace.concreteIsoOfEq
+        elimTrace.promotion.raw_eq_diagram.symm
+      boundary := by
+        simp only [InstantiationTrace.finalSourceOpen,
+          rawOpen, rawBoundary, List.map_map]
+        apply List.map_congr_left
+        intro wire member
+        apply Fin.ext
+        calc
+          ((VacuousElimTrace.concreteIsoOfEq
+              elimTrace.promotion.raw_eq_diagram.symm).wires
+                (copyTrace.finalWireMap elimTrace wire)).val =
+              (copyTrace.finalWireMap elimTrace wire).val :=
+            VacuousElimTrace.concreteIsoOfEq_wires_val
+              elimTrace.promotion.raw_eq_diagram.symm _
+          _ = (Fin.cast (vacuousElimRaw?_wireCount hraw).symm
+                (copyTrace.wireMap wire)).val := rfl
+    }
+    have expectedBoundary :
+        expectedInterface.transportBoundary boundary = some rawBoundary := by
+      exact copyTrace.finalInterface_transportBoundary_eq_map hraw
+        finalWellFormed boundary sourceRoot
+    exact toRaw.trans
+      (realizes.operationalIso_to_rawResultOpen htransport rawBoundary
+        expectedBoundary)
+  apply SuccessfulReceiptSound.of_realized_operational realizes
+    (operational := operationalOpen) (operationalIso := operationalIso)
+  intro boundary sourceRoot mapped htransport valid args
+  let source : OpenProofState signature := {
+    diagram := input
+    boundary := boundary
+    boundary_root_scoped := sourceRoot
+  }
+  let direction : ConcreteElaboration.SimulationDirection :=
+    match orientation with
+    | .forward => .backward
+    | .backward => .forward
+  have allowedDepth : InstantiationTrace.FinalDepthAllowed direction
+      (concreteCutDepth input.val bubble) := by
+    cases orientation <;>
+      simpa [direction, InstantiationTrace.FinalDepthAllowed, spawnPolarity]
+        using polarity
+  have allowed : InstantiationTrace.FinalAllowed elimTrace.sourceDiagram
+      (elimTrace.targetIndex finalWellFormed) direction
+      elimTrace.sourceDiagram.root := by
+    exact copyTrace.finalAllowed_root elimTrace sourceWellFormed
+      finalWellFormed direction allowedDepth
+  have semantic := copyTrace.finalOpen_denote elimTrace sourceWellFormed
+    finalWellFormed boundary sourceRoot direction allowed
+    Lambda.canonicalModel
+    (Theory.interpretDefinitions context.definitions) args
+  let iso := operationalIso boundary sourceRoot mapped htransport
+  have operationalArgsEq :
+      args ∘ Fin.cast (iso.boundary_length_eq.trans
+        ((realizes.rawResultOpen_boundary_length mapped).trans
+          (receipt.interface.transportBoundary_length htransport))) =
+        args ∘ Fin.cast
+          (copyTrace.finalBoundaryLengthEq elimTrace boundary) := by
+    funext position
+    apply congrArg args
+    apply Fin.ext
+    rfl
+  cases orientation with
+  | forward =>
+      simpa [DirectedEntailment, DirectedImplication, source,
+        OpenProofState.denote, operationalOpen, direction, operationalArgsEq]
+        using semantic
+  | backward =>
+      simpa [DirectedEntailment, DirectedImplication, source,
+        OpenProofState.denote, operationalOpen, direction, operationalArgsEq]
+        using semantic
 
 /- Superseded proof retained temporarily for reference while the stronger
 attachment-sensitive executor contract is implemented.
