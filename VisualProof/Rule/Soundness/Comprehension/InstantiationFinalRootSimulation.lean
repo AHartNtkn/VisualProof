@@ -345,7 +345,7 @@ theorem finalBoundaryWitness
   let lengthEq := copyTrace.finalBoundaryLengthEq elimTrace boundary
   have sourceExposedNodup := source.val.exposedWires_nodup
   have targetExposedNodup := target.val.exposedWires_nodup
-  have wireInjective := copyTrace.finalWireMap_injective elimTrace boundaryNodup
+  have wireInjective := copyTrace.finalWireMap_injective elimTrace
   unfold
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
   cases direction with
