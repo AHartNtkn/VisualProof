@@ -1871,10 +1871,6 @@ theorem applyRelUnfold_sound
     SuccessfulReceiptSound context orientation input
       (.relUnfold node definition payload body_eq)
       receipt := by
-  sorry
-
-/- Superseded discrete-reference proof retained while the strengthened wired
-reference theorem is reconstructed.
   let sameArity :=
     relUnfold_body_arity context definition payload body_eq
   have happly' :
@@ -1944,7 +1940,7 @@ reference theorem is reconstructed.
       payload.occurrence.ReplacementQuotientsLocal decomposition replacement
         materializedArity := by
     exact materialized.local
-  let source := namedReferencePattern signature definition
+  let source := wiredNamedReferencePattern signature definition payload.wiring
   apply pinnedReplacementReceipt_sound context orientation input
     payload.selection source payload.args payload.occurrence decomposition
     replacement materializedArity locality
@@ -1978,7 +1974,8 @@ reference theorem is reconstructed.
         (context.definitionEntry definition).body.val.boundary.length =
           source.val.boundary.length :=
       (context.definitionEntry definition).body_arity.trans
-        (namedReferencePattern_boundary_length signature definition).symm
+        (wiredNamedReferencePattern_boundary_length signature definition
+          payload.wiring).symm
     let entryArgs :=
       namedArgs ∘ Fin.cast entryNamedEq
     have sourceArgsEq :
@@ -1986,20 +1983,22 @@ reference theorem is reconstructed.
             Fin.cast
               (context.definitionEntry definition).body_arity.symm) ∘
           Fin.cast
-            (namedReferencePattern_boundary_length signature definition)) =
+            (wiredNamedReferencePattern_boundary_length signature definition
+              payload.wiring)) =
           namedArgs := by
       funext position
       apply congrArg namedArgs
       apply Fin.ext
       rfl
     have namedDenotes :=
-      (namedReferencePattern_denote_entry
-        (context.definitionEntry definition) Lambda.canonicalModel
+      (wiredNamedReferencePattern_denote_entry
+        (context.definitionEntry definition) payload.wiring
+        Lambda.canonicalModel
         (Theory.interpretDefinitions context.definitions) entryArgs).mp (by
           simpa [source, sourceArgsEq] using sourcePatternDenotes)
     have entryDenotes :=
       (relUnfold_equiv context.definitions definition entryArgs).mp
-        namedDenotes
+        namedDenotes.2
     let bodyIso : Diagram.OpenConcreteIso payload.body.val
         (context.definitionEntry definition).body.val :=
       Diagram.OpenConcreteIso.ofEq body_eq
@@ -2032,14 +2031,21 @@ reference theorem is reconstructed.
       apply Fin.ext
       rfl
     simpa [replacement, bodyArgsEq] using materializedDenotes
-  have localBackward : ∀ targetArgs,
-      replacement.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) targetArgs →
-        (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
-          (targetArgs ∘ Fin.cast presentation.boundary_arity_eq) := by
-    intro targetArgs targetDenotes
+  have localBackward : presentation.AttachmentLocalLaw .backward
+      Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions) := by
+    intro targetValues targetDenotes
+    let targetInput :=
+      payload.occurrence.replacementInput decomposition replacement
+        materializedArity
+    let targetArgs := fun position =>
+      targetValues (targetInput.quotientWire (targetInput.attachment position))
+    change replacement.denote Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions) targetArgs at targetDenotes
+    change (payload.occurrence.reassemblyInput decomposition).pattern.denote
+      Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions)
+      (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)
     let bodyArgs :=
       targetArgs ∘ Fin.cast materialized.certificate.boundary_length.symm
     have materializedArgsEq :
@@ -2073,10 +2079,38 @@ reference theorem is reconstructed.
       (relUnfold_equiv context.definitions definition entryArgs).mpr
         entryDenotes
     have sourcePatternDenotes :=
-      (namedReferencePattern_denote_entry
-        (context.definitionEntry definition) Lambda.canonicalModel
+      (wiredNamedReferencePattern_denote_entry
+        (context.definitionEntry definition) payload.wiring
+        Lambda.canonicalModel
         (Theory.interpretDefinitions context.definitions) entryArgs).mpr
-        namedDenotes
+        ⟨by
+          intro left right hwiring
+          have hboundary :
+              (wiredNamedReferencePattern signature definition
+                  payload.wiring).val.boundary.get
+                    (Fin.cast
+                      (wiredNamedReferencePattern_boundary_length signature
+                        definition payload.wiring).symm left) =
+                (wiredNamedReferencePattern signature definition
+                  payload.wiring).val.boundary.get
+                    (Fin.cast
+                      (wiredNamedReferencePattern_boundary_length signature
+                        definition payload.wiring).symm right) := by
+            simpa [wiredNamedReferencePattern,
+              wiredNamedReferencePatternRaw] using hwiring
+          have hpositions :=
+            payload.occurrence.position_eq_of_pattern_boundary_eq
+              decomposition hboundary
+          dsimp only [entryArgs, bodyArgs, targetArgs, Function.comp_apply]
+          apply congrArg targetValues
+          apply congrArg targetInput.quotientWire
+          dsimp only [targetInput, PinnedOccurrence.replacementInput,
+            PinnedOccurrence.replacementAttachment]
+          apply congrArg
+            (Splice.Decomposition.originalFragmentInput decomposition).attachment
+          apply Fin.ext
+          simpa using congrArg Fin.val hpositions,
+          namedDenotes⟩
     let sourceIso :=
       payload.occurrence.reassemblyPatternIso decomposition
     let sourceArgs :=
@@ -2084,7 +2118,8 @@ reference theorem is reconstructed.
           Fin.cast
             (context.definitionEntry definition).body_arity.symm) ∘
         Fin.cast
-          (namedReferencePattern_boundary_length signature definition)) ∘
+          (wiredNamedReferencePattern_boundary_length signature definition
+            payload.wiring)) ∘
         Fin.cast sourceIso.boundary_length_eq)
     have sourceTargetArgsEq :
         sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm =
@@ -2092,14 +2127,16 @@ reference theorem is reconstructed.
               Fin.cast
                 (context.definitionEntry definition).body_arity.symm) ∘
             Fin.cast
-              (namedReferencePattern_boundary_length signature definition)) := by
+              (wiredNamedReferencePattern_boundary_length signature definition
+                payload.wiring)) := by
       funext position
       apply congrArg
         ((entryArgs ∘
             Fin.cast
               (context.definitionEntry definition).body_arity.symm) ∘
           Fin.cast
-            (namedReferencePattern_boundary_length signature definition))
+            (wiredNamedReferencePattern_boundary_length signature definition
+              payload.wiring))
       apply Fin.ext
       rfl
     have sourceDenotes :
@@ -2108,7 +2145,7 @@ reference theorem is reconstructed.
           (Theory.interpretDefinitions context.definitions) sourceArgs :=
       (sourceIso.denote_iff
         (payload.occurrence.reassemblyPattern decomposition).property
-        (namedReferencePattern signature definition).property
+        (wiredNamedReferencePattern signature definition payload.wiring).property
         Lambda.canonicalModel
         (Theory.interpretDefinitions context.definitions) sourceArgs).mpr (by
           simpa [sourceTargetArgsEq] using sourcePatternDenotes)
@@ -2121,192 +2158,16 @@ reference theorem is reconstructed.
       rfl
     simpa [sourceArgsEq] using sourceDenotes
   have equivalence :=
+    let localForward' :=
+      Diagram.Splice.Input.TwoInputPresentation.LocalLaw.toAttachmentLocalLaw
+        presentation .forward Lambda.canonicalModel
+        (Theory.interpretDefinitions context.definitions) localForward
     equivalentPinnedReplacement_compiled context input payload.selection
       source payload.args payload.occurrence decomposition replacement
       materializedArity locality sourceSplice targetSplice' frameBoundary
-      frameRoot localForward localBackward proofArgs
+      frameRoot localForward' localBackward proofArgs
   simpa [DirectedEntailment, Step.tag, StepTag.semanticMode] using equivalence
--/
 
-/- Superseded proof retained temporarily for reference while the stronger
-attachment-sensitive executor contract is implemented.
-  let sameArity :=
-    relUnfold_body_arity context definition payload body_eq
-  have happly' :
-      applyRelUnfold input node definition payload sameArity =
-        .ok receipt := by
-    simpa [sameArity] using happly
-  obtain ⟨decomposition, hdecomposition, locality, targetResult,
-      targetSplice, realizes⟩ := applyRelUnfold_realizes happly'
-  let source := namedReferencePattern signature definition
-  apply pinnedReplacementReceipt_sound context orientation input
-    payload.selection source payload.args payload.occurrence decomposition
-    payload.body sameArity locality
-    (.relUnfold node definition payload body_eq) receipt targetResult
-    targetSplice realizes
-  intro sourceResult sourceSplice frameBoundary frameRoot proofArgs
-  have localForward : ∀ sourceArgs,
-      (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) sourceArgs →
-        payload.body.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
-          (sourceArgs ∘ Fin.cast
-            (payload.occurrence.reassemblyTwoInputPresentation decomposition
-              payload.body sameArity locality).boundary_arity_eq.symm) := by
-    intro sourceArgs sourceDenotes
-    let sourceIso :=
-      payload.occurrence.reassemblyPatternIso decomposition
-    let namedArgs :=
-      sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm
-    have sourcePatternDenotes :
-        source.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) namedArgs :=
-      (sourceIso.denote_iff
-        (payload.occurrence.reassemblyPattern decomposition).property
-        source.property Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions) sourceArgs).mp
-        sourceDenotes
-    let entryNamedEq :
-        (context.definitionEntry definition).body.val.boundary.length =
-          source.val.boundary.length :=
-      (context.definitionEntry definition).body_arity.trans
-        (namedReferencePattern_boundary_length signature definition).symm
-    let entryArgs :=
-      namedArgs ∘ Fin.cast entryNamedEq
-    have sourceArgsEq :
-        ((entryArgs ∘
-            Fin.cast
-              (context.definitionEntry definition).body_arity.symm) ∘
-          Fin.cast
-            (namedReferencePattern_boundary_length signature definition)) =
-          namedArgs := by
-      funext position
-      apply congrArg namedArgs
-      apply Fin.ext
-      rfl
-    have namedDenotes :=
-      (namedReferencePattern_denote_entry
-        (context.definitionEntry definition) Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions) entryArgs).mp (by
-          simpa [source, sourceArgsEq] using sourcePatternDenotes)
-    have entryDenotes :=
-      (relUnfold_equiv context.definitions definition entryArgs).mp
-        namedDenotes
-    let bodyIso : Diagram.OpenConcreteIso payload.body.val
-        (context.definitionEntry definition).body.val :=
-      Diagram.OpenConcreteIso.ofEq body_eq
-    let bodyArgs :=
-      entryArgs ∘ Fin.cast bodyIso.boundary_length_eq
-    have entryArgsEq :
-        bodyArgs ∘ Fin.cast bodyIso.boundary_length_eq.symm =
-          entryArgs := by
-      funext position
-      apply congrArg entryArgs
-      apply Fin.ext
-      rfl
-    have bodyDenotes :
-        payload.body.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) bodyArgs :=
-      (bodyIso.denote_iff payload.body.property
-        (context.definitionEntry definition).body.property
-        Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions) bodyArgs).mpr (by
-          simpa [entryArgsEq] using entryDenotes)
-    have bodyArgsEq :
-        bodyArgs =
-          sourceArgs ∘ Fin.cast
-            (payload.occurrence.reassemblyTwoInputPresentation decomposition
-              payload.body sameArity locality).boundary_arity_eq.symm := by
-      funext position
-      apply congrArg sourceArgs
-      apply Fin.ext
-      rfl
-    simpa [bodyArgsEq] using bodyDenotes
-  have localBackward : ∀ targetArgs,
-      payload.body.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) targetArgs →
-        (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
-          (targetArgs ∘ Fin.cast
-            (payload.occurrence.reassemblyTwoInputPresentation decomposition
-              payload.body sameArity locality).boundary_arity_eq) := by
-    intro targetArgs targetDenotes
-    let bodyIso : Diagram.OpenConcreteIso payload.body.val
-        (context.definitionEntry definition).body.val :=
-      Diagram.OpenConcreteIso.ofEq body_eq
-    let entryArgs :=
-      targetArgs ∘ Fin.cast bodyIso.boundary_length_eq.symm
-    have entryDenotes :
-        (context.definitionEntry definition).body.denote
-          Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) entryArgs :=
-      (bodyIso.denote_iff payload.body.property
-        (context.definitionEntry definition).body.property
-        Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions) targetArgs).mp
-        targetDenotes
-    have namedDenotes :=
-      (relUnfold_equiv context.definitions definition entryArgs).mpr
-        entryDenotes
-    have sourcePatternDenotes :=
-      (namedReferencePattern_denote_entry
-        (context.definitionEntry definition) Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions) entryArgs).mpr
-        namedDenotes
-    let sourceIso :=
-      payload.occurrence.reassemblyPatternIso decomposition
-    let sourceArgs :=
-      (((entryArgs ∘
-          Fin.cast
-            (context.definitionEntry definition).body_arity.symm) ∘
-        Fin.cast
-          (namedReferencePattern_boundary_length signature definition)) ∘
-        Fin.cast sourceIso.boundary_length_eq)
-    have sourceTargetArgsEq :
-        sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm =
-          ((entryArgs ∘
-              Fin.cast
-                (context.definitionEntry definition).body_arity.symm) ∘
-            Fin.cast
-              (namedReferencePattern_boundary_length signature definition)) := by
-      funext position
-      apply congrArg
-        ((entryArgs ∘
-            Fin.cast
-              (context.definitionEntry definition).body_arity.symm) ∘
-          Fin.cast
-            (namedReferencePattern_boundary_length signature definition))
-      apply Fin.ext
-      rfl
-    have sourceDenotes :
-        (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) sourceArgs :=
-      (sourceIso.denote_iff
-        (payload.occurrence.reassemblyPattern decomposition).property
-        (namedReferencePattern signature definition).property
-        Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions) sourceArgs).mpr (by
-          simpa [sourceTargetArgsEq] using sourcePatternDenotes)
-    have sourceArgsEq :
-        sourceArgs =
-          targetArgs ∘ Fin.cast
-            (payload.occurrence.reassemblyTwoInputPresentation decomposition
-              payload.body sameArity locality).boundary_arity_eq := by
-      funext position
-      apply congrArg targetArgs
-      apply Fin.ext
-      rfl
-    simpa [sourceArgsEq] using sourceDenotes
-  have equivalence :=
-    equivalentPinnedReplacement_compiled context input payload.selection
-      source payload.args payload.occurrence decomposition payload.body
-      sameArity locality sourceSplice targetSplice frameBoundary frameRoot
-      localForward localBackward proofArgs
-  simpa [DirectedEntailment, Step.tag, StepTag.semanticMode] using equivalence
--/
 
 /-- Every successful relation-folding receipt is sound. -/
 theorem applyRelFold_sound
