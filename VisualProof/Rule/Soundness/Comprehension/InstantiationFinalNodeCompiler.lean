@@ -33,7 +33,6 @@ theorem final_endpointOccurs_reverseNode_iff
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -100,7 +99,6 @@ theorem regularNode_resolvedPorts_related
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input.val)
@@ -129,7 +127,7 @@ theorem regularNode_resolvedPorts_related
   have mappedTargetOccurs : elimTrace.sourceDiagram.EndpointOccurs
       (copyTrace.finalWireMap elimTrace targetWire) ⟨finalNode, port⟩ :=
     (copyTrace.final_endpointOccurs_reverseNode_iff elimTrace finalWellFormed
-      boundaryNodup finalRegion regular finalNode nodeRegion targetWire port).2
+      finalRegion regular finalNode nodeRegion targetWire port).2
       targetOccurs
   have wireEq : sourceWire = copyTrace.finalWireMap elimTrace targetWire :=
     ConcreteElaboration.endpoint_wire_unique
@@ -169,7 +167,6 @@ theorem regularNode_itemSimulation
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
@@ -215,7 +212,7 @@ theorem regularNode_itemSimulation
       simp only [finalShape] at shape ⊢ <;> exact shape
   · intro port sourceIndex targetIndex sourceResolved targetResolved
     exact copyTrace.regularNode_resolvedPorts_related elimTrace
-      sourceWellFormed finalWellFormed boundaryNodup sourceContext targetContext
+      sourceWellFormed finalWellFormed sourceContext targetContext
       context sourceNodup finalRegion regular finalNode nodeRegion port
       sourceIndex targetIndex sourceResolved targetResolved
   · intro region binder arity sourceRelation sourceShape sourceLookup

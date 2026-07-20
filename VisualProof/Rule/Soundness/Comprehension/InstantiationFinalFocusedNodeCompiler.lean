@@ -401,7 +401,6 @@ theorem focusedKeptNode_endpointOccurs_iff
     {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (finalNode : Fin elimTrace.sourceDiagram.nodeCount)
     (originalNode : Fin input.val.nodeCount)
     (originalRegion : (input.val.nodes originalNode).region = payload.parent)
@@ -446,7 +445,6 @@ theorem focusedKeptNode_resolvedPorts_related
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input.val)
@@ -473,8 +471,8 @@ theorem focusedKeptNode_resolvedPorts_related
     ConcreteElaboration.resolvePort?_sound targetResolved
   have mappedTargetOccurs : elimTrace.sourceDiagram.EndpointOccurs
       (copyTrace.finalWireMap elimTrace targetWire) ⟨finalNode, port⟩ :=
-    (copyTrace.focusedKeptNode_endpointOccurs_iff elimTrace boundaryNodup
-      finalNode originalNode originalRegion droppedEq targetWire port).2
+    (copyTrace.focusedKeptNode_endpointOccurs_iff elimTrace finalNode
+      originalNode originalRegion droppedEq targetWire port).2
       targetOccurs
   have wireEq : sourceWire = copyTrace.finalWireMap elimTrace targetWire :=
     ConcreteElaboration.endpoint_wire_unique
@@ -513,7 +511,6 @@ theorem focusedKeptNode_itemSimulation
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
@@ -561,8 +558,8 @@ theorem focusedKeptNode_itemSimulation
       simp only [sourceShape] at shape ⊢ <;> exact shape
   · intro port sourceIndex targetIndex sourceResolved targetResolved
     exact copyTrace.focusedKeptNode_resolvedPorts_related elimTrace
-      sourceWellFormed boundaryNodup sourceContext targetContext context
-      sourceNodup finalNode originalNode originalRegion droppedEq port
+      sourceWellFormed sourceContext targetContext context sourceNodup finalNode
+      originalNode originalRegion droppedEq port
       sourceIndex targetIndex sourceResolved targetResolved
   · intro region binder arity sourceRelation sourceShape sourceLookup
     exact binderWitness.bindersMapped binder arity sourceRelation sourceLookup

@@ -30,7 +30,6 @@ theorem focusedKeptOccurrence_itemSimulation
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
@@ -129,7 +128,7 @@ theorem focusedKeptOccurrence_itemSimulation
         copyTrace.keptNode_original elimTrace finalWellFormed node member
       rw [mapped] at targetCompiled
       exact copyTrace.focusedKeptNode_itemSimulation elimTrace
-        sourceWellFormed finalWellFormed boundaryNodup model named direction
+        sourceWellFormed finalWellFormed model named direction
         sourceContext targetContext context sourceExact.nodup sourceBinders
         targetBinders binderWitness node member originalNode mapped sourceItem
         targetItem sourceCompiled targetCompiled
