@@ -3,35 +3,22 @@
   "diagram": {
     "root": "r0",
     "regions": {
-      "r0": {
-        "kind": "sheet"
-      },
-      "r1": {
-        "kind": "cut",
-        "parent": "r0"
-      },
-      "r2": {
-        "kind": "cut",
-        "parent": "r1"
-      },
-      "r3": {
-        "kind": "cut",
-        "parent": "r2"
-      },
-      "r4": {
-        "kind": "cut",
-        "parent": "r3"
-      },
-      "r5": {
-        "kind": "cut",
-        "parent": "r3"
-      },
-      "r6": {
-        "kind": "cut",
-        "parent": "r5"
-      }
+      "r0": { "kind": "sheet" },
+      "r1": { "kind": "cut", "parent": "r0" },
+      "r2": { "kind": "bubble", "parent": "r1", "arity": 0 },
+      "r3": { "kind": "bubble", "parent": "r2", "arity": 0 },
+      "r4": { "kind": "cut", "parent": "r3" },
+      "r5": { "kind": "cut", "parent": "r4" },
+      "r6": { "kind": "cut", "parent": "r3" }
     },
-    "nodes": {},
+    "nodes": {
+      "n0": { "kind": "atom", "region": "r3", "binder": "r2" },
+      "n1": { "kind": "atom", "region": "r3", "binder": "r3" },
+      "n2": { "kind": "atom", "region": "r5", "binder": "r2" },
+      "n3": { "kind": "atom", "region": "r5", "binder": "r3" },
+      "n4": { "kind": "atom", "region": "r6", "binder": "r2" },
+      "n5": { "kind": "atom", "region": "r6", "binder": "r3" }
+    },
     "wires": {}
   }
 }

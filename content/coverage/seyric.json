@@ -148,13 +148,6 @@
       "stoppingRule": "Stop after compound unit construction is established; larger compounds add no new placement decision."
     },
     {
-      "id": "iteration-same-region-copy",
-      "kind": "isolated",
-      "family": "iteration",
-      "distinction": "Copy an occurrence within the same semantic region.",
-      "stoppingRule": "Stop after same-region copy authority is established."
-    },
-    {
       "id": "iteration-ancestor-descendant-compound",
       "kind": "isolated",
       "family": "iteration",
@@ -984,14 +977,15 @@
     {
       "puzzle": "compound-copy-authority-contrast",
       "obligations": [
-        "iteration-same-region-copy",
         "iteration-ancestor-descendant-compound",
         "interaction-ancestry-copy-authority"
       ],
-      "visibleSituation": "One compound source has a legal same-region destination, a legal descendant destination, and an equal-looking sibling destination with no copy authority.",
-      "defeats": "It defeats visual-nearness authority: a compound copies within its own region and into its descendant, while the equally near sibling host is incomparable.",
+      "visibleSituation": "A P-and-Q source lies above one R-bearing descendant and beside a similar R-bearing sibling; only the descendant can receive the compound and thereby complete the P-Q-R support for its pre-existing target.",
+      "defeats": "It defeats visual-nearness authority and decorative copying: the sibling destination is incomparable, partial and same-region copies lack co-located R, and the authorized compound copy is consumed immediately as part of the exact P-Q-R source.",
       "experientialNeighbors": [
-        "single-mark-return"
+        "atomic-content-insertion",
+        "double-cut-copy-license",
+        "marked-echo-deiteration"
       ]
     },
     {
@@ -1052,10 +1046,11 @@
       "obligations": [
         "double-cut-introduction-compound-selection"
       ],
-      "visibleSituation": "One complete grouped proposition, rather than one of its visible internal atoms, must be selected and wrapped in a double cut.",
-      "defeats": "It defeats the hypothesis that wrapping either visible internal atom is equivalent to wrapping the complete two-owner conjunction.",
+      "visibleSituation": "A P-and-Q support faces a deeper P-Q-P field; wrapping exactly the intact P-and-Q compound creates an inner cut that matches the support.",
+      "defeats": "It defeats atom-first and select-everything guesses: wrapping P alone or the larger P-Q-P fragment cannot make the introduced inner cut removable, so the internal P-and-Q grouping remains decisive after the wrap.",
       "experientialNeighbors": [
-        "atomic-double-cut-selection"
+        "atomic-double-cut-selection",
+        "content-bearing-annulus-choice"
       ]
     },
     {
@@ -1065,9 +1060,12 @@
         "double-cut-elimination-compound-eligibility",
         "interaction-annulus-double-cut-eligibility"
       ],
-      "visibleSituation": "A compound content-bearing double cut must be distinguished from an obstructed near-match whose blocker is owned by the annulus; eliminating the eligible pair visibly preserves its complete inner content.",
-      "defeats": "It defeats the silhouette rule for double cuts: annulus-owned content blocks one near-match while the empty annulus releases the other and preserves both inner conjuncts.",
-      "experientialNeighbors": []
+      "visibleSituation": "Two P-and-Q double cuts share one workspace: the eligible pair has an empty annulus, while its near-match carries P in the annulus. Eliminating the eligible pair promotes its P and Q beside a pre-existing P.",
+      "defeats": "It defeats the silhouette rule and disposable-content reading: the obstructed pair cannot eliminate, while the selected pair preserves stable P-and-Q content that forms and discharges the exact P-P-Q target.",
+      "experientialNeighbors": [
+        "compound-double-cut-selection",
+        "double-cut-insertion-workspace"
+      ]
     },
     {
       "puzzle": "disjunction-over-conjunction-base",
@@ -1807,10 +1805,12 @@
       "obligations": [
         "mixed-double-cut-workspace-insertion"
       ],
-      "visibleSituation": "Introducing a double cut in negative r3 creates positive annulus dc; inserting an empty double cut there supplies the sole ancestor exact occurrence that licenses removal of the wrapped r5 double cut.",
-      "defeats": "The insertion is not decoration: without the annular source the wrapped r5 occurrence has no ancestor match, and leaving the source in the annulus blocks cleanup.",
+      "visibleSituation": "A flat P-and-Q support accompanies a content-bearing P-and-Q double cut and a separate marked P-and-Q field in negative r3. Wrapping the complete pair creates positive ancestor annulus dc, where an inserted matching double cut becomes its sole exact source.",
+      "defeats": "The workspace and insertion are both material: r3 rejects insertion, pre-existing positive r4 and r6 are descendants or siblings rather than ancestor workspaces, dc_0 remains negative, and a P-only insertion cannot discharge the complete pair.",
       "experientialNeighbors": [
-        "shallow-edit-legality-contrast"
+        "atomic-content-insertion",
+        "compound-double-cut-selection",
+        "content-bearing-annulus-choice"
       ]
     },
     {

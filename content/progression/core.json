@@ -188,7 +188,7 @@
     {
       "puzzle": "compound-copy-authority-contrast",
       "prerequisites": [
-        "single-mark-return"
+        "marked-echo-deiteration"
       ]
     },
     {
@@ -230,7 +230,7 @@
     {
       "puzzle": "content-bearing-annulus-choice",
       "prerequisites": [
-        "single-mark-return"
+        "compound-double-cut-selection"
       ]
     },
     {
@@ -691,7 +691,8 @@
     {
       "puzzle": "double-cut-insertion-workspace",
       "prerequisites": [
-        "single-mark-return"
+        "atomic-double-cut-selection",
+        "atomic-content-insertion"
       ]
     },
     {

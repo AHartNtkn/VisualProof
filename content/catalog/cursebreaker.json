@@ -144,8 +144,8 @@
         "professional": "Seyric Compound Copy Authority Contrast"
       },
       "provenance": {
-        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound copy authority contrast.",
-        "function": "One compound source has a legal same-region destination, a legal descendant destination, and an equal-looking sibling destination with no copy authority."
+        "summary": "A P-and-Q source overlooks one R-bearing descendant and an equal-looking R-bearing sibling destination outside its authority.",
+        "function": "Only copying intact P-and-Q into the descendant completes the P-Q-R support needed to discharge pre-existing content; partial, same-region, and sibling choices cannot."
       }
     },
     {
@@ -204,8 +204,8 @@
         "professional": "Seyric Compound Double Cut Selection"
       },
       "provenance": {
-        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound double cut selection.",
-        "function": "One complete grouped proposition, rather than one of its visible internal atoms, must be selected and wrapped in a double cut."
+        "summary": "A P-and-Q support faces a deeper P-Q-P field whose exact wrapped subgroup must remain recognizable.",
+        "function": "Wrapping intact P-and-Q creates a matching inner cut that can be discharged; wrapping P alone or the larger P-Q-P field cannot."
       }
     },
     {
@@ -214,8 +214,8 @@
         "professional": "Seyric Content Bearing Annulus Choice"
       },
       "provenance": {
-        "summary": "A Seyric propositional tablet whose visible arrangement isolates content bearing annulus choice.",
-        "function": "A compound content-bearing double cut must be distinguished from an obstructed near-match whose blocker is owned by the annulus; eliminating the eligible pair visibly preserves its complete inner content."
+        "summary": "Eligible and obstructed P-and-Q double cuts coexist in one workspace beside a P context and an exact P-P-Q support.",
+        "function": "Eliminating the empty-annulus pair preserves its P and Q beside the context for a later exact discharge; the annulus-owned blocker prevents the near-match from making that transition."
       }
     },
     {
@@ -1003,8 +1003,8 @@
         "professional": "Double Cut Insertion Workspace"
       },
       "provenance": {
-        "summary": "Introducing a double cut in negative r3 creates positive annulus dc; inserting an empty double cut there supplies the sole ancestor exact occurrence that licenses removal of the wrapped r5 double cut.",
-        "function": "The insertion is not decoration: without the annular source the wrapped r5 occurrence has no ancestor match, and leaving the source in the annulus blocks cleanup."
+        "summary": "A flat P-and-Q support accompanies a content-bearing P-and-Q double cut and a separate marked P-and-Q field inside one negative owner region.",
+        "function": "Wrapping the complete target creates the only positive ancestor workspace where an inserted matching double cut can discharge it; pre-existing positive hosts, P-only content, and the negative inner annulus cannot."
       }
     },
     {

@@ -3,14 +3,7 @@
   "solution": [
     {
       "rule": "doubleCutIntro",
-      "sel": {
-        "region": "r3",
-        "regions": [
-          "r5"
-        ],
-        "nodes": [],
-        "wires": []
-      }
+      "sel": { "region": "r3", "regions": ["r4"], "nodes": [], "wires": [] }
     },
     {
       "rule": "insertion",
@@ -19,61 +12,49 @@
         "diagram": {
           "root": "r0",
           "regions": {
-            "r0": {
-              "kind": "sheet"
-            },
-            "r1": {
-              "kind": "cut",
-              "parent": "r0"
-            },
-            "r2": {
-              "kind": "cut",
-              "parent": "r1"
-            }
+            "r0": { "kind": "sheet" },
+            "r1": { "kind": "bubble", "parent": "r0", "arity": 0 },
+            "r2": { "kind": "bubble", "parent": "r1", "arity": 0 },
+            "r3": { "kind": "cut", "parent": "r2" },
+            "r4": { "kind": "cut", "parent": "r3" }
           },
-          "nodes": {},
+          "nodes": {
+            "n0": { "kind": "atom", "region": "r4", "binder": "r1" },
+            "n1": { "kind": "atom", "region": "r4", "binder": "r2" }
+          },
           "wires": {}
         },
         "boundary": []
       },
       "attachments": [],
-      "binders": {}
+      "binders": { "r1": "r2", "r2": "r3" }
     },
     {
       "rule": "deiteration",
-      "sel": {
-        "region": "dc_0",
-        "regions": [
-          "r5"
-        ],
-        "nodes": [],
-        "wires": []
-      },
+      "sel": { "region": "dc_0", "regions": ["r4"], "nodes": [], "wires": [] },
+      "fuel": 100
+    },
+    { "rule": "doubleCutElim", "region": "r3_0" },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "dc", "regions": [], "nodes": ["n0_0", "n1_0"], "wires": [] },
+      "fuel": 100
+    },
+    { "rule": "doubleCutElim", "region": "dc" },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r6", "regions": [], "nodes": ["n4", "n5"], "wires": [] },
       "fuel": 100
     },
     {
-      "rule": "doubleCutElim",
-      "region": "r1_0"
+      "rule": "erasure",
+      "sel": { "region": "r3", "regions": [], "nodes": ["n0", "n1"], "wires": [] }
     },
-    {
-      "rule": "doubleCutElim",
-      "region": "dc"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r3"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r1"
-    }
+    { "rule": "vacuousElim", "region": "r3" },
+    { "rule": "vacuousElim", "region": "r2" },
+    { "rule": "doubleCutElim", "region": "r1" }
   ],
   "availableArtifacts": [],
-  "expectedRules": [
-    "doubleCutIntro",
-    "insertion",
-    "deiteration",
-    "doubleCutElim"
-  ],
+  "expectedRules": ["doubleCutIntro", "insertion", "deiteration", "doubleCutElim", "erasure", "vacuousElim"],
   "recognizedStates": []
 }

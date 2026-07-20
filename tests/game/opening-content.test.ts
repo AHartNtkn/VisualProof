@@ -15,11 +15,9 @@ const onboardingIds = [
 ] as const
 const singleMarkRootIds = [
   'atomic-fragment-erasure',
-  'compound-copy-authority-contrast',
   'transfer-duplication-recognition',
   'common-conjunction-factor-base',
   'common-disjunction-factor-base',
-  'content-bearing-annulus-choice',
   'disjunction-over-conjunction-base',
   'i-dao',
   'conjunction-idempotence-introduction',
@@ -48,7 +46,6 @@ const singleMarkRootIds = [
   'de-morgan-product-consumer',
   'de-morgan-sum-consumer',
   'double-cut-copy-license',
-  'double-cut-insertion-workspace',
   'preserve-sole-structural-source',
   'r4',
   'r5',
@@ -56,10 +53,14 @@ const singleMarkRootIds = [
   'rm-c3',
 ] as const
 const reconstructedPrerequisites = [
-  ['shallow-edit-legality-contrast', 'single-mark-return'],
-  ['atomic-content-insertion', 'marked-echo-deiteration'],
-  ['atomic-double-cut-selection', 'marked-echo-deiteration'],
-  ['polarity-bubble-contrast', 'marked-echo-deiteration'],
+  ['shallow-edit-legality-contrast', ['single-mark-return']],
+  ['atomic-content-insertion', ['marked-echo-deiteration']],
+  ['atomic-double-cut-selection', ['marked-echo-deiteration']],
+  ['polarity-bubble-contrast', ['marked-echo-deiteration']],
+  ['compound-copy-authority-contrast', ['marked-echo-deiteration']],
+  ['compound-double-cut-selection', ['atomic-double-cut-selection']],
+  ['content-bearing-annulus-choice', ['compound-double-cut-selection']],
+  ['double-cut-insertion-workspace', ['atomic-double-cut-selection', 'atomic-content-insertion']],
 ] as const
 describe('reconstructed opening content', () => {
   it('matches the accepted Seyric collection structurally without making its count authoritative', () => {
@@ -101,9 +102,9 @@ describe('reconstructed opening content', () => {
       expect(catalog.placement(puzzleId(id)).prerequisites)
         .toEqual([puzzleId('single-mark-return')])
     }
-    for (const [id, prerequisite] of reconstructedPrerequisites) {
+    for (const [id, prerequisites] of reconstructedPrerequisites) {
       expect(catalog.placement(puzzleId(id)).prerequisites)
-        .toEqual([puzzleId(prerequisite)])
+        .toEqual(prerequisites.map(puzzleId))
     }
   })
 
