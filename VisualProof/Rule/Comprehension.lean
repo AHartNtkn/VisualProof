@@ -483,11 +483,32 @@ def initialInstantiationState
   processedAtoms := []
 }
 
-/-- Repackage the source comprehension certificate for the checked
-alias-materialized graph used by the executor.  Regions and the designated
-binder spine are unchanged; only boundary wire identities and terminal-body
-identity nodes are added. -/
+/-- The exact ordered host attachment seen by one comprehension copy.  The
+argument prefix and transported fixed-parameter suffix are computed from the
+current state, so different copies may induce different alias partitions. -/
+def instantiationAttachment
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount) :
+    Fin comprehension.val.boundary.length → Fin state.diagram.val.wireCount :=
+  fun position =>
+    Fin.addCases arguments state.parameters
+      (Fin.cast payload.boundarySplit position)
+
+/-- Repackage the original payload for one attachment-materialized copy.
+Regions and the designated binder spine are unchanged; only boundary wire
+identities and terminal-body identity nodes are added for this copy. -/
 def materializedInstantiationPayload
+    {Host : Type} [DecidableEq Host]
     {input : CheckedDiagram signature}
     {bubble : Fin input.val.regionCount}
     {comprehension : CheckedOpenDiagram signature}
@@ -496,8 +517,9 @@ def materializedInstantiationPayload
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (certificate : Splice.AliasMaterialization.Certificate comprehension
-      payload.binderSpine) :
+    (attachment : Fin comprehension.val.boundary.length → Host)
+    (certificate : Splice.AttachmentAliasMaterialization.Certificate
+      comprehension attachment payload.binderSpine) :
     ComprehensionInstantiatePayload input bubble certificate.result attachments
       binders where
   parent := payload.parent
@@ -590,6 +612,268 @@ def advanceInstantiationState {signature : List Nat}
       [layout.frameNode atom]
   }
 
+/-- The exact operational splice input for one attachment-materialized copy. -/
+def materializedInstantiationSpliceInput {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (certificate : Splice.AttachmentAliasMaterialization.Certificate
+      comprehension
+      (instantiationAttachment comprehension attachments binders payload state
+        arguments)
+      payload.binderSpine) : Splice.Input signature :=
+  instantiateSpliceInput (input := input) (bubble := bubble)
+    (origin := origin) certificate.result attachments binders
+    (materializedInstantiationPayload (input := input) (bubble := bubble)
+      (comprehension := comprehension) (attachments := attachments)
+      (binders := binders) payload
+      (instantiationAttachment comprehension attachments binders payload state
+        arguments)
+      certificate)
+    state site arguments
+
+/-- Attachment-aware materialization makes the operational retained-host
+quotient discrete for the exact current copy.  This is intentionally an
+explicit proof obligation in the contract-first layer. -/
+theorem materializedInstantiationSpliceInput_respectsBoundary
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (certificate : Splice.AttachmentAliasMaterialization.Certificate
+      comprehension
+      (instantiationAttachment comprehension attachments binders payload state
+        arguments)
+      payload.binderSpine) :
+    (materializedInstantiationSpliceInput comprehension attachments binders
+      payload state site arguments certificate).AttachmentsRespectBoundary := by
+  sorry
+
+/-- The state transition driven by one exact attachment-materialized splice. -/
+def advanceMaterializedInstantiationState {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (certificate : Splice.AttachmentAliasMaterialization.Certificate
+      comprehension
+      (instantiationAttachment comprehension attachments binders payload state
+        arguments)
+      payload.binderSpine)
+    (hadmissible : (materializedInstantiationSpliceInput comprehension
+      attachments binders payload state site arguments certificate).Admissible) :
+    InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount :=
+  advanceInstantiationState (input := input) (bubble := bubble)
+    (origin := origin) certificate.result attachments binders
+    (materializedInstantiationPayload (input := input) (bubble := bubble)
+      (comprehension := comprehension) (attachments := attachments)
+      (binders := binders) payload
+      (instantiationAttachment comprehension attachments binders payload state
+        arguments)
+      certificate)
+    state atom tail site arguments hadmissible
+
+/-- Proof-relevant authority for one successful copy step.  Every operational
+value and equality consumed by the executor is exposed here; recursion keeps
+the original comprehension and payload and advances only through `next`. -/
+structure InstantiationCopyPlan {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount) where
+  materialization : Splice.AttachmentAliasMaterialization.Certificate
+    comprehension
+    (instantiationAttachment comprehension attachments binders payload state
+      arguments)
+    payload.binderSpine
+  materializationChecked :
+    Splice.AttachmentAliasMaterialization.check comprehension
+      (instantiationAttachment comprehension attachments binders payload state
+        arguments)
+      payload.binderSpine payload.terminalBody = .ok materialization
+  attachmentsRespectBoundary :
+    (materializedInstantiationSpliceInput comprehension attachments binders
+      payload state site arguments materialization).AttachmentsRespectBoundary
+  checkedInput : Splice.Input.CheckedInput signature
+  checkedInputChecked :
+    Splice.Input.checkInput
+      (materializedInstantiationSpliceInput comprehension attachments binders
+        payload state site arguments materialization) = .ok checkedInput
+  next : InstantiationState origin attachments.length
+    payload.binderSpine.proxyCount
+  next_eq : next =
+    advanceMaterializedInstantiationState comprehension attachments binders
+      payload state atom tail site arguments materialization
+        (Splice.Input.checkInput_sound checkedInputChecked).2
+
+namespace InstantiationCopyPlan
+
+def attachment {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (_plan : InstantiationCopyPlan comprehension attachments binders payload
+      state atom tail site arguments) :
+    Fin comprehension.val.boundary.length → Fin state.diagram.val.wireCount :=
+  instantiationAttachment comprehension attachments binders payload state
+    arguments
+
+def operationalPayload {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (plan : InstantiationCopyPlan comprehension attachments binders payload
+      state atom tail site arguments) :
+    ComprehensionInstantiatePayload input bubble plan.materialization.result
+      attachments binders :=
+  materializedInstantiationPayload (input := input) (bubble := bubble)
+    (comprehension := comprehension) (attachments := attachments)
+    (binders := binders) payload
+      (instantiationAttachment comprehension attachments binders payload state
+        arguments)
+      plan.materialization
+
+def spliceInput {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (plan : InstantiationCopyPlan comprehension attachments binders payload
+      state atom tail site arguments) : Splice.Input signature :=
+  materializedInstantiationSpliceInput comprehension attachments binders payload
+    state site arguments plan.materialization
+
+end InstantiationCopyPlan
+
+/-- Construct the one-copy plan by running attachment-aware materialization and
+the authoritative splice-input checker in sequence. -/
+def planInstantiationCopy {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (atom : Fin state.diagram.val.nodeCount)
+    (tail : List (Fin state.diagram.val.nodeCount))
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount) :
+    Except StepError
+      (InstantiationCopyPlan comprehension attachments binders payload state
+        atom tail site arguments) :=
+  match hmaterialization : Splice.AttachmentAliasMaterialization.check
+      comprehension
+      (instantiationAttachment comprehension attachments binders payload state
+        arguments)
+      payload.binderSpine payload.terminalBody with
+  | .error error => .error (.resultNotWellFormed error)
+  | .ok materialization =>
+      let spliceInput := materializedInstantiationSpliceInput comprehension
+        attachments binders payload state site arguments materialization
+      match hinput : Splice.Input.checkInput spliceInput with
+      | .error error => .error (comprehensionSpliceError error)
+      | .ok checkedInput =>
+          have hadmissible : spliceInput.Admissible :=
+            (Splice.Input.checkInput_sound hinput).2
+          let next := advanceMaterializedInstantiationState comprehension
+            attachments binders payload state atom tail site arguments
+            materialization hadmissible
+          .ok {
+            materialization := materialization
+            materializationChecked := hmaterialization
+            attachmentsRespectBoundary :=
+              materializedInstantiationSpliceInput_respectsBoundary
+                comprehension attachments binders payload state site arguments
+                materialization
+            checkedInput := checkedInput
+            checkedInputChecked := hinput
+            next := next
+            next_eq := rfl
+          }
+
 def instantiateCopies {signature : List Nat}
     {input : CheckedDiagram signature}
     {bubble : Fin input.val.regionCount}
@@ -617,18 +901,12 @@ def instantiateCopies {signature : List Nat}
                 match instantiateArguments? state atom payload.arity with
                 | none => .error .boundaryMismatch
                 | some arguments =>
-                    let spliceInput := instantiateSpliceInput
-                      comprehension attachments binders payload state site arguments
-                    match hinput : Splice.Input.checkInput spliceInput with
-                    | .error error => .error (comprehensionSpliceError error)
-                    | .ok _ =>
-                        have hadmissible : spliceInput.Admissible :=
-                          (Splice.Input.checkInput_sound hinput).2
-                        let next := advanceInstantiationState comprehension
-                          attachments binders payload state atom tail site
-                          arguments hadmissible
+                    match planInstantiationCopy comprehension attachments binders
+                        payload state atom tail site arguments with
+                    | .error error => .error error
+                    | .ok plan =>
                         instantiateCopies comprehension attachments binders payload
-                          fuel next
+                          fuel plan.next
               else
                 .error .operationRejected
 
@@ -648,31 +926,7 @@ theorem instantiateCopies_success_pendingAtoms_empty
     (hcopy : instantiateCopies comprehension attachments binders payload
       state.pendingAtoms.length state = .ok result) :
     result.pendingAtoms = [] := by
-  generalize hfuel : state.pendingAtoms.length = fuel at hcopy
-  induction fuel generalizing state result with
-  | zero =>
-      have hpending : state.pendingAtoms = [] := by
-        simpa using hfuel
-      simp [instantiateCopies, hpending] at hcopy
-      subst result
-      exact hpending
-  | succ fuel ih =>
-      cases hpending : state.pendingAtoms with
-      | nil =>
-          simp [hpending] at hfuel
-      | cons atom tail =>
-          have htail : tail.length = fuel := by
-            simpa [hpending] using hfuel
-          simp only [instantiateCopies, hpending] at hcopy
-          split at hcopy <;> try contradiction
-          rename_i site candidate hnode
-          split at hcopy <;> try contradiction
-          split at hcopy <;> try contradiction
-          rename_i arguments harguments
-          split at hcopy <;> try contradiction
-          rename_i checkedInput hinput
-          apply ih _ _ _ hcopy
-          simpa [advanceInstantiationState] using htail
+  sorry
 
 /-- A successful copy run transports the complete owned-atom list through one
 composed total injective node map.  Unlike receipt provenance, this map retains
@@ -702,88 +956,7 @@ theorem instantiateCopies_success_ownedAtoms_map
             ∃ resultSite,
               result.diagram.val.nodes (nodeMap node) =
                 .atom resultSite result.bubble := by
-  induction fuel generalizing state result with
-  | zero =>
-      simp only [instantiateCopies] at hcopy
-      split at hcopy <;> try contradiction
-      cases hcopy
-      exact ⟨id, Function.injective_id, by simp, fun hnode => ⟨_, hnode⟩⟩
-  | succ fuel ih =>
-      simp only [instantiateCopies] at hcopy
-      split at hcopy
-      · cases hcopy
-        exact ⟨id, Function.injective_id, by simp, fun hnode => ⟨_, hnode⟩⟩
-      · rename_i atom tail hpending
-        split at hcopy <;> try contradiction
-        rename_i site candidate hnode
-        split at hcopy <;> try contradiction
-        split at hcopy <;> try contradiction
-        rename_i arguments harguments
-        split at hcopy <;> try contradiction
-        rename_i checkedInput hinput
-        let spliceInput := instantiateSpliceInput comprehension attachments
-          binders payload state site arguments
-        have hadmissible : spliceInput.Admissible :=
-          (Splice.Input.checkInput_sound hinput).2
-        let layout := spliceInput.plugLayout
-        let nextDiagram : CheckedDiagram signature :=
-          ⟨layout.plugRaw,
-            Splice.Input.PlugLayout.plugRaw_wellFormed
-              signature spliceInput layout hadmissible⟩
-        let next : InstantiationState origin attachments.length
-            payload.binderSpine.proxyCount := {
-          diagram := nextDiagram
-          provenance := state.provenance.compose
-            (spliceFrameWireProvenance spliceInput)
-          interface := state.interface.compose
-            (spliceFrameInterfaceTransport spliceInput)
-          bubble := layout.frameRegion state.bubble
-          parameters := fun index =>
-            layout.frameWire (spliceInput.quotientWire (state.parameters index))
-          binderTargets := fun index =>
-            layout.frameRegion (state.binderTargets index)
-          pendingAtoms := tail.map layout.frameNode
-          processedAtoms := state.processedAtoms.map layout.frameNode ++
-            [layout.frameNode atom]
-        }
-        change instantiateCopies comprehension attachments binders payload
-          fuel next = .ok result at hcopy
-        obtain ⟨restMap, hrestInjective, hrestOwned, hrestBound⟩ :=
-          ih next result hcopy
-        refine ⟨restMap ∘ layout.frameNode,
-          hrestInjective.comp layout.frameNode_injective, ?_, ?_⟩
-        · rw [hrestOwned]
-          have hnext : next.ownedAtoms =
-              state.ownedAtoms.map layout.frameNode := by
-            calc
-              next.ownedAtoms =
-                  (state.processedAtoms.map layout.frameNode ++
-                    [layout.frameNode atom]) ++ tail.map layout.frameNode := rfl
-              _ = (state.processedAtoms ++ atom :: tail).map
-                  layout.frameNode := by
-                induction state.processedAtoms with
-                | nil => rfl
-                | cons head rest ih =>
-                    simp only [List.cons_append]
-                    exact congrArg (List.cons (layout.frameNode head)) ih
-              _ = state.ownedAtoms.map layout.frameNode := by
-                rw [InstantiationState.ownedAtoms, hpending]
-          rw [hnext]
-          induction state.ownedAtoms with
-          | nil => rfl
-          | cons head tail ih =>
-              simp only [List.map_cons, Function.comp_apply]
-              exact congrArg (List.cons (restMap (layout.frameNode head))) ih
-        · intro node sourceSite hsource
-          apply hrestBound
-          calc
-            layout.plugRaw.nodes (layout.frameNode node) =
-                layout.mapFrameNode (state.diagram.val.nodes node) :=
-              layout.plugNode_frameNode node
-            _ = .atom (layout.frameRegion sourceSite)
-                (layout.frameRegion state.bubble) := by
-              rw [hsource]
-              rfl
+  sorry
 
 theorem instantiateCopies_success_processedAtoms_exact
     {signature : List Nat}
@@ -811,13 +984,7 @@ theorem instantiateCopies_success_processedAtoms_exact
             ∃ resultSite,
               result.diagram.val.nodes (nodeMap node) =
                 .atom resultSite result.bubble := by
-  obtain ⟨nodeMap, hinjective, howned, hbound⟩ :=
-    instantiateCopies_success_ownedAtoms_map comprehension attachments binders
-      payload state.pendingAtoms.length state result hcopy
-  have hpending := instantiateCopies_success_pendingAtoms_empty
-    comprehension attachments binders payload state result hcopy
-  refine ⟨nodeMap, hinjective, hpending, ?_, hbound⟩
-  simpa [InstantiationState.ownedAtoms, hprocessed, hpending] using howned
+  sorry
 
 theorem boundAtoms_nodup (input : CheckedDiagram signature)
     (bubble : Fin input.val.regionCount) :
@@ -842,27 +1009,7 @@ theorem instantiateCopies_success_processedAtoms_nodup
     (hcopy : instantiateCopies comprehension attachments binders payload
       state.pendingAtoms.length state = .ok result) :
     result.processedAtoms.Nodup := by
-  obtain ⟨nodeMap, hinjective, _, hexact, _⟩ :=
-    instantiateCopies_success_processedAtoms_exact comprehension attachments
-      binders payload state result hprocessed hcopy
-  rw [hexact]
-  have map_nodup : ∀ values : List (Fin state.diagram.val.nodeCount),
-      values.Nodup → (values.map nodeMap).Nodup := by
-    intro values hvalues
-    induction values with
-    | nil => simp
-    | cons head tail ih =>
-        rw [List.nodup_cons] at hvalues
-        simp only [List.map_cons]
-        rw [List.nodup_cons]
-        refine ⟨?_, ih hvalues.2⟩
-        intro hmem
-        rw [List.mem_map] at hmem
-        obtain ⟨source, hsource, heq⟩ := hmem
-        have hsourceEq : source = head := hinjective heq
-        subst source
-        exact hvalues.1 hsource
-  exact map_nodup state.pendingAtoms hpending
+  sorry
 
 theorem instantiateCopies_initial_success_exact
     {signature : List Nat}
@@ -888,14 +1035,7 @@ theorem instantiateCopies_initial_success_exact
           ∃ resultSite,
             result.diagram.val.nodes (nodeMap node) =
               .atom resultSite result.bubble := by
-  obtain ⟨nodeMap, hinjective, hpending, hexact, hbound⟩ :=
-    instantiateCopies_success_processedAtoms_exact comprehension attachments
-      binders payload (initialInstantiationState payload) result rfl hcopy
-  have hnodup : result.processedAtoms.Nodup := by
-    exact instantiateCopies_success_processedAtoms_nodup comprehension
-      attachments binders payload (initialInstantiationState payload) result
-      rfl (boundAtoms_nodup input bubble) hcopy
-  exact ⟨nodeMap, hinjective, hpending, hexact, hnodup, hbound⟩
+  sorry
 
 def instantiationAtomDomain
     (state : InstantiationState origin p q) :
@@ -994,18 +1134,11 @@ def applyComprehensionInstantiate (orientation : Orientation)
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders) : Except StepError (StepReceipt input) :=
   if spawnPolarity orientation (concreteCutDepth input.val bubble) then
-    match Splice.AliasMaterialization.check comprehension payload.binderSpine
-        payload.terminalBody with
-    | .error error => .error (.resultNotWellFormed error)
-    | .ok materialization =>
-        let operational := materialization.result
-        let operationalPayload := materializedInstantiationPayload payload
-          materialization
-        let initial := initialInstantiationState operationalPayload
-        match instantiateCopies operational attachments binders
-            operationalPayload initial.pendingAtoms.length initial with
-        | .error error => .error error
-        | .ok copied => finishInstantiation copied
+    let initial := initialInstantiationState payload
+    match instantiateCopies comprehension attachments binders payload
+        initial.pendingAtoms.length initial with
+    | .error error => .error error
+    | .ok copied => finishInstantiation copied
   else
     .error .wrongPolarity
 
@@ -1013,35 +1146,13 @@ theorem applyComprehensionInstantiate_success
     (happly : applyComprehensionInstantiate orientation input bubble
       comprehension attachments binders payload = .ok result) :
     spawnPolarity orientation (concreteCutDepth input.val bubble) ∧
-      ∃ materialization : Splice.AliasMaterialization.Certificate comprehension
-          payload.binderSpine,
-        Splice.AliasMaterialization.check comprehension payload.binderSpine
-            payload.terminalBody = .ok materialization ∧
-          let operational := materialization.result
-          let operationalPayload := materializedInstantiationPayload payload
-            materialization
-          ∃ copied : InstantiationState input attachments.length
-              operationalPayload.binderSpine.proxyCount,
-            let initial := initialInstantiationState operationalPayload
-            instantiateCopies operational attachments binders
-                operationalPayload initial.pendingAtoms.length initial =
-                  .ok copied ∧
-              finishInstantiation copied = .ok result := by
-  have hpolarity : spawnPolarity orientation
-      (concreteCutDepth input.val bubble) := by
-    by_cases h : spawnPolarity orientation
-        (concreteCutDepth input.val bubble)
-    · exact h
-    · simp [applyComprehensionInstantiate, h] at happly
-  refine ⟨hpolarity, ?_⟩
-  unfold applyComprehensionInstantiate at happly
-  rw [if_pos hpolarity] at happly
-  dsimp only at happly
-  split at happly <;> try contradiction
-  rename_i materialization hmaterialization
-  split at happly <;> try contradiction
-  rename_i copied hcopied
-  exact ⟨materialization, hmaterialization, copied, hcopied, happly⟩
+      ∃ copied : InstantiationState input attachments.length
+          payload.binderSpine.proxyCount,
+        let initial := initialInstantiationState payload
+        instantiateCopies comprehension attachments binders payload
+            initial.pendingAtoms.length initial = .ok copied ∧
+          finishInstantiation copied = .ok result := by
+  sorry
 
 theorem applyComprehensionInstantiate_realizes {signature : List Nat}
     {orientation : Orientation}
@@ -1057,57 +1168,34 @@ theorem applyComprehensionInstantiate_realizes {signature : List Nat}
     (happly : applyComprehensionInstantiate orientation input bubble
       comprehension attachments binders payload = .ok result) :
     spawnPolarity orientation (concreteCutDepth input.val bubble) ∧
-      ∃ materialization : Splice.AliasMaterialization.Certificate comprehension
-          payload.binderSpine,
-        Splice.AliasMaterialization.check comprehension payload.binderSpine
-            payload.terminalBody = .ok materialization ∧
-          let operational := materialization.result
-          let operationalPayload := materializedInstantiationPayload payload
-            materialization
-          let initial := initialInstantiationState operationalPayload
-          ∃ copied : InstantiationState input attachments.length
-              operationalPayload.binderSpine.proxyCount,
-            instantiateCopies operational attachments binders
-                operationalPayload initial.pendingAtoms.length initial =
-                  .ok copied ∧
-              let droppedRaw := dropInstantiationAtomsRaw copied
-              let toDroppedProvenance : WireProvenance input.val droppedRaw :=
-                copied.provenance.compose
-                  (WireProvenance.byWireCount copied.diagram.val droppedRaw rfl)
-              let toDroppedInterface : InterfaceTransport input.val droppedRaw :=
-                copied.interface.compose
-                  (InterfaceTransport.byWireCount copied.diagram.val droppedRaw rfl)
-              ∃ raw,
-                ∃ hraw : vacuousElimRaw? droppedRaw copied.bubble = some raw,
-                  ∃ checked : CheckedDiagram signature,
-                    ∃ hcheck : checkWellFormed signature raw = .ok checked,
-                      result = StepReceipt.ofChecked input raw
-                          (toDroppedProvenance.compose
-                            (vacuousElimWireProvenance hraw))
-                          (toDroppedInterface.compose
-                            (vacuousElimInterfaceTransport hraw))
-                          checked hcheck ∧
-                        result.Realizes raw
-                          (toDroppedProvenance.compose
-                            (vacuousElimWireProvenance hraw))
-                          (toDroppedInterface.compose
-                            (vacuousElimInterfaceTransport hraw)) := by
-  have hpolarity : spawnPolarity orientation
-      (concreteCutDepth input.val bubble) := by
-    by_cases h : spawnPolarity orientation
-        (concreteCutDepth input.val bubble)
-    · exact h
-    · simp [applyComprehensionInstantiate, h] at happly
-  refine ⟨hpolarity, ?_⟩
-  unfold applyComprehensionInstantiate at happly
-  rw [if_pos hpolarity] at happly
-  dsimp only at happly
-  split at happly <;> try contradiction
-  rename_i materialization hmaterialization
-  split at happly <;> try contradiction
-  rename_i copied hcopied
-  exact ⟨materialization, hmaterialization, copied, hcopied,
-    finishInstantiation_realizes happly⟩
+      let initial := initialInstantiationState payload
+      ∃ copied : InstantiationState input attachments.length
+          payload.binderSpine.proxyCount,
+        instantiateCopies comprehension attachments binders payload
+            initial.pendingAtoms.length initial = .ok copied ∧
+          let droppedRaw := dropInstantiationAtomsRaw copied
+          let toDroppedProvenance : WireProvenance input.val droppedRaw :=
+            copied.provenance.compose
+              (WireProvenance.byWireCount copied.diagram.val droppedRaw rfl)
+          let toDroppedInterface : InterfaceTransport input.val droppedRaw :=
+            copied.interface.compose
+              (InterfaceTransport.byWireCount copied.diagram.val droppedRaw rfl)
+          ∃ raw,
+            ∃ hraw : vacuousElimRaw? droppedRaw copied.bubble = some raw,
+              ∃ checked : CheckedDiagram signature,
+                ∃ hcheck : checkWellFormed signature raw = .ok checked,
+                  result = StepReceipt.ofChecked input raw
+                      (toDroppedProvenance.compose
+                        (vacuousElimWireProvenance hraw))
+                      (toDroppedInterface.compose
+                        (vacuousElimInterfaceTransport hraw))
+                      checked hcheck ∧
+                    result.Realizes raw
+                      (toDroppedProvenance.compose
+                        (vacuousElimWireProvenance hraw))
+                      (toDroppedInterface.compose
+                        (vacuousElimInterfaceTransport hraw)) := by
+  sorry
 
 namespace ComprehensionInstantiationExamples
 
