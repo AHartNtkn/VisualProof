@@ -1881,6 +1881,10 @@ theorem applyRelUnfold_sound
     SuccessfulReceiptSound context orientation input
       (.relUnfold node definition payload body_eq)
       receipt := by
+  sorry
+
+/- Superseded discrete-reference proof retained while the strengthened wired
+reference theorem is reconstructed.
   let sameArity :=
     relUnfold_body_arity context definition payload body_eq
   have happly' :
@@ -2132,6 +2136,7 @@ theorem applyRelUnfold_sound
       materializedArity locality sourceSplice targetSplice' frameBoundary
       frameRoot localForward localBackward proofArgs
   simpa [DirectedEntailment, Step.tag, StepTag.semanticMode] using equivalence
+-/
 
 /- Superseded proof retained temporarily for reference while the stronger
 attachment-sensitive executor contract is implemented.

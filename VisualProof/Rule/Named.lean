@@ -1904,7 +1904,7 @@ def applyRelUnfold (input : CheckedDiagram signature)
     (definition : Fin signature.length)
     (payload : RelUnfoldPayload input node definition)
     (sameArity :
-      (namedReferencePattern signature definition).val.boundary.length =
+      payload.source.val.boundary.length =
         payload.body.val.boundary.length) :
     Except StepError (StepReceipt input) :=
   match decomposeChecked signature input payload.selection with
@@ -1941,7 +1941,7 @@ theorem applyRelUnfold_success
     {definition : Fin signature.length}
     {payload : RelUnfoldPayload input node definition}
     {sameArity :
-      (namedReferencePattern signature definition).val.boundary.length =
+      payload.source.val.boundary.length =
         payload.body.val.boundary.length}
     {result : StepReceipt input}
     (happly : applyRelUnfold input node definition payload sameArity =
@@ -1975,7 +1975,7 @@ theorem applyRelUnfold_realizes
     {definition : Fin signature.length}
     {payload : RelUnfoldPayload input node definition}
     {sameArity :
-      (namedReferencePattern signature definition).val.boundary.length =
+      payload.source.val.boundary.length =
         payload.body.val.boundary.length}
     {result : StepReceipt input}
     (happly : applyRelUnfold input node definition payload sameArity =

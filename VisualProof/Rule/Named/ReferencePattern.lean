@@ -373,10 +373,11 @@ theorem relUnfold_body_arity
     (payload : RelUnfoldPayload input node definition)
     (body_eq :
       payload.body.val = (context.definitionEntry definition).body.val) :
-    (namedReferencePattern signature definition).val.boundary.length =
+    payload.source.val.boundary.length =
       payload.body.val.boundary.length := by
   rw [body_eq]
-  exact (namedReferencePattern_boundary_length signature definition).trans
+  exact (wiredNamedReferencePattern_boundary_length signature definition
+      payload.wiring).trans
     (context.definitionEntry definition).body_arity.symm
 
 end VisualProof.Rule

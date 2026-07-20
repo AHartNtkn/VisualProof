@@ -97,6 +97,62 @@ def namedReferencePattern (signature : List Nat)
   ⟨namedReferencePatternRaw signature definition,
     namedReferencePatternRaw_wellFormed signature definition⟩
 
+/-- The concrete identity quotient carried by a named-reference occurrence.
+Every argument position selects one concrete wire, and surjectivity rules out
+irrelevant empty wires. Distinct argument positions may select the same wire. -/
+structure NamedReferenceWiring (arity : Nat) where
+  wireCount : Nat
+  argumentWire : Fin arity → Fin wireCount
+  argumentWire_surjective : Function.Surjective argumentWire
+
+/-- A named-reference node whose ordered argument interface realizes an
+arbitrary concrete identity quotient. The ordinary canonical reference is the
+special case in which `argumentWire` is the identity. -/
+def wiredNamedReferencePatternRaw (signature : List Nat)
+    (definition : Fin signature.length)
+    (wiring : NamedReferenceWiring (signature.get definition)) :
+    OpenConcreteDiagram where
+  diagram := {
+    regionCount := 1
+    nodeCount := 1
+    wireCount := wiring.wireCount
+    root := 0
+    regions := fun _ => .sheet
+    nodes := fun _ =>
+      .named 0 definition.val (signature.get definition)
+    wires := fun wire => {
+      scope := 0
+      endpoints := (allFin (signature.get definition)).filterMap fun argument =>
+        if wiring.argumentWire argument = wire then
+          some { node := 0, port := .arg argument }
+        else none
+    }
+  }
+  boundary := List.ofFn wiring.argumentWire
+
+/-- Arbitrary argument-wire quotients preserve the concrete well-formedness of
+one named-reference node. -/
+theorem wiredNamedReferencePatternRaw_wellFormed
+    (signature : List Nat) (definition : Fin signature.length)
+    (wiring : NamedReferenceWiring (signature.get definition)) :
+    (wiredNamedReferencePatternRaw signature definition wiring).WellFormed
+      signature := by
+  sorry
+
+def wiredNamedReferencePattern (signature : List Nat)
+    (definition : Fin signature.length)
+    (wiring : NamedReferenceWiring (signature.get definition)) :
+    CheckedOpenDiagram signature :=
+  ⟨wiredNamedReferencePatternRaw signature definition wiring,
+    wiredNamedReferencePatternRaw_wellFormed signature definition wiring⟩
+
+@[simp] theorem wiredNamedReferencePattern_boundary_length
+    (signature : List Nat) (definition : Fin signature.length)
+    (wiring : NamedReferenceWiring (signature.get definition)) :
+    (wiredNamedReferencePatternRaw signature definition wiring).boundary.length =
+      signature.get definition := by
+  simp [wiredNamedReferencePatternRaw]
+
 theorem namedReferencePattern_boundary_length
     (signature : List Nat) (definition : Fin signature.length) :
     (namedReferencePatternRaw signature definition).boundary.length =

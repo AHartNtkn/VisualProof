@@ -1628,10 +1628,20 @@ structure RelUnfoldPayload (input : Diagram.CheckedDiagram signature)
     (definition : Fin signature.length) where
   selection : Diagram.CheckedSelection input.val
   args : List (Fin input.val.wireCount)
+  wiring : NamedReferenceWiring (signature.get definition)
   occurrence : PinnedOccurrence input selection
-    (namedReferencePattern signature definition) args
+    (wiredNamedReferencePattern signature definition wiring) args
   selected_node : selection.selectedNodes = [node]
   body : Diagram.CheckedOpenDiagram signature
+
+def RelUnfoldPayload.source
+    {signature : List Nat}
+    {input : Diagram.CheckedDiagram signature}
+    {node : Fin input.val.nodeCount}
+    {definition : Fin signature.length}
+    (payload : RelUnfoldPayload input node definition) :
+    Diagram.CheckedOpenDiagram signature :=
+  wiredNamedReferencePattern signature definition payload.wiring
 
 /-- Exact pinned occurrence of a named relation body, ready to contract. -/
 structure RelFoldPayload (input : Diagram.CheckedDiagram signature)
