@@ -1,0 +1,24 @@
+{
+  "id": "blank-witness",
+  "diagram": {
+    "root": "r0",
+    "regions": {
+      "r0": {
+        "kind": "sheet"
+      },
+      "r1": {
+        "kind": "bubble",
+        "parent": "r0",
+        "arity": 0
+      }
+    },
+    "nodes": {
+      "n0": {
+        "kind": "atom",
+        "region": "r1",
+        "binder": "r1"
+      }
+    },
+    "wires": {}
+  }
+}

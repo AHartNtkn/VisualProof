@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
-import { buildCatalog, type GameCatalog } from '../../src/game/catalog'
+import type { GameCatalog } from '../../src/game/catalog'
 import {
   createInitialGameState,
   type GameControllerState,
@@ -9,6 +9,7 @@ import { reduceGame } from '../../src/game/controller'
 import { applyGameStep, currentDiagram, startPuzzle } from '../../src/game/session'
 import {
   controllerCatalog,
+  controllerPuzzle,
   controllerSource,
   FIRST,
   FIRST_CULTURE,
@@ -16,6 +17,7 @@ import {
   SECOND_CULTURE,
   SHARED_TEACHER_ID,
 } from './controller-fixture'
+import { buildTestCatalog } from './catalog-fixture'
 
 const catalog = controllerCatalog()
 
@@ -35,7 +37,7 @@ const applyWitness = (
   state: GameControllerState,
   puzzle: typeof FIRST | typeof SECOND,
   index: number,
-) => transition(state, { kind: 'applyStep', step: catalog.puzzle(puzzle).witness[index]! }).state
+) => transition(state, { kind: 'applyStep', step: controllerPuzzle(puzzle).witness[index]! }).state
 
 describe('authoritative game controller', () => {
   it('starts in the archive with caller-owned reduced motion and first-launch defaults', () => {
@@ -134,7 +136,7 @@ describe('authoritative game controller', () => {
     const timeline = state.firstAttempts.get(FIRST)?.timeline
 
     expect(() => transition(state, {
-      kind: 'applyStep', step: catalog.puzzle(FIRST).witness[0]!,
+      kind: 'applyStep', step: controllerPuzzle(FIRST).witness[0]!,
     })).toThrow(/pause.*owns input/)
     expect(() => transition(state, { kind: 'moveTimeline', cursor: 0 }))
       .toThrow(/pause.*owns input/)
@@ -203,7 +205,7 @@ describe('authoritative game controller', () => {
     const untouchedFirst = state.firstAttempts.get(FIRST)
     state = transition(state, {
       kind: 'applyStep',
-      step: catalog.puzzle(SECOND).witness[2]!,
+      step: controllerPuzzle(SECOND).witness[2]!,
     }).state
 
     expect(state.firstAttempts.get(SECOND)?.timeline.cursor).toBe(1)
@@ -214,7 +216,7 @@ describe('authoritative game controller', () => {
 
   it('refuses locked selection atomically with a domain effect', () => {
     const source = controllerSource()
-    const lockedCatalog = buildCatalog({
+    const lockedCatalog = buildTestCatalog({
       ...source,
       puzzles: source.puzzles.map((puzzle) => puzzle.id === SECOND
         ? { ...puzzle, prerequisites: [FIRST] }
@@ -292,8 +294,8 @@ describe('authoritative game controller', () => {
 
   it('delivers the same local intervention id independently for each puzzle', () => {
     let state = select(fresh(), FIRST)
-    const firstIntervention = catalog.puzzle(FIRST).teacher[0]!
-    const secondIntervention = catalog.puzzle(SECOND).teacher[0]!
+    const firstIntervention = catalog.guidance(FIRST).interventions[0]!
+    const secondIntervention = catalog.guidance(SECOND).interventions[0]!
     expect(firstIntervention.id).toBe(SHARED_TEACHER_ID)
     expect(secondIntervention.id).toBe(SHARED_TEACHER_ID)
 
@@ -313,10 +315,10 @@ describe('authoritative game controller', () => {
     const source = controllerSource()
     const second = source.puzzles.find((puzzle) => puzzle.id === SECOND)!
     const firstStep = second.witness[0]!
-    const reached = applyGameStep(startPuzzle(second), firstStep, {
+    const reached = applyGameStep(startPuzzle({ id: second.id, diagram: second.goal.diagram }), firstStep, {
       context: { relations: source.context.relations, theorems: new Map() },
     })
-    const authority = buildCatalog({
+    const authority = buildTestCatalog({
       ...source,
       puzzles: source.puzzles.map((puzzle) => puzzle.id !== SECOND ? puzzle : {
         ...puzzle,

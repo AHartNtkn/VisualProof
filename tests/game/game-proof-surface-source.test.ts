@@ -34,4 +34,13 @@ describe('game-owned proof surface boundaries', () => {
       /paint\([^\n]+\)\.filter\(\(shape\) => shape\.kind !== 'frame'\)/,
     )
   })
+
+  it('keeps deselection vocabulary separate from the proof erasure operation', () => {
+    const brush = readFileSync(
+      resolve('src/game/interface/loupe/interact/brush.ts'),
+      'utf8',
+    )
+    expect(brush).toContain("type BrushMode = 'select' | 'deselect'")
+    expect(brush).not.toMatch(/readonly erase|stroke\.erase|erase mode|add\/erase/i)
+  })
 })

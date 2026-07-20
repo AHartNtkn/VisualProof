@@ -1,0 +1,785 @@
+{
+  "cultures": [
+    {
+      "id": "seyric-horizon",
+      "order": 0,
+      "unlocksAfter": [],
+      "gateway": "two-veils",
+      "puzzles": [
+        "two-veils",
+        "four-veils",
+        "forked-veil",
+        "echoed-veil",
+        "empty-ring-release",
+        "single-mark-return",
+        "shallow-edit-legality-contrast",
+        "atomic-fragment-erasure",
+        "atomic-content-insertion",
+        "compound-copy-authority-contrast",
+        "transfer-duplication-recognition",
+        "atomic-double-cut-selection",
+        "common-conjunction-factor-base",
+        "common-disjunction-factor-base",
+        "compound-common-disjunction-factor",
+        "compound-double-cut-selection",
+        "content-bearing-annulus-choice",
+        "disjunction-over-conjunction-base",
+        "i-dao",
+        "nested-owner-introduction",
+        "polarity-bubble-contrast",
+        "rm-fa",
+        "useful-vacuous-owner-workspace",
+        "conjunction-idempotence-introduction",
+        "weakening-introduction",
+        "compound-weakening-boundary",
+        "two-mark-projection",
+        "compound-projection",
+        "ternary-projection-choice",
+        "left-injection-introduction",
+        "grouped-branch-construction",
+        "injection-branch-contrast",
+        "compound-conjunction-idempotence",
+        "disjunction-idempotence-introduction",
+        "compound-disjunction-idempotence",
+        "atomic-conjunction-exchange",
+        "compound-conjunction-exchange",
+        "disjunction-exchange-recognition",
+        "compound-disjunction-exchange",
+        "conjunction-reassociation-recognition",
+        "conjunction-reassociation-role-scope",
+        "disjunction-reassociation-recognition",
+        "structural-recognition-routing-choice",
+        "disjunction-reassociation-role-scope",
+        "i-c3",
+        "i-c4",
+        "r1",
+        "i-cs",
+        "i-al",
+        "ch-and",
+        "i-case2",
+        "rm-case3",
+        "i-om",
+        "ch-or",
+        "ternary-branchwise-map",
+        "i-aa",
+        "b6",
+        "i-ao",
+        "rm-ao",
+        "sey-ctr-i01",
+        "sey-ctr-r01",
+        "atomic-excluded-middle",
+        "sey-lem-i01",
+        "sey-lem-c01",
+        "atomic-negated-disjunction-forward",
+        "atomic-negated-disjunction-reverse",
+        "sey-dm-ec-i01",
+        "sey-dm-ec-c01",
+        "sey-dm-ed-i01",
+        "sey-dm-fc-i01",
+        "compound-conjunction-de-morgan",
+        "sey-red-i01",
+        "sey-red-c01",
+        "sey-pei-i01",
+        "sey-pei-c01",
+        "compound-context-threaded-choice",
+        "assumption-relevant-structured-reductio",
+        "weakening-injection-weave",
+        "contrapositive-composition-bridge",
+        "excluded-middle-manufactures-cases",
+        "alternating-negation-cnf",
+        "alternating-negation-dnf",
+        "b3",
+        "branch-preparation-common-tail",
+        "branch-preparation-local-chains",
+        "classical-consensus-branch-building",
+        "classical-consensus-product-collapsing",
+        "de-morgan-product-consumer",
+        "de-morgan-sum-consumer",
+        "double-cut-copy-license",
+        "double-cut-insertion-workspace",
+        "preserve-sole-structural-source",
+        "r4",
+        "r5",
+        "recollect-shared-branch-context",
+        "rm-c3",
+        "sey-ref-sel-i01",
+        "compound-theorem-source-choice",
+        "useful-manifestation-target",
+        "sey-ref-dis-i01",
+        "compound-context-dissolution",
+        "artifact-creates-copy-authority",
+        "artifact-polarity-direction-contrast",
+        "artifact-preserves-copy-authority",
+        "artifact-selected-downstream-bridge"
+      ]
+    },
+    {
+      "id": "myratic-tradition",
+      "order": 1,
+      "unlocksAfter": [
+        "single-mark-return"
+      ],
+      "gateway": "blank-witness",
+      "puzzles": [
+        "blank-witness"
+      ]
+    }
+  ],
+  "placements": [
+    {
+      "puzzle": "two-veils",
+      "prerequisites": []
+    },
+    {
+      "puzzle": "four-veils",
+      "prerequisites": [
+        "two-veils"
+      ]
+    },
+    {
+      "puzzle": "forked-veil",
+      "prerequisites": [
+        "two-veils"
+      ]
+    },
+    {
+      "puzzle": "echoed-veil",
+      "prerequisites": [
+        "forked-veil"
+      ]
+    },
+    {
+      "puzzle": "empty-ring-release",
+      "prerequisites": [
+        "echoed-veil"
+      ]
+    },
+    {
+      "puzzle": "single-mark-return",
+      "prerequisites": [
+        "empty-ring-release"
+      ]
+    },
+    {
+      "puzzle": "shallow-edit-legality-contrast",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "atomic-fragment-erasure",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "atomic-content-insertion",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-copy-authority-contrast",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "transfer-duplication-recognition",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "atomic-double-cut-selection",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "common-conjunction-factor-base",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "common-disjunction-factor-base",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-common-disjunction-factor",
+      "prerequisites": [
+        "common-disjunction-factor-base"
+      ]
+    },
+    {
+      "puzzle": "compound-double-cut-selection",
+      "prerequisites": [
+        "atomic-double-cut-selection"
+      ]
+    },
+    {
+      "puzzle": "content-bearing-annulus-choice",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "disjunction-over-conjunction-base",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "i-dao",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "nested-owner-introduction",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "polarity-bubble-contrast",
+      "prerequisites": [
+        "nested-owner-introduction",
+        "shallow-edit-legality-contrast"
+      ]
+    },
+    {
+      "puzzle": "rm-fa",
+      "prerequisites": [
+        "common-conjunction-factor-base"
+      ]
+    },
+    {
+      "puzzle": "useful-vacuous-owner-workspace",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "conjunction-idempotence-introduction",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "weakening-introduction",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-weakening-boundary",
+      "prerequisites": [
+        "atomic-fragment-erasure",
+        "weakening-introduction"
+      ]
+    },
+    {
+      "puzzle": "two-mark-projection",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-projection",
+      "prerequisites": [
+        "two-mark-projection"
+      ]
+    },
+    {
+      "puzzle": "ternary-projection-choice",
+      "prerequisites": [
+        "two-mark-projection"
+      ]
+    },
+    {
+      "puzzle": "left-injection-introduction",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "grouped-branch-construction",
+      "prerequisites": [
+        "atomic-content-insertion",
+        "left-injection-introduction"
+      ]
+    },
+    {
+      "puzzle": "injection-branch-contrast",
+      "prerequisites": [
+        "left-injection-introduction"
+      ]
+    },
+    {
+      "puzzle": "compound-conjunction-idempotence",
+      "prerequisites": [
+        "conjunction-idempotence-introduction"
+      ]
+    },
+    {
+      "puzzle": "disjunction-idempotence-introduction",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-disjunction-idempotence",
+      "prerequisites": [
+        "disjunction-idempotence-introduction"
+      ]
+    },
+    {
+      "puzzle": "atomic-conjunction-exchange",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-conjunction-exchange",
+      "prerequisites": [
+        "atomic-conjunction-exchange"
+      ]
+    },
+    {
+      "puzzle": "disjunction-exchange-recognition",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-disjunction-exchange",
+      "prerequisites": [
+        "disjunction-exchange-recognition"
+      ]
+    },
+    {
+      "puzzle": "conjunction-reassociation-recognition",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "conjunction-reassociation-role-scope",
+      "prerequisites": [
+        "conjunction-reassociation-recognition"
+      ]
+    },
+    {
+      "puzzle": "disjunction-reassociation-recognition",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "structural-recognition-routing-choice",
+      "prerequisites": [
+        "conjunction-reassociation-recognition",
+        "disjunction-reassociation-recognition"
+      ]
+    },
+    {
+      "puzzle": "disjunction-reassociation-role-scope",
+      "prerequisites": [
+        "disjunction-reassociation-recognition"
+      ]
+    },
+    {
+      "puzzle": "i-c3",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "i-c4",
+      "prerequisites": [
+        "i-c3"
+      ]
+    },
+    {
+      "puzzle": "r1",
+      "prerequisites": [
+        "i-c3"
+      ]
+    },
+    {
+      "puzzle": "i-cs",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "i-al",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "ch-and",
+      "prerequisites": [
+        "i-al"
+      ]
+    },
+    {
+      "puzzle": "i-case2",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "rm-case3",
+      "prerequisites": [
+        "i-case2"
+      ]
+    },
+    {
+      "puzzle": "i-om",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "ch-or",
+      "prerequisites": [
+        "i-om"
+      ]
+    },
+    {
+      "puzzle": "ternary-branchwise-map",
+      "prerequisites": [
+        "i-om"
+      ]
+    },
+    {
+      "puzzle": "i-aa",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "b6",
+      "prerequisites": [
+        "i-aa"
+      ]
+    },
+    {
+      "puzzle": "i-ao",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "rm-ao",
+      "prerequisites": [
+        "i-ao"
+      ]
+    },
+    {
+      "puzzle": "sey-ctr-i01",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "sey-ctr-r01",
+      "prerequisites": [
+        "sey-ctr-i01"
+      ]
+    },
+    {
+      "puzzle": "atomic-excluded-middle",
+      "prerequisites": [
+        "left-injection-introduction",
+        "i-case2"
+      ]
+    },
+    {
+      "puzzle": "sey-lem-i01",
+      "prerequisites": [
+        "atomic-excluded-middle"
+      ]
+    },
+    {
+      "puzzle": "sey-lem-c01",
+      "prerequisites": [
+        "sey-lem-i01"
+      ]
+    },
+    {
+      "puzzle": "atomic-negated-disjunction-forward",
+      "prerequisites": [
+        "conjunction-idempotence-introduction",
+        "disjunction-idempotence-introduction"
+      ]
+    },
+    {
+      "puzzle": "atomic-negated-disjunction-reverse",
+      "prerequisites": [
+        "atomic-negated-disjunction-forward"
+      ]
+    },
+    {
+      "puzzle": "sey-dm-ec-i01",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "sey-dm-ec-c01",
+      "prerequisites": [
+        "sey-dm-ec-i01",
+        "atomic-negated-disjunction-forward"
+      ]
+    },
+    {
+      "puzzle": "sey-dm-ed-i01",
+      "prerequisites": [
+        "atomic-negated-disjunction-forward",
+        "atomic-negated-disjunction-reverse"
+      ]
+    },
+    {
+      "puzzle": "sey-dm-fc-i01",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-conjunction-de-morgan",
+      "prerequisites": [
+        "sey-dm-ec-i01",
+        "sey-dm-fc-i01"
+      ]
+    },
+    {
+      "puzzle": "sey-red-i01",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "sey-red-c01",
+      "prerequisites": [
+        "sey-red-i01"
+      ]
+    },
+    {
+      "puzzle": "sey-pei-i01",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "sey-pei-c01",
+      "prerequisites": [
+        "sey-pei-i01"
+      ]
+    },
+    {
+      "puzzle": "compound-context-threaded-choice",
+      "prerequisites": [
+        "i-cs"
+      ]
+    },
+    {
+      "puzzle": "assumption-relevant-structured-reductio",
+      "prerequisites": [
+        "sey-red-c01"
+      ]
+    },
+    {
+      "puzzle": "weakening-injection-weave",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "contrapositive-composition-bridge",
+      "prerequisites": [
+        "sey-ctr-i01",
+        "i-c3"
+      ]
+    },
+    {
+      "puzzle": "excluded-middle-manufactures-cases",
+      "prerequisites": [
+        "atomic-excluded-middle",
+        "i-case2"
+      ]
+    },
+    {
+      "puzzle": "alternating-negation-cnf",
+      "prerequisites": [
+        "compound-conjunction-de-morgan",
+        "sey-dm-ed-i01",
+        "disjunction-over-conjunction-base"
+      ]
+    },
+    {
+      "puzzle": "alternating-negation-dnf",
+      "prerequisites": [
+        "compound-conjunction-de-morgan",
+        "sey-dm-ed-i01",
+        "i-dao"
+      ]
+    },
+    {
+      "puzzle": "b3",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "branch-preparation-common-tail",
+      "prerequisites": [
+        "i-case2"
+      ]
+    },
+    {
+      "puzzle": "branch-preparation-local-chains",
+      "prerequisites": [
+        "i-case2"
+      ]
+    },
+    {
+      "puzzle": "classical-consensus-branch-building",
+      "prerequisites": [
+        "atomic-excluded-middle",
+        "i-case2",
+        "common-conjunction-factor-base"
+      ]
+    },
+    {
+      "puzzle": "classical-consensus-product-collapsing",
+      "prerequisites": [
+        "atomic-excluded-middle",
+        "common-disjunction-factor-base"
+      ]
+    },
+    {
+      "puzzle": "de-morgan-product-consumer",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "de-morgan-sum-consumer",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "double-cut-copy-license",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "double-cut-insertion-workspace",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "preserve-sole-structural-source",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "r4",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "r5",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "recollect-shared-branch-context",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "rm-c3",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "sey-ref-sel-i01",
+      "prerequisites": [
+        "single-mark-return",
+        "nested-owner-introduction"
+      ]
+    },
+    {
+      "puzzle": "compound-theorem-source-choice",
+      "prerequisites": [
+        "sey-lem-i01",
+        "sey-lem-c01",
+        "sey-ref-sel-i01"
+      ]
+    },
+    {
+      "puzzle": "useful-manifestation-target",
+      "prerequisites": [
+        "two-mark-projection"
+      ]
+    },
+    {
+      "puzzle": "sey-ref-dis-i01",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "compound-context-dissolution",
+      "prerequisites": [
+        "rm-fa",
+        "sey-ref-dis-i01"
+      ]
+    },
+    {
+      "puzzle": "artifact-creates-copy-authority",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "artifact-polarity-direction-contrast",
+      "prerequisites": [
+        "two-mark-projection"
+      ]
+    },
+    {
+      "puzzle": "artifact-preserves-copy-authority",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "artifact-selected-downstream-bridge",
+      "prerequisites": [
+        "i-c3",
+        "i-c4"
+      ]
+    },
+    {
+      "puzzle": "blank-witness",
+      "prerequisites": []
+    }
+  ]
+}

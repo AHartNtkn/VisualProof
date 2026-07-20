@@ -1,0 +1,13 @@
+{
+  "id": "two-veils",
+  "diagram": {
+    "root": "r0",
+    "regions": {
+      "r0": { "kind": "sheet" },
+      "r1": { "kind": "cut", "parent": "r0" },
+      "r2": { "kind": "cut", "parent": "r1" }
+    },
+    "nodes": {},
+    "wires": {}
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cursebreaker://schemas/diagram",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["root", "regions", "nodes", "wires"],
+  "properties": {
+    "root": { "type": "string", "minLength": 1 },
+    "regions": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "object", "additionalProperties": false, "required": ["kind"], "properties": { "kind": { "const": "sheet" } } },
+          { "type": "object", "additionalProperties": false, "required": ["kind", "parent"], "properties": { "kind": { "const": "cut" }, "parent": { "type": "string", "minLength": 1 } } },
+          { "type": "object", "additionalProperties": false, "required": ["kind", "parent", "arity"], "properties": { "kind": { "const": "bubble" }, "parent": { "type": "string", "minLength": 1 }, "arity": { "type": "integer", "minimum": 0 } } }
+        ]
+      }
+    },
+    "nodes": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          { "type": "object", "additionalProperties": false, "required": ["kind", "region", "term"], "properties": { "kind": { "const": "term" }, "region": { "type": "string" }, "term": { "type": "string" } } },
+          { "type": "object", "additionalProperties": false, "required": ["kind", "region", "binder"], "properties": { "kind": { "const": "atom" }, "region": { "type": "string" }, "binder": { "type": "string" } } },
+          { "type": "object", "additionalProperties": false, "required": ["kind", "region", "defId", "arity"], "properties": { "kind": { "const": "ref" }, "region": { "type": "string" }, "defId": { "type": "string" }, "arity": { "type": "integer", "minimum": 0 } } }
+        ]
+      }
+    },
+    "wires": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["scope", "endpoints"],
+        "properties": {
+          "scope": { "type": "string" },
+          "endpoints": {
+            "type": "array",
+            "items": { "type": "object", "additionalProperties": false, "required": ["node", "port"], "properties": { "node": { "type": "string" }, "port": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  }
+}

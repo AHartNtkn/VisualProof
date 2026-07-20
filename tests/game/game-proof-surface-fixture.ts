@@ -1,5 +1,6 @@
 import { mountLensEnvironment } from '../../src/game/interface/lens-environment'
 import { GameProofViewport } from '../../src/game/interface/proof-surface'
+import { brushHitTest } from '../../src/game/interface/loupe/hittest'
 import { gameProofMotionPreferences } from '../../src/game/interface/proof-motion'
 import { mountTimelineLever } from '../../src/game/interface/timeline-lever'
 import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
@@ -10,6 +11,7 @@ import { minimalPuzzle } from './catalog-fixture'
 const fixture = comprehensionFixture()
 let diagram = fixture.diagram
 let prepared = 0
+const preparedSteps: ProofStep[] = []
 let refusals = 0
 let changed = 0
 let timelineCursor = 3
@@ -33,6 +35,7 @@ const surface = new GameProofViewport({
   fuel: () => 256,
   prepare: (step: ProofStep) => {
     prepared++
+    preparedSteps.push(step)
     const next = applyStep(diagram, step, { theorems: new Map(), relations: new Map() }, 'backward')
     return () => { diagram = next }
   },
@@ -69,9 +72,72 @@ const worldToClient = (point: { readonly x: number; readonly y: number }) => {
   }
 }
 
+const cutBoundaryPoint = () => {
+  const region = surface.engine.regions.get(fixture.guard)
+  if (region === undefined) throw new Error('guard cut has no rendered geometry')
+  for (let index = 0; index < 360; index += 1) {
+    const angle = index * Math.PI / 180
+    const point = {
+      x: region.center.x + Math.cos(angle) * region.radius,
+      y: region.center.y + Math.sin(angle) * region.radius,
+    }
+    const hit = brushHitTest(surface.engine, point, { scale: surface.view.scale }, false)
+    if (hit?.kind === 'region' && hit.id === fixture.guard) return worldToClient(point)
+  }
+  throw new Error('guard cut has no pointer-reachable boundary point')
+}
+
+const rootTargetPoint = () => {
+  const frame = surface.engine.frame
+  if (frame === null) throw new Error('proof frame has no rendered geometry')
+  const offsets = [
+    { x: 0.82, y: 0.82 },
+    { x: -0.82, y: 0.82 },
+    { x: 0.82, y: -0.82 },
+    { x: -0.82, y: -0.82 },
+  ]
+  for (const offset of offsets) {
+    const point = {
+      x: frame.center.x + frame.half * offset.x,
+      y: frame.center.y + frame.half * offset.y,
+    }
+    const insideCut = [...surface.engine.regions.entries()].some(([id, region]) =>
+      diagram.regions[id]?.kind !== 'sheet'
+      && Math.hypot(point.x - region.center.x, point.y - region.center.y) <= region.radius)
+    if (!insideCut) return worldToClient(point)
+  }
+  throw new Error('proof root has no pointer-reachable iteration target')
+}
+
+const guardCopies = (): number => Object.entries(diagram.regions)
+  .filter(([, region]) => region.kind === 'cut' && region.parent === diagram.root)
+  .filter(([cut]) => Object.entries(diagram.regions).some(([bubble, region]) =>
+    region.kind === 'bubble'
+    && region.parent === cut
+    && Object.values(diagram.nodes).filter((node) =>
+      node.kind === 'atom' && node.region === bubble).length === 2))
+  .length
+
 const state = {
   mapping: (client: { readonly x: number; readonly y: number }) => surface.mapClient(client),
   proofNodePoint: () => worldToClient([...surface.engine.bodies.values()].find((body) => body.node !== null)!.pos),
+  proofNodePoints: () => [...surface.engine.bodies.values()]
+    .filter((body) => body.node !== null)
+    .slice(0, 2)
+    .map((body) => worldToClient(body.pos)),
+  cutIterationGesture: () => ({
+    cut: fixture.guard,
+    root: diagram.root,
+    start: cutBoundaryPoint(),
+    target: rootTargetPoint(),
+  }),
+  iterationSnapshot: () => ({
+    prepared,
+    lastStep: preparedSteps.at(-1) ?? null,
+    cutCopies: guardCopies(),
+    regions: Object.keys(diagram.regions).length,
+    nodes: Object.keys(diagram.nodes).length,
+  }),
   selection: () => surface.debug().selection.map((hit) => `${hit.kind}:${hit.id}`),
   clearSelection: (): void => surface.interaction.setSelection([]),
   selectParameter: (): void => surface.interaction.setSelection([{ kind: 'wire', id: fixture.parameter }]),
@@ -81,7 +147,10 @@ const state = {
   prepared: (): number => prepared,
   refusals: (): number => refusals,
   changed: (): number => changed,
-  refuseIncompleteArtifact: (): void => { surface.dropArtifact(minimalPuzzle(), { x: 10, y: 10 }) },
+  refuseIncompleteArtifact: (): void => {
+    const artifact = minimalPuzzle()
+    surface.dropArtifact({ id: artifact.id, diagram: artifact.goal.diagram }, { x: 10, y: 10 })
+  },
   cornerAlpha: (): number => {
     surface.frame(performance.now())
     return surface.canvas.getContext('2d')!.getImageData(0, 0, 1, 1).data[3]!
@@ -103,7 +172,8 @@ const state = {
     })
     const before = snapshot()
     const opened = surface.openConstruction(fixture.bubble, { x: 100, y: 100 })
-    const drop = surface.dropArtifact(minimalPuzzle(), { x: 100, y: 100 })
+    const artifact = minimalPuzzle()
+    const drop = surface.dropArtifact({ id: artifact.id, diagram: artifact.goal.diagram }, { x: 100, y: 100 })
     surface.reconcileDiagram()
     surface.cancelActiveGesture()
     surface.resize(before.canvas.width + 200, before.canvas.height + 100)

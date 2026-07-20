@@ -5,6 +5,7 @@ import {
 } from '../src/game'
 import type { GameAction } from '../src/game/controller'
 import type { Vec2 } from '../src/view/vec'
+import { gameCatalog } from './content'
 
 declare global {
   interface Window {
@@ -23,7 +24,7 @@ async function boot(): Promise<void> {
   if (!(host instanceof HTMLElement)) throw new Error("missing <main id='cursebreaker'>")
 
   const platform = cursebreakerPlatform()
-  const mounted = await mountCursebreaker({ host, platform })
+  const mounted = await mountCursebreaker({ host, platform, catalog: gameCatalog })
   if (new URLSearchParams(window.location.search).has('debug')) {
     window.__cursebreakerDebug = {
       state: () => mounted.debug(),

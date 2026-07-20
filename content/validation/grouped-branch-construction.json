@@ -1,0 +1,140 @@
+{
+  "puzzle": "grouped-branch-construction",
+  "solution": [
+    {
+      "rule": "insertion",
+      "region": "r5",
+      "pattern": {
+        "diagram": {
+          "root": "r0",
+          "regions": {
+            "r0": {
+              "kind": "sheet"
+            },
+            "r1": {
+              "kind": "bubble",
+              "parent": "r0",
+              "arity": 0
+            },
+            "r2": {
+              "kind": "bubble",
+              "parent": "r1",
+              "arity": 0
+            }
+          },
+          "nodes": {
+            "n0": {
+              "kind": "atom",
+              "region": "r2",
+              "binder": "r1"
+            },
+            "n1": {
+              "kind": "atom",
+              "region": "r2",
+              "binder": "r2"
+            }
+          },
+          "wires": {}
+        },
+        "boundary": []
+      },
+      "attachments": [],
+      "binders": {
+        "r1": "r2",
+        "r2": "r3"
+      }
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r7",
+        "regions": [
+          "r8"
+        ],
+        "nodes": [
+          "n3",
+          "n4"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5",
+        "regions": [],
+        "nodes": [
+          "n0_0",
+          "n1_0"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r6",
+        "regions": [],
+        "nodes": [
+          "n2"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5",
+        "regions": [
+          "r7"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [],
+        "nodes": [
+          "n0",
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "insertion",
+    "deiteration",
+    "erasure",
+    "doubleCutElim",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

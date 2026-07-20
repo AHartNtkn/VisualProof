@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cursebreaker://schemas/guidance",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "pages": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1, "pattern": "^[^\\r\\n]+$" } },
+    "simpleTrigger": { "type": "object", "additionalProperties": false, "required": ["kind"], "properties": { "kind": { "enum": ["opening", "completion"] } } },
+    "recognizedTrigger": { "type": "object", "additionalProperties": false, "required": ["kind", "state"], "properties": { "kind": { "const": "recognizedUnwinnable" }, "state": { "$ref": "cursebreaker://schemas/diagram" } } }
+  },
+  "type": "object", "additionalProperties": false, "required": ["puzzles"],
+  "properties": {
+    "puzzles": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["puzzle", "interventions"],
+        "properties": {
+          "puzzle": { "$ref": "#/$defs/id" },
+          "interventions": {
+            "type": "array",
+            "items": {
+              "type": "object", "additionalProperties": false,
+              "required": ["id", "trigger", "repeat", "pages"],
+              "properties": {
+                "id": { "$ref": "#/$defs/id" },
+                "trigger": { "oneOf": [{ "$ref": "#/$defs/simpleTrigger" }, { "$ref": "#/$defs/recognizedTrigger" }] },
+                "repeat": { "enum": ["once", "repeatable"] }, "pages": { "$ref": "#/$defs/pages" },
+                "recovery": { "const": "timeline" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

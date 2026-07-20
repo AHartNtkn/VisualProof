@@ -1,0 +1,37 @@
+{
+  "id": "double-cut-insertion-workspace",
+  "diagram": {
+    "root": "r0",
+    "regions": {
+      "r0": {
+        "kind": "sheet"
+      },
+      "r1": {
+        "kind": "cut",
+        "parent": "r0"
+      },
+      "r2": {
+        "kind": "cut",
+        "parent": "r1"
+      },
+      "r3": {
+        "kind": "cut",
+        "parent": "r2"
+      },
+      "r4": {
+        "kind": "cut",
+        "parent": "r3"
+      },
+      "r5": {
+        "kind": "cut",
+        "parent": "r3"
+      },
+      "r6": {
+        "kind": "cut",
+        "parent": "r5"
+      }
+    },
+    "nodes": {},
+    "wires": {}
+  }
+}

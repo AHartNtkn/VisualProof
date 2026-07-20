@@ -1,5 +1,5 @@
 import { createInitialGameState } from '../../src/game/controller-state'
-import { buildCatalog } from '../../src/game/catalog'
+import { loadGameContent } from '../../src/game/catalog'
 import '../../app/style.css'
 import { reduceGame, type GameAction } from '../../src/game/controller'
 import {
@@ -9,13 +9,16 @@ import {
 } from '../../src/game/interface/mount'
 import type { CursebreakerPlatform } from '../../src/game/platform'
 import { encodeGameSave } from '../../src/game/save'
-import { controllerCatalog } from './controller-fixture'
-import { openingCatalog } from '../../src/game/content'
+import { controllerSource } from './controller-fixture'
+import { gameContentFiles } from '../../src/game/content'
+import { buildTestCatalog } from './catalog-fixture'
+import { openingDemonstration, openingWitness } from './content-evidence'
 import {
   artifactRuntimeCatalog,
   editorRuntimeCatalog,
   longRuntimeCatalog,
   motionRuntimeCatalog,
+  runtimeEvidenceFor,
 } from './runtime-catalog-fixture'
 
 const host = document.querySelector<HTMLElement>('#cursebreaker')!
@@ -36,22 +39,27 @@ window.cancelAnimationFrame = (request: number): void => {
   activeRafs.delete(request)
   nativeCancelAnimationFrame(request)
 }
-const scenarioCatalog = scenario === 'opening' ? openingCatalog()
+const scenarioCatalog = scenario === 'opening' ? loadGameContent(gameContentFiles)
   : scenario === 'artifact' ? artifactRuntimeCatalog()
     : scenario === 'editor' ? editorRuntimeCatalog()
       : scenario === 'motion' ? motionRuntimeCatalog()
         : scenario === 'long' ? longRuntimeCatalog()
-          : controllerCatalog()
-const catalog = scenario === 'opening' ? scenarioCatalog : buildCatalog({
-  ...scenarioCatalog.source,
-  puzzles: scenarioCatalog.source.puzzles.map((puzzle) => ({ ...puzzle, teacher: [] })),
-})
+          : buildTestCatalog({
+              ...controllerSource(),
+              puzzles: controllerSource().puzzles.map((puzzle) => ({ ...puzzle, teacher: [] })),
+            })
+const catalog = scenarioCatalog
+const controllerEvidence = new Map(controllerSource().puzzles.map((puzzle) => [puzzle.id, puzzle.witness] as const))
+
+const witnessFor = (id: string) => scenario === 'opening'
+  ? openingWitness(id)
+  : runtimeEvidenceFor(id)?.witness ?? controllerEvidence.get(id as never) ?? []
 
 const restoredSave = (): unknown => {
   let state = createInitialGameState(catalog, { reducedMotion: false })
-  const first = catalog.source.puzzles[0]!
-  state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first.id }).state
-  state = reduceGame(catalog, state, { kind: 'applyStep', step: first.witness[0]! }).state
+  const first = catalog.puzzleIds[0]!
+  state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first }).state
+  state = reduceGame(catalog, state, { kind: 'applyStep', step: witnessFor(first)[0]! }).state
   state = reduceGame(catalog, state, { kind: 'setCultureScroll', culture: state.selectedCulture, scroll: 137 }).state
   state = reduceGame(catalog, state, { kind: 'setReducedMotion', value: true }).state
   state = reduceGame(catalog, state, { kind: 'setFullscreen', value: false }).state
@@ -61,9 +69,9 @@ const restoredSave = (): unknown => {
 
 const completedSave = (): unknown => {
   let state = createInitialGameState(catalog, { reducedMotion: false })
-  const first = catalog.source.puzzles[0]!
-  state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first.id }).state
-  for (const step of first.witness) {
+  const first = catalog.puzzleIds[0]!
+  state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first }).state
+  for (const step of witnessFor(first)) {
     state = reduceGame(catalog, state, { kind: 'applyStep', step }).state
   }
   return encodeGameSave(catalog, state)
@@ -195,24 +203,24 @@ const fixture = {
   witness: (index: number) => {
     const active = requireMounted().debug().state.activePuzzle
     if (active === null) throw new Error('no active puzzle')
-    const step = catalog.puzzle(active).witness[index]
+    const step = witnessFor(active)[index]
     if (step === undefined) throw new Error(`active puzzle has no witness step ${index}`)
     requireMounted().dispatch({ kind: 'applyStep', step })
   },
   unwinnable: () => {
     const active = requireMounted().debug().state.activePuzzle
     if (active === null) throw new Error('no active puzzle')
-    const intervention = catalog.puzzle(active).teacher.find(
+    const intervention = catalog.guidance(active).interventions.find(
       ({ trigger }) => trigger.kind === 'recognizedUnwinnable',
     )
     if (intervention?.trigger.kind !== 'recognizedUnwinnable') {
       throw new Error('active puzzle has no recognized unwinnable demonstration')
     }
-    for (const step of intervention.trigger.demonstration) {
+    for (const step of openingDemonstration(active, intervention.id)) {
       requireMounted().dispatch({ kind: 'applyStep', step })
     }
   },
-  puzzles: () => catalog.source.puzzles.map(({ id }) => id),
+  puzzles: () => catalog.puzzleIds,
   settle: () => requireMounted().settled(),
   nativeExit: () => { for (const callback of exitListeners) callback() },
   dispose: () => requireMounted().dispose(),

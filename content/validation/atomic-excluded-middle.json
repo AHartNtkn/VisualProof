@@ -1,0 +1,52 @@
+{
+  "puzzle": "atomic-excluded-middle",
+  "solution": [
+    {
+      "rule": "doubleCutElim",
+      "region": "r6"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r3"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5",
+        "regions": [],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r2",
+        "regions": [],
+        "nodes": [
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutElim",
+    "deiteration",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

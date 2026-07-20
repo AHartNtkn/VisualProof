@@ -1,0 +1,90 @@
+{
+  "puzzle": "de-morgan-sum-consumer",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5",
+        "regions": [
+          "r7"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [
+          "r10"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r11",
+        "regions": [
+          "r12"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r11",
+        "regions": [
+          "r14"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5",
+          "r8",
+          "r16"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "erasure",
+    "vacuousElim",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

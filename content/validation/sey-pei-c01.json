@@ -1,0 +1,72 @@
+{
+  "puzzle": "sey-pei-c01",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5",
+        "regions": [
+          "r8"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r9",
+        "regions": [],
+        "nodes": [
+          "n5",
+          "n6"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r7"
+        ],
+        "nodes": [
+          "n0",
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "doubleCutElim",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

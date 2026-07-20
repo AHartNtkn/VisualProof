@@ -1,0 +1,63 @@
+{
+  "puzzle": "artifact-polarity-direction-contrast",
+  "solution": [
+    {
+      "rule": "theorem",
+      "name": "game:artifact:two-mark-projection",
+      "at": {
+        "sel": {
+          "region": "r3",
+          "regions": [],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "forward"
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r3",
+        "regions": [
+          "r1_1"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r3"
+    },
+    {
+      "rule": "theorem",
+      "name": "game:artifact:two-mark-projection",
+      "at": {
+        "sel": {
+          "region": "r2",
+          "regions": [
+            "r1_0"
+          ],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "reverse"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "two-mark-projection"
+  ],
+  "expectedRules": [
+    "theorem",
+    "erasure",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

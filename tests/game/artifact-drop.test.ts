@@ -4,26 +4,29 @@ import { applyStep } from '../../src/kernel/proof/step'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { artifactTheoremContext } from '../../src/game/artifact-theorem'
 import { planArtifactDrop } from '../../src/game/interface/artifact-drop'
-import { minimalPuzzle } from './catalog-fixture'
+import { buildTestCatalog, minimalPuzzle, minimalSource } from './catalog-fixture'
 import { twoVeils } from './fixtures'
 
 const artifactGoal = twoVeils()
-const artifact = minimalPuzzle({ goal: artifactGoal.goal })
-const completed = artifactTheoremContext(
-  [artifact],
-  new Set([artifact.id]),
-  { relations: new Map() },
-)
+const testArtifact = minimalPuzzle({ goal: artifactGoal.goal })
+const source = minimalSource()
+const catalog = buildTestCatalog({
+  ...source,
+  cultures: [{ ...source.cultures[0]!, gateway: testArtifact.id }],
+  puzzles: [testArtifact],
+})
+const artifact = catalog.puzzle(testArtifact.id)
+const completed = artifactTheoremContext(catalog, new Set([artifact.id]))
 
 describe('completed artifact drop authority', () => {
   it('dissolves a cut-only exact occurrence through an ordinary reverse theorem step', () => {
     const result = planArtifactDrop({
       artifact,
-      diagram: artifact.goal.diagram,
+      diagram: artifact.diagram,
       context: completed,
       target: {
         hit: { kind: 'region', id: artifactGoal.eliminations[0]! },
-        containingRegion: artifact.goal.diagram.root,
+        containingRegion: artifact.diagram.root,
       },
       fuel: 256,
     })
@@ -34,8 +37,8 @@ describe('completed artifact drop authority', () => {
       step: { rule: 'theorem', direction: 'reverse' },
     })
     if (!result.ok) throw new Error(result.reason)
-    expect(Object.keys(applyStep(artifact.goal.diagram, result.step, completed, 'backward').regions))
-      .toEqual([artifact.goal.diagram.root])
+    expect(Object.keys(applyStep(artifact.diagram, result.step, completed, 'backward').regions))
+      .toEqual([artifact.diagram.root])
   })
 
   it('manifests into the actual smallest negative containing region', () => {
@@ -65,12 +68,12 @@ describe('completed artifact drop authority', () => {
   })
 
   it('refuses incomplete artifacts, similar forms, and strict-subgraph hits without a step', () => {
-    const unavailable = artifactTheoremContext([artifact], new Set(), { relations: new Map() })
+    const unavailable = artifactTheoremContext(catalog, new Set())
     expect(planArtifactDrop({
       artifact,
-      diagram: artifact.goal.diagram,
+      diagram: artifact.diagram,
       context: unavailable,
-      target: { hit: { kind: 'region', id: artifactGoal.eliminations[0]! }, containingRegion: artifact.goal.diagram.root },
+      target: { hit: { kind: 'region', id: artifactGoal.eliminations[0]! }, containingRegion: artifact.diagram.root },
       fuel: 256,
     })).toMatchObject({ ok: false, code: 'artifact-incomplete' })
 
@@ -87,9 +90,9 @@ describe('completed artifact drop authority', () => {
 
     expect(planArtifactDrop({
       artifact,
-      diagram: artifact.goal.diagram,
+      diagram: artifact.diagram,
       context: completed,
-      target: { hit: null, containingRegion: artifact.goal.diagram.root },
+      target: { hit: null, containingRegion: artifact.diagram.root },
       fuel: 256,
     })).toMatchObject({ ok: false, code: 'no-legal-artifact-operation' })
   })
@@ -97,7 +100,7 @@ describe('completed artifact drop authority', () => {
   it('refuses an outside-canvas target before theorem matching or insertion', () => {
     expect(planArtifactDrop({
       artifact,
-      diagram: artifact.goal.diagram,
+      diagram: artifact.diagram,
       context: completed,
       target: { hit: null, containingRegion: null },
       fuel: 256,
@@ -168,14 +171,14 @@ describe('completed artifact drop authority', () => {
   })
 
   it('validates candidates without mutating the supplied diagram', () => {
-    const before = JSON.stringify(artifact.goal.diagram)
+    const before = JSON.stringify(artifact.diagram)
     planArtifactDrop({
       artifact,
-      diagram: artifact.goal.diagram,
+      diagram: artifact.diagram,
       context: completed,
-      target: { hit: { kind: 'region', id: artifactGoal.eliminations[0]! }, containingRegion: artifact.goal.diagram.root },
+      target: { hit: { kind: 'region', id: artifactGoal.eliminations[0]! }, containingRegion: artifact.diagram.root },
       fuel: 256,
     })
-    expect(JSON.stringify(artifact.goal.diagram)).toBe(before)
+    expect(JSON.stringify(artifact.diagram)).toBe(before)
   })
 })

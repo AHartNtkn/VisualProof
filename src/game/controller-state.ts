@@ -55,7 +55,7 @@ export function createInitialGameState(
   catalog: GameCatalog,
   preferences: InitialGamePreferences,
 ): GameControllerState {
-  const firstCulture = catalog.source.cultures[0]
+  const firstCulture = catalog.cultureIds[0]
   if (firstCulture === undefined) throw new GameDomainError('game catalog must contain a culture')
   return {
     mode: 'archive',
@@ -66,8 +66,8 @@ export function createInitialGameState(
     deliveredGuidance: [],
     guidance: null,
     completionReceipt: null,
-    selectedCulture: firstCulture.id,
-    scrollByCulture: new Map(catalog.source.cultures.map((culture) => [culture.id, 0] as const)),
+    selectedCulture: firstCulture,
+    scrollByCulture: new Map(catalog.cultureIds.map((culture) => [culture, 0] as const)),
     settings: {
       reducedMotion: preferences.reducedMotion,
       fullscreen: true,

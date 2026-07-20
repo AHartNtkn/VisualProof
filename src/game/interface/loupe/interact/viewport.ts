@@ -15,6 +15,7 @@ import {
   choosePointerPhase,
   createBrushState,
   reduceBrush,
+  type BrushMode,
   type BrushState,
   type PointerPhase,
 } from './brush'
@@ -35,7 +36,7 @@ export type PointerSample = {
 }
 export type PointerClaim = {
   /** A still release either belongs to the claim (spawn/pending target) or is
-      committed by the viewport as the ordinary selection toggle. */
+      committed by the viewport as ordinary selection. */
   readonly still: 'claim' | 'selection'
   readonly blocksPassiveRelaxation: boolean
   /** Bodies held by a policy gesture. They are excluded from settling while
@@ -87,6 +88,7 @@ type ActivePointer = {
   readonly downWorld: Vec2
   readonly initialSelection: readonly Hit[]
   readonly claim: PointerClaim | null
+  readonly brushMode: BrushMode
   brush: BrushState | null
   physics: { readonly drag: PhysicsDrag; readonly pinNode: string | null } | null
   activeDrag: ActivePhysicsDrag | null
@@ -297,6 +299,7 @@ export class InteractiveViewport {
     this.#opts.canvas.focus({ preventScroll: true })
     const sample = this.#sample(event)
     const claim = this.#opts.claim(sample)
+    const brushMode: BrushMode = event.shiftKey ? 'deselect' : 'select'
     const phase = event.button === 2
       ? (!event.shiftKey && !event.ctrlKey && claim !== null ? 'claimed' : null)
       : this.#opts.selectionEnabled()
@@ -305,7 +308,11 @@ export class InteractiveViewport {
           : event.ctrlKey && this.#opts.physicsEnabled?.() !== false ? 'physics' : 'claimed'
     if (phase === null) return
     const brush = phase === 'selection'
-      ? reduceBrush(createBrushState(this.#selected), { kind: 'begin', hit: sample.hit })
+      ? reduceBrush(createBrushState(this.#selected), {
+          kind: 'begin',
+          hit: sample.hit,
+          mode: brushMode,
+        })
       : null
     this.#pointer = {
       id: event.pointerId,
@@ -314,6 +321,7 @@ export class InteractiveViewport {
       downWorld: sample.world,
       initialSelection: this.#selected,
       claim,
+      brushMode,
       brush,
       physics: phase === 'physics' ? this.#makePhysicsGrab(sample.world) : null,
       activeDrag: null,
@@ -366,7 +374,9 @@ export class InteractiveViewport {
     } else if (pointer.phase === 'claimed' && pointer.claim !== null) {
       if (pointer.moved) pointer.claim.move(sample)
       pointer.claim.release(sample, pointer.moved)
-      if (!pointer.moved && pointer.claim.still === 'selection') this.#commitStillSelection(sample.hit)
+      if (!pointer.moved && pointer.claim.still === 'selection') {
+        this.#commitStillSelection(sample.hit)
+      }
     } else if (pointer.phase === 'physics' && pointer.physics !== null && pointer.moved) {
       pointer.activeDrag = { drag: pointer.physics.drag, cursor: sample.world }
       commitPhysicsDragSample(this.#opts.engine(), pointer.activeDrag)
@@ -407,7 +417,7 @@ export class InteractiveViewport {
 
   #commitStillSelection(hit: Hit | null): void {
     const initial = this.#selected
-    const begun = reduceBrush(createBrushState(initial), { kind: 'begin', hit })
+    const begun = reduceBrush(createBrushState(initial), { kind: 'begin', hit, mode: 'select' })
     const ended = reduceBrush(begun, { kind: 'end' })
     this.setSelection(ended.selected)
     if (!sameSelection(initial, this.#selected)) this.#opts.selectionCommitted()
@@ -419,7 +429,7 @@ export class InteractiveViewport {
     if (pointer.phase === 'selection') {
       const movingStart = reduceBrush(
         createBrushState(pointer.initialSelection),
-        { kind: 'begin', hit: this.#hit(pointer.downWorld, true) },
+        { kind: 'begin', hit: this.#hit(pointer.downWorld, true), mode: pointer.brushMode },
       )
       this.#setBrush(movingStart)
     } else if (pointer.phase === 'physics' && pointer.physics !== null) {

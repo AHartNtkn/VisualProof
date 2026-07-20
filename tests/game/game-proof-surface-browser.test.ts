@@ -79,6 +79,79 @@ describe('rendered game proof surface', () => {
     } finally { await page.close() }
   })
 
+  it('uses plain pointer input only to select and Shift pointer input only to deselect', async () => {
+    const page = await openFixture()
+    try {
+      const points = await page.evaluate(() => window.__gameProofSurfaceFixture.proofNodePoints())
+      expect(points).toHaveLength(2)
+      const [first, second] = points as [typeof points[number], typeof points[number]]
+
+      await page.mouse.click(first.x, first.y)
+      const once = await page.evaluate(() => window.__gameProofSurfaceFixture.selection())
+      expect(once).toHaveLength(1)
+      await page.mouse.click(first.x, first.y)
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection())).toEqual(once)
+
+      await page.keyboard.down('Shift')
+      await page.mouse.click(first.x, first.y)
+      await page.keyboard.up('Shift')
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection())).toEqual([])
+
+      await page.keyboard.down('Shift')
+      await page.mouse.click(first.x, first.y)
+      await page.keyboard.up('Shift')
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection())).toEqual([])
+
+      await page.mouse.click(first.x, first.y)
+      await page.mouse.click(second.x, second.y)
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection())).toHaveLength(2)
+      const proofMoves = await page.evaluate(() => window.__gameProofSurfaceFixture.prepared())
+      await page.keyboard.down('Shift')
+      await page.mouse.move(first.x, first.y)
+      await page.mouse.down()
+      await page.mouse.move(second.x, second.y, { steps: 12 })
+      await page.mouse.up()
+      await page.keyboard.up('Shift')
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection())).toEqual([])
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.prepared())).toBe(proofMoves)
+
+      const canvas = await page.locator('.curse-game-proof-canvas').boundingBox()
+      if (canvas === null) throw new Error('proof canvas missing')
+      await page.mouse.click(first.x, first.y)
+      await page.mouse.click(canvas.x + 4, canvas.y + 4)
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection())).toEqual([])
+    } finally { await page.close() }
+  })
+
+  it('iterates an already-selected cut together with its nested contents', async () => {
+    const page = await openFixture()
+    try {
+      const gesture = await page.evaluate(() =>
+        window.__gameProofSurfaceFixture.cutIterationGesture())
+      await page.mouse.click(gesture.start.x, gesture.start.y)
+      expect(await page.evaluate(() => window.__gameProofSurfaceFixture.selection()))
+        .toEqual([`region:${gesture.cut}`])
+
+      const before = await page.evaluate(() => window.__gameProofSurfaceFixture.iterationSnapshot())
+      await page.mouse.move(gesture.start.x, gesture.start.y)
+      await page.mouse.down()
+      await page.mouse.move(gesture.target.x, gesture.target.y, { steps: 12 })
+      await page.mouse.up()
+      await page.waitForFunction((prepared) =>
+        window.__gameProofSurfaceFixture.iterationSnapshot().prepared > prepared, before.prepared)
+      const after = await page.evaluate(() => window.__gameProofSurfaceFixture.iterationSnapshot())
+
+      expect(after.lastStep).toMatchObject({
+        rule: 'iteration',
+        sel: { region: gesture.root, regions: [gesture.cut], nodes: [], wires: [] },
+        target: gesture.root,
+      })
+      expect(after.cutCopies).toBe(before.cutCopies + 1)
+      expect(after.regions).toBe(before.regions + 2)
+      expect(after.nodes).toBe(before.nodes + 2)
+    } finally { await page.close() }
+  })
+
   it('opens the one game loupe, blocks proof shortcuts beneath it, and gives Escape to editor close', async () => {
     const page = await openFixture()
     try {

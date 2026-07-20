@@ -54,4 +54,15 @@ describe('game package boundary', () => {
     expect(production).not.toMatch(/CampaignId|CampaignDefinition|campaignId|\bcampaigns\b/)
     expect(production).not.toMatch(/MisconceptionCue|misconceptions|\.thought\b/)
   })
+
+  it('contains no executable puzzle catalog, fallback authority, or runtime validation evidence', () => {
+    const production = tsFilesUnder('src/game')
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n')
+    const mount = readFileSync('src/game/interface/mount.ts', 'utf8')
+    const contentImports = readFileSync('src/game/content/files.ts', 'utf8')
+    expect(production).not.toMatch(/openingCatalog|GameCatalogSource|\bbuildCatalog\b|catalog\.source/)
+    expect(mount).not.toMatch(/options\.catalog\s*\?\?/)
+    expect(contentImports).not.toContain('content/validation')
+  })
 })

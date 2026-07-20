@@ -2,12 +2,20 @@ import type { GameCatalog } from '../catalog'
 import type { GameControllerState, GamePrimaryMode } from '../controller-state'
 import { isCultureUnlocked, isUnlocked } from '../progress'
 import type { CultureId, PuzzleId } from '../types'
+import { diagramToJson } from '../../kernel/diagram/json'
+import {
+  PUZZLE_PREVIEW_HEIGHT,
+  PUZZLE_PREVIEW_WIDTH,
+  puzzlePreviewKey,
+  type PuzzlePreviewRequest,
+} from './puzzle-preview-contract'
 
 export type FolioRecordStatus = 'locked' | 'unlocked' | 'completed'
 export type FolioRecordAffordance = 'select' | 'resist' | 'drag-theorem' | 'inert'
 
 export type FolioRecordProjection = {
   readonly id: PuzzleId
+  readonly levelNumber: number
   readonly name: string
   readonly accession: string | null
   readonly summary: string
@@ -15,6 +23,7 @@ export type FolioRecordProjection = {
   readonly affordance: FolioRecordAffordance
   readonly priority: boolean
   readonly restrictedPacket: boolean
+  readonly preview: PuzzlePreviewRequest
 }
 
 export type FolioCultureProjection = {
@@ -50,29 +59,38 @@ export function projectFolio(
   mode: FolioProjection['mode'],
 ): FolioProjection {
   const progress = { completed: state.completed }
-  const cultures = catalog.source.cultures.map((culture) => ({
+  const cultures = catalog.cultureIds.map((id) => catalog.culture(id)).map((culture) => ({
     id: culture.id,
     name: culture.name,
     shortName: culture.shortName,
     historicalSummary: culture.historicalSummary,
     unlocked: isCultureUnlocked(catalog, progress, culture.id),
     scroll: state.scrollByCulture.get(culture.id) ?? 0,
-    records: catalog.source.puzzles
-      .filter((puzzle) => puzzle.culture === culture.id)
-      .map((puzzle): FolioRecordProjection => {
-        const status: FolioRecordStatus = state.completed.has(puzzle.id)
+    records: catalog.puzzlesInCulture(culture.id)
+      .map((id, index): FolioRecordProjection => {
+        const artifact = catalog.artifact(id)
+        const fingerprint = catalog.puzzleFingerprint(id)
+        const status: FolioRecordStatus = state.completed.has(id)
           ? 'completed'
-          : isUnlocked(catalog, progress, puzzle.id) ? 'unlocked' : 'locked'
+          : isUnlocked(catalog, progress, id) ? 'unlocked' : 'locked'
         return {
-          id: puzzle.id,
-          name: puzzle.name.professional,
-          accession: puzzle.name.accession ?? null,
-          summary: puzzle.provenance.summary,
+          id,
+          levelNumber: index + 1,
+          name: artifact.name.professional,
+          accession: artifact.name.accession ?? null,
+          summary: artifact.provenance.summary,
           status,
           affordance: recordAffordance(mode, status),
-          priority: puzzle.id === culture.gateway,
+          priority: id === culture.gateway,
           restrictedPacket:
-            culture.unlocksAfter.length > 0 && puzzle.id === culture.gateway,
+            culture.unlocksAfter.length > 0 && id === culture.gateway,
+          preview: {
+            key: puzzlePreviewKey(fingerprint),
+            fingerprint,
+            diagram: diagramToJson(catalog.puzzle(id).diagram),
+            width: PUZZLE_PREVIEW_WIDTH,
+            height: PUZZLE_PREVIEW_HEIGHT,
+          },
         }
       }),
   }))

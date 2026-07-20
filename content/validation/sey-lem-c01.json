@@ -1,0 +1,64 @@
+{
+  "puzzle": "sey-lem-c01",
+  "solution": [
+    {
+      "rule": "doubleCutElim",
+      "region": "r8"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r7",
+        "regions": [],
+        "nodes": [
+          "n0",
+          "n1",
+          "n2"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [],
+        "nodes": [
+          "n3",
+          "n4",
+          "n5"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutElim",
+    "deiteration",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

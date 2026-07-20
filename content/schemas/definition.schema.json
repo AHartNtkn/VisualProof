@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cursebreaker://schemas/definition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "diagram", "boundary"],
+  "properties": {
+    "id": { "type": "string", "minLength": 1 },
+    "diagram": { "$ref": "cursebreaker://schemas/diagram" },
+    "boundary": { "type": "array", "items": { "type": "string" } }
+  }
+}

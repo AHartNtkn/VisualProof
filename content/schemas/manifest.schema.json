@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cursebreaker://schemas/manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "version", "puzzles", "definitions", "progression", "coverage", "catalog", "guidance"],
+  "properties": {
+    "format": { "const": "cursebreaker-content" },
+    "version": { "const": 2 },
+    "puzzles": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^puzzles/.+\\.json$" } },
+    "definitions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^definitions/.+\\.json$" } },
+    "progression": { "type": "string" },
+    "coverage": { "type": "string" },
+    "catalog": { "type": "string" },
+    "guidance": { "type": "string" }
+  }
+}

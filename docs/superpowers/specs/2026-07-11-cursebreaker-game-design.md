@@ -190,91 +190,91 @@ Production styling begins only after the user selects or refines a demonstrated 
 
 ## 6. Content and progression authority
 
-One immutable bundled catalog is the only source of game content. Every artifact contains:
+One strict versioned JSON manifest selects the immutable bundled content package.
+Core puzzles contain only a stable puzzle identity and semantic starting diagram.
+Progression, catalog/lore, authored guidance, and build-only coverage are
+independent records keyed by puzzle identity; none is part of the logical puzzle
+contract. Build-only validation sidecars contain feasibility witnesses, observed
+witness mechanics, artifact assumptions, and recognized-state demonstrations.
+Coverage and validation sidecars are excluded from the shipped desktop package.
 
-- stable artifact identity and culture identity;
-- exact closed theorem diagram;
-- verified backward solution witness;
-- content fingerprint;
-- prerequisite artifact and knowledge-node identities;
-- mechanics introduced, practiced, retrieved, and assessed;
-- required broken-seal reference dependencies;
-- diegetic title and artifact description;
-- teacher interventions and optional escalating hints, including exact
-  recognized-state triggers where appropriate.
+The engine owns backward proof physics, canonical-blank completion, teacher
+behavior, rendering, and deterministic presentation. Presentation variation is
+derived from puzzle identity plus its logical fingerprint and is not authored
+puzzle data.
 
 A build-time verifier rejects:
 
 - nonempty theorem boundaries;
-- goals whose witness does not replay backward to canonical blank;
+- solutions that do not replay backward to canonical blank;
 - cyclic, missing, or unreachable prerequisites;
 - unavailable or circular broken-seal reference dependencies;
-- duplicate identities or unstable fingerprints;
-- claimed mechanics absent from the verified trace;
+- duplicate identities or canonical starting problems;
+- uncovered obligations or puzzles with no approved obligation;
+- redundant required-or-optional placement fields;
 - invalid, open, or unreachable recognized-state teacher triggers;
 - references to proof-assistant-only content or actions.
 
 Progress derives unlocked artifacts and available broken-seal references solely
-from the catalog plus completed puzzle identities. The versioned local save
+from progression plus completed puzzle identities. Logical fingerprints use the
+exact canonical starting diagram and only transitively referenced semantic
+definitions; lore, progression, coverage, guidance, validation, and presentation
+are excluded. The versioned local save
 contains progress, settings, and the active puzzle timeline. It contains no
 external theory, arbitrary authored diagram, filesystem authority, or imported
 proof object.
 
-## 7. Mastery-learning content contract
+## 7. Content selection contract
 
-The curriculum is a prerequisite DAG of small observable performances, not a chapter list or theorem-name checklist. Player-visible groupings are the sealing traditions of different cultures, not linear campaigns. Each culture contains a required mastery spine plus elective practice, retrieval, remediation, and challenge artifacts.
+Player-visible groupings are the sealing traditions of different cultures, not
+linear campaigns. Puzzle existence is decided from the distinct problem a start
+presents: an isolated concept distinction, a bounded generalization that defeats
+a plausible narrower reading, or a cross-topic interaction that changes legality,
+dependency, scope, matching, source/target choice, or consequence. Co-occurrence,
+role labels, folio slots, and desired inventory sizes cannot generate records.
 
-The tutorial spans several cultures and continues through approximately the fixed-point theorem. Unlocking a later culture does not close an earlier one or require every artifact in it; only artifacts in the prerequisite closure of later content are progression requirements.
+A retained puzzle may carry several approved obligations. Every retained puzzle
+must carry at least one. Canonical uniqueness is necessary but not sufficient;
+experiential neighbors are reviewed for functional padding. A stored witness
+proves only that the open problem can be solved and never prescribes the player's
+route. The mandatory Seyric path is exactly the transitive completion set needed
+to unlock the first Myratic puzzle; every other Seyric puzzle is practice.
 
-Every retained performance requires:
+Only specifically authored, semantically recognized unwinnable states may offer
+one concise teacher observation explaining recognition and timeline recovery.
+There is no stalled, timed, or generic hint trigger. Invalid actions retain their
+immediate local thoughts and never masquerade as proof-state diagnoses.
 
-1. Brief direct instruction.
-2. One low-noise isolated use.
-3. A contrast with its nearest tempting mistake.
-4. At least two structurally varied applications.
-5. Delayed retrieval after intervening content.
-6. Mixed use with older skills.
-7. An unprompted transfer artifact.
-
-After initial proficiency, ordinary content should target approximately 50–60% current-culture skills, 25–35% recent skills, and 10–20% distant retrieval. Culture advancement depends on transfer artifacts rather than raw puzzle count, completion speed, or move count.
-
-Recognized dead ends or sustained lack of progress may offer one concise teacher
-observation and unlock an optional contrast or remediation artifact. Returning
-from remediation preserves the original puzzle timeline. Invalid actions retain
-their immediate local thoughts and never masquerade as proof-state diagnoses.
-
-Every candidate mechanic family must pass a representative feasibility spike before exact artifact counts are committed:
+Every candidate problem family must pass a representative feasibility spike
+before production integration:
 
 - one closed zero-boundary theorem;
 - a legal backward trace through exposed game interactions;
-- evidence the advertised mechanic is load-bearing;
+- evidence the advertised distinction is visible in the start;
 - no accidental one-step broken-seal reference solution;
 - a readable diagram independent of layout accidents.
 
-If a retained kernel mechanic does not create a distinct, intelligible player decision in backward play, it must be removed from the player-facing surface rather than justified through filler puzzles.
+Content does not decide which logical mechanics exist on the player-facing
+surface. It demonstrates the available mechanics through worthwhile open
+problems without forcing a particular route.
 
-## 8. Curriculum roadmap
+## 8. Representation roadmap
 
-The roadmap deliberately introduces one new representational ontology at a time: regions and proposition marks; nested proposition binders; individual wires and relations; named relational forms; term anatomy and computation; recursion; then substantial mathematical applications.
+Cultures introduce representational ontologies in a legible historical order:
+regions and proposition marks; nested proposition binders; individual wires and
+relations; named relational forms; term anatomy and computation; recursion; then
+substantial mathematical applications. Exact inventories and progression edges
+belong to the current culture-specific content design and strict content package,
+not to this overview.
 
-Exact artifact lists remain deferred until the prerequisite graph, mechanic matrix, and representative feasibility proofs are validated.
+### 8.1 Oldest propositional culture
 
-### 8.1 Oldest propositional culture — initial instruction
-
-The oldest surviving sealing tradition is structurally primitive. Its simplicity makes it the opening instructional culture, but it is only the beginning of the tutorial rather than a bounded tutorial of its own.
-
-Must include:
-
-- “Two Veils”: `¬¬⊤`.
-- “Four Veils”: `¬¬¬¬⊤`.
-- Cut nesting and move legality.
-- Insertion/erasure and iteration/deiteration in small proposition seals.
-- Timeline scrubbing, retained future, and branch replacement.
-- Early outer arity-zero proposition bubbles.
-- One low-noise construction-loupe substitution.
-- One obvious whole-seal reference use after several seals have been broken.
-
-Exit evidence: independently read a small seal, use the timeline, understand atomic refusals, and complete a simple outer-quantified proposition puzzle.
+The oldest surviving sealing tradition is structurally primitive and purely
+propositional. Its collection covers cut ownership and polarity, insertion and
+erasure, iteration and deiteration, structural recognition, constructive and
+classical propositional relationships, and exact completed-artifact use. Passive
+guidance on a suitable first problem explains selection and timeline behavior;
+these interface explanations do not warrant controls-only puzzles.
 
 ### 8.2 Oldest propositional culture — outer-universal development
 
@@ -519,7 +519,7 @@ This culture reconnects proposition structure, nested second-order comprehension
 
 ## 9. Mechanic coverage contract
 
-| Mechanic | First honest curricular home |
+| Mechanic | First honest content home |
 |---|---|
 | Double-cut introduction/elimination | Apprenticeship |
 | Insertion/erasure | Apprenticeship and outer propositions |
@@ -543,31 +543,24 @@ Before content freeze, the implemented player-action surface must be mechanicall
 
 ## 10. First implementation slice
 
-The approved development order is a permanent seven-artifact opening batch, then completion of the overall game interface, then most remaining artifact authorship. It is not immediate authorship of the entire roadmap.
+The game runtime and puzzle content have separate authorities. The runtime owns
+backward-only sessions, blank completion, saves, exact completed-artifact use,
+the curator's desk, main lens, timeline lever, passive teacher notes, invalid-move
+thoughts, and construction loupe. The content package owns only the strict layers
+described in Section 6.
 
-It includes:
-
-- the sole game entry point and game-native product architecture;
-- backward-only puzzle sessions and blank completion;
-- progression, local save, and exact broken-seal reference authority;
-- the curator's desk, main lens, timeline lever, teacher dialogue, red thoughts, and clean construction loupe;
-- six permanent artifacts beginning the oldest pure-propositional culture;
-- one permanent gateway artifact beginning the next proposition-binder culture;
-- a required mastery spine alongside at least one elective artifact, so the interface proves non-linear progression;
-- the full curriculum and mechanic graph as the durable authoring roadmap.
-
-Only `∃P.P`, the Myratic gateway, is authored in this slice. The remaining
-Myratic families in Section 8.3 are durable curriculum direction, not content
-to implement before the interface is substantially finalized.
-
-Later cultural content must not appear as placeholder, locked empty panels, or unverifiable scaffolding in the shipped slice. Non-shipping development fixtures may exercise interface surfaces whose instructional culture has not yet been authored.
+Culture-specific collections are integrated only as complete validated bundles.
+Later cultures do not appear as placeholder panels or unverifiable scaffolding.
+Non-shipping fixtures may exercise interface surfaces whose culture content has
+not yet been authored, but fixture identities never become production inventory
+authority.
 
 ## 11. Validation
 
 ### 11.1 Logical and content validation
 
 - Every shipped theorem is closed and has an empty boundary.
-- Every witness replays backward through exposed game actions to canonical blank.
+- Every build-only solution replays backward through exposed game actions to canonical blank.
 - Every advertised mechanic is load-bearing in at least one representative assessment.
 - Exact broken-seal reference dependencies are acyclic and audited for shortcuts.
 - The prerequisite graph is acyclic, reachable, and free of overloaded or orphan nodes.

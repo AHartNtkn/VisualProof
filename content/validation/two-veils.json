@@ -1,0 +1,9 @@
+{
+  "puzzle": "two-veils",
+  "solution": [
+    { "rule": "doubleCutElim", "region": "r1" }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": ["doubleCutElim"],
+  "recognizedStates": []
+}

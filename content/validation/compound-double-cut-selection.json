@@ -1,0 +1,72 @@
+{
+  "puzzle": "compound-double-cut-selection",
+  "solution": [
+    {
+      "rule": "doubleCutIntro",
+      "sel": {
+        "region": "r4",
+        "regions": [],
+        "nodes": [
+          "n0",
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "dc"
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [],
+        "nodes": [
+          "n0",
+          "n1",
+          "n2",
+          "n3"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutIntro",
+    "deiteration",
+    "doubleCutElim",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

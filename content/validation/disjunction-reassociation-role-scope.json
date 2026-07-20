@@ -1,0 +1,74 @@
+{
+  "puzzle": "disjunction-reassociation-role-scope",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r10",
+        "regions": [],
+        "nodes": [
+          "n4",
+          "n5"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r7",
+        "regions": [
+          "r8",
+          "r9"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r7"
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r5",
+        "regions": [],
+        "nodes": [
+          "n0",
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r5"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "erasure",
+    "doubleCutElim",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

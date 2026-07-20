@@ -1,0 +1,77 @@
+{
+  "puzzle": "compound-conjunction-idempotence",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r7",
+        "regions": [
+          "r11"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r7"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r6"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r3",
+        "regions": [
+          "r9",
+          "r10"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "doubleCutElim",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

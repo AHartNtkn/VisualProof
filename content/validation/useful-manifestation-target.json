@@ -1,0 +1,64 @@
+{
+  "puzzle": "useful-manifestation-target",
+  "solution": [
+    {
+      "rule": "theorem",
+      "name": "game:artifact:two-mark-projection",
+      "at": {
+        "sel": {
+          "region": "r3",
+          "regions": [],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "forward"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r1_0"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r3",
+        "regions": [
+          "r1_1"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r3"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "two-mark-projection"
+  ],
+  "expectedRules": [
+    "theorem",
+    "deiteration",
+    "erasure",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

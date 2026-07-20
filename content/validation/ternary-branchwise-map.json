@@ -1,0 +1,133 @@
+{
+  "puzzle": "ternary-branchwise-map",
+  "solution": [
+    {
+      "rule": "doubleCutElim",
+      "region": "r18"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [
+          "r9"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r10",
+        "regions": [
+          "r11"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r12",
+        "regions": [
+          "r13"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r14",
+        "regions": [
+          "r15"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r14",
+        "regions": [
+          "r16"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r14",
+        "regions": [
+          "r17"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r7",
+        "regions": [
+          "r8",
+          "r10",
+          "r12",
+          "r20",
+          "r21",
+          "r22"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r7"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r6"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r5"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutElim",
+    "deiteration",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

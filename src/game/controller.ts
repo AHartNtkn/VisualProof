@@ -96,7 +96,7 @@ const withGuidanceFor = (
     return state.guidance === null ? state : { ...state, guidance: null }
   }
   const presented = guidanceInterventionsFor(
-    catalog.puzzle(state.activePuzzle),
+    catalog.guidance(state.activePuzzle),
     signal,
     state.deliveredGuidance,
   )[0]
@@ -147,11 +147,7 @@ export function reduceGame(
       const session = activeSession(state)
       const replay = state.completed.has(puzzle.id)
       const transition = applyGameStep(session, action.step, {
-        context: artifactTheoremContext(
-          catalog.source.puzzles,
-          state.completed,
-          catalog.source.context,
-        ),
+        context: artifactTheoremContext(catalog, state.completed),
       })
       if (transition.completedNow) {
         if (replay) {

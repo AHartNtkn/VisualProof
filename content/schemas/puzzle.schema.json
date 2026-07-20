@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cursebreaker://schemas/puzzle",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "diagram"],
+  "properties": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "diagram": { "$ref": "cursebreaker://schemas/diagram" }
+  }
+}

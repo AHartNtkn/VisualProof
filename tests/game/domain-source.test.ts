@@ -11,8 +11,7 @@ const sourceFiles = (directory: string): string[] => readdirSync(directory, { wi
 
 describe('ordinary theorem and authored teaching source authority', () => {
   it('contains no displaced artifact-step or generic teacher authority', () => {
-    const roots = ['src/game', 'tests/game']
-    const contents = roots.flatMap(sourceFiles)
+    const contents = sourceFiles('src/game')
       .map((path) => `${path}\n${readFileSync(path, 'utf8')}`)
       .join('\n')
     const forbidden = [

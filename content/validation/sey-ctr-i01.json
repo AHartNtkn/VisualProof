@@ -1,0 +1,70 @@
+{
+  "puzzle": "sey-ctr-i01",
+  "solution": [
+    {
+      "rule": "doubleCutElim",
+      "region": "r6"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r9"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r4",
+        "regions": [],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r3",
+        "regions": [
+          "r8"
+        ],
+        "nodes": [
+          "n3"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutElim",
+    "deiteration",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

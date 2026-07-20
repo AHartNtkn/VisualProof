@@ -1,0 +1,121 @@
+{
+  "puzzle": "alternating-negation-dnf",
+  "solution": [
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
+    },
+    {
+      "rule": "doubleCutIntro",
+      "sel": {
+        "region": "r8",
+        "regions": [],
+        "nodes": [
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutIntro",
+      "sel": {
+        "region": "r8",
+        "regions": [],
+        "nodes": [
+          "n2"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r9"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r11",
+        "regions": [
+          "r12"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r14",
+        "regions": [
+          "r15"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [
+          "dc"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [
+          "dc_1"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r7",
+          "r11",
+          "r14"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutElim",
+    "doubleCutIntro",
+    "deiteration",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

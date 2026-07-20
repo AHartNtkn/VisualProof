@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cursebreaker://schemas/progression",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "ids": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["cultures", "placements"],
+  "properties": {
+    "cultures": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "order", "unlocksAfter", "gateway", "puzzles"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "order": { "type": "integer", "minimum": 0 },
+          "unlocksAfter": { "$ref": "#/$defs/ids" },
+          "gateway": { "$ref": "#/$defs/id" },
+          "puzzles": { "$ref": "#/$defs/ids" }
+        }
+      }
+    },
+    "placements": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["puzzle", "prerequisites"],
+        "properties": {
+          "puzzle": { "$ref": "#/$defs/id" },
+          "prerequisites": { "$ref": "#/$defs/ids" }
+        }
+      }
+    }
+  }
+}

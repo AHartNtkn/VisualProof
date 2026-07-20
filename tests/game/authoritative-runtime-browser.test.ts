@@ -40,6 +40,18 @@ const openFixture = async (
   return page
 }
 
+const completeProductionPuzzle = async (
+  page: Page,
+  puzzle: string,
+  witnessSteps: number,
+): Promise<void> => {
+  await page.locator(`[data-puzzle="${puzzle}"]`).click()
+  for (let index = 0; index < witnessSteps; index += 1) {
+    await page.evaluate((step) => window.__authoritativeRuntimeFixture.witness(step), index)
+  }
+  await page.getByRole('button', { name: 'Return to level selection' }).click()
+}
+
 describe('authoritative production renderer runtime', () => {
   it('starts a null save in a visible, operable archive around the empty substrate', async () => {
     const page = await openFixture()
@@ -272,6 +284,30 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
+  it('renders numbered canonical puzzle previews and exposes a pointer-transparent inspection', async () => {
+    const page = await openFixture('long')
+    try {
+      const first = page.locator('.curse-folio-record').first()
+      await first.locator('.curse-folio-puzzle-preview-frame[data-preview-state="ready"]')
+        .waitFor()
+      expect(await page.locator('.curse-folio-record-name').allTextContents()).toEqual(
+        Array.from({ length: 8 }, (_, index) => `${index + 1}. Long record 0-${index}`),
+      )
+      const image = first.locator('.curse-folio-puzzle-preview')
+      expect(await image.evaluate((node) => ({
+        width: (node as HTMLImageElement).naturalWidth,
+        height: (node as HTMLImageElement).naturalHeight,
+        source: (node as HTMLImageElement).src,
+      }))).toMatchObject({ width: 640, height: 400, source: expect.stringMatching(/^blob:/) })
+
+      await first.hover()
+      const inspection = page.locator('.curse-folio-puzzle-preview-inspection')
+      expect(await inspection.getAttribute('aria-hidden')).toBe('false')
+      expect(await inspection.evaluate((node) => getComputedStyle(node).pointerEvents)).toBe('none')
+      expect(await inspection.locator('img').getAttribute('src')).toBe(await image.getAttribute('src'))
+    } finally { await page.close() }
+  })
+
   it('restores an active puzzle save exactly before mounting its stateful views', async () => {
     const page = await openFixture('restore')
     try {
@@ -319,6 +355,36 @@ describe('authoritative production renderer runtime', () => {
         .toBe('archive')
       expect(await folio.count()).toBe(1)
     } finally { await page.close() }
+  })
+
+  it('routes completion Enter and Space through the same archive action as the sole button', async () => {
+    const close = async (input: 'button' | 'Enter' | 'Space') => {
+      const page = await openFixture('completion')
+      try {
+        if (input === 'button') {
+          await page.getByRole('button', { name: 'Return to level selection' }).click()
+        } else {
+          await page.keyboard.press(input)
+        }
+        await page.evaluate(() => window.__authoritativeRuntimeFixture.settle())
+        return await page.evaluate(() => ({
+          state: window.__authoritativeRuntimeFixture.state(),
+          writes: window.__authoritativeRuntimeFixture.writes(),
+          folio: document.querySelector('.curse-folio') !== null,
+        }))
+      } finally {
+        await page.close()
+      }
+    }
+
+    const button = await close('button')
+    const enter = await close('Enter')
+    const space = await close('Space')
+    expect(enter).toEqual(button)
+    expect(space).toEqual(button)
+    expect(button.state.mode).toBe('archive')
+    expect(button.folio).toBe(true)
+    expect(button.writes).toHaveLength(1)
   })
 
   it('uses Released mount as the sole completion treatment', async () => {
@@ -401,7 +467,7 @@ describe('authoritative production renderer runtime', () => {
       const replacements = await page.evaluate(() =>
         window.__authoritativeRuntimeFixture.invalidSaveReplacements())
       expect(replacements).toHaveLength(1)
-      expect(replacements[0]).toMatchObject({ format: 'cursebreaker-save', version: 4, mode: 'archive' })
+      expect(replacements[0]).toMatchObject({ format: 'cursebreaker-save', version: 5, mode: 'archive' })
     } finally { await page.close() }
   })
 
@@ -723,7 +789,7 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('keeps a locked opening record resisted with no navigation or save', async () => {
+  it('keeps a locked opening record resisted with no navigation or progress', async () => {
     const page = await openFixture('opening')
     try {
       const observeResistance = async (selector: string): Promise<void> => page.evaluate((targetSelector) => {
@@ -750,7 +816,55 @@ describe('authoritative production renderer runtime', () => {
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
         mode: 'archive', activePuzzle: null,
       })
-      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.writes())).toEqual([])
+      const writes = await page.evaluate(() => window.__authoritativeRuntimeFixture.writes())
+      for (const write of writes) {
+        expect(write).toMatchObject({
+          mode: 'archive',
+          activePuzzle: null,
+          attempts: {},
+          completed: [],
+          completionReceipt: null,
+          deliveredGuidance: [],
+          guidance: null,
+        })
+      }
+    } finally { await page.close() }
+  })
+
+  it('reveals the additive onboarding spine before the preserved practice graph', async () => {
+    const page = await openFixture('opening')
+    try {
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles().slice(0, 6)))
+        .toEqual([
+          'two-veils',
+          'four-veils',
+          'forked-veil',
+          'echoed-veil',
+          'empty-ring-release',
+          'single-mark-return',
+        ])
+      const status = async (puzzle: string): Promise<string | null> => page
+        .locator(`[data-puzzle="${puzzle}"]`).getAttribute('data-status')
+      expect(await status('two-veils')).toBe('unlocked')
+      expect(await status('four-veils')).toBe('locked')
+      expect(await status('forked-veil')).toBe('locked')
+      expect(await status('two-mark-projection')).toBe('locked')
+
+      await completeProductionPuzzle(page, 'two-veils', 1)
+      expect(await status('four-veils')).toBe('unlocked')
+      expect(await status('forked-veil')).toBe('unlocked')
+      expect(await status('echoed-veil')).toBe('locked')
+
+      await completeProductionPuzzle(page, 'forked-veil', 2)
+      expect(await status('echoed-veil')).toBe('unlocked')
+      await completeProductionPuzzle(page, 'echoed-veil', 3)
+      expect(await status('empty-ring-release')).toBe('unlocked')
+      await completeProductionPuzzle(page, 'empty-ring-release', 2)
+      expect(await status('single-mark-return')).toBe('unlocked')
+      expect(await status('two-mark-projection')).toBe('locked')
+      await completeProductionPuzzle(page, 'single-mark-return', 4)
+      expect(await status('two-mark-projection')).toBe('unlocked')
+      expect(await status('atomic-fragment-erasure')).toBe('unlocked')
     } finally { await page.close() }
   })
 
@@ -774,17 +888,23 @@ describe('authoritative production renderer runtime', () => {
       expect(await note.evaluate((node) => node.contains(document.activeElement))).toBe(false)
       expect(await page.locator('.curse-game-proof-canvas').count()).toBe(1)
 
-      for (let expectedPage = 1; expectedPage < 4; expectedPage += 1) {
+      const pages = [await note.locator('p').textContent()]
+      for (let expectedPage = 1; expectedPage < 3; expectedPage += 1) {
         await note.locator('button').click()
         expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().guidance?.page))
           .toBe(expectedPage)
         expect(await note.locator('p').count()).toBe(1)
+        pages.push(await note.locator('p').textContent())
       }
       expect(await note.locator('button').count()).toBe(0)
-      expect(await note.locator('p').textContent()).toMatch(/Eliminate the double cut.*Delete.*Backspace/)
+      expect(pages).toEqual([
+        expect.stringMatching(/pointer.*boundary.*glow/i),
+        expect.stringMatching(/highlighted boundary.*selection remains lit.*deselect.*empty field/i),
+        expect.stringMatching(/outer boundary.*double cut.*Delete or Backspace.*lift both veils/i),
+      ])
       await page.evaluate(() => window.__authoritativeRuntimeFixture.settle())
       expect(await page.evaluate(() => (window.__authoritativeRuntimeFixture.writes().at(-1) as any)
-        .guidance.page)).toBe(3)
+        .guidance.page)).toBe(2)
     } finally { await page.close() }
   })
 
@@ -858,9 +978,10 @@ describe('authoritative production renderer runtime', () => {
       await page.mouse.click(rim.x, rim.y)
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().selection.length))
         .toBeGreaterThan(0)
+      const selected = await page.evaluate(() => window.__authoritativeRuntimeFixture.state().selection)
       await page.mouse.click(rim.x, rim.y)
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().selection))
-        .toEqual([])
+        .toEqual(selected)
 
       await page.locator('.curse-game-proof-canvas').focus()
       await page.keyboard.press('Escape')
@@ -876,43 +997,29 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('presents only authored nonblocking commentary for a recognized unwinnable state', async () => {
+  it('does not invent generic commentary for a production puzzle without guidance', async () => {
     const page = await openFixture('opening')
     try {
-      const puzzles = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles())
-      for (const puzzle of puzzles.slice(0, 2)) {
-        await page.locator(`[data-puzzle="${puzzle}"]`).click()
-        const count = await page.evaluate(() => window.__authoritativeRuntimeFixture.state().steps.length)
-        const witnessCount = puzzle === puzzles[0] ? 1 : 2
-        expect(count).toBe(0)
-        for (let index = 0; index < witnessCount; index++) {
-          await page.evaluate((step) => window.__authoritativeRuntimeFixture.witness(step), index)
-        }
-        expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().mode))
-          .toBe('completion')
-        await page.locator('.curse-completion button').click()
-      }
-
-      await page.locator(`[data-puzzle="${puzzles[2]}"]`).click()
-      await page.evaluate(() => window.__authoritativeRuntimeFixture.unwinnable())
-      const guidance = await page.evaluate(() => window.__authoritativeRuntimeFixture.state().guidance)
-      expect(guidance).toMatchObject({
-        identity: { puzzle: puzzles[2], intervention: 'empty-veil-trap' },
-        page: 0,
+      const puzzle = 'two-mark-projection'
+      await completeProductionPuzzle(page, 'two-veils', 1)
+      await completeProductionPuzzle(page, 'forked-veil', 2)
+      await completeProductionPuzzle(page, 'echoed-veil', 3)
+      await completeProductionPuzzle(page, 'empty-ring-release', 2)
+      await completeProductionPuzzle(page, 'single-mark-return', 4)
+      const record = page.locator(`[data-puzzle="${puzzle}"]`)
+      expect(await record.getAttribute('data-status')).toBe('unlocked')
+      await record.click()
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
+        mode: 'puzzle', activePuzzle: puzzle, steps: [], guidance: null,
       })
-      const commentary = page.locator('.curse-guidance-note')
-      expect(await commentary.count()).toBe(1)
-      expect(await commentary.getAttribute('role')).toBeNull()
-      expect(await commentary.locator('p').textContent()).toBe(
-        'An empty veil is a familiar novice’s trap. Nothing remains inside it to work upon. Draw the lever back to before the clearing.',
-      )
+      expect(await page.locator('.curse-guidance-note').count()).toBe(0)
       expect(await page.locator('.curse-game-proof-canvas').count()).toBe(1)
-      await page.locator('.curse-production-timeline-control').focus()
-      await page.keyboard.press('Home')
-      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().cursor)).toBe(0)
-      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().guidance))
-        .toBeNull()
-      expect(await commentary.count()).toBe(0)
+
+      await page.evaluate(() => window.__authoritativeRuntimeFixture.witness(0))
+      expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state())).toMatchObject({
+        mode: 'puzzle', activePuzzle: puzzle, steps: ['deiteration'], guidance: null,
+      })
+      expect(await page.locator('.curse-guidance-note').count()).toBe(0)
     } finally { await page.close() }
   })
 

@@ -250,7 +250,7 @@ export class GameProofMoveController {
     if (!this.#options.active() || sample.button !== 0) return null
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
-    if (sample.hit?.kind !== 'node'
+    if (sample.hit === null
       || !this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) return null
     const discovery = discoverGameProofActions(
       this.#options.diagram(),

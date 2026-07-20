@@ -38,6 +38,52 @@ const controllerFor = (
 })
 
 describe('actual game proof controller routes', () => {
+  it('claims iteration from a selected cut and commits that cut-rooted subtree', () => {
+    const builder = new DiagramBuilder()
+    const selectedCut = builder.cut(builder.root)
+    const nestedCut = builder.cut(selectedCut)
+    builder.termNode(nestedCut, parseTerm('x'))
+    const diagram = builder.build()
+    const applied: ProofStep[] = []
+    const selected = { value: [{ kind: 'region' as const, id: selectedCut }] }
+    const controller = controllerFor(diagram, selected, applied, [])
+    const sample = {
+      pointerId: 1,
+      button: 0,
+      client: { x: 10, y: 10 },
+      screen: { x: 10, y: 10 },
+      world: { x: 0, y: 0 },
+      hit: { kind: 'region' as const, id: selectedCut },
+      shiftKey: false,
+      ctrlKey: false,
+      altKey: false,
+      metaKey: false,
+    }
+
+    const claim = controller.claim(sample)
+    expect(claim).not.toBeNull()
+    const release = {
+      ...sample,
+      client: { x: 100, y: 100 },
+      screen: { x: 100, y: 100 },
+      world: { x: 10_000, y: 10_000 },
+      hit: null,
+    }
+    claim!.move(release)
+    claim!.release(release, true)
+
+    expect(applied).toEqual([{
+      rule: 'iteration',
+      sel: mkSelection(diagram, {
+        region: builder.root,
+        regions: [selectedCut],
+        nodes: [],
+        wires: [],
+      }),
+      target: builder.root,
+    }])
+  })
+
   it('commits every immediate GameProofAction through the shared controller dispatcher', () => {
     const builder = new DiagramBuilder()
     const outer = builder.cut(builder.root)

@@ -1,0 +1,167 @@
+{
+  "puzzle": "alternating-negation-cnf",
+  "solution": [
+    {
+      "rule": "doubleCutIntro",
+      "sel": {
+        "region": "r5",
+        "regions": [],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "iteration",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "target": "r10"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5_0",
+        "regions": [
+          "dc_1"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5_0"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r13",
+        "regions": [
+          "r14"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r10",
+        "regions": [
+          "r11",
+          "r7_0",
+          "r8_0"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r10"
+    },
+    {
+      "rule": "iteration",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "target": "r15"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5_0",
+        "regions": [
+          "dc_1"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5_0"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r18",
+        "regions": [
+          "r19"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r15",
+        "regions": [
+          "r16",
+          "r7_0",
+          "r8_0"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r15"
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutIntro",
+    "iteration",
+    "deiteration",
+    "doubleCutElim",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

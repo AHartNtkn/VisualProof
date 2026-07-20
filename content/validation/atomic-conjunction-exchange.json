@@ -1,0 +1,79 @@
+{
+  "puzzle": "atomic-conjunction-exchange",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r6",
+        "regions": [],
+        "nodes": [
+          "n3"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r6",
+        "regions": [],
+        "nodes": [
+          "n4"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r6",
+        "regions": [
+          "r7"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [
+          "n0",
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "erasure",
+    "vacuousElim",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

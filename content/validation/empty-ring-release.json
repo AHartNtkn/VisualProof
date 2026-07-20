@@ -1,0 +1,10 @@
+{
+  "puzzle": "empty-ring-release",
+  "solution": [
+    { "rule": "vacuousElim", "region": "r2" },
+    { "rule": "doubleCutElim", "region": "r1" }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": ["vacuousElim", "doubleCutElim"],
+  "recognizedStates": []
+}

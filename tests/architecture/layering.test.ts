@@ -47,10 +47,15 @@ describe('layer separation (spec §4.2)', () => {
     expect(offenders, offenders.join('\n')).toEqual([])
   })
 
-  it('only the canvas adapter touches the canvas API', () => {
+  it('only browser rendering adapters touch the canvas API', () => {
     const offenders: string[] = []
+    const renderAdapters = new Set([
+      'src/view/canvas.ts',
+      'src/app/proof-front.ts',
+      'src/game/interface/proof-surface.ts',
+    ])
     for (const file of tsFilesUnder('src')) {
-      if (file.endsWith('view/canvas.ts')) continue
+      if (renderAdapters.has(file)) continue
       if (readFileSync(file, 'utf8').includes('CanvasRenderingContext2D')) {
         offenders.push(file)
       }

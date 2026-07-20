@@ -1,0 +1,56 @@
+{
+  "puzzle": "conjunction-idempotence-introduction",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r3",
+        "regions": [],
+        "nodes": [
+          "n2"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r3",
+        "regions": [],
+        "nodes": [
+          "n1"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r2",
+        "regions": [],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "erasure",
+    "vacuousElim",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

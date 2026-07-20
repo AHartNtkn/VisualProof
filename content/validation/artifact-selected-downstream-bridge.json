@@ -1,0 +1,57 @@
+{
+  "puzzle": "artifact-selected-downstream-bridge",
+  "solution": [
+    {
+      "rule": "theorem",
+      "name": "game:artifact:i-c3",
+      "at": {
+        "sel": {
+          "region": "r1",
+          "regions": [],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "forward"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r2",
+        "regions": [
+          "r1_0"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r1",
+        "regions": [
+          "r1_1"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "i-c3",
+    "i-c4"
+  ],
+  "expectedRules": [
+    "theorem",
+    "deiteration",
+    "erasure",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

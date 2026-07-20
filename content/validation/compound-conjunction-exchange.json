@@ -1,0 +1,66 @@
+{
+  "puzzle": "compound-conjunction-exchange",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [],
+        "nodes": [
+          "n5"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [
+          "r9"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "erasure",
+    "vacuousElim",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

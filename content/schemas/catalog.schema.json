@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cursebreaker://schemas/catalog",
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "text": { "type": "string", "minLength": 1 }
+  },
+  "type": "object", "additionalProperties": false,
+  "required": ["cultures", "artifacts"],
+  "properties": {
+    "cultures": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "name", "shortName", "relativeAge", "historicalSummary", "lineage", "isolation", "sealingVocabulary"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" }, "name": { "$ref": "#/$defs/text" }, "shortName": { "$ref": "#/$defs/text" },
+          "relativeAge": { "type": "integer", "minimum": 0 }, "historicalSummary": { "$ref": "#/$defs/text" },
+          "lineage": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+          "isolation": { "enum": ["connected", "isolated", "uncertain"] },
+          "sealingVocabulary": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "$ref": "#/$defs/text" } }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["puzzle", "name", "provenance"],
+        "properties": {
+          "puzzle": { "$ref": "#/$defs/id" },
+          "name": {
+            "type": "object", "additionalProperties": false, "required": ["professional"],
+            "properties": { "professional": { "$ref": "#/$defs/text" }, "curatorShorthand": { "$ref": "#/$defs/text" }, "accession": { "$ref": "#/$defs/text" } }
+          },
+          "provenance": {
+            "type": "object", "additionalProperties": false, "required": ["summary", "function"],
+            "properties": { "summary": { "$ref": "#/$defs/text" }, "function": { "$ref": "#/$defs/text" }, "findspot": { "$ref": "#/$defs/text" }, "attributedTo": { "$ref": "#/$defs/text" } }
+          }
+        }
+      }
+    }
+  }
+}

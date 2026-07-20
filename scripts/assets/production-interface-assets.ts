@@ -62,24 +62,6 @@ export const PRODUCTION_INTERFACE_ASSETS = [
     token: 'excavation-folio/guard-leaf.png',
   },
   {
-    path: 'assets/interface/generated/excavation-folio/mount-photo.png',
-    width: 720, height: 460, colorType: 'rgba',
-    consumer: 'src/game/interface/folio.css',
-    token: 'excavation-folio/mount-photo.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/mount-rubbing.png',
-    width: 720, height: 460, colorType: 'rgba',
-    consumer: 'src/game/interface/folio.css',
-    token: 'excavation-folio/mount-rubbing.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/mount-tracing.png',
-    width: 720, height: 460, colorType: 'rgba',
-    consumer: 'src/game/interface/folio.css',
-    token: 'excavation-folio/mount-tracing.png',
-  },
-  {
     path: 'assets/interface/generated/excavation-folio/clearance-slip.png',
     width: 500, height: 180, colorType: 'rgba',
     consumer: 'src/game/interface/folio.css',
@@ -96,48 +78,6 @@ export const PRODUCTION_INTERFACE_ASSETS = [
     width: 680, height: 430, colorType: 'rgba',
     consumer: 'src/game/interface/folio.css',
     token: 'excavation-folio/restricted-sleeve.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/specimens/auten-reliquary-closure.png',
-    width: 760, height: 470, colorType: 'rgba',
-    consumer: 'src/game/interface/folio-view.ts',
-    token: 'specimens/auten-reliquary-closure.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/specimens/orra-gate-fragment.png',
-    width: 760, height: 470, colorType: 'rgba',
-    consumer: 'src/game/interface/folio-view.ts',
-    token: 'specimens/orra-gate-fragment.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/specimens/seyr-cairn-seal-iv.png',
-    width: 760, height: 470, colorType: 'rgba',
-    consumer: 'src/game/interface/folio-view.ts',
-    token: 'specimens/seyr-cairn-seal-iv.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/specimens/seyr-ossuary-seal.png',
-    width: 760, height: 470, colorType: 'rgba',
-    consumer: 'src/game/interface/folio-view.ts',
-    token: 'specimens/seyr-ossuary-seal.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/specimens/seyric-field-seal-s-27.png',
-    width: 760, height: 470, colorType: 'rgba',
-    consumer: 'src/game/interface/folio-view.ts',
-    token: 'specimens/seyric-field-seal-s-27.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/specimens/tel-vey-chamber-seal-viii.png',
-    width: 760, height: 470, colorType: 'rgba',
-    consumer: 'src/game/interface/folio-view.ts',
-    token: 'specimens/tel-vey-chamber-seal-viii.png',
-  },
-  {
-    path: 'assets/interface/generated/excavation-folio/specimens/uninscribed-votive-of-myrat.png',
-    width: 760, height: 470, colorType: 'rgba',
-    consumer: 'src/game/interface/folio-view.ts',
-    token: 'specimens/uninscribed-votive-of-myrat.png',
   },
   {
     path: 'assets/interface/generated/editor-loupe/rim-socket.png',

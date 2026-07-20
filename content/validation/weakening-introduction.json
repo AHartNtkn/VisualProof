@@ -1,0 +1,63 @@
+{
+  "puzzle": "weakening-introduction",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r6",
+        "regions": [],
+        "nodes": [
+          "n2"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r5",
+        "regions": [],
+        "nodes": [
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r3",
+        "regions": [],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "erasure",
+    "doubleCutElim",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

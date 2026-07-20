@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { buildCatalog } from '../../src/game/catalog'
+import { diagramToJson } from '../../src/kernel/diagram/json'
 import { createInitialGameState } from '../../src/game/controller-state'
 import { projectFolio } from '../../src/game/interface/folio-projection'
-import { cultureId, puzzleId, type GameCatalogSource } from '../../src/game/types'
-import { minimalPuzzle, minimalSource } from './catalog-fixture'
+import { cultureId, puzzleId } from '../../src/game/types'
+import { buildTestCatalog, minimalPuzzle, minimalSource, type TestCatalogSource } from './catalog-fixture'
 
 const FIELD = cultureId('field-culture')
 const VAULT = cultureId('vault-culture')
 
-function largeSource(): GameCatalogSource {
+function largeSource(): TestCatalogSource {
   const base = minimalSource()
   const fieldPuzzles = Array.from({ length: 18 }, (_, index) => minimalPuzzle({
     id: puzzleId(`field-record-${index}`),
@@ -39,9 +39,9 @@ function largeSource(): GameCatalogSource {
 
 describe('production excavation folio projection', () => {
   it('keeps dozens of cultures and records in catalog order with real progress statuses', () => {
-    const catalog = buildCatalog(largeSource())
+    const catalog = buildTestCatalog(largeSource())
     const initial = createInitialGameState(catalog, { reducedMotion: false })
-    const completed = new Set(catalog.source.puzzles.slice(0, 6).map(({ id }) => id))
+    const completed = new Set(catalog.puzzleIds.slice(0, 6))
     const state = {
       ...initial,
       completed,
@@ -54,8 +54,23 @@ describe('production excavation folio projection', () => {
     const archive = projectFolio(catalog, state, 'archive')
     expect(archive.cultures.map(({ id }) => id)).toEqual([FIELD, VAULT])
     expect(archive.cultures[0]!.records.map(({ id }) => id)).toEqual(
-      catalog.source.puzzles.slice(0, 18).map(({ id }) => id),
+      catalog.puzzleIds.slice(0, 18),
     )
+    expect(archive.cultures[0]!.records.map(({ levelNumber }) => levelNumber)).toEqual(
+      Array.from({ length: 18 }, (_, index) => index + 1),
+    )
+    expect(archive.cultures[1]!.records.map(({ levelNumber }) => levelNumber)).toEqual(
+      Array.from({ length: 18 }, (_, index) => index + 1),
+    )
+    const first = catalog.puzzleIds[0]!
+    const fingerprint = catalog.puzzleFingerprint(first)
+    expect(archive.cultures[0]!.records[0]!.preview).toEqual({
+      key: `cursebreaker-thumbnail:dark-slate-v1:${fingerprint}:640x400`,
+      fingerprint,
+      diagram: diagramToJson(catalog.puzzle(first).diagram),
+      width: 640,
+      height: 400,
+    })
     expect(archive.cultures[0]!.records.map(({ status }) => status)).toEqual([
       ...Array.from({ length: 6 }, () => 'completed'),
       'unlocked',
@@ -70,7 +85,7 @@ describe('production excavation folio projection', () => {
       .toBe(false)
     expect(archive.cultures[1]!.records.filter(({ restrictedPacket }) => restrictedPacket))
       .toEqual([expect.objectContaining({
-        id: catalog.source.cultures[1]!.gateway,
+        id: catalog.culture(catalog.cultureIds[1]!).gateway,
         status: 'locked',
       })])
     expect(archive.selectedCulture).toBe(FIELD)
@@ -78,24 +93,26 @@ describe('production excavation folio projection', () => {
   })
 
   it('keeps restricted packet identity stable across its locked-to-unlocked transition', () => {
-    const catalog = buildCatalog(largeSource())
+    const catalog = buildTestCatalog(largeSource())
     const initial = createInitialGameState(catalog, { reducedMotion: false })
-    const packet = catalog.source.cultures[1]!.gateway
+    const packet = catalog.culture(catalog.cultureIds[1]!).gateway
     const sealed = projectFolio(catalog, initial, 'archive').cultures[1]!.records
       .find(({ restrictedPacket }) => restrictedPacket)
     const released = projectFolio(catalog, {
       ...initial,
-      completed: new Set(catalog.source.puzzles.map(({ id }) => id)),
+      completed: new Set(catalog.puzzleIds),
     }, 'archive').cultures[1]!.records.find(({ restrictedPacket }) => restrictedPacket)
 
     expect(sealed).toMatchObject({ id: packet, restrictedPacket: true, status: 'locked' })
     expect(released).toMatchObject({ id: packet, restrictedPacket: true, status: 'completed' })
+    expect(released?.levelNumber).toBe(sealed?.levelNumber)
+    expect(released?.preview).toEqual(sealed?.preview)
   })
 
   it('allows theorem dragging only from completed records while a puzzle is active', () => {
-    const catalog = buildCatalog(largeSource())
+    const catalog = buildTestCatalog(largeSource())
     const initial = createInitialGameState(catalog, { reducedMotion: false })
-    const completed = new Set(catalog.source.puzzles.slice(0, 3).map(({ id }) => id))
+    const completed = new Set(catalog.puzzleIds.slice(0, 3))
     const projection = projectFolio(catalog, { ...initial, completed }, 'puzzle')
 
     expect(projection.cultures[0]!.records.slice(0, 5).map(({ affordance }) => affordance))
@@ -105,14 +122,14 @@ describe('production excavation folio projection', () => {
   })
 
   it('preserves catalog order and progress while making completion records inert', () => {
-    const catalog = buildCatalog(largeSource())
+    const catalog = buildTestCatalog(largeSource())
     const initial = createInitialGameState(catalog, { reducedMotion: false })
-    const completed = new Set(catalog.source.puzzles.slice(0, 6).map(({ id }) => id))
+    const completed = new Set(catalog.puzzleIds.slice(0, 6))
     const projection = projectFolio(catalog, { ...initial, completed }, 'completion')
 
     expect(projection.mode).toBe('completion')
     expect(projection.cultures[0]!.records.map(({ id }) => id)).toEqual(
-      catalog.source.puzzles.slice(0, 18).map(({ id }) => id),
+      catalog.puzzleIds.slice(0, 18),
     )
     expect(projection.cultures[0]!.records.slice(0, 7).map(({ status }) => status)).toEqual([
       ...Array.from({ length: 6 }, () => 'completed'),

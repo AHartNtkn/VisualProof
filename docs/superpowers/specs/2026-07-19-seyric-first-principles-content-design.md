@@ -13,7 +13,7 @@ This design governs puzzle content and the data surfaces that own it. It does no
 - Canonical uniqueness is necessary but insufficient. Two different canonical starts are still redundant when they present the same decisions and no new bounded generalization.
 - Problems are open-ended. A validation witness proves that a problem is solvable; it is not an intended, unique, shortest, or mandatory solution.
 - Teacher pages may explain interactions directly. They cannot create puzzle value that is absent from the start.
-- Optional practice never gates another puzzle, a culture gateway, or progression.
+- The mandatory Seyric path is exactly the minimal transitive completion set needed to unlock the first Myratic puzzle; every other Seyric record is practice.
 - A further example is warranted only when it defeats a plausible narrower interpretation left by the earlier examples. Once the broader pattern is established, larger instances are padding.
 - A mixed problem is warranted only when one concept changes another concept's legality, dependency, scope, source or target choice, matching, or consequences. Co-occurrence and independent sequencing are insufficient.
 - One record may carry several compatible obligations. The final collection does not allocate a standalone record and a mixed record for equivalent exposure.
@@ -28,9 +28,9 @@ The runtime and build-time layers remain strict JSON, but the curriculum-shaped 
 
 ### Progression
 
-`content/progression/core.json` owns culture order, folio order, explicit puzzle prerequisites, gateways, and whether a record is optional. It does not own performances, mastery roles, remediation roles, or instructional claims.
+`content/progression/core.json` owns culture order, folio order, explicit puzzle prerequisites, gateways, and culture-unlock conditions. It does not own performances, mastery roles, remediation roles, instructional claims, or a separate required-or-optional classification.
 
-An optional record must have no downstream prerequisite edge and cannot be a culture gateway. Requiredness is not inferred from introduction, practice, retrieval, assessment, challenge, transfer, or remediation labels because those labels no longer exist.
+The mandatory Seyric path is derived solely as the minimal transitive set of Seyric completions needed to unlock the first Myratic puzzle. Every other Seyric record is practice. Introduction, retrieval, assessment, challenge, transfer, remediation, and similar labels cannot alter that graph.
 
 ### Coverage
 
@@ -63,14 +63,35 @@ Coverage data never enters puzzle identity, unlocking, teacher acknowledgment, o
 
 The obsolete curriculum schema, runtime performance types and accessors, learning-role placement arrays, and performance references in guidance are deleted. There is no adapter or compatibility path.
 
+## Additive onboarding augmentation
+
+The accepted practice collection remains intact. Five deliberately simple records precede it so the player can exercise the graphical proof operations before reading a content-bearing propositional seal:
+
+```text
+two-veils
+├── four-veils (practice)
+└── forked-veil
+    └── echoed-veil
+        └── empty-ring-release
+            └── single-mark-return
+                ├── first Myratic unlock
+                └── preserved Seyric practice graph
+```
+
+The empty starts are substantive onboarding content, not incomplete propositional exercises. They isolate boundary highlighting and selection, double-cut release, negative-field fragment erasure, ancestor-supported deiteration, and the distinction between a polarity-changing veil and an ownership ring. `four-veils` adds open-order repetition but is not in the Myratic prerequisite closure.
+
+Progression remains the only authority for this distinction. The mandatory Seyric closure is `two-veils`, `forked-veil`, `echoed-veil`, `empty-ring-release`, and `single-mark-return`; every other Seyric record is practice. The pre-existing practice roots depend on `single-mark-return`, while all pre-existing nonempty practice relationships remain unchanged.
+
 ## Approved isolated coverage
 
 These are analytical obligations, not record slots. A final record may carry several when each is genuinely visible.
 
 | Family | Topic | Warranted sequence and stopping point |
 | --- | --- | --- |
-| Hosted | Selection, highlighting, deselection | Explain on the first suitable puzzle; no controls-only record. |
-| Hosted | Timeline rewind and branch replacement | Explain on a suitable branching problem; no timeline-only record. |
+| Onboarding | Empty cut topology | One bare paired-veil release, one open-order four-veil repetition, one negative-field fragment erasure, and one ancestor-supported cut-form deiteration. |
+| Onboarding | Ownership transition | One empty ring between familiar veils, stopping before content-bearing ownership in `single-mark-return`. |
+| Hosted | Selection, highlighting, deselection | Explain on `two-veils`, whose bare double-cut release supplies the proof problem; no controls-only record. |
+| Hosted | Timeline rewind and branch replacement | Explain on `forked-veil`, whose sibling erasure supplies a real branching problem; no timeline-only record. |
 | Primitive | Ownership and vacuity | Single-owner/vacuous elimination; nested-owner discrimination; useful vacuous introduction. |
 | Primitive | Polarity | Shallow opposite-polarity contrast; nested parity where rings and cuts defeat local-depth guessing. |
 | Primitive | Double-cut elimination | Direct content preservation; compound eligible pair versus obstructed annulus. |
@@ -170,7 +191,7 @@ Authors may explore alternative witnesses freely. They must not add decoys to fo
 
 Order records by the minimum concepts needed to read them, then place mixed records after their participating concepts have appeared. This ordering supports comprehension but is not a mastery curriculum.
 
-Only core conceptual dependencies may gate later core records. Optional records sit near related material but have no dependents. Artifact-dependent records may depend on the completed source artifact and must themselves remain non-gating unless they carry a separately required core relation that cannot be presented without the artifact.
+Practice records may depend on completed source artifacts and may sequence other practice records. They remain outside the mandatory Seyric path unless their completion is in the transitive graph that unlocks the first Myratic puzzle. No conceptual or pedagogical label can change that definition.
 
 ### 5. Finish every content layer
 
@@ -183,7 +204,7 @@ After the current audit identifies independent obligation families, authors work
 The lead integrates accepted bundles and owns all shared ordering and registration files. Each batch receives two independent reviews:
 
 - a logical/content review checks closedness, witness replay, exact artifact authority, concept accuracy, and feasibility;
-- an adversarial coverage review checks the claimed visible distinction, experiential neighbors, saturation, open-endedness, and non-gating optional status.
+- an adversarial coverage review checks the claimed visible distinction, experiential neighbors, saturation, open-endedness, and whether every mandatory-path edge is genuinely necessary to unlock the first Myratic puzzle.
 
 A single concrete defect overrides vague approvals. Reviews do not reject alternative solutions.
 
@@ -196,7 +217,7 @@ A single concrete defect overrides vague approvals. Reviews do not reject altern
 - every witness replays backward to canonical blank;
 - every recognized-state demonstration reaches its declared state;
 - every artifact dependency is available from actual prerequisites;
-- every optional record has no dependent and is not a gateway;
+- the mandatory Seyric path equals the transitive prerequisite closure of the first Myratic unlock condition;
 - every claimed obligation exists and every approved obligation has coverage;
 - no puzzle claims value solely through teacher text or witness rule names.
 
@@ -232,7 +253,7 @@ Completion requires an itemized final receipt containing:
 - every retained puzzle with its visible-situation rationale and experiential-neighbor comparison;
 - every deleted puzzle with the non-value reason and proof that no dependent reference remains;
 - every newly authored puzzle with witness replay and both independent reviews;
-- observed final puzzle and optional-record totals, reported only after the collection is complete;
+- the derived mandatory Seyric path and the exact graph edge justifying every member;
 - validation command outputs and zero-count defect checks.
 
-The refactor is not complete while any retained record lacks a complete bundle, any approved obligation lacks coverage, any optional record gates progression, or any obsolete inventory authority remains.
+The refactor is not complete while any retained record lacks a complete bundle, any approved obligation lacks coverage, any redundant required-or-optional declaration remains, or any obsolete inventory authority remains.

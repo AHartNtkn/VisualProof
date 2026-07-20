@@ -1,4 +1,5 @@
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import type { DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import { findOccurrences, occurrenceSelection, type Occurrence } from '../../kernel/diagram/subgraph/match'
 import { mkSelection } from '../../kernel/diagram/subgraph/selection'
 import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof/step'
@@ -39,7 +40,7 @@ export type ArtifactDropRequest = {
 const occurrenceContains = (
   occurrence: Occurrence,
   hit: Hit,
-  pattern: PuzzleDefinition['goal'],
+  pattern: DiagramWithBoundary,
 ): boolean => {
   switch (hit.kind) {
     case 'node': return [...occurrence.nodeMap.values()].includes(hit.id)

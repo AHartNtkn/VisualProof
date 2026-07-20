@@ -1,0 +1,79 @@
+{
+  "puzzle": "double-cut-insertion-workspace",
+  "solution": [
+    {
+      "rule": "doubleCutIntro",
+      "sel": {
+        "region": "r3",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "insertion",
+      "region": "dc",
+      "pattern": {
+        "diagram": {
+          "root": "r0",
+          "regions": {
+            "r0": {
+              "kind": "sheet"
+            },
+            "r1": {
+              "kind": "cut",
+              "parent": "r0"
+            },
+            "r2": {
+              "kind": "cut",
+              "parent": "r1"
+            }
+          },
+          "nodes": {},
+          "wires": {}
+        },
+        "boundary": []
+      },
+      "attachments": [],
+      "binders": {}
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "dc_0",
+        "regions": [
+          "r5"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1_0"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "dc"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r3"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutIntro",
+    "insertion",
+    "deiteration",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

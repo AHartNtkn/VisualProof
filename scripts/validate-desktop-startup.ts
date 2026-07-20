@@ -87,7 +87,7 @@ try {
 
     const replacement = JSON.parse(await readFile(path.join(saveDirectory, 'save.json'), 'utf8'))
     assert.equal(replacement.format, 'cursebreaker-save')
-    assert.equal(replacement.version, 4)
+    assert.equal(replacement.version, 5)
     assert.equal(replacement.mode, 'archive')
     const files = await readdir(saveDirectory)
     const rejectedName = files.find((name) => /^rejected-save-[\da-f-]+\.json$/.test(name))

@@ -1,1 +1,1 @@
-export * from './opening'
+export { gameContentFiles } from './files'

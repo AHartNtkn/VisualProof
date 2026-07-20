@@ -10,6 +10,7 @@ const puzzle = minimalPuzzle({
   id: puzzleId('four-veils'), name: { professional: 'Four Veils' }, goal: fixture.goal,
   witness: fixture.eliminations.map((region) => ({ rule: 'doubleCutElim' as const, region })),
 })
+const corePuzzle = { id: puzzle.id, diagram: puzzle.goal.diagram }
 const authority = {
   context: { relations: new Map(), theorems: new Map() },
 }
@@ -24,14 +25,14 @@ describe('backward game session', () => {
       binders: {},
     }
 
-    const transition = applyGameStep(startPuzzle(puzzle), step, authority)
+    const transition = applyGameStep(startPuzzle(corePuzzle), step, authority)
 
     expect(transition.session.timeline.steps).toEqual([step])
     expect(currentDiagram(transition.session)).not.toBe(puzzle.goal.diagram)
   })
 
   it('completes on canonical blank', () => {
-    const start = startPuzzle(puzzle)
+    const start = startPuzzle(corePuzzle)
     const first = applyGameStep(start, puzzle.witness[0]!, authority)
     expect(first.completedNow).toBe(false)
     const second = applyGameStep(first.session, puzzle.witness[1]!, authority)
@@ -40,7 +41,7 @@ describe('backward game session', () => {
   })
 
   it('rejects every move from canonical blank', () => {
-    const first = applyGameStep(startPuzzle(puzzle), puzzle.witness[0]!, authority).session
+    const first = applyGameStep(startPuzzle(corePuzzle), puzzle.witness[0]!, authority).session
     const solved = applyGameStep(first, puzzle.witness[1]!, authority).session
     const blank = currentDiagram(solved)
 
@@ -53,7 +54,7 @@ describe('backward game session', () => {
   })
 
   it('retains future while scrubbing and truncates it on a new continuation', () => {
-    const first = applyGameStep(startPuzzle(puzzle), puzzle.witness[0]!, authority).session
+    const first = applyGameStep(startPuzzle(corePuzzle), puzzle.witness[0]!, authority).session
     const solved = applyGameStep(first, puzzle.witness[1]!, authority).session
     const rewound = moveCursor(solved, 0)
     expect(rewound.timeline.states).toHaveLength(3)
@@ -64,7 +65,7 @@ describe('backward game session', () => {
   })
 
   it('fails atomically when a general theorem reference is unavailable in game content', () => {
-    const start = startPuzzle(puzzle)
+    const start = startPuzzle(corePuzzle)
     expect(() => applyGameStep(start, {
       rule: 'theorem', name: 'unavailable', direction: 'forward',
       at: { sel: { region: puzzle.goal.diagram.root, regions: [], nodes: [], wires: [] }, args: [] },

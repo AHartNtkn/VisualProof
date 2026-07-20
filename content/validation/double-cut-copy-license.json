@@ -1,0 +1,72 @@
+{
+  "puzzle": "double-cut-copy-license",
+  "solution": [
+    {
+      "rule": "doubleCutIntro",
+      "sel": {
+        "region": "r2",
+        "regions": [],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "dc_0",
+        "regions": [],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "dc"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r3",
+        "regions": [],
+        "nodes": [
+          "n2"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r2",
+        "regions": [],
+        "nodes": [
+          "n1"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutIntro",
+    "deiteration",
+    "doubleCutElim",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

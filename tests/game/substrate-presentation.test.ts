@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { buildCatalog } from '../../src/game/catalog'
 import {
   EMPTY_ARCHIVE_SUBSTRATE_SEED,
   puzzleSubstrateSeed,
   substratePresentation,
 } from '../../src/game/interface/substrate-presentation'
-import { minimalSource } from './catalog-fixture'
+import { puzzleId } from '../../src/game/types'
+import { loadGameContent } from '../../src/game/catalog'
+import { gameContentFiles } from '../../src/game/content'
 
 describe('deterministic substrate presentation', () => {
   it('is identical for an identical explicit seed and restrained in every channel', () => {
@@ -19,18 +20,19 @@ describe('deterministic substrate presentation', () => {
   })
 
   it('uses logical puzzle identity rather than catalog presentation prose', () => {
-    const source = minimalSource()
-    const original = buildCatalog(source)
-    const rewritten = buildCatalog({
-      ...source,
-      puzzles: source.puzzles.map((puzzle) => ({
-        ...puzzle,
-        name: { professional: 'Completely revised catalog label' },
-        provenance: { summary: 'New catalog prose.', function: 'New interpretation.' },
-      })),
-    })
-    const id = source.puzzles[0]!.id
+    const original = loadGameContent(gameContentFiles)
+    const files = structuredClone(gameContentFiles) as Record<string, unknown>
+    const catalog = files['catalog/cursebreaker.json'] as {
+      cultures: unknown[]
+      artifacts: Array<{ name: { professional: string }; provenance: { summary: string } }>
+    }
+    catalog.artifacts[0]!.name.professional = 'Completely revised catalog label'
+    catalog.artifacts[0]!.provenance.summary = 'New catalog prose.'
+    const rewritten = loadGameContent(files)
+    const id = puzzleId('single-mark-return')
+
     expect(puzzleSubstrateSeed(original, id)).toBe(puzzleSubstrateSeed(rewritten, id))
+    expect(puzzleSubstrateSeed(original, id)).toMatch(/^cursebreaker:puzzle:single-mark-return:/)
     expect(substratePresentation(puzzleSubstrateSeed(original, id))).toEqual(
       substratePresentation(puzzleSubstrateSeed(rewritten, id)),
     )

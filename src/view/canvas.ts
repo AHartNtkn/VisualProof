@@ -179,3 +179,21 @@ export function drawShapes(
     }
   }
 }
+
+/** Browser-worker raster adapter for derived previews. Semantic callers supply
+    shapes and a transform; this module alone owns the OffscreenCanvas API. */
+export async function rasterizeShapes(
+  width: number,
+  height: number,
+  background: string,
+  shapes: readonly Shape[],
+  transform: { readonly scale: number; readonly offsetX: number; readonly offsetY: number },
+): Promise<Blob> {
+  const canvas = new OffscreenCanvas(width, height)
+  const context = canvas.getContext('2d')
+  if (context === null) throw new Error('raster canvas has no 2d context')
+  context.fillStyle = background
+  context.fillRect(0, 0, width, height)
+  drawShapes(context as unknown as CanvasRenderingContext2D, shapes, transform)
+  return canvas.convertToBlob({ type: 'image/png' })
+}

@@ -1,0 +1,1171 @@
+{
+  "cultures": [
+    {
+      "id": "seyric-horizon",
+      "name": "The Seyric Horizon",
+      "shortName": "Seyric",
+      "relativeAge": 0,
+      "historicalSummary": "the earliest secure sealing horizon, known from funerary closures, threshold wards, and stone stoppers. Its self-name is unknown; “Seyric” is the modern archaeological exonym.",
+      "lineage": [],
+      "isolation": "uncertain",
+      "sealingVocabulary": [
+        "veils",
+        "fields",
+        "echoes",
+        "rings",
+        "marks"
+      ]
+    },
+    {
+      "id": "myratic-tradition",
+      "name": "The Myratic Tradition",
+      "shortName": "Myratic",
+      "relativeAge": 1,
+      "historicalSummary": "the isolated Myrat complex, whose deliberate hollows may stand for complete seal-patterns. No direct Seyric lineage is established. Supplying a pattern is its first technique, not the identity of the whole tradition.",
+      "lineage": [],
+      "isolation": "isolated",
+      "sealingVocabulary": [
+        "hollows",
+        "patterns"
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "puzzle": "two-veils",
+      "name": {
+        "professional": "The Seyr Ossuary Seal",
+        "curatorShorthand": "paired-veil form"
+      },
+      "provenance": {
+        "summary": "a basalt stopper recovered in place from Ossuary I at Seyr, the earliest securely excavated intact closure assigned to the horizon.",
+        "function": "contained a simple mortuary curse within the burial niche."
+      }
+    },
+    {
+      "puzzle": "four-veils",
+      "name": {
+        "professional": "Seyr Cairn Seal IV",
+        "curatorShorthand": "four-veil nesting"
+      },
+      "provenance": {
+        "summary": "the fourth slate closure catalogued from the outer cairn cache at Seyr; tool marks suggest it was cut during one workshop episode.",
+        "function": "reinforced a cache curse through repeated nested closure."
+      }
+    },
+    {
+      "puzzle": "forked-veil",
+      "name": {
+        "professional": "The Orra Gate Fragment",
+        "curatorShorthand": "forked field"
+      },
+      "provenance": {
+        "summary": "a broken limestone lintel ward from the Orra Gate. The forked interior appears to be a later repair or accretion rather than the original carving.",
+        "function": "confined a threshold curse while allowing one obstructing fragment to be cleared during licensed passage."
+      }
+    },
+    {
+      "puzzle": "echoed-veil",
+      "name": {
+        "professional": "Tel Vey Chamber Seal VIII",
+        "curatorShorthand": "supported-echo form"
+      },
+      "provenance": {
+        "summary": "the eighth closure recorded in the Tel Vey storage chamber; its repeated inner fragment remains unusually crisp beneath mineral deposits.",
+        "function": "reinforced a chamber curse by repeating an older surrounding form inside a deeper field."
+      }
+    },
+    {
+      "puzzle": "empty-ring-release",
+      "name": {
+        "professional": "The Seyr Empty-Ring Exercise",
+        "curatorShorthand": "empty ring between veils"
+      },
+      "provenance": {
+        "summary": "an unpigmented steatite practice fragment from the Seyr workshop refuse; its central ring encloses no mark and was cut deliberately.",
+        "function": "isolated an empty ownership ring between a familiar pair of veils."
+      }
+    },
+    {
+      "puzzle": "single-mark-return",
+      "name": {
+        "professional": "The Auten Reliquary Closure",
+        "curatorShorthand": "single-ring ownership form"
+      },
+      "provenance": {
+        "summary": "a bronze-faced reliquary closure from Auten, preserving the first securely dated Seyric ring with a bound colored mark. Its discovery forced a revision of the horizon's chronology.",
+        "function": "returned a marked condition through a veiled chamber while keeping both occurrences under one ring."
+      }
+    },
+    {
+      "puzzle": "shallow-edit-legality-contrast",
+      "name": {
+        "professional": "Seyric Shallow Edit Legality Contrast"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates shallow edit legality contrast.",
+        "function": "Similar atomic targets in shallow opposite-polarity hosts make the actual semantic host decide whether erasure, insertion, or weakening is legal."
+      }
+    },
+    {
+      "puzzle": "atomic-fragment-erasure",
+      "name": {
+        "professional": "Seyric Atomic Fragment Erasure"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates atomic fragment erasure.",
+        "function": "A complete owned atomic fragment is the smallest legal erasure among nearby fragments."
+      }
+    },
+    {
+      "puzzle": "atomic-content-insertion",
+      "name": {
+        "professional": "Seyric Atomic Content Insertion"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates atomic content insertion.",
+        "function": "A missing atomic proposition must be constructed and placed in one legal semantic host."
+      }
+    },
+    {
+      "puzzle": "compound-copy-authority-contrast",
+      "name": {
+        "professional": "Seyric Compound Copy Authority Contrast"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound copy authority contrast.",
+        "function": "One compound source has a legal same-region destination, a legal descendant destination, and an equal-looking sibling destination with no copy authority."
+      }
+    },
+    {
+      "puzzle": "transfer-duplication-recognition",
+      "name": {
+        "professional": "The Myrat Duplicate-Field Votive"
+      },
+      "provenance": {
+        "summary": "an unprovenanced alabaster votive from Myrat whose repeated same-owner field marks accompany a separately incised paired closure unlike the Seyr teaching tablets.",
+        "function": "tested whether duplication and flat-group recognition transferred to an unfamiliar material and two-obligation composition."
+      }
+    },
+    {
+      "puzzle": "atomic-double-cut-selection",
+      "name": {
+        "professional": "Seyric Atomic Double Cut Selection"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates atomic double cut selection.",
+        "function": "Two nearby atomic occurrences make exact selection of one complete atom decisive before double-cut introduction."
+      }
+    },
+    {
+      "puzzle": "common-conjunction-factor-base",
+      "name": {
+        "professional": "Common Conjunction Factor Base"
+      },
+      "provenance": {
+        "summary": "The direct closed theorem (A∧B)∨(A∧C) → A∧(B∨C) presents the shared A inside both source alternatives and asks for one factored A with the residual B/C choice preserved.",
+        "function": "The common conjunction component must be recovered from both alternatives while the residual alternatives remain grouped in the conclusion."
+      }
+    },
+    {
+      "puzzle": "common-disjunction-factor-base",
+      "name": {
+        "professional": "Common Disjunction Factor Base"
+      },
+      "provenance": {
+        "summary": "(A∨B)∧(A∨C) exposes atomic A as the exact common alternative to factor into A∨(B∧C).",
+        "function": "A must be matched as the common alternative in both clauses; no separately available A can bypass the factoring relation."
+      }
+    },
+    {
+      "puzzle": "compound-common-disjunction-factor",
+      "name": {
+        "professional": "Compound Common Disjunction Factor"
+      },
+      "provenance": {
+        "summary": "The whole common alternative K=(P∨Q) occurs in both clauses ((K∨R)∧(K∨S)) and must remain intact in K∨(R∧S).",
+        "function": "Matching only P, only Q, or the silhouette of a partial alternative does not establish equality of the complete common disjunction."
+      }
+    },
+    {
+      "puzzle": "compound-double-cut-selection",
+      "name": {
+        "professional": "Seyric Compound Double Cut Selection"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound double cut selection.",
+        "function": "One complete grouped proposition, rather than one of its visible internal atoms, must be selected and wrapped in a double cut."
+      }
+    },
+    {
+      "puzzle": "content-bearing-annulus-choice",
+      "name": {
+        "professional": "Seyric Content Bearing Annulus Choice"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates content bearing annulus choice.",
+        "function": "A compound content-bearing double cut must be distinguished from an obstructed near-match whose blocker is owned by the annulus; eliminating the eligible pair visibly preserves its complete inner content."
+      }
+    },
+    {
+      "puzzle": "disjunction-over-conjunction-base",
+      "name": {
+        "professional": "Disjunction Over Conjunction Base"
+      },
+      "provenance": {
+        "summary": "The direct closed theorem A∨(B∧C) → (A∨B)∧(A∨C) asks the same A alternative to survive in both conjunctive conclusions while B and C remain distinct.",
+        "function": "The shared alternative must participate in both conjunctive outputs, not only one."
+      }
+    },
+    {
+      "puzzle": "i-dao",
+      "name": {
+        "professional": "The Seyr Split-Conjunction Tablet"
+      },
+      "provenance": {
+        "summary": "a three-owner basalt proof tablet showing one common condition carried into two alternative clauses.",
+        "function": "introduced the canonical expansion of a conjunction over a disjunction in Seyric ward accounting."
+      }
+    },
+    {
+      "puzzle": "nested-owner-introduction",
+      "name": {
+        "professional": "Seyr Workshop Tablet S-12",
+        "curatorShorthand": "paired-ring return",
+        "accession": "S-12"
+      },
+      "provenance": {
+        "summary": "a palm-sized steatite exercise tablet recovered from the primary Seyr workshop refuse lens; residues preserve two pigments within nested rings.",
+        "function": "trained apprentices to return two marked conditions through one field while keeping their ring ownership distinct."
+      }
+    },
+    {
+      "puzzle": "polarity-bubble-contrast",
+      "name": {
+        "professional": "Seyric Ring-and-Veil Polarity Tablet S-45",
+        "curatorShorthand": "rings do not turn the field",
+        "accession": "S-45"
+      },
+      "provenance": {
+        "summary": "A didactic slate placing one ownership ring in a dark field and another ring beyond a veil in the opposite field.",
+        "function": "trained ward-readers to keep proposition ownership separate from the alternating field polarity created only by veils."
+      }
+    },
+    {
+      "puzzle": "rm-fa",
+      "name": {
+        "professional": "The Aven Exact-Factor Correction Seal"
+      },
+      "provenance": {
+        "summary": "a gypsum seal marking the two A occurrences in paired conjunctive alternatives with the same owner pigment.",
+        "function": "Factor common compound conjunct P∨Q from branches with asymmetric residuals R and S∧T."
+      }
+    },
+    {
+      "puzzle": "useful-vacuous-owner-workspace",
+      "name": {
+        "professional": "Seyric Useful Vacuous Owner Workspace"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates useful vacuous owner workspace.",
+        "function": "A freshly introduced zero-owner boundary changes a later exact topology or scope choice before that boundary is discharged; empty decorative structure is insufficient."
+      }
+    },
+    {
+      "puzzle": "conjunction-idempotence-introduction",
+      "name": {
+        "professional": "Seyr Workshop Tablet S-34",
+        "accession": "S-34"
+      },
+      "provenance": {
+        "summary": "a steatite apprentice tablet from the Seyr workshop refuse lens, incised with one ring and a deliberately repeated pair of matching field marks.",
+        "function": "trained seal-cutters to recognize that repeating an identical condition within one field does not create a second obligation."
+      }
+    },
+    {
+      "puzzle": "weakening-introduction",
+      "name": {
+        "professional": "Seyric Apprentice Tablet S-31",
+        "curatorShorthand": "the spare premise",
+        "accession": "S-31"
+      },
+      "provenance": {
+        "summary": "A small slate exercise from the Seyr workshop sequence, incised with one premise repeated beyond a second, differently marked assumption.",
+        "function": "Trained sealers to preserve a sufficient premise when a later condition was admitted but not used."
+      }
+    },
+    {
+      "puzzle": "compound-weakening-boundary",
+      "name": {
+        "professional": "Seyric Compound Weakening Boundary"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound weakening boundary.",
+        "function": "A complete compound proposition must remain intact while a separate irrelevant compound semantic subgraph is erased as one whole fragment."
+      }
+    },
+    {
+      "puzzle": "two-mark-projection",
+      "name": {
+        "professional": "Seyric Field Seal S-27",
+        "curatorShorthand": "two-ring field form",
+        "accession": "S-27"
+      },
+      "provenance": {
+        "summary": "a small repetitive tablet from Seyr workshop refuse, probably a routine exercise or production trial rather than a commissioned closure.",
+        "function": "practiced separating two nested owners while retaining only the mark required by the seal."
+      }
+    },
+    {
+      "puzzle": "compound-projection",
+      "name": {
+        "professional": "Seyric Compound Projection"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound projection.",
+        "function": "A grouped conjunct must be projected intact as one proposition instead of selecting one of its internal atoms."
+      }
+    },
+    {
+      "puzzle": "ternary-projection-choice",
+      "name": {
+        "professional": "Seyric Ternary Projection Choice"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates ternary projection choice.",
+        "function": "Exactly three product components offer distinct targets and only one feeds the goal."
+      }
+    },
+    {
+      "puzzle": "left-injection-introduction",
+      "name": {
+        "professional": "Seyric Alternative Seal S-34L",
+        "curatorShorthand": "left alternative",
+        "accession": "S-34L"
+      },
+      "provenance": {
+        "summary": "A fine-grained clay teaching seal whose first pigment recurs in the left member of a paired alternative enclosure.",
+        "function": "Taught apprentices to certify an alternative seal from a premise matching its left branch."
+      }
+    },
+    {
+      "puzzle": "grouped-branch-construction",
+      "name": {
+        "professional": "Seyric Grouped Branch Construction"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates grouped branch construction.",
+        "function": "A missing grouped proposition must be constructed as one semantic unit and placed intact as a disjunctive branch."
+      }
+    },
+    {
+      "puzzle": "injection-branch-contrast",
+      "name": {
+        "professional": "The Orra Branch-Choice Seal"
+      },
+      "provenance": {
+        "summary": "a limestone gate seal from Orra with two differently owned alternatives, one of which repeats the single marked condition admitted outside the branch field.",
+        "function": "tested whether ward readers chose the supported alternative by ownership rather than applying a fixed left-branch habit."
+      }
+    },
+    {
+      "puzzle": "compound-conjunction-idempotence",
+      "name": {
+        "professional": "Seyric Compound Conjunction Idempotence"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound conjunction idempotence.",
+        "function": "The same nontrivial compound proposition repeats whole across a conjunction, while partial internal matches do not count."
+      }
+    },
+    {
+      "puzzle": "disjunction-idempotence-introduction",
+      "name": {
+        "professional": "The Tel Vey Twin-Branch Seal"
+      },
+      "provenance": {
+        "summary": "a fine limestone chamber seal from Tel Vey whose two sibling veils preserve the same pigment and ring ownership under separate cuts.",
+        "function": "demonstrated that repeating one permitted alternative in two branches does not widen the ward's licensed passage."
+      }
+    },
+    {
+      "puzzle": "compound-disjunction-idempotence",
+      "name": {
+        "professional": "Seyric Compound Disjunction Idempotence"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound disjunction idempotence.",
+        "function": "The same nontrivial compound proposition repeats whole across a disjunction, while partial internal matches do not count."
+      }
+    },
+    {
+      "puzzle": "atomic-conjunction-exchange",
+      "name": {
+        "professional": "Seyric Atomic Conjunction Exchange"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates atomic conjunction exchange.",
+        "function": "Two atomic conjunction operands are exchanged while remaining under the same semantic owner."
+      }
+    },
+    {
+      "puzzle": "compound-conjunction-exchange",
+      "name": {
+        "professional": "Seyric Compound Conjunction Exchange"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates compound conjunction exchange.",
+        "function": "A compound conjunction operand is exchanged whole with another operand while every semantic owner remains fixed."
+      }
+    },
+    {
+      "puzzle": "disjunction-exchange-recognition",
+      "name": {
+        "professional": "The Orra Reversed-Branch Lintel"
+      },
+      "provenance": {
+        "summary": "a matched limestone lintel fragment from the Orra Gate whose paired alternatives recur in opposite carved positions on the inner and outer faces.",
+        "function": "showed ward readers that the two licensed passages remained the same alternatives regardless of which branch the carver placed first."
+      }
+    },
+    {
+      "puzzle": "compound-disjunction-exchange",
+      "name": {
+        "professional": "Seyric Compound Disjunction Exchange"
+      },
+      "provenance": {
+        "summary": "A compound disjunction operand is exchanged whole with another operand while every semantic owner remains fixed. Wrapping the denied compound P∨(Q∧R) creates a negative annulus; iterating that complete nested source into the annulus makes whole-compound erasure legal and mandatory before the boundary can be discharged.",
+        "function": "It defeats the hypothesis that only atomic alternatives can exchange visually; the complete conjunctive branch keeps both owners and one branch boundary. The annulus is not decorative: its negative polarity admits whole-compound erasure, and leaving the temporary nested disjunction in place blocks double-cut elimination."
+      }
+    },
+    {
+      "puzzle": "conjunction-reassociation-recognition",
+      "name": {
+        "professional": "Seyr Triple-Field Tablet S-46"
+      },
+      "provenance": {
+        "summary": "a broad slate workshop tablet from Seyr bearing three differently pigmented ring marks in a single uninterrupted field, copied in several spatial clusters by apprentice hands.",
+        "function": "trained readers to treat every apparent clustering of three joint conditions as one field unless an actual boundary separated them."
+      }
+    },
+    {
+      "puzzle": "conjunction-reassociation-role-scope",
+      "name": {
+        "professional": "Seyric Conjunction Reassociation Role Scope"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates conjunction reassociation role scope.",
+        "function": "Among multiple conjunction sites, one visibly compound opposite-connective proposition must remain one semantic role, and that role identifies the correct scope boundary."
+      }
+    },
+    {
+      "puzzle": "disjunction-reassociation-recognition",
+      "name": {
+        "professional": "The Tel Vey Three-Branch Closure"
+      },
+      "provenance": {
+        "summary": "a chamber closure from Tel Vey bearing three sibling branch cuts under one outer field; later copies cluster the branches differently without adding inner boundaries.",
+        "function": "trained ward readers to preserve the same three licensed alternatives across differing scribal parenthesizations."
+      }
+    },
+    {
+      "puzzle": "structural-recognition-routing-choice",
+      "name": {
+        "professional": "Seyric Structural Recognition Routing Choice"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates structural recognition routing choice.",
+        "function": "Exchange or reassociation recognition determines which intact component is projected or which alternative family is constructed, without any structural rewrite move."
+      }
+    },
+    {
+      "puzzle": "disjunction-reassociation-role-scope",
+      "name": {
+        "professional": "Seyric Disjunction Reassociation Role Scope"
+      },
+      "provenance": {
+        "summary": "A Seyric propositional tablet whose visible arrangement isolates disjunction reassociation role scope.",
+        "function": "Among multiple disjunction sites, one visibly compound opposite-connective proposition must remain one semantic role, and that role identifies the correct scope boundary."
+      }
+    },
+    {
+      "puzzle": "i-c3",
+      "name": {
+        "professional": "Seyric Three-Link Consequence Seal C-03",
+        "curatorShorthand": "P through Q to R",
+        "accession": "C-03"
+      },
+      "provenance": {
+        "summary": "An early connective-period slate arranging three owned pigments across two implication links and a final return veil.",
+        "function": "Introduced the workshop method for carrying a starting condition through a three-proposition implication chain."
+      }
+    },
+    {
+      "puzzle": "i-c4",
+      "name": {
+        "professional": "Seyr Four-Link Transit Tablet C-4"
+      },
+      "provenance": {
+        "summary": "a long slate exercise tablet from Seyr with four pigment owners and three evenly spaced implication chambers.",
+        "function": "trained advanced readers to carry one licensed condition through a three-link sequence without confusing the intermediate owners."
+      }
+    },
+    {
+      "puzzle": "r1",
+      "name": {
+        "professional": "Seyr Delayed Composition Tablet R-1"
+      },
+      "provenance": {
+        "summary": "a weathered slate retrieval tablet combining the classic three-proposition chain with a separate paired closure.",
+        "function": "The compound premise P∧S composes through the compound handoff Q∧T to R."
+      }
+    },
+    {
+      "puzzle": "i-cs",
+      "name": {
+        "professional": "The Auten Side-Premise Ledger"
+      },
+      "provenance": {
+        "summary": "a bronze-faced calculation tablet from Auten whose first implication chamber admits two owned marks while only one advances into the second chamber.",
+        "function": "trained readers to preserve a standing condition alongside a changing implication chain."
+      }
+    },
+    {
+      "puzzle": "i-al",
+      "name": {
+        "professional": "Tel Vey Paired-Consequents Seal"
+      },
+      "provenance": {
+        "summary": "a limestone teaching seal from Tel Vey with two parallel implication chambers feeding one paired terminal field.",
+        "function": "trained readers to transform two independent conditions and retain both results as one joint obligation."
+      }
+    },
+    {
+      "puzzle": "ch-and",
+      "name": {
+        "professional": "Seyric Paired-Lift Challenge"
+      },
+      "provenance": {
+        "summary": "Lift independent compound-output implications together into one four-owner conjunction",
+        "function": "Lift independent compound-output implications together into one four-owner conjunction"
+      }
+    },
+    {
+      "puzzle": "i-case2",
+      "name": {
+        "professional": "The Orra Two-Gate Case Lintel"
+      },
+      "provenance": {
+        "summary": "a limestone lintel from Orra with two parallel conditional wards, a forked alternative field, and one shared terminal mark.",
+        "function": "required gate readers to verify that either licensed approach led to the same protected chamber."
+      }
+    },
+    {
+      "puzzle": "rm-case3",
+      "name": {
+        "professional": "The Veyr Three-Case Recovery Slate"
+      },
+      "provenance": {
+        "summary": "a compact Veyr correction slate preserving three nested alternatives around one shared terminal condition.",
+        "function": "Resolve separate P, Q, and R implications to shared compound S∧T"
+      }
+    },
+    {
+      "puzzle": "i-om",
+      "name": {
+        "professional": "The Myrat Alternative-Mapping Tablet"
+      },
+      "provenance": {
+        "summary": "an alabaster teaching tablet from Myrat with one conditional pigment change repeated across only one arm of a forked field.",
+        "function": "trained readers to transform one licensed alternative while carrying the other through unchanged."
+      }
+    },
+    {
+      "puzzle": "ch-or",
+      "name": {
+        "professional": "Seyric Preserved-Branch Mapping Challenge"
+      },
+      "provenance": {
+        "summary": "Map a compound P∧T branch to Q∧U while preserving compound R∧S",
+        "function": "Map a compound P∧T branch to Q∧U while preserving compound R∧S"
+      }
+    },
+    {
+      "puzzle": "ternary-branchwise-map",
+      "name": {
+        "professional": "Ternary Branchwise Map"
+      },
+      "provenance": {
+        "summary": "P∨Q∨R is paired with P→S, Q→T, and R→U, requiring three corresponding output alternatives S∨T∨U.",
+        "function": "Binary position guessing does not generalize: each of three source branches must be matched to its own result by correspondence."
+      }
+    },
+    {
+      "puzzle": "i-aa",
+      "name": {
+        "professional": "Seyric Absorbing-Conjunct Seal C-23",
+        "curatorShorthand": "A absorbs A-or-B",
+        "accession": "C-23"
+      },
+      "provenance": {
+        "summary": "A two-pigment slate placing a standalone A beside an A/B alternative enclosure and a single A return.",
+        "function": "Introduced conjunction absorption by showing that required A already satisfies the alternative containing A."
+      }
+    },
+    {
+      "puzzle": "b6",
+      "name": {
+        "professional": "Auten Conjunctive Absorption Tablet B-6"
+      },
+      "provenance": {
+        "summary": "a bronze exercise tablet from Auten placing a plain P beside a forked P-or-Q field and repeating P as the terminal condition.",
+        "function": "Absorb (P∨Q)∧((P∨Q)∨(R∧S)) to the compound repeated proposition P∨Q."
+      }
+    },
+    {
+      "puzzle": "i-ao",
+      "name": {
+        "professional": "The Orra Absorbed-Branch Lintel"
+      },
+      "provenance": {
+        "summary": "a limestone gate lintel from Orra with one plain P branch and one P-and-Q branch converging on the same terminal ownership mark.",
+        "function": "trained readers to recognize that an extra condition on one route did not change the condition common to both licensed routes."
+      }
+    },
+    {
+      "puzzle": "rm-ao",
+      "name": {
+        "professional": "Seyric Disjunction-Absorption Remediation Slate"
+      },
+      "provenance": {
+        "summary": "Absorb a compound repeated P∧Q from (P∧Q)∨((P∧Q)∧R)",
+        "function": "Absorb a compound repeated P∧Q from (P∧Q)∨((P∧Q)∧R)"
+      }
+    },
+    {
+      "puzzle": "sey-ctr-i01",
+      "name": {
+        "professional": "The Seyr Reversed-Endpoint Tablet"
+      },
+      "provenance": {
+        "summary": "a two-owner basalt theorem tablet setting an implication beside its polarity-reversed counterpart.",
+        "function": "introduced direct contraposition to classical ward readers without invoking a separate citation."
+      }
+    },
+    {
+      "puzzle": "sey-ctr-r01",
+      "name": {
+        "professional": "The Tel Vey Contraposition Recall Plaque"
+      },
+      "provenance": {
+        "summary": "an unannotated fired-clay plaque from Tel Vey repeating the classical two-owner theorem after delayed study.",
+        "function": "Direct contraposition with a conjunctive antecedent"
+      }
+    },
+    {
+      "puzzle": "atomic-excluded-middle",
+      "name": {
+        "professional": "Seyric Atomic Complement Tablet",
+        "curatorShorthand": "atomic complement",
+        "accession": "SEY-LEM-ATOM"
+      },
+      "provenance": {
+        "summary": "A single proposition and its veiled complement form an exhaustive split.",
+        "function": "Atomic excluded middle"
+      }
+    },
+    {
+      "puzzle": "sey-lem-i01",
+      "name": {
+        "professional": "Seyric Complementary Split Tablet K-01",
+        "curatorShorthand": "first excluded-middle split",
+        "accession": "K-01"
+      },
+      "provenance": {
+        "summary": "A classical-period slate placing one pigment and its veiled complement in a single alternative enclosure.",
+        "function": "Excluded middle for a two-owner conjunction"
+      }
+    },
+    {
+      "puzzle": "sey-lem-c01",
+      "name": {
+        "professional": "Seyric Split-Polarity Contrast K-02",
+        "curatorShorthand": "split versus conjunction",
+        "accession": "K-02"
+      },
+      "provenance": {
+        "summary": "A contrast slate recutting the complementary branches with stronger polarity marks.",
+        "function": "Excluded middle for a three-owner conjunction"
+      }
+    },
+    {
+      "puzzle": "atomic-negated-disjunction-forward",
+      "name": {
+        "professional": "Seyric Atomic Negated Disjunction Forward Tablet",
+        "curatorShorthand": "atomic negated disjunction forward",
+        "accession": "SEY-B52D72ED"
+      },
+      "provenance": {
+        "summary": "A negated disjunction whose two operands are atomic expands into the conjunction of their negations, with no compound operand obscuring the base direction.",
+        "function": "de-morgan-negated-disjunction-forward"
+      }
+    },
+    {
+      "puzzle": "atomic-negated-disjunction-reverse",
+      "name": {
+        "professional": "Seyric Atomic Negated Disjunction Reverse Tablet",
+        "curatorShorthand": "atomic negated disjunction reverse",
+        "accession": "SEY-99F67574"
+      },
+      "provenance": {
+        "summary": "A conjunction of two negated atomic operands factors into their negated disjunction, with no compound operand obscuring the base reverse direction.",
+        "function": "de-morgan-negated-disjunction-reverse"
+      }
+    },
+    {
+      "puzzle": "sey-dm-ec-i01",
+      "name": {
+        "professional": "Seyric Negated-Conjunction Expansion K-05",
+        "curatorShorthand": "not-both expansion",
+        "accession": "K-05"
+      },
+      "provenance": {
+        "summary": "A two-pigment classical slate juxtaposing a veiled conjunction with two separately veiled alternatives.",
+        "function": "Expand negated conjunction with atomic operands"
+      }
+    },
+    {
+      "puzzle": "sey-dm-ec-c01",
+      "name": {
+        "professional": "Seyric De Morgan Polarity Contrast K-06",
+        "curatorShorthand": "one veil versus two",
+        "accession": "K-06"
+      },
+      "provenance": {
+        "summary": "A contrast tablet emphasizing the difference between one veil around a conjunction and separate veils in a disjunction.",
+        "function": "Expand negated conjunction with conjunctive left operand"
+      }
+    },
+    {
+      "puzzle": "sey-dm-ed-i01",
+      "name": {
+        "professional": "Auten De Morgan Bifurcation Tablet ED-I"
+      },
+      "provenance": {
+        "summary": "a silver-black tablet whose single denied fork separates into two sealed refusals.",
+        "function": "Expand negated disjunction with conjunctive left operand"
+      }
+    },
+    {
+      "puzzle": "sey-dm-fc-i01",
+      "name": {
+        "professional": "Auten De Morgan Convergence Tablet FC-I"
+      },
+      "provenance": {
+        "summary": "a blackened bronze tablet whose two denied branches converge beneath one conjunctive seal.",
+        "function": "Factor negated conjunction with atomic operands"
+      }
+    },
+    {
+      "puzzle": "compound-conjunction-de-morgan",
+      "name": {
+        "professional": "Seyric Compound Conjunction De Morgan Tablet",
+        "curatorShorthand": "compound conjunction de morgan",
+        "accession": "SEY-4F9FE982"
+      },
+      "provenance": {
+        "summary": "A conjunction-family De Morgan relation preserves one opposite-connective compound component as a whole.",
+        "function": "de-morgan-compound-conjunction-family"
+      }
+    },
+    {
+      "puzzle": "sey-red-i01",
+      "name": {
+        "professional": "Seyric Contradiction Return Tablet K-23",
+        "curatorShorthand": "closed contradiction-to-conclusion display introducing reductio.",
+        "accession": "K-23"
+      },
+      "provenance": {
+        "summary": "A unique classical-period instructional seal catalogued as K-23.",
+        "function": "Closed contradiction-to-conclusion display introducing reductio."
+      }
+    },
+    {
+      "puzzle": "sey-red-c01",
+      "name": {
+        "professional": "The Veyr Reductio Boundary Contrast"
+      },
+      "provenance": {
+        "summary": "a painted limestone seal distinguishing a contradiction-producing negated assumption from an ordinary paired veil.",
+        "function": "Reductio with a compound denied conclusion: assuming not-(Q and R) exposes the P/not-P contradiction"
+      }
+    },
+    {
+      "puzzle": "sey-pei-i01",
+      "name": {
+        "professional": "The Seyr Peirce Feedback Tablet"
+      },
+      "provenance": {
+        "summary": "a two-owner basalt theorem tablet whose P trace returns through a nested implication loop.",
+        "function": "Peirce feedback ((P implies (Q and R)) implies P) implies P with an explicit compound feedback endpoint"
+      }
+    },
+    {
+      "puzzle": "sey-pei-c01",
+      "name": {
+        "professional": "The Veyr Feedback-versus-Chain Contrast"
+      },
+      "provenance": {
+        "summary": "a painted limestone variant marking the returning P path separately from the forward P-to-Q implication.",
+        "function": "Peirce feedback with a conjunctive returned proposition P-and-R"
+      }
+    },
+    {
+      "puzzle": "compound-context-threaded-choice",
+      "name": {
+        "professional": "Compound Context Threaded Choice"
+      },
+      "provenance": {
+        "summary": "P, the required whole context S∧T, and the near-match S∧U sit beside a P∧(S∧T) to Q∧(S∧T) to R∧(S∧T) chain.",
+        "function": "Shared atoms are not enough: the complete S∧T context, rather than the similar S∧U context, is the invariant consumed at both handoffs."
+      }
+    },
+    {
+      "puzzle": "assumption-relevant-structured-reductio",
+      "name": {
+        "professional": "Seyric Assumption Relevant Structured Reductio Tablet",
+        "curatorShorthand": "assumption relevant structured reductio",
+        "accession": "SEY-8C88631B"
+      },
+      "provenance": {
+        "summary": "Under denial of a compound conclusion, one structured contradiction depends on that denial while a competing contradiction is visible but cannot discharge it.",
+        "function": "reductio-assumption-relevant-contradiction, mixed-structured-contradiction-reductio"
+      }
+    },
+    {
+      "puzzle": "weakening-injection-weave",
+      "name": {
+        "professional": "Seyric Spare-Premise Alternative Seal S-64",
+        "curatorShorthand": "exchange and inject",
+        "accession": "S-64"
+      },
+      "provenance": {
+        "summary": "A three-pigment slate whose exchanged premise pair supplies only the first mark to the left branch of an alternative enclosure.",
+        "function": "Combined conjunction exchange, weakening of an unused premise, and left injection into a disjunction."
+      }
+    },
+    {
+      "puzzle": "contrapositive-composition-bridge",
+      "name": {
+        "professional": "Seyric Contrapositive Composition Bridge Tablet",
+        "curatorShorthand": "contrapositive composition bridge",
+        "accession": "SEY-54BBEBF1"
+      },
+      "provenance": {
+        "summary": "One supplied implication becomes the exact missing middle bridge only after contrapositive reversal, enabling composition with a second link.",
+        "function": "mixed-contrapositive-bridge"
+      }
+    },
+    {
+      "puzzle": "excluded-middle-manufactures-cases",
+      "name": {
+        "professional": "Seyric Excluded Middle Manufactures Cases Tablet",
+        "curatorShorthand": "excluded middle manufactures cases",
+        "accession": "SEY-6CB13850"
+      },
+      "provenance": {
+        "summary": "No split is supplied; downstream handlers for a proposition and its negation identify the useful excluded-middle proposition, and both manufactured cases are consumed.",
+        "function": "mixed-excluded-middle-manufactures-cases"
+      }
+    },
+    {
+      "puzzle": "alternating-negation-cnf",
+      "name": {
+        "professional": "Seyric Alternating Negation Cnf Tablet",
+        "curatorShorthand": "alternating negation cnf",
+        "accession": "SEY-D4D5DA0D"
+      },
+      "provenance": {
+        "summary": "An alternating connective boundary requires both De Morgan and distribution to produce a recognizably CNF-shaped intermediate consumed downstream.",
+        "function": "mixed-alternating-negation-cnf"
+      }
+    },
+    {
+      "puzzle": "alternating-negation-dnf",
+      "name": {
+        "professional": "Seyric Alternating Negation Dnf Tablet",
+        "curatorShorthand": "alternating negation dnf",
+        "accession": "SEY-880500E5"
+      },
+      "provenance": {
+        "summary": "An alternating connective boundary requires both De Morgan and distribution to produce a recognizably DNF-shaped intermediate consumed downstream.",
+        "function": "mixed-alternating-negation-dnf"
+      }
+    },
+    {
+      "puzzle": "b3",
+      "name": {
+        "professional": "The Veyr Side-Premise Case Weave"
+      },
+      "provenance": {
+        "summary": "a dense slate weave from Veyr preserving one side premise across a composed implication route and a two-case marginal diagram.",
+        "function": "Connected branch map into a side-bearing two-case chain"
+      }
+    },
+    {
+      "puzzle": "branch-preparation-common-tail",
+      "name": {
+        "professional": "Branch Preparation Common Tail"
+      },
+      "provenance": {
+        "summary": "P and Q prepare locally to R and S, converge separately to T, and only then share the single T→U continuation.",
+        "function": "The common tail cannot be applied before the branch-specific preparations establish its shared T input."
+      }
+    },
+    {
+      "puzzle": "branch-preparation-local-chains",
+      "name": {
+        "professional": "Branch Preparation Local Chains"
+      },
+      "provenance": {
+        "summary": "The P branch follows P→R→T while the Q branch follows Q→S→T before the cases converge.",
+        "function": "A single shared implication cannot stand in for the two different local intermediate states."
+      }
+    },
+    {
+      "puzzle": "classical-consensus-branch-building",
+      "name": {
+        "professional": "Seyric Classical Consensus Branch Building Tablet",
+        "curatorShorthand": "classical consensus branch building",
+        "accession": "SEY-73CBEFCD"
+      },
+      "provenance": {
+        "summary": "A manufactured classical split and distribution across a factor boundary expose one shared term whose recognition changes how the branches are built.",
+        "function": "mixed-classical-consensus-branch-building"
+      }
+    },
+    {
+      "puzzle": "classical-consensus-product-collapsing",
+      "name": {
+        "professional": "Seyric Classical Consensus Product Collapsing Tablet",
+        "curatorShorthand": "classical consensus product collapsing",
+        "accession": "SEY-CFABDE33"
+      },
+      "provenance": {
+        "summary": "A classical split and dual distribution expose redundant product structure whose shared term changes the available collapse.",
+        "function": "mixed-classical-consensus-product-collapsing"
+      }
+    },
+    {
+      "puzzle": "de-morgan-product-consumer",
+      "name": {
+        "professional": "De Morgan Product Consumer"
+      },
+      "provenance": {
+        "summary": "Releasing the outer double negation turns ¬(P∨Q) into the full product ¬P∧¬Q; the ¬P conjunct is then projected as the exact antecedent consumed by ¬P→R.",
+        "function": "Recognizing De Morgan is not the endpoint: the produced connective is a product, and one exact product component must feed the later implication consumer while the other remains visible context."
+      }
+    },
+    {
+      "puzzle": "de-morgan-sum-consumer",
+      "name": {
+        "professional": "De Morgan Sum Consumer"
+      },
+      "provenance": {
+        "summary": "Eliminating the two branch double cuts exposes ¬(P∧Q) as the alternatives ¬P∨¬Q, whose branches feed separate ¬P→R and ¬Q→R case handlers.",
+        "function": "The produced alternatives cannot be treated as a product; each branch must enter its matching case consumer."
+      }
+    },
+    {
+      "puzzle": "double-cut-copy-license",
+      "name": {
+        "professional": "Double Cut Copy License"
+      },
+      "provenance": {
+        "summary": "Two peer P occurrences initially license either peer removal; wrapping one P in a double cut moves it below the other and removes its authority over that peer while preserving the reverse authority.",
+        "function": "Net polarity equivalence does not preserve ancestry direction: the new boundary changes which exact occurrence may justify which removal."
+      }
+    },
+    {
+      "puzzle": "double-cut-insertion-workspace",
+      "name": {
+        "professional": "Double Cut Insertion Workspace"
+      },
+      "provenance": {
+        "summary": "Introducing a double cut in negative r3 creates positive annulus dc; inserting an empty double cut there supplies the sole ancestor exact occurrence that licenses removal of the wrapped r5 double cut.",
+        "function": "The insertion is not decoration: without the annular source the wrapped r5 occurrence has no ancestor match, and leaving the source in the annulus blocks cleanup."
+      }
+    },
+    {
+      "puzzle": "preserve-sole-structural-source",
+      "name": {
+        "professional": "Preserve Sole Structural Source"
+      },
+      "provenance": {
+        "summary": "A sole P occurrence in the negative premise field looks erasable, but it is the only ancestor source that can discharge the P side of P→Q before Q reaches the denied target.",
+        "function": "Locally legal simplification is not globally harmless: erasing P first removes the exact structural authority needed by the implication bridge."
+      }
+    },
+    {
+      "puzzle": "r4",
+      "name": {
+        "professional": "Tel Vey Common-Factor Recall Seal R-4"
+      },
+      "provenance": {
+        "summary": "a limestone recall seal placing an absorbed conjunction beside an unrelated closure pair.",
+        "function": "Factor compound P∧Q from ((P∧Q)∧(P∧Q))∨((P∧Q)∧(R∨S)); the result is (P∧Q)∧((P∧Q)∨(R∨S)), which absorbs to P∧Q."
+      }
+    },
+    {
+      "puzzle": "r5",
+      "name": {
+        "professional": "Orra Three-Case Recall Lintel R-5"
+      },
+      "provenance": {
+        "summary": "a weathered gate lintel combining a three-way case field with a separate closure pair.",
+        "function": "Three cases produce two clauses sharing alternative S; factoring them yields S∨(S∧U), which is then absorbed to S."
+      }
+    },
+    {
+      "puzzle": "recollect-shared-branch-context",
+      "name": {
+        "professional": "Recollect Shared Branch Context"
+      },
+      "provenance": {
+        "summary": "The whole context K=U∧V is supplied outside P∨Q, the branches map to R and S, and K must then be recollected with each mapped result by the downstream consumers.",
+        "function": "Mapping the branches does not finish their preparation; the exact whole shared K must be matched again after the branch-local result appears."
+      }
+    },
+    {
+      "puzzle": "rm-c3",
+      "name": {
+        "professional": "Seyric Three-Link Remediation Slate R-31",
+        "curatorShorthand": "restore the Q handoff",
+        "accession": "R-31"
+      },
+      "provenance": {
+        "summary": "A corrective workshop slate emphasizing the middle Q owner between P/Q and Q/R links.",
+        "function": "Remediated three-proposition implication composition after a missed or mismatched middle handoff."
+      }
+    },
+    {
+      "puzzle": "sey-ref-sel-i01",
+      "name": {
+        "professional": "Seyric Exact-Record Selection Tablet K-32",
+        "curatorShorthand": "introduction to exact completed-artifact selection on a full closed sey-cl-r01 occurrence.",
+        "accession": "K-32"
+      },
+      "provenance": {
+        "summary": "A unique closed classical record catalogued as K-32.",
+        "function": "Choose the exact current single-mark-return and nested-owner-introduction records on two complete introduction-path occurrences"
+      }
+    },
+    {
+      "puzzle": "compound-theorem-source-choice",
+      "name": {
+        "professional": "Seyric Compound Theorem Source Choice Tablet",
+        "curatorShorthand": "compound theorem source choice",
+        "accession": "SEY-F6741E47"
+      },
+      "provenance": {
+        "summary": "The completed two-variable and three-variable compound excluded-middle records are both available, but the displayed occurrence exactly matches only the complete two-variable theorem side; the extra-variable near source must be refused.",
+        "function": "exact-theorem-selection-compound-side"
+      }
+    },
+    {
+      "puzzle": "useful-manifestation-target",
+      "name": {
+        "professional": "Seyric Useful Manifestation Target Tablet",
+        "curatorShorthand": "useful manifestation target",
+        "accession": "SEY-AEDCB9C0"
+      },
+      "provenance": {
+        "summary": "A surviving completed theorem has multiple legal manifestation hosts, but only one creates ordinary content useful to the open problem.",
+        "function": "manifestation-legal-target-choice"
+      }
+    },
+    {
+      "puzzle": "sey-ref-dis-i01",
+      "name": {
+        "professional": "Seyric Dissolution Tablet K-40",
+        "curatorShorthand": "introduction to dissolving an exact completed-record occurrence.",
+        "accession": "K-40"
+      },
+      "provenance": {
+        "summary": "A closed theorem-reference exercise catalogued as K-40.",
+        "function": "Dissolve the exact current single-mark artifact inside an atomic identity context"
+      }
+    },
+    {
+      "puzzle": "compound-context-dissolution",
+      "name": {
+        "professional": "Seyric Compound Context Dissolution Tablet",
+        "curatorShorthand": "compound context dissolution",
+        "accession": "SEY-0982E755"
+      },
+      "provenance": {
+        "summary": "A surviving compound theorem has one exact dissolvable occurrence and one contextually near but nonexact occurrence.",
+        "function": "dissolution-compound-context-exactness"
+      }
+    },
+    {
+      "puzzle": "artifact-creates-copy-authority",
+      "name": {
+        "professional": "Seyric Artifact Creates Copy Authority Tablet",
+        "curatorShorthand": "artifact creates copy authority",
+        "accession": "SEY-89C99085"
+      },
+      "provenance": {
+        "summary": "Ordinary content manifested from a surviving artifact becomes the exact ancestor source for a later structural copy decision.",
+        "function": "mixed-artifact-creates-structural-authority"
+      }
+    },
+    {
+      "puzzle": "artifact-polarity-direction-contrast",
+      "name": {
+        "professional": "Seyric Artifact Polarity Direction Contrast Tablet",
+        "curatorShorthand": "artifact polarity direction contrast",
+        "accession": "SEY-7EE2BED1"
+      },
+      "provenance": {
+        "summary": "The same surviving theorem artifact has exact candidate sites at different nested parities, and the useful manifestation or dissolution direction changes with polarity.",
+        "function": "mixed-artifact-direction-polarity"
+      }
+    },
+    {
+      "puzzle": "artifact-preserves-copy-authority",
+      "name": {
+        "professional": "Seyric Artifact Preserves Copy Authority Tablet",
+        "curatorShorthand": "artifact preserves copy authority",
+        "accession": "SEY-E2A44E93"
+      },
+      "provenance": {
+        "summary": "An exact artifact occurrence is dissolvable but is also the sole ancestor or peer authority required by a later structural step.",
+        "function": "mixed-artifact-preserves-structural-authority"
+      }
+    },
+    {
+      "puzzle": "artifact-selected-downstream-bridge",
+      "name": {
+        "professional": "Seyric Artifact Selected Downstream Bridge Tablet",
+        "curatorShorthand": "artifact selected downstream bridge",
+        "accession": "SEY-63BD986F"
+      },
+      "provenance": {
+        "summary": "The completed two-link and three-link composition records are both available, but a later consumer accepts only the entire closed two-link theorem content as one ordinary manifested proposition; the three-link theorem is a relevant near source whose extra link cannot satisfy that consumer.",
+        "function": "mixed-artifact-downstream-bridge"
+      }
+    },
+    {
+      "puzzle": "blank-witness",
+      "name": {
+        "professional": "The Uninscribed Votive of Myrat",
+        "curatorShorthand": "blank-hollow form"
+      },
+      "provenance": {
+        "summary": "an alabaster votive from the isolated Myrat complex. Wear and residue establish that its empty face is intentional and integral to the seal, not unfinished work or later damage.",
+        "function": "required the maker or breaker to supply one complete pattern for its deliberate hollow."
+      }
+    }
+  ]
+}

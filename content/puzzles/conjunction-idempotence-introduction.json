@@ -1,0 +1,42 @@
+{
+  "id": "conjunction-idempotence-introduction",
+  "diagram": {
+    "root": "r0",
+    "regions": {
+      "r0": {
+        "kind": "sheet"
+      },
+      "r1": {
+        "kind": "cut",
+        "parent": "r0"
+      },
+      "r2": {
+        "kind": "bubble",
+        "parent": "r1",
+        "arity": 0
+      },
+      "r3": {
+        "kind": "cut",
+        "parent": "r2"
+      }
+    },
+    "nodes": {
+      "n0": {
+        "kind": "atom",
+        "region": "r2",
+        "binder": "r2"
+      },
+      "n1": {
+        "kind": "atom",
+        "region": "r3",
+        "binder": "r2"
+      },
+      "n2": {
+        "kind": "atom",
+        "region": "r3",
+        "binder": "r2"
+      }
+    },
+    "wires": {}
+  }
+}

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace the quota-shaped Seyric inventory with one validated collection whose puzzles are justified by the approved isolated and mixed obligations, whose optional records never gate progress, and whose runtime data contains no curriculum-role authority.
+**Goal:** Replace the quota-shaped Seyric inventory with one validated collection whose puzzles are justified by the approved isolated and mixed obligations, whose mandatory Seyric path is derived solely from the first Myratic unlock graph, and whose runtime data contains no curriculum-role authority.
 
 **Architecture:** Perform the content judgment in scratch before mutating production: inventory current starts, classify them against the approved obligation model, construct only missing starts, and adversarially review the resulting collection. Then migrate the strict JSON package in one direction from curriculum v1 to progression/coverage v2, integrate only the accepted complete bundles, delete stale records and authorities, and validate the entire package directly.
 
@@ -13,7 +13,7 @@
 - Puzzle count is an output only; no task may allocate, retain, delete, or add a record to approach a number.
 - Existing IDs, folio positions, roadmap slots, role labels, and prior effort have no authority.
 - Alternative solutions are welcome. A stored witness proves feasibility only.
-- Optional practice never gates a puzzle, a culture, or a gateway.
+- The mandatory Seyric path is exactly the minimal transitive completion set needed to unlock the first Myratic puzzle; every other Seyric record is practice.
 - Canonical inequality does not prove experiential novelty.
 - A mixed record is warranted only by a changed legality, dependency, scope, source/target choice, matching problem, consequence, or bounded-generalization threshold.
 - Exchange and reassociation are recognition topics; do not invent a local transformation move.
@@ -174,13 +174,13 @@ Each missing brief contains:
 
 IDs describe the semantic problem, never `practice`, `retrieval`, `challenge`, `remediation`, `transfer`, a batch number, or a desired position.
 
-- [ ] **Step 3: Establish optional non-gating status**
+- [ ] **Step 3: Establish the minimal Myratic unlock path**
 
-Mark a record optional only when it adds worthwhile extra exposure but no unique core obligation. Assert that no accepted record or culture gateway depends on an optional ID. Do not make optionality synonymous with difficulty.
+Derive the mandatory Seyric path as the transitive set of Seyric completions needed to unlock the first Myratic puzzle. Keep every other accepted record as practice outside that path. Do not add a second required-or-optional declaration.
 
 - [ ] **Step 4: Review coverage and ordering**
 
-The lead reviews `coverage-matrix.md` for every approved obligation, every accepted ID, every missing brief, and every optional edge. Any uncovered obligation must have an authoring brief or a fixed-semantics rejection from the design spec.
+The lead reviews `coverage-matrix.md` for every approved obligation, every accepted ID, every missing brief, and every edge on the Myratic unlock path. Any uncovered obligation must have an authoring brief or a fixed-semantics rejection from the design spec.
 
 ---
 
@@ -207,7 +207,7 @@ Each bundle uses:
 ```ts
 type CandidateBundle = {
   core: { id: string; diagram: unknown }
-  placement: { puzzle: string; prerequisites: string[]; optional: boolean }
+  placement: { puzzle: string; prerequisites: string[] }
   artifact: { puzzle: string; name: object; provenance: object }
   coverage: {
     puzzle: string
@@ -289,11 +289,11 @@ Expected: every probe exits 0; missing, inexact, or wrong-polarity artifact use 
 
 - [ ] **Step 3: Run independent logical and experiential audits**
 
-Logical review checks closedness, propositional purity, theorem validity, witness replay, and artifact availability. Experiential review checks visible obligation, nearest neighbors, saturation, open-endedness, and optional non-gating status. Reviewers list defects by ID; they do not approve by count.
+Logical review checks closedness, propositional purity, theorem validity, witness replay, and artifact availability. Experiential review checks visible obligation, nearest neighbors, saturation, open-endedness, and whether each mandatory-path edge is necessary to unlock the first Myratic puzzle. Reviewers list defects by ID; they do not approve by count.
 
 - [ ] **Step 4: Produce the final inventory**
 
-The lead resolves defects, reruns affected probes, and writes `final-inventory.json` containing exact culture order, placements, optional flags, puzzle file sources, artifact records, coverage rows, guidance rows, and validation sidecars. No production file changes before this inventory is complete.
+The lead resolves defects, reruns affected probes, and writes `final-inventory.json` containing exact culture order, placements, puzzle file sources, artifact records, coverage rows, guidance rows, and validation sidecars. No production file changes before this inventory is complete.
 
 ---
 
@@ -317,7 +317,7 @@ The lead resolves defects, reruns affected probes, and writes `final-inventory.j
 
 **Interfaces:**
 - Consumes: Task 6 `final-inventory.json`.
-- Produces: manifest format version 2; runtime `PuzzlePlacement` with `{ puzzle, culture, prerequisites, optional }`; runtime `ProgressionCultureDefinition`; no `PerformanceId`, `PerformanceDefinition`, `CurriculumLearning`, `CurriculumPlacement`, or performance accessor.
+- Produces: manifest format version 2; runtime `PuzzlePlacement` with `{ puzzle, culture, prerequisites }`; runtime `ProgressionCultureDefinition`; no `PerformanceId`, `PerformanceDefinition`, `CurriculumLearning`, `CurriculumPlacement`, performance accessor, or redundant optionality field.
 
 - [ ] **Step 1: Write failing v2 loader tests**
 
@@ -335,7 +335,7 @@ Update the portable fixture to use:
     id: 'seyric-horizon', order: 0, unlocksAfter: [], gateway: 'two-veils',
     puzzles: ['two-veils'],
   }],
-  placements: [{ puzzle: 'two-veils', prerequisites: [], optional: false }],
+  placements: [{ puzzle: 'two-veils', prerequisites: [] }],
 },
 ```
 
@@ -356,7 +356,6 @@ export type PuzzlePlacement = {
   readonly puzzle: PuzzleId
   readonly culture: CultureId
   readonly prerequisites: readonly PuzzleId[]
-  readonly optional: boolean
 }
 
 export type ProgressionCultureDefinition = {
@@ -408,7 +407,7 @@ Commit only Task 7 files with message: `refactor: replace curriculum content own
 
 - [ ] **Step 1: Write failing final-inventory tests**
 
-Add assertions that the production ID set equals Task 6's accepted IDs, every placement optional flag obeys non-gating rules, every Seyric start is propositional, and canonical fingerprints are unique. Do not assert a numeric total.
+Add assertions that the production ID set equals Task 6's accepted IDs, the mandatory Seyric path is exactly the first Myratic unlock closure, every Seyric start is propositional, and canonical fingerprints are unique. Do not assert a numeric total.
 
 - [ ] **Step 2: Run tests and verify failure**
 
@@ -446,7 +445,7 @@ Commit Task 8 files with message: `feat: reconstruct Seyric puzzle collection`.
 
 **Interfaces:**
 - Consumes: progression v2, coverage schema/data, final runtime catalog, and validation sidecars.
-- Produces: direct semantic validation of coverage completeness, canonical uniqueness, optional non-gating, artifact availability, witness replay, and recognized-state replay.
+- Produces: direct semantic validation of coverage completeness, canonical uniqueness, progression-graph integrity, artifact availability, witness replay, and recognized-state replay.
 
 - [ ] **Step 1: Write failing coverage validation tests**
 
@@ -455,7 +454,7 @@ Add negative fixtures for:
 ```ts
 expect(() => validateFixture({ missingCoverage: 'two-veils' })).toThrow(/no coverage row/)
 expect(() => validateFixture({ duplicateFingerprint: true })).toThrow(/duplicate canonical start/)
-expect(() => validateFixture({ optionalPrerequisite: true })).toThrow(/optional puzzle .* gates/)
+expect(() => validateFixture({ obsoleteOptionalField: true })).toThrow(/additional properties|unknown field.*optional/)
 expect(() => validateFixture({ unknownObligation: true })).toThrow(/unknown obligation/)
 expect(() => validateFixture({ uncoveredObligation: true })).toThrow(/uncovered obligation/)
 ```
@@ -464,11 +463,11 @@ expect(() => validateFixture({ uncoveredObligation: true })).toThrow(/uncovered 
 
 Run: `npx vitest run tests/game/content-validation.test.ts`
 
-Expected: FAIL because the current validator does not parse coverage or optional flags.
+Expected: FAIL because the current validator does not parse coverage and still accepts the obsolete optionality field.
 
 - [ ] **Step 3: Implement direct validators**
 
-Parse `content/coverage/seyric.json` with AJV. Verify one coverage row per Seyric puzzle, all obligations referenced and covered, all experiential neighbors exist, every coverage string is nonempty, every optional puzzle has no dependent and is not a gateway/unlock gate, and canonical start groups have size one. Keep witness and recognized-state replay unchanged.
+Parse `content/coverage/seyric.json` with AJV. Verify one coverage row per Seyric puzzle, all obligations referenced and covered, all experiential neighbors exist, every coverage string is nonempty, the mandatory Seyric path is derived from the first Myratic unlock graph, and canonical start groups have size one. Keep witness and recognized-state replay unchanged.
 
 - [ ] **Step 4: Run validation**
 
@@ -507,7 +506,7 @@ Remove the three named documents entirely. Do not preserve summaries, migration 
 
 - [ ] **Step 2: Rewrite the content-format documentation**
 
-Document puzzles, progression, build-only coverage, catalog, guidance, validation, manifest v2, puzzle fingerprints, optional non-gating, and the authoring bundle. State explicitly that coverage metadata cannot generate or gate records.
+Document puzzles, progression, build-only coverage, catalog, guidance, validation, manifest v2, puzzle fingerprints, the graph-derived Myratic unlock path, and the authoring bundle. State explicitly that coverage metadata cannot generate or gate records.
 
 - [ ] **Step 3: Run displaced-model searches**
 
@@ -562,7 +561,7 @@ Expected: no displaced authority; diff check exits 0; status contains only inten
 
 - [ ] **Step 3: Write the final receipt**
 
-Record every obligation and its covering puzzle or fixed-semantics rejection, every discarded ID and absence proof, every new puzzle and witness/review evidence, observed final/optional totals, exact commands, and exact pass results. Do not call an observed total a target or baseline.
+Record every obligation and its covering puzzle or fixed-semantics rejection, every discarded ID and absence proof, every new puzzle and witness/review evidence, the exact mandatory Myratic-unlock path, exact commands, and exact pass results. Do not report inventory totals.
 
 - [ ] **Step 4: Append foundation conformance**
 

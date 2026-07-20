@@ -1,0 +1,56 @@
+{
+  "puzzle": "artifact-creates-copy-authority",
+  "solution": [
+    {
+      "rule": "theorem",
+      "name": "game:artifact:single-mark-return",
+      "at": {
+        "sel": {
+          "region": "r1",
+          "regions": [],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "forward"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r2",
+        "regions": [
+          "r1_0"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r1",
+        "regions": [
+          "r1_1"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "single-mark-return"
+  ],
+  "expectedRules": [
+    "theorem",
+    "deiteration",
+    "erasure",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

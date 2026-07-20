@@ -1,29 +1,28 @@
 import { describe, expect, it } from 'vitest'
-import { buildCatalog } from '../../src/game/catalog'
 import {
   emptyProgress, isCultureUnlocked, isRequired, isUnlocked, recordCompletion,
 } from '../../src/game/progress'
-import { cultureId, puzzleId, type PuzzleDefinition } from '../../src/game/types'
-import { minimalPuzzle, minimalSource } from './catalog-fixture'
+import { cultureId, puzzleId } from '../../src/game/types'
+import { buildTestCatalog, minimalPuzzle, minimalSource, type TestPuzzleDefinition } from './catalog-fixture'
 
 const first = minimalPuzzle({ name: { professional: 'Two Veils' } })
-const second: PuzzleDefinition = {
+const second: TestPuzzleDefinition = {
   ...first, id: puzzleId('veil-retrieval'), name: { professional: 'Veil Retrieval' },
   prerequisites: [first.id],
 }
-const third: PuzzleDefinition = {
+const third: TestPuzzleDefinition = {
   ...first, id: puzzleId('third-artifact'), name: { professional: 'Third Artifact' },
   prerequisites: [second.id],
 }
-const fourth: PuzzleDefinition = {
+const fourth: TestPuzzleDefinition = {
   ...first, id: puzzleId('fourth-artifact'), name: { professional: 'Fourth Artifact' },
   prerequisites: [third.id],
 }
-const fifth: PuzzleDefinition = {
+const fifth: TestPuzzleDefinition = {
   ...first, id: puzzleId('culture-gate'), name: { professional: 'Culture Gate' },
   prerequisites: [fourth.id],
 }
-const sixth: PuzzleDefinition = {
+const sixth: TestPuzzleDefinition = {
   ...first, id: puzzleId('elective-artifact'), name: { professional: 'Elective Artifact' },
 }
 const secondCulture = {
@@ -34,7 +33,7 @@ const secondCulture = {
   unlocksAfter: [fifth.id],
   gateway: puzzleId('second-gateway'),
 }
-const seventh: PuzzleDefinition = {
+const seventh: TestPuzzleDefinition = {
   ...first,
   id: secondCulture.gateway,
   culture: secondCulture.id,
@@ -42,7 +41,7 @@ const seventh: PuzzleDefinition = {
 }
 const source = minimalSource()
 const firstCulture = { ...source.cultures[0]!, gateway: first.id }
-const catalog = buildCatalog({
+const catalog = buildTestCatalog({
   ...source,
   cultures: [firstCulture, secondCulture],
   puzzles: [first, second, third, fourth, fifth, sixth, seventh],

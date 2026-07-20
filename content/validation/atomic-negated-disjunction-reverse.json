@@ -1,0 +1,54 @@
+{
+  "puzzle": "atomic-negated-disjunction-reverse",
+  "solution": [
+    {
+      "rule": "doubleCutElim",
+      "region": "r8"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r7",
+        "regions": [
+          "r10",
+          "r11"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r5",
+          "r6"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutElim",
+    "deiteration",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

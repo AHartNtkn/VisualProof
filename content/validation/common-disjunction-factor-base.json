@@ -1,0 +1,92 @@
+{
+  "puzzle": "common-disjunction-factor-base",
+  "solution": [
+    {
+      "rule": "doubleCutElim",
+      "region": "r11"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5",
+        "regions": [
+          "r6"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [
+          "r9"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r8"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r14",
+        "regions": [],
+        "nodes": [
+          "n5",
+          "n6"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r13"
+        ],
+        "nodes": [
+          "n1",
+          "n3"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "doubleCutElim",
+    "deiteration",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

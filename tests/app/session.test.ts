@@ -164,7 +164,7 @@ describe('proof session', () => {
     expect(session.forward.steps).toHaveLength(0)
   })
 
-  it('undo pops exactly one step and restores the prior diagram', () => {
+  it('undo moves the cursor back while retaining the future step', () => {
     const theory = buildFregeTheory()
     const ctx = verifyTheory(theory)
     const { lhs, rhs } = goalPair()
@@ -174,7 +174,8 @@ describe('proof session', () => {
       sel: mkSelection(currentSide(s0, 'forward'), { region: currentSide(s0, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
     const s2 = undoForward(s1)
-    expect(s2.forward.steps).toHaveLength(0)
+    expect(s2.forward.steps).toHaveLength(1)
+    expect(s2.forward.cursor).toBe(0)
     expect(currentSide(s2, 'forward')).toBe(currentSide(s0, 'forward'))
     expect(() => undoForward(s2)).toThrowError(/nothing to undo/)
   })
@@ -232,7 +233,8 @@ describe('backward mode', () => {
     s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
     s = undoBackward(s)
     expect(currentSide(s, 'backward')).toBe(before)
-    expect(s.backward.steps).toHaveLength(0)
+    expect(s.backward.steps).toHaveLength(1)
+    expect(s.backward.cursor).toBe(0)
   })
 })
 
@@ -297,7 +299,8 @@ describe('backward undo restores the composed tail', () => {
     s = applyBackward(s, { rule: 'doubleCutElim', region: o2 })
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
     s = undoBackward(s)
-    expect(s.backward.steps).toHaveLength(1)
+    expect(s.backward.steps).toHaveLength(2)
+    expect(s.backward.cursor).toBe(1)
     // redo: the remaining pair is o1's (the inner one was restored by undo? no —
     // undo restored the state AFTER unwrapping o2 only, so o1's pair remains)
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })

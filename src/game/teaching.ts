@@ -3,9 +3,9 @@ import { exploreForm } from '../kernel/diagram/canonical/explore'
 import {
   guidanceDeliveryIdentity,
   isGuidanceDelivered,
-  type PuzzleDefinition,
+  type GuidanceDefinition,
   type GuidanceDeliveryIdentity,
-  type TeacherIntervention,
+  type GuidanceIntervention,
 } from './types'
 
 export type TeacherSignal =
@@ -15,16 +15,16 @@ export type TeacherSignal =
 
 export type PresentedGuidanceIntervention = {
   readonly identity: GuidanceDeliveryIdentity
-  readonly intervention: TeacherIntervention
+  readonly intervention: GuidanceIntervention
 }
 
 export function guidanceInterventionsFor(
-  puzzle: PuzzleDefinition,
+  guidance: GuidanceDefinition,
   signal: TeacherSignal,
   delivered: readonly GuidanceDeliveryIdentity[],
 ): readonly PresentedGuidanceIntervention[] {
-  return puzzle.teacher.flatMap((intervention) => {
-    const identity = guidanceDeliveryIdentity(puzzle.id, intervention.id)
+  return guidance.interventions.flatMap((intervention) => {
+    const identity = guidanceDeliveryIdentity(guidance.puzzle, intervention.id)
     if (intervention.repeat === 'once' && isGuidanceDelivered(delivered, identity)) return []
     const trigger = intervention.trigger
     if (trigger.kind !== signal.kind) return []

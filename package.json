@@ -14,6 +14,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "assets:validate": "tsx scripts/assets/validate-interface-assets.ts",
+    "content:validate": "tsx scripts/validate-game-content.ts",
     "presentation:validate": "vitest run tests/game/approved-presentation-browser.test.ts tests/game/folio-motion.test.ts",
     "assets:capture-lens": "node scripts/assets/capture-central-lens.mjs",
     "emit:theories": "tsx scripts/emit-theories.ts",
@@ -21,7 +22,7 @@
     "app": "npm run build:desktop && electron .",
     "test:desktop-startup": "npm run build:desktop && xvfb-run -a node --import tsx scripts/validate-desktop-startup.ts",
     "e2e": "playwright test",
-    "build:renderer": "vite build app",
+    "build:renderer": "npm run content:validate && vite build app",
     "build:electron": "tsc -p tsconfig.electron.json",
     "build:desktop": "npm run build:renderer && npm run build:electron",
     "package:linux:dir": "npm run build:desktop && electron-builder --linux dir",
@@ -30,6 +31,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@types/node": "^20",
+    "ajv": "^8.20.0",
     "electron": "43.1.1",
     "electron-builder": "26.15.3",
     "tsx": "^4.22.5",
@@ -47,6 +49,9 @@
     "files": [
       "app/dist/**/*",
       "dist-electron/**/*",
+      "content/**/*",
+      "!content/coverage/**/*",
+      "!content/validation/**/*",
       "package.json"
     ],
     "linux": {

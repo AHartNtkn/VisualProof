@@ -5,7 +5,7 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { applyStep } from '../../src/kernel/proof/step'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { weakHeadNormalize } from '../../src/kernel/term/hnf'
-import { buildCatalog, type GameCatalog } from '../../src/game/catalog'
+import type { GameCatalog } from '../../src/game/catalog'
 import {
   beginComprehensionDraft,
   currentComprehensionDraft,
@@ -14,10 +14,16 @@ import {
 import {
   cultureId,
   puzzleId,
-  type PuzzleDefinition,
 } from '../../src/game/types'
 import { controllerSource, FIRST_CULTURE, SECOND_CULTURE } from './controller-fixture'
-import { minimalPuzzle, minimalSource } from './catalog-fixture'
+import { buildTestCatalog, minimalPuzzle, minimalSource, type TestCatalogSource, type TestPuzzleDefinition, type TestTeacherIntervention } from './catalog-fixture'
+
+const evidence = new Map<string, { witness: TestPuzzleDefinition['witness']; teacher: readonly TestTeacherIntervention[] }>()
+const remember = (source: TestCatalogSource): TestCatalogSource => {
+  for (const puzzle of source.puzzles) evidence.set(puzzle.id, { witness: puzzle.witness, teacher: puzzle.teacher })
+  return source
+}
+export const runtimeEvidenceFor = (id: string) => evidence.get(id)
 
 export const ARTIFACT = puzzleId('vacuous-record')
 export const MANIFEST_HOST = puzzleId('manifest-host')
@@ -33,9 +39,6 @@ export function artifactRuntimeCatalog(): GameCatalog {
     name: { professional: 'Vacuous record' },
     goal: artifactGoal,
     witness: [{ rule: 'vacuousElim', region: bubble }],
-    learning: {
-      introduces: [], practices: [], retrieves: [], assesses: [], rulesUsed: ['vacuousElim'],
-    },
   })
   const manifest = minimalPuzzle({
     id: MANIFEST_HOST,
@@ -48,17 +51,17 @@ export function artifactRuntimeCatalog(): GameCatalog {
     name: { professional: 'Dissolve host' },
     prerequisites: [ARTIFACT],
   })
-  return buildCatalog({
+  return buildTestCatalog(remember({
     ...base,
     cultures: [{ ...base.cultures[0]!, gateway: ARTIFACT }],
     puzzles: [artifact, manifest, dissolve],
-  })
+  }))
 }
 
 export function longRuntimeCatalog(): GameCatalog {
   const base = controllerSource()
   const cultures = [FIRST_CULTURE, SECOND_CULTURE] as const
-  const puzzles: PuzzleDefinition[] = []
+  const puzzles: TestPuzzleDefinition[] = []
   for (const [cultureIndex] of cultures.entries()) {
     const template = base.puzzles[cultureIndex]!
     for (let index = 0; index < 8; index += 1) {
@@ -70,14 +73,14 @@ export function longRuntimeCatalog(): GameCatalog {
       })
     }
   }
-  return buildCatalog({
+  return buildTestCatalog(remember({
     ...base,
     cultures: base.cultures.map((culture, index) => ({
       ...culture,
       gateway: puzzles[index * 8]!.id,
     })),
     puzzles,
-  })
+  }))
 }
 
 export const MOTION_PUZZLE = puzzleId('motion-interaction')
@@ -122,16 +125,12 @@ export function editorRuntimeCatalog(): GameCatalog {
     name: { professional: 'Editor interaction' },
     goal: mkDiagramWithBoundary(diagram, []),
     witness: [instantiate, eraseTerm, { rule: 'doubleCutElim', region: outer }],
-    learning: {
-      introduces: [], practices: [], retrieves: [], assesses: [],
-      rulesUsed: ['comprehensionInstantiate', 'erasure', 'doubleCutElim'],
-    },
   })
-  return buildCatalog({
+  return buildTestCatalog(remember({
     ...base,
     cultures: [{ ...base.cultures[0]!, gateway: EDITOR_PUZZLE }],
     puzzles: [puzzle],
-  })
+  }))
 }
 
 export function motionRuntimeCatalog(): GameCatalog {
@@ -176,14 +175,10 @@ export function motionRuntimeCatalog(): GameCatalog {
     name: { professional: 'Motion interaction' },
     goal: mkDiagramWithBoundary(diagram, []),
     witness: [first, convert, erase, { rule: 'doubleCutElim', region: outer }],
-    learning: {
-      introduces: [], practices: [], retrieves: [], assesses: [],
-      rulesUsed: ['doubleCutElim', 'conversion', 'erasure'],
-    },
   })
-  return buildCatalog({
+  return buildTestCatalog(remember({
     ...base,
     cultures: [{ ...base.cultures[0]!, id: cultureId('motion-culture'), gateway: MOTION_PUZZLE }],
     puzzles: [{ ...puzzle, culture: cultureId('motion-culture') }],
-  })
+  }))
 }

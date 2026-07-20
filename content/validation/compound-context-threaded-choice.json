@@ -1,0 +1,112 @@
+{
+  "puzzle": "compound-context-threaded-choice",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [],
+        "nodes": [
+          "n5",
+          "n6",
+          "n7"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r8"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r10",
+        "regions": [],
+        "nodes": [
+          "n11",
+          "n12",
+          "n13"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r10"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r12",
+        "regions": [],
+        "nodes": [
+          "n17",
+          "n18",
+          "n19"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r7",
+        "regions": [],
+        "nodes": [
+          "n0",
+          "n1",
+          "n2",
+          "n3",
+          "n4",
+          "n8",
+          "n9",
+          "n10",
+          "n14",
+          "n15",
+          "n16"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r7"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r6"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r5"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r3"
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "deiteration",
+    "doubleCutElim",
+    "erasure",
+    "vacuousElim"
+  ],
+  "recognizedStates": []
+}

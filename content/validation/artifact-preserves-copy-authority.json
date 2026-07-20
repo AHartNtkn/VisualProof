@@ -1,0 +1,66 @@
+{
+  "puzzle": "artifact-preserves-copy-authority",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r4",
+        "regions": [
+          "r1_1"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r6",
+        "regions": [
+          "r1_2"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "theorem",
+      "name": "game:artifact:single-mark-return",
+      "at": {
+        "sel": {
+          "region": "r2",
+          "regions": [
+            "r1_0"
+          ],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "reverse"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r3"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "single-mark-return"
+  ],
+  "expectedRules": [
+    "deiteration",
+    "theorem",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

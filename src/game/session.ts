@@ -24,7 +24,7 @@ export type GameRuntimeAuthority = {
 }
 
 export function startPuzzle(puzzle: PuzzleDefinition): GameSession {
-  return { puzzle: puzzle.id, timeline: { states: [puzzle.goal.diagram], steps: [], cursor: 0 } }
+  return { puzzle: puzzle.id, timeline: { states: [puzzle.diagram], steps: [], cursor: 0 } }
 }
 
 export function currentDiagram(session: GameSession): Diagram {

@@ -1,0 +1,10 @@
+{
+  "puzzle": "four-veils",
+  "solution": [
+    { "rule": "doubleCutElim", "region": "r3" },
+    { "rule": "doubleCutElim", "region": "r1" }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": ["doubleCutElim"],
+  "recognizedStates": []
+}

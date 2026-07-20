@@ -1,0 +1,285 @@
+{
+  "id": "r5",
+  "diagram": {
+    "root": "r0",
+    "regions": {
+      "r0": {
+        "kind": "sheet"
+      },
+      "r1": {
+        "kind": "cut",
+        "parent": "r0"
+      },
+      "r2": {
+        "kind": "bubble",
+        "parent": "r1",
+        "arity": 0
+      },
+      "r3": {
+        "kind": "bubble",
+        "parent": "r2",
+        "arity": 0
+      },
+      "r4": {
+        "kind": "bubble",
+        "parent": "r3",
+        "arity": 0
+      },
+      "r5": {
+        "kind": "bubble",
+        "parent": "r4",
+        "arity": 0
+      },
+      "r6": {
+        "kind": "bubble",
+        "parent": "r5",
+        "arity": 0
+      },
+      "r7": {
+        "kind": "cut",
+        "parent": "r6"
+      },
+      "r8": {
+        "kind": "cut",
+        "parent": "r7"
+      },
+      "r9": {
+        "kind": "cut",
+        "parent": "r7"
+      },
+      "r10": {
+        "kind": "cut",
+        "parent": "r7"
+      },
+      "r11": {
+        "kind": "cut",
+        "parent": "r6"
+      },
+      "r12": {
+        "kind": "cut",
+        "parent": "r11"
+      },
+      "r13": {
+        "kind": "cut",
+        "parent": "r12"
+      },
+      "r14": {
+        "kind": "cut",
+        "parent": "r12"
+      },
+      "r15": {
+        "kind": "cut",
+        "parent": "r12"
+      },
+      "r16": {
+        "kind": "cut",
+        "parent": "r11"
+      },
+      "r17": {
+        "kind": "cut",
+        "parent": "r16"
+      },
+      "r18": {
+        "kind": "cut",
+        "parent": "r17"
+      },
+      "r19": {
+        "kind": "cut",
+        "parent": "r17"
+      },
+      "r20": {
+        "kind": "cut",
+        "parent": "r16"
+      },
+      "r21": {
+        "kind": "cut",
+        "parent": "r20"
+      },
+      "r22": {
+        "kind": "cut",
+        "parent": "r20"
+      },
+      "r23": {
+        "kind": "cut",
+        "parent": "r6"
+      },
+      "r24": {
+        "kind": "cut",
+        "parent": "r23"
+      },
+      "r25": {
+        "kind": "cut",
+        "parent": "r24"
+      },
+      "r26": {
+        "kind": "cut",
+        "parent": "r24"
+      },
+      "r27": {
+        "kind": "cut",
+        "parent": "r23"
+      },
+      "r28": {
+        "kind": "cut",
+        "parent": "r27"
+      },
+      "r29": {
+        "kind": "cut",
+        "parent": "r27"
+      },
+      "r30": {
+        "kind": "cut",
+        "parent": "r23"
+      },
+      "r31": {
+        "kind": "cut",
+        "parent": "r30"
+      },
+      "r32": {
+        "kind": "cut",
+        "parent": "r31"
+      },
+      "r33": {
+        "kind": "cut",
+        "parent": "r31"
+      },
+      "r34": {
+        "kind": "cut",
+        "parent": "r6"
+      },
+      "r35": {
+        "kind": "cut",
+        "parent": "r34"
+      },
+      "r36": {
+        "kind": "cut",
+        "parent": "r35"
+      },
+      "r37": {
+        "kind": "cut",
+        "parent": "r35"
+      },
+      "r38": {
+        "kind": "cut",
+        "parent": "r34"
+      },
+      "r39": {
+        "kind": "cut",
+        "parent": "r6"
+      }
+    },
+    "nodes": {
+      "n0": {
+        "kind": "atom",
+        "region": "r8",
+        "binder": "r2"
+      },
+      "n1": {
+        "kind": "atom",
+        "region": "r9",
+        "binder": "r3"
+      },
+      "n2": {
+        "kind": "atom",
+        "region": "r10",
+        "binder": "r4"
+      },
+      "n3": {
+        "kind": "atom",
+        "region": "r13",
+        "binder": "r2"
+      },
+      "n4": {
+        "kind": "atom",
+        "region": "r14",
+        "binder": "r3"
+      },
+      "n5": {
+        "kind": "atom",
+        "region": "r15",
+        "binder": "r4"
+      },
+      "n6": {
+        "kind": "atom",
+        "region": "r18",
+        "binder": "r5"
+      },
+      "n7": {
+        "kind": "atom",
+        "region": "r19",
+        "binder": "r5"
+      },
+      "n8": {
+        "kind": "atom",
+        "region": "r21",
+        "binder": "r5"
+      },
+      "n9": {
+        "kind": "atom",
+        "region": "r22",
+        "binder": "r6"
+      },
+      "n10": {
+        "kind": "atom",
+        "region": "r25",
+        "binder": "r5"
+      },
+      "n11": {
+        "kind": "atom",
+        "region": "r26",
+        "binder": "r5"
+      },
+      "n12": {
+        "kind": "atom",
+        "region": "r28",
+        "binder": "r5"
+      },
+      "n13": {
+        "kind": "atom",
+        "region": "r29",
+        "binder": "r6"
+      },
+      "n14": {
+        "kind": "atom",
+        "region": "r32",
+        "binder": "r5"
+      },
+      "n15": {
+        "kind": "atom",
+        "region": "r33",
+        "binder": "r5"
+      },
+      "n16": {
+        "kind": "atom",
+        "region": "r33",
+        "binder": "r6"
+      },
+      "n17": {
+        "kind": "atom",
+        "region": "r36",
+        "binder": "r5"
+      },
+      "n18": {
+        "kind": "atom",
+        "region": "r37",
+        "binder": "r5"
+      },
+      "n19": {
+        "kind": "atom",
+        "region": "r37",
+        "binder": "r6"
+      },
+      "n20": {
+        "kind": "atom",
+        "region": "r38",
+        "binder": "r5"
+      },
+      "n21": {
+        "kind": "atom",
+        "region": "r39",
+        "binder": "r5"
+      }
+    },
+    "wires": {}
+  }
+}

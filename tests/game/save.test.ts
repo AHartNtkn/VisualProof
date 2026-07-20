@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { stepToJson } from '../../src/kernel/proof/json'
-import { buildCatalog, type GameCatalog } from '../../src/game/catalog'
+import type { GameCatalog } from '../../src/game/catalog'
 import { createInitialGameState, type GameControllerState } from '../../src/game/controller-state'
 import { reduceGame, type GameAction } from '../../src/game/controller'
 import { decodeGameSave, encodeGameSave, startGame } from '../../src/game/save'
 import {
   controllerCatalog,
+  controllerPuzzle,
   controllerSource,
   FIRST,
   FIRST_CULTURE,
@@ -13,6 +14,7 @@ import {
   SECOND_CULTURE,
   SHARED_TEACHER_ID,
 } from './controller-fixture'
+import { buildTestCatalog } from './catalog-fixture'
 
 const catalog = controllerCatalog()
 
@@ -32,7 +34,7 @@ const move = (
   state: GameControllerState,
   puzzle: typeof FIRST | typeof SECOND,
   index: number,
-) => act(state, { kind: 'applyStep', step: catalog.puzzle(puzzle).witness[index]! })
+) => act(state, { kind: 'applyStep', step: controllerPuzzle(puzzle).witness[index]! })
 
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 
@@ -97,7 +99,7 @@ describe('strict per-puzzle game save', () => {
     expect(loaded.deliveredGuidance).toEqual(state.deliveredGuidance)
   })
 
-  it('strictly rejects bare, duplicate, repeatable, and cross-puzzle guidance deliveries', () => {
+  it('rejects malformed and duplicate guidance deliveries while dropping stale overlay identities', () => {
     const base: any = plain(encodeGameSave(catalog, fresh()))
     base.deliveredGuidance = [SHARED_TEACHER_ID]
     expect(() => decodeGameSave(catalog, base)).toThrow(/delivered guidance/)
@@ -111,21 +113,21 @@ describe('strict per-puzzle game save', () => {
 
     const crossPuzzle: any = plain(encodeGameSave(catalog, fresh()))
     crossPuzzle.deliveredGuidance = [{ puzzle: FIRST, intervention: 'not-authored-here' }]
-    expect(() => decodeGameSave(catalog, crossPuzzle)).toThrow(/unknown or repeatable/)
+    expect(decodeGameSave(catalog, crossPuzzle).deliveredGuidance).toEqual([])
   })
 
   it('round-trips the exact active guidance page and rejects invalid page ownership', () => {
     let state = select(fresh(), FIRST)
     state = act(state, { kind: 'advanceGuidancePage' })
     const encoded: any = plain(encodeGameSave(catalog, state))
-    expect(encoded.version).toBe(4)
+    expect(encoded.version).toBe(5)
     expect(encoded.guidance).toEqual({
       puzzle: FIRST, intervention: SHARED_TEACHER_ID, page: 1,
     })
     expect(decodeGameSave(catalog, encoded).guidance).toEqual(state.guidance)
 
     encoded.guidance.page = 99
-    expect(() => decodeGameSave(catalog, encoded)).toThrow(/guidance.*page/)
+    expect(decodeGameSave(catalog, encoded).guidance).toBeNull()
     encoded.guidance.page = 1
     encoded.guidance.puzzle = SECOND
     expect(() => decodeGameSave(catalog, encoded)).toThrow(/guidance.*active puzzle/)
@@ -151,14 +153,14 @@ describe('strict per-puzzle game save', () => {
       textSize: 'medium',
     })
     expect(() => startGame(catalog, {
-      save: { format: 'cursebreaker-save', version: 3 },
+      save: { format: 'cursebreaker-save', version: 4 },
       reducedMotion: false,
     })).toThrow(/unsupported game save format or version/)
   })
 
   it('keeps the first catalog culture selected and saveable even when its archive is gated', () => {
     const source = controllerSource()
-    const gatedFirst = buildCatalog({
+    const gatedFirst = buildTestCatalog({
       ...source,
       cultures: source.cultures.map((culture) => culture.id === FIRST_CULTURE
         ? { ...culture, unlocksAfter: [SECOND] }
@@ -173,7 +175,7 @@ describe('strict per-puzzle game save', () => {
 
   it('refuses a forged locked selection for any non-first culture', () => {
     const source = controllerSource()
-    const gatedSecond = buildCatalog({
+    const gatedSecond = buildTestCatalog({
       ...source,
       cultures: source.cultures.map((culture) => culture.id === SECOND_CULTURE
         ? { ...culture, unlocksAfter: [FIRST] }
@@ -194,7 +196,7 @@ describe('strict per-puzzle game save', () => {
 
   it('refuses a locked active puzzle', () => {
     const source = controllerSource()
-    const locked = buildCatalog({
+    const locked = buildTestCatalog({
       ...source,
       puzzles: source.puzzles.map((puzzle) => puzzle.id === SECOND
         ? { ...puzzle, prerequisites: [FIRST] }
@@ -211,7 +213,7 @@ describe('strict per-puzzle game save', () => {
 
   it('refuses a locked inactive first attempt in archive mode', () => {
     const source = controllerSource()
-    const locked = buildCatalog({
+    const locked = buildTestCatalog({
       ...source,
       puzzles: source.puzzles.map((puzzle) => puzzle.id === SECOND
         ? { ...puzzle, prerequisites: [FIRST] }
@@ -244,7 +246,7 @@ describe('strict per-puzzle game save', () => {
 
     const completedTimeline: any = plain(encodeGameSave(catalog, fresh()))
     completedTimeline.attempts[FIRST] = {
-      steps: catalog.puzzle(FIRST).witness.map(stepToJson),
+      steps: controllerPuzzle(FIRST).witness.map(stepToJson),
       cursor: 0,
     }
     completedTimeline.puzzleFingerprints[FIRST] = catalog.puzzleFingerprint(FIRST)
@@ -279,7 +281,7 @@ describe('strict per-puzzle game save', () => {
     expect(() => decodeGameSave(catalog, encoded)).toThrow(/logical fingerprint does not match/)
 
     const source = controllerSource()
-    const changedPresentation = buildCatalog({
+    const changedPresentation = buildTestCatalog({
       ...source,
       cultures: source.cultures.map((culture) => ({
         ...culture,
@@ -297,6 +299,16 @@ describe('strict per-puzzle game save', () => {
       })),
     })
     expect(() => decodeGameSave(changedPresentation, encodeGameSave(catalog, state))).not.toThrow()
+
+    const withoutGuidance = buildTestCatalog({
+      ...source,
+      puzzles: source.puzzles.map((puzzle) => ({ ...puzzle, teacher: [] })),
+    })
+    const restored = decodeGameSave(withoutGuidance, encodeGameSave(catalog, state))
+    expect(restored.activePuzzle).toBe(FIRST)
+    expect(restored.firstAttempts.get(FIRST)?.timeline.cursor).toBe(0)
+    expect(restored.deliveredGuidance).toEqual([])
+    expect(restored.guidance).toBeNull()
   })
 
   it('refuses invalid scroll, settings, and mode/receipt combinations', () => {

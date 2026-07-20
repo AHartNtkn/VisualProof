@@ -33,7 +33,10 @@ describe('desktop build and package contract', () => {
       productName: 'Cursebreaker',
       asar: true,
       directories: { output: 'release' },
-      files: expect.arrayContaining(['app/dist/**/*', 'dist-electron/**/*']),
+      files: expect.arrayContaining([
+        'app/dist/**/*', 'dist-electron/**/*', 'content/**/*',
+        '!content/coverage/**/*', '!content/validation/**/*',
+      ]),
       linux: { category: 'Game', target: ['AppImage', 'deb'] },
     })
     expect(build).not.toHaveProperty('win')

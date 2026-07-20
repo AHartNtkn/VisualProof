@@ -1,0 +1,34 @@
+{
+  "puzzle": "compound-theorem-source-choice",
+  "solution": [
+    {
+      "rule": "theorem",
+      "name": "game:artifact:sey-lem-i01",
+      "at": {
+        "sel": {
+          "region": "r2",
+          "regions": [
+            "r1_0"
+          ],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "reverse"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "sey-lem-i01",
+    "sey-lem-c01"
+  ],
+  "expectedRules": [
+    "theorem",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

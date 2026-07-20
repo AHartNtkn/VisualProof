@@ -1,0 +1,37 @@
+{
+  "puzzle": "compound-context-dissolution",
+  "solution": [
+    {
+      "rule": "theorem",
+      "name": "game:artifact:rm-fa",
+      "at": {
+        "sel": {
+          "region": "r2",
+          "regions": [
+            "r1_0"
+          ],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "reverse"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r3"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "rm-fa"
+  ],
+  "expectedRules": [
+    "theorem",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

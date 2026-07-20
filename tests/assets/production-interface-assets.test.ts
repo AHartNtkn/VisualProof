@@ -24,19 +24,9 @@ const expectedRuntimeAssets = [
   'assets/interface/generated/excavation-folio/folio-shell.png',
   'assets/interface/generated/excavation-folio/dossier-sheet.png',
   'assets/interface/generated/excavation-folio/guard-leaf.png',
-  'assets/interface/generated/excavation-folio/mount-photo.png',
-  'assets/interface/generated/excavation-folio/mount-rubbing.png',
-  'assets/interface/generated/excavation-folio/mount-tracing.png',
   'assets/interface/generated/excavation-folio/clearance-slip.png',
   'assets/interface/generated/excavation-folio/priority-band.png',
   'assets/interface/generated/excavation-folio/restricted-sleeve.png',
-  'assets/interface/generated/excavation-folio/specimens/auten-reliquary-closure.png',
-  'assets/interface/generated/excavation-folio/specimens/orra-gate-fragment.png',
-  'assets/interface/generated/excavation-folio/specimens/seyr-cairn-seal-iv.png',
-  'assets/interface/generated/excavation-folio/specimens/seyr-ossuary-seal.png',
-  'assets/interface/generated/excavation-folio/specimens/seyric-field-seal-s-27.png',
-  'assets/interface/generated/excavation-folio/specimens/tel-vey-chamber-seal-viii.png',
-  'assets/interface/generated/excavation-folio/specimens/uninscribed-votive-of-myrat.png',
   'assets/interface/generated/editor-loupe/rim-socket.png',
   'assets/interface/generated/editor-loupe/handle-terminal.png',
   'assets/interface/generated/editor-loupe/optical-edge.png',
@@ -73,6 +63,14 @@ describe('production interface asset authority', () => {
     expect(paths).not.toContainEqual(expect.stringMatching(
       /central-lens\/(?:frame|glass|shadow|lever-housing|lever-handle)\.png$/,
     ))
+    for (const path of [
+      'assets/interface/generated/excavation-folio/mount-photo.png',
+      'assets/interface/generated/excavation-folio/mount-rubbing.png',
+      'assets/interface/generated/excavation-folio/mount-tracing.png',
+      'assets/interface/generated/excavation-folio/specimens/auten-reliquary-closure.png',
+      'assets/interface/generated/excavation-folio/specimens/seyric-field-seal-s-27.png',
+      'assets/interface/generated/excavation-folio/specimens/uninscribed-votive-of-myrat.png',
+    ]) expect(existsSync(resolve(path)), path).toBe(false)
   })
 
   it('rejects an RGB asset truncated after its PNG header', () => {

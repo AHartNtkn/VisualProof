@@ -8,9 +8,9 @@ import {
 
 describe('authoritative runtime decisive catalogs', () => {
   it('builds verified artifact and long-scroll catalogs through production validation', () => {
-    expect(artifactRuntimeCatalog().source.puzzles).toHaveLength(3)
-    expect(editorRuntimeCatalog().source.puzzles).toHaveLength(1)
-    expect(longRuntimeCatalog().source.puzzles).toHaveLength(16)
-    expect(motionRuntimeCatalog().source.puzzles).toHaveLength(1)
+    expect(artifactRuntimeCatalog().puzzleIds).toHaveLength(3)
+    expect(editorRuntimeCatalog().puzzleIds).toHaveLength(1)
+    expect(longRuntimeCatalog().puzzleIds).toHaveLength(16)
+    expect(motionRuntimeCatalog().puzzleIds).toHaveLength(1)
   })
 })

@@ -1,0 +1,50 @@
+{
+  "puzzle": "sey-ref-sel-i01",
+  "solution": [
+    {
+      "rule": "theorem",
+      "name": "game:artifact:single-mark-return",
+      "at": {
+        "sel": {
+          "region": "r2",
+          "regions": [
+            "r1_0"
+          ],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "reverse"
+    },
+    {
+      "rule": "theorem",
+      "name": "game:artifact:nested-owner-introduction",
+      "at": {
+        "sel": {
+          "region": "r2",
+          "regions": [
+            "r1_1"
+          ],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "reverse"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "single-mark-return",
+    "nested-owner-introduction"
+  ],
+  "expectedRules": [
+    "theorem",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

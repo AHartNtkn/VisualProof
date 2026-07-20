@@ -1,0 +1,63 @@
+{
+  "puzzle": "sey-ref-dis-i01",
+  "solution": [
+    {
+      "rule": "theorem",
+      "name": "game:artifact:single-mark-return",
+      "at": {
+        "sel": {
+          "region": "r3",
+          "regions": [
+            "r1_0"
+          ],
+          "nodes": [],
+          "wires": []
+        },
+        "args": []
+      },
+      "direction": "reverse"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r3",
+        "regions": [],
+        "nodes": [
+          "n1"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "r2",
+        "regions": [],
+        "nodes": [
+          "n0"
+        ],
+        "wires": []
+      }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r2"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r1"
+    }
+  ],
+  "availableArtifacts": [
+    "single-mark-return"
+  ],
+  "expectedRules": [
+    "theorem",
+    "deiteration",
+    "erasure",
+    "vacuousElim",
+    "doubleCutElim"
+  ],
+  "recognizedStates": []
+}

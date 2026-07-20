@@ -1,0 +1,29 @@
+{
+  "puzzle": "blank-witness",
+  "solution": [
+    {
+      "rule": "comprehensionInstantiate",
+      "bubble": "r1",
+      "comp": {
+        "diagram": {
+          "root": "r0",
+          "regions": {
+            "r0": {
+              "kind": "sheet"
+            }
+          },
+          "nodes": {},
+          "wires": {}
+        },
+        "boundary": []
+      },
+      "attachments": [],
+      "binders": {}
+    }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": [
+    "comprehensionInstantiate"
+  ],
+  "recognizedStates": []
+}

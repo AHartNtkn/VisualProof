@@ -29,7 +29,7 @@ export type SerializedGameTimeline = {
 
 export type GameSave = {
   readonly format: 'cursebreaker-save'
-  readonly version: 4
+  readonly version: 5
   readonly puzzleFingerprints: Readonly<Record<string, string>>
   readonly completed: readonly PuzzleId[]
   readonly attempts: Readonly<Record<string, SerializedGameTimeline>>
@@ -131,7 +131,7 @@ export function encodeGameSave(catalog: GameCatalog, state: GameControllerState)
   )
   const document: GameSave = {
     format: 'cursebreaker-save',
-    version: 4,
+    version: 5,
     puzzleFingerprints: Object.fromEntries(
       [...referenced]
         .sort()
@@ -152,9 +152,9 @@ export function encodeGameSave(catalog: GameCatalog, state: GameControllerState)
     completionReceipt: state.completionReceipt,
     selectedCulture: state.selectedCulture,
     scrollByCulture: Object.fromEntries(
-      catalog.source.cultures.map((culture) => [
-        culture.id,
-        state.scrollByCulture.get(culture.id),
+      catalog.cultureIds.map((culture) => [
+        culture,
+        state.scrollByCulture.get(culture),
       ]),
     ) as Readonly<Record<string, number>>,
     settings: state.settings,
@@ -201,11 +201,7 @@ const readTimeline = (
   })
   let session = startPuzzle(catalog.puzzle(puzzle))
   const authority = {
-    context: artifactTheoremContext(
-      catalog.source.puzzles,
-      completed,
-      catalog.source.context,
-    ),
+    context: artifactTheoremContext(catalog, completed),
   }
   try {
     for (const step of steps) {
@@ -301,7 +297,8 @@ const readGuidanceDeliveries = (
     throw new GameDomainError('save delivered guidance must be an array')
   }
   const seen = new Set<string>()
-  return value.map((entry, index) => {
+  const delivered: GuidanceDeliveryIdentity[] = []
+  for (const [index, entry] of value.entries()) {
     const saved = strictRecord(
       entry,
       `save delivered guidance ${index}`,
@@ -317,14 +314,10 @@ const readGuidanceDeliveries = (
         `save delivered guidance ${index} intervention must be a string`,
       )
     }
-    const intervention = catalog.puzzle(puzzle).teacher.find((candidate) =>
+    const intervention = catalog.guidance(puzzle).interventions.find((candidate) =>
       candidate.id === saved.intervention
       && candidate.repeat === 'once')
-    if (intervention === undefined) {
-      throw new GameDomainError(
-        `delivered guidance intervention '${puzzle}:${saved.intervention}' is unknown or repeatable`,
-      )
-    }
+    if (intervention === undefined) continue
     const identity = guidanceDeliveryIdentity(puzzle, intervention.id)
     const key = JSON.stringify([identity.puzzle, identity.intervention])
     if (seen.has(key)) {
@@ -333,8 +326,9 @@ const readGuidanceDeliveries = (
       )
     }
     seen.add(key)
-    return identity
-  })
+    delivered.push(identity)
+  }
+  return delivered
 }
 
 const validateCompletedClosure = (
@@ -392,7 +386,7 @@ const validateMode = (
 
 export function decodeGameSave(catalog: GameCatalog, value: unknown): GameControllerState {
   const root = strictRecord(value, 'save', ROOT_FIELDS)
-  if (root.format !== 'cursebreaker-save' || root.version !== 4) {
+  if (root.format !== 'cursebreaker-save' || root.version !== 5) {
     throw new GameDomainError('unsupported game save format or version')
   }
   const completedEntries = uniqueStrings(root.completed, 'save completed')
@@ -428,18 +422,16 @@ export function decodeGameSave(catalog: GameCatalog, value: unknown): GameContro
     if (typeof saved.intervention !== 'string') {
       throw new GameDomainError('save guidance intervention must be a string')
     }
-    const intervention = catalog.puzzle(puzzle).teacher.find((candidate) =>
+    const intervention = catalog.guidance(puzzle).interventions.find((candidate) =>
       candidate.id === saved.intervention
       && candidate.trigger.kind !== 'completion')
-    if (intervention === undefined) {
-      throw new GameDomainError(`save guidance '${puzzle}:${saved.intervention}' is unknown`)
-    }
+    if (intervention === undefined) return null
     if (!Number.isSafeInteger(saved.page)) {
       throw new GameDomainError('save guidance page must be an integer')
     }
     const page = saved.page as number
     if (page < 0 || page >= intervention.pages.length) {
-      throw new GameDomainError(`save guidance page ${page} is outside authored pages`)
+      return null
     }
     const identity = guidanceDeliveryIdentity(puzzle, intervention.id)
     if (intervention.repeat === 'once' && !deliveredGuidance.some((candidate) =>
@@ -451,15 +443,15 @@ export function decodeGameSave(catalog: GameCatalog, value: unknown): GameContro
   })()
 
   const selectedCulture = readCultureId(catalog, root.selectedCulture, 'save selected culture')
-  const firstCulture = catalog.source.cultures[0]
+  const firstCulture = catalog.cultureIds[0]
   if (
-    selectedCulture !== firstCulture?.id
+    selectedCulture !== firstCulture
     && !isCultureUnlocked(catalog, { completed }, selectedCulture)
   ) {
     throw new GameDomainError(`selected culture '${selectedCulture}' is locked`)
   }
   const savedScroll = strictRecord(root.scrollByCulture, 'save scrollByCulture')
-  const catalogCultures = new Set(catalog.source.cultures.map((culture) => culture.id))
+  const catalogCultures = new Set(catalog.cultureIds)
   if (
     Object.keys(savedScroll).length !== catalogCultures.size
     || [...catalogCultures].some((id) => !(id in savedScroll))

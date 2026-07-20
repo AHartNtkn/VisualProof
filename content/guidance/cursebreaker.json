@@ -1,0 +1,1065 @@
+{
+  "puzzles": [
+    {
+      "puzzle": "two-veils",
+      "interventions": [
+        {
+          "id": "opening-paired-veils",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Move the pointer over a boundary. A glow appears when that part of the seal can be acted on.",
+            "Click a highlighted boundary to select it. The selection remains lit after the pointer moves away; click it again to deselect it, or click the empty field to clear the selection.",
+            "Select the outer boundary of the paired veils. Right-click and choose ‘Eliminate the double cut,’ or press Delete or Backspace, to lift both veils."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "four-veils",
+      "interventions": [
+        {
+          "id": "opening-four-veils",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "There are two paired veils here. Either pair may be lifted first."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "forked-veil",
+      "interventions": [
+        {
+          "id": "opening-forked-veil",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "A dark field does not preserve every fragment drawn within it. Select one complete inner veil and erase it; the remaining pair is already familiar.",
+            "The timeline records every move. Drag its handle backward to revisit an earlier state; making a move there creates a new branch without deleting the earlier attempt."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "echoed-veil",
+      "interventions": [
+        {
+          "id": "opening-echoed-veil",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The innermost veil is an exact echo of the older veil beside its host. Where the older form remains, the supported echo may be removed by deiteration; the familiar clearing and paired release remain afterward."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "empty-ring-release",
+      "interventions": [
+        {
+          "id": "opening-empty-ring-release",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "A ring is not a veil: it names ownership and does not reverse the field. This ring owns no mark, so it may be dissolved.",
+            "Dissolve the empty ring. The familiar paired veils remain."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "single-mark-return",
+      "interventions": [
+        {
+          "id": "opening-seyric-basics",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Move the pointer over a mark or boundary. A glow appears when that part of the seal can be acted on.",
+            "Click a highlighted part to select it. The selection remains lit when the pointer moves away; click it again to deselect it, or click the empty field to clear the selection.",
+            "The timeline at the bottom records every move. Drag its handle backward to revisit an earlier state; making a move there creates a new branch without deleting the earlier attempt.",
+            "The inner repeated mark has an equal ancestor outside its field, so it may be removed by deiteration. Select that inner mark and choose Deiterate; then clear the remaining negative-field mark and release the empty boundaries."
+          ]
+        },
+        {
+          "id": "completion-single-ring",
+          "trigger": {
+            "kind": "completion"
+          },
+          "repeat": "once",
+          "pages": [
+            "Good. The Seyric rings are ownership marks, not ornament. That distinction will matter among the Myratic finds."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "transfer-duplication-recognition",
+      "interventions": [
+        {
+          "id": "opening-transfer-duplication-recognition",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Treat the three alternatives as flat peers and compare their P/Q multiplicities through the shared rings.",
+            "Copy one supported P into the incomplete branch; all three then become the same P-and-P-and-Q alternative, exposing idempotence at both connective levels."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "common-conjunction-factor-base",
+      "interventions": [
+        {
+          "id": "opening-common-conjunction-factor-base",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The direct closed theorem (A∧B)∨(A∧C) → A∧(B∨C) presents the shared A inside both source alternatives and asks for one factored A with the residual B/C choice preserved."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "common-disjunction-factor-base",
+      "interventions": [
+        {
+          "id": "opening-common-disjunction-factor-base",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "(A∨B)∧(A∨C) exposes atomic A as the exact common alternative to factor into A∨(B∧C)."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "compound-common-disjunction-factor",
+      "interventions": [
+        {
+          "id": "opening-compound-common-disjunction-factor",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The whole common alternative K=(P∨Q) occurs in both clauses ((K∨R)∧(K∨S)) and must remain intact in K∨(R∧S)."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "disjunction-over-conjunction-base",
+      "interventions": [
+        {
+          "id": "opening-disjunction-over-conjunction-base",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The direct closed theorem A∨(B∧C) → (A∨B)∧(A∨C) asks the same A alternative to survive in both conjunctive conclusions while B and C remain distinct."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-dao",
+      "interventions": [
+        {
+          "id": "opening-distribute-and",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Carry the common A into both alternatives: A∧(B∨C) expands to (A∧B)∨(A∧C). Keep B and C in separate branches while preserving the same A owner in each."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "nested-owner-introduction",
+      "interventions": [
+        {
+          "id": "opening-nested-owners",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The rings are nested, but they do not share a mark. Follow each color back to its own ring before lifting either echo."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "polarity-bubble-contrast",
+      "interventions": [
+        {
+          "id": "opening-polarity-bubble-contrast",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The proposition ring names P but does not reverse field polarity. Count only veils as you trace the three P occurrences.",
+            "Use the outer P as support for both inward echoes, then clear it from its negative field and release the remaining pairs."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "rm-fa",
+      "interventions": [
+        {
+          "id": "opening-rm-fa-rebuild",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Both branches contain the complete P∨Q conjunct. Factor it once while preserving the different residuals R and S∧T."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "conjunction-idempotence-introduction",
+      "interventions": [
+        {
+          "id": "opening-duplicate-conjunct",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The two marks inside the veil belong to the same ring: this is one conjunct repeated, not two different conditions.",
+            "That bright field will not permit ordinary clearing. Lift one exact echo through the matching older mark; the remaining copy can then meet the same support."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "weakening-introduction",
+      "interventions": [
+        {
+          "id": "opening-weakening",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "This is weakening: the first premise already supplies the final mark. The second assumption may be admitted without being used."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "left-injection-introduction",
+      "interventions": [
+        {
+          "id": "opening-left-injection",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "This is left injection: the given P supplies the left alternative of P ∨ Q. The right alternative does not also need a premise."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "injection-branch-contrast",
+      "interventions": [
+        {
+          "id": "opening-injection-branch-contrast",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Trace the two available source owners into the three disjunction branches.",
+            "Both left P and right R are legitimate injections; compare them and reject unsupported Q rather than following a fixed side habit."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "disjunction-idempotence-introduction",
+      "interventions": [
+        {
+          "id": "opening-duplicate-disjunct",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The two sibling branches return to the same ring. They repeat one alternative; they do not offer two different choices.",
+            "Lift one exact branch as a supported echo. Only then will the remaining branch and its surrounding veil form a pair that can be released."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "disjunction-exchange-recognition",
+      "interventions": [
+        {
+          "id": "opening-disjunction-exchange",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The sibling branches trade visual positions, but their common field does not give either branch a semantic first place.",
+            "Each branch still returns to the same ring as before. This is the same disjunction under a different carving order; no exchange operation is required."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "compound-disjunction-exchange",
+      "interventions": [
+        {
+          "id": "opening-compound-disjunction-exchange",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Wrapping the denied compound P∨(Q∧R) creates a negative annulus; iterating that complete nested source into the annulus makes whole-compound erasure legal and mandatory before the boundary can be discharged."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "conjunction-reassociation-recognition",
+      "interventions": [
+        {
+          "id": "opening-conjunction-reassociation",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "A written reader might say “P and Q, then R” or “P, then Q and R.” The tablet cuts no boundary around either pair.",
+            "All three marks share one unordered field, so those parenthesizations denote the same conjunction here. Account for each ring once; there is no reassociation operation to perform."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "disjunction-reassociation-recognition",
+      "interventions": [
+        {
+          "id": "opening-disjunction-reassociation",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "A written reader might group the first two alternatives or the last two. This closure gives all three branch veils the same parent field.",
+            "With no inner grouping boundary, both parenthesizations denote the same disjunction. Account for each ring-owned branch once; no reassociation operation is missing."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-c3",
+      "interventions": [
+        {
+          "id": "opening-i-c3",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Begin with P, use the P→Q link to release Q, then use that Q with the Q→R link to release R; the middle owner is the handoff between the two implications, so compare owners rather than choosing a link by position."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-c4",
+      "interventions": [
+        {
+          "id": "opening-compose-four",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "This tablet extends the familiar composition chain by one link: P leads to Q, Q leads to R, and R leads to S. The repeated owner at each handoff tells you how the three implication chambers connect.",
+            "The final denied S cannot be answered from P directly. Let each implication make the next owned mark available, while remaining open to any valid order of independent cleanup."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "r1",
+      "interventions": [
+        {
+          "id": "opening-r1-rebuild",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Use the complete P∧S premise to obtain the complete Q∧T handoff. That entire pair is needed to reach R."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-cs",
+      "interventions": [
+        {
+          "id": "opening-compose-side",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "P and S enter the first implication together, but only P changes through Q into R. S is the side premise: it is needed to match the compound entrance and then remains unchanged while composition continues.",
+            "Do not confuse an unchanged premise with a useless one. Track where S is required, preserve it through the chain, and use any valid cleanup order once R is supported."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-al",
+      "interventions": [
+        {
+          "id": "opening-and-lift",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Two implication tracks run in parallel: P supports Q, and R supports S. The denied conclusion asks for Q and S together, so neither track can stand in for the other.",
+            "Lift each premise through its matching implication, then read the two produced marks as one conjunction. Any valid order between the independent tracks is welcome."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "ch-and",
+      "interventions": [
+        {
+          "id": "opening-ch-and-connected",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Lift independent compound-output implications together into one four-owner conjunction. Follow ownership and the visible branch or handoff structure; any legal route that completes the seal is welcome."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-case2",
+      "interventions": [
+        {
+          "id": "opening-case-two",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "P leads to R, and Q also leads to R. The forked field says that one of P or Q holds, so the two implications are the two cases of one argument.",
+            "The terminal denied R can be compared with both case implications. Account for both alternatives before treating the fork as exhausted; symmetric branch orders are equally valid."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "rm-case3",
+      "interventions": [
+        {
+          "id": "opening-rm-case3-connected",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Resolve separate P, Q, and R implications to shared compound S∧T. Follow ownership and the visible branch or handoff structure; any legal route that completes the seal is welcome."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-om",
+      "interventions": [
+        {
+          "id": "opening-or-map",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The implication changes P into Q. When the input is P or R, only the P branch follows that implication; R remains a valid alternative without being transformed.",
+            "The output is therefore Q or R. Keep the branch owners distinct, and use any valid route that accounts for both the mapped and preserved alternatives."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "ch-or",
+      "interventions": [
+        {
+          "id": "opening-ch-or-connected",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Map a compound P∧T branch to Q∧U while preserving compound R∧S. Follow ownership and the visible branch or handoff structure; any legal route that completes the seal is welcome."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "ternary-branchwise-map",
+      "interventions": [
+        {
+          "id": "opening-ternary-branchwise-map",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "P∨Q∨R is paired with P→S, Q→T, and R→U, requiring three corresponding output alternatives S∨T∨U."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-aa",
+      "interventions": [
+        {
+          "id": "opening-i-aa",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The standalone A is required, and that same owned A already satisfies the alternative A ∨ B; collapse the repeated A and leave B as an irrelevant alternative to read A ∧ (A ∨ B) as A."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "b6",
+      "interventions": [
+        {
+          "id": "opening-b6-rebuild",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Treat P∨Q as one repeated whole. In (P∨Q)∧((P∨Q)∨(R∧S)), the second conjunct adds no requirement beyond that whole."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "i-ao",
+      "interventions": [
+        {
+          "id": "opening-absorb-or",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "One alternative is P; the other is P together with Q. Both alternatives already contain the same P, so the added Q cannot prevent the disjunction from supporting P.",
+            "Treat Q as branch-specific material, then compare the common P across both cases. Any valid order that resolves the two alternatives is welcome."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "rm-ao",
+      "interventions": [
+        {
+          "id": "opening-rm-ao-connected",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Absorb a compound repeated P∧Q from (P∧Q)∨((P∧Q)∧R). Follow ownership and the visible branch or handoff structure; any legal route that completes the seal is welcome."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-ctr-i01",
+      "interventions": [
+        {
+          "id": "opening-direct-contraposition",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Read the right clause as the contrapositive of the left: reverse P→Q to ¬Q→¬P, keeping the same P and Q owners while both endpoints cross polarity."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-ctr-r01",
+      "interventions": [
+        {
+          "id": "opening-sey-ctr-r01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Direct contraposition with a conjunctive antecedent. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-lem-i01",
+      "interventions": [
+        {
+          "id": "opening-sey-lem-i01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Excluded middle for a two-owner conjunction. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-lem-c01",
+      "interventions": [
+        {
+          "id": "opening-sey-lem-c01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Excluded middle for a three-owner conjunction. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-dm-ec-i01",
+      "interventions": [
+        {
+          "id": "opening-sey-dm-ec-i01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Expand negated conjunction with atomic operands. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-dm-ec-c01",
+      "interventions": [
+        {
+          "id": "opening-sey-dm-ec-c01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Expand negated conjunction with conjunctive left operand. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-dm-ed-i01",
+      "interventions": [
+        {
+          "id": "opening-sey-dm-ed-i01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Expand negated disjunction with conjunctive left operand. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-dm-fc-i01",
+      "interventions": [
+        {
+          "id": "opening-sey-dm-fc-i01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Factor negated conjunction with atomic operands. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-red-i01",
+      "interventions": [
+        {
+          "id": "opening-sey-red-i01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Assume the denied conclusion temporarily, combine it with the premises until the same owned proposition appears as both P and ¬P, then discharge that denial to return the desired conclusion."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-red-c01",
+      "interventions": [
+        {
+          "id": "opening-sey-red-c01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Reductio with a compound denied conclusion: assuming not-(Q and R) exposes the P/not-P contradiction. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-pei-i01",
+      "interventions": [
+        {
+          "id": "opening-sey-pei-i01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Peirce feedback ((P implies (Q and R)) implies P) implies P with an explicit compound feedback endpoint. Track complete owner, polarity, cut, and artifact topology; use the declared relationship as connected support for the remaining proof."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-pei-c01",
+      "interventions": [
+        {
+          "id": "opening-sey-pei-c01",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Peirce feedback with a conjunctive returned proposition P-and-R. Track complete owner, polarity, cut, and artifact topology; use the declared relationship as connected support for the remaining proof."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "compound-context-threaded-choice",
+      "interventions": [
+        {
+          "id": "opening-compound-context-threaded-choice",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "P, the required whole context S∧T, and the near-match S∧U sit beside a P∧(S∧T) to Q∧(S∧T) to R∧(S∧T) chain."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "weakening-injection-weave",
+      "interventions": [
+        {
+          "id": "opening-weakening-injection-weave",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The P and Q premises may be read in either conjunction order. Preserve P, leave Q unused by weakening, and use P as the left alternative of P ∨ R."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "b3",
+      "interventions": [
+        {
+          "id": "opening-b3-connected",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Connected branch map into a side-bearing two-case chain. Follow ownership and the visible branch or handoff structure; any legal route that completes the seal is welcome."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "branch-preparation-common-tail",
+      "interventions": [
+        {
+          "id": "opening-branch-preparation-common-tail",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "P and Q prepare locally to R and S, converge separately to T, and only then share the single T→U continuation."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "branch-preparation-local-chains",
+      "interventions": [
+        {
+          "id": "opening-branch-preparation-local-chains",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The P branch follows P→R→T while the Q branch follows Q→S→T before the cases converge."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "de-morgan-product-consumer",
+      "interventions": [
+        {
+          "id": "opening-de-morgan-product-consumer",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Releasing the outer double negation turns ¬(P∨Q) into the full product ¬P∧¬Q; the ¬P conjunct is then projected as the exact antecedent consumed by ¬P→R."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "de-morgan-sum-consumer",
+      "interventions": [
+        {
+          "id": "opening-de-morgan-sum-consumer",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Eliminating the two branch double cuts exposes ¬(P∧Q) as the alternatives ¬P∨¬Q, whose branches feed separate ¬P→R and ¬Q→R case handlers."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "double-cut-copy-license",
+      "interventions": [
+        {
+          "id": "opening-double-cut-copy-license",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Two peer P occurrences initially license either peer removal; wrapping one P in a double cut moves it below the other and removes its authority over that peer while preserving the reverse authority."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "double-cut-insertion-workspace",
+      "interventions": [
+        {
+          "id": "opening-double-cut-insertion-workspace",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Introducing a double cut in negative r3 creates positive annulus dc; inserting an empty double cut there supplies the sole ancestor exact occurrence that licenses removal of the wrapped r5 double cut."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "preserve-sole-structural-source",
+      "interventions": [
+        {
+          "id": "opening-preserve-sole-structural-source",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "A sole P occurrence in the negative premise field looks erasable, but it is the only ancestor source that can discharge the P side of P→Q before Q reaches the denied target."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "r4",
+      "interventions": [
+        {
+          "id": "opening-r4-rebuild",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Factor the complete P∧Q pair from both alternatives. The result has the form X∧(X∨(R∨S)); absorb the repeated X to finish."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "r5",
+      "interventions": [
+        {
+          "id": "opening-r5-rebuild",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Bring all three cases to two clauses sharing S. Factor S to expose S∨(S∧U), then absorb the repeated S."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "recollect-shared-branch-context",
+      "interventions": [
+        {
+          "id": "opening-recollect-shared-branch-context",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The whole context K=U∧V is supplied outside P∨Q, the branches map to R and S, and K must then be recollected with each mapped result by the downstream consumers."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "rm-c3",
+      "interventions": [
+        {
+          "id": "opening-rm-c3-rebuild",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "P now yields Q together with an extra side result S. Project the Q handoff from that richer intermediate, use Q with Q→R, and keep S distinct while the chain reaches R; any legal cleanup order is welcome."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-ref-sel-i01",
+      "interventions": [
+        {
+          "id": "opening-sey-ref-sel-i01-integrated-repair",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Match each complete occurrence to its exact introduction-path record: single-mark-return and nested-owner-introduction. Similar cut silhouettes are not interchangeable."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "sey-ref-dis-i01",
+      "interventions": [
+        {
+          "id": "opening-sey-ref-dis-i01-integrated-repair",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Dissolve the exact current single-mark artifact inside an atomic identity context"
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "blank-witness",
+      "interventions": [
+        {
+          "id": "opening-blank-hollow",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The Myratic hollow is deliberate. It asks for an entire seal-pattern. Open the loupe and place the blank sheet within it."
+          ]
+        },
+        {
+          "id": "completion-blank-hollow",
+          "trigger": {
+            "kind": "completion"
+          },
+          "repeat": "once",
+          "pages": [
+            "Precisely. To a Myratic seal, even an unwritten sheet is a complete pattern."
+          ]
+        }
+      ]
+    }
+  ]
+}

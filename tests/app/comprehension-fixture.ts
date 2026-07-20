@@ -3,6 +3,7 @@ import type { Diagram, RegionId, WireId } from '../../src/kernel/diagram/diagram
 
 export type ComprehensionFixture = {
   readonly diagram: Diagram
+  readonly guard: RegionId
   readonly bubble: RegionId
   readonly parameter: WireId
 }
@@ -18,5 +19,5 @@ export function comprehensionFixture(): ComprehensionFixture {
   }
   const context = builder.ref(builder.root, 'context', 1)
   const parameter = builder.wire(builder.root, [{ node: context, port: { kind: 'arg', index: 0 } }])
-  return { diagram: builder.build(), bubble, parameter }
+  return { diagram: builder.build(), guard, bubble, parameter }
 }

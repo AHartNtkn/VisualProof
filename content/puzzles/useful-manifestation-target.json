@@ -1,0 +1,71 @@
+{
+  "id": "useful-manifestation-target",
+  "diagram": {
+    "root": "r0",
+    "regions": {
+      "r0": {
+        "kind": "sheet"
+      },
+      "r1": {
+        "kind": "cut",
+        "parent": "r0"
+      },
+      "r2": {
+        "kind": "cut",
+        "parent": "r1"
+      },
+      "r3": {
+        "kind": "cut",
+        "parent": "r2"
+      },
+      "r4": {
+        "kind": "cut",
+        "parent": "r3"
+      },
+      "r5": {
+        "kind": "cut",
+        "parent": "r2"
+      },
+      "r6": {
+        "kind": "cut",
+        "parent": "r5"
+      },
+      "r1_0": {
+        "kind": "cut",
+        "parent": "r4"
+      },
+      "r2_0": {
+        "kind": "bubble",
+        "parent": "r1_0",
+        "arity": 0
+      },
+      "r3_0": {
+        "kind": "bubble",
+        "parent": "r2_0",
+        "arity": 0
+      },
+      "r4_0": {
+        "kind": "cut",
+        "parent": "r3_0"
+      }
+    },
+    "nodes": {
+      "n0": {
+        "kind": "atom",
+        "region": "r3_0",
+        "binder": "r2_0"
+      },
+      "n1": {
+        "kind": "atom",
+        "region": "r3_0",
+        "binder": "r3_0"
+      },
+      "n2": {
+        "kind": "atom",
+        "region": "r4_0",
+        "binder": "r2_0"
+      }
+    },
+    "wires": {}
+  }
+}

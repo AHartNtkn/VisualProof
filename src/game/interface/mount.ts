@@ -4,7 +4,6 @@ import { DARK } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
 import { artifactTheoremContext } from '../artifact-theorem'
 import type { GameCatalog } from '../catalog'
-import { openingCatalog } from '../content'
 import type {
   GameControllerState,
 } from '../controller-state'
@@ -24,6 +23,10 @@ import {
 import { mountLensEnvironment, type MountedLensEnvironment } from './lens-environment'
 import { mountFolioView, type MountedFolioView } from './folio-view'
 import { projectFolio } from './folio-projection'
+import {
+  createBrowserPuzzlePreviewService,
+  type PuzzlePreviewService,
+} from './puzzle-preview-service'
 import { gameProofMotionPreferences } from './proof-motion'
 import { GameProofViewport, type GameProofViewportDebug } from './proof-surface'
 import { mountTimelineLever, type MountedTimelineLever } from './timeline-lever'
@@ -44,7 +47,7 @@ export type CursebreakerPresentationProjection = GamePresentationProjection
 export type CursebreakerMountOptions = {
   readonly host: HTMLElement
   readonly platform: CursebreakerPlatform
-  readonly catalog?: GameCatalog
+  readonly catalog: GameCatalog
 }
 
 export type CursebreakerRect = {
@@ -115,6 +118,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
   readonly #platform: CursebreakerPlatform
   readonly #environment: MountedLensEnvironment
   readonly #presentation: MountedGamePresentationView
+  readonly #previewService: PuzzlePreviewService
   #state: GameControllerState
   #folio: MountedFolioView | null = null
   #proof: GameProofViewport | null = null
@@ -147,6 +151,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     const runtimeWindow = options.host.ownerDocument.defaultView
     if (runtimeWindow === null) throw new Error('Cursebreaker must mount in a live window')
     this.#window = runtimeWindow
+    this.#previewService = createBrowserPuzzlePreviewService()
 
     options.host.replaceChildren()
     this.#environment = mountLensEnvironment({
@@ -202,6 +207,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#timeline.dispose()
     this.#folio?.dispose()
     this.#folio = null
+    this.#previewService.dispose()
     this.#clearRefusal()
     this.#presentation.dispose()
     this.#environment.dispose()
@@ -366,6 +372,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#folio = mountFolioView({
       host: this.#environment.folioHost,
       projection: projectFolio(this.#catalog, this.#state, this.#state.mode),
+      previewService: this.#previewService,
       inputAllowed: () => this.#folioInputAllowed(),
       onSelectPuzzle: (puzzle) => this.dispatch({ kind: 'selectPuzzle', puzzle }),
       onRefusePuzzle: (puzzle) => this.dispatch({ kind: 'selectPuzzle', puzzle }),
@@ -391,12 +398,13 @@ export class CursebreakerRuntime implements MountedCursebreaker {
   #presentationProjection(state: GameControllerState): CursebreakerPresentationProjection {
     const receipt = state.completionReceipt
     const completion = receipt === null ? null : (() => {
-      const puzzle = this.#catalog.puzzle(receipt.puzzle)
-      const authored = puzzle.teacher.find(({ trigger }) => trigger.kind === 'completion')?.pages[0]
+      const artifact = this.#catalog.artifact(receipt.puzzle)
+      const authored = this.#catalog.guidance(receipt.puzzle).interventions
+        .find(({ trigger }) => trigger.kind === 'completion')?.pages[0]
       return {
         receipt,
-        artifactName: puzzle.name.professional,
-        response: authored ?? puzzle.provenance.function,
+        artifactName: artifact.name.professional,
+        response: authored ?? artifact.provenance.function,
       }
     })()
     return {
@@ -432,12 +440,8 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       host: this.#environment.proofCanvasSlot,
       overlayHost: this.#environment.element,
       diagram: () => currentDiagram(this.#requireActiveSession()),
-      boundary: () => puzzle.goal.boundary,
-      context: () => artifactTheoremContext(
-        this.#catalog.source.puzzles,
-        this.#state.completed,
-        this.#catalog.source.context,
-      ),
+      boundary: () => [],
+      context: () => artifactTheoremContext(this.#catalog, this.#state.completed),
       orientation: () => 'backward',
       theme: () => DARK,
       fuel: () => 256,
@@ -593,6 +597,19 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       return
     }
     if (
+      this.#state.mode === 'completion'
+      && this.#state.transient === null
+      && !event.altKey
+      && !event.ctrlKey
+      && !event.metaKey
+      && !event.shiftKey
+      && (event.key === 'Enter' || event.key === ' ')
+    ) {
+      event.preventDefault()
+      this.dispatch({ kind: 'levelSelection' })
+      return
+    }
+    if (
       event.altKey
       || (!event.ctrlKey && !event.metaKey)
       || event.key.toLowerCase() !== 'z'
@@ -613,7 +630,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
 export async function mountCursebreaker(
   options: CursebreakerMountOptions,
 ): Promise<MountedCursebreaker> {
-  const catalog = options.catalog ?? openingCatalog()
+  const catalog = options.catalog
   const freshState = async (): Promise<GameControllerState> =>
     (await import('../controller-state')).createInitialGameState(catalog, {
       reducedMotion: options.host.ownerDocument.defaultView

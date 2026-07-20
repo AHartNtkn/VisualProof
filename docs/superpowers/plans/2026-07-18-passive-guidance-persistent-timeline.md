@@ -62,14 +62,14 @@
 Add catalog cases that reject `pages: []`, `pages: ['']`, leading/trailing whitespace, embedded `\n`, and completion interventions with more than one page. Assert changing page order or wording does not change the puzzle’s logical fingerprint. Replace teaching expectations with passive candidates and delivered identities. Pin the first puzzle’s ordered pages:
 
 ```ts
-expect(puzzle('two-veils').teacher[0]!.pages).toEqual([
+expect(puzzle('single-mark-return').teacher[0]!.pages).toEqual([
   expect.stringMatching(/move|hover|highlight/i),
   expect.stringMatching(/click|select/i),
   expect.stringMatching(/again|empty|clear/i),
-  expect.stringMatching(/Eliminate the double cut|Delete|Backspace/i),
+  expect.stringMatching(/Deiterate/i),
 ])
-expect(puzzle('two-veils').teacher[0]!.pages.slice(0, -1).join(' '))
-  .not.toMatch(/Eliminate the double cut|Delete|Backspace/i)
+expect(puzzle('single-mark-return').teacher[0]!.pages.slice(0, -1).join(' '))
+  .not.toMatch(/Deiterate/i)
 ```
 
 - [ ] **Step 2: Run the focused tests and verify RED**
@@ -89,7 +89,6 @@ Replace the single text field and acknowledgement identity helpers:
 ```ts
 type TeacherInterventionBase = {
   readonly id: string
-  readonly performance?: PerformanceId
   readonly pages: readonly string[]
   readonly repeat: 'once' | 'repeatable'
 }
@@ -102,7 +101,7 @@ export type GuidanceDeliveryIdentity = {
 
 Validate every page with `nonBlank`, reject `page.includes('\n')`, and require exactly one page for completion triggers. Keep ordered pages out of the proof-logical puzzle fingerprint. Rename the matcher to return `{ identity, intervention }` without modal/nonmodal presentation intents. Convert every fixture and shipped intervention to `pages`.
 
-Author the first puzzle’s four direct interface paragraphs from actual production behavior. The final paragraph names the discovered “Eliminate the double cut” action and Delete/Backspace alternative; earlier pages do not name a logical proof move.
+Author the first puzzle’s four direct interface paragraphs from actual production behavior. The final paragraph names the deiteration move that completes the problem; earlier pages do not name a logical proof move.
 
 - [ ] **Step 4: Run the focused tests and verify GREEN**
 

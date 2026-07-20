@@ -1,0 +1,18 @@
+{
+  "puzzle": "echoed-veil",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r3", "regions": ["r4"], "nodes": [], "wires": [] },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": { "region": "r1", "regions": ["r2"], "nodes": [], "wires": [] }
+    },
+    { "rule": "doubleCutElim", "region": "r1" }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": ["deiteration", "erasure", "doubleCutElim"],
+  "recognizedStates": []
+}

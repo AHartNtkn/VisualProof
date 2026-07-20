@@ -1,0 +1,13 @@
+{
+  "puzzle": "forked-veil",
+  "solution": [
+    {
+      "rule": "erasure",
+      "sel": { "region": "r1", "regions": ["r3"], "nodes": [], "wires": [] }
+    },
+    { "rule": "doubleCutElim", "region": "r1" }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": ["erasure", "doubleCutElim"],
+  "recognizedStates": []
+}
