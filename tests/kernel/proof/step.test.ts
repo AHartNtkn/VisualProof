@@ -89,7 +89,11 @@ describe('applyStep mirrors the direct appliers', () => {
       { node: n2, port: { kind: 'output' } },
     ])
     const d = h.build()
-    const correspondence = proposePortCorrespondence(termNodeAt(d, n1).term, termNodeAt(d, n2).term)
+    const correspondence = {
+      commonArity: 3,
+      left: { s0: 0, s1: 1 },
+      right: { s0: 0, s1: 2 },
+    }
     const step: ProofStep = { rule: 'headStrip', a: n1, b: n2, correspondence }
     expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(applyHeadStrip(d, n1, n2, correspondence)))
     const out = replayProof(d, [step], ctx)

@@ -93,35 +93,39 @@ export function applyHeadStrip(
     throw new RuleError(`heads do not correspond: bound indices differ (${ha.index} vs ${hb.index})`)
   }
 
-  // Gate 7: prefix-closures per position, skipping trivial ones. Wrapping the
+  // Gate 7: every correspondence column represented on both sides must name
+  // one host wire. One-sided columns impose no attachment constraint.
+  const rightByColumn = new Map<number, string>(
+    Object.entries(correspondence.right).map(([name, column]) => [column, name]),
+  )
+  for (const [leftName, column] of Object.entries(correspondence.left)) {
+    const rightName = rightByColumn.get(column)
+    if (rightName === undefined) continue
+    const leftWire = wireAt(d, a, { kind: 'freeVar', name: leftName })
+    const rightWire = wireAt(d, b, { kind: 'freeVar', name: rightName })
+    if (leftWire !== rightWire) {
+      throw new RuleError(
+        `head strip shared correspondence column ${column} maps native ports on different host wires ('${leftWire}' and '${rightWire}')`,
+      )
+    }
+  }
+
+  // Gate 8: prefix-closures per position, skipping trivial ones. Wrapping the
   // argument in the same n lambdas keeps its de Bruijn indices into the
   // binder prefix valid and leaves free ports unchanged. A position is
-  // trivial exactly when the closures are termEq AND every shared free port
-  // rides the same wire in both nodes — then the added conjunct would be
-  // derivable by one iteration (exactness, not heuristic).
+  // trivial exactly when the mapped closures are termEq.
   const closure = (t: Term, n: number): Term => {
     let cur = t
     for (let i = 0; i < n; i++) cur = lam(cur)
     return cur
   }
   const pairs: { ca: Term; cb: Term }[] = []
-  const rightByColumn = new Map<number, string>(
-    Object.entries(correspondence.right).map(([name, column]) => [column, name]),
-  )
   for (let i = 0; i < sa.args.length; i++) {
     const ca = closure(sa.args[i]!, sa.binders)
     const cb = closure(sb.args[i]!, sb.binders)
     const mappedLeft = mapTermToCommonCarrier(ca, correspondence.left)
     const mappedRight = mapTermToCommonCarrier(cb, correspondence.right)
-    if (termEq(mappedLeft, mappedRight)) {
-      const allShared = freePorts(ca).every((leftName) => {
-        const rightName = rightByColumn.get(correspondence.left[leftName]!)
-        return rightName !== undefined
-          && wireAt(d, a, { kind: 'freeVar', name: leftName })
-            === wireAt(d, b, { kind: 'freeVar', name: rightName })
-      })
-      if (allShared) continue
-    }
+    if (termEq(mappedLeft, mappedRight)) continue
     pairs.push({ ca, cb })
   }
 
