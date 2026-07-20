@@ -1,4 +1,5 @@
 import VisualProof.Diagram.Concrete.Subgraph.Splice.Removal
+import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Discrete
 
 namespace VisualProof.Diagram
 
@@ -86,8 +87,53 @@ def transitiveInput : Input [] where
   terminalBody := aliasTerminalBody
   binderTarget := nofun
 
+/-- The same repeated operational boundary, with every occurrence of each
+intrinsic identity attached to one host wire. -/
+def repeatedSameHostInput : Input [] where
+  frame := checkedWireFrame
+  pattern := checkedAliasPattern
+  site := ⟨0, by simp [checkedWireFrame, wireFrame]⟩
+  attachment := fun position =>
+    Fin.castLE (by simp [checkedWireFrame, wireFrame, checkedAliasPattern,
+      aliasPattern]) (checkedAliasPattern.val.boundary.get position)
+  binderSpine := aliasSpine
+  terminalBody := aliasTerminalBody
+  binderTarget := nofun
+
+/-- Repeated intrinsic identities generate a discrete retained-host quotient
+when their occurrences respect the intrinsic boundary equality. -/
+theorem repeated_same_host_respects_boundary :
+    repeatedSameHostInput.AttachmentsRespectBoundary := by
+  intro left right boundaryEq
+  exact congrArg (Fin.castLE (by
+    simp [checkedWireFrame, wireFrame, checkedAliasPattern, aliasPattern]))
+      boundaryEq
+
+theorem repeated_same_host_quotient_is_discrete
+    (left right : Fin repeatedSameHostInput.frame.val.wireCount) :
+    repeatedSameHostInput.attachmentPartition.related left right = true ↔
+      left = right :=
+  Input.attachmentPartition_related_iff_of_attachmentsRespectBoundary
+    repeatedSameHostInput repeated_same_host_respects_boundary left right
+
+theorem repeated_same_host_quotient_count :
+    repeatedSameHostInput.wireQuotient.count =
+      repeatedSameHostInput.frame.val.wireCount := by
+  native_decide
+
 theorem transitiveInput_admissible : transitiveInput.Admissible := by
   native_decide
+
+/-- Attaching equal intrinsic boundary identities to different host wires is
+exactly the case excluded by attachment-respecting discreteness. -/
+theorem transitiveInput_does_not_respect_boundary :
+    ¬ transitiveInput.AttachmentsRespectBoundary := by
+  intro respects
+  have attachmentsEqual := respects
+    ⟨0, by simp [transitiveInput, checkedAliasPattern, aliasPattern]⟩
+    ⟨1, by simp [transitiveInput, checkedAliasPattern, aliasPattern]⟩
+    (by rfl)
+  simp [transitiveInput, checkedAliasPattern, aliasPattern] at attachmentsEqual
 
 /-- Repeated positions for the first boundary identity coalesce host wires 0/1. -/
 theorem repeated_alias_coalesces :
