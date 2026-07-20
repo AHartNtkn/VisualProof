@@ -34,7 +34,6 @@ theorem focusedRootItems_transport
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
@@ -237,7 +236,7 @@ theorem focusedRootItems_transport
               intro occurrence member sourceItem targetItem sourceOccurrence
                 targetOccurrence
               exact copyTrace.focusedKeptOccurrence_itemSimulation elimTrace
-                sourceWellFormed finalWellFormed boundaryNodup model named
+                sourceWellFormed finalWellFormed model named
                 .forward fuelSource (bubbleFuel + 1)
                 sourceRoot
                 targetRoot focusedContext
@@ -375,7 +374,7 @@ theorem focusedRootItems_transport
                     VacuousElimTrace.FreshRelationSelector elimTrace
                       finalWellFormed model :=
                   InstantiationSemantic.finalFocusRelationSelector copyTrace
-                    elimTrace finalWellFormed boundaryNodup model named
+                    elimTrace finalWellFormed model named
                 let terminalSimulation := elimTrace.semanticSimulation
                   sourceWellFormed finalWellFormed model named terminalFresh
                 have terminalSelectedPointwise : ∀ occurrence,
@@ -835,7 +834,7 @@ theorem focusedRootItems_transport
                           (candidate_eq := candidate_eq)
                           (arguments_eq := arguments_eq)
                           (rest := rest)
-                          elimTrace finalWellFormed boundaryNodup model named
+                          elimTrace finalWellFormed model named
                           sourceRoot
                           terminalRoot
                           sourceBinders terminalBinders sourceExact
@@ -946,7 +945,7 @@ theorem focusedRootItems_transport
                       }
                       let initialExternal :=
                         InstantiationSemantic.externalAligned_of_trace wholeTrace
-                          boundaryNodup model named fresh proxyValues
+                          model named fresh proxyValues
                           parameterValues simulations
                           (targetBinders.push bubble payload.arity)
                           (fresh, targetRelations) terminalWireValue

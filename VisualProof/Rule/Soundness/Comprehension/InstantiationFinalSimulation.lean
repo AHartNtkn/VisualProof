@@ -205,7 +205,6 @@ noncomputable def finalSemanticSimulation
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
@@ -272,7 +271,7 @@ noncomputable def finalSemanticSimulation
   extendContext := by
     intro sourceContext targetContext witness region regular sourceExact
       targetExact
-    exact PLift.up (witness.down.extendRegular finalWellFormed boundaryNodup
+    exact PLift.up (witness.down.extendRegular finalWellFormed
       region (Classical.not_not.mp regular))
   extendFocusedContext := by
     intro sourceContext targetContext witness region atRegion focused sourceExact
@@ -283,7 +282,7 @@ noncomputable def finalSemanticSimulation
       · exact focus
     subst region
     simpa using PLift.up
-      (witness.down.extendFocused finalWellFormed boundaryNodup)
+      (witness.down.extendFocused finalWellFormed)
   at_child := by
     intro sourceContext targetContext context parent regular sourceExact
       targetExact child atParent childParent
@@ -328,12 +327,12 @@ noncomputable def finalSemanticSimulation
       direction sourceContext targetContext region
       (copyTrace.reverseRegionMap elimTrace finalWellFormed region)
       context.down.indexRelation
-      (context.down.extendRegular finalWellFormed boundaryNodup region
+      (context.down.extendRegular finalWellFormed region
         (Classical.not_not.mp regular)).indexRelation
       model named (sourceItems.renameRelations binderWitness.relationMap)
       targetItems
     · exact context.down.regularEnvironmentSelection finalWellFormed
-        boundaryNodup direction sourceContext targetContext region
+        direction sourceContext targetContext region
         (Classical.not_not.mp regular) sourceExact
     · exact itemSemantics
   nodeSemantic := by
@@ -348,7 +347,7 @@ noncomputable def finalSemanticSimulation
     have targetNodeEq := ConcreteElaboration.LocalOccurrence.node.inj mapped
     subst targetNode
     exact copyTrace.regularNode_itemSimulation elimTrace sourceWellFormed
-      finalWellFormed boundaryNodup model named direction sourceContext
+      finalWellFormed model named direction sourceContext
       targetContext context.down sourceNodup sourceBinders targetBinders
       binderWitness region regular' sourceNode nodeRegion sourceItem targetItem
       sourceCompiled targetCompiled
@@ -459,7 +458,6 @@ noncomputable def finalSemanticSimulation
               Option.some.inj bubbleBodyEq
             subst bubbleBody
             let focusedContext := context.down.extendFocused finalWellFormed
-              boundaryNodup
             have keptPointwise : ∀ occurrence,
                 occurrence ∈ elimTrace.keptOccurrences finalWellFormed →
                 ∀ sourceItem targetItem,
@@ -480,7 +478,7 @@ noncomputable def finalSemanticSimulation
               intro occurrence member sourceItem targetItem sourceOccurrence
                 targetOccurrence
               exact copyTrace.focusedKeptOccurrence_itemSimulation elimTrace
-                sourceWellFormed finalWellFormed boundaryNodup model named
+                sourceWellFormed finalWellFormed model named
                 .forward fuelSource (bubbleFuel + 1)
                 (sourceContext.extend
                   (elimTrace.targetIndex finalWellFormed))
@@ -624,7 +622,7 @@ noncomputable def finalSemanticSimulation
                     VacuousElimTrace.FreshRelationSelector elimTrace
                       finalWellFormed model :=
                   InstantiationSemantic.finalFocusRelationSelector copyTrace
-                    elimTrace finalWellFormed boundaryNodup model named
+                    elimTrace finalWellFormed model named
                 let terminalSimulation := elimTrace.semanticSimulation
                   sourceWellFormed finalWellFormed model named terminalFresh
                 have terminalSelectedPointwise : ∀ occurrence,
@@ -1128,7 +1126,7 @@ noncomputable def finalSemanticSimulation
                           (candidate_eq := candidate_eq)
                           (arguments_eq := arguments_eq)
                           (rest := rest)
-                          elimTrace finalWellFormed boundaryNodup model named
+                          elimTrace finalWellFormed model named
                           (sourceContext.extend
                             (elimTrace.targetIndex finalWellFormed))
                           (terminalOuter.extend elimTrace.parent)
@@ -1240,7 +1238,7 @@ noncomputable def finalSemanticSimulation
                       }
                       let initialExternal :=
                         InstantiationSemantic.externalAligned_of_trace wholeTrace
-                          boundaryNodup model named fresh proxyValues
+                          model named fresh proxyValues
                           parameterValues simulations
                           (targetBinders.push bubble payload.arity)
                           (fresh, targetRelations) terminalWireValue

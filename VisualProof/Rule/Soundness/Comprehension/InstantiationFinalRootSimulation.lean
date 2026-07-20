@@ -25,7 +25,6 @@ variable {signature : List Nat}
 theorem terminalBoundary_root
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
@@ -51,7 +50,6 @@ noncomputable def finalRootContextSimulation
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
@@ -61,28 +59,27 @@ noncomputable def finalRootContextSimulation
     let source : CheckedOpenDiagram signature :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-          finalWellFormed boundaryNodup boundary boundaryRoot⟩
+          finalWellFormed boundary boundaryRoot⟩
     let target : CheckedOpenDiagram signature :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
     let simulation := copyTrace.finalSemanticSimulation elimTrace
-      sourceWellFormed finalWellFormed boundaryNodup model named
+      sourceWellFormed finalWellFormed model named
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires := by
   let source : CheckedOpenDiagram signature :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-        finalWellFormed boundaryNodup boundary boundaryRoot⟩
+        finalWellFormed boundary boundaryRoot⟩
   let target : CheckedOpenDiagram signature :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   let simulation := copyTrace.finalSemanticSimulation elimTrace
-    sourceWellFormed finalWellFormed boundaryNodup model named
-  let outer := copyTrace.finalOuterContextWitness elimTrace boundaryNodup
-    boundary
+    sourceWellFormed finalWellFormed model named
+  let outer := copyTrace.finalOuterContextWitness elimTrace boundary
   let combined := copyTrace.finalRootContextWitness elimTrace finalWellFormed
-    boundaryNodup boundary boundaryRoot sourceWellFormed
+    boundary boundaryRoot sourceWellFormed
   have sourceRootExact : ConcreteElaboration.WireContext.Exact
       source.val.rootWires
       elimTrace.sourceDiagram.root := by
@@ -160,7 +157,7 @@ noncomputable def finalRootContextSimulation
       named (sourceItems.renameRelations
         (simulation.relationMap simulation.binders_empty)) targetItems
     · exact copyTrace.finalRootEnvironmentSelection elimTrace sourceWellFormed
-        finalWellFormed boundaryNodup boundary boundaryRoot direction
+        finalWellFormed boundary boundaryRoot direction
     · exact itemSemantics
   · intro atRoot focused allowed recurse recurseAt sourceItems targetItems
       sourceCompiled targetCompiled
@@ -188,7 +185,7 @@ noncomputable def finalRootContextSimulation
       (elimTrace.targetIndex finalWellFormed) direction allowedFocus
     subst direction
     let terminalBoundary := boundary.map copyTrace.wireMap
-    have terminalBoundaryRoot := copyTrace.terminalBoundary_root boundaryNodup
+    have terminalBoundaryRoot := copyTrace.terminalBoundary_root
       boundary boundaryRoot
     let terminal : CheckedOpenDiagram signature :=
       ⟨VacuousElimTrace.targetOpen (dropInstantiationAtomsRaw result)
@@ -247,7 +244,7 @@ noncomputable def finalRootContextSimulation
         ConcreteElaboration.BinderContext.Enumeration.empty
           elimTrace.sourceDiagram
     have itemTransport := copyTrace.focusedRootItems_transport elimTrace
-      sourceWellFormed finalWellFormed boundaryNodup model named
+      sourceWellFormed finalWellFormed model named
       elimTrace.sourceDiagram.regionCount input.val.regionCount
       source.val.rootWires target.val.rootWires combined terminal.val.rootWires
       terminalContext terminalExact sourceEmpty
@@ -297,7 +294,7 @@ noncomputable def finalRootContextSimulation
         target.val.hiddenWires outer.indexRelation combined.indexRelation model
         named sourceItems targetItems
         (copyTrace.finalRootEnvironmentSelection elimTrace sourceWellFormed
-          finalWellFormed boundaryNodup boundary boundaryRoot .forward)
+          finalWellFormed boundary boundaryRoot .forward)
         itemTransport')
 
 theorem finalBoundaryWitness
@@ -308,7 +305,6 @@ theorem finalBoundaryWitness
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
@@ -319,12 +315,12 @@ theorem finalBoundaryWitness
     let source : CheckedOpenDiagram signature :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-          finalWellFormed boundaryNodup boundary boundaryRoot⟩
+          finalWellFormed boundary boundaryRoot⟩
     let target : CheckedOpenDiagram signature :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
     let root := copyTrace.finalRootContextSimulation elimTrace
-      sourceWellFormed finalWellFormed boundaryNodup boundary boundaryRoot
+      sourceWellFormed finalWellFormed boundary boundaryRoot
       model named direction
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate target.elaborate root.outer model named
@@ -334,14 +330,13 @@ theorem finalBoundaryWitness
   let source : CheckedOpenDiagram signature :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-        finalWellFormed boundaryNodup boundary boundaryRoot⟩
+        finalWellFormed boundary boundaryRoot⟩
   let target : CheckedOpenDiagram signature :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
-  let outer := copyTrace.finalOuterContextWitness elimTrace boundaryNodup
-    boundary
+  let outer := copyTrace.finalOuterContextWitness elimTrace boundary
   let root := copyTrace.finalRootContextSimulation elimTrace sourceWellFormed
-    finalWellFormed boundaryNodup boundary boundaryRoot model named direction
+    finalWellFormed boundary boundaryRoot model named direction
   let lengthEq := copyTrace.finalBoundaryLengthEq elimTrace boundary
   have sourceExposedNodup := source.val.exposedWires_nodup
   have targetExposedNodup := target.val.exposedWires_nodup
@@ -360,7 +355,7 @@ theorem finalBoundaryWitness
           let sourcePosition : Fin source.val.boundary.length :=
             Fin.cast lengthEq.symm position
           have classEq := copyTrace.finalOuter_sourceIndex_boundaryClass
-            elimTrace boundaryNodup boundary position
+            elimTrace boundary position
           change sourceAssignment.classes
               (outer.sourceIndex (target.val.boundaryClass position)) =
             args position
@@ -395,7 +390,7 @@ theorem finalBoundaryWitness
           let targetPosition : Fin target.val.boundary.length :=
             Fin.cast lengthEq sourcePosition
           have classEq := copyTrace.finalOuter_sourceIndex_boundaryClass
-            elimTrace boundaryNodup boundary targetPosition
+            elimTrace boundary targetPosition
           have classEq' : outer.sourceIndex
                 (target.val.boundaryClass targetPosition) =
               source.val.boundaryClass sourcePosition := by
@@ -431,7 +426,6 @@ theorem finalOpen_denote
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
@@ -445,7 +439,7 @@ theorem finalOpen_denote
     let source : CheckedOpenDiagram signature :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-          finalWellFormed boundaryNodup boundary boundaryRoot⟩
+          finalWellFormed boundary boundaryRoot⟩
     let target : CheckedOpenDiagram signature :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
@@ -457,19 +451,19 @@ theorem finalOpen_denote
   let source : CheckedOpenDiagram signature :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-        finalWellFormed boundaryNodup boundary boundaryRoot⟩
+        finalWellFormed boundary boundaryRoot⟩
   let target : CheckedOpenDiagram signature :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   let simulation := copyTrace.finalSemanticSimulation elimTrace
-    sourceWellFormed finalWellFormed boundaryNodup model named
+    sourceWellFormed finalWellFormed model named
   let root := copyTrace.finalRootContextSimulation elimTrace sourceWellFormed
-    finalWellFormed boundaryNodup boundary boundaryRoot model named direction
+    finalWellFormed boundary boundaryRoot model named direction
   exact ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
     source target model named simulation direction root allowed
     (args ∘ Fin.cast (copyTrace.finalBoundaryLengthEq elimTrace boundary)) args
     (copyTrace.finalBoundaryWitness elimTrace sourceWellFormed finalWellFormed
-      boundaryNodup boundary boundaryRoot direction model named args)
+      boundary boundaryRoot direction model named args)
 
 end InstantiationTrace
 
