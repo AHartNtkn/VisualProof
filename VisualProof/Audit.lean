@@ -13,6 +13,9 @@ the source audit.
 #print axioms VisualProof.Diagram.iso_denotation
 #print axioms VisualProof.Diagram.Region.denote_spliceAt
 
+#print axioms VisualProof.Rule.applyComprehensionInstantiate_sound
+#print axioms VisualProof.Rule.applyTheorem_sound
+#print axioms VisualProof.Rule.applyRelUnfold_sound
 #print axioms VisualProof.Rule.applyStep_sound
 #print axioms VisualProof.Proof.checkedTheorem_sound
 #print axioms VisualProof.Proof.verifiedTheory_sound
