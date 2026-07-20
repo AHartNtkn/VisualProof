@@ -14,7 +14,6 @@ const onboardingIds = [
   'empty-ring-release',
 ] as const
 const singleMarkRootIds = [
-  'atomic-fragment-erasure',
   'transfer-duplication-recognition',
   'common-conjunction-factor-base',
   'common-disjunction-factor-base',
@@ -53,6 +52,7 @@ const singleMarkRootIds = [
   'rm-c3',
 ] as const
 const reconstructedPrerequisites = [
+  ['atomic-fragment-erasure', ['compound-weakening-boundary']],
   ['shallow-edit-legality-contrast', ['single-mark-return']],
   ['atomic-content-insertion', ['marked-echo-deiteration']],
   ['atomic-double-cut-selection', ['marked-echo-deiteration']],

@@ -5,7 +5,9 @@ import { join, resolve } from 'node:path'
 import { findEmptyCutShortcutHosts, validateGameContent } from '../../scripts/validate-game-content'
 import { loadGameContent } from '../../src/game/catalog'
 import { gameContentFiles } from '../../src/game/content/files'
-import { cutDepth, type Diagram, type RegionId, type SubgraphSelection } from '../../src/kernel/diagram'
+import {
+  cutDepth, selectionContents, type Diagram, type RegionId, type SubgraphSelection,
+} from '../../src/kernel/diagram'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { applyStep } from '../../src/kernel/proof'
@@ -298,6 +300,77 @@ describe('build-only game content evidence', () => {
       return hosts.length === 0 ? [] : [[id, hosts]]
     }))
     expect(violations).toEqual({})
+  })
+
+  it('keeps the intimidating erasure puzzle structurally distinct from forked-veil', () => {
+    const catalog = loadGameContent(gameContentFiles)
+    const intimidating = catalog.puzzle('atomic-fragment-erasure' as never).diagram
+    const simple = catalog.puzzle('forked-veil' as never).diagram
+    const evidence = readJson(resolve(
+      process.cwd(), 'content/validation/atomic-fragment-erasure.json',
+    ))
+    const first = evidence.solution[0]
+
+    expect(catalog.puzzleFingerprint('atomic-fragment-erasure' as never))
+      .not.toBe(catalog.puzzleFingerprint('forked-veil' as never))
+    expect(Object.keys(intimidating.nodes).length).toBeGreaterThan(Object.keys(simple.nodes).length)
+    expect(Object.keys(intimidating.regions).length).toBeGreaterThan(
+      Object.keys(simple.regions).length + 4,
+    )
+    expect(findEmptyCutShortcutHosts(intimidating)).toEqual(['r5'])
+
+    expect(first).toEqual({
+      rule: 'erasure',
+      sel: { region: 'r5', regions: ['r7'], nodes: [], wires: [] },
+    })
+    const fragment = selectionContents(intimidating, first.sel)
+    expect([...fragment.allRegions].sort()).toEqual(['r7', 'r8', 'r9'])
+    expect([...fragment.allNodes].sort()).toEqual(['n0', 'n1', 'n2', 'n3'])
+    expect([...fragment.allNodes].map((id) => {
+      const node = intimidating.nodes[id]
+      expect(node).toMatchObject({ kind: 'atom' })
+      return node?.kind === 'atom' ? node.binder : undefined
+    })).toEqual(['r2', 'r3', 'r4', 'r5'])
+
+    expect(intimidating.regions.r7).toEqual({ kind: 'cut', parent: 'r5' })
+    expect(['n0', 'n1'].map((id) => intimidating.nodes[id])).toEqual([
+      { kind: 'atom', region: 'r7', binder: 'r2' },
+      { kind: 'atom', region: 'r7', binder: 'r3' },
+    ])
+    expect(intimidating.regions.r8).toEqual({ kind: 'cut', parent: 'r7' })
+    expect(intimidating.regions.r9).toEqual({ kind: 'cut', parent: 'r7' })
+    expect(['n2', 'n3'].map((id) => intimidating.nodes[id])).toEqual([
+      { kind: 'atom', region: 'r8', binder: 'r4' },
+      { kind: 'atom', region: 'r9', binder: 'r5' },
+    ])
+
+    expect(intimidating.regions.r6).toEqual({ kind: 'cut', parent: 'r5' })
+    expect(Object.values(intimidating.regions).filter((region) =>
+      region.kind !== 'sheet' && region.parent === 'r6',
+    )).toEqual([])
+    expect(Object.values(intimidating.nodes).filter(({ region }) => region === 'r6')).toEqual([])
+    const afterFirst = applyStep(intimidating, first, proofContext, 'backward')
+    expect(afterFirst.regions.r7).toBeUndefined()
+    expect(afterFirst.regions.r6).toEqual({ kind: 'cut', parent: 'r5' })
+  })
+
+  it('stages intimidating whole-fragment recognition after the compound boundary', () => {
+    const catalog = loadGameContent(gameContentFiles)
+    const seyric = catalog.puzzlesInCulture('seyric-horizon' as never)
+    const boundaryIndex = seyric.indexOf('compound-weakening-boundary' as never)
+
+    expect(seyric[boundaryIndex + 1]).toBe('atomic-fragment-erasure')
+    expect(catalog.placement('atomic-fragment-erasure' as never).prerequisites)
+      .toEqual(['compound-weakening-boundary'])
+    expect(catalog.placement('compound-weakening-boundary' as never).prerequisites)
+      .not.toContain('atomic-fragment-erasure')
+
+    const coverage = readJson(resolve(process.cwd(), 'content/coverage/seyric.json'))
+    const row = coverage.puzzles.find(
+      ({ puzzle }: JsonRecord) => puzzle === 'atomic-fragment-erasure',
+    )
+    expect(row.obligations).toContain('erasure-compound-semantic-subgraph')
+    expect(row.experientialNeighbors).toContain('forked-veil')
   })
 
   it('gates each reconstructed creative operation with its witness and prerequisites', () => {

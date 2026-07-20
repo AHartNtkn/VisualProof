@@ -120,13 +120,6 @@
       "stoppingRule": "Stop after compound exact selection establishes whole-selection behavior."
     },
     {
-      "id": "erasure-atomic-fragment",
-      "kind": "isolated",
-      "family": "erasure",
-      "distinction": "Erase a complete atomic fragment.",
-      "stoppingRule": "Stop after complete-fragment selection is established for atomic content."
-    },
-    {
       "id": "erasure-compound-semantic-subgraph",
       "kind": "isolated",
       "family": "erasure",
@@ -953,12 +946,13 @@
     {
       "puzzle": "atomic-fragment-erasure",
       "obligations": [
-        "erasure-atomic-fragment"
+        "erasure-compound-semantic-subgraph"
       ],
-      "visibleSituation": "A complete owned atomic fragment is the smallest legal erasure among nearby fragments.",
-      "defeats": "It defeats the hypothesis that clearing a field requires selecting an enclosing region; each complete owned atom is itself a legal fragment.",
+      "visibleSituation": "A tiny empty veil and the densely grouped implication (P∧Q)→(R∨S) share one dark host; its two antecedent marks and two denied alternatives still form one disposable sibling.",
+      "defeats": "Unlike forked-veil's tiny disposable veil, this later tablet defeats the urge to work inward through an intimidating proposition: the sufficient empty veil makes the entire compound root erasable in one selection.",
       "experientialNeighbors": [
-        "shallow-edit-legality-contrast"
+        "forked-veil",
+        "compound-weakening-boundary"
       ]
     },
     {

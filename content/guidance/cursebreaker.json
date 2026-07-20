@@ -305,6 +305,22 @@
       ]
     },
     {
+      "puzzle": "atomic-fragment-erasure",
+      "interventions": [
+        {
+          "id": "opening-intimidating-fragment-erasure",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The four marked parts form one complete proposition: if P and Q, then R or S. Its nested veils show that grouping; they are not four separate chores.",
+            "The tiny empty veil beside it already settles the dark field. Select the outer boundary of the entire marked proposition and erase that whole fragment in one move; then release the empty rings and the remaining paired veil."
+          ]
+        }
+      ]
+    },
+    {
       "puzzle": "left-injection-introduction",
       "interventions": [
         {

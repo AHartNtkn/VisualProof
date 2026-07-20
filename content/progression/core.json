@@ -14,7 +14,6 @@
         "single-mark-return",
         "marked-echo-deiteration",
         "shallow-edit-legality-contrast",
-        "atomic-fragment-erasure",
         "atomic-content-insertion",
         "compound-copy-authority-contrast",
         "transfer-duplication-recognition",
@@ -33,6 +32,7 @@
         "conjunction-idempotence-introduction",
         "weakening-introduction",
         "compound-weakening-boundary",
+        "atomic-fragment-erasure",
         "two-mark-projection",
         "compound-projection",
         "ternary-projection-choice",
@@ -174,12 +174,6 @@
       ]
     },
     {
-      "puzzle": "atomic-fragment-erasure",
-      "prerequisites": [
-        "single-mark-return"
-      ]
-    },
-    {
       "puzzle": "atomic-content-insertion",
       "prerequisites": [
         "marked-echo-deiteration"
@@ -285,8 +279,13 @@
     {
       "puzzle": "compound-weakening-boundary",
       "prerequisites": [
-        "atomic-fragment-erasure",
         "weakening-introduction"
+      ]
+    },
+    {
+      "puzzle": "atomic-fragment-erasure",
+      "prerequisites": [
+        "compound-weakening-boundary"
       ]
     },
     {

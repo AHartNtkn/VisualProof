@@ -864,7 +864,7 @@ describe('authoritative production renderer runtime', () => {
       expect(await status('two-mark-projection')).toBe('locked')
       await completeProductionPuzzle(page, 'single-mark-return', 4)
       expect(await status('two-mark-projection')).toBe('unlocked')
-      expect(await status('atomic-fragment-erasure')).toBe('unlocked')
+      expect(await status('atomic-fragment-erasure')).toBe('locked')
     } finally { await page.close() }
   })
 
