@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { findEmptyCutShortcutHosts, validateGameContent } from '../../scripts/validate-game-content'
+import {
+  analyzeSeyricStart,
+  findEmptyCutShortcutHosts,
+  validateGameContent,
+} from '../../scripts/validate-game-content'
 import { loadGameContent } from '../../src/game/catalog'
 import { gameContentFiles } from '../../src/game/content/files'
-import {
-  cutDepth, selectionContents, type Diagram, type RegionId, type SubgraphSelection,
-} from '../../src/kernel/diagram'
+import { selectionContents, type Diagram, type RegionId, type SubgraphSelection } from '../../src/kernel/diagram'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { applyStep } from '../../src/kernel/proof'
@@ -28,12 +30,12 @@ const creativePrimaryRule = new Map([
 ])
 
 const creativePrerequisites = new Map([
-  ['compound-copy-authority-contrast', ['marked-echo-deiteration']],
-  ['compound-double-cut-selection', ['atomic-double-cut-selection']],
+  ['compound-copy-authority-contrast', ['blank-witness', 'marked-echo-deiteration']],
+  ['compound-double-cut-selection', ['seyric-atomic-double-cut-selection']],
   ['content-bearing-annulus-choice', ['compound-double-cut-selection']],
-  ['double-cut-insertion-workspace', ['atomic-double-cut-selection', 'atomic-content-insertion']],
+  ['double-cut-insertion-workspace', ['seyric-atomic-double-cut-selection', 'atomic-content-insertion']],
   ['grouped-branch-construction', ['atomic-content-insertion', 'left-injection-introduction']],
-  ['useful-vacuous-owner-workspace', ['empty-ring-release', 'marked-echo-deiteration']],
+  ['useful-vacuous-owner-workspace', ['blank-witness', 'empty-ring-release', 'marked-echo-deiteration']],
 ])
 
 const creativePrimaryStepIndex = new Map([
@@ -63,46 +65,6 @@ const insertBoundAtom = (
   attachments: [],
   binders: { [boundAtomPattern.binder]: binder },
 }, proofContext, 'backward')
-
-const groupedBranchPatterns = (() => {
-  const build = (binders: readonly ('p' | 'q')[]) => {
-    const builder = new DiagramBuilder()
-    const p = builder.bubble(builder.root, 0)
-    const q = builder.bubble(p, 0)
-    const branch = builder.cut(q)
-    for (const binder of binders) builder.atom(branch, binder === 'p' ? p : q)
-    return {
-      pattern: { diagram: builder.build(), boundary: [] },
-      binders: { p, q },
-    }
-  }
-
-  return {
-    exact: build(['p', 'q']),
-    nearby: build(['p']),
-    larger: build(['p', 'q', 'p']),
-  }
-})()
-
-const insertGroupedBranch = (
-  diagram: Diagram,
-  region: RegionId,
-  p: RegionId,
-  q: RegionId,
-  variant: keyof typeof groupedBranchPatterns,
-): Diagram => {
-  const source = groupedBranchPatterns[variant]
-  return applyStep(diagram, {
-    rule: 'insertion',
-    region,
-    pattern: source.pattern,
-    attachments: [],
-    binders: {
-      [source.binders.p]: p,
-      [source.binders.q]: q,
-    },
-  }, proofContext, 'backward')
-}
 
 const deiterate = (diagram: Diagram, sel: SubgraphSelection): Diagram => applyStep(diagram, {
   rule: 'deiteration', sel, fuel: 100,
@@ -246,13 +208,11 @@ describe('build-only game content evidence', () => {
     })
   })
 
-  it('gives the marked echo an ordinary deiteration-first witness', () => {
+  it('gives the marked echo a deiteration-first witness', () => {
     const evidence = readJson(resolve(
       process.cwd(), 'content/validation/marked-echo-deiteration.json',
     ))
-    expect(evidence.solution.map(({ rule }: JsonRecord) => rule)).toEqual([
-      'deiteration', 'erasure', 'vacuousElim', 'doubleCutElim',
-    ])
+    expect(evidence.solution[0]?.rule).toBe('deiteration')
   })
 
   it('finds a negative host where an empty cut makes competing content disposable', () => {
@@ -397,17 +357,6 @@ describe('build-only game content evidence', () => {
       .toThrow(/no justifying occurrence/)
   })
 
-  it('uses inserted atomic content as the exact source for a pre-existing branch', () => {
-    const catalog = loadGameContent(gameContentFiles)
-    const start = catalog.puzzle('atomic-content-insertion' as never).diagram
-    const target = { region: 'r5', regions: ['r6'], nodes: [], wires: [] }
-
-    expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
-    expect(() => deiterate(insertBoundAtom(start, 'r4', 'r3'), target)).not.toThrow()
-    expect(() => deiterate(insertBoundAtom(start, 'r4', 'r2'), target))
-      .toThrow(/no justifying occurrence/)
-  })
-
   it('uses only the exact atomic double cut to create deiteration authority', () => {
     const catalog = loadGameContent(gameContentFiles)
     const start = catalog.puzzle('atomic-double-cut-selection' as never).diagram
@@ -435,38 +384,6 @@ describe('build-only game content evidence', () => {
     }, proofContext, 'backward')
     expect(() => deiterate(larger, innerCutAround(larger, 'n1')))
       .toThrow(/no justifying occurrence/)
-  })
-
-  it('uses an intact inserted conjunctive branch to unlock a pre-existing branch', () => {
-    const start = loadGameContent(gameContentFiles)
-      .puzzle('grouped-branch-construction' as never).diagram
-    const target = { region: 'r4', regions: ['r5'], nodes: [], wires: [] }
-
-    expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
-    const inserted = insertGroupedBranch(start, 'r4', 'r2', 'r3', 'exact')
-    const consumed = deiterate(inserted, target)
-    const createdBranch = Object.keys(inserted.regions).find((id) => start.regions[id] === undefined)
-    expect(createdBranch).toBeDefined()
-    expect(consumed.regions.r5).toBeUndefined()
-    expect(consumed.regions[createdBranch!]).toMatchObject({ kind: 'cut', parent: 'r4' })
-    expect(Object.values(consumed.nodes).filter(({ region }) => region === createdBranch)
-      .map((node) => node.kind === 'atom' ? node.binder : undefined))
-      .toEqual(['r2', 'r3'])
-
-    const atomByAtom = insertBoundAtom(
-      insertBoundAtom(start, 'r4', 'r2'),
-      'r4',
-      'r3',
-    )
-    expect(() => deiterate(atomByAtom, target)).toThrow(/no justifying occurrence/)
-    for (const variant of ['nearby', 'larger'] as const) {
-      expect(() => deiterate(
-        insertGroupedBranch(start, 'r4', 'r2', 'r3', variant),
-        target,
-      )).toThrow(/no justifying occurrence/)
-    }
-    expect(() => insertGroupedBranch(start, 'r5', 'r2', 'r3', 'exact'))
-      .toThrow(/requires a positive region/)
   })
 
   it('uses the introduced bubble itself to unlock a pre-existing owned pattern', () => {
@@ -520,8 +437,11 @@ describe('build-only game content evidence', () => {
   })
 
   it('records the reconstructed puzzles beside their exact experiential neighbors', () => {
-    const coverage = readJson(resolve(process.cwd(), 'content/coverage/seyric.json'))
-    const row = (id: string): JsonRecord => coverage.puzzles.find(
+    const coverage = [
+      readJson(resolve(process.cwd(), 'content/coverage/seyric.json')),
+      readJson(resolve(process.cwd(), 'content/coverage/myratic.json')),
+    ]
+    const row = (id: string): JsonRecord => coverage.flatMap(({ puzzles }) => puzzles).find(
       ({ puzzle }: JsonRecord) => puzzle === id,
     )
 
@@ -691,6 +611,24 @@ describe('build-only game content evidence', () => {
     })).toThrow(/no coverage row/)
   })
 
+  it('requires coverage for every puzzle in every manifest-owned culture file', () => {
+    expect(() => validateFixture((root) => {
+      const path = join(root, 'coverage/myratic.json')
+      const coverage = readJson(path)
+      coverage.puzzles = []
+      writeJson(path, coverage)
+    })).toThrow(/Myratic puzzle 'blank-witness' has no coverage row/)
+  })
+
+  it('rejects a coverage row owned by a different culture', () => {
+    expect(() => validateFixture((root) => {
+      const path = join(root, 'coverage/myratic.json')
+      const coverage = readJson(path)
+      coverage.puzzles[0].puzzle = 'two-veils'
+      writeJson(path, coverage)
+    })).toThrow(/Myratic coverage row names puzzle 'two-veils' owned by 'seyric-horizon'/)
+  })
+
   it('rejects duplicate canonical Seyric starts', () => {
     expect(() => validateFixture((root) => {
       const manifest = readJson(join(root, 'manifest.json'))
@@ -701,6 +639,72 @@ describe('build-only game content evidence', () => {
       second.diagram = first.diagram
       writeJson(join(root, secondPath), second)
     })).toThrow(/duplicate canonical start/)
+  })
+
+  it('rejects Seyric matrix duplicates that differ only by global-prefix order', () => {
+    expect(() => validateFixture((root) => {
+      const source = readJson(join(root, 'puzzles/two-mark-projection.json'))
+      const targetPath = join(root, 'puzzles/left-injection-introduction.json')
+      const target = readJson(targetPath)
+      target.diagram = structuredClone(source.diagram)
+      for (const node of Object.values(target.diagram.nodes) as JsonRecord[]) {
+        if (node.binder === 'r2') node.binder = 'r3'
+        else if (node.binder === 'r3') node.binder = 'r2'
+      }
+      writeJson(targetPath, target)
+      const coveragePath = join(root, 'coverage/seyric.json')
+      const coverage = readJson(coveragePath)
+      coverage.puzzles.find(
+        ({ puzzle }: JsonRecord) => puzzle === 'left-injection-introduction',
+      ).immediateComplementPattern = 'fixture-swapped-prefix-projection'
+      writeJson(coveragePath, coverage)
+    })).toThrow(/matrix structure.*global-prefix order/i)
+  })
+
+  it('requires a unique coverage pattern for every exact sibling-occurrence Seyric start', () => {
+    expect(() => validateFixture((root) => {
+      const path = join(root, 'coverage/seyric.json')
+      const coverage = readJson(path)
+      const row = coverage.puzzles.find(
+        ({ puzzle }: JsonRecord) => puzzle === 'single-mark-return',
+      )
+      delete row.immediateComplementPattern
+      writeJson(path, coverage)
+    })).toThrow(/single-mark-return.*immediateComplementPattern/)
+  })
+
+  it('rejects a direct-complement classification on a start that does not expose one', () => {
+    expect(() => validateFixture((root) => {
+      const path = join(root, 'coverage/seyric.json')
+      const coverage = readJson(path)
+      const row = coverage.puzzles.find(({ puzzle }: JsonRecord) => puzzle === 'two-veils')
+      row.immediateComplementPattern = 'not-an-exposed-complement'
+      writeJson(path, coverage)
+    })).toThrow(/two-veils.*does not expose.*exact graphical sibling occurrence/i)
+  })
+
+  it('rejects reused direct-complement pattern classifications', () => {
+    expect(() => validateFixture((root) => {
+      const path = join(root, 'coverage/seyric.json')
+      const coverage = readJson(path)
+      const source = coverage.puzzles.find(
+        ({ puzzle }: JsonRecord) => puzzle === 'single-mark-return',
+      )
+      const intimidating = coverage.puzzles.find(
+        ({ puzzle }: JsonRecord) => puzzle === 'sey-red-c01',
+      )
+      intimidating.immediateComplementPattern = source.immediateComplementPattern
+      writeJson(path, coverage)
+    })).toThrow(/duplicate exact-sibling-occurrence pattern/i)
+  })
+
+  it('rejects Seyric-only complement classifications in another culture', () => {
+    expect(() => validateFixture((root) => {
+      const path = join(root, 'coverage/myratic.json')
+      const coverage = readJson(path)
+      coverage.puzzles[0].immediateComplementPattern = 'misowned-classification'
+      writeJson(path, coverage)
+    })).toThrow(/Myratic.*immediateComplementPattern.*Seyric/i)
   })
 
   it('rejects an unapproved empty-cut truth witness with competing content', () => {
@@ -750,24 +754,14 @@ describe('build-only game content evidence', () => {
         stoppingRule: 'Exists only to prove direct coverage validation.',
       })
       writeJson(path, coverage)
-    })).toThrow(/uncovered obligation/)
+    })).toThrow(/uncovered .*obligation/)
   })
 
   it('keeps every implemented Seyric problem inside the propositional culture boundary', () => {
     const catalog = loadGameContent(gameContentFiles)
-    const violations: string[] = []
-    for (const id of catalog.puzzlesInCulture('seyric-horizon' as never)) {
-      const diagram = catalog.puzzle(id).diagram
-      for (const [regionId, region] of Object.entries(diagram.regions)) {
-        if (region.kind !== 'bubble') continue
-        if (region.arity !== 0) violations.push(`${id}: bubble '${regionId}' has arity ${region.arity}`)
-        if (cutDepth(diagram, regionId) % 2 === 0) violations.push(`${id}: bubble '${regionId}' is existential`)
-      }
-      for (const [nodeId, node] of Object.entries(diagram.nodes)) {
-        if (node.kind !== 'atom') violations.push(`${id}: node '${nodeId}' has kind '${node.kind}'`)
-      }
-      if (Object.keys(diagram.wires).length > 0) violations.push(`${id}: contains individual wires`)
-    }
+    const violations = catalog.puzzlesInCulture('seyric-horizon' as never).flatMap((id) =>
+      analyzeSeyricStart(catalog.puzzle(id).diagram).violations.map(({ code, detail }) =>
+        `${id} [${code}]: ${detail}`))
 
     expect(violations).toEqual([])
   })

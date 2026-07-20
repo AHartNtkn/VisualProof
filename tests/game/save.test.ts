@@ -34,7 +34,7 @@ const move = (
   state: GameControllerState,
   puzzle: typeof FIRST | typeof SECOND,
   index: number,
-) => act(state, { kind: 'applyStep', step: controllerPuzzle(puzzle).witness[index]! })
+) => act(state, { kind: 'applySteps', steps: [controllerPuzzle(puzzle).witness[index]!] })
 
 const plain = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
 

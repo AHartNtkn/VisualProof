@@ -1,5 +1,5 @@
 import { polarity } from '../../kernel/diagram/regions'
-import type { ProofStep } from '../../kernel/proof/step'
+import type { GameSteps } from '../types'
 import { DARK } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
 import { artifactTheoremContext } from '../artifact-theorem'
@@ -295,7 +295,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#enqueueSave(this.#latestSave)
   }
 
-  #commitPreparedStep(
+  #commitPreparedSteps(
     preparedFrom: GameControllerState,
     prepared: ReturnType<typeof reduceGame>,
   ): void {
@@ -445,12 +445,12 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       orientation: () => 'backward',
       theme: () => DARK,
       fuel: () => 256,
-      prepare: (step: ProofStep) => {
+      prepare: (steps: GameSteps) => {
         const preparedFrom = this.#state
         const prepared = reduceGame(this.#catalog, preparedFrom, {
-          kind: 'applyStep', step,
+          kind: 'applySteps', steps,
         })
-        return () => this.#commitPreparedStep(preparedFrom, prepared)
+        return () => this.#commitPreparedSteps(preparedFrom, prepared)
       },
       motionPreferences: () => gameProofMotionPreferences(this.#state.settings.reducedMotion),
       inputAllowed: () => this.#proofInputAllowed(),

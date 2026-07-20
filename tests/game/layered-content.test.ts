@@ -10,9 +10,10 @@ const portableFiles = (overrides: Record<string, unknown> = {}): Record<string, 
   const diagram = diagramToJson(twoVeils().goal.diagram)
   return {
     'manifest.json': {
-      format: 'cursebreaker-content', version: 2,
+      format: 'cursebreaker-content', version: 3,
       puzzles: ['puzzles/two-veils.json'], definitions: [],
-      progression: 'progression/core.json', coverage: 'coverage/seyric.json',
+      progression: 'progression/core.json',
+      coverage: { 'seyric-horizon': 'coverage/seyric.json' },
       catalog: 'catalog/cursebreaker.json',
       guidance: 'guidance/cursebreaker.json',
     },
@@ -109,12 +110,17 @@ describe('layered portable game content', () => {
     const manifest = files['manifest.json'] as Record<string, unknown>
     expect(() => catalogModule.loadGameContent({
       ...files,
+      'manifest.json': { ...manifest, version: 2 },
+    })).toThrow(/version must be 3/)
+
+    expect(() => catalogModule.loadGameContent({
+      ...files,
       'manifest.json': {
         ...manifest,
         version: 1,
         curriculum: 'curriculum/core.json',
       },
-    })).toThrow(/version must be 2|unknown field 'curriculum'/)
+    })).toThrow(/version must be 3|unknown field 'curriculum'/)
 
     const progression = files['progression/core.json'] as { placements: Array<Record<string, unknown>> }
     expect(() => catalogModule.loadGameContent({
@@ -149,6 +155,21 @@ describe('layered portable game content', () => {
     }
     guidance.puzzles[0]!.interventions[0]!.performance = 'release-paired-veils'
     expect(() => catalogModule.loadGameContent(files)).toThrow(/unknown field 'performance'/)
+  })
+
+  it('validates culture-owned coverage paths without importing build-only payloads', () => {
+    const files = portableFiles()
+    const manifest = files['manifest.json'] as Record<string, unknown>
+    expect(() => catalogModule.loadGameContent({
+      ...files,
+      'manifest.json': {
+        ...manifest,
+        coverage: { 'other-culture': 'coverage/seyric.json' },
+      },
+    })).toThrow(/coverage cultures must match catalog cultures exactly/)
+
+    const { ['coverage/seyric.json']: _missing, ...withoutCoverage } = files
+    expect(() => catalogModule.loadGameContent(withoutCoverage)).not.toThrow()
   })
 
   it('rejects missing layer ownership, cyclic progression, and non-authored hint triggers', () => {
@@ -204,20 +225,25 @@ describe('layered portable game content', () => {
     expect(original.puzzleFingerprint('two-veils')).not.toMatch(/^[0-9a-f]{8}$/)
   })
 
-  it('loads production through manifest v2 and progression-owned dependencies', () => {
+  it('loads production through manifest v3 with culture-owned coverage', () => {
     const files = (contentModule as Record<string, unknown>).gameContentFiles
     expect(files).toBeTypeOf('object')
     const manifest = (files as Record<string, unknown>)['manifest.json']
     expect(manifest).toEqual({
       format: 'cursebreaker-content',
-      version: 2,
+      version: 3,
       puzzles: expect.any(Array),
       definitions: expect.any(Array),
       progression: 'progression/core.json',
-      coverage: 'coverage/seyric.json',
+      coverage: {
+        'seyric-horizon': 'coverage/seyric.json',
+        'myratic-tradition': 'coverage/myratic.json',
+      },
       catalog: 'catalog/cursebreaker.json',
       guidance: 'guidance/cursebreaker.json',
     })
+    expect(files).not.toHaveProperty('coverage/seyric.json')
+    expect(files).not.toHaveProperty('coverage/myratic.json')
 
     const catalog = catalogModule.loadGameContent(files as Record<string, unknown>)
 
@@ -226,12 +252,9 @@ describe('layered portable game content', () => {
     )
     const seyric = catalog.puzzlesInCulture('seyric-horizon' as never)
     expect(seyric.indexOf('single-mark-return' as never))
-      .toBeLessThan(seyric.indexOf('nested-owner-introduction' as never))
-    expect(seyric.indexOf('nested-owner-introduction' as never))
-      .toBeLessThan(seyric.indexOf('two-mark-projection' as never))
+      .toBeLessThan(seyric.indexOf('marked-echo-deiteration' as never))
     for (const [earlier, later] of [
-      ['atomic-double-cut-selection', 'compound-double-cut-selection'],
-      ['weakening-introduction', 'compound-weakening-boundary'],
+      ['seyric-atomic-double-cut-selection', 'compound-double-cut-selection'],
       ['two-mark-projection', 'compound-projection'],
       ['left-injection-introduction', 'disjunction-idempotence-introduction'],
       ['atomic-conjunction-exchange', 'conjunction-reassociation-recognition'],
@@ -242,14 +265,17 @@ describe('layered portable game content', () => {
     }
 
     for (const [id, prerequisites] of [
-      ['nested-owner-introduction', ['single-mark-return']],
-      ['compound-double-cut-selection', ['atomic-double-cut-selection']],
+      ['seyric-field-edit-contrast', ['single-mark-return']],
+      ['seyric-compound-copy-authority', ['marked-echo-deiteration']],
+      ['seyric-atomic-double-cut-selection', ['marked-echo-deiteration']],
+      ['seyric-extraction-continuation', ['single-mark-return']],
+      ['compound-double-cut-selection', ['seyric-atomic-double-cut-selection']],
+      ['compound-weakening-boundary', ['two-mark-projection']],
       ['compound-projection', ['two-mark-projection']],
       [
         'structural-recognition-routing-choice',
         ['conjunction-reassociation-recognition', 'disjunction-reassociation-recognition'],
       ],
-      ['artifact-selected-downstream-bridge', ['i-c3', 'i-c4']],
     ] as const) {
       expect(catalog.placement(id as never)).toEqual({
         puzzle: id,
@@ -261,7 +287,16 @@ describe('layered portable game content', () => {
     expect(catalog.culture('myratic-tradition' as never)).toMatchObject({
       gateway: 'blank-witness',
       unlocksAfter: ['single-mark-return'],
-      puzzles: ['blank-witness'],
+      puzzles: expect.arrayContaining([
+        'blank-witness',
+        'nested-owner-introduction',
+        'artifact-selected-downstream-bridge',
+      ]),
+    })
+    expect(catalog.placement('artifact-selected-downstream-bridge' as never)).toEqual({
+      puzzle: 'artifact-selected-downstream-bridge',
+      culture: 'myratic-tradition',
+      prerequisites: ['blank-witness', 'i-c3', 'i-c4'],
     })
   })
 

@@ -2,6 +2,22 @@
   "puzzle": "alternating-negation-dnf",
   "solution": [
     {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r18",
+        "regions": [],
+        "nodes": [
+          "n8"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r18"
+    },
+    {
       "rule": "doubleCutElim",
       "region": "r5"
     },
@@ -82,15 +98,21 @@
     {
       "rule": "erasure",
       "sel": {
-        "region": "r4",
+        "region": "r17",
         "regions": [
           "r7",
           "r11",
           "r14"
         ],
-        "nodes": [],
+        "nodes": [
+          "n7"
+        ],
         "wires": []
       }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r17"
     },
     {
       "rule": "vacuousElim",
@@ -111,9 +133,9 @@
   ],
   "availableArtifacts": [],
   "expectedRules": [
+    "deiteration",
     "doubleCutElim",
     "doubleCutIntro",
-    "deiteration",
     "erasure",
     "vacuousElim"
   ],

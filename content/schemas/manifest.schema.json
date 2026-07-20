@@ -6,11 +6,16 @@
   "required": ["format", "version", "puzzles", "definitions", "progression", "coverage", "catalog", "guidance"],
   "properties": {
     "format": { "const": "cursebreaker-content" },
-    "version": { "const": 2 },
+    "version": { "const": 3 },
     "puzzles": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^puzzles/.+\\.json$" } },
     "definitions": { "type": "array", "uniqueItems": true, "items": { "type": "string", "pattern": "^definitions/.+\\.json$" } },
     "progression": { "type": "string" },
-    "coverage": { "type": "string" },
+    "coverage": {
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+      "additionalProperties": { "type": "string", "pattern": "^coverage/.+\\.json$" }
+    },
     "catalog": { "type": "string" },
     "guidance": { "type": "string" }
   }

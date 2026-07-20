@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyGameStep, currentDiagram, startPuzzle, type GameRuntimeAuthority } from '../../src/game/session'
+import { applyGameSteps, currentDiagram, startPuzzle, type GameRuntimeAuthority } from '../../src/game/session'
 import { guidanceInterventionsFor, type TeacherSignal } from '../../src/game/teaching'
 import { guidanceDeliveryIdentity, puzzleId, type GuidanceDefinition, type GuidanceIntervention } from '../../src/game/types'
 import { fourVeils, twoVeils } from './fixtures'
@@ -51,9 +51,9 @@ describe('passive guidance matching', () => {
   })
 
   it('offers an exact authored unwinnable state as passive recovery guidance', () => {
-    const transition = applyGameStep(
+    const transition = applyGameSteps(
       startPuzzle(puzzle),
-      { rule: 'doubleCutElim', region: four.eliminations[0]! },
+      [{ rule: 'doubleCutElim', region: four.eliminations[0]! }],
       authority,
     )
 
@@ -88,9 +88,9 @@ describe('passive guidance matching', () => {
     let signal: TeacherSignal | undefined
 
     expect(() => {
-      const transition = applyGameStep(
+      const transition = applyGameSteps(
         unchanged,
-        { rule: 'doubleCutElim', region: 'missing-region' },
+        [{ rule: 'doubleCutElim', region: 'missing-region' }],
         authority,
       )
       signal = {

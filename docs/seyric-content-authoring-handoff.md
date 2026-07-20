@@ -83,17 +83,30 @@ Review the complete Seyric propositional domain, including:
 - reductio and contrapositive reasoning;
 - case analysis and consensus-style reasoning;
 - excluded middle and other classical principles;
-- theorem and artifact use;
-- exact-occurrence theorem manifestation and dissolution;
 - meaningful combinations across these areas.
 
 Inspect the actual pure-propositional proof engine, current content data, and relevant game design documentation to understand the domain. Treat existing puzzle records as candidate material, not as inventory authority. Each candidate survives only if its proof situation makes an independent, worthwhile contribution.
 
 ## Seyric logic boundary
 
-Seyric puzzles must stay within the pure propositional layer.
+Seyric puzzles must stay within the pure propositional layer. Every production
+start has exactly one ordinary outer goal cut, followed by an optional
+uninterrupted prefix of arity-zero bubbles, followed by a matrix containing only
+atom marks and ordinary cuts. The matrix contains no bubbles or wires, and every
+atom is owned by one of the outer-prefix bubbles. Equivalently, its authored
+logical shape is `∀X,Y,Z,… . P(X,Y,Z,…)`, where `P` contains no quantifiers.
+
+Those outer bubbles close global proposition names; they are not Seyric puzzle
+content. A feasibility witness may remove only the contiguous vacuous prefix,
+deepest first, after all propositional work, with only trailing double-cut cleanup
+afterward. Nontrivial bubble placement, scope, ownership, introduction, movement,
+distribution, and other quantifier reasoning belong to Myratic.
 
 Do not include puzzles whose reasoning nontrivially quantifies over propositions, predicates, formulas, proof rules, or other second-order objects. That material belongs to Myratic content.
+
+This is a restriction on authored starts and validation witnesses, not on the
+logical moves exposed to the player. Do not remove or disable any player move to
+enforce the content boundary.
 
 Assume the game will expose the complete pure-propositional interaction set. Do not:
 
@@ -125,6 +138,16 @@ Do not ask permission merely to author additional content when one of these defe
 Use the engine’s authoritative logical canonicalization to fingerprint every starting diagram.
 
 Canonical duplicates must be consolidated or removed. Puzzle names, prose, guidance, artifact metadata, and witnesses must not affect logical identity.
+
+Also compare Seyric matrices modulo the names and order of their harmless global
+prefix. Starts with the same atom/cut topology under such a permutation are
+redundant even when their exact canonical fingerprints differ. A deliberately
+retained start whose matrix contains a direct cut and a sibling subset exactly
+matching that cut's complete contents must have one unique approved
+`immediateComplementPattern` in Seyric coverage; no two such starts may claim
+the same pattern. Exact means playable graphical occurrence identity: canonical
+extracted pattern plus binder attachments. Do not normalize through De Morgan,
+double negation, distribution, or another proof transformation in this audit.
 
 Canonical uniqueness is necessary but insufficient. Conduct a human adversarial review for functionally redundant puzzles and padding. Canonically distinct starts can still provide effectively identical player experiences.
 

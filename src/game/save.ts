@@ -10,7 +10,7 @@ import {
   type InterfaceTextSize,
 } from './controller-state'
 import { isCultureUnlocked, isUnlocked } from './progress'
-import { applyGameStep, moveCursor, startPuzzle, type GameSession } from './session'
+import { applyGameSteps, moveCursor, startPuzzle, type GameSession } from './session'
 import {
   GameDomainError,
   guidanceDeliveryIdentity,
@@ -205,7 +205,7 @@ const readTimeline = (
   }
   try {
     for (const step of steps) {
-      const transition = applyGameStep(session, step, authority)
+      const transition = applyGameSteps(session, [step], authority)
       if (transition.completedNow) {
         throw new GameDomainError(`saved unfinished timeline '${puzzle}' reaches completion`)
       }

@@ -1,0 +1,308 @@
+{
+  "obligations": [
+    {
+      "id": "myratic-existential-pattern-completion",
+      "kind": "isolated",
+      "family": "propositional-quantification",
+      "distinction": "Complete an existentially scoped hollow pattern with the canonical blank witness.",
+      "stoppingRule": "Stop after one blank comprehension witness establishes existential pattern completion."
+    },
+    {
+      "id": "vacuous-ring-elimination",
+      "kind": "onboarding",
+      "family": "onboarding-ownership",
+      "distinction": "Dissolve an empty ownership ring while preserving the surrounding paired veils and their polarity.",
+      "stoppingRule": "Stop after one empty ring distinguishes ownership from polarity before owned marks appear."
+    },
+    {
+      "id": "ownership-nested-discrimination",
+      "kind": "isolated",
+      "family": "ownership-and-vacuity",
+      "distinction": "Discriminate the actual semantic owner among nested candidate hosts.",
+      "stoppingRule": "Stop after nesting defeats selection by superficial containment."
+    },
+    {
+      "id": "ownership-useful-vacuous-introduction",
+      "kind": "isolated",
+      "family": "ownership-and-vacuity",
+      "distinction": "Wrap the exact owned source in one vacuous bubble so that the new boundary itself becomes ancestor authority for a pre-existing open owned pattern; a double cut cannot supply the same match.",
+      "stoppingRule": "Stop after exact, partial, larger, wrong-target, and double-cut choices distinguish the one useful ownership boundary."
+    },
+    {
+      "id": "interaction-host-scope-edit-legality",
+      "kind": "carried-interaction",
+      "family": "hosted-scope-ownership-polarity-edit-legality",
+      "distinction": "Similar targets have different insertion, erasure, or weakening legality because their actual semantic hosts change scope, ownership, or polarity; an isolated record must carry this interaction without a combination-only record.",
+      "stoppingRule": "Stop after host identity changes local edit legality among similar targets."
+    },
+    {
+      "id": "exact-theorem-selection-simple-near-source",
+      "kind": "isolated",
+      "family": "exact-theorem-selection",
+      "distinction": "Choose the simple exact completed theorem source over a near match.",
+      "stoppingRule": "Stop after exact-versus-near source choice is established."
+    },
+    {
+      "id": "exact-theorem-selection-compound-side",
+      "kind": "isolated",
+      "family": "exact-theorem-selection",
+      "distinction": "Match the exact compound theorem side as one whole source.",
+      "stoppingRule": "Stop after compound theorem-side exactness is required."
+    },
+    {
+      "id": "manifestation-legal-target-choice",
+      "kind": "isolated",
+      "family": "manifestation",
+      "distinction": "Choose a useful legal target for manifestation.",
+      "stoppingRule": "Stop after one useful legal-target choice; theorem-side complexity is opaque after source selection."
+    },
+    {
+      "id": "dissolution-simple-exact-occurrence",
+      "kind": "isolated",
+      "family": "dissolution",
+      "distinction": "Choose a simple exact occurrence for dissolution.",
+      "stoppingRule": "Stop after simple exact occurrence matching is established."
+    },
+    {
+      "id": "dissolution-compound-context-exactness",
+      "kind": "isolated",
+      "family": "dissolution",
+      "distinction": "Choose the context-sensitive exact compound occurrence over a near match.",
+      "stoppingRule": "Stop after compound context and exactness jointly determine the dissolution site."
+    },
+    {
+      "id": "mixed-artifact-creates-structural-authority",
+      "kind": "mixed",
+      "family": "artifact-content-changes-structural-authority",
+      "distinction": "Ordinary manifested artifact content creates an ancestor source for later structural authority.",
+      "stoppingRule": "Stop after one source-creation topology."
+    },
+    {
+      "id": "mixed-artifact-direction-polarity",
+      "kind": "mixed",
+      "family": "artifact-direction-selected-by-polarity",
+      "distinction": "One completed record has a possible exact dissolution site and an absent manifestation field at different polarities.",
+      "stoppingRule": "Stop after one nested-parity contrast."
+    },
+    {
+      "id": "mixed-artifact-preserves-structural-authority",
+      "kind": "mixed",
+      "family": "artifact-content-changes-structural-authority",
+      "distinction": "Dissolution would remove ordinary artifact content that is the source of later structural authority.",
+      "stoppingRule": "Stop after one source-preservation topology."
+    },
+    {
+      "id": "mixed-artifact-downstream-bridge",
+      "kind": "mixed",
+      "family": "artifact-supplies-downstream-bridge",
+      "distinction": "The useful completed record is selected by a later chain or branch dependency.",
+      "stoppingRule": "Stop after one downstream bridge; retain a second only if linear and branching diagrams create different choices."
+    },
+    {
+      "id": "myratic-local-owner-copy-authority",
+      "kind": "isolated",
+      "family": "local-binder-copy-authority",
+      "distinction": "Identify compound copy authority through a local semantic owner instead of visible ancestry alone.",
+      "stoppingRule": "Stop after one local owner changes the otherwise similar compound copy relation."
+    },
+    {
+      "id": "myratic-local-owner-double-cut-selection",
+      "kind": "isolated",
+      "family": "local-binder-double-cut-selection",
+      "distinction": "Select the atomic content whose local owner makes a double-cut introduction useful.",
+      "stoppingRule": "Stop after neighboring differently owned atoms make the selection consequential."
+    },
+    {
+      "id": "myratic-local-owner-extraction-continuation",
+      "kind": "mixed",
+      "family": "local-binder-extraction-continuation",
+      "distinction": "Extract the exact locally owned product component consumed by a continuation.",
+      "stoppingRule": "Stop after one local owner distinguishes the valid extracted handoff."
+    }
+  ],
+  "puzzles": [
+    {
+      "puzzle": "blank-witness",
+      "obligations": [
+        "myratic-existential-pattern-completion"
+      ],
+      "visibleSituation": "A hollow existential bubble appears directly on the sheet.",
+      "defeats": "The bubble requires a comprehension witness; it is not a universal prefix or terminal vacuous cleanup.",
+      "experientialNeighbors": []
+    },
+    {
+      "puzzle": "empty-ring-release",
+      "obligations": [
+        "vacuous-ring-elimination"
+      ],
+      "visibleSituation": "One empty ownership ring sits between two familiar veils and can dissolve without changing their polarity.",
+      "defeats": "Rings and veils are not interchangeable boundaries: only veils reverse the field, while this unowned ring is vacuous.",
+      "experientialNeighbors": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "nested-owner-introduction",
+      "obligations": [
+        "ownership-nested-discrimination"
+      ],
+      "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 2 cuts. Discriminate the actual semantic owner among nested candidate hosts.",
+      "defeats": "It overturns the hypothesis that nearest visual enclosure determines ownership; nested semantic owners distinguish otherwise similar occurrences.",
+      "experientialNeighbors": []
+    },
+    {
+      "puzzle": "useful-vacuous-owner-workspace",
+      "obligations": [
+        "ownership-useful-vacuous-introduction"
+      ],
+      "visibleSituation": "Two differently owned marks begin flat beside a pre-existing bubble carrying the same open P-and-Q pattern and a marked final veil. Wrapping exactly the flat pair in one fresh bubble creates the missing ancestor-shaped source before cleanup.",
+      "defeats": "The target bubble has no justifying occurrence beforehand. The exact introduced bubble enables its deiteration and remains intact during that operation; either one-mark bubble, a bubble around the target, the larger source-plus-target bubble, and an exact double cut all fail to create the same ownership-sensitive match.",
+      "experientialNeighbors": [
+        "double-cut-insertion-workspace",
+        "nested-owner-introduction"
+      ]
+    },
+    {
+      "puzzle": "shallow-edit-legality-contrast",
+      "obligations": [
+        "interaction-host-scope-edit-legality"
+      ],
+      "visibleSituation": "P and Q supports occupy successive shallow negative hosts, while the neighboring positive veil contains Q beside a deeper P-and-Q target; inserting P into that positive host creates the exact local source needed to lift the target.",
+      "defeats": "It defeats edit-by-proximity and owner-color guesses: the adjacent negative host rejects backward insertion, insertion of Q in the positive host leaves the compound unmatched, and only P in that host bridges the split supports to the pre-existing target.",
+      "experientialNeighbors": [
+        "atomic-content-insertion",
+        "polarity-bubble-contrast",
+        "compound-copy-authority-contrast"
+      ]
+    },
+    {
+      "puzzle": "compound-copy-authority-contrast",
+      "obligations": [
+        "myratic-local-owner-copy-authority"
+      ],
+      "visibleSituation": "A P-and-Q source lies above a workspace whose separate R-owned support and P-Q-R target bubbles await an exact match, beside a structurally parallel workspace outside its authority.",
+      "defeats": "It defeats visual-nearness authority, both source-destination reversals, and decorative copying: only intact P-Q copied into separate support matches the stable target bubble; target-derived and source-region copies cannot manufacture that sibling authority, the parallel branch is incomparable, and descendant R cannot move upward.",
+      "experientialNeighbors": [
+        "atomic-content-insertion",
+        "double-cut-copy-license",
+        "marked-echo-deiteration"
+      ]
+    },
+    {
+      "puzzle": "atomic-double-cut-selection",
+      "obligations": [
+        "myratic-local-owner-double-cut-selection"
+      ],
+      "visibleSituation": "Inside a paired veil, an outer-owned P sits beside a separately ring-owned Q while an ancestor veil supplies exactly P; wrapping only P creates the matching inner veil and a useful empty annulus.",
+      "defeats": "It defeats selection by proximity or size: wrapping Q preserves the wrong owner, while wrapping P together with Q creates a compound inner veil that cannot match the single-P support.",
+      "experientialNeighbors": [
+        "atomic-content-insertion",
+        "compound-double-cut-selection",
+        "marked-echo-deiteration"
+      ]
+    },
+    {
+      "puzzle": "rm-c3",
+      "obligations": [
+        "myratic-local-owner-extraction-continuation"
+      ],
+      "visibleSituation": "Closed wire-free start with 4 semantic owners, 7 owned atomic occurrences, and 6 cuts. A product result contains the exact component consumed by a later implication.",
+      "defeats": "It overturns the strategy of treating extraction as terminal: the exact extracted component is the only input accepted by the continuation.",
+      "experientialNeighbors": []
+    },
+    {
+      "puzzle": "sey-ref-sel-i01",
+      "obligations": [
+        "exact-theorem-selection-simple-near-source"
+      ],
+      "visibleSituation": "Closed wire-free start with 3 semantic owners, 6 owned atomic occurrences, and 6 cuts. Choose the simple exact completed theorem source over a near match.",
+      "defeats": "It overturns the hypothesis that a similar-looking completed theorem is sufficient; the selected source side must match exactly.",
+      "experientialNeighbors": []
+    },
+    {
+      "puzzle": "compound-theorem-source-choice",
+      "obligations": [
+        "exact-theorem-selection-compound-side"
+      ],
+      "visibleSituation": "The completed two-owner and three-owner excluded-middle records are both available beside a continuation shaped for a proper component of the three-owner record. The authored route manifests that record, opens its internal annulus, and uses the resulting component downstream.",
+      "defeats": "The smaller related artifact does not supply the authored component, while an exact whole occurrence may still be reconstructed and dissolved through ordinary player moves; the puzzle demonstrates source choice without prescribing one proof.",
+      "experientialNeighbors": [
+        "sey-ref-sel-i01"
+      ]
+    },
+    {
+      "puzzle": "useful-manifestation-target",
+      "obligations": [
+        "manifestation-legal-target-choice"
+      ],
+      "visibleSituation": "A surviving completed theorem has multiple legal manifestation hosts, but only one creates ordinary content useful to the open problem.",
+      "defeats": "Defeats the strategy that every polarity-legal manifestation host is interchangeable; only an ancestor host supplies the downstream exact occurrence.",
+      "experientialNeighbors": []
+    },
+    {
+      "puzzle": "sey-ref-dis-i01",
+      "obligations": [
+        "dissolution-simple-exact-occurrence"
+      ],
+      "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 4 cuts. Choose a simple exact occurrence for dissolution.",
+      "defeats": "This establishes that an exact present occurrence may be dissolved; there is no prior narrower occurrence hypothesis.",
+      "experientialNeighbors": []
+    },
+    {
+      "puzzle": "compound-context-dissolution",
+      "obligations": [
+        "dissolution-compound-context-exactness"
+      ],
+      "visibleSituation": "A surviving compound theorem has one exact dissolvable occurrence and one contextually near but nonexact occurrence.",
+      "defeats": "Defeats the strategy that local presence makes any enclosing compound selection dissolvable; the selected occurrence must equal the entire theorem side with no adjacent context.",
+      "experientialNeighbors": [
+        "sey-ref-dis-i01"
+      ]
+    },
+    {
+      "puzzle": "artifact-creates-copy-authority",
+      "obligations": [
+        "mixed-artifact-creates-structural-authority"
+      ],
+      "visibleSituation": "Ordinary content manifested from a surviving artifact becomes the exact ancestor source for a later structural copy decision.",
+      "defeats": "Defeats the strategy that a descendant copy may be removed before any ordinary ancestor occurrence exists; manifestation creates the structural authority and leaves no provenance privilege.",
+      "experientialNeighbors": [
+        "compound-copy-authority-contrast"
+      ]
+    },
+    {
+      "puzzle": "artifact-polarity-direction-contrast",
+      "obligations": [
+        "mixed-artifact-direction-polarity"
+      ],
+      "visibleSituation": "The completed two-mark projection artifact has a negative manifestation host feeding one continuation and a separate exact occurrence in a positive workspace. The authored route manifests and reduces the first copy, then dissolves the second in reverse.",
+      "defeats": "Artifact direction depends on the selected occurrence and its host rather than record provenance. Ordinary construction also permits valid uniform-direction proofs, so the presentation demonstrates both directions without making either route exclusive.",
+      "experientialNeighbors": [
+        "useful-manifestation-target",
+        "compound-context-dissolution"
+      ]
+    },
+    {
+      "puzzle": "artifact-preserves-copy-authority",
+      "obligations": [
+        "mixed-artifact-preserves-structural-authority"
+      ],
+      "visibleSituation": "An exact artifact occurrence is dissolvable but is also the sole ancestor or peer authority required by a later structural step.",
+      "defeats": "Defeats the strategy that an exact dissolvable occurrence is locally disposable; it must remain while it is the sole ordinary ancestor authority for dependent copies.",
+      "experientialNeighbors": [
+        "preserve-sole-structural-source"
+      ]
+    },
+    {
+      "puzzle": "artifact-selected-downstream-bridge",
+      "obligations": [
+        "mixed-artifact-downstream-bridge"
+      ],
+      "visibleSituation": "The completed two-link and three-link composition records are both available, but a later consumer accepts only the entire closed two-link theorem content as one ordinary manifested proposition; the three-link theorem is a relevant near source whose extra link cannot satisfy that consumer.",
+      "defeats": "Defeats the strategy that any longer related composition artifact can support a shorter downstream consumer; the entire manifested proposition must be the exact required bridge.",
+      "experientialNeighbors": [
+        "contrapositive-composition-bridge"
+      ]
+    }
+  ]
+}

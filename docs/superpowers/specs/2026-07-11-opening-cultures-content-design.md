@@ -110,12 +110,20 @@ progression.
 
 ## Content and validation authority
 
-The strict layered package keeps semantic puzzle cores, progression, build-only
-coverage, catalog, guidance, and validation sidecars separate. Content
+The strict version-3 layered package keeps semantic puzzle cores, progression,
+one build-only coverage file per culture, catalog, guidance, and validation
+sidecars separate. Content
 validation rejects malformed semantic diagrams, missing or cyclic dependencies,
 unreachable content, incomplete cross-layer bundles, build-only witnesses that
 do not reach canonical blank, invalid artifact authority, and unreachable
 recognized states.
+
+Every Seyric start has one ordinary outer goal cut, an optional uninterrupted
+prefix of arity-zero bubbles used only to close global proposition names, and an
+atom-and-cut matrix containing no further bubbles or wires. Seyric witnesses do
+not perform nontrivial binder placement, scope, ownership, introduction, or
+movement; those mechanics are Myratic content. This authoring boundary does not
+limit player moves.
 
 Logical fingerprints contain canonical puzzle semantics and transitively
 referenced logical-definition semantics only. Culture metadata, artifact names,

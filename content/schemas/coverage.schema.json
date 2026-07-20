@@ -36,7 +36,8 @@
           "obligations": { "$ref": "#/$defs/nonemptyIds" },
           "visibleSituation": { "type": "string", "minLength": 1 },
           "defeats": { "type": "string", "minLength": 1 },
-          "experientialNeighbors": { "$ref": "#/$defs/ids" }
+          "experientialNeighbors": { "$ref": "#/$defs/ids" },
+          "immediateComplementPattern": { "$ref": "#/$defs/id" }
         }
       }
     }

@@ -2,67 +2,44 @@
   "puzzle": "weakening-injection-weave",
   "solution": [
     {
+      "rule": "erasure",
+      "sel": { "region": "r9", "regions": [], "nodes": ["n2"], "wires": [] }
+    },
+    {
       "rule": "deiteration",
-      "sel": {
-        "region": "r7",
-        "regions": [],
-        "nodes": [
-          "n2"
-        ],
-        "wires": []
-      },
+      "sel": { "region": "r12", "regions": ["r13"], "nodes": [], "wires": [] },
       "fuel": 100
     },
     {
       "rule": "erasure",
-      "sel": {
-        "region": "r6",
-        "regions": [
-          "r8"
-        ],
-        "nodes": [],
-        "wires": []
-      }
+      "sel": { "region": "r11", "regions": ["r15"], "nodes": [], "wires": [] }
     },
+    { "rule": "doubleCutElim", "region": "r11" },
+    { "rule": "doubleCutElim", "region": "r10" },
     {
-      "rule": "doubleCutElim",
-      "region": "r6"
+      "rule": "deiteration",
+      "sel": { "region": "r17", "regions": [], "nodes": ["n7"], "wires": [] },
+      "fuel": 100
+    },
+    { "rule": "doubleCutElim", "region": "r17" },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r19", "regions": [], "nodes": ["n9"], "wires": [] },
+      "fuel": 100
     },
     {
       "rule": "erasure",
-      "sel": {
-        "region": "r4",
-        "regions": [],
-        "nodes": [
-          "n0",
-          "n1"
-        ],
-        "wires": []
-      }
+      "sel": { "region": "r7", "regions": ["r8"], "nodes": ["n6", "n8"], "wires": [] }
     },
-    {
-      "rule": "vacuousElim",
-      "region": "r4"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r3"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r2"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r1"
-    }
+    { "rule": "vacuousElim", "region": "r7" },
+    { "rule": "vacuousElim", "region": "r6" },
+    { "rule": "vacuousElim", "region": "r5" },
+    { "rule": "vacuousElim", "region": "r4" },
+    { "rule": "vacuousElim", "region": "r3" },
+    { "rule": "vacuousElim", "region": "r2" },
+    { "rule": "doubleCutElim", "region": "r1" }
   ],
   "availableArtifacts": [],
-  "expectedRules": [
-    "deiteration",
-    "erasure",
-    "doubleCutElim",
-    "vacuousElim"
-  ],
+  "expectedRules": ["erasure", "deiteration", "doubleCutElim", "vacuousElim"],
   "recognizedStates": []
 }

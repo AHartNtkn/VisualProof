@@ -59,7 +59,7 @@ const restoredSave = (): unknown => {
   let state = createInitialGameState(catalog, { reducedMotion: false })
   const first = catalog.puzzleIds[0]!
   state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first }).state
-  state = reduceGame(catalog, state, { kind: 'applyStep', step: witnessFor(first)[0]! }).state
+  state = reduceGame(catalog, state, { kind: 'applySteps', steps: [witnessFor(first)[0]!] }).state
   state = reduceGame(catalog, state, { kind: 'setCultureScroll', culture: state.selectedCulture, scroll: 137 }).state
   state = reduceGame(catalog, state, { kind: 'setReducedMotion', value: true }).state
   state = reduceGame(catalog, state, { kind: 'setFullscreen', value: false }).state
@@ -72,7 +72,7 @@ const completedSave = (): unknown => {
   const first = catalog.puzzleIds[0]!
   state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first }).state
   for (const step of witnessFor(first)) {
-    state = reduceGame(catalog, state, { kind: 'applyStep', step }).state
+    state = reduceGame(catalog, state, { kind: 'applySteps', steps: [step] }).state
   }
   return encodeGameSave(catalog, state)
 }
@@ -205,7 +205,7 @@ const fixture = {
     if (active === null) throw new Error('no active puzzle')
     const step = witnessFor(active)[index]
     if (step === undefined) throw new Error(`active puzzle has no witness step ${index}`)
-    requireMounted().dispatch({ kind: 'applyStep', step })
+    requireMounted().dispatch({ kind: 'applySteps', steps: [step] })
   },
   unwinnable: () => {
     const active = requireMounted().debug().state.activePuzzle
@@ -217,7 +217,7 @@ const fixture = {
       throw new Error('active puzzle has no recognized unwinnable demonstration')
     }
     for (const step of openingDemonstration(active, intervention.id)) {
-      requireMounted().dispatch({ kind: 'applyStep', step })
+      requireMounted().dispatch({ kind: 'applySteps', steps: [step] })
     }
   },
   puzzles: () => catalog.puzzleIds,

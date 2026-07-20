@@ -6,8 +6,11 @@ import type { ProofStep } from '../../src/kernel/proof/step'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkEngine } from '../../src/view/engine'
 import { DARK } from '../../src/view/paint'
+import { applyGameSteps, currentDiagram, startPuzzle } from '../../src/game/session'
+import { puzzleId } from '../../src/game/types'
 import {
   GameProofMoveController,
+  vacuousEliminationChainSteps,
   type GameProofAction,
   type GameProofActionInput,
 } from '../../src/game/interface/proof-moves'
@@ -30,7 +33,7 @@ const controllerFor = (
   selection: () => selection.value as never,
   setSelection: (next) => { selection.value = next as never },
   context: () => ({ theorems: new Map(), relations }),
-  apply: (step) => { applied.push(step) },
+  apply: (steps) => { applied.push(...steps) },
   refuse: (message) => { throw new Error(message) },
   theme: () => DARK,
   fuel: () => 256,
@@ -38,6 +41,245 @@ const controllerFor = (
 })
 
 describe('actual game proof controller routes', () => {
+  it('recognizes only a gapless nested chain of selected vacuous bubble rims, deepest first', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.bubble(builder.root, 0)
+    const middle = builder.bubble(outer, 0)
+    const inner = builder.bubble(middle, 0)
+    const sibling = builder.bubble(builder.root, 0)
+    const diagram = builder.build()
+    const context = { theorems: new Map(), relations: new Map() }
+
+    expect(vacuousEliminationChainSteps(diagram, [
+      { kind: 'region', id: middle },
+      { kind: 'region', id: inner },
+      { kind: 'region', id: outer },
+    ], context)).toEqual([
+      { rule: 'vacuousElim', region: inner },
+      { rule: 'vacuousElim', region: middle },
+      { rule: 'vacuousElim', region: outer },
+    ])
+    expect(vacuousEliminationChainSteps(diagram, [
+      { kind: 'region', id: outer },
+      { kind: 'region', id: inner },
+    ], context)).toBeNull()
+    expect(vacuousEliminationChainSteps(diagram, [
+      { kind: 'region', id: outer },
+      { kind: 'region', id: sibling },
+    ], context)).toBeNull()
+  })
+
+  it('commits selected nested vacuous bubbles as one prepared batch and clears selection once', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.bubble(builder.root, 0)
+    const middle = builder.bubble(outer, 0)
+    const inner = builder.bubble(middle, 0)
+    const diagram = builder.build()
+    const batches: ProofStep[][] = []
+    let cleared = 0
+    const selection = { value: [outer, middle, inner].map((id) => ({ kind: 'region' as const, id })) }
+    const controller = new GameProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => mkEngine(diagram, []),
+      selection: () => selection.value,
+      setSelection: (next) => { selection.value = next as never; cleared++ },
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      apply: (steps) => { batches.push([...steps]) },
+      refuse: (message) => { throw new Error(message) },
+      theme: () => DARK,
+      fuel: () => 256,
+      openConstruction: () => undefined,
+    })
+
+    expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
+    expect(batches).toEqual([[
+      { rule: 'vacuousElim', region: inner },
+      { rule: 'vacuousElim', region: middle },
+      { rule: 'vacuousElim', region: outer },
+    ]])
+    expect(cleared).toBe(1)
+  })
+
+  it('uses one proof-controller apply seam for one nested-rim gesture while appending every timeline step', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.bubble(builder.root, 0)
+    const middle = builder.bubble(outer, 0)
+    const inner = builder.bubble(middle, 0)
+    builder.termNode(inner, parseTerm('x'))
+    const diagram = builder.build()
+    const authority = { context: { theorems: new Map(), relations: new Map() } }
+    let session = startPuzzle({ id: puzzleId('nested-vacuous-batch'), diagram })
+    let applyCalls = 0
+    const selection = { value: [outer, middle, inner].map((id) => ({ kind: 'region' as const, id })) }
+    const controller = new GameProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => currentDiagram(session),
+      engine: () => mkEngine(currentDiagram(session), []),
+      selection: () => selection.value,
+      setSelection: (next) => { selection.value = next as never },
+      context: () => authority.context,
+      apply: (steps) => {
+        applyCalls++
+        session = applyGameSteps(session, steps, authority).session
+      },
+      refuse: (message) => { throw new Error(message) },
+      theme: () => DARK,
+      fuel: () => 256,
+      openConstruction: () => undefined,
+    })
+
+    expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
+    expect(applyCalls).toBe(1)
+    expect(session.timeline.steps).toEqual([
+      { rule: 'vacuousElim', region: inner },
+      { rule: 'vacuousElim', region: middle },
+      { rule: 'vacuousElim', region: outer },
+    ])
+    expect(session.timeline.states).toHaveLength(4)
+    expect(session.timeline.cursor).toBe(3)
+  })
+
+  it('preserves ordinary single-bubble keyboard elimination as a singleton batch', () => {
+    const builder = new DiagramBuilder()
+    const bubble = builder.bubble(builder.root, 0)
+    const diagram = builder.build()
+    const batches: ProofStep[][] = []
+    const selection = { value: [{ kind: 'region' as const, id: bubble }] as readonly { kind: 'region'; id: string }[] }
+    const controller = new GameProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => mkEngine(diagram, []),
+      selection: () => selection.value,
+      setSelection: (next) => { selection.value = next as never },
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      apply: (steps) => { batches.push([...steps]) },
+      refuse: (message) => { throw new Error(message) },
+      theme: () => DARK,
+      fuel: () => 256,
+      openConstruction: () => undefined,
+    })
+
+    expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
+    expect(batches).toEqual([[{ rule: 'vacuousElim', region: bubble }]])
+  })
+
+  it('does not recognize a nested selected chain when any bubble binds an atom', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.bubble(builder.root, 0)
+    const inner = builder.bubble(outer, 1)
+    builder.atom(inner, inner)
+    const diagram = builder.build()
+
+    expect(vacuousEliminationChainSteps(diagram, [
+      { kind: 'region', id: outer },
+      { kind: 'region', id: inner },
+    ], { theorems: new Map(), relations: new Map() })).toBeNull()
+  })
+
+  it('refuses atomically when a valid deepest elimination exposes a nonvacuous outer bubble', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.bubble(builder.root, 1)
+    const inner = builder.bubble(outer, 0)
+    builder.atom(inner, outer)
+    const diagram = builder.build()
+    const applied: ProofStep[][] = []
+    const refusals: string[] = []
+    let cleared = 0
+    const original = [outer, inner].map((id) => ({ kind: 'region' as const, id }))
+    const selection = { value: original as readonly { kind: 'region'; id: string }[] }
+    const controller = new GameProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => mkEngine(diagram, []),
+      selection: () => selection.value,
+      setSelection: (next) => { selection.value = next as never; cleared++ },
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      apply: (steps) => { applied.push([...steps]) },
+      refuse: (message) => { refusals.push(message) },
+      theme: () => DARK,
+      fuel: () => 256,
+      openConstruction: () => undefined,
+    })
+
+    expect(controller.keyDown(key({ key: 'Delete' }))).toBe(true)
+    expect(applied).toEqual([])
+    expect(selection.value).toBe(original)
+    expect(cleared).toBe(0)
+    expect(refusals).toEqual(['select one gapless chain of vacuous bubble rims'])
+  })
+
+  it('refuses an invalid multi-bubble batch without falling through or changing selection', () => {
+    const builder = new DiagramBuilder()
+    const first = builder.bubble(builder.root, 0)
+    const second = builder.bubble(builder.root, 0)
+    const diagram = builder.build()
+    const applied: ProofStep[][] = []
+    const refusals: string[] = []
+    let cleared = 0
+    const original = [first, second].map((id) => ({ kind: 'region' as const, id }))
+    const selection = { value: original as readonly { kind: 'region'; id: string }[] }
+    const controller = new GameProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => mkEngine(diagram, []),
+      selection: () => selection.value,
+      setSelection: (next) => { selection.value = next as never; cleared++ },
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      apply: (steps) => { applied.push([...steps]) },
+      refuse: (message) => { refusals.push(message) },
+      theme: () => DARK,
+      fuel: () => 256,
+      openConstruction: () => undefined,
+    })
+
+    expect(controller.keyDown(key({ key: 'Delete' }))).toBe(true)
+    expect(applied).toEqual([])
+    expect(selection.value).toBe(original)
+    expect(cleared).toBe(0)
+    expect(refusals).toEqual(['select one gapless chain of vacuous bubble rims'])
+  })
+
+  it('refuses a mixed multi-bubble selection instead of deleting any generic sub-selection', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.bubble(builder.root, 0)
+    const inner = builder.bubble(outer, 0)
+    const cut = builder.cut(inner)
+    const diagram = builder.build()
+    const applied: ProofStep[][] = []
+    const refusals: string[] = []
+    const original = [
+      { kind: 'region' as const, id: outer },
+      { kind: 'region' as const, id: inner },
+      { kind: 'region' as const, id: cut },
+    ]
+    const selection = { value: original as readonly { kind: 'region'; id: string }[] }
+    const controller = new GameProofMoveController({
+      host: { ownerDocument: {} } as HTMLElement,
+      active: () => true,
+      diagram: () => diagram,
+      engine: () => mkEngine(diagram, []),
+      selection: () => selection.value,
+      setSelection: (next) => { selection.value = next as never },
+      context: () => ({ theorems: new Map(), relations: new Map() }),
+      apply: (steps) => { applied.push([...steps]) },
+      refuse: (message) => { refusals.push(message) },
+      theme: () => DARK,
+      fuel: () => 256,
+      openConstruction: () => undefined,
+    })
+
+    expect(controller.keyDown(key({ key: 'Backspace' }))).toBe(true)
+    expect(applied).toEqual([])
+    expect(selection.value).toBe(original)
+    expect(refusals).toEqual(['select one gapless chain of vacuous bubble rims'])
+  })
+
   it('claims iteration from a selected cut and commits that cut-rooted subtree', () => {
     const builder = new DiagramBuilder()
     const selectedCut = builder.cut(builder.root)

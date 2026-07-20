@@ -3,23 +3,52 @@
   "solution": [
     {
       "rule": "theorem",
-      "name": "game:artifact:sey-lem-i01",
+      "name": "game:artifact:sey-lem-c01",
       "at": {
         "sel": {
-          "region": "r2",
-          "regions": [
-            "r1_0"
-          ],
+          "region": "continuation-outer",
+          "regions": [],
           "nodes": [],
           "wires": []
         },
         "args": []
       },
-      "direction": "reverse"
+      "direction": "forward"
     },
     {
       "rule": "doubleCutElim",
-      "region": "r1"
+      "region": "r8"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "continuation-inner",
+        "regions": [
+          "target-outer"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": {
+        "region": "continuation-outer",
+        "regions": [
+          "r1"
+        ],
+        "nodes": [],
+        "wires": []
+      }
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "continuation-outer"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "outer"
     }
   ],
   "availableArtifacts": [
@@ -28,7 +57,9 @@
   ],
   "expectedRules": [
     "theorem",
-    "doubleCutElim"
+    "doubleCutElim",
+    "deiteration",
+    "erasure"
   ],
   "recognizedStates": []
 }

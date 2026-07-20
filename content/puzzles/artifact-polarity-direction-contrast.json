@@ -1,61 +1,89 @@
 {
   "id": "artifact-polarity-direction-contrast",
   "diagram": {
-    "root": "r0",
+    "root": "sheet",
     "regions": {
-      "r0": {
+      "sheet": {
         "kind": "sheet"
       },
-      "r1": {
+      "outer": {
         "kind": "cut",
-        "parent": "r0"
+        "parent": "sheet"
       },
-      "r2": {
+      "workspace": {
         "kind": "cut",
-        "parent": "r1"
+        "parent": "outer"
       },
-      "r3": {
+      "manifest-host": {
         "kind": "cut",
-        "parent": "r2"
+        "parent": "workspace"
       },
-      "r4": {
+      "continuation-host": {
         "kind": "cut",
-        "parent": "r3"
+        "parent": "manifest-host"
       },
-      "r1_0": {
+      "repeat-outer": {
         "kind": "cut",
-        "parent": "r2"
+        "parent": "continuation-host"
       },
-      "r2_0": {
+      "repeat-x": {
         "kind": "bubble",
-        "parent": "r1_0",
+        "parent": "repeat-outer",
         "arity": 0
       },
-      "r3_0": {
+      "repeat-y": {
         "kind": "bubble",
-        "parent": "r2_0",
+        "parent": "repeat-x",
         "arity": 0
       },
-      "r4_0": {
+      "repeat-mark": {
         "kind": "cut",
-        "parent": "r3_0"
+        "parent": "repeat-y"
+      },
+      "dissolve-outer": {
+        "kind": "cut",
+        "parent": "workspace"
+      },
+      "dissolve-x": {
+        "kind": "bubble",
+        "parent": "dissolve-outer",
+        "arity": 0
+      },
+      "dissolve-y": {
+        "kind": "bubble",
+        "parent": "dissolve-x",
+        "arity": 0
+      },
+      "dissolve-mark": {
+        "kind": "cut",
+        "parent": "dissolve-y"
       }
     },
     "nodes": {
-      "n0": {
+      "repeat-x-open": {
         "kind": "atom",
-        "region": "r3_0",
-        "binder": "r2_0"
+        "region": "repeat-y",
+        "binder": "repeat-x"
       },
-      "n1": {
+      "repeat-y-open": {
         "kind": "atom",
-        "region": "r3_0",
-        "binder": "r3_0"
+        "region": "repeat-y",
+        "binder": "repeat-y"
       },
-      "n2": {
+      "dissolve-x-open": {
         "kind": "atom",
-        "region": "r4_0",
-        "binder": "r2_0"
+        "region": "dissolve-y",
+        "binder": "dissolve-x"
+      },
+      "dissolve-y-open": {
+        "kind": "atom",
+        "region": "dissolve-y",
+        "binder": "dissolve-y"
+      },
+      "dissolve-x-marked": {
+        "kind": "atom",
+        "region": "dissolve-mark",
+        "binder": "dissolve-x"
       }
     },
     "wires": {}

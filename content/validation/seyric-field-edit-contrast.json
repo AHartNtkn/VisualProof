@@ -1,0 +1,63 @@
+{
+  "puzzle": "seyric-field-edit-contrast",
+  "solution": [
+    {
+      "rule": "erasure",
+      "sel": { "region": "r6", "regions": [], "nodes": ["n7"], "wires": [] }
+    },
+    {
+      "rule": "iteration",
+      "sel": { "region": "r18", "regions": ["r5"], "nodes": [], "wires": [] },
+      "target": "r9"
+    },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r5_0", "regions": ["r6_0"], "nodes": [], "wires": [] },
+      "fuel": 100
+    },
+    { "rule": "doubleCutElim", "region": "r5_0" },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r11", "regions": [], "nodes": ["n4"], "wires": [] },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": { "region": "r9", "regions": ["r10"], "nodes": ["n1_0", "n2_0"], "wires": [] }
+    },
+    { "rule": "doubleCutElim", "region": "r9" },
+    {
+      "rule": "iteration",
+      "sel": { "region": "r18", "regions": ["r5"], "nodes": [], "wires": [] },
+      "target": "r12"
+    },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r5_0", "regions": ["r6_0"], "nodes": [], "wires": [] },
+      "fuel": 100
+    },
+    { "rule": "doubleCutElim", "region": "r5_0" },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r14", "regions": [], "nodes": ["n6"], "wires": [] },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": { "region": "r12", "regions": ["r13"], "nodes": ["n1_0", "n2_0"], "wires": [] }
+    },
+    { "rule": "doubleCutElim", "region": "r12" },
+    {
+      "rule": "erasure",
+      "sel": { "region": "r18", "regions": ["r5"], "nodes": [], "wires": [] }
+    },
+    { "rule": "vacuousElim", "region": "r18" },
+    { "rule": "vacuousElim", "region": "r4" },
+    { "rule": "vacuousElim", "region": "r3" },
+    { "rule": "vacuousElim", "region": "r2" },
+    { "rule": "doubleCutElim", "region": "r1" }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": ["erasure", "iteration", "deiteration", "doubleCutElim", "vacuousElim"],
+  "recognizedStates": []
+}

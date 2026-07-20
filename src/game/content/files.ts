@@ -27,7 +27,6 @@ import puzzle15 from '../../../content/puzzles/polarity-bubble-contrast.json'
 import puzzle16 from '../../../content/puzzles/rm-fa.json'
 import puzzle17 from '../../../content/puzzles/useful-vacuous-owner-workspace.json'
 import puzzle18 from '../../../content/puzzles/conjunction-idempotence-introduction.json'
-import puzzle19 from '../../../content/puzzles/weakening-introduction.json'
 import puzzle20 from '../../../content/puzzles/compound-weakening-boundary.json'
 import puzzle21 from '../../../content/puzzles/two-mark-projection.json'
 import puzzle22 from '../../../content/puzzles/compound-projection.json'
@@ -74,7 +73,6 @@ import puzzle62 from '../../../content/puzzles/sey-dm-ec-c01.json'
 import puzzle63 from '../../../content/puzzles/sey-dm-ed-i01.json'
 import puzzle64 from '../../../content/puzzles/sey-dm-fc-i01.json'
 import puzzle65 from '../../../content/puzzles/compound-conjunction-de-morgan.json'
-import puzzle66 from '../../../content/puzzles/sey-red-i01.json'
 import puzzle67 from '../../../content/puzzles/sey-red-c01.json'
 import puzzle68 from '../../../content/puzzles/sey-pei-i01.json'
 import puzzle69 from '../../../content/puzzles/sey-pei-c01.json'
@@ -109,6 +107,10 @@ import puzzle97 from '../../../content/puzzles/artifact-polarity-direction-contr
 import puzzle98 from '../../../content/puzzles/artifact-preserves-copy-authority.json'
 import puzzle99 from '../../../content/puzzles/artifact-selected-downstream-bridge.json'
 import puzzle100 from '../../../content/puzzles/blank-witness.json'
+import seyricFieldEditContrast from '../../../content/puzzles/seyric-field-edit-contrast.json'
+import seyricCompoundCopyAuthority from '../../../content/puzzles/seyric-compound-copy-authority.json'
+import seyricAtomicDoubleCutSelection from '../../../content/puzzles/seyric-atomic-double-cut-selection.json'
+import seyricExtractionContinuation from '../../../content/puzzles/seyric-extraction-continuation.json'
 import type { GameContentFiles } from '../content-loader'
 
 export const gameContentFiles: GameContentFiles = Object.freeze({
@@ -141,7 +143,6 @@ export const gameContentFiles: GameContentFiles = Object.freeze({
   'puzzles/rm-fa.json': puzzle16,
   'puzzles/useful-vacuous-owner-workspace.json': puzzle17,
   'puzzles/conjunction-idempotence-introduction.json': puzzle18,
-  'puzzles/weakening-introduction.json': puzzle19,
   'puzzles/compound-weakening-boundary.json': puzzle20,
   'puzzles/two-mark-projection.json': puzzle21,
   'puzzles/compound-projection.json': puzzle22,
@@ -188,7 +189,6 @@ export const gameContentFiles: GameContentFiles = Object.freeze({
   'puzzles/sey-dm-ed-i01.json': puzzle63,
   'puzzles/sey-dm-fc-i01.json': puzzle64,
   'puzzles/compound-conjunction-de-morgan.json': puzzle65,
-  'puzzles/sey-red-i01.json': puzzle66,
   'puzzles/sey-red-c01.json': puzzle67,
   'puzzles/sey-pei-i01.json': puzzle68,
   'puzzles/sey-pei-c01.json': puzzle69,
@@ -223,4 +223,8 @@ export const gameContentFiles: GameContentFiles = Object.freeze({
   'puzzles/artifact-preserves-copy-authority.json': puzzle98,
   'puzzles/artifact-selected-downstream-bridge.json': puzzle99,
   'puzzles/blank-witness.json': puzzle100,
+  'puzzles/seyric-field-edit-contrast.json': seyricFieldEditContrast,
+  'puzzles/seyric-compound-copy-authority.json': seyricCompoundCopyAuthority,
+  'puzzles/seyric-atomic-double-cut-selection.json': seyricAtomicDoubleCutSelection,
+  'puzzles/seyric-extraction-continuation.json': seyricExtractionContinuation,
 })

@@ -112,10 +112,12 @@
       "interventions": [
         {
           "id": "opening-marked-echo-deiteration",
-          "trigger": { "kind": "opening" },
+          "trigger": {
+            "kind": "opening"
+          },
           "repeat": "once",
           "pages": [
-            "The deeper marked veil exactly repeats the older marked veil under the same ring. Because the older occurrence remains in an ancestor field, the descendant echo may be lifted."
+            "The marked negative-P fragment already has ancestor support. Remove its exact descendant echo to expose Q, then carry Q through the separate continuation to R."
           ]
         }
       ]
@@ -268,7 +270,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Both branches contain the complete P∨Q conjunct. Factor it once while preserving the different residuals R and S∧T."
+            "Both branches contain the complete P∨Q conjunct. Factor it once while preserving the different residuals R and S∧T, then use the factored result in the U continuation."
           ]
         }
       ]
@@ -285,21 +287,6 @@
           "pages": [
             "The two marks inside the veil belong to the same ring: this is one conjunct repeated, not two different conditions.",
             "That bright field will not permit ordinary clearing. Lift one exact echo through the matching older mark; the remaining copy can then meet the same support."
-          ]
-        }
-      ]
-    },
-    {
-      "puzzle": "weakening-introduction",
-      "interventions": [
-        {
-          "id": "opening-weakening",
-          "trigger": {
-            "kind": "opening"
-          },
-          "repeat": "once",
-          "pages": [
-            "This is weakening: the first premise already supplies the final mark. The second assumption may be admitted without being used."
           ]
         }
       ]
@@ -345,8 +332,8 @@
           },
           "repeat": "once",
           "pages": [
-            "The target is not two loose marks: its veil encloses P and Q as one conjunctive branch. The equal branch behind the paired veils is staged nearby but is not yet an ancestor source for it.",
-            "One useful route inserts the complete P-and-Q branch into the bright construction field. Keep its branch boundary and both internal marks intact while it discharges the pre-existing target; atom-by-atom placement does not supply the same whole occurrence."
+            "The missing source content is not two loose marks: it is the complete cut-delimited not-(P-and-Q) fragment inside the T source.",
+            "Insert that whole fragment with its boundary and both internal marks intact. Only the completed T source matches the blocked target in the surrounding R context."
           ]
         }
       ]
@@ -409,7 +396,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Wrapping the denied compound P∨(Q∧R) creates a negative annulus; iterating that complete nested source into the annulus makes whole-compound erasure legal and mandatory before the boundary can be discharged."
+            "The source already shows P∨(Q∧R). In the deeper target, wrap exactly the exchanged P and Q∧R branches—leave X outside—so the missing disjunction boundary matches the source."
           ]
         }
       ]
@@ -702,7 +689,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Direct contraposition with a conjunctive antecedent. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+            "Contraposition reverses this implication, but the conjunctive endpoint remains one complete proposition while its polarity changes."
           ]
         }
       ]
@@ -717,7 +704,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Excluded middle for a two-owner conjunction. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+            "This is excluded middle around a two-mark conjunction. Treat the conjunction as one complete proposition and match it against its whole negation."
           ]
         }
       ]
@@ -732,7 +719,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Excluded middle for a three-owner conjunction. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+            "This larger excluded-middle seal surrounds a three-mark conjunction. The same whole-proposition pattern applies while all three marks remain inside the recognized group."
           ]
         }
       ]
@@ -747,7 +734,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Expand negated conjunction with atomic operands. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+            "The denied target is the disjunction of the two separate negations. Give each atom its own double veil; only the completed pair matches that whole target."
           ]
         }
       ]
@@ -762,7 +749,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Expand negated conjunction with conjunctive left operand. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+            "This expansion has three peer components. Transform each one separately; the target exists only when all three negated alternatives are present."
           ]
         }
       ]
@@ -777,7 +764,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Expand negated disjunction with conjunctive left operand. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+            "Opening the negated disjunction yields one compound refusal and one atomic refusal. Keep the compound side intact: it and the atomic side feed different continuations before the results meet."
           ]
         }
       ]
@@ -792,22 +779,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Factor negated conjunction with atomic operands. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
-          ]
-        }
-      ]
-    },
-    {
-      "puzzle": "sey-red-i01",
-      "interventions": [
-        {
-          "id": "opening-sey-red-i01",
-          "trigger": {
-            "kind": "opening"
-          },
-          "repeat": "once",
-          "pages": [
-            "Assume the denied conclusion temporarily, combine it with the premises until the same owned proposition appears as both P and ¬P, then discharge that denial to return the desired conclusion."
+            "The two separately negated components are the source, not the finish. Open both double-veiled branches so they form the single negated conjunction required by the target."
           ]
         }
       ]
@@ -822,7 +794,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Reductio with a compound denied conclusion: assuming not-(Q and R) exposes the P/not-P contradiction. Read the actual source and target topology through owner identity and cut polarity; normalize the concept-bearing difference, then discharge the exact repeated relationship."
+            "The largest connected fragment is a coherent transitive chain, but it is irrelevant to the direct P/not-P complement beside it. The crowded fragment can be removed whole before resolving the simple core."
           ]
         }
       ]
@@ -882,7 +854,7 @@
           },
           "repeat": "once",
           "pages": [
-            "The P and Q premises may be read in either conjunction order. Preserve P, leave Q unused by weakening, and use P as the left alternative of P ∨ R."
+            "The enclosed P-and-Q source has one spare R mark. Remove R, then use the complete P-and-Q whole in the useful alternative branch; the exposed T continues onward to U."
           ]
         }
       ]
@@ -957,7 +929,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Eliminating the two branch double cuts exposes ¬(P∧Q) as the alternatives ¬P∨¬Q, whose branches feed separate ¬P→R and ¬Q→R case handlers."
+            "The De Morgan alternatives enter separate case handlers and converge on R. That common result is still intermediate: carry R through to S before confronting the denied S."
           ]
         }
       ]
@@ -972,7 +944,7 @@
           },
           "repeat": "once",
           "pages": [
-            "Two peer P occurrences initially license either peer removal; wrapping one P in a double cut moves it below the other and removes its authority over that peer while preserving the reverse authority."
+            "The two P marks are not initially in a usable copy direction. Wrap only the deeper P: its new descendant cut matches the cut-delimited source, while Q or P+Q does not."
           ]
         }
       ]
@@ -987,7 +959,7 @@
           },
           "repeat": "once",
           "pages": [
-            "The flat P-and-Q support and the two existing positive fields do not provide ancestor authority for the complete pair. Wrap the content-bearing target to create a positive annulus, then place a matching P-and-Q double cut there so the pre-existing pair has an exact ancestor source."
+            "The existing positive fields are inside or beside the complete P-Q target, not above it. Wrap the whole target to create a positive ancestor annulus, then insert an exact P-Q double cut there."
           ]
         }
       ]
@@ -1002,7 +974,7 @@
           },
           "repeat": "once",
           "pages": [
-            "A sole P occurrence in the negative premise field looks erasable, but it is the only ancestor source that can discharge the P side of P→Q before Q reaches the denied target."
+            "The sole P source looks erasable, but both the P-to-Q and P-to-R branches depend on it. Preserve it until it has served both downstream occurrences."
           ]
         }
       ]

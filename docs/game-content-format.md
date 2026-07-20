@@ -1,18 +1,21 @@
 # Cursebreaker game content format
 
 `content/manifest.json` is the sole production content entry point. It is strict
-JSON with `format: "cursebreaker-content"` and `version: 2`. The manifest names
-the ordered puzzle and logical-definition files plus exactly one progression,
-coverage, catalog, and guidance file:
+JSON with `format: "cursebreaker-content"` and `version: 3`. The manifest names
+the ordered puzzle and logical-definition files, one progression, catalog, and
+guidance file, and one build-only coverage file for each catalog culture:
 
 ```json
 {
   "format": "cursebreaker-content",
-  "version": 2,
+  "version": 3,
   "puzzles": ["puzzles/example.json"],
   "definitions": [],
   "progression": "progression/core.json",
-  "coverage": "coverage/seyric.json",
+  "coverage": {
+    "seyric-horizon": "coverage/seyric.json",
+    "myratic-tradition": "coverage/myratic.json"
+  },
   "catalog": "catalog/cursebreaker.json",
   "guidance": "guidance/cursebreaker.json"
 }
@@ -20,8 +23,8 @@ coverage, catalog, and guidance file:
 
 Every content file is strict JSON validated against `content/schemas/`; unknown
 fields are errors. Runtime loading validates the manifest shape and imports the
-runtime layers. Coverage is build-only: runtime loading accepts its manifest
-path but does not import its payload. Content validation loads every layer,
+runtime layers. Coverage is build-only: runtime loading validates the culture-to-
+path map but does not import those payloads. Content validation loads every layer,
 including coverage and per-puzzle validation sidecars. Desktop packaging excludes
 both build-only coverage and validation sidecars.
 
@@ -64,11 +67,15 @@ path. There is no separate required-or-optional placement value.
 
 ### Build-only coverage
 
-`content/coverage/seyric.json` is authoring and audit evidence. `obligations`
-records the approved onboarding, isolated, carried-interaction, or mixed distinctions, their
-family, and stopping rules. `puzzles` maps each puzzle to claimed obligations, the visible situation,
-the narrower hypothesis or simpler strategy it defeats, and its experiential
-neighbors.
+Each manifest-owned `content/coverage/<culture>.json` file is authoring and audit
+evidence for exactly one culture. `obligations` records the approved onboarding,
+isolated, carried-interaction, or mixed distinctions, their family, and stopping
+rules. `puzzles` maps every puzzle owned by that culture to claimed obligations,
+the visible situation, the narrower hypothesis or simpler strategy it defeats,
+and its experiential neighbors. A Seyric row may additionally name an
+`immediateComplementPattern` when the start deliberately exposes an exact
+graphical sibling occurrence matching the complete contents of a direct cut;
+these pattern names are unique review classifications, not runtime mechanics.
 
 Coverage describes and validates records that have already been authored. It
 cannot generate a puzzle, retain or replace one, place one on the mandatory path,
@@ -128,6 +135,38 @@ puzzle's logical fingerprint. Save decoding compares stored fingerprints with
 the current catalog so logical drift is rejected while presentation-only edits
 remain compatible.
 
+## Culture syntax and redundancy authority
+
+A Seyric authored start has exactly one ordinary outer goal cut. Inside it is an
+optional uninterrupted prefix of arity-zero bubbles followed by a matrix made
+only of atom marks and ordinary cuts. The matrix contains no bubbles or wires,
+and every atom is owned by a bubble in that outer prefix. The prefix supplies
+global closure only: Seyric puzzles never require nontrivial binder placement,
+scope, ownership, introduction, or movement. A validation witness may remove
+only the contiguous vacuous prefix, deepest first, after the propositional work;
+only trailing double-cut cleanup may follow. Quantifier mechanics and
+content-bearing binder reasoning belong to Myratic.
+
+This authoring boundary does not restrict the proof moves available to the
+player. It constrains production starts and their feasibility witnesses so the
+Seyric collection remains propositionally focused.
+
+Content validation applies three distinct redundancy checks to Seyric starts:
+
+- the existing canonical logical fingerprint rejects exact duplicates;
+- a structural matrix fingerprint rejects starts that differ only by the order
+  or names of the harmless global prefix while preserving cut topology; and
+- exact graphical sibling-occurrence starts require a unique approved
+  `immediateComplementPattern`, making each retained shortcut's experiential
+  purpose explicit. The audit uses the same extracted subgraph, canonical
+  boundary form, and binder attachments as playable occurrence matching. It
+  compares every nonempty sibling subset with each direct cut's complete
+  contents and never normalizes through De Morgan, double-negation,
+  distribution, or another proof transformation.
+
+These checks do not impose an intended solution and do not replace direct
+content review.
+
 ## Complete authoring bundle
 
 A puzzle is ready for integration only as a complete bundle:
@@ -148,7 +187,7 @@ layer and import surface; aliases, tombstones, compatibility maps, and fallback
 content paths are not authoring mechanisms.
 
 Run `npm run content:validate` after assembling a bundle. It schema-validates
-every layer, checks graph and cross-reference integrity, validates coverage and
-the derived Myratic unlock path, rejects duplicate canonical starts, verifies
-artifact availability, replays every witness to canonical blank, and replays
-recognized-state demonstrations.
+every layer, checks graph and cross-reference integrity, validates culture-owned
+coverage and the derived Myratic unlock path, enforces the Seyric syntax and
+redundancy authorities, verifies artifact availability, replays every witness to
+canonical blank, and replays recognized-state demonstrations.

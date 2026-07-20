@@ -4,6 +4,18 @@
     {
       "rule": "deiteration",
       "sel": {
+        "region": "r16",
+        "regions": [
+          "r17"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
         "region": "r5",
         "regions": [
           "r7"
@@ -52,15 +64,20 @@
     {
       "rule": "erasure",
       "sel": {
-        "region": "r4",
+        "region": "r20",
         "regions": [
           "r5",
           "r8",
-          "r16"
+          "r16",
+          "r18"
         ],
         "nodes": [],
         "wires": []
       }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r20"
     },
     {
       "rule": "vacuousElim",

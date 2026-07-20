@@ -4,7 +4,7 @@
     {
       "rule": "deiteration",
       "sel": {
-        "region": "r4",
+        "region": "r5",
         "regions": [],
         "nodes": [
           "n1"
@@ -15,12 +15,12 @@
     },
     {
       "rule": "doubleCutElim",
-      "region": "r4"
+      "region": "r5"
     },
     {
       "rule": "deiteration",
       "sel": {
-        "region": "r6",
+        "region": "r7",
         "regions": [],
         "nodes": [
           "n3"
@@ -30,16 +30,38 @@
       "fuel": 100
     },
     {
+      "rule": "doubleCutElim",
+      "region": "r7"
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r9",
+        "regions": [],
+        "nodes": [
+          "n5",
+          "n6"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
       "rule": "erasure",
       "sel": {
-        "region": "r3",
+        "region": "r4",
         "regions": [],
         "nodes": [
           "n0",
-          "n2"
+          "n2",
+          "n4"
         ],
         "wires": []
       }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r4"
     },
     {
       "rule": "vacuousElim",

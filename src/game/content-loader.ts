@@ -235,13 +235,19 @@ export function loadGameContent(files: GameContentFiles): PortableGameCatalog {
   const manifest = record(file(files, 'manifest.json'), 'content manifest')
   only(manifest, ['format', 'version', 'puzzles', 'definitions', 'progression', 'coverage', 'catalog', 'guidance'], 'content manifest')
   if (manifest.format !== 'cursebreaker-content') throw new GameDomainError("content manifest format must be 'cursebreaker-content'")
-  if (manifest.version !== 2) throw new GameDomainError('content manifest version must be 2')
+  if (manifest.version !== 3) throw new GameDomainError('content manifest version must be 3')
   const puzzlePaths = strings(manifest.puzzles, 'content manifest puzzles')
   const definitionPaths = strings(manifest.definitions, 'content manifest definitions')
   unique(puzzlePaths, 'puzzle path')
   unique(definitionPaths, 'definition path')
   const progressionPath = string(manifest.progression, 'content manifest progression')
-  string(manifest.coverage, 'content manifest coverage')
+  const coverageRecord = record(manifest.coverage, 'content manifest coverage')
+  const coveragePaths = new Map(Object.entries(coverageRecord).map(([rawCulture, path]) => [
+    cultureId(rawCulture),
+    string(path, `content manifest coverage '${rawCulture}'`),
+  ] as const))
+  if (coveragePaths.size === 0) throw new GameDomainError('content manifest coverage must name at least one culture')
+  unique([...coveragePaths.values()], 'coverage path')
   const catalogPath = string(manifest.catalog, 'content manifest catalog')
   const guidancePath = string(manifest.guidance, 'content manifest guidance')
 
@@ -346,6 +352,12 @@ export function loadGameContent(files: GameContentFiles): PortableGameCatalog {
     .sort((left, right) => left.order - right.order)
     .map((entry): ContentCulture => ({ ...catalogCultureById.get(entry.id)!, ...entry }))
   const cultureById = new Map(combinedCultures.map((entry) => [entry.id, entry] as const))
+  if (
+    coveragePaths.size !== cultureById.size
+    || [...coveragePaths.keys()].some((id) => !cultureById.has(id))
+  ) {
+    throw new GameDomainError('content manifest coverage cultures must match catalog cultures exactly')
+  }
   for (const culture of combinedCultures) {
     for (const ancestor of culture.lineage) if (!cultureById.has(ancestor)) throw new GameDomainError(`culture '${culture.id}' names unknown lineage culture '${ancestor}'`)
     for (const unlock of culture.unlocksAfter) if (!puzzleById.has(unlock)) throw new GameDomainError(`culture '${culture.id}' names unknown unlock puzzle '${unlock}'`)

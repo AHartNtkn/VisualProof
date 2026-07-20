@@ -1,75 +1,32 @@
 {
   "id": "sey-dm-ec-i01",
   "diagram": {
-    "root": "r0",
+    "root": "sheet",
     "regions": {
-      "r0": {
-        "kind": "sheet"
-      },
-      "r1": {
-        "kind": "cut",
-        "parent": "r0"
-      },
-      "r2": {
-        "kind": "bubble",
-        "parent": "r1",
-        "arity": 0
-      },
-      "r3": {
-        "kind": "bubble",
-        "parent": "r2",
-        "arity": 0
-      },
-      "r4": {
-        "kind": "cut",
-        "parent": "r3"
-      },
-      "r5": {
-        "kind": "cut",
-        "parent": "r3"
-      },
-      "r6": {
-        "kind": "cut",
-        "parent": "r5"
-      },
-      "r7": {
-        "kind": "cut",
-        "parent": "r6"
-      },
-      "r8": {
-        "kind": "cut",
-        "parent": "r7"
-      },
-      "r9": {
-        "kind": "cut",
-        "parent": "r6"
-      },
-      "r10": {
-        "kind": "cut",
-        "parent": "r9"
-      }
+      "sheet": { "kind": "sheet" },
+      "goal": { "kind": "cut", "parent": "sheet" },
+      "p": { "kind": "bubble", "parent": "goal", "arity": 0 },
+      "q": { "kind": "bubble", "parent": "p", "arity": 0 },
+      "s": { "kind": "bubble", "parent": "q", "arity": 0 },
+      "container": { "kind": "cut", "parent": "s" },
+      "work": { "kind": "cut", "parent": "container" },
+      "source": { "kind": "cut", "parent": "work" },
+      "consumer": { "kind": "cut", "parent": "work" },
+      "required-whole": { "kind": "cut", "parent": "consumer" },
+      "required-p-outer": { "kind": "cut", "parent": "required-whole" },
+      "required-p-inner": { "kind": "cut", "parent": "required-p-outer" },
+      "required-q-outer": { "kind": "cut", "parent": "required-whole" },
+      "required-q-inner": { "kind": "cut", "parent": "required-q-outer" },
+      "output": { "kind": "cut", "parent": "consumer" },
+      "final": { "kind": "cut", "parent": "work" }
     },
     "nodes": {
-      "n0": {
-        "kind": "atom",
-        "region": "r4",
-        "binder": "r2"
-      },
-      "n1": {
-        "kind": "atom",
-        "region": "r4",
-        "binder": "r3"
-      },
-      "n2": {
-        "kind": "atom",
-        "region": "r8",
-        "binder": "r2"
-      },
-      "n3": {
-        "kind": "atom",
-        "region": "r10",
-        "binder": "r3"
-      }
+      "source-p": { "kind": "atom", "region": "source", "binder": "p" },
+      "source-q": { "kind": "atom", "region": "source", "binder": "q" },
+      "required-p": { "kind": "atom", "region": "required-p-inner", "binder": "p" },
+      "required-q": { "kind": "atom", "region": "required-q-inner", "binder": "q" },
+      "output-s": { "kind": "atom", "region": "output", "binder": "s" },
+      "final-s": { "kind": "atom", "region": "final", "binder": "s" }
     },
     "wires": {}
   }

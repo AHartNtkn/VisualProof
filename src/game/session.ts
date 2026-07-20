@@ -1,7 +1,7 @@
 import type { Diagram } from '../kernel/diagram/diagram'
 import { applyStep, type ProofContext } from '../kernel/proof/step'
 import { isBlank } from './blank'
-import { GameDomainError, type GameStep, type PuzzleDefinition, type PuzzleId } from './types'
+import { GameDomainError, type GameStep, type GameSteps, type PuzzleDefinition, type PuzzleId } from './types'
 
 export type GameTimeline = {
   readonly states: readonly Diagram[]
@@ -40,21 +40,34 @@ export function moveCursor(session: GameSession, cursor: number): GameSession {
   return { ...session, timeline: { ...session.timeline, cursor } }
 }
 
-export function applyGameStep(
+export function applyGameSteps(
   session: GameSession,
-  step: GameStep,
+  pending: GameSteps,
   authority: GameRuntimeAuthority,
 ): GameTransition {
   const current = currentDiagram(session)
   if (isBlank(current)) {
     throw new GameDomainError('cannot apply a game step from canonical blank')
   }
-  const next = applyStep(current, step, authority.context, 'backward')
+  if (pending.length === 0) throw new GameDomainError('a game-step batch must be nonempty')
+
+  let next = current
+  const appendedStates: Diagram[] = []
+  for (const step of pending) {
+    if (isBlank(next)) throw new GameDomainError('cannot apply a game step from canonical blank')
+    next = applyStep(next, step, authority.context, 'backward')
+    appendedStates.push(next)
+  }
+
   const states = session.timeline.states.slice(0, session.timeline.cursor + 1)
   const steps = session.timeline.steps.slice(0, session.timeline.cursor)
   const updated: GameSession = {
     ...session,
-    timeline: { states: [...states, next], steps: [...steps, step], cursor: steps.length + 1 },
+    timeline: {
+      states: [...states, ...appendedStates],
+      steps: [...steps, ...pending],
+      cursor: steps.length + pending.length,
+    },
   }
   return { session: updated, completedNow: !isBlank(current) && isBlank(next) }
 }

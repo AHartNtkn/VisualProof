@@ -34,7 +34,8 @@ The mandatory Seyric path is derived solely as the minimal transitive set of Sey
 
 ### Coverage
 
-`content/coverage/seyric.json` is build-time authoring and audit data. It owns:
+The manifest owns one build-time coverage file per culture.
+`content/coverage/seyric.json` is Seyric authoring and audit data. It owns:
 
 - the approved isolated and interaction obligations;
 - the visible distinction and saturation rule for each obligation;
@@ -42,6 +43,9 @@ The mandatory Seyric path is derived solely as the minimal transitive set of Sey
 - the puzzle's concise visible-situation rationale;
 - the narrower interpretation or simpler strategy it defeats;
 - the experiential neighbors against which it must be compared.
+- a unique `immediateComplementPattern` for each deliberately retained start
+  that exposes an exact graphical sibling occurrence matching a direct cut's
+  complete contents.
 
 Coverage data never enters puzzle identity, unlocking, teacher acknowledgment, or runtime behavior. It cannot generate records.
 
@@ -59,9 +63,29 @@ Coverage data never enters puzzle identity, unlocking, teacher acknowledgment, o
 
 ### Manifest and loading
 
-`content/manifest.json` advances to a new strict version naming puzzles, definitions, progression, coverage, catalog, and guidance. Runtime loading imports the runtime layers and ignores the build-only coverage payload after validating the manifest shape. Content validation loads all layers, including coverage and validation sidecars.
+`content/manifest.json` uses strict version 3, naming puzzles, definitions,
+progression, catalog, guidance, and a culture-keyed map of coverage files. Runtime
+loading imports the runtime layers and ignores the build-only coverage payloads
+after validating the manifest shape. Content validation loads all layers,
+including every culture's coverage and the validation sidecars.
 
 The obsolete curriculum schema, runtime performance types and accessors, learning-role placement arrays, and performance references in guidance are deleted. There is no adapter or compatibility path.
+
+## Seyric authoring boundary
+
+Every Seyric start consists of one ordinary outer goal cut, an optional
+uninterrupted prefix of arity-zero bubbles, and then a matrix made only from atom
+marks and ordinary cuts. The matrix contains no bubbles or wires, and every atom
+is owned by one of the global-prefix bubbles. Its shape is therefore
+`∀X,Y,Z,… . P(X,Y,Z,…)`, where `P` contains no quantifiers.
+
+The prefix exists only to close global proposition names. Seyric does not teach
+bubble scope, binder ownership, vacuity, introduction, movement, distribution,
+or artifact-mediated quantifier reasoning. A Seyric feasibility witness may
+remove only the contiguous vacuous prefix, deepest first, after the propositional
+work, followed only by trailing double-cut cleanup. Those quantifier mechanics
+belong to Myratic. This is a content-authoring restriction and does not remove or
+limit player proof moves.
 
 ## Additive onboarding augmentation
 
@@ -72,15 +96,21 @@ two-veils
 ├── four-veils (practice)
 └── forked-veil
     └── echoed-veil
-        └── empty-ring-release
-            └── single-mark-return
-                ├── first Myratic unlock
-                └── preserved Seyric practice graph
+        └── single-mark-return
+            ├── first Myratic unlock
+            └── preserved Seyric practice graph
 ```
 
-The empty starts are substantive onboarding content, not incomplete propositional exercises. They isolate boundary highlighting and selection, double-cut release, negative-field fragment erasure, ancestor-supported deiteration, and the distinction between a polarity-changing veil and an ownership ring. `four-veils` adds open-order repetition but is not in the Myratic prerequisite closure.
+The empty starts are substantive onboarding content, not incomplete propositional
+exercises. They isolate boundary highlighting and selection, double-cut release,
+negative-field fragment erasure, and ancestor-supported cut-form deiteration.
+`single-mark-return` is the first atom-bearing propositional problem. `four-veils`
+adds open-order repetition but is not in the Myratic prerequisite closure.
 
-Progression remains the only authority for this distinction. The mandatory Seyric closure is `two-veils`, `forked-veil`, `echoed-veil`, `empty-ring-release`, and `single-mark-return`; every other Seyric record is practice. The pre-existing practice roots depend on `single-mark-return`, while all pre-existing nonempty practice relationships remain unchanged.
+Progression remains the only authority for this distinction. The mandatory Seyric
+closure is exactly `two-veils`, `forked-veil`, `echoed-veil`, and
+`single-mark-return`; every other Seyric record is practice. `empty-ring-release`
+and all other content-bearing bubble-mechanics records belong to Myratic.
 
 ## Approved isolated coverage
 
@@ -89,10 +119,8 @@ These are analytical obligations, not record slots. A final record may carry sev
 | Family | Topic | Warranted sequence and stopping point |
 | --- | --- | --- |
 | Onboarding | Empty cut topology | One bare paired-veil release, one open-order four-veil repetition, one negative-field fragment erasure, and one ancestor-supported cut-form deiteration. |
-| Onboarding | Ownership transition | One empty ring between familiar veils, stopping before content-bearing ownership in `single-mark-return`. |
 | Hosted | Selection, highlighting, deselection | Explain on `two-veils`, whose bare double-cut release supplies the proof problem; no controls-only record. |
 | Hosted | Timeline rewind and branch replacement | Explain on `forked-veil`, whose sibling erasure supplies a real branching problem; no timeline-only record. |
-| Primitive | Ownership and vacuity | Single-owner/vacuous elimination; nested-owner discrimination; useful vacuous introduction. |
 | Primitive | Polarity | Shallow opposite-polarity contrast; nested parity where rings and cuts defeat local-depth guessing. |
 | Primitive | Double-cut elimination | Direct content preservation; compound eligible pair versus obstructed annulus. |
 | Primitive | Double-cut introduction | Atomic exact-selection wrap; compound exact-selection wrap. |
@@ -104,7 +132,7 @@ These are analytical obligations, not record slots. A final record may carry sev
 | Structural | Projection | Binary atomic projection; compound conjunct projection; ternary target selection. |
 | Structural | Injection | Binary atomic injection; grouped proposition as one branch; ternary alternative-family placement. |
 | Structural | Idempotence | Atomic and compound repeated-whole recognition for conjunction and disjunction. |
-| Structural | Exchange | Atomic and compound owner-preserving recognition for conjunction and disjunction. |
+| Structural | Exchange | Atomic and compound whole-shape recognition for conjunction and disjunction. |
 | Structural | Reassociation | For each connective: minimal three-role recognition, one compound role, and one multiple-site or scope-boundary choice. |
 | Constructive | Implication composition | Atomic two-link bridge; compound middle/bridge discrimination; first three-link chain. |
 | Constructive | Side-condition composition | Atomic required invariant; compound invariant carried through the connected path. |
@@ -118,11 +146,11 @@ These are analytical obligations, not record slots. A final record may carry sev
 | Classical | De Morgan | Four base directions; one compound conjunction-family case; one compound disjunction-family case; one ternary family generalizer. |
 | Classical | Reductio | Direct atomic contradiction; compound desired conclusion; assumption-relevant contradiction selection. |
 | Classical | Peirce feedback | Atomic feedback proposition; compound repeated feedback proposition. |
-| Artifact | Exact theorem selection | Simple exact/near source choice; compound theorem-side exactness. |
-| Artifact | Manifestation | One useful legal-target choice; theorem-side complexity is opaque after selection. |
-| Artifact | Dissolution | Simple exact occurrence; compound/context-sensitive exact-versus-near occurrence. |
-
-Content double negation receives no independent records beyond the double-cut sequence. Structural transfer, practice, challenge, remediation, retrieval, and assessment are not content topics. Fusion is excluded because pure-propositional Seyric diagrams have no wires.
+Content double negation receives no independent records beyond the double-cut
+sequence. Quantifier mechanics and the artifact exercises that depend on them are
+Myratic coverage. Structural transfer, practice, challenge, remediation,
+retrieval, and assessment are not content topics. Fusion is excluded because
+pure-propositional Seyric diagrams have no wires.
 
 ## Approved cross-topic coverage
 
@@ -132,8 +160,8 @@ The final shapes for these isolated obligations must also expose the interaction
 
 | Interaction | Required visible distinction |
 | --- | --- |
-| Hosted scope, ownership, polarity, and local edit legality | Similar targets whose actual semantic host changes whether insertion, erasure, or weakening is legal. |
-| Annulus ownership and double-cut eligibility | An eligible pair and an obstructed near-match whose blocker actually belongs to the annulus. |
+| Hosted field, polarity, and local edit legality | Similar targets whose actual semantic host changes whether insertion, erasure, or weakening is legal. |
+| Annulus contents and double-cut eligibility | An eligible pair and an obstructed near-match whose blocker actually lies in the annulus. |
 | Ancestry-sensitive iteration/deiteration | Equal-looking occurrences in ancestor, descendant, and sibling relations with different authority. |
 | Structural recognition guiding routing | Exchange or reassociation recognition determines the component projected or alternative constructed, without inventing a structural rewrite. |
 
@@ -156,11 +184,7 @@ The final shapes for these isolated obligations must also expose the interaction
 | Excluded middle manufactures cases | No split is supplied; the two downstream handlers identify the useful excluded-middle proposition. | One split; compound structure only when branches consume it. |
 | Structured contradiction under reductio | A compound consequence conflicts with separately available negated components under the reductio assumption. | One compound contradiction with a meaningful competing source. |
 | Classical consensus across a factor boundary | The branch-building and product-collapsing dual relations combine factoring/distribution with excluded middle. | One of each dual topology. |
-| Artifact direction selected by polarity | One completed record has a possible exact dissolution site and an absent manifestation field at different polarities. | One nested-parity contrast. |
-| Artifact supplies a downstream bridge | The useful completed record is determined by a later chain or branch dependency. | One bridge; retain a second only if linear and branching diagrams create different choices. |
-| Artifact content creates or destroys structural authority | Ordinary manifested content creates an ancestor source, or dissolution would remove that source. | One source-creation and one source-preservation topology. |
-
-Peirce receives no mixed family unless a concrete closed formula later demonstrates a changed feedback dependency rather than compound Peirce followed by ordinary setup. Exchange and reassociation never act as local normalization moves. Manifested artifacts never retain special provenance.
+Peirce receives no mixed family unless a concrete closed formula later demonstrates a changed feedback dependency rather than compound Peirce followed by ordinary setup. Exchange and reassociation never act as local normalization moves.
 
 ## Reconstruction procedure
 
@@ -174,10 +198,16 @@ For every current Seyric puzzle:
 
 1. compute its canonical starting fingerprint;
 2. group exact duplicates;
-3. group experiential neighbors by logical family, dependency topology, operand complexity, and graphical scope;
-4. determine which approved obligations are visibly present;
-5. reject records justified only by role labels, formula renaming, larger saturated arity, longer saturated chains, mirrored positions, or catalog prose;
-6. retain the clearest feasible representative when several starts provide equivalent exposure.
+3. compute its structural matrix fingerprint modulo global-prefix name and order,
+   while preserving every cut boundary, and reject unapproved collisions;
+4. identify exact graphical sibling-occurrence starts using canonical extracted
+   patterns and binder attachments, without normalizing through proof
+   transformations, and require a unique approved `immediateComplementPattern`
+   for each survivor;
+5. group experiential neighbors by logical family, dependency topology, operand complexity, and graphical scope;
+6. determine which approved obligations are visibly present;
+7. reject records justified only by role labels, formula renaming, larger saturated arity, longer saturated chains, mirrored positions, or catalog prose;
+8. retain the clearest feasible representative when several starts provide equivalent exposure.
 
 The audit is content judgment supported by automatic evidence. Automatic validity, witness replay, or canonical inequality never establishes value by itself.
 

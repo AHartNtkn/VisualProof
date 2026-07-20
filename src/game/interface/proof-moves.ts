@@ -5,7 +5,8 @@ import { isAncestorOrEqual, polarity } from '../../kernel/diagram/regions'
 import { findOccurrences } from '../../kernel/diagram/subgraph/match'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../../kernel/diagram/subgraph/selection'
-import type { ProofContext, ProofStep } from '../../kernel/proof/step'
+import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof/step'
+import type { GameSteps } from '../types'
 import { parseTerm } from '../../kernel/term/parse'
 import { applyConversion } from '../../kernel/rules/conversion'
 import { headNormalize, weakHeadNormalize } from '../../kernel/term/hnf'
@@ -117,6 +118,60 @@ export function discoverGameProofActions(
   }
 }
 
+/**
+ * Recognize a selected, gapless parent-child chain of vacuous bubble rims.
+ * Each proposed elimination is replayed through the ordinary proof authority
+ * before the caller is allowed to prepare the batch.
+ */
+export function vacuousEliminationChainSteps(
+  diagram: Diagram,
+  hits: readonly Hit[],
+  context: ProofContext,
+): GameSteps | null {
+  if (hits.length < 2 || hits.some((hit) => hit.kind !== 'region')) return null
+  const selected = hits.map((hit) => hit.id)
+  if (new Set(selected).size !== selected.length) return null
+  if (selected.some((id) => diagram.regions[id]?.kind !== 'bubble')) return null
+
+  const selectedSet = new Set(selected)
+  const roots = selected.filter((id) => {
+    const region = diagram.regions[id]!
+    return region.kind === 'bubble' && !selectedSet.has(region.parent)
+  })
+  if (roots.length !== 1) return null
+
+  const outerToInner: RegionId[] = []
+  let current = roots[0]!
+  while (true) {
+    outerToInner.push(current)
+    const children = selected.filter((id) => {
+      const region = diagram.regions[id]!
+      return region.kind === 'bubble' && region.parent === current
+    })
+    if (children.length === 0) break
+    if (children.length !== 1) return null
+    current = children[0]!
+  }
+  if (outerToInner.length !== selected.length) return null
+
+  const [deepest, ...remaining] = outerToInner.reverse()
+  if (deepest === undefined) return null
+  const steps: GameSteps = [
+    { rule: 'vacuousElim', region: deepest },
+    ...remaining.map((region): ProofStep => ({ rule: 'vacuousElim', region })),
+  ]
+  let preflight = diagram
+  try {
+    for (const step of steps) preflight = applyStep(preflight, step, context, 'backward')
+  } catch {
+    return null
+  }
+  return steps
+}
+
+const isVacuousBatchRequest = (diagram: Diagram, hits: readonly Hit[]): boolean =>
+  hits.filter((hit) => hit.kind === 'region' && diagram.regions[hit.id]?.kind === 'bubble').length >= 2
+
 const erasureSelection = (diagram: Diagram, selection: SubgraphSelection): SubgraphSelection => {
   const existing = new Set(selection.wires)
   const riders = orphanedWires(diagram, new Set(selection.nodes))
@@ -216,7 +271,7 @@ export type GameProofMoveOptions = {
   readonly selection: () => readonly Hit[]
   readonly setSelection: (selection: readonly Hit[]) => void
   readonly context: () => ProofContext
-  readonly apply: (step: ProofStep) => void
+  readonly apply: (steps: GameSteps) => void
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
   readonly fuel: () => number
@@ -333,6 +388,23 @@ export class GameProofMoveController {
       return true
     }
     if (!['Delete', 'Backspace', 'w', 'W'].includes(sample.key)) return false
+    if (sample.key === 'Delete' || sample.key === 'Backspace') {
+      const diagram = this.#options.diagram()
+      const selection = this.#options.selection()
+      const chain = vacuousEliminationChainSteps(
+        diagram,
+        selection,
+        this.#options.context(),
+      )
+      if (chain !== null) {
+        this.#commitSteps(chain)
+        return true
+      }
+      if (isVacuousBatchRequest(diagram, selection)) {
+        this.#options.refuse('select one gapless chain of vacuous bubble rims', this.#lastPointer)
+        return true
+      }
+    }
     const discovery = discoverGameProofActions(
       this.#options.diagram(),
       this.#options.selection(),
@@ -454,8 +526,12 @@ export class GameProofMoveController {
   dispose(): void { this.cancel() }
 
   #commit(step: ProofStep): void {
+    this.#commitSteps([step])
+  }
+
+  #commitSteps(steps: GameSteps): void {
     try {
-      this.#options.apply(step)
+      this.#options.apply(steps)
       this.#options.setSelection([])
       this.#closeMenu()
       this.#closePrompt()

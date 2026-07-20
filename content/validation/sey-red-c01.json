@@ -2,53 +2,25 @@
   "puzzle": "sey-red-c01",
   "solution": [
     {
+      "rule": "erasure",
+      "sel": { "region": "r5", "regions": ["r7"], "nodes": [], "wires": [] }
+    },
+    {
       "rule": "deiteration",
-      "sel": {
-        "region": "r4",
-        "regions": [],
-        "nodes": [
-          "n1"
-        ],
-        "wires": []
-      },
+      "sel": { "region": "r6", "regions": [], "nodes": ["n1"], "wires": [] },
       "fuel": 100
     },
     {
       "rule": "erasure",
-      "sel": {
-        "region": "r6",
-        "regions": [
-          "r5"
-        ],
-        "nodes": [
-          "n0"
-        ],
-        "wires": []
-      }
+      "sel": { "region": "r5", "regions": [], "nodes": ["n0"], "wires": [] }
     },
-    {
-      "rule": "vacuousElim",
-      "region": "r6"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r3"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r2"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r1"
-    }
+    { "rule": "vacuousElim", "region": "r5" },
+    { "rule": "vacuousElim", "region": "r4" },
+    { "rule": "vacuousElim", "region": "r3" },
+    { "rule": "vacuousElim", "region": "r2" },
+    { "rule": "doubleCutElim", "region": "r1" }
   ],
   "availableArtifacts": [],
-  "expectedRules": [
-    "deiteration",
-    "erasure",
-    "vacuousElim",
-    "doubleCutElim"
-  ],
+  "expectedRules": ["erasure", "deiteration", "vacuousElim", "doubleCutElim"],
   "recognizedStates": []
 }

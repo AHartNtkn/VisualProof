@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { artifactTheoremContext, artifactTheoremName, completedArtifactTheorem } from '../../src/game/artifact-theorem'
 import { blankDiagram, isBlank } from '../../src/game/blank'
-import { applyGameStep, currentDiagram, startPuzzle } from '../../src/game/session'
+import { applyGameSteps, currentDiagram, startPuzzle } from '../../src/game/session'
 import { buildTestCatalog, minimalSource } from './catalog-fixture'
 import { twoVeils } from './fixtures'
 
@@ -37,7 +37,7 @@ describe('completed artifact theorems', () => {
       rule: 'theorem' as const, name: artifactTheoremName(puzzle.id), direction: 'forward' as const,
       at: { sel: { region: negative, regions: [], nodes: [], wires: [] }, args: [] },
     }
-    const transition = applyGameStep(startPuzzle(hostPuzzle), step, { context: available })
+    const transition = applyGameSteps(startPuzzle(hostPuzzle), [step], { context: available })
     expect(transition.session.timeline.steps).toEqual([step])
   })
 
@@ -49,7 +49,7 @@ describe('completed artifact theorems', () => {
         args: [],
       },
     }
-    const transition = applyGameStep(startPuzzle(puzzle), step, { context: available })
+    const transition = applyGameSteps(startPuzzle(puzzle), [step], { context: available })
     expect(transition.completedNow).toBe(true)
     expect(isBlank(currentDiagram(transition.session))).toBe(true)
   })
@@ -60,8 +60,8 @@ describe('completed artifact theorems', () => {
       rule: 'theorem' as const, name: artifactTheoremName(puzzle.id), direction: 'reverse' as const,
       at: { sel: { region: puzzle.diagram.root, regions: [], nodes: [], wires: [] }, args: [] },
     }
-    expect(() => applyGameStep(session, missing, { context: unavailable })).toThrow(/unknown theorem/)
-    expect(() => applyGameStep(session, missing, { context: available })).toThrow(/not an occurrence/)
+    expect(() => applyGameSteps(session, [missing], { context: unavailable })).toThrow(/unknown theorem/)
+    expect(() => applyGameSteps(session, [missing], { context: available })).toThrow(/not an occurrence/)
     expect(currentDiagram(session)).toBe(puzzle.diagram)
   })
 })

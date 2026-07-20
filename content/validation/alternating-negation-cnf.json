@@ -2,6 +2,22 @@
   "puzzle": "alternating-negation-cnf",
   "solution": [
     {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r21",
+        "regions": [],
+        "nodes": [
+          "n8"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r21"
+    },
+    {
       "rule": "doubleCutIntro",
       "sel": {
         "region": "r5",
@@ -15,7 +31,7 @@
     {
       "rule": "iteration",
       "sel": {
-        "region": "r4",
+        "region": "r20",
         "regions": [
           "r5"
         ],
@@ -72,7 +88,7 @@
     {
       "rule": "iteration",
       "sel": {
-        "region": "r4",
+        "region": "r20",
         "regions": [
           "r5"
         ],
@@ -129,13 +145,19 @@
     {
       "rule": "erasure",
       "sel": {
-        "region": "r4",
+        "region": "r20",
         "regions": [
           "r5"
         ],
-        "nodes": [],
+        "nodes": [
+          "n7"
+        ],
         "wires": []
       }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r20"
     },
     {
       "rule": "vacuousElim",
@@ -156,10 +178,10 @@
   ],
   "availableArtifacts": [],
   "expectedRules": [
-    "doubleCutIntro",
-    "iteration",
     "deiteration",
     "doubleCutElim",
+    "doubleCutIntro",
+    "iteration",
     "erasure",
     "vacuousElim"
   ],

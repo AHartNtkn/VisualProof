@@ -9,6 +9,30 @@
       "rule": "deiteration",
       "sel": {
         "region": "r5",
+        "regions": [],
+        "nodes": [
+          "n6"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r8",
+        "regions": [],
+        "nodes": [
+          "n7"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r5",
         "regions": [
           "r7"
         ],
@@ -52,16 +76,21 @@
     {
       "rule": "erasure",
       "sel": {
-        "region": "r4",
+        "region": "r16",
         "regions": [
           "r14",
           "r15"
         ],
         "nodes": [
-          "n0"
+          "n0",
+          "n8"
         ],
         "wires": []
       }
+    },
+    {
+      "rule": "vacuousElim",
+      "region": "r16"
     },
     {
       "rule": "vacuousElim",

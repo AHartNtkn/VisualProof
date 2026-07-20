@@ -10,14 +10,13 @@
         "four-veils",
         "forked-veil",
         "echoed-veil",
-        "empty-ring-release",
         "single-mark-return",
         "marked-echo-deiteration",
-        "shallow-edit-legality-contrast",
+        "seyric-field-edit-contrast",
         "atomic-content-insertion",
-        "compound-copy-authority-contrast",
+        "seyric-compound-copy-authority",
         "transfer-duplication-recognition",
-        "atomic-double-cut-selection",
+        "seyric-atomic-double-cut-selection",
         "common-conjunction-factor-base",
         "common-disjunction-factor-base",
         "compound-common-disjunction-factor",
@@ -25,12 +24,9 @@
         "content-bearing-annulus-choice",
         "disjunction-over-conjunction-base",
         "i-dao",
-        "nested-owner-introduction",
         "polarity-bubble-contrast",
         "rm-fa",
-        "useful-vacuous-owner-workspace",
         "conjunction-idempotence-introduction",
-        "weakening-introduction",
         "compound-weakening-boundary",
         "atomic-fragment-erasure",
         "two-mark-projection",
@@ -78,7 +74,6 @@
         "sey-dm-ed-i01",
         "sey-dm-fc-i01",
         "compound-conjunction-de-morgan",
-        "sey-red-i01",
         "sey-red-c01",
         "sey-pei-i01",
         "sey-pei-c01",
@@ -102,16 +97,7 @@
         "r4",
         "r5",
         "recollect-shared-branch-context",
-        "rm-c3",
-        "sey-ref-sel-i01",
-        "compound-theorem-source-choice",
-        "useful-manifestation-target",
-        "sey-ref-dis-i01",
-        "compound-context-dissolution",
-        "artifact-creates-copy-authority",
-        "artifact-polarity-direction-contrast",
-        "artifact-preserves-copy-authority",
-        "artifact-selected-downstream-bridge"
+        "seyric-extraction-continuation"
       ]
     },
     {
@@ -122,7 +108,23 @@
       ],
       "gateway": "blank-witness",
       "puzzles": [
-        "blank-witness"
+        "blank-witness",
+        "empty-ring-release",
+        "nested-owner-introduction",
+        "useful-vacuous-owner-workspace",
+        "shallow-edit-legality-contrast",
+        "compound-copy-authority-contrast",
+        "atomic-double-cut-selection",
+        "rm-c3",
+        "sey-ref-sel-i01",
+        "compound-theorem-source-choice",
+        "useful-manifestation-target",
+        "sey-ref-dis-i01",
+        "compound-context-dissolution",
+        "artifact-creates-copy-authority",
+        "artifact-polarity-direction-contrast",
+        "artifact-preserves-copy-authority",
+        "artifact-selected-downstream-bridge"
       ]
     }
   ],
@@ -152,13 +154,14 @@
     {
       "puzzle": "empty-ring-release",
       "prerequisites": [
+        "blank-witness",
         "echoed-veil"
       ]
     },
     {
       "puzzle": "single-mark-return",
       "prerequisites": [
-        "empty-ring-release"
+        "echoed-veil"
       ]
     },
     {
@@ -170,6 +173,7 @@
     {
       "puzzle": "shallow-edit-legality-contrast",
       "prerequisites": [
+        "blank-witness",
         "single-mark-return"
       ]
     },
@@ -182,6 +186,7 @@
     {
       "puzzle": "compound-copy-authority-contrast",
       "prerequisites": [
+        "blank-witness",
         "marked-echo-deiteration"
       ]
     },
@@ -194,6 +199,7 @@
     {
       "puzzle": "atomic-double-cut-selection",
       "prerequisites": [
+        "blank-witness",
         "marked-echo-deiteration"
       ]
     },
@@ -218,7 +224,7 @@
     {
       "puzzle": "compound-double-cut-selection",
       "prerequisites": [
-        "atomic-double-cut-selection"
+        "seyric-atomic-double-cut-selection"
       ]
     },
     {
@@ -242,6 +248,7 @@
     {
       "puzzle": "nested-owner-introduction",
       "prerequisites": [
+        "blank-witness",
         "single-mark-return"
       ]
     },
@@ -260,6 +267,7 @@
     {
       "puzzle": "useful-vacuous-owner-workspace",
       "prerequisites": [
+        "blank-witness",
         "empty-ring-release",
         "marked-echo-deiteration"
       ]
@@ -271,15 +279,9 @@
       ]
     },
     {
-      "puzzle": "weakening-introduction",
-      "prerequisites": [
-        "single-mark-return"
-      ]
-    },
-    {
       "puzzle": "compound-weakening-boundary",
       "prerequisites": [
-        "weakening-introduction"
+        "two-mark-projection"
       ]
     },
     {
@@ -566,15 +568,9 @@
       ]
     },
     {
-      "puzzle": "sey-red-i01",
-      "prerequisites": [
-        "single-mark-return"
-      ]
-    },
-    {
       "puzzle": "sey-red-c01",
       "prerequisites": [
-        "sey-red-i01"
+        "single-mark-return"
       ]
     },
     {
@@ -691,7 +687,7 @@
     {
       "puzzle": "double-cut-insertion-workspace",
       "prerequisites": [
-        "atomic-double-cut-selection",
+        "seyric-atomic-double-cut-selection",
         "atomic-content-insertion"
       ]
     },
@@ -722,12 +718,14 @@
     {
       "puzzle": "rm-c3",
       "prerequisites": [
+        "blank-witness",
         "single-mark-return"
       ]
     },
     {
       "puzzle": "sey-ref-sel-i01",
       "prerequisites": [
+        "blank-witness",
         "single-mark-return",
         "nested-owner-introduction"
       ]
@@ -735,6 +733,7 @@
     {
       "puzzle": "compound-theorem-source-choice",
       "prerequisites": [
+        "blank-witness",
         "sey-lem-i01",
         "sey-lem-c01",
         "sey-ref-sel-i01"
@@ -743,18 +742,21 @@
     {
       "puzzle": "useful-manifestation-target",
       "prerequisites": [
+        "blank-witness",
         "two-mark-projection"
       ]
     },
     {
       "puzzle": "sey-ref-dis-i01",
       "prerequisites": [
+        "blank-witness",
         "single-mark-return"
       ]
     },
     {
       "puzzle": "compound-context-dissolution",
       "prerequisites": [
+        "blank-witness",
         "rm-fa",
         "sey-ref-dis-i01"
       ]
@@ -762,24 +764,28 @@
     {
       "puzzle": "artifact-creates-copy-authority",
       "prerequisites": [
+        "blank-witness",
         "single-mark-return"
       ]
     },
     {
       "puzzle": "artifact-polarity-direction-contrast",
       "prerequisites": [
+        "blank-witness",
         "two-mark-projection"
       ]
     },
     {
       "puzzle": "artifact-preserves-copy-authority",
       "prerequisites": [
+        "blank-witness",
         "single-mark-return"
       ]
     },
     {
       "puzzle": "artifact-selected-downstream-bridge",
       "prerequisites": [
+        "blank-witness",
         "i-c3",
         "i-c4"
       ]
@@ -787,6 +793,30 @@
     {
       "puzzle": "blank-witness",
       "prerequisites": []
+    },
+    {
+      "puzzle": "seyric-field-edit-contrast",
+      "prerequisites": [
+        "single-mark-return"
+      ]
+    },
+    {
+      "puzzle": "seyric-compound-copy-authority",
+      "prerequisites": [
+        "marked-echo-deiteration"
+      ]
+    },
+    {
+      "puzzle": "seyric-atomic-double-cut-selection",
+      "prerequisites": [
+        "marked-echo-deiteration"
+      ]
+    },
+    {
+      "puzzle": "seyric-extraction-continuation",
+      "prerequisites": [
+        "single-mark-return"
+      ]
     }
   ]
 }

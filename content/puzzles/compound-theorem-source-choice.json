@@ -1,74 +1,89 @@
 {
   "id": "compound-theorem-source-choice",
   "diagram": {
-    "root": "r0",
+    "root": "sheet",
     "regions": {
-      "r0": {
+      "sheet": {
         "kind": "sheet"
       },
-      "r1": {
+      "outer": {
         "kind": "cut",
-        "parent": "r0"
+        "parent": "sheet"
       },
-      "r2": {
+      "workspace": {
         "kind": "cut",
-        "parent": "r1"
+        "parent": "outer"
       },
-      "r1_0": {
+      "continuation-outer": {
         "kind": "cut",
-        "parent": "r2"
+        "parent": "workspace"
       },
-      "r2_0": {
+      "continuation-inner": {
+        "kind": "cut",
+        "parent": "continuation-outer"
+      },
+      "target-outer": {
+        "kind": "cut",
+        "parent": "continuation-inner"
+      },
+      "target-x": {
         "kind": "bubble",
-        "parent": "r1_0",
+        "parent": "target-outer",
         "arity": 0
       },
-      "r3": {
+      "target-y": {
         "kind": "bubble",
-        "parent": "r2_0",
+        "parent": "target-x",
         "arity": 0
       },
-      "r4": {
-        "kind": "cut",
-        "parent": "r3"
+      "target-z": {
+        "kind": "bubble",
+        "parent": "target-y",
+        "arity": 0
       },
-      "r5": {
+      "target-core": {
         "kind": "cut",
-        "parent": "r4"
+        "parent": "target-z"
       },
-      "r6": {
+      "target-branch": {
         "kind": "cut",
-        "parent": "r5"
+        "parent": "target-core"
       },
-      "r7": {
+      "target-mark": {
         "kind": "cut",
-        "parent": "r5"
-      },
-      "r8": {
-        "kind": "cut",
-        "parent": "r7"
+        "parent": "target-branch"
       }
     },
     "nodes": {
-      "n0": {
+      "target-open-x": {
         "kind": "atom",
-        "region": "r6",
-        "binder": "r2_0"
+        "region": "target-branch",
+        "binder": "target-x"
       },
-      "n1": {
+      "target-open-y": {
         "kind": "atom",
-        "region": "r6",
-        "binder": "r3"
+        "region": "target-branch",
+        "binder": "target-y"
       },
-      "n2": {
+      "target-open-z": {
         "kind": "atom",
-        "region": "r8",
-        "binder": "r2_0"
+        "region": "target-branch",
+        "binder": "target-z"
       },
-      "n3": {
+      "target-mark-x": {
         "kind": "atom",
-        "region": "r8",
-        "binder": "r3"
+        "region": "target-mark",
+        "binder": "target-x"
+      },
+      "target-mark-y": {
+        "kind": "atom",
+        "region": "target-mark",
+        "binder": "target-y"
+      },
+      "target-mark-z": {
+        "kind": "atom",
+        "region": "target-mark",
+        "binder": "target-z"
       }
     },
     "wires": {}

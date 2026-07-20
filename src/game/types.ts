@@ -22,6 +22,7 @@ export const cultureId = (value: string): CultureId => {
 export class GameDomainError extends Error {}
 
 export type GameStep = ProofStep
+export type GameSteps = readonly [GameStep, ...GameStep[]]
 
 export type GameRuleContext = Pick<ProofContext, 'relations'>
 

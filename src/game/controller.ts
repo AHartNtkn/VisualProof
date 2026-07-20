@@ -5,19 +5,19 @@ import {
   type InterfaceTextSize,
 } from './controller-state'
 import { isCultureUnlocked, isUnlocked } from './progress'
-import { applyGameStep, currentDiagram, moveCursor, startPuzzle } from './session'
+import { applyGameSteps, currentDiagram, moveCursor, startPuzzle } from './session'
 import { guidanceInterventionsFor, type TeacherSignal } from './teaching'
 import {
   GameDomainError,
   isGuidanceDelivered,
   type CultureId,
-  type GameStep,
+  type GameSteps,
   type PuzzleId,
 } from './types'
 
 export type GameAction =
   | { readonly kind: 'selectPuzzle'; readonly puzzle: PuzzleId }
-  | { readonly kind: 'applyStep'; readonly step: GameStep }
+  | { readonly kind: 'applySteps'; readonly steps: GameSteps }
   | { readonly kind: 'moveTimeline'; readonly cursor: number }
   | { readonly kind: 'escape' }
   | { readonly kind: 'openPause' }
@@ -141,12 +141,12 @@ export function reduceGame(
       }
       return result(withGuidanceFor(catalog, selected, { kind: 'opening' }))
     }
-    case 'applyStep': {
+    case 'applySteps': {
       requireTimelineInputOwner(state)
       const puzzle = activePuzzle(catalog, state)
       const session = activeSession(state)
       const replay = state.completed.has(puzzle.id)
-      const transition = applyGameStep(session, action.step, {
+      const transition = applyGameSteps(session, action.steps, {
         context: artifactTheoremContext(catalog, state.completed),
       })
       if (transition.completedNow) {

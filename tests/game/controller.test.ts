@@ -6,7 +6,7 @@ import {
   type GameControllerState,
 } from '../../src/game/controller-state'
 import { reduceGame } from '../../src/game/controller'
-import { applyGameStep, currentDiagram, startPuzzle } from '../../src/game/session'
+import { applyGameSteps, currentDiagram, startPuzzle } from '../../src/game/session'
 import {
   controllerCatalog,
   controllerPuzzle,
@@ -37,7 +37,7 @@ const applyWitness = (
   state: GameControllerState,
   puzzle: typeof FIRST | typeof SECOND,
   index: number,
-) => transition(state, { kind: 'applyStep', step: controllerPuzzle(puzzle).witness[index]! }).state
+) => transition(state, { kind: 'applySteps', steps: [controllerPuzzle(puzzle).witness[index]!] }).state
 
 describe('authoritative game controller', () => {
   it('starts in the archive with caller-owned reduced motion and first-launch defaults', () => {
@@ -78,6 +78,18 @@ describe('authoritative game controller', () => {
     expect(state.mode).toBe('archive')
     expect(state.activePuzzle).toBeNull()
     expect(state.completionReceipt).toBeNull()
+  })
+
+  it('commits a prepared batch as one controller action while counting every ordinary proof move', () => {
+    const witness = controllerPuzzle(FIRST).witness
+    const state = transition(select(fresh(), FIRST), {
+      kind: 'applySteps',
+      steps: [witness[0]!, ...witness.slice(1)],
+    }).state
+
+    expect(state.mode).toBe('completion')
+    expect(state.completionReceipt).toEqual({ puzzle: FIRST, moves: witness.length, replay: false })
+    expect(state.completed).toContain(FIRST)
   })
 
   it('applies Escape precedence for editor, pause settings, pause, and no transient while guidance remains passive', () => {
@@ -136,7 +148,7 @@ describe('authoritative game controller', () => {
     const timeline = state.firstAttempts.get(FIRST)?.timeline
 
     expect(() => transition(state, {
-      kind: 'applyStep', step: controllerPuzzle(FIRST).witness[0]!,
+      kind: 'applySteps', steps: [controllerPuzzle(FIRST).witness[0]!],
     })).toThrow(/pause.*owns input/)
     expect(() => transition(state, { kind: 'moveTimeline', cursor: 0 }))
       .toThrow(/pause.*owns input/)
@@ -204,14 +216,46 @@ describe('authoritative game controller', () => {
     expect(state.firstAttempts.get(SECOND)?.timeline.steps).toHaveLength(2)
     const untouchedFirst = state.firstAttempts.get(FIRST)
     state = transition(state, {
-      kind: 'applyStep',
-      step: controllerPuzzle(SECOND).witness[2]!,
+      kind: 'applySteps',
+      steps: [controllerPuzzle(SECOND).witness[2]!],
     }).state
 
     expect(state.firstAttempts.get(SECOND)?.timeline.cursor).toBe(1)
     expect(state.firstAttempts.get(SECOND)?.timeline.states).toHaveLength(2)
     expect(state.firstAttempts.get(SECOND)?.timeline.steps).toHaveLength(1)
     expect(state.firstAttempts.get(FIRST)).toBe(untouchedFirst)
+  })
+
+  it('branches after rewind with a non-completing batch and preserves one-operation timeline traversal', () => {
+    const witness = controllerPuzzle(FIRST).witness
+    let state = select(fresh(), FIRST)
+    state = applyWitness(state, FIRST, 0)
+    state = applyWitness(state, FIRST, 1)
+    const future = state.firstAttempts.get(FIRST)!.timeline
+    expect(future).toMatchObject({ cursor: 2 })
+    expect(future.states).toHaveLength(3)
+
+    state = transition(state, { kind: 'moveTimeline', cursor: 0 }).state
+    state = transition(state, {
+      kind: 'applySteps',
+      steps: [witness[0]!, witness[1]!],
+    }).state
+    const branched = state.firstAttempts.get(FIRST)!.timeline
+    expect(state.mode).toBe('puzzle')
+    expect(branched).toMatchObject({ cursor: 2, steps: [witness[0], witness[1]] })
+    expect(branched.states).toHaveLength(3)
+    expect(branched.states[1]).not.toBe(branched.states[0])
+    expect(branched.states[2]).not.toBe(branched.states[1])
+
+    state = transition(state, { kind: 'moveTimeline', cursor: 1 }).state
+    expect(state.firstAttempts.get(FIRST)!.timeline.cursor).toBe(1)
+    expect(currentDiagram(state.firstAttempts.get(FIRST)!)).toBe(branched.states[1])
+    state = transition(state, { kind: 'moveTimeline', cursor: 0 }).state
+    expect(currentDiagram(state.firstAttempts.get(FIRST)!)).toBe(branched.states[0])
+    state = transition(state, { kind: 'moveTimeline', cursor: 1 }).state
+    expect(currentDiagram(state.firstAttempts.get(FIRST)!)).toBe(branched.states[1])
+    state = transition(state, { kind: 'moveTimeline', cursor: 2 }).state
+    expect(currentDiagram(state.firstAttempts.get(FIRST)!)).toBe(branched.states[2])
   })
 
   it('refuses locked selection atomically with a domain effect', () => {
@@ -315,7 +359,7 @@ describe('authoritative game controller', () => {
     const source = controllerSource()
     const second = source.puzzles.find((puzzle) => puzzle.id === SECOND)!
     const firstStep = second.witness[0]!
-    const reached = applyGameStep(startPuzzle({ id: second.id, diagram: second.goal.diagram }), firstStep, {
+    const reached = applyGameSteps(startPuzzle({ id: second.id, diagram: second.goal.diagram }), [firstStep], {
       context: { relations: source.context.relations, theorems: new Map() },
     })
     const authority = buildTestCatalog({
@@ -341,7 +385,7 @@ describe('authoritative game controller', () => {
       { kind: 'selectPuzzle', puzzle: SECOND },
     ).state
 
-    state = reduceGame(authority, state, { kind: 'applyStep', step: firstStep }).state
+    state = reduceGame(authority, state, { kind: 'applySteps', steps: [firstStep] }).state
     expect(state.guidance).toMatchObject({
       identity: { puzzle: SECOND, intervention: 'recognized-route' },
       page: 0,
@@ -353,8 +397,8 @@ describe('authoritative game controller', () => {
   it('does not change controller state when a proof move is invalid', () => {
     const state = select(fresh(), FIRST)
     expect(() => transition(state, {
-      kind: 'applyStep',
-      step: { rule: 'doubleCutElim', region: 'forged-region' },
+      kind: 'applySteps',
+      steps: [{ rule: 'doubleCutElim', region: 'forged-region' }],
     })).toThrow()
     expect(state.firstAttempts.get(FIRST)?.timeline).toMatchObject({ cursor: 0, steps: [] })
     expect(state.guidance?.page).toBe(0)

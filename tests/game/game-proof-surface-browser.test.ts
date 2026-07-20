@@ -126,6 +126,7 @@ describe('rendered game proof surface', () => {
   it('iterates an already-selected cut together with its nested contents', async () => {
     const page = await openFixture()
     try {
+      await page.evaluate(() => window.__gameProofSurfaceFixture.freezeLayout())
       const gesture = await page.evaluate(() =>
         window.__gameProofSurfaceFixture.cutIterationGesture())
       await page.mouse.click(gesture.start.x, gesture.start.y)

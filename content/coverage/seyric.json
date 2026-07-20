@@ -36,13 +36,6 @@
       "stoppingRule": "Stop after one owner, one ancestor support, and one descendant echo isolate binder-preserving deiteration."
     },
     {
-      "id": "vacuous-ring-elimination",
-      "kind": "onboarding",
-      "family": "onboarding-ownership",
-      "distinction": "Dissolve an empty ownership ring while preserving the surrounding paired veils and their polarity.",
-      "stoppingRule": "Stop after one empty ring distinguishes ownership from polarity before owned marks appear."
-    },
-    {
       "id": "hosted-selection-explanation",
       "kind": "isolated",
       "family": "hosted-selection",
@@ -55,27 +48,6 @@
       "family": "hosted-timeline",
       "distinction": "A suitable final branching record carries the explanation of timeline rewind and branch replacement; this explanation warrants no timeline-only puzzle.",
       "stoppingRule": "Explain timeline behavior on a suitable branching problem and add no dedicated timeline record."
-    },
-    {
-      "id": "ownership-vacuous-elimination",
-      "kind": "isolated",
-      "family": "ownership-and-vacuity",
-      "distinction": "Eliminate a single-owner vacuous structure while respecting its semantic owner.",
-      "stoppingRule": "Stop after the single-owner vacuous-elimination distinction is visible."
-    },
-    {
-      "id": "ownership-nested-discrimination",
-      "kind": "isolated",
-      "family": "ownership-and-vacuity",
-      "distinction": "Discriminate the actual semantic owner among nested candidate hosts.",
-      "stoppingRule": "Stop after nesting defeats selection by superficial containment."
-    },
-    {
-      "id": "ownership-useful-vacuous-introduction",
-      "kind": "isolated",
-      "family": "ownership-and-vacuity",
-      "distinction": "Wrap the exact owned source in one vacuous bubble so that the new boundary itself becomes ancestor authority for a pre-existing open owned pattern; a double cut cannot supply the same match.",
-      "stoppingRule": "Stop after exact, partial, larger, wrong-target, and double-cut choices distinguish the one useful ownership boundary."
     },
     {
       "id": "polarity-shallow-opposite-contrast",
@@ -167,13 +139,6 @@
       "family": "deiteration",
       "distinction": "Choose the exact compound duplicate over a near match.",
       "stoppingRule": "Stop after compound exactness defeats near-match selection; further compound size is padding."
-    },
-    {
-      "id": "weakening-atomic-retained-proposition",
-      "kind": "isolated",
-      "family": "weakening",
-      "distinction": "Recognize the atomic proposition retained through weakening.",
-      "stoppingRule": "Stop after the atomic retained proposition is unambiguous."
     },
     {
       "id": "weakening-compound-retained-context",
@@ -512,6 +477,13 @@
       "stoppingRule": "Stop before a fourth variable; larger compound forms add no new decision."
     },
     {
+      "id": "excluded-middle-irrelevant-junk-recognition",
+      "kind": "isolated",
+      "family": "excluded-middle",
+      "distinction": "Recognize a direct atomic complement despite one coherent, visually intimidating irrelevant fragment.",
+      "stoppingRule": "Stop after one deliberately crowded example; further irrelevant-junk complements add no new decision."
+    },
+    {
       "id": "de-morgan-negated-conjunction-forward",
       "kind": "isolated",
       "family": "de-morgan",
@@ -561,13 +533,6 @@
       "stoppingRule": "Stop after one ternary family generalizer; additional arity is padding."
     },
     {
-      "id": "reductio-direct-atomic-contradiction",
-      "kind": "isolated",
-      "family": "reductio",
-      "distinction": "Derive a direct atomic contradiction under the reductio assumption.",
-      "stoppingRule": "Stop after the direct atomic contradiction form is established."
-    },
-    {
       "id": "reductio-compound-conclusion",
       "kind": "isolated",
       "family": "reductio",
@@ -594,48 +559,6 @@
       "family": "peirce-feedback",
       "distinction": "Recognize a compound feedback proposition repeated as one whole proposition.",
       "stoppingRule": "Stop after whole-compound feedback matching is required."
-    },
-    {
-      "id": "exact-theorem-selection-simple-near-source",
-      "kind": "isolated",
-      "family": "exact-theorem-selection",
-      "distinction": "Choose the simple exact completed theorem source over a near match.",
-      "stoppingRule": "Stop after exact-versus-near source choice is established."
-    },
-    {
-      "id": "exact-theorem-selection-compound-side",
-      "kind": "isolated",
-      "family": "exact-theorem-selection",
-      "distinction": "Match the exact compound theorem side as one whole source.",
-      "stoppingRule": "Stop after compound theorem-side exactness is required."
-    },
-    {
-      "id": "manifestation-legal-target-choice",
-      "kind": "isolated",
-      "family": "manifestation",
-      "distinction": "Choose a useful legal target for manifestation.",
-      "stoppingRule": "Stop after one useful legal-target choice; theorem-side complexity is opaque after source selection."
-    },
-    {
-      "id": "dissolution-simple-exact-occurrence",
-      "kind": "isolated",
-      "family": "dissolution",
-      "distinction": "Choose a simple exact occurrence for dissolution.",
-      "stoppingRule": "Stop after simple exact occurrence matching is established."
-    },
-    {
-      "id": "dissolution-compound-context-exactness",
-      "kind": "isolated",
-      "family": "dissolution",
-      "distinction": "Choose the context-sensitive exact compound occurrence over a near match.",
-      "stoppingRule": "Stop after compound context and exactness jointly determine the dissolution site."
-    },
-    {
-      "id": "interaction-host-scope-edit-legality",
-      "kind": "carried-interaction",
-      "family": "hosted-scope-ownership-polarity-edit-legality",
-      "distinction": "Similar targets have different insertion, erasure, or weakening legality because their actual semantic hosts change scope, ownership, or polarity; an isolated record must carry this interaction without a combination-only record.",
-      "stoppingRule": "Stop after host identity changes local edit legality among similar targets."
     },
     {
       "id": "interaction-annulus-double-cut-eligibility",
@@ -673,11 +596,11 @@
       "stoppingRule": "Stop after one insertion-oriented workspace."
     },
     {
-      "id": "mixed-double-cut-workspace-erasure",
+      "id": "mixed-double-cut-workspace-deiteration",
       "kind": "mixed",
       "family": "temporary-double-cut-workspace",
-      "distinction": "A double cut creates an opposite-polarity annulus in which a useful erasure becomes legal.",
-      "stoppingRule": "Stop after one erasure-oriented workspace."
+      "distinction": "A double cut creates the exact descendant boundary that lets an ancestor source deiterate a complete compound occurrence as one unit.",
+      "stoppingRule": "Stop after one deiteration-oriented boundary workspace."
     },
     {
       "id": "mixed-simplification-preserves-structural-source",
@@ -818,34 +741,6 @@
       "family": "classical-consensus-factor-boundary",
       "distinction": "A product-collapsing relation combines factoring or distribution with excluded middle across a factor boundary.",
       "stoppingRule": "Stop after one product-collapsing dual topology."
-    },
-    {
-      "id": "mixed-artifact-direction-polarity",
-      "kind": "mixed",
-      "family": "artifact-direction-selected-by-polarity",
-      "distinction": "One completed record has a possible exact dissolution site and an absent manifestation field at different polarities.",
-      "stoppingRule": "Stop after one nested-parity contrast."
-    },
-    {
-      "id": "mixed-artifact-downstream-bridge",
-      "kind": "mixed",
-      "family": "artifact-supplies-downstream-bridge",
-      "distinction": "The useful completed record is selected by a later chain or branch dependency.",
-      "stoppingRule": "Stop after one downstream bridge; retain a second only if linear and branching diagrams create different choices."
-    },
-    {
-      "id": "mixed-artifact-creates-structural-authority",
-      "kind": "mixed",
-      "family": "artifact-content-changes-structural-authority",
-      "distinction": "Ordinary manifested artifact content creates an ancestor source for later structural authority.",
-      "stoppingRule": "Stop after one source-creation topology."
-    },
-    {
-      "id": "mixed-artifact-preserves-structural-authority",
-      "kind": "mixed",
-      "family": "artifact-content-changes-structural-authority",
-      "distinction": "Dissolution would remove ordinary artifact content that is the source of later structural authority.",
-      "stoppingRule": "Stop after one source-preservation topology."
     }
   ],
   "puzzles": [
@@ -892,37 +787,39 @@
       "defeats": "Deiteration depends on an equal supporting occurrence, not merely on visual depth or emptiness.",
       "experientialNeighbors": [
         "forked-veil"
-      ]
-    },
-    {
-      "puzzle": "empty-ring-release",
-      "obligations": [
-        "vacuous-ring-elimination"
       ],
-      "visibleSituation": "One empty ownership ring sits between two familiar veils and can dissolve without changing their polarity.",
-      "defeats": "Rings and veils are not interchangeable boundaries: only veils reverse the field, while this unowned ring is vacuous.",
-      "experientialNeighbors": [
-        "single-mark-return"
-      ]
+      "immediateComplementPattern": "empty-cut-ancestor-echo"
     },
     {
       "puzzle": "single-mark-return",
       "obligations": [
-        "ownership-vacuous-elimination",
         "deiteration-ancestor-supported-descendant",
         "hosted-selection-explanation"
       ],
-      "visibleSituation": "Closed wire-free start with 1 semantic owner, 2 owned atomic occurrences, and 2 cuts. Eliminate a single-owner vacuous structure while respecting its semantic owner. Remove a descendant occurrence supported by an equal ancestor occurrence. This first content-bearing problem also provides the live semantic targets on which selection, highlighting, and deselection can be explained without interrupting play.",
-      "defeats": "This establishes elimination of a single vacuous owner while preserving its owned content; there is no prior narrower ownership hypothesis. It overturns the hypothesis that only peer duplicates authorize removal; an equal ancestor occurrence supports a descendant. It defeats the controls-only approach by attaching the explanation to a real ownership and ancestry choice.",
-      "experientialNeighbors": []
+      "visibleSituation": "One globally bound mark appears in an ancestor field and repeats in a descendant field. This first content-bearing problem also provides live semantic targets on which selection, highlighting, and deselection can be explained without interrupting play; terminal binder cleanup follows only after the propositional work is complete.",
+      "defeats": "It overturns the hypothesis that only peer duplicates authorize removal: an equal ancestor occurrence supports a descendant. It also defeats a controls-only exercise by attaching the interaction explanation to a real ancestry choice.",
+      "experientialNeighbors": [],
+      "immediateComplementPattern": "atomic-ancestor-echo"
+    },
+    {
+      "puzzle": "seyric-field-edit-contrast",
+      "obligations": [
+        "polarity-shallow-opposite-contrast"
+      ],
+      "visibleSituation": "In `((A∧X)∨(B∧C)) → ((A∨B)∧(A∨C))`, X obstructs exact support in the negative A source while the corresponding positive A target refuses the same erasure.",
+      "defeats": "It defeats edit-by-proximity and edit-free copying: X must be erased in the legal negative field before the copied A branch can support the continuation.",
+      "experientialNeighbors": [
+        "shallow-edit-legality-contrast",
+        "polarity-bubble-contrast"
+      ]
     },
     {
       "puzzle": "marked-echo-deiteration",
       "obligations": [
         "marked-fragment-supported-deiteration"
       ],
-      "visibleSituation": "One ring owns two identical marked veils: an older support and a repeated descendant inside a deeper field.",
-      "defeats": "It defeats the hypothesis that visual similarity alone is enough: the removable occurrence is the exact descendant under the same owner and ancestor support.",
+      "visibleSituation": "A supported negative-P echo blocks Q inside one implication; removing that exact marked fragment exposes Q, which then feeds a separate Q-to-R continuation and denied R.",
+      "defeats": "The marked deiteration is not an isolated identity cleanup: it creates the only Q source used by the differently shaped downstream route.",
       "experientialNeighbors": [
         "echoed-veil",
         "single-mark-return",
@@ -930,38 +827,12 @@
       ]
     },
     {
-      "puzzle": "shallow-edit-legality-contrast",
-      "obligations": [
-        "polarity-shallow-opposite-contrast",
-        "interaction-host-scope-edit-legality"
-      ],
-      "visibleSituation": "P and Q supports occupy successive shallow negative hosts, while the neighboring positive veil contains Q beside a deeper P-and-Q target; inserting P into that positive host creates the exact local source needed to lift the target.",
-      "defeats": "It defeats edit-by-proximity and owner-color guesses: the adjacent negative host rejects backward insertion, insertion of Q in the positive host leaves the compound unmatched, and only P in that host bridges the split supports to the pre-existing target.",
-      "experientialNeighbors": [
-        "atomic-content-insertion",
-        "polarity-bubble-contrast",
-        "compound-copy-authority-contrast"
-      ]
-    },
-    {
-      "puzzle": "atomic-fragment-erasure",
-      "obligations": [
-        "erasure-compound-semantic-subgraph"
-      ],
-      "visibleSituation": "A tiny empty veil and the densely grouped implication (P∧Q)→(R∨S) share one dark host; its two antecedent marks and two denied alternatives still form one disposable sibling.",
-      "defeats": "Unlike forked-veil's tiny disposable veil, this later tablet defeats the urge to work inward through an intimidating proposition: the sufficient empty veil makes the entire compound root erasable in one selection.",
-      "experientialNeighbors": [
-        "forked-veil",
-        "compound-weakening-boundary"
-      ]
-    },
-    {
       "puzzle": "atomic-content-insertion",
       "obligations": [
         "insertion-atomic-construction-placement"
       ],
-      "visibleSituation": "A shallow marked veil contains P but lacks the inner-owned Q carried by a deeper P-and-Q veil; adding that one atom makes the two complete marked veils exact.",
-      "defeats": "It defeats indiscriminate insertion: only Q under its existing inner owner completes the shallow source, and that completed relationship is consumed immediately to lift the descendant veil.",
+      "visibleSituation": "An R-gated blocked target needs the exact shallow negative-P source to contain Q as well; inserting Q completes that source without disturbing the retained R context.",
+      "defeats": "It defeats indiscriminate insertion: only Q in the shallow source creates the exact marked fragment that can discharge the target.",
       "experientialNeighbors": [
         "marked-echo-deiteration",
         "grouped-branch-construction",
@@ -969,17 +840,30 @@
       ]
     },
     {
-      "puzzle": "compound-copy-authority-contrast",
+      "puzzle": "seyric-compound-copy-authority",
       "obligations": [
         "iteration-ancestor-descendant-compound",
         "interaction-ancestry-copy-authority"
       ],
-      "visibleSituation": "A P-and-Q source lies above a workspace whose separate R-owned support and P-Q-R target bubbles await an exact match, beside a structurally parallel workspace outside its authority.",
-      "defeats": "It defeats visual-nearness authority, both source-destination reversals, and decorative copying: only intact P-Q copied into separate support matches the stable target bubble; target-derived and source-region copies cannot manufacture that sibling authority, the parallel branch is incomparable, and descendant R cannot move upward.",
+      "visibleSituation": "The intact implication `(P∧S)→(Q∧R)` must be copied into descendant branches that separately continue to Q and R.",
+      "defeats": "It defeats atom-by-atom or partial-region copying: only the complete cut-delimited implication has ancestor-to-descendant copy authority.",
+      "experientialNeighbors": [
+        "marked-echo-deiteration",
+        "compound-copy-authority-contrast",
+        "double-cut-copy-license"
+      ]
+    },
+    {
+      "puzzle": "seyric-atomic-double-cut-selection",
+      "obligations": [
+        "double-cut-introduction-atomic-selection"
+      ],
+      "visibleSituation": "Within `(R ∧ (P ∨ (Q ∧ R))) → (P ∨ Q)`, wrapping exactly P creates the double-cut occurrence consumed by the guarded continuation.",
+      "defeats": "It defeats selecting by proximity or extent: wrapping Q, P together with Q, or skipping the wrap cannot feed the same continuation.",
       "experientialNeighbors": [
         "atomic-content-insertion",
-        "double-cut-copy-license",
-        "marked-echo-deiteration"
+        "compound-double-cut-selection",
+        "atomic-double-cut-selection"
       ]
     },
     {
@@ -990,19 +874,6 @@
       "visibleSituation": "Closed wire-free start with 2 semantic owners, 11 owned atomic occurrences, and 6 cuts. Choose the exact compound duplicate over a near match.",
       "defeats": "It overturns the hypothesis that shared atoms or a similar silhouette are enough; the removable compound must match exactly.",
       "experientialNeighbors": []
-    },
-    {
-      "puzzle": "atomic-double-cut-selection",
-      "obligations": [
-        "double-cut-introduction-atomic-selection"
-      ],
-      "visibleSituation": "Inside a paired veil, an outer-owned P sits beside a separately ring-owned Q while an ancestor veil supplies exactly P; wrapping only P creates the matching inner veil and a useful empty annulus.",
-      "defeats": "It defeats selection by proximity or size: wrapping Q preserves the wrong owner, while wrapping P together with Q creates a compound inner veil that cannot match the single-P support.",
-      "experientialNeighbors": [
-        "atomic-content-insertion",
-        "compound-double-cut-selection",
-        "marked-echo-deiteration"
-      ]
     },
     {
       "puzzle": "common-conjunction-factor-base",
@@ -1080,15 +951,6 @@
       "experientialNeighbors": []
     },
     {
-      "puzzle": "nested-owner-introduction",
-      "obligations": [
-        "ownership-nested-discrimination"
-      ],
-      "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 2 cuts. Discriminate the actual semantic owner among nested candidate hosts.",
-      "defeats": "It overturns the hypothesis that nearest visual enclosure determines ownership; nested semantic owners distinguish otherwise similar occurrences.",
-      "experientialNeighbors": []
-    },
-    {
       "puzzle": "polarity-bubble-contrast",
       "obligations": [
         "polarity-nested-parity"
@@ -1106,20 +968,21 @@
       "obligations": [
         "factoring-common-conjunction-compound"
       ],
-      "visibleSituation": "Closed wire-free start with 5 semantic owners, 24 owned atomic occurrences, and 34 cuts. Factor a compound common conjunction component as one whole factor.",
-      "defeats": "It overturns the hypothesis that a common conjunction factor must be atomic rather than an exact compound whole.",
+      "visibleSituation": "Six global proposition owners form two asymmetric branches sharing the intact P-or-Q factor; exposing the factored result supplies the U continuation.",
+      "defeats": "It overturns both atomic-only factoring and endpoint factoring: the common factor is compound, and the factored whole is consumed downstream rather than merely opposed by an existing copy.",
       "experientialNeighbors": []
     },
     {
-      "puzzle": "useful-vacuous-owner-workspace",
+      "puzzle": "seyric-extraction-continuation",
       "obligations": [
-        "ownership-useful-vacuous-introduction"
+        "mixed-extraction-continuation"
       ],
-      "visibleSituation": "Two differently owned marks begin flat beside a pre-existing bubble carrying the same open P-and-Q pattern and a marked final veil. Wrapping exactly the flat pair in one fresh bubble creates the missing ancestor-shaped source before cleanup.",
-      "defeats": "The target bubble has no justifying occurrence beforehand. The exact introduced bubble enables its deiteration and remains intact during that operation; either one-mark bubble, a bubble around the target, the larger source-plus-target bubble, and an exact double cut all fail to create the same ownership-sensitive match.",
+      "visibleSituation": "From P and P→(Q∧S), the compound intermediate supplies Q to Q→R while the irrelevant S component remains outside the continuation.",
+      "defeats": "It defeats treating product extraction as terminal: Q is extracted from an intermediate result specifically to feed the later implication to R.",
       "experientialNeighbors": [
-        "double-cut-insertion-workspace",
-        "nested-owner-introduction"
+        "rm-fa",
+        "rm-c3",
+        "two-mark-projection"
       ]
     },
     {
@@ -1133,15 +996,6 @@
       "experientialNeighbors": []
     },
     {
-      "puzzle": "weakening-introduction",
-      "obligations": [
-        "weakening-atomic-retained-proposition"
-      ],
-      "visibleSituation": "Closed wire-free start with 2 semantic owners, 3 owned atomic occurrences, and 4 cuts. Recognize the atomic proposition retained through weakening.",
-      "defeats": "This establishes that an atomic proposition survives irrelevant conjunctive context; there is no prior narrower retained-shape hypothesis.",
-      "experientialNeighbors": []
-    },
-    {
       "puzzle": "compound-weakening-boundary",
       "obligations": [
         "erasure-compound-semantic-subgraph",
@@ -1150,8 +1004,21 @@
       "visibleSituation": "A complete compound proposition must remain intact while a separate irrelevant compound semantic subgraph is erased as one whole fragment.",
       "defeats": "It defeats the hypothesis that weakening may nibble at internal atoms: the irrelevant disjunctive component is removed whole while the required disjunction remains intact.",
       "experientialNeighbors": [
-        "weakening-introduction",
+        "two-mark-projection",
         "atomic-fragment-erasure"
+      ],
+      "immediateComplementPattern": "compound-retention-with-separate-junk"
+    },
+    {
+      "puzzle": "atomic-fragment-erasure",
+      "obligations": [
+        "erasure-compound-semantic-subgraph"
+      ],
+      "visibleSituation": "A tiny empty veil and the densely grouped implication (P∧Q)→(R∨S) share one dark host; its two antecedent marks and two denied alternatives still form one disposable sibling.",
+      "defeats": "Unlike forked-veil's tiny disposable veil, this later tablet defeats the urge to work inward through an intimidating proposition: the sufficient empty veil makes the entire compound root erasable in one selection.",
+      "experientialNeighbors": [
+        "forked-veil",
+        "compound-weakening-boundary"
       ]
     },
     {
@@ -1161,7 +1028,8 @@
       ],
       "visibleSituation": "Closed wire-free start with 2 semantic owners, 3 owned atomic occurrences, and 2 cuts. Project one atomic conjunct from a binary conjunction.",
       "defeats": "This establishes selection of one atomic component from a binary product; there is no prior narrower component-choice hypothesis.",
-      "experientialNeighbors": []
+      "experientialNeighbors": [],
+      "immediateComplementPattern": "binary-atomic-projection"
     },
     {
       "puzzle": "compound-projection",
@@ -1172,7 +1040,8 @@
       "defeats": "It defeats the hypothesis that projection always selects an atomic mark; the selected component is the intact Q-or-R proposition.",
       "experientialNeighbors": [
         "two-mark-projection"
-      ]
+      ],
+      "immediateComplementPattern": "compound-role-projection"
     },
     {
       "puzzle": "ternary-projection-choice",
@@ -1183,7 +1052,8 @@
       "defeats": "It defeats the binary left/right model of projection: three peer conjuncts are available and the goal owner singles out the middle one.",
       "experientialNeighbors": [
         "two-mark-projection"
-      ]
+      ],
+      "immediateComplementPattern": "ternary-target-projection"
     },
     {
       "puzzle": "left-injection-introduction",
@@ -1200,8 +1070,8 @@
         "insertion-compound-construction-unit",
         "injection-grouped-branch"
       ],
-      "visibleSituation": "A positive branch field contains one pre-existing cut-delimited P-and-Q target while an equal grouped source is staged behind a sibling double veil. The missing peer must be inserted with its boundary and both internal conjuncts intact.",
-      "defeats": "Before insertion the staged group is not an ancestor of the target. Only the exact inserted P-and-Q branch enables the target's deiteration; two adjacent atomic insertions, a P-only branch, a larger P-and-Q-and-P branch, and the negative target host do not. The inserted branch survives that use until the staged source is later promoted.",
+      "visibleSituation": "Within an R-and-not-T context, the shallow T source is completed by inserting one cut-delimited not-(P-and-Q) fragment, after which it exactly supports the blocked target.",
+      "defeats": "Loose atoms, P alone, a larger group, or the wrong host do not create the required whole occurrence; the cut boundary and both internal marks must be inserted together.",
       "experientialNeighbors": [
         "atomic-content-insertion",
         "left-injection-introduction"
@@ -1257,7 +1127,8 @@
       "defeats": "It defeats the hypothesis that left-to-right drawing order changes a conjunction or exchanges the propositions between their semantic owners.",
       "experientialNeighbors": [
         "disjunction-exchange-recognition"
-      ]
+      ],
+      "immediateComplementPattern": "atomic-product-exchange"
     },
     {
       "puzzle": "compound-conjunction-exchange",
@@ -1268,7 +1139,8 @@
       "defeats": "It defeats the hypothesis that only atomic operands can exchange visually; the complete opposite-connective operand keeps its owner and boundary.",
       "experientialNeighbors": [
         "atomic-conjunction-exchange"
-      ]
+      ],
+      "immediateComplementPattern": "compound-role-product-exchange"
     },
     {
       "puzzle": "disjunction-exchange-recognition",
@@ -1277,16 +1149,17 @@
       ],
       "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 8 cuts. Recognize atomic disjunction operands exchanged under the same owner.",
       "defeats": "This establishes owner-preserving atomic disjunction exchange recognition; there is no prior narrower operand hypothesis.",
-      "experientialNeighbors": []
+      "experientialNeighbors": [],
+      "immediateComplementPattern": "atomic-sum-exchange"
     },
     {
       "puzzle": "compound-disjunction-exchange",
       "obligations": [
         "exchange-disjunction-compound",
-        "mixed-double-cut-workspace-erasure"
+        "mixed-double-cut-workspace-deiteration"
       ],
-      "visibleSituation": "A compound disjunction operand is exchanged whole with another operand while every semantic owner remains fixed. The same open start also supports an erasure-oriented temporary double-cut workspace: Wrapping the denied compound P∨(Q∧R) creates a negative annulus; iterating that complete nested source into the annulus makes whole-compound erasure legal and mandatory before the boundary can be discharged.",
-      "defeats": "It defeats the hypothesis that only atomic alternatives can exchange visually; the complete conjunctive branch keeps both owners and one branch boundary. The annulus is not decorative: its negative polarity admits whole-compound erasure, and leaving the temporary nested disjunction in place blocks double-cut elimination.",
+      "visibleSituation": "A source disjunction contains P and the intact compound branch Q∧R. The target shows those same branches exchanged inside a deeper field beside unrelated X. Wrapping exactly the two exchanged branches creates the missing disjunction boundary, which the source can discharge.",
+      "defeats": "It defeats atomwise and oversized wrapping: only the two complete disjunction branches, with Q∧R preserved as one branch, acquire the source's boundary.",
       "experientialNeighbors": [
         "disjunction-exchange-recognition",
         "double-cut-insertion-workspace"
@@ -1299,7 +1172,8 @@
       ],
       "visibleSituation": "Closed wire-free start with 3 semantic owners, 6 owned atomic occurrences, and 2 cuts. Recognize the minimal three-role conjunction under reassociation.",
       "defeats": "It overturns the two-operand hypothesis for conjunction recognition by making three semantic roles participate in the same flat owner.",
-      "experientialNeighbors": []
+      "experientialNeighbors": [],
+      "immediateComplementPattern": "flat-ternary-product"
     },
     {
       "puzzle": "conjunction-reassociation-role-scope",
@@ -1307,8 +1181,8 @@
         "reassociation-conjunction-compound-role",
         "reassociation-conjunction-site-scope-choice"
       ],
-      "visibleSituation": "Among multiple conjunction sites, one visibly compound opposite-connective proposition must remain one semantic role, and that role identifies the correct scope boundary.",
-      "defeats": "It defeats imagined binary grouping: the opposite-connective R-or-S operand remains one role and identifies the useful projection scope among flat P, Q, and compound sites.",
+      "visibleSituation": "The flat source P, Q, and R-or-S must be matched as one three-role conjunction to a consumer leading through T to U; the opposite-connective role remains intact.",
+      "defeats": "Projecting only R-or-S or selecting loose internal atoms cannot start the continuation: the full flat conjunction scope is the usable occurrence.",
       "experientialNeighbors": [
         "conjunction-reassociation-recognition"
       ]
@@ -1320,15 +1194,16 @@
       ],
       "visibleSituation": "Closed wire-free start with 3 semantic owners, 6 owned atomic occurrences, and 10 cuts. Recognize the minimal three-role disjunction under reassociation.",
       "defeats": "It overturns the two-alternative hypothesis for disjunction recognition by making three semantic roles participate in the same flat owner.",
-      "experientialNeighbors": []
+      "experientialNeighbors": [],
+      "immediateComplementPattern": "flat-ternary-sum"
     },
     {
       "puzzle": "structural-recognition-routing-choice",
       "obligations": [
         "interaction-structural-recognition-routing"
       ],
-      "visibleSituation": "Exchange or reassociation recognition determines which intact component is projected or which alternative family is constructed, without any structural rewrite move.",
-      "defeats": "It defeats a fixed first-branch strategy: only the exchanged middle Q component reaches a supplied alternative, while the visually first S branch has no authority.",
+      "visibleSituation": "The intact marked negative-(P-and-Q) fragment is the only source that can enter the A-to-R link and then continue through R-to-S.",
+      "defeats": "It defeats routing from a visually nearby atom or breaking the marked source apart: the whole recognized fragment must survive to start the continuation.",
       "experientialNeighbors": [
         "weakening-injection-weave"
       ]
@@ -1455,7 +1330,8 @@
       ],
       "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 5 cuts. Recognize an atomic proposition repeated whole in conjunction-family absorption.",
       "defeats": "This establishes the base conjunction-absorption relation; there is no prior narrower operand hypothesis to overturn.",
-      "experientialNeighbors": []
+      "experientialNeighbors": [],
+      "immediateComplementPattern": "atomic-absorption"
     },
     {
       "puzzle": "b6",
@@ -1464,7 +1340,8 @@
       ],
       "visibleSituation": "Closed wire-free start with 4 semantic owners, 16 owned atomic occurrences, and 28 cuts. Recognize a compound proposition repeated whole in conjunction-family absorption.",
       "defeats": "It overturns the hypothesis that absorption works only when the repeated whole is atomic.",
-      "experientialNeighbors": []
+      "experientialNeighbors": [],
+      "immediateComplementPattern": "compound-role-absorption"
     },
     {
       "puzzle": "i-ao",
@@ -1498,7 +1375,7 @@
       "obligations": [
         "contraposition-compound-endpoint"
       ],
-      "visibleSituation": "Closed wire-free start with 3 semantic owners, 6 owned atomic occurrences, and 8 cuts. Negate and reverse a compound implication endpoint as one whole proposition.",
+      "visibleSituation": "A contraposition problem reverses an implication while preserving its conjunctive endpoint as one whole proposition.",
       "defeats": "It overturns the hypothesis that contraposition may negate and reverse only atomic endpoints rather than a compound endpoint as one whole.",
       "experientialNeighbors": []
     },
@@ -1556,8 +1433,8 @@
       "obligations": [
         "de-morgan-negated-conjunction-forward"
       ],
-      "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 8 cuts. Transform a negated conjunction into a disjunction of negated components.",
-      "defeats": "This establishes the forward negated-conjunction relation; there is no prior narrower direction hypothesis.",
+      "visibleSituation": "A negated atomic conjunction faces a denied disjunction of the two negations. Each source atom must acquire its own double veil before the completed transformed whole can discharge the denial.",
+      "defeats": "The start is not an identity: neither atomic branch alone produces the disjunction of negations, and the whole forward transformation is consumed after construction.",
       "experientialNeighbors": []
     },
     {
@@ -1565,8 +1442,8 @@
       "obligations": [
         "de-morgan-ternary-family-generalizer"
       ],
-      "visibleSituation": "Closed wire-free start with 3 semantic owners, 6 owned atomic occurrences, and 8 cuts. Generalize a De Morgan family across the first ternary connective.",
-      "defeats": "It overturns the hypothesis that De Morgan matching is intrinsically binary; three peer components participate without hidden grouping.",
+      "visibleSituation": "A negated three-role conjunction faces a denied three-way disjunction of the separate negations. All three source atoms must be transformed before the whole target exists.",
+      "defeats": "It overturns the binary-only interpretation without adding a fourth padding role: omitting any one of the three peer transformations leaves the denial unmatched.",
       "experientialNeighbors": []
     },
     {
@@ -1574,8 +1451,8 @@
       "obligations": [
         "de-morgan-compound-disjunction-family"
       ],
-      "visibleSituation": "A negated disjunction with a conjunctive left operand expands while preserving that compound operand as one whole proposition.",
-      "defeats": "It overturns the atomic-operand-only interpretation for the disjunction-family De Morgan relation; it does not substitute for the simple forward base case.",
+      "visibleSituation": "Opening a negated disjunction produces a negated compound P-and-Q branch and a negated atomic R branch; the two results separately feed S and T before those outputs meet a denied S-and-T goal.",
+      "defeats": "The compound branch cannot be split into incidental atoms and the other branch cannot be erased as junk: each transformed output supplies a different downstream consumer.",
       "experientialNeighbors": []
     },
     {
@@ -1583,8 +1460,8 @@
       "obligations": [
         "de-morgan-negated-conjunction-reverse"
       ],
-      "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 8 cuts. Transform a disjunction of negated components into a negated conjunction.",
-      "defeats": "It overturns the hypothesis that the conjunction-family relation is usable only from negated conjunction to separated alternatives.",
+      "visibleSituation": "A disjunction of separately negated atoms faces a denied negated conjunction. Opening both double-veiled source branches constructs the whole reverse De Morgan form used to discharge the denial.",
+      "defeats": "The reverse direction is a construction rather than a pre-existing identity: both separated branches must contribute before the negated conjunction can be consumed.",
       "experientialNeighbors": []
     },
     {
@@ -1592,30 +1469,22 @@
       "obligations": [
         "de-morgan-compound-conjunction-family"
       ],
-      "visibleSituation": "A conjunction-family De Morgan relation preserves one opposite-connective compound component as a whole.",
-      "defeats": "Defeats: De Morgan can preserve only atomic components.",
+      "visibleSituation": "A negated conjunction has a disjunctive P-or-Q role beside atomic R. The compound role is wrapped as one unit and R separately before the completed disjunction of negations can be consumed.",
+      "defeats": "It defeats atom-only transformation and partial compound matching: both the intact opposite-connective role and the atomic peer are necessary parts of the transformed whole.",
       "experientialNeighbors": [
         "sey-dm-ec-i01",
         "sey-dm-ec-c01"
       ]
     },
     {
-      "puzzle": "sey-red-i01",
-      "obligations": [
-        "reductio-direct-atomic-contradiction"
-      ],
-      "visibleSituation": "Closed wire-free start with 2 semantic owners, 3 owned atomic occurrences, and 3 cuts. Derive a direct atomic contradiction under the reductio assumption.",
-      "defeats": "This establishes direct atomic contradiction under the assumption; there is no prior narrower contradiction hypothesis.",
-      "experientialNeighbors": []
-    },
-    {
       "puzzle": "sey-red-c01",
       "obligations": [
-        "reductio-compound-conclusion"
+        "excluded-middle-irrelevant-junk-recognition"
       ],
-      "visibleSituation": "Closed wire-free start with 3 semantic owners, 4 owned atomic occurrences, and 3 cuts. Use reductio to establish a compound desired conclusion treated as a whole.",
-      "defeats": "It overturns the hypothesis that reductio may discharge only an atomic desired conclusion; the compound conclusion is treated as one whole.",
-      "experientialNeighbors": []
+      "visibleSituation": "A direct P/not-P complement sits beside a large but coherent transitive-chain fragment that can be removed as one irrelevant unit.",
+      "defeats": "It defeats the assumption that the most elaborate connected fragment must contain the key: the simple complement remains decisive despite intimidating irrelevant structure.",
+      "experientialNeighbors": [],
+      "immediateComplementPattern": "atomic-complement-amid-coherent-junk"
     },
     {
       "puzzle": "sey-pei-i01",
@@ -1651,13 +1520,13 @@
     {
       "puzzle": "assumption-relevant-structured-reductio",
       "obligations": [
+        "reductio-compound-conclusion",
         "reductio-assumption-relevant-contradiction",
         "mixed-structured-contradiction-reductio"
       ],
       "visibleSituation": "Under denial of a compound conclusion, one structured contradiction depends on that denial while a competing contradiction is visible but cannot discharge it.",
       "defeats": "Defeats: Any visible contradiction can discharge any denied conclusion regardless of scope or dependency.",
       "experientialNeighbors": [
-        "sey-red-i01",
         "sey-red-c01"
       ]
     },
@@ -1666,8 +1535,8 @@
       "obligations": [
         "mixed-product-to-sum-handoff"
       ],
-      "visibleSituation": "Closed wire-free start with 3 semantic owners, 4 owned atomic occurrences, and 5 cuts. A grouped product relation hands off into a sum relation analogous to `(A ∧ B) → (B ∨ C)`.",
-      "defeats": "It overturns the strategy of handling projection and injection independently: the selected product component determines the useful alternative handoff.",
+      "visibleSituation": "Weakening removes spare R from an enclosed P-and-Q-and-R source, creating the exact whole P-and-Q needed by one branch of an alternative consumer; its T result then feeds T-to-U.",
+      "defeats": "Weakening and injection are not adjacent decorations: the whole source is unusable before weakening, the spare alternative cannot replace it, and the selected branch supplies a differently shaped downstream continuation.",
       "experientialNeighbors": []
     },
     {
@@ -1749,8 +1618,8 @@
       "obligations": [
         "mixed-classical-consensus-branch-building"
       ],
-      "visibleSituation": "A manufactured classical split and distribution across a factor boundary expose one shared term whose recognition changes how the branches are built.",
-      "defeats": "Defeats: The shared consensus term is merely another independent case.",
+      "visibleSituation": "A manufactured P/not-P split creates two branches whose construction crosses a factor boundary and consumes the same shared factor in both branches.",
+      "defeats": "The shared consensus factor is not another independent case: preserving and using it changes how both classical branches must be built.",
       "experientialNeighbors": [
         "excluded-middle-manufactures-cases",
         "common-conjunction-factor-base"
@@ -1782,8 +1651,8 @@
       "obligations": [
         "mixed-negation-creates-sum-consumer"
       ],
-      "visibleSituation": "Eliminating the two branch double cuts exposes ¬(P∧Q) as the alternatives ¬P∨¬Q, whose branches feed separate ¬P→R and ¬Q→R case handlers.",
-      "defeats": "The produced alternatives cannot be treated as a product; each branch must enter its matching case consumer.",
+      "visibleSituation": "The De Morgan alternatives ¬P and ¬Q feed separate case handlers to R; their common R result must then pass through R→S to meet a denied S.",
+      "defeats": "The produced alternatives cannot be treated as a product or as an endpoint: each enters its matching case consumer and the common result must continue downstream.",
       "experientialNeighbors": []
     },
     {
@@ -1791,8 +1660,8 @@
       "obligations": [
         "mixed-boundary-topology-copy-authority"
       ],
-      "visibleSituation": "Two peer P occurrences initially license either peer removal; wrapping one P in a double cut moves it below the other and removes its authority over that peer while preserving the reverse authority.",
-      "defeats": "Net polarity equivalence does not preserve ancestry direction: the new boundary changes which exact occurrence may justify which removal.",
+      "visibleSituation": "A cut-delimited P source and a P inside an incomparable deeper field are not initially in a usable copy direction. Wrapping exactly the deeper P creates a descendant cut matching the matrix-level source; Q or P+Q produces the wrong structure.",
+      "defeats": "It defeats net-polarity and proximity guesses: source and target P do not justify either removal before the new double-cut ancestry exists.",
       "experientialNeighbors": [
         "compound-copy-authority-contrast"
       ]
@@ -1802,8 +1671,8 @@
       "obligations": [
         "mixed-double-cut-workspace-insertion"
       ],
-      "visibleSituation": "A flat P-and-Q support accompanies a content-bearing P-and-Q double cut and a separate marked P-and-Q field in negative r3. Wrapping the complete pair creates positive ancestor annulus dc, where an inserted matching double cut becomes its sole exact source.",
-      "defeats": "The workspace and insertion are both material: r3 rejects insertion, pre-existing positive r4 and r6 are descendants or siblings rather than ancestor workspaces, dc_0 remains negative, and a P-only insertion cannot discharge the complete pair.",
+      "visibleSituation": "The complete P-Q double cut is the target. The matrix rejects insertion, while the existing positive cuts place a copy inside or beside the target and give it no ancestor authority. Wrapping the target creates a useful positive ancestor annulus where inserting the exact P-Q double cut enables its discharge.",
+      "defeats": "It defeats permissive-host and partial-shape guesses: the matrix and inner annulus have the wrong polarity, the pre-existing positive cuts have the wrong ancestry, and P alone cannot discharge the complete double cut.",
       "experientialNeighbors": [
         "atomic-content-insertion",
         "compound-double-cut-selection",
@@ -1815,8 +1684,8 @@
       "obligations": [
         "mixed-simplification-preserves-structural-source"
       ],
-      "visibleSituation": "A sole P occurrence in the negative premise field looks erasable, but it is the only ancestor source that can discharge the P side of P→Q before Q reaches the denied target.",
-      "defeats": "Locally legal simplification is not globally harmless: erasing P first removes the exact structural authority needed by the implication bridge.",
+      "visibleSituation": "A sole P occurrence looks erasable, but it is the only ancestor source for both P→Q and P→R before Q and R jointly meet the denied conjunction.",
+      "defeats": "Locally legal simplification is not globally harmless: erasing P removes the exact authority required by two separate downstream branches.",
       "experientialNeighbors": [
         "compound-copy-authority-contrast"
       ]
@@ -1848,109 +1717,6 @@
       "defeats": "Mapping the branches does not finish their preparation; the exact whole shared K must be matched again after the branch-local result appears.",
       "experientialNeighbors": [
         "b3"
-      ]
-    },
-    {
-      "puzzle": "rm-c3",
-      "obligations": [
-        "mixed-extraction-continuation"
-      ],
-      "visibleSituation": "Closed wire-free start with 4 semantic owners, 7 owned atomic occurrences, and 6 cuts. A product result contains the exact component consumed by a later implication.",
-      "defeats": "It overturns the strategy of treating extraction as terminal: the exact extracted component is the only input accepted by the continuation.",
-      "experientialNeighbors": []
-    },
-    {
-      "puzzle": "sey-ref-sel-i01",
-      "obligations": [
-        "exact-theorem-selection-simple-near-source"
-      ],
-      "visibleSituation": "Closed wire-free start with 3 semantic owners, 6 owned atomic occurrences, and 6 cuts. Choose the simple exact completed theorem source over a near match.",
-      "defeats": "It overturns the hypothesis that a similar-looking completed theorem is sufficient; the selected source side must match exactly.",
-      "experientialNeighbors": []
-    },
-    {
-      "puzzle": "compound-theorem-source-choice",
-      "obligations": [
-        "exact-theorem-selection-compound-side"
-      ],
-      "visibleSituation": "The completed two-variable and three-variable compound excluded-middle records are both available, but the displayed occurrence exactly matches only the complete two-variable theorem side; the extra-variable near source must be refused.",
-      "defeats": "Defeats the strategy that a larger related theorem may stand in for a smaller complete theorem-side occurrence; whole closed content must match exactly.",
-      "experientialNeighbors": [
-        "sey-ref-sel-i01"
-      ]
-    },
-    {
-      "puzzle": "useful-manifestation-target",
-      "obligations": [
-        "manifestation-legal-target-choice"
-      ],
-      "visibleSituation": "A surviving completed theorem has multiple legal manifestation hosts, but only one creates ordinary content useful to the open problem.",
-      "defeats": "Defeats the strategy that every polarity-legal manifestation host is interchangeable; only an ancestor host supplies the downstream exact occurrence.",
-      "experientialNeighbors": []
-    },
-    {
-      "puzzle": "sey-ref-dis-i01",
-      "obligations": [
-        "dissolution-simple-exact-occurrence"
-      ],
-      "visibleSituation": "Closed wire-free start with 2 semantic owners, 4 owned atomic occurrences, and 4 cuts. Choose a simple exact occurrence for dissolution.",
-      "defeats": "This establishes that an exact present occurrence may be dissolved; there is no prior narrower occurrence hypothesis.",
-      "experientialNeighbors": []
-    },
-    {
-      "puzzle": "compound-context-dissolution",
-      "obligations": [
-        "dissolution-compound-context-exactness"
-      ],
-      "visibleSituation": "A surviving compound theorem has one exact dissolvable occurrence and one contextually near but nonexact occurrence.",
-      "defeats": "Defeats the strategy that local presence makes any enclosing compound selection dissolvable; the selected occurrence must equal the entire theorem side with no adjacent context.",
-      "experientialNeighbors": [
-        "sey-ref-dis-i01"
-      ]
-    },
-    {
-      "puzzle": "artifact-creates-copy-authority",
-      "obligations": [
-        "mixed-artifact-creates-structural-authority"
-      ],
-      "visibleSituation": "Ordinary content manifested from a surviving artifact becomes the exact ancestor source for a later structural copy decision.",
-      "defeats": "Defeats the strategy that a descendant copy may be removed before any ordinary ancestor occurrence exists; manifestation creates the structural authority and leaves no provenance privilege.",
-      "experientialNeighbors": [
-        "compound-copy-authority-contrast"
-      ]
-    },
-    {
-      "puzzle": "artifact-polarity-direction-contrast",
-      "obligations": [
-        "mixed-artifact-direction-polarity"
-      ],
-      "visibleSituation": "The same surviving theorem artifact has exact candidate sites at different nested parities, and the useful manifestation or dissolution direction changes with polarity.",
-      "defeats": "Defeats the rule that artifact direction is fixed independently of host polarity; manifestation and dissolution reverse legality across nested parity.",
-      "experientialNeighbors": [
-        "useful-manifestation-target",
-        "compound-context-dissolution"
-      ]
-    },
-    {
-      "puzzle": "artifact-preserves-copy-authority",
-      "obligations": [
-        "mixed-artifact-preserves-structural-authority"
-      ],
-      "visibleSituation": "An exact artifact occurrence is dissolvable but is also the sole ancestor or peer authority required by a later structural step.",
-      "defeats": "Defeats the strategy that an exact dissolvable occurrence is locally disposable; it must remain while it is the sole ordinary ancestor authority for dependent copies.",
-      "experientialNeighbors": [
-        "preserve-sole-structural-source"
-      ]
-    },
-    {
-      "puzzle": "artifact-selected-downstream-bridge",
-      "obligations": [
-        "mixed-artifact-downstream-bridge"
-      ],
-      "visibleSituation": "The completed two-link and three-link composition records are both available, but a later consumer accepts only the entire closed two-link theorem content as one ordinary manifested proposition; the three-link theorem is a relevant near source whose extra link cannot satisfy that consumer.",
-      "defeats": "Defeats the strategy that any longer related composition artifact can support a shorter downstream consumer; the entire manifested proposition must be the exact required bridge.",
-      "experientialNeighbors": [
-        "contrapositive-composition-bridge"
       ]
     }
   ]

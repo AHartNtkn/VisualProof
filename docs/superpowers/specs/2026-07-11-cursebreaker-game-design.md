@@ -190,7 +190,8 @@ Production styling begins only after the user selects or refines a demonstrated 
 
 ## 6. Content and progression authority
 
-One strict versioned JSON manifest selects the immutable bundled content package.
+One strict version-3 JSON manifest selects the immutable bundled content package
+and maps every catalog culture to its own build-only coverage file.
 Core puzzles contain only a stable puzzle identity and semantic starting diagram.
 Progression, catalog/lore, authored guidance, and build-only coverage are
 independent records keyed by puzzle identity; none is part of the logical puzzle
@@ -210,6 +211,9 @@ A build-time verifier rejects:
 - cyclic, missing, or unreachable prerequisites;
 - unavailable or circular broken-seal reference dependencies;
 - duplicate identities or canonical starting problems;
+- Seyric matrix duplicates that differ only by global-prefix name or order;
+- unclassified or duplicate direct-complement Seyric patterns;
+- Seyric starts or witnesses that cross the pure-propositional authoring boundary;
 - uncovered obligations or puzzles with no approved obligation;
 - redundant required-or-optional placement fields;
 - invalid, open, or unreachable recognized-state teacher triggers;
@@ -270,15 +274,22 @@ not to this overview.
 ### 8.1 Oldest propositional culture
 
 The oldest surviving sealing tradition is structurally primitive and purely
-propositional. Its collection covers cut ownership and polarity, insertion and
+propositional. Its collection covers cut containment and polarity, insertion and
 erasure, iteration and deiteration, structural recognition, constructive and
-classical propositional relationships, and exact completed-artifact use. Passive
+classical propositional relationships. Passive
 guidance on a suitable first problem explains selection and timeline behavior;
 these interface explanations do not warrant controls-only puzzles.
 
 ### 8.2 Oldest propositional culture — outer-universal development
 
-This is the substantial continuation of the same pure-propositional culture. Nearly every theorem has outer closure of the form `∀P,Q,R,…`. Non-universal proposition quantification belongs to the next culture.
+This is the substantial continuation of the same pure-propositional culture.
+Every authored start has one ordinary outer goal cut, an optional uninterrupted
+prefix of arity-zero bubbles, and an atom-and-cut matrix with no bubbles or wires.
+Its logical shape is `∀P,Q,R,… . M(P,Q,R,…)`, where `M` contains no quantifiers.
+The prefix only closes global proposition names: nontrivial binder placement,
+scope, ownership, vacuity, introduction, movement, distribution, and artifact-
+mediated quantifier reasoning belong to the next culture. This content boundary
+does not restrict the proof moves available to the player.
 
 Required theorem families:
 
@@ -292,7 +303,6 @@ Required theorem families:
 - distribution and absorption;
 - contraposition and De Morgan families;
 - delayed classical families: excluded middle, double-negation elimination, reductio, and Peirce-style forms;
-- exact broken-seal reference choice among multiple older artifacts;
 - the same semantic family in structurally different diagrams.
 
 Exit evidence: solve unfamiliar multi-proposition seals through polarity and structural reasoning without stepwise dialogue or silhouette matching.

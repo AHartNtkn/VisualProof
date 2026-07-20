@@ -831,7 +831,7 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('reveals the additive onboarding spine before the preserved practice graph', async () => {
+  it('reveals the required Seyric spine before optional culture practice', async () => {
     const page = await openFixture('opening')
     try {
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles().slice(0, 6)))
@@ -840,8 +840,8 @@ describe('authoritative production renderer runtime', () => {
           'four-veils',
           'forked-veil',
           'echoed-veil',
-          'empty-ring-release',
           'single-mark-return',
+          'marked-echo-deiteration',
         ])
       const status = async (puzzle: string): Promise<string | null> => page
         .locator(`[data-puzzle="${puzzle}"]`).getAttribute('data-status')
@@ -858,13 +858,13 @@ describe('authoritative production renderer runtime', () => {
       await completeProductionPuzzle(page, 'forked-veil', 2)
       expect(await status('echoed-veil')).toBe('unlocked')
       await completeProductionPuzzle(page, 'echoed-veil', 3)
-      expect(await status('empty-ring-release')).toBe('unlocked')
-      await completeProductionPuzzle(page, 'empty-ring-release', 2)
       expect(await status('single-mark-return')).toBe('unlocked')
       expect(await status('two-mark-projection')).toBe('locked')
       await completeProductionPuzzle(page, 'single-mark-return', 4)
       expect(await status('two-mark-projection')).toBe('unlocked')
       expect(await status('atomic-fragment-erasure')).toBe('locked')
+      await page.locator('.curse-folio-culture-tab').nth(1).click()
+      expect(await status('blank-witness')).toBe('unlocked')
     } finally { await page.close() }
   })
 
@@ -1004,7 +1004,6 @@ describe('authoritative production renderer runtime', () => {
       await completeProductionPuzzle(page, 'two-veils', 1)
       await completeProductionPuzzle(page, 'forked-veil', 2)
       await completeProductionPuzzle(page, 'echoed-veil', 3)
-      await completeProductionPuzzle(page, 'empty-ring-release', 2)
       await completeProductionPuzzle(page, 'single-mark-return', 4)
       const record = page.locator(`[data-puzzle="${puzzle}"]`)
       expect(await record.getAttribute('data-status')).toBe('unlocked')

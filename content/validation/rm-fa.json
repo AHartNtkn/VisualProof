@@ -3,77 +3,34 @@
   "solution": [
     {
       "rule": "deiteration",
-      "sel": {
-        "region": "r16",
-        "regions": [
-          "r17"
-        ],
-        "nodes": [],
-        "wires": []
-      },
+      "sel": { "region": "r16", "regions": ["r17"], "nodes": [], "wires": [] },
       "fuel": 100
     },
-    {
-      "rule": "doubleCutElim",
-      "region": "r16"
-    },
+    { "rule": "doubleCutElim", "region": "r16" },
     {
       "rule": "deiteration",
-      "sel": {
-        "region": "r33",
-        "regions": [
-          "r34",
-          "r37"
-        ],
-        "nodes": [],
-        "wires": []
-      },
+      "sel": { "region": "r33", "regions": ["r34", "r37"], "nodes": [], "wires": [] },
+      "fuel": 100
+    },
+    { "rule": "doubleCutElim", "region": "r33" },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r42", "regions": [], "nodes": ["n25"], "wires": [] },
       "fuel": 100
     },
     {
       "rule": "erasure",
-      "sel": {
-        "region": "r6",
-        "regions": [
-          "r7",
-          "r27",
-          "r30"
-        ],
-        "nodes": [],
-        "wires": []
-      }
+      "sel": { "region": "r40", "regions": ["r7", "r27", "r30"], "nodes": ["n24"], "wires": [] }
     },
-    {
-      "rule": "vacuousElim",
-      "region": "r6"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r5"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r4"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r3"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r2"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r1"
-    }
+    { "rule": "vacuousElim", "region": "r40" },
+    { "rule": "vacuousElim", "region": "r6" },
+    { "rule": "vacuousElim", "region": "r5" },
+    { "rule": "vacuousElim", "region": "r4" },
+    { "rule": "vacuousElim", "region": "r3" },
+    { "rule": "vacuousElim", "region": "r2" },
+    { "rule": "doubleCutElim", "region": "r1" }
   ],
   "availableArtifacts": [],
-  "expectedRules": [
-    "deiteration",
-    "doubleCutElim",
-    "erasure",
-    "vacuousElim"
-  ],
+  "expectedRules": ["deiteration", "doubleCutElim", "erasure", "vacuousElim"],
   "recognizedStates": []
 }

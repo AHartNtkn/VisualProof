@@ -82,10 +82,11 @@ export function minimalSource(): TestCatalogSource {
 export function buildTestCatalog(source: TestCatalogSource): GameCatalog {
   const files: Record<string, unknown> = {
     'manifest.json': {
-      format: 'cursebreaker-content', version: 2,
+      format: 'cursebreaker-content', version: 3,
       puzzles: source.puzzles.map(({ id }) => `puzzles/${id}.json`),
       definitions: [...source.context.relations.keys()].sort().map((id) => `definitions/${id}.json`),
-      progression: 'progression/core.json', coverage: 'coverage/test.json',
+      progression: 'progression/core.json',
+      coverage: Object.fromEntries(source.cultures.map(({ id }) => [id, `coverage/${id}.json`])),
       catalog: 'catalog/test.json', guidance: 'guidance/test.json',
     },
     'progression/core.json': {
@@ -95,17 +96,6 @@ export function buildTestCatalog(source: TestCatalogSource): GameCatalog {
       })),
       placements: source.puzzles.map((puzzle) => ({
         puzzle: puzzle.id, prerequisites: puzzle.prerequisites,
-      })),
-    },
-    'coverage/test.json': {
-      obligations: [{
-        id: 'fixture-obligation', kind: 'isolated', family: 'fixture',
-        distinction: 'Exercise the fixture proof.', stoppingRule: 'Stop after one fixture.',
-      }],
-      puzzles: source.puzzles.map(({ id: puzzle }) => ({
-        puzzle, obligations: ['fixture-obligation'],
-        visibleSituation: 'A fixture proof.', defeats: 'A fixture misconception.',
-        experientialNeighbors: [],
       })),
     },
     'catalog/test.json': {
@@ -125,6 +115,19 @@ export function buildTestCatalog(source: TestCatalogSource): GameCatalog {
         })),
       })),
     },
+  }
+  for (const culture of source.cultures) {
+    files[`coverage/${culture.id}.json`] = {
+      obligations: [{
+        id: 'fixture-obligation', kind: 'isolated', family: 'fixture',
+        distinction: 'Exercise the fixture proof.', stoppingRule: 'Stop after one fixture.',
+      }],
+      puzzles: source.puzzles.filter((puzzle) => puzzle.culture === culture.id).map(({ id: puzzle }) => ({
+        puzzle, obligations: ['fixture-obligation'],
+        visibleSituation: 'A fixture proof.', defeats: 'A fixture misconception.',
+        experientialNeighbors: [],
+      })),
+    }
   }
   for (const puzzle of source.puzzles) files[`puzzles/${puzzle.id}.json`] = { id: puzzle.id, diagram: diagramToJson(puzzle.goal.diagram) }
   for (const [id, definition] of source.context.relations) files[`definitions/${id}.json`] = { id, diagram: diagramToJson(definition.diagram), boundary: definition.boundary }

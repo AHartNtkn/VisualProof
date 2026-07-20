@@ -17,6 +17,7 @@ let changed = 0
 let timelineCursor = 3
 const timelineRequests: number[] = []
 const timelineStates = Array.from({ length: 8 }, () => diagram)
+let layoutFrozen = false
 const host = document.querySelector<HTMLElement>('#host')!
 const environment = mountLensEnvironment({
   host,
@@ -33,10 +34,13 @@ const surface = new GameProofViewport({
   orientation: () => 'forward',
   theme: () => DARK,
   fuel: () => 256,
-  prepare: (step: ProofStep) => {
+  prepare: (steps) => {
     prepared++
-    preparedSteps.push(step)
-    const next = applyStep(diagram, step, { theorems: new Map(), relations: new Map() }, 'backward')
+    preparedSteps.push(...steps)
+    let next = diagram
+    for (const step of steps) {
+      next = applyStep(next, step, { theorems: new Map(), relations: new Map() }, 'backward')
+    }
     return () => { diagram = next }
   },
   motionPreferences: () => gameProofMotionPreferences(true),
@@ -119,6 +123,7 @@ const guardCopies = (): number => Object.entries(diagram.regions)
   .length
 
 const state = {
+  freezeLayout: (): void => { layoutFrozen = true },
   mapping: (client: { readonly x: number; readonly y: number }) => surface.mapClient(client),
   proofNodePoint: () => worldToClient([...surface.engine.bodies.values()].find((body) => body.node !== null)!.pos),
   proofNodePoints: () => [...surface.engine.bodies.values()]
@@ -184,5 +189,8 @@ const state = {
 declare global { interface Window { __gameProofSurfaceFixture: typeof state } }
 window.__gameProofSurfaceFixture = state
 
-const animate = (now: number): void => { surface.frame(now); requestAnimationFrame(animate) }
+const animate = (now: number): void => {
+  if (!layoutFrozen) surface.frame(now)
+  requestAnimationFrame(animate)
+}
 requestAnimationFrame(animate)

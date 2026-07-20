@@ -1,56 +1,19 @@
 {
   "puzzle": "sey-dm-fc-i01",
   "solution": [
-    {
-      "rule": "doubleCutElim",
-      "region": "r5"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r7"
-    },
-    {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r9",
-        "regions": [
-          "r10"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
-    },
-    {
-      "rule": "erasure",
-      "sel": {
-        "region": "r3",
-        "regions": [
-          "r4"
-        ],
-        "nodes": [],
-        "wires": []
-      }
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r3"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r2"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r1"
-    }
+    { "rule": "doubleCutElim", "region": "source-p-outer" },
+    { "rule": "doubleCutElim", "region": "source-q-outer" },
+    { "rule": "deiteration", "sel": { "region": "consumer", "regions": ["required-whole"], "nodes": [], "wires": [] }, "fuel": 100 },
+    { "rule": "doubleCutElim", "region": "consumer" },
+    { "rule": "deiteration", "sel": { "region": "final", "regions": [], "nodes": ["final-s"], "wires": [] }, "fuel": 100 },
+    { "rule": "erasure", "sel": { "region": "work", "regions": ["source"], "nodes": ["output-s"], "wires": [] } },
+    { "rule": "doubleCutElim", "region": "container" },
+    { "rule": "vacuousElim", "region": "s" },
+    { "rule": "vacuousElim", "region": "q" },
+    { "rule": "vacuousElim", "region": "p" },
+    { "rule": "doubleCutElim", "region": "goal" }
   ],
   "availableArtifacts": [],
-  "expectedRules": [
-    "doubleCutElim",
-    "deiteration",
-    "erasure",
-    "vacuousElim"
-  ],
+  "expectedRules": ["doubleCutElim", "deiteration", "erasure", "vacuousElim"],
   "recognizedStates": []
 }

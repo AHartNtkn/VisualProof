@@ -1,60 +1,20 @@
 {
   "puzzle": "compound-conjunction-de-morgan",
   "solution": [
-    {
-      "rule": "doubleCutElim",
-      "region": "r8"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r10"
-    },
-    {
-      "rule": "deiteration",
-      "sel": {
-        "region": "r6",
-        "regions": [
-          "r7"
-        ],
-        "nodes": [],
-        "wires": []
-      },
-      "fuel": 100
-    },
-    {
-      "rule": "erasure",
-      "sel": {
-        "region": "r4",
-        "regions": [
-          "r5"
-        ],
-        "nodes": [],
-        "wires": []
-      }
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r4"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r3"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r2"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r1"
-    }
+    { "rule": "doubleCutIntro", "sel": { "region": "source", "regions": ["source-compound"], "nodes": [], "wires": [] } },
+    { "rule": "doubleCutIntro", "sel": { "region": "source", "regions": [], "nodes": ["source-r"], "wires": [] } },
+    { "rule": "deiteration", "sel": { "region": "consumer", "regions": ["required-whole"], "nodes": [], "wires": [] }, "fuel": 100 },
+    { "rule": "doubleCutElim", "region": "consumer" },
+    { "rule": "deiteration", "sel": { "region": "final", "regions": [], "nodes": ["final-s"], "wires": [] }, "fuel": 100 },
+    { "rule": "erasure", "sel": { "region": "work", "regions": ["source"], "nodes": ["output-s"], "wires": [] } },
+    { "rule": "doubleCutElim", "region": "container" },
+    { "rule": "vacuousElim", "region": "s" },
+    { "rule": "vacuousElim", "region": "r" },
+    { "rule": "vacuousElim", "region": "q" },
+    { "rule": "vacuousElim", "region": "p" },
+    { "rule": "doubleCutElim", "region": "goal" }
   ],
   "availableArtifacts": [],
-  "expectedRules": [
-    "doubleCutElim",
-    "deiteration",
-    "erasure",
-    "vacuousElim"
-  ],
+  "expectedRules": ["doubleCutIntro", "deiteration", "doubleCutElim", "erasure", "vacuousElim"],
   "recognizedStates": []
 }

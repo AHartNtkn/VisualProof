@@ -3,79 +3,44 @@
   "solution": [
     {
       "rule": "insertion",
-      "region": "r4",
+      "region": "r5",
       "pattern": {
         "diagram": {
           "root": "r0",
           "regions": {
-            "r0": {
-              "kind": "sheet"
-            },
-            "r1": {
-              "kind": "bubble",
-              "parent": "r0",
-              "arity": 0
-            }
+            "r0": { "kind": "sheet" },
+            "r1": { "kind": "bubble", "parent": "r0", "arity": 0 }
           },
           "nodes": {
-            "n0": {
-              "kind": "atom",
-              "region": "r1",
-              "binder": "r1"
-            }
+            "n0": { "kind": "atom", "region": "r1", "binder": "r1" }
           },
           "wires": {}
         },
         "boundary": []
       },
       "attachments": [],
-      "binders": {
-        "r1": "r3"
-      }
+      "binders": { "r1": "r3" }
     },
     {
       "rule": "deiteration",
-      "sel": {
-        "region": "r5",
-        "regions": [
-          "r6"
-        ],
-        "nodes": [],
-        "wires": []
-      },
+      "sel": { "region": "r6", "regions": ["r7"], "nodes": [], "wires": [] },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r6", "regions": [], "nodes": ["n2"], "wires": [] },
       "fuel": 100
     },
     {
       "rule": "erasure",
-      "sel": {
-        "region": "r3",
-        "regions": [
-          "r4"
-        ],
-        "nodes": [],
-        "wires": []
-      }
+      "sel": { "region": "r4", "regions": ["r5"], "nodes": ["n0"], "wires": [] }
     },
-    {
-      "rule": "vacuousElim",
-      "region": "r3"
-    },
-    {
-      "rule": "vacuousElim",
-      "region": "r2"
-    },
-    {
-      "rule": "doubleCutElim",
-      "region": "r1"
-    }
+    { "rule": "vacuousElim", "region": "r4" },
+    { "rule": "vacuousElim", "region": "r3" },
+    { "rule": "vacuousElim", "region": "r2" },
+    { "rule": "doubleCutElim", "region": "r1" }
   ],
   "availableArtifacts": [],
-  "expectedRules": [
-    "insertion",
-    "deiteration",
-    "erasure",
-    "vacuousElim",
-    "doubleCutElim"
-  ],
+  "expectedRules": ["insertion", "deiteration", "erasure", "vacuousElim", "doubleCutElim"],
   "recognizedStates": []
 }

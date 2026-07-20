@@ -6,7 +6,7 @@
       "name": "game:artifact:two-mark-projection",
       "at": {
         "sel": {
-          "region": "r3",
+          "region": "manifest-host",
           "regions": [],
           "nodes": [],
           "wires": []
@@ -16,11 +16,35 @@
       "direction": "forward"
     },
     {
+      "rule": "deiteration",
+      "sel": {
+        "region": "r4",
+        "regions": [],
+        "nodes": [
+          "n2"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
+        "region": "continuation-host",
+        "regions": [
+          "repeat-outer"
+        ],
+        "nodes": [],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
       "rule": "erasure",
       "sel": {
-        "region": "r3",
+        "region": "manifest-host",
         "regions": [
-          "r1_1"
+          "r1"
         ],
         "nodes": [],
         "wires": []
@@ -28,16 +52,16 @@
     },
     {
       "rule": "doubleCutElim",
-      "region": "r3"
+      "region": "manifest-host"
     },
     {
       "rule": "theorem",
       "name": "game:artifact:two-mark-projection",
       "at": {
         "sel": {
-          "region": "r2",
+          "region": "workspace",
           "regions": [
-            "r1_0"
+            "dissolve-outer"
           ],
           "nodes": [],
           "wires": []
@@ -48,7 +72,7 @@
     },
     {
       "rule": "doubleCutElim",
-      "region": "r1"
+      "region": "outer"
     }
   ],
   "availableArtifacts": [
@@ -56,6 +80,7 @@
   ],
   "expectedRules": [
     "theorem",
+    "deiteration",
     "erasure",
     "doubleCutElim"
   ],

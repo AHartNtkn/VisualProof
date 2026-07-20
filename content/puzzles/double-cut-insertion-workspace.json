@@ -9,15 +9,20 @@
       "r3": { "kind": "bubble", "parent": "r2", "arity": 0 },
       "r4": { "kind": "cut", "parent": "r3" },
       "r5": { "kind": "cut", "parent": "r4" },
-      "r6": { "kind": "cut", "parent": "r3" }
+      "r6": { "kind": "cut", "parent": "r3" },
+      "r7": { "kind": "cut", "parent": "r6" },
+      "r8": { "kind": "cut", "parent": "r3" },
+      "r9": { "kind": "cut", "parent": "r8" },
+      "r10": { "kind": "cut", "parent": "r9" }
     },
     "nodes": {
-      "n0": { "kind": "atom", "region": "r3", "binder": "r2" },
-      "n1": { "kind": "atom", "region": "r3", "binder": "r3" },
-      "n2": { "kind": "atom", "region": "r5", "binder": "r2" },
-      "n3": { "kind": "atom", "region": "r5", "binder": "r3" },
-      "n4": { "kind": "atom", "region": "r6", "binder": "r2" },
-      "n5": { "kind": "atom", "region": "r6", "binder": "r3" }
+      "n0": { "kind": "atom", "region": "r5", "binder": "r2" },
+      "n1": { "kind": "atom", "region": "r5", "binder": "r3" },
+      "n2": { "kind": "atom", "region": "r3", "binder": "r2" },
+      "n3": { "kind": "atom", "region": "r3", "binder": "r3" },
+      "n4": { "kind": "atom", "region": "r7", "binder": "r2" },
+      "n5": { "kind": "atom", "region": "r10", "binder": "r2" },
+      "n6": { "kind": "atom", "region": "r9", "binder": "r3" }
     },
     "wires": {}
   }

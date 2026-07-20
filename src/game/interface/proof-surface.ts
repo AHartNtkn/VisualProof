@@ -8,7 +8,7 @@ import { highlightGroup, paint } from '../../view/paint'
 import { drawShapes } from '../../view/canvas'
 import { existentialStubs, legPaths } from '../../view/wires'
 import type { Vec2 } from '../../view/vec'
-import type { PuzzleDefinition } from '../types'
+import type { GameSteps, PuzzleDefinition } from '../types'
 import { planArtifactDrop, type ArtifactDropPlan, type ArtifactDropTarget } from './artifact-drop'
 import { ConstructionLoupe, type ConstructionLoupeDebug } from './construction-loupe'
 import { hitTest, type Hit } from './loupe/hittest'
@@ -83,7 +83,7 @@ export type GameProofViewportModel = {
   orientation(): 'forward' | 'backward'
   theme(): Theme
   fuel(): number
-  prepare(step: ProofStep): () => void
+  prepare(steps: GameSteps): () => void
   motionPreferences(): ProofMotionPreferences
   inputAllowed(): boolean
   refuse(text: string, pointer: Vec2): void
@@ -163,7 +163,7 @@ export class GameProofViewport {
       selection: () => this.interaction.selection,
       setSelection: (selection) => this.interaction.setSelection(selection),
       context: model.context,
-      apply: (step) => this.#apply(step),
+      apply: (steps) => this.#applySteps(steps),
       refuse: model.refuse,
       theme: model.theme,
       fuel: model.fuel,
@@ -397,8 +397,12 @@ export class GameProofViewport {
   }
 
   #apply(step: ProofStep): void {
-    const commit = this.#model.prepare(step)
-    this.motion.run(step, () => {
+    this.#applySteps([step])
+  }
+
+  #applySteps(steps: GameSteps): void {
+    const commit = this.#model.prepare(steps)
+    this.motion.run(steps[0], () => {
       commit()
       this.reconcileDiagram()
     }, this.#window.performance.now())
