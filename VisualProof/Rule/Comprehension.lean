@@ -937,7 +937,33 @@ theorem instantiateCopies_success_pendingAtoms_empty
     (hcopy : instantiateCopies comprehension attachments binders payload
       state.pendingAtoms.length state = .ok result) :
     result.pendingAtoms = [] := by
-  sorry
+  generalize hfuel : state.pendingAtoms.length = fuel at hcopy
+  induction fuel generalizing state result with
+  | zero =>
+      have hpending : state.pendingAtoms = [] := by
+        simpa using hfuel
+      simp [instantiateCopies, hpending] at hcopy
+      subst result
+      exact hpending
+  | succ fuel ih =>
+      cases hpending : state.pendingAtoms with
+      | nil =>
+          simp [hpending] at hfuel
+      | cons atom tail =>
+          have htail : tail.length = fuel := by
+            simpa [hpending] using hfuel
+          simp only [instantiateCopies, hpending] at hcopy
+          split at hcopy <;> try contradiction
+          rename_i site candidate hnode
+          split at hcopy <;> try contradiction
+          split at hcopy <;> try contradiction
+          rename_i arguments harguments
+          split at hcopy <;> try contradiction
+          rename_i plan hplan
+          apply ih _ _ _ hcopy
+          rw [plan.next_eq]
+          simpa [advanceMaterializedInstantiationState,
+            advanceInstantiationState] using htail
 
 /-- A successful copy run transports the complete owned-atom list through one
 composed total injective node map.  Unlike receipt provenance, this map retains
@@ -967,7 +993,71 @@ theorem instantiateCopies_success_ownedAtoms_map
             ∃ resultSite,
               result.diagram.val.nodes (nodeMap node) =
                 .atom resultSite result.bubble := by
-  sorry
+  induction fuel generalizing state result with
+  | zero =>
+      simp only [instantiateCopies] at hcopy
+      split at hcopy <;> try contradiction
+      cases hcopy
+      exact ⟨id, Function.injective_id, by simp, fun hnode => ⟨_, hnode⟩⟩
+  | succ fuel ih =>
+      simp only [instantiateCopies] at hcopy
+      split at hcopy
+      · cases hcopy
+        exact ⟨id, Function.injective_id, by simp, fun hnode => ⟨_, hnode⟩⟩
+      · rename_i atom tail hpending
+        split at hcopy <;> try contradiction
+        rename_i site candidate hnode
+        split at hcopy <;> try contradiction
+        split at hcopy <;> try contradiction
+        rename_i arguments harguments
+        split at hcopy <;> try contradiction
+        rename_i plan hplan
+        let spliceInput := plan.spliceInput
+        have hadmissible : spliceInput.Admissible :=
+          (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+        let layout := spliceInput.plugLayout
+        let next := advanceMaterializedInstantiationState comprehension
+          attachments binders payload state atom tail site arguments
+          plan.materialization hadmissible
+        rw [plan.next_eq] at hcopy
+        change instantiateCopies comprehension attachments binders payload
+          fuel next = .ok result at hcopy
+        obtain ⟨restMap, hrestInjective, hrestOwned, hrestBound⟩ :=
+          ih next result hcopy
+        refine ⟨restMap ∘ layout.frameNode,
+          hrestInjective.comp layout.frameNode_injective, ?_, ?_⟩
+        · rw [hrestOwned]
+          have hnext : next.ownedAtoms =
+              state.ownedAtoms.map layout.frameNode := by
+            calc
+              next.ownedAtoms =
+                  (state.processedAtoms.map layout.frameNode ++
+                    [layout.frameNode atom]) ++ tail.map layout.frameNode := rfl
+              _ = (state.processedAtoms ++ atom :: tail).map
+                  layout.frameNode := by
+                induction state.processedAtoms with
+                | nil => rfl
+                | cons head rest ih =>
+                    simp only [List.cons_append]
+                    exact congrArg (List.cons (layout.frameNode head)) ih
+              _ = state.ownedAtoms.map layout.frameNode := by
+                rw [InstantiationState.ownedAtoms, hpending]
+          rw [hnext]
+          induction state.ownedAtoms with
+          | nil => rfl
+          | cons head tail ih =>
+              simp only [List.map_cons, Function.comp_apply]
+              exact congrArg (List.cons (restMap (layout.frameNode head))) ih
+        · intro node sourceSite hsource
+          apply hrestBound
+          calc
+            layout.plugRaw.nodes (layout.frameNode node) =
+                layout.mapFrameNode (state.diagram.val.nodes node) :=
+              layout.plugNode_frameNode node
+            _ = .atom (layout.frameRegion sourceSite)
+                (layout.frameRegion state.bubble) := by
+              rw [hsource]
+              rfl
 
 theorem instantiateCopies_success_processedAtoms_exact
     {signature : List Nat}
@@ -995,7 +1085,13 @@ theorem instantiateCopies_success_processedAtoms_exact
             ∃ resultSite,
               result.diagram.val.nodes (nodeMap node) =
                 .atom resultSite result.bubble := by
-  sorry
+  obtain ⟨nodeMap, hinjective, howned, hbound⟩ :=
+    instantiateCopies_success_ownedAtoms_map comprehension attachments binders
+      payload state.pendingAtoms.length state result hcopy
+  have hpending := instantiateCopies_success_pendingAtoms_empty
+    comprehension attachments binders payload state result hcopy
+  refine ⟨nodeMap, hinjective, hpending, ?_, hbound⟩
+  simpa [InstantiationState.ownedAtoms, hprocessed, hpending] using howned
 
 theorem boundAtoms_nodup (input : CheckedDiagram signature)
     (bubble : Fin input.val.regionCount) :
@@ -1020,7 +1116,27 @@ theorem instantiateCopies_success_processedAtoms_nodup
     (hcopy : instantiateCopies comprehension attachments binders payload
       state.pendingAtoms.length state = .ok result) :
     result.processedAtoms.Nodup := by
-  sorry
+  obtain ⟨nodeMap, hinjective, _, hexact, _⟩ :=
+    instantiateCopies_success_processedAtoms_exact comprehension attachments
+      binders payload state result hprocessed hcopy
+  rw [hexact]
+  have map_nodup : ∀ values : List (Fin state.diagram.val.nodeCount),
+      values.Nodup → (values.map nodeMap).Nodup := by
+    intro values hvalues
+    induction values with
+    | nil => simp
+    | cons head tail ih =>
+        rw [List.nodup_cons] at hvalues
+        simp only [List.map_cons]
+        rw [List.nodup_cons]
+        refine ⟨?_, ih hvalues.2⟩
+        intro hmem
+        rw [List.mem_map] at hmem
+        obtain ⟨source, hsource, heq⟩ := hmem
+        have hsourceEq : source = head := hinjective heq
+        subst source
+        exact hvalues.1 hsource
+  exact map_nodup state.pendingAtoms hpending
 
 theorem instantiateCopies_initial_success_exact
     {signature : List Nat}
@@ -1046,7 +1162,14 @@ theorem instantiateCopies_initial_success_exact
           ∃ resultSite,
             result.diagram.val.nodes (nodeMap node) =
               .atom resultSite result.bubble := by
-  sorry
+  obtain ⟨nodeMap, hinjective, hpending, hexact, hbound⟩ :=
+    instantiateCopies_success_processedAtoms_exact comprehension attachments
+      binders payload (initialInstantiationState payload) result rfl hcopy
+  have hnodup : result.processedAtoms.Nodup := by
+    exact instantiateCopies_success_processedAtoms_nodup comprehension
+      attachments binders payload (initialInstantiationState payload) result
+      rfl (boundAtoms_nodup input bubble) hcopy
+  exact ⟨nodeMap, hinjective, hpending, hexact, hnodup, hbound⟩
 
 def instantiationAtomDomain
     (state : InstantiationState origin p q) :
