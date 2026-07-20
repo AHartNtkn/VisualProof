@@ -1,0 +1,19 @@
+{
+  "puzzle": "marked-echo-deiteration",
+  "solution": [
+    {
+      "rule": "deiteration",
+      "sel": { "region": "r4", "regions": ["r5"], "nodes": [], "wires": [] },
+      "fuel": 100
+    },
+    {
+      "rule": "erasure",
+      "sel": { "region": "r2", "regions": ["r3"], "nodes": [], "wires": [] }
+    },
+    { "rule": "vacuousElim", "region": "r2" },
+    { "rule": "doubleCutElim", "region": "r1" }
+  ],
+  "availableArtifacts": [],
+  "expectedRules": ["deiteration", "erasure", "vacuousElim", "doubleCutElim"],
+  "recognizedStates": []
+}

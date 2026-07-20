@@ -29,6 +29,13 @@
       "stoppingRule": "Stop after the first mark-free ancestor-supported removal separates deiteration authority from mere depth."
     },
     {
+      "id": "marked-fragment-supported-deiteration",
+      "kind": "onboarding",
+      "family": "onboarding-structural-editing",
+      "distinction": "Remove an exact marked descendant fragment supported by the same marked fragment in an ancestor field.",
+      "stoppingRule": "Stop after one owner, one ancestor support, and one descendant echo isolate binder-preserving deiteration."
+    },
+    {
       "id": "vacuous-ring-elimination",
       "kind": "onboarding",
       "family": "onboarding-ownership",
@@ -922,6 +929,19 @@
       "visibleSituation": "Closed wire-free start with 1 semantic owner, 2 owned atomic occurrences, and 2 cuts. Eliminate a single-owner vacuous structure while respecting its semantic owner. Remove a descendant occurrence supported by an equal ancestor occurrence. This first content-bearing problem also provides the live semantic targets on which selection, highlighting, and deselection can be explained without interrupting play.",
       "defeats": "This establishes elimination of a single vacuous owner while preserving its owned content; there is no prior narrower ownership hypothesis. It overturns the hypothesis that only peer duplicates authorize removal; an equal ancestor occurrence supports a descendant. It defeats the controls-only approach by attaching the explanation to a real ownership and ancestry choice.",
       "experientialNeighbors": []
+    },
+    {
+      "puzzle": "marked-echo-deiteration",
+      "obligations": [
+        "marked-fragment-supported-deiteration"
+      ],
+      "visibleSituation": "One ring owns two identical marked veils: an older support and a repeated descendant inside a deeper field.",
+      "defeats": "It defeats the hypothesis that visual similarity alone is enough: the removable occurrence is the exact descendant under the same owner and ancestor support.",
+      "experientialNeighbors": [
+        "echoed-veil",
+        "single-mark-return",
+        "transfer-duplication-recognition"
+      ]
     },
     {
       "puzzle": "shallow-edit-legality-contrast",

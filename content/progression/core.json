@@ -12,6 +12,7 @@
         "echoed-veil",
         "empty-ring-release",
         "single-mark-return",
+        "marked-echo-deiteration",
         "shallow-edit-legality-contrast",
         "atomic-fragment-erasure",
         "atomic-content-insertion",
@@ -158,6 +159,12 @@
       "puzzle": "single-mark-return",
       "prerequisites": [
         "empty-ring-release"
+      ]
+    },
+    {
+      "puzzle": "marked-echo-deiteration",
+      "prerequisites": [
+        "single-mark-return"
       ]
     },
     {

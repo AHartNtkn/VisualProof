@@ -8,6 +8,7 @@
     "puzzles/echoed-veil.json",
     "puzzles/empty-ring-release.json",
     "puzzles/single-mark-return.json",
+    "puzzles/marked-echo-deiteration.json",
     "puzzles/shallow-edit-legality-contrast.json",
     "puzzles/atomic-fragment-erasure.json",
     "puzzles/atomic-content-insertion.json",

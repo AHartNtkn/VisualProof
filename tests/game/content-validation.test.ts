@@ -41,6 +41,15 @@ describe('build-only game content evidence', () => {
     })
   })
 
+  it('gives the marked echo an ordinary deiteration-first witness', () => {
+    const evidence = readJson(resolve(
+      process.cwd(), 'content/validation/marked-echo-deiteration.json',
+    ))
+    expect(evidence.solution.map(({ rule }: JsonRecord) => rule)).toEqual([
+      'deiteration', 'erasure', 'vacuousElim', 'doubleCutElim',
+    ])
+  })
+
   it('finds a negative host where an empty cut makes competing content disposable', () => {
     const builder = new DiagramBuilder()
     const outer = builder.cut(builder.root)

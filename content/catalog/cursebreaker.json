@@ -98,6 +98,17 @@
       }
     },
     {
+      "puzzle": "marked-echo-deiteration",
+      "name": {
+        "professional": "Seyric Marked-Echo Practice Tablet",
+        "curatorShorthand": "marked echo"
+      },
+      "provenance": {
+        "summary": "A compact Seyric workshop tablet carrying the same owned mark in an older veil and in a deeper repeated veil.",
+        "function": "Trained recognition that an exact descendant repetition may be lifted only while its older matching support remains."
+      }
+    },
+    {
       "puzzle": "shallow-edit-legality-contrast",
       "name": {
         "professional": "Seyric Shallow Edit Legality Contrast"

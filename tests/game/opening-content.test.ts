@@ -101,6 +101,17 @@ describe('reconstructed opening content', () => {
     }
   })
 
+  it('introduces marked ancestor-supported deiteration after mark ownership', () => {
+    const id = puzzleId('marked-echo-deiteration')
+    const seyric = catalog.puzzlesInCulture('seyric-horizon' as never)
+    expect(seyric.indexOf(id)).toBe(seyric.indexOf(puzzleId('single-mark-return')) + 1)
+    expect(catalog.placement(id).prerequisites).toEqual([puzzleId('single-mark-return')])
+
+    const diagram = catalog.puzzle(id).diagram
+    expect(Object.values(diagram.regions).filter(({ kind }) => kind === 'bubble')).toHaveLength(1)
+    expect(Object.values(diagram.nodes).filter(({ kind }) => kind === 'atom')).toHaveLength(2)
+  })
+
   it('keeps every Seyric start propositional and canonically distinct', () => {
     const violations: string[] = []
     const idsByFingerprint = new Map<string, string[]>()

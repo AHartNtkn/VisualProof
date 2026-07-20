@@ -108,6 +108,19 @@
       ]
     },
     {
+      "puzzle": "marked-echo-deiteration",
+      "interventions": [
+        {
+          "id": "opening-marked-echo-deiteration",
+          "trigger": { "kind": "opening" },
+          "repeat": "once",
+          "pages": [
+            "The deeper marked veil exactly repeats the older marked veil under the same ring. Because the older occurrence remains in an ancestor field, the descendant echo may be lifted."
+          ]
+        }
+      ]
+    },
+    {
       "puzzle": "transfer-duplication-recognition",
       "interventions": [
         {

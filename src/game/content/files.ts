@@ -8,6 +8,7 @@ import onboardingForkedVeil from '../../../content/puzzles/forked-veil.json'
 import onboardingEchoedVeil from '../../../content/puzzles/echoed-veil.json'
 import onboardingEmptyRingRelease from '../../../content/puzzles/empty-ring-release.json'
 import puzzle0 from '../../../content/puzzles/single-mark-return.json'
+import markedEchoDeiteration from '../../../content/puzzles/marked-echo-deiteration.json'
 import puzzle1 from '../../../content/puzzles/shallow-edit-legality-contrast.json'
 import puzzle2 from '../../../content/puzzles/atomic-fragment-erasure.json'
 import puzzle3 from '../../../content/puzzles/atomic-content-insertion.json'
@@ -121,6 +122,7 @@ export const gameContentFiles: GameContentFiles = Object.freeze({
   'puzzles/echoed-veil.json': onboardingEchoedVeil,
   'puzzles/empty-ring-release.json': onboardingEmptyRingRelease,
   'puzzles/single-mark-return.json': puzzle0,
+  'puzzles/marked-echo-deiteration.json': markedEchoDeiteration,
   'puzzles/shallow-edit-legality-contrast.json': puzzle1,
   'puzzles/atomic-fragment-erasure.json': puzzle2,
   'puzzles/atomic-content-insertion.json': puzzle3,
