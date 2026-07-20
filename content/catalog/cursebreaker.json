@@ -144,8 +144,8 @@
         "professional": "Seyric Compound Copy Authority Contrast"
       },
       "provenance": {
-        "summary": "A P-and-Q source overlooks an R-owned descendant and a structurally parallel R-owned destination outside its authority.",
-        "function": "Only copying intact P-and-Q inward completes descendant-owned P-Q-R support; partial and same-region copies fail, the parallel destination is incomparable, and descendant R cannot be copied backward into its ancestor source."
+        "summary": "A P-and-Q source overlooks a descendant with separate R-owned support and P-Q-R target bubbles, plus a parallel workspace outside its authority.",
+        "function": "Only copying intact P-and-Q into the separate descendant support bubble completes a target-independent P-Q-R match; target-derived and source-region copies fail, the parallel workspace is incomparable, and descendant R cannot move upward."
       }
     },
     {

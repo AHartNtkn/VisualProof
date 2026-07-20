@@ -4,27 +4,34 @@
     {
       "rule": "iteration",
       "sel": { "region": "r5", "regions": [], "nodes": ["n0", "n1"], "wires": [] },
-      "target": "r6"
+      "target": "r11"
     },
     {
       "rule": "deiteration",
-      "sel": { "region": "r6", "regions": [], "nodes": ["n3", "n4", "n5"], "wires": [] },
+      "sel": { "region": "r6", "regions": ["r12"], "nodes": [], "wires": [] },
       "fuel": 100
     },
     {
       "rule": "deiteration",
-      "sel": { "region": "r6", "regions": [], "nodes": ["n0_0", "n1_0"], "wires": [] },
+      "sel": { "region": "r11", "regions": [], "nodes": ["n0_0", "n1_0"], "wires": [] },
       "fuel": 100
     },
     {
       "rule": "erasure",
-      "sel": { "region": "r6", "regions": [], "nodes": ["n2"], "wires": [] }
+      "sel": { "region": "r11", "regions": [], "nodes": ["n2"], "wires": [] }
     },
+    { "rule": "vacuousElim", "region": "r11" },
     { "rule": "vacuousElim", "region": "r6" },
     {
       "rule": "erasure",
-      "sel": { "region": "r9", "regions": [], "nodes": ["n6", "n7", "n8", "n9"], "wires": [] }
+      "sel": { "region": "r13", "regions": [], "nodes": ["n6"], "wires": [] }
     },
+    { "rule": "vacuousElim", "region": "r13" },
+    {
+      "rule": "erasure",
+      "sel": { "region": "r14", "regions": [], "nodes": ["n7", "n8", "n9"], "wires": [] }
+    },
+    { "rule": "vacuousElim", "region": "r14" },
     { "rule": "vacuousElim", "region": "r9" },
     { "rule": "doubleCutElim", "region": "r7" },
     { "rule": "doubleCutElim", "region": "r4" },

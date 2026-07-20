@@ -318,11 +318,11 @@ describe('build-only game content evidence', () => {
     const start = loadGameContent(gameContentFiles)
       .puzzle('compound-copy-authority-contrast' as never).diagram
     const source = { region: 'r5', regions: [], nodes: ['n0', 'n1'], wires: [] }
-    const target = { region: 'r6', regions: [], nodes: ['n3', 'n4', 'n5'], wires: [] }
+    const target = { region: 'r6', regions: ['r12'], nodes: [], wires: [] }
 
     expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
     const copied = applyStep(start, {
-      rule: 'iteration', sel: source, target: 'r6',
+      rule: 'iteration', sel: source, target: 'r11',
     }, proofContext, 'backward')
     expect(() => deiterate(copied, target)).not.toThrow()
 
@@ -330,7 +330,7 @@ describe('build-only game content evidence', () => {
       const partial = applyStep(start, {
         rule: 'iteration',
         sel: { region: 'r5', regions: [], nodes: [node], wires: [] },
-        target: 'r6',
+        target: 'r11',
       }, proofContext, 'backward')
       expect(() => deiterate(partial, target)).toThrow(/no justifying occurrence/)
     }
@@ -344,14 +344,21 @@ describe('build-only game content evidence', () => {
       expect(() => deiterate(sameRegion, target)).toThrow(/no justifying occurrence/)
     }
 
+    const targetDerived = applyStep(start, {
+      rule: 'iteration',
+      sel: { region: 'r12', regions: [], nodes: ['n3', 'n4'], wires: [] },
+      target: 'r12',
+    }, proofContext, 'backward')
+    expect(() => deiterate(targetDerived, target)).toThrow(/no justifying occurrence/)
+
     expect(() => applyStep(start, {
       rule: 'iteration',
-      sel: { region: 'r6', regions: [], nodes: ['n2'], wires: [] },
+      sel: { region: 'r11', regions: [], nodes: ['n2'], wires: [] },
       target: 'r5',
     }, proofContext, 'backward')).toThrow(/must lie within the source region/)
 
     expect(() => applyStep(start, {
-      rule: 'iteration', sel: source, target: 'r9',
+      rule: 'iteration', sel: source, target: 'r13',
     }, proofContext, 'backward')).toThrow(/must lie within the source region/)
   })
 
