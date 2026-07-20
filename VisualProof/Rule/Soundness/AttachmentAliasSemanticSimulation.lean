@@ -39,7 +39,8 @@ theorem childOccurrence_itemSimulation
     (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
     (targetContext : ConcreteElaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (collapse : ContextCollapse pattern attachment spine targetContext sourceContext)
+    (relation : ConcreteElaboration.ContextIndexRelation
+      sourceContext.length targetContext.length)
     (sourceBinders : ConcreteElaboration.BinderContext pattern.val.diagram rels)
     (targetBinders : ConcreteElaboration.BinderContext
       (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
@@ -78,7 +79,7 @@ theorem childOccurrence_itemSimulation
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           fuelTarget child targetContext childTargetBinders = some targetBody →
       ConcreteElaboration.RegionSimulation model named childDirection
-        (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+        relation
         sourceBody targetBody)
     (child : Fin pattern.val.diagram.regionCount)
     (parent : (pattern.val.diagram.regions child).parent? =
@@ -95,7 +96,7 @@ theorem childOccurrence_itemSimulation
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         fuelTarget) targetContext targetBinders (.child child) = some targetItem) :
     ConcreteElaboration.ItemSimulation model named direction
-      (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+      relation
       sourceItem targetItem := by
   have targetParent :
       ((materializedDiagram pattern.val attachment spine.bodyContainer).regions
@@ -282,7 +283,8 @@ theorem childOccurrences_simulation
     (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
     (targetContext : ConcreteElaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (collapse : ContextCollapse pattern attachment spine targetContext sourceContext)
+    (relation : ConcreteElaboration.ContextIndexRelation
+      sourceContext.length targetContext.length)
     (sourceBinders : ConcreteElaboration.BinderContext pattern.val.diagram rels)
     (targetBinders : ConcreteElaboration.BinderContext
       (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
@@ -319,7 +321,7 @@ theorem childOccurrences_simulation
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           fuelTarget child targetContext childTargetBinders = some targetBody →
       ConcreteElaboration.RegionSimulation model named childDirection
-        (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+        relation
         sourceBody targetBody)
     (sourceItems : ItemSeq signature sourceContext.length rels)
     (targetItems : ItemSeq signature targetContext.length rels)
@@ -336,7 +338,7 @@ theorem childOccurrences_simulation
       ((sourceChildOccurrences pattern.val spine.bodyContainer).map
         (liftOccurrence pattern.val attachment)) = some targetItems) :
     ConcreteElaboration.ItemSeqSimulation model named direction
-      (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+      relation
       sourceItems targetItems := by
   have result := ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
     model named direction
@@ -344,7 +346,7 @@ theorem childOccurrences_simulation
     (ConcreteElaboration.compileRegion? signature
       (materializedDiagram pattern.val attachment spine.bodyContainer) fuelTarget)
     sourceContext targetContext sourceBinders targetBinders
-    (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+      relation
     (ConcreteElaboration.identityRelationRenaming rels)
     (liftOccurrence pattern.val attachment)
     (sourceChildOccurrences pattern.val spine.bodyContainer) (by
@@ -354,7 +356,7 @@ theorem childOccurrences_simulation
       have parent := of_decide_eq_true (List.mem_filter.mp childMember).2
       have item := childOccurrence_itemSimulation pattern attachment spine
         targetWellFormed model named direction fuelSource fuelTarget sourceContext
-        targetContext collapse sourceBinders targetBinders bindersEqual
+        targetContext relation sourceBinders targetBinders bindersEqual
         sourceBindersCover targetBindersCover sourceEnumeration targetEnumeration
         recurse child parent sourceItem targetItem sourceOccurrence targetOccurrence
       simpa [ConcreteElaboration.identityRelationRenaming] using item)
@@ -510,7 +512,9 @@ theorem focusedLocalTransport_backward
   have childSimulation := childOccurrences_simulation pattern attachment spine
     targetWellFormed model named .backward fuelSource fuelTarget
     (sourceOuterContext.extend spine.bodyContainer)
-    (targetOuterContext.extend spine.bodyContainer) extendedCollapse sourceBinders
+    (targetOuterContext.extend spine.bodyContainer)
+    (ConcreteElaboration.ContextIndexRelation.forwardMap extendedCollapse.oldIndex)
+    sourceBinders
     targetBinders bindersEqual sourceBindersCover targetBindersCover
     sourceEnumeration targetEnumeration recurse sourceChildItems targetChildItems
     sourceChildCompiled targetChildCompiled
