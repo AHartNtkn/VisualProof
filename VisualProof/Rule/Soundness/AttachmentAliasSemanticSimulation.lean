@@ -269,6 +269,66 @@ theorem oldNodeOccurrences_simulation
     sourceItems targetItems sourceCompiled targetCompiled
   simpa using result
 
+theorem oldNodeOccurrences_simulation_collapse
+    (pattern : CheckedOpenDiagram signature)
+    (attachment : Fin pattern.val.boundary.length → Host)
+    (spine : BinderSpine pattern.val.diagram)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceRecurse : ∀ {relations : RelCtx},
+      Fin pattern.val.diagram.regionCount →
+      (context : ConcreteElaboration.WireContext pattern.val.diagram) →
+      ConcreteElaboration.BinderContext pattern.val.diagram relations →
+      Option (Region signature context.length relations))
+    (targetRecurse : ∀ {relations : RelCtx},
+      Fin pattern.val.diagram.regionCount →
+      (context : ConcreteElaboration.WireContext
+        (materializedDiagram pattern.val attachment spine.bodyContainer)) →
+      ConcreteElaboration.BinderContext
+        (materializedDiagram pattern.val attachment spine.bodyContainer)
+        relations → Option (Region signature context.length relations))
+    (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext
+      (materializedDiagram pattern.val attachment spine.bodyContainer))
+    (collapse : ContextCollapse pattern attachment spine targetContext sourceContext)
+    (sourceNodup : sourceContext.Nodup)
+    (sourceBinders : ConcreteElaboration.BinderContext pattern.val.diagram rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
+    (bindersEqual : HEq sourceBinders targetBinders)
+    (sourceItems : ItemSeq signature sourceContext.length rels)
+    (targetItems : ItemSeq signature targetContext.length rels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      pattern.val.diagram sourceRecurse sourceContext sourceBinders
+      (sourceNodeOccurrences pattern.val spine.bodyContainer) = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      (materializedDiagram pattern.val attachment spine.bodyContainer)
+      targetRecurse targetContext targetBinders
+      ((sourceNodeOccurrences pattern.val spine.bodyContainer).map
+        (liftOccurrence pattern.val attachment)) = some targetItems) :
+    ConcreteElaboration.ItemSeqSimulation model named .forward
+      (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
+      sourceItems targetItems := by
+  have result := ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+    model named .forward sourceRecurse targetRecurse sourceContext targetContext
+    sourceBinders targetBinders
+    (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
+    (ConcreteElaboration.identityRelationRenaming rels)
+    (liftOccurrence pattern.val attachment)
+    (sourceNodeOccurrences pattern.val spine.bodyContainer) (by
+      intro occurrence member sourceItem targetItem sourceOccurrence targetOccurrence
+      unfold sourceNodeOccurrences filterFin at member
+      obtain ⟨node, _, rfl⟩ := List.mem_map.mp member
+      simp only [ConcreteElaboration.compileOccurrenceWith?, liftOccurrence]
+        at sourceOccurrence targetOccurrence
+      have item := oldNode_itemSimulation pattern attachment spine sourceContext
+        targetContext collapse sourceNodup sourceBinders targetBinders bindersEqual
+        node sourceItem targetItem sourceOccurrence targetOccurrence model named
+        .forward
+      simpa [ConcreteElaboration.identityRelationRenaming] using item)
+    sourceItems targetItems sourceCompiled targetCompiled
+  simpa using result
+
 theorem childOccurrences_simulation
     (pattern : CheckedOpenDiagram signature)
     (attachment : Fin pattern.val.boundary.length → Host)
