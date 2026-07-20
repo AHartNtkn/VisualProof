@@ -164,6 +164,7 @@ theorem extractionCompileSelectedItems_denote
     (layout : FragmentLayout input.val selection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection)
     {fragmentRels hostRels : RelCtx}
     (fragmentFuel hostFuel : Nat)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -198,7 +199,7 @@ theorem extractionCompileSelectedItems_denote
         some hostItems) :
     let binderWitness := ExtractionBinderWitness.terminal input selection layout
       fragmentBinders fragmentEnumeration hostBinders hostCover
-    ConcreteElaboration.ItemSeqSimulation model named .backward
+    ConcreteElaboration.ItemSeqSimulation model named direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItems.renameRelations binderWitness.relationMap) hostItems := by
@@ -226,14 +227,14 @@ theorem extractionCompileSelectedItems_denote
         exact (extractionHostOccurrenceMap_terminal_perm_selected input
           selection layout).mem_iff.mp hostMember)
   have mappedSimulation : ConcreteElaboration.ItemSeqSimulation model named
-      .backward
+      direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItems.renameRelations binderWitness.relationMap)
       mappedHostItems := by
     apply
       ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-        model named .backward
+        model named direction
         (ConcreteElaboration.compileRegion? signature
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
         (ConcreteElaboration.compileRegion? signature input.val hostFuel)
@@ -248,7 +249,7 @@ theorem extractionCompileSelectedItems_denote
       cases occurrence with
       | node node =>
           apply extractionCompileNode_itemSimulationOfMembership input selection
-            layout model named .backward fragmentContext hostContext membership
+            layout model named direction fragmentContext hostContext membership
             hostExact.nodup fragmentBinders hostBinders
             binderWitness.relationMap node
           · intro region binder arity relation nodeShape lookup
@@ -324,7 +325,7 @@ theorem extractionCompileSelectedItems_denote
                       simp [hostResult'] at hostOccurrenceCompiled'
                       subst hostItem
                       have bodies := extractionCompileRegion_material_denote
-                        input selection layout model named .forward fragmentFuel
+                        input selection layout model named direction.flip fragmentFuel
                         hostFuel childMaterial fragmentContext hostContext
                         membership fragmentBinders hostBinders
                         (fragmentEnumeration.cutChild
@@ -342,10 +343,17 @@ theorem extractionCompileSelectedItems_denote
                           (by simpa only [CRegion.parent?] using
                             congrArg CRegion.parent? hostKind'))
                         fragmentChild hostChild fragmentResult hostResult
-                      intro fragmentEnv hostEnv relEnv environments hostNot
-                        fragmentDenotes
-                      exact hostNot (bodies fragmentEnv hostEnv relEnv
-                        environments fragmentDenotes)
+                      intro fragmentEnv hostEnv relEnv environments
+                      have bodyEntailment := bodies fragmentEnv hostEnv relEnv
+                        environments
+                      simp only [Item.renameRelations, cut_denotes_negation]
+                      cases direction with
+                      | forward =>
+                          exact fun fragmentNot hostDenotes =>
+                            fragmentNot (bodyEntailment hostDenotes)
+                      | backward =>
+                          exact fun hostNot fragmentDenotes =>
+                            hostNot (bodyEntailment fragmentDenotes)
           | bubble actualParent arity =>
               have actualParentEq : actualParent = layout.bodyContainer := by
                 rw [fragmentKind] at childParent
@@ -396,7 +404,7 @@ theorem extractionCompileSelectedItems_denote
                       let childWitness := binderWitness.bubbleChild childMaterial
                         arity fragmentKind hostKind'
                       have bodies := extractionCompileRegion_material_denote
-                        input selection layout model named .backward fragmentFuel
+                        input selection layout model named direction fragmentFuel
                         hostFuel childMaterial fragmentContext hostContext
                         membership fragmentPushed hostPushed
                         (fragmentEnumeration.bubbleChild
@@ -412,18 +420,34 @@ theorem extractionCompileSelectedItems_denote
                             congrArg CRegion.parent? hostKind'))
                         fragmentChild hostChild fragmentResult hostResult
                       intro fragmentEnv hostEnv relEnv environments
-                      rintro ⟨relationValue, hostDenotes⟩
-                      exact ⟨relationValue, bodies fragmentEnv hostEnv
-                        (relationValue, relEnv) environments hostDenotes⟩
+                      simp only [Item.renameRelations, bubble_denotes_exists]
+                      cases direction with
+                      | forward =>
+                          rintro ⟨relationValue, fragmentDenotes⟩
+                          exact ⟨relationValue, bodies fragmentEnv hostEnv
+                            (relationValue, relEnv) environments
+                            fragmentDenotes⟩
+                      | backward =>
+                          rintro ⟨relationValue, hostDenotes⟩
+                          exact ⟨relationValue, bodies fragmentEnv hostEnv
+                            (relationValue, relEnv) environments hostDenotes⟩
     · exact fragmentCompiled
     · exact mappedHostCompiled
-  intro fragmentEnv hostEnv relEnv environments hostDenotes
-  apply mappedSimulation fragmentEnv hostEnv relEnv environments
-  exact (ModalSoundness.compileOccurrences_denote_perm input.val
+  intro fragmentEnv hostEnv relEnv environments
+  have permuted := ModalSoundness.compileOccurrences_denote_perm input.val
     (ConcreteElaboration.compileRegion? signature input.val hostFuel)
     hostContext hostBinders
     (extractionHostOccurrenceMap_terminal_perm_selected input selection layout)
-    mappedHostCompiled hostCompiled model named hostEnv relEnv).mpr hostDenotes
+    mappedHostCompiled hostCompiled model named hostEnv relEnv
+  cases direction with
+  | forward =>
+      intro fragmentDenotes
+      exact permuted.mp (mappedSimulation fragmentEnv hostEnv relEnv
+        environments fragmentDenotes)
+  | backward =>
+      intro hostDenotes
+      exact mappedSimulation fragmentEnv hostEnv relEnv environments
+        (permuted.mpr hostDenotes)
 
 /-- The selected anchor block entails the extracted terminal material.  This
 is the compiler-level copy law consumed by iteration contraction. -/
@@ -790,7 +814,7 @@ theorem extractionCompileRoot_selected_denote
     exact ConcreteElaboration.openRootWires_exact
       (ConcreteDiagram.extractOpenRaw_wellFormed input selection layout)
   have itemsSimulation := extractionCompileSelectedItems_denote input selection
-    layout model named
+    layout model named .backward
     (input.val.extractDiagramRaw selection layout).regionCount hostFuel
     fragment.rootWires hostContext ConcreteElaboration.BinderContext.empty
     hostBinders fragmentEnumeration hostEnumeration hostCover fragmentExact
