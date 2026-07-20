@@ -122,7 +122,8 @@ theorem bubblePresentation_of_coalesced_outerAligned
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (respects : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).AttachmentsRespectBoundary)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
@@ -140,7 +141,7 @@ theorem bubblePresentation_of_coalesced_outerAligned
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
     let target := bubblePresentation_of_coalesced comprehension attachments
-      binders payload state site arguments hadmissible boundaryNodup model named
+      binders payload state site arguments hadmissible respects model named
       relationValue values parameterValues source
     target.OuterAligned (sourceWireValue ∘ spliceInput.quotientWire) := by
   dsimp only
@@ -149,8 +150,9 @@ theorem bubblePresentation_of_coalesced_outerAligned
     payload state site arguments
   let coalesced := coalescedInstantiationState comprehension attachments binders
     payload state site arguments hadmissible
-  let actualIso := Splice.Input.coalescedFrameIsoOfBoundaryNodup spliceInput
-    boundaryNodup
+  let actualIso :=
+    Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary spliceInput
+      respects
   let targetView := droppedBubbleView state
   let targetLeaf := targetView.compilerLeaf
   let targetOuter := targetLeaf.inheritedWires
@@ -176,13 +178,15 @@ theorem bubblePresentation_of_coalesced_outerAligned
   rw [aligned, mappedAtIndex]
   change sourceWireValue (source.outer.get sourceIndex) =
     sourceWireValue (spliceInput.quotientWire
-      (Splice.Input.discreteQuotientWireEquiv spliceInput boundaryNodup
+      (Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+        spliceInput respects
         (source.outer.get sourceIndex)))
   rw [show spliceInput.quotientWire
-      (Splice.Input.discreteQuotientWireEquiv spliceInput boundaryNodup
+      (Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+        spliceInput respects
         (source.outer.get sourceIndex)) = source.outer.get sourceIndex by
-    exact (Splice.Input.discreteQuotientWireEquiv spliceInput
-      boundaryNodup).left_inv _]
+    exact (Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+      spliceInput respects).left_inv _]
 
 /-- A bubble presentation paired with the fact that its inherited environment
 is the restriction of a single valuation on the executor state. -/
@@ -228,7 +232,6 @@ theorem alignedBubblePresentation_nonempty_of_trace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
@@ -242,7 +245,127 @@ theorem alignedBubblePresentation_nonempty_of_trace
       values parameterValues targetWireValue) :
     Nonempty (AlignedBubblePresentation payload state model named relationValue
       values parameterValues (targetWireValue ∘ trace.wireMap)) := by
-  sorry
+  induction trace with
+  | done fuel state pending_empty =>
+      exact ⟨target⟩
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
+      rcases plan with ⟨materialization, materializationChecked,
+        attachmentsRespectBoundary, checkedInput, checkedInputChecked,
+        nextState, next_eq⟩
+      cases next_eq
+      let plan : InstantiationCopyPlan comprehension attachments binders payload
+          state atom tail site arguments := {
+        materialization := materialization
+        materializationChecked := materializationChecked
+        attachmentsRespectBoundary := attachmentsRespectBoundary
+        checkedInput := checkedInput
+        checkedInputChecked := checkedInputChecked
+        next := advanceMaterializedInstantiationState comprehension attachments
+          binders payload state atom tail site arguments materialization
+            (Splice.Input.checkInput_sound checkedInputChecked).2
+        next_eq := rfl
+      }
+      rcases simulations with ⟨simulation, restSimulations⟩
+      obtain ⟨nextAligned⟩ := ih restSimulations targetWireValue target
+      let hadmissible :=
+        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+      let operationalTarget : BubblePresentation plan.operationalPayload
+          (advanceInstantiationState plan.materialization.result attachments
+            binders plan.operationalPayload state atom tail site arguments
+            hadmissible)
+          model named relationValue values parameterValues := {
+        rels := nextAligned.presentation.rels
+        outer := nextAligned.presentation.outer
+        outerExact := nextAligned.presentation.outerExact
+        binderContext := nextAligned.presentation.binderContext
+        binderCover := nextAligned.presentation.binderCover
+        binderEnumeration := nextAligned.presentation.binderEnumeration
+        fuel := nextAligned.presentation.fuel
+        body := nextAligned.presentation.body
+        compiled := nextAligned.presentation.compiled
+        environment := nextAligned.presentation.environment
+        relationEnvironment := nextAligned.presentation.relationEnvironment
+        fixed := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using
+            nextAligned.presentation.fixed
+        proxies := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using
+            nextAligned.presentation.proxies
+        parameters := nextAligned.presentation.parameters
+        denotes := nextAligned.presentation.denotes
+      }
+      let spliceInput := plan.spliceInput
+      let nextWireValue := targetWireValue ∘ rest.wireMap
+      have operationalAligned : operationalTarget.OuterAligned nextWireValue := by
+        intro index
+        simpa [operationalTarget, nextWireValue] using
+          nextAligned.aligned index
+      let coalesced := coalescedBubblePresentation_of_target
+        plan.materialization.result attachments binders
+        plan.operationalPayload state atom tail site arguments hadmissible model
+        named relationValue values parameterValues
+        (fun sourceFuel targetFuel => simulation .backward sourceFuel targetFuel
+          state.bubble (ConcreteDiagram.Encloses.refl _ _)) operationalTarget
+      have coalescedAligned : coalesced.OuterAligned
+          (nextWireValue ∘ spliceInput.plugLayout.frameWire) := by
+        exact coalescedBubblePresentation_of_target_outerAligned
+          plan.materialization.result attachments binders
+          plan.operationalPayload state atom tail site arguments hadmissible model
+          named relationValue values parameterValues
+          (fun sourceFuel targetFuel => simulation .backward sourceFuel
+            targetFuel state.bubble (ConcreteDiagram.Encloses.refl _ _))
+          operationalTarget nextWireValue operationalAligned
+      let source := bubblePresentation_of_coalesced
+        plan.materialization.result attachments binders
+        plan.operationalPayload state site arguments hadmissible
+        plan.attachmentsRespectBoundary model named relationValue values
+        parameterValues coalesced
+      have sourceAligned : source.OuterAligned
+          ((nextWireValue ∘ spliceInput.plugLayout.frameWire) ∘
+            spliceInput.quotientWire) := by
+        exact bubblePresentation_of_coalesced_outerAligned
+          plan.materialization.result attachments binders
+          plan.operationalPayload state site arguments hadmissible
+          plan.attachmentsRespectBoundary model named relationValue values
+          parameterValues coalesced
+          (nextWireValue ∘ spliceInput.plugLayout.frameWire) coalescedAligned
+      let originalSource : BubblePresentation payload state model named
+          relationValue values parameterValues := {
+        rels := source.rels
+        outer := source.outer
+        outerExact := source.outerExact
+        binderContext := source.binderContext
+        binderCover := source.binderCover
+        binderEnumeration := source.binderEnumeration
+        fuel := source.fuel
+        body := source.body
+        compiled := source.compiled
+        environment := source.environment
+        relationEnvironment := source.relationEnvironment
+        fixed := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using source.fixed
+        proxies := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using
+            source.proxies
+        parameters := source.parameters
+        denotes := source.denotes
+      }
+      refine ⟨{ presentation := originalSource, aligned := ?_ }⟩
+      simpa [originalSource, nextWireValue, spliceInput, Function.comp_def,
+        InstantiationTrace.wireMap] using sourceAligned
 
 /-- Canonical aligned presentation extracted from the propositional trace
 composition theorem. -/
@@ -262,7 +385,6 @@ noncomputable def alignedBubblePresentation_of_trace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
@@ -277,7 +399,7 @@ noncomputable def alignedBubblePresentation_of_trace
     AlignedBubblePresentation payload state model named relationValue values
       parameterValues (targetWireValue ∘ trace.wireMap) :=
   Classical.choice (alignedBubblePresentation_nonempty_of_trace trace
-    boundaryNodup model named relationValue values parameterValues simulations
+    model named relationValue values parameterValues simulations
     targetWireValue target)
 
 end InstantiationSemantic
