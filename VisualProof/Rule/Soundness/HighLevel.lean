@@ -1223,7 +1223,210 @@ theorem applyTheorem_sound
     SuccessfulReceiptSound context orientation input
       (.theorem theoremIndex selection args direction payload registered)
       receipt := by
-  sorry
+  obtain ⟨polarity, decomposition, hdecomposition, materialized,
+      hmaterialized, targetResult, targetSplice, realizes⟩ :=
+    applyTheorem_realizes happly
+  let replacement := materialized.certificate.result
+  let materializedArity :=
+    payload.sameBoundaryArity.trans
+      materialized.certificate.boundary_length.symm
+  have targetInputEq :
+      materialized.spliceInput =
+        payload.occurrence.replacementInput decomposition replacement
+          materializedArity := by
+    exact payload.occurrence.materialized_spliceInput_eq_replacementInput
+      decomposition payload.target payload.sameBoundaryArity materialized
+  have targetSplice' :
+      Diagram.Splice.Input.spliceChecked signature
+          (payload.occurrence.replacementInput decomposition replacement
+            materializedArity) = .ok targetResult := by
+    rw [← targetInputEq]
+    exact targetSplice
+  have realizes' :
+      receipt.Realizes
+        (payload.occurrence.replacementInput decomposition replacement
+          materializedArity).plugLayout.plugRaw
+        ((removeWireProvenance input selection
+            decomposition.frameDomains).compose
+          (spliceFrameWireProvenance
+            (payload.occurrence.replacementInput decomposition replacement
+              materializedArity)))
+        ((removeWireInterfaceTransport input selection
+            decomposition.frameDomains).compose
+          (spliceFrameInterfaceTransport
+            (payload.occurrence.replacementInput decomposition replacement
+              materializedArity))) := by
+    let frame := input.val.removeRaw selection decomposition.frameDomains
+    let Target := { candidate : Splice.Input signature //
+      candidate.frame.val = frame }
+    let actual : Target := ⟨materialized.spliceInput, rfl⟩
+    let canonical : Target :=
+      ⟨payload.occurrence.replacementInput decomposition replacement
+        materializedArity, rfl⟩
+    have targetEq : actual = canonical := by
+      apply Subtype.ext
+      exact targetInputEq
+    let family := fun candidate : Target =>
+      receipt.Realizes candidate.val.plugLayout.plugRaw
+        ((removeWireProvenance input selection
+            decomposition.frameDomains).compose
+          ((spliceFrameWireProvenance candidate.val).castSource
+            candidate.property))
+        ((removeWireInterfaceTransport input selection
+            decomposition.frameDomains).compose
+          ((spliceFrameInterfaceTransport candidate.val).castSource
+            candidate.property))
+    have actualRealizes : family actual := by
+      simpa [family, actual, WireProvenance.castSource,
+        InterfaceTransport.castSource] using realizes
+    have canonicalRealizes : family canonical := targetEq ▸ actualRealizes
+    simpa [family, canonical, WireProvenance.castSource,
+      InterfaceTransport.castSource] using canonicalRealizes
+  have locality :
+      payload.occurrence.ReplacementQuotientsLocal decomposition replacement
+        materializedArity := by
+    exact materialized.local
+  apply pinnedReplacementReceipt_sound_core context orientation input selection
+    payload.source args payload.occurrence decomposition replacement
+    materializedArity locality
+    (.theorem theoremIndex selection args direction payload registered)
+    receipt targetResult targetSplice' realizes'
+  intro sourceResult sourceSplice frameBoundary frameRoot valid proofArgs
+  let presentation :=
+    payload.occurrence.reassemblyTwoInputPresentation decomposition replacement
+      materializedArity locality
+  have allowed :
+      presentation.Allowed
+        (citationSimulationDirection direction)
+        (replaySimulationDirection orientation)
+        (payload.occurrence.reassemblyInput decomposition).plugLayout.plugRaw.root := by
+    dsimp only [presentation]
+    exact theoremCitationAllowed payload.occurrence decomposition replacement
+      materializedArity locality sourceSplice frameBoundary frameRoot
+      orientation direction polarity
+  have localLaw :
+      match citationSimulationDirection direction with
+      | .forward => ∀ sourceArgs,
+          (payload.occurrence.reassemblyInput decomposition).pattern.denote
+              Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions) sourceArgs →
+            replacement.denote Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm)
+      | .backward => ∀ targetArgs,
+          replacement.denote Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions) targetArgs →
+            (payload.occurrence.reassemblyInput decomposition).pattern.denote
+              Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq) := by
+    cases direction with
+    | forward =>
+        intro sourceArgs sourceDenotes
+        let sourceIso :=
+          payload.occurrence.reassemblyPatternIso decomposition
+        have sourcePatternDenotes :
+            payload.source.denote Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              (sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm) :=
+          (sourceIso.denote_iff
+            (payload.occurrence.reassemblyPattern decomposition).property
+            payload.source.property Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions) sourceArgs).mp
+            sourceDenotes
+        have targetDenotes :=
+          theoremPayload_forward_local
+            (context.theorems.get theoremIndex) payload registered
+            (Theory.interpretDefinitions context.definitions)
+            (valid.theorems theoremIndex)
+            (sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm)
+            sourcePatternDenotes
+        have materializedDenotes :=
+          (materialized.certificate.denote_iff Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions)
+            (sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm ∘
+              Fin.cast payload.sameBoundaryArity.symm)).mpr targetDenotes
+        have materializedArgsEq :
+            ((sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm ∘
+                Fin.cast payload.sameBoundaryArity.symm) ∘
+              Fin.cast materialized.certificate.boundary_length) =
+              sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm := by
+          funext position
+          apply congrArg sourceArgs
+          apply Fin.ext
+          rfl
+        simpa [replacement, materializedArgsEq] using materializedDenotes
+    | reverse =>
+        intro targetArgs targetDenotes
+        let payloadTargetArgs :=
+          targetArgs ∘ Fin.cast materialized.certificate.boundary_length.symm
+        have payloadTargetDenotes :
+            payload.target.denote Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              payloadTargetArgs :=
+          (materialized.certificate.denote_iff Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions)
+            payloadTargetArgs).mp (by
+              have targetArgsEq :
+                  payloadTargetArgs ∘
+                      Fin.cast materialized.certificate.boundary_length =
+                    targetArgs := by
+                funext position
+                apply congrArg targetArgs
+                apply Fin.ext
+                rfl
+              simpa [replacement, targetArgsEq] using targetDenotes)
+        have sourcePatternDenotes :=
+          theoremPayload_backward_local
+            (context.theorems.get theoremIndex) payload registered
+            (Theory.interpretDefinitions context.definitions)
+            (valid.theorems theoremIndex) payloadTargetArgs
+            payloadTargetDenotes
+        let sourceIso :=
+          payload.occurrence.reassemblyPatternIso decomposition
+        let reassemblyArgs :=
+          (payloadTargetArgs ∘ Fin.cast payload.sameBoundaryArity) ∘
+            Fin.cast sourceIso.boundary_length_eq
+        have reassemblyDenotes :
+            (payload.occurrence.reassemblyInput decomposition).pattern.denote
+              Lambda.canonicalModel
+              (Theory.interpretDefinitions context.definitions)
+              reassemblyArgs :=
+          (sourceIso.denote_iff
+            (payload.occurrence.reassemblyPattern decomposition).property
+            payload.source.property Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions)
+            reassemblyArgs).mpr (by
+              have reassemblyArgsEq :
+                reassemblyArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm =
+                    payloadTargetArgs ∘
+                      Fin.cast payload.sameBoundaryArity := by
+                funext position
+                apply congrArg
+                  (payloadTargetArgs ∘
+                    Fin.cast payload.sameBoundaryArity)
+                apply Fin.ext
+                rfl
+              simpa [reassemblyArgsEq] using sourcePatternDenotes)
+        have reassemblyTargetArgsEq :
+            reassemblyArgs =
+              targetArgs ∘ Fin.cast presentation.boundary_arity_eq := by
+          funext position
+          apply congrArg targetArgs
+          apply Fin.ext
+          rfl
+        simpa [reassemblyTargetArgsEq] using reassemblyDenotes
+  have paired :=
+    presentation.compiledSpliceSourceOpen_entails sourceSplice targetSplice'
+      frameBoundary frameRoot rfl rfl
+      (citationSimulationDirection direction)
+      (replaySimulationDirection orientation)
+      Lambda.canonicalModel
+      (Theory.interpretDefinitions context.definitions)
+      localLaw allowed proofArgs
+  cases orientation <;> cases direction <;>
+    simpa [DirectedEntailment, Step.tag, StepTag.semanticMode,
+      citationSimulationDirection, replaySimulationDirection] using paired
 
 /- Superseded proof retained temporarily for reference while the stronger
 attachment-sensitive executor contract is implemented.
