@@ -195,7 +195,7 @@ describe('proof session', () => {
     void n
   })
 
-  it('refuses a step that would leave a stale fixed statement-boundary id', () => {
+  it('transports a preserved statement boundary through local alias materialization', () => {
     const bodyBuilder = new DiagramBuilder()
     const bodyNode = bodyBuilder.termNode(bodyBuilder.root, p('y'))
     const shared = bodyBuilder.wire(bodyBuilder.root, [{ node: bodyNode, port: { kind: 'output' } }])
@@ -217,10 +217,16 @@ describe('proof session', () => {
     const ctx = { theorems: new Map(), relations: new Map([['Alias', aliasBody]]) }
     const session = startSession(side, side, ctx)
 
-    expect(() => applyForward(session, { rule: 'relUnfold', node: ref }))
-      .toThrowError(new RegExp(`forward step 0 gives boundary wire '${w1}' no semantic image`))
-    expect(() => applyBackward(session, { rule: 'relUnfold', node: ref }))
-      .toThrowError(new RegExp(`backward step 0 gives boundary wire '${w1}' no semantic image`))
+    const forward = applyForward(session, { rule: 'relUnfold', node: ref })
+    const backward = applyBackward(session, { rule: 'relUnfold', node: ref })
+    expect(sideBoundary(forward, 'forward')).toEqual([w1])
+    expect(sideBoundary(backward, 'backward')).toEqual([w1])
+    expect(currentSide(forward, 'forward').wires[w0]).toBeDefined()
+    expect(currentSide(forward, 'forward').wires[w1]).toBeDefined()
+    expect(currentSide(backward, 'backward').wires[w0]).toBeDefined()
+    expect(currentSide(backward, 'backward').wires[w1]).toBeDefined()
+    expect(timelineActiveActions(forward.forward)).toHaveLength(1)
+    expect(timelineActiveActions(backward.backward)).toHaveLength(1)
     expect(currentSide(session, 'forward').wires[w0]).toBeDefined()
     expect(currentSide(session, 'forward').wires[w1]).toBeDefined()
     expect(timelineActiveActions(session.forward)).toHaveLength(0)

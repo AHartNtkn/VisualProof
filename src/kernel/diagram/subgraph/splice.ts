@@ -92,14 +92,24 @@ export function spliceSubgraphMapped(
   // A repeated boundary identity is an equality constraint at the application
   // site, not permission to identify the host wires globally. Keep the first
   // ordered attachment as the copied pattern wire's representative and record
-  // every later incidence for an explicit local identity node below.
+  // every distinct later attachment for one explicit local identity node
+  // below. Repeating the same stub/attachment pair adds no new equality.
   const firstAttachmentOfStub = new Map<WireId, WireId>()
+  const attachmentsOfStub = new Map<WireId, Set<WireId>>()
   const aliasIncidences: Array<{ representative: WireId; attachment: WireId; position: number }> = []
   pattern.boundary.forEach((stub, i) => {
     const attachment = attachments[i]!
     const first = firstAttachmentOfStub.get(stub)
-    if (first === undefined) firstAttachmentOfStub.set(stub, attachment)
-    else aliasIncidences.push({ representative: first, attachment, position: i })
+    if (first === undefined) {
+      firstAttachmentOfStub.set(stub, attachment)
+      attachmentsOfStub.set(stub, new Set([attachment]))
+    } else {
+      const seen = attachmentsOfStub.get(stub)!
+      if (!seen.has(attachment)) {
+        seen.add(attachment)
+        aliasIncidences.push({ representative: first, attachment, position: i })
+      }
+    }
   })
 
   for (const [stub, hb] of binderMap) {
