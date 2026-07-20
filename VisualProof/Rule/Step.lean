@@ -1,6 +1,6 @@
 import VisualProof.Theory.Semantics
 import VisualProof.Diagram.Concrete.Subgraph.Splice
-import VisualProof.Lambda.Certificate
+import VisualProof.Lambda.NormalSeparation
 import VisualProof.Rule.NamedReference
 
 namespace VisualProof.Rule
@@ -271,6 +271,7 @@ inductive StepTag
   | deiteration
   | doubleCutIntro
   | doubleCutElim
+  | inconsistentCutElim
   | conversion
   | congruenceJoin
   | anchoredWireSplit
@@ -291,12 +292,13 @@ inductive StepTag
 def StepTag.all : List StepTag :=
   [.openTermSpawn, .relationSpawn, .boundRelationSpawn, .wireJoin,
     .erasure, .wireSever, .iteration, .deiteration,
-    .doubleCutIntro, .doubleCutElim, .conversion, .congruenceJoin,
+    .doubleCutIntro, .doubleCutElim, .inconsistentCutElim,
+    .conversion, .congruenceJoin,
     .anchoredWireSplit, .anchoredWireContract, .headStrip, .closedTermIntro,
     .fusion, .fission, .comprehensionInstantiate, .comprehensionAbstract,
     .theorem, .vacuousIntro, .vacuousElim, .relUnfold, .relFold]
 
-theorem StepTag.all_length : StepTag.all.length = 25 := by
+theorem StepTag.all_length : StepTag.all.length = 26 := by
   native_decide
 
 theorem StepTag.all_nodup : StepTag.all.Nodup := by
@@ -316,6 +318,7 @@ def StepTag.semanticMode : StepTag → SemanticMode
   | .erasure | .wireSever | .comprehensionInstantiate
   | .comprehensionAbstract | .headStrip | .theorem => .directed
   | .iteration | .deiteration | .doubleCutIntro | .doubleCutElim
+  | .inconsistentCutElim
   | .conversion | .congruenceJoin | .anchoredWireSplit
   | .anchoredWireContract | .closedTermIntro
   | .fusion | .fission | .vacuousIntro | .vacuousElim
@@ -1450,6 +1453,34 @@ structure ComprehensionInstantiatePayload
     input.val.Encloses (binderTargets index) bubble ∧
       binderTargets index ≠ bubble
 
+/-- Every structural gate for inconsistent-cut elimination is intrinsic to the
+payload. A zero-port concrete term is closed in the concrete diagram's native
+free-port representation. -/
+structure InconsistentCutPayload
+    (input : Diagram.CheckedDiagram signature)
+    (region : Fin input.val.regionCount)
+    (first second : Fin input.val.nodeCount) where
+  parent : Fin input.val.regionCount
+  region_is_cut : input.val.regions region = .cut parent
+  distinct : first ≠ second
+  firstTerm : Lambda.Term 0 (Fin 0)
+  firstNode : input.val.nodes first = .term region 0 firstTerm
+  secondTerm : Lambda.Term 0 (Fin 0)
+  secondNode : input.val.nodes second = .term region 0 secondTerm
+  outputWire : Fin input.val.wireCount
+  firstOutput : input.val.EndpointOccurs outputWire
+    { node := first, port := .output }
+  secondOutput : input.val.EndpointOccurs outputWire
+    { node := second, port := .output }
+  certificate : Lambda.NormalSeparationCertificate
+  selection : Diagram.CheckedSelection input.val
+  selection_eq : selection.val = {
+    anchor := parent
+    childRoots := [region]
+    directNodes := []
+    explicitWires := []
+  }
+
 structure ConversionPayload (input : Diagram.CheckedDiagram signature)
     (node : Fin input.val.nodeCount) where
   region : Fin input.val.regionCount
@@ -1691,6 +1722,9 @@ inductive Step (context : ProofContext signature)
       (witness : DeiterationWitness input selection)
   | doubleCutIntro (selection : Diagram.CheckedSelection input.val)
   | doubleCutElim (region : Fin input.val.regionCount)
+  | inconsistentCutElim (region : Fin input.val.regionCount)
+      (first second : Fin input.val.nodeCount)
+      (payload : InconsistentCutPayload input region first second)
   | conversion (node : Fin input.val.nodeCount)
       (payload : ConversionPayload input node)
   | congruenceJoin (first second : Fin input.val.nodeCount)
@@ -1750,6 +1784,7 @@ def Step.tag : Step context input → StepTag
   | .deiteration .. => .deiteration
   | .doubleCutIntro .. => .doubleCutIntro
   | .doubleCutElim .. => .doubleCutElim
+  | .inconsistentCutElim .. => .inconsistentCutElim
   | .conversion .. => .conversion
   | .congruenceJoin .. => .congruenceJoin
   | .anchoredWireSplit .. => .anchoredWireSplit

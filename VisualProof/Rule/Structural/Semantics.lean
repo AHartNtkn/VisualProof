@@ -1,4 +1,4 @@
-import VisualProof.Rule.Structural.Iteration
+import VisualProof.Rule.Structural.InconsistentCut
 import VisualProof.Diagram.ContextReachability
 
 namespace VisualProof.Rule
