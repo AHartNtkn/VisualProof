@@ -403,6 +403,84 @@ theorem targetAtom_region_iff_nonwrap
       subst region
       rfl
 
+/-- A surviving node outside the wrap's direct selection preserves its
+compiler-relevant constructor, owner map, and binder map. -/
+theorem node_shape_of_surviving_not_direct
+    (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
+    (node : Fin input.val.nodeCount)
+    (survives : trace.domains.nodes.survives node = true)
+    (notDirect : node ∉ wrap.val.directNodes) :
+    trace.diagram.nodes (trace.targetNode node survives) =
+      mapNodeShape trace.regionMap (input.val.nodes node) := by
+  have result := trace.abstractNode?_targetNode node survives
+  unfold abstractNode? at result
+  cases sourceShape : input.val.nodes node with
+  | term owner freePorts term =>
+      have ownerSurvives : trace.domains.regions.survives owner = true := by
+        simpa [sourceShape] using trace.nodeOwner_survives node survives
+      simp only [sourceShape, notDirect, if_false,
+        trace.domains.regions.index?_index owner ownerSurvives,
+        Option.map_some] at result
+      simp only [mapNodeShape]
+      rw [trace.regionMap_of_survives owner ownerSurvives]
+      simpa only [targetRegion] using (Option.some.inj result).symm
+  | atom owner binder =>
+      have ownerSurvives : trace.domains.regions.survives owner = true := by
+        simpa [sourceShape] using trace.nodeOwner_survives node survives
+      have binderSurvives := trace.atomBinder_survives node survives owner
+        binder sourceShape
+      simp only [sourceShape, notDirect, if_false,
+        trace.domains.regions.index?_index owner ownerSurvives,
+        trace.domains.regions.index?_index binder binderSurvives,
+        Option.map_some, Option.bind_some] at result
+      simp only [mapNodeShape]
+      rw [trace.regionMap_of_survives owner ownerSurvives,
+        trace.regionMap_of_survives binder binderSurvives]
+      simpa only [targetRegion] using (Option.some.inj result).symm
+  | named owner definition arity =>
+      have ownerSurvives : trace.domains.regions.survives owner = true := by
+        simpa [sourceShape] using trace.nodeOwner_survives node survives
+      simp only [sourceShape, notDirect, if_false,
+        trace.domains.regions.index?_index owner ownerSurvives,
+        Option.map_some] at result
+      simp only [mapNodeShape]
+      rw [trace.regionMap_of_survives owner ownerSurvives]
+      simpa only [targetRegion] using (Option.some.inj result).symm
+
+/-- A surviving child outside the wrap's direct roots preserves its complete
+region constructor under the survivor map. -/
+theorem region_shape_of_surviving_not_root
+    (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
+    (child : Fin input.val.regionCount)
+    (survives : trace.domains.regions.survives child = true)
+    (notRoot : child ∉ wrap.val.childRoots) :
+    trace.diagram.regions (trace.targetRegion child survives) =
+      mapRegionShape trace.regionMap (input.val.regions child) := by
+  have result := trace.abstractRegion?_targetRegion child survives
+  unfold abstractRegion? at result
+  cases sourceShape : input.val.regions child with
+  | sheet =>
+      simp only [sourceShape] at result
+      simpa only [mapRegionShape] using (Option.some.inj result).symm
+  | cut parent =>
+      have parentSurvives := trace.regionParent_survives child parent survives
+        (by simp [sourceShape, CRegion.parent?])
+      simp only [sourceShape, notRoot, if_false,
+        trace.domains.regions.index?_index parent parentSurvives,
+        Option.map_some] at result
+      simp only [mapRegionShape]
+      rw [trace.regionMap_of_survives parent parentSurvives]
+      simpa only [targetRegion] using (Option.some.inj result).symm
+  | bubble parent arity =>
+      have parentSurvives := trace.regionParent_survives child parent survives
+        (by simp [sourceShape, CRegion.parent?])
+      simp only [sourceShape, notRoot, if_false,
+        trace.domains.regions.index?_index parent parentSurvives,
+        Option.map_some] at result
+      simp only [mapRegionShape]
+      rw [trace.regionMap_of_survives parent parentSurvives]
+      simpa only [targetRegion] using (Option.some.inj result).symm
+
 theorem mem_filterMap_targetNode_iff
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
