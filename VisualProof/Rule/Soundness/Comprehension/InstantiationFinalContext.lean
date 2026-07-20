@@ -130,7 +130,6 @@ noncomputable def localSourceIndex
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -171,7 +170,6 @@ theorem localSourceIndex_lookup
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -184,7 +182,7 @@ theorem localSourceIndex_lookup
         (copyTrace.finalWireMap elimTrace
           ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
             targetIndex)) =
-      some (localSourceIndex finalWellFormed boundaryNodup finalRegion
+      some (localSourceIndex finalWellFormed finalRegion
         originalRegion mappedRegion targetIndex) :=
   Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete (by
     apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
@@ -216,7 +214,6 @@ theorem localSourceIndex_get
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -225,13 +222,13 @@ theorem localSourceIndex_get
       originalRegion).length) :
     (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
         finalRegion).get
-        (localSourceIndex finalWellFormed boundaryNodup finalRegion
+        (localSourceIndex finalWellFormed finalRegion
           originalRegion mappedRegion targetIndex) =
       copyTrace.finalWireMap elimTrace
         ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
           targetIndex) :=
   ConcreteElaboration.WireContext.lookup?_sound
-    (localSourceIndex_lookup finalWellFormed boundaryNodup finalRegion
+    (localSourceIndex_lookup finalWellFormed finalRegion
       originalRegion mappedRegion targetIndex)
 
 theorem localSourceIndex_injective
@@ -254,12 +251,11 @@ theorem localSourceIndex_injective
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
       originalRegion = finalRegion) :
-    Function.Injective (localSourceIndex finalWellFormed boundaryNodup
+    Function.Injective (localSourceIndex finalWellFormed
       finalRegion originalRegion mappedRegion) := by
   intro first second indicesEq
   have mappedWiresEq : copyTrace.finalWireMap elimTrace
@@ -268,9 +264,9 @@ theorem localSourceIndex_injective
       copyTrace.finalWireMap elimTrace
         ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
           second) := by
-    rw [← localSourceIndex_get finalWellFormed boundaryNodup finalRegion
+    rw [← localSourceIndex_get finalWellFormed finalRegion
       originalRegion mappedRegion first,
-      ← localSourceIndex_get finalWellFormed boundaryNodup finalRegion
+      ← localSourceIndex_get finalWellFormed finalRegion
         originalRegion mappedRegion second, indicesEq]
   have wiresEq := copyTrace.finalWireMap_injective elimTrace
     mappedWiresEq
@@ -309,7 +305,6 @@ def extendMapped
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
@@ -355,7 +350,6 @@ def extendRegular
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
@@ -368,7 +362,7 @@ def extendRegular
       (sourceContext.extend finalRegion)
       (targetContext.extend
         (copyTrace.reverseRegionMap elimTrace finalWellFormed finalRegion)) :=
-  witness.extendMapped finalWellFormed boundaryNodup finalRegion
+  witness.extendMapped finalWellFormed finalRegion
     (copyTrace.reverseRegionMap elimTrace finalWellFormed finalRegion)
     (copyTrace.finalRegionMap_reverseRegionMap elimTrace finalWellFormed
       finalRegion regular)
@@ -393,7 +387,6 @@ def extendFocused
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
@@ -402,7 +395,7 @@ def extendFocused
     FinalContextWitness copyTrace elimTrace
       (sourceContext.extend (elimTrace.targetIndex finalWellFormed))
       (targetContext.extend payload.parent) :=
-  witness.extendMapped finalWellFormed boundaryNodup
+  witness.extendMapped finalWellFormed
     (elimTrace.targetIndex finalWellFormed) payload.parent
     (copyTrace.finalRegionMap_parent elimTrace finalWellFormed)
 
@@ -429,7 +422,6 @@ def extendSelected
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
