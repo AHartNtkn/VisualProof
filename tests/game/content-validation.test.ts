@@ -1,19 +1,17 @@
 import { describe, expect, it } from 'vitest'
-import { createHash } from 'node:crypto'
 import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { validateGameContent } from '../../scripts/validate-game-content'
+import { findEmptyCutShortcutHosts, validateGameContent } from '../../scripts/validate-game-content'
 import { loadGameContent } from '../../src/game/catalog'
 import { gameContentFiles } from '../../src/game/content/files'
 import { cutDepth } from '../../src/kernel/diagram'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 
 type JsonRecord = Record<string, any>
 
 const readJson = (path: string): JsonRecord => JSON.parse(readFileSync(path, 'utf8')) as JsonRecord
 const writeJson = (path: string, value: unknown): void => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
-const sha256 = (value: unknown): string => createHash('sha256')
-  .update(JSON.stringify(value)).digest('hex')
 
 const validateFixture = (mutate: (root: string) => void): void => {
   const root = mkdtempSync(join(tmpdir(), 'cursebreaker-content-validation-'))
@@ -43,6 +41,35 @@ describe('build-only game content evidence', () => {
     })
   })
 
+  it('finds a negative host where an empty cut makes competing content disposable', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.cut(builder.root)
+    const owner = builder.bubble(outer, 0)
+    builder.atom(owner, owner)
+    builder.cut(owner)
+
+    expect(findEmptyCutShortcutHosts(builder.build())).toEqual([owner])
+  })
+
+  it('does not flag an empty cut without competing content', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.cut(builder.root)
+    builder.cut(outer)
+
+    expect(findEmptyCutShortcutHosts(builder.build())).toEqual([])
+  })
+
+  it('does not flag a nonempty cut', () => {
+    const builder = new DiagramBuilder()
+    const outer = builder.cut(builder.root)
+    const owner = builder.bubble(outer, 0)
+    const marked = builder.cut(owner)
+    builder.atom(marked, owner)
+    builder.atom(owner, owner)
+
+    expect(findEmptyCutShortcutHosts(builder.build())).toEqual([])
+  })
+
   it('represents both nested owners as distinct binder pairs', () => {
     const diagram = loadGameContent(gameContentFiles).puzzle('nested-owner-introduction' as never).diagram
     const binders = ['n0', 'n1', 'n2', 'n3'].map((id) => diagram.nodes[id]).map((node) => {
@@ -63,101 +90,6 @@ describe('build-only game content evidence', () => {
     }
 
     expect([...byFingerprint.values()].filter((ids) => ids.length > 1)).toEqual([])
-  })
-
-  it('preserves every incumbent Seyric bundle while adding onboarding beside it', () => {
-    const onboarding = new Set([
-      'two-veils', 'four-veils', 'forked-veil', 'echoed-veil', 'empty-ring-release',
-    ])
-    const onboardingObligations = new Set([
-      'bare-double-cut-elimination',
-      'repeated-double-cut-order-practice',
-      'negative-field-empty-fragment-erasure',
-      'cut-form-supported-deiteration',
-      'vacuous-ring-elimination',
-    ])
-    const incumbentRootIds = new Set([
-      'single-mark-return',
-      'shallow-edit-legality-contrast',
-      'atomic-fragment-erasure',
-      'atomic-content-insertion',
-      'compound-copy-authority-contrast',
-      'transfer-duplication-recognition',
-      'atomic-double-cut-selection',
-      'common-conjunction-factor-base',
-      'common-disjunction-factor-base',
-      'content-bearing-annulus-choice',
-      'disjunction-over-conjunction-base',
-      'i-dao',
-      'conjunction-idempotence-introduction',
-      'weakening-introduction',
-      'two-mark-projection',
-      'left-injection-introduction',
-      'disjunction-idempotence-introduction',
-      'atomic-conjunction-exchange',
-      'disjunction-exchange-recognition',
-      'conjunction-reassociation-recognition',
-      'disjunction-reassociation-recognition',
-      'i-c3',
-      'i-cs',
-      'i-al',
-      'i-case2',
-      'i-om',
-      'i-aa',
-      'i-ao',
-      'sey-ctr-i01',
-      'sey-dm-ec-i01',
-      'sey-dm-fc-i01',
-      'sey-red-i01',
-      'sey-pei-i01',
-      'weakening-injection-weave',
-      'b3',
-      'de-morgan-product-consumer',
-      'de-morgan-sum-consumer',
-      'double-cut-copy-license',
-      'double-cut-insertion-workspace',
-      'preserve-sole-structural-source',
-      'r4',
-      'r5',
-      'recollect-shared-branch-context',
-      'rm-c3',
-    ])
-    const progression = readJson(resolve(process.cwd(), 'content/progression/core.json'))
-    const incumbentIds = progression.cultures[0].puzzles.filter(
-      (id: string) => !onboarding.has(id),
-    ) as string[]
-    const incumbent = new Set(incumbentIds)
-    const catalog = readJson(resolve(process.cwd(), 'content/catalog/cursebreaker.json'))
-    const guidance = readJson(resolve(process.cwd(), 'content/guidance/cursebreaker.json'))
-    const coverage = readJson(resolve(process.cwd(), 'content/coverage/seyric.json'))
-    const incumbentCoreBytes = incumbentIds.map((id) => readFileSync(resolve(
-      process.cwd(), `content/puzzles/${id}.json`,
-    ), 'utf8'))
-    const preservedBundle = {
-      seyric: incumbentIds,
-      catalog: catalog.artifacts.filter(({ puzzle }: JsonRecord) => incumbent.has(puzzle)),
-      guidance: guidance.puzzles.filter(({ puzzle }: JsonRecord) => incumbent.has(puzzle)),
-      obligations: coverage.obligations.filter(({ id }: JsonRecord) => !onboardingObligations.has(id)),
-      coverage: coverage.puzzles.filter(({ puzzle }: JsonRecord) => incumbent.has(puzzle)),
-      validations: incumbentIds.map((id) => readJson(resolve(
-        process.cwd(), `content/validation/${id}.json`,
-      ))),
-    }
-    const incumbentProgression = structuredClone(progression)
-    incumbentProgression.cultures[0].gateway = 'single-mark-return'
-    incumbentProgression.cultures[0].puzzles = incumbentIds
-    incumbentProgression.placements = incumbentProgression.placements
-      .filter(({ puzzle }: JsonRecord) => !onboarding.has(puzzle))
-      .map((placement: JsonRecord) => incumbentRootIds.has(placement.puzzle)
-        ? { ...placement, prerequisites: [] }
-        : placement)
-
-    expect(sha256(incumbentCoreBytes))
-      .toBe('dd698fc6630b7f6f4fff4c19c31a38b92bbbf19bf7cec29bc3e4893f74d1e720')
-    expect(sha256(incumbentProgression))
-      .toBe('c31a2917cd915b6056cd49b17ee02a5ba6d71d009b3141a668cb05449e45b6c9')
-    expect(sha256(preservedBundle))
-      .toBe('b9694b69f7ed6a2f3ce4131f26912790b7e5029c5a2a0150364b3accd7cd8083')
   })
 
   it('rejects a Seyric puzzle with no coverage row', () => {

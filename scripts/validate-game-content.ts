@@ -3,6 +3,7 @@ import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { exploreForm } from '../src/kernel/diagram/canonical/explore'
+import type { Diagram, RegionId } from '../src/kernel/diagram/diagram'
 import { cutDepth } from '../src/kernel/diagram/regions'
 import { stepFromJson } from '../src/kernel/proof/json'
 import { artifactTheoremContext } from '../src/game/artifact-theorem'
@@ -37,6 +38,32 @@ export type ContentValidationReceipt = {
   readonly puzzles: number
   readonly solutions: number
   readonly recognizedStates: number
+}
+
+const directChildRegions = (diagram: Diagram, parent: RegionId): RegionId[] =>
+  Object.entries(diagram.regions)
+    .filter(([, region]) => region.kind !== 'sheet' && region.parent === parent)
+    .map(([id]) => id)
+
+const directNodeCount = (diagram: Diagram, region: RegionId): number =>
+  Object.values(diagram.nodes).filter((node) => node.region === region).length
+
+const isEmptyCut = (diagram: Diagram, region: RegionId): boolean =>
+  diagram.regions[region]?.kind === 'cut'
+  && directChildRegions(diagram, region).length === 0
+  && directNodeCount(diagram, region) === 0
+
+export function findEmptyCutShortcutHosts(diagram: Diagram): readonly RegionId[] {
+  const hosts: RegionId[] = []
+  for (const id of Object.keys(diagram.regions)) {
+    if (cutDepth(diagram, id) % 2 === 0) continue
+    const children = directChildRegions(diagram, id)
+    const emptyCuts = children.filter((child) => isEmptyCut(diagram, child))
+    if (emptyCuts.length === 0) continue
+    const competingRegions = children.filter((child) => !emptyCuts.includes(child))
+    if (competingRegions.length > 0 || directNodeCount(diagram, id) > 0) hosts.push(id)
+  }
+  return hosts
 }
 
 const parseJson = (path: string): unknown => JSON.parse(readFileSync(path, 'utf8')) as unknown

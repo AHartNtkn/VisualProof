@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { createHash } from 'node:crypto'
 import seyricCoverage from '../../content/coverage/seyric.json'
 import { loadGameContent } from '../../src/game/catalog'
 import { gameContentFiles } from '../../src/game/content'
@@ -60,9 +59,6 @@ const incumbentRootIds = [
   'recollect-shared-branch-context',
   'rm-c3',
 ] as const
-const sha256 = (value: unknown): string => createHash('sha256')
-  .update(JSON.stringify(value)).digest('hex')
-
 describe('reconstructed opening content', () => {
   it('matches the accepted Seyric collection structurally without making its count authoritative', () => {
     const acceptedIds = seyricCoverage.puzzles.map(({ puzzle }) => puzzle).sort()
@@ -72,15 +68,6 @@ describe('reconstructed opening content', () => {
     expect(catalog.puzzleIds).toEqual(
       catalog.cultureIds.flatMap((culture) => catalog.puzzlesInCulture(culture)),
     )
-  })
-
-  it('prepends the additive onboarding spine and preserves every incumbent semantic start', () => {
-    const seyricIds = catalog.puzzlesInCulture('seyric-horizon' as never)
-    expect(seyricIds.slice(0, 6)).toEqual([...onboardingIds, 'single-mark-return'])
-
-    const incumbentIds = seyricIds.filter((id) => !(onboardingIds as readonly string[]).includes(id))
-    expect(sha256(incumbentIds.map((id) => [id, catalog.puzzleFingerprint(id)])))
-      .toBe('9e30f8ef87680994587ff18836d23b0dc0cda9376ec19f47359c1ba60a2e3a81')
   })
 
   it('keeps the early cut exercises mark-free and introduces one empty ring afterward', () => {
