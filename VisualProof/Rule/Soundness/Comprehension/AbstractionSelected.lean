@@ -1,5 +1,5 @@
 import VisualProof.Rule.Comprehension.Semantics
-import VisualProof.Rule.Soundness.Comprehension.AbstractionSimulation
+import VisualProof.Rule.Soundness.Comprehension.AbstractionEnvironment
 import VisualProof.Rule.Soundness.Iteration.ExtractionTerminalSemantic
 
 namespace VisualProof.Rule

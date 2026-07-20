@@ -1,4 +1,4 @@
-import VisualProof.Rule.Soundness.Comprehension.AbstractionEnvironment
+import VisualProof.Rule.Soundness.Comprehension.AbstractionFocusedOccurrences
 
 namespace VisualProof.Rule
 
@@ -157,7 +157,7 @@ noncomputable def semanticSimulation
       parent arity childKind allowed
   ContextWitness := fun sourceContext targetContext =>
     PLift (ContextWitness trace sourceContext targetContext)
-  AtRegion := fun _ region => trace.Reachable region
+  AtRegion := fun _ region => trace.OuterReachable region
   indexRelation := fun context => context.down.indexRelation
   extendContext := by
     intro sourceContext targetContext context region regular sourceExact
@@ -168,11 +168,11 @@ noncomputable def semanticSimulation
     intro sourceContext targetContext context region reachable focused
       sourceExact targetExact
     exact PLift.up (context.down.extend region
-      (trace.survives_of_reachable payload region reachable))
+      (trace.survives_of_reachable payload region reachable.1))
   at_child := by
     intro sourceContext targetContext context parent regular sourceExact
       targetExact child reachable childParent
-    exact trace.reachable_child_of_regular payload parent child reachable
+    exact trace.outerReachable_child_of_regular payload parent child reachable
       (Classical.not_not.mp regular) childParent
   at_extended := by
     intro sourceContext targetContext context region regular sourceExact
@@ -181,8 +181,33 @@ noncomputable def semanticSimulation
   at_focused_child := by
     intro sourceContext targetContext context parent focused sourceExact
       targetExact child reachable sourceParent targetParent
-    exact trace.reachable_child_of_focus targetWellFormed parent child
-      reachable targetParent
+    have parentEq := trace.outerReachable_focused_eq payload parent reachable
+      focused
+    subst parent
+    have childSurvives := trace.reachable_child_of_focus targetWellFormed
+      wrap.val.anchor child reachable.1 targetParent
+    refine ⟨childSurvives, ?_⟩
+    by_cases childEq : child = wrap.val.anchor
+    · exact Or.inl childEq
+    · apply Or.inr
+      intro selected
+      have targetDirect : child ∉ wrap.val.childRoots := by
+        rw [trace.regionMap_of_survives child childSurvives,
+          trace.regionMap_of_survives wrap.val.anchor
+            (wrap_anchor_survives payload)] at targetParent
+        exact ((trace.targetRegion_parent_wrap_iff child childSurvives
+          (wrap_anchor_survives payload)).1 targetParent).2
+      obtain ⟨root, rootMember, encloses⟩ :=
+        (wrap.mem_selectedRegions child).1 selected
+      have rootEq : root = child := by
+        have rootParent := wrap.property.childRoots_direct root rootMember
+        rcases ConcreteElaboration.encloses_direct_child sourceParent encloses with
+          equal | enclosesParent
+        · exact equal
+        · exact False.elim
+            (ConcreteElaboration.checked_direct_child_not_encloses_parent
+              input.property rootParent enclosesParent)
+      exact targetDirect (rootEq ▸ rootMember)
   localTransport := by
     intro sourceRels targetRels direction fuelSource fuelTarget sourceContext
       targetContext context sourceBinders targetBinders binderWitness region
