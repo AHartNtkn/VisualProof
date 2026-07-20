@@ -703,6 +703,15 @@ describe('build-only game content evidence', () => {
     })).toThrow(/duplicate canonical start/)
   })
 
+  it('rejects an unapproved empty-cut truth witness with competing content', () => {
+    expect(() => validateFixture((root) => {
+      const path = join(root, 'puzzles/single-mark-return.json')
+      const puzzle = readJson(path)
+      puzzle.diagram.regions.r_shortcut = { kind: 'cut', parent: 'r2' }
+      writeJson(path, puzzle)
+    })).toThrow(/empty-cut shortcut.*single-mark-return/i)
+  })
+
   it('rejects the obsolete placement optionality field', () => {
     expect(() => validateFixture((root) => {
       const path = join(root, 'progression/core.json')

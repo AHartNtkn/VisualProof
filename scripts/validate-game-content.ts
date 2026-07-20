@@ -275,6 +275,20 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
     throw new GameDomainError(`duplicate canonical start among Seyric puzzles: ${duplicateSeyricProblems.map((ids) => ids.join(', ')).join('; ')}`)
   }
 
+  const permittedShortcutPuzzles = new Set<PuzzleId>([
+    puzzleId('forked-veil'),
+    puzzleId('echoed-veil'),
+    puzzleId('atomic-fragment-erasure'),
+  ])
+  for (const id of seyricIds) {
+    const hosts = findEmptyCutShortcutHosts(catalog.puzzle(id).diagram)
+    if (hosts.length > 0 && !permittedShortcutPuzzles.has(id)) {
+      throw new GameDomainError(
+        `empty-cut shortcut in '${id}' at negative host(s): ${hosts.join(', ')}`,
+      )
+    }
+  }
+
   const seyricLanguageViolations: string[] = []
   for (const id of seyricIds) {
     const diagram = catalog.puzzle(id).diagram
