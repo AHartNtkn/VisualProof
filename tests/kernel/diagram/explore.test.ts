@@ -206,7 +206,8 @@ function relabel(d: Diagram, rng: () => number): Diagram {
   }
   const nodes: Record<NodeId, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
-    nodes[nTo.get(id)!] = n.kind === 'term' ? { kind: 'term', region: rTo.get(n.region)!, term: n.term }
+    nodes[nTo.get(id)!] = n.kind === 'term'
+      ? { kind: 'term', region: rTo.get(n.region)!, term: n.term, freePorts: n.freePorts }
       : n.kind === 'atom' ? { kind: 'atom', region: rTo.get(n.region)!, binder: rTo.get(n.binder)! }
       : { kind: 'ref', region: rTo.get(n.region)!, defId: n.defId, arity: n.arity }
   }

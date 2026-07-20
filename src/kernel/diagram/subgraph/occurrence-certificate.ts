@@ -1,6 +1,5 @@
 import type { ConversionCertificate } from '../../term/certificate'
 import { checkConversion } from '../../term/certificate'
-import { freePorts } from '../../term/term'
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
 import { positionalPortKey } from '../canonical/shape'
 import type { DiagramWithBoundary } from '../boundary'
@@ -41,7 +40,7 @@ function sameMap<K, V>(left: ReadonlyMap<K, V>, right: ReadonlyMap<K, V>): boole
 function endpointPositionKey(d: Diagram, endpoint: Endpoint): string {
   const node = d.nodes[endpoint.node]!
   switch (node.kind) {
-    case 'term': return positionalPortKey(node.term, endpoint.port)
+    case 'term': return positionalPortKey(node.term, endpoint.port, node.freePorts)
     case 'atom':
     case 'ref':
       return endpoint.port.kind === 'arg'
@@ -216,12 +215,12 @@ export function checkOccurrenceCertificate(
         break
       case 'term': {
         if (target.kind !== 'term') return fail(`node '${patternNode}' has incompatible image '${hostNode}'`)
-        if (freePorts(source.term).length !== freePorts(target.term).length) {
+        if (source.freePorts.length !== target.freePorts.length) {
           return fail(`term '${patternNode}' changes positional arity at '${hostNode}'`)
         }
         const checked = checkConversion(
-          closeOverPorts(source.term),
-          closeOverPorts(target.term),
+          closeOverPorts(source.term, source.freePorts),
+          closeOverPorts(target.term, target.freePorts),
           certificate.termCertificates.get(patternNode)!,
         )
         if (!checked.ok) return fail(`term certificate for '${patternNode}' is invalid: ${checked.reason}`)

@@ -334,7 +334,7 @@ describe('relation workspace port model', () => {
 
     expectOneSnapshot(draft, spawned)
     expect(Object.values(currentRelationDraft(spawned).diagram.nodes)).toEqual([
-      { kind: 'term', region: 'r0', term: lam(bvar(0)) },
+      { kind: 'term', region: 'r0', term: lam(bvar(0)), freePorts: [] },
     ])
     expect(Object.values(currentRelationDraft(spawned).diagram.wires)).toEqual([
       { scope: 'r0', endpoints: [{ node: 'n', port: { kind: 'output' } }] },

@@ -133,12 +133,12 @@ function correspondenceFromJson(v: unknown, what: string): PortCorrespondence {
   }
   const mapping = (side: unknown, label: string): Record<string, number> => {
     if (!isRecord(side)) fail(`${label} must be an object`)
-    const result: Record<string, number> = {}
+    const entries: [string, number][] = []
     for (const [name, column] of Object.entries(side)) {
       if (typeof column !== 'number') fail(`${label}['${name}'] must be a number`)
-      result[name] = column
+      entries.push([name, column])
     }
-    return result
+    return Object.fromEntries(entries)
   }
   const correspondence: PortCorrespondence = {
     commonArity: v.commonArity,
@@ -338,8 +338,9 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'conversion': {
       assertOnlyKeys(j, ['rule', 'node', 'term', 'certificate', 'correspondence', 'attachments'], 'conversion step')
       if (!isRecord(j.attachments)) fail('attachments must be an object')
-      const attachments: Record<string, WireId> = {}
-      for (const [k, v] of Object.entries(j.attachments)) attachments[k] = str(v, `attachments['${k}']`)
+      const attachments = Object.fromEntries(
+        Object.entries(j.attachments).map(([k, v]) => [k, str(v, `attachments['${k}']`)]),
+      ) as Record<string, WireId>
       return { rule, node: str(j.node, 'node'), term: termFromJson(j.term, 'term'), certificate: certFromJson(j.certificate, 'certificate'), correspondence: correspondenceFromJson(j.correspondence, 'correspondence'), attachments }
     }
     case 'congruenceJoin':

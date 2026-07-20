@@ -44,6 +44,29 @@ const freeVarWires = (d: Diagram, node: NodeId): WireId[] =>
     .map(([id]) => id)
 
 describe('head strip (rigid-head equation decomposition)', () => {
+  it('gives each generated closure its witness-selected full interface, including unused one-sided columns', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x a'), ['a', 'unusedLeft'])
+    const n2 = h.termNode(h.root, p('\\x. x b'), ['b', 'unusedRight'])
+    h.wire(h.root, [fv(n1, 'a')])
+    h.wire(h.root, [fv(n1, 'unusedLeft')])
+    h.wire(h.root, [fv(n2, 'b')])
+    h.wire(h.root, [fv(n2, 'unusedRight')])
+    h.wire(h.root, [outp(n1), outp(n2)])
+    const d = h.build()
+    const out = applyHeadStrip(d, n1, n2, {
+      commonArity: 4,
+      left: { s0: 0, s1: 1 },
+      right: { s0: 2, s1: 3 },
+    })
+    const added = addedNodes(d, out)
+    expect(added).toHaveLength(2)
+    for (const id of added) {
+      const node = out.nodes[id]
+      expect(node?.kind === 'term' && node.freePorts).toEqual(['s0', 's1'])
+    }
+  })
+
   it('uses mapped prefix closures to select exactly the nontrivial argument equations', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('\\x. x a a'))
@@ -60,7 +83,7 @@ describe('head strip (rigid-head equation decomposition)', () => {
     const out = applyHeadStrip(d, n1, n2, correspondence)
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
-    expect(added.filter((node) => freeVarWires(out, node).includes(shared))).toHaveLength(1)
+    expect(added.filter((node) => freeVarWires(out, node).includes(shared))).toHaveLength(2)
     expect(termEq(termOf(out, added[0]!), p('\\x. s0'))).toBe(true)
     expect(termEq(termOf(out, added[1]!), p('\\x. s0'))).toBe(true)
   })
@@ -81,20 +104,20 @@ describe('head strip (rigid-head equation decomposition)', () => {
     })
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
-    // every single-free closure is canonically the term 's0'; the b- and
-    // c-copies are distinguished by WIRING (which parent wire they ride)
+    // Each closure retains its parent's full positional interface, so the
+    // selected second-position argument remains s1 on both new nodes.
     const bNode = added.find((id) => freeVarWires(out, id).includes(wb))
     const cNode = added.find((id) => freeVarWires(out, id).includes(wc))
     expect(bNode).toBeDefined()
     expect(cNode).toBeDefined()
     expect(bNode).not.toBe(cNode)
-    expect(termEq(termOf(out, bNode!), p('\\x. s0'))).toBe(true)
-    expect(termEq(termOf(out, cNode!), p('\\x. s0'))).toBe(true)
+    expect(termEq(termOf(out, bNode!), p('\\x. s1'))).toBe(true)
+    expect(termEq(termOf(out, cNode!), p('\\x. s1'))).toBe(true)
     expect(out.nodes[bNode!]!.region).toBe(h.root)
     expect(out.nodes[cNode!]!.region).toBe(h.root)
-    // closure free ports ride exactly the wires those ports ride on the parents
-    expect(freeVarWires(out, bNode!)).toEqual([wb])
-    expect(freeVarWires(out, cNode!)).toEqual([wc])
+    // The full declared interface rides exactly the parent interface wires.
+    expect(freeVarWires(out, bNode!)).toEqual([wa, wb])
+    expect(freeVarWires(out, cNode!)).toEqual([wa, wc])
     // the two added outputs share ONE fresh wire scoped at the region
     const wo = outputWire(out, bNode!)
     expect(outputWire(out, cNode!)).toBe(wo)
@@ -108,8 +131,8 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(outputWire(out, n1)).toBe(weq)
     expect(outputWire(out, n2)).toBe(weq)
     expect(out.wires[weq]!.endpoints).toHaveLength(2)
-    // the skipped position gained no endpoints
-    expect(out.wires[wa]!.endpoints).toHaveLength(2)
+    // The skipped occurrence position remains present as an unused declared slot.
+    expect(out.wires[wa]!.endpoints).toHaveLength(4)
   })
 
   it('rejects a shared correspondence column whose native ports ride different host wires', () => {

@@ -139,6 +139,17 @@ describe('step interface transport', () => {
     return { diagram: b.build(), redundant, survivor, drop, keep }
   }
 
+  it('does not treat fresh result wires as source identities', () => {
+    const d = new DiagramBuilder().build()
+    const receipt = applyStepWithReceipt(d, {
+      rule: 'closedTermIntro', region: d.root, term: pp('\\x. x'),
+    }, ctx)
+    const fresh = Object.keys(receipt.result.wires)[0]!
+
+    expect(receipt.provenance.image(fresh)).toBeUndefined()
+    expect(receipt.interface.image(fresh)).toBeUndefined()
+  })
+
   it('coalesces an anchored contraction boundary exactly when the survivor is root-available', () => {
     const root = anchoredFixture(false)
     const rootReceipt = applyStepWithReceipt(root.diagram, {
@@ -148,6 +159,8 @@ describe('step interface transport', () => {
       certificate: { leftSteps: [], rightSteps: [] },
     }, ctx)
     expect(rootReceipt.result.wires[root.drop]).toBeUndefined()
+    expect(rootReceipt.provenance.image(root.drop)).toBeUndefined()
+    expect(rootReceipt.provenance.image(root.keep)).toBe(root.keep)
     expect(rootReceipt.interface.image(root.drop)).toBe(root.keep)
     expect(transportBoundary(rootReceipt.interface, [root.drop, root.drop, root.keep]))
       .toEqual([root.keep, root.keep, root.keep])
@@ -160,6 +173,7 @@ describe('step interface transport', () => {
       certificate: { leftSteps: [], rightSteps: [] },
     }, ctx)
     expect(shieldedReceipt.result.wires[shielded.drop]).toBeUndefined()
+    expect(shieldedReceipt.provenance.image(shielded.drop)).toBeUndefined()
     expect(shieldedReceipt.interface.image(shielded.drop)).toBeUndefined()
     expect(transportBoundary(shieldedReceipt.interface, [shielded.drop])).toBeUndefined()
     expect(transportBoundary(shieldedReceipt.interface, [shielded.keep])).toEqual([shielded.keep])
@@ -177,6 +191,9 @@ describe('step interface transport', () => {
       ctx,
       'backward',
     )
+    expect(receipt.provenance.image(outer)).toBe(outer)
+    expect(receipt.provenance.image(inner)).toBeUndefined()
+    expect(receipt.interface.image(inner)).toBe(outer)
     expect(transportBoundary(receipt.interface, [outer, inner, inner]))
       .toEqual([outer, outer, outer])
   })
@@ -202,6 +219,8 @@ describe('step interface transport', () => {
       certificate: { leftSteps: [], rightSteps: [] }, correspondence,
     }, ctx)
     expect(rootReceipt.result.wires[root.absorbed]).toBeUndefined()
+    expect(rootReceipt.provenance.image(root.retained)).toBe(root.retained)
+    expect(rootReceipt.provenance.image(root.absorbed)).toBeUndefined()
     expect(rootReceipt.interface.image(root.absorbed)).toBe(root.retained)
 
     const shielded = fixture(true)
@@ -210,6 +229,9 @@ describe('step interface transport', () => {
       certificate: { leftSteps: [], rightSteps: [] }, correspondence,
     }, ctx)
     expect(shieldedReceipt.result.wires[shielded.absorbed]).toBeUndefined()
+    expect(shieldedReceipt.provenance.image(shielded.retained)).toBeUndefined()
+    expect(shieldedReceipt.provenance.image(shielded.absorbed)).toBeUndefined()
+    expect(shieldedReceipt.interface.image(shielded.retained)).toBeUndefined()
     expect(shieldedReceipt.interface.image(shielded.absorbed)).toBeUndefined()
   })
 })

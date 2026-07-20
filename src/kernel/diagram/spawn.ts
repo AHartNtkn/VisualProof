@@ -4,12 +4,19 @@ import type { Diagram, DiagramNode, NodeId, Port, RegionId, Wire, WireId } from 
 import { mkDiagram, requiredPorts } from './diagram'
 import { freshId, type IdReservation } from './subgraph/freshId'
 
-export function spawnTermNode(d: Diagram, region: RegionId, term: Term, reservation?: IdReservation): { diagram: Diagram; node: NodeId } {
+export function spawnTermNode(
+  d: Diagram,
+  region: RegionId,
+  term: Term,
+  declaredFreePorts: readonly string[] = freePorts(term),
+  reservation?: IdReservation,
+): { diagram: Diagram; node: NodeId } {
   const node = freshId(new Set(Object.keys(d.nodes)), 'n', reservation?.nodes)
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: { kind: 'term', region, term } }
+  const termNode: DiagramNode = { kind: 'term', region, term, freePorts: [...declaredFreePorts] }
+  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: termNode }
   const wires: Record<WireId, Wire> = { ...d.wires }
   const takenWires = new Set(Object.keys(d.wires))
-  const ports: Port[] = [{ kind: 'output' }, ...freePorts(term).map((name): Port => ({ kind: 'freeVar', name }))]
+  const ports: Port[] = requiredPorts(d, termNode)
   for (const port of ports) {
     const wire = freshId(takenWires, 'w', reservation?.wires)
     takenWires.add(wire)

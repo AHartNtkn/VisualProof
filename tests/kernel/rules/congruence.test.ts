@@ -26,6 +26,24 @@ const certFor = (l: string, r: string): ConversionCertificate => {
 }
 
 describe('congruence join (functionality of equality)', () => {
+  it('checks and joins over unused declared ports', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x'), ['unusedLeft'])
+    const n2 = h.termNode(h.root, p('\\x. x'), ['unusedRight'])
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'unusedLeft' } },
+      { node: n2, port: { kind: 'freeVar', name: 'unusedRight' } },
+    ])
+    h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
+    h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
+    const d = h.build()
+    expect(() => applyCongruenceJoin(d, n1, n2, empty, {
+      commonArity: 1,
+      left: { s0: 0 },
+      right: { s0: 0 },
+    })).not.toThrow()
+  })
+
   it('requires one host wire only for ports assigned to the same common column', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('(\\u. kept) erasedLeft'))

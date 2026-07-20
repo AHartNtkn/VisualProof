@@ -178,7 +178,7 @@ export function spliceSubgraphMapped(
   // Return-typed switch (no default): a new node kind forces its rebuild here.
   const rebuildNode = (n: DiagramNode): DiagramNode => {
     switch (n.kind) {
-      case 'term': return { kind: 'term', region: regionMap.get(n.region)!, term: n.term }
+      case 'term': return { kind: 'term', region: regionMap.get(n.region)!, term: n.term, freePorts: n.freePorts }
       case 'atom': return { kind: 'atom', region: regionMap.get(n.region)!, binder: binderMap.get(n.binder) ?? regionMap.get(n.binder)! }
       case 'ref': return { kind: 'ref', region: regionMap.get(n.region)!, defId: n.defId, arity: n.arity }
     }
@@ -188,7 +188,7 @@ export function spliceSubgraphMapped(
     nodes[nodeMap.get(id)!] = rebuildNode(n)
   }
   for (const alias of aliasNodes) {
-    nodes[alias.id] = { kind: 'term', region: atRegion, term: port('s0') }
+    nodes[alias.id] = { kind: 'term', region: atRegion, term: port('s0'), freePorts: ['s0'] }
   }
 
   const mapEndpoints = (eps: readonly Endpoint[]): Endpoint[] =>

@@ -38,7 +38,7 @@ export function applyClosedTermIntro(d: Diagram, region: RegionId, term: Term, r
   return mkDiagram({
     root: d.root,
     regions: { ...d.regions },
-    nodes: { ...d.nodes, [nodeId]: { kind: 'term', region, term } },
+    nodes: { ...d.nodes, [nodeId]: { kind: 'term', region, term, freePorts: [] } },
     wires: {
       ...d.wires,
       [wireId]: { scope: region, endpoints: [{ node: nodeId, port: { kind: 'output' } }] },

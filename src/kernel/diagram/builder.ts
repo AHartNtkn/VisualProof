@@ -1,4 +1,5 @@
 import type { Term } from '../term/term'
+import { freePorts } from '../term/term'
 import type { Diagram, Endpoint, NodeId, Region, RegionId, DiagramNode, Wire, WireId } from './diagram'
 import { mkDiagram, portKey, requiredPorts } from './diagram'
 
@@ -31,9 +32,9 @@ export class DiagramBuilder {
     return id
   }
 
-  termNode(region: RegionId, term: Term): NodeId {
+  termNode(region: RegionId, term: Term, declaredFreePorts: readonly string[] = freePorts(term)): NodeId {
     const id = `n${this.nodeCount++}`
-    this.nodes[id] = { kind: 'term', region, term }
+    this.nodes[id] = { kind: 'term', region, term, freePorts: [...declaredFreePorts] }
     return id
   }
 

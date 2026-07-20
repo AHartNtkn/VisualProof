@@ -22,7 +22,7 @@ export function applyOpenTermSpawn(d: Diagram, region: RegionId, term: Term, ori
   if (freePorts(term).length === 0) {
     throw new RuleError('open-term spawn requires at least one free port; use closed-term introduction')
   }
-  return spawnTermNode(d, region, term, reservation).diagram
+  return spawnTermNode(d, region, term, freePorts(term), reservation).diagram
 }
 
 export function applyRelationSpawn(

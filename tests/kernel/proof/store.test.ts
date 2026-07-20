@@ -255,7 +255,9 @@ describe('theory files', () => {
           diagram: {
             root: 'r0',
             regions: { r0: { kind: 'sheet' } },
-            nodes: { n0: { kind: 'term', region: 'r0', term: 'A(P("y"),P("z"))' } },
+            nodes: {
+              n0: { kind: 'term', region: 'r0', term: 'A(P("y"),P("z"))', freePorts: ['y', 'z'] },
+            },
             wires: {
               w0: { scope: 'r0', endpoints: [{ node: 'n0', port: 'out' }] },
               w1: { scope: 'r0', endpoints: [{ node: 'n0', port: 'v:y' }] },

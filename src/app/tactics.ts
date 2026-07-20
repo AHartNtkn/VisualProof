@@ -35,7 +35,8 @@ function applyHeadConversion(
     throw new Error(`the term is already in ${formName}; refusing a no-op conversion step`)
   }
   const certificate: ConversionCertificate = { leftSteps: result.steps, rightSteps: [] }
-  const correspondence = proposePortCorrespondence(termNodeAt(d, node).term, result.term)
+  const source = termNodeAt(d, node)
+  const correspondence = proposePortCorrespondence(source.term, result.term, source.freePorts)
   const step: ProofStep = { rule: 'conversion', node, term: result.term, certificate, correspondence, attachments: {} }
   return { diagram: applyConversionByCertificate(d, node, result.term, certificate, correspondence, {}), step }
 }

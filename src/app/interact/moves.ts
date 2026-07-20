@@ -9,8 +9,9 @@ import type { ConversionCertificate } from '../../kernel/term/certificate'
 import { parseTerm } from '../../kernel/term/parse'
 import { applyConversion } from '../../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
-import { termNodeAt } from '../../kernel/rules/access'
+import { termNodeAt, wireAt } from '../../kernel/rules/access'
 import { mapTermToCommonCarrier, proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
+import type { PortCorrespondence } from '../../kernel/rules/port-correspondence'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
@@ -26,6 +27,31 @@ import { FissionDragController, type FissionRequest } from './fission'
 import { CopyDragController, copyDestinationPreview } from './copy'
 
 export type ProofOrientation = 'forward' | 'backward'
+
+/** Author a correspondence whose shared columns already satisfy the kernel's
+ * attachment gate. Declared ports on different wires become one-sided. */
+function proposeAttachedPortCorrespondence(d: Diagram, a: NodeId, b: NodeId): PortCorrespondence {
+  const leftNode = termNodeAt(d, a)
+  const rightNode = termNodeAt(d, b)
+  const left = new Map<string, number>()
+  const right = new Map<string, number>()
+  const usedRight = new Set<string>()
+  let commonArity = 0
+  for (const leftName of leftNode.freePorts) {
+    const leftWire = wireAt(d, a, { kind: 'freeVar', name: leftName })
+    const rightName = rightNode.freePorts.find((candidate) =>
+      !usedRight.has(candidate)
+      && wireAt(d, b, { kind: 'freeVar', name: candidate }) === leftWire)
+    if (rightName === undefined) continue
+    left.set(leftName, commonArity)
+    right.set(rightName, commonArity)
+    usedRight.add(rightName)
+    commonArity++
+  }
+  for (const name of leftNode.freePorts) if (!left.has(name)) left.set(name, commonArity++)
+  for (const name of rightNode.freePorts) if (!right.has(name)) right.set(name, commonArity++)
+  return { commonArity, left: Object.fromEntries(left), right: Object.fromEntries(right) }
+}
 
 export type InstantiationChoice =
   | { readonly kind: 'anonymous'; readonly label: 'New relation…' }
@@ -128,7 +154,7 @@ export function proofConnectionStep(
       || a.node === b.node || d.nodes[a.node]?.kind !== 'term' || d.nodes[b.node]?.kind !== 'term') {
       throw new Error("release on another term's output strand to compare arguments")
     }
-    const correspondence = proposePortCorrespondence(termNodeAt(d, a.node).term, termNodeAt(d, b.node).term)
+    const correspondence = proposeAttachedPortCorrespondence(d, a.node, b.node)
     const step: ProofStep = { rule: 'headStrip', a: a.node, b: b.node, correspondence }
     applyStep(d, step, connectionContext, orientation)
     return step
@@ -147,9 +173,11 @@ export function proofConnectionStep(
   const convertiblePairs: Array<{ readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }> = []
   if (unambiguous) for (const a of leftCandidates) {
     for (const b of rightCandidates) {
-      const leftTerm = termNodeAt(d, a).term
-      const rightTerm = termNodeAt(d, b).term
-      const correspondence = proposePortCorrespondence(leftTerm, rightTerm)
+      const leftNode = termNodeAt(d, a)
+      const rightNode = termNodeAt(d, b)
+      const leftTerm = leftNode.term
+      const rightTerm = rightNode.term
+      const correspondence = proposeAttachedPortCorrespondence(d, a, b)
       const result = convertible(
         mapTermToCommonCarrier(leftTerm, correspondence.left),
         mapTermToCommonCarrier(rightTerm, correspondence.right),
@@ -519,7 +547,8 @@ export class ProofMoveController {
     row('Convert → custom target…', () => this.#openTextPrompt('Conversion target', 'target term', (value) => {
       const term = parseTerm(value)
       const diagram = this.#options.diagram()
-      const correspondence = proposePortCorrespondence(termNodeAt(diagram, node).term, term)
+      const source = termNodeAt(diagram, node)
+      const correspondence = proposePortCorrespondence(source.term, term, source.freePorts)
       const conversion = applyConversion(diagram, node, term, correspondence, this.#options.fuel())
       this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, correspondence, attachments: {} })
     }))

@@ -54,7 +54,8 @@ export class DerivationCursor {
    */
   pushConv(label: string, node: NodeId, t: Term, attach: Readonly<Record<string, WireId>> = {}): void {
     let certificate
-    const correspondence = proposePortCorrespondence(termNodeAt(this.cur, node).term, t)
+    const source = termNodeAt(this.cur, node)
+    const correspondence = proposePortCorrespondence(source.term, t, source.freePorts)
     try {
       certificate = applyConversion(this.cur, node, t, correspondence, CONVERSION_FUEL, attach).certificate
     } catch (e) {
@@ -64,7 +65,9 @@ export class DerivationCursor {
   }
 
   pushCongruence(label: string, a: NodeId, b: NodeId, certificate: ConversionCertificate): void {
-    const correspondence = proposePortCorrespondence(termNodeAt(this.cur, a).term, termNodeAt(this.cur, b).term)
+    const left = termNodeAt(this.cur, a)
+    const right = termNodeAt(this.cur, b)
+    const correspondence = proposePortCorrespondence(left.term, right.term, left.freePorts, right.freePorts)
     this.push(label, { rule: 'congruenceJoin', a, b, certificate, correspondence })
   }
 

@@ -46,7 +46,8 @@ function deriveOnePlusOne(): Theorem {
   const scratch = new DiagramBuilder()
   const sn = scratch.termNode(scratch.root, poo)
   const scratchDiagram = scratch.build()
-  const correspondence = proposePortCorrespondence(termNodeAt(scratchDiagram, sn).term, TWOp)
+  const scratchNode = termNodeAt(scratchDiagram, sn)
+  const correspondence = proposePortCorrespondence(scratchNode.term, TWOp, scratchNode.freePorts)
   const conv = applyConversion(scratchDiagram, sn, TWOp, correspondence, 4096)
   const join: ProofStep = { rule: 'congruenceJoin', a, b, certificate: conv.certificate, correspondence }
   steps.push(join)
@@ -77,7 +78,11 @@ function deriveFixedPoint(): Theorem {
       leftSteps: [{ kind: 'beta', path: [] }, { kind: 'beta', path: [] }],
       rightSteps: [{ kind: 'beta', path: ['arg'] }],
     },
-    correspondence: proposePortCorrespondence(termNodeAt(lhsDiagram, n).term, newTerm),
+    correspondence: proposePortCorrespondence(
+      termNodeAt(lhsDiagram, n).term,
+      newTerm,
+      termNodeAt(lhsDiagram, n).freePorts,
+    ),
     attachments: {},
   }
   const action = singleStepAction('unfold fixed point', step)

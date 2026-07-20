@@ -69,6 +69,28 @@ describe('composeActions', () => {
     expect(exploreForm(viaA)).toBe(exploreForm(viaB))
   })
 
+  it('executes a polarity-sensitive backward tail in its recorded orientation', () => {
+    const mk = () => {
+      const h = new DiagramBuilder()
+      const first = h.termNode(h.root, p('\\x. x'))
+      const second = h.termNode(h.root, p('\\x. x'))
+      const firstWire = h.wire(h.root, [{ node: first, port: { kind: 'output' } }])
+      const secondWire = h.wire(h.root, [{ node: second, port: { kind: 'output' } }])
+      return { d: h.build(), firstWire, secondWire }
+    }
+    const target = mk()
+    const source = mk()
+    const tail = [action('join at the root from the goal side', [{
+      rule: 'wireJoin', a: source.firstWire, b: source.secondWire,
+    }])]
+
+    const composed = composeActions(target.d, source.d, tail, ctx, { orientation: 'backward' })
+    const viaTarget = replayActions(target.d, composed, ctx, undefined, 'backward')
+    const viaSource = replayActions(source.d, tail, ctx, undefined, 'backward')
+
+    expect(exploreForm(viaTarget)).toBe(exploreForm(viaSource))
+  })
+
   it('handles multi-step tails whose later steps reference ids created by earlier ones', () => {
     const { da, db, bn } = twoCopies()
     const wrapped = replayActions(db, [action('wrap y', [{
@@ -133,6 +155,96 @@ describe('composeActions', () => {
     const composed = composeActions(da, db, tail, ctx)
     const viaA = replayActions(da, composed, ctx)
     expect(Object.values(viaA.nodes)).toHaveLength(1)
+  })
+
+  it('uses ordered meet boundaries to disambiguate an automorphism', () => {
+    const mk = () => {
+      const h = new DiagramBuilder()
+      const first = h.termNode(h.root, p('x'))
+      const firstWire = h.wire(h.root, [{ node: first, port: { kind: 'freeVar', name: 'x' } }])
+      const second = h.termNode(h.root, p('x'))
+      const secondWire = h.wire(h.root, [{ node: second, port: { kind: 'freeVar', name: 'x' } }])
+      return { d: h.build(), first, firstWire, second, secondWire }
+    }
+    const target = mk()
+    const source = mk()
+    const tail = [action('wrap the source boundary component', [{
+      rule: 'doubleCutIntro',
+      sel: mkSelection(source.d, {
+        region: source.d.root, regions: [], nodes: [source.first], wires: [],
+      }),
+    }])]
+
+    const composed = composeActions(target.d, source.d, tail, ctx, {
+      boundaries: {
+        target: [target.secondWire],
+        source: [source.firstWire],
+      },
+    })
+
+    expect(composed[0]!.steps[0]).toMatchObject({
+      rule: 'doubleCutIntro',
+      sel: { nodes: [target.second] },
+    })
+  })
+
+  it('transports repeated meet-boundary positions through coalescence before the next step', () => {
+    const mk = () => {
+      const h = new DiagramBuilder()
+      const redundant = h.termNode(h.root, p('\\x. x'))
+      const survivor = h.termNode(h.root, p('\\x. x'))
+      const drop = h.wire(h.root, [{ node: redundant, port: { kind: 'output' } }])
+      const keep = h.wire(h.root, [{ node: survivor, port: { kind: 'output' } }])
+      return { d: h.build(), redundant, survivor, drop, keep }
+    }
+    const target = mk()
+    const source = mk()
+    const certificate = { leftSteps: [], rightSteps: [] }
+    const tail = [action('coalesce then erase the repeated boundary', [
+      {
+        rule: 'anchoredWireContract',
+        redundant: source.redundant,
+        survivor: source.survivor,
+        certificate,
+      },
+      {
+        rule: 'erasure',
+        sel: mkSelection(source.d, {
+          region: source.d.root, regions: [], nodes: [source.survivor], wires: [source.keep],
+        }),
+      },
+    ])]
+
+    expect(() => composeActions(target.d, source.d, tail, ctx, {
+      boundaries: {
+        target: [target.drop, target.drop, target.keep],
+        source: [source.drop, source.drop, source.keep],
+      },
+    })).toThrowError(/step 1.*boundary position 0.*has no semantic image/)
+  })
+
+  it('rejects open composition when a step loses a meet-boundary position', () => {
+    const mk = () => {
+      const h = new DiagramBuilder()
+      const node = h.termNode(h.root, p('x'))
+      const wire = h.wire(h.root, [{ node, port: { kind: 'freeVar', name: 'x' } }])
+      return { d: h.build(), node, wire }
+    }
+    const target = mk()
+    const source = mk()
+    const tail = [action('erase the exposed component', [{
+      rule: 'erasure',
+      sel: mkSelection(source.d, {
+        region: source.d.root, regions: [], nodes: [source.node], wires: [source.wire],
+      }),
+    }])]
+
+    expect(() => composeActions(target.d, source.d, tail, ctx, {
+      boundaries: {
+        target: [target.wire],
+        source: [source.wire],
+      },
+    })).toThrowError(/boundary position 0.*has no semantic image/)
   })
 
   it('maps erasure sel through the iso — erases the correct node in an asymmetric meet', () => {
@@ -282,6 +394,33 @@ describe('composeActions', () => {
 
 describe('mapStepIds', () => {
   const certificate = { leftSteps: [], rightSteps: [] }
+
+  it('preserves prototype-colliding conversion attachment names as own keys', () => {
+    const attachments: Record<string, string> = Object.create(null) as Record<string, string>
+    Object.defineProperties(attachments, {
+      ['__proto__']: { value: 'w0', enumerable: true },
+      constructor: { value: 'w1', enumerable: true },
+      toString: { value: 'w2', enumerable: true },
+    })
+    const iso: DiagramIso = {
+      regions: new Map(),
+      nodes: new Map([['n0', 'N0']]),
+      wires: new Map([['w0', 'W0'], ['w1', 'W1'], ['w2', 'W2']]),
+    }
+
+    const mapped = mapStepIds({
+      rule: 'conversion', node: 'n0', term: p('x'), certificate,
+      correspondence: { commonArity: 0, left: {}, right: {} }, attachments,
+    }, iso)
+
+    expect(mapped.rule).toBe('conversion')
+    if (mapped.rule !== 'conversion') throw new Error('expected conversion step')
+    expect(Object.getPrototypeOf(mapped.attachments)).toBeNull()
+    expect(Object.keys(mapped.attachments)).toEqual(['__proto__', 'constructor', 'toString'])
+    expect(mapped.attachments.__proto__).toBe('W0')
+    expect(mapped.attachments.constructor).toBe('W1')
+    expect(mapped.attachments.toString).toBe('W2')
+  })
 
   it('remaps every anchored split host operand', () => {
     const iso: DiagramIso = {

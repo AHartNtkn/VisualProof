@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
+import { port } from '../../../src/kernel/term/term'
 import {
   proposePortCorrespondence,
   validatePortCorrespondence,
@@ -51,5 +52,22 @@ describe('PortCorrespondence', () => {
       left: { shared: 0, x: 1 },
       right: { shared: 0, y: 1 },
     })
+  })
+
+  it('treats Object prototype names as ordinary own port keys', () => {
+    const names = ['toString', 'constructor', '__proto__']
+    const left = Object.fromEntries(names.map((name, column) => [name, column]))
+    const correspondence: PortCorrespondence = { commonArity: 3, left, right: {} }
+    expect(() => validatePortCorrespondence(correspondence, names, [])).not.toThrow()
+
+    const proposed = proposePortCorrespondence(
+      port('__proto__'),
+      port('__proto__'),
+      names,
+      names,
+    )
+    expect(Object.keys(proposed.left)).toEqual(names)
+    expect(Object.hasOwn(proposed.left, '__proto__')).toBe(true)
+    expect(proposed.left['__proto__']).toBe(2)
   })
 })

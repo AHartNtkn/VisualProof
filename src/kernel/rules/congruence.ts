@@ -1,4 +1,3 @@
-import { freePorts } from '../term/term'
 import type { ConversionCertificate } from '../term/certificate'
 import { checkConversion } from '../term/certificate'
 import type { Diagram, NodeId, Wire, WireId } from '../diagram/diagram'
@@ -42,7 +41,7 @@ export function applyCongruenceJoin(
       `congruence join requires both nodes in one region; '${a}' is in '${na.region}', '${b}' in '${nb.region}'`,
     )
   }
-  validatePortCorrespondence(correspondence, freePorts(na.term), freePorts(nb.term))
+  validatePortCorrespondence(correspondence, na.freePorts, nb.freePorts)
   const check = checkConversion(
     mapTermToCommonCarrier(na.term, correspondence.left),
     mapTermToCommonCarrier(nb.term, correspondence.right),

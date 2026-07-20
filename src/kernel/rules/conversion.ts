@@ -1,5 +1,4 @@
 import type { Term } from '../term/term'
-import { freePorts } from '../term/term'
 import { printTerm } from '../term/print'
 import { convertible } from '../term/convert'
 import type { ConversionCertificate } from '../term/certificate'
@@ -10,6 +9,7 @@ import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt } from './access'
 import {
+  correspondenceSidePorts,
   mapTermToCommonCarrier,
   validatePortCorrespondence,
   type PortCorrespondence,
@@ -33,14 +33,14 @@ function replaceNodeTerm(
   attachments: Readonly<Record<string, WireId>>,
   reservation?: IdReservation,
 ): Diagram {
-  const oldPorts = freePorts(node.term)
-  const newPorts = freePorts(newTerm)
+  const oldPorts = node.freePorts
+  const newPorts = correspondenceSidePorts(correspondence.right)
   validatePortCorrespondence(correspondence, oldPorts, newPorts)
   const oldPortByColumn = new Map<number, string>(
     Object.entries(correspondence.left).map(([name, column]) => [column, name]),
   )
   for (const [name, w] of Object.entries(attachments)) {
-    const column = correspondence.right[name]
+    const column = Object.hasOwn(correspondence.right, name) ? correspondence.right[name] : undefined
     if (column === undefined || oldPortByColumn.has(column)) {
       throw new DiagramError(`attachment for port '${name}', which is not a newly added free port of the replacement term`)
     }
@@ -60,7 +60,7 @@ function replaceNodeTerm(
     const column = correspondence.right[name]!
     const oldName = oldPortByColumn.get(column)
     const target = oldName === undefined
-      ? attachments[name]
+      ? (Object.hasOwn(attachments, name) ? attachments[name] : undefined)
       : Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((endpoint) =>
           endpoint.node === nodeId
           && endpoint.port.kind === 'freeVar'
@@ -75,7 +75,7 @@ function replaceNodeTerm(
   }
   const nodes: Record<NodeId, DiagramNode> = {
     ...d.nodes,
-    [nodeId]: { kind: 'term', region: node.region, term: newTerm },
+    [nodeId]: { kind: 'term', region: node.region, term: newTerm, freePorts: newPorts },
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
 }
@@ -100,7 +100,7 @@ export function applyConversion(
   reservation?: IdReservation,
 ): ConversionResult {
   const node = termNodeAt(d, nodeId)
-  validatePortCorrespondence(correspondence, freePorts(node.term), freePorts(newTerm))
+  validatePortCorrespondence(correspondence, node.freePorts, correspondenceSidePorts(correspondence.right))
   const oldInCarrier = mapTermToCommonCarrier(node.term, correspondence.left)
   const replacementInCarrier = mapTermToCommonCarrier(newTerm, correspondence.right)
   const r = convertible(oldInCarrier, replacementInCarrier, fuel)
@@ -127,7 +127,7 @@ export function applyConversionByCertificate(
   reservation?: IdReservation,
 ): Diagram {
   const node = termNodeAt(d, nodeId)
-  validatePortCorrespondence(correspondence, freePorts(node.term), freePorts(newTerm))
+  validatePortCorrespondence(correspondence, node.freePorts, correspondenceSidePorts(correspondence.right))
   const oldInCarrier = mapTermToCommonCarrier(node.term, correspondence.left)
   const replacementInCarrier = mapTermToCommonCarrier(newTerm, correspondence.right)
   const check = checkConversion(oldInCarrier, replacementInCarrier, certificate)

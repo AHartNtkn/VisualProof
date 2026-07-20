@@ -10,10 +10,23 @@ export type Region =
   | { readonly kind: 'cut'; readonly parent: RegionId }
   | { readonly kind: 'bubble'; readonly parent: RegionId; readonly arity: number }
 
+export type TermDiagramNode = {
+  readonly kind: 'term'
+  readonly region: RegionId
+  readonly term: Term
+  /** Ordered, authoritative interface. May contain names unused by `term`. */
+  readonly freePorts: readonly string[]
+}
+
 export type DiagramNode =
-  | { readonly kind: 'term'; readonly region: RegionId; readonly term: Term }
+  | TermDiagramNode
   | { readonly kind: 'atom'; readonly region: RegionId; readonly binder: RegionId }
   | { readonly kind: 'ref'; readonly region: RegionId; readonly defId: string; readonly arity: number }
+
+/** Construction-only input. Validated Diagram values always materialize `freePorts`. */
+export type DiagramNodeInput =
+  | Omit<TermDiagramNode, 'freePorts'> & { readonly freePorts?: readonly string[] }
+  | Exclude<DiagramNode, TermDiagramNode>
 
 export type Port =
   | { readonly kind: 'output' }
@@ -49,7 +62,7 @@ export function portKey(p: Port): string {
 
 /**
  * The exact port set a node must have attached: output plus one freeVar port
- * per distinct free variable (first-occurrence order) for term nodes; arg
+ * per declared free port (declared order) for term nodes; arg
  * 0..arity-1 for atoms, arity read from the binder bubble.
  */
 export function requiredPorts(d: { regions: Readonly<Record<RegionId, Region>> }, node: DiagramNode): Port[] {
@@ -57,7 +70,7 @@ export function requiredPorts(d: { regions: Readonly<Record<RegionId, Region>> }
     case 'term':
       return [
         { kind: 'output' },
-        ...freePorts(node.term).map((name): Port => ({ kind: 'freeVar', name })),
+        ...node.freePorts.map((name): Port => ({ kind: 'freeVar', name })),
       ]
     case 'atom': {
       const binder = d.regions[node.binder]
@@ -105,7 +118,7 @@ function canonicalizeFreePorts(
       case 'term': {
         const map = new Map<string, string>()
         let identity = true
-        for (const [i, name] of freePorts(n.term).entries()) {
+        for (const [i, name] of n.freePorts.entries()) {
           const to = `s${i}`
           map.set(name, to)
           if (name !== to) identity = false
@@ -113,7 +126,12 @@ function canonicalizeFreePorts(
         renames.set(id, map)
         if (identity) return n
         nodesChanged = true
-        return { kind: 'term', region: n.region, term: renameFreePorts(n.term, map) }
+        return {
+          kind: 'term',
+          region: n.region,
+          term: renameFreePorts(n.term, map),
+          freePorts: n.freePorts.map((_, i) => `s${i}`),
+        }
       }
     }
   }
@@ -175,12 +193,13 @@ function ancestorOrEqualRaw(regions: Readonly<Record<RegionId, Region>>, anc: Re
 export function mkDiagram(parts: {
   root: RegionId
   regions: Record<RegionId, Region>
-  nodes?: Record<NodeId, DiagramNode>
+  nodes?: Record<NodeId, DiagramNodeInput>
   wires?: Record<WireId, Wire>
 }): Diagram {
   const { root: rootId } = parts
   const regions = parts.regions
-  const nodes = parts.nodes ?? {}
+  const inputNodes = parts.nodes ?? {}
+  const nodes: Record<NodeId, DiagramNode> = {}
   const wires = parts.wires ?? {}
   const fail = (msg: string): never => { throw new DiagramError(msg) }
 
@@ -211,22 +230,44 @@ export function mkDiagram(parts: {
     }
   }
 
-  for (const [id, n] of Object.entries(nodes)) {
+  for (const [id, n] of Object.entries(inputNodes)) {
     if (regions[n.region] === undefined) fail(`node '${id}' is in missing region '${n.region}'`)
     switch (n.kind) {
-      case 'term':
+      case 'term': {
         try {
           assertWellFormedTerm(n.term)
         } catch (e) {
           fail(`node '${id}' term: ${e instanceof Error ? e.message : String(e)}`)
         }
+        const declared = n.freePorts ?? freePorts(n.term)
+        const seen = new Set<string>()
+        for (const name of declared) {
+          if (typeof name !== 'string' || name.length === 0) {
+            fail(`node '${id}' free port names must be nonempty strings`)
+          }
+          if (seen.has(name)) fail(`node '${id}' free port names must be unique; repeated '${name}'`)
+          seen.add(name)
+        }
+        for (const name of freePorts(n.term)) {
+          if (!seen.has(name)) fail(`node '${id}' free-port interface does not declare term port '${name}'`)
+        }
+        nodes[id] = n.freePorts !== undefined && Object.isFrozen(n.freePorts)
+          ? n as TermDiagramNode
+          : {
+              kind: 'term',
+              region: n.region,
+              term: n.term,
+              freePorts: Object.freeze([...declared]),
+            }
         break
+      }
       case 'atom': {
         const binder = regions[n.binder] ?? fail(`atom '${id}' references missing binder '${n.binder}'`)
         if (binder.kind !== 'bubble') fail(`atom '${id}' binder '${n.binder}' must be a bubble, got '${binder.kind}'`)
         if (!ancestorOrEqualRaw(regions, n.binder, n.region)) {
           fail(`atom '${id}' must lie inside its binder bubble '${n.binder}'`)
         }
+        nodes[id] = n
         break
       }
       case 'ref':
@@ -235,6 +276,7 @@ export function mkDiagram(parts: {
         if (!Number.isSafeInteger(n.arity) || n.arity < 0) {
           fail(`ref '${id}' arity must be a non-negative safe integer, got ${n.arity}`)
         }
+        nodes[id] = n
         break
       default:
         // Exhaustiveness: a new node kind must add its own validation here.

@@ -5,6 +5,7 @@ export type { PlacementHint, ProofAction } from './action'
 export { singleStepAction, applyAction, replayActions } from './action'
 export type { Theorem, TheoremApplication } from './theorem'
 export { checkTheorem, applyTheorem } from './theorem'
+export type { CompositionBoundaries, CompositionOptions } from './compose'
 export { composeActions, mapStepIds } from './compose'
 export {
   stepToJson, stepFromJson, theoremToJson, theoremFromJson, dwbToJson, dwbFromJson,

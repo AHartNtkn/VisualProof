@@ -19,8 +19,17 @@ describe('termShapeKey', () => {
   })
 
   it('renames ports as p0, p1 in first-occurrence order', () => {
-    expect(termShapeKey(p('y z'))).toBe('A(P("p0"),P("p1"))')
-    expect(termShapeKey(p('z y'))).toBe('A(P("p0"),P("p1"))') // same positional relation
+    expect(termShapeKey(p('y z'))).toBe('2:A(P("p0"),P("p1"))')
+    expect(termShapeKey(p('z y'))).toBe('2:A(P("p0"),P("p1"))') // same positional relation
+  })
+
+  it('includes unused declared positions in shape and positional port keys', () => {
+    expect(termShapeKey(p('used'), ['unused', 'used']))
+      .toBe(termShapeKey(p('b'), ['a', 'b']))
+    expect(termShapeKey(p('used'), ['unused', 'used']))
+      .not.toBe(termShapeKey(p('used'), ['used']))
+    expect(positionalPortKey(p('used'), { kind: 'freeVar', name: 'unused' }, ['unused', 'used']))
+      .toBe('v0')
   })
 
   it('rejects malformed terms loudly', () => {
@@ -37,8 +46,8 @@ describe('positionalPortKey', () => {
     expect(positionalPortKey(t, { kind: 'arg', index: 3 })).toBe('a3')
   })
 
-  it('throws for a freeVar name not free in the term', () => {
+  it('throws for a freeVar name outside the declared interface', () => {
     expect(() => positionalPortKey(p('y'), { kind: 'freeVar', name: 'zz' }))
-      .toThrowError(/'zz' is not a free variable of the term/)
+      .toThrowError(/'zz' is not a declared free port of the term node/)
   })
 })

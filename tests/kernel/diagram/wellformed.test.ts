@@ -88,7 +88,9 @@ describe('mkDiagram rejections', () => {
   })
 
   const oneNode = (wires: Record<string, Wire>) => {
-    const nodes: Record<string, DiagramNode> = { n0: { kind: 'term', region: 'r0', term: p('\\x. x') } }
+    const nodes: Record<string, DiagramNode> = {
+      n0: { kind: 'term', region: 'r0', term: p('\\x. x'), freePorts: [] },
+    }
     return mkDiagram({ root: 'r0', regions: sheet, nodes, wires })
   }
 

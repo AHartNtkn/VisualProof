@@ -24,7 +24,7 @@ export type ConstructionHit =
 
 function moveNodeToRegion(node: DiagramNode, region: RegionId): DiagramNode {
   switch (node.kind) {
-    case 'term': return { kind: 'term', region, term: node.term }
+    case 'term': return { kind: 'term', region, term: node.term, freePorts: node.freePorts }
     case 'atom': return { kind: 'atom', region, binder: node.binder }
     case 'ref': return { kind: 'ref', region, defId: node.defId, arity: node.arity }
   }

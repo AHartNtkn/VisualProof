@@ -23,6 +23,13 @@ describe('closeOverPorts', () => {
     expect(termEq(closeOverPorts(t), t)).toBe(true)
   })
 
+  it('closes over the complete declared interface, including unused positions', () => {
+    expect(termEq(
+      closeOverPorts(p('used'), ['unused', 'used']),
+      p('\\unused. \\used. used'),
+    )).toBe(true)
+  })
+
   it('rejects malformed terms loudly', () => {
     expect(() => closeOverPorts({ kind: 'bvar', index: 0 })).toThrowError(/unbound de Bruijn index/)
   })
@@ -41,6 +48,23 @@ describe('termsMatchModuloBetaEta', () => {
 
   it('rejects different arities without normalizing', () => {
     expect(termsMatchModuloBetaEta(p('y y'), p('y z'), 100).status).toBe('no-match')
+  })
+
+  it('matches using declared arity rather than syntactic occurrence arity', () => {
+    expect(termsMatchModuloBetaEta(
+      p('left'),
+      p('right'),
+      100,
+      ['unused', 'left'],
+      ['spare', 'right'],
+    ).status).toBe('match')
+    expect(termsMatchModuloBetaEta(
+      p('left'),
+      p('right'),
+      100,
+      ['left'],
+      ['spare', 'right'],
+    ).status).toBe('no-match')
   })
 
   it('rejects different positional relations of equal arity', () => {

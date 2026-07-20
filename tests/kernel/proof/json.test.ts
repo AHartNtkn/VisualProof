@@ -70,6 +70,25 @@ describe('action allocation JSON', () => {
 })
 
 describe('step round-trips through JSON', () => {
+  it('round-trips prototype-named correspondence and attachment keys as own data', () => {
+    const left = Object.fromEntries([['toString', 0], ['constructor', 1]])
+    const right = Object.fromEntries([['__proto__', 0]])
+    const attachments = Object.fromEntries([['__proto__', 'w0']])
+    const step: ProofStep = {
+      rule: 'conversion',
+      node: 'n0',
+      term: p('__proto__'),
+      certificate: { leftSteps: [], rightSteps: [] },
+      correspondence: { commonArity: 2, left, right },
+      attachments,
+    }
+    const decoded = stepFromJson(JSON.parse(JSON.stringify(stepToJson(step))))
+    expect(decoded).toEqual(step)
+    if (decoded.rule !== 'conversion') throw new Error('test setup requires conversion')
+    expect(Object.hasOwn(decoded.correspondence.right, '__proto__')).toBe(true)
+    expect(Object.hasOwn(decoded.attachments, '__proto__')).toBe(true)
+  })
+
   it('covers every step kind', () => {
     const b = new DiagramBuilder()
     const bn = b.termNode(b.root, p('\\x. x'))

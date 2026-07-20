@@ -15,6 +15,48 @@ const correspondenceFor = (d: Diagram, node: NodeId, target: Term): PortCorrespo
 }
 
 describe('applyConversion', () => {
+  it('uses the witness-selected replacement interface, preserving an unused declared column', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('used'), ['used', 'unused'])
+    const usedWire = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'used' } }])
+    const unusedWire = h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'unused' } }])
+    const d = h.build()
+    const correspondence: PortCorrespondence = {
+      commonArity: 2,
+      left: { s0: 0, s1: 1 },
+      right: { renamed: 0, spare: 1 },
+    }
+    const out = applyConversion(d, n, p('renamed'), correspondence, 10).diagram
+    const node = out.nodes[n]
+    expect(node?.kind).toBe('term')
+    if (node?.kind !== 'term') throw new Error('test setup requires a term node')
+    expect(node.freePorts).toEqual(['s0', 's1'])
+    expect(out.wires[usedWire]!.endpoints).toContainEqual({ node: n, port: { kind: 'freeVar', name: 's0' } })
+    expect(out.wires[unusedWire]!.endpoints).toContainEqual({ node: n, port: { kind: 'freeVar', name: 's1' } })
+  })
+
+  it('applies prototype-named correspondence and attachment keys as ordinary own properties', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('\\x. x'))
+    const attachment = h.wire(h.root, [])
+    const d = h.build()
+    const right = Object.fromEntries([['__proto__', 0]])
+    const attachments = Object.fromEntries([['__proto__', attachment]])
+    const target = p('(\\u. \\x. x) __proto__')
+    const out = applyConversion(
+      d,
+      n,
+      target,
+      { commonArity: 1, left: {}, right },
+      10,
+      attachments,
+    ).diagram
+    const node = out.nodes[n]
+    expect(node?.kind === 'term' && node.freePorts).toEqual(['s0'])
+    expect(out.wires[attachment]!.endpoints)
+      .toContainEqual({ node: n, port: { kind: 'freeVar', name: 's0' } })
+  })
+
   it('accepts pure free-port renaming through a supplied common carrier and preserves the shared wire', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('x'))

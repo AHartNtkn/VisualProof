@@ -5,9 +5,19 @@ import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { ProofContext, ProofStep } from './step'
-import { applyStep } from './step'
+import { applyStepWithReceipt, transportBoundary } from './step'
 import { allocationReservation, type ProofAction } from './action'
 import { ProofError } from './error'
+
+export type CompositionBoundaries = {
+  readonly target: readonly WireId[]
+  readonly source: readonly WireId[]
+}
+
+export type CompositionOptions = {
+  readonly boundaries?: CompositionBoundaries
+  readonly orientation?: 'forward' | 'backward'
+}
 
 function mapId<T extends string>(m: ReadonlyMap<string, string>, id: T, what: string): T {
   const img = m.get(id)
@@ -84,7 +94,7 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
     case 'doubleCutElim':
       return { ...step, region: mapId(iso.regions, step.region, 'region') }
     case 'conversion': {
-      const attachments: Record<string, WireId> = {}
+      const attachments = Object.create(null) as Record<string, WireId>
       for (const [name, w] of Object.entries(step.attachments)) attachments[name] = mapId(iso.wires, w, 'wire')
       return { ...step, node: mapId(iso.nodes, step.node, 'node'), attachments }
     }
@@ -143,15 +153,30 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
  * replay depend on the id environment, so a single up-front rewrite cannot
  * work — instead the isomorphism is re-derived from canonical labelings
  * after every step (appliers are iso-equivariant up to fresh-id choice).
+ * Optional ordered meet boundaries pin each isomorphism and are transported
+ * position-by-position through both actual step receipts. Empty boundaries
+ * are the closed-diagram specialization.
  */
 export function composeActions(
   meetTarget: Diagram,
   meetSource: Diagram,
   tail: readonly ProofAction[],
   ctx: ProofContext,
+  options: CompositionOptions = {},
 ): ProofAction[] {
-  let iso = exploreIso(meetSource, meetTarget)
-  if (iso === null) throw new ProofError('the two sides do not meet: the diagrams are not isomorphic')
+  const boundaries = options.boundaries ?? { target: [], source: [] }
+  const orientation = options.orientation ?? 'forward'
+  if (boundaries.source.length !== boundaries.target.length) {
+    throw new ProofError(
+      `the two sides do not meet: boundary arity differs (source ${boundaries.source.length}, target ${boundaries.target.length})`,
+    )
+  }
+  let sourceBoundary = boundaries.source
+  let targetBoundary = boundaries.target
+  let iso = exploreIso(meetSource, meetTarget, sourceBoundary, targetBoundary)
+  if (iso === null) {
+    throw new ProofError('the two sides do not meet: the diagrams or ordered boundaries are not isomorphic')
+  }
   let curTarget = meetTarget
   let curSource = meetSource
   const out: ProofAction[] = []
@@ -162,14 +187,28 @@ export function composeActions(
       const mapped = mapStepIds(step, iso)
       mappedSteps.push(mapped)
       try {
-        curTarget = applyStep(curTarget, mapped, ctx, 'forward', reservation)
-        curSource = applyStep(curSource, step, ctx, 'forward', reservation)
+        const targetReceipt = applyStepWithReceipt(curTarget, mapped, ctx, orientation, reservation)
+        const sourceReceipt = applyStepWithReceipt(curSource, step, ctx, orientation, reservation)
+        const mappedTargetBoundary = transportBoundary(targetReceipt.interface, targetBoundary)
+        if (mappedTargetBoundary === undefined) {
+          const position = targetBoundary.findIndex((wire) => targetReceipt.interface.image(wire) === undefined)
+          throw new ProofError(`target boundary position ${position} has no semantic image`)
+        }
+        const mappedSourceBoundary = transportBoundary(sourceReceipt.interface, sourceBoundary)
+        if (mappedSourceBoundary === undefined) {
+          const position = sourceBoundary.findIndex((wire) => sourceReceipt.interface.image(wire) === undefined)
+          throw new ProofError(`source boundary position ${position} has no semantic image`)
+        }
+        curTarget = targetReceipt.result
+        curSource = sourceReceipt.result
+        targetBoundary = mappedTargetBoundary
+        sourceBoundary = mappedSourceBoundary
       } catch (e) {
         throw new ProofError(
           `composing action ${actionIndex} step ${stepIndex} (${step.rule}) failed: ${e instanceof Error ? e.message : String(e)}`,
         )
       }
-      iso = exploreIso(curSource, curTarget)
+      iso = exploreIso(curSource, curTarget, sourceBoundary, targetBoundary)
       if (iso === null) {
         throw new ProofError(
           `composing action ${actionIndex} step ${stepIndex} (${step.rule}) diverged: the sides are no longer isomorphic`,

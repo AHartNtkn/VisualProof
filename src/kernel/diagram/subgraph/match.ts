@@ -53,7 +53,7 @@ function posKey(d: Diagram, ep: Endpoint): string {
   // port key to be decided here.
   switch (n.kind) {
     case 'term':
-      return positionalPortKey(n.term, ep.port)
+      return positionalPortKey(n.term, ep.port, n.freePorts)
     case 'atom':
       if (ep.port.kind === 'arg') return `a${ep.port.index}`
       throw new DiagramError(`atom '${ep.node}' cannot carry port '${ep.port.kind}'`)
@@ -279,11 +279,11 @@ export function findOccurrences(
     const ht = host.nodes[hn]!
     if (pt.kind !== 'term' || ht.kind !== 'term') return setVerdict(false)
     if (mode === 'exact') {
-      return setVerdict(termShapeKey(pt.term) === termShapeKey(ht.term)
+      return setVerdict(termShapeKey(pt.term, pt.freePorts) === termShapeKey(ht.term, ht.freePorts)
         ? { leftSteps: [], rightSteps: [] }
         : false)
     }
-    const v = termsMatchModuloBetaEta(pt.term, ht.term, fuel)
+    const v = termsMatchModuloBetaEta(pt.term, ht.term, fuel, pt.freePorts, ht.freePorts)
     if (v.status === 'undecided') {
       let seen = undecidedSeen.get(pn)
       if (seen === undefined) {

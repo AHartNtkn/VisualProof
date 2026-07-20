@@ -10,11 +10,11 @@ import { DiagramError } from '../diagram'
  * same positional constructor relation iff their shape keys are equal — free
  * variable names are internal labels, not content (spec §2.2).
  */
-export function termShapeKey(t: Term): string {
+export function termShapeKey(t: Term, declaredFreePorts: readonly string[] = freePorts(t)): string {
   assertWellFormedTerm(t)
-  const order = freePorts(t)
+  const order = declaredFreePorts
   const rename = new Map(order.map((name, i) => [name, `p${i}`]))
-  return serializeTerm(renamePorts(t, rename))
+  return `${order.length}:${serializeTerm(renamePorts(t, rename))}`
 }
 
 function renamePorts(t: Term, rename: ReadonlyMap<string, string>): Term {
@@ -37,13 +37,17 @@ function renamePorts(t: Term, rename: ReadonlyMap<string, string>): Term {
  * variable at first-occurrence position i, 'a{i}' for atom args. Used by the
  * canonical form so wire endpoints are name-independent.
  */
-export function positionalPortKey(termOfNode: Term, p: Port): string {
+export function positionalPortKey(
+  termOfNode: Term,
+  p: Port,
+  declaredFreePorts: readonly string[] = freePorts(termOfNode),
+): string {
   switch (p.kind) {
     case 'output': return 'out'
     case 'arg': return `a${p.index}`
     case 'freeVar': {
-      const i = freePorts(termOfNode).indexOf(p.name)
-      if (i < 0) throw new DiagramError(`'${p.name}' is not a free variable of the term`)
+      const i = declaredFreePorts.indexOf(p.name)
+      if (i < 0) throw new DiagramError(`'${p.name}' is not a declared free port of the term node`)
       return `v${i}`
     }
   }

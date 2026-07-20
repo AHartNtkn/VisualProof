@@ -84,7 +84,10 @@ export function applyAnchoredWireSplit(
   return mkDiagram({
     root: d.root,
     regions: { ...d.regions },
-    nodes: { ...d.nodes, [duplicate]: { kind: 'term', region: target, term: witness.term } },
+    nodes: {
+      ...d.nodes,
+      [duplicate]: { kind: 'term', region: target, term: witness.term, freePorts: witness.freePorts },
+    },
     wires: {
       ...d.wires,
       [wireId]: { scope: source.scope, endpoints: source.endpoints.filter((endpoint) => !chosen(endpoint)) },

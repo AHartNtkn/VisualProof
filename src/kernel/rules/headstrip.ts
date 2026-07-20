@@ -1,5 +1,5 @@
 import type { Term } from '../term/term'
-import { lam, termEq, freePorts } from '../term/term'
+import { lam, termEq } from '../term/term'
 import type { HeadSpine } from '../term/hnf'
 import { headSpine } from '../term/hnf'
 import type { Diagram, DiagramNode, NodeId, Wire, WireId } from '../diagram/diagram'
@@ -51,7 +51,7 @@ export function applyHeadStrip(
     )
   }
   const region = na.region
-  validatePortCorrespondence(correspondence, freePorts(na.term), freePorts(nb.term))
+  validatePortCorrespondence(correspondence, na.freePorts, nb.freePorts)
 
   // Gate 2: the outputs share ONE wire — that is what makes the pair an equation.
   const oa = wireAt(d, a, { kind: 'output' })
@@ -145,10 +145,10 @@ export function applyHeadStrip(
     takenNodes.add(ia)
     const ib = freshId(takenNodes, `${b}_hs`, reservation?.nodes)
     takenNodes.add(ib)
-    nodes[ia] = { kind: 'term', region, term: ca }
-    nodes[ib] = { kind: 'term', region, term: cb }
-    for (const name of freePorts(ca)) attach(wireAt(d, a, { kind: 'freeVar', name }), ia, name)
-    for (const name of freePorts(cb)) attach(wireAt(d, b, { kind: 'freeVar', name }), ib, name)
+    nodes[ia] = { kind: 'term', region, term: ca, freePorts: na.freePorts }
+    nodes[ib] = { kind: 'term', region, term: cb, freePorts: nb.freePorts }
+    for (const name of na.freePorts) attach(wireAt(d, a, { kind: 'freeVar', name }), ia, name)
+    for (const name of nb.freePorts) attach(wireAt(d, b, { kind: 'freeVar', name }), ib, name)
     const wo = freshId(takenWires, `${a}_${b}_hs`, reservation?.wires)
     takenWires.add(wo)
     wires[wo] = {

@@ -260,7 +260,7 @@ describe('proof connection resolution', () => {
     expect(proofConnectionStep(b.build(), outputEnd(wire, a), outputEnd(wire, c), 'forward', 64))
       .toEqual({
         rule: 'headStrip', a, b: c,
-        correspondence: { commonArity: 2, left: { s0: 0, s1: 1 }, right: { s0: 0, s1: 1 } },
+        correspondence: { commonArity: 4, left: { s0: 0, s1: 1 }, right: { s0: 2, s1: 3 } },
       })
   })
 
@@ -417,7 +417,7 @@ describe('proof connection resolution', () => {
     claim!.release(to, true)
     expect(applied).toEqual([{
       rule: 'headStrip', a, b: c,
-      correspondence: { commonArity: 1, left: { s0: 0 }, right: { s0: 0 } },
+      correspondence: { commonArity: 2, left: { s0: 0 }, right: { s0: 1 } },
     }])
   })
 

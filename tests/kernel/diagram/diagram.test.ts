@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import {
   mkDiagram, portKey, requiredPorts, DiagramError,
-  type Region, type DiagramNode, type Wire,
+  type Region, type DiagramNode, type DiagramNodeInput, type Wire,
 } from '../../../src/kernel/diagram/diagram'
 
 const p = (s: string) => parseTerm(s)
@@ -18,7 +18,9 @@ describe('portKey', () => {
 describe('requiredPorts', () => {
   it('gives output plus one freeVar port per distinct free variable, in first-occurrence order', () => {
     const regions: Record<string, Region> = { r0: { kind: 'sheet' } }
-    const node: DiagramNode = { kind: 'term', region: 'r0', term: p('\\x. y (z y x)') }
+    const node: DiagramNode = {
+      kind: 'term', region: 'r0', term: p('\\x. y (z y x)'), freePorts: ['y', 'z'],
+    }
     expect(requiredPorts({ regions }, node).map(portKey)).toEqual(['out', 'v:y', 'v:z'])
   })
 
@@ -45,7 +47,7 @@ describe('mkDiagram (happy path)', () => {
       r0: { kind: 'sheet' },
       r1: { kind: 'bubble', parent: 'r0', arity: 2 },
     }
-    const nodes: Record<string, DiagramNode> = {
+    const nodes: Record<string, DiagramNodeInput> = {
       n0: { kind: 'term', region: 'r1', term: p('\\x. x') },
       n1: { kind: 'atom', region: 'r1', binder: 'r1' },
     }
@@ -79,7 +81,7 @@ describe('mkDiagram (happy path)', () => {
     // node id "n0 v:x" with output, plus node "n0" with free var "x out":
     // a naive string key `${node} ${port}` collides; both must coexist.
     const regions: Record<string, Region> = { r0: { kind: 'sheet' } }
-    const nodes: Record<string, DiagramNode> = {
+    const nodes: Record<string, DiagramNodeInput> = {
       'n0': { kind: 'term', region: 'r0', term: { kind: 'port' as const, name: 'x out' } },
       'n0 v:x': { kind: 'term', region: 'r0', term: p('\\x. x') },
     }
@@ -96,7 +98,7 @@ describe('mkDiagram (happy path)', () => {
       r0: { kind: 'sheet' },
       r1: { kind: 'cut', parent: 'r0' },
     }
-    const nodes: Record<string, DiagramNode> = {
+    const nodes: Record<string, DiagramNodeInput> = {
       n0: { kind: 'term', region: 'r0', term: p('\\x. x') },
       n1: { kind: 'term', region: 'r1', term: p('\\x. x') },
     }

@@ -10,9 +10,9 @@ import { DiagramError } from '../diagram'
  * their closures are beta-eta-convertible closed terms. Closing FIRST fixes
  * the arity, so normalization cannot drop a port out from under the wiring.
  */
-export function closeOverPorts(t: Term): Term {
+export function closeOverPorts(t: Term, declaredFreePorts: readonly string[] = freePorts(t)): Term {
   assertWellFormedTerm(t)
-  const order = freePorts(t)
+  const order = declaredFreePorts
   const n = order.length
   const index = new Map(order.map((name, i) => [name, i]))
   const walk = (u: Term, depth: number): Term => {
@@ -45,13 +45,19 @@ export type NodeMatchVerdict =
  * loud 'undecided' verdict naming the side — never a silent answer; the
  * relation is undecidable in general (spec §3.7).
  */
-export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMatchVerdict {
+export function termsMatchModuloBetaEta(
+  a: Term,
+  b: Term,
+  fuel: number,
+  aFreePorts: readonly string[] = freePorts(a),
+  bFreePorts: readonly string[] = freePorts(b),
+): NodeMatchVerdict {
   if (!Number.isInteger(fuel) || fuel <= 0) {
     throw new DiagramError(`fuel must be a positive integer, got ${fuel}`)
   }
-  if (freePorts(a).length !== freePorts(b).length) return { status: 'no-match' }
-  const ca = closeOverPorts(a)
-  const cb = closeOverPorts(b)
+  if (aFreePorts.length !== bFreePorts.length) return { status: 'no-match' }
+  const ca = closeOverPorts(a, aFreePorts)
+  const cb = closeOverPorts(b, bFreePorts)
   // Sound shortcut, not a heuristic: structural equality of closures implies
   // convertibility by reflexivity — and avoids spurious 'undecided' verdicts
   // on identical non-normalizing terms.

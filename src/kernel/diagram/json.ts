@@ -15,7 +15,7 @@ export function diagramToJson(d: Diagram): unknown {
   // Return-typed switch (no default): a new node kind forces a serialization here.
   const nodeToJson = (n: DiagramNode): Record<string, unknown> => {
     switch (n.kind) {
-      case 'term': return { kind: 'term', region: n.region, term: serializeTerm(n.term) }
+      case 'term': return { kind: 'term', region: n.region, term: serializeTerm(n.term), freePorts: [...n.freePorts] }
       case 'atom': return { kind: 'atom', region: n.region, binder: n.binder }
       case 'ref': return { kind: 'ref', region: n.region, defId: n.defId, arity: n.arity }
     }
@@ -91,10 +91,16 @@ export function diagramFromJson(j: unknown): Diagram {
   const nodes: Record<string, DiagramNode> = {}
   for (const [id, v] of Object.entries(jn)) {
     if (!isRecord(v) || typeof v.region !== 'string') fail(`node '${id}' has unrecognized shape`)
-    if (v.kind === 'term' && typeof v.term === 'string') {
-      assertOnlyKeys(v, ['kind', 'region', 'term'], `node '${id}'`)
+    if (v.kind === 'term' && typeof v.term === 'string'
+      && Array.isArray(v.freePorts) && v.freePorts.every((name) => typeof name === 'string')) {
+      assertOnlyKeys(v, ['kind', 'region', 'term', 'freePorts'], `node '${id}'`)
       try {
-        nodes[id] = { kind: 'term', region: v.region, term: deserializeTerm(v.term) }
+        nodes[id] = {
+          kind: 'term',
+          region: v.region,
+          term: deserializeTerm(v.term),
+          freePorts: v.freePorts as string[],
+        }
       } catch (e) {
         fail(`node '${id}' term: ${e instanceof Error ? e.message : String(e)}`)
       }

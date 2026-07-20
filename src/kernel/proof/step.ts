@@ -72,9 +72,18 @@ export type WireInterfaceTransport = {
   readonly image: (wire: WireId) => WireId | undefined
 }
 
+/** Injective graph-identity provenance through one proof step.
+ * A source wire has an image exactly when that same identity survives as a
+ * root-scoped result wire. Unlike the logical interface, provenance never
+ * coalesces distinct source identities. */
+export type WireProvenance = {
+  readonly image: (wire: WireId) => WireId | undefined
+}
+
 /** Authoritative result of executing one serialized proof step. */
 export type StepReceipt = {
   readonly result: Diagram
+  readonly provenance: WireProvenance
   readonly interface: WireInterfaceTransport
 }
 
@@ -96,6 +105,20 @@ function rootFilteredInterface(
   target: Diagram,
   candidate: (wire: WireId) => WireId | undefined,
 ): WireInterfaceTransport {
+  return {
+    image(wire) {
+      const mapped = candidate(wire)
+      if (mapped === undefined) return undefined
+      const targetWire = target.wires[mapped]
+      return targetWire !== undefined && targetWire.scope === target.root ? mapped : undefined
+    },
+  }
+}
+
+function rootFilteredProvenance(
+  target: Diagram,
+  candidate: (wire: WireId) => WireId | undefined,
+): WireProvenance {
   return {
     image(wire) {
       const mapped = candidate(wire)
@@ -164,8 +187,14 @@ export function applyStepWithReceipt(
   reservation?: IdReservation,
 ): StepReceipt {
   const result = applyStepRaw(d, step, ctx, orientation, reservation)
+  const survivingSameId = (wire: WireId): WireId | undefined =>
+    d.wires[wire] !== undefined && result.wires[wire] !== undefined ? wire : undefined
+  const provenance = rootFilteredProvenance(
+    result,
+    survivingSameId,
+  )
   let candidate: (wire: WireId) => WireId | undefined =
-    (wire) => result.wires[wire] === undefined ? undefined : wire
+    survivingSameId
 
   if (step.rule === 'wireJoin') {
     const aSurvives = result.wires[step.a] !== undefined
@@ -173,7 +202,7 @@ export function applyStepWithReceipt(
     const absorbed = aSurvives ? step.b : step.a
     candidate = (wire) => wire === absorbed
       ? retained
-      : result.wires[wire] === undefined ? undefined : wire
+      : survivingSameId(wire)
   } else if (step.rule === 'anchoredWireContract') {
     const redundant = d.nodes[step.redundant]
     const survivor = d.nodes[step.survivor]
@@ -190,7 +219,7 @@ export function applyStepWithReceipt(
       && anchorAvailability(d, step.survivor) === d.root
     candidate = (wire) => wire === drop && coalescesAtRoot
       ? keep
-      : result.wires[wire] === undefined ? undefined : wire
+      : survivingSameId(wire)
   } else if (step.rule === 'congruenceJoin') {
     const outputWire = (node: NodeId): WireId | undefined => Object.keys(d.wires).find((wire) =>
       d.wires[wire]!.endpoints.some((endpoint) => endpoint.node === node && endpoint.port.kind === 'output'))
@@ -200,10 +229,14 @@ export function applyStepWithReceipt(
     const drop = keep === aOutput ? bOutput : aOutput
     candidate = (wire) => wire === drop && keep !== undefined
       ? keep
-      : result.wires[wire] === undefined ? undefined : wire
+      : survivingSameId(wire)
   }
 
-  return { result, interface: rootFilteredInterface(result, candidate) }
+  return {
+    result,
+    provenance,
+    interface: rootFilteredInterface(result, candidate),
+  }
 }
 
 /** Diagram projection for callers that do not carry an open boundary. */

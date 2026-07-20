@@ -75,32 +75,48 @@ export function mapTermToCommonCarrier(
   ))
 }
 
+/** Native interface order selected by a witness side, recovered positionally. */
+export function correspondenceSidePorts(
+  mapping: Readonly<Record<string, number>>,
+): string[] {
+  return Object.entries(mapping)
+    .sort(([, left], [, right]) => left - right)
+    .map(([name]) => name)
+}
+
 /** Deterministic authoring helper. Shared names pair first; remaining native
  * names pair by occurrence order, with either tail receiving one-sided columns. */
-export function proposePortCorrespondence(leftTerm: Term, rightTerm: Term): PortCorrespondence {
-  const leftPorts = freePorts(leftTerm)
-  const rightPorts = freePorts(rightTerm)
+export function proposePortCorrespondence(
+  leftTerm: Term,
+  rightTerm: Term,
+  leftPorts: readonly string[] = freePorts(leftTerm),
+  rightPorts: readonly string[] = freePorts(rightTerm),
+): PortCorrespondence {
   const rightSet = new Set(rightPorts)
-  const left: Record<string, number> = {}
-  const right: Record<string, number> = {}
+  const left = new Map<string, number>()
+  const right = new Map<string, number>()
   let commonArity = 0
 
   for (const name of leftPorts) {
     if (!rightSet.has(name)) continue
-    left[name] = commonArity
-    right[name] = commonArity
+    left.set(name, commonArity)
+    right.set(name, commonArity)
     commonArity++
   }
-  const leftRest = leftPorts.filter((name) => left[name] === undefined)
-  const rightRest = rightPorts.filter((name) => right[name] === undefined)
+  const leftRest = leftPorts.filter((name) => !left.has(name))
+  const rightRest = rightPorts.filter((name) => !right.has(name))
   const paired = Math.min(leftRest.length, rightRest.length)
   for (let i = 0; i < paired; i++) {
-    left[leftRest[i]!] = commonArity
-    right[rightRest[i]!] = commonArity
+    left.set(leftRest[i]!, commonArity)
+    right.set(rightRest[i]!, commonArity)
     commonArity++
   }
-  for (let i = paired; i < leftRest.length; i++) left[leftRest[i]!] = commonArity++
-  for (let i = paired; i < rightRest.length; i++) right[rightRest[i]!] = commonArity++
+  for (let i = paired; i < leftRest.length; i++) left.set(leftRest[i]!, commonArity++)
+  for (let i = paired; i < rightRest.length; i++) right.set(rightRest[i]!, commonArity++)
 
-  return { commonArity, left, right }
+  return {
+    commonArity,
+    left: Object.fromEntries(left),
+    right: Object.fromEntries(right),
+  }
 }

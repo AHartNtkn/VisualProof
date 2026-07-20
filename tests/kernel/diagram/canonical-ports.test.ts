@@ -33,6 +33,35 @@ function freeVarEndpointNames(d: Diagram, id: NodeId): string[] {
 }
 
 describe('name-blind free ports (canonicalization at construction)', () => {
+  it('canonicalizes every declared slot positionally, including an unused slot', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('used'), ['unused', 'used'])
+    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'unused' } }])
+    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'used' } }])
+    const d = h.build()
+    const node = d.nodes[n]
+    expect(node?.kind).toBe('term')
+    if (node?.kind !== 'term') throw new Error('test setup requires a term node')
+    expect(node.freePorts).toEqual(['s0', 's1'])
+    expect(freePorts(node.term)).toEqual(['s1'])
+    expect(freeVarEndpointNames(d, n)).toEqual(['s0', 's1'])
+  })
+
+  it('rejects invalid declarations and declarations that omit an occurring free variable', () => {
+    const build = (declared: readonly string[]) => mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { n0: { kind: 'term', region: 'r0', term: p('used'), freePorts: declared } },
+      wires: {
+        out: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        used: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'used' } }] },
+      },
+    })
+    expect(() => build([''])).toThrowError(/free port.*nonempty/i)
+    expect(() => build(['used', 'used'])).toThrowError(/free port.*unique/i)
+    expect(() => build(['other'])).toThrowError(/does not declare.*used/i)
+  })
+
   it('(a) the law: diagrams identical up to free-port names share a fingerprint', () => {
     const mk = (a: string, b: string) => {
       const h = new DiagramBuilder()

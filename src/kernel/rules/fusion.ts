@@ -83,11 +83,14 @@ export function applyFusion(d: Diagram, wireId: WireId): Diagram {
   // ORIGINAL name; sequential substitution would cascade into it
   const producerTerm = renameFreePorts(a.term, renames)
   const mergedTerm = substPort(b.term, consumedPort, producerTerm)
+  const mergedFreePorts = freePorts(mergedTerm)
 
   const nodes: Record<NodeId, DiagramNode> = {}
   for (const [id, n] of Object.entries(d.nodes)) {
     if (id === producerId) continue
-    nodes[id] = id === consumerId ? { kind: 'term', region: b.region, term: mergedTerm } : n
+    nodes[id] = id === consumerId
+      ? { kind: 'term', region: b.region, term: mergedTerm, freePorts: mergedFreePorts }
+      : n
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, wv] of Object.entries(d.wires)) {
@@ -119,7 +122,8 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
   }
   const q = freshPortName(new Set(freePorts(node.term)), 'q')
   const residualTerm = replaceSubtermAt(node.term, path, port(q))
-  const residualPorts = new Set(freePorts(residualTerm))
+  const residualFreePorts = freePorts(residualTerm)
+  const residualPorts = new Set(residualFreePorts)
   const producerId = freshId(new Set(Object.keys(d.nodes)), `${nodeId}_fis`, reservation?.nodes)
   const newWireId = freshId(new Set(Object.keys(d.wires)), `${nodeId}_fis`, reservation?.wires)
 
@@ -130,8 +134,8 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
 
   const nodes: Record<NodeId, DiagramNode> = {
     ...d.nodes,
-    [nodeId]: { kind: 'term', region: node.region, term: residualTerm },
-    [producerId]: { kind: 'term', region: node.region, term: sub },
+    [nodeId]: { kind: 'term', region: node.region, term: residualTerm, freePorts: residualFreePorts },
+    [producerId]: { kind: 'term', region: node.region, term: sub, freePorts: freePorts(sub) },
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
