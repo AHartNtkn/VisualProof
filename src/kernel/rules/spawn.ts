@@ -4,7 +4,7 @@ import { isAncestorOrEqual, polarity } from '../diagram/regions'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../diagram/spawn'
 import type { Term } from '../term/term'
 import type { IdReservation } from '../diagram/subgraph/freshId'
-import { freePorts } from '../term/term'
+import { assertOpenFreePortInterface } from '../term/term'
 import { RuleError } from './error'
 
 export type SpawnOrientation = 'forward' | 'backward'
@@ -17,12 +17,21 @@ function requireSpawnPolarity(d: Diagram, region: RegionId, orientation: SpawnOr
   }
 }
 
-export function applyOpenTermSpawn(d: Diagram, region: RegionId, term: Term, orientation: SpawnOrientation = 'forward', reservation?: IdReservation): Diagram {
+export function applyOpenTermSpawn(
+  d: Diagram,
+  region: RegionId,
+  term: Term,
+  declaredFreePorts: readonly string[],
+  orientation: SpawnOrientation = 'forward',
+  reservation?: IdReservation,
+): Diagram {
   requireSpawnPolarity(d, region, orientation)
-  if (freePorts(term).length === 0) {
-    throw new RuleError('open-term spawn requires at least one free port; use closed-term introduction')
+  try {
+    assertOpenFreePortInterface(term, declaredFreePorts)
+  } catch (e) {
+    throw new RuleError(`open-term spawn ${e instanceof Error ? e.message : String(e)}`)
   }
-  return spawnTermNode(d, region, term, freePorts(term), reservation).diagram
+  return spawnTermNode(d, region, term, declaredFreePorts, reservation).diagram
 }
 
 export function applyRelationSpawn(

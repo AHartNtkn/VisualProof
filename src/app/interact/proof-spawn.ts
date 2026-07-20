@@ -22,9 +22,10 @@ export type ProofSpawnControllerOptions = {
 
 export function proofTermSpawnStep(source: string, region: RegionId): ProofStep {
   const term = parseTerm(source)
-  return freePorts(term).length === 0
+  const declaredFreePorts = freePorts(term)
+  return declaredFreePorts.length === 0
     ? { rule: 'closedTermIntro', region, term }
-    : { rule: 'openTermSpawn', region, term }
+    : { rule: 'openTermSpawn', region, term, freePorts: declaredFreePorts }
 }
 
 /** Shared Proof-mode policy for the ordinary construction cascade. */

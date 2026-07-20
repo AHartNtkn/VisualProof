@@ -104,26 +104,42 @@ export function applyFusion(d: Diagram, wireId: WireId): Diagram {
  */
 export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[], reservation?: IdReservation): Diagram {
   const node = termNodeAt(d, nodeId)
+  // Interpret every local free-port name through its host wire before
+  // extraction. Distinct local names on one wire denote one individual and
+  // therefore become one support position in each resulting node.
+  const taken = new Set(node.freePorts)
+  const carrierByWire = new Map<WireId, string>()
+  const wireByCarrier = new Map<string, WireId>()
+  let carrierIndex = 0
+  const carrierFor = (wire: WireId): string => {
+    const existing = carrierByWire.get(wire)
+    if (existing !== undefined) return existing
+    const carrier = freshPortName(taken, `__fission_wire_${carrierIndex++}`)
+    taken.add(carrier)
+    carrierByWire.set(wire, carrier)
+    wireByCarrier.set(carrier, wire)
+    return carrier
+  }
+  const globalRenames = new Map(node.freePorts.map((name) => [
+    name,
+    carrierFor(wireAt(d, nodeId, { kind: 'freeVar', name })),
+  ]))
+  const globalTerm = renameFreePorts(node.term, globalRenames)
   let sub: Term
   try {
-    sub = subtermAt(node.term, path)
+    sub = subtermAt(globalTerm, path)
   } catch (e) {
     throw new DiagramError(`invalid path into node '${nodeId}': ${e instanceof Error ? e.message : String(e)}`)
   }
   if (!isBvarClosed(sub)) {
     throw new RuleError(`fission requires a bvar-closed subterm; the subterm at [${path.join(', ')}] references binders above it`)
   }
-  const q = freshPortName(new Set(node.freePorts), 'q')
-  const residualTerm = replaceSubtermAt(node.term, path, port(q))
+  const q = freshPortName(taken, 'q')
+  const residualTerm = replaceSubtermAt(globalTerm, path, port(q))
   const residualFreePorts = freePorts(residualTerm)
   const producerFreePorts = freePorts(sub)
   const producerId = freshId(new Set(Object.keys(d.nodes)), `${nodeId}_fis`, reservation?.nodes)
   const newWireId = freshId(new Set(Object.keys(d.wires)), `${nodeId}_fis`, reservation?.wires)
-
-  const sourcePortWires = new Map<string, WireId>()
-  for (const n of node.freePorts) {
-    sourcePortWires.set(n, wireAt(d, nodeId, { kind: 'freeVar', name: n }))
-  }
 
   const nodes: Record<NodeId, DiagramNode> = {
     ...d.nodes,
@@ -133,10 +149,10 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
     const adds: Endpoint[] = residualFreePorts
-      .filter((name) => name !== q && sourcePortWires.get(name) === id)
+      .filter((name) => name !== q && wireByCarrier.get(name) === id)
       .map((name): Endpoint => ({ node: nodeId, port: { kind: 'freeVar', name } }))
     for (const name of producerFreePorts) {
-      if (sourcePortWires.get(name) === id) {
+      if (wireByCarrier.get(name) === id) {
         adds.push({ node: producerId, port: { kind: 'freeVar', name } })
       }
     }

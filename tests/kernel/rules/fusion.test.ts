@@ -311,6 +311,35 @@ describe('applyFission', () => {
     expect(exploreForm(out)).toBe(exploreForm(d))
   })
 
+  it('compacts different local ports on one global wire before extracting the producer', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('keep (left right)'))
+    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'keep' } }])
+    const shared = h.wire(h.root, [
+      { node: n, port: { kind: 'freeVar', name: 'left' } },
+      { node: n, port: { kind: 'freeVar', name: 'right' } },
+    ])
+    const before = h.build()
+
+    const split = applyFission(before, n, ['arg'])
+    const producer = Object.keys(split.nodes).find((id) => before.nodes[id] === undefined)!
+    const producerNode = split.nodes[producer]
+    expect(producerNode?.kind === 'term' && producerNode.freePorts).toEqual(['s0'])
+    expect(producerNode?.kind === 'term' && printTerm(producerNode.term)).toBe(printTerm(p('s0 s0')))
+    expect(split.wires[shared]?.endpoints).toEqual([
+      { node: producer, port: { kind: 'freeVar', name: 's0' } },
+    ])
+
+    const bridge = Object.entries(split.wires).find(([, wire]) =>
+      wire.endpoints.some((ep) => ep.node === producer && ep.port.kind === 'output'))![0]
+    const fused = applyFusion(split, bridge)
+    const fusedNode = fused.nodes[n]
+    expect(fusedNode?.kind === 'term' && printTerm(fusedNode.term)).toBe(printTerm(p('s0 (s1 s1)')))
+    expect(fused.wires[shared]?.endpoints).toEqual([
+      { node: n, port: { kind: 'freeVar', name: 's1' } },
+    ])
+  })
+
   it('rejects subterms that reference outer binders, by name', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('\\x. x y'))

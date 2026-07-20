@@ -16,6 +16,7 @@ describe('closed-term proof spawning', () => {
       rule: 'openTermSpawn',
       region: 'r7',
       term: parseTerm('x'),
+      freePorts: ['x'],
     })
   })
 })

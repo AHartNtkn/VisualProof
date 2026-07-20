@@ -31,7 +31,7 @@ describe('error vocabulary: unknown ids are DiagramError, gate refusals are Rule
     const h = new DiagramBuilder()
     h.cut(h.root)
     const d = h.build()
-    expect(caughtBy(() => applyOpenTermSpawn(d, 'ghost', p('x')))).toBeInstanceOf(DiagramError)
+    expect(caughtBy(() => applyOpenTermSpawn(d, 'ghost', p('x'), ['x']))).toBeInstanceOf(DiagramError)
   })
 
   it('applyWireJoin with unknown wires throws DiagramError, in either position', () => {
@@ -82,7 +82,7 @@ describe('error vocabulary: unknown ids are DiagramError, gate refusals are Rule
     const n = h.termNode(cut, p('\\x. x'))
     const d = h.build()
     // atomic spawn at the positive root: a real region, refused by the gate
-    expect(caughtBy(() => applyOpenTermSpawn(d, d.root, p('x')))).toBeInstanceOf(RuleError)
+    expect(caughtBy(() => applyOpenTermSpawn(d, d.root, p('x'), ['x']))).toBeInstanceOf(RuleError)
     // erasure at a negative region: a real region, refused by the gate
     const sel = mkSelection(d, { region: cut, regions: [], nodes: [n], wires: [] })
     expect(caughtBy(() => applyErasure(d, sel))).toBeInstanceOf(RuleError)

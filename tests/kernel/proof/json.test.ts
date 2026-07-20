@@ -120,7 +120,7 @@ describe('step round-trips through JSON', () => {
       termCertificates: new Map([['n0', certificate]]),
     }
     const steps: ProofStep[] = [
-      { rule: 'openTermSpawn', region: 'r1', term: p('x') },
+      { rule: 'openTermSpawn', region: 'r1', term: p('x'), freePorts: ['x', 'unused'] },
       { rule: 'relationSpawn', region: 'r1', defId: 'nat', arity: 1 },
       { rule: 'boundRelationSpawn', region: 'r1', binder: 'r2', arity: 2 },
       { rule: 'wireJoin', a: 'w0', b: 'w1' },
@@ -175,6 +175,14 @@ describe('step round-trips through JSON', () => {
       .toThrowError(/unknown field 'extra'/)
     expect(() => stepFromJson({ rule: 'relFold', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, defId: 'nat', args: ['w0'], extra: 1 }))
       .toThrowError(/unknown field 'extra'/)
+    expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")' }))
+      .toThrowError(/freePorts must be an array/)
+    expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")', freePorts: [] }))
+      .toThrowError(/at least one/)
+    expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")', freePorts: ['x', 'x'] }))
+      .toThrowError(/unique|repeated/)
+    expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")', freePorts: ['unused'] }))
+      .toThrowError(/does not declare|cover.*x/)
   })
 
   it('rejects malformed correspondence carrier data during strict decoding', () => {

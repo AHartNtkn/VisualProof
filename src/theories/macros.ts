@@ -90,9 +90,9 @@ export class DerivationCursor {
     return this.newNodeIn(region, before, t)
   }
 
-  spawnOpenTerm(tag: string, region: RegionId, term: Term): NodeId {
+  spawnOpenTerm(tag: string, region: RegionId, term: Term, declaredFreePorts: readonly string[]): NodeId {
     const before = this.cur
-    this.push(tag, { rule: 'openTermSpawn', region, term })
+    this.push(tag, { rule: 'openTermSpawn', region, term, freePorts: declaredFreePorts })
     return this.newNodeIn(region, before, term)
   }
 

@@ -29,12 +29,12 @@ describe('polarity matrix across depths 0..3', () => {
     it(`depth ${depth} (${positive ? 'positive' : 'negative'}): atomic spawn ${positive ? 'rejected' : 'allowed'}, erasure ${positive ? 'allowed' : 'rejected'}`, () => {
       const { d, region, n } = nested(depth)
       if (positive) {
-        expect(() => applyOpenTermSpawn(d, region, p('x')))
+        expect(() => applyOpenTermSpawn(d, region, p('x'), ['x']))
           .toThrowError(/spawning requires a negative region/)
         const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
         expect(() => applyErasure(d, sel)).not.toThrow()
       } else {
-        expect(() => applyOpenTermSpawn(d, region, p('x'))).not.toThrow()
+        expect(() => applyOpenTermSpawn(d, region, p('x'), ['x'])).not.toThrow()
         const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
         expect(() => applyErasure(d, sel))
           .toThrowError(/erasure requires a positive region/)

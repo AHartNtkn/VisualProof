@@ -442,9 +442,10 @@ function endpointWire(diagram: Diagram, endpoint: Endpoint): WireId {
 }
 
 function emitTermNode(compiler: Compiler, region: RegionId, term: Term): NodeId {
-  const made = emit(compiler, freePorts(term).length === 0
+  const declaredFreePorts = freePorts(term)
+  const made = emit(compiler, declaredFreePorts.length === 0
     ? { rule: 'closedTermIntro', region, term }
-    : { rule: 'openTermSpawn', region, term })
+    : { rule: 'openTermSpawn', region, term, freePorts: declaredFreePorts })
   if (made.nodes.length !== 1) throw new Error('term constructor did not create exactly one node')
   return made.nodes[0]!
 }

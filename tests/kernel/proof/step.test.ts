@@ -99,9 +99,11 @@ describe('applyStep mirrors the direct appliers', () => {
       right: { s0: 0, s1: 2 },
     }
     const step: ProofStep = { rule: 'headStrip', a: n1, b: n2, correspondence }
-    expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(applyHeadStrip(d, n1, n2, correspondence)))
-    const out = replayProof(d, [step], ctx)
-    expect(Object.keys(out.nodes)).toHaveLength(4)
+    const direct = exploreForm(applyHeadStrip(d, n1, n2, correspondence))
+    expect(exploreForm(applyStep(d, step, ctx, 'forward'))).toBe(direct)
+    expect(exploreForm(applyStep(d, step, ctx, 'backward'))).toBe(direct)
+    expect(Object.keys(replayProof(d, [step], ctx, undefined, 'forward').nodes)).toHaveLength(4)
+    expect(Object.keys(replayProof(d, [step], ctx, undefined, 'backward').nodes)).toHaveLength(4)
   })
 
   it('double-cut intro/elim and iteration/deiteration round-trip through steps', () => {
@@ -127,7 +129,7 @@ describe('applyStep mirrors the direct appliers', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const d = h.build()
-    const out = applyStep(d, { rule: 'openTermSpawn', region: cut, term: pp('x') }, ctx)
+    const out = applyStep(d, { rule: 'openTermSpawn', region: cut, term: pp('x'), freePorts: ['x'] }, ctx)
     expect(Object.values(out.nodes)).toHaveLength(1)
   })
 })

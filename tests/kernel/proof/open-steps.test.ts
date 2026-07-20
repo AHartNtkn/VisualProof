@@ -40,7 +40,7 @@ describe('open and vacuous proof steps', () => {
   it('round-trips the new step shapes through JSON', () => {
     const sel = { region: 'r0', regions: [], nodes: ['n0'], wires: [] }
     const steps: ProofStep[] = [
-      { rule: 'openTermSpawn', region: 'r1', term: p('x') },
+      { rule: 'openTermSpawn', region: 'r1', term: p('x'), freePorts: ['x'] },
       { rule: 'relationSpawn', region: 'r1', defId: 'nat', arity: 1 },
       { rule: 'boundRelationSpawn', region: 'r1', binder: 'rHost', arity: 1 },
       { rule: 'vacuousIntro', sel, arity: 3 },

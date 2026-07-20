@@ -28,16 +28,46 @@ function relations() {
 describe('atomic proof spawning', () => {
   it('spawns one open term with one singleton wire per required port', () => {
     const h = host()
-    const out = applyOpenTermSpawn(h.diagram, h.cut, p('f x'), 'forward')
+    const out = applyOpenTermSpawn(h.diagram, h.cut, p('f x'), ['f', 'x'], 'forward')
     expect(Object.keys(out.nodes)).toHaveLength(1)
     expect(Object.values(out.wires)).toHaveLength(3)
     expect(Object.values(out.wires).every((wire) => wire.scope === h.cut && wire.endpoints.length === 1)).toBe(true)
   })
 
-  it('keeps closed terms exclusively under closed-term introduction', () => {
+  it('accepts a closed term with one explicit unused port', () => {
     const h = host()
-    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('\\x. x'), 'forward'))
-      .toThrow(/requires at least one free port.*closed-term introduction/)
+    const out = applyOpenTermSpawn(h.diagram, h.cut, p('\\x. x'), ['unused'], 'forward')
+    const node = Object.values(out.nodes)[0]
+    expect(node?.kind === 'term' && node.freePorts).toEqual(['s0'])
+    expect(Object.values(out.wires).map((wire) => wire.endpoints[0]?.port)).toEqual([
+      { kind: 'output' },
+      { kind: 'freeVar', name: 's0' },
+    ])
+  })
+
+  it('preserves declared order independently of syntactic support order', () => {
+    const h = host()
+    const out = applyOpenTermSpawn(h.diagram, h.cut, p('used'), ['unused', 'used'], 'forward')
+    const node = Object.values(out.nodes)[0]
+    expect(node?.kind === 'term' && node.freePorts).toEqual(['s0', 's1'])
+    expect(node?.kind === 'term' && node.term).toEqual({ kind: 'port', name: 's1' })
+    expect(Object.values(out.wires).map((wire) => wire.endpoints[0]?.port)).toEqual([
+      { kind: 'output' },
+      { kind: 'freeVar', name: 's0' },
+      { kind: 'freeVar', name: 's1' },
+    ])
+  })
+
+  it('requires a nonempty, unique declared interface covering syntactic support', () => {
+    const h = host()
+    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('x'), [], 'forward'))
+      .toThrow(/at least one declared free port/)
+    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('x'), ['x', 'x'], 'forward'))
+      .toThrow(/unique|repeated/)
+    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('x'), ['unused'], 'forward'))
+      .toThrow(/does not declare|cover.*x/)
+    expect(() => applyOpenTermSpawn(h.diagram, h.cut, p('x'), [''], 'forward'))
+      .toThrow(/nonempty/)
   })
 
   it('revalidates named relation identity and arity before spawning', () => {
@@ -53,8 +83,8 @@ describe('atomic proof spawning', () => {
 
   it('shares one flipped polarity gate and additionally validates bound-relation scope', () => {
     const h = host()
-    expect(() => applyOpenTermSpawn(h.diagram, h.root, p('x'), 'forward')).toThrow(/negative region/)
-    expect(() => applyOpenTermSpawn(h.diagram, h.root, p('x'), 'backward')).not.toThrow()
+    expect(() => applyOpenTermSpawn(h.diagram, h.root, p('x'), ['x'], 'forward')).toThrow(/negative region/)
+    expect(() => applyOpenTermSpawn(h.diagram, h.root, p('x'), ['x'], 'backward')).not.toThrow()
     expect(() => applyRelationSpawn(h.diagram, h.root, 'logic/R', 2, relations(), 'forward')).toThrow(/negative region/)
     expect(() => applyRelationSpawn(h.diagram, h.root, 'logic/R', 2, relations(), 'backward')).not.toThrow()
 

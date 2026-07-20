@@ -1,4 +1,5 @@
 import type { Term } from '../term/term'
+import { assertOpenFreePortInterface } from '../term/term'
 import { serializeTerm, deserializeTerm } from '../term/serialize'
 import type { PathSeg, ReductionStep } from '../term/reduce'
 import type { ConversionCertificate } from '../term/certificate'
@@ -233,7 +234,7 @@ function appFromJson(v: unknown, what: string): TheoremApplication {
 export function stepToJson(s: ProofStep): unknown {
   switch (s.rule) {
     case 'openTermSpawn':
-      return { rule: s.rule, region: s.region, term: serializeTerm(s.term) }
+      return { rule: s.rule, region: s.region, term: serializeTerm(s.term), freePorts: [...s.freePorts] }
     case 'relationSpawn':
       return { rule: s.rule, region: s.region, defId: s.defId, arity: s.arity }
     case 'boundRelationSpawn':
@@ -300,9 +301,17 @@ export function stepFromJson(j: unknown): ProofStep {
   if (!isRecord(j)) fail('step must be an object')
   const rule = str(j.rule, 'step.rule')
   switch (rule) {
-    case 'openTermSpawn':
-      assertOnlyKeys(j, ['rule', 'region', 'term'], 'openTermSpawn step')
-      return { rule, region: str(j.region, 'region'), term: termFromJson(j.term, 'term') }
+    case 'openTermSpawn': {
+      assertOnlyKeys(j, ['rule', 'region', 'term', 'freePorts'], 'openTermSpawn step')
+      const term = termFromJson(j.term, 'term')
+      const declaredFreePorts = strArray(j.freePorts, 'freePorts')
+      try {
+        assertOpenFreePortInterface(term, declaredFreePorts)
+      } catch (e) {
+        return fail(`openTermSpawn freePorts: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      return { rule, region: str(j.region, 'region'), term, freePorts: declaredFreePorts }
+    }
     case 'relationSpawn': {
       assertOnlyKeys(j, ['rule', 'region', 'defId', 'arity'], 'relationSpawn step')
       if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')

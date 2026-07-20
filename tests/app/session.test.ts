@@ -193,6 +193,7 @@ describe('proof session', () => {
       rule: 'openTermSpawn',
       region: currentSide(s0, 'forward').root,
       term: p('x'),
+      freePorts: ['x'],
     })).toThrowError(/spawning requires a negative region/)
     expect(timelineActiveActions(s0.forward)).toHaveLength(0)
     void n
@@ -425,6 +426,7 @@ describe('backward spawning, un-conversion, un-citation', () => {
       rule: 'openTermSpawn',
       region: currentSide(s, 'backward').root,
       term: p('x'),
+      freePorts: ['x'],
     })
     expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('openTermSpawn')
     expect(meet(s)).toBe(true)

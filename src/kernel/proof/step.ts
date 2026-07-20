@@ -34,7 +34,7 @@ import { assertProofContext } from './context'
  * certificates. Replay is entirely fuel-free and never reruns proof search.
  */
 export type ProofStep =
-  | { readonly rule: 'openTermSpawn'; readonly region: RegionId; readonly term: Term }
+  | { readonly rule: 'openTermSpawn'; readonly region: RegionId; readonly term: Term; readonly freePorts: readonly string[] }
   | { readonly rule: 'relationSpawn'; readonly region: RegionId; readonly defId: string; readonly arity: number }
   | { readonly rule: 'boundRelationSpawn'; readonly region: RegionId; readonly binder: RegionId; readonly arity: number }
   | { readonly rule: 'wireJoin'; readonly a: WireId; readonly b: WireId }
@@ -140,7 +140,7 @@ function applyStepRaw(
   reservation?: IdReservation,
 ): Diagram {
   switch (step.rule) {
-    case 'openTermSpawn': return applyOpenTermSpawn(d, step.region, step.term, orientation, reservation)
+    case 'openTermSpawn': return applyOpenTermSpawn(d, step.region, step.term, step.freePorts, orientation, reservation)
     case 'relationSpawn': return applyRelationSpawn(d, step.region, step.defId, step.arity, ctx.relations, orientation, reservation)
     case 'boundRelationSpawn': return applyBoundRelationSpawn(d, step.region, step.binder, step.arity, orientation, reservation)
     case 'wireJoin': return applyWireJoin(d, step.a, step.b, orientation)

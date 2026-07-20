@@ -56,6 +56,22 @@ export function freePorts(t: Term): string[] {
   return order
 }
 
+/** Validate an explicit ordered term interface without deriving away unused ports. */
+export function assertOpenFreePortInterface(t: Term, declared: readonly string[]): void {
+  if (declared.length === 0) throw new Error('free-port interface must contain at least one declared free port')
+  const seen = new Set<string>()
+  for (const name of declared) {
+    if (typeof name !== 'string' || name.length === 0) {
+      throw new Error('free-port interface names must be nonempty strings')
+    }
+    if (seen.has(name)) throw new Error(`free-port interface names must be unique; repeated '${name}'`)
+    seen.add(name)
+  }
+  for (const name of freePorts(t)) {
+    if (!seen.has(name)) throw new Error(`free-port interface does not declare term port '${name}'`)
+  }
+}
+
 /**
  * Simultaneous free-port rename: a single traversal in which each port leaf
  * is looked up once by its ORIGINAL name, so chained maps ({a→b, b→a} or

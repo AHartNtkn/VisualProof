@@ -1,4 +1,4 @@
-import { app, lam, bvar, port, type Term } from '../kernel/term/term'
+import { app, lam, bvar, freePorts, port, type Term } from '../kernel/term/term'
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
@@ -409,9 +409,10 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   e.push('c1 dcIntro', { rule: 'doubleCutIntro', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }) })
   const cutA = e.newCutIn(e.cur.root, snap)
   const cutB = e.newCutIn(cutA, snap)
-  const H1 = e.spawnOpenTerm('c2 spawn IH1', cutA, F1term)
-  const H2 = e.spawnOpenTerm('c2b spawn IH2', cutA, F2term)
-  const nSucc = e.spawnOpenTerm('c2c spawn SUCC', cutA, SC(port('s0')))
+  const H1 = e.spawnOpenTerm('c2 spawn IH1', cutA, F1term, freePorts(F1term))
+  const H2 = e.spawnOpenTerm('c2b spawn IH2', cutA, F2term, freePorts(F2term))
+  const succTerm = SC(port('s0'))
+  const nSucc = e.spawnOpenTerm('c2c spawn SUCC', cutA, succTerm, freePorts(succTerm))
   e.push('c2d join IH arguments', { rule: 'wireJoin', a: e.wireOf(H1, 'freeVar'), b: e.wireOf(H2, 'freeVar') })
   e.push('c2e join SUCC argument', { rule: 'wireJoin', a: e.wireOf(H1, 'freeVar'), b: e.wireOf(nSucc, 'freeVar') })
   e.push('c2f join IH outputs', { rule: 'wireJoin', a: e.wireOf(H1, 'output'), b: e.wireOf(H2, 'output') })
@@ -613,9 +614,10 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   e.push('c1 dcIntro', { rule: 'doubleCutIntro', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [], wires: [] }) })
   const cutA = e.newCutIn(e.cur.root, snap)
   const cutB = e.newCutIn(cutA, snap)
-  const H1spawn = e.spawnOpenTerm('c2 spawn hyp1', cutA, PT)
-  const H2spawn = e.spawnOpenTerm('c2b spawn hyp2', cutA, PT)
-  const nSf = e.spawnOpenTerm('c2c spawn SUCC', cutA, SC(port('s0')))
+  const H1spawn = e.spawnOpenTerm('c2 spawn hyp1', cutA, PT, freePorts(PT))
+  const H2spawn = e.spawnOpenTerm('c2b spawn hyp2', cutA, PT, freePorts(PT))
+  const spawnedSucc = SC(port('s0'))
+  const nSf = e.spawnOpenTerm('c2c spawn SUCC', cutA, spawnedSucc, freePorts(spawnedSucc))
   e.push('c2d join y arguments', { rule: 'wireJoin', a: e.wireOf(H1spawn, 'freeVar', 's0'), b: e.wireOf(H2spawn, 'freeVar', 's1') })
   e.push('c2e join SUCC argument', { rule: 'wireJoin', a: e.wireOf(H1spawn, 'freeVar', 's0'), b: e.wireOf(nSf, 'freeVar') })
   e.push('c2f join hyp outputs', { rule: 'wireJoin', a: e.wireOf(H1spawn, 'output'), b: e.wireOf(H2spawn, 'output') })
