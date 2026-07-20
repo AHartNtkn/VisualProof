@@ -2459,6 +2459,33 @@ def PinnedOccurrence.reassemblyMaterializedTwoInputPresentation
       apply Fin.ext
       exact congrArg Fin.val heq
 
+/-- The operational materialized input is the canonical replacement input for
+the materialized checked pattern, with only proof-field presentation differing.
+This lets the existing paired-splice compiler surface consume the actual
+executor input rather than a parallel reconstruction. -/
+theorem PinnedOccurrence.materialized_spliceInput_eq_replacementInput
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length)
+    (materialized : occurrence.MaterializedReplacement decomposition
+      replacement sameArity) :
+    materialized.spliceInput =
+      occurrence.replacementInput decomposition materialized.certificate.result
+        (sameArity.trans materialized.certificate.boundary_length.symm) := by
+  unfold PinnedOccurrence.MaterializedReplacement.spliceInput
+  unfold PinnedOccurrence.materializedReplacementInput
+  unfold PinnedOccurrence.replacementInput
+  dsimp only
+  congr
+  funext index
+  exact Fin.elim0 index
+
 /-- A theorem-citation payload determines an accepted canonical
 remove-then-splice replacement before any operational commuting argument. -/
 theorem TheoremPayload.canonicalReplacement_complete
