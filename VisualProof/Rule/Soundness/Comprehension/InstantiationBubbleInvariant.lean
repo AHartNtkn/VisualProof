@@ -82,18 +82,17 @@ theorem BubbleHasPayloadArity.advance
     (tail : List (Fin state.diagram.val.nodeCount))
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
-    (hadmissible : (instantiateSpliceInput comprehension attachments binders
-      payload state site arguments).Admissible)
+    (plan : InstantiationCopyPlan comprehension attachments binders payload
+      state atom tail site arguments)
     (shape : BubbleHasPayloadArity payload state) :
-    BubbleHasPayloadArity payload
-      (advanceInstantiationState comprehension attachments binders payload
-        state atom tail site arguments hadmissible) := by
+    BubbleHasPayloadArity payload plan.next := by
+  rw [plan.next_eq]
   obtain ⟨parent, bubbleShape⟩ := shape
-  let spliceInput := instantiateSpliceInput comprehension attachments binders
-    payload state site arguments
+  let spliceInput := plan.spliceInput
   let layout := spliceInput.plugLayout
   refine ⟨layout.frameRegion parent, ?_⟩
-  simpa [advanceInstantiationState, spliceInput, layout] using
+  simpa [advanceMaterializedInstantiationState, advanceInstantiationState,
+    spliceInput, layout] using
     layout.plugRaw_frameRegion_bubble state.bubble parent payload.arity
       (by simpa [spliceInput, instantiateSpliceInput,
         Splice.Input.coalesceFrameRaw_regions] using bubbleShape)
@@ -164,7 +163,7 @@ def BubbleShapeEveryStep
       state result) : Prop :=
   match trace with
   | .done _ state _ => BubbleHasPayloadArity payload state
-  | .step _ state _ _ _ _ _ _ _ _ _ _ _ _ rest =>
+  | .step _ state _ _ _ _ _ _ _ _ _ _ _ rest =>
       BubbleHasPayloadArity payload state ∧ BubbleShapeEveryStep rest
 
 theorem bubbleShapeEveryStep_of
@@ -187,11 +186,10 @@ theorem bubbleShapeEveryStep_of
     BubbleShapeEveryStep trace := by
   induction trace with
   | done => exact shape
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
       exact ⟨shape, ih (shape.advance comprehension attachments binders payload
-        state atom tail site arguments hadmissible)⟩
+        state atom tail site arguments plan)⟩
 
 /-- The moving quantified bubble has the payload arity at the terminal state of
 an accepted executor trace. -/
@@ -215,11 +213,10 @@ theorem BubbleHasPayloadArity.afterTrace
     BubbleHasPayloadArity payload result := by
   induction trace with
   | done => exact shape
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
       exact ih (shape.advance comprehension attachments binders payload state
-        atom tail site arguments hadmissible)
+        atom tail site arguments plan)
 
 theorem initial_bubbleShapeEveryStep
     {signature : List Nat}

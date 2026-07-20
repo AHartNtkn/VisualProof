@@ -26,24 +26,24 @@ theorem BinderTargetsAtBubble.advance
     (tail : List (Fin state.diagram.val.nodeCount))
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
-    (hadmissible : (instantiateSpliceInput comprehension attachments binders
-      payload state site arguments).Admissible)
+    (plan : InstantiationCopyPlan comprehension attachments binders payload
+      state atom tail site arguments)
     (targets : BinderTargetsAtBubble payload state) :
-    BinderTargetsAtBubble payload
-      (advanceInstantiationState comprehension attachments binders payload
-        state atom tail site arguments hadmissible) := by
-  let spliceInput := instantiateSpliceInput comprehension attachments binders
-    payload state site arguments
+    BinderTargetsAtBubble payload plan.next := by
+  rw [plan.next_eq]
+  let spliceInput := plan.spliceInput
   let layout := spliceInput.plugLayout
   constructor
   · intro index
     obtain ⟨parent, htarget⟩ := targets.target_shape index
     refine ⟨layout.frameRegion parent, ?_⟩
-    simpa [advanceInstantiationState, spliceInput, layout] using
+    simpa [advanceMaterializedInstantiationState, advanceInstantiationState,
+      spliceInput, layout] using
       layout.plugRaw_frameRegion_bubble (state.binderTargets index) parent
         (payload.binderSpine.arity index) htarget
   · intro index
-    simpa [advanceInstantiationState, spliceInput, layout] using
+    simpa [advanceMaterializedInstantiationState, advanceInstantiationState,
+      spliceInput, layout] using
       layout.frame_encloses (targets.target_encloses index)
   · intro index equality
     apply targets.target_ne index
@@ -72,7 +72,7 @@ def BinderTargetsEveryStep
       state result) : Prop :=
   match trace with
   | .done _ _ _ => True
-  | .step _ state _ _ _ _ _ _ _ _ _ _ _ _ rest =>
+  | .step _ state _ _ _ _ _ _ _ _ _ _ _ rest =>
       BinderTargetsAtBubble payload state ∧ BinderTargetsEveryStep rest
 
 theorem binderTargetsEveryStep_of
@@ -95,11 +95,10 @@ theorem binderTargetsEveryStep_of
     BinderTargetsEveryStep trace := by
   induction trace with
   | done => trivial
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
       exact ⟨targets, ih (targets.advance payload state atom tail site arguments
-        hadmissible)⟩
+        plan)⟩
 
 /-- The retained binder targets remain well-shaped and enclosing at the final
 state of an accepted executor trace. -/
@@ -123,11 +122,9 @@ theorem BinderTargetsAtBubble.afterTrace
     BinderTargetsAtBubble payload result := by
   induction trace with
   | done => exact targets
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
-      exact ih (targets.advance payload state atom tail site arguments
-        hadmissible)
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
+      exact ih (targets.advance payload state atom tail site arguments plan)
 
 /-- The first accepted copy supplies target shape; the serialized payload
 supplies the stronger target-to-bubble enclosure, and both persist thereafter. -/
@@ -149,9 +146,10 @@ theorem initial_binderTargetsEveryStep
     BinderTargetsEveryStep trace := by
   cases trace with
   | done => trivial
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest =>
+      let hadmissible :=
+        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have targets : BinderTargetsAtBubble payload
           (initialInstantiationState payload) := {
         target_shape := hadmissible.binder_targets_match
@@ -161,7 +159,7 @@ theorem initial_binderTargetsEveryStep
       }
       exact ⟨targets, binderTargetsEveryStep_of rest
         (targets.advance payload (initialInstantiationState payload) atom tail
-          site arguments hadmissible)⟩
+          site arguments plan)⟩
 
 end InstantiationSemantic
 

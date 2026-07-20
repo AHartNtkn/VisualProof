@@ -28,13 +28,12 @@ theorem ownedAtoms_nodup_advance
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (pending_eq : state.pendingAtoms = atom :: tail)
-    (hadmissible : (instantiateSpliceInput comprehension attachments binders
-      payload state site arguments).Admissible)
+    (plan : InstantiationCopyPlan comprehension attachments binders payload
+      state atom tail site arguments)
     (ownedNodup : state.ownedAtoms.Nodup) :
-    (advanceInstantiationState comprehension attachments binders payload state
-      atom tail site arguments hadmissible).ownedAtoms.Nodup := by
-  let layout := (instantiateSpliceInput comprehension attachments binders
-    payload state site arguments).plugLayout
+    plan.next.ownedAtoms.Nodup := by
+  rw [plan.next_eq]
+  let layout := plan.spliceInput.plugLayout
   have sourceNodup : (state.processedAtoms ++ atom :: tail).Nodup := by
     simpa [InstantiationState.ownedAtoms, pending_eq] using ownedNodup
   have mappedNodup :
@@ -93,7 +92,7 @@ def StepInvariantsEveryStep
       state result) : Prop :=
   match trace with
   | .done _ _ _ => True
-  | .step _ state _ _ _ _ _ _ _ _ _ _ _ _ rest =>
+  | .step _ state _ _ _ _ _ _ _ _ _ _ _ rest =>
       StepInvariantAt payload state ∧ StepInvariantsEveryStep rest
 
 theorem stepInvariantsEveryStep_of
@@ -116,16 +115,13 @@ theorem stepInvariantsEveryStep_of
     StepInvariantsEveryStep trace := by
   induction trace with
   | done => trivial
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
-      let next := advanceInstantiationState comprehension attachments binders
-        payload state atom tail site arguments hadmissible
-      have nextInvariant : StepInvariantAt payload next := {
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
+      have nextInvariant : StepInvariantAt payload plan.next := {
         shape := invariant.shape.advance comprehension attachments binders
-          payload state atom tail site arguments hadmissible
+          payload state atom tail site arguments plan
         ownedNodup := ownedAtoms_nodup_advance comprehension attachments binders
-          payload state atom tail site arguments pending_eq hadmissible
+          payload state atom tail site arguments pending_eq plan
           invariant.ownedNodup
       }
       exact ⟨invariant, ih nextInvariant⟩

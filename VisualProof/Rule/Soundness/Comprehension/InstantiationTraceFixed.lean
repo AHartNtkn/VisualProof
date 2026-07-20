@@ -137,7 +137,7 @@ def RelationContractsEveryStep
     (parameterValues : Fin attachments.length → model.Carrier) : Prop :=
   match trace with
   | .done _ _ _ => True
-  | .step _ state _ _ _ site _ arguments _ _ _ _ _ _ rest =>
+  | .step _ state _ _ _ site _ arguments _ _ _ _ _ rest =>
       (∀ hnonempty : payload.binderSpine.proxyCount ≠ 0,
         relationValue = terminalRelationOfParameterValues payload state site
           arguments hnonempty model named parameterValues values) ∧
@@ -175,8 +175,8 @@ theorem TraceRelationContract.everyStep
       parameterValues := by
   induction trace with
   | done => trivial
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
       exact ⟨contract.nonempty state site arguments,
         contract.empty, ih⟩
 

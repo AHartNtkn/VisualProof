@@ -32,8 +32,12 @@ def regionMap
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result) :
-    Fin state.diagram.val.regionCount → Fin result.diagram.val.regionCount := by
-  sorry
+    Fin state.diagram.val.regionCount → Fin result.diagram.val.regionCount :=
+  match trace with
+  | .done .. => id
+  | .step _ _ _ _ _ _ _ _ plan _ _ _ _ rest => fun region =>
+      rest.regionMap (Fin.cast (by rw [plan.next_eq]; rfl)
+        (plan.spliceInput.plugLayout.frameRegion region))
 
 /-- Composite frame-node map carried by a successful copy trace. -/
 def nodeMap
@@ -52,8 +56,12 @@ def nodeMap
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result) :
-    Fin state.diagram.val.nodeCount → Fin result.diagram.val.nodeCount := by
-  sorry
+    Fin state.diagram.val.nodeCount → Fin result.diagram.val.nodeCount :=
+  match trace with
+  | .done .. => id
+  | .step _ _ _ _ _ _ _ _ plan _ _ _ _ rest => fun node =>
+      rest.nodeMap (Fin.cast (by rw [plan.next_eq]; rfl)
+        (plan.spliceInput.plugLayout.frameNode node))
 
 /-- Composite quotient/frame-wire map carried by a successful copy trace. -/
 def wireMap
@@ -72,8 +80,13 @@ def wireMap
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result) :
-    Fin state.diagram.val.wireCount → Fin result.diagram.val.wireCount := by
-  sorry
+    Fin state.diagram.val.wireCount → Fin result.diagram.val.wireCount :=
+  match trace with
+  | .done .. => id
+  | .step _ _ _ _ _ _ _ _ plan _ _ _ _ rest => fun wire =>
+      rest.wireMap (Fin.cast (by rw [plan.next_eq]; rfl)
+        (plan.spliceInput.plugLayout.frameWire
+          (plan.spliceInput.quotientWire wire)))
 
 theorem regionMap_injective
     {signature : List Nat}
@@ -130,8 +143,7 @@ theorem wireMap_injective
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
-      state result)
-    (boundaryNodup : comprehension.val.boundary.Nodup) :
+      state result) :
     Function.Injective trace.wireMap := by
   sorry
 
@@ -155,7 +167,6 @@ theorem endpointOccurs_wireMap_nodeMap_iff
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (wire : Fin state.diagram.val.wireCount)
     (node : Fin state.diagram.val.nodeCount)
     (port : CPort) :
@@ -182,7 +193,6 @@ theorem wireMap_scope
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (wire : Fin state.diagram.val.wireCount) :
     (result.diagram.val.wires (trace.wireMap wire)).scope =
       trace.regionMap (state.diagram.val.wires wire).scope := by
@@ -384,5 +394,3 @@ theorem initial_processedAtoms_eq_map
 end InstantiationTrace
 
 end VisualProof.Rule
-
-

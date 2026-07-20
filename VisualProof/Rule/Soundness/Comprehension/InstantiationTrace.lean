@@ -40,8 +40,6 @@ inductive InstantiationTrace
       (candidate_eq : candidate = state.bubble)
       (arguments_eq : instantiateArguments? state atom payload.arity =
         some arguments)
-      (input_eq : Splice.Input.checkInput plan.spliceInput =
-        .ok plan.checkedInput)
       (rest : InstantiationTrace comprehension attachments binders payload fuel
         plan.next
         result) :
