@@ -30,6 +30,16 @@ theorem reachable_root
       · exact selection_root_not_selected input wrap (equal ▸ selected)
     · exact selection_root_not_selected input wrap
 
+theorem survives_of_reachable
+    (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
+    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (region : Fin input.val.regionCount)
+    (reachable : trace.Reachable region) :
+    trace.domains.regions.survives region = true := by
+  rcases reachable with wrapRegion | outer
+  · exact wrapRegion ▸ wrap_anchor_survives payload
+  · exact outer.1.1
+
 theorem reachable_child_of_regular
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)

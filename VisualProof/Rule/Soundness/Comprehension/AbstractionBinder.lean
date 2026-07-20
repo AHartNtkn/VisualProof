@@ -102,6 +102,75 @@ theorem relationMap_push
       (RelationRenaming.lift witness.relationMap arity :
         RelationRenaming (arity :: sourceRels) (arity :: targetRels)) := rfl
 
+/-- Push a corresponding surviving bubble directly at the simulation's total
+region map, avoiding proof-dependent transport through `targetRegion`. -/
+def pushMapped
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {wrap : CheckedSelection input.val}
+    {comprehension : CheckedOpenDiagram signature}
+    {occurrences : List (AbstractionOccurrence input)}
+    {raw : ConcreteDiagram}
+    {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
+    {sourceRels targetRels : RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels}
+    {targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels}
+    (witness : BinderWitness trace sourceBinders targetBinders)
+    (child : Fin input.val.regionCount)
+    (survives : trace.domains.regions.survives child = true)
+    (arity : Nat) :
+    BinderWitness trace (sourceBinders.push child arity)
+      (targetBinders.push (trace.regionMap child) arity) where
+  relationMap := RelationRenaming.lift witness.relationMap arity
+  bindersMapped := by
+    intro region regionSurvives binderArity sourceRelation sourceLookup
+    by_cases equal : region = child
+    · subst region
+      rw [trace.regionMap_of_survives child survives]
+      simp only [ConcreteElaboration.BinderContext.push_self] at sourceLookup ⊢
+      cases Option.some.inj sourceLookup
+      rfl
+    · have targetNe : trace.targetRegion region regionSurvives ≠
+          trace.regionMap child := by
+        rw [trace.regionMap_of_survives child survives]
+        intro targetEqual
+        exact equal (trace.targetRegion_injective targetEqual)
+      rw [ConcreteElaboration.BinderContext.push_other _ arity equal]
+        at sourceLookup
+      rw [ConcreteElaboration.BinderContext.push_other _ arity targetNe]
+      cases sourceEq : sourceBinders region with
+      | none => simp [sourceEq] at sourceLookup
+      | some sourceValue =>
+          rcases sourceValue with ⟨actualArity, actualRelation⟩
+          simp [sourceEq] at sourceLookup
+          rcases sourceLookup with ⟨arityEq, relationEq⟩
+          subst binderArity
+          have relationEq' := eq_of_heq relationEq
+          subst sourceRelation
+          rw [witness.bindersMapped region regionSurvives actualArity
+            actualRelation sourceEq]
+          rfl
+
+theorem relationMap_pushMapped
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {wrap : CheckedSelection input.val}
+    {comprehension : CheckedOpenDiagram signature}
+    {occurrences : List (AbstractionOccurrence input)}
+    {raw : ConcreteDiagram}
+    {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
+    {sourceRels targetRels : RelCtx}
+    {sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels}
+    {targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels}
+    (witness : BinderWitness trace sourceBinders targetBinders)
+    (child : Fin input.val.regionCount)
+    (survives : trace.domains.regions.survives child = true)
+    (arity : Nat) :
+    ((witness.pushMapped child survives arity).relationMap :
+      RelationRenaming (arity :: sourceRels) (arity :: targetRels)) =
+      (RelationRenaming.lift witness.relationMap arity :
+        RelationRenaming (arity :: sourceRels) (arity :: targetRels)) := rfl
+
 def weakenRelationMap
     {signature : List Nat}
     {input : CheckedDiagram signature}
