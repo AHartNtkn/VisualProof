@@ -2486,6 +2486,48 @@ theorem PinnedOccurrence.materialized_spliceInput_eq_replacementInput
   funext index
   exact Fin.elim0 index
 
+/-- The canonical paired-splice locality condition holds automatically for a
+materialized replacement because both the literal source reassembly and the
+actual operational target have discrete retained-wire quotients. -/
+theorem PinnedOccurrence.MaterializedReplacement.local
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    {occurrence : PinnedOccurrence input selection pattern hostArgs}
+    {decomposition : Decomposition signature input selection}
+    {replacement : CheckedOpenDiagram signature}
+    {sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length}
+    (materialized : occurrence.MaterializedReplacement decomposition
+      replacement sameArity) :
+    occurrence.ReplacementQuotientsLocal decomposition
+      materialized.certificate.result
+      (sameArity.trans materialized.certificate.boundary_length.symm) := by
+  let target := occurrence.replacementInput decomposition
+    materialized.certificate.result
+      (sameArity.trans materialized.certificate.boundary_length.symm)
+  have targetRespects : target.AttachmentsRespectBoundary := by
+    change (occurrence.replacementInput decomposition
+      materialized.certificate.result
+        (sameArity.trans materialized.certificate.boundary_length.symm)
+      ).AttachmentsRespectBoundary
+    rw [← occurrence.materialized_spliceInput_eq_replacementInput decomposition
+      replacement sameArity materialized]
+    exact materialized.attachmentsRespectBoundary
+  intro left right _scope
+  rw [Splice.Input.quotientWire_eq_iff,
+    Splice.Input.quotientWire_eq_iff,
+    occurrence.sourceInput_attachmentPartition_related_iff decomposition,
+    Splice.Input.attachmentPartition_related_iff_of_attachmentsRespectBoundary
+      target targetRespects]
+  constructor
+  · rintro rfl
+    rfl
+  · intro heq
+    apply Fin.ext
+    exact congrArg Fin.val heq
+
 /-- A theorem-citation payload determines an accepted canonical
 remove-then-splice replacement before any operational commuting argument. -/
 theorem TheoremPayload.canonicalReplacement_complete
