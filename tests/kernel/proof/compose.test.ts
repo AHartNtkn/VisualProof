@@ -188,19 +188,21 @@ describe('composeActions', () => {
     })
   })
 
-  it('transports repeated meet-boundary positions through coalescence before the next step', () => {
+  it('preserves repeated coalesced positions around a marker when mapping the next step', () => {
     const mk = () => {
       const h = new DiagramBuilder()
       const redundant = h.termNode(h.root, p('\\x. x'))
       const survivor = h.termNode(h.root, p('\\x. x'))
+      const markerNode = h.termNode(h.root, p('\\x. x'))
       const drop = h.wire(h.root, [{ node: redundant, port: { kind: 'output' } }])
       const keep = h.wire(h.root, [{ node: survivor, port: { kind: 'output' } }])
-      return { d: h.build(), redundant, survivor, drop, keep }
+      const marker = h.wire(h.root, [{ node: markerNode, port: { kind: 'output' } }])
+      return { d: h.build(), redundant, survivor, markerNode, drop, keep, marker }
     }
     const target = mk()
     const source = mk()
     const certificate = { leftSteps: [], rightSteps: [] }
-    const tail = [action('coalesce then erase the repeated boundary', [
+    const tail = [action('coalesce then wrap the unaffected marker', [
       {
         rule: 'anchoredWireContract',
         redundant: source.redundant,
@@ -208,22 +210,40 @@ describe('composeActions', () => {
         certificate,
       },
       {
-        rule: 'erasure',
+        rule: 'doubleCutIntro',
         sel: mkSelection(source.d, {
-          region: source.d.root, regions: [], nodes: [source.survivor], wires: [source.keep],
+          region: source.d.root, regions: [], nodes: [source.markerNode], wires: [],
         }),
       },
     ])]
 
-    expect(() => composeActions(target.d, source.d, tail, ctx, {
+    const closedComposition = composeActions(target.d, source.d, tail, ctx)
+    expect(closedComposition[0]!.steps[1]).toMatchObject({
+      rule: 'doubleCutIntro',
+      sel: { nodes: [target.markerNode] },
+    })
+
+    const composed = composeActions(target.d, source.d, tail, ctx, {
       boundaries: {
-        target: [target.drop, target.drop, target.keep],
-        source: [source.drop, source.drop, source.keep],
+        target: [target.drop, target.keep, target.drop, target.keep, target.marker],
+        source: [source.marker, source.drop, source.marker, source.drop, source.keep],
       },
-    })).toThrowError(/step 1.*boundary position 0.*has no semantic image/)
+    })
+    expect(composed[0]!.steps[1]).toMatchObject({
+      rule: 'doubleCutIntro',
+      sel: { nodes: [target.redundant] },
+    })
+
+    const viaTarget = replayActions(target.d, composed, ctx)
+    const viaSource = replayActions(source.d, tail, ctx)
+    expect(exploreForm(viaTarget, [
+      target.drop, target.marker, target.drop, target.marker, target.marker,
+    ])).toBe(exploreForm(viaSource, [
+      source.marker, source.keep, source.marker, source.keep, source.keep,
+    ]))
   })
 
-  it('rejects open composition when a step loses a meet-boundary position', () => {
+  it('reports source-side boundary loss even when the corresponding target position is also lost', () => {
     const mk = () => {
       const h = new DiagramBuilder()
       const node = h.termNode(h.root, p('x'))
@@ -244,7 +264,7 @@ describe('composeActions', () => {
         target: [target.wire],
         source: [source.wire],
       },
-    })).toThrowError(/boundary position 0.*has no semantic image/)
+    })).toThrowError(/target boundary position 0.*source boundary position 0.*has no semantic image/)
   })
 
   it('maps erasure sel through the iso — erases the correct node in an asymmetric meet', () => {

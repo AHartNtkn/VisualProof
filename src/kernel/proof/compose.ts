@@ -190,14 +190,18 @@ export function composeActions(
         const targetReceipt = applyStepWithReceipt(curTarget, mapped, ctx, orientation, reservation)
         const sourceReceipt = applyStepWithReceipt(curSource, step, ctx, orientation, reservation)
         const mappedTargetBoundary = transportBoundary(targetReceipt.interface, targetBoundary)
-        if (mappedTargetBoundary === undefined) {
-          const position = targetBoundary.findIndex((wire) => targetReceipt.interface.image(wire) === undefined)
-          throw new ProofError(`target boundary position ${position} has no semantic image`)
-        }
         const mappedSourceBoundary = transportBoundary(sourceReceipt.interface, sourceBoundary)
-        if (mappedSourceBoundary === undefined) {
-          const position = sourceBoundary.findIndex((wire) => sourceReceipt.interface.image(wire) === undefined)
-          throw new ProofError(`source boundary position ${position} has no semantic image`)
+        if (mappedTargetBoundary === undefined || mappedSourceBoundary === undefined) {
+          const failures: string[] = []
+          if (mappedTargetBoundary === undefined) {
+            const position = targetBoundary.findIndex((wire) => targetReceipt.interface.image(wire) === undefined)
+            failures.push(`target boundary position ${position} has no semantic image`)
+          }
+          if (mappedSourceBoundary === undefined) {
+            const position = sourceBoundary.findIndex((wire) => sourceReceipt.interface.image(wire) === undefined)
+            failures.push(`source boundary position ${position} has no semantic image`)
+          }
+          throw new ProofError(failures.join('; '))
         }
         curTarget = targetReceipt.result
         curSource = sourceReceipt.result
