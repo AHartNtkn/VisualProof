@@ -7,6 +7,7 @@ import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
 import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
 import { applyClosedTermIntro } from '../../../src/kernel/rules/intro'
+import { findInconsistentCutEvidence } from '../../../src/kernel/rules/inconsistent-cut'
 import {
   applyStep,
   applyStepWithReceipt,
@@ -45,6 +46,35 @@ describe('applyStep mirrors the direct appliers', () => {
     const { diagram, certificate } = applyConversion(d, n, target, correspondence, 10)
     const step: ProofStep = { rule: 'conversion', node: n, term: target, certificate, correspondence, attachments: {} }
     expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(diagram))
+  })
+
+  it('inconsistent-cut elimination replays its authored certificate after UI fuel changes', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const first = h.termNode(cut, pp('(\\x. x) (\\z. z)'))
+    const second = h.termNode(cut, pp('\\x. (\\a. \\b. a) x'))
+    h.wire(cut, [first, second].map((node) => ({ node, port: { kind: 'output' as const } })))
+    const d = h.build()
+
+    let uiFuel = 2
+    const discovery = findInconsistentCutEvidence(d, cut, uiFuel)
+    expect(discovery.status).toBe('certified')
+    if (discovery.status !== 'certified') throw new Error('test setup requires certified evidence')
+    const step: ProofStep = {
+      rule: 'inconsistentCutElim',
+      region: cut,
+      first: discovery.first,
+      second: discovery.second,
+      certificate: discovery.certificate,
+    }
+
+    uiFuel = 0
+    expect(uiFuel).toBe(0)
+    const replayed = applyStep(d, step, ctx)
+
+    expect(replayed.regions[cut]).toBeUndefined()
+    expect(replayed.nodes[first]).toBeUndefined()
+    expect(replayed.nodes[second]).toBeUndefined()
   })
 
   it('congruenceJoin step merges the outputs of βη-equal co-resident nodes', () => {

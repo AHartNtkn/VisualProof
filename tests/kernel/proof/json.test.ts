@@ -130,6 +130,10 @@ describe('step round-trips through JSON', () => {
       { rule: 'deiteration', sel, justifier: sel, certificate: occurrenceCertificate },
       { rule: 'doubleCutIntro', sel },
       { rule: 'doubleCutElim', region: 'r1' },
+      {
+        rule: 'inconsistentCutElim', region: 'r1', first: 'n0', second: 'n1',
+        certificate: { firstSteps: [], secondSteps: [{ kind: 'eta', path: ['body'] }] },
+      },
       { rule: 'conversion', node: 'n0', term: p('s0'), certificate, correspondence, attachments: { z: 'w0' } },
       { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate, correspondence },
       { rule: 'anchoredWireSplit', wire: 'w0', witness: 'n0', endpoints: [
@@ -183,6 +187,66 @@ describe('step round-trips through JSON', () => {
       .toThrowError(/unique|repeated/)
     expect(() => stepFromJson({ rule: 'openTermSpawn', region: 'r1', term: 'P("x")', freePorts: ['unused'] }))
       .toThrowError(/does not declare|cover.*x/)
+  })
+
+  it('strictly rejects malformed inconsistent-cut elimination steps at every object layer', () => {
+    const valid = {
+      rule: 'inconsistentCutElim', region: 'r1', first: 'n0', second: 'n1',
+      certificate: {
+        firstSteps: [{ kind: 'beta', path: [] }],
+        secondSteps: [{ kind: 'eta', path: ['body'] }],
+      },
+    }
+    const without = (key: string, value: Record<string, unknown>): Record<string, unknown> => {
+      const copy = { ...value }
+      delete copy[key]
+      return copy
+    }
+
+    expect(() => stepFromJson(without('certificate', valid))).toThrowError(/certificate must be an object/)
+    expect(() => stepFromJson({ ...valid, certificate: without('firstSteps', valid.certificate) }))
+      .toThrowError(/certificate\.firstSteps must be an array/)
+    expect(() => stepFromJson({ ...valid, certificate: without('secondSteps', valid.certificate) }))
+      .toThrowError(/certificate\.secondSteps must be an array/)
+    for (const id of ['region', 'first', 'second']) {
+      expect(() => stepFromJson(without(id, valid))).toThrowError(new RegExp(`${id} must be a string`))
+      expect(() => stepFromJson({ ...valid, [id]: 7 })).toThrowError(new RegExp(`${id} must be a string`))
+    }
+    expect(() => stepFromJson({ ...valid, extra: true })).toThrowError(/step has unknown field 'extra'/)
+    expect(() => stepFromJson({ ...valid, certificate: { ...valid.certificate, extra: true } }))
+      .toThrowError(/certificate has unknown field 'extra'/)
+    expect(() => stepFromJson({
+      ...valid,
+      certificate: { ...valid.certificate, firstSteps: [{ kind: 'beta', path: [], extra: true }] },
+    })).toThrowError(/certificate\.firstSteps\[0\] has unknown field 'extra'/)
+    expect(() => stepFromJson({
+      ...valid,
+      certificate: { ...valid.certificate, firstSteps: [{ path: [] }] },
+    })).toThrowError(/certificate\.firstSteps\[0\]\.kind must be a string/)
+    expect(() => stepFromJson({
+      ...valid,
+      certificate: { ...valid.certificate, firstSteps: [{ kind: 'beta' }] },
+    })).toThrowError(/certificate\.firstSteps\[0\]\.path must be an array/)
+    expect(() => stepFromJson({
+      ...valid,
+      certificate: { ...valid.certificate, firstSteps: [{ kind: 'beta', path: 'body' }] },
+    })).toThrowError(/certificate\.firstSteps\[0\]\.path must be an array/)
+    expect(() => stepFromJson({
+      ...valid,
+      certificate: { ...valid.certificate, firstSteps: [{ kind: 'gamma', path: [] }] },
+    })).toThrowError(/certificate\.firstSteps\[0\]\.kind must be beta\|eta/)
+    expect(() => stepFromJson({
+      ...valid,
+      certificate: { ...valid.certificate, firstSteps: [{ kind: 7, path: [] }] },
+    })).toThrowError(/certificate\.firstSteps\[0\]\.kind must be a string/)
+    expect(() => stepFromJson({
+      ...valid,
+      certificate: { ...valid.certificate, firstSteps: [{ kind: 'beta', path: ['sideways'] }] },
+    })).toThrowError(/not a path segment/)
+    expect(() => stepFromJson({
+      ...valid,
+      certificate: { ...valid.certificate, firstSteps: [{ kind: 'beta', path: [7] }] },
+    })).toThrowError(/certificate\.firstSteps\[0\]\.path\[0\] must be a string/)
   })
 
   it('rejects malformed correspondence carrier data during strict decoding', () => {

@@ -95,6 +95,13 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
       return { ...step, sel: mapSel(iso, step.sel) }
     case 'doubleCutElim':
       return { ...step, region: mapId(iso.regions, step.region, 'region') }
+    case 'inconsistentCutElim':
+      return {
+        ...step,
+        region: mapId(iso.regions, step.region, 'region'),
+        first: mapId(iso.nodes, step.first, 'node'),
+        second: mapId(iso.nodes, step.second, 'node'),
+      }
     case 'conversion': {
       const attachments = Object.create(null) as Record<string, WireId>
       for (const [name, w] of Object.entries(step.attachments)) attachments[name] = mapId(iso.wires, w, 'wire')

@@ -1,6 +1,6 @@
 import type { Term } from '../term/term'
 import type { PathSeg } from '../term/reduce'
-import type { ConversionCertificate } from '../term/certificate'
+import type { ConversionCertificate, NormalSeparationCertificate } from '../term/certificate'
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram/diagram'
 import type { IdReservation } from '../diagram/subgraph/freshId'
 import type { DiagramWithBoundary } from '../diagram/boundary'
@@ -12,6 +12,7 @@ import { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from 
 import { applyErasure, applyWireSever } from '../rules/erasure'
 import { applyIteration, applyDeiteration } from '../rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../rules/doublecut'
+import { applyInconsistentCutElim } from '../rules/inconsistent-cut'
 import { applyConversionByCertificate } from '../rules/conversion'
 import { applyCongruenceJoin } from '../rules/congruence'
 import { anchorAvailability, applyAnchoredWireSplit, applyAnchoredWireContract } from '../rules/anchored-wire'
@@ -44,6 +45,7 @@ export type ProofStep =
   | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
+  | { readonly rule: 'inconsistentCutElim'; readonly region: RegionId; readonly first: NodeId; readonly second: NodeId; readonly certificate: NormalSeparationCertificate }
   | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly correspondence: PortCorrespondence; readonly attachments: Readonly<Record<string, WireId>> }
   | { readonly rule: 'congruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate; readonly correspondence: PortCorrespondence }
   | { readonly rule: 'anchoredWireSplit'; readonly wire: WireId; readonly witness: NodeId; readonly endpoints: readonly Endpoint[]; readonly target: RegionId }
@@ -150,6 +152,7 @@ function applyStepRaw(
     case 'deiteration': return applyDeiteration(d, step.sel, step.justifier, step.certificate)
     case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel, reservation)
     case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
+    case 'inconsistentCutElim': return applyInconsistentCutElim(d, step.region, step.first, step.second, step.certificate)
     case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.correspondence, step.attachments, reservation)
     case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate, step.correspondence)
     case 'anchoredWireSplit': return applyAnchoredWireSplit(d, step.wire, step.witness, step.endpoints, step.target, reservation)

@@ -38,6 +38,46 @@ function twoCopies() {
 }
 
 describe('composeActions', () => {
+  it('remaps every inconsistent-cut host id across an isomorphic meet and preserves its certificate', () => {
+    const build = (markerFirst: boolean) => {
+      const h = new DiagramBuilder()
+      const addMarker = () => {
+        const marker = h.cut(h.root)
+        h.termNode(marker, p('\\x. \\y. \\z. x'))
+      }
+      if (markerFirst) addMarker()
+      const cut = h.cut(h.root)
+      const first = h.termNode(cut, p('\\x. x'))
+      const second = h.termNode(cut, p('\\x. \\y. x'))
+      h.wire(cut, [first, second].map((node) => ({ node, port: { kind: 'output' as const } })))
+      if (!markerFirst) addMarker()
+      return { diagram: h.build(), cut, first, second }
+    }
+    const target = build(true)
+    const source = build(false)
+    const certificate = { firstSteps: [], secondSteps: [] }
+    expect(source.cut).not.toBe(target.cut)
+    expect(source.first).not.toBe(target.first)
+    expect(source.second).not.toBe(target.second)
+
+    const composed = composeActions(target.diagram, source.diagram, [action('remove contradiction', [{
+      rule: 'inconsistentCutElim',
+      region: source.cut,
+      first: source.first,
+      second: source.second,
+      certificate,
+    }])], ctx)
+
+    expect(composed[0]!.steps[0]).toEqual({
+      rule: 'inconsistentCutElim',
+      region: target.cut,
+      first: target.first,
+      second: target.second,
+      certificate,
+    })
+    expect((composed[0]!.steps[0] as { certificate: unknown }).certificate).toBe(certificate)
+  })
+
   it('preserves allocation exclusions and uses them while composing both sides', () => {
     const source = new DiagramBuilder().build()
     const target = new DiagramBuilder().build()

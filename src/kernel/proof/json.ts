@@ -2,7 +2,7 @@ import type { Term } from '../term/term'
 import { assertOpenFreePortInterface } from '../term/term'
 import { serializeTerm, deserializeTerm } from '../term/serialize'
 import type { PathSeg, ReductionStep } from '../term/reduce'
-import type { ConversionCertificate } from '../term/certificate'
+import type { ConversionCertificate, NormalSeparationCertificate } from '../term/certificate'
 import type { Endpoint, WireId } from '../diagram/diagram'
 import { portKey } from '../diagram/diagram'
 import { diagramToJson, diagramFromJson, parsePortKey } from '../diagram/json'
@@ -97,25 +97,51 @@ export function dwbFromJson(v: unknown, what = 'pattern'): DiagramWithBoundary {
   }
 }
 
+function reductionStepsToJson(steps: readonly ReductionStep[]): unknown {
+  return steps.map((step) => ({ kind: step.kind, path: [...step.path] }))
+}
+
+function reductionStepsFromJson(value: unknown, what: string): ReductionStep[] {
+  if (!Array.isArray(value)) fail(`${what} must be an array`)
+  return value.map((step, index) => {
+    if (!isRecord(step)) fail(`${what}[${index}] must be an object`)
+    assertOnlyKeys(step, ['kind', 'path'], `${what}[${index}]`)
+    const kind = str(step.kind, `${what}[${index}].kind`)
+    if (kind !== 'beta' && kind !== 'eta') fail(`${what}[${index}].kind must be beta|eta`)
+    return { kind, path: pathFromJson(step.path, `${what}[${index}].path`) }
+  })
+}
+
 function certToJson(c: ConversionCertificate): unknown {
-  const steps = (xs: readonly ReductionStep[]) => xs.map((s) => ({ kind: s.kind, path: [...s.path] }))
-  return { leftSteps: steps(c.leftSteps), rightSteps: steps(c.rightSteps) }
+  return {
+    leftSteps: reductionStepsToJson(c.leftSteps),
+    rightSteps: reductionStepsToJson(c.rightSteps),
+  }
 }
 
 function certFromJson(v: unknown, what: string): ConversionCertificate {
   if (!isRecord(v)) fail(`${what} must be an object`)
   assertOnlyKeys(v, ['leftSteps', 'rightSteps'], what)
-  const steps = (xs: unknown, w: string): ReductionStep[] => {
-    if (!Array.isArray(xs)) fail(`${w} must be an array`)
-    return xs.map((x, i) => {
-      if (!isRecord(x)) fail(`${w}[${i}] must be an object`)
-      assertOnlyKeys(x, ['kind', 'path'], `${w}[${i}]`)
-      const kind = str(x.kind, `${w}[${i}].kind`)
-      if (kind !== 'beta' && kind !== 'eta') fail(`${w}[${i}].kind must be beta|eta`)
-      return { kind, path: pathFromJson(x.path, `${w}[${i}].path`) }
-    })
+  return {
+    leftSteps: reductionStepsFromJson(v.leftSteps, `${what}.leftSteps`),
+    rightSteps: reductionStepsFromJson(v.rightSteps, `${what}.rightSteps`),
   }
-  return { leftSteps: steps(v.leftSteps, `${what}.leftSteps`), rightSteps: steps(v.rightSteps, `${what}.rightSteps`) }
+}
+
+function normalSeparationToJson(certificate: NormalSeparationCertificate): unknown {
+  return {
+    firstSteps: reductionStepsToJson(certificate.firstSteps),
+    secondSteps: reductionStepsToJson(certificate.secondSteps),
+  }
+}
+
+function normalSeparationFromJson(value: unknown, what: string): NormalSeparationCertificate {
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  assertOnlyKeys(value, ['firstSteps', 'secondSteps'], what)
+  return {
+    firstSteps: reductionStepsFromJson(value.firstSteps, `${what}.firstSteps`),
+    secondSteps: reductionStepsFromJson(value.secondSteps, `${what}.secondSteps`),
+  }
 }
 
 function correspondenceToJson(correspondence: PortCorrespondence): unknown {
@@ -257,6 +283,14 @@ export function stepToJson(s: ProofStep): unknown {
       return { rule: s.rule, sel: selToJson(s.sel) }
     case 'doubleCutElim':
       return { rule: s.rule, region: s.region }
+    case 'inconsistentCutElim':
+      return {
+        rule: s.rule,
+        region: s.region,
+        first: s.first,
+        second: s.second,
+        certificate: normalSeparationToJson(s.certificate),
+      }
     case 'conversion':
       return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), correspondence: correspondenceToJson(s.correspondence), attachments: { ...s.attachments } }
     case 'congruenceJoin':
@@ -349,6 +383,15 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'doubleCutElim':
       assertOnlyKeys(j, ['rule', 'region'], 'doubleCutElim step')
       return { rule, region: str(j.region, 'region') }
+    case 'inconsistentCutElim':
+      assertOnlyKeys(j, ['rule', 'region', 'first', 'second', 'certificate'], 'inconsistentCutElim step')
+      return {
+        rule,
+        region: str(j.region, 'region'),
+        first: str(j.first, 'first'),
+        second: str(j.second, 'second'),
+        certificate: normalSeparationFromJson(j.certificate, 'certificate'),
+      }
     case 'conversion': {
       assertOnlyKeys(j, ['rule', 'node', 'term', 'certificate', 'correspondence', 'attachments'], 'conversion step')
       if (!isRecord(j.attachments)) fail('attachments must be an object')
