@@ -237,6 +237,158 @@ theorem focusedSurvivingSources_semantic
                         (tail sourceEnvironment targetEnvironment targetRelations
                           environments fixed)
 
+/-- Simultaneous forward semantics for surviving direct selected material
+after it has been moved beneath the fresh abstraction bubble. -/
+theorem focusedSelectedSurvivingSources_semantic
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {wrap : CheckedSelection input.val}
+    {comprehension : CheckedOpenDiagram signature}
+    {occurrences : List (AbstractionOccurrence input)}
+    {raw : ConcreteDiagram}
+    {sourceRels targetRels : RelCtx}
+    (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
+    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (targetWellFormed : trace.diagram.WellFormed signature)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (sourceFuel targetFuel : Nat)
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (context : ContextWitness trace sourceContext targetContext)
+    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (binderWitness : BinderWitness trace sourceBinders targetBinders)
+    (sourceExact : sourceContext.Exact wrap.val.anchor)
+    (targetExact : targetContext.Exact (trace.regionMap wrap.val.anchor))
+    (sourceCover : sourceBinders.Covers wrap.val.anchor)
+    (targetCover : targetBinders.Covers (trace.regionMap wrap.val.anchor))
+    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      input.val sourceBinders wrap.val.anchor)
+    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+      trace.diagram targetBinders (trace.regionMap wrap.val.anchor))
+    (allowed : AbstractionAllowed input.val wrap.val.anchor .forward
+      wrap.val.anchor)
+    (recurseAt : ∀ (childDirection : ConcreteElaboration.SimulationDirection)
+      (child : Fin input.val.regionCount),
+      child ∈ wrap.selectedRegions →
+      trace.domains.regions.survives child = true →
+      child ≠ wrap.val.anchor →
+      AbstractionAllowed input.val wrap.val.anchor childDirection child →
+      FixedRegionSimulation trace model named childDirection sourceFuel
+        targetFuel child)
+    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+      input.val.nodeCount))
+    (members : ∀ occurrence, occurrence ∈ values → occurrence ∈
+      ModalSoundness.selectedOccurrences input.val wrap)
+    (survives : ∀ occurrence, occurrence ∈ values →
+      ∃ target, trace.survivingOccurrence? occurrence = some target)
+    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
+    (targetItems : ItemSeq signature targetContext.length
+      (comprehension.val.boundary.length :: targetRels))
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      input.val (ConcreteElaboration.compileRegion? signature input.val
+        sourceFuel) sourceContext sourceBinders values = some sourceItems)
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      trace.diagram (ConcreteElaboration.compileRegion? signature trace.diagram
+        targetFuel) targetContext
+          (targetBinders.push trace.bubble comprehension.val.boundary.length)
+          (values.map trace.survivorOccurrence) = some targetItems) :
+    ∀ (sourceEnvironment : Fin sourceContext.length → model.Carrier)
+      (targetEnvironment : Fin targetContext.length → model.Carrier)
+      (targetRelations : RelEnv model.Carrier
+        (comprehension.val.boundary.length :: targetRels)),
+      context.indexRelation.EnvironmentsAgree sourceEnvironment
+          targetEnvironment →
+      FixedRelationWitness (signature := signature) (input := input)
+        (wrap := wrap) (comprehension := comprehension)
+        (occurrences := occurrences) (raw := raw) trace model named
+          (targetBinders.push trace.bubble comprehension.val.boundary.length)
+          targetRelations →
+      ConcreteElaboration.SimulationDirection.forward.Entails
+        (denoteItemSeq model named sourceEnvironment targetRelations
+          (sourceItems.renameRelations
+            (binderWitness.intoFreshBubble
+              comprehension.val.boundary.length).relationMap))
+        (denoteItemSeq model named targetEnvironment targetRelations
+          targetItems) := by
+  induction values generalizing sourceItems targetItems with
+  | nil =>
+      simp only [ConcreteElaboration.compileOccurrencesWith?, List.map_nil]
+        at sourceCompiled targetCompiled
+      have sourceEq := Option.some.inj sourceCompiled
+      have targetEq := Option.some.inj targetCompiled
+      subst sourceItems
+      subst targetItems
+      intro sourceEnvironment targetEnvironment targetRelations environments
+        fixed
+      simp [ItemSeq.renameRelations,
+        ConcreteElaboration.SimulationDirection.Entails]
+  | cons occurrence rest induction =>
+      obtain ⟨targetOccurrence, mapped⟩ := survives occurrence (by simp)
+      have mappedTotal := trace.survivorOccurrence_eq_of_some occurrence
+        targetOccurrence mapped
+      simp only [ConcreteElaboration.compileOccurrencesWith?, List.map_cons]
+        at sourceCompiled targetCompiled
+      cases sourceHeadResult : ConcreteElaboration.compileOccurrenceWith?
+          signature input.val
+          (ConcreteElaboration.compileRegion? signature input.val sourceFuel)
+          sourceContext sourceBinders occurrence with
+      | none => simp [sourceHeadResult] at sourceCompiled
+      | some sourceHead =>
+          cases sourceTailResult : ConcreteElaboration.compileOccurrencesWith?
+              signature input.val
+              (ConcreteElaboration.compileRegion? signature input.val sourceFuel)
+              sourceContext sourceBinders rest with
+          | none => simp [sourceHeadResult, sourceTailResult] at sourceCompiled
+          | some sourceTail =>
+              simp [sourceHeadResult, sourceTailResult] at sourceCompiled
+              subst sourceItems
+              rw [mappedTotal] at targetCompiled
+              cases targetHeadResult : ConcreteElaboration.compileOccurrenceWith?
+                  signature trace.diagram
+                  (ConcreteElaboration.compileRegion? signature trace.diagram
+                    targetFuel) targetContext
+                  (targetBinders.push trace.bubble
+                    comprehension.val.boundary.length) targetOccurrence with
+              | none => simp [targetHeadResult] at targetCompiled
+              | some targetHead =>
+                  cases targetTailResult :
+                      ConcreteElaboration.compileOccurrencesWith? signature
+                        trace.diagram
+                        (ConcreteElaboration.compileRegion? signature
+                          trace.diagram targetFuel)
+                        targetContext
+                        (targetBinders.push trace.bubble
+                          comprehension.val.boundary.length)
+                        (rest.map trace.survivorOccurrence) with
+                  | none =>
+                      simp [targetHeadResult, targetTailResult] at targetCompiled
+                  | some targetTail =>
+                      simp [targetHeadResult, targetTailResult] at targetCompiled
+                      subst targetItems
+                      have head := trace.focusedSelectedOccurrence_semantic
+                        payload targetWellFormed model named sourceFuel targetFuel
+                        sourceContext targetContext context sourceBinders
+                        targetBinders binderWitness sourceExact targetExact
+                        sourceCover targetCover sourceEnumeration
+                        targetEnumeration allowed recurseAt occurrence
+                        (members occurrence (by simp)) mapped sourceHead targetHead
+                        sourceHeadResult targetHeadResult
+                      have tail := induction
+                        (fun current currentMember => members current
+                          (by simp [currentMember]))
+                        (fun current currentMember => survives current
+                          (by simp [currentMember]))
+                        sourceTail targetTail sourceTailResult targetTailResult
+                      intro sourceEnvironment targetEnvironment targetRelations
+                        environments fixed
+                      exact ConcreteElaboration.SimulationDirection.forward.entails_and
+                        (head sourceEnvironment targetEnvironment targetRelations
+                          environments fixed)
+                        (tail sourceEnvironment targetEnvironment targetRelations
+                          environments fixed)
+
 end AbstractionRawTrace
 
 end VisualProof.Rule
