@@ -202,7 +202,16 @@ theorem PinnedOccurrence.materializedReplacementInput_respectsBoundary
       (emptyBinderSpine replacement)) :
     (occurrence.materializedReplacementInput decomposition replacement
       sameArity certificate).AttachmentsRespectBoundary := by
-  sorry
+  intro left right hboundary
+  exact ((Splice.AttachmentAliasMaterialization.raw_boundary_get_eq_iff
+    replacement.val
+    (occurrence.replacementAttachment decomposition replacement sameArity)
+    (emptyBinderSpine replacement).bodyContainer
+    (Fin.cast certificate.boundary_length left)
+    (Fin.cast certificate.boundary_length right)).1 (by
+      simpa [PinnedOccurrence.materializedReplacementInput,
+        Splice.AttachmentAliasMaterialization.Certificate.result] using
+        hboundary)).2
 
 /-- Run the authoritative attachment materializer for a named replacement and
 package the exact checked certificate with its discrete operational input. -/
@@ -1947,7 +1956,17 @@ theorem applyRelUnfold_success
               Splice.Input.spliceChecked signature materialized.spliceInput =
                   .ok checked ∧
                 result.result = checked := by
-  sorry
+  unfold applyRelUnfold at happly
+  split at happly <;> try contradiction
+  rename_i decomposition hdecomposition
+  dsimp only at happly
+  split at happly <;> try contradiction
+  rename_i materialized hmaterialized
+  split at happly <;> try contradiction
+  rename_i checked hsplice
+  cases happly
+  exact ⟨decomposition, hdecomposition, materialized, hmaterialized,
+    checked, hsplice, rfl⟩
 
 theorem applyRelUnfold_realizes
     {signature : List Nat}
@@ -1980,7 +1999,26 @@ theorem applyRelUnfold_realizes
                 ((removeWireInterfaceTransport input payload.selection
                     decomposition.frameDomains).compose
                   (spliceFrameInterfaceTransport spliceInput)) := by
-  sorry
+  unfold applyRelUnfold at happly
+  split at happly <;> try contradiction
+  rename_i decomposition hdecomposition
+  dsimp only at happly
+  split at happly <;> try contradiction
+  rename_i materialized hmaterialized
+  split at happly <;> try contradiction
+  rename_i checked hsplice
+  have hresult : checked.val = materialized.spliceInput.plugLayout.plugRaw :=
+    (Splice.Input.spliceChecked_sound hsplice).1
+  cases happly
+  rcases checked with ⟨diagram, wellFormed⟩
+  dsimp only at hresult hsplice ⊢
+  subst diagram
+  refine ⟨decomposition, hdecomposition, materialized, hmaterialized,
+    ⟨_, wellFormed⟩, hsplice, rfl, ?_, ?_⟩
+  · intro wire
+    simp [WireProvenance.castTarget]
+  · intro wire
+    simp [InterfaceTransport.castTarget]
 
 /-- Contract an exact pinned occurrence through the single canonical
 remove-then-splice replacement path. -/
@@ -2160,7 +2198,19 @@ theorem applyTheorem_success {signature : List Nat}
                 Splice.Input.spliceChecked signature
                     materialized.spliceInput = .ok checked ∧
                   result.result = checked := by
-  sorry
+  unfold applyTheorem at happly
+  split at happly <;> try contradiction
+  rename_i hpolarity
+  split at happly <;> try contradiction
+  rename_i decomposition hdecomposition
+  dsimp only at happly
+  split at happly <;> try contradiction
+  rename_i materialized hmaterialized
+  split at happly <;> try contradiction
+  rename_i checked hsplice
+  cases happly
+  exact ⟨hpolarity, decomposition, hdecomposition, materialized,
+    hmaterialized, checked, hsplice, rfl⟩
 
 theorem applyTheorem_realizes {signature : List Nat}
     {orientation : Orientation}
@@ -2193,7 +2243,28 @@ theorem applyTheorem_realizes {signature : List Nat}
                 ((removeWireInterfaceTransport input selection
                     decomposition.frameDomains).compose
                   (spliceFrameInterfaceTransport spliceInput)) := by
-  sorry
+  unfold applyTheorem at happly
+  split at happly <;> try contradiction
+  rename_i hpolarity
+  split at happly <;> try contradiction
+  rename_i decomposition hdecomposition
+  dsimp only at happly
+  split at happly <;> try contradiction
+  rename_i materialized hmaterialized
+  split at happly <;> try contradiction
+  rename_i checked hsplice
+  have hresult : checked.val = materialized.spliceInput.plugLayout.plugRaw :=
+    (Splice.Input.spliceChecked_sound hsplice).1
+  cases happly
+  rcases checked with ⟨diagram, wellFormed⟩
+  dsimp only at hresult hsplice ⊢
+  subst diagram
+  refine ⟨hpolarity, decomposition, hdecomposition, materialized,
+    hmaterialized, ⟨_, wellFormed⟩, hsplice, rfl, ?_, ?_⟩
+  · intro wire
+    simp [WireProvenance.castTarget]
+  · intro wire
+    simp [InterfaceTransport.castTarget]
 
 /-- The ordered concrete occurrence certified by a `PinnedOccurrence`, exposed
 as an open proof state without collapsing repeated boundary positions. -/
