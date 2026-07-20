@@ -2417,6 +2417,48 @@ def PinnedOccurrence.reassemblyTwoInputPresentation
       occurrence.sourceInput_attachmentPartition_related_iff decomposition]
       using hlocal
 
+/-- Literal reassembly and an attachment-materialized replacement share the
+same retained frame, splice site, ordered positional attachment, and discrete
+retained-wire quotient.  Unlike `reassemblyTwoInputPresentation`, this
+presentation needs no locality premise: the materialization certificate makes
+the target quotient discrete for every accepted ordered alias pattern. -/
+def PinnedOccurrence.reassemblyMaterializedTwoInputPresentation
+    {input : CheckedDiagram signature}
+    {selection : CheckedSelection input.val}
+    {pattern : CheckedOpenDiagram signature}
+    {hostArgs : List (Fin input.val.wireCount)}
+    (occurrence : PinnedOccurrence input selection pattern hostArgs)
+    (decomposition : Decomposition signature input selection)
+    (replacement : CheckedOpenDiagram signature)
+    (sameArity : pattern.val.boundary.length =
+      replacement.val.boundary.length)
+    (materialized : occurrence.MaterializedReplacement decomposition
+      replacement sameArity) :
+    Splice.Input.TwoInputPresentation
+      (occurrence.reassemblyInput decomposition) materialized.spliceInput where
+  frame_eq := rfl
+  site_eq := rfl
+  boundary_arity_eq :=
+    (occurrence.reassemblyPattern_boundary_length decomposition).trans
+      (sameArity.trans materialized.certificate.boundary_length.symm)
+  attachment_eq := by
+    intro position
+    apply Fin.ext
+    rfl
+  site_local_quotients := by
+    intro left right _scope
+    rw [Splice.Input.quotientWire_eq_iff,
+      Splice.Input.quotientWire_eq_iff,
+      occurrence.reassemblyInput_attachmentPartition_related_iff
+        decomposition,
+      materialized.quotientDiscrete]
+    constructor
+    · rintro rfl
+      rfl
+    · intro heq
+      apply Fin.ext
+      exact congrArg Fin.val heq
+
 /-- A theorem-citation payload determines an accepted canonical
 remove-then-splice replacement before any operational commuting argument. -/
 theorem TheoremPayload.canonicalReplacement_complete
