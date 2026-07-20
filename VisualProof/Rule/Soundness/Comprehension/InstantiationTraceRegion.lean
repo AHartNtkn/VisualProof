@@ -1,4 +1,6 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceFixed
+import VisualProof.Rule.Soundness.AttachmentAliasSemantic
+import VisualProof.Rule.Soundness.Comprehension.InstantiationAttachmentSemantic
 
 namespace VisualProof.Rule
 
@@ -77,7 +79,68 @@ theorem regionSimulationsEveryStep_of
       values parameterValues) :
     RegionSimulationsEveryStep trace model named relationValue values
       parameterValues := by
-  sorry
+  induction trace with
+  | done => trivial
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
+      rcases invariants with ⟨invariant, restInvariants⟩
+      rcases targets with ⟨targets, restTargets⟩
+      rcases relations with ⟨nonemptyRelationEq, emptyRelationEq,
+        restRelations⟩
+      let hadmissible :=
+        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+      have operationalTargets : BinderTargetsAtBubble plan.operationalPayload
+          state := by
+        constructor
+        · intro index
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using
+            targets.target_shape index
+        · intro index
+          exact targets.target_encloses index
+        · intro index
+          exact targets.target_ne index
+      have operationalEmptyRelationEq :
+          ∀ _hzero : plan.operationalPayload.binderSpine.proxyCount = 0,
+            relationValue = plan.operationalPayload.interpretedRelation model
+              named parameterValues := by
+        intro hzero
+        have sourceEq := emptyRelationEq (by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using hzero)
+        apply sourceEq.trans
+        funext relationArguments
+        apply propext
+        exact (plan.materialization.denote_iff model named
+          (Fin.addCases relationArguments parameterValues ∘
+            Fin.cast payload.boundarySplit)).symm
+      refine ⟨?_, ih restInvariants restTargets restRelations⟩
+      intro direction sourceFuel targetFuel region enclosed
+      apply advance_enclosed_region_simulation_fixed plan.materialization.result
+        attachments binders plan.operationalPayload state atom tail site
+        arguments
+      · simpa [candidate_eq] using node_eq
+      · exact arguments_eq
+      · exact pending_eq
+      · exact invariant.ownedNodup
+      · exact invariant.shape
+      · exact operationalTargets
+      · intro hnonempty
+        have sourceNonempty : payload.binderSpine.proxyCount ≠ 0 := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using hnonempty
+        apply (nonemptyRelationEq sourceNonempty).trans
+        exact terminalRelationOfParameterValues_materialized payload state site
+          arguments plan.materialization sourceNonempty model named parameterValues
+          values
+      · exact operationalEmptyRelationEq
+      · exact enclosed
 
 theorem initial_regionSimulationsEveryStep
     {signature : List Nat}
