@@ -215,6 +215,45 @@ theorem occurrenceFamilyEnvironment_eq_value_on_closure
       exact touchingWire_not_internal payload index other
         (context.get hostIndex) touching
 
+/-- Replacing deleted internal-wire values by the simultaneous occurrence
+witnesses preserves the exact survivor context relation. -/
+theorem occurrenceFamilyEnvironment_agrees
+    (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
+    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (indices : List (Fin occurrences.length))
+    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (context : ContextWitness trace sourceContext targetContext)
+    (values : ∀ index : Fin occurrences.length,
+      Fin sourceContext.length → D)
+    (fallback : Fin sourceContext.length → D)
+    (target : Fin targetContext.length → D)
+    (baseAgreement : context.indexRelation.EnvironmentsAgree fallback target) :
+    context.indexRelation.EnvironmentsAgree
+      (occurrenceFamilyEnvironment input occurrences indices sourceContext
+        values fallback) target := by
+  rw [ContextWitness.indexRelation,
+    ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
+  funext targetIndex
+  change occurrenceFamilyEnvironment input occurrences indices sourceContext
+      values fallback (context.sourceIndex targetIndex) = target targetIndex
+  rw [occurrenceFamilyEnvironment_eq_fallback input occurrences indices
+    sourceContext values fallback (context.sourceIndex targetIndex)]
+  · exact baseAgreement (context.sourceIndex targetIndex) targetIndex rfl
+  · intro index indexMember internal
+    have originSurvives := trace.domains.wires.origin_survives
+      (targetContext.get targetIndex)
+    have sourceWire := context.sourceIndex_get targetIndex
+    have sourceSurvives : trace.domains.wires.survives
+        (sourceContext.get (context.sourceIndex targetIndex)) = true := by
+      rw [sourceWire]
+      exact originSurvives
+    have notDeleted := (wire_survives_iff input occurrences
+      (sourceContext.get (context.sourceIndex targetIndex))).1 sourceSurvives
+    apply notDeleted
+    rw [abstractionWires, List.mem_flatMap]
+    exact ⟨occurrences.get index, List.get_mem _ index, internal⟩
+
 end AbstractionRawTrace
 
 end VisualProof.Rule
