@@ -5,13 +5,50 @@ import { join, resolve } from 'node:path'
 import { findEmptyCutShortcutHosts, validateGameContent } from '../../scripts/validate-game-content'
 import { loadGameContent } from '../../src/game/catalog'
 import { gameContentFiles } from '../../src/game/content/files'
-import { cutDepth } from '../../src/kernel/diagram'
+import { cutDepth, type Diagram, type RegionId, type SubgraphSelection } from '../../src/kernel/diagram'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
+import { applyStep } from '../../src/kernel/proof'
 
 type JsonRecord = Record<string, any>
 
 const readJson = (path: string): JsonRecord => JSON.parse(readFileSync(path, 'utf8')) as JsonRecord
 const writeJson = (path: string, value: unknown): void => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
+const proofContext = { theorems: new Map(), relations: new Map() }
+
+const boundAtomPattern = (() => {
+  const builder = new DiagramBuilder()
+  const binder = builder.bubble(builder.root, 0)
+  builder.atom(binder, binder)
+  return { pattern: { diagram: builder.build(), boundary: [] }, binder }
+})()
+
+const insertBoundAtom = (
+  diagram: Diagram,
+  region: RegionId,
+  binder: RegionId,
+): Diagram => applyStep(diagram, {
+  rule: 'insertion',
+  region,
+  pattern: boundAtomPattern.pattern,
+  attachments: [],
+  binders: { [boundAtomPattern.binder]: binder },
+}, proofContext, 'backward')
+
+const deiterate = (diagram: Diagram, sel: SubgraphSelection): Diagram => applyStep(diagram, {
+  rule: 'deiteration', sel, fuel: 100,
+}, proofContext, 'backward')
+
+const innerCutAround = (diagram: Diagram, stableNode: string): SubgraphSelection => {
+  const inner = diagram.nodes[stableNode]?.region
+  if (inner === undefined) throw new Error(`missing stable node '${stableNode}'`)
+  const innerRegion = diagram.regions[inner]
+  if (innerRegion?.kind !== 'cut') throw new Error(`stable node '${stableNode}' is not inside a cut`)
+  const outer = innerRegion.parent
+  if (diagram.regions[outer]?.kind !== 'cut') {
+    throw new Error(`stable node '${stableNode}' is not inside an introduced double cut`)
+  }
+  return { region: outer, regions: [inner], nodes: [], wires: [] }
+}
 
 const validateFixture = (mutate: (root: string) => void): void => {
   const root = mkdtempSync(join(tmpdir(), 'cursebreaker-content-validation-'))
@@ -93,18 +130,56 @@ describe('build-only game content evidence', () => {
     }
   })
 
-  it('preserves each reconstructed problem\'s primary rule in its authored witness', () => {
-    const primaryRule = new Map([
-      ['shallow-edit-legality-contrast', 'insertion'],
-      ['atomic-content-insertion', 'insertion'],
-      ['atomic-double-cut-selection', 'doubleCutIntro'],
-      ['polarity-bubble-contrast', 'deiteration'],
-    ])
+  it('uses a legal shallow insertion to unlock a pre-existing compound target', () => {
+    const catalog = loadGameContent(gameContentFiles)
+    const start = catalog.puzzle('shallow-edit-legality-contrast' as never).diagram
+    const target = { region: 'r6', regions: [], nodes: ['n3', 'n4'], wires: [] }
 
-    for (const [id, rule] of primaryRule) {
-      const evidence = readJson(resolve(process.cwd(), `content/validation/${id}.json`))
-      expect(evidence.solution.some((step: JsonRecord) => step.rule === rule), id).toBe(true)
-    }
+    expect(() => insertBoundAtom(start, 'r3', 'r2')).toThrow(/requires a positive region/)
+    expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
+    expect(() => deiterate(insertBoundAtom(start, 'r4', 'r2'), target)).not.toThrow()
+    expect(() => deiterate(insertBoundAtom(start, 'r4', 'r3'), target))
+      .toThrow(/no justifying occurrence/)
+  })
+
+  it('uses inserted atomic content as the exact source for a pre-existing branch', () => {
+    const catalog = loadGameContent(gameContentFiles)
+    const start = catalog.puzzle('atomic-content-insertion' as never).diagram
+    const target = { region: 'r5', regions: ['r6'], nodes: [], wires: [] }
+
+    expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
+    expect(() => deiterate(insertBoundAtom(start, 'r4', 'r3'), target)).not.toThrow()
+    expect(() => deiterate(insertBoundAtom(start, 'r4', 'r2'), target))
+      .toThrow(/no justifying occurrence/)
+  })
+
+  it('uses only the exact atomic double cut to create deiteration authority', () => {
+    const catalog = loadGameContent(gameContentFiles)
+    const start = catalog.puzzle('atomic-double-cut-selection' as never).diagram
+
+    expect(() => deiterate(start, {
+      region: 'r5', regions: [], nodes: ['n1'], wires: [],
+    })).toThrow(/no justifying occurrence/)
+
+    const exact = applyStep(start, {
+      rule: 'doubleCutIntro',
+      sel: { region: 'r5', regions: [], nodes: ['n1'], wires: [] },
+    }, proofContext, 'backward')
+    expect(() => deiterate(exact, innerCutAround(exact, 'n1'))).not.toThrow()
+
+    const nearby = applyStep(start, {
+      rule: 'doubleCutIntro',
+      sel: { region: 'r6', regions: [], nodes: ['n2'], wires: [] },
+    }, proofContext, 'backward')
+    expect(() => deiterate(nearby, innerCutAround(nearby, 'n2')))
+      .toThrow(/no justifying occurrence/)
+
+    const larger = applyStep(start, {
+      rule: 'doubleCutIntro',
+      sel: { region: 'r5', regions: ['r6'], nodes: ['n1'], wires: [] },
+    }, proofContext, 'backward')
+    expect(() => deiterate(larger, innerCutAround(larger, 'n1')))
+      .toThrow(/no justifying occurrence/)
   })
 
   it('represents both nested owners as distinct binder pairs', () => {

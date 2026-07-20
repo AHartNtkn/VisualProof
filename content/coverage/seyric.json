@@ -949,11 +949,12 @@
         "polarity-shallow-opposite-contrast",
         "interaction-host-scope-edit-legality"
       ],
-      "visibleSituation": "Two owner-specific marks sit in a shallow negative field while one supported echo sits just across a positive veil; the player must act on the host whose polarity admits the edit.",
-      "defeats": "It defeats the hypothesis that nearby marked targets share edit permissions: atomic insertion belongs inside the positive veil, while final erasure belongs to the enclosing negative field.",
+      "visibleSituation": "P and Q supports occupy successive shallow negative hosts, while the neighboring positive veil contains Q beside a deeper P-and-Q target; inserting P into that positive host creates the exact local source needed to lift the target.",
+      "defeats": "It defeats edit-by-proximity and owner-color guesses: the adjacent negative host rejects backward insertion, insertion of Q in the positive host leaves the compound unmatched, and only P in that host bridges the split supports to the pre-existing target.",
       "experientialNeighbors": [
         "atomic-content-insertion",
-        "polarity-bubble-contrast"
+        "polarity-bubble-contrast",
+        "compound-copy-authority-contrast"
       ]
     },
     {
