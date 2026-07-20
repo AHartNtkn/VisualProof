@@ -18,6 +18,8 @@ import type { ProofStep } from '../../src/kernel/proof/step'
 import { applyAction, singleStepAction, type ProofAction } from '../../src/kernel/proof/action'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
 import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
+import { proposePortCorrespondence } from '../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
 const gesture = (step: ProofStep): ProofAction => singleStepAction(step.rule, step)
@@ -440,8 +442,11 @@ describe('backward spawning, un-conversion, un-citation', () => {
     let s = startSession(lhs, rhs, ctx)
     // the goal node's source free 'y' is canonical s0; the backward target
     // must be spelled in the node's CURRENT port names
-    const conv = applyConversion(currentSide(s, 'backward'), m, p('(\\a. a) s0'), 32)
-    s = applyBackward(s, { rule: 'conversion', node: m, term: p('(\\a. a) s0'), certificate: conv.certificate, attachments: {} })
+    const diagram = currentSide(s, 'backward')
+    const target = p('(\\a. a) s0')
+    const correspondence = proposePortCorrespondence(termNodeAt(diagram, m).term, target)
+    const conv = applyConversion(diagram, m, target, correspondence, 32)
+    s = applyBackward(s, { rule: 'conversion', node: m, term: target, certificate: conv.certificate, correspondence, attachments: {} })
     expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('conversion')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unConverted')

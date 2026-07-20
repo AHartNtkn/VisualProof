@@ -7,6 +7,12 @@ export { applyIteration, applyDeiteration, findDeiterationEvidence } from './ite
 export { applyDoubleCutIntro, applyDoubleCutElim } from './doublecut'
 export type { ConversionResult } from './conversion'
 export { applyConversion, applyConversionByCertificate } from './conversion'
+export type { PortCorrespondence } from './port-correspondence'
+export {
+  proposePortCorrespondence,
+  validatePortCorrespondence,
+  validatePortCorrespondenceCarrier,
+} from './port-correspondence'
 export { applyCongruenceJoin } from './congruence'
 export {
   anchorAvailability,

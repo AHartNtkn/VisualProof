@@ -9,6 +9,11 @@ import { DiagramError, mkDiagram } from '../diagram/diagram'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt } from './access'
+import {
+  mapTermToCommonCarrier,
+  validatePortCorrespondence,
+  type PortCorrespondence,
+} from './port-correspondence'
 
 /**
  * Swap a term node's term for a βη-equal one (callers have already verified
@@ -24,13 +29,19 @@ function replaceNodeTerm(
   nodeId: NodeId,
   node: Extract<DiagramNode, { kind: 'term' }>,
   newTerm: Term,
+  correspondence: PortCorrespondence,
   attachments: Readonly<Record<string, WireId>>,
   reservation?: IdReservation,
 ): Diagram {
-  const oldPorts = new Set(freePorts(node.term))
-  const newPorts = new Set(freePorts(newTerm))
+  const oldPorts = freePorts(node.term)
+  const newPorts = freePorts(newTerm)
+  validatePortCorrespondence(correspondence, oldPorts, newPorts)
+  const oldPortByColumn = new Map<number, string>(
+    Object.entries(correspondence.left).map(([name, column]) => [column, name]),
+  )
   for (const [name, w] of Object.entries(attachments)) {
-    if (oldPorts.has(name) || !newPorts.has(name)) {
+    const column = correspondence.right[name]
+    if (column === undefined || oldPortByColumn.has(column)) {
       throw new DiagramError(`attachment for port '${name}', which is not a newly added free port of the replacement term`)
     }
     if (d.wires[w] === undefined) throw new DiagramError(`unknown wire '${w}'`)
@@ -40,14 +51,20 @@ function replaceNodeTerm(
     wires[id] = {
       scope: w.scope,
       endpoints: w.endpoints.filter(
-        (ep) => !(ep.node === nodeId && ep.port.kind === 'freeVar' && !newPorts.has(ep.port.name)),
+        (ep) => !(ep.node === nodeId && ep.port.kind === 'freeVar'),
       ),
     }
   }
   for (const name of newPorts) {
-    if (oldPorts.has(name)) continue
     const ep: Endpoint = { node: nodeId, port: { kind: 'freeVar', name } }
-    const target = attachments[name]
+    const column = correspondence.right[name]!
+    const oldName = oldPortByColumn.get(column)
+    const target = oldName === undefined
+      ? attachments[name]
+      : Object.entries(d.wires).find(([, wire]) => wire.endpoints.some((endpoint) =>
+          endpoint.node === nodeId
+          && endpoint.port.kind === 'freeVar'
+          && endpoint.port.name === oldName))?.[0]
     if (target !== undefined) {
       const w = wires[target]!
       wires[target] = { scope: w.scope, endpoints: [...w.endpoints, ep] }
@@ -77,19 +94,26 @@ export function applyConversion(
   d: Diagram,
   nodeId: NodeId,
   newTerm: Term,
+  correspondence: PortCorrespondence,
   fuel: number,
   attachments: Readonly<Record<string, WireId>> = {},
   reservation?: IdReservation,
 ): ConversionResult {
   const node = termNodeAt(d, nodeId)
-  const r = convertible(node.term, newTerm, fuel)
+  validatePortCorrespondence(correspondence, freePorts(node.term), freePorts(newTerm))
+  const oldInCarrier = mapTermToCommonCarrier(node.term, correspondence.left)
+  const replacementInCarrier = mapTermToCommonCarrier(newTerm, correspondence.right)
+  const r = convertible(oldInCarrier, replacementInCarrier, fuel)
   if (r.status === 'fuel-exhausted') {
     throw new RuleError(`conversion is undecided under fuel ${fuel}: ${r.detail}; supply a certificate or raise the fuel`)
   }
   if (r.status === 'not-convertible') {
     throw new RuleError(`'${printTerm(node.term)}' and '${printTerm(newTerm)}' are not βη-convertible`)
   }
-  return { diagram: replaceNodeTerm(d, nodeId, node, newTerm, attachments, reservation), certificate: r.certificate }
+  return {
+    diagram: replaceNodeTerm(d, nodeId, node, newTerm, correspondence, attachments, reservation),
+    certificate: r.certificate,
+  }
 }
 
 /** Rule 5, replay form: fuel-free, checks a stored certificate mechanically. */
@@ -98,11 +122,15 @@ export function applyConversionByCertificate(
   nodeId: NodeId,
   newTerm: Term,
   certificate: ConversionCertificate,
+  correspondence: PortCorrespondence,
   attachments: Readonly<Record<string, WireId>> = {},
   reservation?: IdReservation,
 ): Diagram {
   const node = termNodeAt(d, nodeId)
-  const check = checkConversion(node.term, newTerm, certificate)
+  validatePortCorrespondence(correspondence, freePorts(node.term), freePorts(newTerm))
+  const oldInCarrier = mapTermToCommonCarrier(node.term, correspondence.left)
+  const replacementInCarrier = mapTermToCommonCarrier(newTerm, correspondence.right)
+  const check = checkConversion(oldInCarrier, replacementInCarrier, certificate)
   if (!check.ok) throw new RuleError(`conversion certificate rejected: ${check.reason}`)
-  return replaceNodeTerm(d, nodeId, node, newTerm, attachments, reservation)
+  return replaceNodeTerm(d, nodeId, node, newTerm, correspondence, attachments, reservation)
 }

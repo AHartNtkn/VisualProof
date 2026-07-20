@@ -8,6 +8,8 @@ import {
   applyConversion, applyFusion, applyFission,
   applyComprehensionInstantiate, applyComprehensionAbstract,
 } from '../../../src/kernel/rules/index'
+import { proposePortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
 
@@ -29,7 +31,9 @@ describe('equational rules are polarity-free at depths 0..3', () => {
 
       // the node's free ports f, y are positional s0, s1; conversion contracts
       // the inner redex, leaving f y
-      expect(() => applyConversion(d, n, p('s0 s1'), 10)).not.toThrow()
+      const target = p('s0 s1')
+      const correspondence = proposePortCorrespondence(termNodeAt(d, n).term, target)
+      expect(() => applyConversion(d, n, target, correspondence, 10)).not.toThrow()
 
       const split = applyFission(d, n, ['arg'])
       const newWire = Object.keys(split.wires).find(

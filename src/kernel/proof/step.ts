@@ -6,6 +6,7 @@ import type { IdReservation } from '../diagram/subgraph/freshId'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
+import type { PortCorrespondence } from '../rules/port-correspondence'
 import { applyWireJoin } from '../rules/wire-join'
 import { applyOpenTermSpawn, applyRelationSpawn, applyBoundRelationSpawn } from '../rules/spawn'
 import { applyErasure, applyWireSever } from '../rules/erasure'
@@ -47,11 +48,11 @@ export type ProofStep =
   | { readonly rule: 'deiteration'; readonly sel: SubgraphSelection; readonly justifier: SubgraphSelection; readonly certificate: OccurrenceCertificate }
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
-  | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly attachments: Readonly<Record<string, WireId>> }
-  | { readonly rule: 'congruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }
+  | { readonly rule: 'conversion'; readonly node: NodeId; readonly term: Term; readonly certificate: ConversionCertificate; readonly correspondence: PortCorrespondence; readonly attachments: Readonly<Record<string, WireId>> }
+  | { readonly rule: 'congruenceJoin'; readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate; readonly correspondence: PortCorrespondence }
   | { readonly rule: 'anchoredWireSplit'; readonly wire: WireId; readonly witness: NodeId; readonly endpoints: readonly Endpoint[]; readonly target: RegionId }
   | { readonly rule: 'anchoredWireContract'; readonly redundant: NodeId; readonly survivor: NodeId; readonly certificate: ConversionCertificate }
-  | { readonly rule: 'headStrip'; readonly a: NodeId; readonly b: NodeId }
+  | { readonly rule: 'headStrip'; readonly a: NodeId; readonly b: NodeId; readonly correspondence: PortCorrespondence }
   | { readonly rule: 'closedTermIntro'; readonly region: RegionId; readonly term: Term }
   | { readonly rule: 'fusion'; readonly wire: WireId }
   | { readonly rule: 'fission'; readonly node: NodeId; readonly path: readonly PathSeg[] }
@@ -130,11 +131,11 @@ function applyStepRaw(
     case 'deiteration': return applyDeiteration(d, step.sel, step.justifier, step.certificate)
     case 'doubleCutIntro': return applyDoubleCutIntro(d, step.sel, reservation)
     case 'doubleCutElim': return applyDoubleCutElim(d, step.region)
-    case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.attachments, reservation)
-    case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate)
+    case 'conversion': return applyConversionByCertificate(d, step.node, step.term, step.certificate, step.correspondence, step.attachments, reservation)
+    case 'congruenceJoin': return applyCongruenceJoin(d, step.a, step.b, step.certificate, step.correspondence)
     case 'anchoredWireSplit': return applyAnchoredWireSplit(d, step.wire, step.witness, step.endpoints, step.target, reservation)
     case 'anchoredWireContract': return applyAnchoredWireContract(d, step.redundant, step.survivor, step.certificate)
-    case 'headStrip': return applyHeadStrip(d, step.a, step.b, reservation)
+    case 'headStrip': return applyHeadStrip(d, step.a, step.b, step.correspondence, reservation)
     case 'closedTermIntro': return applyClosedTermIntro(d, step.region, step.term, reservation)
     case 'fusion': return applyFusion(d, step.wire)
     case 'fission': return applyFission(d, step.node, step.path, reservation)
@@ -188,6 +189,16 @@ export function applyStepWithReceipt(
       && keep !== undefined
       && anchorAvailability(d, step.survivor) === d.root
     candidate = (wire) => wire === drop && coalescesAtRoot
+      ? keep
+      : result.wires[wire] === undefined ? undefined : wire
+  } else if (step.rule === 'congruenceJoin') {
+    const outputWire = (node: NodeId): WireId | undefined => Object.keys(d.wires).find((wire) =>
+      d.wires[wire]!.endpoints.some((endpoint) => endpoint.node === node && endpoint.port.kind === 'output'))
+    const aOutput = outputWire(step.a)
+    const bOutput = outputWire(step.b)
+    const keep = aOutput !== undefined && result.wires[aOutput] !== undefined ? aOutput : bOutput
+    const drop = keep === aOutput ? bOutput : aOutput
+    candidate = (wire) => wire === drop && keep !== undefined
       ? keep
       : result.wires[wire] === undefined ? undefined : wire
   }

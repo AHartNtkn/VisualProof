@@ -10,6 +10,7 @@ import { parseTerm } from '../../kernel/term/parse'
 import { applyConversion } from '../../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import { termNodeAt } from '../../kernel/rules/access'
+import { mapTermToCommonCarrier, proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
@@ -127,7 +128,8 @@ export function proofConnectionStep(
       || a.node === b.node || d.nodes[a.node]?.kind !== 'term' || d.nodes[b.node]?.kind !== 'term') {
       throw new Error("release on another term's output strand to compare arguments")
     }
-    const step: ProofStep = { rule: 'headStrip', a: a.node, b: b.node }
+    const correspondence = proposePortCorrespondence(termNodeAt(d, a.node).term, termNodeAt(d, b.node).term)
+    const step: ProofStep = { rule: 'headStrip', a: a.node, b: b.node, correspondence }
     applyStep(d, step, connectionContext, orientation)
     return step
   }
@@ -145,10 +147,17 @@ export function proofConnectionStep(
   const convertiblePairs: Array<{ readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }> = []
   if (unambiguous) for (const a of leftCandidates) {
     for (const b of rightCandidates) {
-      const result = convertible(termNodeAt(d, a).term, termNodeAt(d, b).term, fuel)
+      const leftTerm = termNodeAt(d, a).term
+      const rightTerm = termNodeAt(d, b).term
+      const correspondence = proposePortCorrespondence(leftTerm, rightTerm)
+      const result = convertible(
+        mapTermToCommonCarrier(leftTerm, correspondence.left),
+        mapTermToCommonCarrier(rightTerm, correspondence.right),
+        fuel,
+      )
       if (result.status !== 'convertible') continue
       convertiblePairs.push({ a, b, certificate: result.certificate })
-      candidates.push({ rule: 'congruenceJoin', a, b, certificate: result.certificate })
+      candidates.push({ rule: 'congruenceJoin', a, b, certificate: result.certificate, correspondence })
     }
   }
   for (const pair of convertiblePairs) {
@@ -509,8 +518,10 @@ export class ProofMoveController {
     row('Convert → head normal', () => this.#commit(convertToHeadNormal(this.#options.diagram(), node, this.#options.fuel()).step))
     row('Convert → custom target…', () => this.#openTextPrompt('Conversion target', 'target term', (value) => {
       const term = parseTerm(value)
-      const conversion = applyConversion(this.#options.diagram(), node, term, this.#options.fuel())
-      this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, attachments: {} })
+      const diagram = this.#options.diagram()
+      const correspondence = proposePortCorrespondence(termNodeAt(diagram, node).term, term)
+      const conversion = applyConversion(diagram, node, term, correspondence, this.#options.fuel())
+      this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, correspondence, attachments: {} })
     }))
   }
 

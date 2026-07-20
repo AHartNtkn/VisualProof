@@ -6,6 +6,11 @@ import { mkDiagram } from '../diagram/diagram'
 import { isAncestorOrEqual, cutDepth } from '../diagram/regions'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
+import {
+  mapTermToCommonCarrier,
+  validatePortCorrespondence,
+  type PortCorrespondence,
+} from './port-correspondence'
 
 /**
  * Rule 9: congruence join — the functionality of equality. Two term nodes in
@@ -27,6 +32,7 @@ export function applyCongruenceJoin(
   a: NodeId,
   b: NodeId,
   certificate: ConversionCertificate,
+  correspondence: PortCorrespondence,
 ): Diagram {
   if (a === b) throw new RuleError(`congruence join needs two distinct nodes; got '${a}' twice`)
   const na = termNodeAt(d, a)
@@ -36,16 +42,24 @@ export function applyCongruenceJoin(
       `congruence join requires both nodes in one region; '${a}' is in '${na.region}', '${b}' in '${nb.region}'`,
     )
   }
-  const check = checkConversion(na.term, nb.term, certificate)
+  validatePortCorrespondence(correspondence, freePorts(na.term), freePorts(nb.term))
+  const check = checkConversion(
+    mapTermToCommonCarrier(na.term, correspondence.left),
+    mapTermToCommonCarrier(nb.term, correspondence.right),
+    certificate,
+  )
   if (!check.ok) throw new RuleError(`congruence certificate rejected: ${check.reason}`)
-  const sharedNames = new Set(freePorts(na.term))
-  for (const name of freePorts(nb.term)) {
-    if (!sharedNames.has(name)) continue
-    const wa = wireAt(d, a, { kind: 'freeVar', name })
-    const wb = wireAt(d, b, { kind: 'freeVar', name })
+  const rightByColumn = new Map<number, string>(
+    Object.entries(correspondence.right).map(([name, column]) => [column, name]),
+  )
+  for (const [leftName, column] of Object.entries(correspondence.left)) {
+    const rightName = rightByColumn.get(column)
+    if (rightName === undefined) continue
+    const wa = wireAt(d, a, { kind: 'freeVar', name: leftName })
+    const wb = wireAt(d, b, { kind: 'freeVar', name: rightName })
     if (wa !== wb) {
       throw new RuleError(
-        `congruence join requires shared free port '${name}' on one wire; found '${wa}' and '${wb}'`,
+        `congruence join requires common column ${column} ports '${leftName}' and '${rightName}' on one wire; found '${wa}' and '${wb}'`,
       )
     }
   }

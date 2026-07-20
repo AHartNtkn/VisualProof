@@ -5,6 +5,9 @@ import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { type ProofContext, type ProofStep } from '../kernel/proof/step'
 import { applyAction, singleStepAction, type ProofAction } from '../kernel/proof/action'
+import type { ConversionCertificate } from '../kernel/term/certificate'
+import { termNodeAt } from '../kernel/rules/access'
+import { proposePortCorrespondence } from '../kernel/rules/port-correspondence'
 
 /**
  * Interactive conversion fuel for derivation construction. Conversions made
@@ -51,12 +54,18 @@ export class DerivationCursor {
    */
   pushConv(label: string, node: NodeId, t: Term, attach: Readonly<Record<string, WireId>> = {}): void {
     let certificate
+    const correspondence = proposePortCorrespondence(termNodeAt(this.cur, node).term, t)
     try {
-      certificate = applyConversion(this.cur, node, t, CONVERSION_FUEL, attach).certificate
+      certificate = applyConversion(this.cur, node, t, correspondence, CONVERSION_FUEL, attach).certificate
     } catch (e) {
       throw new Error(`step '${label}' (conversion) failed: ${e instanceof Error ? e.message : String(e)}`)
     }
-    this.push(label, { rule: 'conversion', node, term: t, certificate, attachments: attach })
+    this.push(label, { rule: 'conversion', node, term: t, certificate, correspondence, attachments: attach })
+  }
+
+  pushCongruence(label: string, a: NodeId, b: NodeId, certificate: ConversionCertificate): void {
+    const correspondence = proposePortCorrespondence(termNodeAt(this.cur, a).term, termNodeAt(this.cur, b).term)
+    this.push(label, { rule: 'congruenceJoin', a, b, certificate, correspondence })
   }
 
   /** Search while constructing the theory, then store only the chosen checked evidence. */

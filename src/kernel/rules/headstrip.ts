@@ -7,6 +7,11 @@ import { mkDiagram } from '../diagram/diagram'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { termNodeAt, wireAt } from './access'
+import {
+  mapTermToCommonCarrier,
+  validatePortCorrespondence,
+  type PortCorrespondence,
+} from './port-correspondence'
 
 /**
  * Head strip: decompose an equation between head-normal terms with the same
@@ -29,7 +34,13 @@ import { termNodeAt, wireAt } from './access'
  * arbitrary lambda-model individual and may denote a non-injective function,
  * so equality of two applications does not entail equality of their arguments.
  */
-export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId, reservation?: IdReservation): Diagram {
+export function applyHeadStrip(
+  d: Diagram,
+  a: NodeId,
+  b: NodeId,
+  correspondence: PortCorrespondence,
+  reservation?: IdReservation,
+): Diagram {
   // Gate 1: distinct term nodes in one region.
   if (a === b) throw new RuleError(`head strip needs two distinct nodes; got '${a}' twice`)
   const na = termNodeAt(d, a)
@@ -40,6 +51,7 @@ export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId, reservation?: I
     )
   }
   const region = na.region
+  validatePortCorrespondence(correspondence, freePorts(na.term), freePorts(nb.term))
 
   // Gate 2: the outputs share ONE wire — that is what makes the pair an equation.
   const oa = wireAt(d, a, { kind: 'output' })
@@ -93,13 +105,21 @@ export function applyHeadStrip(d: Diagram, a: NodeId, b: NodeId, reservation?: I
     return cur
   }
   const pairs: { ca: Term; cb: Term }[] = []
+  const rightByColumn = new Map<number, string>(
+    Object.entries(correspondence.right).map(([name, column]) => [column, name]),
+  )
   for (let i = 0; i < sa.args.length; i++) {
     const ca = closure(sa.args[i]!, sa.binders)
     const cb = closure(sb.args[i]!, sb.binders)
-    if (termEq(ca, cb)) {
-      const allShared = freePorts(ca).every(
-        (name) => wireAt(d, a, { kind: 'freeVar', name }) === wireAt(d, b, { kind: 'freeVar', name }),
-      )
+    const mappedLeft = mapTermToCommonCarrier(ca, correspondence.left)
+    const mappedRight = mapTermToCommonCarrier(cb, correspondence.right)
+    if (termEq(mappedLeft, mappedRight)) {
+      const allShared = freePorts(ca).every((leftName) => {
+        const rightName = rightByColumn.get(correspondence.left[leftName]!)
+        return rightName !== undefined
+          && wireAt(d, a, { kind: 'freeVar', name: leftName })
+            === wireAt(d, b, { kind: 'freeVar', name: rightName })
+      })
       if (allShared) continue
     }
     pairs.push({ ca, cb })

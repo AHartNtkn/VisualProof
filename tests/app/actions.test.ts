@@ -8,6 +8,8 @@ import { applicableActions } from '../../src/app/actions'
 import { bootFixture } from './boot-fixture'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { applyStep } from '../../src/kernel/proof/step'
+import { proposePortCorrespondence } from '../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
 
@@ -162,8 +164,9 @@ describe('descriptor → step construction (the shell contract)', () => {
     expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('convert')
     // the node's source free 'y' is canonical s0 after construction
     const target = p('s0')
-    const pre = applyConversion(d, n, target, 32)
-    const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, attachments: {} }, ctx)
+    const correspondence = proposePortCorrespondence(termNodeAt(d, n).term, target)
+    const pre = applyConversion(d, n, target, correspondence, 32)
+    const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, correspondence, attachments: {} }, ctx)
     expect(JSON.stringify(out.nodes[n])).toContain('"port"')
   })
 

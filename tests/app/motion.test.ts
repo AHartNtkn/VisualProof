@@ -11,13 +11,17 @@ import {
   setMotionSpeed,
   smoothstep,
 } from '../../src/app/interact/motion'
+import { proposePortCorrespondence } from '../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../src/kernel/rules/access'
 
 const fixture = () => {
   const builder = new DiagramBuilder()
   const node = builder.termNode(builder.root, parseTerm('(\\x. x) y'))
   const diagram = builder.build()
-  const converted = applyConversion(diagram, node, parseTerm('s0'), 32)
-  const step = { rule: 'conversion' as const, node, term: parseTerm('s0'), certificate: converted.certificate, attachments: {} }
+  const term = parseTerm('s0')
+  const correspondence = proposePortCorrespondence(termNodeAt(diagram, node).term, term)
+  const converted = applyConversion(diagram, node, term, correspondence, 32)
+  const step = { rule: 'conversion' as const, node, term, certificate: converted.certificate, correspondence, attachments: {} }
   return { diagram, node, step }
 }
 

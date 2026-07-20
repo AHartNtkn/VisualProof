@@ -13,6 +13,10 @@ import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { ProofStep } from './step'
 import type { PlacementHint, ProofAction, ProofAllocation } from './action'
 import type { Theorem, TheoremApplication } from './theorem'
+import {
+  validatePortCorrespondenceCarrier,
+  type PortCorrespondence,
+} from '../rules/port-correspondence'
 
 function fail(msg: string): never {
   throw new Error(`malformed proof JSON: ${msg}`)
@@ -111,6 +115,42 @@ function certFromJson(v: unknown, what: string): ConversionCertificate {
     })
   }
   return { leftSteps: steps(v.leftSteps, `${what}.leftSteps`), rightSteps: steps(v.rightSteps, `${what}.rightSteps`) }
+}
+
+function correspondenceToJson(correspondence: PortCorrespondence): unknown {
+  return {
+    commonArity: correspondence.commonArity,
+    left: { ...correspondence.left },
+    right: { ...correspondence.right },
+  }
+}
+
+function correspondenceFromJson(v: unknown, what: string): PortCorrespondence {
+  if (!isRecord(v)) fail(`${what} must be an object`)
+  assertOnlyKeys(v, ['commonArity', 'left', 'right'], what)
+  if (typeof v.commonArity !== 'number' || !Number.isSafeInteger(v.commonArity) || v.commonArity < 0) {
+    fail(`${what}.commonArity must be a non-negative safe integer`)
+  }
+  const mapping = (side: unknown, label: string): Record<string, number> => {
+    if (!isRecord(side)) fail(`${label} must be an object`)
+    const result: Record<string, number> = {}
+    for (const [name, column] of Object.entries(side)) {
+      if (typeof column !== 'number') fail(`${label}['${name}'] must be a number`)
+      result[name] = column
+    }
+    return result
+  }
+  const correspondence: PortCorrespondence = {
+    commonArity: v.commonArity,
+    left: mapping(v.left, `${what}.left`),
+    right: mapping(v.right, `${what}.right`),
+  }
+  try {
+    validatePortCorrespondenceCarrier(correspondence)
+  } catch (error) {
+    fail(`${what}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  return correspondence
 }
 
 function idMapToJson(map: ReadonlyMap<string, string>): unknown {
@@ -218,15 +258,15 @@ export function stepToJson(s: ProofStep): unknown {
     case 'doubleCutElim':
       return { rule: s.rule, region: s.region }
     case 'conversion':
-      return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), attachments: { ...s.attachments } }
+      return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), correspondence: correspondenceToJson(s.correspondence), attachments: { ...s.attachments } }
     case 'congruenceJoin':
-      return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate) }
+      return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate), correspondence: correspondenceToJson(s.correspondence) }
     case 'anchoredWireSplit':
       return { rule: s.rule, wire: s.wire, witness: s.witness, endpoints: s.endpoints.map(endpointToJson), target: s.target }
     case 'anchoredWireContract':
       return { rule: s.rule, redundant: s.redundant, survivor: s.survivor, certificate: certToJson(s.certificate) }
     case 'headStrip':
-      return { rule: s.rule, a: s.a, b: s.b }
+      return { rule: s.rule, a: s.a, b: s.b, correspondence: correspondenceToJson(s.correspondence) }
     case 'closedTermIntro':
       return { rule: s.rule, region: s.region, term: serializeTerm(s.term) }
     case 'fusion':
@@ -296,15 +336,15 @@ export function stepFromJson(j: unknown): ProofStep {
       assertOnlyKeys(j, ['rule', 'region'], 'doubleCutElim step')
       return { rule, region: str(j.region, 'region') }
     case 'conversion': {
-      assertOnlyKeys(j, ['rule', 'node', 'term', 'certificate', 'attachments'], 'conversion step')
+      assertOnlyKeys(j, ['rule', 'node', 'term', 'certificate', 'correspondence', 'attachments'], 'conversion step')
       if (!isRecord(j.attachments)) fail('attachments must be an object')
       const attachments: Record<string, WireId> = {}
       for (const [k, v] of Object.entries(j.attachments)) attachments[k] = str(v, `attachments['${k}']`)
-      return { rule, node: str(j.node, 'node'), term: termFromJson(j.term, 'term'), certificate: certFromJson(j.certificate, 'certificate'), attachments }
+      return { rule, node: str(j.node, 'node'), term: termFromJson(j.term, 'term'), certificate: certFromJson(j.certificate, 'certificate'), correspondence: correspondenceFromJson(j.correspondence, 'correspondence'), attachments }
     }
     case 'congruenceJoin':
-      assertOnlyKeys(j, ['rule', 'a', 'b', 'certificate'], 'congruenceJoin step')
-      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), certificate: certFromJson(j.certificate, 'certificate') }
+      assertOnlyKeys(j, ['rule', 'a', 'b', 'certificate', 'correspondence'], 'congruenceJoin step')
+      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), certificate: certFromJson(j.certificate, 'certificate'), correspondence: correspondenceFromJson(j.correspondence, 'correspondence') }
     case 'anchoredWireSplit': {
       assertOnlyKeys(j, ['rule', 'wire', 'witness', 'endpoints', 'target'], 'anchoredWireSplit step')
       if (!Array.isArray(j.endpoints)) fail('endpoints must be an array')
@@ -325,8 +365,8 @@ export function stepFromJson(j: unknown): ProofStep {
         certificate: certFromJson(j.certificate, 'certificate'),
       }
     case 'headStrip':
-      assertOnlyKeys(j, ['rule', 'a', 'b'], 'headStrip step')
-      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
+      assertOnlyKeys(j, ['rule', 'a', 'b', 'correspondence'], 'headStrip step')
+      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), correspondence: correspondenceFromJson(j.correspondence, 'correspondence') }
     case 'closedTermIntro':
       assertOnlyKeys(j, ['rule', 'region', 'term'], 'closedTermIntro step')
       return { rule, region: str(j.region, 'region'), term: termFromJson(j.term, 'term') }

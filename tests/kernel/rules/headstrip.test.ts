@@ -4,10 +4,18 @@ import type { Term } from '../../../src/kernel/term/term'
 import { app, bvar, lam, port, termEq } from '../../../src/kernel/term/term'
 import type { Diagram, Endpoint, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
+import { applyHeadStrip as kernelHeadStrip } from '../../../src/kernel/rules/headstrip'
 import { RuleError } from '../../../src/kernel/rules/error'
+import { proposePortCorrespondence, type PortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
+const applyHeadStrip = (
+  d: Diagram,
+  a: NodeId,
+  b: NodeId,
+  correspondence = proposePortCorrespondence(termNodeAt(d, a).term, termNodeAt(d, b).term),
+) => kernelHeadStrip(d, a, b, correspondence)
 
 const fv = (node: NodeId, name: string): Endpoint => ({ node, port: { kind: 'freeVar', name } })
 const outp = (node: NodeId): Endpoint => ({ node, port: { kind: 'output' } })
@@ -36,6 +44,27 @@ const freeVarWires = (d: Diagram, node: NodeId): WireId[] =>
     .map(([id]) => id)
 
 describe('head strip (rigid-head equation decomposition)', () => {
+  it('uses mapped prefix closures to select exactly the nontrivial argument equations', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x a a'))
+    const n2 = h.termNode(h.root, p('\\x. x b c'))
+    const shared = h.wire(h.root, [fv(n1, 'a'), fv(n2, 'c')])
+    h.wire(h.root, [fv(n2, 'b')])
+    h.wire(h.root, [outp(n1), outp(n2)])
+    const d = h.build()
+    const correspondence: PortCorrespondence = {
+      commonArity: 2,
+      left: { s0: 0 },
+      right: { s0: 1, s1: 0 },
+    }
+    const out = applyHeadStrip(d, n1, n2, correspondence)
+    const added = addedNodes(d, out)
+    expect(added).toHaveLength(2)
+    expect(added.filter((node) => freeVarWires(out, node).includes(shared))).toHaveLength(1)
+    expect(termEq(termOf(out, added[0]!), p('\\x. s0'))).toBe(true)
+    expect(termEq(termOf(out, added[1]!), p('\\x. s0'))).toBe(true)
+  })
+
   it('strips \\x. x a b —o— \\x. x a c into ONE added equation pair', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('\\x. x a b'))

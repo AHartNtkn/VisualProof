@@ -356,9 +356,10 @@ describe('mapStepIds', () => {
       nodes: new Map([['n0', 'N0'], ['n1', 'N1']]),
       wires: new Map(),
     }
-    expect(mapStepIds({ rule: 'headStrip', a: 'n0', b: 'n1' }, iso))
-      .toEqual({ rule: 'headStrip', a: 'N0', b: 'N1' })
-    expect(() => mapStepIds({ rule: 'headStrip', a: 'n0', b: 'missing' }, iso))
+    const correspondence = { commonArity: 0, left: {}, right: {} }
+    expect(mapStepIds({ rule: 'headStrip', a: 'n0', b: 'n1', correspondence }, iso))
+      .toEqual({ rule: 'headStrip', a: 'N0', b: 'N1', correspondence })
+    expect(() => mapStepIds({ rule: 'headStrip', a: 'n0', b: 'missing', correspondence }, iso))
       .toThrowError(/cannot map node 'missing'/)
   })
 

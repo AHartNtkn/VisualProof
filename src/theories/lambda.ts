@@ -7,6 +7,8 @@ import { replayActions, singleStepAction } from '../kernel/proof/action'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { Theory } from '../kernel/proof/store'
 import type { Diagram } from '../kernel/diagram/diagram'
+import { proposePortCorrespondence } from '../kernel/rules/port-correspondence'
+import { termNodeAt } from '../kernel/rules/access'
 
 // Pure λ demos: these theorems are ABOUT λ-terms, so the terms are the pure
 // programs themselves (no named constants — named things are relation nodes).
@@ -43,8 +45,10 @@ function deriveOnePlusOne(): Theorem {
   // harvest the 1+1 ~ 2 certificate once at build time (fuel-free replay)
   const scratch = new DiagramBuilder()
   const sn = scratch.termNode(scratch.root, poo)
-  const conv = applyConversion(scratch.build(), sn, TWOp, 4096)
-  const join: ProofStep = { rule: 'congruenceJoin', a, b, certificate: conv.certificate }
+  const scratchDiagram = scratch.build()
+  const correspondence = proposePortCorrespondence(termNodeAt(scratchDiagram, sn).term, TWOp)
+  const conv = applyConversion(scratchDiagram, sn, TWOp, correspondence, 4096)
+  const join: ProofStep = { rule: 'congruenceJoin', a, b, certificate: conv.certificate, correspondence }
   steps.push(join)
   const joinAction = singleStepAction('join equal terms', join)
   actions.push(joinAction)
@@ -73,6 +77,7 @@ function deriveFixedPoint(): Theorem {
       leftSteps: [{ kind: 'beta', path: [] }, { kind: 'beta', path: [] }],
       rightSteps: [{ kind: 'beta', path: ['arg'] }],
     },
+    correspondence: proposePortCorrespondence(termNodeAt(lhsDiagram, n).term, newTerm),
     attachments: {},
   }
   const action = singleStepAction('unfold fixed point', step)

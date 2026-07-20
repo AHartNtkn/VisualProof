@@ -380,8 +380,8 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   e.push('t8 iterate IH pair', { rule: 'iteration', sel: mkSelection(e.cur, { region: cut2c, regions: [], nodes: [F1yc, F2yc], wires: [oyc] }), target: cut3c })
   const H1pc = e.newNodeIn(cut3c, snap, F1term)
   const H2pc = e.newNodeIn(cut3c, snap, F2term)
-  e.push('t9 cJ E1c=H1pc', { rule: 'congruenceJoin', a: E1c, b: H1pc, certificate: idCert })
-  e.push('t9b cJ E2c=H2pc', { rule: 'congruenceJoin', a: E2c, b: H2pc, certificate: idCert })
+  e.pushCongruence('t9 cJ E1c=H1pc', E1c, H1pc, idCert)
+  e.pushCongruence('t9b cJ E2c=H2pc', E2c, H2pc, idCert)
   e.pushDeiteration('t11 deiterate E1c', mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E1c], wires: [] }), 64)
   e.pushDeiteration('t11b deiterate E2c', mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E2c], wires: [] }), 64)
 
@@ -397,7 +397,7 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   snap = e.cur
   e.push('b4b fission ZERO out of Mp', { rule: 'fission', node: Mp, path: ['body', 'arg', 'fn', 'arg'] })
   const Z2 = e.newNodeIn(e.cur.root, snap)
-  e.push('b5 cJ Z1=Z2', { rule: 'congruenceJoin', a: Z1, b: Z2, certificate: idCert })
+  e.pushCongruence('b5 cJ Z1=Z2', Z1, Z2, idCert)
   e.push('b6 erase Z2 dup', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [Z2], wires: [] }) })
   const wZ = e.wireOf(Z1, 'output')
   e.pushDeiteration('A7 deiterate base conjunct',
@@ -425,9 +425,9 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   e.push('c6 iterate IH pair', { rule: 'iteration', sel: mkSelection(e.cur, { region: cutA, regions: [], nodes: [H1, H2], wires: [ohF] }), target: cutB })
   const H1p = e.newNodeIn(cutB, snap, F1term)
   const H2p = e.newNodeIn(cutB, snap, F2term)
-  e.push('c7 cJ E1=H1p', { rule: 'congruenceJoin', a: E1, b: H1p, certificate: idCert })
-  e.push('c7b cJ E2=H2p', { rule: 'congruenceJoin', a: E2, b: H2p, certificate: idCert })
-  e.push('c7c cJ D1=D2', { rule: 'congruenceJoin', a: D1, b: D2, certificate: idCert })
+  e.pushCongruence('c7 cJ E1=H1p', E1, H1p, idCert)
+  e.pushCongruence('c7b cJ E2=H2p', E2, H2p, idCert)
+  e.pushCongruence('c7c cJ D1=D2', D1, D2, idCert)
   e.pushDeiteration('c8 deiterate E1', mkSelection(e.cur, { region: cutB, regions: [], nodes: [E1], wires: [] }), 64)
   e.pushDeiteration('c8b deiterate E2', mkSelection(e.cur, { region: cutB, regions: [], nodes: [E2], wires: [] }), 64)
   e.push('c8c erase seedB', { rule: 'erasure', sel: mkSelection(e.cur, { region: cutB, regions: [], nodes: [seedB], wires: [e.wireOf(seedB, 'output')] }) })
@@ -440,7 +440,7 @@ function runShiftInduction(e: DerivationCursor, ref: NodeId, wn: WireId): {
   const oG = e.wireOf(F1m, 'output')
   const A1 = kOpen(e, 'e2 A1', Z1, e.cur.root, app(port('f'), port('a')), { f: oG, a: wn })
   const A2 = kOpen(e, 'e2 A2', Z1, e.cur.root, app(port('f'), port('a')), { f: oG, a: wn })
-  e.push('e2 cJ A1=A2', { rule: 'congruenceJoin', a: A1, b: A2, certificate: idCert })
+  e.pushCongruence('e2 cJ A1=A2', A1, A2, idCert)
   e.push('e2 sever oG', { rule: 'wireSever', wire: oG, keep: [{ node: F1m, port: { kind: 'output' } }, { node: A1, port: { kind: 'freeVar', name: 's0' } }] })
   e.push('e2 fuse F1m->A1', { rule: 'fusion', wire: oG })
   e.push('e2 fuse F2m->A2', { rule: 'fusion', wire: e.wireOf(F2m, 'output') })
@@ -479,7 +479,7 @@ function deriveSuccShiftS(ctx: ProofContext): Theorem {
   const r = runShiftInduction(e, rN, wb)
 
   // reconcile: the applied A1 = `a + (S b)` equals the o-node; keep A2 = `S(a + b)`
-  e.push('rc cJ oNode=A1', { rule: 'congruenceJoin', a: oNode, b: r.A1, certificate: idCert })
+  e.pushCongruence('rc cJ oNode=A1', oNode, r.A1, idCert)
   e.push('rc erase oNode+A1', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [oNode, r.A1], wires: [] }) })
   // fold A2 = S(a + b) into Plus(a,b,t) ∧ Succ(t,o)
   const snap = e.cur
@@ -583,7 +583,7 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   e.push('t8 iterate IH pair', { rule: 'iteration', sel: mkSelection(e.cur, { region: cut2c, regions: [], nodes: [P1y, P2y], wires: [oyC] }), target: cut3c })
   const H1pc = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined)
     .find((id) => e.cur.wires[wyC]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === 's0'))!
-  e.push('t9 cJ E1c=H1pc', { rule: 'congruenceJoin', a: E1c, b: H1pc, certificate: idCert })
+  e.pushCongruence('t9 cJ E1c=H1pc', E1c, H1pc, idCert)
   e.pushDeiteration('t11 deiterate E1c', mkSelection(e.cur, { region: cut3c, regions: [], nodes: [E1c], wires: [] }), 64)
 
   // b: root base fact `0 + b` —o— `b + 0` (units are pure conversion)
@@ -600,7 +600,7 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   snap = e.cur
   e.push('b4b fission ZERO out of Mp', { rule: 'fission', node: Mp, path: ['arg'] })
   const Z2 = e.newNodeIn(e.cur.root, snap)
-  e.push('b5 cJ Z1=Z2', { rule: 'congruenceJoin', a: Z1, b: Z2, certificate: idCert })
+  e.pushCongruence('b5 cJ Z1=Z2', Z1, Z2, idCert)
   e.push('b6 erase Z2 dup', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [Z2], wires: [] }) })
   const wZ = e.wireOf(Z1, 'output')
   const wM = e.wireOf(M, 'output')
@@ -665,7 +665,7 @@ function derivePlusComm(ctx: ProofContext): Theorem {
   e.push('c7 iterate IH pair', { rule: 'iteration', sel: mkSelection(e.cur, { region: cutA, regions: [], nodes: [H1, H2], wires: [ohF] }), target: cutB })
   const H2p = Object.keys(e.cur.nodes).filter((id) => snap.nodes[id] === undefined)
     .find((id) => e.cur.wires[wyF]!.endpoints.some((ep) => ep.node === id && ep.port.kind === 'freeVar' && ep.port.name === 's1'))!
-  e.push('c8 cJ E2=H2p', { rule: 'congruenceJoin', a: E2, b: H2p, certificate: idCert })
+  e.pushCongruence('c8 cJ E2=H2p', E2, H2p, idCert)
   e.pushDeiteration('c9 deiterate E2', mkSelection(e.cur, { region: cutB, regions: [], nodes: [E2], wires: [] }), 64)
   e.push('c10 erase occurrence leftovers', {
     rule: 'erasure',
@@ -683,7 +683,7 @@ function derivePlusComm(ctx: ProofContext): Theorem {
     .filter(([, n]) => n.kind === 'term' && n.region === e.cur.root && J((n as Extract<typeof n, { kind: 'term' }>).term) === J(PT)).map(([id]) => id)
   const ab = rootPT.filter((id) => s0w(id) === wa && s1w(id) === wb)   // o-node + R(a).P1
   const ba = rootPT.filter((id) => s0w(id) === wb && s1w(id) === wa)   // R(a).P2
-  e.push('rc cJ ab', { rule: 'congruenceJoin', a: ab[0]!, b: ab[1]!, certificate: idCert })
+  e.pushCongruence('rc cJ ab', ab[0]!, ab[1]!, idCert)
   e.push('rc erase ab', { rule: 'erasure', sel: mkSelection(e.cur, { region: e.cur.root, regions: [], nodes: [ab[0]!, ab[1]!], wires: [] }) })
   refoldPlus(e, ba[0]!, [wb, wa, wo])
   return { name: 'plusComm', lhs, rhs: mkDiagramWithBoundary(e.cur, [wa, wb, wo]), actions: [...e.actions] }

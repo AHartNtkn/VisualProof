@@ -16,6 +16,7 @@ import {
 } from '../../../src/kernel/proof/json'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
 import type { ProofAction } from '../../../src/kernel/proof/action'
+import { proposePortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
 
 const p = (s: string) => parseTerm(s)
 
@@ -79,7 +80,12 @@ describe('step round-trips through JSON', () => {
     const n = h.termNode(h.root, p('(\\x. x) y'))
     const d = h.build()
     // the node's source free 'y' is canonical s0 after construction
-    const { certificate } = applyConversion(d, n, p('s0'), 10)
+    const target = p('s0')
+    const correspondence = proposePortCorrespondence(
+      (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).term,
+      target,
+    )
+    const { certificate } = applyConversion(d, n, target, correspondence, 10)
 
     const sel = { region: 'r0', regions: ['r1'], nodes: ['n0'], wires: ['w0'] }
     const occurrenceCertificate = {
@@ -102,13 +108,13 @@ describe('step round-trips through JSON', () => {
       { rule: 'deiteration', sel, justifier: sel, certificate: occurrenceCertificate },
       { rule: 'doubleCutIntro', sel },
       { rule: 'doubleCutElim', region: 'r1' },
-      { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: { z: 'w0' } },
-      { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate },
+      { rule: 'conversion', node: 'n0', term: p('s0'), certificate, correspondence, attachments: { z: 'w0' } },
+      { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate, correspondence },
       { rule: 'anchoredWireSplit', wire: 'w0', witness: 'n0', endpoints: [
         { node: 'n1', port: { kind: 'freeVar', name: 's0' } },
       ], target: 'r1' },
       { rule: 'anchoredWireContract', redundant: 'n0', survivor: 'n1', certificate },
-      { rule: 'headStrip', a: 'n0', b: 'n1' },
+      { rule: 'headStrip', a: 'n0', b: 'n1', correspondence },
       { rule: 'closedTermIntro', region: 'r1', term: p('\\x. \\y. x') },
       { rule: 'fusion', wire: 'w0' },
       { rule: 'fission', node: 'n0', path: ['fn', 'arg'] },
@@ -132,8 +138,11 @@ describe('step round-trips through JSON', () => {
       .toThrowError(/unknown field 'extra'/)
     expect(() => stepFromJson({ rule: 'fission', node: 'n0', path: ['sideways'] }))
       .toThrowError(/path segment/)
-    expect(() => stepFromJson({ rule: 'headStrip', a: 'n0', b: 'n1', certificate: { leftSteps: [], rightSteps: [] } }))
-      .toThrowError(/unknown field 'certificate'/)
+    for (const legacy of [
+      { rule: 'conversion', node: 'n0', term: 'P("s0")', certificate: { leftSteps: [], rightSteps: [] }, attachments: {} },
+      { rule: 'congruenceJoin', a: 'n0', b: 'n1', certificate: { leftSteps: [], rightSteps: [] } },
+      { rule: 'headStrip', a: 'n0', b: 'n1' },
+    ]) expect(() => stepFromJson(legacy)).toThrowError(/correspondence/)
     expect(() => stepFromJson({
       ...(stepToJson({ rule: 'closedTermIntro', region: 'r1', term: p('\\x. x') }) as Record<string, unknown>),
       node: 'n0',
@@ -143,6 +152,27 @@ describe('step round-trips through JSON', () => {
     expect(() => stepFromJson({ rule: 'relUnfold', node: 'n0', extra: 1 }))
       .toThrowError(/unknown field 'extra'/)
     expect(() => stepFromJson({ rule: 'relFold', sel: { region: 'r0', regions: [], nodes: [], wires: [] }, defId: 'nat', args: ['w0'], extra: 1 }))
+      .toThrowError(/unknown field 'extra'/)
+  })
+
+  it('rejects malformed correspondence carrier data during strict decoding', () => {
+    const base = {
+      rule: 'headStrip', a: 'n0', b: 'n1',
+      correspondence: { commonArity: 2, left: { s0: 0 }, right: { s0: 1 } },
+    }
+    expect(() => stepFromJson({
+      ...base,
+      correspondence: { commonArity: 1.5, left: {}, right: {} },
+    })).toThrowError(/commonArity.*safe integer/)
+    expect(() => stepFromJson({
+      ...base,
+      correspondence: { commonArity: 2, left: { s0: 0, s1: 0 }, right: { s0: 1 } },
+    })).toThrowError(/injective.*left/)
+    expect(() => stepFromJson({
+      ...base,
+      correspondence: { commonArity: 2, left: { s0: 0 }, right: { s0: 0 } },
+    })).toThrowError(/column 1.*uncovered/)
+    expect(() => stepFromJson({ ...base, correspondence: { ...base.correspondence, extra: 1 } }))
       .toThrowError(/unknown field 'extra'/)
   })
 
@@ -200,9 +230,14 @@ describe('certFromJson rejects invalid reduction-step kinds', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('(\\x. x) y'))
     const d = h.build()
-    const { certificate } = applyConversion(d, n, p('s0'), 10)
+    const target = p('s0')
+    const correspondence = proposePortCorrespondence(
+      (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).term,
+      target,
+    )
+    const { certificate } = applyConversion(d, n, target, correspondence, 10)
     // Build a valid conversion step JSON, then corrupt one reduction-step kind
-    const step: ProofStep = { rule: 'conversion', node: 'n0', term: p('s0'), certificate, attachments: {} }
+    const step: ProofStep = { rule: 'conversion', node: 'n0', term: target, certificate, correspondence, attachments: {} }
     const j = JSON.parse(JSON.stringify(stepToJson(step))) as Record<string, unknown>
     const cert = j['certificate'] as { leftSteps: unknown[] }
     if (cert.leftSteps.length > 0) {

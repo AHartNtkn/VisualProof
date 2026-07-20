@@ -9,6 +9,7 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import type { ConversionCertificate } from '../../../src/kernel/term/certificate'
 import { applyCongruenceJoin } from '../../../src/kernel/rules/congruence'
+import { proposePortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
 import { applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 
 const p = (s: string) => parseTerm(s)
@@ -143,7 +144,8 @@ describe('name-blind free ports (canonicalization at construction)', () => {
     const d = h.build()
     // after construction the two nodes carry literally equal terms
     expect(termEq(termOf(d, n1), termOf(d, n2))).toBe(true)
-    const out = applyCongruenceJoin(d, n1, n2, empty)
+    const correspondence = proposePortCorrespondence(termOf(d, n1), termOf(d, n2))
+    const out = applyCongruenceJoin(d, n1, n2, empty, correspondence)
     const shared = Object.values(out.wires).find(
       (w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2,
     )

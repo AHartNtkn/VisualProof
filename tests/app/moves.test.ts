@@ -258,7 +258,10 @@ describe('proof connection resolution', () => {
     ])
 
     expect(proofConnectionStep(b.build(), outputEnd(wire, a), outputEnd(wire, c), 'forward', 64))
-      .toEqual({ rule: 'headStrip', a, b: c })
+      .toEqual({
+        rule: 'headStrip', a, b: c,
+        correspondence: { commonArity: 2, left: { s0: 0, s1: 1 }, right: { s0: 0, s1: 1 } },
+      })
   })
 
   it('does not guess a head-strip pair from a same-wire trunk', () => {
@@ -412,7 +415,10 @@ describe('proof connection resolution', () => {
     expect(claim).not.toBeNull()
     claim!.move(to)
     claim!.release(to, true)
-    expect(applied).toEqual([{ rule: 'headStrip', a, b: c }])
+    expect(applied).toEqual([{
+      rule: 'headStrip', a, b: c,
+      correspondence: { commonArity: 1, left: { s0: 0 }, right: { s0: 0 } },
+    }])
   })
 
   it('refuses the same endpoint and preserves a kernel head mismatch refusal', () => {
