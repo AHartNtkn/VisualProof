@@ -3,7 +3,7 @@
   "solution": [
     {
       "rule": "insertion",
-      "region": "r4",
+      "region": "r5",
       "pattern": {
         "diagram": {
           "root": "r0",
@@ -36,7 +36,7 @@
     {
       "rule": "deiteration",
       "sel": {
-        "region": "r4",
+        "region": "r5",
         "regions": [],
         "nodes": [
           "n0_0"
@@ -61,9 +61,7 @@
       "rule": "erasure",
       "sel": {
         "region": "r3",
-        "regions": [
-          "r5"
-        ],
+        "regions": [],
         "nodes": [
           "n0",
           "n1"

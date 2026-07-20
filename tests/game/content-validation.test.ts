@@ -79,6 +79,34 @@ describe('build-only game content evidence', () => {
     expect(findEmptyCutShortcutHosts(builder.build())).toEqual([])
   })
 
+  it('keeps reconstructed atomic and polarity problems free of empty-cut truth witnesses', () => {
+    const catalog = loadGameContent(gameContentFiles)
+    const shortcutFree = [
+      'shallow-edit-legality-contrast',
+      'atomic-content-insertion',
+      'atomic-double-cut-selection',
+      'polarity-bubble-contrast',
+    ] as const
+
+    for (const id of shortcutFree) {
+      expect(findEmptyCutShortcutHosts(catalog.puzzle(id as never).diagram), id).toEqual([])
+    }
+  })
+
+  it('preserves each reconstructed problem\'s primary rule in its authored witness', () => {
+    const primaryRule = new Map([
+      ['shallow-edit-legality-contrast', 'insertion'],
+      ['atomic-content-insertion', 'insertion'],
+      ['atomic-double-cut-selection', 'doubleCutIntro'],
+      ['polarity-bubble-contrast', 'deiteration'],
+    ])
+
+    for (const [id, rule] of primaryRule) {
+      const evidence = readJson(resolve(process.cwd(), `content/validation/${id}.json`))
+      expect(evidence.solution.some((step: JsonRecord) => step.rule === rule), id).toBe(true)
+    }
+  })
+
   it('represents both nested owners as distinct binder pairs', () => {
     const diagram = loadGameContent(gameContentFiles).puzzle('nested-owner-introduction' as never).diagram
     const binders = ['n0', 'n1', 'n2', 'n3'].map((id) => diagram.nodes[id]).map((node) => {

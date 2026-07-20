@@ -182,7 +182,7 @@
     {
       "puzzle": "atomic-content-insertion",
       "prerequisites": [
-        "single-mark-return"
+        "marked-echo-deiteration"
       ]
     },
     {
@@ -200,7 +200,7 @@
     {
       "puzzle": "atomic-double-cut-selection",
       "prerequisites": [
-        "single-mark-return"
+        "marked-echo-deiteration"
       ]
     },
     {
@@ -254,8 +254,7 @@
     {
       "puzzle": "polarity-bubble-contrast",
       "prerequisites": [
-        "nested-owner-introduction",
-        "shallow-edit-legality-contrast"
+        "marked-echo-deiteration"
       ]
     },
     {

@@ -13,14 +13,10 @@ const onboardingIds = [
   'echoed-veil',
   'empty-ring-release',
 ] as const
-const incumbentRootIds = [
-  'single-mark-return',
-  'shallow-edit-legality-contrast',
+const singleMarkRootIds = [
   'atomic-fragment-erasure',
-  'atomic-content-insertion',
   'compound-copy-authority-contrast',
   'transfer-duplication-recognition',
-  'atomic-double-cut-selection',
   'common-conjunction-factor-base',
   'common-disjunction-factor-base',
   'content-bearing-annulus-choice',
@@ -59,6 +55,12 @@ const incumbentRootIds = [
   'recollect-shared-branch-context',
   'rm-c3',
 ] as const
+const reconstructedPrerequisites = [
+  ['shallow-edit-legality-contrast', 'single-mark-return'],
+  ['atomic-content-insertion', 'marked-echo-deiteration'],
+  ['atomic-double-cut-selection', 'marked-echo-deiteration'],
+  ['polarity-bubble-contrast', 'marked-echo-deiteration'],
+] as const
 describe('reconstructed opening content', () => {
   it('matches the accepted Seyric collection structurally without making its count authoritative', () => {
     const acceptedIds = seyricCoverage.puzzles.map(({ puzzle }) => puzzle).sort()
@@ -86,7 +88,7 @@ describe('reconstructed opening content', () => {
     expect(Object.keys(ring.wires)).toEqual([])
   })
 
-  it('attaches the preserved optional practice graph behind the completed onboarding spine', () => {
+  it('attaches each opening practice problem behind its required concept', () => {
     expect(catalog.placement(puzzleId('two-veils')).prerequisites).toEqual([])
     expect(catalog.placement(puzzleId('four-veils')).prerequisites).toEqual([puzzleId('two-veils')])
     expect(catalog.placement(puzzleId('forked-veil')).prerequisites).toEqual([puzzleId('two-veils')])
@@ -95,9 +97,13 @@ describe('reconstructed opening content', () => {
     expect(catalog.placement(puzzleId('single-mark-return')).prerequisites)
       .toEqual([puzzleId('empty-ring-release')])
 
-    for (const id of incumbentRootIds.slice(1)) {
+    for (const id of singleMarkRootIds) {
       expect(catalog.placement(puzzleId(id)).prerequisites)
         .toEqual([puzzleId('single-mark-return')])
+    }
+    for (const [id, prerequisite] of reconstructedPrerequisites) {
+      expect(catalog.placement(puzzleId(id)).prerequisites)
+        .toEqual([puzzleId(prerequisite)])
     }
   })
 

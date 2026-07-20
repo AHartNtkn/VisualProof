@@ -20,10 +20,6 @@
         "parent": "r2",
         "arity": 0
       },
-      "r4": {
-        "kind": "cut",
-        "parent": "r3"
-      },
       "r5": {
         "kind": "cut",
         "parent": "r3"

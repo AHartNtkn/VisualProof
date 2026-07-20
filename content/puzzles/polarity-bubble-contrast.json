@@ -43,6 +43,11 @@
         "kind": "atom",
         "region": "r4",
         "binder": "r2"
+      },
+      "n3": {
+        "kind": "atom",
+        "region": "r5",
+        "binder": "r2"
       }
     },
     "wires": {}

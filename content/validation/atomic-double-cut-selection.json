@@ -4,10 +4,10 @@
     {
       "rule": "doubleCutIntro",
       "sel": {
-        "region": "r3",
+        "region": "r5",
         "regions": [],
         "nodes": [
-          "n0"
+          "n1"
         ],
         "wires": []
       }
@@ -15,9 +15,9 @@
     {
       "rule": "deiteration",
       "sel": {
-        "region": "r3",
+        "region": "dc",
         "regions": [
-          "r4"
+          "dc_0"
         ],
         "nodes": [],
         "wires": []
@@ -25,24 +25,26 @@
       "fuel": 100
     },
     {
-      "rule": "doubleCutElim",
-      "region": "dc"
-    },
-    {
       "rule": "erasure",
       "sel": {
-        "region": "r3",
-        "regions": [],
-        "nodes": [
-          "n0",
-          "n1"
+        "region": "r2",
+        "regions": [
+          "r3"
         ],
+        "nodes": [],
         "wires": []
       }
     },
     {
-      "rule": "vacuousElim",
-      "region": "r3"
+      "rule": "erasure",
+      "sel": {
+        "region": "r5",
+        "regions": [
+          "r6"
+        ],
+        "nodes": [],
+        "wires": []
+      }
     },
     {
       "rule": "vacuousElim",
@@ -51,15 +53,19 @@
     {
       "rule": "doubleCutElim",
       "region": "r1"
+    },
+    {
+      "rule": "doubleCutElim",
+      "region": "r5"
     }
   ],
   "availableArtifacts": [],
   "expectedRules": [
     "doubleCutIntro",
     "deiteration",
-    "doubleCutElim",
     "erasure",
-    "vacuousElim"
+    "vacuousElim",
+    "doubleCutElim"
   ],
   "recognizedStates": []
 }

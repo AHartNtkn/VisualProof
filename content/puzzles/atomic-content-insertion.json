@@ -26,40 +26,27 @@
       },
       "r5": {
         "kind": "cut",
-        "parent": "r4"
+        "parent": "r3"
       },
       "r6": {
         "kind": "cut",
-        "parent": "r4"
-      },
-      "r7": {
-        "kind": "cut",
-        "parent": "r6"
-      },
-      "r8": {
-        "kind": "cut",
-        "parent": "r3"
+        "parent": "r5"
       }
     },
     "nodes": {
       "n0": {
         "kind": "atom",
-        "region": "r3",
+        "region": "r4",
         "binder": "r2"
       },
       "n1": {
         "kind": "atom",
-        "region": "r5",
-        "binder": "r3"
+        "region": "r6",
+        "binder": "r2"
       },
       "n2": {
         "kind": "atom",
         "region": "r6",
-        "binder": "r2"
-      },
-      "n3": {
-        "kind": "atom",
-        "region": "r7",
         "binder": "r3"
       }
     },

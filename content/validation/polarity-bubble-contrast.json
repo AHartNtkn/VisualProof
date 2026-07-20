@@ -4,6 +4,18 @@
     {
       "rule": "deiteration",
       "sel": {
+        "region": "r5",
+        "regions": [],
+        "nodes": [
+          "n3"
+        ],
+        "wires": []
+      },
+      "fuel": 100
+    },
+    {
+      "rule": "deiteration",
+      "sel": {
         "region": "r4",
         "regions": [],
         "nodes": [

@@ -949,9 +949,10 @@
         "polarity-shallow-opposite-contrast",
         "interaction-host-scope-edit-legality"
       ],
-      "visibleSituation": "Similar atomic targets in shallow opposite-polarity hosts make the actual semantic host decide whether erasure, insertion, or weakening is legal.",
-      "defeats": "It defeats the hypothesis that similar nearby marks admit the same edit; the shallow host polarity controls insertion versus erasure.",
+      "visibleSituation": "Two owner-specific marks sit in a shallow negative field while one supported echo sits just across a positive veil; the player must act on the host whose polarity admits the edit.",
+      "defeats": "It defeats the hypothesis that nearby marked targets share edit permissions: atomic insertion belongs inside the positive veil, while final erasure belongs to the enclosing negative field.",
       "experientialNeighbors": [
+        "atomic-content-insertion",
         "polarity-bubble-contrast"
       ]
     },
@@ -971,10 +972,12 @@
       "obligations": [
         "insertion-atomic-construction-placement"
       ],
-      "visibleSituation": "A missing atomic proposition must be constructed and placed in one legal semantic host.",
-      "defeats": "It defeats the hypothesis that an empty positive host cannot receive owned propositional content; the inserted atom is tied to the existing owner and then participates in exact matching.",
+      "visibleSituation": "A shallow marked veil contains P but lacks the inner-owned Q carried by a deeper P-and-Q veil; adding that one atom makes the two complete marked veils exact.",
+      "defeats": "It defeats indiscriminate insertion: only Q under its existing inner owner completes the shallow source, and that completed relationship is consumed immediately to lift the descendant veil.",
       "experientialNeighbors": [
-        "shallow-edit-legality-contrast"
+        "marked-echo-deiteration",
+        "grouped-branch-construction",
+        "atomic-double-cut-selection"
       ]
     },
     {
@@ -1004,9 +1007,13 @@
       "obligations": [
         "double-cut-introduction-atomic-selection"
       ],
-      "visibleSituation": "Two nearby atomic occurrences make exact selection of one complete atom decisive before double-cut introduction.",
-      "defeats": "It defeats the hypothesis that selecting a nearby enclosure is equivalent to selecting the complete atomic occurrence to be wrapped.",
-      "experientialNeighbors": []
+      "visibleSituation": "Inside a paired veil, an outer-owned P sits beside a separately ring-owned Q while an ancestor veil supplies exactly P; wrapping only P creates the matching inner veil and a useful empty annulus.",
+      "defeats": "It defeats selection by proximity or size: wrapping Q preserves the wrong owner, while wrapping P together with Q creates a compound inner veil that cannot match the single-P support.",
+      "experientialNeighbors": [
+        "atomic-content-insertion",
+        "compound-double-cut-selection",
+        "marked-echo-deiteration"
+      ]
     },
     {
       "puzzle": "common-conjunction-factor-base",
@@ -1093,9 +1100,13 @@
       "obligations": [
         "polarity-nested-parity"
       ],
-      "visibleSituation": "Closed wire-free start with 1 semantic owner, 3 owned atomic occurrences, and 4 cuts. Determine nested polarity by parity where rings and cuts defeat local-depth guessing.",
-      "defeats": "It overturns the hypothesis that polarity follows local cut depth alone; rings and nested cuts require parity across the full host path.",
-      "experientialNeighbors": []
+      "visibleSituation": "One ownership ring carries four identical P marks through three nested veils, placing successive occurrences in alternating negative and positive hosts without any ring changing parity.",
+      "defeats": "It overturns local-depth and ring-color guesses: only the complete cut path gives polarity, and both the outer P side and the nested alternating side are required for the closed theorem.",
+      "experientialNeighbors": [
+        "marked-echo-deiteration",
+        "shallow-edit-legality-contrast",
+        "nested-owner-introduction"
+      ]
     },
     {
       "puzzle": "rm-fa",
