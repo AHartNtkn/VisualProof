@@ -1163,7 +1163,19 @@ theorem applyComprehensionInstantiate_success
         instantiateCopies comprehension attachments binders payload
             initial.pendingAtoms.length initial = .ok copied ∧
           finishInstantiation copied = .ok result := by
-  sorry
+  have hpolarity : spawnPolarity orientation
+      (concreteCutDepth input.val bubble) := by
+    by_cases h : spawnPolarity orientation
+        (concreteCutDepth input.val bubble)
+    · exact h
+    · simp [applyComprehensionInstantiate, h] at happly
+  refine ⟨hpolarity, ?_⟩
+  unfold applyComprehensionInstantiate at happly
+  rw [if_pos hpolarity] at happly
+  dsimp only at happly
+  split at happly <;> try contradiction
+  rename_i copied hcopied
+  exact ⟨copied, hcopied, happly⟩
 
 theorem applyComprehensionInstantiate_realizes {signature : List Nat}
     {orientation : Orientation}
@@ -1206,7 +1218,19 @@ theorem applyComprehensionInstantiate_realizes {signature : List Nat}
                         (vacuousElimWireProvenance hraw))
                       (toDroppedInterface.compose
                         (vacuousElimInterfaceTransport hraw)) := by
-  sorry
+  have hpolarity : spawnPolarity orientation
+      (concreteCutDepth input.val bubble) := by
+    by_cases h : spawnPolarity orientation
+        (concreteCutDepth input.val bubble)
+    · exact h
+    · simp [applyComprehensionInstantiate, h] at happly
+  refine ⟨hpolarity, ?_⟩
+  unfold applyComprehensionInstantiate at happly
+  rw [if_pos hpolarity] at happly
+  dsimp only at happly
+  split at happly <;> try contradiction
+  rename_i copied hcopied
+  exact ⟨copied, hcopied, finishInstantiation_realizes happly⟩
 
 namespace ComprehensionInstantiationExamples
 
