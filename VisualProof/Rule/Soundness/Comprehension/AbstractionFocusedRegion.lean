@@ -148,6 +148,7 @@ theorem focusedSurvivingOccurrence_semantic
     (parent : Fin input.val.regionCount)
     (parentSurvives : trace.domains.regions.survives parent = true)
     (notWrap : parent ≠ wrap.val.anchor)
+    (parentSelected : parent ∈ wrap.selectedRegions)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
@@ -165,6 +166,10 @@ theorem focusedSurvivingOccurrence_semantic
     (allowed : AbstractionAllowed input.val wrap.val.anchor direction parent)
     (recurseAt : ∀ (childDirection : ConcreteElaboration.SimulationDirection)
       (child : Fin input.val.regionCount),
+      child ∈ wrap.selectedRegions →
+      trace.domains.regions.survives child = true →
+      child ≠ wrap.val.anchor →
+      AbstractionAllowed input.val wrap.val.anchor childDirection child →
       FixedRegionSimulation trace model named childDirection sourceFuel
         targetFuel child)
     (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -244,6 +249,24 @@ theorem focusedSurvivingOccurrence_semantic
               rw [trace.regionMap_of_survives parent parentSurvives]
               exact (trace.targetRegion_parent_iff_nonwrap child survives parent
                 parentSurvives notWrap).2 childParent
+            have parentSelectedRaw :=
+              (wrap.mem_selectedRegions parent).1 parentSelected
+            obtain ⟨root, rootMember, rootEnclosesParent⟩ := parentSelectedRaw
+            have parentEnclosesChild : input.val.Encloses parent child := by
+              refine ⟨⟨1, by
+                have positive : 0 < input.val.regionCount :=
+                  Nat.lt_of_le_of_lt (Nat.zero_le child.val) child.isLt
+                omega⟩, ?_⟩
+              simp [ConcreteDiagram.climb, childParent]
+            have childSelected : child ∈ wrap.selectedRegions := by
+              apply (wrap.mem_selectedRegions child).2
+              exact ⟨root, rootMember,
+                ConcreteElaboration.checked_encloses_trans input.property
+                  rootEnclosesParent parentEnclosesChild⟩
+            have childNotWrap : child ≠ wrap.val.anchor := by
+              intro equal
+              subst child
+              exact selection_anchor_not_selected input wrap childSelected
             cases sourceKind : input.val.regions child with
             | sheet =>
                 simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind]
@@ -283,25 +306,26 @@ theorem focusedSurvivingOccurrence_semantic
                               targetBinders = some targetBody := by
                           rw [trace.regionMap_of_survives child survives]
                           exact targetResult
-                        have bodies := recurseAt direction.flip child sourceContext
-                          targetContext context sourceExact.nodup sourceBinders
-                          targetBinders binderWitness
-                          (ConcreteElaboration.BinderContext.covers_cut_child
-                            sourceCover sourceKind)
-                          (by
-                            rw [trace.regionMap_of_survives child survives]
-                            exact ConcreteElaboration.BinderContext.covers_cut_child
-                              targetCover childShape)
-                          (sourceEnumeration.cutChild input.property sourceKind)
-                          (by
-                            rw [trace.regionMap_of_survives child survives]
-                            exact targetEnumeration.cutChild targetWellFormed
-                              childShape)
-                          (sourceExact.extend_child input.property childParent)
-                          (by
-                            rw [trace.regionMap_of_survives child survives]
-                            exact targetExact.extend_child targetWellFormed targetParent)
-                          sourceBody targetBody sourceResult targetResultMapped
+                        have bodies := recurseAt direction.flip child childSelected
+                          survives childNotWrap childAllowed sourceContext
+                              targetContext context sourceExact.nodup sourceBinders
+                              targetBinders binderWitness
+                              (ConcreteElaboration.BinderContext.covers_cut_child
+                                sourceCover sourceKind)
+                              (by
+                                rw [trace.regionMap_of_survives child survives]
+                                exact ConcreteElaboration.BinderContext.covers_cut_child
+                                  targetCover childShape)
+                              (sourceEnumeration.cutChild input.property sourceKind)
+                              (by
+                                rw [trace.regionMap_of_survives child survives]
+                                exact targetEnumeration.cutChild targetWellFormed
+                                  childShape)
+                              (sourceExact.extend_child input.property childParent)
+                              (by
+                                rw [trace.regionMap_of_survives child survives]
+                                exact targetExact.extend_child targetWellFormed targetParent)
+                              sourceBody targetBody sourceResult targetResultMapped
                         intro sourceEnvironment targetEnvironment targetRelations
                           environments fixed
                         have bodyEntailment := bodies sourceEnvironment
@@ -354,25 +378,26 @@ theorem focusedSurvivingOccurrence_semantic
                               targetPushed = some targetBody := by
                           rw [trace.regionMap_of_survives child survives]
                           exact targetResult
-                        have bodies := recurseAt direction child sourceContext
-                          targetContext context sourceExact.nodup sourcePushed
-                          targetPushed childWitness
-                          (ConcreteElaboration.BinderContext.push_covers_bubble_child
-                            sourceCover sourceKind)
-                          (by
-                            rw [trace.regionMap_of_survives child survives]
-                            exact ConcreteElaboration.BinderContext.push_covers_bubble_child
-                              targetCover childShape)
-                          (sourceEnumeration.bubbleChild input.property sourceKind)
-                          (by
-                            rw [trace.regionMap_of_survives child survives]
-                            exact targetEnumeration.bubbleChild targetWellFormed
-                              childShape)
-                          (sourceExact.extend_child input.property childParent)
-                          (by
-                            rw [trace.regionMap_of_survives child survives]
-                            exact targetExact.extend_child targetWellFormed targetParent)
-                          sourceBody targetBody sourceResult targetResultMapped
+                        have bodies := recurseAt direction child childSelected
+                          survives childNotWrap childAllowed sourceContext
+                              targetContext context sourceExact.nodup sourcePushed
+                              targetPushed childWitness
+                              (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                                sourceCover sourceKind)
+                              (by
+                                rw [trace.regionMap_of_survives child survives]
+                                exact ConcreteElaboration.BinderContext.push_covers_bubble_child
+                                  targetCover childShape)
+                              (sourceEnumeration.bubbleChild input.property sourceKind)
+                              (by
+                                rw [trace.regionMap_of_survives child survives]
+                                exact targetEnumeration.bubbleChild targetWellFormed
+                                  childShape)
+                              (sourceExact.extend_child input.property childParent)
+                              (by
+                                rw [trace.regionMap_of_survives child survives]
+                                exact targetExact.extend_child targetWellFormed targetParent)
+                              sourceBody targetBody sourceResult targetResultMapped
                         intro sourceEnvironment targetEnvironment targetRelations
                           environments fixed
                         simp only [Item.renameRelations, bubble_denotes_exists]

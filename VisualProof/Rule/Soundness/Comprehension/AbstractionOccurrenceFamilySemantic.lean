@@ -150,7 +150,11 @@ theorem occurrenceFamily_backward
       context.indexRelation.EnvironmentsAgree sourceEnvironment
           targetEnvironment ∧
         denoteItemSeq model named sourceEnvironment sourceRelations
-          (occurrenceFamilyItems sourceItems indices) := by
+          (occurrenceFamilyItems sourceItems indices) ∧
+        (∀ hostIndex, (∀ index, index ∈ indices →
+            sourceContext.get hostIndex ∉
+              (occurrences.get index).selection.internalWires) →
+          sourceEnvironment hostIndex = fallback hostIndex) := by
   classical
   have targetAtoms := (occurrenceFamilyAtomItems_denote_iff indices targetItems
     model named targetEnvironment targetRelations).1 targetDenotes
@@ -206,32 +210,35 @@ theorem occurrenceFamily_backward
       targetEnvironment := by
     exact trace.occurrenceFamilyEnvironment_agrees payload indices sourceContext
       targetContext context values fallback targetEnvironment environments
-  refine ⟨sourceEnvironment, agreement, ?_⟩
-  apply (occurrenceFamilyItems_denote_iff indices sourceItems model named
-    sourceEnvironment sourceRelations).2
-  intro index member
-  have valueDenotes : denoteItemSeq model named (values index) sourceRelations
-      (sourceItems index) := by
-    dsimp only [values]
-    rw [dif_pos member]
-    exact (Classical.choose_spec (realized index member)).2
-  apply (selectedOccurrence_denote_congr input (occurrences.get index)
-    (payload.witnesses index) model named hostFuel sourceContext sourceBinders
-    (by
-      rw [anchored index member]
-      exact sourceEnumeration)
-    (by
-      rw [anchored index member]
-      exact sourceCover)
-    (by
-      rw [anchored index member]
-      exact sourceExact)
-    (sourceItems index) (sourceCompiled index member) (values index)
-    sourceEnvironment sourceRelations ?_).1 valueDenotes
-  intro hostIndex represented
-  symm
-  exact occurrenceFamilyEnvironment_eq_value_on_closure payload indices
-    sourceContext values fallback preserves index member hostIndex represented
+  refine ⟨sourceEnvironment, agreement, ?_, ?_⟩
+  · apply (occurrenceFamilyItems_denote_iff indices sourceItems model named
+      sourceEnvironment sourceRelations).2
+    intro index member
+    have valueDenotes : denoteItemSeq model named (values index) sourceRelations
+        (sourceItems index) := by
+      dsimp only [values]
+      rw [dif_pos member]
+      exact (Classical.choose_spec (realized index member)).2
+    apply (selectedOccurrence_denote_congr input (occurrences.get index)
+      (payload.witnesses index) model named hostFuel sourceContext sourceBinders
+      (by
+        rw [anchored index member]
+        exact sourceEnumeration)
+      (by
+        rw [anchored index member]
+        exact sourceCover)
+      (by
+        rw [anchored index member]
+        exact sourceExact)
+      (sourceItems index) (sourceCompiled index member) (values index)
+      sourceEnvironment sourceRelations ?_).1 valueDenotes
+    intro hostIndex represented
+    symm
+    exact occurrenceFamilyEnvironment_eq_value_on_closure payload indices
+      sourceContext values fallback preserves index member hostIndex represented
+  · intro hostIndex outside
+    exact occurrenceFamilyEnvironment_eq_fallback input occurrences indices
+      sourceContext values fallback hostIndex outside
 
 end AbstractionRawTrace
 
