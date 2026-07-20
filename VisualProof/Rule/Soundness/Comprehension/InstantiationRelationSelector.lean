@@ -289,7 +289,9 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
         targetEnvironment sourceRelations targetRelations =
       payloadArityEq ▸ relationOfTraceFocus wholeTrace model named
         parameterValues proxyValues := by
-  sorry
+  by_cases hzero : payload.binderSpine.proxyCount = 0
+  · simp [finalFocusRelationSelector, relationOfTraceFocus, hzero]
+  · simp [finalFocusRelationSelector, relationOfTraceFocus, hzero]
 
 end InstantiationSemantic
 
