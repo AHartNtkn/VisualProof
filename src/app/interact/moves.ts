@@ -7,6 +7,7 @@ import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof
 import { convertible } from '../../kernel/term/convert'
 import type { ConversionCertificate } from '../../kernel/term/certificate'
 import { parseTerm } from '../../kernel/term/parse'
+import { freePorts } from '../../kernel/term/term'
 import { applyConversion } from '../../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import { termNodeAt, wireAt } from '../../kernel/rules/access'
@@ -548,7 +549,7 @@ export class ProofMoveController {
       const term = parseTerm(value)
       const diagram = this.#options.diagram()
       const source = termNodeAt(diagram, node)
-      const correspondence = proposePortCorrespondence(source.term, term, source.freePorts)
+      const correspondence = proposePortCorrespondence(source.term, term, source.freePorts, freePorts(term))
       const conversion = applyConversion(diagram, node, term, correspondence, this.#options.fuel())
       this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, correspondence, attachments: {} })
     }))

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
+import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
@@ -103,6 +104,8 @@ describe('step round-trips through JSON', () => {
     const correspondence = proposePortCorrespondence(
       (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).term,
       target,
+      (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).freePorts,
+      freePorts(target),
     )
     const { certificate } = applyConversion(d, n, target, correspondence, 10)
 
@@ -253,6 +256,8 @@ describe('certFromJson rejects invalid reduction-step kinds', () => {
     const correspondence = proposePortCorrespondence(
       (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).term,
       target,
+      (d.nodes[n] as Extract<typeof d.nodes[string], { kind: 'term' }>).freePorts,
+      freePorts(target),
     )
     const { certificate } = applyConversion(d, n, target, correspondence, 10)
     // Build a valid conversion step JSON, then corrupt one reduction-step kind

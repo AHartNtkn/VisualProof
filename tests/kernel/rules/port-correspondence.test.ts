@@ -42,12 +42,16 @@ describe('PortCorrespondence', () => {
   })
 
   it('proposes a deterministic native witness that pairs shared names, then remaining ports by occurrence', () => {
-    expect(proposePortCorrespondence(p('x erased'), p('renamed added'))).toEqual({
+    expect(proposePortCorrespondence(
+      p('x erased'), p('renamed added'), ['x', 'erased'], ['renamed', 'added'],
+    )).toEqual({
       commonArity: 2,
       left: { x: 0, erased: 1 },
       right: { renamed: 0, added: 1 },
     })
-    expect(proposePortCorrespondence(p('shared x'), p('shared y'))).toEqual({
+    expect(proposePortCorrespondence(
+      p('shared x'), p('shared y'), ['shared', 'x'], ['shared', 'y'],
+    )).toEqual({
       commonArity: 2,
       left: { shared: 0, x: 1 },
       right: { shared: 0, y: 1 },

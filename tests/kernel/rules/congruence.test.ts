@@ -16,7 +16,12 @@ const applyCongruenceJoin = (
   a: NodeId,
   b: NodeId,
   certificate: ConversionCertificate,
-  correspondence = proposePortCorrespondence(termNodeAt(d, a).term, termNodeAt(d, b).term),
+  correspondence = proposePortCorrespondence(
+    termNodeAt(d, a).term,
+    termNodeAt(d, b).term,
+    termNodeAt(d, a).freePorts,
+    termNodeAt(d, b).freePorts,
+  ),
 ) => kernelCongruenceJoin(d, a, b, certificate, correspondence)
 
 const certFor = (l: string, r: string): ConversionCertificate => {

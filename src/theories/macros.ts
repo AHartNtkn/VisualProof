@@ -1,5 +1,5 @@
 import type { Term } from '../kernel/term/term'
-import { termEq } from '../kernel/term/term'
+import { freePorts, termEq } from '../kernel/term/term'
 import { applyConversion } from '../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
@@ -55,7 +55,7 @@ export class DerivationCursor {
   pushConv(label: string, node: NodeId, t: Term, attach: Readonly<Record<string, WireId>> = {}): void {
     let certificate
     const source = termNodeAt(this.cur, node)
-    const correspondence = proposePortCorrespondence(source.term, t, source.freePorts)
+    const correspondence = proposePortCorrespondence(source.term, t, source.freePorts, freePorts(t))
     try {
       certificate = applyConversion(this.cur, node, t, correspondence, CONVERSION_FUEL, attach).certificate
     } catch (e) {

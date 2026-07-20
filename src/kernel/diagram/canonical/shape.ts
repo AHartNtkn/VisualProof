@@ -1,16 +1,16 @@
 import type { Term } from '../../term/term'
-import { app, assertWellFormedTerm, freePorts, lam, port, bvar } from '../../term/term'
+import { app, assertWellFormedTerm, lam, port, bvar } from '../../term/term'
 import { serializeTerm } from '../../term/serialize'
 import type { Port } from '../diagram'
 import { DiagramError } from '../diagram'
 
 /**
  * The shape key of a term node: its term with free ports renamed positionally
- * (p0, p1, … in first-occurrence order), serialized. Two term nodes denote the
+ * (p0, p1, … in declared interface order), serialized. Two term nodes denote the
  * same positional constructor relation iff their shape keys are equal — free
  * variable names are internal labels, not content (spec §2.2).
  */
-export function termShapeKey(t: Term, declaredFreePorts: readonly string[] = freePorts(t)): string {
+export function termShapeKey(t: Term, declaredFreePorts: readonly string[]): string {
   assertWellFormedTerm(t)
   const order = declaredFreePorts
   const rename = new Map(order.map((name, i) => [name, `p${i}`]))
@@ -34,13 +34,13 @@ function renamePorts(t: Term, rename: ReadonlyMap<string, string>): Term {
 
 /**
  * Positional key for a port: 'out' for the output, 'v{i}' for the free
- * variable at first-occurrence position i, 'a{i}' for atom args. Used by the
+ * variable at declared interface position i, 'a{i}' for atom args. Used by the
  * canonical form so wire endpoints are name-independent.
  */
 export function positionalPortKey(
-  termOfNode: Term,
+  _termOfNode: Term,
   p: Port,
-  declaredFreePorts: readonly string[] = freePorts(termOfNode),
+  declaredFreePorts: readonly string[],
 ): string {
   switch (p.kind) {
     case 'output': return 'out'

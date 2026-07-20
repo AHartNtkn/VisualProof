@@ -14,7 +14,12 @@ const applyHeadStrip = (
   d: Diagram,
   a: NodeId,
   b: NodeId,
-  correspondence = proposePortCorrespondence(termNodeAt(d, a).term, termNodeAt(d, b).term),
+  correspondence = proposePortCorrespondence(
+    termNodeAt(d, a).term,
+    termNodeAt(d, b).term,
+    termNodeAt(d, a).freePorts,
+    termNodeAt(d, b).freePorts,
+  ),
 ) => kernelHeadStrip(d, a, b, correspondence)
 
 const fv = (node: NodeId, name: string): Endpoint => ({ node, port: { kind: 'freeVar', name } })

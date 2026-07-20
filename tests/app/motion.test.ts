@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { parseTerm } from '../../src/kernel/term/parse'
+import { freePorts } from '../../src/kernel/term/term'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
@@ -19,7 +20,8 @@ const fixture = () => {
   const node = builder.termNode(builder.root, parseTerm('(\\x. x) y'))
   const diagram = builder.build()
   const term = parseTerm('s0')
-  const correspondence = proposePortCorrespondence(termNodeAt(diagram, node).term, term)
+  const source = termNodeAt(diagram, node)
+  const correspondence = proposePortCorrespondence(source.term, term, source.freePorts, freePorts(term))
   const converted = applyConversion(diagram, node, term, correspondence, 32)
   const step = { rule: 'conversion' as const, node, term, certificate: converted.certificate, correspondence, attachments: {} }
   return { diagram, node, step }

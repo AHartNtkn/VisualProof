@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { DiagramError, type Diagram, type NodeId } from '../../../src/kernel/diagram/diagram'
-import type { Term } from '../../../src/kernel/term/term'
+import { freePorts, type Term } from '../../../src/kernel/term/term'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyConversion, applyConversionByCertificate } from '../../../src/kernel/rules/conversion'
 import { proposePortCorrespondence, type PortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
@@ -11,7 +11,7 @@ const p = (s: string) => parseTerm(s)
 const correspondenceFor = (d: Diagram, node: NodeId, target: Term): PortCorrespondence => {
   const source = d.nodes[node]
   if (source === undefined || source.kind !== 'term') throw new Error('test setup requires a term node')
-  return proposePortCorrespondence(source.term, target)
+  return proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
 }
 
 describe('applyConversion', () => {

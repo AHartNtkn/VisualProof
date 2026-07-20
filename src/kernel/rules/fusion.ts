@@ -46,43 +46,35 @@ export function applyFusion(d: Diagram, wireId: WireId): Diagram {
     )
   }
 
-  const residual = new Set(freePorts(b.term))
-  residual.delete(consumedPort)
-  // Identity rides the wire, never the port name (names are canonical
-  // positions after construction, so a shared individual is usually spelled
-  // differently on the two nodes). A producer port riding the same wire as a
-  // consumer residual port IS that individual: collapse it onto the
-  // consumer's existing endpoint under the consumer's name.
-  const residualWireName = new Map<WireId, string>()
-  for (const r of residual) {
-    residualWireName.set(wireAt(d, consumerId, { kind: 'freeVar', name: r }), r)
+  // Re-express both terms in one private carrier whose names denote global
+  // wires. This is the TS counterpart of Lean's fusionTerm: equal wires
+  // collapse even when their node-local names differ, while equal local names
+  // on different wires remain distinct. Compact only after substitution.
+  const taken = new Set<string>([...a.freePorts, ...b.freePorts])
+  const carrierByWire = new Map<WireId, string>()
+  const wireByCarrier = new Map<string, WireId>()
+  let carrierIndex = 0
+  const carrierFor = (sourceWire: WireId): string => {
+    const existing = carrierByWire.get(sourceWire)
+    if (existing !== undefined) return existing
+    const carrier = freshPortName(taken, `__fusion_wire_${carrierIndex++}`)
+    taken.add(carrier)
+    carrierByWire.set(sourceWire, carrier)
+    wireByCarrier.set(carrier, sourceWire)
+    return carrier
   }
-  const taken = new Set<string>([...freePorts(a.term), ...freePorts(b.term)])
-  const renames = new Map<string, string>()
-  // endpoints to add to the consumer, on the producer's old wires
-  const migrations: { readonly wire: WireId; readonly portName: string }[] = []
-  for (const n of freePorts(a.term)) {
-    const wa = wireAt(d, producerId, { kind: 'freeVar', name: n })
-    const shared = residualWireName.get(wa)
-    if (shared !== undefined) {
-      if (shared !== n) renames.set(n, shared)
-      continue // the consumer's existing endpoint carries the merged port
-    }
-    if (residual.has(n)) {
-      // same NAME as a residual port but a different wire: a distinct
-      // individual that must not be conflated — freshen it
-      const fresh = freshPortName(taken, n)
-      taken.add(fresh)
-      renames.set(n, fresh)
-      migrations.push({ wire: wa, portName: fresh })
-    } else {
-      migrations.push({ wire: wa, portName: n })
-    }
-  }
-  // simultaneous: a collapse target may equal another producer port's
-  // ORIGINAL name; sequential substitution would cascade into it
-  const producerTerm = renameFreePorts(a.term, renames)
-  const mergedTerm = substPort(b.term, consumedPort, producerTerm)
+  const producerRenames = new Map(a.freePorts.map((name) => [
+    name,
+    carrierFor(wireAt(d, producerId, { kind: 'freeVar', name })),
+  ]))
+  const consumerRenames = new Map(b.freePorts.map((name) => [
+    name,
+    carrierFor(wireAt(d, consumerId, { kind: 'freeVar', name })),
+  ]))
+  const producerGlobal = renameFreePorts(a.term, producerRenames)
+  const consumerGlobal = renameFreePorts(b.term, consumerRenames)
+  const consumedCarrier = consumerRenames.get(consumedPort)!
+  const mergedTerm = substPort(consumerGlobal, consumedCarrier, producerGlobal)
   const mergedFreePorts = freePorts(mergedTerm)
 
   const nodes: Record<NodeId, DiagramNode> = {}
@@ -95,10 +87,11 @@ export function applyFusion(d: Diagram, wireId: WireId): Diagram {
   const wires: Record<WireId, Wire> = {}
   for (const [id, wv] of Object.entries(d.wires)) {
     if (id === wireId) continue
-    const kept = wv.endpoints.filter((ep) => ep.node !== producerId)
-    const adds = migrations
-      .filter((m) => m.wire === id)
-      .map((m): Endpoint => ({ node: consumerId!, port: { kind: 'freeVar', name: m.portName } }))
+    const kept = wv.endpoints.filter((ep) =>
+      ep.node !== producerId && !(ep.node === consumerId && ep.port.kind === 'freeVar'))
+    const adds = mergedFreePorts
+      .filter((carrier) => wireByCarrier.get(carrier) === id)
+      .map((carrier): Endpoint => ({ node: consumerId!, port: { kind: 'freeVar', name: carrier } }))
     wires[id] = { scope: wv.scope, endpoints: [...kept, ...adds] }
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
@@ -120,31 +113,35 @@ export function applyFission(d: Diagram, nodeId: NodeId, path: readonly PathSeg[
   if (!isBvarClosed(sub)) {
     throw new RuleError(`fission requires a bvar-closed subterm; the subterm at [${path.join(', ')}] references binders above it`)
   }
-  const q = freshPortName(new Set(freePorts(node.term)), 'q')
+  const q = freshPortName(new Set(node.freePorts), 'q')
   const residualTerm = replaceSubtermAt(node.term, path, port(q))
   const residualFreePorts = freePorts(residualTerm)
-  const residualPorts = new Set(residualFreePorts)
+  const producerFreePorts = freePorts(sub)
   const producerId = freshId(new Set(Object.keys(d.nodes)), `${nodeId}_fis`, reservation?.nodes)
   const newWireId = freshId(new Set(Object.keys(d.wires)), `${nodeId}_fis`, reservation?.wires)
 
-  const subPortWires = new Map<string, WireId>()
-  for (const n of freePorts(sub)) {
-    subPortWires.set(n, wireAt(d, nodeId, { kind: 'freeVar', name: n }))
+  const sourcePortWires = new Map<string, WireId>()
+  for (const n of node.freePorts) {
+    sourcePortWires.set(n, wireAt(d, nodeId, { kind: 'freeVar', name: n }))
   }
 
   const nodes: Record<NodeId, DiagramNode> = {
     ...d.nodes,
     [nodeId]: { kind: 'term', region: node.region, term: residualTerm, freePorts: residualFreePorts },
-    [producerId]: { kind: 'term', region: node.region, term: sub, freePorts: freePorts(sub) },
+    [producerId]: { kind: 'term', region: node.region, term: sub, freePorts: producerFreePorts },
   }
   const wires: Record<WireId, Wire> = {}
   for (const [id, w] of Object.entries(d.wires)) {
-    const adds: Endpoint[] = []
-    for (const [n, wid] of subPortWires) {
-      if (wid === id) adds.push({ node: producerId, port: { kind: 'freeVar', name: n } })
+    const adds: Endpoint[] = residualFreePorts
+      .filter((name) => name !== q && sourcePortWires.get(name) === id)
+      .map((name): Endpoint => ({ node: nodeId, port: { kind: 'freeVar', name } }))
+    for (const name of producerFreePorts) {
+      if (sourcePortWires.get(name) === id) {
+        adds.push({ node: producerId, port: { kind: 'freeVar', name } })
+      }
     }
     const kept = w.endpoints.filter(
-      (ep) => !(ep.node === nodeId && ep.port.kind === 'freeVar' && !residualPorts.has(ep.port.name)),
+      (ep) => !(ep.node === nodeId && ep.port.kind === 'freeVar'),
     )
     wires[id] = { scope: w.scope, endpoints: [...kept, ...adds] }
   }

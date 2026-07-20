@@ -1,4 +1,4 @@
-import { app, lam, bvar, port, termEq, type Term } from '../kernel/term/term'
+import { app, lam, bvar, freePorts, port, termEq, type Term } from '../kernel/term/term'
 import { DiagramBuilder } from '../kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import { applyConversion } from '../kernel/rules/conversion'
@@ -47,7 +47,7 @@ function deriveOnePlusOne(): Theorem {
   const sn = scratch.termNode(scratch.root, poo)
   const scratchDiagram = scratch.build()
   const scratchNode = termNodeAt(scratchDiagram, sn)
-  const correspondence = proposePortCorrespondence(scratchNode.term, TWOp, scratchNode.freePorts)
+  const correspondence = proposePortCorrespondence(scratchNode.term, TWOp, scratchNode.freePorts, freePorts(TWOp))
   const conv = applyConversion(scratchDiagram, sn, TWOp, correspondence, 4096)
   const join: ProofStep = { rule: 'congruenceJoin', a, b, certificate: conv.certificate, correspondence }
   steps.push(join)
@@ -82,6 +82,7 @@ function deriveFixedPoint(): Theorem {
       termNodeAt(lhsDiagram, n).term,
       newTerm,
       termNodeAt(lhsDiagram, n).freePorts,
+      freePorts(newTerm),
     ),
     attachments: {},
   }

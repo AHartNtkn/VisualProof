@@ -86,6 +86,44 @@ describe('applyFusion', () => {
     expect(out.wires[wb]?.endpoints).toEqual([{ node: b2, port: { kind: 'freeVar', name: 's2' } }])
   })
 
+  it('compacts occurring support and removes every unused source endpoint', () => {
+    const h = new DiagramBuilder()
+    const producer = h.termNode(h.root, p('usedP'), ['unusedP', 'usedP'])
+    const consumer = h.termNode(h.root, p('slot kept'), ['unusedC', 'slot', 'kept'])
+    const unusedProducerWire = h.wire(h.root, [
+      { node: producer, port: { kind: 'freeVar', name: 'unusedP' } },
+    ])
+    const producerFreeWire = h.wire(h.root, [
+      { node: producer, port: { kind: 'freeVar', name: 'usedP' } },
+    ])
+    const unusedConsumerWire = h.wire(h.root, [
+      { node: consumer, port: { kind: 'freeVar', name: 'unusedC' } },
+    ])
+    const keptConsumerWire = h.wire(h.root, [
+      { node: consumer, port: { kind: 'freeVar', name: 'kept' } },
+    ])
+    const fusedWire = h.wire(h.root, [
+      { node: producer, port: { kind: 'output' } },
+      { node: consumer, port: { kind: 'freeVar', name: 'slot' } },
+    ])
+
+    const out = applyFusion(h.build(), fusedWire)
+    const merged = out.nodes[consumer]
+    expect(merged?.kind).toBe('term')
+    if (merged?.kind !== 'term') throw new Error('expected merged term node')
+    expect(merged.freePorts).toEqual(['s0', 's1'])
+    expect(printTerm(merged.term)).toBe(printTerm(p('s0 s1')))
+    expect(out.wires[fusedWire]).toBeUndefined()
+    expect(out.wires[unusedProducerWire]?.endpoints).toEqual([])
+    expect(out.wires[unusedConsumerWire]?.endpoints).toEqual([])
+    expect(out.wires[producerFreeWire]?.endpoints).toEqual([
+      { node: consumer, port: { kind: 'freeVar', name: 's0' } },
+    ])
+    expect(out.wires[keptConsumerWire]?.endpoints).toEqual([
+      { node: consumer, port: { kind: 'freeVar', name: 's1' } },
+    ])
+  })
+
   it("applies collapse renames in ONE simultaneous pass: a collapse target equal to another producer port's original name must not cascade", () => {
     // producer 'a b' → canonical (s0 s1); consumer 'q y z' → canonical
     // s0 s1 s2 with s0 consumed. Producer s0 shares a wire with consumer s1,
@@ -202,6 +240,47 @@ describe('applyFission', () => {
       (id) => d.wires[id] === undefined && split.wires[id]!.endpoints.length === 2,
     )!
     expect(exploreForm(applyFusion(split, newWire))).toBe(exploreForm(d))
+  })
+
+  it('compacts producer and residual separately, removes unused endpoints, and keeps the fresh port distinct', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('keep extracted'), ['q', 'keep', 'extracted'])
+    const unusedWire = h.wire(h.root, [
+      { node: n, port: { kind: 'freeVar', name: 'q' } },
+    ])
+    const keptWire = h.wire(h.root, [
+      { node: n, port: { kind: 'freeVar', name: 'keep' } },
+    ])
+    const extractedWire = h.wire(h.root, [
+      { node: n, port: { kind: 'freeVar', name: 'extracted' } },
+    ])
+    const before = h.build()
+
+    const split = applyFission(before, n, ['arg'])
+    const producer = Object.keys(split.nodes).find((id) => before.nodes[id] === undefined)
+    expect(producer).toBeDefined()
+    const residualNode = split.nodes[n]
+    const producerNode = split.nodes[producer!]
+    expect(residualNode?.kind).toBe('term')
+    expect(producerNode?.kind).toBe('term')
+    if (residualNode?.kind !== 'term' || producerNode?.kind !== 'term') {
+      throw new Error('expected residual and producer term nodes')
+    }
+    expect(residualNode.freePorts).toEqual(['s0', 's1'])
+    expect(producerNode.freePorts).toEqual(['s0'])
+    expect(new Set(residualNode.freePorts).size).toBe(residualNode.freePorts.length)
+    expect(printTerm(residualNode.term)).toBe(printTerm(p('s0 s1')))
+    expect(printTerm(producerNode.term)).toBe(printTerm(p('s0')))
+    expect(split.wires[unusedWire]?.endpoints).toEqual([])
+    expect(split.wires[keptWire]?.endpoints).toEqual([
+      { node: n, port: { kind: 'freeVar', name: 's0' } },
+    ])
+    expect(split.wires[extractedWire]?.endpoints).toEqual([
+      { node: producer, port: { kind: 'freeVar', name: 's0' } },
+    ])
+    const connecting = Object.values(split.wires).find((wire) =>
+      wire.endpoints.some((ep) => ep.node === producer && ep.port.kind === 'output'))
+    expect(connecting?.endpoints).toContainEqual({ node: n, port: { kind: 'freeVar', name: 's1' } })
   })
 
   it('round-trips a shared free spelled DIFFERENTLY on the two nodes: fusion yields ONE port on the shared wire, used in both positions', () => {

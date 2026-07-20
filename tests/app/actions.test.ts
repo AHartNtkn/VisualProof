@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
+import { freePorts } from '../../src/kernel/term/term'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'
@@ -164,7 +165,8 @@ describe('descriptor → step construction (the shell contract)', () => {
     expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('convert')
     // the node's source free 'y' is canonical s0 after construction
     const target = p('s0')
-    const correspondence = proposePortCorrespondence(termNodeAt(d, n).term, target)
+    const source = termNodeAt(d, n)
+    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
     const pre = applyConversion(d, n, target, correspondence, 32)
     const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, correspondence, attachments: {} }, ctx)
     expect(JSON.stringify(out.nodes[n])).toContain('"port"')

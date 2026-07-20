@@ -1,16 +1,16 @@
 import type { Term } from '../../term/term'
-import { app, assertWellFormedTerm, bvar, freePorts, lam, termEq } from '../../term/term'
+import { app, assertWellFormedTerm, bvar, lam, termEq } from '../../term/term'
 import { normalize } from '../../term/reduce'
 import type { ConversionCertificate } from '../../term/certificate'
 import { DiagramError } from '../diagram'
 
 /**
- * Close a term over its free ports in first-occurrence order: port i becomes
+ * Close a term over its free ports in declared interface order: port i becomes
  * the i-th outermost lambda. Two nodes denote the same positional relation iff
  * their closures are beta-eta-convertible closed terms. Closing FIRST fixes
  * the arity, so normalization cannot drop a port out from under the wiring.
  */
-export function closeOverPorts(t: Term, declaredFreePorts: readonly string[] = freePorts(t)): Term {
+export function closeOverPorts(t: Term, declaredFreePorts: readonly string[]): Term {
   assertWellFormedTerm(t)
   const order = declaredFreePorts
   const n = order.length
@@ -49,8 +49,8 @@ export function termsMatchModuloBetaEta(
   a: Term,
   b: Term,
   fuel: number,
-  aFreePorts: readonly string[] = freePorts(a),
-  bFreePorts: readonly string[] = freePorts(b),
+  aFreePorts: readonly string[],
+  bFreePorts: readonly string[],
 ): NodeMatchVerdict {
   if (!Number.isInteger(fuel) || fuel <= 0) {
     throw new DiagramError(`fuel must be a positive integer, got ${fuel}`)

@@ -1,5 +1,5 @@
 import type { Term } from '../term/term'
-import { freePorts, renameFreePorts } from '../term/term'
+import { renameFreePorts } from '../term/term'
 import { RuleError } from './error'
 
 /** A serializable witness that embeds each term's native free-port names into
@@ -85,12 +85,12 @@ export function correspondenceSidePorts(
 }
 
 /** Deterministic authoring helper. Shared names pair first; remaining native
- * names pair by occurrence order, with either tail receiving one-sided columns. */
+ * names pair by declared interface order, with either tail receiving one-sided columns. */
 export function proposePortCorrespondence(
-  leftTerm: Term,
-  rightTerm: Term,
-  leftPorts: readonly string[] = freePorts(leftTerm),
-  rightPorts: readonly string[] = freePorts(rightTerm),
+  _leftTerm: Term,
+  _rightTerm: Term,
+  leftPorts: readonly string[],
+  rightPorts: readonly string[],
 ): PortCorrespondence {
   const rightSet = new Set(rightPorts)
   const left = new Map<string, number>()

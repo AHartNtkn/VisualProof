@@ -27,7 +27,7 @@ function permutations<T>(xs: readonly T[]): T[][] {
 
 function nodeContent(n: DiagramNode): string {
   switch (n.kind) {
-    case 'term': return `term:${termShapeKey(n.term)}`
+    case 'term': return `term:${termShapeKey(n.term, n.freePorts)}`
     case 'atom': return 'atom'
     case 'ref': return `ref:${n.defId}:${n.arity}`
   }
@@ -39,7 +39,7 @@ function regionContent(r: Region): string {
 
 function epKey(d: Diagram, ep: Endpoint): string {
   const n = d.nodes[ep.node]!
-  if (n.kind === 'term') return positionalPortKey(n.term, ep.port)
+  if (n.kind === 'term') return positionalPortKey(n.term, ep.port, n.freePorts)
   if (ep.port.kind === 'arg') return `a${ep.port.index}`
   throw new Error('unexpected port')
 }

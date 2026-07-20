@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
+import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -32,7 +33,8 @@ describe('equational rules are polarity-free at depths 0..3', () => {
       // the node's free ports f, y are positional s0, s1; conversion contracts
       // the inner redex, leaving f y
       const target = p('s0 s1')
-      const correspondence = proposePortCorrespondence(termNodeAt(d, n).term, target)
+      const source = termNodeAt(d, n)
+      const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
       expect(() => applyConversion(d, n, target, correspondence, 10)).not.toThrow()
 
       const split = applyFission(d, n, ['arg'])

@@ -39,7 +39,8 @@ describe('applyStep mirrors the direct appliers', () => {
     const d = h.build()
     // the node's source free 'y' is canonical s0 after construction
     const target = pp('s0')
-    const correspondence = proposePortCorrespondence(termNodeAt(d, n).term, target)
+    const source = termNodeAt(d, n)
+    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, ['s0'])
     const { diagram, certificate } = applyConversion(d, n, target, correspondence, 10)
     const step: ProofStep = { rule: 'conversion', node: n, term: target, certificate, correspondence, attachments: {} }
     expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(diagram))
@@ -56,7 +57,9 @@ describe('applyStep mirrors the direct appliers', () => {
     h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
     h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
     const d = h.build()
-    const correspondence = proposePortCorrespondence(termNodeAt(d, n1).term, termNodeAt(d, n2).term)
+    const left = termNodeAt(d, n1)
+    const right = termNodeAt(d, n2)
+    const correspondence = proposePortCorrespondence(left.term, right.term, left.freePorts, right.freePorts)
     const step: ProofStep = { rule: 'congruenceJoin', a: n1, b: n2, certificate: { leftSteps: [], rightSteps: [] }, correspondence }
     const out = applyStep(d, step, ctx)
     const shared = Object.values(out.wires).find((w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2)

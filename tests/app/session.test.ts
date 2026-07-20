@@ -7,7 +7,7 @@ import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
-import { termEq } from '../../src/kernel/term/term'
+import { freePorts, termEq } from '../../src/kernel/term/term'
 import { bootFixture } from './boot-fixture'
 import {
   startSession, applyForward as applyForwardAction, applyBackward as applyBackwardAction, undoForward, undoBackward, meet, assembleTheorem, sideBoundary, currentSide,
@@ -444,7 +444,8 @@ describe('backward spawning, un-conversion, un-citation', () => {
     // must be spelled in the node's CURRENT port names
     const diagram = currentSide(s, 'backward')
     const target = p('(\\a. a) s0')
-    const correspondence = proposePortCorrespondence(termNodeAt(diagram, m).term, target)
+    const source = termNodeAt(diagram, m)
+    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
     const conv = applyConversion(diagram, m, target, correspondence, 32)
     s = applyBackward(s, { rule: 'conversion', node: m, term: target, certificate: conv.certificate, correspondence, attachments: {} })
     expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('conversion')

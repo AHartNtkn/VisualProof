@@ -21,6 +21,12 @@ function termOf(d: Diagram, id: NodeId): Term {
   return n.term
 }
 
+function interfaceOf(d: Diagram, id: NodeId): readonly string[] {
+  const n = d.nodes[id]
+  if (n === undefined || n.kind !== 'term') throw new Error(`test setup: node '${id}' must be a term node`)
+  return n.freePorts
+}
+
 /** All freeVar endpoint names of one node across the whole diagram. */
 function freeVarEndpointNames(d: Diagram, id: NodeId): string[] {
   const names: string[] = []
@@ -173,7 +179,9 @@ describe('name-blind free ports (canonicalization at construction)', () => {
     const d = h.build()
     // after construction the two nodes carry literally equal terms
     expect(termEq(termOf(d, n1), termOf(d, n2))).toBe(true)
-    const correspondence = proposePortCorrespondence(termOf(d, n1), termOf(d, n2))
+    const correspondence = proposePortCorrespondence(
+      termOf(d, n1), termOf(d, n2), interfaceOf(d, n1), interfaceOf(d, n2),
+    )
     const out = applyCongruenceJoin(d, n1, n2, empty, correspondence)
     const shared = Object.values(out.wires).find(
       (w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2,

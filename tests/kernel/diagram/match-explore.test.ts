@@ -258,14 +258,14 @@ function randomClosed(rng: () => number): Diagram {
 
 function epKey(d: Diagram, ep: Endpoint): string {
   const n = d.nodes[ep.node]!
-  if (n.kind === 'term') return positionalPortKey(n.term, ep.port)
+  if (n.kind === 'term') return positionalPortKey(n.term, ep.port, n.freePorts)
   if (ep.port.kind === 'arg') return `a${ep.port.index}`
   throw new Error('unexpected port')
 }
 
 function nodeContent(d: Diagram, id: NodeId): string {
   const n = d.nodes[id]!
-  return n.kind === 'term' ? `t:${termShapeKey(n.term)}` : n.kind === 'ref' ? `r:${n.defId}:${n.arity}` : 'atom'
+  return n.kind === 'term' ? `t:${termShapeKey(n.term, n.freePorts)}` : n.kind === 'ref' ? `r:${n.defId}:${n.arity}` : 'atom'
 }
 function regionContent(d: Diagram, id: RegionId): string {
   const r = d.regions[id]!
