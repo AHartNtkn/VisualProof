@@ -748,6 +748,7 @@ structure Certificate {signature : List Nat}
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram) : Type where
   wellFormed : (raw pattern.val attachment spine.bodyContainer).WellFormed signature
+  sourceTerminalBody : spine.TerminalBodyContract pattern.val
 
 namespace Certificate
 
@@ -819,6 +820,7 @@ def check {signature : List Nat}
           boundary_is_root_scoped :=
             (terminalBody pattern attachment spine contract).boundary_is_root_scoped
         }
+        sourceTerminalBody := contract
       }
 
 theorem check_success {signature : List Nat}
