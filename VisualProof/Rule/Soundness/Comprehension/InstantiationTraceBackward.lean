@@ -3,6 +3,7 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationDiscrete
 namespace VisualProof.Rule
 
 open VisualProof
+open VisualProof.Data.Finite
 open VisualProof.Diagram
 open VisualProof.Theory
 
@@ -787,8 +788,160 @@ theorem inheritedWireEquivIso_spec
       iso.wires (sourceOuter.get index) :=
   FiniteEquiv.restrictLists_spec iso.wires sourceOuter targetOuter _ _ _ index
 
-/-- With an alias-free materialized boundary, cancellation of the transient
-host quotient transports a bubble presentation back to the executor state. -/
+/-- Deleting processed atoms commutes with cancellation of any retained-host
+quotient certified discrete by the executor's attachment contract. -/
+noncomputable def attachmentRespectingDroppedStateIso
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (respects : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).AttachmentsRespectBoundary) :
+    ConcreteIso
+      (dropInstantiationAtomsRaw
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible))
+      (dropInstantiationAtomsRaw state) := by
+  let spliceInput := instantiateSpliceInput comprehension attachments binders
+    payload state site arguments
+  let wireEquiv :=
+    Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+      spliceInput respects
+  exact {
+    regionCount_eq := rfl
+    nodeCount_eq := rfl
+    wireCount_eq := by
+      apply Nat.le_antisymm
+      · exact fin_card_le_of_injective wireEquiv wireEquiv.injective
+      · exact fin_card_le_of_injective wireEquiv.symm wireEquiv.symm.injective
+    regions := .refl _
+    nodes := .refl _
+    wires := wireEquiv
+    root_eq := rfl
+    regions_eq := by
+      intro region
+      change (state.diagram.val.regions region).rename (.refl _) =
+        state.diagram.val.regions region
+      simp
+    nodes_eq := by
+      intro node
+      change (state.diagram.val.nodes
+          ((instantiationAtomDomain state).origin node)).rename (.refl _) =
+        state.diagram.val.nodes ((instantiationAtomDomain state).origin node)
+      simp
+    wire_scope_eq := by
+      intro quotient
+      change spliceInput.coalescedScope quotient =
+        (state.diagram.val.wires (wireEquiv quotient)).scope
+      exact Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary
+        spliceInput respects quotient
+    wire_endpoints_perm := by
+      intro quotient
+      change
+        (((spliceInput.coalescedEndpoints quotient).filterMap
+            (instantiationAtomDomain state).reindexEndpoint?).map
+          (CEndpoint.rename (.refl _))).Perm
+        ((state.diagram.val.wires (wireEquiv quotient)).endpoints.filterMap
+          (instantiationAtomDomain state).reindexEndpoint?)
+      rw [Splice.Input.coalescedEndpoints_eq_of_attachmentsRespectBoundary
+        spliceInput respects quotient]
+      simpa [spliceInput, instantiateSpliceInput, wireEquiv] using
+        (ConcreteIso.refl (dropInstantiationAtomsRaw state)).wire_endpoints_perm
+          (wireEquiv quotient)
+  }
+
+theorem attachmentRespectingDroppedRegionIso
+    {signature : List Nat}
+    {input : CheckedDiagram signature}
+    {bubble : Fin input.val.regionCount}
+    (comprehension : CheckedOpenDiagram signature)
+    (attachments : List (Fin input.val.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
+    (payload : ComprehensionInstantiatePayload input bubble comprehension
+      attachments binders)
+    {origin : CheckedDiagram signature}
+    (state : InstantiationState origin attachments.length
+      payload.binderSpine.proxyCount)
+    (site : Fin state.diagram.val.regionCount)
+    (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
+    (hadmissible : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).Admissible)
+    (respects : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).AttachmentsRespectBoundary)
+    {sourceRels : RelCtx}
+    {sourceFuel targetFuel : Nat}
+    {sourceRegion : Fin
+      (dropInstantiationAtomsRaw
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible)).regionCount}
+    {targetRegion : Fin (dropInstantiationAtomsRaw state).regionCount}
+    (regionEq :
+      (attachmentRespectingDroppedStateIso comprehension attachments binders
+        payload state site arguments hadmissible respects).regions sourceRegion =
+        targetRegion)
+    (sourceContext : ConcreteElaboration.WireContext
+      (dropInstantiationAtomsRaw
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible)))
+    (targetContext : ConcreteElaboration.WireContext
+      (dropInstantiationAtomsRaw state))
+    (ambient : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length))
+    (contextsAgree : ConcreteElaboration.WireContextsAgree
+      (attachmentRespectingDroppedStateIso comprehension attachments binders
+        payload state site arguments hadmissible respects)
+      sourceContext targetContext ambient)
+    (targetExact : (targetContext.extend targetRegion).Exact targetRegion)
+    (sourceBinders : ConcreteElaboration.BinderContext
+      (dropInstantiationAtomsRaw
+        (coalescedInstantiationState comprehension attachments binders payload
+          state site arguments hadmissible)) sourceRels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (dropInstantiationAtomsRaw state) sourceRels)
+    (bindersAgree : ConcreteElaboration.BinderContextsAgree
+      (attachmentRespectingDroppedStateIso comprehension attachments binders
+        payload state site arguments hadmissible respects)
+      sourceBinders targetBinders)
+    (sourceBody : Region signature sourceContext.length sourceRels)
+    (targetBody : Region signature targetContext.length sourceRels)
+    (sourceCompiled : compileSurvivorRegion? signature
+      (coalescedInstantiationState comprehension attachments binders payload
+        state site arguments hadmissible)
+      sourceFuel sourceRegion sourceContext sourceBinders = some sourceBody)
+    (targetCompiled : ConcreteElaboration.compileRegion? signature
+      (dropInstantiationAtomsRaw state) targetFuel targetRegion targetContext
+      targetBinders = some targetBody) :
+    RegionIso signature ambient sourceRels sourceBody targetBody := by
+  let coalesced := coalescedInstantiationState comprehension attachments binders
+    payload state site arguments hadmissible
+  let iso := attachmentRespectingDroppedStateIso comprehension attachments
+    binders payload state site arguments hadmissible respects
+  have sourceCompiled' : ConcreteElaboration.compileRegion? signature
+      (dropInstantiationAtomsRaw coalesced) sourceFuel sourceRegion sourceContext
+      sourceBinders = some sourceBody := by
+    exact (drop_compileRegion_eq_survivor coalesced sourceFuel sourceRegion
+      sourceContext sourceBinders).trans (by
+        simpa [coalesced] using sourceCompiled)
+  subst targetRegion
+  exact ConcreteElaboration.compileRegion?_equivariant iso
+    (InstantiationDrop.raw_wellFormed state) contextsAgree targetExact
+    bindersAgree sourceCompiled' targetCompiled
+
+/-- Cancellation of an executor-certified discrete retained-host quotient
+transports a bubble presentation back to the executor state. -/
 noncomputable def bubblePresentation_of_coalesced
     {signature : List Nat}
     {input : CheckedDiagram signature}
@@ -806,7 +959,8 @@ noncomputable def bubblePresentation_of_coalesced
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (respects : (instantiateSpliceInput comprehension attachments binders
+      payload state site arguments).AttachmentsRespectBoundary)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
@@ -823,10 +977,11 @@ noncomputable def bubblePresentation_of_coalesced
     payload state site arguments
   let coalesced := coalescedInstantiationState comprehension attachments binders
     payload state site arguments hadmissible
-  let actualIso := Splice.Input.coalescedFrameIsoOfBoundaryNodup spliceInput
-    boundaryNodup
-  let droppedIso := discreteDroppedStateIso comprehension attachments binders
-    payload state site arguments hadmissible boundaryNodup
+  let actualIso :=
+    Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary spliceInput
+      respects
+  let droppedIso := attachmentRespectingDroppedStateIso comprehension
+    attachments binders payload state site arguments hadmissible respects
   let targetView := droppedBubbleView state
   let targetLeaf := targetView.compilerLeaf
   let targetOuter := targetLeaf.inheritedWires
@@ -901,8 +1056,9 @@ noncomputable def bubblePresentation_of_coalesced
   have contextsAgree : ConcreteElaboration.WireContextsAgree droppedIso
       source.outer targetOuter ambient := by
     intro index
-    simpa [ambient, actualIso, droppedIso, discreteDroppedStateIso,
-      Splice.Input.coalescedFrameIsoOfBoundaryNodup] using
+    simpa [ambient, actualIso, droppedIso,
+      attachmentRespectingDroppedStateIso,
+      Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary] using
       inheritedWireEquivIso_spec actualIso state.bubble source.outer targetOuter
         sourceExact targetExact index
   have sourceCompiled : compileSurvivorRegion? signature coalesced source.fuel
@@ -910,8 +1066,8 @@ noncomputable def bubblePresentation_of_coalesced
     simpa [coalesced] using source.compiled
   have bodyIso : RegionIso signature ambient source.rels source.body
       targetBody := by
-    exact discreteDroppedRegionIso comprehension attachments binders payload
-      state site arguments hadmissible boundaryNodup rfl source.outer
+    exact attachmentRespectingDroppedRegionIso comprehension attachments
+      binders payload state site arguments hadmissible respects rfl source.outer
       targetOuter ambient contextsAgree droppedExact source.binderContext
       targetBinders bindersAgree source.body targetBody sourceCompiled
       targetCompiledDropped
@@ -950,12 +1106,12 @@ noncomputable def bubblePresentation_of_coalesced
       rw [wireEq] at mappedWire
       have parameterImage : actualIso.wires (coalesced.parameters position) =
           state.parameters position := by
-        change Splice.Input.discreteQuotientWireEquiv spliceInput
-            boundaryNodup
+        change Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+            spliceInput respects
             (spliceInput.quotientWire (state.parameters position)) =
           state.parameters position
-        exact Splice.Input.discreteQuotientWireEquiv_quotientWire
-          spliceInput boundaryNodup (state.parameters position)
+        exact Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire
+          spliceInput respects (state.parameters position)
       exact mappedWire.trans parameterImage
     · change source.environment (ambient.invFun (ambient sourceIndex)) =
         parameterValues position
@@ -999,7 +1155,6 @@ theorem bubblePresentation_nonempty_of_trace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
@@ -1012,7 +1167,85 @@ theorem bubblePresentation_nonempty_of_trace
       parameterValues) :
     Nonempty (BubblePresentation payload state model named relationValue values
       parameterValues) := by
-  sorry
+  induction trace with
+  | done fuel state pending_empty =>
+      exact ⟨target⟩
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
+      rcases simulations with ⟨simulation, restSimulations⟩
+      obtain ⟨nextPresentation⟩ := ih restSimulations target
+      rw [plan.next_eq] at nextPresentation
+      let hadmissible :=
+        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+      have operationalTarget : BubblePresentation plan.operationalPayload
+          (advanceInstantiationState plan.materialization.result attachments
+            binders plan.operationalPayload state atom tail site arguments
+            hadmissible)
+          model named relationValue values parameterValues := {
+        rels := nextPresentation.rels
+        outer := nextPresentation.outer
+        outerExact := nextPresentation.outerExact
+        binderContext := nextPresentation.binderContext
+        binderCover := nextPresentation.binderCover
+        binderEnumeration := nextPresentation.binderEnumeration
+        fuel := nextPresentation.fuel
+        body := nextPresentation.body
+        compiled := nextPresentation.compiled
+        environment := nextPresentation.environment
+        relationEnvironment := nextPresentation.relationEnvironment
+        fixed := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using
+            nextPresentation.fixed
+        proxies := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using
+            nextPresentation.proxies
+        parameters := nextPresentation.parameters
+        denotes := nextPresentation.denotes
+      }
+      let coalesced := coalescedBubblePresentation_of_target
+        plan.materialization.result attachments binders
+        plan.operationalPayload state atom tail site arguments hadmissible model
+        named relationValue values parameterValues
+        (fun sourceFuel targetFuel => simulation .backward sourceFuel targetFuel
+          state.bubble (ConcreteDiagram.Encloses.refl _ _))
+        operationalTarget
+      let source := bubblePresentation_of_coalesced
+        plan.materialization.result attachments binders
+        plan.operationalPayload state site arguments hadmissible
+        plan.attachmentsRespectBoundary model named relationValue values
+        parameterValues coalesced
+      exact ⟨{
+        rels := source.rels
+        outer := source.outer
+        outerExact := source.outerExact
+        binderContext := source.binderContext
+        binderCover := source.binderCover
+        binderEnumeration := source.binderEnumeration
+        fuel := source.fuel
+        body := source.body
+        compiled := source.compiled
+        environment := source.environment
+        relationEnvironment := source.relationEnvironment
+        fixed := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using source.fixed
+        proxies := by
+          simpa [InstantiationCopyPlan.operationalPayload,
+            materializedInstantiationPayload,
+            Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Splice.AttachmentAliasMaterialization.binderSpine] using
+            source.proxies
+        parameters := source.parameters
+        denotes := source.denotes
+      }⟩
 
 /-- Choice-free clients use the propositional composition theorem above;
 semantic soundness extracts its canonical presentation only at the boundary. -/
@@ -1032,7 +1265,6 @@ noncomputable def bubblePresentation_of_trace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
@@ -1045,8 +1277,8 @@ noncomputable def bubblePresentation_of_trace
       parameterValues) :
     BubblePresentation payload state model named relationValue values
       parameterValues :=
-  Classical.choice (bubblePresentation_nonempty_of_trace trace boundaryNodup
-    model named relationValue values parameterValues simulations target)
+  Classical.choice (bubblePresentation_nonempty_of_trace trace model named
+    relationValue values parameterValues simulations target)
 
 end InstantiationSemantic
 
