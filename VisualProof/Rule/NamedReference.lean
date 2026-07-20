@@ -137,7 +137,139 @@ theorem wiredNamedReferencePatternRaw_wellFormed
     (wiring : NamedReferenceWiring (signature.get definition)) :
     (wiredNamedReferencePatternRaw signature definition wiring).WellFormed
       signature := by
-  sorry
+  constructor
+  · constructor
+    · rfl
+    · intro region _
+      change region = (0 : Fin 1)
+      exact Subsingleton.elim (α := Fin 1) region 0
+    · intro region
+      change Fin 1 at region
+      have regionEq : region = (0 : Fin 1) := Subsingleton.elim _ _
+      subst region
+      exact ConcreteDiagram.Encloses.refl _ _
+    · intro node
+      trivial
+    · intro node
+      trivial
+    · intro node
+      change signature[definition.val]? = some (signature.get definition)
+      simpa [List.get_eq_getElem] using
+        List.getElem?_eq_getElem definition.isLt
+    · intro wire endpoint endpointMember
+      change CEndpoint 1 at endpoint
+      obtain ⟨argument, _, mapped⟩ := List.mem_filterMap.mp endpointMember
+      have wireEq : wiring.argumentWire argument = wire := by
+        by_cases equal : wiring.argumentWire argument = wire
+        · exact equal
+        · have impossible : False := by simpa [equal] using mapped
+          exact impossible.elim
+      have endpointEq : endpoint =
+          ({ node := 0, port := CPort.arg argument } : CEndpoint 1) := by
+        have simplified := mapped
+        rw [if_pos wireEq] at simplified
+        exact (Option.some.inj simplified).symm
+      rw [endpointEq]
+      change ∃ index : Fin (signature.get definition),
+        CPort.arg argument = CPort.arg index
+      exact ⟨argument, rfl⟩
+    · intro wire
+      apply List.Pairwise.filterMap
+        (R := fun left right : Fin (signature.get definition) => left ≠ right)
+        (S := (· ≠ ·))
+      · intro left right different leftEndpoint leftMapped rightEndpoint
+          rightMapped endpointEq
+        change CEndpoint 1 at leftEndpoint rightEndpoint
+        have leftWireEq : wiring.argumentWire left = wire := by
+          by_cases equal : wiring.argumentWire left = wire
+          · exact equal
+          · have impossible : False := by simpa [equal] using leftMapped
+            exact impossible.elim
+        have rightWireEq : wiring.argumentWire right = wire := by
+          by_cases equal : wiring.argumentWire right = wire
+          · exact equal
+          · have impossible : False := by simpa [equal] using rightMapped
+            exact impossible.elim
+        have leftEq : leftEndpoint =
+            ({ node := 0, port := CPort.arg left } : CEndpoint 1) := by
+          have simplified := leftMapped
+          rw [if_pos leftWireEq] at simplified
+          exact (Option.some.inj simplified).symm
+        have rightEq : rightEndpoint =
+            ({ node := 0, port := CPort.arg right } : CEndpoint 1) := by
+          have simplified := rightMapped
+          rw [if_pos rightWireEq] at simplified
+          exact (Option.some.inj simplified).symm
+        rw [leftEq, rightEq] at endpointEq
+        apply different
+        apply Fin.ext
+        simpa using congrArg
+          (fun endpoint : CEndpoint 1 => endpoint.port) endpointEq
+      · exact allFin_nodup (signature.get definition)
+    · intro left right different endpoint leftMember
+      change CEndpoint 1 at endpoint
+      obtain ⟨leftArgument, _, leftMapped⟩ :=
+        List.mem_filterMap.mp leftMember
+      have leftWireEq : wiring.argumentWire leftArgument = left := by
+        by_cases equal : wiring.argumentWire leftArgument = left
+        · exact equal
+        · have impossible : False := by simpa [equal] using leftMapped
+          exact impossible.elim
+      have leftEndpointEq :
+          ({ node := 0, port := CPort.arg leftArgument } : CEndpoint 1) =
+            endpoint := by
+        have simplified := leftMapped
+        rw [if_pos leftWireEq] at simplified
+        exact Option.some.inj simplified
+      unfold ConcreteDiagram.EndpointOccurs
+      change (!decide (endpoint ∈
+        (allFin (signature.get definition)).filterMap fun argument =>
+          if wiring.argumentWire argument = right then
+            some { node := 0, port := CPort.arg argument }
+          else none)) = true
+      have absent : endpoint ∉
+          (allFin (signature.get definition)).filterMap (fun argument =>
+            if wiring.argumentWire argument = right then
+              some { node := 0, port := CPort.arg argument }
+            else none) := by
+        intro rightMember
+        obtain ⟨rightArgument, _, rightMapped⟩ :=
+          List.mem_filterMap.mp rightMember
+        have rightWireEq : wiring.argumentWire rightArgument = right := by
+          by_cases equal : wiring.argumentWire rightArgument = right
+          · exact equal
+          · have impossible : False := by simpa [equal] using rightMapped
+            exact impossible.elim
+        have rightEndpointEq :
+            ({ node := 0, port := CPort.arg rightArgument } : CEndpoint 1) =
+              endpoint := by
+          have simplified := rightMapped
+          rw [if_pos rightWireEq] at simplified
+          exact Option.some.inj simplified
+        apply bne_iff_ne.mp different
+        rw [← leftWireEq, ← rightWireEq]
+        apply congrArg wiring.argumentWire
+        apply Fin.ext
+        simpa using congrArg
+          (fun endpoint : CEndpoint 1 => endpoint.port)
+          (leftEndpointEq.trans rightEndpointEq.symm)
+      rw [Bool.not_eq_true']
+      exact decide_eq_false absent
+    · intro node argument
+      change Fin 1 at node
+      have nodeEq : node = (0 : Fin 1) := Subsingleton.elim _ _
+      subst node
+      refine ⟨wiring.argumentWire argument, ?_⟩
+      apply List.mem_filterMap.mpr
+      refine ⟨argument, mem_allFin argument, ?_⟩
+      have self : wiring.argumentWire argument =
+          wiring.argumentWire argument := rfl
+      rw [if_pos self]
+      rfl
+    · intro wire endpoint endpointMember
+      exact ConcreteDiagram.Encloses.refl _ _
+  · intro wire _
+    rfl
 
 def wiredNamedReferencePattern (signature : List Nat)
     (definition : Fin signature.length)
