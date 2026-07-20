@@ -65,6 +65,30 @@ def instantiateCopiesSuccessTrace
       state = .ok result) :
     InstantiationTrace comprehension attachments binders payload fuel state
       result := by
-  sorry
+  induction fuel generalizing state result with
+  | zero =>
+      simp only [instantiateCopies] at hcopy
+      split at hcopy
+      · rename_i hpending
+        cases hcopy
+        exact .done 0 state (List.isEmpty_iff.mp hpending)
+      · contradiction
+  | succ fuel ih =>
+      simp only [instantiateCopies] at hcopy
+      split at hcopy
+      · rename_i hpending
+        cases hcopy
+        exact .done (fuel + 1) state hpending
+      · rename_i atom tail hpending
+        split at hcopy <;> try contradiction
+        rename_i site candidate hnode
+        split at hcopy <;> try contradiction
+        rename_i hcandidate
+        split at hcopy <;> try contradiction
+        rename_i arguments harguments
+        split at hcopy <;> try contradiction
+        rename_i plan hplan
+        exact .step fuel state result atom tail site candidate arguments plan
+          hpending hnode hcandidate harguments (ih plan.next result hcopy)
 
 end VisualProof.Rule
