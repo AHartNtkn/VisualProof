@@ -428,7 +428,6 @@ theorem focusedLocalTransport_backward
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (bodyNeRoot : spine.bodyContainer ≠ pattern.val.diagram.root)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
@@ -587,13 +586,13 @@ theorem focusedLocalTransport_backward
   subst targetItems
   simp only [denoteItemSeq_append]
   intro targetLocalEnv targetDenotes
-  let sourceLocalEnv := sourceLocal pattern attachment spine
-    spine.bodyContainer bodyNeRoot targetLocalEnv
-  refine ⟨sourceLocalEnv, ?_⟩
-  have envOld := extendedEnv_oldIndex pattern attachment spine contract
+  let sourceLocalEnv := oldIndexLocal pattern attachment spine contract
     targetOuterContext sourceOuterContext outerCollapse spine.bodyContainer
-    bodyNeRoot targetExact sourceExact sourceOuter targetOuter outerEq
-    targetLocalEnv
+    targetExact sourceExact targetOuter targetLocalEnv
+  refine ⟨sourceLocalEnv, ?_⟩
+  have envOld := extendedEnv_oldIndex_general pattern attachment spine contract
+    targetOuterContext sourceOuterContext outerCollapse spine.bodyContainer
+    targetExact sourceExact sourceOuter targetOuter outerEq targetLocalEnv
   have extendedAgrees :
       ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
         (ConcreteElaboration.ContextIndexRelation.forwardMap

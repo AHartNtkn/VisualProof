@@ -564,6 +564,78 @@ theorem extendedEnv_oldIndex
     simp [sourceLocal, extendedEnv, ConcreteElaboration.extendedEnvironment,
       extendWireEnv, Function.comp_def]
 
+/-- Select the source local valuation directly through the canonical old-wire
+indices of the extended collapse. Unlike `sourceLocal`, this formulation also
+works at the root, where materialization adds root-scoped alias wires. -/
+noncomputable def oldIndexLocal
+    (pattern : CheckedOpenDiagram signature)
+    (attachment : Fin pattern.val.boundary.length → Host)
+    (spine : BinderSpine pattern.val.diagram)
+    (contract : spine.TerminalBodyContract pattern.val)
+    (expanded : ConcreteElaboration.WireContext
+      (materializedDiagram pattern.val attachment spine.bodyContainer))
+    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (collapse : ContextCollapse pattern attachment spine expanded original)
+    (region : Fin pattern.val.diagram.regionCount)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region)
+    (targetOuter : Fin expanded.length → D)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (materializedDiagram pattern.val attachment spine.bodyContainer)
+        region).length → D) :
+    Fin (ConcreteElaboration.exactScopeWires pattern.val.diagram region).length →
+      D :=
+  fun index =>
+    extendedEnv expanded region targetOuter targetLocal
+      ((extendCollapse pattern attachment spine contract expanded original
+        collapse region expandedExact originalExact).oldIndex
+        (Fin.cast
+          (ConcreteElaboration.WireContext.length_extend original region).symm
+          (Fin.natAdd original.length index)))
+
+theorem extendedEnv_oldIndex_general
+    (pattern : CheckedOpenDiagram signature)
+    (attachment : Fin pattern.val.boundary.length → Host)
+    (spine : BinderSpine pattern.val.diagram)
+    (contract : spine.TerminalBodyContract pattern.val)
+    (expanded : ConcreteElaboration.WireContext
+      (materializedDiagram pattern.val attachment spine.bodyContainer))
+    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (collapse : ContextCollapse pattern attachment spine expanded original)
+    (region : Fin pattern.val.diagram.regionCount)
+    (expandedExact : (expanded.extend region).Exact region)
+    (originalExact : (original.extend region).Exact region)
+    (sourceOuter : Fin original.length → D)
+    (targetOuter : Fin expanded.length → D)
+    (outerEq : sourceOuter = targetOuter ∘ collapse.oldIndex)
+    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+      (materializedDiagram pattern.val attachment spine.bodyContainer)
+        region).length → D) :
+    extendedEnv original region sourceOuter
+        (oldIndexLocal pattern attachment spine contract expanded original
+          collapse region expandedExact originalExact targetOuter targetLocal) =
+      extendedEnv expanded region targetOuter targetLocal ∘
+        (extendCollapse pattern attachment spine contract expanded original
+          collapse region expandedExact originalExact).oldIndex := by
+  funext sourceIndex
+  let split := Fin.cast
+    (ConcreteElaboration.WireContext.length_extend original region) sourceIndex
+  have recover : Fin.cast
+      (ConcreteElaboration.WireContext.length_extend original region).symm
+      split = sourceIndex := by apply Fin.ext; rfl
+  rw [← recover]
+  refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
+  · rw [show Fin.cast _ (Fin.castAdd _ inherited) =
+        original.outerIndex region inherited by apply Fin.ext; rfl]
+    simp only [Function.comp_apply]
+    rw [extendCollapse_oldIndex_inherited pattern attachment spine contract
+      expanded original collapse region expandedExact originalExact inherited]
+    rw [extendedEnv_outer, extendedEnv_outer, outerEq]
+    rfl
+  · simp [oldIndexLocal, extendedEnv,
+      ConcreteElaboration.extendedEnvironment, extendWireEnv,
+      Function.comp_def]
+
 end Semantic
 
 end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
