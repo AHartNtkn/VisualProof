@@ -9,14 +9,14 @@ describe('mergeTheories (the only thing boot.ts does — no fetch, no manifest)'
     const frege = loadTheory(theoryToJson(buildFregeTheory()))
     const merged = mergeTheories([frege])
     expect(merged.ctx.theorems.has('plusAssoc')).toBe(true)
-    expect(merged.relations['nat']).toBeDefined()
+    expect(new Map(merged.relations).get('nat')).toBeDefined()
   })
 
   it('empty input rebuilds to the empty context (the honest empty boot)', () => {
     const merged = mergeTheories([])
     expect(merged.ctx).toBe(EMPTY_PROOF_CONTEXT)
     expect([...merged.ctx.theorems.keys()]).toEqual([])
-    expect(Object.keys(merged.relations)).toEqual([])
+    expect(merged.relations.map(([name]) => name)).toEqual([])
   })
 
   it('refuses conflicting theorem names loudly', () => {
@@ -27,7 +27,7 @@ describe('mergeTheories (the only thing boot.ts does — no fetch, no manifest)'
 
   it('rebuilds from the certified snapshot rather than a mutated parsed theory', () => {
     const loaded = loadTheory(theoryToJson(buildFregeTheory()))
-    delete (loaded.theory.relations as Record<string, unknown>).nat
+    ;(loaded.theory.relations as unknown[]).splice(0)
     ;(loaded.theory.theorems as unknown[]).splice(0)
     const merged = mergeTheories([loaded])
     expect(merged.ctx.relations.has('nat')).toBe(true)

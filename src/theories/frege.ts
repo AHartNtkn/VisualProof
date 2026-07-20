@@ -86,8 +86,13 @@ export function natRelation(): DiagramWithBoundary {
   return mkDiagramWithBoundary(l.build(), [wx])
 }
 
-function buildRelations(): Record<string, DiagramWithBoundary> {
-  return { zero: zeroRelation(), succ: succRelation(), plus: plusRelation(), nat: natRelation() }
+function buildRelations(): Array<readonly [string, DiagramWithBoundary]> {
+  return [
+    ['zero', zeroRelation()],
+    ['succ', succRelation()],
+    ['plus', plusRelation()],
+    ['nat', natRelation()],
+  ]
 }
 
 const idCert = { leftSteps: [], rightSteps: [] }

@@ -251,7 +251,7 @@ describe('applyTheorem', () => {
     const first = relationBuilder.wire(relationBuilder.root, [])
     const second = relationBuilder.wire(relationBuilder.root, [])
     const pairContext = verifyTheory({
-      relations: { Pair: mkDiagramWithBoundary(relationBuilder.build(), [first, second]) },
+      relations: [['Pair', mkDiagramWithBoundary(relationBuilder.build(), [first, second])]],
       theorems: [],
     })
     expect(() => applyCertifiedTheorem(diagram, theorem, {

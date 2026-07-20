@@ -10,7 +10,7 @@ import type { Theory } from '../kernel/proof/store'
  */
 export function sessionTheory(
   ctx: ProofContext,
-  extras: { readonly relations: Readonly<Record<string, DiagramWithBoundary>> },
+  extras: { readonly relations: readonly (readonly [string, DiagramWithBoundary])[] },
 ): Theory {
   assertProofContext(ctx)
   return {

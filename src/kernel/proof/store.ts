@@ -15,12 +15,10 @@ const FORMAT = 'visual-proof-theory'
 const VERSION = 1
 
 export function theoryToJson(t: Theory): unknown {
-  const relations: Record<string, unknown> = {}
-  for (const [name, rel] of Object.entries(t.relations)) relations[name] = dwbToJson(rel)
   return {
     format: FORMAT,
     version: VERSION,
-    relations,
+    relations: t.relations.map(([name, relation]) => [name, dwbToJson(relation)]),
     theorems: t.theorems.map(theoremToJson),
   }
 }
@@ -42,12 +40,19 @@ export function theoryFromJson(j: unknown): Theory {
   }
   if (j.format !== FORMAT) fail(`unrecognized format '${String(j.format)}'`)
   if (j.version !== VERSION) fail(`unsupported version '${String(j.version)}' (expected ${VERSION})`)
-  if (!isRecord(j.relations) || !Array.isArray(j.theorems)) {
-    fail("'relations' must be an object and 'theorems' an array")
+  if (!Array.isArray(j.relations) || !Array.isArray(j.theorems)) {
+    fail("'relations' and 'theorems' must be arrays")
   }
-  const relations: Record<string, DiagramWithBoundary> = {}
-  for (const [name, v] of Object.entries(j.relations)) {
-    relations[name] = dwbFromJson(v, `relation '${name}'`)
+  const relations: Array<readonly [string, DiagramWithBoundary]> = []
+  const names = new Set<string>()
+  for (const [index, entry] of j.relations.entries()) {
+    if (!Array.isArray(entry) || entry.length !== 2 || typeof entry[0] !== 'string') {
+      fail(`relations[${index}] must be a [name, body] pair`)
+    }
+    const name = entry[0]
+    if (names.has(name)) fail(`relations repeats name '${name}'`)
+    names.add(name)
+    relations.push([name, dwbFromJson(entry[1], `relation '${name}'`)])
   }
   return { relations, theorems: j.theorems.map((t) => theoremFromJson(t)) }
 }

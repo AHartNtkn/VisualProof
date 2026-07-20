@@ -41,13 +41,12 @@ export function defineRelation(
   orderedWires: readonly WireId[],
   name: string,
   ctx: ProofContext,
-  relations: Readonly<Record<string, DiagramWithBoundary>>,
 ): { relation: DiagramWithBoundary } {
   assertProofContext(ctx)
   if (name.trim() === '') {
     throw new Error('relation name is empty: type a name in the name input first')
   }
-  if (ctx.relations.has(name) || Object.prototype.hasOwnProperty.call(relations, name)) {
+  if (ctx.relations.has(name)) {
     throw new Error(`relation '${name}' already exists (loaded or defined this session); choose a fresh name`)
   }
   if (ctx.theorems.has(name)) {

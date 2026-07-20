@@ -12,7 +12,7 @@ import type { Theory } from '../kernel/proof/store'
  */
 export type BootContext = {
   readonly ctx: ProofContext
-  readonly relations: Readonly<Record<string, DiagramWithBoundary>>
+  readonly relations: readonly (readonly [string, DiagramWithBoundary])[]
 }
 
 /**
@@ -21,7 +21,7 @@ export type BootContext = {
  * change what a citation means.
  */
 export function mergeTheories(loaded: readonly { theory: Theory; ctx: ProofContext }[]): BootContext {
-  const relations: Record<string, DiagramWithBoundary> = {}
+  const relations: Array<readonly [string, DiagramWithBoundary]> = []
   const theorems: Theorem[] = []
   const theoremNames = new Set<string>()
   const relationNames = new Set<string>()
@@ -42,7 +42,7 @@ export function mergeTheories(loaded: readonly { theory: Theory; ctx: ProofConte
   for (const { ctx } of loaded) {
     assertProofContext(ctx)
     for (const [name, rel] of ctx.relations) {
-      relations[name] = rel
+      relations.push([name, rel])
     }
     for (const theorem of ctx.theorems.values()) {
       theorems.push(theorem)

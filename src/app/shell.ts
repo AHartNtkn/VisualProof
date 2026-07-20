@@ -128,7 +128,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let library: Library = opts.initialLibrary ?? emptyLibrary()
   const boot = rebuild(library)
   let ctx: ProofContext = boot.ctx
-  let relations: Readonly<Record<string, DiagramWithBoundary>> = boot.relations
+  let relations: readonly (readonly [string, DiagramWithBoundary])[] = boot.relations
 
   // ---- state ----
   let mode: 'edit' | 'prove' | 'replay' = 'edit'
@@ -366,7 +366,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Called after every library change (load/unload/adopt): refreshes the live
   // context bindings the rest of the shell reads (citation menus, replay) and
   // re-renders the Library panel.
-  const setContext = (newCtx: ProofContext, newRelations: Readonly<Record<string, DiagramWithBoundary>>): void => {
+  const setContext = (newCtx: ProofContext, newRelations: readonly (readonly [string, DiagramWithBoundary])[]): void => {
     ctx = newCtx
     relations = newRelations
     renderLibrary()
@@ -579,7 +579,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, actions: t.actions.length }))
       libraryDiv.append(renderGroup(
         `file:${e.file}`, e.file, thms,
-        Object.keys(e.theory.relations),
+        e.theory.relations.map(([name]) => name),
       ))
     }
 
@@ -707,7 +707,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (thm === undefined) throw new Error(`unknown theorem '${name}'`)
     if (mode !== 'replay') replayReturnMode = mode
     mainMotion.cancel()
-    replay = mkReplay(thm, ctx)
+    replay = mkReplay(thm.name, ctx)
     replayK = 0
     mode = 'replay'
     if (fixedWorkspace !== null) {
@@ -1123,7 +1123,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           // name/pick/extraction; defineEntry re-checks against the whole
           // library. A refusal stays attached to this pending interaction.
           const order = p.args.length > 0 ? [...p.args] : canonicalArgOrder(editDiagram, p.sel)
-          const { relation } = defineRelation(editDiagram, p.sel, order, name, ctx, relations)
+          const { relation } = defineRelation(editDiagram, p.sel, order, name, ctx)
           const next = defineEntry(library, name, relation)
           pending = null
           applyLibrary(next)

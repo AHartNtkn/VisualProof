@@ -158,7 +158,7 @@ export function rebuild(lib: Library): BootContext {
   const loaded = lib.entries
     .filter((e): e is LoadedEntry => e.status === 'loaded')
   for (const entry of loaded) assertProofContext(entry.ctx)
-  const relations: Record<string, DiagramWithBoundary> = {}
+  const relations: Array<readonly [string, DiagramWithBoundary]> = []
   const theorems: Theorem[] = []
   const loadedRelations = new Set<string>()
   const loadedTheorems = new Set<string>()
@@ -176,7 +176,7 @@ export function rebuild(lib: Library): BootContext {
     if (loadedTheorems.has(name)) throw new Error(`theory merge conflict: '${name}' names both a relation and theorem`)
   }
   for (const entry of loaded) {
-    for (const [name, relation] of entry.ctx.relations) relations[name] = relation
+    for (const [name, relation] of entry.ctx.relations) relations.push([name, relation])
   }
   const allTheoremNames = new Set(loadedTheorems)
   for (const theorem of lib.adopted) allTheoremNames.add(theorem.name)
@@ -189,7 +189,7 @@ export function rebuild(lib: Library): BootContext {
       throw new Error(`library conflict: defined relation '${name}' duplicates a theorem name`)
     }
     definedNames.add(name)
-    relations[name] = relation
+    relations.push([name, relation])
   }
   for (const entry of loaded) theorems.push(...entry.ctx.theorems.values())
   const adoptedNames = new Set<string>()

@@ -296,7 +296,7 @@ describe('diagonal comprehension: instantiation and the inverse round-trip', () 
         }],
       })],
     }
-    const theory: Theory = { relations: {}, theorems: [thm] }
+    const theory: Theory = { relations: [], theorems: [thm] }
     // loadTheory replays and checks the proof arrives at rhs; the repeated-wire
     // args must survive JSON.stringify → parse → loadTheory unchanged.
     const roundTripped = JSON.parse(JSON.stringify(theoryToJson(theory)))
@@ -348,7 +348,7 @@ describe('diagonal comprehension: instantiation and the inverse round-trip', () 
         binders: [],
       })],
     }
-    const theory: Theory = { relations: {}, theorems: [thm] }
+    const theory: Theory = { relations: [], theorems: [thm] }
     expect(() => loadTheory(JSON.parse(JSON.stringify(theoryToJson(theory))))).not.toThrow()
   })
 })

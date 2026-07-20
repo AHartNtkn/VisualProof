@@ -61,7 +61,7 @@ describe('end to end: derived rule proved, stored, loaded, applied natively', ()
   }
 
   it('save → load → apply in a host through a proof step', () => {
-    const theory: Theory = { relations: {}, theorems: [dropQ()] }
+    const theory: Theory = { relations: [], theorems: [dropQ()] }
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(theory))))
 
     const h = new DiagramBuilder()
@@ -85,7 +85,7 @@ describe('end to end: derived rule proved, stored, loaded, applied natively', ()
   })
 
   it('the whole pipeline preserves verification: tampered files are refused', () => {
-    const theory: Theory = { relations: {}, theorems: [dropQ()] }
+    const theory: Theory = { relations: [], theorems: [dropQ()] }
     const j = JSON.parse(JSON.stringify(theoryToJson(theory))) as { theorems: { actions: unknown[] }[] }
     j.theorems[0]!.actions = [] // tamper: claim the theorem with no proof
     expect(() => loadTheory(j)).toThrowError(/does not arrive at the stated right-hand side/)
@@ -93,7 +93,7 @@ describe('end to end: derived rule proved, stored, loaded, applied natively', ()
 
   it('verifyTheory + fingerprints: applying a theorem equals replaying its expansion', () => {
     const t = dropQ()
-    const ctx = verifyTheory({ relations: {}, theorems: [t] })
+    const ctx = verifyTheory({ relations: [], theorems: [t] })
     const h = new DiagramBuilder()
     const hp = h.termNode(h.root, p('\\a. a'))
     const hq = h.termNode(h.root, p('\\a. \\b. a'))

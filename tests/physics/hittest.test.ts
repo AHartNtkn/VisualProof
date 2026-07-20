@@ -41,7 +41,7 @@ describe('settled hit targets', () => {
   })
 
   it('a click on a boundary wire (its leg near the frame slot) resolves to that wire', () => {
-    const nat = buildFregeTheory().relations.nat!
+    const nat = new Map(buildFregeTheory().relations).get('nat')!
     const e = mkEngine(nat.diagram, nat.boundary)
     settle(e, 1200)
     const wid = nat.boundary[0]!

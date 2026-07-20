@@ -27,8 +27,10 @@ export type Replay = {
   boundaryAt(k: number): readonly WireId[]
 }
 
-export function mkReplay(thm: Theorem, ctx: ProofContext): Replay {
+export function mkReplay(name: string, ctx: ProofContext): Replay {
   assertProofContext(ctx)
+  const thm = ctx.theorems.get(name)
+  if (thm === undefined) throw new Error(`unknown certified theorem '${name}'`)
   const n = thm.actions.length
   // cache[k] = diagram after k steps; index 0 is the lhs, always present.
   const cache: Diagram[] = [thm.lhs.diagram]

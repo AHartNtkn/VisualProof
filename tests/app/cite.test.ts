@@ -42,7 +42,7 @@ function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; 
     second,
     firstWire,
     ctx: verifyTheory({
-      relations: { p: unaryRelation(), q: unaryRelation() },
+      relations: [['p', unaryRelation()], ['q', unaryRelation()]],
       theorems: [theorem, unrelated, closed],
     }),
   }

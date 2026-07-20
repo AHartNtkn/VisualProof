@@ -94,7 +94,7 @@ function deriveFixedPoint(): Theorem {
 
 export function buildLambdaTheory(): Theory {
   return {
-    relations: {},
+    relations: [],
     theorems: [deriveOnePlusOne(), deriveFixedPoint()],
   }
 }

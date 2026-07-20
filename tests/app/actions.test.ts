@@ -150,7 +150,7 @@ describe('reference-node gates', () => {
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const withRel = verifyTheory(buildFregeTheory())
     expect(applicableActions(d, sel, withRel).map((a) => a.kind)).toContain('relFold')
-    const noRel = verifyTheory({ relations: {}, theorems: [] })
+    const noRel = verifyTheory({ relations: [], theorems: [] })
     expect(applicableActions(d, sel, noRel).map((a) => a.kind)).not.toContain('relFold')
   })
 })

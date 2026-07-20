@@ -218,7 +218,7 @@ describe('proof session', () => {
       { node: c1, port: { kind: 'freeVar', name: 'b' } },
     ])
     const side = mkDiagramWithBoundary(host.build(), [w1])
-    const ctx = verifyTheory({ relations: { Alias: aliasBody }, theorems: [] })
+    const ctx = verifyTheory({ relations: [['Alias', aliasBody]], theorems: [] })
     const session = startSession(side, side, ctx)
 
     const forward = applyForward(session, { rule: 'relUnfold', node: ref })

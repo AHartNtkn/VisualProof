@@ -8,6 +8,7 @@ import { instantiationChoices } from '../../src/app/interact/moves'
 import { sessionTheory } from '../../src/app/persist'
 import { mkReplay } from '../../src/app/replay'
 import { startSession, startTrack } from '../../src/app/session'
+import { revalidateCopy, type CopyPlan } from '../../src/app/copy-planner'
 
 describe('application ProofContext boundaries', () => {
   it('rejects a structural forgery before zero-work or unrelated validation', () => {
@@ -17,13 +18,16 @@ describe('application ProofContext boundaries', () => {
     const theorem = { name: 'identity', lhs: side, rhs: side, actions: [] }
     const selection = { region: diagram.root, regions: [], nodes: [], wires: [] }
     const calls = [
-      () => mkReplay(theorem, forged),
+      () => mkReplay(theorem.name, forged),
       () => startTrack(side, 'forward', forged),
       () => startSession(side, side, forged),
       () => applicableActions(diagram, selection, forged),
       () => instantiationChoices(forged, 0),
-      () => sessionTheory(forged, { relations: {} }),
-      () => defineRelation(diagram, selection, [], '', forged, {}),
+      () => sessionTheory(forged, { relations: [] }),
+      () => defineRelation(diagram, selection, [], '', forged),
+      () => revalidateCopy({} as CopyPlan, diagram, {
+        kind: 'proof', diagram, region: 'missing', orientation: 'forward', ctx: forged,
+      }),
     ]
     for (const call of calls) expect(call).toThrowError('invalid proof context')
   })

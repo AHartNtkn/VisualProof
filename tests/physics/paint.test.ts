@@ -32,7 +32,7 @@ describe('law 2 — no text on lambda: labels only on ref-node discs', () => {
   it('across both theories: every label sits on a ref-node disc; term anatomy emits no text and no disc', () => {
     const sides: DiagramWithBoundary[] = []
     for (const theory of [buildFregeTheory(), buildLambdaTheory()]) {
-      for (const rel of Object.values(theory.relations)) sides.push(rel)
+      for (const [, relation] of theory.relations) sides.push(relation)
       for (const thm of theory.theorems) { sides.push(thm.lhs); sides.push(thm.rhs) }
     }
     for (const side of sides) {
@@ -92,7 +92,7 @@ describe('law 3 — boundary honesty: boundary wires connect INSIDE the frame, i
   })
 
   it("a bundled side's boundary wires each reach a slot on the INSIDE of the frame — no shape outside it", () => {
-    const nat = buildFregeTheory().relations.nat!
+    const nat = new Map(buildFregeTheory().relations).get('nat')!
     const e = mkEngine(nat.diagram, nat.boundary)
     settle(e, 1200)
     expect(nat.boundary.length).toBeGreaterThan(0)

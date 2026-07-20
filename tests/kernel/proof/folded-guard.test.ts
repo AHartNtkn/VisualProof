@@ -39,7 +39,7 @@ const isConjunct = (n: DiagramNode): boolean => n.kind === 'term' && termEq(n.te
 describe('folded-guard integration proof', () => {
   it('unfolds a working copy while the ambient guard stays folded, and folded ≠ unfolded statements', () => {
     const relations = new Map([['R', bodyR()]])
-    const ctx = verifyTheory({ relations: Object.fromEntries(relations), theorems: [] })
+    const ctx = verifyTheory({ relations: [...relations], theorems: [] })
 
     // lhs: a single folded reference R(x) with x as the boundary line.
     const lb = new DiagramBuilder()

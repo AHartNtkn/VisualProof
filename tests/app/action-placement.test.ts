@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { applyAction, type ProofAction } from '../../src/kernel/proof/action'
-import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { EMPTY_PROOF_CONTEXT, registerTheorem } from '../../src/kernel/proof/context'
 import { theoremFromJson, theoremToJson } from '../../src/kernel/proof/json'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { mkReplay } from '../../src/app/replay'
@@ -123,7 +123,7 @@ describe('proof action placement presentation', () => {
       rhs: mkDiagramWithBoundary(after, []),
       actions: [action],
     }))
-    const replay = mkReplay(theorem, context)
+    const replay = mkReplay(theorem.name, registerTheorem(context, theorem))
     const replayed = replay.diagramAt(1)
     const engine = mkEngine(replayed, replay.boundaryAt(1))
     seedProject(engine)

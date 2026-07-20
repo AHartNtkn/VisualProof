@@ -27,7 +27,7 @@ function identity(name: string) {
 
 describe('verified ProofContext authority', () => {
   it('uses one canonical empty context', () => {
-    expect(verifyTheory({ relations: {}, theorems: [] })).toBe(EMPTY_PROOF_CONTEXT)
+    expect(verifyTheory({ relations: [], theorems: [] })).toBe(EMPTY_PROOF_CONTEXT)
     expect(() => assertProofContext(EMPTY_PROOF_CONTEXT)).not.toThrow()
     expect(replayProof(emptyDiagram(), [], EMPTY_PROOF_CONTEXT)).toEqual(emptyDiagram())
   })
@@ -66,6 +66,15 @@ describe('verified ProofContext authority', () => {
     }
   })
 
+  it('does not expose an authenticating constructor through an instance or prototype', () => {
+    expect(Object.getPrototypeOf(EMPTY_PROOF_CONTEXT)).toBeNull()
+    expect((EMPTY_PROOF_CONTEXT as unknown as { constructor?: unknown }).constructor).toBeUndefined()
+    expect(() => {
+      const Constructor = (EMPTY_PROOF_CONTEXT as unknown as { constructor: new (...args: unknown[]) => unknown }).constructor
+      return new Constructor([], [])
+    }).toThrow()
+  })
+
   it('registers valid theorems incrementally without mutating prior contexts', () => {
     const first = registerTheorem(EMPTY_PROOF_CONTEXT, identity('first'))
     const second = registerTheorem(first, identity('second'))
@@ -79,23 +88,113 @@ describe('verified ProofContext authority', () => {
     const ctx = registerTheorem(EMPTY_PROOF_CONTEXT, source)
     expect(() => (ctx.theorems as Map<string, unknown>).set('forged', identity('forged'))).toThrow()
     expect(() => ((ctx.theorems.get('stable')!.actions as unknown[]) as unknown[]).push({})).toThrow()
+    expect(() => ((ctx.theorems.get('stable') as unknown as { name: string }).name = 'forged')).toThrow()
+    expect(() => ((ctx.theorems.get('stable') as unknown as { actions: unknown[] }).actions = [])).toThrow()
     ;(source as { name: string }).name = 'mutated-source'
     expect([...ctx.theorems.keys()]).toEqual(['stable'])
   })
 
-  it('prevents prototype poisoning of authentic collection queries', () => {
-    const ctx = registerTheorem(EMPTY_PROOF_CONTEXT, identity('stable'))
+  it('prevents prototype poisoning of authentic queries and certified execution', () => {
+    const ctx = verifyTheory({
+      relations: [['StableRelation', mkDiagramWithBoundary(emptyDiagram(), [])]],
+      theorems: [identity('stable-theorem')],
+    })
     const prototype = Object.getPrototypeOf(ctx.theorems) as Record<PropertyKey, unknown>
     expect(() => Object.defineProperty(prototype, 'get', {
       configurable: true,
       value: () => identity('forged'),
     })).toThrow()
+    expect(() => Object.defineProperty(prototype, 'has', {
+      configurable: true,
+      value: () => false,
+    })).toThrow()
     expect(() => Object.defineProperty(prototype, Symbol.iterator, {
       configurable: true,
       value: function* () { yield ['forged', identity('forged')] },
     })).toThrow()
+
     expect(ctx.theorems.get('forged')).toBeUndefined()
-    expect([...ctx.theorems.keys()]).toEqual(['stable'])
+    expect(ctx.theorems.has('stable-theorem')).toBe(true)
+    expect(ctx.relations.has('StableRelation')).toBe(true)
+    expect([...ctx.theorems].map(([name]) => name)).toEqual(['stable-theorem'])
+    expect([...ctx.relations].map(([name]) => name)).toEqual(['StableRelation'])
+
+    const theoremHost = emptyDiagram()
+    expect(applyTheorem(theoremHost, ctx, 'stable-theorem', {
+      sel: { region: theoremHost.root, regions: [], nodes: [], wires: [] },
+      args: [],
+    }, 'forward')).toEqual(theoremHost)
+
+    const relationHostBuilder = new DiagramBuilder()
+    const relationRef = relationHostBuilder.ref(relationHostBuilder.root, 'StableRelation', 0)
+    const relationHost = relationHostBuilder.build()
+    expect(applyStep(relationHost, { rule: 'relUnfold', node: relationRef }, ctx)).toEqual(emptyDiagram())
+  })
+
+  it('ignores native Map and WeakSet prototype poisoning after module initialization', () => {
+    const ctx = verifyTheory({
+      relations: [['StableRelation', mkDiagramWithBoundary(emptyDiagram(), [])]],
+      theorems: [identity('stable-theorem')],
+    })
+    const mapGet = Object.getOwnPropertyDescriptor(Map.prototype, 'get')!
+    const mapHas = Object.getOwnPropertyDescriptor(Map.prototype, 'has')!
+    const mapIterator = Object.getOwnPropertyDescriptor(Map.prototype, Symbol.iterator)!
+    const weakSetHas = Object.getOwnPropertyDescriptor(WeakSet.prototype, 'has')!
+    let observed: unknown
+    let forgedRejected = false
+    try {
+      Object.defineProperty(Map.prototype, 'get', { configurable: true, value: () => identity('forged') })
+      Object.defineProperty(Map.prototype, 'has', { configurable: true, value: () => false })
+      Object.defineProperty(Map.prototype, Symbol.iterator, {
+        configurable: true,
+        value: function* () { yield ['forged', identity('forged')] },
+      })
+      Object.defineProperty(WeakSet.prototype, 'has', { configurable: true, value: () => true })
+      assertProofContext(ctx)
+      try {
+        assertProofContext({ theorems: new Map(), relations: new Map() })
+      } catch {
+        forgedRejected = true
+      }
+      observed = {
+        theorem: ctx.theorems.get('stable-theorem')?.name,
+        relation: ctx.relations.has('StableRelation'),
+        theoremNames: [...ctx.theorems].map(([name]) => name),
+        relationNames: [...ctx.relations].map(([name]) => name),
+      }
+    } finally {
+      Object.defineProperty(Map.prototype, 'get', mapGet)
+      Object.defineProperty(Map.prototype, 'has', mapHas)
+      Object.defineProperty(Map.prototype, Symbol.iterator, mapIterator)
+      Object.defineProperty(WeakSet.prototype, 'has', weakSetHas)
+    }
+    expect(forgedRejected).toBe(true)
+    expect(observed).toEqual({
+      theorem: 'stable-theorem',
+      relation: true,
+      theoremNames: ['stable-theorem'],
+      relationNames: ['StableRelation'],
+    })
+  })
+
+  it('rejects executable, unsupported, and cyclic theorem schema carriers', () => {
+    const functionActions = {
+      ...identity('function-actions'),
+      actions: (() => []) as unknown as readonly ProofAction[],
+    }
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, functionActions)).toThrow(/unsupported function value/)
+
+    const certificate = { leftSteps: [] as unknown[], rightSteps: [] as unknown[] }
+    certificate.leftSteps.push(certificate)
+    const cyclic = {
+      ...identity('cyclic-certificate'),
+      actions: [{
+        label: 'cyclic',
+        steps: [{ rule: 'anchoredWireContract', redundant: 'n0', survivor: 'n1', certificate }],
+        placements: [],
+      }],
+    } as unknown as ReturnType<typeof identity>
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, cyclic)).toThrow(/cyclic values are not supported/)
   })
 
   it('owns immutable relation snapshots and preserves valid incremental order', () => {
@@ -122,14 +221,14 @@ describe('verified ProofContext authority', () => {
     const cut = nestedBuilder.cut(nestedBuilder.root)
     const nested = nestedBuilder.wire(cut, [])
     expect(() => verifyTheory({
-      relations: { Bad: mkDiagramWithBoundary(nestedBuilder.build(), [nested]) },
+      relations: [['Bad', mkDiagramWithBoundary(nestedBuilder.build(), [nested])]],
       theorems: [],
     })).toThrowError(/boundary wire .* (?:is not|must be) scoped at the diagram root/)
 
     const rootBuilder = new DiagramBuilder()
     const rootWire = rootBuilder.wire(rootBuilder.root, [])
     const ctx = verifyTheory({
-      relations: { Alias: mkDiagramWithBoundary(rootBuilder.build(), [rootWire, rootWire]) },
+      relations: [['Alias', mkDiagramWithBoundary(rootBuilder.build(), [rootWire, rootWire])]],
       theorems: [],
     })
     expect(ctx.relations.get('Alias')!.boundary).toEqual([rootWire, rootWire])
@@ -145,6 +244,13 @@ describe('verified ProofContext authority', () => {
     const step = action.steps.find((candidate) => candidate.rule === 'deiteration')!
     if (step.rule !== 'deiteration') throw new Error('expected deiteration step')
     const size = step.certificate.regionMap.size
+    const sourceTheorem = source.theorems.find((candidate) => candidate.name === theorem.name)!
+    const sourceStep = sourceTheorem.actions.flatMap((candidate) => candidate.steps)
+      .find((candidate) => candidate.rule === 'deiteration')!
+    if (sourceStep.rule !== 'deiteration') throw new Error('expected source deiteration step')
+    ;(sourceStep.certificate.regionMap as Map<string, string>).set('source-forged', 'source-forged')
+    expect(step.certificate.regionMap.has('source-forged')).toBe(false)
+    expect(() => checkTheorem(theorem, ctx)).not.toThrow()
     expect(() => (step.certificate.regionMap as Map<string, string>).set('forged', 'forged')).toThrow()
     expect(step.certificate.regionMap.size).toBe(size)
     expect(() => ((action as { label: string }).label = 'mutated')).toThrow()

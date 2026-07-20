@@ -155,7 +155,7 @@ function correspondenceFromJson(v: unknown, what: string): PortCorrespondence {
 }
 
 function idMapToJson(map: ReadonlyMap<string, string>): unknown {
-  return [...map].sort(([left], [right]) => left.localeCompare(right))
+  return [...map]
 }
 
 function idMapFromJson(v: unknown, what: string): Map<string, string> {
@@ -180,7 +180,6 @@ function occurrenceCertificateToJson(certificate: OccurrenceCertificate): unknow
     attachments: [...certificate.attachments],
     binderMap: idMapToJson(certificate.binderMap),
     termCertificates: [...certificate.termCertificates]
-      .sort(([left], [right]) => left.localeCompare(right))
       .map(([node, conversion]) => [node, certToJson(conversion)]),
   }
 }

@@ -21,7 +21,7 @@ const refNodeOf = (d: { nodes: Record<string, { kind: string }> }): string => {
 describe('defineRelation — the extracted copy round-trips through fold/unfold', () => {
   it('defines a relation whose fold-then-unfold reproduces the original sheet', () => {
     const { d, sel, wY, wZ } = sheetBody()
-    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
+    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx)
     expect(relation.boundary).toHaveLength(2)
 
     const relations = new Map([['R', relation]])
@@ -36,7 +36,7 @@ describe('defineRelation — the extracted copy round-trips through fold/unfold'
   it('honors the pick order as the argument order (reversed picks give the reversed boundary)', () => {
     const { d, sel, wY, wZ } = sheetBody()
     // Define with REVERSED picks: arg 0 is the z-line, arg 1 is the y-line.
-    const { relation } = defineRelation(d, sel, [wZ, wY], 'R', emptyCtx, {})
+    const { relation } = defineRelation(d, sel, [wZ, wY], 'R', emptyCtx)
     const relations = new Map([['R', relation]])
     // Folding the same body with the same (reversed) arg order matches.
     expect(() => applyRelFold(d, sel, 'R', [wZ, wY], relations)).not.toThrow()
@@ -48,7 +48,7 @@ describe('defineRelation — the extracted copy round-trips through fold/unfold'
   it('does not mutate the input diagram', () => {
     const { d, sel, wY, wZ } = sheetBody()
     const before = JSON.stringify(d)
-    defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
+    defineRelation(d, sel, [wY, wZ], 'R', emptyCtx)
     expect(JSON.stringify(d)).toBe(before)
   })
 
@@ -58,7 +58,7 @@ describe('defineRelation — the extracted copy round-trips through fold/unfold'
     // defined"): the canonical form of the sheet is untouched by defining.
     const { d, sel, wY, wZ } = sheetBody()
     const before = exploreForm(d)
-    defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
+    defineRelation(d, sel, [wY, wZ], 'R', emptyCtx)
     expect(exploreForm(d)).toBe(before)
   })
 })
@@ -66,46 +66,38 @@ describe('defineRelation — the extracted copy round-trips through fold/unfold'
 describe('defineRelation — refusals (each message observed)', () => {
   it('refuses an empty name', () => {
     const { d, sel, wY, wZ } = sheetBody()
-    expect(() => defineRelation(d, sel, [wY, wZ], '', emptyCtx, {})).toThrow(/name is empty/)
-    expect(() => defineRelation(d, sel, [wY, wZ], '   ', emptyCtx, {})).toThrow(/name is empty/)
+    expect(() => defineRelation(d, sel, [wY, wZ], '', emptyCtx)).toThrow(/name is empty/)
+    expect(() => defineRelation(d, sel, [wY, wZ], '   ', emptyCtx)).toThrow(/name is empty/)
   })
 
   it('refuses a name that collides with an existing relation (ctx.relations)', () => {
     const { d, sel, wY, wZ } = sheetBody()
-    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
-    const ctx = verifyTheory({ relations: { R: relation }, theorems: [] })
-    expect(() => defineRelation(d, sel, [wY, wZ], 'R', ctx, {})).toThrow(/relation 'R' already exists/)
-  })
-
-  it('refuses a name that collides with a session relation (the relations record)', () => {
-    const { d, sel, wY, wZ } = sheetBody()
-    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
-    expect(() => defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, { R: relation })).toThrow(
-      /relation 'R' already exists/,
-    )
+    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx)
+    const ctx = verifyTheory({ relations: [['R', relation]], theorems: [] })
+    expect(() => defineRelation(d, sel, [wY, wZ], 'R', ctx)).toThrow(/relation 'R' already exists/)
   })
 
   it('refuses a name that collides with a theorem (one namespace)', () => {
     const { d, sel, wY, wZ } = sheetBody()
     const empty = mkDiagramWithBoundary(emptyDiagram(), [])
     const thm: Theorem = { name: 'T', lhs: empty, rhs: empty, actions: [] }
-    const ctx = verifyTheory({ relations: {}, theorems: [thm] })
-    expect(() => defineRelation(d, sel, [wY, wZ], 'T', ctx, {})).toThrow(/already a theorem/)
+    const ctx = verifyTheory({ relations: [], theorems: [thm] })
+    expect(() => defineRelation(d, sel, [wY, wZ], 'T', ctx)).toThrow(/already a theorem/)
   })
 
   it('refuses when a crossing wire is left unpicked', () => {
     const { d, sel, wY } = sheetBody()
-    expect(() => defineRelation(d, sel, [wY], 'R', emptyCtx, {})).toThrow(/was not picked/)
+    expect(() => defineRelation(d, sel, [wY], 'R', emptyCtx)).toThrow(/was not picked/)
   })
 
   it('refuses a duplicated pick', () => {
     const { d, sel, wY } = sheetBody()
-    expect(() => defineRelation(d, sel, [wY, wY], 'R', emptyCtx, {})).toThrow(/picked more than once/)
+    expect(() => defineRelation(d, sel, [wY, wY], 'R', emptyCtx)).toThrow(/picked more than once/)
   })
 
   it('refuses a non-crossing (internal) wire picked as an argument', () => {
     const { d, sel, wY, wZ, wOut } = sheetBody()
-    expect(() => defineRelation(d, sel, [wY, wZ, wOut], 'R', emptyCtx, {})).toThrow(/is not a crossing wire/)
+    expect(() => defineRelation(d, sel, [wY, wZ, wOut], 'R', emptyCtx)).toThrow(/is not a crossing wire/)
   })
 
   it('refuses an open subgraph — a selection that binds atoms outside itself', () => {
@@ -121,7 +113,7 @@ describe('defineRelation — refusals (each message observed)', () => {
     const wArg = Object.keys(d.wires).find((wid) =>
       d.wires[wid]!.endpoints.some((ep) => ep.node === at),
     )!
-    expect(() => defineRelation(d, sel, [wArg], 'R', emptyCtx, {})).toThrow(
+    expect(() => defineRelation(d, sel, [wArg], 'R', emptyCtx)).toThrow(
       /binds atoms outside itself/,
     )
   })
@@ -139,7 +131,7 @@ describe('canonicalArgOrder — a deterministic default argument order', () => {
     // property of the shape, not of iteration accidents
     expect(ordA).toEqual(ordB)
     // and defining with it round-trips like any explicit pick
-    const { relation } = defineRelation(a.d, a.sel, ordA, 'C', emptyCtx, {})
+    const { relation } = defineRelation(a.d, a.sel, ordA, 'C', emptyCtx)
     expect(relation.boundary).toHaveLength(2)
   })
 
@@ -157,8 +149,8 @@ describe('canonicalArgOrder — a deterministic default argument order', () => {
 describe('inferFoldArgs — the fold arguments come from occurrence matching', () => {
   it('infers the attachment order that folds, without any user pick', () => {
     const { d, sel, wY, wZ } = sheetBody()
-    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
-    const ctx = verifyTheory({ relations: { R: relation }, theorems: [] })
+    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx)
+    const ctx = verifyTheory({ relations: [['R', relation]], theorems: [] })
     const args = inferFoldArgs(d, sel, 'R', ctx)
     // the body is asymmetric, so exactly one assignment is valid — the pick order
     expect(args).toEqual([wY, wZ])
@@ -169,13 +161,13 @@ describe('inferFoldArgs — the fold arguments come from occurrence matching', (
 
   it('refuses when the selection is not an occurrence of the body', () => {
     const { d, sel, wY, wZ } = sheetBody()
-    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
+    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx)
     // a different, non-matching sheet: a single closed term node
     const b = new DiagramBuilder()
     const t = b.termNode(b.root, parseTerm('\\x. x'))
     const d2 = b.build()
     const sel2 = mkSelection(d2, { region: b.root, regions: [], nodes: [t], wires: [] })
-    const ctx = verifyTheory({ relations: { R: relation }, theorems: [] })
+    const ctx = verifyTheory({ relations: [['R', relation]], theorems: [] })
     expect(() => inferFoldArgs(d2, sel2, 'R', ctx)).toThrowError(/not an occurrence of 'R'/)
   })
 

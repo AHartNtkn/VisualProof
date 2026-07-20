@@ -263,6 +263,7 @@ export class ProofMoveController {
   #lastPointer: Vec2
 
   constructor(options: ProofMoveControllerOptions) {
+    assertProofContext(options.context())
     this.#options = options
     this.#document = options.host.ownerDocument
     this.#lastPointer = { x: 0, y: 0 }
@@ -301,11 +302,14 @@ export class ProofMoveController {
       sourceSelection: options.selection,
       sourceEngine: options.engine,
       viewScale: options.viewScale,
-      destination: (sample) => ({
-        kind: 'proof', diagram: options.diagram(),
-        region: regionAt(options.engine(), options.diagram(), sample.world),
-        orientation: options.orientation(), ctx: options.context(),
-      }),
+      destination: (sample) => {
+        const context = this.#context()
+        return {
+          kind: 'proof', diagram: options.diagram(),
+          region: regionAt(options.engine(), options.diagram(), sample.world),
+          orientation: options.orientation(), ctx: context,
+        }
+      },
       commit: (plan) => {
         if (plan.kind !== 'proof') throw new Error('proof copy produced a structural plan')
         this.#options.apply(plan.action)
@@ -320,6 +324,7 @@ export class ProofMoveController {
   }
 
   claim(sample: PointerSample): PointerClaim | null {
+    this.#context()
     this.#lastPointer = sample.client
     if (!this.#options.active() || sample.button !== 0) return null
     if (this.#cycle !== null && !sample.ctrlKey) {
@@ -344,6 +349,7 @@ export class ProofMoveController {
   }
 
   contextMenu(sample: PointerSample): boolean {
+    this.#context()
     this.#lastPointer = sample.client
     if (!this.#options.active()) return false
     this.#closeMenu()
@@ -362,6 +368,7 @@ export class ProofMoveController {
   }
 
   doubleClick(sample: PointerSample): boolean {
+    this.#context()
     this.#lastPointer = sample.client
     if (!this.#options.active()) return false
     if (sample.hit?.kind === 'wire') {
@@ -385,6 +392,7 @@ export class ProofMoveController {
   }
 
   keyDown(sample: KeySample): boolean {
+    this.#context()
     if (!this.#options.active() || sample.repeat) return false
     if (sample.key === 'Escape') {
       const active = this.#menu !== null || this.#prompt !== null || this.#cycle !== null
@@ -413,7 +421,7 @@ export class ProofMoveController {
     const discovery = discoverProofActions(
       this.#options.diagram(),
       this.#options.selection(),
-      this.#options.context(),
+      this.#context(),
       this.#options.orientation(),
     )
     if (discovery === null) {
@@ -434,6 +442,7 @@ export class ProofMoveController {
   }
 
   overlay(): readonly Shape[] {
+    this.#context()
     const out: Shape[] = [...this.#connection.overlay(), ...this.#fission.overlay(), ...this.#copy.overlay()]
     const cycle = this.#cycle
     if (cycle !== null && cycle.candidate.occurrences !== null) {
@@ -447,6 +456,7 @@ export class ProofMoveController {
   }
 
   cancel(): void {
+    this.#context()
     this.#closeMenu()
     this.#closePrompt()
     this.#cycle = null
@@ -457,8 +467,15 @@ export class ProofMoveController {
 
   dispose(): void { this.cancel(); this.#fission.dispose(); this.#copy.dispose() }
 
-  passiveSample(sample: PointerSample | null): void { this.#fission.hover(this.#copy.dragging ? null : sample) }
-  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld); this.#copy.modifiersChanged(ctrlHeld) }
+  passiveSample(sample: PointerSample | null): void {
+    this.#context()
+    this.#fission.hover(this.#copy.dragging ? null : sample)
+  }
+  modifiersChanged(ctrlHeld: boolean): void {
+    this.#context()
+    this.#fission.modifiersChanged(ctrlHeld)
+    this.#copy.modifiersChanged(ctrlHeld)
+  }
 
   #commit(step: ProofStep): void {
     try {
@@ -488,12 +505,13 @@ export class ProofMoveController {
     }
     const d = this.#options.diagram()
     const region = regionAt(this.#options.engine(), d, sample.world)
-    const discovery = discoverProofActions(d, hits, this.#options.context(), this.#options.orientation())
+    const context = this.#context()
+    const discovery = discoverProofActions(d, hits, context, this.#options.orientation())
     if (discovery !== null) {
       row('Actions', null)
       for (const action of discovery.actions) this.#appendAction(row, action, discovery.sel)
     }
-    const candidates = citationCandidates(d, hits, discovery?.sel.region ?? region, this.#options.context(), this.#options.orientation(), this.#options.fuel())
+    const candidates = citationCandidates(d, hits, discovery?.sel.region ?? region, context, this.#options.orientation(), this.#options.fuel())
     const citations = hits.length === 0 ? { applicable: [], closed: candidates.closed } : candidates
     if (citations.applicable.length > 0) {
       row('Applicable theorems', null)
@@ -528,19 +546,21 @@ export class ProofMoveController {
         const bubble = sel.regions[0]!
         const bubbleRegion = this.#options.diagram().regions[bubble]!
         const arity = bubbleRegion.kind === 'bubble' ? bubbleRegion.arity : -1
-        for (const choice of instantiationChoices(this.#options.context(), arity)) {
+        const context = this.#context()
+        for (const choice of instantiationChoices(context, arity)) {
           if (choice.kind === 'anonymous') row(choice.label, () => {
             this.#closeMenu()
             this.#options.openComprehension(bubble, this.#lastPointer)
           })
-          else row(choice.label, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#options.context(), choice.name), attachments: [], binders: [] }))
+          else row(choice.label, () => this.#commit({ rule: 'comprehensionInstantiate', bubble, comp: foldedComprehension(this.#context(), choice.name), attachments: [], binders: [] }))
         }
         return
       }
       case 'relUnfold': row(action.label, () => this.#commit({ rule: 'relUnfold', node: sel.nodes[0]! })); return
       case 'relFold': {
         row('Fold into', null)
-        for (const name of this.#options.context().relations.keys()) row(name, () => this.#commit({ rule: 'relFold', sel, defId: name, args: inferFoldArgs(this.#options.diagram(), sel, name, this.#options.context()) }))
+        const context = this.#context()
+        for (const name of context.relations.keys()) row(name, () => this.#commit({ rule: 'relFold', sel, defId: name, args: inferFoldArgs(this.#options.diagram(), sel, name, this.#context()) }))
         return
       }
       case 'citeTheorem': return
@@ -592,4 +612,9 @@ export class ProofMoveController {
 
   #closeMenu(): void { this.#menu?.remove(); this.#menu = null }
   #closePrompt(): void { this.#prompt?.remove(); this.#prompt = null }
+  #context(): ProofContext {
+    const context = this.#options.context()
+    assertProofContext(context)
+    return context
+  }
 }

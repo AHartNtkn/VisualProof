@@ -46,7 +46,7 @@ describe('the bundled Frege theory', () => {
       return walk(t.term as never)
     }
     const theory = buildFregeTheory()
-    for (const rel of Object.values(theory.relations)) {
+    for (const [, rel] of theory.relations) {
       expect(Object.values(rel.diagram.nodes).some(hasConst)).toBe(false)
     }
   })
@@ -272,7 +272,7 @@ describe('the bundled Frege theory', () => {
     // Non-vacuity lock: the zero-evidence is a `zero` reference living strictly
     // inside the guard bubble, its arg line scoped there — no top-level zero
     // witness leaks. The ONLY root-scoped wire is the boundary x-line.
-    const nat = buildFregeTheory().relations['nat']!
+    const nat = new Map(buildFregeTheory().relations).get('nat')!
     const d = nat.diagram
     const zeroEntry = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero')
     expect(zeroEntry).toBeDefined()
@@ -291,10 +291,11 @@ describe('the bundled Frege theory', () => {
 
   it('the named ℕ relation is arity 1 with a stable fingerprint', () => {
     const theory = buildFregeTheory()
-    expect(theory.relations['nat']).toBeDefined()
-    expect(theory.relations['nat']!.boundary).toHaveLength(1)
-    expect(boundaryForm(theory.relations['nat']!)).toBeTruthy()
-    expect(boundaryForm(natRelation())).toBe(boundaryForm(theory.relations['nat']!))
+    const nat = new Map(theory.relations).get('nat')!
+    expect(nat).toBeDefined()
+    expect(nat.boundary).toHaveLength(1)
+    expect(boundaryForm(nat)).toBeTruthy()
+    expect(boundaryForm(natRelation())).toBe(boundaryForm(nat))
   })
 
   it('the theory is deterministic: two builds are identical', () => {

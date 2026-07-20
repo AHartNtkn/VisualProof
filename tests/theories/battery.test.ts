@@ -98,7 +98,7 @@ describe('bundled theories as shipped artifacts', () => {
 
   it('every statement and relation body is a pure term (guards the constant purge)', () => {
     for (const theory of [buildFregeTheory(), buildLambdaTheory()]) {
-      for (const [name, rel] of Object.entries(theory.relations)) {
+      for (const [name, rel] of theory.relations) {
         assertPureTerms(rel.diagram, `relation '${name}'`)
       }
       for (const thm of theory.theorems) {

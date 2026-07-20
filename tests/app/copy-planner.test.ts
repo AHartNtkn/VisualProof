@@ -293,7 +293,7 @@ describe('CopyPlanner proof destinations', () => {
     const relationBuilder = new DiagramBuilder()
     relationBuilder.cut(relationBuilder.root)
     const relation = mkDiagramWithBoundary(relationBuilder.build(), [])
-    const relationCtx = verifyTheory({ relations: { 'single-cut': relation }, theorems: [] })
+    const relationCtx = verifyTheory({ relations: [['single-cut', relation]], theorems: [] })
 
     const builder = new DiagramBuilder()
     const sourceRegion = builder.cut(builder.root)
@@ -852,7 +852,7 @@ describe('CopyPlanner refusals and revalidation', () => {
       ...destination, orientation: 'backward',
     })).code).toBe('stale-destination')
     const changedContext = verifyTheory({
-      relations: { 'new-relation': mkDiagramWithBoundary(new DiagramBuilder().build(), []) },
+      relations: [['new-relation', mkDiagramWithBoundary(new DiagramBuilder().build(), [])]],
       theorems: [],
     })
     expect(refusal(revalidateCopy(original, diagram, {

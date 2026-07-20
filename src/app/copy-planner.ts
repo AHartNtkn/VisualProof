@@ -928,6 +928,8 @@ export function revalidateCopy(
   liveSource: Diagram,
   liveDestination: CopyDestination,
 ): CopyPlan | CopyRefusal {
+  const invalidDestination = validateDestination(liveDestination)
+  if (invalidDestination !== null) return invalidDestination
   const evidence = planEvidence.get(plan)
   if (evidence === undefined) return deny('invalid-plan', 'copy plan has no revalidation evidence')
   if (diagramStateFingerprint(liveSource) !== evidence.sourceState) {

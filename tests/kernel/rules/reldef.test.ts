@@ -194,7 +194,7 @@ describe('relUnfold / relFold replay through applyStep', () => {
   it('replays a relUnfold step to the same diagram as the direct applier', () => {
     const relations = new Map([['R', bodyR()]])
     const { d, node } = refHost('R')
-    const ctx = verifyTheory({ relations: Object.fromEntries(relations), theorems: [] })
+    const ctx = verifyTheory({ relations: [...relations], theorems: [] })
     const replayed = replayProof(d, [{ rule: 'relUnfold', node }], ctx)
     expect(exploreForm(replayed)).toBe(exploreForm(applyRelUnfold(d, node, relations)))
   })
@@ -202,7 +202,7 @@ describe('relUnfold / relFold replay through applyStep', () => {
   it('replays unfold then fold back to the original', () => {
     const relations = new Map([['R', bodyR()]])
     const { d, node, carrier, wArg } = refHost('R')
-    const ctx = verifyTheory({ relations: Object.fromEntries(relations), theorems: [] })
+    const ctx = verifyTheory({ relations: [...relations], theorems: [] })
     const un = applyRelUnfold(d, node, relations)
     const sel = bodySelection(un, carrier, un.root)
     const steps: ProofStep[] = [

@@ -14,7 +14,7 @@ const refNodeOf = (d: { nodes: Record<string, { kind: string }> }): string => {
 describe('defineRelation — the defined relation renders its argument-order pip', () => {
   it('a ref to the defined ARITY-2 relation draws exactly one pip on its rim', () => {
     const { d, sel, wY, wZ } = sheetBody()
-    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx, {})
+    const { relation } = defineRelation(d, sel, [wY, wZ], 'R', emptyCtx)
     const relations = new Map([['R', relation]])
     const folded = applyRelFold(d, sel, 'R', [wY, wZ], relations)
     const ref = refNodeOf(folded)

@@ -4,7 +4,7 @@ import type { ProofStep } from '../../src/kernel/proof/step'
 import { applyAction } from '../../src/kernel/proof/action'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { verifyTheory } from '../../src/kernel/proof/store'
-import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine } from '../../src/view/engine'
 import { computeLegs, recomputeRegions } from '../../src/view/index'
@@ -53,7 +53,10 @@ const key = (value: string): KeySample => ({
   repeat: false,
 })
 
-function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' = 'none') {
+function fusionController(
+  initialSelection: 'none' | 'wire' | 'node' | 'mixed' = 'none',
+  initialContext: ProofContext = ctx(),
+) {
   const b = new DiagramBuilder()
   const producer = b.termNode(b.root, p('\\x. x'))
   const consumer = b.termNode(b.root, p('q y'))
@@ -71,7 +74,7 @@ function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' =
         : []
   const applied: ProofStep[] = []
   const abstractions: Array<{ sel: import('../../src/kernel/diagram/subgraph/selection').SubgraphSelection; pointer: { x: number; y: number } }> = []
-  const proof = ctx()
+  let proof = initialContext
   const controller = new ProofMoveController({
     host: { ownerDocument: {} } as HTMLElement,
     active: () => true,
@@ -94,8 +97,22 @@ function fusionController(initialSelection: 'none' | 'wire' | 'node' | 'mixed' =
     openAbstraction: (sel, at) => { abstractions.push({ sel, pointer: at }) },
     openSpawn: () => {},
   })
-  return { controller, producer, consumer, wire, applied, abstractions, diagram: () => diagram }
+  return {
+    controller, producer, consumer, wire, applied, abstractions, diagram: () => diagram,
+    setContext: (next: ProofContext) => { proof = next },
+  }
 }
+
+describe('ProofMoveController context authority', () => {
+  it('authenticates construction and every later context callback before branching', () => {
+    const forged = { theorems: new Map(), relations: new Map() } as unknown as ProofContext
+    expect(() => fusionController('none', forged)).toThrowError('invalid proof context')
+    const fixture = fusionController()
+    fixture.setContext(forged)
+    expect(() => fixture.controller.claim({ ...pointer({ kind: 'region', id: 'missing' }), button: 1 }))
+      .toThrowError('invalid proof context')
+  })
+})
 
 describe('shared proof move discovery', () => {
   it('absorb-normalizes a selected double-cut subtree and chooses its elimination first', () => {

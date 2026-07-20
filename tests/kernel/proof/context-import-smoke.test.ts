@@ -8,7 +8,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 
 describe('fresh public proof barrel import', () => {
   it('initializes the empty authority, verifier, and dispatcher without a module cycle failure', () => {
-    expect(verifyTheory({ relations: {}, theorems: [] })).toBe(EMPTY_PROOF_CONTEXT)
+    expect(verifyTheory({ relations: [], theorems: [] })).toBe(EMPTY_PROOF_CONTEXT)
     const diagram = new DiagramBuilder().build()
     expect(() => applyStep(diagram, {
       rule: 'doubleCutIntro',
