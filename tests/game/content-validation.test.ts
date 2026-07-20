@@ -317,33 +317,41 @@ describe('build-only game content evidence', () => {
   it('uses descendant authority to make a copied compound material', () => {
     const start = loadGameContent(gameContentFiles)
       .puzzle('compound-copy-authority-contrast' as never).diagram
-    const source = { region: 'r6', regions: [], nodes: ['n1', 'n2'], wires: [] }
-    const target = { region: 'r7', regions: [], nodes: ['n4', 'n5', 'n6'], wires: [] }
+    const source = { region: 'r5', regions: [], nodes: ['n0', 'n1'], wires: [] }
+    const target = { region: 'r6', regions: [], nodes: ['n3', 'n4', 'n5'], wires: [] }
 
     expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
     const copied = applyStep(start, {
-      rule: 'iteration', sel: source, target: 'r7',
+      rule: 'iteration', sel: source, target: 'r6',
     }, proofContext, 'backward')
     expect(() => deiterate(copied, target)).not.toThrow()
 
-    const partial = applyStep(start, {
-      rule: 'iteration',
-      sel: { region: 'r6', regions: [], nodes: ['n1'], wires: [] },
-      target: 'r7',
-    }, proofContext, 'backward')
-    expect(() => deiterate(partial, target)).toThrow(/no justifying occurrence/)
+    for (const node of ['n0', 'n1']) {
+      const partial = applyStep(start, {
+        rule: 'iteration',
+        sel: { region: 'r5', regions: [], nodes: [node], wires: [] },
+        target: 'r6',
+      }, proofContext, 'backward')
+      expect(() => deiterate(partial, target)).toThrow(/no justifying occurrence/)
+    }
 
     for (const sameRegionSource of [source, {
-      region: 'r6', regions: [], nodes: ['n1'], wires: [],
+      region: 'r5', regions: [], nodes: ['n0'], wires: [],
     }]) {
       const sameRegion = applyStep(start, {
-        rule: 'iteration', sel: sameRegionSource, target: 'r6',
+        rule: 'iteration', sel: sameRegionSource, target: 'r5',
       }, proofContext, 'backward')
       expect(() => deiterate(sameRegion, target)).toThrow(/no justifying occurrence/)
     }
 
     expect(() => applyStep(start, {
-      rule: 'iteration', sel: source, target: 'r8',
+      rule: 'iteration',
+      sel: { region: 'r6', regions: [], nodes: ['n2'], wires: [] },
+      target: 'r5',
+    }, proofContext, 'backward')).toThrow(/must lie within the source region/)
+
+    expect(() => applyStep(start, {
+      rule: 'iteration', sel: source, target: 'r9',
     }, proofContext, 'backward')).toThrow(/must lie within the source region/)
   })
 

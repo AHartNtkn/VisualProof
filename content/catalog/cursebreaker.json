@@ -144,8 +144,8 @@
         "professional": "Seyric Compound Copy Authority Contrast"
       },
       "provenance": {
-        "summary": "A P-and-Q source overlooks one R-bearing descendant and an equal-looking R-bearing sibling destination outside its authority.",
-        "function": "Only copying intact P-and-Q into the descendant completes the P-Q-R support needed to discharge pre-existing content; partial, same-region, and sibling choices cannot."
+        "summary": "A P-and-Q source overlooks an R-owned descendant and a structurally parallel R-owned destination outside its authority.",
+        "function": "Only copying intact P-and-Q inward completes descendant-owned P-Q-R support; partial and same-region copies fail, the parallel destination is incomparable, and descendant R cannot be copied backward into its ancestor source."
       }
     },
     {
