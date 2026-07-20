@@ -10,6 +10,55 @@ open VisualProof.Diagram.ConcreteElaboration
 
 namespace TwoInputPresentation
 
+/-- A replacement law over arbitrary ordered boundary values. -/
+def LocalLaw {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature) : Prop :=
+  match direction with
+  | .forward => ∀ sourceArgs,
+      source.pattern.denote model named sourceArgs →
+        target.pattern.denote model named
+          (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm)
+  | .backward => ∀ targetArgs,
+      target.pattern.denote model named targetArgs →
+        source.pattern.denote model named
+          (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)
+
+/-- The maximally useful local replacement law: it is required only for
+ordered boundary values induced by an actual splice quotient valuation. -/
+def AttachmentLocalLaw {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature) : Prop :=
+  match direction with
+  | .forward => ∀ sourceValues : source.wireQuotient.Carrier → model.Carrier,
+      source.pattern.denote model named (fun position =>
+        sourceValues (source.quotientWire (source.attachment position))) →
+      target.pattern.denote model named
+        ((fun position =>
+          sourceValues (source.quotientWire (source.attachment position))) ∘
+          Fin.cast presentation.boundary_arity_eq.symm)
+  | .backward => ∀ targetValues : target.wireQuotient.Carrier → model.Carrier,
+      target.pattern.denote model named (fun position =>
+        targetValues (target.quotientWire (target.attachment position))) →
+      source.pattern.denote model named
+        ((fun position =>
+          targetValues (target.quotientWire (target.attachment position))) ∘
+          Fin.cast presentation.boundary_arity_eq)
+
+theorem LocalLaw.toAttachmentLocalLaw
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    (direction : ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (law : presentation.LocalLaw direction model named) :
+    presentation.AttachmentLocalLaw direction model named := by
+  cases direction <;> intro values denotes <;> exact law _ denotes
+
 /-- Complete proof-dependent local transport at the distinguished splice site
 in the forward direction.  The active source witness determines the target
 quotient values and hidden pattern witness; retained-frame items are then
@@ -124,10 +173,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
         targetBinders
         (ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
           targetRegion) = some targetItems)
-    (localLaw : ∀ sourceArgs,
-      source.pattern.denote model named sourceArgs →
-        target.pattern.denote model named
-          (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm)) :
+    (localLaw : presentation.AttachmentLocalLaw .forward model named) :
     ∀ relEnv sourceOuter targetOuter,
       (presentation.contextIndexRelation sourceContext targetContext
         ).EnvironmentsAgree sourceOuter targetOuter →
@@ -191,7 +237,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
       sourceDenotes
   obtain ⟨targetValues, valuesAgree, targetPatternDenotes⟩ :=
     presentation.forwardQuotientEnvironment_of_pattern_entailment model named
-      sourceValues (localLaw _) sourcePatternDenotes
+      sourceValues (localLaw sourceValues) sourcePatternDenotes
   obtain ⟨targetHidden, targetPatternItemsDenote⟩ :=
     target.patternRootItems_of_pattern_denote model named targetValues
       targetPatternDenotes
@@ -400,10 +446,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
         targetBinders
         (ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
           targetRegion) = some targetItems)
-    (localLaw : ∀ targetArgs,
-      target.pattern.denote model named targetArgs →
-        source.pattern.denote model named
-          (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)) :
+    (localLaw : presentation.AttachmentLocalLaw .backward model named) :
     ∀ relEnv sourceOuter targetOuter,
       (presentation.contextIndexRelation sourceContext targetContext
         ).EnvironmentsAgree sourceOuter targetOuter →
@@ -467,7 +510,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
       targetDenotes
   obtain ⟨sourceValues, valuesAgree, sourcePatternDenotes⟩ :=
     presentation.backwardQuotientEnvironment_of_pattern_entailment model named
-      targetValues (localLaw _) targetPatternDenotes
+      targetValues (localLaw targetValues) targetPatternDenotes
   obtain ⟨sourceHidden, sourcePatternItemsDenote⟩ :=
     source.patternRootItems_of_pattern_denote model named sourceValues
       sourcePatternDenotes
@@ -569,16 +612,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
     (siteDirection : ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match siteDirection with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)) :
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
       source.plugLayout.plugRaw target.plugLayout.plugRaw model named where
   source_wellFormed :=
@@ -964,16 +998,7 @@ theorem rootExactChildSimulationOfEmpty
     (siteDirection : ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match siteDirection with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)) :
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
     ∀ {childDirection : ConcreteElaboration.SimulationDirection}
       {child : Fin source.plugLayout.plugRaw.regionCount}
       {childRels : Theory.RelCtx}
@@ -1196,16 +1221,7 @@ theorem rootClosedTransportOfEmpty
     (siteDirection : ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match siteDirection with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection siteDirection
       source.plugLayout.plugRaw.root) :
     let targetSiteRoot := presentation.target_site_eq_root_of_root hsite
@@ -1626,16 +1642,7 @@ theorem rootOutput_denoteOfEmpty
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match direction with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (localLaw : presentation.AttachmentLocalLaw direction model named)
     (allowed : presentation.Allowed direction direction
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
@@ -1956,16 +1963,7 @@ noncomputable def nestedRootContextSimulationOfEmpty
       ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match siteDirection with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)) :
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
       (presentation.concreteSemanticSimulationOfEmpty sourceAdmissible
         targetAdmissible sourceZero targetZero sourceBoundary siteDirection
@@ -2219,16 +2217,7 @@ theorem nestedOutput_denoteOfEmpty
       ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match siteDirection with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection rootDirection
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
@@ -2293,16 +2282,7 @@ theorem compiledSpliceSourceOpen_entails_of_root
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match direction with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (localLaw : presentation.AttachmentLocalLaw direction model named)
     (allowed : presentation.Allowed direction direction
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
@@ -2383,16 +2363,7 @@ theorem compiledSpliceSourceOpen_entails_of_nested
       ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match siteDirection with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection rootDirection
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
@@ -2459,7 +2430,7 @@ theorem compiledSpliceSourceOpen_entails_of_nested
 proper nested site.  Root direction is forced to equal the focused direction
 when the site is the root; nested sites retain the cut-parity-selected root
 direction. -/
-theorem compiledSpliceSourceOpen_entails
+theorem compiledSpliceSourceOpen_entails_at_attachments
     {signature : List Nat} {source target : Input signature}
     (presentation : TwoInputPresentation source target)
     {sourceResult targetResult : CheckedDiagram signature}
@@ -2474,16 +2445,7 @@ theorem compiledSpliceSourceOpen_entails
       ConcreteElaboration.SimulationDirection)
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
-    (localLaw : match siteDirection with
-      | .forward => ∀ sourceArgs,
-          source.pattern.denote model named sourceArgs →
-            target.pattern.denote model named
-              (sourceArgs ∘
-                Fin.cast presentation.boundary_arity_eq.symm)
-      | .backward => ∀ targetArgs,
-          target.pattern.denote model named targetArgs →
-            source.pattern.denote model named
-              (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection rootDirection
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
@@ -2515,6 +2477,46 @@ theorem compiledSpliceSourceOpen_entails
   · exact presentation.compiledSpliceSourceOpen_entails_of_nested sourceSplice
       targetSplice sourceBoundary sourceRoot hsite sourceZero targetZero
       siteDirection rootDirection model named localLaw allowed args
+
+/-- Backward-compatible arbitrary-boundary form. Arbitrary laws specialize to
+the actual quotient valuations used by the authoritative splice semantics. -/
+theorem compiledSpliceSourceOpen_entails
+    {signature : List Nat} {source target : Input signature}
+    (presentation : TwoInputPresentation source target)
+    {sourceResult targetResult : CheckedDiagram signature}
+    (sourceSplice : spliceChecked signature source = .ok sourceResult)
+    (targetSplice : spliceChecked signature target = .ok targetResult)
+    (sourceBoundary : List (Fin source.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (source.frame.val.wires wire).scope = source.frame.val.root)
+    (sourceZero : source.binderSpine.proxyCount = 0)
+    (targetZero : target.binderSpine.proxyCount = 0)
+    (siteDirection rootDirection :
+      ConcreteElaboration.SimulationDirection)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (localLaw : presentation.LocalLaw siteDirection model named)
+    (allowed : presentation.Allowed siteDirection rootDirection
+      source.plugLayout.plugRaw.root)
+    (args : Fin sourceBoundary.length → model.Carrier) :
+    rootDirection.Entails
+      (denoteOpen model named
+        (compiledSpliceSourceOpen source sourceSplice sourceBoundary sourceRoot)
+        (args ∘ Fin.cast (by simp [compiledSpliceSourceOpen,
+          PlugLayout.checkedCoalescedOpenRoot,
+          PlugLayout.coalescedOpenRoot])))
+      (denoteOpen model named
+        (compiledSpliceSourceOpen target targetSplice
+          (presentation.targetBoundary sourceBoundary)
+          (presentation.targetBoundary_root sourceBoundary sourceRoot))
+        (args ∘ Fin.cast (by simp [compiledSpliceSourceOpen,
+          PlugLayout.checkedCoalescedOpenRoot,
+          PlugLayout.coalescedOpenRoot, targetBoundary]))) := by
+  exact presentation.compiledSpliceSourceOpen_entails_at_attachments
+    sourceSplice targetSplice sourceBoundary sourceRoot sourceZero targetZero
+    siteDirection rootDirection model named
+    (localLaw.toAttachmentLocalLaw presentation siteDirection model named)
+    allowed args
 
 end TwoInputPresentation
 
