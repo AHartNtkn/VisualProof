@@ -16,25 +16,31 @@ const readJson = (path: string): JsonRecord => JSON.parse(readFileSync(path, 'ut
 const writeJson = (path: string, value: unknown): void => writeFileSync(path, `${JSON.stringify(value, null, 2)}\n`)
 const proofContext = { theorems: new Map(), relations: new Map() }
 
-const compoundPrimaryRule = new Map([
+const creativePrimaryRule = new Map([
   ['compound-copy-authority-contrast', 'iteration'],
   ['compound-double-cut-selection', 'doubleCutIntro'],
   ['content-bearing-annulus-choice', 'doubleCutElim'],
   ['double-cut-insertion-workspace', 'insertion'],
+  ['grouped-branch-construction', 'insertion'],
+  ['useful-vacuous-owner-workspace', 'vacuousIntro'],
 ])
 
-const compoundPrerequisites = new Map([
+const creativePrerequisites = new Map([
   ['compound-copy-authority-contrast', ['marked-echo-deiteration']],
   ['compound-double-cut-selection', ['atomic-double-cut-selection']],
   ['content-bearing-annulus-choice', ['compound-double-cut-selection']],
   ['double-cut-insertion-workspace', ['atomic-double-cut-selection', 'atomic-content-insertion']],
+  ['grouped-branch-construction', ['atomic-content-insertion', 'left-injection-introduction']],
+  ['useful-vacuous-owner-workspace', ['empty-ring-release', 'marked-echo-deiteration']],
 ])
 
-const compoundPrimaryStepIndex = new Map([
+const creativePrimaryStepIndex = new Map([
   ['compound-copy-authority-contrast', 0],
   ['compound-double-cut-selection', 0],
   ['content-bearing-annulus-choice', 0],
   ['double-cut-insertion-workspace', 1],
+  ['grouped-branch-construction', 0],
+  ['useful-vacuous-owner-workspace', 0],
 ])
 
 const boundAtomPattern = (() => {
@@ -55,6 +61,46 @@ const insertBoundAtom = (
   attachments: [],
   binders: { [boundAtomPattern.binder]: binder },
 }, proofContext, 'backward')
+
+const groupedBranchPatterns = (() => {
+  const build = (binders: readonly ('p' | 'q')[]) => {
+    const builder = new DiagramBuilder()
+    const p = builder.bubble(builder.root, 0)
+    const q = builder.bubble(p, 0)
+    const branch = builder.cut(q)
+    for (const binder of binders) builder.atom(branch, binder === 'p' ? p : q)
+    return {
+      pattern: { diagram: builder.build(), boundary: [] },
+      binders: { p, q },
+    }
+  }
+
+  return {
+    exact: build(['p', 'q']),
+    nearby: build(['p']),
+    larger: build(['p', 'q', 'p']),
+  }
+})()
+
+const insertGroupedBranch = (
+  diagram: Diagram,
+  region: RegionId,
+  p: RegionId,
+  q: RegionId,
+  variant: keyof typeof groupedBranchPatterns,
+): Diagram => {
+  const source = groupedBranchPatterns[variant]
+  return applyStep(diagram, {
+    rule: 'insertion',
+    region,
+    pattern: source.pattern,
+    attachments: [],
+    binders: {
+      [source.binders.p]: p,
+      [source.binders.q]: q,
+    },
+  }, proofContext, 'backward')
+}
 
 const deiterate = (diagram: Diagram, sel: SubgraphSelection): Diagram => applyStep(diagram, {
   rule: 'deiteration', sel, fuel: 100,
@@ -236,29 +282,33 @@ describe('build-only game content evidence', () => {
     expect(findEmptyCutShortcutHosts(builder.build())).toEqual([])
   })
 
-  it('keeps reconstructed atomic and polarity problems free of empty-cut truth witnesses', () => {
+  it('keeps reconstructed causal problems free of empty-cut truth witnesses', () => {
     const catalog = loadGameContent(gameContentFiles)
     const shortcutFree = [
       'shallow-edit-legality-contrast',
       'atomic-content-insertion',
       'atomic-double-cut-selection',
       'polarity-bubble-contrast',
+      'grouped-branch-construction',
+      'useful-vacuous-owner-workspace',
     ] as const
 
-    for (const id of shortcutFree) {
-      expect(findEmptyCutShortcutHosts(catalog.puzzle(id as never).diagram), id).toEqual([])
-    }
+    const violations = Object.fromEntries(shortcutFree.flatMap((id) => {
+      const hosts = findEmptyCutShortcutHosts(catalog.puzzle(id as never).diagram)
+      return hosts.length === 0 ? [] : [[id, hosts]]
+    }))
+    expect(violations).toEqual({})
   })
 
-  it('keeps reconstructed compound problems free of empty-cut truth witnesses', () => {
+  it('gates each reconstructed creative operation with its witness and prerequisites', () => {
     const catalog = loadGameContent(gameContentFiles)
 
-    for (const [id, primaryRule] of compoundPrimaryRule) {
+    for (const [id, primaryRule] of creativePrimaryRule) {
       expect(findEmptyCutShortcutHosts(catalog.puzzle(id as never).diagram), id).toEqual([])
       const evidence = readJson(resolve(process.cwd(), `content/validation/${id}.json`))
-      expect(evidence.solution[compoundPrimaryStepIndex.get(id)!]?.rule, id).toBe(primaryRule)
+      expect(evidence.solution[creativePrimaryStepIndex.get(id)!]?.rule, id).toBe(primaryRule)
       expect(catalog.placement(id as never).prerequisites, id)
-        .toEqual(compoundPrerequisites.get(id))
+        .toEqual(creativePrerequisites.get(id))
     }
   })
 
@@ -312,6 +362,102 @@ describe('build-only game content evidence', () => {
     }, proofContext, 'backward')
     expect(() => deiterate(larger, innerCutAround(larger, 'n1')))
       .toThrow(/no justifying occurrence/)
+  })
+
+  it('uses an intact inserted conjunctive branch to unlock a pre-existing branch', () => {
+    const start = loadGameContent(gameContentFiles)
+      .puzzle('grouped-branch-construction' as never).diagram
+    const target = { region: 'r4', regions: ['r5'], nodes: [], wires: [] }
+
+    expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
+    const inserted = insertGroupedBranch(start, 'r4', 'r2', 'r3', 'exact')
+    const consumed = deiterate(inserted, target)
+    const createdBranch = Object.keys(inserted.regions).find((id) => start.regions[id] === undefined)
+    expect(createdBranch).toBeDefined()
+    expect(consumed.regions.r5).toBeUndefined()
+    expect(consumed.regions[createdBranch!]).toMatchObject({ kind: 'cut', parent: 'r4' })
+    expect(Object.values(consumed.nodes).filter(({ region }) => region === createdBranch)
+      .map((node) => node.kind === 'atom' ? node.binder : undefined))
+      .toEqual(['r2', 'r3'])
+
+    const atomByAtom = insertBoundAtom(
+      insertBoundAtom(start, 'r4', 'r2'),
+      'r4',
+      'r3',
+    )
+    expect(() => deiterate(atomByAtom, target)).toThrow(/no justifying occurrence/)
+    for (const variant of ['nearby', 'larger'] as const) {
+      expect(() => deiterate(
+        insertGroupedBranch(start, 'r4', 'r2', 'r3', variant),
+        target,
+      )).toThrow(/no justifying occurrence/)
+    }
+    expect(() => insertGroupedBranch(start, 'r5', 'r2', 'r3', 'exact'))
+      .toThrow(/requires a positive region/)
+  })
+
+  it('uses the introduced bubble itself to unlock a pre-existing owned pattern', () => {
+    const start = loadGameContent(gameContentFiles)
+      .puzzle('useful-vacuous-owner-workspace' as never).diagram
+    const exactSelection = {
+      region: 'r3', regions: [], nodes: ['n0', 'n1'], wires: [],
+    }
+    const target = { region: 'r3', regions: ['r4'], nodes: [], wires: [] }
+
+    expect(() => deiterate(start, target)).toThrow(/no justifying occurrence/)
+    const introduced = applyStep(start, {
+      rule: 'vacuousIntro', sel: exactSelection, arity: 0,
+    }, proofContext, 'backward')
+    const consumed = deiterate(introduced, target)
+    expect(consumed.regions.r4).toBeUndefined()
+    expect(consumed.regions.vb).toMatchObject({ kind: 'bubble', parent: 'r3', arity: 0 })
+    expect(['n0', 'n1'].map((id) => consumed.nodes[id]?.region)).toEqual(['vb', 'vb'])
+
+    for (const nodes of [['n0'], ['n1']] as const) {
+      const partial = applyStep(start, {
+        rule: 'vacuousIntro',
+        sel: { region: 'r3', regions: [], nodes: [...nodes], wires: [] },
+        arity: 0,
+      }, proofContext, 'backward')
+      expect(() => deiterate(partial, target)).toThrow(/no justifying occurrence/)
+    }
+
+    const larger = applyStep(start, {
+      rule: 'vacuousIntro',
+      sel: { region: 'r3', regions: ['r4'], nodes: ['n0', 'n1'], wires: [] },
+      arity: 0,
+    }, proofContext, 'backward')
+    expect(() => deiterate(larger, {
+      region: 'vb', regions: ['r4'], nodes: [], wires: [],
+    })).toThrow(/no justifying occurrence/)
+
+    const wrong = applyStep(start, {
+      rule: 'vacuousIntro',
+      sel: target,
+      arity: 0,
+    }, proofContext, 'backward')
+    expect(() => deiterate(wrong, {
+      region: 'vb', regions: ['r4'], nodes: [], wires: [],
+    })).toThrow(/no justifying occurrence/)
+
+    const doubleCut = applyStep(start, {
+      rule: 'doubleCutIntro', sel: exactSelection,
+    }, proofContext, 'backward')
+    expect(() => deiterate(doubleCut, target)).toThrow(/no justifying occurrence/)
+  })
+
+  it('records the reconstructed puzzles beside their exact experiential neighbors', () => {
+    const coverage = readJson(resolve(process.cwd(), 'content/coverage/seyric.json'))
+    const row = (id: string): JsonRecord => coverage.puzzles.find(
+      ({ puzzle }: JsonRecord) => puzzle === id,
+    )
+
+    expect(row('grouped-branch-construction').experientialNeighbors).toEqual(
+      expect.arrayContaining(['atomic-content-insertion', 'left-injection-introduction']),
+    )
+    expect(row('useful-vacuous-owner-workspace').experientialNeighbors).toEqual(
+      expect.arrayContaining(['double-cut-insertion-workspace', 'nested-owner-introduction']),
+    )
   })
 
   it('uses descendant authority to make a copied compound material', () => {

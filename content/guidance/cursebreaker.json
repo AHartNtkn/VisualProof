@@ -227,6 +227,22 @@
       ]
     },
     {
+      "puzzle": "useful-vacuous-owner-workspace",
+      "interventions": [
+        {
+          "id": "opening-useful-vacuous-owner-workspace",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "Compare the flat P-and-Q pair with the equal pair already inside a ring. The owned marks match, but their complete open patterns do not yet have the same boundary.",
+            "One useful route wraps exactly the flat pair in a fresh empty ring. That single boundary becomes an ancestor-shaped source for the pre-existing ringed pair; wrapping one mark, wrapping more of the tablet, or using paired veils does not create that ownership match."
+          ]
+        }
+      ]
+    },
+    {
       "puzzle": "polarity-bubble-contrast",
       "interventions": [
         {
@@ -299,6 +315,22 @@
           "repeat": "once",
           "pages": [
             "This is left injection: the given P supplies the left alternative of P ∨ Q. The right alternative does not also need a premise."
+          ]
+        }
+      ]
+    },
+    {
+      "puzzle": "grouped-branch-construction",
+      "interventions": [
+        {
+          "id": "opening-grouped-branch-construction",
+          "trigger": {
+            "kind": "opening"
+          },
+          "repeat": "once",
+          "pages": [
+            "The target is not two loose marks: its veil encloses P and Q as one conjunctive branch. The equal branch behind the paired veils is staged nearby but is not yet an ancestor source for it.",
+            "One useful route inserts the complete P-and-Q branch into the bright construction field. Keep its branch boundary and both internal marks intact while it discharges the pre-existing target; atom-by-atom placement does not supply the same whole occurrence."
           ]
         }
       ]

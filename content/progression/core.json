@@ -266,7 +266,8 @@
     {
       "puzzle": "useful-vacuous-owner-workspace",
       "prerequisites": [
-        "single-mark-return"
+        "empty-ring-release",
+        "marked-echo-deiteration"
       ]
     },
     {

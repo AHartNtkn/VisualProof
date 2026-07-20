@@ -74,8 +74,8 @@
       "id": "ownership-useful-vacuous-introduction",
       "kind": "isolated",
       "family": "ownership-and-vacuity",
-      "distinction": "Introduce a vacuous structure where its vacuity is useful to the problem.",
-      "stoppingRule": "Stop after the first useful vacuous introduction; empty structure without a new ownership decision adds no value."
+      "distinction": "Wrap the exact owned source in one vacuous bubble so that the new boundary itself becomes ancestor authority for a pre-existing open owned pattern; a double cut cannot supply the same match.",
+      "stoppingRule": "Stop after exact, partial, larger, wrong-target, and double-cut choices distinguish the one useful ownership boundary."
     },
     {
       "id": "polarity-shallow-opposite-contrast",
@@ -144,8 +144,8 @@
       "id": "insertion-compound-construction-unit",
       "kind": "isolated",
       "family": "insertion",
-      "distinction": "Construct and place compound content as one semantic unit.",
-      "stoppingRule": "Stop after compound unit construction is established; larger compounds add no new placement decision."
+      "distinction": "Construct a boundary-delimited branch whose internal P-and-Q conjunction remains intact as one inserted semantic unit.",
+      "stoppingRule": "Stop when atom-by-atom, partial, larger, and wrong-host constructions cannot replace the exact grouped branch."
     },
     {
       "id": "iteration-ancestor-descendant-compound",
@@ -221,8 +221,8 @@
       "id": "injection-grouped-branch",
       "kind": "isolated",
       "family": "injection",
-      "distinction": "Inject a grouped proposition as one intact disjunctive branch.",
-      "stoppingRule": "Further internal complexity adds no new branch-construction decision."
+      "distinction": "Place an intact cut-delimited P-and-Q proposition as one alternative, preserving its internal conjunction through the downstream branch match.",
+      "stoppingRule": "Stop after one binary grouped branch separates intact alternative construction from atomic placement."
     },
     {
       "id": "injection-ternary-alternative-placement",
@@ -1121,9 +1121,12 @@
       "obligations": [
         "ownership-useful-vacuous-introduction"
       ],
-      "visibleSituation": "A freshly introduced zero-owner boundary changes a later exact topology or scope choice before that boundary is discharged; empty decorative structure is insufficient.",
-      "defeats": "It defeats the hypothesis that a vacuous owner boundary is merely decorative: adding it changes which whole fragment is an exact peer before the boundary is dissolved.",
-      "experientialNeighbors": []
+      "visibleSituation": "Two differently owned marks begin flat beside a pre-existing bubble carrying the same open P-and-Q pattern and a marked final veil. Wrapping exactly the flat pair in one fresh bubble creates the missing ancestor-shaped source before cleanup.",
+      "defeats": "The target bubble has no justifying occurrence beforehand. The exact introduced bubble enables its deiteration and remains intact during that operation; either one-mark bubble, a bubble around the target, the larger source-plus-target bubble, and an exact double cut all fail to create the same ownership-sensitive match.",
+      "experientialNeighbors": [
+        "double-cut-insertion-workspace",
+        "nested-owner-introduction"
+      ]
     },
     {
       "puzzle": "conjunction-idempotence-introduction",
@@ -1203,11 +1206,11 @@
         "insertion-compound-construction-unit",
         "injection-grouped-branch"
       ],
-      "visibleSituation": "A missing grouped proposition must be constructed as one semantic unit and placed intact as a disjunctive branch.",
-      "defeats": "It defeats the hypothesis that an injected branch must be atomic: the Q-and-R group is matched, selected, and carried as one alternative.",
+      "visibleSituation": "A positive branch field contains one pre-existing cut-delimited P-and-Q target while an equal grouped source is staged behind a sibling double veil. The missing peer must be inserted with its boundary and both internal conjuncts intact.",
+      "defeats": "Before insertion the staged group is not an ancestor of the target. Only the exact inserted P-and-Q branch enables the target's deiteration; two adjacent atomic insertions, a P-only branch, a larger P-and-Q-and-P branch, and the negative target host do not. The inserted branch survives that use until the staged source is later promoted.",
       "experientialNeighbors": [
-        "left-injection-introduction",
-        "injection-branch-contrast"
+        "atomic-content-insertion",
+        "left-injection-introduction"
       ]
     },
     {
