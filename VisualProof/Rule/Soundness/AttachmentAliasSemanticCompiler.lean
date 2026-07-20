@@ -286,6 +286,90 @@ theorem oldNode_itemSimulation
   rw [relationMapEq, Item.renameRelations_id] at simulation
   exact simulation
 
+/-- Retained nodes also admit the embedding-oriented relation that selects
+the canonical lifted-old target position.  This orientation deliberately
+ignores fresh alias positions until the distinguished identity block. -/
+theorem oldNode_itemSimulation_oldIndex
+    (pattern : CheckedOpenDiagram signature)
+    (attachment : Fin pattern.val.boundary.length → Host)
+    (spine : BinderSpine pattern.val.diagram)
+    (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
+    (targetContext : ConcreteElaboration.WireContext
+      (materializedDiagram pattern.val attachment spine.bodyContainer))
+    (collapse : ContextCollapse pattern attachment spine targetContext
+      sourceContext)
+    (targetNodup : targetContext.Nodup)
+    (sourceBinders : ConcreteElaboration.BinderContext pattern.val.diagram rels)
+    (targetBinders : ConcreteElaboration.BinderContext
+      (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
+    (bindersEqual : HEq sourceBinders targetBinders)
+    (sourceNode : Fin pattern.val.diagram.nodeCount)
+    (sourceItem : Item signature sourceContext.length rels)
+    (targetItem : Item signature targetContext.length rels)
+    (sourceCompiled : ConcreteElaboration.compileNode? signature
+      pattern.val.diagram sourceContext sourceBinders sourceNode =
+        some sourceItem)
+    (targetCompiled : ConcreteElaboration.compileNode? signature
+      (materializedDiagram pattern.val attachment spine.bodyContainer)
+      targetContext targetBinders
+      (liftOldNode pattern.val attachment sourceNode) = some targetItem)
+    (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (direction : ConcreteElaboration.SimulationDirection) :
+    ConcreteElaboration.ItemSimulation model named direction
+      (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+      sourceItem targetItem := by
+  cases bindersEqual
+  have simulation :=
+    ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+      (source := pattern.val.diagram)
+      (target := materializedDiagram pattern.val attachment spine.bodyContainer)
+      model named direction sourceContext targetContext
+      (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+      sourceBinders sourceBinders
+      (ConcreteElaboration.identityRelationRenaming rels)
+      (sourceNode := sourceNode)
+      (targetNode := liftOldNode pattern.val attachment sourceNode)
+      (regionMap := id) (binderMap := id)
+      (nodeShape := by
+        cases shape : pattern.val.diagram.nodes sourceNode <;>
+          simp [materializedDiagram, liftOldNode, shape])
+      (portsRelated := by
+        intro port sourceIndex targetIndex sourceResolved targetResolved
+        obtain ⟨sourceOwner, sourceOccurs, sourceGet⟩ :=
+          ConcreteElaboration.resolvePort?_sound sourceResolved
+        obtain ⟨targetOwner, targetOccurs, targetGet⟩ :=
+          ConcreteElaboration.resolvePort?_sound targetResolved
+        obtain ⟨origin, originEq, originOccurs⟩ :=
+          oldEndpointOccurs_backward pattern.val attachment spine.bodyContainer
+            targetOwner { node := sourceNode, port := port } (by
+              simpa [liftOldEndpoint, liftOldNode] using targetOccurs)
+        have ownerEq : origin = sourceOwner :=
+          ConcreteElaboration.endpoint_wire_unique
+            pattern.property.diagram_well_formed.wire_endpoints_are_disjoint
+            originOccurs sourceOccurs
+        change collapse.oldIndex sourceIndex = targetIndex
+        apply Fin.ext
+        exact (List.getElem_inj targetNodup).mp (by
+          have sourceGetList : sourceContext.get sourceIndex = sourceOwner := by
+            simpa only [List.get_eq_getElem] using sourceGet
+          have targetGetList : targetContext.get targetIndex = targetOwner := by
+            simpa only [List.get_eq_getElem] using targetGet
+          have oldGet := collapse.old_get sourceIndex
+          rw [sourceGetList, ← ownerEq, originEq] at oldGet
+          simpa only [List.get_eq_getElem] using oldGet.trans targetGetList.symm))
+      (bindersRelated := by
+        intro region binder arity sourceRelation nodeShape binderLookup
+        simpa [ConcreteElaboration.identityRelationRenaming] using binderLookup)
+      (sourceItem := sourceItem) (targetItem := targetItem)
+      sourceCompiled targetCompiled
+  have relationMapEq :
+      (ConcreteElaboration.identityRelationRenaming rels :
+        RelationRenaming rels rels) =
+      (fun {arity} (relation : RelVar rels arity) => relation) := rfl
+  rw [relationMapEq, Item.renameRelations_id] at simulation
+  exact simulation
+
 end Semantic
 
 end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
