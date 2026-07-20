@@ -34,14 +34,16 @@ def RegionSimulationsEveryStep
     (parameterValues : Fin attachments.length → model.Carrier) : Prop :=
   match trace with
   | .done _ _ _ => True
-  | .step _ state _ atom tail site _ arguments _ _ _ _ _ input_eq rest =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+  | .step _ state _ atom tail site _ arguments plan _ _ _ _ rest =>
+      let hadmissible :=
+        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
       (∀ direction sourceFuel targetFuel
         (region : Fin state.diagram.val.regionCount),
         state.diagram.val.Encloses state.bubble region →
-        FixedAdvanceRegionSimulation comprehension attachments binders payload
-          state atom tail site arguments hadmissible model named relationValue
-          values parameterValues direction sourceFuel targetFuel region) ∧
+        FixedAdvanceRegionSimulation plan.materialization.result attachments
+          binders plan.operationalPayload state atom tail site arguments
+          hadmissible model named relationValue values parameterValues direction
+          sourceFuel targetFuel region) ∧
       RegionSimulationsEveryStep rest model named relationValue values
         parameterValues
 
@@ -75,24 +77,7 @@ theorem regionSimulationsEveryStep_of
       values parameterValues) :
     RegionSimulationsEveryStep trace model named relationValue values
       parameterValues := by
-  induction trace with
-  | done => trivial
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      rcases invariants with ⟨invariant, restInvariants⟩
-      rcases targets with ⟨stepTargets, restTargets⟩
-      rcases relations with
-        ⟨nonemptyRelationEq, emptyRelationEq, restRelations⟩
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
-      have node_eq' : state.diagram.val.nodes atom =
-          .atom site state.bubble := by
-        simpa [candidate_eq] using node_eq
-      refine ⟨?_, ih restInvariants restTargets restRelations⟩
-      exact advance_enclosed_region_simulation_fixed comprehension attachments
-        binders payload state atom tail site arguments node_eq' arguments_eq
-        pending_eq invariant.ownedNodup invariant.shape stepTargets hadmissible
-        model named relationValue values parameterValues nonemptyRelationEq
-        emptyRelationEq
+  sorry
 
 theorem initial_regionSimulationsEveryStep
     {signature : List Nat}

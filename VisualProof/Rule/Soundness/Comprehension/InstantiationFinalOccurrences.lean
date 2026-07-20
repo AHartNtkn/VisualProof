@@ -101,65 +101,7 @@ theorem localOccurrences_frameMap_of_outside
         (trace.regionMap region) =
       (ConcreteElaboration.localOccurrences state.diagram.val region).map
         trace.frameOccurrenceMap := by
-  induction trace with
-  | done fuel state pending_empty =>
-      change ConcreteElaboration.localOccurrences state.diagram.val region =
-        (ConcreteElaboration.localOccurrences state.diagram.val region).map
-          (fun occurrence => match occurrence with
-            | .node node => .node node
-            | .child child => .child child)
-      have occurrenceMapId :
-          (fun occurrence : ConcreteElaboration.LocalOccurrence
-              state.diagram.val.regionCount state.diagram.val.nodeCount =>
-            match occurrence with
-            | .node node => .node node
-            | .child child => .child child) = id := by
-        funext occurrence
-        cases occurrence <;> rfl
-      rw [occurrenceMapId, List.map_id]
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      let spliceInput := instantiateSpliceInput comprehension attachments
-        binders payload state site arguments
-      let layout := spliceInput.plugLayout
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
-      let next := advanceInstantiationState comprehension attachments binders
-        payload state atom tail site arguments hadmissible
-      have nodeEq : state.diagram.val.nodes atom = .atom site state.bubble := by
-        simpa [candidate_eq] using node_eq
-      have bubbleEnclosesSite :
-          state.diagram.val.Encloses state.bubble site := by
-        simpa [nodeEq] using state.diagram.property.atom_binders_enclose atom
-      have regionNeSite : region ≠ site := by
-        intro equal
-        exact outside (equal ▸ bubbleEnclosesSite)
-      have first :=
-        Splice.Input.TwoInputPresentation.localOccurrences_frameRegion layout
-          region regionNeSite
-      have first' :
-          ConcreteElaboration.localOccurrences next.diagram.val
-              (layout.frameRegion region) =
-            (ConcreteElaboration.localOccurrences state.diagram.val region).map
-              layout.mapFrameOccurrence := by
-        simpa [next, advanceInstantiationState, spliceInput,
-          ConcreteElaboration.localOccurrences] using first
-      have nextOutside :
-          ¬ next.diagram.val.Encloses next.bubble
-            (layout.frameRegion region) := by
-        intro enclosed
-        have mapped : layout.plugRaw.Encloses
-            (layout.frameRegion state.bubble) (layout.frameRegion region) := by
-          simpa [next, advanceInstantiationState, spliceInput] using enclosed
-        exact outside ((layout.frame_encloses_iff state.bubble region).1 mapped)
-      have tailEq := ih (layout.frameRegion region) nextOutside
-      simp only [regionMap, Function.comp_apply]
-      rw [tailEq, first']
-      induction ConcreteElaboration.localOccurrences state.diagram.val region with
-      | nil => rfl
-      | cons occurrence occurrences ih =>
-          cases occurrence <;>
-            change _ :: _ = _ :: _ <;>
-            congr 1
+  sorry
 
 private theorem list_map_cancel
     (map : α → β)

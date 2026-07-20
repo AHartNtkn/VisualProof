@@ -75,8 +75,7 @@ theorem final_endpointOccurs_reverseNode_iff
       input.val.EndpointOccurs wire ⟨originalNode, port⟩
   rw [InstantiationSemantic.drop_endpointOccurs_origin_iff]
   rw [copyTrace.droppedNodeMap_origin originalNode outside]
-  exact copyTrace.endpointOccurs_wireMap_nodeMap_iff boundaryNodup wire
-    originalNode port
+  exact copyTrace.endpointOccurs_wireMap_nodeMap_iff wire originalNode port
 
 /-- Resolved ports at a regular final node are related by the certified
 final-to-original lexical-context relation. -/

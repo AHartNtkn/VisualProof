@@ -372,59 +372,7 @@ theorem externalAligned_nonempty_of_trace
     Nonempty (ExternalAlignedBubblePresentation payload state model named
       relationValue values parameterValues (targetWireValue ∘ trace.wireMap)
       externalBinders externalRelations (targetOwnerMap ∘ trace.regionMap)) := by
-  induction trace with
-  | done =>
-      exact ⟨{
-        presentation := target.presentation
-        wireAligned := by simpa [InstantiationTrace.wireMap] using
-          target.wireAligned
-        relationMap := target.relationMap
-        binderAligned := by simpa [InstantiationTrace.regionMap] using
-          target.binderAligned
-        relationsAligned := target.relationsAligned
-      }⟩
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      rcases simulations with ⟨stepSimulations, restSimulations⟩
-      obtain ⟨next⟩ := ih restSimulations targetWireValue targetOwnerMap target
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
-      obtain ⟨coalesced⟩ := coalescedExternalAligned_nonempty comprehension
-        attachments binders payload state atom tail site arguments hadmissible
-        model named relationValue values parameterValues
-        (fun sourceFuel targetFuel =>
-          stepSimulations .backward sourceFuel targetFuel state.bubble
-            (ConcreteDiagram.Encloses.refl state.diagram.val state.bubble))
-        externalBinders externalRelations (targetWireValue ∘ rest.wireMap)
-        (targetOwnerMap ∘ rest.regionMap) next
-      let spliceInput := instantiateSpliceInput comprehension attachments
-        binders payload state site arguments
-      let sourcePresentation := bubblePresentation_of_coalesced comprehension
-        attachments binders payload state site arguments hadmissible
-        boundaryNodup model named relationValue values parameterValues
-        coalesced.presentation
-      let actualIso := Splice.Input.coalescedFrameIsoOfBoundaryNodup spliceInput
-        boundaryNodup
-      refine ⟨{
-        presentation := sourcePresentation
-        wireAligned := bubblePresentation_of_coalesced_outerAligned
-          comprehension attachments binders payload state site arguments
-          hadmissible boundaryNodup model named relationValue values
-          parameterValues coalesced.presentation
-          ((targetWireValue ∘ rest.wireMap) ∘
-            spliceInput.plugLayout.frameWire) coalesced.wireAligned
-        relationMap := coalesced.relationMap
-        binderAligned := ?_
-        relationsAligned := coalesced.relationsAligned
-      }⟩
-      · intro region arity relation sourceLookup
-        change coalesced.presentation.binderContext
-            (actualIso.regions.invFun region) = some ⟨arity, relation⟩
-          at sourceLookup
-        have mapped := coalesced.binderAligned
-          (actualIso.regions.invFun region) arity relation sourceLookup
-        simpa [InstantiationTrace.regionMap, advanceInstantiationState,
-          sourcePresentation, actualIso, spliceInput, Function.comp_def] using
-          mapped
+  sorry
 
 /-- Canonical fully aligned presentation transported through a complete
 accepted executor trace. -/

@@ -19,7 +19,8 @@ def ParameterScopesAtBubble
       (state.diagram.val.wires (state.parameters position)).scope ≠
         state.bubble
 
-/-- One alias-free operational splice preserves inherited parameter scope. -/
+/-- One attachment-materialized operational splice preserves inherited
+parameter scope. -/
 theorem ParameterScopesAtBubble.advance
     {signature : List Nat}
     {input : CheckedDiagram signature}
@@ -37,24 +38,21 @@ theorem ParameterScopesAtBubble.advance
     (tail : List (Fin state.diagram.val.nodeCount))
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
-    (hadmissible : (instantiateSpliceInput comprehension attachments binders
-      payload state site arguments).Admissible)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
+    (plan : InstantiationCopyPlan comprehension attachments binders payload
+      state atom tail site arguments)
     (scopes : ParameterScopesAtBubble state) :
-    ParameterScopesAtBubble
-      (advanceInstantiationState comprehension attachments binders payload
-        state atom tail site arguments hadmissible) := by
-  let spliceInput := instantiateSpliceInput comprehension attachments binders
-    payload state site arguments
+    ParameterScopesAtBubble plan.next := by
+  rw [plan.next_eq]
+  let spliceInput := plan.spliceInput
   let layout := spliceInput.plugLayout
   intro position
   obtain ⟨visible, proper⟩ := scopes position
   have scopeEq : spliceInput.coalescedScope
         (spliceInput.quotientWire (state.parameters position)) =
       (state.diagram.val.wires (state.parameters position)).scope := by
-    rw [Splice.Input.coalescedScope_eq_of_boundary_nodup spliceInput
-      boundaryNodup]
-    rw [Splice.Input.discreteQuotientWireEquiv_quotientWire]
+    rw [Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary spliceInput
+      plan.attachmentsRespectBoundary]
+    rw [Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire]
     rfl
   constructor
   · change layout.plugRaw.Encloses
@@ -100,17 +98,15 @@ theorem ParameterScopesAtBubble.afterTrace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (scopes : ParameterScopesAtBubble state) :
     ParameterScopesAtBubble result := by
   induction trace with
   | done => exact scopes
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+  | step fuel state result atom tail site candidate arguments plan
+      pending_eq node_eq candidate_eq arguments_eq rest ih =>
       exact ih
         (scopes.advance comprehension attachments binders payload state atom
-          tail site arguments hadmissible boundaryNodup)
+          tail site arguments plan)
 
 /-- The serialized parameter-scope certificate initializes the trace
 invariant, including repeated ordered parameters. -/

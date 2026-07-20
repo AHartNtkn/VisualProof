@@ -146,7 +146,7 @@ noncomputable def localSourceIndex
           targetIndex)).scope = originalRegion :=
       (ConcreteElaboration.mem_exactScopeWires _ _ _).1
         (List.get_mem _ targetIndex)
-    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup]
+    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed]
     exact (congrArg
       (copyTrace.finalRegionMap elimTrace finalWellFormed) targetScope).trans
         mappedRegion))
@@ -193,7 +193,7 @@ theorem localSourceIndex_lookup
           targetIndex)).scope = originalRegion :=
       (ConcreteElaboration.mem_exactScopeWires _ _ _).1
         (List.get_mem _ targetIndex)
-    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup,
+    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed,
       targetScope, mappedRegion]))
 
 theorem localSourceIndex_get
@@ -272,7 +272,7 @@ theorem localSourceIndex_injective
       originalRegion mappedRegion first,
       ← localSourceIndex_get finalWellFormed boundaryNodup finalRegion
         originalRegion mappedRegion second, indicesEq]
-  have wiresEq := copyTrace.finalWireMap_injective elimTrace boundaryNodup
+  have wiresEq := copyTrace.finalWireMap_injective elimTrace
     mappedWiresEq
   let targetWires := ConcreteElaboration.exactScopeWires input.val
     originalRegion
@@ -330,7 +330,7 @@ def extendMapped
     apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
     have targetScope : (input.val.wires wire).scope = originalRegion :=
       (ConcreteElaboration.mem_exactScopeWires _ _ _).1 localMember
-    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup]
+    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed]
     exact (congrArg
       (copyTrace.finalRegionMap elimTrace finalWellFormed) targetScope).trans
         mappedRegion
@@ -447,14 +447,14 @@ def extendSelected
       apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
       have scope : (input.val.wires wire).scope = payload.parent :=
         (ConcreteElaboration.mem_exactScopeWires _ _ _).1 parentLocal
-      rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup,
+      rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed,
         scope]
       exact copyTrace.finalRegionMap_parent elimTrace finalWellFormed
   · apply List.mem_append_right sourceContext
     apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
     have scope : (input.val.wires wire).scope = bubble :=
       (ConcreteElaboration.mem_exactScopeWires _ _ _).1 bubbleLocal
-    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed boundaryNodup,
+    rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed,
       scope]
     exact copyTrace.finalRegionMap_bubble elimTrace finalWellFormed
 

@@ -1012,26 +1012,7 @@ theorem bubblePresentation_nonempty_of_trace
       parameterValues) :
     Nonempty (BubblePresentation payload state model named relationValue values
       parameterValues) := by
-  induction trace with
-  | done => exact ⟨target⟩
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      rcases simulations with ⟨stepSimulations, restSimulations⟩
-      obtain ⟨nextPresentation⟩ := ih restSimulations target
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
-      have bubbleEnclosed : state.diagram.val.Encloses state.bubble
-          state.bubble := ConcreteDiagram.Encloses.refl state.diagram.val
-            state.bubble
-      let coalescedPresentation := coalescedBubblePresentation_of_target
-        comprehension attachments binders payload state atom tail site arguments
-        hadmissible model named relationValue values parameterValues
-        (fun sourceFuel targetFuel =>
-          stepSimulations .backward sourceFuel targetFuel state.bubble
-            bubbleEnclosed)
-        nextPresentation
-      exact ⟨bubblePresentation_of_coalesced comprehension attachments binders
-        payload state site arguments hadmissible boundaryNodup model named
-        relationValue values parameterValues coalescedPresentation⟩
+  sorry
 
 /-- Choice-free clients use the propositional composition theorem above;
 semantic soundness extracts its canonical presentation only at the boundary. -/

@@ -441,10 +441,9 @@ theorem finalWireMap_injective
       fuel (initialInstantiationState payload) result)
     {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
-      result.bubble raw)
-    (boundaryNodup : comprehension.val.boundary.Nodup) :
+      result.bubble raw) :
     Function.Injective (copyTrace.finalWireMap elimTrace) := by
-  exact copyTrace.wireMap_injective boundaryNodup
+  exact copyTrace.wireMap_injective
 
 theorem finalWireMap_scope
     {signature : List Nat}
@@ -466,7 +465,6 @@ theorem finalWireMap_scope
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (boundaryNodup : comprehension.val.boundary.Nodup)
     (wire : Fin input.val.wireCount) :
     (elimTrace.sourceDiagram.wires
         (copyTrace.finalWireMap elimTrace wire)).scope =
@@ -475,7 +473,7 @@ theorem finalWireMap_scope
   unfold finalWireMap finalRegionMap
   rw [elimTrace.liftWire_scope finalWellFormed]
   rw [InstantiationDrop.raw_wire_scope]
-  rw [copyTrace.wireMap_scope boundaryNodup]
+  rw [copyTrace.wireMap_scope]
   rfl
 
 end InstantiationTrace

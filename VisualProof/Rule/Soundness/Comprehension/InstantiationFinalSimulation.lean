@@ -507,7 +507,7 @@ noncomputable def finalSemanticSimulation
                 sourceKeptItems targetKeptItems sourceKeptCompiled
                 targetKeptCompiled
             let finalScopes := InstantiationSemantic.ParameterScopesAtBubble.afterTrace
-              copyTrace boundaryNodup
+              copyTrace
               (InstantiationSemantic.initial_parameterScopesAtBubble payload)
             let finalShape :=
               (InstantiationSemantic.initial_bubbleHasPayloadArity payload).afterTrace
@@ -1035,10 +1035,10 @@ noncomputable def finalSemanticSimulation
                       simpa [sourceOuter, initialInstantiationState] using
                         terminalBubbleDenote
                   | step traceFuel _ _ atom tail site candidate arguments
-                      checkedInput pending_eq node_eq candidate_eq arguments_eq
-                      input_eq rest =>
+                      plan pending_eq node_eq candidate_eq arguments_eq rest =>
                       let hadmissible :=
-                        (Splice.Input.checkInput_sound input_eq).2
+                        (Splice.Input.checkInput_sound
+                          plan.checkedInputChecked).2
                       let initialTargets :
                           InstantiationSemantic.BinderTargetsAtBubble payload
                             (initialInstantiationState payload) := {
@@ -1052,9 +1052,8 @@ noncomputable def finalSemanticSimulation
                           attachments binders payload (traceFuel + 1)
                           (initialInstantiationState payload) result :=
                         .step traceFuel (initialInstantiationState payload)
-                          result atom tail site candidate arguments checkedInput
-                          pending_eq node_eq candidate_eq arguments_eq input_eq
-                          rest
+                          result atom tail site candidate arguments plan
+                          pending_eq node_eq candidate_eq arguments_eq rest
                       let finalTargets := initialTargets.afterTrace wholeTrace
                       let terminalStateExact :=
                         InstantiationSemantic.dropExact_to_state result
@@ -1124,10 +1123,10 @@ noncomputable def finalSemanticSimulation
                           (payload := payload) (traceFuel := traceFuel)
                           (result := result) (atom := atom) (tail := tail)
                           (site := site) (candidate := candidate)
-                          (arguments := arguments) (checkedInput := checkedInput)
+                          (arguments := arguments) (plan := plan)
                           (pending_eq := pending_eq) (node_eq := node_eq)
                           (candidate_eq := candidate_eq)
-                          (arguments_eq := arguments_eq) (input_eq := input_eq)
+                          (arguments_eq := arguments_eq)
                           (rest := rest)
                           elimTrace finalWellFormed boundaryNodup model named
                           (sourceContext.extend

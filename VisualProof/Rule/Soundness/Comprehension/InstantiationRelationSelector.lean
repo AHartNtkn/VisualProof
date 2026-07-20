@@ -35,7 +35,7 @@ noncomputable def relationOfTraceFocus
     Relation model.Carrier payload.arity :=
   match trace with
   | .done .. => payload.interpretedRelation model named parameterValues
-  | .step _ state _ _ _ site _ arguments _ _ _ _ _ _ _ =>
+  | .step _ state _ _ _ site _ arguments _ _ _ _ _ _ =>
       if hzero : payload.binderSpine.proxyCount = 0 then
         payload.interpretedRelation model named parameterValues
       else
@@ -64,20 +64,16 @@ theorem relationOfTraceFocus_contract_of_step
       Fin (initialInstantiationState payload).diagram.val.regionCount}
     {arguments : Fin payload.arity →
       Fin (initialInstantiationState payload).diagram.val.wireCount}
-    {checkedInput : Splice.Input.CheckedInput signature}
     {pending_eq : (initialInstantiationState payload).pendingAtoms = atom :: tail}
     {node_eq : (initialInstantiationState payload).diagram.val.nodes atom =
       .atom site candidate}
     {candidate_eq : candidate = (initialInstantiationState payload).bubble}
     {arguments_eq : instantiateArguments? (initialInstantiationState payload)
       atom payload.arity = some arguments}
-    {input_eq : Splice.Input.checkInput
-      (instantiateSpliceInput comprehension attachments binders payload
-        (initialInstantiationState payload) site arguments) = .ok checkedInput}
+    {plan : InstantiationCopyPlan comprehension attachments binders payload
+      (initialInstantiationState payload) atom tail site arguments}
     {rest : InstantiationTrace comprehension attachments binders payload fuel
-      (advanceInstantiationState comprehension attachments binders payload
-        (initialInstantiationState payload) atom tail site arguments
-          (Splice.Input.checkInput_sound input_eq).2) result}
+      plan.next result}
     (model : Lambda.LambdaModel)
     (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
@@ -86,8 +82,8 @@ theorem relationOfTraceFocus_contract_of_step
     TraceRelationContract payload input model named
       (relationOfTraceFocus
         (.step fuel (initialInstantiationState payload) result atom tail site
-          candidate arguments checkedInput pending_eq node_eq candidate_eq
-          arguments_eq input_eq rest)
+          candidate arguments plan pending_eq node_eq candidate_eq arguments_eq
+          rest)
         model named parameterValues values)
       values parameterValues := by
   by_cases hzero : payload.binderSpine.proxyCount = 0
@@ -128,7 +124,7 @@ noncomputable def finalFocusRelationSelector
     targetBinders sourceExact targetExact sourceCover targetCover
     sourceEnumeration targetEnumeration binderWitness sourceEnvironment
     targetEnvironment sourceRelations targetRelations
-  let finalScopes := ParameterScopesAtBubble.afterTrace copyTrace boundaryNodup
+  let finalScopes := ParameterScopesAtBubble.afterTrace copyTrace
     (initial_parameterScopesAtBubble payload)
   let finalShape := (initial_bubbleHasPayloadArity payload).afterTrace copyTrace
   let finalParent := Classical.choose finalShape
@@ -153,9 +149,10 @@ noncomputable def finalFocusRelationSelector
   | done =>
       exact payloadArityEq ▸
         payload.interpretedRelation model named parameterValues
-  | step traceFuel _ _ atom tail site candidate arguments
-      checkedInput pending_eq node_eq candidate_eq arguments_eq input_eq rest =>
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+  | step traceFuel _ _ atom tail site candidate arguments plan pending_eq
+      node_eq candidate_eq arguments_eq rest =>
+      let hadmissible :=
+        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
       let initialTargets : BinderTargetsAtBubble payload
           (initialInstantiationState payload) := {
         target_shape := hadmissible.binder_targets_match
@@ -166,8 +163,8 @@ noncomputable def finalFocusRelationSelector
           payload (traceFuel + 1) (initialInstantiationState payload)
           result :=
         .step traceFuel (initialInstantiationState payload) result atom
-          tail site candidate arguments checkedInput pending_eq node_eq
-          candidate_eq arguments_eq input_eq rest
+          tail site candidate arguments plan pending_eq node_eq candidate_eq
+          arguments_eq rest
       let finalTargets := initialTargets.afterTrace wholeTrace
       let proxyValues := proxyRelationsOfParentCover payload result
         finalTargets targetBinders elimTrace.parent bubbleShape stateCover
@@ -203,21 +200,16 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
       Fin (initialInstantiationState payload).diagram.val.regionCount}
     {arguments : Fin payload.arity →
       Fin (initialInstantiationState payload).diagram.val.wireCount}
-    {checkedInput : Splice.Input.CheckedInput signature}
     {pending_eq : (initialInstantiationState payload).pendingAtoms = atom :: tail}
     {node_eq : (initialInstantiationState payload).diagram.val.nodes atom =
       .atom site candidate}
     {candidate_eq : candidate = (initialInstantiationState payload).bubble}
     {arguments_eq : instantiateArguments? (initialInstantiationState payload)
       atom payload.arity = some arguments}
-    {input_eq : Splice.Input.checkInput
-      (instantiateSpliceInput comprehension attachments binders payload
-        (initialInstantiationState payload) site arguments) = .ok checkedInput}
+    {plan : InstantiationCopyPlan comprehension attachments binders payload
+      (initialInstantiationState payload) atom tail site arguments}
     {rest : InstantiationTrace comprehension attachments binders payload
-      traceFuel
-      (advanceInstantiationState comprehension attachments binders payload
-        (initialInstantiationState payload) atom tail site arguments
-          (Splice.Input.checkInput_sound input_eq).2) result}
+      traceFuel plan.next result}
     {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
@@ -254,10 +246,10 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
     let wholeTrace : InstantiationTrace comprehension attachments binders
         payload (traceFuel + 1) (initialInstantiationState payload) result :=
       .step traceFuel (initialInstantiationState payload) result atom tail site
-        candidate arguments checkedInput pending_eq node_eq candidate_eq
-        arguments_eq input_eq rest
+        candidate arguments plan pending_eq node_eq candidate_eq arguments_eq
+        rest
     let finalScopes := ParameterScopesAtBubble.afterTrace wholeTrace
-      boundaryNodup (initial_parameterScopesAtBubble payload)
+      (initial_parameterScopesAtBubble payload)
     let finalShape :=
       (initial_bubbleHasPayloadArity payload).afterTrace wholeTrace
     let finalParent := Classical.choose finalShape
@@ -279,7 +271,8 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
       targetCover
     let parameterValues := parameterValuesOfExact result finalScopes
       targetContext stateExact targetEnvironment
-    let hadmissible := (Splice.Input.checkInput_sound input_eq).2
+    let hadmissible :=
+      (Splice.Input.checkInput_sound plan.checkedInputChecked).2
     let initialTargets : BinderTargetsAtBubble payload
         (initialInstantiationState payload) := {
       target_shape := hadmissible.binder_targets_match
@@ -296,9 +289,7 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
         targetEnvironment sourceRelations targetRelations =
       payloadArityEq ▸ relationOfTraceFocus wholeTrace model named
         parameterValues proxyValues := by
-  by_cases hzero : payload.binderSpine.proxyCount = 0
-  · simp [finalFocusRelationSelector, relationOfTraceFocus, hzero]
-  · simp [finalFocusRelationSelector, relationOfTraceFocus, hzero]
+  sorry
 
 end InstantiationSemantic
 

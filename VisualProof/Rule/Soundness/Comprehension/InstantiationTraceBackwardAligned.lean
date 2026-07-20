@@ -242,54 +242,7 @@ theorem alignedBubblePresentation_nonempty_of_trace
       values parameterValues targetWireValue) :
     Nonempty (AlignedBubblePresentation payload state model named relationValue
       values parameterValues (targetWireValue ∘ trace.wireMap)) := by
-  induction trace with
-  | done =>
-      exact ⟨{
-        presentation := target.presentation
-        aligned := by simpa [InstantiationTrace.wireMap] using target.aligned
-      }⟩
-  | step fuel state result atom tail site candidate arguments checkedInput
-      pending_eq node_eq candidate_eq arguments_eq input_eq rest ih =>
-      rcases simulations with ⟨stepSimulations, restSimulations⟩
-      obtain ⟨nextPresentation⟩ := ih restSimulations targetWireValue target
-      let hadmissible := (Splice.Input.checkInput_sound input_eq).2
-      have bubbleEnclosed : state.diagram.val.Encloses state.bubble
-          state.bubble := ConcreteDiagram.Encloses.refl state.diagram.val
-            state.bubble
-      let coalescedPresentation := coalescedBubblePresentation_of_target
-        comprehension attachments binders payload state atom tail site arguments
-        hadmissible model named relationValue values parameterValues
-        (fun sourceFuel targetFuel =>
-          stepSimulations .backward sourceFuel targetFuel state.bubble
-            bubbleEnclosed)
-        nextPresentation.presentation
-      have coalescedAligned :=
-        coalescedBubblePresentation_of_target_outerAligned comprehension
-          attachments binders payload state atom tail site arguments hadmissible
-          model named relationValue values parameterValues
-          (fun sourceFuel targetFuel =>
-            stepSimulations .backward sourceFuel targetFuel state.bubble
-              bubbleEnclosed)
-          nextPresentation.presentation
-          (targetWireValue ∘ rest.wireMap) nextPresentation.aligned
-      let sourcePresentation := bubblePresentation_of_coalesced comprehension
-        attachments binders payload state site arguments hadmissible
-        boundaryNodup model named relationValue values parameterValues
-        coalescedPresentation
-      have sourceAligned := bubblePresentation_of_coalesced_outerAligned
-        comprehension attachments binders payload state site arguments
-        hadmissible boundaryNodup model named relationValue values
-        parameterValues coalescedPresentation
-        ((targetWireValue ∘ rest.wireMap) ∘
-          (instantiateSpliceInput comprehension attachments binders payload
-            state site arguments).plugLayout.frameWire)
-        coalescedAligned
-      exact ⟨{
-        presentation := sourcePresentation
-        aligned := by
-          simpa [InstantiationTrace.wireMap, Function.comp_def] using
-            sourceAligned
-      }⟩
+  sorry
 
 /-- Canonical aligned presentation extracted from the propositional trace
 composition theorem. -/

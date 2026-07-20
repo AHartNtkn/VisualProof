@@ -35,7 +35,7 @@ theorem terminalBoundary_root
   intro mapped member
   obtain ⟨wire, wireMember, rfl⟩ := List.mem_map.mp member
   rw [InstantiationDrop.raw_wire_scope]
-  rw [copyTrace.wireMap_scope boundaryNodup]
+  rw [copyTrace.wireMap_scope]
   have rootScope :
       ((initialInstantiationState payload).diagram.val.wires wire).scope =
         (initialInstantiationState payload).diagram.val.root := by

@@ -425,8 +425,7 @@ theorem focusedKeptNode_endpointOccurs_iff
     input.val.EndpointOccurs wire ⟨originalNode, port⟩
   rw [InstantiationSemantic.drop_endpointOccurs_origin_iff]
   rw [copyTrace.droppedNodeMap_origin originalNode outside]
-  exact copyTrace.endpointOccurs_wireMap_nodeMap_iff boundaryNodup wire
-    originalNode port
+  exact copyTrace.endpointOccurs_wireMap_nodeMap_iff wire originalNode port
 
 theorem focusedKeptNode_resolvedPorts_related
     {signature : List Nat}
