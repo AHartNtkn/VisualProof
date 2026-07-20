@@ -231,26 +231,24 @@ The whitelist is semantic content policy, not a generic engine exception.
 The audit supplements rather than replaces replay validation. It does not attempt to
 forbid all alternative proofs or require one authored move sequence.
 
-## Creative-Rule Materiality and Dominance
+## Creative-Rule Materiality
 
-Evidence gathered after the first reconstruction rejected both witness-rule-name
-checks and a universal ban on alternative destructive proofs.
+Evidence gathered after the first reconstruction rejected witness-rule-name checks,
+universal bans on alternative proofs, and proof-length dominance requirements.
 
 For every reconstructed creative-rule puzzle:
 
 - the creative step must create identifiable content, authority, or a boundary;
 - a named downstream consumer must be illegal before that step and legal afterward
   because of the created resource;
-- the consumer must depend on or consume that resource;
+- the consumer must operate on pre-existing puzzle content and depend on or consume
+  the created resource;
 - a nearby atom, wrong owner, or larger selection must not unlock the same consumer;
-- exhaustive destructive closure must record the shortest all-destructive proof;
-- no all-destructive proof may be shorter than or equal in length to the validated
-  causal proof.
 
-Complete destructive unreachability remains preferred for compact introductions, but
-it is not a universal content requirement. A longer alternative proof is compatible
-with an open problem. This validation rejects a dominating shortcut without enforcing
-one intended sequence.
+The exact empty-cut shortcut audit and experiential review reject disposable padding.
+No validation requires every proof to contain the assigned rule, compares the
+authored witness with a shortest proof, or rejects a legitimate alternative for being
+shorter. The teacher may describe one useful route through an open problem.
 
 ## Validation
 

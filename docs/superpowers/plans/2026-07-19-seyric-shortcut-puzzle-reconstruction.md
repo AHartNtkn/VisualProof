@@ -13,7 +13,7 @@
 - Do not modify any `echoed-veil` authored surface: puzzle, validation, guidance, catalog, coverage, progression, or runtime projection.
 - Preserve the point, puzzle ID, and artifact identity of reconstructed puzzles; topology, size, silhouette, witness, and prerequisites may change dramatically.
 - Alternative proofs remain welcome. Do not enforce an intended solution or forbid a different valid route.
-- For creative-rule puzzles, prove causal create/consume materiality and reject any all-destructive proof no longer than the validated causal proof; do not ban longer alternatives merely for existing.
+- For creative-rule puzzles, prove causal create/consume materiality on pre-existing content; do not require the authored route, rank it against alternatives, or reject another valid route for being shorter.
 - No reconstructed puzzle may duplicate an existing canonical start or an existing player-facing decision.
 - Permit the identified empty-cut shortcut only in `forked-veil`, unchanged `echoed-veil`, and the deliberately intimidating `atomic-fragment-erasure`.
 - Keep every Seyric goal in the pure propositional culture boundary: arity-zero bubbles in negative context, atom nodes only, and no wires.
@@ -355,11 +355,11 @@ git commit -m "feat(game): add marked-echo deiteration introduction"
 - Consumes: `findEmptyCutShortcutHosts`, canonical puzzle fingerprints, and ordinary backward proof steps.
 - Produces: four valid, shortcut-free, canonically distinct starts whose primary decisions are respectively host legality, atomic insertion, exact atomic wrapping, and parity through ownership rings.
 
-**Post-review evidence amendment:** The first implementation passed witness replay but
-three puzzles had shorter destructive bypasses. Two bounded implementation searches
-and five independent evidence probes rejected the compact homologous-deficit insertion
-and wrapper/match double-cut families. This amendment governs Steps 1–3 wherever the
-original examples conflict with it.
+**Post-review evidence amendment:** The first implementation proved that checking only
+for a rule name is too weak. Three bounded implementation searches and five independent
+evidence probes also proved that closure and proof-length dominance requirements are
+both infeasible for the explored families and inconsistent with the established
+open-problem model. This amendment governs Steps 1–3 wherever earlier text conflicts.
 
 - [ ] **Step 1: Add failing per-point assertions**
 
@@ -381,22 +381,14 @@ it('keeps reconstructed atomic and polarity problems free of empty-cut truth wit
 })
 ```
 
-Replace rule-name-presence assertions with semantic materiality and dominance evidence:
-
-```ts
-for (const id of creativeDecisionPuzzles) {
-  const evidence = readJson(resolve(process.cwd(), `content/validation/${id}.json`))
-  const destructive = shortestDestructiveWitness(catalog.puzzle(id as never).diagram)
-  expect(destructive === undefined || destructive.length > evidence.solution.length, id).toBe(true)
-}
-```
-
 For each final topology, add a real-kernel causal counterfactual: its named consumer
-must fail immediately before the creative step, succeed after it because of the
-created resource, and fail after the documented nearby/wrong/larger counterfactual.
-Track semantic descendants rather than relying only on a fresh serialized ID.
+on pre-existing puzzle content must fail immediately before the creative step,
+succeed after it because of the created resource, and fail after the documented
+nearby/wrong/larger counterfactual. Track semantic descendants rather than relying
+only on a fresh serialized ID. Do not assert that no other proof exists or compare
+proof lengths.
 
-- [ ] **Step 2: Run the focused test and observe the three reviewed dominance violations**
+- [ ] **Step 2: Run the focused test and observe the missing causal evidence**
 
 Run:
 
@@ -404,8 +396,9 @@ Run:
 npm test -- --run tests/game/content-validation.test.ts
 ```
 
-Expected: FAIL because the three first-pass starts have destructive proofs no longer
-than their causal witnesses. `polarity-bubble-contrast` remains approved.
+Expected: FAIL because rule-name presence does not prove causal use and
+`shallow-edit-legality-contrast` introduces and removes decoration without unlocking
+work on pre-existing content. `polarity-bubble-contrast` remains approved.
 
 - [ ] **Step 3: Reconstruct each complete bundle from its point**
 
@@ -434,7 +427,7 @@ polarity-bubble-contrast:
   Both sides must be needed; removing either complete side may not leave a theorem.
 ```
 
-For each candidate, use a temporary `npx tsx --eval` spike with `DiagramBuilder`, `applyStep(..., 'backward')`, and `isBlank` before replacing the JSON. Compare its `exploreForm` against every catalog start before accepting it. Compute its shortest destructive proof and reject it when that path is no longer than the causal proof. Then replace the puzzle diagram and entire validation witness, and rewrite its coverage `visibleSituation`, `defeats`, and `experientialNeighbors` to name the nearest real neighbors and the different player decision.
+For each candidate, use a temporary `npx tsx --eval` spike with `DiagramBuilder`, `applyStep(..., 'backward')`, and `isBlank` before replacing the JSON. Compare its `exploreForm` against every catalog start before accepting it. Prove the causal pre/post/counterfactual contract on pre-existing content; do not search for or rank every alternative proof. Then replace the puzzle diagram and entire validation witness, and rewrite its coverage `visibleSituation`, `defeats`, and `experientialNeighbors` to name the nearest real neighbors and the different player decision.
 
 Set prerequisites exactly as follows and do not make the new puzzle part of the
 Myratic unlock closure:
@@ -488,7 +481,7 @@ git commit -m "feat(game): reconstruct atomic Seyric edit problems"
 - Consumes: the shortcut detector and marked-echo deiteration prerequisite.
 - Produces: four shortcut-free compound problems with different primary decisions.
 
-- [ ] **Step 1: Extend the shortcut, materiality, and dominance table**
+- [ ] **Step 1: Extend the shortcut and materiality table**
 
 Add these exact operation mappings to the Task 3 semantic test data:
 
@@ -502,8 +495,7 @@ const compoundPrimaryRule = new Map([
 ```
 
 Assert every listed start has no shortcut host. For each creative mapping, add the
-same causal pre/post/counterfactual evidence and require its shortest destructive
-proof, when one exists, to be longer than its causal witness. For
+same causal pre/post/counterfactual evidence on pre-existing content. For
 `content-bearing-annulus-choice`, prove instead that the selected elimination
 preserves content consumed later and that the obstructed near-match cannot perform
 the same transition.
@@ -616,9 +608,9 @@ expect(row('useful-vacuous-owner-workspace').experientialNeighbors).toEqual(
 )
 ```
 
-Also add causal pre/post/counterfactual evidence for each created resource and apply
-the same destructive-proof dominance rule. A witness containing `insertion` or
-`vacuousIntro` is not evidence by itself.
+Also add causal pre/post/counterfactual evidence for each created resource on
+pre-existing content. A witness containing `insertion` or `vacuousIntro` is not
+evidence by itself, and alternative proof length is not part of this test.
 
 - [ ] **Step 2: Run the focused test and observe both violations**
 
