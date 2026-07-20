@@ -114,9 +114,8 @@ theorem targetEnvironment_agrees
     _ _ _).2
   rfl
 
-/-- Extend the origin relation through any source region.  If that region was
-deleted, its total target image is the fresh bubble, which has no scoped
-survivor wires; otherwise exact local wires correspond by scope injectivity. -/
+/-- Extend the origin relation through a surviving source region. Exact local
+wires correspond by compact scope injectivity. -/
 def extend
     {signature : List Nat}
     {input : CheckedDiagram signature}
@@ -128,7 +127,8 @@ def extend
     {sourceContext : ConcreteElaboration.WireContext input.val}
     {targetContext : ConcreteElaboration.WireContext trace.diagram}
     (witness : ContextWitness trace sourceContext targetContext)
-    (region : Fin input.val.regionCount) :
+    (region : Fin input.val.regionCount)
+    (regionSurvives : trace.domains.regions.survives region = true) :
     ContextWitness trace (sourceContext.extend region)
       (targetContext.extend (trace.regionMap region)) where
   origin_mem := by
@@ -149,16 +149,8 @@ def extend
         trace.targetWire_origin_index targetWire
       have scopeTransport := trace.targetWire_scope original originalSurvives
       rw [mapped, targetScope] at scopeTransport
-      by_cases regionSurvives :
-          trace.domains.regions.survives region = true
-      · rw [trace.regionMap_of_survives region regionSurvives] at scopeTransport
-        exact trace.targetRegion_injective scopeTransport.symm
-      · exfalso
-        unfold regionMap at scopeTransport
-        rw [dif_neg regionSurvives] at scopeTransport
-        exact trace.targetRegion_ne_bubble _
-          (trace.wireScope_survives original originalSurvives)
-          scopeTransport.symm
+      rw [trace.regionMap_of_survives region regionSurvives] at scopeTransport
+      exact trace.targetRegion_injective scopeTransport.symm
 
 end ContextWitness
 

@@ -18,16 +18,17 @@ def FrameRegular
     ∀ index : Fin occurrences.length,
       region ≠ (occurrences.get index).selection.val.anchor
 
-/-- Total source-to-target region map.  Removed occurrence interiors are
-opaque at their focused anchors and therefore may share the fresh bubble as a
-total-map value. -/
+/-- Total source-to-target region map. Removed occurrence interiors are opaque
+at the wrap focus; mapping them to the target root keeps them outside the
+direct-child recursion seam while every observable survivor uses its exact
+compact image. -/
 def regionMap
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (region : Fin input.val.regionCount) : Fin trace.diagram.regionCount :=
   if survives : trace.domains.regions.survives region = true then
     trace.targetRegion region survives
   else
-    trace.bubble
+    trace.diagram.root
 
 theorem regionMap_of_survives
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
@@ -78,7 +79,7 @@ theorem targetRegion_ne_bubble
   have bound := (trace.domains.regions.index region survives).isLt
   omega
 
-private theorem selectedRegion_parent_cases
+theorem selectedRegion_parent_cases
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
     {region parent : Fin input.val.regionCount}
@@ -97,6 +98,19 @@ private theorem selectedRegion_parent_cases
   · right
     exact (selection.mem_selectedRegions parent).2
       ⟨root, direct, parentSelected⟩
+
+theorem selection_root_not_selected
+    (input : CheckedDiagram signature)
+    (selection : CheckedSelection input.val) :
+    input.val.root ∉ selection.selectedRegions := by
+  intro selected
+  obtain ⟨child, childRoot, encloses⟩ :=
+    (selection.mem_selectedRegions input.val.root).1 selected
+  have childEq := ConcreteElaboration.encloses_sheet_eq
+    input.property.root_is_sheet encloses
+  have parent := selection.property.childRoots_direct child childRoot
+  rw [childEq, input.property.root_is_sheet] at parent
+  contradiction
 
 /-- Every direct child of a regular frame region survives compaction. -/
 theorem child_survives_of_regular
