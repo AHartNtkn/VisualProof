@@ -27,7 +27,7 @@ import {
   currentRelationDraft,
   replaceRelationDiagram,
 } from '../../src/app/relation-workspace-draft'
-import { planCopy } from '../../src/app/copy-planner'
+import { planCopy } from '../../src/interaction/copy-planner'
 
 const context = (): ProofContext => (EMPTY_PROOF_CONTEXT)
 
@@ -48,7 +48,7 @@ function hostWithBubble(arity = 2): Diagram {
 describe('shared relation workspace mechanics', () => {
   it('uses a transaction still click but yields a moved occurrence gesture to copy', () => {
     const events: string[] = []
-    const claim = (name: string): import('../../src/app/interact/viewport').PointerClaim => ({
+    const claim = (name: string): import('../../src/interaction/controllers/viewport').PointerClaim => ({
       still: 'claim', blocksPassiveRelaxation: false,
       move: () => { events.push(`${name}:move`) },
       release: (_sample, moved) => { events.push(`${name}:release:${moved}`) },

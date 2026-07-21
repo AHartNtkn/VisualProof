@@ -8,8 +8,8 @@ import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { applyRelFold, applyRelUnfold } from '../../src/kernel/rules/reldef'
 import { verifyTheory } from '../../src/kernel/proof/context'
 import type { Theorem } from '../../src/kernel/proof/theorem'
-import { emptyDiagram } from '../../src/app/edit'
-import { defineRelation, canonicalArgOrder, inferFoldArgs } from '../../src/app/define'
+import { emptyDiagram } from '../../src/interaction/edit'
+import { defineRelation, canonicalArgOrder, inferFoldArgs } from '../../src/interaction/define'
 import { sheetBody, emptyCtx } from './relationFixture'
 
 const refNodeOf = (d: { nodes: Record<string, { kind: string }> }): string => {

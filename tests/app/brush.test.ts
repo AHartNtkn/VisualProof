@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import type { Hit } from '../../src/app/hittest'
+import type { Hit } from '../../src/interaction/hittest'
 import {
   choosePointerPhase,
   createBrushState,
   isHitSelected,
   reduceBrush,
-} from '../../src/app/interact/brush'
+} from '../../src/interaction/controllers/brush'
 
 const nodeA: Hit = { kind: 'node', id: 'a' }
 const nodeB: Hit = { kind: 'node', id: 'b' }

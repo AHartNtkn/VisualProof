@@ -58,7 +58,7 @@ export function projectFolio(
   state: GameControllerState,
   mode: FolioProjection['mode'],
 ): FolioProjection {
-  const progress = { completed: state.completed }
+  const progress = { completed: state.completedArtifacts }
   const cultures = catalog.cultureIds.map((id) => catalog.culture(id)).map((culture) => ({
     id: culture.id,
     name: culture.name,
@@ -70,7 +70,7 @@ export function projectFolio(
       .map((id, index): FolioRecordProjection => {
         const artifact = catalog.artifact(id)
         const fingerprint = catalog.puzzleFingerprint(id)
-        const status: FolioRecordStatus = state.completed.has(id)
+        const status: FolioRecordStatus = state.completedArtifacts.has(id)
           ? 'completed'
           : isUnlocked(catalog, progress, id) ? 'unlocked' : 'locked'
         return {

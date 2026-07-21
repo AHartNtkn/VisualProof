@@ -17,13 +17,13 @@ import {
   joinWires,
   reparentNode,
   severEndpoint,
-} from '../edit'
-import { buildSelection, type Hit } from '../hittest'
-import { ConnectionDragController } from './connection'
-import { FissionDragController, type FissionRequest } from './fission'
-import { CopyDragController, copyDestinationPreview } from './copy'
-import type { KeySample, PointerClaim, PointerSample } from './viewport'
-import type { CopyDestination, CopyPlan } from '../copy-planner'
+} from '../../interaction/edit'
+import { buildSelection, type Hit } from '../../interaction/hittest'
+import { ConnectionDragController } from '../../interaction/controllers/connection'
+import { FissionDragController, type FissionRequest } from '../../interaction/controllers/fission'
+import { CopyDragController, copyDestinationPreview } from '../../interaction/controllers/copy'
+import type { KeySample, PointerClaim, PointerSample } from '../../interaction/controllers/viewport'
+import type { CopyDestination, CopyPlan } from '../../interaction/copy-planner'
 
 type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
 

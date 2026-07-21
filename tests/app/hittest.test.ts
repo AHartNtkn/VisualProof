@@ -5,7 +5,7 @@ import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { mkEngine, recomputeRegions, computeLegs, legPaths, settle, existentialStubs, frameBounds, frameSlots } from '../../src/view/index'
 import type { Vec2 } from '../../src/view/index'
 import { vec } from '../../src/view/vec'
-import { hitTest, wireHitTest, wireManipulationHitTest, brushHitTest, dragTarget, buildSelection } from '../../src/app/hittest'
+import { hitTest, wireHitTest, wireManipulationHitTest, brushHitTest, dragTarget, buildSelection } from '../../src/interaction/hittest'
 
 const p = (s: string) => parseTerm(s)
 const viewport = (scale = 1) => ({ scale })

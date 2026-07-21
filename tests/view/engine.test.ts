@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { requiredPorts } from '../../src/kernel/diagram/diagram'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkEngine, carryOver, worldAnchor, portNormal, pkey, DISC_R, frameSlots, FRAME_CORNER_W, type FrameBounds } from '../../src/view/engine'
-import { emptyDiagram } from '../../src/app/edit'
+import { emptyDiagram } from '../../src/interaction/edit'
 
 const p = (s: string) => parseTerm(s)
 

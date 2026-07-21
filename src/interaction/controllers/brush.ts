@@ -1,4 +1,4 @@
-import type { Hit } from '../hittest'
+import type { Hit } from '../../interaction/hittest'
 
 export type BrushStroke = {
   readonly erase: boolean

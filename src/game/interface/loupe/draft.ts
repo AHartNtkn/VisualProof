@@ -203,7 +203,7 @@ function validateSnapshot(draft: ComprehensionDraft, snapshot: ComprehensionSnap
     draft.bubble,
     materialized.relation,
     materialized.attachments,
-    new Map(),
+    [],
     draft.orientation,
   )
 }

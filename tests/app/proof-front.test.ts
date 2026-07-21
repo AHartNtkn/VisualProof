@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { parseTerm } from '../../src/kernel/term/parse'
-import type { KeySample } from '../../src/app/interact/viewport'
+import type { KeySample } from '../../src/interaction/controllers/viewport'
 import { frontInputAllowed, frontKeyRoute, retainedFrontIds } from '../../src/app/proof-front'
 
 const key: KeySample = {

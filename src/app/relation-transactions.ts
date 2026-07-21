@@ -8,7 +8,7 @@ import type { Engine } from '../view/engine'
 import type { Shape, Theme } from '../view/paint'
 import type { Vec2 } from '../view/vec'
 import { existentialStubs, legPaths } from '../view/wires'
-import type { PointerSample } from './interact/viewport'
+import type { PointerSample } from '../interaction/controllers/viewport'
 import {
   createOccurrenceSetState,
   cycleOccurrenceSet,

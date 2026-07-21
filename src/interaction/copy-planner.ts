@@ -20,7 +20,8 @@ import { assertProofContext } from '../kernel/proof/context'
 import { app, bvar, freePorts, lam, type Term } from '../kernel/term/term'
 import type { PathSeg } from '../kernel/term/reduce'
 import type { Vec2 } from '../view/vec'
-import type { ProofOrientation } from './interact/moves'
+
+export type ProofOrientation = 'forward' | 'backward'
 
 export type CopyDestination =
   | { readonly kind: 'workspace'; readonly draft: Diagram; readonly region: RegionId; readonly at: Vec2 }

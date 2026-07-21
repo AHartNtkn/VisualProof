@@ -15,7 +15,7 @@ import {
   orphanedWires,
   reparentNode,
   severEndpoint,
-} from '../../src/app/edit'
+} from '../../src/interaction/edit'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../../src/kernel/diagram/spawn'
 
 const p = (s: string) => parseTerm(s)

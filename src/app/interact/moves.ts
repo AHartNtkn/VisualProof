@@ -3,60 +3,33 @@ import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/dia
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
-import { applyStep, type ProofStep } from '../../kernel/proof/step'
+import type { ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
-import { EMPTY_PROOF_CONTEXT, assertProofContext } from '../../kernel/proof/context'
-import { convertible } from '../../kernel/term/convert'
-import type { ConversionCertificate } from '../../kernel/term/certificate'
+import { assertProofContext } from '../../kernel/proof/context'
 import { parseTerm } from '../../kernel/term/parse'
 import { freePorts } from '../../kernel/term/term'
 import { applyConversion } from '../../kernel/rules/conversion'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import { findInconsistentCutEvidence } from '../../kernel/rules/inconsistent-cut'
 import { RuleError } from '../../kernel/rules/error'
-import { termNodeAt, wireAt } from '../../kernel/rules/access'
-import { mapTermToCommonCarrier, proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
-import type { PortCorrespondence } from '../../kernel/rules/port-correspondence'
+import { termNodeAt } from '../../kernel/rules/access'
+import { proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
-import { applicableActions, type ActionDescriptor } from '../actions'
-import { inferFoldArgs } from '../define'
-import { absorbHits, orphanedWires } from '../edit'
-import { buildSelection, type Hit } from '../hittest'
+import { applicableActions, type ActionDescriptor } from '../../interaction/actions'
+import { inferFoldArgs } from '../../interaction/define'
+import { absorbHits, orphanedWires } from '../../interaction/edit'
+import { buildSelection, type Hit } from '../../interaction/hittest'
 import { convertToHeadNormal, convertToWeakHeadNormal } from '../tactics'
 import { citationCandidates, citationStep, type CitationCandidate } from './cite'
-import { ConnectionDragController, type ConnectionEnd } from './connection'
-import type { KeySample, PointerClaim, PointerSample } from './viewport'
-import { FissionDragController, type FissionRequest } from './fission'
-import { CopyDragController, copyDestinationPreview } from './copy'
+import { ConnectionDragController } from '../../interaction/controllers/connection'
+import type { KeySample, PointerClaim, PointerSample } from '../../interaction/controllers/viewport'
+import { FissionDragController, type FissionRequest } from '../../interaction/controllers/fission'
+import { CopyDragController, copyDestinationPreview } from '../../interaction/controllers/copy'
+import { proofConnectionStep } from '../../interaction/proof-connection'
 
 export type ProofOrientation = 'forward' | 'backward'
-
-/** Author a correspondence whose shared columns already satisfy the kernel's
- * attachment gate. Declared ports on different wires become one-sided. */
-function proposeAttachedPortCorrespondence(d: Diagram, a: NodeId, b: NodeId): PortCorrespondence {
-  const leftNode = termNodeAt(d, a)
-  const rightNode = termNodeAt(d, b)
-  const left = new Map<string, number>()
-  const right = new Map<string, number>()
-  const usedRight = new Set<string>()
-  let commonArity = 0
-  for (const leftName of leftNode.freePorts) {
-    const leftWire = wireAt(d, a, { kind: 'freeVar', name: leftName })
-    const rightName = rightNode.freePorts.find((candidate) =>
-      !usedRight.has(candidate)
-      && wireAt(d, b, { kind: 'freeVar', name: candidate }) === leftWire)
-    if (rightName === undefined) continue
-    left.set(leftName, commonArity)
-    right.set(rightName, commonArity)
-    usedRight.add(rightName)
-    commonArity++
-  }
-  for (const name of leftNode.freePorts) if (!left.has(name)) left.set(name, commonArity++)
-  for (const name of rightNode.freePorts) if (!right.has(name)) right.set(name, commonArity++)
-  return { commonArity, left: Object.fromEntries(left), right: Object.fromEntries(right) }
-}
 
 export type InstantiationChoice =
   | { readonly kind: 'anonymous'; readonly label: 'New relation…' }
@@ -152,86 +125,6 @@ export function foldedComprehension(ctx: ProofContext, name: string): DiagramWit
     boundary.push(builder.wire(builder.root, [{ node: ref, port: { kind: 'arg', index } }]))
   }
   return mkDiagramWithBoundary(builder.build(), boundary)
-}
-
-const connectionContext = EMPTY_PROOF_CONTEXT
-
-function outputNodes(d: Diagram, wire: WireId): NodeId[] {
-  return d.wires[wire]!.endpoints
-    .filter((endpoint) => endpoint.port.kind === 'output' && d.nodes[endpoint.node]?.kind === 'term')
-    .map((endpoint) => endpoint.node)
-}
-
-/** Resolve the one graphical connection gesture to a replayable proof record.
-    Candidate choice is deterministic but intentionally invisible: every
-    accepted different-wire candidate has the same visible merged-wire result. */
-export function proofConnectionStep(
-  d: Diagram,
-  source: ConnectionEnd,
-  target: ConnectionEnd,
-  orientation: ProofOrientation,
-  fuel: number,
-): ProofStep {
-  if (source.wire === target.wire) {
-    const a = source.endpoint
-    const b = target.endpoint
-    if (a === null || b === null || a.port.kind !== 'output' || b.port.kind !== 'output'
-      || a.node === b.node || d.nodes[a.node]?.kind !== 'term' || d.nodes[b.node]?.kind !== 'term') {
-      throw new Error("release on another term's output strand to compare arguments")
-    }
-    const correspondence = proposeAttachedPortCorrespondence(d, a.node, b.node)
-    const step: ProofStep = { rule: 'headStrip', a: a.node, b: b.node, correspondence }
-    applyStep(d, step, connectionContext, orientation)
-    return step
-  }
-
-  const candidates: ProofStep[] = [{ rule: 'wireJoin', a: source.wire, b: target.wire }]
-  const left = outputNodes(d, source.wire)
-  const right = outputNodes(d, target.wire)
-  const concreteOutput = (end: ConnectionEnd): NodeId | null => end.endpoint?.port.kind === 'output'
-    && d.nodes[end.endpoint.node]?.kind === 'term' ? end.endpoint.node : null
-  const sourceNode = concreteOutput(source)
-  const targetNode = concreteOutput(target)
-  const leftCandidates = sourceNode === null ? left : [sourceNode]
-  const rightCandidates = targetNode === null ? right : [targetNode]
-  const unambiguous = leftCandidates.length === 1 && rightCandidates.length === 1
-  const convertiblePairs: Array<{ readonly a: NodeId; readonly b: NodeId; readonly certificate: ConversionCertificate }> = []
-  if (unambiguous) for (const a of leftCandidates) {
-    for (const b of rightCandidates) {
-      const leftNode = termNodeAt(d, a)
-      const rightNode = termNodeAt(d, b)
-      const leftTerm = leftNode.term
-      const rightTerm = rightNode.term
-      const correspondence = proposeAttachedPortCorrespondence(d, a, b)
-      const result = convertible(
-        mapTermToCommonCarrier(leftTerm, correspondence.left),
-        mapTermToCommonCarrier(rightTerm, correspondence.right),
-        fuel,
-      )
-      if (result.status !== 'convertible') continue
-      convertiblePairs.push({ a, b, certificate: result.certificate })
-      candidates.push({ rule: 'congruenceJoin', a, b, certificate: result.certificate, correspondence })
-    }
-  }
-  for (const pair of convertiblePairs) {
-    candidates.push({ rule: 'anchoredWireContract', redundant: pair.a, survivor: pair.b, certificate: pair.certificate })
-    candidates.push({
-      rule: 'anchoredWireContract', redundant: pair.b, survivor: pair.a,
-      certificate: { leftSteps: pair.certificate.rightSteps, rightSteps: pair.certificate.leftSteps },
-    })
-  }
-  for (const candidate of candidates) {
-    try {
-      applyStep(d, candidate, connectionContext, orientation)
-      return candidate
-    } catch {
-      // Another proof justification may license the same visible connection.
-    }
-  }
-  if (!unambiguous && (leftCandidates.length > 1 || rightCandidates.length > 1)) {
-    throw new Error('proof connection is ambiguous; drag from one producer output strand to the other')
-  }
-  throw new Error(`no valid proof connection joins lines '${source.wire}' and '${target.wire}'`)
 }
 
 export type ProofMoveControllerOptions = {

@@ -21,7 +21,10 @@ export function emptyDiagram(): Diagram {
 
 export function addTermNode(d: Diagram, region: RegionId, term: Term): { diagram: Diagram; node: NodeId } {
   const node = freshId(new Set(Object.keys(d.nodes)), 'n')
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [node]: { kind: 'term', region, term } }
+  const nodes: Record<NodeId, DiagramNode> = {
+    ...d.nodes,
+    [node]: { kind: 'term', region, term, freePorts: freePorts(term) },
+  }
   const wires: Record<WireId, Wire> = { ...d.wires }
   const takenWires = new Set(Object.keys(d.wires))
   const ports: Port[] = [{ kind: 'output' }, ...freePorts(term).map((name): Port => ({ kind: 'freeVar', name }))]
@@ -70,7 +73,7 @@ export type ConstructionHit =
 
 function moveNodeToRegion(node: DiagramNode, region: RegionId): DiagramNode {
   switch (node.kind) {
-    case 'term': return { kind: 'term', region, term: node.term }
+    case 'term': return { kind: 'term', region, term: node.term, freePorts: node.freePorts }
     case 'atom': return { kind: 'atom', region, binder: node.binder }
     case 'ref': return { kind: 'ref', region, defId: node.defId, arity: node.arity }
   }

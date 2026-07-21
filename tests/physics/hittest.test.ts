@@ -3,7 +3,7 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine, recomputeRegions, legPaths, settle, computeLegs } from '../../src/view/index'
 import { buildFregeTheory } from '../../src/theories/frege'
-import { hitTest, dragTarget } from '../../src/app/hittest'
+import { hitTest, dragTarget } from '../../src/interaction/hittest'
 
 const p = (s: string) => parseTerm(s)
 const viewport = (scale = 1) => ({ scale })

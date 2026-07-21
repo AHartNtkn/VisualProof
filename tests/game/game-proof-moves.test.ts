@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
+import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
+import { EMPTY_PROOF_CONTEXT, verifyTheory } from '../../src/kernel/proof/context'
 import {
-  gameProofActions,
+  discoverGameProofActions,
   proofShortcutStep,
 } from '../../src/game/interface/proof-moves'
 import {
@@ -36,22 +37,27 @@ describe('game proof move routing', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const diagram = builder.build()
-    const selection = mkSelection(diagram, { region: builder.root, regions: [cut], nodes: [], wires: [] })
-    const actions = gameProofActions(diagram, selection, {
-      relations: new Map(),
-      theorems: new Map([['forbidden-picker-entry', {} as never]]),
-    }, true)
+    const empty = new DiagramBuilder().build()
+    const context = verifyTheory({ relations: [], theorems: [{
+      name: 'forbidden-picker-entry',
+      lhs: mkDiagramWithBoundary(empty, []),
+      rhs: mkDiagramWithBoundary(empty, []),
+      actions: [],
+    }] })
+    const discovery = discoverGameProofActions(
+      diagram,
+      [{ kind: 'region', id: cut }],
+      context,
+    )
 
-    expect(actions.map((action) => action.kind)).not.toContain('citeTheorem')
-    expect(JSON.stringify(actions)).not.toMatch(/theorem|citation|reference/i)
+    expect(discovery?.actions.map((action) => action.kind)).not.toContain('citeTheorem')
+    expect(JSON.stringify(discovery)).not.toMatch(/theorem|citation|reference/i)
   })
 
-  it('retains closed insertion discovery in an eligible empty backward-play region', () => {
+  it('does not invent a selection action for empty-space spawning', () => {
     const builder = new DiagramBuilder()
     const diagram = builder.build()
-    const selection = mkSelection(diagram, { region: builder.root, regions: [], nodes: [], wires: [] })
-    expect(gameProofActions(diagram, selection, { relations: new Map(), theorems: new Map() }, true)
-      .map((action) => action.kind)).toContain('insert')
+    expect(discoverGameProofActions(diagram, [], EMPTY_PROOF_CONTEXT)).toBeNull()
   })
 
   it('gives an open loupe exclusive proof authority while retaining its constrained host viewport', () => {

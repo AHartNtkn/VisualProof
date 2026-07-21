@@ -7,7 +7,7 @@ import { occurrenceToSelection } from '../../kernel/diagram/subgraph/occurrence'
 import type { ProofContext } from '../../kernel/proof/context'
 import { assertProofContext } from '../../kernel/proof/context'
 import type { ProofStep } from '../../kernel/proof/step'
-import type { Hit } from '../hittest'
+import type { Hit } from '../../interaction/hittest'
 import type { ProofOrientation } from './moves'
 
 export type CitationCandidate = {

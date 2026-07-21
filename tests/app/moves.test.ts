@@ -14,12 +14,12 @@ import {
   discoverProofActions,
   foldedComprehension,
   instantiationChoices,
-  proofConnectionStep,
   ProofMoveController,
 } from '../../src/app/interact/moves'
-import type { ConnectionEnd } from '../../src/app/interact/connection'
-import type { Hit } from '../../src/app/hittest'
-import type { KeySample, PointerSample } from '../../src/app/interact/viewport'
+import { proofConnectionStep } from '../../src/interaction/proof-connection'
+import type { ConnectionEnd } from '../../src/interaction/controllers/connection'
+import type { Hit } from '../../src/interaction/hittest'
+import type { KeySample, PointerSample } from '../../src/interaction/controllers/viewport'
 
 const p = (source: string) => parseTerm(source)
 const ctx = () => verifyTheory(buildFregeTheory())
@@ -626,6 +626,26 @@ describe('proof connection resolution', () => {
 
     expect(step.rule).toBe('anchoredWireContract')
     expect(step).toMatchObject({ redundant: flat, survivor: shielded })
+  })
+
+  it('authors anchoredWireSplit by dragging a closed witness output to another endpoint on its line', () => {
+    const b = new DiagramBuilder()
+    const target = b.bubble(b.root, 1)
+    const witness = b.termNode(target, p('\\x. x'))
+    const consumer = b.termNode(target, p('x'))
+    const endpoint = { node: consumer, port: { kind: 'freeVar' as const, name: 'x' } }
+    const wire = b.wire(b.root, [
+      { node: witness, port: { kind: 'output' } },
+      endpoint,
+    ])
+
+    const diagram = b.build()
+    const canonicalEndpoint = diagram.wires[wire]!.endpoints.find((value) => value.node === consumer)!
+    expect(proofConnectionStep(
+      diagram, outputEnd(wire, witness), { wire, endpoint: canonicalEndpoint }, 'forward', 64,
+    )).toEqual({
+      rule: 'anchoredWireSplit', wire, witness, endpoints: [canonicalEndpoint], target,
+    })
   })
 
   it('authors headStrip by dragging between two output legs on the same wire', () => {

@@ -6,7 +6,7 @@ import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import { freshId } from '../kernel/diagram/subgraph/freshId'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 import type { Term } from '../kernel/term/term'
-import { addBubble, addCut } from './edit'
+import { addBubble, addCut } from '../interaction/edit'
 
 export type RelationPort = {
   readonly id: string

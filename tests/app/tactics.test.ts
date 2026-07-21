@@ -3,7 +3,7 @@ import { parseTerm } from '../../src/kernel/term/parse'
 import { termEq } from '../../src/kernel/term/term'
 import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 import { replayProof } from '../../src/kernel/proof/step'
-import { emptyDiagram } from '../../src/app/edit'
+import { emptyDiagram } from '../../src/interaction/edit'
 import { spawnTermNode } from '../../src/kernel/diagram/spawn'
 import { convertToHeadNormal, convertToWeakHeadNormal } from '../../src/app/tactics'
 

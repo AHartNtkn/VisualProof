@@ -91,7 +91,7 @@
 1. Capture pre-migration canonical results for all 1,039 legacy moves in a temporary test artifact outside the repository. Add tests requiring the new sidecars to preserve action count and each action's canonical post-state.
 2. Change the schema and validator to action arrays; flatten constituent steps when deriving `expectedRules`.
 3. Replay every old solution in its original state. Replace 276 deiterations with `findDeiterationEvidence` output, convert the one binder object to `[]`, and wrap unchanged logical moves as one-step actions.
-4. Replace each of the four general insertions with one atomic multi-step spawn/structure action. Require canonical equality with its captured legacy result.
+4. Replace three local general insertions with atomic multi-step spawn/structure actions that preserve their captured result. Replace the grouped branch-construction witness as a whole with an ordinary current-rule proof preserving its start, blank result, and user-action count; do not reproduce obsolete insertion intermediates.
 5. Walk progression with authenticated completed-action records so theorem citations are registered only after their prerequisite proofs; separately enforce `availableArtifacts` declarations.
 6. Run `npm run content:validate` and assert 109 puzzles, 109 solutions, 0 recognized states, 1,039 actions, and blank final diagrams.
 7. Prove no diff under `content/manifest.json`, `content/puzzles`, `content/catalog`, `content/progression`, `content/guidance`, or `content/coverage` relative to `3b4c6f9`.
@@ -126,10 +126,10 @@
 - Tests: exhaustive rule-route and event-driven controller tests
 
 1. Add a failing compile-time/runtime coverage table keyed by the exact `ProofStep['rule']` union. Each entry must drive a real input route, capture its emitted action, and successfully apply it in the intended backward context.
-2. Add failing interaction tests for a proof slash across concrete endpoint legs producing one `wireSever` action, rejecting trunks/junctions, and preflighting multiple crossed legs atomically.
+2. Add failing interaction tests for a selected-line context menu whose explicit endpoint rows produce one `wireSever` action with the labeled retained prefix.
 3. Add failing interaction tests for dragging a closed witness output to a distinct same-wire non-output endpoint producing `anchoredWireSplit`; preserve same-wire output-to-output `headStrip` arbitration.
 4. Add or adapt concrete routes for spawn, connection/contract, deletion including undecided inconsistent cuts, copy/iteration, double/vacuous introduction, conversion, fusion/fission, comprehension instantiate/abstract, theorem artifact drop, and relation fold/unfold.
-5. Delete `GameProofAction`, `Discovery`, `discoverGameProofActions`, Insert, endpoint transport, fuel deiteration, and all duplicated rule-authoring paths.
+5. Delete `GameProofAction`, Insert, endpoint transport, fuel deiteration, and all duplicated rule-authoring paths; keep only a thin game filter over shared action discovery where artifact citation ownership requires it.
 6. Run the exhaustive coverage and lifecycle suites, then all game and app interaction tests; commit when green.
 
 ## Task 8: Prove conformance and absence of the displaced model

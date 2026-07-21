@@ -84,9 +84,12 @@ timelines and bare completed IDs are rejected; no legacy decoder remains.
 
 Build-only validation sidecars also store actions. Their 1,039 user moves remain
 1,039 actions. Deiterations acquire explicit evidence at their original replay
-state, the empty comprehension binder record becomes an ordered empty array, and
-the four insertion moves become single multi-step actions whose canonical result
-matches the old move. `expectedRules` is derived by flattening action steps.
+state and the empty comprehension binder record becomes an ordered empty array.
+Three local insertion moves become atomic spawn/structure actions. The grouped
+branch-construction witness is replaced as a whole by an ordinary nine-action
+current-rule proof with the same start, blank result, and user-action count as its
+old witness; obsolete insertion intermediates are not retained. `expectedRules`
+is derived by flattening action steps.
 Puzzles, manifest, catalog, progression, guidance, and coverage remain byte-identical.
 
 ## Complete interaction contract
@@ -102,7 +105,7 @@ Puzzles, manifest, catalog, progression, guidance, and coverage remain byte-iden
 | `anchoredWireContract` | drag distinct wires through a closed witness |
 | `anchoredWireSplit` | drag a closed witness output to a distinct endpoint on the same wire |
 | `headStrip` | drag between two term outputs on one equality wire |
-| `wireSever` | proof slash across concrete endpoint legs; trunks and junctions refuse |
+| `wireSever` | selected-line context menu, explicit `Sever after node/port` endpoint row |
 | `erasure` | contextual Delete/Backspace |
 | `doubleCutElim` | contextual Delete/Backspace |
 | `vacuousElim` | contextual Delete/Backspace |

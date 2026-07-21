@@ -1,8 +1,10 @@
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../../kernel/diagram/boundary'
-import { findOccurrences, occurrenceSelection, type Occurrence } from '../../kernel/diagram/subgraph/match'
+import { findOccurrences, type Occurrence } from '../../kernel/diagram/subgraph/match'
+import { occurrenceToSelection } from '../../kernel/diagram/subgraph/occurrence'
 import { mkSelection } from '../../kernel/diagram/subgraph/selection'
-import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof/step'
+import { applyStep, type ProofStep } from '../../kernel/proof/step'
+import type { ProofContext } from '../../kernel/proof/context'
 import type { PuzzleDefinition } from '../types'
 import { artifactTheoremName } from '../artifact-theorem'
 import type { Hit } from './loupe/hittest'
@@ -110,7 +112,7 @@ export function planArtifactDrop(request: ArtifactDropRequest): ArtifactDropPlan
         name,
         direction: 'reverse',
         at: {
-          sel: occurrenceSelection(theorem.rhs, selected, diagram),
+          sel: occurrenceToSelection(diagram, theorem.rhs, selected),
           args: [...selected.attachments],
         },
       }

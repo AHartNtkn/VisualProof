@@ -16,7 +16,7 @@ import {
   type CopyDestination,
   type CopyPlan,
   type CopyRefusal,
-} from '../../src/app/copy-planner'
+} from '../../src/interaction/copy-planner'
 
 const p = (source: string) => parseTerm(source)
 const ctx: ProofContext = EMPTY_PROOF_CONTEXT

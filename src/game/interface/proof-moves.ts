@@ -1,14 +1,19 @@
+import { portKey, type Diagram, type NodeId, type RegionId, type WireId } from '../../kernel/diagram/diagram'
 import { DiagramBuilder } from '../../kernel/diagram/builder'
-import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import { isAncestorOrEqual, polarity } from '../../kernel/diagram/regions'
-import { findOccurrences } from '../../kernel/diagram/subgraph/match'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../../kernel/diagram/subgraph/selection'
-import { applyStep, type ProofContext, type ProofStep } from '../../kernel/proof/step'
-import type { GameSteps } from '../types'
+import { applyStep, type ProofStep } from '../../kernel/proof/step'
+import type { ProofContext } from '../../kernel/proof/context'
+import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
 import { parseTerm } from '../../kernel/term/parse'
+import { freePorts } from '../../kernel/term/term'
 import { applyConversion } from '../../kernel/rules/conversion'
+import { proposePortCorrespondence } from '../../kernel/rules/port-correspondence'
+import { findDeiterationEvidence } from '../../kernel/rules/iteration'
+import { findInconsistentCutEvidence } from '../../kernel/rules/inconsistent-cut'
+import { RuleError } from '../../kernel/rules/error'
 import { headNormalize, weakHeadNormalize } from '../../kernel/term/hnf'
 import { termNodeAt } from '../../kernel/rules/access'
 import { applyConversionByCertificate } from '../../kernel/rules/conversion'
@@ -18,21 +23,12 @@ import type { Vec2 } from '../../view/vec'
 import { absorbHits, orphanedWires } from './loupe/edit'
 import { buildSelection, type Hit } from './loupe/hittest'
 import type { KeySample, PointerClaim, PointerSample } from './loupe/interact/viewport'
+import { applicableActions, type ActionDescriptor } from '../../interaction/actions'
+import { inferFoldArgs } from '../../interaction/define'
+import { ConnectionDragController } from '../../interaction/controllers/connection'
+import { FissionDragController } from '../../interaction/controllers/fission'
+import { proofConnectionStep } from '../../interaction/proof-connection'
 import './proof-surface.css'
-
-export type GameProofAction =
-  | { readonly kind: 'erase'; readonly label: string }
-  | { readonly kind: 'insert'; readonly label: string }
-  | { readonly kind: 'doubleCutWrap'; readonly label: string }
-  | { readonly kind: 'doubleCutElim'; readonly label: string }
-  | { readonly kind: 'vacuousWrap'; readonly label: string }
-  | { readonly kind: 'vacuousElim'; readonly label: string }
-  | { readonly kind: 'iterate'; readonly label: string }
-  | { readonly kind: 'deiterate'; readonly label: string }
-  | { readonly kind: 'instantiate'; readonly label: string }
-  | { readonly kind: 'convert'; readonly label: string }
-  | { readonly kind: 'relUnfold'; readonly label: string }
-  | { readonly kind: 'relFold'; readonly label: string }
 
 export type GameProofActionInput =
   | { readonly kind: 'term'; readonly source: string }
@@ -42,58 +38,7 @@ export type GameProofActionInput =
   | { readonly kind: 'construction' }
   | { readonly kind: 'relation'; readonly name: string }
 
-/** Read-only affordance discovery. Kernel appliers remain commit authority. */
-export function gameProofActions(
-  diagram: Diagram,
-  selection: SubgraphSelection,
-  context: ProofContext,
-  backward = true,
-): GameProofAction[] {
-  const actions: GameProofAction[] = []
-  const sign = polarity(diagram, selection.region)
-  const eraseSign = backward ? 'negative' : 'positive'
-  const hasContent = selection.nodes.length + selection.regions.length + selection.wires.length > 0
-  if (hasContent && sign === eraseSign) actions.push({ kind: 'erase', label: `Erase (${eraseSign} region)` })
-  if (!hasContent && sign !== eraseSign) actions.push({ kind: 'insert', label: 'Insert…' })
-  actions.push({ kind: 'doubleCutWrap', label: 'Wrap in a double cut' })
-  actions.push({ kind: 'vacuousWrap', label: 'Wrap in a vacuous bubble…' })
-  if (hasContent) {
-    actions.push({ kind: 'iterate', label: 'Iterate by dragging the selection' })
-    actions.push({ kind: 'deiterate', label: 'Deiterate (needs a justifying copy)' })
-  }
-  if (selection.nodes.length === 1 && selection.regions.length === 0
-    && diagram.nodes[selection.nodes[0]!]?.kind === 'term') {
-    actions.push({ kind: 'convert', label: 'Convert (βη)…' })
-  }
-  if (selection.nodes.length === 1 && selection.regions.length === 0 && selection.wires.length === 0) {
-    const node = diagram.nodes[selection.nodes[0]!]
-    if (node?.kind === 'ref' && context.relations.has(node.defId)) {
-      actions.push({ kind: 'relUnfold', label: `Unfold ${node.defId}` })
-    }
-  }
-  if (hasContent && context.relations.size > 0) actions.push({ kind: 'relFold', label: 'Fold into a relation…' })
-  if (selection.regions.length === 1 && selection.nodes.length === 0 && selection.wires.length === 0) {
-    const id = selection.regions[0]!
-    const region = diagram.regions[id]!
-    if (region.kind === 'cut') {
-      const children = Object.values(diagram.regions).filter((candidate) =>
-        candidate.kind !== 'sheet' && candidate.parent === id)
-      const occupied = Object.values(diagram.nodes).some((node) => node.region === id)
-        || Object.values(diagram.wires).some((wire) => wire.scope === id)
-      if (children.length === 1 && children[0]?.kind === 'cut' && !occupied) {
-        actions.push({ kind: 'doubleCutElim', label: 'Eliminate the double cut' })
-      }
-    }
-    if (region.kind === 'bubble') {
-      const bound = Object.values(diagram.nodes).some((node) => node.kind === 'atom' && node.binder === id)
-      if (!bound) actions.push({ kind: 'vacuousElim', label: 'Dissolve the vacuous bubble' })
-      if (bound && polarity(diagram, id) === (backward ? 'positive' : 'negative')) {
-        actions.push({ kind: 'instantiate', label: 'Instantiate the relation…' })
-      }
-    }
-  }
-  return actions
-}
+type ActionSteps = readonly [ProofStep, ...ProofStep[]]
 
 export function proofShortcutStep(sample: KeySample, selection: readonly Hit[]): ProofStep | null {
   if (sample.repeat || sample.ctrlKey || sample.altKey || sample.metaKey || sample.key.toLowerCase() !== 'f') return null
@@ -102,7 +47,7 @@ export function proofShortcutStep(sample: KeySample, selection: readonly Hit[]):
     : null
 }
 
-type Discovery = { readonly selection: SubgraphSelection; readonly actions: readonly GameProofAction[] }
+type Discovery = { readonly selection: SubgraphSelection; readonly actions: readonly ActionDescriptor[] }
 
 export function discoverGameProofActions(
   diagram: Diagram,
@@ -112,7 +57,11 @@ export function discoverGameProofActions(
   if (hits.length === 0) return null
   try {
     const selection = buildSelection(diagram, absorbHits(diagram, hits))
-    return { selection, actions: gameProofActions(diagram, selection, context, true) }
+    return {
+      selection,
+      actions: applicableActions(diagram, selection, context, true)
+        .filter((action) => action.kind !== 'citeTheorem'),
+    }
   } catch {
     return null
   }
@@ -127,7 +76,7 @@ export function vacuousEliminationChainSteps(
   diagram: Diagram,
   hits: readonly Hit[],
   context: ProofContext,
-): GameSteps | null {
+): ActionSteps | null {
   if (hits.length < 2 || hits.some((hit) => hit.kind !== 'region')) return null
   const selected = hits.map((hit) => hit.id)
   if (new Set(selected).size !== selected.length) return null
@@ -156,7 +105,7 @@ export function vacuousEliminationChainSteps(
 
   const [deepest, ...remaining] = outerToInner.reverse()
   if (deepest === undefined) return null
-  const steps: GameSteps = [
+  const steps: ActionSteps = [
     { rule: 'vacuousElim', region: deepest },
     ...remaining.map((region): ProofStep => ({ rule: 'vacuousElim', region })),
   ]
@@ -180,11 +129,25 @@ const erasureSelection = (diagram: Diagram, selection: SubgraphSelection): Subgr
 }
 
 const deletionStep = (diagram: Diagram, discovery: Discovery, fuel: number): ProofStep | null => {
-  const has = (kind: GameProofAction['kind']): boolean => discovery.actions.some((action) => action.kind === kind)
+  const has = (kind: ActionDescriptor['kind']): boolean => discovery.actions.some((action) => action.kind === kind)
   if (has('doubleCutElim')) return { rule: 'doubleCutElim', region: discovery.selection.regions[0]! }
   if (has('vacuousElim')) return { rule: 'vacuousElim', region: discovery.selection.regions[0]! }
+  if (has('inconsistentCutElim')) {
+    const result = findInconsistentCutEvidence(diagram, discovery.selection.regions[0]!, fuel)
+    if (result.status === 'undecided') throw new RuleError('inconsistency is undecided under the current fuel')
+    if (result.status === 'certified') return {
+      rule: 'inconsistentCutElim', region: discovery.selection.regions[0]!,
+      first: result.first, second: result.second, certificate: result.certificate,
+    }
+  }
   if (has('erase')) return { rule: 'erasure', sel: erasureSelection(diagram, discovery.selection) }
-  if (has('deiterate')) return { rule: 'deiteration', sel: discovery.selection, fuel }
+  if (has('deiterate')) {
+    return {
+      rule: 'deiteration',
+      sel: discovery.selection,
+      ...findDeiterationEvidence(diagram, discovery.selection, fuel),
+    }
+  }
   return null
 }
 
@@ -223,43 +186,21 @@ const foldedComprehension = (context: ProofContext, name: string): DiagramWithBo
   return mkDiagramWithBoundary(builder.build(), boundary)
 }
 
-const inferFoldArgs = (
-  diagram: Diagram,
-  selection: SubgraphSelection,
-  name: string,
-  context: ProofContext,
-): WireId[] => {
-  const body = context.relations.get(name)
-  if (body === undefined) throw new Error(`unknown relation '${name}'`)
-  const coveredNodes = new Set(selection.nodes)
-  const coveredRegions = new Set<RegionId>()
-  const walk = (region: RegionId): void => {
-    coveredRegions.add(region)
-    for (const [id, child] of Object.entries(diagram.regions)) {
-      if (child.kind !== 'sheet' && child.parent === region) walk(id)
-    }
-  }
-  for (const region of selection.regions) walk(region)
-  for (const [id, node] of Object.entries(diagram.nodes)) if (coveredRegions.has(node.region)) coveredNodes.add(id)
-  for (const occurrence of findOccurrences(diagram, body, {
-    fuel: 64,
-    inRegion: selection.region,
-    mode: 'exact',
-  }).matches) {
-    const mapped = new Set(occurrence.nodeMap.values())
-    if (mapped.size === coveredNodes.size && [...coveredNodes].every((node) => mapped.has(node))) {
-      return [...occurrence.attachments]
-    }
-  }
-  throw new Error(`the selection is not an exact occurrence of '${name}'`)
-}
-
 const normalizeStep = (diagram: Diagram, node: NodeId, fuel: number, weak: boolean): ProofStep => {
+  const current = termNodeAt(diagram, node)
   const result = weak ? weakHeadNormalize(termNodeAt(diagram, node).term, fuel) : headNormalize(termNodeAt(diagram, node).term, fuel)
   if (result.steps.length === 0) throw new Error(`the term is already in ${weak ? 'weak ' : ''}head-normal form`)
   const certificate = { leftSteps: result.steps, rightSteps: [] }
-  const step: ProofStep = { rule: 'conversion', node, term: result.term, certificate, attachments: {} }
-  applyConversionByCertificate(diagram, node, result.term, certificate, {})
+  const correspondence = proposePortCorrespondence(
+    current.term,
+    result.term,
+    current.freePorts,
+    freePorts(result.term),
+  )
+  const step: ProofStep = {
+    rule: 'conversion', node, term: result.term, certificate, correspondence, attachments: {},
+  }
+  applyConversionByCertificate(diagram, node, result.term, certificate, correspondence, {})
   return step
 }
 
@@ -268,10 +209,11 @@ export type GameProofMoveOptions = {
   readonly active: () => boolean
   readonly diagram: () => Diagram
   readonly engine: () => Engine
+  readonly viewScale: () => number
   readonly selection: () => readonly Hit[]
   readonly setSelection: (selection: readonly Hit[]) => void
   readonly context: () => ProofContext
-  readonly apply: (steps: GameSteps) => void
+  readonly apply: (action: ProofAction) => void
   readonly refuse: (text: string, pointer: Vec2) => void
   readonly theme: () => Theme
   readonly fuel: () => number
@@ -290,6 +232,8 @@ const sameHit = (a: Hit, b: Hit): boolean => a.kind === b.kind && a.id === b.id
 export class GameProofMoveController {
   readonly #options: GameProofMoveOptions
   readonly #document: Document
+  readonly #connection: ConnectionDragController
+  readonly #fission: FissionDragController
   #menu: HTMLDivElement | null = null
   #prompt: HTMLDivElement | null = null
   #drag: IterationDrag | null = null
@@ -298,6 +242,37 @@ export class GameProofMoveController {
   constructor(options: GameProofMoveOptions) {
     this.#options = options
     this.#document = options.host.ownerDocument
+    this.#connection = new ConnectionDragController({
+      active: options.active,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: (source, target, pointer) => {
+        try {
+          this.#commit(proofConnectionStep(
+            options.diagram(), source, target, 'backward', options.fuel(),
+          ))
+          return true
+        } catch (error) {
+          options.refuse(error instanceof Error ? error.message : String(error), pointer)
+          return false
+        }
+      },
+      refuse: options.refuse,
+    })
+    this.#fission = new FissionDragController({
+      active: options.active,
+      diagram: options.diagram,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: ({ node, path, at }) => this.#commitAction({
+        label: 'fission',
+        steps: [{ rule: 'fission', node, path }],
+        placements: [{ introducedNode: 0, x: at.x, y: at.y }],
+      }),
+      refuse: options.refuse,
+    })
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -305,6 +280,10 @@ export class GameProofMoveController {
     if (!this.#options.active() || sample.button !== 0) return null
     if (this.#menu !== null) this.#closeMenu()
     if (sample.shiftKey || sample.ctrlKey) return null
+    const connection = this.#connection.claim(sample)
+    if (connection !== null) return connection
+    const fission = this.#fission.claim(sample)
+    if (fission !== null) return fission
     if (sample.hit === null
       || !this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) return null
     const discovery = discoverGameProofActions(
@@ -418,7 +397,13 @@ export class GameProofMoveController {
       return true
     }
     if (sample.key === 'Delete' || sample.key === 'Backspace') {
-      const step = deletionStep(this.#options.diagram(), discovery, this.#options.fuel())
+      let step: ProofStep | null
+      try {
+        step = deletionStep(this.#options.diagram(), discovery, this.#options.fuel())
+      } catch (error) {
+        this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer)
+        return true
+      }
       if (step === null) this.#options.refuse('nothing here reads as a deletion', this.#lastPointer)
       else this.#commit(step)
       return true
@@ -430,7 +415,7 @@ export class GameProofMoveController {
 
   /** Shared behavioral dispatcher used by rendered menu routes and focused tests. */
   invokeAction(
-    action: GameProofAction,
+    action: ActionDescriptor,
     selection: SubgraphSelection,
     input?: GameProofActionInput,
   ): boolean {
@@ -438,20 +423,11 @@ export class GameProofMoveController {
       case 'erase':
         this.#commit({ rule: 'erasure', sel: erasureSelection(this.#options.diagram(), selection) })
         return true
-      case 'insert':
-        if (input?.kind !== 'term') { this.#openTermInsertion(selection.region); return true }
-        this.#commit(this.#termInsertionStep(selection.region, input.source))
-        return true
       case 'doubleCutWrap':
         this.#commit({ rule: 'doubleCutIntro', sel: selection })
         return true
       case 'doubleCutElim':
         this.#commit({ rule: 'doubleCutElim', region: selection.regions[0]! })
-        return true
-      case 'vacuousWrap':
-        if (input?.kind !== 'arity') { this.#openArityPrompt(selection); return true }
-        if (!Number.isInteger(input.arity) || input.arity < 0) throw new Error(`'${input.arity}' is not a valid arity`)
-        this.#commit({ rule: 'vacuousIntro', sel: selection, arity: input.arity })
         return true
       case 'vacuousElim':
         this.#commit({ rule: 'vacuousElim', region: selection.regions[0]! })
@@ -461,14 +437,27 @@ export class GameProofMoveController {
         this.#commit({ rule: 'iteration', sel: selection, target: input.region })
         return true
       case 'deiterate':
-        this.#commit({ rule: 'deiteration', sel: selection, fuel: this.#options.fuel() })
+        this.#commit({
+          rule: 'deiteration',
+          sel: selection,
+          ...findDeiterationEvidence(this.#options.diagram(), selection, this.#options.fuel()),
+        })
         return true
       case 'convert': {
         if (input?.kind !== 'conversion') return false
         const node = selection.nodes[0]!
         const term = parseTerm(input.source)
-        const conversion = applyConversion(this.#options.diagram(), node, term, this.#options.fuel())
-        this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, attachments: {} })
+        const current = termNodeAt(this.#options.diagram(), node)
+        const correspondence = proposePortCorrespondence(
+          current.term, term, current.freePorts, freePorts(term),
+        )
+        const conversion = applyConversion(
+          this.#options.diagram(), node, term, correspondence, this.#options.fuel(),
+        )
+        this.#commit({
+          rule: 'conversion', node, term,
+          certificate: conversion.certificate, correspondence, attachments: {},
+        })
         return true
       }
       case 'instantiate': {
@@ -480,7 +469,32 @@ export class GameProofMoveController {
         if (input?.kind !== 'relation') return false
         this.#commit({
           rule: 'comprehensionInstantiate', bubble,
-          comp: foldedComprehension(this.#options.context(), input.name), attachments: [], binders: {},
+          comp: foldedComprehension(this.#options.context(), input.name), attachments: [], binders: [],
+        })
+        return true
+      }
+      case 'abstractWrap': {
+        if (input?.kind !== 'relation') return false
+        const comp = this.#options.context().relations.get(input.name)
+        if (comp === undefined) throw new Error(`unknown relation '${input.name}'`)
+        const args = inferFoldArgs(
+          this.#options.diagram(), selection, input.name, this.#options.context(),
+        )
+        this.#commit({
+          rule: 'comprehensionAbstract', wrap: selection, comp,
+          occurrences: [{ sel: selection, args }],
+        })
+        return true
+      }
+      case 'inconsistentCutElim': {
+        const result = findInconsistentCutEvidence(
+          this.#options.diagram(), selection.regions[0]!, this.#options.fuel(),
+        )
+        if (result.status === 'undecided') throw new RuleError('inconsistency is undecided under the current fuel')
+        if (result.status === 'absent') throw new RuleError('no inconsistent pair was found in the selected cut')
+        this.#commit({
+          rule: 'inconsistentCutElim', region: selection.regions[0]!,
+          first: result.first, second: result.second, certificate: result.certificate,
         })
         return true
       }
@@ -494,14 +508,17 @@ export class GameProofMoveController {
           args: inferFoldArgs(this.#options.diagram(), selection, input.name, this.#options.context()),
         })
         return true
+      case 'citeTheorem':
+        return false
     }
   }
 
   overlay(): readonly Shape[] {
     const drag = this.#drag
-    if (drag === null || !drag.moved) return []
+    const shared = [...this.#connection.overlay(), ...this.#fission.overlay()]
+    if (drag === null || !drag.moved) return shared
     const color = this.#options.theme().interaction.valid
-    return drag.targets.flatMap((region) => {
+    return [...shared, ...drag.targets.flatMap((region) => {
       if (this.#options.diagram().regions[region]?.kind === 'sheet') return []
       const geometry = this.#options.engine().regions.get(region)
       return geometry === undefined ? [] : [{
@@ -514,24 +531,30 @@ export class GameProofMoveController {
         insetColor: null,
         glow: null,
       }]
-    })
+    })]
   }
 
   cancel(): void {
     this.#closeMenu()
     this.#closePrompt()
     this.#drag = null
+    this.#connection.cancel()
+    this.#fission.cancel()
   }
 
-  dispose(): void { this.cancel() }
+  dispose(): void { this.cancel(); this.#fission.dispose() }
 
   #commit(step: ProofStep): void {
-    this.#commitSteps([step])
+    this.#commitAction(singleStepAction(step.rule, step))
   }
 
-  #commitSteps(steps: GameSteps): void {
+  #commitSteps(steps: ActionSteps): void {
+    this.#commitAction({ label: steps.map(({ rule }) => rule).join(' + '), steps, placements: [] })
+  }
+
+  #commitAction(action: ProofAction): void {
     try {
-      this.#options.apply(steps)
+      this.#options.apply(action)
       this.#options.setSelection([])
       this.#closeMenu()
       this.#closePrompt()
@@ -559,17 +582,29 @@ export class GameProofMoveController {
       menu.append(element)
     }
     const diagram = this.#options.diagram()
+    row('Seal operations', null)
+    if (hits.length === 1 && hits[0]?.kind === 'wire') {
+      this.#appendWireActions(row, hits[0].id)
+      if (menu.childElementCount <= 1) return
+      this.#menu = menu
+      this.#options.host.append(menu)
+      return
+    }
     const discovery = hits.length === 0
       ? (() => {
           const selection = mkSelection(diagram, {
             region: regionAt(this.#options.engine(), diagram, sample.world),
             regions: [], nodes: [], wires: [],
           })
-          return { selection, actions: gameProofActions(diagram, selection, this.#options.context(), true) }
+          return {
+            selection,
+            actions: applicableActions(diagram, selection, this.#options.context(), true)
+              .filter((action) => action.kind !== 'citeTheorem'),
+          }
         })()
       : discoverGameProofActions(diagram, hits, this.#options.context())
     if (discovery === null) return
-    row('Seal operations', null)
+    if (hits.length === 0) this.#appendSpawnActions(row, discovery.selection.region)
     for (const action of discovery.actions) this.#appendAction(row, action, discovery.selection)
     if (menu.childElementCount <= 1) return
     this.#menu = menu
@@ -578,20 +613,25 @@ export class GameProofMoveController {
 
   #appendAction(
     row: (label: string, run: (() => void) | null) => void,
-    action: GameProofAction,
+    action: ActionDescriptor,
     selection: SubgraphSelection,
   ): void {
     switch (action.kind) {
       case 'erase':
-      case 'insert':
       case 'doubleCutWrap':
       case 'doubleCutElim':
-      case 'vacuousWrap':
       case 'vacuousElim':
       case 'deiterate':
+      case 'inconsistentCutElim':
       case 'relUnfold': row(action.label, () => { this.invokeAction(action, selection) }); return
       case 'iterate': row(action.label, null); return
       case 'convert': this.#appendConversions(row, selection.nodes[0]!); return
+      case 'abstractWrap': {
+        for (const name of this.#options.context().relations.keys()) row(`Abstract as ${name}`, () => {
+          this.invokeAction(action, selection, { kind: 'relation', name })
+        })
+        return
+      }
       case 'instantiate': {
         const bubble = selection.regions[0]!
         const value = this.#options.diagram().regions[bubble]!
@@ -611,7 +651,55 @@ export class GameProofMoveController {
         for (const name of this.#options.context().relations.keys()) row(`Fold into ${name}`, () => {
           this.invokeAction(action, selection, { kind: 'relation', name })
         })
+        return
       }
+      case 'citeTheorem': return
+    }
+  }
+
+  #appendSpawnActions(row: (label: string, run: (() => void) | null) => void, region: RegionId): void {
+    if (polarity(this.#options.diagram(), region) !== 'positive') return
+    row('Spawn', null)
+    row('Term…', () => this.#openTermSpawn(region))
+    for (const [name, relation] of this.#options.context().relations) {
+      row(`Relation ${name}`, () => this.#commit({
+        rule: 'relationSpawn', region, defId: name, arity: relation.boundary.length,
+      }))
+    }
+    for (const [binder, value] of Object.entries(this.#options.diagram().regions)) {
+      if (value.kind !== 'bubble' || !isAncestorOrEqual(this.#options.diagram(), binder, region)) continue
+      row(`Bound predicate ${binder}`, () => this.#commit({
+        rule: 'boundRelationSpawn', region, binder, arity: value.arity,
+      }))
+    }
+  }
+
+  #appendWireActions(row: (label: string, run: (() => void) | null) => void, wireId: WireId): void {
+    const diagram = this.#options.diagram()
+    const wire = diagram.wires[wireId]
+    if (wire === undefined) return
+    row('Line operations', null)
+    wire.endpoints.slice(0, -1).forEach((endpoint, index) => {
+      const step: ProofStep = {
+        rule: 'wireSever', wire: wireId, keep: wire.endpoints.slice(0, index + 1),
+      }
+      try { applyStep(diagram, step, this.#options.context(), 'backward') }
+      catch { return }
+      row(`Sever after ${endpoint.node}/${portKey(endpoint.port)}`, () => this.#commit(step))
+    })
+    const witnesses = wire.endpoints.filter((endpoint) => {
+      const node = diagram.nodes[endpoint.node]
+      return endpoint.port.kind === 'output' && node?.kind === 'term' && node.freePorts.length === 0
+    })
+    for (const witness of witnesses) for (const endpoint of wire.endpoints) {
+      if (endpoint.node === witness.node && portKey(endpoint.port) === portKey(witness.port)) continue
+      const step: ProofStep = {
+        rule: 'anchoredWireSplit', wire: wireId, witness: witness.node,
+        endpoints: [endpoint], target: diagram.nodes[endpoint.node]!.region,
+      }
+      try { applyStep(diagram, step, this.#options.context(), 'backward') }
+      catch { continue }
+      row(`Split ${endpoint.node}/${portKey(endpoint.port)} from ${witness.node}`, () => this.#commit(step))
     }
   }
 
@@ -619,24 +707,32 @@ export class GameProofMoveController {
     row('Normalize (also: double-click)', () => this.#commit(normalizeStep(this.#options.diagram(), node, this.#options.fuel(), false)))
     row('Convert to custom target…', () => this.#openTextPrompt('Conversion target', (value) => {
       const term = parseTerm(value)
-      const conversion = applyConversion(this.#options.diagram(), node, term, this.#options.fuel())
-      this.#commit({ rule: 'conversion', node, term, certificate: conversion.certificate, attachments: {} })
+      const current = termNodeAt(this.#options.diagram(), node)
+      const correspondence = proposePortCorrespondence(
+        current.term, term, current.freePorts, freePorts(term),
+      )
+      const conversion = applyConversion(
+        this.#options.diagram(), node, term, correspondence, this.#options.fuel(),
+      )
+      this.#commit({
+        rule: 'conversion', node, term,
+        certificate: conversion.certificate, correspondence, attachments: {},
+      })
     }))
   }
 
-  #openTermInsertion(region: RegionId): void {
-    this.#openTextPrompt('Insertion term', (value) => {
-      this.#commit(this.#termInsertionStep(region, value))
+  #openTermSpawn(region: RegionId): void {
+    this.#openTextPrompt('Spawn term', (value) => {
+      this.#commit(this.#termSpawnStep(region, value))
     })
   }
 
-  #termInsertionStep(region: RegionId, source: string): ProofStep {
-    const builder = new DiagramBuilder()
-    builder.termNode(builder.root, parseTerm(source))
-    return {
-      rule: 'insertion', region,
-      pattern: mkDiagramWithBoundary(builder.build(), []), attachments: [], binders: {},
-    }
+  #termSpawnStep(region: RegionId, source: string): ProofStep {
+    const term = parseTerm(source)
+    const declared = freePorts(term)
+    return declared.length === 0
+      ? { rule: 'closedTermIntro', region, term }
+      : { rule: 'openTermSpawn', region, term, freePorts: declared }
   }
 
   #openArityPrompt(selection: SubgraphSelection): void {

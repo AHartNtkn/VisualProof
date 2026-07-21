@@ -14,13 +14,13 @@ import { adaptCanvas, type CanvasAdapter } from '../view/canvas'
 import { seedProject } from '../view/relax'
 import { existentialStubs, legPaths } from '../view/wires'
 import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
-import { wireHitTest, type Hit } from './hittest'
+import { wireHitTest, type Hit } from '../interaction/hittest'
 import { ConstructController } from './interact/construct'
-import { CopyDragController, copyDestinationPreview } from './interact/copy'
-import type { CopyDestination, CopyPlan } from './copy-planner'
+import { CopyDragController, copyDestinationPreview } from '../interaction/controllers/copy'
+import type { CopyDestination, CopyPlan } from '../interaction/copy-planner'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
 import { introducedNodeId } from './interact/closed-term-intro'
-import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from './interact/viewport'
+import { InteractiveViewport, type KeySample, type MutableView, type PointerClaim, type PointerSample } from '../interaction/controllers/viewport'
 import {
   applyRelationConnection,
   beginSubstitutionDraft,

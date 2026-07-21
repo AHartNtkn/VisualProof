@@ -22,7 +22,7 @@ import {
   type FixedSideGeometry,
 } from './fixed-side-layout'
 import { ProofFrontViewport, type ProofFrontDebugState } from './proof-front'
-import type { KeySample } from './interact/viewport'
+import type { KeySample } from '../interaction/controllers/viewport'
 import type { MotionPreferences } from './interact/motion'
 import { proofSnapshot, type ProofSnapshot } from './proof-snapshot'
 import { seedActionHistoryPlacements } from './proof-placement'

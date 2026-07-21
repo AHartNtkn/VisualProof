@@ -9,11 +9,11 @@ import {
   FissionDragController,
   fissionHit,
   type FissionRequest,
-} from '../../src/app/interact/fission'
-import type { PointerSample } from '../../src/app/interact/viewport'
+} from '../../src/interaction/controllers/fission'
+import type { PointerSample } from '../../src/interaction/controllers/viewport'
 import { ConstructController } from '../../src/app/interact/construct'
 import { ProofMoveController } from '../../src/app/interact/moves'
-import { wireHitTest } from '../../src/app/hittest'
+import { wireHitTest } from '../../src/interaction/hittest'
 import { applyFission, applyFusion } from '../../src/kernel/rules/fusion'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 

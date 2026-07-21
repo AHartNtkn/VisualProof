@@ -1,5 +1,5 @@
 import { polarity } from '../../kernel/diagram/regions'
-import type { GameSteps } from '../types'
+import type { ProofAction } from '../../kernel/proof/action'
 import { DARK } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
 import { artifactTheoremContext } from '../artifact-theorem'
@@ -272,7 +272,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
 
   #activeSession(state: GameControllerState): GameSession | null {
     if (state.mode !== 'puzzle' || state.activePuzzle === null) return null
-    return (state.completed.has(state.activePuzzle)
+    return (state.completedArtifacts.has(state.activePuzzle)
       ? state.replays
       : state.firstAttempts).get(state.activePuzzle) ?? null
   }
@@ -311,7 +311,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       ...current,
       mode: authoritative.mode,
       activePuzzle: authoritative.activePuzzle,
-      completed: authoritative.completed,
+      completedArtifacts: authoritative.completedArtifacts,
       firstAttempts: authoritative.firstAttempts,
       replays: authoritative.replays,
       deliveredGuidance: authoritative.deliveredGuidance,
@@ -441,14 +441,14 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       overlayHost: this.#environment.element,
       diagram: () => currentDiagram(this.#requireActiveSession()),
       boundary: () => [],
-      context: () => artifactTheoremContext(this.#catalog, this.#state.completed),
+      context: () => artifactTheoremContext(this.#catalog, this.#state.completedArtifacts),
       orientation: () => 'backward',
       theme: () => DARK,
       fuel: () => 256,
-      prepare: (steps: GameSteps) => {
+      prepare: (action: ProofAction) => {
         const preparedFrom = this.#state
         const prepared = reduceGame(this.#catalog, preparedFrom, {
-          kind: 'applySteps', steps,
+          kind: 'applyProofAction', action,
         })
         return () => this.#commitPreparedSteps(preparedFrom, prepared)
       },

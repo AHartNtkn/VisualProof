@@ -1,5 +1,7 @@
 import type { Diagram, RegionId, WireId } from '../../kernel/diagram/diagram'
-import type { ProofContext, ProofStep } from '../../kernel/proof/step'
+import type { ProofStep } from '../../kernel/proof/step'
+import { singleStepAction, type ProofAction } from '../../kernel/proof/action'
+import type { ProofContext } from '../../kernel/proof/context'
 import type { Engine } from '../../view/engine'
 import { carryOver, mkEngine } from '../../view/engine'
 import { seedProject } from '../../view/relax'
@@ -8,7 +10,7 @@ import { highlightGroup, paint } from '../../view/paint'
 import { drawShapes } from '../../view/canvas'
 import { existentialStubs, legPaths } from '../../view/wires'
 import type { Vec2 } from '../../view/vec'
-import type { GameSteps, PuzzleDefinition } from '../types'
+import type { PuzzleDefinition } from '../types'
 import { planArtifactDrop, type ArtifactDropPlan, type ArtifactDropTarget } from './artifact-drop'
 import { ConstructionLoupe, type ConstructionLoupeDebug } from './construction-loupe'
 import { hitTest, type Hit } from './loupe/hittest'
@@ -83,7 +85,7 @@ export type GameProofViewportModel = {
   orientation(): 'forward' | 'backward'
   theme(): Theme
   fuel(): number
-  prepare(steps: GameSteps): () => void
+  prepare(action: ProofAction): () => void
   motionPreferences(): ProofMotionPreferences
   inputAllowed(): boolean
   refuse(text: string, pointer: Vec2): void
@@ -160,10 +162,11 @@ export class GameProofViewport {
       active: () => this.#inputAllowed(),
       diagram: model.diagram,
       engine: () => this.#engine,
+      viewScale: () => this.view.scale,
       selection: () => this.interaction.selection,
       setSelection: (selection) => this.interaction.setSelection(selection),
       context: model.context,
-      apply: (steps) => this.#applySteps(steps),
+      apply: (action) => this.#applyAction(action),
       refuse: model.refuse,
       theme: model.theme,
       fuel: model.fuel,
@@ -397,12 +400,14 @@ export class GameProofViewport {
   }
 
   #apply(step: ProofStep): void {
-    this.#applySteps([step])
+    this.#applyAction(singleStepAction(step.rule, step))
   }
 
-  #applySteps(steps: GameSteps): void {
-    const commit = this.#model.prepare(steps)
-    this.motion.run(steps[0], () => {
+  #applyAction(action: ProofAction): void {
+    const commit = this.#model.prepare(action)
+    const first = action.steps[0]
+    if (first === undefined) throw new Error('proof action must contain at least one step')
+    this.motion.run(first, () => {
       commit()
       this.reconcileDiagram()
     }, this.#window.performance.now())

@@ -8,7 +8,7 @@ import { mkEngine, frameBounds, frameSlots } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, bubbleHues, highlightGroup, LIGHT, DARK } from '../../src/view/paint'
 import { computeLegs } from '../../src/view/wires'
-import { addBubble } from '../../src/app/edit'
+import { addBubble } from '../../src/interaction/edit'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 
 const p = (s: string) => parseTerm(s)

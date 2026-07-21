@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { applyRelFold } from '../../src/kernel/rules/reldef'
-import { defineRelation } from '../../src/app/define'
+import { defineRelation } from '../../src/interaction/define'
 import { mkEngine, settle, paint, LIGHT, DISC_R } from '../../src/view/index'
 import { sheetBody, emptyCtx } from '../app/relationFixture'
 

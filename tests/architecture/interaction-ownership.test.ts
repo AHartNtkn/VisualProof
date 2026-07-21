@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const shellSource = readFileSync('src/app/shell.ts', 'utf8')
-const viewportSource = readFileSync('src/app/interact/viewport.ts', 'utf8')
+const viewportSource = readFileSync('src/interaction/controllers/viewport.ts', 'utf8')
 const constructSource = readFileSync('src/app/interact/construct.ts', 'utf8')
 const spawnSource = readFileSync('src/app/interact/spawn.ts', 'utf8')
 const movesSource = readFileSync('src/app/interact/moves.ts', 'utf8')
@@ -38,7 +38,7 @@ describe('production interaction ownership', () => {
     for (const event of canvasInteractionEvents) {
       expect(
         listenerPattern(event).test(viewportSource),
-        `src/app/interact/viewport.ts must install a ${event} listener`,
+        `src/interaction/controllers/viewport.ts must install a ${event} listener`,
       ).toBe(true)
     }
     for (const event of ['keydown', 'keyup']) {

@@ -1,6 +1,7 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
 import { parseTerm } from '../../kernel/term/parse'
-import type { ProofContext, ProofStep } from '../../kernel/proof/step'
+import type { ProofStep } from '../../kernel/proof/step'
+import type { ProofContext } from '../../kernel/proof/context'
 import { carryOver, mkEngine, resolvedFrameSlot, type Engine } from '../../view/engine'
 import { bubbleHues, paint, type Shape, type Theme } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
@@ -102,7 +103,7 @@ export function constructionInstantiationStep(draft: ComprehensionDraft): ProofS
     rule: 'comprehensionInstantiate', bubble: draft.bubble,
     comp: materialized.relation,
     attachments: materialized.attachments,
-    binders: {},
+    binders: [],
   }
 }
 
@@ -365,7 +366,7 @@ export class ConstructionLoupe {
     shapes.push(...this.#construct.overlay(), ...this.#connectionShapes('draft'))
     const slot = resolvedFrameSlot(this.#engine, 0)
     if (slot !== null) shapes.push({ kind: 'dot', center: slot.point, rPx: 8, fill: theme.interaction.selection })
-    this.#surface.render(shapes, this.#view)
+    this.#surface.render({ layers: [{ shapes }] }, this.#view)
     this.#renderGesture()
   }
 

@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkEngine } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, LIGHT } from '../../src/view/paint'
-import { hitTest, dragTarget } from '../../src/app/hittest'
+import { hitTest, dragTarget } from '../../src/interaction/hittest'
 
 /**
  * An empty leaf region carries an invisible ANCHOR body (its positional state
