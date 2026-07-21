@@ -14,6 +14,7 @@ import type { ActionDescriptor } from '../../src/interaction/actions'
 import { FakeDocument, FakeElement } from './interface-fake-dom'
 import {
   GameProofMoveController,
+  selectedHeadStripStep,
   vacuousEliminationChainSteps,
   type GameProofActionInput,
 } from '../../src/game/interface/proof-moves'
@@ -107,6 +108,53 @@ describe('actual game proof controller routes', () => {
       rule: 'headStrip', a, b,
       correspondence: { commonArity: 0, left: {}, right: {} },
     }])
+  })
+
+  it.each(['Delete', 'Backspace'])('%s head-strips when the selected equation includes its wire', (pressed) => {
+    const builder = new DiagramBuilder()
+    const a = builder.termNode(builder.root, parseTerm('\\x. x'))
+    const b = builder.termNode(builder.root, parseTerm('\\x. x'))
+    const equation = builder.wire(builder.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: b, port: { kind: 'output' } },
+    ])
+    const diagram = builder.build()
+    const applied: ProofAction[] = []
+    const selection = { value: [
+      { kind: 'node' as const, id: a },
+      { kind: 'wire' as const, id: equation },
+      { kind: 'node' as const, id: b },
+    ] }
+    const controller = controllerFor(diagram, selection, applied, [])
+
+    expect(controller.keyDown(key({ key: pressed }))).toBe(true)
+    expect(stepsFrom(applied)).toEqual([{
+      rule: 'headStrip', a, b,
+      correspondence: { commonArity: 0, left: {}, right: {} },
+    }])
+  })
+
+  it('does not treat an unrelated selected wire as part of headstrip', () => {
+    const builder = new DiagramBuilder()
+    const a = builder.termNode(builder.root, parseTerm('\\x. x'))
+    const b = builder.termNode(builder.root, parseTerm('\\x. x'))
+    builder.wire(builder.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: b, port: { kind: 'output' } },
+    ])
+    const c = builder.termNode(builder.root, parseTerm('\\x. x'))
+    const d = builder.termNode(builder.root, parseTerm('\\x. x'))
+    const unrelated = builder.wire(builder.root, [
+      { node: c, port: { kind: 'output' } },
+      { node: d, port: { kind: 'output' } },
+    ])
+    const diagram = builder.build()
+
+    expect(selectedHeadStripStep(diagram, [
+      { kind: 'node', id: a },
+      { kind: 'node', id: b },
+      { kind: 'wire', id: unrelated },
+    ], EMPTY_PROOF_CONTEXT)).toBeNull()
   })
 
   it('recognizes only a gapless nested chain of selected vacuous bubble rims, deepest first', () => {

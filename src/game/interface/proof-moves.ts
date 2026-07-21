@@ -12,7 +12,7 @@ import { proposePortCorrespondence } from '../../kernel/rules/port-correspondenc
 import { findInconsistentCutEvidence } from '../../kernel/rules/inconsistent-cut'
 import { RuleError } from '../../kernel/rules/error'
 import { headNormalize, weakHeadNormalize } from '../../kernel/term/hnf'
-import { termNodeAt } from '../../kernel/rules/access'
+import { termNodeAt, wireAt } from '../../kernel/rules/access'
 import { applyConversionByCertificate } from '../../kernel/rules/conversion'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
@@ -56,10 +56,17 @@ export function selectedHeadStripStep(
   hits: readonly Hit[],
   context: ProofContext,
 ): ProofStep | null {
-  if (hits.length !== 2 || hits.some((hit) => hit.kind !== 'node')) return null
-  const [a, b] = hits.map((hit) => hit.id)
-  if (a === undefined || b === undefined
+  const nodes = hits.filter((hit): hit is Extract<Hit, { kind: 'node' }> => hit.kind === 'node')
+  const wires = hits.filter((hit): hit is Extract<Hit, { kind: 'wire' }> => hit.kind === 'wire')
+  if (nodes.length !== 2 || wires.length > 1 || nodes.length + wires.length !== hits.length) return null
+  const [a, b] = nodes.map((hit) => hit.id)
+  if (a === undefined || b === undefined || a === b
     || diagram.nodes[a]?.kind !== 'term' || diagram.nodes[b]?.kind !== 'term') return null
+  if (wires.length === 1) {
+    const selectedWire = wires[0]!.id
+    if (wireAt(diagram, a, { kind: 'output' }) !== selectedWire
+      || wireAt(diagram, b, { kind: 'output' }) !== selectedWire) return null
+  }
   const step: ProofStep = {
     rule: 'headStrip', a, b,
     correspondence: proposeAttachedPortCorrespondence(diagram, a, b),
