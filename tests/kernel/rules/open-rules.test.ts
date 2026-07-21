@@ -2,10 +2,8 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
-import { applyInsertion } from '../../../src/kernel/rules/insertion'
+import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyVacuousBubbleIntro, applyVacuousBubbleElim } from '../../../src/kernel/rules/vacuous'
 
 const p = (s: string) => parseTerm(s)
@@ -38,7 +36,8 @@ describe('open iteration / deiteration', () => {
         Object.entries(iterated.wires).filter(([, wv]) =>
           wv.scope === cut).map(([id]) => id),
     })
-    const back = applyDeiteration(iterated, copySel, 100)
+    const evidence = findDeiterationEvidence(iterated, copySel, 100)
+    const back = applyDeiteration(iterated, copySel, evidence.justifier, evidence.certificate)
     expect(exploreForm(back)).toBe(exploreForm(d))
   })
 
@@ -67,43 +66,7 @@ describe('open iteration / deiteration', () => {
     const d = h.build()
     // only ONE R-application exists: deiterating it must fail (no justifier)
     const sel = mkSelection(d, { region: rB, regions: [], nodes: [n1, a1], wires: [] })
-    expect(() => applyDeiteration(d, sel, 100)).toThrowError(/no justifying occurrence/)
-  })
-})
-
-describe('open insertion', () => {
-  it('inserts R-referencing content at a negative region inside the binder', () => {
-    const h = new DiagramBuilder()
-    const cut1 = h.cut(h.root)
-    const rB = h.bubble(cut1, 1)
-    const d = h.build()
-    // pattern: stub(1)[ id-node + atom on a shared wire ]
-    const b = new DiagramBuilder()
-    const stub = b.bubble(b.root, 1)
-    const bn = b.termNode(stub, p('\\x. x'))
-    const ba = b.atom(stub, stub)
-    b.wire(stub, [
-      { node: bn, port: { kind: 'output' } },
-      { node: ba, port: { kind: 'arg', index: 0 } },
-    ])
-    const pattern = mkDiagramWithBoundary(b.build(), [])
-    const out = applyInsertion(d, rB, pattern, [], new Map([[stub, rB]]))
-    const atoms = Object.values(out.nodes).filter((x) => x.kind === 'atom')
-    expect(atoms).toHaveLength(1)
-    expect(atoms[0]!.kind === 'atom' && atoms[0]!.binder).toBe(rB)
-    expect(atoms[0]!.region).toBe(rB)
-  })
-
-  it('still gates on the negative region with binder maps in play', () => {
-    const h = new DiagramBuilder()
-    const rB = h.bubble(h.root, 1) // positive position
-    const d = h.build()
-    const b = new DiagramBuilder()
-    const stub = b.bubble(b.root, 1)
-    b.atom(stub, stub)
-    const pattern = mkDiagramWithBoundary(b.build(), [])
-    expect(() => applyInsertion(d, rB, pattern, [], new Map([[stub, rB]])))
-      .toThrowError(/insertion requires a negative region/)
+    expect(() => findDeiterationEvidence(d, sel, 100)).toThrowError(/no justifying occurrence/)
   })
 })
 

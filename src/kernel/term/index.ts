@@ -6,8 +6,13 @@ export type { PathSeg, ReductionStep, NormalizeResult } from './reduce'
 export { shift, betaReduce, hasFreeBVar, stepNormalOrder, stepEta, applyStepAt, normalize } from './reduce'
 export type { SpineHead, HeadSpine } from './hnf'
 export { headSpine, headNormalize, weakHeadNormalize } from './hnf'
-export type { ConversionCertificate, ConversionCheck } from './certificate'
-export { checkConversion } from './certificate'
+export type {
+  ConversionCertificate,
+  ConversionCheck,
+  NormalSeparationCertificate,
+  NormalSeparationCheck,
+} from './certificate'
+export { checkConversion, checkNormalSeparation } from './certificate'
 export type { ConvertibleResult } from './convert'
 export { convertible } from './convert'
 export { serializeTerm, deserializeTerm } from './serialize'

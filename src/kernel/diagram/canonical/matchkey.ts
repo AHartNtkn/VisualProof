@@ -1,17 +1,18 @@
 import type { Term } from '../../term/term'
-import { app, assertWellFormedTerm, bvar, freePorts, lam, termEq } from '../../term/term'
+import { app, assertWellFormedTerm, bvar, lam, termEq } from '../../term/term'
 import { normalize } from '../../term/reduce'
+import type { ConversionCertificate } from '../../term/certificate'
 import { DiagramError } from '../diagram'
 
 /**
- * Close a term over its free ports in first-occurrence order: port i becomes
+ * Close a term over its free ports in declared interface order: port i becomes
  * the i-th outermost lambda. Two nodes denote the same positional relation iff
  * their closures are beta-eta-convertible closed terms. Closing FIRST fixes
  * the arity, so normalization cannot drop a port out from under the wiring.
  */
-export function closeOverPorts(t: Term): Term {
+export function closeOverPorts(t: Term, declaredFreePorts: readonly string[]): Term {
   assertWellFormedTerm(t)
-  const order = freePorts(t)
+  const order = declaredFreePorts
   const n = order.length
   const index = new Map(order.map((name, i) => [name, i]))
   const walk = (u: Term, depth: number): Term => {
@@ -34,7 +35,7 @@ export function closeOverPorts(t: Term): Term {
 }
 
 export type NodeMatchVerdict =
-  | { readonly status: 'match' }
+  | { readonly status: 'match'; readonly certificate: ConversionCertificate }
   | { readonly status: 'no-match' }
   | { readonly status: 'undecided'; readonly detail: string }
 
@@ -44,17 +45,23 @@ export type NodeMatchVerdict =
  * loud 'undecided' verdict naming the side — never a silent answer; the
  * relation is undecidable in general (spec §3.7).
  */
-export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMatchVerdict {
+export function termsMatchModuloBetaEta(
+  a: Term,
+  b: Term,
+  fuel: number,
+  aFreePorts: readonly string[],
+  bFreePorts: readonly string[],
+): NodeMatchVerdict {
   if (!Number.isInteger(fuel) || fuel <= 0) {
     throw new DiagramError(`fuel must be a positive integer, got ${fuel}`)
   }
-  if (freePorts(a).length !== freePorts(b).length) return { status: 'no-match' }
-  const ca = closeOverPorts(a)
-  const cb = closeOverPorts(b)
+  if (aFreePorts.length !== bFreePorts.length) return { status: 'no-match' }
+  const ca = closeOverPorts(a, aFreePorts)
+  const cb = closeOverPorts(b, bFreePorts)
   // Sound shortcut, not a heuristic: structural equality of closures implies
   // convertibility by reflexivity — and avoids spurious 'undecided' verdicts
   // on identical non-normalizing terms.
-  if (termEq(ca, cb)) return { status: 'match' }
+  if (termEq(ca, cb)) return { status: 'match', certificate: { leftSteps: [], rightSteps: [] } }
   const na = normalize(ca, fuel)
   if (na.status === 'fuel-exhausted') {
     return { status: 'undecided', detail: `left closure did not normalize within ${fuel} steps` }
@@ -63,5 +70,7 @@ export function termsMatchModuloBetaEta(a: Term, b: Term, fuel: number): NodeMat
   if (nb.status === 'fuel-exhausted') {
     return { status: 'undecided', detail: `right closure did not normalize within ${fuel} steps` }
   }
-  return termEq(na.term, nb.term) ? { status: 'match' } : { status: 'no-match' }
+  return termEq(na.term, nb.term)
+    ? { status: 'match', certificate: { leftSteps: na.path, rightSteps: nb.path } }
+    : { status: 'no-match' }
 }

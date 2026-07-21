@@ -4,10 +4,23 @@ import type { Term } from '../../../src/kernel/term/term'
 import { app, bvar, lam, port, termEq } from '../../../src/kernel/term/term'
 import type { Diagram, Endpoint, NodeId, WireId } from '../../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
+import { applyHeadStrip as kernelHeadStrip } from '../../../src/kernel/rules/headstrip'
 import { RuleError } from '../../../src/kernel/rules/error'
+import { proposePortCorrespondence, type PortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
+const applyHeadStrip = (
+  d: Diagram,
+  a: NodeId,
+  b: NodeId,
+  correspondence = proposePortCorrespondence(
+    termNodeAt(d, a).term,
+    termNodeAt(d, b).term,
+    termNodeAt(d, a).freePorts,
+    termNodeAt(d, b).freePorts,
+  ),
+) => kernelHeadStrip(d, a, b, correspondence)
 
 const fv = (node: NodeId, name: string): Endpoint => ({ node, port: { kind: 'freeVar', name } })
 const outp = (node: NodeId): Endpoint => ({ node, port: { kind: 'output' } })
@@ -36,31 +49,78 @@ const freeVarWires = (d: Diagram, node: NodeId): WireId[] =>
     .map(([id]) => id)
 
 describe('head strip (rigid-head equation decomposition)', () => {
-  it('strips f a b —o— f a c into ONE added equation pair (trivial position skipped)', () => {
+  it('gives each generated closure only its actual free support', () => {
     const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, p('f a b'))
-    const n2 = h.termNode(h.root, p('f a c'))
-    h.wire(h.root, [fv(n1, 'f'), fv(n2, 'f')])
+    const n1 = h.termNode(h.root, p('\\x. x a'), ['a', 'unusedLeft'])
+    const n2 = h.termNode(h.root, p('\\x. x b'), ['b', 'unusedRight'])
+    h.wire(h.root, [fv(n1, 'a')])
+    h.wire(h.root, [fv(n1, 'unusedLeft')])
+    h.wire(h.root, [fv(n2, 'b')])
+    h.wire(h.root, [fv(n2, 'unusedRight')])
+    h.wire(h.root, [outp(n1), outp(n2)])
+    const d = h.build()
+    const out = applyHeadStrip(d, n1, n2, {
+      commonArity: 4,
+      left: { s0: 0, s1: 1 },
+      right: { s0: 2, s1: 3 },
+    })
+    const added = addedNodes(d, out)
+    expect(added).toHaveLength(2)
+    for (const id of added) {
+      const node = out.nodes[id]
+      expect(node?.kind === 'term' && node.freePorts).toEqual(['s0'])
+      expect(freeVarWires(out, id)).toHaveLength(1)
+    }
+  })
+
+  it('uses mapped prefix closures to select exactly the nontrivial argument equations', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x a a'))
+    const n2 = h.termNode(h.root, p('\\x. x b c'))
+    const shared = h.wire(h.root, [fv(n1, 'a'), fv(n2, 'c')])
+    h.wire(h.root, [fv(n2, 'b')])
+    h.wire(h.root, [outp(n1), outp(n2)])
+    const d = h.build()
+    const correspondence: PortCorrespondence = {
+      commonArity: 2,
+      left: { s0: 0 },
+      right: { s0: 1, s1: 0 },
+    }
+    const out = applyHeadStrip(d, n1, n2, correspondence)
+    const added = addedNodes(d, out)
+    expect(added).toHaveLength(2)
+    expect(added.filter((node) => freeVarWires(out, node).includes(shared))).toHaveLength(1)
+    expect(termEq(termOf(out, added[0]!), p('\\x. s0'))).toBe(true)
+    expect(termEq(termOf(out, added[1]!), p('\\x. s0'))).toBe(true)
+  })
+
+  it('strips \\x. x a b —o— \\x. x a c into ONE added equation pair', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x a b'))
+    const n2 = h.termNode(h.root, p('\\x. x a c'))
     const wa = h.wire(h.root, [fv(n1, 'a'), fv(n2, 'a')])
     const wb = h.wire(h.root, [fv(n1, 'b')])
     const wc = h.wire(h.root, [fv(n2, 'c')])
     const weq = h.wire(h.root, [outp(n1), outp(n2)])
     const d = h.build()
-    const out = applyHeadStrip(d, n1, n2)
+    const out = applyHeadStrip(d, n1, n2, {
+      commonArity: 3,
+      left: { s0: 0, s1: 1 },
+      right: { s0: 0, s1: 2 },
+    })
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
-    // every single-free closure is canonically the term 's0'; the b- and
-    // c-copies are distinguished by WIRING (which parent wire they ride)
+    // Each closure compacts to its own actual one-port support.
     const bNode = added.find((id) => freeVarWires(out, id).includes(wb))
     const cNode = added.find((id) => freeVarWires(out, id).includes(wc))
     expect(bNode).toBeDefined()
     expect(cNode).toBeDefined()
     expect(bNode).not.toBe(cNode)
-    expect(termEq(termOf(out, bNode!), p('s0'))).toBe(true)
-    expect(termEq(termOf(out, cNode!), p('s0'))).toBe(true)
+    expect(termEq(termOf(out, bNode!), p('\\x. s0'))).toBe(true)
+    expect(termEq(termOf(out, cNode!), p('\\x. s0'))).toBe(true)
     expect(out.nodes[bNode!]!.region).toBe(h.root)
     expect(out.nodes[cNode!]!.region).toBe(h.root)
-    // closure free ports ride exactly the wires those ports ride on the parents
+    // The unused parent port is absent from each generated argument node.
     expect(freeVarWires(out, bNode!)).toEqual([wb])
     expect(freeVarWires(out, cNode!)).toEqual([wc])
     // the two added outputs share ONE fresh wire scoped at the region
@@ -71,57 +131,85 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(out.wires[wo]!.endpoints).toHaveLength(2)
     // originals untouched (both parents canonicalize to the SAME spelling —
     // their distinction lives entirely in the wiring)
-    expect(termEq(termOf(out, n1), p('s0 s1 s2'))).toBe(true)
-    expect(termEq(termOf(out, n2), p('s0 s1 s2'))).toBe(true)
+    expect(termEq(termOf(out, n1), p('\\x. x s0 s1'))).toBe(true)
+    expect(termEq(termOf(out, n2), p('\\x. x s0 s1'))).toBe(true)
     expect(outputWire(out, n1)).toBe(weq)
     expect(outputWire(out, n2)).toBe(weq)
     expect(out.wires[weq]!.endpoints).toHaveLength(2)
-    // the skipped position gained no endpoints
+    // The skipped occurrence position remains attached only to the originals.
     expect(out.wires[wa]!.endpoints).toHaveLength(2)
   })
 
-  it('does NOT skip a termEq position whose free port rides different wires', () => {
+  it('rejects a shared correspondence column whose native ports ride different host wires', () => {
     const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, p('f a b'))
-    const n2 = h.termNode(h.root, p('f a c'))
-    h.wire(h.root, [fv(n1, 'f'), fv(n2, 'f')])
-    const wa1 = h.wire(h.root, [fv(n1, 'a')])
-    const wa2 = h.wire(h.root, [fv(n2, 'a')])
-    h.wire(h.root, [fv(n1, 'b')])
+    const n1 = h.termNode(h.root, p('\\x. x a b'))
+    const n2 = h.termNode(h.root, p('\\x. x c d'))
+    h.wire(h.root, [fv(n1, 'a')])
+    h.wire(h.root, [fv(n2, 'c')])
+    h.wire(h.root, [fv(n1, 'b'), fv(n2, 'd')])
+    h.wire(h.root, [outp(n1), outp(n2)])
+    const d = h.build()
+    const correspondence: PortCorrespondence = {
+      commonArity: 2,
+      left: { s0: 0, s1: 1 },
+      right: { s0: 0, s1: 1 },
+    }
+
+    expect(() => applyHeadStrip(d, n1, n2, correspondence))
+      .toThrowError(/shared correspondence column 0.*different host wires/)
+  })
+
+  it('accepts aligned shared columns and selects mapped-unequal prefix closures', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x (a a)'))
+    const n2 = h.termNode(h.root, p('\\x. x (b (b b))'))
+    h.wire(h.root, [fv(n1, 'a'), fv(n2, 'b')])
+    h.wire(h.root, [outp(n1), outp(n2)])
+    const d = h.build()
+    const correspondence: PortCorrespondence = {
+      commonArity: 1,
+      left: { s0: 0 },
+      right: { s0: 0 },
+    }
+
+    const out = applyHeadStrip(d, n1, n2, correspondence)
+    expect(addedNodes(d, out)).toHaveLength(2)
+  })
+
+  it('accepts one-sided correspondence columns', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x a'))
+    const n2 = h.termNode(h.root, p('\\x. x (b c)'))
+    h.wire(h.root, [fv(n1, 'a')])
+    h.wire(h.root, [fv(n2, 'b')])
     h.wire(h.root, [fv(n2, 'c')])
     h.wire(h.root, [outp(n1), outp(n2)])
     const d = h.build()
-    const out = applyHeadStrip(d, n1, n2)
-    const added = addedNodes(d, out)
-    // both positions strip: two equation pairs
-    expect(added).toHaveLength(4)
-    // all four closures are canonically the single-port term 's0'; the two
-    // a-copies are the ones riding the parents' a-wires
-    const aNodes = added.filter((id) => {
-      const ws = freeVarWires(out, id)
-      return ws.length === 1 && (ws[0] === wa1 || ws[0] === wa2)
-    })
-    expect(aNodes).toHaveLength(2)
-    for (const id of aNodes) expect(termEq(termOf(out, id), p('s0'))).toBe(true)
-    // one copy hangs off each parent's a-wire, and they share an output wire
-    const ridden = aNodes.flatMap((id) => freeVarWires(out, id))
-    expect(new Set(ridden)).toEqual(new Set([wa1, wa2]))
-    const [a1, a2] = aNodes
-    expect(outputWire(out, a1!)).toBe(outputWire(out, a2!))
+    const correspondence: PortCorrespondence = {
+      commonArity: 3,
+      left: { s0: 0 },
+      right: { s0: 1, s1: 2 },
+    }
+
+    const out = applyHeadStrip(d, n1, n2, correspondence)
+    expect(addedNodes(d, out)).toHaveLength(2)
   })
 
   it('is polarity-blind: works identically inside a cut, fresh wire scoped there', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
-    const n1 = h.termNode(cut, p('f a b'))
-    const n2 = h.termNode(cut, p('f a c'))
-    h.wire(cut, [fv(n1, 'f'), fv(n2, 'f')])
+    const n1 = h.termNode(cut, p('\\x. x a b'))
+    const n2 = h.termNode(cut, p('\\x. x a c'))
     h.wire(cut, [fv(n1, 'a'), fv(n2, 'a')])
     h.wire(cut, [fv(n1, 'b')])
     h.wire(cut, [fv(n2, 'c')])
     h.wire(cut, [outp(n1), outp(n2)])
     const d = h.build()
-    const out = applyHeadStrip(d, n1, n2)
+    const out = applyHeadStrip(d, n1, n2, {
+      commonArity: 3,
+      left: { s0: 0, s1: 1 },
+      right: { s0: 0, s1: 2 },
+    })
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
     for (const id of added) expect(out.nodes[id]!.region).toBe(cut)
@@ -138,7 +226,11 @@ describe('head strip (rigid-head equation decomposition)', () => {
     const wb = h.wire(h.root, [fv(n2, 'b')])
     h.wire(h.root, [outp(n1), outp(n2)])
     const d = h.build()
-    const out = applyHeadStrip(d, n1, n2)
+    const out = applyHeadStrip(d, n1, n2, {
+      commonArity: 2,
+      left: { s0: 0 },
+      right: { s0: 1 },
+    })
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
     // both closures are canonically \x. s0 — distinguished by wiring alone
@@ -156,14 +248,17 @@ describe('head strip (rigid-head equation decomposition)', () => {
 
   it('builds prefix-closures with unshifted indices: an arg referencing an outer prefix binder survives wrapping', () => {
     const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, p('\\x. \\y. g (x a)'))
-    const n2 = h.termNode(h.root, p('\\x. \\y. g (x b)'))
-    h.wire(h.root, [fv(n1, 'g'), fv(n2, 'g')])
+    const n1 = h.termNode(h.root, p('\\x. \\y. y (x a)'))
+    const n2 = h.termNode(h.root, p('\\x. \\y. y (x b)'))
     const wa = h.wire(h.root, [fv(n1, 'a')])
     const wb = h.wire(h.root, [fv(n2, 'b')])
     h.wire(h.root, [outp(n1), outp(n2)])
     const d = h.build()
-    const out = applyHeadStrip(d, n1, n2)
+    const out = applyHeadStrip(d, n1, n2, {
+      commonArity: 2,
+      left: { s0: 0 },
+      right: { s0: 1 },
+    })
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
     // Directly-constructed expected closure: \x. \y. x s0 — the arg's bvar 1
@@ -187,14 +282,17 @@ describe('head strip (rigid-head equation decomposition)', () => {
     const h = new DiagramBuilder()
     const outer = h.cut(h.root)
     const inner = h.cut(outer)
-    const n1 = h.termNode(inner, p('f a'))
-    const n2 = h.termNode(inner, p('f b'))
-    h.wire(inner, [fv(n1, 'f'), fv(n2, 'f')])
+    const n1 = h.termNode(inner, p('\\x. x a'))
+    const n2 = h.termNode(inner, p('\\x. x b'))
     h.wire(inner, [fv(n1, 'a')])
     h.wire(inner, [fv(n2, 'b')])
     h.wire(inner, [outp(n1), outp(n2)])
     const d = h.build()
-    const out = applyHeadStrip(d, n1, n2)
+    const out = applyHeadStrip(d, n1, n2, {
+      commonArity: 2,
+      left: { s0: 0 },
+      right: { s0: 1 },
+    })
     const added = addedNodes(d, out)
     expect(added).toHaveLength(2)
     for (const id of added) expect(out.nodes[id]!.region).toBe(inner)
@@ -205,9 +303,8 @@ describe('head strip (rigid-head equation decomposition)', () => {
 
   it('is a no-op when every position is trivial (nothing added, nothing removed)', () => {
     const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, p('f a'))
-    const n2 = h.termNode(h.root, p('f a'))
-    h.wire(h.root, [fv(n1, 'f'), fv(n2, 'f')])
+    const n1 = h.termNode(h.root, p('\\x. x a'))
+    const n2 = h.termNode(h.root, p('\\x. x a'))
     h.wire(h.root, [fv(n1, 'a'), fv(n2, 'a')])
     h.wire(h.root, [outp(n1), outp(n2)])
     const d = h.build()
@@ -276,15 +373,14 @@ describe('head strip (rigid-head equation decomposition)', () => {
     expect(() => applyHeadStrip(h.build(), n1, n2)).toThrowError(/argument counts differ: 2 vs 1/)
   })
 
-  it('refuses free heads on different wires even when their names coincide (name-blind)', () => {
+  it('refuses free heads even when their names and wires correspond', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('f a'))
     const n2 = h.termNode(h.root, p('f a'))
-    h.wire(h.root, [fv(n1, 'f')])
-    h.wire(h.root, [fv(n2, 'f')]) // same NAME, different individual
+    h.wire(h.root, [fv(n1, 'f'), fv(n2, 'f')])
     h.wire(h.root, [fv(n1, 'a'), fv(n2, 'a')])
     h.wire(h.root, [outp(n1), outp(n2)])
-    expect(() => applyHeadStrip(h.build(), n1, n2)).toThrowError(/different wires/)
+    expect(() => applyHeadStrip(h.build(), n1, n2)).toThrowError(/bound rigid heads/)
   })
 
   it('refuses a bound head against a free head', () => {
@@ -294,7 +390,7 @@ describe('head strip (rigid-head equation decomposition)', () => {
     h.wire(h.root, [fv(n1, 'a'), fv(n2, 'a')])
     h.wire(h.root, [fv(n2, 'f')])
     h.wire(h.root, [outp(n1), outp(n2)])
-    expect(() => applyHeadStrip(h.build(), n1, n2)).toThrowError(/heads do not correspond/)
+    expect(() => applyHeadStrip(h.build(), n1, n2)).toThrowError(/bound rigid heads/)
   })
 
   it('refuses bound heads with different indices', () => {

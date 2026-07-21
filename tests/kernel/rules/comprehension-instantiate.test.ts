@@ -207,6 +207,19 @@ describe('parameterized comprehension instantiation', () => {
     expect(out.wires[wParam]!.scope).toBe(cut)
   })
 
+  it('refuses a bubble-scoped parameter that would be captured by the instantiated relation', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const bub = h.bubble(cut, 1)
+    const atom = h.atom(bub, bub)
+    h.wire(cut, [{ node: atom, port: { kind: 'arg', index: 0 } }])
+    const captured = h.wire(bub, [])
+    const d = h.build()
+
+    expect(() => applyComprehensionInstantiate(d, bub, paramComp(), [captured]))
+      .toThrowError(/parameter attachment wire .* must properly enclose the instantiated bubble/)
+  })
+
   it('attaches the SAME parameter wire to every copy — parameters are shared across instances', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
@@ -247,7 +260,7 @@ describe('parameterized comprehension instantiation', () => {
   it('refuses a parameter wire scoped INSIDE the bubble when copies land outside its scope', () => {
     // Quantifier-scope forgery probe: the parameter wire lives in a cut inside
     // the bubble; the atom (where the copy lands) is at the bubble itself, NOT
-    // enclosed by that cut. The splice's enclosure validation must refuse.
+    // enclosed by that cut. The rule-level fixed-parameter gate must refuse.
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const bub = h.bubble(cut, 1)
@@ -257,7 +270,7 @@ describe('parameterized comprehension instantiation', () => {
     const wInside = h.wire(inner, [])
     const d = h.build()
     expect(() => applyComprehensionInstantiate(d, bub, paramComp(), [wInside]))
-      .toThrowError(/attachment wire '\w+' \(scope '\w+'\) does not enclose splice region/)
+      .toThrowError(/parameter attachment wire .* must properly enclose the instantiated bubble/)
   })
 
   it('instantiates the flat plusComm comp — pair PLUS x b / PLUS b x riding the ambient b-line', () => {

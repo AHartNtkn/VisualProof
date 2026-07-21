@@ -20,6 +20,27 @@ function sample() {
 }
 
 describe('diagram JSON', () => {
+  it('round-trips an unused declared term port and requires the declaration in strict JSON', () => {
+    const b = new DiagramBuilder()
+    const nodeId = b.termNode(b.root, p('used'), ['unused', 'used'])
+    const d = b.build()
+    const encoded = diagramToJson(d) as {
+      nodes: Record<string, { freePorts?: string[] }>
+    }
+    expect(encoded.nodes[nodeId]!.freePorts).toEqual(['s0', 's1'])
+    const decoded = diagramFromJson(encoded)
+    const node = decoded.nodes[nodeId]
+    expect(node?.kind).toBe('term')
+    if (node?.kind !== 'term') throw new Error('test setup requires a term node')
+    expect(node.freePorts).toEqual(['s0', 's1'])
+
+    const missing = JSON.parse(JSON.stringify(encoded)) as {
+      nodes: Record<string, Record<string, unknown>>
+    }
+    delete missing.nodes[nodeId]!['freePorts']
+    expect(() => diagramFromJson(missing)).toThrowError(/node.*unrecognized shape/i)
+  })
+
   it('round-trips structurally: toJson ∘ fromJson ∘ toJson is the identity on JSON', () => {
     const d = sample()
     const j1 = diagramToJson(d)

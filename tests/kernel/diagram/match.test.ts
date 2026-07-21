@@ -4,6 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
+import { checkOccurrenceCertificate } from '../../../src/kernel/diagram/subgraph/occurrence-certificate'
 
 const p = (s: string) => parseTerm(s)
 
@@ -16,6 +17,23 @@ function nodePattern() {
 }
 
 describe('findOccurrences basics', () => {
+  it('matches and certifies the full declared term interface, including unused slots', () => {
+    const patternBuilder = new DiagramBuilder()
+    patternBuilder.termNode(patternBuilder.root, p('\\x. x'), ['unused'])
+    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+
+    const hostBuilder = new DiagramBuilder()
+    hostBuilder.termNode(hostBuilder.root, p('\\x. x'), ['spare'])
+    const host = hostBuilder.build()
+    const found = findOccurrences(host, pattern, { fuel: 100 })
+    expect(found.matches).toHaveLength(1)
+    expect(checkOccurrenceCertificate(host, pattern, found.matches[0]!)).toEqual({ ok: true })
+
+    const narrower = new DiagramBuilder()
+    narrower.termNode(narrower.root, p('\\x. x'))
+    expect(findOccurrences(narrower.build(), pattern, { fuel: 100 }).matches).toHaveLength(0)
+  })
+
   it('finds a single-node occurrence and discovers its attachment', () => {
     const h = new DiagramBuilder()
     const target = h.termNode(h.root, p('y x'))
@@ -255,15 +273,12 @@ describe('adversarial ids (soundness and dedup under unconstrained id strings)',
     expect(findOccurrences(host, pattern, { fuel: 100 }).matches).toHaveLength(6)
   })
 
-  it('rejects boundary stubs not scoped at the pattern root (silent never-match hole)', () => {
+  it('rejects boundary stubs not scoped at the pattern root before matching', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const n = b.termNode(cut, p('y'))
     const stub = b.wire(cut, [{ node: n, port: { kind: 'freeVar', name: 'y' } }]) // scoped INSIDE
-    const pattern = mkDiagramWithBoundary(b.build(), [stub])
-    const h = new DiagramBuilder()
-    const host = h.build()
-    expect(() => findOccurrences(host, pattern, { fuel: 100 }))
-      .toThrowError(/boundary wire 'w0' is not scoped at the pattern root/)
+    expect(() => mkDiagramWithBoundary(b.build(), [stub]))
+      .toThrowError(/boundary wire 'w0' must be scoped at the diagram root/)
   })
 })

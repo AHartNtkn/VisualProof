@@ -4,7 +4,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
-import { removeSubgraph, spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
+import { removeSubgraph, spliceSubgraph, spliceSubgraphMapped } from '../../../src/kernel/diagram/subgraph/splice'
 
 const p = (s: string) => parseTerm(s)
 
@@ -63,6 +63,54 @@ describe('removeSubgraph', () => {
 })
 
 describe('spliceSubgraph', () => {
+  it('reserves an external namespace and returns the canonical clone maps', () => {
+    const patternBuilder = new DiagramBuilder()
+    const cut = patternBuilder.cut(patternBuilder.root)
+    const node = patternBuilder.termNode(cut, p('\\x. x'))
+    const internal = patternBuilder.wire(cut, [{ node, port: { kind: 'output' } }])
+    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const hostDiagram = new DiagramBuilder().build()
+
+    const mapped = spliceSubgraphMapped(hostDiagram, hostDiagram.root, pattern, [], {
+      reserved: {
+        regions: new Set(Object.keys(pattern.diagram.regions)),
+        nodes: new Set(Object.keys(pattern.diagram.nodes)),
+        wires: new Set(Object.keys(pattern.diagram.wires)),
+      },
+    })
+
+    expect(mapped.regionMap.get(pattern.diagram.root)).toBe(hostDiagram.root)
+    expect(mapped.regionMap.get(cut)).not.toBe(cut)
+    expect(mapped.nodeMap.get(node)).not.toBe(node)
+    expect(mapped.wireMap.get(internal)).not.toBe(internal)
+    const copiedNode = mapped.nodeMap.get(node)!
+    const copiedWire = mapped.wireMap.get(internal)!
+    expect(mapped.diagram.nodes[copiedNode]).toMatchObject({ kind: 'term', region: mapped.regionMap.get(cut) })
+    expect(mapped.diagram.wires[copiedWire]?.endpoints).toEqual([
+      { node: copiedNode, port: { kind: 'output' } },
+    ])
+  })
+
+  it('maps a boundary stub to the surviving host attachment', () => {
+    const patternBuilder = new DiagramBuilder()
+    const node = patternBuilder.termNode(patternBuilder.root, p('y'))
+    const boundary = patternBuilder.wire(patternBuilder.root, [
+      { node, port: { kind: 'freeVar', name: 'y' } },
+    ])
+    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [boundary])
+    const hostBuilder = new DiagramBuilder()
+    const hostNode = hostBuilder.termNode(hostBuilder.root, p('\\x. x'))
+    const attachment = hostBuilder.wire(hostBuilder.root, [
+      { node: hostNode, port: { kind: 'output' } },
+    ])
+    const hostDiagram = hostBuilder.build()
+
+    const mapped = spliceSubgraphMapped(hostDiagram, hostDiagram.root, pattern, [attachment])
+
+    expect(mapped.wireMap.get(boundary)).toBe(attachment)
+    expect(mapped.diagram.wires[attachment]?.endpoints).toHaveLength(2)
+  })
+
   it('extract → remove → splice round-trips structurally (endpoint restored)', () => {
     const h = host()
     const sel = mkSelection(h.d, { region: h.d.root, regions: [h.cut], nodes: [], wires: [] })
@@ -76,17 +124,13 @@ describe('spliceSubgraph', () => {
     expect(cuts).toHaveLength(1)
   })
 
-  it('rejects boundary wires not scoped at the pattern root (the resolved obligation)', () => {
+  it('rejects boundary wires not scoped at the pattern root before splice', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const n = b.termNode(cut, p('\\x. x'))
     const w = b.wire(cut, [{ node: n, port: { kind: 'output' } }]) // scoped INSIDE the cut
-    const pattern = mkDiagramWithBoundary(b.build(), [w])
-    const hostB = new DiagramBuilder()
-    const hn = hostB.termNode(hostB.root, p('\\x. x'))
-    const hw = hostB.wire(hostB.root, [{ node: hn, port: { kind: 'output' } }])
-    expect(() => spliceSubgraph(hostB.build(), 'r0', pattern, [hw]))
-      .toThrowError(/boundary wire 'w0' is not scoped at the pattern root; not spliceable/)
+    expect(() => mkDiagramWithBoundary(b.build(), [w]))
+      .toThrowError(/boundary wire 'w0' must be scoped at the diagram root/)
   })
 
   it('rejects attachment arity mismatches and attachments that cannot reach the splice region', () => {
@@ -129,7 +173,7 @@ describe('spliceSubgraph', () => {
     expect(out.wires[hw]?.endpoints).toHaveLength(3) // hn.out + spliced y + spliced x
   })
 
-  it('pushes an intrinsically aliased boundary out by identifying its host attachments once', () => {
+  it('materializes an intrinsically aliased boundary at the splice site without moving host scopes', () => {
     const pb = new DiagramBuilder()
     const pn = pb.termNode(pb.root, p('y'))
     const shared = pb.wire(pb.root, [{ node: pn, port: { kind: 'output' } }])
@@ -143,10 +187,21 @@ describe('spliceSubgraph', () => {
     const inner = hb.wire(cut, [{ node: innerNode, port: { kind: 'output' } }])
     const out = spliceSubgraph(hb.build(), cut, pattern, [inner, outer])
 
-    expect(out.wires[inner]).toBeUndefined()
+    expect(out.wires[inner]?.scope).toBe(cut)
     expect(out.wires[outer]?.scope).toBe(out.root)
-    // Both host endpoints plus the pattern endpoint exactly once. Repeating
-    // the boundary incidence must not copy the same pattern endpoint twice.
-    expect(out.wires[outer]?.endpoints).toHaveLength(3)
+    // The first attachment receives the copied pattern endpoint. The repeated
+    // incidence contributes one local identity node connecting the untouched
+    // host wires, so neither quantifier owner changes.
+    expect(out.wires[inner]?.endpoints).toHaveLength(3)
+    expect(out.wires[outer]?.endpoints).toHaveLength(2)
+    const aliases = Object.entries(out.nodes).filter(([id]) => id.startsWith('alias_'))
+    expect(aliases).toHaveLength(1)
+    expect(aliases[0]![1].region).toBe(cut)
+    expect(out.wires[inner]?.endpoints).toContainEqual({
+      node: aliases[0]![0], port: { kind: 'output' },
+    })
+    expect(out.wires[outer]?.endpoints).toContainEqual({
+      node: aliases[0]![0], port: { kind: 'freeVar', name: 's0' },
+    })
   })
 })

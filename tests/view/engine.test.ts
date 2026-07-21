@@ -9,7 +9,7 @@ import { emptyDiagram } from '../../src/app/edit'
 const p = (s: string) => parseTerm(s)
 
 const nat = () => {
-  const b = buildFregeTheory().relations.nat!
+  const b = new Map(buildFregeTheory().relations).get('nat')!
   return { d: b.diagram, boundary: b.boundary }
 }
 

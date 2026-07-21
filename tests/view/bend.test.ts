@@ -63,6 +63,35 @@ describe('bendGrid', () => {
       expect(r.r1).toBeGreaterThan(0)
     }
   })
+
+  it('maps every syntax occurrence to exact internal anatomy primitives and a hit trace', () => {
+    const g = bendGrid(trompGrid(p('a ((\\x. x) b)')))
+    expect(g.occurrences.map((occurrence) => occurrence.path)).toEqual([
+      [], ['fn'], ['arg'], ['arg', 'fn'], ['arg', 'fn', 'body'], ['arg', 'arg'],
+    ])
+    const root = g.occurrences[0]!
+    expect(root.hit.kind).toBe('exit')
+    expect(root.arcIndices).toHaveLength(g.arcs.length)
+    expect(root.radialIndices).toHaveLength(g.radials.length)
+    const argument = g.occurrences.find((occurrence) => occurrence.path.join('/') === 'arg')!
+    expect(argument.hit.kind).toBe('radial')
+    expect(argument.arcIndices.length + argument.radialIndices.length).toBeGreaterThan(0)
+    const body = g.occurrences.find((occurrence) => occurrence.path.join('/') === 'arg/fn/body')!
+    expect(body.hit.kind).toBe('arcPoint')
+    expect(body.arcIndices.length + body.radialIndices.length).toBeGreaterThan(0)
+    for (const occurrence of g.occurrences) {
+      expect(occurrence.arcIndices.length + occurrence.radialIndices.length + Number(occurrence.includeExit),
+        `painted carrier for [${occurrence.path.join(',')}]`).toBeGreaterThan(0)
+    }
+  })
+
+  it('gives a lambda leaf body a painted internal carrier to highlight', () => {
+    for (const source of ['\\x. a', '\\x. x']) {
+      const g = bendGrid(trompGrid(p(source)))
+      const body = g.occurrences.find((occurrence) => occurrence.path.join('/') === 'body')!
+      expect(body.arcIndices.length + body.radialIndices.length).toBeGreaterThan(0)
+    }
+  })
 })
 
 describe('atomGeometry', () => {
@@ -78,6 +107,10 @@ describe('atomGeometry', () => {
   it('emits no exit line (law 4: refs/atoms have no term output, so no second leg)', () => {
     expect(atomGeometry(2).exitLine).toBeNull()
     expect(atomGeometry(0).exitLine).toBeNull()
+  })
+
+  it('has no term occurrence targets', () => {
+    expect(atomGeometry(2).occurrences).toEqual([])
   })
 })
 

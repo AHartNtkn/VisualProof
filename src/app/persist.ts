@@ -1,5 +1,6 @@
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
 import type { Theory } from '../kernel/proof/store'
 
 /**
@@ -9,8 +10,9 @@ import type { Theory } from '../kernel/proof/store'
  */
 export function sessionTheory(
   ctx: ProofContext,
-  extras: { readonly relations: Readonly<Record<string, DiagramWithBoundary>> },
+  extras: { readonly relations: readonly (readonly [string, DiagramWithBoundary])[] },
 ): Theory {
+  assertProofContext(ctx)
   return {
     relations: extras.relations,
     theorems: [...ctx.theorems.values()],

@@ -1,4 +1,7 @@
-import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
+import type { ProofStep } from '../kernel/proof/step'
+import { singleStepAction, type ProofAction } from '../kernel/proof/action'
 import type { Theme } from '../view/paint'
 import type { Vec2 } from '../view/vec'
 import {
@@ -21,6 +24,8 @@ import {
 import { ProofFrontViewport, type ProofFrontDebugState } from './proof-front'
 import type { KeySample } from './interact/viewport'
 import type { MotionPreferences } from './interact/motion'
+import { proofSnapshot, type ProofSnapshot } from './proof-snapshot'
+import { seedActionHistoryPlacements } from './proof-placement'
 
 export type FixedSideWorkspaceOptions = {
   readonly host: HTMLElement
@@ -40,8 +45,8 @@ export type FixedSideWorkspaceDebug = {
   readonly ratio: number
   readonly focused: FixedSide
   readonly met: boolean
-  readonly forward: ProofFrontDebugState & { readonly cursor: number; readonly selected: number; readonly pinCount: number }
-  readonly backward: ProofFrontDebugState & { readonly cursor: number; readonly selected: number; readonly pinCount: number }
+  readonly forward: ProofFrontDebugState & { readonly cursor: number; readonly selected: number; readonly pinCount: number; readonly proofSnapshot: ProofSnapshot }
+  readonly backward: ProofFrontDebugState & { readonly cursor: number; readonly selected: number; readonly pinCount: number; readonly proofSnapshot: ProofSnapshot }
 }
 
 export class FixedSideWorkspace {
@@ -63,6 +68,7 @@ export class FixedSideWorkspace {
   #narrowNotice: HTMLDivElement
 
   constructor(options: FixedSideWorkspaceOptions) {
+    assertProofContext(options.context())
     if (window.innerWidth < MIN_FIXED_WORKSPACE_WIDTH) {
       throw new Error(`fixed-side proving requires a window at least ${MIN_FIXED_WORKSPACE_WIDTH}px wide`)
     }
@@ -97,6 +103,7 @@ export class FixedSideWorkspace {
       theme: options.theme,
       fuel: options.fuel,
       prepare: (step: ProofStep) => this.#prepare(side, step),
+      prepareAction: (action: ProofAction) => this.#prepareAction(side, action),
       motionPreferences: options.motionPreferences,
       workspaceInputAllowed: () => !this.playing && (!this.editing || this.#front(side).editing),
       focused: () => this.#focused === side,
@@ -107,6 +114,8 @@ export class FixedSideWorkspace {
     })
     this.forward = new ProofFrontViewport(forwardDom.canvas, model('forward'))
     this.backward = new ProofFrontViewport(backwardDom.canvas, model('backward'))
+    this.#presentHistory('forward')
+    this.#presentHistory('backward')
     this.#geometry = paneGeometry(window.innerWidth, window.innerHeight, this.#ratio, FIXED_SIDE_SEAM_WIDTH)
 
     this.seam.addEventListener('pointerdown', this.#seamDown)
@@ -128,6 +137,7 @@ export class FixedSideWorkspace {
 
   setFocusedSide(side: FixedSide): void {
     if (side === this.#focused) return
+    this.#front(this.#focused).cancelRelationWorkspace()
     this.#focused = side
     this.forward.setFocused(side === 'forward')
     this.backward.setFocused(side === 'backward')
@@ -137,6 +147,7 @@ export class FixedSideWorkspace {
 
   reconcile(side: FixedSide): void {
     this.#front(side).reconcileDiagram()
+    this.#presentHistory(side)
     this.#refresh()
   }
 
@@ -150,6 +161,11 @@ export class FixedSideWorkspace {
   cancelGestures(): void {
     this.forward.cancelActiveGesture()
     this.backward.cancelActiveGesture()
+  }
+
+  cancelRelationWorkspace(): void {
+    this.forward.cancelRelationWorkspace()
+    this.backward.cancelRelationWorkspace()
   }
 
   frame(now = performance.now()): void {
@@ -173,10 +189,12 @@ export class FixedSideWorkspace {
       forward: {
         ...this.forward.debugState(), cursor: session.forward.cursor,
         selected: this.forward.interaction.selection.length, pinCount: this.forward.interaction.pins.size,
+        proofSnapshot: proofSnapshot(session.forward, 'forward', 'forward'),
       },
       backward: {
         ...this.backward.debugState(), cursor: session.backward.cursor,
         selected: this.backward.interaction.selection.length, pinCount: this.backward.interaction.pins.size,
+        proofSnapshot: proofSnapshot(session.backward, 'backward', 'backward'),
       },
     }
   }
@@ -201,9 +219,28 @@ export class FixedSideWorkspace {
     return side === 'forward' ? this.forward : this.backward
   }
 
-  #prepare(side: FixedSide, step: ProofStep): () => void {
+  #presentHistory(side: FixedSide): void {
     const session = this.#options.session()
-    const next = side === 'forward' ? applyForward(session, step) : applyBackward(session, step)
+    const timeline = session[side]
+    const initial = timeline.states[0]
+    if (initial === undefined) throw new Error(`${side} proof timeline has no initial state`)
+    seedActionHistoryPlacements(
+      this.#front(side).engine,
+      initial,
+      timeline.actions.slice(0, timeline.cursor),
+      session.ctx,
+      side,
+    )
+  }
+
+  #prepare(side: FixedSide, step: ProofStep): () => void {
+    const action = singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step)
+    return this.#prepareAction(side, action)
+  }
+
+  #prepareAction(side: FixedSide, action: ProofAction): () => void {
+    const session = this.#options.session()
+    const next = side === 'forward' ? applyForward(session, action) : applyBackward(session, action)
     return () => {
       this.#options.commit(next, side)
       this.reconcile(side)

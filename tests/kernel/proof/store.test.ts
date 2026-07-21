@@ -7,6 +7,7 @@ import type { Theorem } from '../../../src/kernel/proof/theorem'
 import type { Theory } from '../../../src/kernel/proof/store'
 import { verifyTheory, theoryToJson, loadTheory } from '../../../src/kernel/proof/store'
 import { ProofError } from '../../../src/kernel/proof/error'
+import { singleStepAction } from '../../../src/kernel/proof/action'
 
 const p = (s: string) => parseTerm(s)
 
@@ -25,7 +26,7 @@ function dropQ(): Theorem {
   const rhs = mkDiagramWithBoundary(r.build(), [rb])
   return {
     name: 'dropQ', lhs, rhs,
-    steps: [{ rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } }],
+    actions: [singleStepAction('drop Q', { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } })],
   }
 }
 
@@ -36,10 +37,28 @@ function isIdentity() {
   return mkDiagramWithBoundary(b.build(), [w])
 }
 
+function groupedNoop(): Theorem {
+  const b = new DiagramBuilder()
+  const side = mkDiagramWithBoundary(b.build(), [])
+  return {
+    name: 'groupedNoop',
+    lhs: side,
+    rhs: side,
+    actions: [{
+      label: 'introduce and eliminate a double cut',
+      steps: [
+        { rule: 'doubleCutIntro', sel: { region: side.diagram.root, regions: [], nodes: [], wires: [] } },
+        { rule: 'doubleCutElim', region: 'dc' },
+      ],
+      placements: [],
+    }],
+  }
+}
+
 describe('verifyTheory', () => {
   it('verifies relations, theorems in order and returns the context', () => {
     const theory: Theory = {
-      relations: { isIdentity: isIdentity() },
+      relations: [['isIdentity', isIdentity()]],
       theorems: [dropQ()],
     }
     const ctx = verifyTheory(theory)
@@ -48,11 +67,11 @@ describe('verifyTheory', () => {
 
   it('rejects duplicate theorem names and broken proofs, by name', () => {
     const t = dropQ()
-    expect(() => verifyTheory({ relations: {}, theorems: [t, t] }))
+    expect(() => verifyTheory({ relations: [], theorems: [t, t] }))
       .toThrowError(/duplicate theorem name 'dropQ'/)
-    const broken: Theorem = { ...t, steps: [] }
+    const broken: Theorem = { ...t, actions: [] }
     let caught: unknown
-    try { verifyTheory({ relations: {}, theorems: [broken] }) } catch (e) { caught = e }
+    try { verifyTheory({ relations: [], theorems: [broken] }) } catch (e) { caught = e }
     expect(caught).toBeInstanceOf(ProofError)
   })
 
@@ -73,14 +92,14 @@ describe('verifyTheory', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     const derived: Theorem = {
       name: 'viaDropQ', lhs, rhs,
-      steps: [{
+      actions: [singleStepAction('cite drop Q', {
         rule: 'theorem', name: 'dropQ',
         at: { sel: { region: lhs.diagram.root, regions: [], nodes: [lp, lq], wires: [] }, args: [lb] },
         direction: 'forward',
-      }],
+      })],
     }
-    expect(() => verifyTheory({ relations: {}, theorems: [base, derived] })).not.toThrow()
-    expect(() => verifyTheory({ relations: {}, theorems: [derived, base] }))
+    expect(() => verifyTheory({ relations: [], theorems: [base, derived] })).not.toThrow()
+    expect(() => verifyTheory({ relations: [], theorems: [derived, base] }))
       .toThrowError(/unknown theorem 'dropQ'/)
   })
 })
@@ -94,17 +113,24 @@ describe('verifyTheory — relation references', () => {
     return mkDiagramWithBoundary(b.build(), [w])
   }
 
+  function relationRefBody(defId: string) {
+    const b = new DiagramBuilder()
+    const node = b.ref(b.root, defId, 1)
+    const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
+    return mkDiagramWithBoundary(b.build(), [w])
+  }
+
   /** A theorem whose (identical) sides are a single reference node. */
   function refTheorem(defId: string, arity = 1): Theorem {
     const b = new DiagramBuilder()
     const node = b.ref(b.root, defId, arity)
     const w = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
     const side = mkDiagramWithBoundary(b.build(), [w])
-    return { name: 'refThm', lhs: side, rhs: side, steps: [] }
+    return { name: 'refThm', lhs: side, rhs: side, actions: [] }
   }
 
   it('verifies a theory whose theorem references a declared relation, exposing it in ctx', () => {
-    const ctx = verifyTheory({ relations: { R: simpleBody() }, theorems: [refTheorem('R')] })
+    const ctx = verifyTheory({ relations: [['R', simpleBody()]], theorems: [refTheorem('R')] })
     expect(ctx.relations.has('R')).toBe(true)
     expect(ctx.relations.get('R')!.boundary).toHaveLength(1)
   })
@@ -119,8 +145,8 @@ describe('verifyTheory — relation references', () => {
     const at = b.atom(bub, bub)
     const bound = b.wire(b.root, [{ node: at, port: { kind: 'arg', index: 0 } }])
     const existsBody = mkDiagramWithBoundary(b.build(), [bound])
-    expect(() => verifyTheory({ relations: { R: existsBody }, theorems: [] })).not.toThrow()
-    const json = theoryToJson({ relations: { R: existsBody }, theorems: [] })
+    expect(() => verifyTheory({ relations: [['R', existsBody]], theorems: [] })).not.toThrow()
+    const json = theoryToJson({ relations: [['R', existsBody]], theorems: [] })
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(json)))
     expect(ctx.relations.has('R')).toBe(true)
   })
@@ -130,19 +156,66 @@ describe('verifyTheory — relation references', () => {
     const node = b.termNode(b.root, p('y'))
     const shared = b.wire(b.root, [{ node, port: { kind: 'output' } }])
     const alias = mkDiagramWithBoundary(b.build(), [shared, shared])
-    const json = theoryToJson({ relations: { Alias: alias }, theorems: [] })
+    const json = theoryToJson({ relations: [['Alias', alias]], theorems: [] })
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(json)))
     expect(ctx.relations.get('Alias')?.boundary).toEqual([shared, shared])
   })
 
   it('refuses a theorem side whose reference names an unknown relation', () => {
-    expect(() => verifyTheory({ relations: {}, theorems: [refTheorem('ghost')] }))
+    expect(() => verifyTheory({ relations: [], theorems: [refTheorem('ghost')] }))
       .toThrowError(/left-hand side: reference node .* names unknown relation 'ghost'/)
   })
 
   it('refuses a theorem side whose reference arity disagrees with the relation', () => {
-    expect(() => verifyTheory({ relations: { R: simpleBody() }, theorems: [refTheorem('R', 2)] }))
+    expect(() => verifyTheory({ relations: [['R', simpleBody()]], theorems: [refTheorem('R', 2)] }))
       .toThrowError(/has arity 2 but the relation has arity 1/)
+  })
+
+  it('accepts relation references only to an earlier registered definition', () => {
+    expect(() => verifyTheory({
+      relations: [['Base', simpleBody()], ['Alias', relationRefBody('Base')]],
+      theorems: [],
+    })).not.toThrow()
+  })
+
+  it('preserves explicit order for integer-like names and treats __proto__ as ordinary data', () => {
+    const ctx = verifyTheory({
+      relations: [
+        ['10', simpleBody()],
+        ['2', relationRefBody('10')],
+        ['__proto__', relationRefBody('2')],
+      ],
+      theorems: [],
+    })
+    expect([...ctx.relations.keys()]).toEqual(['10', '2', '__proto__'])
+  })
+
+  it('rejects duplicate relation pairs instead of overwriting them', () => {
+    expect(() => verifyTheory({
+      relations: [['R', simpleBody()], ['R', simpleBody()]],
+      theorems: [],
+    })).toThrowError(/duplicate proof-context name 'R'/)
+  })
+
+  it('refuses a forward relation reference', () => {
+    expect(() => verifyTheory({
+      relations: [['Alias', relationRefBody('Base')], ['Base', simpleBody()]],
+      theorems: [],
+    })).toThrowError(/relation 'Alias' body: reference node .* names unknown relation 'Base'/)
+  })
+
+  it('refuses a self-recursive relation definition', () => {
+    expect(() => verifyTheory({
+      relations: [['Loop', relationRefBody('Loop')]],
+      theorems: [],
+    })).toThrowError(/relation 'Loop' body: reference node .* names unknown relation 'Loop'/)
+  })
+
+  it('refuses a mutually recursive relation cycle at its first forward edge', () => {
+    expect(() => verifyTheory({
+      relations: [['Left', relationRefBody('Right')], ['Right', relationRefBody('Left')]],
+      theorems: [],
+    })).toThrowError(/relation 'Left' body: reference node .* names unknown relation 'Right'/)
   })
 })
 
@@ -164,13 +237,13 @@ describe('check-before-register invariant', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     const selfCite: Theorem = {
       name: 'selfCite', lhs, rhs,
-      steps: [{
+      actions: [singleStepAction('self cite', {
         rule: 'theorem', name: 'selfCite',
         at: { sel: { region: lhs.diagram.root, regions: [], nodes: [lp, lq], wires: [] }, args: [lb] },
         direction: 'forward',
-      }],
+      })],
     }
-    expect(() => verifyTheory({ relations: {}, theorems: [selfCite] }))
+    expect(() => verifyTheory({ relations: [], theorems: [selfCite] }))
       .toThrowError(/unknown theorem 'selfCite'/)
   })
 })
@@ -178,12 +251,13 @@ describe('check-before-register invariant', () => {
 describe('theory files', () => {
   it('round-trips through JSON with verification on load', () => {
     const theory: Theory = {
-      relations: { isIdentity: isIdentity() },
-      theorems: [dropQ()],
+      relations: [['isIdentity', isIdentity()]],
+      theorems: [dropQ(), groupedNoop()],
     }
     const text = JSON.stringify(theoryToJson(theory))
     const { theory: back, ctx } = loadTheory(JSON.parse(text))
     expect(ctx.theorems.has('dropQ')).toBe(true)
+    expect(back.theorems[1]!.actions).toEqual(theory.theorems[1]!.actions)
     expect(JSON.stringify(theoryToJson(back))).toBe(text)
   })
 
@@ -195,12 +269,13 @@ describe('theory files', () => {
     const j = {
       format: 'visual-proof-theory',
       version: 1,
-      relations: {
-        R: {
+      relations: [['R', {
           diagram: {
             root: 'r0',
             regions: { r0: { kind: 'sheet' } },
-            nodes: { n0: { kind: 'term', region: 'r0', term: 'A(P("y"),P("z"))' } },
+            nodes: {
+              n0: { kind: 'term', region: 'r0', term: 'A(P("y"),P("z"))', freePorts: ['y', 'z'] },
+            },
             wires: {
               w0: { scope: 'r0', endpoints: [{ node: 'n0', port: 'out' }] },
               w1: { scope: 'r0', endpoints: [{ node: 'n0', port: 'v:y' }] },
@@ -208,12 +283,11 @@ describe('theory files', () => {
             },
           },
           boundary: ['w1', 'w2'],
-        },
-      },
+        }]],
       theorems: [],
     }
     const { theory } = loadTheory(j)
-    const d = theory.relations['R']!.diagram
+    const d = theory.relations.find(([name]) => name === 'R')![1].diagram
     const n = d.nodes['n0']
     expect(n?.kind === 'term' && freePorts(n.term)).toEqual(['s0', 's1'])
     expect(d.wires['w1']?.endpoints).toEqual([{ node: 'n0', port: { kind: 'freeVar', name: 's0' } }])
@@ -221,9 +295,23 @@ describe('theory files', () => {
   })
 
   it('rejects unversioned or alien envelopes', () => {
-    expect(() => loadTheory({ format: 'something-else', version: 1, relations: {}, theorems: [] }))
+    expect(() => loadTheory({ format: 'something-else', version: 1, relations: [], theorems: [] }))
       .toThrowError(/format/)
-    expect(() => loadTheory({ format: 'visual-proof-theory', version: 99, relations: {}, theorems: [] }))
+    expect(() => loadTheory({ format: 'visual-proof-theory', version: 99, relations: [], theorems: [] }))
       .toThrowError(/version/)
+  })
+
+  it('rejects legacy object-shaped and duplicate-pair relation JSON', () => {
+    expect(() => loadTheory({
+      format: 'visual-proof-theory', version: 1, relations: { R: {} }, theorems: [],
+    })).toThrowError(/'relations' and 'theorems' must be arrays/)
+    const relation = theoryToJson({ relations: [['R', isIdentity()]], theorems: [] }) as {
+      format: string
+      version: number
+      relations: unknown[]
+      theorems: unknown[]
+    }
+    expect(() => loadTheory({ ...relation, relations: [relation.relations[0], relation.relations[0]] }))
+      .toThrowError(/relations repeats name 'R'/)
   })
 })

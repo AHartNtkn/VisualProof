@@ -7,6 +7,7 @@ import { mkDiagram } from '../../src/kernel/diagram/diagram'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { applyTheorem, type Theorem } from '../../src/kernel/proof/theorem'
+import { applyStep } from '../../src/kernel/proof/step'
 
 /** The reference nodes of a theorem side, as `defId/arity` strings, sorted. */
 function refKinds(side: Theorem['lhs']): string[] {
@@ -45,7 +46,7 @@ describe('the bundled Frege theory', () => {
       return walk(t.term as never)
     }
     const theory = buildFregeTheory()
-    for (const rel of Object.values(theory.relations)) {
+    for (const [, rel] of theory.relations) {
       expect(Object.values(rel.diagram.nodes).some(hasConst)).toBe(false)
     }
   })
@@ -111,7 +112,46 @@ describe('the bundled Frege theory', () => {
   })
 
   it('zeroIsNat: the closed sentence ⟹ ∃z. Zero(z) ∧ nat(z); no boundary; nat and zero co-ride the existential z', () => {
-    const t = buildFregeTheory().theorems.find((x) => x.name === 'zeroIsNat')!
+    const theory = buildFregeTheory()
+    const t = theory.theorems.find((x) => x.name === 'zeroIsNat')!
+    const rules = t.actions.flatMap((action) => action.steps).map((step) => step.rule)
+    expect(rules).toContain('anchoredWireSplit')
+    expect(rules).toContain('anchoredWireContract')
+    expect(rules).toContain('relationSpawn')
+    expect(rules).toContain('boundRelationSpawn')
+    expect(rules).not.toContain('insertion')
+
+    const ctx = verifyTheory(theory)
+    let replayed = t.lhs.diagram
+    let observedSplit = false
+    for (const step of t.actions.flatMap((action) => action.steps)) {
+      if (step.rule !== 'anchoredWireSplit') {
+        replayed = applyStep(replayed, step, ctx)
+        continue
+      }
+      observedSplit = true
+      const originalWire = replayed.wires[step.wire]
+      expect(originalWire).toBeDefined()
+      const originalScope = originalWire!.scope
+      expect(replayed.regions[originalScope]?.kind).toBe('bubble')
+      const baseEndpoint = originalWire!.endpoints.find((endpoint) => {
+        const node = replayed.nodes[endpoint.node]
+        return node?.kind === 'atom' && node.region === originalScope && endpoint.port.kind === 'arg'
+      })
+      expect(baseEndpoint).toBeDefined()
+      const movedEndpoint = step.endpoints[0]
+      expect(movedEndpoint).toBeDefined()
+
+      replayed = applyStep(replayed, step, ctx)
+
+      const retainedWire = replayed.wires[step.wire]
+      expect(retainedWire).toBeDefined()
+      expect(retainedWire!.scope).toBe(originalScope)
+      expect(retainedWire!.endpoints).toContainEqual(baseEndpoint)
+      expect(retainedWire!.endpoints).toContainEqual({ node: step.witness, port: { kind: 'output' } })
+      expect(retainedWire!.endpoints).not.toContainEqual(movedEndpoint)
+    }
+    expect(observedSplit).toBe(true)
     // a standalone fact, so both sides are closed sentences (empty boundary)
     expect(t.lhs.boundary).toHaveLength(0)
     expect(t.rhs.boundary).toHaveLength(0)
@@ -183,6 +223,7 @@ describe('the bundled Frege theory', () => {
 
   it('smoke: oneIsNat inserts a certified nat(1) that then satisfies a plusComm citation', () => {
     const theory = buildFregeTheory()
+    const ctx = verifyTheory(theory)
     const oneIsNat = theory.theorems.find((x) => x.name === 'oneIsNat')!
     const plusComm = theory.theorems.find((x) => x.name === 'plusComm')!
 
@@ -190,7 +231,7 @@ describe('the bundled Frege theory', () => {
     // positive region and it PLANTS its own certified 1 as Zero(z) ∧ Succ(z,s)
     // ∧ nat(s) on fresh existential lines — no host premise needed.
     const d0 = new DiagramBuilder().build()
-    const d = applyTheorem(d0, oneIsNat, {
+    const d = applyTheorem(d0, ctx, oneIsNat.name, {
       sel: mkSelection(d0, { region: d0.root, regions: [], nodes: [], wires: [] }), args: [],
     }, 'forward')
     const natS = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'nat')![0]
@@ -218,7 +259,7 @@ describe('the bundled Frege theory', () => {
     })
 
     // feed nat(1) ∧ nat(b) ∧ Plus(s,b,sum) into plusComm → Plus(b,s,sum)
-    const d2 = applyTheorem(d1, plusComm, {
+    const d2 = applyTheorem(d1, ctx, plusComm.name, {
       sel: mkSelection(d1, { region: d1.root, regions: [], nodes: [natS, natB, plusN], wires: [] }), args: [ws, wb, wsum],
     }, 'forward')
     // the Plus now reads (b, s, sum): its first argument rides wb, the crossed 1
@@ -231,7 +272,7 @@ describe('the bundled Frege theory', () => {
     // Non-vacuity lock: the zero-evidence is a `zero` reference living strictly
     // inside the guard bubble, its arg line scoped there — no top-level zero
     // witness leaks. The ONLY root-scoped wire is the boundary x-line.
-    const nat = buildFregeTheory().relations['nat']!
+    const nat = new Map(buildFregeTheory().relations).get('nat')!
     const d = nat.diagram
     const zeroEntry = Object.entries(d.nodes).find(([, n]) => n.kind === 'ref' && n.defId === 'zero')
     expect(zeroEntry).toBeDefined()
@@ -250,10 +291,11 @@ describe('the bundled Frege theory', () => {
 
   it('the named ℕ relation is arity 1 with a stable fingerprint', () => {
     const theory = buildFregeTheory()
-    expect(theory.relations['nat']).toBeDefined()
-    expect(theory.relations['nat']!.boundary).toHaveLength(1)
-    expect(boundaryForm(theory.relations['nat']!)).toBeTruthy()
-    expect(boundaryForm(natRelation())).toBe(boundaryForm(theory.relations['nat']!))
+    const nat = new Map(theory.relations).get('nat')!
+    expect(nat).toBeDefined()
+    expect(nat.boundary).toHaveLength(1)
+    expect(boundaryForm(nat)).toBeTruthy()
+    expect(boundaryForm(natRelation())).toBe(boundaryForm(nat))
   })
 
   it('the theory is deterministic: two builds are identical', () => {

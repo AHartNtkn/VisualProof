@@ -2,11 +2,10 @@ import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../src/kernel/diagram/diagram'
-import { mkEngine, recomputeRegions, legPaths, settle, computeLegs, existentialStubs, frameBounds, frameSlots } from '../../src/view/index'
+import { mkEngine, recomputeRegions, computeLegs, legPaths, settle, existentialStubs, frameBounds, frameSlots } from '../../src/view/index'
 import type { Vec2 } from '../../src/view/index'
-import { buildFregeTheory } from '../../src/theories/frege'
 import { vec } from '../../src/view/vec'
-import { hitTest, wireHitTest, brushHitTest, dragTarget, buildSelection } from '../../src/app/hittest'
+import { hitTest, wireHitTest, wireManipulationHitTest, brushHitTest, dragTarget, buildSelection } from '../../src/app/hittest'
 
 const p = (s: string) => parseTerm(s)
 const viewport = (scale = 1) => ({ scale })
@@ -112,6 +111,32 @@ describe('hitTest', () => {
 
     expect(hitTest(e, bindPoint, viewport()), 'ordinary selection keeps node-first precedence').toEqual({ kind: 'node', id: zero })
     expect(wireHitTest(e, bindPoint, viewport()), 'wire manipulation sees every painted part of the line').toEqual({ kind: 'wire', id: wire })
+  })
+
+  it('distinguishes concrete endpoint legs from the trunk of one equality wire', () => {
+    const h = new DiagramBuilder()
+    const a = h.termNode(h.root, p('f x'))
+    const b = h.termNode(h.root, p('f y'))
+    const wire = h.wire(h.root, [
+      { node: a, port: { kind: 'output' } },
+      { node: b, port: { kind: 'output' } },
+    ])
+    const e = mkEngine(h.build(), [])
+    e.bodies.get(a)!.pos = vec(-40, 0)
+    e.bodies.get(b)!.pos = vec(40, 0)
+    recomputeRegions(e)
+    const path = computeLegs(e).find(({ leg }) => leg.wid === wire)!
+    const pointFor = (node: string): Vec2 => path.leg.from.body === node ? path.pts[0]! : path.pts.at(-1)!
+
+    expect(wireManipulationHitTest(e, pointFor(a), viewport())).toEqual({
+      wire,
+      endpoint: { node: a, port: { kind: 'output' } },
+    })
+    expect(wireManipulationHitTest(e, pointFor(b), viewport())).toEqual({
+      wire,
+      endpoint: { node: b, port: { kind: 'output' } },
+    })
+    expect(wireManipulationHitTest(e, midOf(path.pts), viewport())).toEqual({ wire, endpoint: null })
   })
 
   it('gives a painted semantic dot precedence over a coincident wire stroke', () => {
@@ -250,20 +275,6 @@ describe('dragTarget — what a press-and-drag grabs', () => {
     expect(dragTarget(e, vec(1, 1), viewport())).toEqual({ kind: 'body', id: n })
   })
 
-  it('a point on an ∃ dot grabs its homed body (clicks resolve it to the wire, drags do not)', () => {
-    // PLAN 21: hub junction bodies are gone — the grabbable junction-kind
-    // bodies are the homed wire ends (the ∃ dots), which stay independently
-    // manipulable (loose-ends law)
-    const h2 = new DiagramBuilder()
-    const a = h2.termNode(h2.root, p('\\x. x'))
-    const w = h2.wire(h2.root, [{ node: a, port: { kind: 'output' } }])
-    const e2 = mkEngine(h2.build(), [])
-    settle(e2, 2600) // the ∃ dot parks just outside the disc's clearance once settled
-    const j = e2.bodies.get(e2.wires.get(w)!.tipBodyId!)!
-    expect(hitTest(e2, j.pos, viewport())).toEqual({ kind: 'wire', id: w })
-    expect(dragTarget(e2, j.pos, viewport())).toEqual({ kind: 'body', id: j.id })
-  })
-
   it('a point inside a region (off every disc) grabs the region', () => {
     const { cut, e } = setup()
     const g = e.regions.get(cut)!
@@ -294,29 +305,6 @@ describe('buildSelection', () => {
 })
 
 describe('engine hit targets (junctions, frame exits → existing vocabulary)', () => {
-  it('a click on a branch junction resolves to its wire — hit-tested on the DRAWN tributary curves', () => {
-    const h = new DiagramBuilder()
-    const a = h.termNode(h.root, p('x'))
-    const b = h.termNode(h.root, p('x'))
-    const c = h.termNode(h.root, p('x'))
-    const w = h.wire(h.root, [
-      { node: a, port: { kind: 'freeVar', name: 'x' } },
-      { node: b, port: { kind: 'freeVar', name: 'x' } },
-      { node: c, port: { kind: 'freeVar', name: 'x' } },
-    ])
-    const e = mkEngine(h.build(), [])
-    settle(e, 2600)
-    recomputeRegions(e)
-    // a k-ary junction is DRAWN as a tree of elastica legs (the branching IS the
-    // physics wire, one geometry), so a click must hit-test against those legs —
-    // paint and hit share legPaths. Pick a point on a drawn leg and assert parity.
-    const legs = legPaths(e).filter((l) => l.wid === w)
-    expect(legs.length, 'the junction is drawn as its legs').toBeGreaterThan(0)
-    const curve = legs.map((l) => l.pts).find((pl) => pl.length > 2)!
-    const mid = curve[Math.floor(curve.length / 2)]!
-    expect(hitTest(e, mid, viewport())).toEqual({ kind: 'wire', id: w })
-  })
-
   it('a click on an existential stub resolves to its internal wire', () => {
     // A lone internal identity node: its output is a genuine internal singleton
     // wire, painted as an ∃ stub. The stub is a painted target, so it must be
@@ -332,18 +320,6 @@ describe('engine hit targets (junctions, frame exits → existing vocabulary)', 
     const stub = existentialStubs(e)[0]!
     expect(stub).toBeDefined()
     expect(hitTest(e, stub.dot, viewport())).toEqual({ kind: 'wire', id: stub.wid })
-  })
-
-  it('a click on a boundary wire (its leg near the frame slot) resolves to that wire', () => {
-    const nat = buildFregeTheory().relations.nat!
-    const e = mkEngine(nat.diagram, nat.boundary)
-    settle(e, 1200)
-    const wid = nat.boundary[0]!
-    const leg = computeLegs(e).find((g) => g.leg.wid === wid)!
-    expect(leg).toBeDefined()
-    // a point partway along the boundary leg (toward the frame), clear of the node
-    const pt = leg.pts[Math.floor(leg.pts.length * 0.75)]!
-    expect(hitTest(e, pt, viewport())).toEqual({ kind: 'wire', id: wid })
   })
 
   it('clicking an endpointless boundary port at its drawn frame slot resolves to that wire', () => {

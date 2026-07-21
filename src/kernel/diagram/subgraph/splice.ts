@@ -4,7 +4,21 @@ import { isAncestorOrEqual } from '../regions'
 import type { DiagramWithBoundary } from '../boundary'
 import type { SubgraphSelection } from './selection'
 import { selectionContents } from './selection'
-import { freshId } from './freshId'
+import { freshId, type IdReservation } from './freshId'
+import { port } from '../../term/term'
+
+export type SpliceOptions = {
+  readonly binderMap?: ReadonlyMap<RegionId, RegionId>
+  readonly reserved?: IdReservation | undefined
+}
+
+export type MappedSplice = {
+  readonly diagram: Diagram
+  readonly regionMap: ReadonlyMap<RegionId, RegionId>
+  readonly nodeMap: ReadonlyMap<string, string>
+  /** Internal wires map to fresh wires; boundary stubs map to their surviving host attachment. */
+  readonly wireMap: ReadonlyMap<WireId, WireId>
+}
 
 /** Drop the selection's content; touching wires keep only their outside endpoints. */
 export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
@@ -36,23 +50,23 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
  * pushout of the two interfaces, not repeated copying of the same endpoints.
  * The quotient keeps the outermost attachment scope and a deterministic
  * survivor id, then copies each boundary stub's endpoints exactly once.
- * Boundary stubs MUST be scoped
- * at the pattern root (the connection seam's quantifier location after the
- * splice IS the attachment wire's scope — a non-root stub scope would assert
- * a location the splice cannot honor; see boundary.ts). Pattern content gets
+ * Boundary stubs are intrinsically scoped at the pattern root by
+ * DiagramWithBoundary construction. The assertion below is defensive: the
+ * connection seam cannot honor any other scope. Pattern content gets
  * fresh host ids deterministically; the result is re-validated by mkDiagram.
  *
  * With a binder map, mapped stubs are location-transparent layers (not copied
  * as fresh bubbles); their children reparent to the splice region, and atoms
  * bound to them rebind to the host bubbles indicated in the map.
  */
-export function spliceSubgraph(
+export function spliceSubgraphMapped(
   host: Diagram,
   atRegion: RegionId,
   pattern: DiagramWithBoundary,
   attachments: readonly WireId[],
-  binderMap: ReadonlyMap<RegionId, RegionId> = new Map(),
-): Diagram {
+  options: SpliceOptions = {},
+): MappedSplice {
+  const binderMap = options.binderMap ?? new Map<RegionId, RegionId>()
   if (host.regions[atRegion] === undefined) {
     throw new DiagramError(`splice region '${atRegion}' does not exist`)
   }
@@ -63,7 +77,7 @@ export function spliceSubgraph(
   const boundarySet = new Set(pattern.boundary)
   for (const b of pattern.boundary) {
     if (pd.wires[b]!.scope !== pd.root) {
-      throw new DiagramError(`boundary wire '${b}' is not scoped at the pattern root; not spliceable`)
+      throw new DiagramError(`invalid DiagramWithBoundary: boundary wire '${b}' is not scoped at the pattern root`)
     }
   }
   for (const a of attachments) {
@@ -74,53 +88,35 @@ export function spliceSubgraph(
     }
   }
 
-  // Boundary alias classes induce a quotient on host attachments. Use a tiny
-  // union-find over attachment ids: two host wires are identified exactly when
-  // two positions exposing the same pattern wire attach to them. Distinct
-  // pattern wires may still intentionally attach to one host wire (diagonal
-  // instantiation); that does not add another equivalence edge.
-  const parent = new Map<WireId, WireId>()
-  const find = (w: WireId): WireId => {
-    const p = parent.get(w)
-    if (p === undefined) { parent.set(w, w); return w }
-    if (p === w) return w
-    const root = find(p)
-    parent.set(w, root)
-    return root
-  }
-  const unite = (a: WireId, b: WireId): void => {
-    const ra = find(a), rb = find(b)
-    if (ra !== rb) parent.set(rb, ra)
-  }
+  // A repeated boundary identity is an equality constraint at the application
+  // site, not permission to identify the host wires globally. Keep the first
+  // ordered attachment as the copied pattern wire's representative and record
+  // every distinct later attachment for one explicit local identity node
+  // below. Repeating the same stub/attachment pair adds no new equality.
   const firstAttachmentOfStub = new Map<WireId, WireId>()
+  const attachmentsOfStub = new Map<WireId, Set<WireId>>()
+  const aliasIncidences: Array<{ representative: WireId; attachment: WireId; position: number }> = []
   pattern.boundary.forEach((stub, i) => {
     const attachment = attachments[i]!
     const first = firstAttachmentOfStub.get(stub)
-    if (first === undefined) firstAttachmentOfStub.set(stub, attachment)
-    else unite(first, attachment)
-  })
-  const component = new Map<WireId, WireId[]>()
-  for (const attachment of attachments) {
-    const root = find(attachment)
-    const members = component.get(root)
-    if (members === undefined) component.set(root, [attachment])
-    else if (!members.includes(attachment)) members.push(attachment)
-  }
-  const hostImage = new Map<WireId, WireId>()
-  for (const members of component.values()) {
-    // All attachment scopes enclose atRegion, hence lie on one ancestor chain.
-    // Start with first incidence for stable equal-scope tie-breaking and replace
-    // it only with a strictly outer scope.
-    let survivor = members[0]!
-    for (const id of members.slice(1)) {
-      const candidate = host.wires[id]!
-      const current = host.wires[survivor]!
-      if (candidate.scope !== current.scope && isAncestorOrEqual(host, candidate.scope, current.scope)) survivor = id
+    if (first === undefined) {
+      firstAttachmentOfStub.set(stub, attachment)
+      attachmentsOfStub.set(stub, new Set([attachment]))
+    } else {
+      const seen = attachmentsOfStub.get(stub)!
+      if (!seen.has(attachment)) {
+        seen.add(attachment)
+        aliasIncidences.push({ representative: first, attachment, position: i })
+      }
     }
-    for (const id of members) hostImage.set(id, survivor)
-  }
+  })
 
+  const binderTargets = new Set<RegionId>()
   for (const [stub, hb] of binderMap) {
+    if (binderTargets.has(hb)) {
+      throw new DiagramError(`binder map target '${hb}' is used by more than one stub`)
+    }
+    binderTargets.add(hb)
     const ps = pd.regions[stub]
     if (ps === undefined) throw new DiagramError(`binder map stub '${stub}' is not a pattern region`)
     if (ps.kind !== 'bubble') throw new DiagramError(`binder map stub '${stub}' is not a bubble`)
@@ -143,24 +139,32 @@ export function spliceSubgraph(
   for (const stub of binderMap.keys()) regionMap.set(stub, atRegion)
   for (const id of Object.keys(pd.regions)) {
     if (id === pd.root || binderMap.has(id)) continue
-    const fresh = freshId(takenRegions, id)
+    const fresh = freshId(takenRegions, id, options.reserved?.regions)
     takenRegions.add(fresh)
     regionMap.set(id, fresh)
   }
   const takenNodes = new Set(Object.keys(host.nodes))
   const nodeMap = new Map<string, string>()
   for (const id of Object.keys(pd.nodes)) {
-    const fresh = freshId(takenNodes, id)
+    const fresh = freshId(takenNodes, id, options.reserved?.nodes)
     takenNodes.add(fresh)
     nodeMap.set(id, fresh)
   }
+  const aliasNodes = aliasIncidences.map(({ representative, attachment, position }) => {
+    const fresh = freshId(takenNodes, `alias_${position}`, options.reserved?.nodes)
+    takenNodes.add(fresh)
+    return { id: fresh, representative, attachment }
+  })
   // Mint against the full PRE-QUOTIENT namespace: a wire removed by the
   // pushout must never be resurrected as unrelated copied content.
   const takenWires = new Set(Object.keys(host.wires))
   const wireMap = new Map<WireId, WireId>()
+  pattern.boundary.forEach((stub, index) => {
+    if (!wireMap.has(stub)) wireMap.set(stub, attachments[index]!)
+  })
   for (const id of Object.keys(pd.wires)) {
     if (boundarySet.has(id)) continue
-    const fresh = freshId(takenWires, id)
+    const fresh = freshId(takenWires, id, options.reserved?.wires)
     takenWires.add(fresh)
     wireMap.set(id, fresh)
   }
@@ -178,7 +182,7 @@ export function spliceSubgraph(
   // Return-typed switch (no default): a new node kind forces its rebuild here.
   const rebuildNode = (n: DiagramNode): DiagramNode => {
     switch (n.kind) {
-      case 'term': return { kind: 'term', region: regionMap.get(n.region)!, term: n.term }
+      case 'term': return { kind: 'term', region: regionMap.get(n.region)!, term: n.term, freePorts: n.freePorts }
       case 'atom': return { kind: 'atom', region: regionMap.get(n.region)!, binder: binderMap.get(n.binder) ?? regionMap.get(n.binder)! }
       case 'ref': return { kind: 'ref', region: regionMap.get(n.region)!, defId: n.defId, arity: n.arity }
     }
@@ -187,21 +191,14 @@ export function spliceSubgraph(
   for (const [id, n] of Object.entries(pd.nodes)) {
     nodes[nodeMap.get(id)!] = rebuildNode(n)
   }
+  for (const alias of aliasNodes) {
+    nodes[alias.id] = { kind: 'term', region: atRegion, term: port('s0'), freePorts: ['s0'] }
+  }
 
   const mapEndpoints = (eps: readonly Endpoint[]): Endpoint[] =>
     eps.map((ep) => ({ node: nodeMap.get(ep.node)!, port: ep.port }))
 
-  const wires: Record<WireId, Wire> = {}
-  for (const [id, w] of Object.entries(host.wires)) {
-    const image = hostImage.get(id) ?? id
-    if (image !== id) continue
-    const merged = Object.entries(host.wires)
-      .filter(([candidate]) => (hostImage.get(candidate) ?? candidate) === id)
-      .flatMap(([, candidate]) => candidate.endpoints)
-    wires[id] = merged.length === w.endpoints.length
-      ? w
-      : { scope: w.scope, endpoints: merged }
-  }
+  const wires: Record<WireId, Wire> = { ...host.wires }
   for (const [id, w] of Object.entries(pd.wires)) {
     if (boundarySet.has(id)) continue
     wires[wireMap.get(id)!] = {
@@ -213,7 +210,7 @@ export function spliceSubgraph(
   pattern.boundary.forEach((stubId, i) => {
     if (copiedBoundary.has(stubId)) return
     copiedBoundary.add(stubId)
-    const hostWireId = hostImage.get(attachments[i]!) ?? attachments[i]!
+    const hostWireId = attachments[i]!
     const stub = pd.wires[stubId]!
     const existing = wires[hostWireId]!
     wires[hostWireId] = {
@@ -221,6 +218,45 @@ export function spliceSubgraph(
       endpoints: [...existing.endpoints, ...mapEndpoints(stub.endpoints)],
     }
   })
+  for (const alias of aliasNodes) {
+    const representative = wires[alias.representative]!
+    const attachment = wires[alias.attachment]!
+    if (alias.representative === alias.attachment) {
+      wires[alias.representative] = {
+        scope: representative.scope,
+        endpoints: [
+          ...representative.endpoints,
+          { node: alias.id, port: { kind: 'output' } },
+          { node: alias.id, port: { kind: 'freeVar', name: 's0' } },
+        ],
+      }
+    } else {
+      wires[alias.representative] = {
+        scope: representative.scope,
+        endpoints: [...representative.endpoints, { node: alias.id, port: { kind: 'output' } }],
+      }
+      wires[alias.attachment] = {
+        scope: attachment.scope,
+        endpoints: [...attachment.endpoints, { node: alias.id, port: { kind: 'freeVar', name: 's0' } }],
+      }
+    }
+  }
 
-  return mkDiagram({ root: host.root, regions, nodes, wires })
+  return Object.freeze({
+    diagram: mkDiagram({ root: host.root, regions, nodes, wires }),
+    regionMap: new Map(regionMap),
+    nodeMap: new Map(nodeMap),
+    wireMap: new Map(wireMap),
+  })
+}
+
+/** Ordinary convenience entry: canonical mapped splice without extra reservations. */
+export function spliceSubgraph(
+  host: Diagram,
+  atRegion: RegionId,
+  pattern: DiagramWithBoundary,
+  attachments: readonly WireId[],
+  binderMap: ReadonlyMap<RegionId, RegionId> = new Map(),
+): Diagram {
+  return spliceSubgraphMapped(host, atRegion, pattern, attachments, { binderMap }).diagram
 }

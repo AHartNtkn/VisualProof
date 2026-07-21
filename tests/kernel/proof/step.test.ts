@@ -1,20 +1,28 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyConversion } from '../../../src/kernel/rules/conversion'
 import { applyHeadStrip } from '../../../src/kernel/rules/headstrip'
 import { applyClosedTermIntro } from '../../../src/kernel/rules/intro'
-import { applyStep, replayProof } from '../../../src/kernel/proof/step'
-import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import { findInconsistentCutEvidence } from '../../../src/kernel/rules/inconsistent-cut'
+import {
+  applyStep,
+  applyStepWithReceipt,
+  replayProof,
+  transportBoundary,
+} from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 import { ProofError } from '../../../src/kernel/proof/error'
+import { proposePortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../../src/kernel/rules/access'
 
 const pp = (s: string) => parseTerm(s)
 
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
 
 describe('applyStep mirrors the direct appliers', () => {
   it('erasure step equals applyErasure', () => {
@@ -32,9 +40,41 @@ describe('applyStep mirrors the direct appliers', () => {
     const n = h.termNode(h.root, pp('(\\x. x) y'))
     const d = h.build()
     // the node's source free 'y' is canonical s0 after construction
-    const { diagram, certificate } = applyConversion(d, n, pp('s0'), 10)
-    const step: ProofStep = { rule: 'conversion', node: n, term: pp('s0'), certificate, attachments: {} }
+    const target = pp('s0')
+    const source = termNodeAt(d, n)
+    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, ['s0'])
+    const { diagram, certificate } = applyConversion(d, n, target, correspondence, 10)
+    const step: ProofStep = { rule: 'conversion', node: n, term: target, certificate, correspondence, attachments: {} }
     expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(diagram))
+  })
+
+  it('inconsistent-cut elimination replays its authored certificate after UI fuel changes', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const first = h.termNode(cut, pp('(\\x. x) (\\z. z)'))
+    const second = h.termNode(cut, pp('\\x. (\\a. \\b. a) x'))
+    h.wire(cut, [first, second].map((node) => ({ node, port: { kind: 'output' as const } })))
+    const d = h.build()
+
+    let uiFuel = 2
+    const discovery = findInconsistentCutEvidence(d, cut, uiFuel)
+    expect(discovery.status).toBe('certified')
+    if (discovery.status !== 'certified') throw new Error('test setup requires certified evidence')
+    const step: ProofStep = {
+      rule: 'inconsistentCutElim',
+      region: cut,
+      first: discovery.first,
+      second: discovery.second,
+      certificate: discovery.certificate,
+    }
+
+    uiFuel = 0
+    expect(uiFuel).toBe(0)
+    const replayed = applyStep(d, step, ctx)
+
+    expect(replayed.regions[cut]).toBeUndefined()
+    expect(replayed.nodes[first]).toBeUndefined()
+    expect(replayed.nodes[second]).toBeUndefined()
   })
 
   it('congruenceJoin step merges the outputs of βη-equal co-resident nodes', () => {
@@ -48,7 +88,10 @@ describe('applyStep mirrors the direct appliers', () => {
     h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
     h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
     const d = h.build()
-    const step: ProofStep = { rule: 'congruenceJoin', a: n1, b: n2, certificate: { leftSteps: [], rightSteps: [] } }
+    const left = termNodeAt(d, n1)
+    const right = termNodeAt(d, n2)
+    const correspondence = proposePortCorrespondence(left.term, right.term, left.freePorts, right.freePorts)
+    const step: ProofStep = { rule: 'congruenceJoin', a: n1, b: n2, certificate: { leftSteps: [], rightSteps: [] }, correspondence }
     const out = applyStep(d, step, ctx)
     const shared = Object.values(out.wires).find((w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2)
     expect(shared).toBeDefined()
@@ -69,12 +112,8 @@ describe('applyStep mirrors the direct appliers', () => {
 
   it('headStrip step decomposes a rigid-head equation, replaying through replayProof', () => {
     const h = new DiagramBuilder()
-    const n1 = h.termNode(h.root, pp('f a b'))
-    const n2 = h.termNode(h.root, pp('f a c'))
-    h.wire(h.root, [
-      { node: n1, port: { kind: 'freeVar', name: 'f' } },
-      { node: n2, port: { kind: 'freeVar', name: 'f' } },
-    ])
+    const n1 = h.termNode(h.root, pp('\\x. x a b'))
+    const n2 = h.termNode(h.root, pp('\\x. x a c'))
     h.wire(h.root, [
       { node: n1, port: { kind: 'freeVar', name: 'a' } },
       { node: n2, port: { kind: 'freeVar', name: 'a' } },
@@ -84,10 +123,17 @@ describe('applyStep mirrors the direct appliers', () => {
       { node: n2, port: { kind: 'output' } },
     ])
     const d = h.build()
-    const step: ProofStep = { rule: 'headStrip', a: n1, b: n2 }
-    expect(exploreForm(applyStep(d, step, ctx))).toBe(exploreForm(applyHeadStrip(d, n1, n2)))
-    const out = replayProof(d, [step], ctx)
-    expect(Object.keys(out.nodes)).toHaveLength(4)
+    const correspondence = {
+      commonArity: 3,
+      left: { s0: 0, s1: 1 },
+      right: { s0: 0, s1: 2 },
+    }
+    const step: ProofStep = { rule: 'headStrip', a: n1, b: n2, correspondence }
+    const direct = exploreForm(applyHeadStrip(d, n1, n2, correspondence))
+    expect(exploreForm(applyStep(d, step, ctx, 'forward'))).toBe(direct)
+    expect(exploreForm(applyStep(d, step, ctx, 'backward'))).toBe(direct)
+    expect(Object.keys(replayProof(d, [step], ctx, undefined, 'forward').nodes)).toHaveLength(4)
+    expect(Object.keys(replayProof(d, [step], ctx, undefined, 'backward').nodes)).toHaveLength(4)
   })
 
   it('double-cut intro/elim and iteration/deiteration round-trip through steps', () => {
@@ -109,15 +155,122 @@ describe('applyStep mirrors the direct appliers', () => {
     expect(Object.keys(out.regions).length).toBe(Object.keys(d.regions).length + 2)
   })
 
-  it('insertion and comprehension steps carry their patterns by value', () => {
-    const b = new DiagramBuilder()
-    b.termNode(b.root, pp('\\x. \\y. x'))
-    const pat = mkDiagramWithBoundary(b.build(), [])
+  it('atomic open-term spawning replays through the proof dispatcher', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const d = h.build()
-    const out = applyStep(d, { rule: 'insertion', region: cut, pattern: pat, attachments: [], binders: {} }, ctx)
+    const out = applyStep(d, { rule: 'openTermSpawn', region: cut, term: pp('x'), freePorts: ['x'] }, ctx)
     expect(Object.values(out.nodes)).toHaveLength(1)
+  })
+})
+
+describe('step interface transport', () => {
+  const anchoredFixture = (survivorBehindCut: boolean) => {
+    const b = new DiagramBuilder()
+    const cut = b.cut(b.root)
+    const redundant = b.termNode(b.root, pp('\\x. x'))
+    const survivor = b.termNode(survivorBehindCut ? cut : b.root, pp('\\x. x'))
+    const drop = b.wire(b.root, [{ node: redundant, port: { kind: 'output' } }])
+    const keep = b.wire(b.root, [{ node: survivor, port: { kind: 'output' } }])
+    return { diagram: b.build(), redundant, survivor, drop, keep }
+  }
+
+  it('does not treat fresh result wires as source identities', () => {
+    const d = new DiagramBuilder().build()
+    const receipt = applyStepWithReceipt(d, {
+      rule: 'closedTermIntro', region: d.root, term: pp('\\x. x'),
+    }, ctx)
+    const fresh = Object.keys(receipt.result.wires)[0]!
+
+    expect(receipt.provenance.image(fresh)).toBeUndefined()
+    expect(receipt.interface.image(fresh)).toBeUndefined()
+  })
+
+  it('coalesces an anchored contraction boundary exactly when the survivor is root-available', () => {
+    const root = anchoredFixture(false)
+    const rootReceipt = applyStepWithReceipt(root.diagram, {
+      rule: 'anchoredWireContract',
+      redundant: root.redundant,
+      survivor: root.survivor,
+      certificate: { leftSteps: [], rightSteps: [] },
+    }, ctx)
+    expect(rootReceipt.result.wires[root.drop]).toBeUndefined()
+    expect(rootReceipt.provenance.image(root.drop)).toBeUndefined()
+    expect(rootReceipt.provenance.image(root.keep)).toBe(root.keep)
+    expect(rootReceipt.interface.image(root.drop)).toBe(root.keep)
+    expect(transportBoundary(rootReceipt.interface, [root.drop, root.drop, root.keep]))
+      .toEqual([root.keep, root.keep, root.keep])
+
+    const shielded = anchoredFixture(true)
+    const shieldedReceipt = applyStepWithReceipt(shielded.diagram, {
+      rule: 'anchoredWireContract',
+      redundant: shielded.redundant,
+      survivor: shielded.survivor,
+      certificate: { leftSteps: [], rightSteps: [] },
+    }, ctx)
+    expect(shieldedReceipt.result.wires[shielded.drop]).toBeUndefined()
+    expect(shieldedReceipt.provenance.image(shielded.drop)).toBeUndefined()
+    expect(shieldedReceipt.interface.image(shielded.drop)).toBeUndefined()
+    expect(transportBoundary(shieldedReceipt.interface, [shielded.drop])).toBeUndefined()
+    expect(transportBoundary(shieldedReceipt.interface, [shielded.keep])).toEqual([shielded.keep])
+  })
+
+  it('uses the same coalescing interface authority for wire join', () => {
+    const b = new DiagramBuilder()
+    const outerNode = b.termNode(b.root, pp('\\x. x'))
+    const innerNode = b.termNode(b.root, pp('\\x. x'))
+    const outer = b.wire(b.root, [{ node: outerNode, port: { kind: 'output' } }])
+    const inner = b.wire(b.root, [{ node: innerNode, port: { kind: 'output' } }])
+    const receipt = applyStepWithReceipt(
+      b.build(),
+      { rule: 'wireJoin', a: outer, b: inner },
+      ctx,
+      'backward',
+    )
+    expect(receipt.provenance.image(outer)).toBe(outer)
+    expect(receipt.provenance.image(inner)).toBeUndefined()
+    expect(receipt.interface.image(inner)).toBe(outer)
+    expect(transportBoundary(receipt.interface, [outer, inner, inner]))
+      .toEqual([outer, outer, outer])
+  })
+
+  it('transports the congruenceJoin absorbed output only when the retained output is root-visible', () => {
+    const fixture = (insideCut: boolean) => {
+      const b = new DiagramBuilder()
+      const region = insideCut ? b.cut(b.root) : b.root
+      const a = b.termNode(region, pp('x'))
+      const c = b.termNode(region, pp('x'))
+      b.wire(region, [
+        { node: a, port: { kind: 'freeVar', name: 'x' } },
+        { node: c, port: { kind: 'freeVar', name: 'x' } },
+      ])
+      const retained = b.wire(region, [{ node: a, port: { kind: 'output' } }])
+      const absorbed = b.wire(region, [{ node: c, port: { kind: 'output' } }])
+      return { diagram: b.build(), a, c, retained, absorbed }
+    }
+    const correspondence = { commonArity: 1, left: { s0: 0 }, right: { s0: 0 } }
+    const root = fixture(false)
+    const rootReceipt = applyStepWithReceipt(root.diagram, {
+      rule: 'congruenceJoin', a: root.a, b: root.c,
+      certificate: { leftSteps: [], rightSteps: [] }, correspondence,
+    }, ctx)
+    expect(rootReceipt.result.wires[root.absorbed]).toBeUndefined()
+    expect(rootReceipt.provenance.image(root.retained)).toBe(root.retained)
+    expect(rootReceipt.provenance.image(root.absorbed)).toBeUndefined()
+    expect(rootReceipt.interface.image(root.absorbed)).toBe(root.retained)
+    expect(transportBoundary(rootReceipt.interface, [root.retained, root.absorbed, root.absorbed]))
+      .toEqual([root.retained, root.retained, root.retained])
+
+    const shielded = fixture(true)
+    const shieldedReceipt = applyStepWithReceipt(shielded.diagram, {
+      rule: 'congruenceJoin', a: shielded.a, b: shielded.c,
+      certificate: { leftSteps: [], rightSteps: [] }, correspondence,
+    }, ctx)
+    expect(shieldedReceipt.result.wires[shielded.absorbed]).toBeUndefined()
+    expect(shieldedReceipt.provenance.image(shielded.retained)).toBeUndefined()
+    expect(shieldedReceipt.provenance.image(shielded.absorbed)).toBeUndefined()
+    expect(shieldedReceipt.interface.image(shielded.retained)).toBeUndefined()
+    expect(shieldedReceipt.interface.image(shielded.absorbed)).toBeUndefined()
   })
 })
 

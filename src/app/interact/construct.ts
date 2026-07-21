@@ -1,4 +1,4 @@
-import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../../kernel/diagram/diagram'
+import type { Diagram, Endpoint, NodeId, RegionId } from '../../kernel/diagram/diagram'
 import { pkey, type Engine, type Leg } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
 import {
@@ -8,7 +8,7 @@ import {
   type BodyPlacement,
 } from '../../view/placement'
 import type { Vec2 } from '../../view/vec'
-import { computeLegs, existentialStubs, legPaths, type LegGeom } from '../../view/wires'
+import { computeLegs, type LegGeom } from '../../view/wires'
 import {
   absorbHits,
   addBubble,
@@ -18,13 +18,16 @@ import {
   reparentNode,
   severEndpoint,
 } from '../edit'
-import { buildSelection, wireHitTest, type Hit } from '../hittest'
+import { buildSelection, type Hit } from '../hittest'
+import { ConnectionDragController } from './connection'
+import { FissionDragController, type FissionRequest } from './fission'
+import { CopyDragController, copyDestinationPreview } from './copy'
 import type { KeySample, PointerClaim, PointerSample } from './viewport'
+import type { CopyDestination, CopyPlan } from '../copy-planner'
 
 type PlacementState = { readonly node: NodeId; readonly placement: BodyPlacement; at: Vec2 }
 
 type Preview =
-  | { readonly kind: 'join'; readonly source: WireId; readonly from: Vec2; at: Vec2; target: WireId | null }
   | { readonly kind: 'slash'; readonly from: Vec2; at: Vec2 }
   | { readonly kind: 'placement'; readonly state: PlacementState }
 
@@ -37,11 +40,16 @@ export type ConstructOptions = {
   readonly selection: () => readonly Hit[]
   readonly setSelection: (selection: readonly Hit[]) => void
   readonly commit: (diagram: Diagram) => void
+  readonly commitFission: (request: FissionRequest) => void
   readonly refuse: (text: string, pointer?: Vec2) => void
   readonly setProblem: (problemId: string, text: string) => void
   readonly clearProblem: (problemId: string) => void
   readonly openSpawn: (sample: PointerSample, region: RegionId) => void
   readonly theme: () => Theme
+  readonly copy?: {
+    readonly destination: (sample: PointerSample) => CopyDestination | null
+    readonly commit: (plan: CopyPlan, sample: PointerSample) => void
+  }
 }
 
 function sameHit(a: Hit, b: Hit): boolean {
@@ -56,20 +64,6 @@ function regionAt(engine: Engine, diagram: Diagram, point: Vec2): RegionId {
       && (best === null || region.radius < best.radius)) best = { id, radius: region.radius }
   }
   return best?.id ?? diagram.root
-}
-
-function pointSegmentDistance(point: Vec2, from: Vec2, to: Vec2): number {
-  const dx = to.x - from.x
-  const dy = to.y - from.y
-  const length2 = dx * dx + dy * dy
-  const t = length2 === 0 ? 0 : Math.max(0, Math.min(1, ((point.x - from.x) * dx + (point.y - from.y) * dy) / length2))
-  return Math.hypot(point.x - (from.x + dx * t), point.y - (from.y + dy * t))
-}
-
-function polylineDistance(point: Vec2, points: readonly Vec2[]): number {
-  let best = Infinity
-  for (let i = 1; i < points.length; i++) best = Math.min(best, pointSegmentDistance(point, points[i - 1]!, points[i]!))
-  return best
 }
 
 function crosses(a: Vec2, b: Vec2, c: Vec2, d: Vec2): boolean {
@@ -104,31 +98,53 @@ function endpointAt(diagram: Diagram, leg: Leg): Endpoint | null {
   return null
 }
 
-function wireShapes(engine: Engine, wire: WireId, stroke: string, width: number): Shape[] {
-  const out: Shape[] = []
-  for (const path of legPaths(engine)) {
-    if (path.wid === wire) out.push({ kind: 'polyline', pts: path.pts, stroke, width, glow: null })
-  }
-  for (const stub of existentialStubs(engine)) {
-    if (stub.wid === wire) out.push({ kind: 'segment', from: stub.from, to: stub.to, stroke, width, glow: null })
-  }
-  return out
-}
-
 export class ConstructController {
   readonly #options: ConstructOptions
-  readonly optionsElement: HTMLButtonElement
+  readonly #connection: ConnectionDragController
+  readonly #fission: FissionDragController
+  readonly #copy: CopyDragController | null
   #preview: Preview | null = null
-  #severMode: 'slash' | 'double-click' = 'slash'
   #prompt: HTMLDivElement | null = null
 
   constructor(options: ConstructOptions) {
     this.#options = options
-    this.optionsElement = options.host.ownerDocument.createElement('button')
-    this.optionsElement.type = 'button'
-    this.optionsElement.className = 'vpa-sever-option'
-    this.optionsElement.addEventListener('click', this.#toggleSever)
-    this.#syncOptionLabel()
+    this.#connection = new ConnectionDragController({
+      active: options.active,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: (source, target, pointer) => {
+        if (source.wire === target.wire) {
+          this.#options.refuse('release on another line to join', pointer)
+          return false
+        }
+        return this.#tryCommit(() => joinWires(this.#options.diagram(), [source.wire, target.wire]), 'lines joined — one individual now')
+      },
+      refuse: options.refuse,
+    })
+    this.#fission = new FissionDragController({
+      active: options.active,
+      diagram: options.diagram,
+      engine: options.engine,
+      viewScale: options.viewScale,
+      theme: options.theme,
+      commit: options.commitFission,
+      refuse: (text, pointer) => options.refuse(text, pointer),
+    })
+    this.#copy = options.copy === undefined ? null : new CopyDragController({
+      active: options.active,
+      sourceDiagram: options.diagram,
+      sourceSelection: options.selection,
+      sourceEngine: options.engine,
+      viewScale: options.viewScale,
+      destination: options.copy.destination,
+      commit: options.copy.commit,
+      refuse: (text, sample) => options.refuse(text, sample.client),
+      theme: options.theme,
+      destinationPreview: (destination) => copyDestinationPreview(
+        options.engine(), destination.region, options.theme(),
+      ),
+    })
   }
 
   claim(sample: PointerSample): PointerClaim | null {
@@ -136,29 +152,18 @@ export class ConstructController {
     if (sample.button === 2) return this.#slashClaim(sample)
     if (sample.button !== 0) return null
 
-    if (sample.hit?.kind === 'node' && this.#options.selection().some((hit) => sameHit(hit, sample.hit!))) {
+    const connection = this.#connection.claim(sample)
+    if (connection !== null) return connection
+    const fission = this.#fission.claim(sample)
+    if (fission !== null) return fission
+    const selected = this.#options.selection()
+    const copy = this.#copy?.claim(sample) ?? null
+    if (copy !== null) { this.#fission.hover(null); return copy }
+
+    if (sample.hit?.kind === 'node' && selected.some((hit) => sameHit(hit, sample.hit!))) {
       return this.#placementClaim(sample.hit.id)
     }
-    const wire = wireHitTest(this.#options.engine(), sample.world, { scale: this.#options.viewScale() })
-    if (wire !== null) return this.#joinClaim(wire.id, sample.world)
     return null
-  }
-
-  doubleClick(sample: PointerSample): boolean {
-    if (!this.#options.active() || this.#severMode !== 'double-click') return false
-    let nearest: { readonly leg: LegGeom; readonly distance: number } | null = null
-    for (const leg of computeLegs(this.#options.engine())) {
-      const distance = polylineDistance(sample.world, leg.pts)
-      if (distance <= 2.5 && (nearest === null || distance < nearest.distance)) nearest = { leg, distance }
-    }
-    if (nearest === null) return false
-    const endpoint = endpointAt(this.#options.diagram(), nearest.leg.leg)
-    if (endpoint === null) {
-      this.#options.refuse('that strand runs between junctions; sever nearer a port', sample.client)
-      return true
-    }
-    this.#tryCommit(() => severEndpoint(this.#options.diagram(), nearest!.leg.leg.wid, endpoint), 'strand severed')
-    return true
   }
 
   keyDown(sample: KeySample): boolean {
@@ -184,59 +189,43 @@ export class ConstructController {
       else this.#tryCommit(() => deleteHits(this.#options.diagram(), selected), 'deleted; selected boundaries dissolved and unselected contents propagated')
       return true
     }
-    if (sample.key === 'Escape' && this.#prompt !== null) {
-      this.#closePrompt()
-      return true
+    if (sample.key === 'Escape') {
+      const cancelledFission = this.#fission.cancel()
+      this.#copy?.cancel()
+      if (this.#prompt !== null) {
+        this.#closePrompt()
+        return true
+      }
+      return cancelledFission
     }
     return false
   }
 
   overlay(): readonly Shape[] {
+    const connection = [...this.#connection.overlay(), ...this.#fission.overlay(), ...(this.#copy?.overlay() ?? [])]
     const preview = this.#preview
-    if (preview === null) return []
+    if (preview === null) return connection
     const colors = this.#options.theme().interaction
     if (preview.kind === 'slash') {
-      return [{ kind: 'segment', from: preview.from, to: preview.at, stroke: colors.refusal, width: 2, glow: null }]
-    }
-    if (preview.kind === 'join') {
-      const out: Shape[] = [{ kind: 'segment', from: preview.from, to: preview.at, stroke: colors.valid, width: 1.6, glow: null }]
-      if (preview.target !== null) out.push(...wireShapes(this.#options.engine(), preview.target, colors.valid, 3.2))
-      return out
+      return [...connection, { kind: 'segment', from: preview.from, to: preview.at, stroke: colors.refusal, width: 2, glow: null }]
     }
     const destination = regionAt(this.#options.engine(), this.#options.diagram(), preview.state.at)
     const home = this.#options.diagram().nodes[preview.state.node]?.region
     const geometry = this.#options.engine().regions.get(destination)
     return geometry === undefined || destination === home || this.#options.diagram().regions[destination]?.kind === 'sheet'
-      ? []
-      : [{ kind: 'circle', center: geometry.center, r: geometry.radius, fill: colors.validWash, stroke: colors.valid, width: 1.6, insetColor: null, glow: null }]
+      ? connection
+      : [...connection, { kind: 'circle', center: geometry.center, r: geometry.radius, fill: colors.validWash, stroke: colors.valid, width: 1.6, insetColor: null, glow: null }]
   }
 
   dispose(): void {
     this.#closePrompt()
-    this.optionsElement.removeEventListener('click', this.#toggleSever)
-    this.optionsElement.remove()
+    this.#connection.cancel()
+    this.#fission.dispose()
+    this.#copy?.dispose()
   }
 
-  #joinClaim(source: WireId, from: Vec2): PointerClaim {
-    const preview: Extract<Preview, { kind: 'join' }> = { kind: 'join', source, from, at: from, target: null }
-    this.#preview = preview
-    return {
-      still: 'selection',
-      blocksPassiveRelaxation: true,
-      move: (sample) => {
-        preview.at = sample.world
-        const target = wireHitTest(this.#options.engine(), sample.world, { scale: this.#options.viewScale() })
-        preview.target = target !== null && target.id !== source ? target.id : null
-      },
-      release: (_sample, moved) => {
-        this.#preview = null
-        if (!moved) return
-        if (preview.target === null) this.#options.refuse('release on another line to join', _sample.client)
-        else this.#tryCommit(() => joinWires(this.#options.diagram(), [source, preview.target!]), 'lines joined — one individual now')
-      },
-      cancel: () => { this.#preview = null },
-    }
-  }
+  passiveSample(sample: PointerSample | null): void { this.#fission.hover(this.#copy?.dragging === true ? null : sample) }
+  modifiersChanged(ctrlHeld: boolean): void { this.#fission.modifiersChanged(ctrlHeld); this.#copy?.modifiersChanged(ctrlHeld) }
 
   #slashClaim(start: PointerSample): PointerClaim {
     const preview: Extract<Preview, { kind: 'slash' }> = { kind: 'slash', from: start.world, at: start.world }
@@ -249,10 +238,6 @@ export class ConstructController {
         this.#preview = null
         if (!moved) {
           this.#options.openSpawn(start, regionAt(this.#options.engine(), this.#options.diagram(), start.world))
-          return
-        }
-        if (this.#severMode !== 'slash') {
-          this.#options.refuse('sever is set to double-click', sample.client)
           return
         }
         const crossings = crossedLegs(this.#options.engine(), preview.from, sample.world)
@@ -388,12 +373,4 @@ export class ConstructController {
     this.#prompt = null
   }
 
-  #toggleSever = (): void => {
-    this.#severMode = this.#severMode === 'slash' ? 'double-click' : 'slash'
-    this.#syncOptionLabel()
-  }
-
-  #syncOptionLabel(): void {
-    this.optionsElement.textContent = this.#severMode === 'slash' ? '⚙ sever: right-drag slash' : '⚙ sever: double-click strand'
-  }
 }

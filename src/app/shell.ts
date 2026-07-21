@@ -5,7 +5,10 @@ import { parseTerm } from '../kernel/term/parse'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { applyRelFold, applyRelUnfold } from '../kernel/rules/reldef'
-import type { ProofContext, ProofStep } from '../kernel/proof/step'
+import { applyFission } from '../kernel/rules/fusion'
+import type { ProofContext } from '../kernel/proof/context'
+import type { ProofStep } from '../kernel/proof/step'
+import { singleStepAction, type ProofAction } from '../kernel/proof/action'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
 import { vec } from '../view/vec'
@@ -15,20 +18,23 @@ import { settleStep, establishProofFrame, establishProofSlotShift, seedProject }
 import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, bubbleHues, highlightGroup, LIGHT, THEMES } from '../view/paint'
-import { drawShapes } from '../view/canvas'
+import { adaptCanvas } from '../view/canvas'
 import { fitCamera } from '../view/camera'
 import { seedBodyPlacement } from '../view/placement'
+import { seedActionHistoryPlacements } from './proof-placement'
 import type { Library } from './library'
 import { emptyLibrary, reconcile, loadEntry, unloadEntry, adoptEntry, defineEntry, rebuild } from './library'
 import { defineRelation, canonicalArgOrder, inferFoldArgs } from './define'
 import type { Replay } from './replay'
 import { mkReplay } from './replay'
-import { emptyDiagram, addTermNode, addRefNode, addAtomNode } from './edit'
+import { emptyDiagram } from './edit'
+import { spawnBoundRelationNode, spawnRelationNode, spawnTermNode } from '../kernel/diagram/spawn'
 import type { ProofSession, TrackDirection, TrackSession } from './session'
 import {
   startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, meet, assembleTheorem, adoptTheorem, sideBoundary, currentSide,
   startTrack, applyTrack, undoTrack, redoTrack, moveTrack, declareTrack, adoptTrackTheorem, trackBoundary, currentTrack,
 } from './session'
+import { proofSnapshot as serializeProofSnapshot } from './proof-snapshot'
 import type { Companion } from './companion'
 import { companionFor } from './companion'
 import { sessionTheory } from './persist'
@@ -37,8 +43,12 @@ import type { Hit } from './hittest'
 import { hitTest, wireHitTest, buildSelection } from './hittest'
 import { isHitSelected } from './interact/brush'
 import { ConstructController } from './interact/construct'
+import { copyRegionAt } from './interact/copy'
 import { SpawnCascade, boundPredicateOptions } from './interact/spawn'
+import { ProofSpawnController } from './interact/proof-spawn'
 import { ProofMoveController } from './interact/moves'
+import { introducedNodeId } from './interact/closed-term-intro'
+import { fissionDropPoint, fissionTargetPoint } from './interact/fission'
 import { InteractiveViewport, type KeySample, type PointerClaim, type PointerSample } from './interact/viewport'
 import { FeedbackController, REFUSAL_LIFETIME_MS, type FeedbackState } from './feedback'
 import { mountCompass } from './compass'
@@ -46,7 +56,8 @@ import { mountScrubber, type MountedScrubber, type TimelineView } from './intera
 import { previewTransition } from './history-preview'
 import { FixedSideWorkspace } from './fixed-side-workspace'
 import { defaultMotionPreferences, MotionCoordinator, setMotionSpeed } from './interact/motion'
-import { ComprehensionEditor } from './comprehension-editor'
+import { RelationWorkspace, SubstituteTransaction } from './relation-workspace'
+import { AbstractTransaction } from './relation-transactions'
 
 /**
  * The DOM shell: browser glue over the tested headless core (edit, session,
@@ -85,6 +96,10 @@ export type LibraryViewActions = {
   readonly replay: (theorem: string) => void
 }
 
+export function theoremActionCountLabel(count: number): string {
+  return `${count} action${count === 1 ? '' : 's'}`
+}
+
 export type LibraryRenderer = (
   host: HTMLElement,
   state: LibraryViewState,
@@ -105,8 +120,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const { canvas, chrome } = opts
   const themeCycle = opts.themes ?? THEMES
   if (themeCycle.length === 0) throw new Error('mountShell requires at least one theme')
-  const ctx2d = canvas.getContext('2d')
-  if (ctx2d === null) throw new Error('the canvas has no 2d context')
+  const mainSurface = adaptCanvas(canvas)
 
   // ---- boot: nothing. The app has ZERO built-in knowledge of any theory file
   // and fetches nothing. The working context is empty until the user opens
@@ -114,7 +128,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let library: Library = opts.initialLibrary ?? emptyLibrary()
   const boot = rebuild(library)
   let ctx: ProofContext = boot.ctx
-  let relations: Readonly<Record<string, DiagramWithBoundary>> = boot.relations
+  let relations: readonly (readonly [string, DiagramWithBoundary])[] = boot.relations
 
   // ---- state ----
   let mode: 'edit' | 'prove' | 'replay' = 'edit'
@@ -126,6 +140,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let replayReturnMode: 'edit' | 'prove' = 'edit'
   let editDiagram = opts.initialDiagram ?? emptyDiagram()
   const editHistory: Diagram[] = []
+  const editFuture: Diagram[] = []
   let goalLhs: DiagramWithBoundary | null = null
   let goalRhs: DiagramWithBoundary | null = null
   type ActiveProof =
@@ -153,8 +168,13 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let interaction!: InteractiveViewport
   let construct!: ConstructController
   let proofMoves!: ProofMoveController
-  let comprehensionEditor: ComprehensionEditor | null = null
+  let relationWorkspace: RelationWorkspace | null = null
+  const cancelRelationAuthoring = (): void => {
+    relationWorkspace?.cancel()
+    fixedWorkspace?.cancelRelationWorkspace()
+  }
   let spawnCascade!: SpawnCascade
+  let proofSpawn!: ProofSpawnController
   let spawnHoverBinder: RegionId | null = null
   const feedback = new FeedbackController()
   let lastPointerClient: Vec2 = { x: window.innerWidth / 2, y: window.innerHeight / 2 }
@@ -162,7 +182,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   let refusalTimer = 0
   const rememberPointer = (pointer: Vec2): void => {
     lastPointerClient = pointer
-    comprehensionEditor?.hostPointerChanged(pointer)
+    relationWorkspace?.hostPointerChanged(pointer)
   }
   const clearRefusalPresentation = (sequence?: number): void => {
     feedback.clearRefusal(sequence)
@@ -235,11 +255,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   companionLabel.style.pointerEvents = 'none'
   companionWrap.append(companionCanvas, companionLabel)
   document.body.append(companionWrap)
-  const cctx = companionCanvas.getContext('2d')
-  if (cctx === null) throw new Error('the companion canvas has no 2d context')
+  const companionSurface = adaptCanvas(companionCanvas)
 
-  canvas.width = window.innerWidth
-  canvas.height = window.innerHeight
+  mainSurface.resize(window.innerWidth, window.innerHeight)
   const applyThemeBackdrop = (): void => {
     canvas.style.background = theme.canvas
     canvas.ownerDocument.documentElement.style.background = theme.canvas
@@ -274,11 +292,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     return editDiagram
   }
 
-  // Prove-mode sides render their statement boundary as frame exits; an edit
-  // sheet has no boundary. mkEngine ignores boundary ids absent from the
-  // current diagram, so a stale id simply draws no exit.
+  // Proof and replay boundaries are transported with their current diagrams;
+  // an edit sheet has no boundary.
   const currentBoundary = (): readonly WireId[] => {
-    if (mode === 'replay' && replay !== null) return replay.boundary
+    if (mode === 'replay' && replay !== null) return replay.boundaryAt(replayK)
     if (mode === 'prove' && proof !== null) {
       return proof.kind === 'track' ? trackBoundary(proof.track) : sideBoundary(proof.session, proof.side)
     }
@@ -349,7 +366,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Called after every library change (load/unload/adopt): refreshes the live
   // context bindings the rest of the shell reads (citation menus, replay) and
   // re-renders the Library panel.
-  const setContext = (newCtx: ProofContext, newRelations: Readonly<Record<string, DiagramWithBoundary>>): void => {
+  const setContext = (newCtx: ProofContext, newRelations: readonly (readonly [string, DiagramWithBoundary])[]): void => {
     ctx = newCtx
     relations = newRelations
     renderLibrary()
@@ -359,6 +376,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // A rebuild conflict propagates through guard() to typed refusal feedback, leaving
   // the prior library untouched.
   const applyLibrary = (next: Library): void => {
+    cancelRelationAuthoring()
     library = next
     const r = rebuild(library)
     setContext(r.ctx, r.relations)
@@ -466,7 +484,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const renderGroup = (
     key: string,
     title: string,
-    thms: readonly { readonly name: string; readonly steps: number }[],
+    thms: readonly { readonly name: string; readonly actions: number }[],
     relNames: readonly string[],
   ): HTMLElement => {
     const g = div('vpa-lib-group')
@@ -482,7 +500,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     if (thms.length === 0) thmRow.append('none')
     thms.forEach((t, i) => {
       if (i > 0) thmRow.append(', ')
-      thmRow.append(`${t.name} (${t.steps} step${t.steps === 1 ? '' : 's'}) `)
+      thmRow.append(`${t.name} (${theoremActionCountLabel(t.actions)}) `)
       thmRow.append(button('▶ Replay', guard(() => enterReplay(t.name))))
     })
     g.append(thmRow)
@@ -558,17 +576,17 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
     for (const e of library.entries) {
       if (e.status !== 'loaded') continue
-      const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, steps: t.steps.length }))
+      const thms = [...e.ctx.theorems.values()].map((t) => ({ name: t.name, actions: t.actions.length }))
       libraryDiv.append(renderGroup(
         `file:${e.file}`, e.file, thms,
-        Object.keys(e.theory.relations),
+        e.theory.relations.map(([name]) => name),
       ))
     }
 
     if (library.adopted.length > 0 || library.definedRelations.length > 0) {
       libraryDiv.append(renderGroup(
         SESSION_GROUP, 'Session (adopted + defined)',
-        library.adopted.map((t) => ({ name: t.name, steps: t.steps.length })),
+        library.adopted.map((t) => ({ name: t.name, actions: t.actions.length })),
         library.definedRelations.map((r) => r.name),
       ))
     }
@@ -605,6 +623,18 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       seedProject(next)
       mainMotion.observeSwap(previous, next, performance.now())
       engine = next
+      if (mode === 'prove' && proof?.kind === 'track') {
+        const timeline = proof.track.timeline
+        const initial = timeline.states[0]
+        if (initial === undefined) throw new Error('proof timeline has no initial state')
+        seedActionHistoryPlacements(
+          engine,
+          initial,
+          timeline.actions.slice(0, timeline.cursor),
+          proof.track.ctx,
+          proof.track.direction,
+        )
+      }
       if (surfaceChanged) interaction.resetSurface()
       else interaction.reconcileDiagram()
       kernelSel = null
@@ -638,6 +668,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // ---- edit operations (mkDiagram-validated surgery via edit.ts) ----
   const pushEdit = (d: Diagram, placement?: { readonly node: NodeId; readonly at: Vec2 }, preserveSelection = false): void => {
     editHistory.push(editDiagram)
+    editFuture.length = 0
     editDiagram = d
     sync(false, preserveSelection)
     if (placement !== undefined) seedBodyPlacement(engine, placement.node, placement.at)
@@ -662,20 +693,21 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
 
   const proofStatus = (): string => {
     if (proof === null) return 'no proof'
-    if (proof.kind === 'track') return `${proof.track.timeline.cursor} step(s) · declare when ready`
+    if (proof.kind === 'track') return `${theoremActionCountLabel(proof.track.timeline.cursor)} · declare when ready`
     const session = proof.session
-    return `forward ${session.forward.cursor} step(s) · backward ${session.backward.cursor} step(s) · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
+    return `forward ${theoremActionCountLabel(session.forward.cursor)} · backward ${theoremActionCountLabel(session.backward.cursor)} · ${meet(session) ? 'fingerprints MET — assemble when ready' : 'not met yet'}`
   }
 
   // ---- replay stepping ----
   // Open the stepper over a bundled/adopted theorem, remembering the mode we
   // leave so exit restores it. Step 0 (the lhs) seeds a fresh engine.
   const enterReplay = (name: string): void => {
+    cancelRelationAuthoring()
     const thm = ctx.theorems.get(name)
     if (thm === undefined) throw new Error(`unknown theorem '${name}'`)
     if (mode !== 'replay') replayReturnMode = mode
     mainMotion.cancel()
-    replay = mkReplay(thm, ctx)
+    replay = mkReplay(thm.name, ctx)
     replayK = 0
     mode = 'replay'
     if (fixedWorkspace !== null) {
@@ -685,13 +717,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     compass.setOpen('library', false)
     interaction.cancelActiveGesture()
     displayed = replay.diagramAt(0)
-    engine = mkEngine(displayed, replay.boundary)
+    engine = mkEngine(displayed, replay.boundaryAt(0))
     // Size the fixed border ONCE from the PROOF-WIDE max content extent (USER RULING
     // 2026-07-06, option (a)): a replay's contents are ALL its steps, so one absolute
     // border fits every step and never resizes as the proof is stepped. Cheap
     // (~150 ms whole-proof scan). Established before seedProject, whose establishFrame
     // then no-ops; every later step carries this same frame via carryOver.
-    const steps = Array.from({ length: replay.stepCount + 1 }, (_, k) => ({ diagram: replay!.diagramAt(k), boundary: replay!.boundary }))
+    const steps = Array.from({ length: replay.actionCount + 1 }, (_, k) => ({
+      diagram: replay!.diagramAt(k),
+      boundary: replay!.boundaryAt(k),
+    }))
     establishProofFrame(engine, steps)
     // proof-wide boundary slot-shift: align the fixed slots to where the ports sit,
     // once, so boundary wires take short exits instead of sweeping the frame. Carried
@@ -711,13 +746,20 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const gotoReplayStep = (k: number): void => {
     if (replay === null) return
     interaction.cancelActiveGesture()
-    replayK = Math.max(0, Math.min(replay.stepCount, k))
+    replayK = Math.max(0, Math.min(replay.actionCount, k))
     const prevEngine = engine
     displayed = replay.diagramAt(replayK)
-    const next = mkEngine(displayed, replay.boundary)
+    const next = mkEngine(displayed, replay.boundaryAt(replayK))
     carryOver(prevEngine, next)
     seedProject(next)
     engine = next
+    seedActionHistoryPlacements(
+      engine,
+      replay.diagramAt(0),
+      replay.actions.slice(0, replayK),
+      ctx,
+      'forward',
+    )
     interaction.reconcileDiagram()
     kernelSel = null
     pending = null
@@ -738,7 +780,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const leaveProof = guard(() => {
-    if (comprehensionEditor !== null || fixedWorkspace?.editing) return
+    cancelRelationAuthoring()
     proofMoves.cancel()
     mainMotion.cancel()
     if (mode === 'replay') {
@@ -804,10 +846,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     refreshChrome()
   })
   const onUndo = guard(() => {
-    if (mainMotion.playing || fixedWorkspace?.busy || comprehensionEditor !== null) return
+    cancelRelationAuthoring()
+    if (mainMotion.playing || fixedWorkspace?.playing) return
     if (mode === 'edit') {
       const prev = editHistory.pop()
       if (prev === undefined) throw new Error('nothing to undo in edit mode')
+      editFuture.push(editDiagram)
       editDiagram = prev
       sync()
       return
@@ -827,9 +871,18 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     sync()
   })
   const onRedo = guard(() => {
-    if (mainMotion.playing || fixedWorkspace?.busy || comprehensionEditor !== null) return
+    cancelRelationAuthoring()
+    if (mainMotion.playing || fixedWorkspace?.playing) return
+    if (mode === 'edit') {
+      const next = editFuture.pop()
+      if (next === undefined) throw new Error('nothing to redo in edit mode')
+      editHistory.push(editDiagram)
+      editDiagram = next
+      sync()
+      return
+    }
     if (mode === 'replay' && replay !== null) {
-      if (replayK === replay.stepCount) throw new Error('nothing to redo in replay')
+      if (replayK === replay.actionCount) throw new Error('nothing to redo in replay')
       gotoReplayStep(replayK + 1)
       return
     }
@@ -858,10 +911,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   })
 
   // ---- proof actions ----
-  const applyProofStep = (step: ProofStep): void => {
+  const applyProofAction = (action: ProofAction): void => {
     if (proof === null) throw new Error('no active proof')
     if (proof.kind === 'track') {
-      const next = applyTrack(proof.track, step)
+      const next = applyTrack(proof.track, action)
+      const step = action.steps[action.steps.length - 1]
+      if (step === undefined) throw new Error('proof action has no kernel step')
       mainMotion.run(step, () => {
         proof = { kind: 'track', track: next }
         sync()
@@ -869,34 +924,82 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       refreshChrome()
       return
     } else {
-      proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, step) : applyBackward(proof.session, step) }
+      proof = { ...proof, session: proof.side === 'forward' ? applyForward(proof.session, action) : applyBackward(proof.session, action) }
       fixedWorkspace?.reconcile(proof.side)
       return
     }
   }
 
+  const applyProofStep = (step: ProofStep): void => {
+    applyProofAction(singleStepAction(step.rule === 'theorem' ? `cite ${step.name}` : step.rule, step))
+  }
+
   const openComprehension = (bubble: RegionId, pointer: Vec2): void => {
-    if (mode !== 'prove' || proof?.kind !== 'track' || comprehensionEditor !== null) return
-    let editor: ComprehensionEditor
-    editor = new ComprehensionEditor({
-      mount: document.body,
-      canvas,
+    if (mode !== 'prove' || proof?.kind !== 'track' || relationWorkspace !== null) return
+    let workspace: RelationWorkspace
+    const transaction = new SubstituteTransaction({
       diagram: currentDiagram,
       boundary: () => proof?.kind === 'track' ? trackBoundary(proof.track) : [],
+      bubble,
+      context: () => ctx,
+      orientation: proof.track.direction,
+      apply: applyProofAction,
+      cancel: () => {},
+    })
+    workspace = new RelationWorkspace({
+      mount: document.body,
+      canvas,
       engine: () => engine,
       view: () => view,
+      selection: () => interaction.selection,
       context: () => ctx,
       theme: () => theme,
       fuel: () => readCount(fuel.input, 'fuel'),
-      apply: applyProofStep,
       refuse,
       changed: refreshChrome,
       openChanged: (open) => {
-        if (!open && comprehensionEditor === editor) comprehensionEditor = null
+        if (!open && relationWorkspace === workspace) relationWorkspace = null
         refreshChrome()
       },
-    }, bubble, pointer)
-    comprehensionEditor = editor
+    }, transaction, transaction.initialDraft(), pointer)
+    relationWorkspace = workspace
+    proofMoves.cancel()
+    refreshChrome()
+  }
+
+  const openAbstraction = (selection: SubgraphSelection, pointer: Vec2): void => {
+    if (mode !== 'prove' || proof?.kind !== 'track' || relationWorkspace !== null) return
+    let workspace: RelationWorkspace
+    const transaction = new AbstractTransaction({
+      diagram: currentDiagram,
+      boundary: () => proof?.kind === 'track' ? trackBoundary(proof.track) : [],
+      wrap: selection,
+      context: () => ctx,
+      orientation: proof.track.direction,
+      apply: applyProofAction,
+      cancel: () => {},
+      engine: () => engine,
+      theme: () => theme,
+      matcherFuel: () => readCount(fuel.input, 'fuel'),
+      solverFuel: () => Math.max(1024, readCount(fuel.input, 'fuel')),
+    })
+    workspace = new RelationWorkspace({
+      mount: document.body,
+      canvas,
+      engine: () => engine,
+      view: () => view,
+      selection: () => interaction.selection,
+      context: () => ctx,
+      theme: () => theme,
+      fuel: () => readCount(fuel.input, 'fuel'),
+      refuse,
+      changed: refreshChrome,
+      openChanged: (open) => {
+        if (!open && relationWorkspace === workspace) relationWorkspace = null
+        refreshChrome()
+      },
+    }, transaction, transaction.initialDraft(), pointer)
+    relationWorkspace = workspace
     proofMoves.cancel()
     refreshChrome()
   }
@@ -924,7 +1027,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   }
 
   const claimPointer = (sample: PointerSample): PointerClaim | null => {
-    const editorClaim = comprehensionEditor?.hostClaim(sample) ?? null
+    const editorClaim = relationWorkspace?.hostClaim(sample) ?? null
     const pendingClaim: PointerClaim | null = sample.button === 0 && pending?.kind === 'defineRelation' ? {
         still: 'claim',
         blocksPassiveRelaxation: false,
@@ -940,7 +1043,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     const goal = `goal ${goalLhs === null ? 'LHS unset' : 'LHS set'}/${goalRhs === null ? 'RHS unset' : 'RHS set'}`
     if (mode === 'replay' && replay !== null) {
       const rule = replayK === 0 ? '(start)' : replay.labelAt(replayK)
-      statusDiv.textContent = `[REPLAY] step ${replayK}/${replay.stepCount} — ${rule}`
+      statusDiv.textContent = `[REPLAY] action ${replayK}/${replay.actionCount} — ${rule}`
     } else {
       const direction = proofDirection()
       const head = mode === 'edit' ? 'EDIT' : `PROVE · ${direction?.toUpperCase() ?? 'UNKNOWN'}`
@@ -1020,7 +1123,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           // name/pick/extraction; defineEntry re-checks against the whole
           // library. A refusal stays attached to this pending interaction.
           const order = p.args.length > 0 ? [...p.args] : canonicalArgOrder(editDiagram, p.sel)
-          const { relation } = defineRelation(editDiagram, p.sel, order, name, ctx, relations)
+          const { relation } = defineRelation(editDiagram, p.sel, order, name, ctx)
           const next = defineEntry(library, name, relation)
           pending = null
           applyLibrary(next)
@@ -1144,12 +1247,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     restyleCompanion(visible)
     if (!visible || comp === null) return
     companionWrap.style.background = theme.canvas
-    const w = companionCanvas.clientWidth
-    const h = companionCanvas.clientHeight
-    if (w > 0 && h > 0 && (companionCanvas.width !== w || companionCanvas.height !== h)) {
-      companionCanvas.width = w
-      companionCanvas.height = h
-    }
+    companionSurface.syncSize()
+    const { width: w, height: h } = companionSurface.size()
     if (comp.diagram !== companionShownDiagram || companionEngine === null) {
       const prev = companionEngine
       const next = mkEngine(comp.diagram, comp.boundary)
@@ -1160,12 +1259,9 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       companionRebuilds++
     }
     settleStep(companionEngine, null)
-    applyFit(companionEngine, companionCanvas.width, companionCanvas.height, 1, companionView)
+    applyFit(companionEngine, w, h, 1, companionView)
     const shapes = paint(companionEngine, theme)
-    cctx.clearRect(0, 0, companionCanvas.width, companionCanvas.height)
-    cctx.fillStyle = theme.canvas
-    cctx.fillRect(0, 0, companionCanvas.width, companionCanvas.height)
-    drawShapes(cctx, shapes, companionView)
+    companionSurface.render({ background: theme.canvas, layers: [{ shapes }] }, companionView)
     companionLabel.textContent = comp.label
   }
 
@@ -1190,15 +1286,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     // Split gives the companion the right half, so the main view fits the left
     // half; PiP/hidden leave the main view full-width (PiP overlays a corner).
     const mainW = comp !== null && companionMode === 'split' ? Math.floor(window.innerWidth / 2) : window.innerWidth
-    if (canvas.width !== mainW || canvas.height !== window.innerHeight) {
-      canvas.width = mainW
-      canvas.height = window.innerHeight
-    }
+    mainSurface.resize(mainW, window.innerHeight)
     // Plan 24 motion policy: a FULL strict-descent sweep over every DOF each
     // frame (no time-slicing) — the whole diagram eases toward rest together.
     // InteractiveViewport supplies the exact persistent and active pin set.
     mainMotion.frame(now)
-    if (!mainMotion.playing) interaction.advance(comprehensionEditor === null)
+    if (!mainMotion.playing) interaction.advance(relationWorkspace === null)
     const shapes: Shape[] = paint(engine, theme)
     for (const id of interaction.pins) {
       const b = engine.bodies.get(id)
@@ -1226,17 +1319,16 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     }
     shapes.push(...construct.overlay())
     shapes.push(...proofMoves.overlay())
-    if (comprehensionEditor !== null) shapes.push(...comprehensionEditor.hostOverlays())
-    ctx2d.clearRect(0, 0, canvas.width, canvas.height)
-    ctx2d.fillStyle = theme.canvas
-    ctx2d.fillRect(0, 0, canvas.width, canvas.height)
-    drawShapes(ctx2d, shapes, view)
-    ctx2d.save()
-    ctx2d.globalAlpha = mainMotion.hoverFraction(now)
-    drawShapes(ctx2d, hoverShapes, view)
-    ctx2d.restore()
-    drawShapes(ctx2d, mainMotion.overlays(now), view)
-    comprehensionEditor?.frame(now)
+    if (relationWorkspace !== null) shapes.push(...relationWorkspace.hostOverlays())
+    mainSurface.render({
+      background: theme.canvas,
+      layers: [
+        { shapes },
+        { shapes: hoverShapes, alpha: mainMotion.hoverFraction(now) },
+        { shapes: mainMotion.overlays(now) },
+      ],
+    }, view)
+    relationWorkspace?.frame(now)
     renderCompanion(comp, companionVisible)
     raf = requestAnimationFrame(frame)
   }
@@ -1244,14 +1336,14 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   // Replay stepping by arrow keys. Inert outside replay mode; ignores keys while
   // a text/number input is focused so typing a term is never hijacked.
   const onKeyDown = (e: KeySample): boolean => {
-    if (comprehensionEditor !== null) return true
+    if (relationWorkspace !== null) return relationWorkspace.keyDown(e)
     if (mode === 'prove' && proof?.kind === 'dual') return false
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
       if (e.shiftKey) onRedo()
       else onUndo()
       return true
     }
-    if (e.key === 'Escape' && spawnCascade.escape()) return true
+    if (e.key === 'Escape' && (spawnCascade.escape() || proofSpawn.close())) return true
     if (e.key === 'Escape' && pending !== null) {
       pending = null
       palettePoint = null
@@ -1408,7 +1500,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     host: document.body,
     spawnTerm: ({ source, invocation }) => {
       try {
-        const added = addTermNode(editDiagram, invocation.region, parseTerm(source))
+        requireEdit()
+        const added = spawnTermNode(editDiagram, invocation.region, parseTerm(source))
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
       } catch (error) {
@@ -1418,10 +1511,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     spawnRelation: ({ defId, arity: relationArity, invocation }) => {
       try {
+        requireEdit()
         const relation = ctx.relations.get(defId)
         if (relation === undefined) throw new Error(`relation '${defId}' is no longer loaded`)
         if (relation.boundary.length !== relationArity) throw new Error(`relation '${defId}' changed while the spawn menu was open`)
-        const added = addRefNode(editDiagram, invocation.region, defId, relationArity)
+        const added = spawnRelationNode(editDiagram, invocation.region, defId, relationArity)
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
       } catch (error) {
@@ -1431,7 +1525,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     spawnBoundPredicate: ({ binder, invocation }) => {
       try {
-        const added = addAtomNode(editDiagram, invocation.region, binder)
+        requireEdit()
+        const added = spawnBoundRelationNode(editDiagram, invocation.region, binder)
         pushEdit(added.diagram, { node: added.node, at: invocation.world }, true)
         return true
       } catch (error) {
@@ -1446,6 +1541,24 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     },
     hoverBinder: (binder) => { spawnHoverBinder = binder },
   })
+  proofSpawn = new ProofSpawnController({
+    host: document.body,
+    diagram: currentDiagram,
+    context: () => ctx,
+    commit: (step) => {
+      if (proof?.kind !== 'track') throw new Error('proof spawning requires an active track proof')
+      applyProofStep(step)
+      return currentDiagram()
+    },
+    place: (node, at) => seedBodyPlacement(engine, node, at),
+    refuse,
+    binderColor: (binder) => {
+      const color = bubbleHues(currentDiagram(), theme.bubbleLightness).get(binder)
+      if (color === undefined) throw new Error(`bound-predicate option references missing bubble '${binder}'`)
+      return color
+    },
+    hoverBinder: (binder) => { spawnHoverBinder = binder },
+  })
   construct = new ConstructController({
     host: document.body,
     active: () => mode === 'edit' && !mainMotion.playing,
@@ -1455,6 +1568,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     selection: () => interaction.selection,
     setSelection: (selection) => interaction.setSelection(selection),
     commit: (diagram) => pushEdit(diagram),
+    commitFission: ({ node, path, at }) => {
+      const before = editDiagram
+      const next = applyFission(before, node, path)
+      pushEdit(next, { node: introducedNodeId(before, next), at })
+    },
     refuse,
     setProblem: setFeedbackProblem,
     clearProblem: clearFeedbackProblem,
@@ -1471,23 +1589,43 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       }
     },
     theme: () => theme,
+    copy: {
+      destination: (sample) => ({
+        kind: 'edit', diagram: editDiagram,
+        region: copyRegionAt(engine, editDiagram, sample.world), at: sample.world,
+      }),
+      commit: (plan) => {
+        if (plan.kind !== 'edit') throw new Error('Edit copy produced a non-Edit plan')
+        const node = plan.introduced[0]
+        pushEdit(plan.result, node === undefined ? undefined : { node, at: plan.at })
+      },
+    },
   })
   proofMoves = new ProofMoveController({
     host: document.body,
-    active: () => mode === 'prove' && proof?.kind === 'track' && !mainMotion.playing && comprehensionEditor === null,
+    active: () => mode === 'prove' && proof?.kind === 'track' && !mainMotion.playing && relationWorkspace === null,
     diagram: currentDiagram,
     engine: () => engine,
+    viewScale: () => view.scale,
     selection: () => interaction.selection,
     setSelection: (selection) => interaction.setSelection(selection),
     context: () => ctx,
     orientation: () => proofDirection() ?? 'forward',
-    apply: applyProofStep,
+    apply: applyProofAction,
+    commitFission: ({ node, path, at }) => {
+      const before = currentDiagram()
+      applyProofStep({ rule: 'fission', node, path })
+      seedBodyPlacement(engine, introducedNodeId(before, currentDiagram()), at)
+    },
     refuse: (text, pointer) => refuse(text, pointer),
     theme: () => theme,
     fuel: () => readCount(fuel.input, 'fuel'),
     openComprehension,
+    openAbstraction,
+    openSpawn: (sample, region) => {
+      proofSpawn.open({ screen: sample.client, world: sample.world, region })
+    },
   })
-  compass.lifecycle.append(construct.optionsElement)
   interaction = new InteractiveViewport({
     canvas,
     view,
@@ -1495,10 +1633,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     diagram: () => displayed,
     selectionEnabled: () => mode !== 'replay',
     claim: claimPointer,
-    doubleClick: (sample) => comprehensionEditor !== null ? false : mode === 'prove' ? proofMoves.doubleClick(sample) : construct.doubleClick(sample),
+    doubleClick: (sample) => relationWorkspace !== null ? false : mode === 'prove' && proofMoves.doubleClick(sample),
     contextMenu: (sample) => {
       if (mode === 'prove') {
-        if (comprehensionEditor !== null) return
+        if (relationWorkspace !== null) return
         proofMoves.contextMenu(sample)
         return
       }
@@ -1507,6 +1645,15 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       refreshChrome()
     },
     pointerChanged: rememberPointer,
+    passiveSample: (sample) => {
+      if (mode === 'edit') construct.passiveSample(sample)
+      else if (mode === 'prove') proofMoves.passiveSample(sample)
+    },
+    modifiersChanged: (ctrlHeld) => {
+      construct.modifiersChanged(ctrlHeld)
+      proofMoves.modifiersChanged(ctrlHeld)
+      relationWorkspace?.modifiersChanged(ctrlHeld)
+    },
     keyDown: onKeyDown,
     selectionChanged,
     selectionCommitted: () => {
@@ -1518,10 +1665,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
   const timelineView = (): TimelineView | null => {
     if (mode === 'replay' && replay !== null) {
       return {
-        states: Array.from({ length: replay.stepCount + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
-        steps: replay.steps,
+        states: Array.from({ length: replay.actionCount + 1 }, (_, cursor) => replay!.diagramAt(cursor)),
+        actions: replay.actions,
         cursor: replayK,
-        boundary: replay.boundary,
+        boundaryAt: (cursor) => replay!.boundaryAt(cursor),
         inputAllowed: () => true,
         moveTo: gotoReplayStep,
       }
@@ -1531,10 +1678,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
       const active = proof.track
       return {
         ...active.timeline,
-        boundary: trackBoundary(active),
-        inputAllowed: () => !mainMotion.playing && comprehensionEditor === null,
+        boundaryAt: (cursor) => active.timeline.boundaries[cursor]!,
+        inputAllowed: () => !mainMotion.playing,
         moveTo: (cursor) => {
           if (proof?.kind !== 'track') return
+          cancelRelationAuthoring()
           proof = { kind: 'track', track: moveTrack(proof.track, cursor) }
           sync()
         },
@@ -1545,9 +1693,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     return {
       ...active,
       name: activeProof.side,
-      boundary: sideBoundary(activeProof.session, activeProof.side),
-      inputAllowed: () => fixedWorkspace?.busy !== true,
+      boundaryAt: (cursor) => active.boundaries[cursor]!,
+      inputAllowed: () => fixedWorkspace?.playing !== true,
       moveTo: (cursor) => {
+        cancelRelationAuthoring()
         fixedWorkspace?.moveFocusedCursor(cursor)
       },
     }
@@ -1573,11 +1722,11 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     let previewCanvas = byTheme.get(theme)
     if (previewCanvas === undefined) {
       previewCanvas = document.createElement('canvas')
-      previewCanvas.width = 520
-      previewCanvas.height = 340
-      const previewContext = previewCanvas.getContext('2d')
-      if (previewContext === null) return
-      const previewEngine = mkEngine(transition.after, timeline.boundary)
+      const previewSurface = adaptCanvas(previewCanvas)
+      previewSurface.resize(520, 340)
+      const bounded = Math.max(0, Math.min(timeline.states.length - 1, cursor))
+      const afterIndex = timeline.states.length === 1 ? 0 : bounded === 0 ? 1 : bounded
+      const previewEngine = mkEngine(transition.after, timeline.boundaryAt(afterIndex))
       seedProject(previewEngine)
       for (let i = 0; i < 16; i++) settleStep(previewEngine, null)
       const points: Vec2[] = []
@@ -1605,9 +1754,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
             const scale = Math.min(previewCanvas!.width / Math.max(80, maxX - minX + 80), previewCanvas!.height / Math.max(80, maxY - minY + 80))
             return { scale, offsetX: previewCanvas!.width / 2 - (minX + maxX) / 2 * scale, offsetY: previewCanvas!.height / 2 - (minY + maxY) / 2 * scale }
           })()
-      previewContext.fillStyle = theme.canvas
-      previewContext.fillRect(0, 0, previewCanvas.width, previewCanvas.height)
-      drawShapes(previewContext, paint(previewEngine, theme), previewView)
+      previewSurface.render({ background: theme.canvas, layers: [{ shapes: paint(previewEngine, theme) }] }, previewView)
       byTheme.set(theme, previewCanvas)
     }
     closeHistoryPreview()
@@ -1648,9 +1795,10 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
     interaction.dispose()
     construct.dispose()
     spawnCascade.dispose()
+    proofSpawn.dispose()
     proofMoves.dispose()
-    comprehensionEditor?.dispose()
-    comprehensionEditor = null
+    relationWorkspace?.dispose()
+    relationWorkspace = null
     mainMotion.dispose()
     fixedWorkspace?.dispose()
     fixedWorkspace = null
@@ -1681,7 +1829,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return {
           mode,
           k: replayK,
-          n: replay?.stepCount ?? 0,
+          n: replay?.actionCount ?? 0,
           label: replay === null ? '' : replayK === 0 ? '(start)' : replay.labelAt(replayK),
           bodies: engine.bodies.size,
         }
@@ -1691,6 +1839,12 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
         return proof.kind === 'track'
           ? { kind: 'track', direction: proof.track.direction }
           : { kind: 'dual', side: proof.side }
+      },
+      proofSnapshot() {
+        if (proof === null) return null
+        return proof.kind === 'track'
+          ? serializeProofSnapshot(proof.track.timeline, proof.track.direction)
+          : serializeProofSnapshot(proof.session[proof.side], proof.side)
       },
       view(): { scale: number; offsetX: number; offsetY: number } {
         return { ...view }
@@ -1702,20 +1856,39 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           userZoom: interaction.userZoom,
         }
       },
+      interactionOverlays(): string[] {
+        return [...construct.overlay(), ...proofMoves.overlay()].map((shape) => shape.kind)
+      },
       fixed() {
         return fixedWorkspace?.debugState() ?? null
       },
       motion() {
         return { ...mainMotion.debugState(performance.now()), preferences: { ...motionPreferences } }
       },
-      comprehension() {
-        return comprehensionEditor?.debugState() ?? null
+      relationWorkspace() {
+        return relationWorkspace?.debugState() ?? null
       },
       spawnBinderHover(): string | null {
         return spawnHoverBinder
       },
       bodies(): { id: string; kind: string; x: number; y: number; r: number; region: string }[] {
         return [...engine.bodies.values()].map((b) => ({ id: b.id, kind: b.kind, x: b.pos.x, y: b.pos.y, r: b.discR, region: b.region }))
+      },
+      fissionTargets(): { node: string; path: readonly string[]; x: number; y: number; dropX: number; dropY: number }[] {
+        return [...engine.bodies.values()].flatMap((body) => body.node?.kind === 'term'
+          ? body.geometry!.occurrences.flatMap((occurrence) => {
+            const point = fissionTargetPoint(engine, body.id, occurrence.path)
+            const drop = fissionDropPoint(engine, displayed, body.id)
+            return point === null || drop === null ? [] : [{
+              node: body.id,
+              path: occurrence.path,
+              x: point.x,
+              y: point.y,
+              dropX: drop.x,
+              dropY: drop.y,
+            }]
+          })
+          : [])
       },
       diagram(): {
         nodes: { id: string; kind: string; region: string; defId: string | null; binder: string | null }[]

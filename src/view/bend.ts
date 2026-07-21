@@ -1,6 +1,7 @@
 import type { Vec2 } from './vec'
 import { polar } from './vec'
 import type { TrompGrid } from './tromp'
+import type { PathSeg } from '../kernel/term/reduce'
 
 /** Total angular width of the C-gap, centered on angle 0 (the output exit). */
 export const GAP_ANGLE = Math.PI / 3
@@ -37,6 +38,21 @@ export type NodeGeometry = {
       atoms have no term output, so they emit no exit line (law 4: non-term
       nodes must not fabricate a second leg). */
   readonly exitLine: readonly [Vec2, Vec2] | null
+  readonly occurrences: readonly TermOccurrenceGeometry[]
+}
+
+export type TermOccurrenceHit =
+  | { readonly kind: 'radial'; readonly radialIndex: number }
+  | { readonly kind: 'arcPoint'; readonly point: Vec2 }
+  | { readonly kind: 'exit' }
+
+export type TermOccurrenceGeometry = {
+  readonly path: readonly PathSeg[]
+  readonly depth: number
+  readonly hit: TermOccurrenceHit
+  readonly arcIndices: readonly number[]
+  readonly radialIndices: readonly number[]
+  readonly includeExit: boolean
 }
 
 /**
@@ -100,6 +116,35 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
   const exitArc = { r: exitR, a0, a1: outAngle }
   const outputAnchor = polar(0, pierceR)
   const exitLine: readonly [Vec2, Vec2] = [polar(a0, exitR), outputAnchor]
+  const occurrences: TermOccurrenceGeometry[] = g.occurrences.map((occurrence) => {
+    const ownedByOccurrence = (owner: readonly PathSeg[] | null): boolean => owner !== null
+      && occurrence.path.every((segment, index) => owner[index] === segment)
+    const arcIndices = occurrence.path.length === 0
+      ? arcs.map((_, index) => index)
+      : g.barOwners.flatMap((owner, index) => ownedByOccurrence(owner) ? [index] : [])
+    const radialIndices = occurrence.path.length === 0
+      ? radials.map((_, index) => index)
+      : g.stemOwners.flatMap((owner, index) => ownedByOccurrence(owner) ? [index] : [])
+    const hit: TermOccurrenceHit = occurrence.hit.kind === 'exit'
+      ? { kind: 'exit' }
+      : occurrence.hit.kind === 'arcPoint'
+        ? { kind: 'arcPoint', point: polar(theta(occurrence.hit.col), radius(occurrence.hit.row)) }
+        : (() => {
+          const radialHit = occurrence.hit
+          if (radialHit.kind !== 'radial') throw new Error('unreachable occurrence hit')
+          const radialIndex = g.stems.findIndex((stem) => stem.kind === 'output'
+            && stem.col === radialHit.col
+            && stem.rowTop === radialHit.rowTop
+            && stem.rowBottom === radialHit.rowBottom)
+          if (radialIndex < 0) {
+            return { kind: 'arcPoint' as const, point: polar(theta(radialHit.col), radius(radialHit.rowBottom)) }
+          }
+          if (!radialIndices.includes(radialIndex)) radialIndices.push(radialIndex)
+          return { kind: 'radial' as const, radialIndex }
+        })()
+    return { path: occurrence.path, depth: occurrence.depth, hit, arcIndices, radialIndices,
+      includeExit: occurrence.path.length === 0 }
+  })
 
   return {
     outerRadius: pierceR + 0.5,
@@ -109,6 +154,7 @@ export function bendGrid(g: TrompGrid): NodeGeometry {
     portAnchors,
     exitArc,
     exitLine,
+    occurrences,
   }
 }
 
@@ -137,5 +183,6 @@ export function atomGeometry(arity: number): NodeGeometry {
     portAnchors,
     exitArc: null,
     exitLine: null,
+    occurrences: [],
   }
 }

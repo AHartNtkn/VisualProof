@@ -7,6 +7,7 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyComprehensionAbstract, applyComprehensionInstantiate, diagonalize } from '../../../src/kernel/rules/comprehension'
 import { loadTheory, theoryToJson } from '../../../src/kernel/proof/index'
 import type { Theorem, Theory } from '../../../src/kernel/proof/index'
+import { singleStepAction } from '../../../src/kernel/proof/action'
 
 const p = (s: string) => parseTerm(s)
 
@@ -285,7 +286,7 @@ describe('diagonal comprehension: instantiation and the inverse round-trip', () 
       name: 'diagAbstract',
       lhs: mkDiagramWithBoundary(phi, []),
       rhs: mkDiagramWithBoundary(diagonalExR('root').d, []),
-      steps: [{
+      actions: [singleStepAction('abstract diagonal comprehension', {
         rule: 'comprehensionAbstract',
         wrap: mkSelection(phi, { region: phi.root, regions: [], nodes: [nId], wires: [] }),
         comp,
@@ -293,15 +294,15 @@ describe('diagonal comprehension: instantiation and the inverse round-trip', () 
           sel: mkSelection(phi, { region: phi.root, regions: [], nodes: [nId], wires: [] }),
           args: [xId, xId],
         }],
-      }],
+      })],
     }
-    const theory: Theory = { relations: {}, theorems: [thm] }
+    const theory: Theory = { relations: [], theorems: [thm] }
     // loadTheory replays and checks the proof arrives at rhs; the repeated-wire
     // args must survive JSON.stringify → parse → loadTheory unchanged.
     const roundTripped = JSON.parse(JSON.stringify(theoryToJson(theory)))
     expect(() => loadTheory(roundTripped)).not.toThrow()
     // sanity: the serialized step still carries the repeated wire
-    const step = roundTripped.theorems[0].steps[0]
+    const step = roundTripped.theorems[0].actions[0].steps[0]
     expect(step.occurrences[0].args).toEqual([xId, xId])
   })
 
@@ -339,15 +340,15 @@ describe('diagonal comprehension: instantiation and the inverse round-trip', () 
       name: 'diagInstantiate',
       lhs: mkDiagramWithBoundary(negExR, []),
       rhs: mkDiagramWithBoundary(inst, []),
-      steps: [{
+      actions: [singleStepAction('instantiate diagonal comprehension', {
         rule: 'comprehensionInstantiate',
         bubble: bub,
         comp,
         attachments: [],
-        binders: {},
-      }],
+        binders: [],
+      })],
     }
-    const theory: Theory = { relations: {}, theorems: [thm] }
+    const theory: Theory = { relations: [], theorems: [thm] }
     expect(() => loadTheory(JSON.parse(JSON.stringify(theoryToJson(theory))))).not.toThrow()
   })
 })

@@ -9,7 +9,8 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import type { ConversionCertificate } from '../../../src/kernel/term/certificate'
 import { applyCongruenceJoin } from '../../../src/kernel/rules/congruence'
-import { applyDeiteration } from '../../../src/kernel/rules/iteration'
+import { proposePortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
+import { applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 
 const p = (s: string) => parseTerm(s)
 const empty: ConversionCertificate = { leftSteps: [], rightSteps: [] }
@@ -18,6 +19,12 @@ function termOf(d: Diagram, id: NodeId): Term {
   const n = d.nodes[id]
   if (n === undefined || n.kind !== 'term') throw new Error(`test setup: node '${id}' must be a term node`)
   return n.term
+}
+
+function interfaceOf(d: Diagram, id: NodeId): readonly string[] {
+  const n = d.nodes[id]
+  if (n === undefined || n.kind !== 'term') throw new Error(`test setup: node '${id}' must be a term node`)
+  return n.freePorts
 }
 
 /** All freeVar endpoint names of one node across the whole diagram. */
@@ -32,6 +39,35 @@ function freeVarEndpointNames(d: Diagram, id: NodeId): string[] {
 }
 
 describe('name-blind free ports (canonicalization at construction)', () => {
+  it('canonicalizes every declared slot positionally, including an unused slot', () => {
+    const h = new DiagramBuilder()
+    const n = h.termNode(h.root, p('used'), ['unused', 'used'])
+    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'unused' } }])
+    h.wire(h.root, [{ node: n, port: { kind: 'freeVar', name: 'used' } }])
+    const d = h.build()
+    const node = d.nodes[n]
+    expect(node?.kind).toBe('term')
+    if (node?.kind !== 'term') throw new Error('test setup requires a term node')
+    expect(node.freePorts).toEqual(['s0', 's1'])
+    expect(freePorts(node.term)).toEqual(['s1'])
+    expect(freeVarEndpointNames(d, n)).toEqual(['s0', 's1'])
+  })
+
+  it('rejects invalid declarations and declarations that omit an occurring free variable', () => {
+    const build = (declared: readonly string[]) => mkDiagram({
+      root: 'r0',
+      regions: { r0: { kind: 'sheet' } },
+      nodes: { n0: { kind: 'term', region: 'r0', term: p('used'), freePorts: declared } },
+      wires: {
+        out: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'output' } }] },
+        used: { scope: 'r0', endpoints: [{ node: 'n0', port: { kind: 'freeVar', name: 'used' } }] },
+      },
+    })
+    expect(() => build([''])).toThrowError(/free port.*nonempty/i)
+    expect(() => build(['used', 'used'])).toThrowError(/free port.*unique/i)
+    expect(() => build(['other'])).toThrowError(/does not declare.*used/i)
+  })
+
   it('(a) the law: diagrams identical up to free-port names share a fingerprint', () => {
     const mk = (a: string, b: string) => {
       const h = new DiagramBuilder()
@@ -143,7 +179,10 @@ describe('name-blind free ports (canonicalization at construction)', () => {
     const d = h.build()
     // after construction the two nodes carry literally equal terms
     expect(termEq(termOf(d, n1), termOf(d, n2))).toBe(true)
-    const out = applyCongruenceJoin(d, n1, n2, empty)
+    const correspondence = proposePortCorrespondence(
+      termOf(d, n1), termOf(d, n2), interfaceOf(d, n1), interfaceOf(d, n2),
+    )
+    const out = applyCongruenceJoin(d, n1, n2, empty, correspondence)
     const shared = Object.values(out.wires).find(
       (w) => w.endpoints.filter((ep) => ep.port.kind === 'output').length === 2,
     )
@@ -169,7 +208,8 @@ describe('name-blind free ports (canonicalization at construction)', () => {
     ])
     const d = h.build()
     const sel = mkSelection(d, { region: cut, regions: [], nodes: [copy], wires: [] })
-    const out = applyDeiteration(d, sel, 100)
+    const evidence = findDeiterationEvidence(d, sel, 100)
+    const out = applyDeiteration(d, sel, evidence.justifier, evidence.certificate)
     expect(out.nodes[copy]).toBeUndefined()
     const ref = new DiagramBuilder()
     const rn = ref.termNode(ref.root, p('y'))

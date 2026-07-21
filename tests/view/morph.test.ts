@@ -18,6 +18,11 @@ const gVar = geomOf('x')
 const close = (a: number, b: number, eps = 1e-9): boolean => Math.abs(a - b) < eps
 
 describe('mkGeomMorph endpoints', () => {
+  it('does not expose interactive syntax occurrences during an animated frame', () => {
+    expect(mkGeomMorph(gRedex, gMid)(0.5).occurrences).toEqual([])
+    expect(mkGridMorph(gridRedex, gridMid)(0.5).occurrences).toEqual([])
+  })
+
   it('p=0 reproduces every arc, radial, and port anchor of the source', () => {
     const m = mkGeomMorph(gRedex, gMid)
     const g0 = m(0)

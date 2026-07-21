@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
-import type { ProofContext } from '../../src/kernel/proof/step'
+import type { ProofContext } from '../../src/kernel/proof/context'
+import { verifyTheory } from '../../src/kernel/proof/context'
 import type { Theorem } from '../../src/kernel/proof/theorem'
 import { citationCandidates, citationDirection, citationStep } from '../../src/app/interact/cite'
 
@@ -12,17 +13,23 @@ function unaryPattern(defId: string) {
   return { side: mkDiagramWithBoundary(b.build(), [boundary]), node }
 }
 
+function unaryRelation() {
+  const builder = new DiagramBuilder()
+  const boundary = builder.wire(builder.root, [])
+  return mkDiagramWithBoundary(builder.build(), [boundary])
+}
+
 function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; second: string; firstWire: string; ctx: ProofContext } {
   const pattern = unaryPattern('p').side
-  const theorem: Theorem = { name: 'pRule', lhs: pattern, rhs: pattern, steps: [] }
+  const theorem: Theorem = { name: 'pRule', lhs: pattern, rhs: pattern, actions: [] }
   const unrelatedSide = unaryPattern('q').side
-  const unrelated: Theorem = { name: 'qRule', lhs: unrelatedSide, rhs: unrelatedSide, steps: [] }
+  const unrelated: Theorem = { name: 'qRule', lhs: unrelatedSide, rhs: unrelatedSide, actions: [] }
   const empty = new DiagramBuilder().build()
   const closed: Theorem = {
     name: 'closed',
     lhs: mkDiagramWithBoundary(empty, []),
     rhs: mkDiagramWithBoundary(empty, []),
-    steps: [],
+    actions: [],
   }
   const h = new DiagramBuilder()
   const first = h.ref(h.root, 'p', 1)
@@ -34,7 +41,10 @@ function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; 
     first,
     second,
     firstWire,
-    ctx: { relations: new Map(), theorems: new Map([['pRule', theorem], ['qRule', unrelated], ['closed', closed]]) },
+    ctx: verifyTheory({
+      relations: [['p', unaryRelation()], ['q', unaryRelation()]],
+      theorems: [theorem, unrelated, closed],
+    }),
   }
 }
 
@@ -65,7 +75,7 @@ describe('infer-first citation candidates', () => {
     expect(citationDirection(d, cut, 'backward')).toBe('forward')
   })
 
-  it('builds matcher-derived and closed insertion steps without manual wire input', () => {
+  it('builds matcher-derived and closed citation steps without manual wire input', () => {
     const { host, first, firstWire, ctx } = fixture()
     const found = citationCandidates(host, [{ kind: 'node', id: first }], host.root, ctx, 'forward', 64)
     const applied = citationStep(host, found.applicable[0]!, 0)

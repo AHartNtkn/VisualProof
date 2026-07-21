@@ -1,11 +1,15 @@
 import type { Term } from '../kernel/term/term'
-import { termEq } from '../kernel/term/term'
+import { freePorts, termEq } from '../kernel/term/term'
 import { applyConversion } from '../kernel/rules/conversion'
+import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
-import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
-import { mkSelection, type SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
-import { replayProof, type ProofContext, type ProofStep } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
+import type { ProofStep } from '../kernel/proof/step'
+import { applyAction, singleStepAction, type ProofAction } from '../kernel/proof/action'
+import type { ConversionCertificate } from '../kernel/term/certificate'
+import { termNodeAt } from '../kernel/rules/access'
+import { proposePortCorrespondence } from '../kernel/rules/port-correspondence'
 
 /**
  * Interactive conversion fuel for derivation construction. Conversions made
@@ -24,10 +28,11 @@ const CONVERSION_FUEL = 8192
  */
 export class DerivationCursor {
   cur: Diagram
-  readonly steps: ProofStep[] = []
+  readonly actions: ProofAction[] = []
   readonly ctx: ProofContext
 
   constructor(d: Diagram, ctx: ProofContext) {
+    assertProofContext(ctx)
     this.cur = d
     this.ctx = ctx
   }
@@ -36,12 +41,12 @@ export class DerivationCursor {
   push(label: string, s: ProofStep): void {
     let next: Diagram
     try {
-      next = replayProof(this.cur, [s], this.ctx)
+      next = applyAction(this.cur, singleStepAction(label, s), this.ctx)
     } catch (e) {
       throw new Error(`step '${label}' (${s.rule}) failed: ${e instanceof Error ? e.message : String(e)}`)
     }
     this.cur = next
-    this.steps.push(s)
+    this.actions.push(singleStepAction(label, s))
   }
 
   /**
@@ -52,12 +57,27 @@ export class DerivationCursor {
    */
   pushConv(label: string, node: NodeId, t: Term, attach: Readonly<Record<string, WireId>> = {}): void {
     let certificate
+    const source = termNodeAt(this.cur, node)
+    const correspondence = proposePortCorrespondence(source.term, t, source.freePorts, freePorts(t))
     try {
-      certificate = applyConversion(this.cur, node, t, CONVERSION_FUEL, attach).certificate
+      certificate = applyConversion(this.cur, node, t, correspondence, CONVERSION_FUEL, attach).certificate
     } catch (e) {
       throw new Error(`step '${label}' (conversion) failed: ${e instanceof Error ? e.message : String(e)}`)
     }
-    this.push(label, { rule: 'conversion', node, term: t, certificate, attachments: attach })
+    this.push(label, { rule: 'conversion', node, term: t, certificate, correspondence, attachments: attach })
+  }
+
+  pushCongruence(label: string, a: NodeId, b: NodeId, certificate: ConversionCertificate): void {
+    const left = termNodeAt(this.cur, a)
+    const right = termNodeAt(this.cur, b)
+    const correspondence = proposePortCorrespondence(left.term, right.term, left.freePorts, right.freePorts)
+    this.push(label, { rule: 'congruenceJoin', a, b, certificate, correspondence })
+  }
+
+  /** Search while constructing the theory, then store only the chosen checked evidence. */
+  pushDeiteration(label: string, selection: import('../kernel/diagram/subgraph/selection').SubgraphSelection, fuel = 8192): void {
+    const evidence = findDeiterationEvidence(this.cur, selection, fuel)
+    this.push(label, { rule: 'deiteration', sel: selection, ...evidence })
   }
 
   /**
@@ -68,6 +88,34 @@ export class DerivationCursor {
     const before = this.cur
     this.push(tag, { rule: 'closedTermIntro', region, term: t })
     return this.newNodeIn(region, before, t)
+  }
+
+  spawnOpenTerm(tag: string, region: RegionId, term: Term, declaredFreePorts: readonly string[]): NodeId {
+    const before = this.cur
+    this.push(tag, { rule: 'openTermSpawn', region, term, freePorts: declaredFreePorts })
+    return this.newNodeIn(region, before, term)
+  }
+
+  spawnRelation(tag: string, region: RegionId, defId: string): NodeId {
+    const relation = this.ctx.relations.get(defId)
+    if (relation === undefined) throw new Error(`unknown relation '${defId}'`)
+    const before = this.cur
+    this.push(tag, { rule: 'relationSpawn', region, defId, arity: relation.boundary.length })
+    const found = Object.entries(this.cur.nodes).find(([id, node]) =>
+      node.kind === 'ref' && node.region === region && node.defId === defId && before.nodes[id] === undefined)
+    if (found === undefined) throw new Error(`no new '${defId}' relation appeared in region '${region}'`)
+    return found[0]
+  }
+
+  spawnBoundRelation(tag: string, region: RegionId, binder: RegionId): NodeId {
+    const value = this.cur.regions[binder]
+    if (value === undefined || value.kind !== 'bubble') throw new Error(`bound relation binder '${binder}' is not a bubble`)
+    const before = this.cur
+    this.push(tag, { rule: 'boundRelationSpawn', region, binder, arity: value.arity })
+    const found = Object.entries(this.cur.nodes).find(([id, node]) =>
+      node.kind === 'atom' && node.region === region && node.binder === binder && before.nodes[id] === undefined)
+    if (found === undefined) throw new Error(`no new bound relation appeared in region '${region}'`)
+    return found[0]
   }
 
   /** The cut that appeared directly under `parent` since the `before` snapshot. */
@@ -122,23 +170,4 @@ export class DerivationCursor {
     }
     return found[0]
   }
-}
-
-/**
- * Live extraction: copy a derived subgraph out of `d` as a self-contained
- * insertion pattern. Derivations prove a fact once, extract it, and insert
- * the copy wherever insertion's polarity gate allows. The selection must be
- * CLOSED — no touching wires, no externally bound atoms — because an open
- * extraction would need attachments or binder bindings the insertion site
- * cannot supply; a closed one inserts with empty attachments and binders.
- */
-export function extractClosedPattern(d: Diagram, sel: SubgraphSelection): DiagramWithBoundary {
-  const ex = extractSubgraph(d, mkSelection(d, sel))
-  if (ex.attachments.length > 0) {
-    throw new Error(`extraction is open: touching wires [${ex.attachments.join(', ')}] would need attachments at the insertion site`)
-  }
-  if (ex.binderStubs.length > 0) {
-    throw new Error(`extraction is open: external binders [${ex.binderAttachments.join(', ')}] would need binder bindings at the insertion site`)
-  }
-  return ex.pattern
 }

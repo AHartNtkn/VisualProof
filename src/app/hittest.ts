@@ -1,8 +1,8 @@
-import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
-import { resolvedFrameSlot, type Engine } from '../view/engine'
-import { legPaths, existentialStubs } from '../view/wires'
+import { pkey, resolvedFrameSlot, type Engine, type LegEnd } from '../view/engine'
+import { computeLegs, legPaths, existentialStubs } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
 
@@ -108,6 +108,44 @@ export function wireHitTest(e: Engine, point: Vec2, viewport: HitViewport): Wire
   const radius = wireHitRadius(viewport)
   return nearestWire(boundaryOrDotCandidates(e, point), radius)
     ?? nearestWire(wireStrokeCandidates(e, point), radius)
+}
+
+export type WireManipulationHit = {
+  readonly wire: WireId
+  readonly endpoint: Endpoint | null
+}
+
+function endpointForLegEnd(e: Engine, wire: WireId, end: LegEnd): Endpoint | null {
+  if (end.key === null || e.d.nodes[end.body] === undefined) return null
+  return e.d.wires[wire]?.endpoints.find((endpoint) =>
+    endpoint.node === end.body && pkey(endpoint.port) === end.key) ?? null
+}
+
+/** A wire hit enriched only when the pointer is on the terminal halo of a
+    concrete node port. Trunks, branch junctions, existential dots, and frame
+    slots remain wire hits but deliberately carry no guessed endpoint. */
+export function wireManipulationHitTest(
+  e: Engine,
+  point: Vec2,
+  viewport: HitViewport,
+): WireManipulationHit | null {
+  const hit = wireHitTest(e, point, viewport)
+  if (hit === null) return null
+  const radius = wireHitRadius(viewport)
+  let best: { readonly endpoint: Endpoint; readonly distance: number } | null = null
+  for (const geometry of computeLegs(e)) {
+    if (geometry.leg.wid !== hit.id || geometry.pts.length === 0) continue
+    for (const [end, at] of [
+      [geometry.leg.from, geometry.pts[0]!],
+      [geometry.leg.to, geometry.pts.at(-1)!],
+    ] as const) {
+      const endpoint = endpointForLegEnd(e, hit.id, end)
+      if (endpoint === null) continue
+      const distance = length(sub(point, at))
+      if (distance <= radius && (best === null || distance < best.distance)) best = { endpoint, distance }
+    }
+  }
+  return { wire: hit.id, endpoint: best?.endpoint ?? null }
 }
 
 export function hitTest(e: Engine, point: Vec2, viewport: HitViewport): Hit | null {

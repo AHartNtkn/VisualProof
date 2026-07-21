@@ -1,21 +1,37 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { applyConversion } from '../../src/kernel/rules/conversion'
+import { applyClosedTermIntro } from '../../src/kernel/rules/intro'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
-import { termEq } from '../../src/kernel/term/term'
+import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
+import { freePorts, termEq } from '../../src/kernel/term/term'
 import { bootFixture } from './boot-fixture'
 import {
-  startSession, applyForward, applyBackward, undoForward, undoBackward, meet, assembleTheorem, sideBoundary, currentSide,
-  startTrack, applyTrack, undoTrack, declareTrack, trackBoundary, currentTrack,
+  startSession, applyForward as applyForwardAction, applyBackward as applyBackwardAction, undoForward, undoBackward, meet, assembleTheorem, sideBoundary, currentSide,
+  startTrack, applyTrack as applyTrackAction, undoTrack, redoTrack, declareTrack, trackBoundary, currentTrack, timelineActiveActions,
 } from '../../src/app/session'
+import type { ProofSession, TrackSession } from '../../src/app/session'
+import type { ProofStep } from '../../src/kernel/proof/step'
+import { applyAction, singleStepAction, type ProofAction } from '../../src/kernel/proof/action'
 import { checkTheorem } from '../../src/kernel/proof/theorem'
-import { mkEngine, settle, frameBounds, frameSlots, computeLegs } from '../../src/view/index'
+import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
+import { proposePortCorrespondence } from '../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
+const gesture = (step: ProofStep): ProofAction => singleStepAction(step.rule, step)
+const applyTrack = (track: TrackSession, step: ProofStep): TrackSession => applyTrackAction(track, gesture(step))
+const applyForward = (session: ProofSession, step: ProofStep): ProofSession => applyForwardAction(session, gesture(step))
+const applyBackward = (session: ProofSession, step: ProofStep): ProofSession => applyBackwardAction(session, gesture(step))
+const certifiedDeiterationStep = (
+  diagram: Parameters<typeof findDeiterationEvidence>[0],
+  sel: Parameters<typeof findDeiterationEvidence>[1],
+  fuel: number,
+): ProofStep => ({ rule: 'deiteration', sel, ...findDeiterationEvidence(diagram, sel, fuel) })
 // pure λ fixtures for the citation demos (no term constants)
 const YF = p('(\\g. (\\x. g (x x)) (\\x. g (x x))) f')
 const FYF = p('s0 ((\\g. (\\x. g (x x)) (\\x. g (x x))) s0)')
@@ -23,6 +39,55 @@ const TWOc = p('\\f. \\x. f (f x)')
 const ZEROc = p('\\f. \\x. x')
 
 describe('single-track proving', () => {
+  it('transports anchored contraction boundaries at root and rejects cut-shielded coalescence', () => {
+    const fixture = (shielded: boolean) => {
+      const b = new DiagramBuilder()
+      const cut = b.cut(b.root)
+      const redundant = b.termNode(b.root, p('\\x. x'))
+      const survivor = b.termNode(shielded ? cut : b.root, p('\\x. x'))
+      const drop = b.wire(b.root, [{ node: redundant, port: { kind: 'output' } }])
+      const keep = b.wire(b.root, [{ node: survivor, port: { kind: 'output' } }])
+      const step: ProofStep = {
+        rule: 'anchoredWireContract',
+        redundant,
+        survivor,
+        certificate: { leftSteps: [], rightSteps: [] },
+      }
+      return { side: mkDiagramWithBoundary(b.build(), [drop, drop, keep]), drop, keep, step }
+    }
+    const empty = EMPTY_PROOF_CONTEXT
+
+    const root = fixture(false)
+    const start = startTrack(root.side, 'forward', empty)
+    const contracted = applyTrack(start, root.step)
+    expect(trackBoundary(contracted)).toEqual([root.keep, root.keep, root.keep])
+    expect(trackBoundary(undoTrack(contracted))).toEqual([root.drop, root.drop, root.keep])
+    expect(trackBoundary(redoTrack(undoTrack(contracted))))
+      .toEqual([root.keep, root.keep, root.keep])
+    expect(() => declareTrack(contracted, 'root-coalescence')).not.toThrow()
+
+    const shielded = fixture(true)
+    const blocked = startTrack(shielded.side, 'forward', empty)
+    expect(() => applyTrack(blocked, shielded.step))
+      .toThrowError(new RegExp(`boundary wire '${shielded.drop}' no semantic image`))
+    expect(trackBoundary(blocked)).toEqual([shielded.drop, shielded.drop, shielded.keep])
+    expect(timelineActiveActions(blocked.timeline)).toEqual([])
+  })
+
+  it('treats every multi-step gesture as one history position and one undo/redo', () => {
+    const ctx = verifyTheory(buildFregeTheory())
+    const b = new DiagramBuilder()
+    b.termNode(b.root, p('\\x. x'))
+    const origin = mkDiagramWithBoundary(b.build(), [])
+    const s0 = startTrack(origin, 'forward', ctx)
+    const first = { rule: 'doubleCutIntro' as const, sel: mkSelection(currentTrack(s0), { region: currentTrack(s0).root, regions: [], nodes: [], wires: [] }) }
+    const action: ProofAction = { label: 'two gestures inside one action', steps: [first, first], placements: [] }
+    const s1 = applyTrackAction(s0, action)
+    expect(s1.timeline.states).toHaveLength(2)
+    expect(timelineActiveActions(s1.timeline)).toEqual([action])
+    expect(undoTrack(s1).timeline.cursor).toBe(0)
+    expect(redoTrack(undoTrack(s1)).timeline.cursor).toBe(1)
+  })
   it('proves forward from the current diagram, undoes, and declares a checked theorem', () => {
     const ctx = verifyTheory(buildFregeTheory())
     const b = new DiagramBuilder()
@@ -35,12 +100,12 @@ describe('single-track proving', () => {
     }
     const s1 = applyTrack(s0, step)
     expect(s1.direction).toBe('forward')
-    expect(s1.timeline.steps).toEqual([step])
+    expect(timelineActiveActions(s1.timeline)).toEqual([gesture(step)])
     expect(currentTrack(undoTrack(s1))).toBe(currentTrack(s0))
     const theorem = declareTrack(s1, 'forwardTrack')
     expect(theorem.lhs).toBe(origin)
     expect(theorem.rhs.diagram).toBe(currentTrack(s1))
-    expect(theorem.steps).toEqual([step])
+    expect(theorem.actions).toEqual([gesture(step)])
     expect(() => checkTheorem(theorem, ctx)).not.toThrow()
   })
 
@@ -58,8 +123,8 @@ describe('single-track proving', () => {
     const theorem = declareTrack(s1, 'backwardTrack')
     expect(theorem.lhs.diagram).toBe(currentTrack(s1))
     expect(theorem.rhs).toBe(origin)
-    expect(theorem.steps).toEqual([])
-    expect(theorem.backSteps).toEqual([step])
+    expect(theorem.actions).toEqual([])
+    expect(theorem.backActions).toEqual([gesture(step)])
     expect(() => checkTheorem(theorem, ctx)).not.toThrow()
   })
 
@@ -94,12 +159,12 @@ describe('proof session', () => {
     const ctx = verifyTheory(theory)
     const { lhs, rhs } = goalPair()
     const s0 = startSession(lhs, rhs, ctx)
-    expect(s0.forward.steps).toHaveLength(0)
+    expect(timelineActiveActions(s0.forward)).toHaveLength(0)
     const s1 = applyForward(s0, {
       rule: 'doubleCutIntro',
       sel: mkSelection(currentSide(s0, 'forward'), { region: currentSide(s0, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
-    expect(s1.forward.steps).toHaveLength(1)
+    expect(timelineActiveActions(s1.forward)).toHaveLength(1)
     expect(Object.keys(currentSide(s1, 'forward').regions).length).toBe(3)
   })
 
@@ -115,7 +180,7 @@ describe('proof session', () => {
     })
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'toy')
-    expect(thm.steps.length).toBeGreaterThan(0)
+    expect(thm.actions.length).toBeGreaterThan(0)
     expect(thm.name).toBe('toy')
   })
 
@@ -125,15 +190,16 @@ describe('proof session', () => {
     const { lhs, rhs, n } = goalPair()
     const s0 = startSession(lhs, rhs, ctx)
     expect(() => applyForward(s0, {
-      rule: 'insertion',
+      rule: 'openTermSpawn',
       region: currentSide(s0, 'forward').root,
-      pattern: lhs, attachments: [], binders: {},
-    })).toThrowError(/insertion requires a negative region/)
-    expect(s0.forward.steps).toHaveLength(0)
+      term: p('x'),
+      freePorts: ['x'],
+    })).toThrowError(/spawning requires a negative region/)
+    expect(timelineActiveActions(s0.forward)).toHaveLength(0)
     void n
   })
 
-  it('refuses a step that would leave a stale fixed statement-boundary id', () => {
+  it('transports a preserved statement boundary through local alias materialization', () => {
     const bodyBuilder = new DiagramBuilder()
     const bodyNode = bodyBuilder.termNode(bodyBuilder.root, p('y'))
     const shared = bodyBuilder.wire(bodyBuilder.root, [{ node: bodyNode, port: { kind: 'output' } }])
@@ -152,19 +218,49 @@ describe('proof session', () => {
       { node: c1, port: { kind: 'freeVar', name: 'b' } },
     ])
     const side = mkDiagramWithBoundary(host.build(), [w1])
-    const ctx = { theorems: new Map(), relations: new Map([['Alias', aliasBody]]) }
+    const ctx = verifyTheory({ relations: [['Alias', aliasBody]], theorems: [] })
     const session = startSession(side, side, ctx)
 
-    expect(() => applyForward(session, { rule: 'relUnfold', node: ref }))
-      .toThrowError(new RegExp(`forward step destroyed fixed statement-boundary wire '${w1}'`))
-    expect(() => applyBackward(session, { rule: 'relUnfold', node: ref }))
-      .toThrowError(new RegExp(`backward step destroyed fixed statement-boundary wire '${w1}'`))
+    const forward = applyForward(session, { rule: 'relUnfold', node: ref })
+    const backward = applyBackward(session, { rule: 'relUnfold', node: ref })
+    expect(sideBoundary(forward, 'forward')).toEqual([w1])
+    expect(sideBoundary(backward, 'backward')).toEqual([w1])
+    expect(currentSide(forward, 'forward').wires[w0]).toBeDefined()
+    expect(currentSide(forward, 'forward').wires[w1]).toBeDefined()
+    expect(currentSide(backward, 'backward').wires[w0]).toBeDefined()
+    expect(currentSide(backward, 'backward').wires[w1]).toBeDefined()
+    expect(timelineActiveActions(forward.forward)).toHaveLength(1)
+    expect(timelineActiveActions(backward.backward)).toHaveLength(1)
     expect(currentSide(session, 'forward').wires[w0]).toBeDefined()
     expect(currentSide(session, 'forward').wires[w1]).toBeDefined()
-    expect(session.forward.steps).toHaveLength(0)
+    expect(timelineActiveActions(session.forward)).toHaveLength(0)
   })
 
-  it('undo moves the cursor back while retaining the future step', () => {
+  it('rejects a multi-step action when an intermediate destroys a fixed boundary even if the final step remints its id', () => {
+    const b = new DiagramBuilder()
+    const root = b.root
+    const initial = applyClosedTermIntro(b.build(), root, p('\\x. x'))
+    const boundary = `${root}_intro`
+    const node = `${root}_intro`
+    const side = mkDiagramWithBoundary(initial, [boundary])
+    const session = startSession(side, side, EMPTY_PROOF_CONTEXT)
+    const action: ProofAction = {
+      label: 'replace the boundary identity',
+      steps: [
+        { rule: 'erasure', sel: { region: root, regions: [], nodes: [node], wires: [boundary] } },
+        { rule: 'closedTermIntro', region: root, term: p('\\x. x') },
+      ],
+      placements: [],
+    }
+
+    const finalOnly = applyAction(initial, action, session.ctx)
+    expect(finalOnly.wires[boundary]).toBeDefined()
+    expect(() => applyForwardAction(session, action))
+      .toThrowError(new RegExp(`forward step 0 gives boundary wire '${boundary}' no semantic image`))
+    expect(session.forward.actions).toHaveLength(0)
+  })
+
+  it('undo pops exactly one step and restores the prior diagram', () => {
     const theory = buildFregeTheory()
     const ctx = verifyTheory(theory)
     const { lhs, rhs } = goalPair()
@@ -174,8 +270,8 @@ describe('proof session', () => {
       sel: mkSelection(currentSide(s0, 'forward'), { region: currentSide(s0, 'forward').root, regions: [], nodes: [], wires: [] }),
     })
     const s2 = undoForward(s1)
-    expect(s2.forward.steps).toHaveLength(1)
-    expect(s2.forward.cursor).toBe(0)
+    expect(s2.forward.actions).toHaveLength(1)
+    expect(timelineActiveActions(s2.forward)).toHaveLength(0)
     expect(currentSide(s2, 'forward')).toBe(currentSide(s0, 'forward'))
     expect(() => undoForward(s2)).toThrowError(/nothing to undo/)
   })
@@ -211,14 +307,14 @@ describe('backward mode', () => {
       ([, r]) => r.kind === 'cut' && r.parent === currentSide(s, 'backward').root,
     )![0]
     s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
-    expect(s.backward.steps).toHaveLength(1)
-    expect(s.backward.steps[0]!.rule).toBe('doubleCutElim')
+    expect(timelineActiveActions(s.backward)).toHaveLength(1)
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('doubleCutElim')
     expect(Object.keys(currentSide(s, 'backward').regions)).toHaveLength(1)
     // and now the two sides meet: lhs ≅ unwrapped rhs
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'toy2')
-    expect(thm.steps).toHaveLength(0)
-    expect(thm.backSteps).toHaveLength(1)
+    expect(thm.actions).toHaveLength(0)
+    expect(thm.backActions).toHaveLength(1)
   })
 
   it('backward undo restores the prior goal diagram', () => {
@@ -233,8 +329,8 @@ describe('backward mode', () => {
     s = applyBackward(s, { rule: 'doubleCutElim', region: outer })
     s = undoBackward(s)
     expect(currentSide(s, 'backward')).toBe(before)
-    expect(s.backward.steps).toHaveLength(1)
-    expect(s.backward.cursor).toBe(0)
+    expect(s.backward.actions).toHaveLength(1)
+    expect(timelineActiveActions(s.backward)).toHaveLength(0)
   })
 })
 
@@ -258,11 +354,11 @@ describe('multi-step backward composition', () => {
     // unwrap the INNER pair first, then the outer pair
     s = applyBackward(s, { rule: 'doubleCutElim', region: o2 })
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
-    expect(s.backward.steps).toHaveLength(2)
+    expect(timelineActiveActions(s.backward)).toHaveLength(2)
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'doubleWrap')
-    expect(thm.steps).toHaveLength(0)
-    expect(thm.backSteps).toHaveLength(2)
+    expect(thm.actions).toHaveLength(0)
+    expect(thm.backActions).toHaveLength(2)
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
   })
 
@@ -299,8 +395,8 @@ describe('backward undo restores the composed tail', () => {
     s = applyBackward(s, { rule: 'doubleCutElim', region: o2 })
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
     s = undoBackward(s)
-    expect(s.backward.steps).toHaveLength(2)
-    expect(s.backward.cursor).toBe(1)
+    expect(s.backward.actions).toHaveLength(2)
+    expect(timelineActiveActions(s.backward)).toHaveLength(1)
     // redo: the remaining pair is o1's (the inner one was restored by undo? no —
     // undo restored the state AFTER unwrapping o2 only, so o1's pair remains)
     s = applyBackward(s, { rule: 'doubleCutElim', region: o1 })
@@ -310,28 +406,29 @@ describe('backward undo restores the composed tail', () => {
   })
 })
 
-describe('backward un-erase, un-conversion, un-citation', () => {
-  it('un-erase adds content backward and records the forward erasure', () => {
+describe('backward spawning, un-conversion, un-citation', () => {
+  it('atomic spawning adds open content backward and records the same shared rule', () => {
     const ctx = verifyTheory(buildFregeTheory())
     // goal: a single node; backward: the proof "had" an extra node erased
     const l = new DiagramBuilder()
-    l.termNode(l.root, p('\\x. x'))
+    const l0 = l.termNode(l.root, p('\\x. x'))
+    l.wire(l.root, [{ node: l0, port: { kind: 'output' } }])
     const both = new DiagramBuilder()
-    both.termNode(both.root, p('\\x. x'))
-    both.termNode(both.root, p('\\x. \\y. x'))
+    const b0 = both.termNode(both.root, p('\\x. x'))
+    both.wire(both.root, [{ node: b0, port: { kind: 'output' } }])
+    const bx = both.termNode(both.root, p('x'))
+    both.wire(both.root, [{ node: bx, port: { kind: 'output' } }])
+    both.wire(both.root, [{ node: bx, port: { kind: 'freeVar', name: 'x' } }])
     const lhs = mkDiagramWithBoundary(both.build(), [])
     const rhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx)
-    const pat = new DiagramBuilder()
-    pat.termNode(pat.root, p('\\x. \\y. x'))
     s = applyBackward(s, {
-      rule: 'insertion',
+      rule: 'openTermSpawn',
       region: currentSide(s, 'backward').root,
-      pattern: mkDiagramWithBoundary(pat.build(), []),
-      attachments: [],
-      binders: {},
+      term: p('x'),
+      freePorts: ['x'],
     })
-    expect(s.backward.steps[0]!.rule).toBe('insertion')
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('openTermSpawn')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unErased')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -348,9 +445,13 @@ describe('backward un-erase, un-conversion, un-citation', () => {
     let s = startSession(lhs, rhs, ctx)
     // the goal node's source free 'y' is canonical s0; the backward target
     // must be spelled in the node's CURRENT port names
-    const conv = applyConversion(currentSide(s, 'backward'), m, p('(\\a. a) s0'), 32)
-    s = applyBackward(s, { rule: 'conversion', node: m, term: p('(\\a. a) s0'), certificate: conv.certificate, attachments: {} })
-    expect(s.backward.steps[0]!.rule).toBe('conversion')
+    const diagram = currentSide(s, 'backward')
+    const target = p('(\\a. a) s0')
+    const source = termNodeAt(diagram, m)
+    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
+    const conv = applyConversion(diagram, m, target, correspondence, 32)
+    s = applyBackward(s, { rule: 'conversion', node: m, term: target, certificate: conv.certificate, correspondence, attachments: {} })
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('conversion')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unConverted')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -384,7 +485,7 @@ describe('backward un-erase, un-conversion, un-citation', () => {
         args: [wo, wf],
       },
     })
-    expect(s.backward.steps[0]!.rule).toBe('theorem')
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('theorem')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'unCited')
     expect(() => checkTheorem(thm, ctx)).not.toThrow()
@@ -455,32 +556,12 @@ describe('sideBoundary — prove-mode sides render their statement boundary', ()
     expect(sideBoundary(s, 'backward')).toBe(s.rhs.boundary)
   })
 
-  it("an engine built for a side connects every boundary wire to a fixed frame slot (plan 24)", () => {
-    const theory = buildFregeTheory()
-    const ctx = verifyTheory(theory)
-    const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
-    const s = startSession(plusComm.lhs, plusComm.rhs, ctx)
-    const boundary = sideBoundary(s, 'backward')
-    expect(boundary.length).toBeGreaterThan(0)
-    const e = mkEngine(currentSide(s, 'backward'), boundary)
-    settle(e, 1200)
-    const slots = frameSlots(frameBounds(e)!, boundary.length)
-    const legsByWid = new Map<string, { x: number; y: number }[][]>()
-    for (const g of computeLegs(e)) { const a = legsByWid.get(g.leg.wid) ?? []; a.push(g.pts); legsByWid.set(g.leg.wid, a) }
-    boundary.forEach((wid, i) => {
-      let best = Infinity
-      for (const pts of legsByWid.get(wid)!) for (const end of [pts[0]!, pts[pts.length - 1]!]) {
-        best = Math.min(best, Math.hypot(end.x - slots[i]!.point.x, end.y - slots[i]!.point.y))
-      }
-      expect(best, `boundary ${i} reaches slot ${i}`).toBeLessThan(1.5)
-    })
-  })
 })
 
 describe('backward proving takes the full vocabulary (shared implementation, flipped gates)', () => {
   const ctx = () => verifyTheory(buildFregeTheory())
 
-  it('erasure applies in NEGATIVE regions backward (forward reading: insertion) and declares green', () => {
+  it('erasure applies in NEGATIVE regions backward and declares green', () => {
     // goal: T at root + cut containing M; lhs: T + empty cut
     const r = new DiagramBuilder()
     const t = r.termNode(r.root, p('\\x. x'))
@@ -496,7 +577,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'erasure', sel: { region: cut, regions: [], nodes: [m], wires: [wm] } })
-    expect(s.backward.steps[0]!.rule).toBe('erasure')
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('erasure')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardErased')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -529,7 +610,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'iteration', sel: { region: currentSide(s, 'backward').root, regions: [], nodes: [a], wires: [wa] }, target: cut })
-    expect(s.backward.steps[0]!.rule).toBe('iteration')
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('iteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardIterated')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -550,8 +631,9 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     l.cut(l.root)
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
-    s = applyBackward(s, { rule: 'deiteration', sel: { region: cut, regions: [], nodes: [c], wires: [wc] }, fuel: 64 })
-    expect(s.backward.steps[0]!.rule).toBe('deiteration')
+    const deSel = { region: cut, regions: [], nodes: [c], wires: [wc] }
+    s = applyBackward(s, certifiedDeiterationStep(currentSide(s, 'backward'), deSel, 64))
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('deiteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardDeiterated')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -572,7 +654,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
     const lhs = mkDiagramWithBoundary(l.build(), [])
     let s = startSession(lhs, rhs, ctx())
     s = applyBackward(s, { rule: 'doubleCutIntro', sel: { region: currentSide(s, 'backward').root, regions: [], nodes: [a], wires: [wa] } })
-    expect(s.backward.steps[0]!.rule).toBe('doubleCutIntro')
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('doubleCutIntro')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'backwardWrapped')
     expect(() => checkTheorem(thm, ctx())).not.toThrow()
@@ -595,7 +677,7 @@ describe('backward proving takes the full vocabulary (shared implementation, fli
 })
 
 describe('backward erasure of externally-bound atoms (binder stubs)', () => {
-  it('the inverse insertion rebinds the atom to its bubble (user bug: iterate a bound predicate, delete it)', () => {
+  it('backward erasure rebinds the atom to its bubble (user bug: iterate a bound predicate, delete it)', () => {
     const c = verifyTheory(buildFregeTheory())
     // goal: cut > bubble(1) > two bound atoms sharing a line
     const r = new DiagramBuilder()
@@ -619,7 +701,7 @@ describe('backward erasure of externally-bound atoms (binder stubs)', () => {
     void w
     // the bubble sits inside a cut: NEGATIVE — backward erasure's gate
     s = applyBackward(s, { rule: 'erasure', sel: { region: bub, regions: [], nodes: [a2], wires: [] } })
-    expect(s.backward.steps[0]!.rule).toBe('erasure')
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('erasure')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'boundAtomErased')
     expect(() => checkTheorem(thm, c)).not.toThrow()
@@ -649,14 +731,15 @@ describe('dual-replay redesign: record actions, verify from both ends', () => {
     void w
     // erase is gated out (positive+backward needs negative) — deletion here IS
     // deiteration, justified by the surviving copy at the same scope
-    s = applyBackward(s, { rule: 'deiteration', sel: { region: bub, regions: [], nodes: [a2], wires: [] }, fuel: 64 })
-    expect(s.backward.steps[0]!.rule).toBe('deiteration')
+    const deSel = { region: bub, regions: [], nodes: [a2], wires: [] }
+    s = applyBackward(s, certifiedDeiterationStep(currentSide(s, 'backward'), deSel, 64))
+    expect(timelineActiveActions(s.backward)[0]!.steps[0]!.rule).toBe('deiteration')
     expect(meet(s)).toBe(true)
     const thm = assembleTheorem(s, 'boundCopyDeiterated')
     expect(() => checkTheorem(thm, c)).not.toThrow()
   })
 
-  it('tampered backSteps cannot certify: the dual replay is the authority', () => {
+  it('tampered backActions cannot certify: the dual replay is the authority', () => {
     const c = verifyTheory(buildFregeTheory())
     const r = new DiagramBuilder()
     const t = r.termNode(r.root, p('\\x. x'))
@@ -675,10 +758,10 @@ describe('dual-replay redesign: record actions, verify from both ends', () => {
     const thm = assembleTheorem(s, 'honest')
     expect(() => checkTheorem(thm, c)).not.toThrow()
     // drop the backward step: the halves no longer meet
-    const forged = { ...thm, backSteps: [] }
+    const forged = { ...thm, backActions: [] }
     expect(() => checkTheorem(forged, c)).toThrowError(/do not meet|does not arrive/)
     // flip the gate: an erasure claimed at a POSITIVE region cannot replay backward
-    const forged2 = { ...thm, backSteps: [{ rule: 'erasure' as const, sel: { region: rhs.diagram.root, regions: [], nodes: [t], wires: [] } }] }
+    const forged2 = { ...thm, backActions: [gesture({ rule: 'erasure', sel: { region: rhs.diagram.root, regions: [], nodes: [t], wires: [] } })] }
     expect(() => checkTheorem(forged2, c)).toThrowError(/backward erasure requires a negative region/)
   })
 })

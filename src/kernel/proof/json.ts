@@ -1,16 +1,23 @@
 import type { Term } from '../term/term'
+import { assertOpenFreePortInterface } from '../term/term'
 import { serializeTerm, deserializeTerm } from '../term/serialize'
 import type { PathSeg, ReductionStep } from '../term/reduce'
-import type { ConversionCertificate } from '../term/certificate'
+import type { ConversionCertificate, NormalSeparationCertificate } from '../term/certificate'
 import type { Endpoint, WireId } from '../diagram/diagram'
 import { portKey } from '../diagram/diagram'
 import { diagramToJson, diagramFromJson, parsePortKey } from '../diagram/json'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { mkDiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
+import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import type { AbstractionOccurrence } from '../rules/comprehension'
 import type { ProofStep } from './step'
+import type { PlacementHint, ProofAction, ProofAllocation } from './action'
 import type { Theorem, TheoremApplication } from './theorem'
+import {
+  validatePortCorrespondenceCarrier,
+  type PortCorrespondence,
+} from '../rules/port-correspondence'
 
 function fail(msg: string): never {
   throw new Error(`malformed proof JSON: ${msg}`)
@@ -90,25 +97,143 @@ export function dwbFromJson(v: unknown, what = 'pattern'): DiagramWithBoundary {
   }
 }
 
+function reductionStepsToJson(steps: readonly ReductionStep[]): unknown {
+  return steps.map((step) => ({ kind: step.kind, path: [...step.path] }))
+}
+
+function reductionStepsFromJson(value: unknown, what: string): ReductionStep[] {
+  if (!Array.isArray(value)) fail(`${what} must be an array`)
+  return value.map((step, index) => {
+    if (!isRecord(step)) fail(`${what}[${index}] must be an object`)
+    assertOnlyKeys(step, ['kind', 'path'], `${what}[${index}]`)
+    const kind = str(step.kind, `${what}[${index}].kind`)
+    if (kind !== 'beta' && kind !== 'eta') fail(`${what}[${index}].kind must be beta|eta`)
+    return { kind, path: pathFromJson(step.path, `${what}[${index}].path`) }
+  })
+}
+
 function certToJson(c: ConversionCertificate): unknown {
-  const steps = (xs: readonly ReductionStep[]) => xs.map((s) => ({ kind: s.kind, path: [...s.path] }))
-  return { leftSteps: steps(c.leftSteps), rightSteps: steps(c.rightSteps) }
+  return {
+    leftSteps: reductionStepsToJson(c.leftSteps),
+    rightSteps: reductionStepsToJson(c.rightSteps),
+  }
 }
 
 function certFromJson(v: unknown, what: string): ConversionCertificate {
   if (!isRecord(v)) fail(`${what} must be an object`)
   assertOnlyKeys(v, ['leftSteps', 'rightSteps'], what)
-  const steps = (xs: unknown, w: string): ReductionStep[] => {
-    if (!Array.isArray(xs)) fail(`${w} must be an array`)
-    return xs.map((x, i) => {
-      if (!isRecord(x)) fail(`${w}[${i}] must be an object`)
-      assertOnlyKeys(x, ['kind', 'path'], `${w}[${i}]`)
-      const kind = str(x.kind, `${w}[${i}].kind`)
-      if (kind !== 'beta' && kind !== 'eta') fail(`${w}[${i}].kind must be beta|eta`)
-      return { kind, path: pathFromJson(x.path, `${w}[${i}].path`) }
-    })
+  return {
+    leftSteps: reductionStepsFromJson(v.leftSteps, `${what}.leftSteps`),
+    rightSteps: reductionStepsFromJson(v.rightSteps, `${what}.rightSteps`),
   }
-  return { leftSteps: steps(v.leftSteps, `${what}.leftSteps`), rightSteps: steps(v.rightSteps, `${what}.rightSteps`) }
+}
+
+function normalSeparationToJson(certificate: NormalSeparationCertificate): unknown {
+  return {
+    firstSteps: reductionStepsToJson(certificate.firstSteps),
+    secondSteps: reductionStepsToJson(certificate.secondSteps),
+  }
+}
+
+function normalSeparationFromJson(value: unknown, what: string): NormalSeparationCertificate {
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  assertOnlyKeys(value, ['firstSteps', 'secondSteps'], what)
+  return {
+    firstSteps: reductionStepsFromJson(value.firstSteps, `${what}.firstSteps`),
+    secondSteps: reductionStepsFromJson(value.secondSteps, `${what}.secondSteps`),
+  }
+}
+
+function correspondenceToJson(correspondence: PortCorrespondence): unknown {
+  return {
+    commonArity: correspondence.commonArity,
+    left: { ...correspondence.left },
+    right: { ...correspondence.right },
+  }
+}
+
+function correspondenceFromJson(v: unknown, what: string): PortCorrespondence {
+  if (!isRecord(v)) fail(`${what} must be an object`)
+  assertOnlyKeys(v, ['commonArity', 'left', 'right'], what)
+  if (typeof v.commonArity !== 'number' || !Number.isSafeInteger(v.commonArity) || v.commonArity < 0) {
+    fail(`${what}.commonArity must be a non-negative safe integer`)
+  }
+  const mapping = (side: unknown, label: string): Record<string, number> => {
+    if (!isRecord(side)) fail(`${label} must be an object`)
+    const entries: [string, number][] = []
+    for (const [name, column] of Object.entries(side)) {
+      if (typeof column !== 'number') fail(`${label}['${name}'] must be a number`)
+      entries.push([name, column])
+    }
+    return Object.fromEntries(entries)
+  }
+  const correspondence: PortCorrespondence = {
+    commonArity: v.commonArity,
+    left: mapping(v.left, `${what}.left`),
+    right: mapping(v.right, `${what}.right`),
+  }
+  try {
+    validatePortCorrespondenceCarrier(correspondence)
+  } catch (error) {
+    fail(`${what}: ${error instanceof Error ? error.message : String(error)}`)
+  }
+  return correspondence
+}
+
+function idMapToJson(map: ReadonlyMap<string, string>): unknown {
+  return [...map]
+}
+
+function idMapFromJson(v: unknown, what: string): Map<string, string> {
+  if (!Array.isArray(v)) fail(`${what} must be an array`)
+  const result = new Map<string, string>()
+  for (const [index, entry] of v.entries()) {
+    if (!Array.isArray(entry) || entry.length !== 2) fail(`${what}[${index}] must be a [pattern, host] pair`)
+    const pattern = str(entry[0], `${what}[${index}][0]`)
+    const host = str(entry[1], `${what}[${index}][1]`)
+    if (result.has(pattern)) fail(`${what} repeats pattern id '${pattern}'`)
+    result.set(pattern, host)
+  }
+  return result
+}
+
+function occurrenceCertificateToJson(certificate: OccurrenceCertificate): unknown {
+  return {
+    region: certificate.region,
+    regionMap: idMapToJson(certificate.regionMap),
+    nodeMap: idMapToJson(certificate.nodeMap),
+    wireMap: idMapToJson(certificate.wireMap),
+    attachments: [...certificate.attachments],
+    binderMap: idMapToJson(certificate.binderMap),
+    termCertificates: [...certificate.termCertificates]
+      .map(([node, conversion]) => [node, certToJson(conversion)]),
+  }
+}
+
+function occurrenceCertificateFromJson(v: unknown, what: string): OccurrenceCertificate {
+  if (!isRecord(v)) fail(`${what} must be an object`)
+  assertOnlyKeys(v, [
+    'region', 'regionMap', 'nodeMap', 'wireMap', 'attachments', 'binderMap', 'termCertificates',
+  ], what)
+  if (!Array.isArray(v.termCertificates)) fail(`${what}.termCertificates must be an array`)
+  const termCertificates = new Map<string, ConversionCertificate>()
+  for (const [index, entry] of v.termCertificates.entries()) {
+    if (!Array.isArray(entry) || entry.length !== 2) {
+      fail(`${what}.termCertificates[${index}] must be a [node, certificate] pair`)
+    }
+    const node = str(entry[0], `${what}.termCertificates[${index}][0]`)
+    if (termCertificates.has(node)) fail(`${what}.termCertificates repeats node '${node}'`)
+    termCertificates.set(node, certFromJson(entry[1], `${what}.termCertificates[${index}][1]`))
+  }
+  return {
+    region: str(v.region, `${what}.region`),
+    regionMap: idMapFromJson(v.regionMap, `${what}.regionMap`),
+    nodeMap: idMapFromJson(v.nodeMap, `${what}.nodeMap`),
+    wireMap: idMapFromJson(v.wireMap, `${what}.wireMap`),
+    attachments: strArray(v.attachments, `${what}.attachments`),
+    binderMap: idMapFromJson(v.binderMap, `${what}.binderMap`),
+    termCertificates,
+  }
 }
 
 function occToJson(o: AbstractionOccurrence): unknown {
@@ -133,8 +258,12 @@ function appFromJson(v: unknown, what: string): TheoremApplication {
 
 export function stepToJson(s: ProofStep): unknown {
   switch (s.rule) {
-    case 'insertion':
-      return { rule: s.rule, region: s.region, pattern: dwbToJson(s.pattern), attachments: [...s.attachments], binders: { ...s.binders } }
+    case 'openTermSpawn':
+      return { rule: s.rule, region: s.region, term: serializeTerm(s.term), freePorts: [...s.freePorts] }
+    case 'relationSpawn':
+      return { rule: s.rule, region: s.region, defId: s.defId, arity: s.arity }
+    case 'boundRelationSpawn':
+      return { rule: s.rule, region: s.region, binder: s.binder, arity: s.arity }
     case 'wireJoin':
       return { rule: s.rule, a: s.a, b: s.b }
     case 'erasure':
@@ -144,19 +273,34 @@ export function stepToJson(s: ProofStep): unknown {
     case 'iteration':
       return { rule: s.rule, sel: selToJson(s.sel), target: s.target }
     case 'deiteration':
-      return { rule: s.rule, sel: selToJson(s.sel), fuel: s.fuel }
+      return {
+        rule: s.rule,
+        sel: selToJson(s.sel),
+        justifier: selToJson(s.justifier),
+        certificate: occurrenceCertificateToJson(s.certificate),
+      }
     case 'doubleCutIntro':
       return { rule: s.rule, sel: selToJson(s.sel) }
     case 'doubleCutElim':
       return { rule: s.rule, region: s.region }
+    case 'inconsistentCutElim':
+      return {
+        rule: s.rule,
+        region: s.region,
+        first: s.first,
+        second: s.second,
+        certificate: normalSeparationToJson(s.certificate),
+      }
     case 'conversion':
-      return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), attachments: { ...s.attachments } }
+      return { rule: s.rule, node: s.node, term: serializeTerm(s.term), certificate: certToJson(s.certificate), correspondence: correspondenceToJson(s.correspondence), attachments: { ...s.attachments } }
     case 'congruenceJoin':
-      return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate) }
-    case 'endpointTransport':
-      return { rule: s.rule, a: s.a, b: s.b, endpoint: endpointToJson(s.endpoint), certificate: certToJson(s.certificate) }
+      return { rule: s.rule, a: s.a, b: s.b, certificate: certToJson(s.certificate), correspondence: correspondenceToJson(s.correspondence) }
+    case 'anchoredWireSplit':
+      return { rule: s.rule, wire: s.wire, witness: s.witness, endpoints: s.endpoints.map(endpointToJson), target: s.target }
+    case 'anchoredWireContract':
+      return { rule: s.rule, redundant: s.redundant, survivor: s.survivor, certificate: certToJson(s.certificate) }
     case 'headStrip':
-      return { rule: s.rule, a: s.a, b: s.b }
+      return { rule: s.rule, a: s.a, b: s.b, correspondence: correspondenceToJson(s.correspondence) }
     case 'closedTermIntro':
       return { rule: s.rule, region: s.region, term: serializeTerm(s.term) }
     case 'fusion':
@@ -164,7 +308,13 @@ export function stepToJson(s: ProofStep): unknown {
     case 'fission':
       return { rule: s.rule, node: s.node, path: [...s.path] }
     case 'comprehensionInstantiate':
-      return { rule: s.rule, bubble: s.bubble, comp: dwbToJson(s.comp), attachments: [...s.attachments], binders: { ...s.binders } }
+      return {
+        rule: s.rule,
+        bubble: s.bubble,
+        comp: dwbToJson(s.comp),
+        attachments: [...s.attachments],
+        binders: s.binders.map(([pattern, host]) => [pattern, host]),
+      }
     case 'comprehensionAbstract':
       return { rule: s.rule, wrap: selToJson(s.wrap), comp: dwbToJson(s.comp), occurrences: s.occurrences.map(occToJson) }
     case 'theorem':
@@ -184,12 +334,26 @@ export function stepFromJson(j: unknown): ProofStep {
   if (!isRecord(j)) fail('step must be an object')
   const rule = str(j.rule, 'step.rule')
   switch (rule) {
-    case 'insertion':
-      assertOnlyKeys(j, ['rule', 'region', 'pattern', 'attachments', 'binders'], 'insertion step')
-      if (!isRecord(j.binders)) fail('binders must be an object')
-      const binders: Record<string, string> = {}
-      for (const [k, v] of Object.entries(j.binders)) binders[k] = str(v, `binders['${k}']`)
-      return { rule, region: str(j.region, 'region'), pattern: dwbFromJson(j.pattern), attachments: strArray(j.attachments, 'attachments'), binders }
+    case 'openTermSpawn': {
+      assertOnlyKeys(j, ['rule', 'region', 'term', 'freePorts'], 'openTermSpawn step')
+      const term = termFromJson(j.term, 'term')
+      const declaredFreePorts = strArray(j.freePorts, 'freePorts')
+      try {
+        assertOpenFreePortInterface(term, declaredFreePorts)
+      } catch (e) {
+        return fail(`openTermSpawn freePorts: ${e instanceof Error ? e.message : String(e)}`)
+      }
+      return { rule, region: str(j.region, 'region'), term, freePorts: declaredFreePorts }
+    }
+    case 'relationSpawn': {
+      assertOnlyKeys(j, ['rule', 'region', 'defId', 'arity'], 'relationSpawn step')
+      if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')
+      return { rule, region: str(j.region, 'region'), defId: str(j.defId, 'defId'), arity: j.arity }
+    }
+    case 'boundRelationSpawn':
+      assertOnlyKeys(j, ['rule', 'region', 'binder', 'arity'], 'boundRelationSpawn step')
+      if (typeof j.arity !== 'number' || !Number.isSafeInteger(j.arity) || j.arity < 0) fail('arity must be a non-negative safe integer')
+      return { rule, region: str(j.region, 'region'), binder: str(j.binder, 'binder'), arity: j.arity }
     case 'wireJoin':
       assertOnlyKeys(j, ['rule', 'a', 'b'], 'wireJoin step')
       return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
@@ -205,9 +369,13 @@ export function stepFromJson(j: unknown): ProofStep {
       assertOnlyKeys(j, ['rule', 'sel', 'target'], 'iteration step')
       return { rule, sel: selFromJson(j.sel, 'sel'), target: str(j.target, 'target') }
     case 'deiteration': {
-      assertOnlyKeys(j, ['rule', 'sel', 'fuel'], 'deiteration step')
-      if (typeof j.fuel !== 'number' || !Number.isInteger(j.fuel) || j.fuel <= 0) fail('fuel must be a positive integer')
-      return { rule, sel: selFromJson(j.sel, 'sel'), fuel: j.fuel }
+      assertOnlyKeys(j, ['rule', 'sel', 'justifier', 'certificate'], 'deiteration step')
+      return {
+        rule,
+        sel: selFromJson(j.sel, 'sel'),
+        justifier: selFromJson(j.justifier, 'justifier'),
+        certificate: occurrenceCertificateFromJson(j.certificate, 'certificate'),
+      }
     }
     case 'doubleCutIntro':
       assertOnlyKeys(j, ['rule', 'sel'], 'doubleCutIntro step')
@@ -215,22 +383,48 @@ export function stepFromJson(j: unknown): ProofStep {
     case 'doubleCutElim':
       assertOnlyKeys(j, ['rule', 'region'], 'doubleCutElim step')
       return { rule, region: str(j.region, 'region') }
+    case 'inconsistentCutElim':
+      assertOnlyKeys(j, ['rule', 'region', 'first', 'second', 'certificate'], 'inconsistentCutElim step')
+      return {
+        rule,
+        region: str(j.region, 'region'),
+        first: str(j.first, 'first'),
+        second: str(j.second, 'second'),
+        certificate: normalSeparationFromJson(j.certificate, 'certificate'),
+      }
     case 'conversion': {
-      assertOnlyKeys(j, ['rule', 'node', 'term', 'certificate', 'attachments'], 'conversion step')
+      assertOnlyKeys(j, ['rule', 'node', 'term', 'certificate', 'correspondence', 'attachments'], 'conversion step')
       if (!isRecord(j.attachments)) fail('attachments must be an object')
-      const attachments: Record<string, WireId> = {}
-      for (const [k, v] of Object.entries(j.attachments)) attachments[k] = str(v, `attachments['${k}']`)
-      return { rule, node: str(j.node, 'node'), term: termFromJson(j.term, 'term'), certificate: certFromJson(j.certificate, 'certificate'), attachments }
+      const attachments = Object.fromEntries(
+        Object.entries(j.attachments).map(([k, v]) => [k, str(v, `attachments['${k}']`)]),
+      ) as Record<string, WireId>
+      return { rule, node: str(j.node, 'node'), term: termFromJson(j.term, 'term'), certificate: certFromJson(j.certificate, 'certificate'), correspondence: correspondenceFromJson(j.correspondence, 'correspondence'), attachments }
     }
     case 'congruenceJoin':
-      assertOnlyKeys(j, ['rule', 'a', 'b', 'certificate'], 'congruenceJoin step')
-      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), certificate: certFromJson(j.certificate, 'certificate') }
-    case 'endpointTransport':
-      assertOnlyKeys(j, ['rule', 'a', 'b', 'endpoint', 'certificate'], 'endpointTransport step')
-      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), endpoint: endpointFromJson(j.endpoint, 'endpoint'), certificate: certFromJson(j.certificate, 'certificate') }
+      assertOnlyKeys(j, ['rule', 'a', 'b', 'certificate', 'correspondence'], 'congruenceJoin step')
+      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), certificate: certFromJson(j.certificate, 'certificate'), correspondence: correspondenceFromJson(j.correspondence, 'correspondence') }
+    case 'anchoredWireSplit': {
+      assertOnlyKeys(j, ['rule', 'wire', 'witness', 'endpoints', 'target'], 'anchoredWireSplit step')
+      if (!Array.isArray(j.endpoints)) fail('endpoints must be an array')
+      return {
+        rule,
+        wire: str(j.wire, 'wire'),
+        witness: str(j.witness, 'witness'),
+        endpoints: j.endpoints.map((endpoint, index) => endpointFromJson(endpoint, `endpoints[${index}]`)),
+        target: str(j.target, 'target'),
+      }
+    }
+    case 'anchoredWireContract':
+      assertOnlyKeys(j, ['rule', 'redundant', 'survivor', 'certificate'], 'anchoredWireContract step')
+      return {
+        rule,
+        redundant: str(j.redundant, 'redundant'),
+        survivor: str(j.survivor, 'survivor'),
+        certificate: certFromJson(j.certificate, 'certificate'),
+      }
     case 'headStrip':
-      assertOnlyKeys(j, ['rule', 'a', 'b'], 'headStrip step')
-      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b') }
+      assertOnlyKeys(j, ['rule', 'a', 'b', 'correspondence'], 'headStrip step')
+      return { rule, a: str(j.a, 'a'), b: str(j.b, 'b'), correspondence: correspondenceFromJson(j.correspondence, 'correspondence') }
     case 'closedTermIntro':
       assertOnlyKeys(j, ['rule', 'region', 'term'], 'closedTermIntro step')
       return { rule, region: str(j.region, 'region'), term: termFromJson(j.term, 'term') }
@@ -242,9 +436,22 @@ export function stepFromJson(j: unknown): ProofStep {
       return { rule, node: str(j.node, 'node'), path: pathFromJson(j.path, 'path') }
     case 'comprehensionInstantiate': {
       assertOnlyKeys(j, ['rule', 'bubble', 'comp', 'attachments', 'binders'], 'comprehensionInstantiate step')
-      if (!isRecord(j.binders)) fail('binders must be an object')
-      const binders: Record<string, string> = {}
-      for (const [k, v] of Object.entries(j.binders)) binders[k] = str(v, `binders['${k}']`)
+      if (!Array.isArray(j.binders)) fail('binders must be an array')
+      const binders: Array<readonly [string, string]> = []
+      const patterns = new Set<string>()
+      const targets = new Set<string>()
+      for (const [index, entry] of j.binders.entries()) {
+        if (!Array.isArray(entry) || entry.length !== 2) {
+          fail(`binders[${index}] must be a [pattern, host] pair`)
+        }
+        const pattern = str(entry[0], `binders[${index}][0]`)
+        const host = str(entry[1], `binders[${index}][1]`)
+        if (patterns.has(pattern)) fail(`binders repeats pattern id '${pattern}'`)
+        if (targets.has(host)) fail(`binders repeats host target '${host}'`)
+        patterns.add(pattern)
+        targets.add(host)
+        binders.push([pattern, host])
+      }
       return { rule, bubble: str(j.bubble, 'bubble'), comp: dwbFromJson(j.comp, 'comp'), attachments: strArray(j.attachments, 'attachments'), binders }
     }
     case 'comprehensionAbstract': {
@@ -277,27 +484,104 @@ export function stepFromJson(j: unknown): ProofStep {
   }
 }
 
+function placementToJson(placement: PlacementHint): unknown {
+  return { introducedNode: placement.introducedNode, x: placement.x, y: placement.y }
+}
+
+function finiteNumber(v: unknown, what: string): number {
+  if (typeof v !== 'number' || !Number.isFinite(v)) fail(`${what} must be a finite number`)
+  return v
+}
+
+function placementFromJson(j: unknown, what: string): PlacementHint {
+  if (!isRecord(j)) fail(`${what} must be an object`)
+  assertOnlyKeys(j, ['introducedNode', 'x', 'y'], what)
+  const introducedNode = finiteNumber(j.introducedNode, `${what}.introducedNode`)
+  if (!Number.isInteger(introducedNode) || introducedNode < 0) {
+    fail(`${what}.introducedNode must be a non-negative integer`)
+  }
+  return {
+    introducedNode,
+    x: finiteNumber(j.x, `${what}.x`),
+    y: finiteNumber(j.y, `${what}.y`),
+  }
+}
+
+export function actionToJson(action: ProofAction): unknown {
+  const allocation = action.allocation
+  const hasAllocation = allocation !== undefined
+    && (allocation.regions.length > 0 || allocation.nodes.length > 0 || allocation.wires.length > 0)
+  return {
+    label: action.label,
+    steps: action.steps.map(stepToJson),
+    placements: action.placements.map(placementToJson),
+    ...(hasAllocation ? { allocation: {
+      regions: [...allocation.regions],
+      nodes: [...allocation.nodes],
+      wires: [...allocation.wires],
+    } } : {}),
+  }
+}
+
+function allocationFromJson(value: unknown, what: string): ProofAllocation | undefined {
+  if (value === undefined) return undefined
+  if (!isRecord(value)) fail(`${what} must be an object`)
+  assertOnlyKeys(value, ['regions', 'nodes', 'wires'], what)
+  const read = (field: 'regions' | 'nodes' | 'wires', singular: string): string[] => {
+    const ids = strArray(value[field], `${what}.${field}`)
+    const seen = new Set<string>()
+    for (const id of ids) {
+      if (id.length === 0) fail(`${what}.${field} ids must be non-empty strings`)
+      if (seen.has(id)) fail(`duplicate ${singular} allocation id '${id}'`)
+      seen.add(id)
+    }
+    return ids
+  }
+  const allocation: ProofAllocation = {
+    regions: read('regions', 'region'),
+    nodes: read('nodes', 'node'),
+    wires: read('wires', 'wire'),
+  }
+  return allocation.regions.length > 0 || allocation.nodes.length > 0 || allocation.wires.length > 0
+    ? allocation
+    : undefined
+}
+
+export function actionFromJson(j: unknown, what = 'action'): ProofAction {
+  if (!isRecord(j)) fail(`${what} must be an object`)
+  assertOnlyKeys(j, ['label', 'steps', 'placements', 'allocation'], what)
+  if (!Array.isArray(j.steps)) fail(`${what}.steps must be an array`)
+  if (!Array.isArray(j.placements)) fail(`${what}.placements must be an array`)
+  const allocation = allocationFromJson(j.allocation, `${what}.allocation`)
+  return {
+    label: str(j.label, `${what}.label`),
+    steps: j.steps.map(stepFromJson),
+    placements: j.placements.map((placement, index) => placementFromJson(placement, `${what}.placements[${index}]`)),
+    ...(allocation === undefined ? {} : { allocation }),
+  }
+}
+
 export function theoremToJson(t: Theorem): unknown {
-  const backSteps = t.backSteps ?? []
+  const backActions = t.backActions ?? []
   return {
     name: t.name, lhs: dwbToJson(t.lhs), rhs: dwbToJson(t.rhs),
-    steps: t.steps.map(stepToJson),
-    // dual-replay form: backward-oriented steps, replayed from the rhs.
-    // Omitted when empty so classic all-forward files stay byte-identical.
-    ...(backSteps.length > 0 ? { backSteps: backSteps.map(stepToJson) } : {}),
+    actions: t.actions.map(actionToJson),
+    ...(backActions.length > 0 ? { backActions: backActions.map(actionToJson) } : {}),
   }
 }
 
 export function theoremFromJson(j: unknown): Theorem {
   if (!isRecord(j)) fail('theorem must be an object')
-  assertOnlyKeys(j, ['name', 'lhs', 'rhs', 'steps', 'backSteps'], 'theorem')
-  if (!Array.isArray(j.steps)) fail('theorem.steps must be an array')
-  if (j.backSteps !== undefined && !Array.isArray(j.backSteps)) fail('theorem.backSteps must be an array')
+  assertOnlyKeys(j, ['name', 'lhs', 'rhs', 'actions', 'backActions'], 'theorem')
+  if (!Array.isArray(j.actions)) fail('theorem.actions must be an array')
+  if (j.backActions !== undefined && !Array.isArray(j.backActions)) fail('theorem.backActions must be an array')
   return {
     name: str(j.name, 'theorem.name'),
     lhs: dwbFromJson(j.lhs, 'theorem.lhs'),
     rhs: dwbFromJson(j.rhs, 'theorem.rhs'),
-    steps: j.steps.map((s) => stepFromJson(s)),
-    ...(Array.isArray(j.backSteps) && j.backSteps.length > 0 ? { backSteps: j.backSteps.map((s) => stepFromJson(s)) } : {}),
+    actions: j.actions.map((action, index) => actionFromJson(action, `theorem.actions[${index}]`)),
+    ...(Array.isArray(j.backActions) && j.backActions.length > 0
+      ? { backActions: j.backActions.map((action, index) => actionFromJson(action, `theorem.backActions[${index}]`)) }
+      : {}),
   }
 }

@@ -1,7 +1,6 @@
 import type { Diagram, DiagramNode, NodeId, Port, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
-import { freePorts } from '../../term/term'
 import { termShapeKey, positionalPortKey } from './shape'
 
 /**
@@ -131,7 +130,7 @@ function endpointKey(d: Diagram, node: NodeId, port: Port): string {
   // Return-typed switch (no default): a new node kind must decide its key here.
   switch (n.kind) {
     case 'term':
-      return positionalPortKey(n.term, port)
+      return positionalPortKey(n.term, port, n.freePorts)
     case 'atom':
       if (port.kind === 'arg') return `a${port.index}`
       throw new DiagramError(`atom '${node}' cannot carry port '${port.kind}'`)
@@ -178,9 +177,9 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
     switch (n.kind) {
       case 'term':
         return {
-          contentKey: `term:${termShapeKey(n.term)}`,
+          contentKey: `term:${termShapeKey(n.term, n.freePorts)}`,
           binder: null,
-          portOrder: ['out', ...freePorts(n.term).map((_, i) => `v${i}`)],
+          portOrder: ['out', ...n.freePorts.map((_, i) => `v${i}`)],
         }
       case 'atom': {
         const binder = d.regions[n.binder]!
@@ -415,12 +414,18 @@ export type DiagramIso = {
  * An isomorphism from `from` onto `to`, or null when none exists. Built by
  * matching canonical-labeling ordinals: equal forms mean the discrete
  * colorings correspond, and the ordinal-matched mapping transports all
- * structure. For diagrams with automorphisms this picks one valid
- * isomorphism, deterministically.
+ * structure. Optional ordered pin lists constrain corresponding wire
+ * positions, including repeated positions. For diagrams with remaining
+ * automorphisms this picks one valid isomorphism deterministically.
  */
-export function exploreIso(from: Diagram, to: Diagram): DiagramIso | null {
-  const a = exploreLabeling(from)
-  const b = exploreLabeling(to)
+export function exploreIso(
+  from: Diagram,
+  to: Diagram,
+  fromPinnedWires: readonly WireId[] = [],
+  toPinnedWires: readonly WireId[] = [],
+): DiagramIso | null {
+  const a = exploreLabeling(from, fromPinnedWires)
+  const b = exploreLabeling(to, toPinnedWires)
   if (a.form !== b.form) return null
   const invert = (m: ReadonlyMap<string, number>): Map<number, string> => {
     const r = new Map<number, string>()

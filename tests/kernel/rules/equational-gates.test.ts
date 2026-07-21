@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
+import { freePorts } from '../../../src/kernel/term/term'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -8,6 +9,8 @@ import {
   applyConversion, applyFusion, applyFission,
   applyComprehensionInstantiate, applyComprehensionAbstract,
 } from '../../../src/kernel/rules/index'
+import { proposePortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
 
@@ -29,7 +32,10 @@ describe('equational rules are polarity-free at depths 0..3', () => {
 
       // the node's free ports f, y are positional s0, s1; conversion contracts
       // the inner redex, leaving f y
-      expect(() => applyConversion(d, n, p('s0 s1'), 10)).not.toThrow()
+      const target = p('s0 s1')
+      const source = termNodeAt(d, n)
+      const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
+      expect(() => applyConversion(d, n, target, correspondence, 10)).not.toThrow()
 
       const split = applyFission(d, n, ['arg'])
       const newWire = Object.keys(split.wires).find(
@@ -40,7 +46,7 @@ describe('equational rules are polarity-free at depths 0..3', () => {
   }
 })
 
-describe('comprehension gates mirror insertion/erasure parity', () => {
+describe('comprehension gates mirror atomic-spawn/erasure parity', () => {
   for (let depth = 0; depth <= 3; depth++) {
     const positive = depth % 2 === 0
     it(`depth ${depth} (${positive ? 'positive' : 'negative'}): abstract ${positive ? 'allowed' : 'rejected'}, instantiate ${positive ? 'rejected' : 'allowed'}`, () => {

@@ -3,9 +3,9 @@ import { mkDiagram } from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
-import { removeSubgraph, spliceSubgraph } from '../diagram/subgraph/splice'
+import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import { exploreForm } from '../diagram/canonical/explore'
-import { freshId } from '../diagram/subgraph/freshId'
+import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
 import { wireAt } from './access'
 
@@ -24,13 +24,14 @@ import { wireAt } from './access'
 /**
  * Unfold: splice the relation body onto the reference's argument wires and drop
  * the reference. The body's boundary stub i merges into arg-i's wire (the same
- * splice path insertion uses), so the body lands attached exactly where the
+ * shared splice path uses), so the body lands attached exactly where the
  * reference's argument lines were.
  */
 export function applyRelUnfold(
   d: Diagram,
   node: NodeId,
   relations: ReadonlyMap<string, DiagramWithBoundary>,
+  reservation?: IdReservation,
 ): Diagram {
   const n = d.nodes[node]
   if (n === undefined) throw new RuleError(`unknown node '${node}'`)
@@ -44,7 +45,7 @@ export function applyRelUnfold(
   }
   const args: WireId[] = []
   for (let i = 0; i < n.arity; i++) args.push(wireAt(d, node, { kind: 'arg', index: i }))
-  const spliced = spliceSubgraph(d, n.region, body, args)
+  const spliced = spliceSubgraphMapped(d, n.region, body, args, { reserved: reservation }).diagram
   return removeSubgraph(spliced, { region: n.region, regions: [], nodes: [node], wires: [] })
 }
 
@@ -63,6 +64,7 @@ export function applyRelFold(
   defId: string,
   args: readonly WireId[],
   relations: ReadonlyMap<string, DiagramWithBoundary>,
+  reservation?: IdReservation,
 ): Diagram {
   const body = relations.get(defId)
   if (body === undefined) throw new RuleError(`relation fold: no relation named '${defId}'`)
@@ -92,7 +94,7 @@ export function applyRelFold(
   // Mint against the FULL pre-removal id set (the applyTheorem discipline):
   // minting after removal can resurrect a just-deleted node id, breaking
   // every diff-based consumer (backward inverses, proof remapping).
-  const refId = freshId(new Set(Object.keys(d.nodes)), 'relFold')
+  const refId = freshId(new Set(Object.keys(d.nodes)), 'relFold', reservation?.nodes)
   const nodes: Record<NodeId, DiagramNode> = {
     ...cleaned.nodes,
     [refId]: { kind: 'ref', region: sel.region, defId, arity: args.length },

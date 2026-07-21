@@ -1,7 +1,9 @@
 import type { Diagram } from '../kernel/diagram/diagram'
 import { polarity } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
+import { hasInconsistentCutCandidate } from '../kernel/rules/inconsistent-cut'
 
 /**
  * Pure, read-only enumeration of moves the UI may offer for a selection.
@@ -11,10 +13,10 @@ import type { ProofContext } from '../kernel/proof/step'
  */
 export type ActionDescriptor =
   | { readonly kind: 'erase'; readonly label: string }
-  | { readonly kind: 'insert'; readonly label: string; readonly needsInput: 'pattern' }
   | { readonly kind: 'doubleCutWrap'; readonly label: string }
   | { readonly kind: 'doubleCutElim'; readonly label: string }
-  | { readonly kind: 'vacuousWrap'; readonly label: string; readonly needsInput: 'arity' }
+  | { readonly kind: 'inconsistentCutElim'; readonly label: string }
+  | { readonly kind: 'abstractWrap'; readonly label: string; readonly needsInput: 'abstraction' }
   | { readonly kind: 'vacuousElim'; readonly label: string }
   | { readonly kind: 'iterate'; readonly label: string; readonly needsTarget: true }
   | { readonly kind: 'deiterate'; readonly label: string }
@@ -27,19 +29,19 @@ export type ActionDescriptor =
 /**
  * `backward` is the reasoning orientation (USER ruling): the SAME move list
  * with exactly the polarity-tied gates flipped — erasure offers in negative
- * regions, insertion in positive, and citation direction ties to sign XOR
+ * regions, atomic spawning in positive, and citation direction ties to sign XOR
  * orientation. Everything else is direction-free and unchanged.
  */
 export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: ProofContext, backward = false): ActionDescriptor[] {
+  assertProofContext(ctx)
   const out: ActionDescriptor[] = []
   const pol = polarity(d, sel.region)
   const eraseSign = backward ? 'negative' : 'positive'
   const hasContent = sel.nodes.length + sel.regions.length + sel.wires.length > 0
 
   if (hasContent && pol === eraseSign) out.push({ kind: 'erase', label: `Erase (${eraseSign} region)` })
-  if (!hasContent && pol !== eraseSign) out.push({ kind: 'insert', label: 'Insert…', needsInput: 'pattern' })
   out.push({ kind: 'doubleCutWrap', label: 'Wrap in a double cut' })
-  out.push({ kind: 'vacuousWrap', label: 'Wrap in a vacuous bubble…', needsInput: 'arity' })
+  out.push({ kind: 'abstractWrap', label: 'Abstract as a relation…', needsInput: 'abstraction' })
   if (hasContent) {
     out.push({ kind: 'iterate', label: 'Iterate into…', needsTarget: true })
     out.push({ kind: 'deiterate', label: 'Deiterate (needs a justifying copy)' })
@@ -75,6 +77,9 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
       const wiresIn = Object.values(d.wires).some((w) => w.scope === rid)
       if (children.length === 1 && children[0]![1].kind === 'cut' && !nodesIn && !wiresIn) {
         out.push({ kind: 'doubleCutElim', label: 'Eliminate the double cut' })
+      }
+      if (hasInconsistentCutCandidate(d, rid)) {
+        out.push({ kind: 'inconsistentCutElim', label: 'Eliminate the inconsistent cut' })
       }
     }
     if (r.kind === 'bubble') {

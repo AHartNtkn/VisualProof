@@ -1,11 +1,11 @@
 import { parseTerm } from '../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import type { ProofContext } from '../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, type ProofContext } from '../../src/kernel/proof/context'
 
 const pc = (s: string) => parseTerm(s)
 
-export const emptyCtx: ProofContext = { theorems: new Map(), relations: new Map() }
+export const emptyCtx: ProofContext = EMPTY_PROOF_CONTEXT
 
 /**
  * An asymmetric arity-2 body on the sheet: term node `y` in root and term node

@@ -17,12 +17,13 @@ const bootCtx = (await bootFixture()).ctx
 const plusCommThm = bootCtx.theorems.get('plusComm')!
 
 const theory = buildFregeTheory()
+const natRelation = new Map(theory.relations).get('nat')!
 const plusComm = theory.theorems.find((t) => t.name === 'plusComm')!
 const succShiftS = theory.theorems.find((t) => t.name === 'succShiftS')!
 
 const cases: [string, Diagram, readonly WireId[]][] = [
   ['plusComm.rhs', plusComm.rhs.diagram, plusComm.rhs.boundary],
-  ['natBody', theory.relations.nat!.diagram, theory.relations.nat!.boundary],
+  ['natBody', natRelation.diagram, natRelation.boundary],
   ['succShiftS.rhs', succShiftS.rhs.diagram, succShiftS.rhs.boundary],
 ]
 
@@ -150,10 +151,10 @@ describe('settle — replay steps: content stays anchored, legal, rests, and E i
   // it.fails are GONE. Budget RE-DERIVED from this model's measured time-to-rest
   // (USER policy): measured 2026-07-06, the slowest plusComm step rests by ~640
   // ticks; settled at 1100 with margin (was 7800 for the non-converging cycles).
-  const r = mkReplay(plusCommThm, bootCtx)
-  for (const k of [0, 16, 32, 48, r.stepCount]) {
+  const r = mkReplay(plusCommThm.name, bootCtx)
+  for (const k of [0, 16, 32, 48, r.actionCount]) {
     it(`plusComm step ${k} stays anchored, rests legally, E monotone`, () => {
-      const e = mkEngine(r.diagramAt(k), r.boundary)
+      const e = mkEngine(r.diagramAt(k), r.boundaryAt(k))
       settle(e, 1100)
       assertRestsLegalMonotone(`plusComm@${k}`, e, 1.5)
     })
@@ -175,15 +176,15 @@ describe('settle — observed jitter reproductions (live feel reports)', () => {
   // but a few nodes make ~1-wu discrete descents late; its drift bound is measured
   // (2026-07-06) at that larger settled value with margin, per USER test policy.
   const jitterCases: [string, number, number, () => { d: Diagram; b: readonly WireId[] }][] = [
-    ['plusComm@20', 1100, 1.5, () => { const r2 = mkReplay(plusCommThm, bootCtx); return { d: r2.diagramAt(20), b: r2.boundary } }],
+    ['plusComm@20', 1100, 1.5, () => { const r2 = mkReplay(plusCommThm.name, bootCtx); return { d: r2.diagramAt(20), b: r2.boundaryAt(20) } }],
     // budget raised 1100→2500: folding the junction trunk terms into the node
     // gates (the strict-descent dual fix) is correct — E stays perfectly monotone
     // (0.00000 rise/tick) — but it lengthens this fixture's transient. MEASURED:
     // drift decays 4.49→0.52 over ticks 1100→2100 monotonically, resting under the
     // 1.5 bound by ~2100; pinned at 2500 with margin. The BOUND is unchanged — an
     // unconverged tail gets a longer budget, never a looser bound (plan-23 policy).
-    ['succShiftS@24', 2500, 1.5, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(24), b: r2.boundary } }],
-    ['succShiftS@48', 2500, 3, () => { const r2 = mkReplay(succShiftS, bootCtx); return { d: r2.diagramAt(48), b: r2.boundary } }],
+    ['succShiftS@24', 2500, 1.5, () => { const r2 = mkReplay(succShiftS.name, bootCtx); return { d: r2.diagramAt(24), b: r2.boundaryAt(24) } }],
+    ['succShiftS@48', 2500, 3, () => { const r2 = mkReplay(succShiftS.name, bootCtx); return { d: r2.diagramAt(48), b: r2.boundaryAt(48) } }],
   ]
   for (const [name, budget, bound, mk] of jitterCases) {
     it(`${name} rests legally with monotone E over 200 post-settle ticks`, () => {
@@ -215,7 +216,7 @@ describe('the leg-solve memo is output-neutral (plan 24 — exact cross-eval sol
     return out
   }
   it('plusComm@20 settles BIT-IDENTICALLY with the leg-solve cache on vs off', () => {
-    const build = (): Engine => { const r = mkReplay(plusCommThm, bootCtx); return mkEngine(r.diagramAt(20), r.boundary) }
+    const build = (): Engine => { const r = mkReplay(plusCommThm.name, bootCtx); return mkEngine(r.diagramAt(20), r.boundaryAt(20)) }
     let on: number[], off: number[]
     try {
       legCache.enabled = true
@@ -282,16 +283,16 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   // direction (one uniform Engine.scale) so it FILLS the border instead of
   // rendering tiny or overflowing. The seed path (app seedProject): proof-wide
   // frame, then applyContentScale sizes THIS step.
-  const r = mkReplay(plusCommThm, bootCtx)
-  const steps = Array.from({ length: r.stepCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundary }))
+  const r = mkReplay(plusCommThm.name, bootCtx)
+  const steps = Array.from({ length: r.actionCount + 1 }, (_, k) => ({ diagram: r.diagramAt(k), boundary: r.boundaryAt(k) }))
   // one fixed proof-wide frame, established once (as enterReplay does)
-  const probe = mkEngine(r.diagramAt(0), r.boundary)
+  const probe = mkEngine(r.diagramAt(0), r.boundaryAt(0))
   establishProofFrame(probe, steps)
   const frame = probe.frame!
 
   // build a step through the app seed path and settle it
   const seedStep = (k: number, ticks: number): Engine => {
-    const e = mkEngine(r.diagramAt(k), r.boundary)
+    const e = mkEngine(r.diagramAt(k), r.boundaryAt(k))
     e.frame = frame
     seedProject(e)
     settle(e, ticks)
@@ -312,7 +313,7 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
   // A SMALL step (few nodes) must fill the fixed border, not render tiny. Measured
   // occupancy 0.74–0.96 across plusComm steps; pinned ≥ 0.6 with margin. It also
   // must not spill past the border.
-  for (const k of [0, r.stepCount]) {
+  for (const k of [0, r.actionCount]) {
     it(`small step ${k} fills the border (occupancy in band) and stays inside`, () => {
       const e = seedStep(k, 700)
       const occ = contentHalf(e) / frame.half
@@ -479,8 +480,8 @@ describe('free node rotation + local-only motion (plan 24, Subsystem 4)', () => 
 
 describe('settleStep — deterministic incremental relaxation', () => {
   it('same diagram, same steps, identical layout (seedless determinism)', () => {
-    const d = theory.relations.nat!.diagram
-    const boundary = theory.relations.nat!.boundary
+    const d = natRelation.diagram
+    const boundary = natRelation.boundary
     const a = mkEngine(d, boundary)
     const b = mkEngine(d, boundary)
     for (let i = 0; i < 200; i++) {

@@ -5,7 +5,7 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import {
-  replayProof, composeProofs, checkTheorem, verifyTheory, loadTheory, theoryToJson,
+  EMPTY_PROOF_CONTEXT, replayProof, composeActions, singleStepAction, checkTheorem, verifyTheory, loadTheory, theoryToJson,
 } from '../../../src/kernel/proof/index'
 import type { ProofStep, Theorem, Theory } from '../../../src/kernel/proof/index'
 
@@ -29,14 +29,14 @@ describe('end to end: a sentence theorem built bidirectionally', () => {
       rule: 'doubleCutIntro',
       sel: mkSelection(backwardStart, { region: backwardStart.root, regions: [], nodes: [], wires: [] }),
     }]
-    const composed = composeProofs(blank, backwardStart, tail, { theorems: new Map(), relations: new Map() })
+    const composed = composeActions(blank, backwardStart, tail.map((step) => singleStepAction(step.rule, step)), EMPTY_PROOF_CONTEXT)
     const thm: Theorem = {
       name: 'blankToDoubleCut',
       lhs: mkDiagramWithBoundary(blank, []),
       rhs: mkDiagramWithBoundary(goal, []),
-      steps: composed,
+      actions: composed,
     }
-    expect(() => checkTheorem(thm, { theorems: new Map(), relations: new Map() })).not.toThrow()
+    expect(() => checkTheorem(thm, EMPTY_PROOF_CONTEXT)).not.toThrow()
   })
 })
 
@@ -56,12 +56,12 @@ describe('end to end: derived rule proved, stored, loaded, applied natively', ()
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     return {
       name: 'dropQ', lhs, rhs,
-      steps: [{ rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } }],
+      actions: [singleStepAction('erase Q', { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } })],
     }
   }
 
   it('save → load → apply in a host through a proof step', () => {
-    const theory: Theory = { relations: {}, theorems: [dropQ()] }
+    const theory: Theory = { relations: [], theorems: [dropQ()] }
     const { ctx } = loadTheory(JSON.parse(JSON.stringify(theoryToJson(theory))))
 
     const h = new DiagramBuilder()
@@ -85,15 +85,15 @@ describe('end to end: derived rule proved, stored, loaded, applied natively', ()
   })
 
   it('the whole pipeline preserves verification: tampered files are refused', () => {
-    const theory: Theory = { relations: {}, theorems: [dropQ()] }
-    const j = JSON.parse(JSON.stringify(theoryToJson(theory))) as { theorems: { steps: unknown[] }[] }
-    j.theorems[0]!.steps = [] // tamper: claim the theorem with no proof
+    const theory: Theory = { relations: [], theorems: [dropQ()] }
+    const j = JSON.parse(JSON.stringify(theoryToJson(theory))) as { theorems: { actions: unknown[] }[] }
+    j.theorems[0]!.actions = [] // tamper: claim the theorem with no proof
     expect(() => loadTheory(j)).toThrowError(/does not arrive at the stated right-hand side/)
   })
 
   it('verifyTheory + fingerprints: applying a theorem equals replaying its expansion', () => {
     const t = dropQ()
-    const ctx = verifyTheory({ relations: {}, theorems: [t] })
+    const ctx = verifyTheory({ relations: [], theorems: [t] })
     const h = new DiagramBuilder()
     const hp = h.termNode(h.root, p('\\a. a'))
     const hq = h.termNode(h.root, p('\\a. \\b. a'))

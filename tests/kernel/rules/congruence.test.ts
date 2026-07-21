@@ -3,11 +3,26 @@ import { parseTerm } from '../../../src/kernel/term/parse'
 import { convertible } from '../../../src/kernel/term/convert'
 import type { ConversionCertificate } from '../../../src/kernel/term/certificate'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { applyCongruenceJoin } from '../../../src/kernel/rules/congruence'
+import { applyCongruenceJoin as kernelCongruenceJoin } from '../../../src/kernel/rules/congruence'
 import { RuleError } from '../../../src/kernel/rules/error'
+import { mapTermToCommonCarrier, proposePortCorrespondence, type PortCorrespondence } from '../../../src/kernel/rules/port-correspondence'
+import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
+import { termNodeAt } from '../../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
 const empty: ConversionCertificate = { leftSteps: [], rightSteps: [] }
+const applyCongruenceJoin = (
+  d: Diagram,
+  a: NodeId,
+  b: NodeId,
+  certificate: ConversionCertificate,
+  correspondence = proposePortCorrespondence(
+    termNodeAt(d, a).term,
+    termNodeAt(d, b).term,
+    termNodeAt(d, a).freePorts,
+    termNodeAt(d, b).freePorts,
+  ),
+) => kernelCongruenceJoin(d, a, b, certificate, correspondence)
 
 const certFor = (l: string, r: string): ConversionCertificate => {
   const res = convertible(p(l), p(r), 256)
@@ -16,6 +31,55 @@ const certFor = (l: string, r: string): ConversionCertificate => {
 }
 
 describe('congruence join (functionality of equality)', () => {
+  it('checks and joins over unused declared ports', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('\\x. x'), ['unusedLeft'])
+    const n2 = h.termNode(h.root, p('\\x. x'), ['unusedRight'])
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'unusedLeft' } },
+      { node: n2, port: { kind: 'freeVar', name: 'unusedRight' } },
+    ])
+    h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
+    h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
+    const d = h.build()
+    expect(() => applyCongruenceJoin(d, n1, n2, empty, {
+      commonArity: 1,
+      left: { s0: 0 },
+      right: { s0: 0 },
+    })).not.toThrow()
+  })
+
+  it('requires one host wire only for ports assigned to the same common column', () => {
+    const h = new DiagramBuilder()
+    const n1 = h.termNode(h.root, p('(\\u. kept) erasedLeft'))
+    const n2 = h.termNode(h.root, p('(\\u. renamed) erasedRight'))
+    h.wire(h.root, [
+      { node: n1, port: { kind: 'freeVar', name: 'kept' } },
+      { node: n2, port: { kind: 'freeVar', name: 'renamed' } },
+    ])
+    h.wire(h.root, [{ node: n1, port: { kind: 'freeVar', name: 'erasedLeft' } }])
+    h.wire(h.root, [{ node: n2, port: { kind: 'freeVar', name: 'erasedRight' } }])
+    h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
+    h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
+    const d = h.build()
+    const correspondence: PortCorrespondence = {
+      commonArity: 3,
+      left: { s0: 0, s1: 1 },
+      right: { s0: 0, s1: 2 },
+    }
+    const left = mapTermToCommonCarrier(
+      (d.nodes[n1] as Extract<typeof d.nodes[string], { kind: 'term' }>).term,
+      correspondence.left,
+    )
+    const right = mapTermToCommonCarrier(
+      (d.nodes[n2] as Extract<typeof d.nodes[string], { kind: 'term' }>).term,
+      correspondence.right,
+    )
+    const conversion = convertible(left, right, 256)
+    if (conversion.status !== 'convertible') throw new Error('test setup requires mapped convertibility')
+    expect(() => applyCongruenceJoin(d, n1, n2, conversion.certificate, correspondence)).not.toThrow()
+  })
+
   it('joins outputs of two identical nodes whose shared free ports ride one wire', () => {
     const h = new DiagramBuilder()
     const n1 = h.termNode(h.root, p('f x'))
@@ -140,7 +204,7 @@ describe('congruence join (functionality of equality)', () => {
     h.wire(h.root, [{ node: n1, port: { kind: 'output' } }])
     h.wire(h.root, [{ node: n2, port: { kind: 'output' } }])
     // the nodes' source free 'y' is canonical s0 after construction
-    expect(() => applyCongruenceJoin(h.build(), n1, n2, empty)).toThrowError(/free port 's0'/)
+    expect(() => applyCongruenceJoin(h.build(), n1, n2, empty)).toThrowError(/common column 0.*'s0'/)
   })
 
   it('refuses a rejected certificate', () => {

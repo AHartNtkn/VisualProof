@@ -3,6 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { verifyTheory } from '../../src/kernel/proof/store'
+import { registerTheorem } from '../../src/kernel/proof/context'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { mkReplay } from '../../src/app/replay'
 import { companionFor } from '../../src/app/companion'
@@ -21,7 +22,8 @@ describe('replay companion', () => {
     const builder = new DiagramBuilder()
     builder.termNode(builder.root, parseTerm('\\x. x'))
     const statement = mkDiagramWithBoundary(builder.build(), [])
-    const replay = mkReplay({ name: 'identity', lhs: statement, rhs: statement, steps: [] }, verifyTheory(buildFregeTheory()))
+    const theorem = { name: 'identity', lhs: statement, rhs: statement, actions: [] }
+    const replay = mkReplay(theorem.name, registerTheorem(verifyTheory(buildFregeTheory()), theorem))
     const companion = companionFor({ mode: 'replay', replay })
     expect(companion).toEqual({ diagram: statement.diagram, boundary: [], label: 'goal: final state' })
   })

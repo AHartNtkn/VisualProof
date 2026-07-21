@@ -3,8 +3,12 @@ import { isAncestorOrEqual } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { extractSubgraph } from '../diagram/subgraph/extract'
-import { removeSubgraph, spliceSubgraph } from '../diagram/subgraph/splice'
+import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
+import type { IdReservation } from '../diagram/subgraph/freshId'
 import { findOccurrences, type Occurrence } from '../diagram/subgraph/match'
+import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
+import { checkOccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
+import { occurrenceToSelection } from '../diagram/subgraph/occurrence'
 import { RuleError } from './error'
 
 /**
@@ -12,7 +16,7 @@ import { RuleError } from './error'
  * not inside the copy, the copy's boundary attaching to the same wires.
  * Sound everywhere — no polarity gate.
  */
-export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion: RegionId): Diagram {
+export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion: RegionId, reservation?: IdReservation): Diagram {
   const c = selectionContents(d, sel) // validates the selection loudly
   if (!isAncestorOrEqual(d, sel.region, targetRegion)) {
     throw new RuleError(`iteration target '${targetRegion}' must lie within the source region '${sel.region}'`)
@@ -27,20 +31,84 @@ export function applyIteration(d: Diagram, sel: SubgraphSelection, targetRegion:
     }
   }
   const binderMap = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
-  return spliceSubgraph(d, targetRegion, pattern, attachments, binderMap)
+  return spliceSubgraphMapped(d, targetRegion, pattern, attachments, { binderMap, reserved: reservation }).diagram
 }
 
-/**
- * Rule 3b: remove a copy that iteration could have produced — there must be a
- * justifying occurrence of the same pattern, at an ancestor-or-equal region,
- * with identical attachments, disjoint from the copy itself. When none is
- * found but some node comparisons were undecided, the error says so (§3.7).
- */
-export function applyDeiteration(d: Diagram, sel: SubgraphSelection, fuel: number): Diagram {
+export type DeiterationEvidence = {
+  readonly justifier: SubgraphSelection
+  readonly certificate: OccurrenceCertificate
+}
+
+function sameSelection(left: SubgraphSelection, right: SubgraphSelection): boolean {
+  const sameIds = (a: readonly string[], b: readonly string[]): boolean =>
+    a.length === b.length && [...a].sort().every((id, index) => id === [...b].sort()[index])
+  return left.region === right.region
+    && sameIds(left.regions, right.regions)
+    && sameIds(left.nodes, right.nodes)
+    && sameIds(left.wires, right.wires)
+}
+
+function evidenceGate(
+  d: Diagram,
+  sel: SubgraphSelection,
+  justifier: SubgraphSelection,
+  certificate: OccurrenceCertificate,
+): { readonly contents: ReturnType<typeof selectionContents> } {
   const c = selectionContents(d, sel)
   const { pattern, attachments, binderStubs, binderAttachments } = extractSubgraph(d, sel)
   const openBinders = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
-  const { matches, undecided } = findOccurrences(d, pattern, { fuel, openBinders })
+  const checked = checkOccurrenceCertificate(d, pattern, certificate, { openBinders })
+  if (!checked.ok) throw new RuleError(`invalid deiteration occurrence certificate: ${checked.reason}`)
+  const suppliedJustifier = mkValidatedSelection(d, justifier)
+  const certifiedJustifier = occurrenceToSelection(d, pattern, certificate)
+  if (!sameSelection(suppliedJustifier, certifiedJustifier)) {
+    throw new RuleError('deiteration justifier selection does not match its occurrence certificate')
+  }
+  if (!isAncestorOrEqual(d, certificate.region, sel.region)) {
+    throw new RuleError(`deiteration justifier '${certificate.region}' is not an ancestor of '${sel.region}'`)
+  }
+  if (certificate.attachments.length !== attachments.length
+    || certificate.attachments.some((wire, index) => wire !== attachments[index])) {
+    throw new RuleError('deiteration justifier does not preserve the target\'s ordered attachments')
+  }
+  for (const region of certificate.regionMap.values()) {
+    if (c.allRegions.has(region)) throw new RuleError('deiteration justifier overlaps the removed region content')
+  }
+  for (const node of certificate.nodeMap.values()) {
+    if (c.allNodes.has(node)) throw new RuleError('deiteration justifier overlaps the removed node content')
+  }
+  const internal = new Set(c.internalWires)
+  for (const [patternWire, hostWire] of certificate.wireMap) {
+    if (pattern.boundary.includes(patternWire)) continue
+    if (internal.has(hostWire)) throw new RuleError('deiteration justifier overlaps the removed wire content')
+  }
+  return { contents: c }
+}
+
+function mkValidatedSelection(d: Diagram, selection: SubgraphSelection): SubgraphSelection {
+  // selectionContents validates the complete selection and returns no altered
+  // representation; the original ordered payload remains the replay record.
+  selectionContents(d, selection)
+  return selection
+}
+
+/**
+ * Interactive constructor for certified replay evidence. Search fuel is used
+ * only here; the selected occurrence and all βη paths are returned for storage.
+ */
+export function findDeiterationEvidence(
+  d: Diagram,
+  sel: SubgraphSelection,
+  fuel: number,
+): DeiterationEvidence {
+  const c = selectionContents(d, sel)
+  const { pattern, attachments, binderStubs, binderAttachments } = extractSubgraph(d, sel)
+  const openBinders = new Map(binderStubs.map((s, i) => [s, binderAttachments[i]!]))
+  const { matches, undecided } = findOccurrences(d, pattern, {
+    fuel,
+    openBinders,
+    attachments,
+  })
   const disjoint = (m: Occurrence): boolean => {
     for (const r of m.regionMap.values()) if (c.allRegions.has(r)) return false
     for (const n of m.nodeMap.values()) if (c.allNodes.has(n)) return false
@@ -63,5 +131,22 @@ export function applyDeiteration(d: Diagram, sel: SubgraphSelection, fuel: numbe
       : ''
     throw new RuleError(`no justifying occurrence found for deiteration at '${sel.region}'${hint}`)
   }
+  const justifier = occurrenceToSelection(d, pattern, justifying)
+  evidenceGate(d, sel, justifier, justifying)
+  return { justifier, certificate: justifying }
+}
+
+/**
+ * Rule 3b replay: validate the supplied justifying occurrence and remove the
+ * selected copy. This path is deterministic, fuel-free, and performs no
+ * occurrence search.
+ */
+export function applyDeiteration(
+  d: Diagram,
+  sel: SubgraphSelection,
+  justifier: SubgraphSelection,
+  certificate: OccurrenceCertificate,
+): Diagram {
+  evidenceGate(d, sel, justifier, certificate)
   return removeSubgraph(d, sel)
 }

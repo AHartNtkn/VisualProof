@@ -4,8 +4,11 @@ import { buildFregeTheory } from '../../../src/theories/frege'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { applyRelFold, applyRelUnfold } from '../../../src/kernel/rules/reldef'
-import { findOccurrences, occurrenceSelection } from '../../../src/kernel/diagram/subgraph/match'
-import { startSession, applyBackward, currentSide } from '../../../src/app/session'
+import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
+import { occurrenceToSelection } from '../../../src/kernel/diagram/subgraph/occurrence'
+import { startSession, applyBackward as applyBackwardAction, currentSide, type ProofSession } from '../../../src/app/session'
+import type { ProofStep } from '../../../src/kernel/proof/step'
+import { singleStepAction } from '../../../src/kernel/proof/action'
 import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
 
 /**
@@ -17,6 +20,7 @@ import type { Diagram, NodeId } from '../../../src/kernel/diagram/diagram'
  */
 describe('relFold id freshness', () => {
   const ctx = () => verifyTheory(buildFregeTheory())
+  const applyBackward = (session: ProofSession, step: ProofStep) => applyBackwardAction(session, singleStepAction(step.rule, step))
 
   it('the user sequence: backward unfold nat, unfold zero, fold zero, fold nat', () => {
     const c = ctx()
@@ -41,12 +45,12 @@ describe('relFold id freshness', () => {
     void zBody
     // the fold selection is what the zero unfold spliced: infer via the matcher
     const zOcc = findOccurrences(g1, c.relations.get('zero')!, { fuel: 64, mode: 'exact' }).matches[0]!
-    s = applyBackward(s, { rule: 'relFold', sel: occurrenceSelection(c.relations.get('zero')!, zOcc, g1), defId: 'zero', args: [...zOcc.attachments] })
+    s = applyBackward(s, { rule: 'relFold', sel: occurrenceToSelection(g1, c.relations.get('zero')!, zOcc), defId: 'zero', args: [...zOcc.attachments] })
     // fold nat back — this is where the session-bug error fired
     const g2 = currentSide(s, 'backward')
     const nOcc = findOccurrences(g2, c.relations.get('nat')!, { fuel: 64, mode: 'exact' }).matches[0]!
     expect(() => {
-      s = applyBackward(s, { rule: 'relFold', sel: occurrenceSelection(c.relations.get('nat')!, nOcc, g2), defId: 'nat', args: [...nOcc.attachments] })
+      s = applyBackward(s, { rule: 'relFold', sel: occurrenceToSelection(g2, c.relations.get('nat')!, nOcc), defId: 'nat', args: [...nOcc.attachments] })
     }).not.toThrow()
   })
 
@@ -60,7 +64,7 @@ describe('relFold id freshness', () => {
     const d0 = b.build()
     const d1 = applyRelUnfold(d0, z, c.relations)
     const occ = findOccurrences(d1, c.relations.get('zero')!, { fuel: 64, mode: 'exact' }).matches[0]!
-    const sel = occurrenceSelection(c.relations.get('zero')!, occ, d1)
+    const sel = occurrenceToSelection(d1, c.relations.get('zero')!, occ)
     const d2 = applyRelFold(d1, sel, 'zero', [...occ.attachments], c.relations)
     const fresh = Object.keys(d2.nodes).filter((id) => d1.nodes[id] === undefined)
     expect(fresh.length, 'exactly one genuinely fresh node: the reference').toBe(1)

@@ -1,12 +1,11 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../../src/kernel/term/parse'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
-import { applyInsertion } from '../../../src/kernel/rules/insertion'
+import { applyOpenTermSpawn } from '../../../src/kernel/rules/spawn'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
-import { applyIteration, applyDeiteration } from '../../../src/kernel/rules/iteration'
+import { applyIteration, applyDeiteration, findDeiterationEvidence } from '../../../src/kernel/rules/iteration'
 import { applyDoubleCutIntro, applyDoubleCutElim } from '../../../src/kernel/rules/doublecut'
 
 const p = (s: string) => parseTerm(s)
@@ -24,24 +23,18 @@ function nested(depth: number) {
   return { d: h.build(), region, n, cuts }
 }
 
-function closedPattern() {
-  const b = new DiagramBuilder()
-  b.termNode(b.root, p('\\x. \\y. x'))
-  return mkDiagramWithBoundary(b.build(), [])
-}
-
 describe('polarity matrix across depths 0..3', () => {
   for (let depth = 0; depth <= 3; depth++) {
     const positive = depth % 2 === 0
-    it(`depth ${depth} (${positive ? 'positive' : 'negative'}): insertion ${positive ? 'rejected' : 'allowed'}, erasure ${positive ? 'allowed' : 'rejected'}`, () => {
+    it(`depth ${depth} (${positive ? 'positive' : 'negative'}): atomic spawn ${positive ? 'rejected' : 'allowed'}, erasure ${positive ? 'allowed' : 'rejected'}`, () => {
       const { d, region, n } = nested(depth)
       if (positive) {
-        expect(() => applyInsertion(d, region, closedPattern(), []))
-          .toThrowError(/insertion requires a negative region/)
+        expect(() => applyOpenTermSpawn(d, region, p('x'), ['x']))
+          .toThrowError(/spawning requires a negative region/)
         const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
         expect(() => applyErasure(d, sel)).not.toThrow()
       } else {
-        expect(() => applyInsertion(d, region, closedPattern(), [])).not.toThrow()
+        expect(() => applyOpenTermSpawn(d, region, p('x'), ['x'])).not.toThrow()
         const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
         expect(() => applyErasure(d, sel))
           .toThrowError(/erasure requires a positive region/)
@@ -58,7 +51,7 @@ describe('polarity matrix across depths 0..3', () => {
 })
 
 describe('inverse round-trips (fingerprint identities)', () => {
-  it('insertion into a cut, then deiteration-free erasure is blocked — but double-cut round-trips at every depth', () => {
+  it('double-cut round-trips at every depth', () => {
     for (let depth = 0; depth <= 2; depth++) {
       const { d, region, n } = nested(depth)
       const sel = mkSelection(d, { region, regions: [], nodes: [n], wires: [] })
@@ -83,6 +76,7 @@ describe('inverse round-trips (fingerprint identities)', () => {
     const iterated = applyIteration(d, sel, cut)
     const copyId = Object.entries(iterated.nodes).find(([, x]) => x.region === cut)![0]
     const copySel = mkSelection(iterated, { region: cut, regions: [], nodes: [copyId], wires: [] })
-    expect(exploreForm(applyDeiteration(iterated, copySel, 100))).toBe(exploreForm(d))
+    const evidence = findDeiterationEvidence(iterated, copySel, 100)
+    expect(exploreForm(applyDeiteration(iterated, copySel, evidence.justifier, evidence.certificate))).toBe(exploreForm(d))
   })
 })

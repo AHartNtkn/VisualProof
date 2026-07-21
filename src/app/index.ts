@@ -1,6 +1,6 @@
-export { emptyDiagram, addTermNode, addCut, addBubble, joinPorts, deleteSelection } from './edit'
+export { emptyDiagram, addCut, addBubble, joinPorts, deleteSelection } from './edit'
 export type { ProofTimeline, ProofSession } from './session'
-export { startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, currentSide, moveSide, meet, assembleTheorem, adoptTheorem } from './session'
+export { startSession, applyForward, applyBackward, undoForward, redoForward, undoBackward, redoBackward, currentSide, moveSide, timelineActiveActions, meet, assembleTheorem, adoptTheorem } from './session'
 export { sessionTheory } from './persist'
 export type { Hit } from './hittest'
 export { hitTest, buildSelection } from './hittest'
@@ -15,5 +15,12 @@ export { ProofFrontViewport } from './proof-front'
 export type { ProofFrontModel, ProofFrontDebugState } from './proof-front'
 export { MotionCoordinator, defaultMotionPreferences, setMotionSpeed, conversionFrames, smoothstep } from './interact/motion'
 export type { MotionPreferences, MotionDebugState } from './interact/motion'
-export { ComprehensionEditor } from './comprehension-editor'
-export type { ComprehensionEditorHost, ComprehensionEditorDebug, EditorRect } from './comprehension-editor'
+export { RelationWorkspace, SubstituteTransaction } from './relation-workspace'
+export type {
+  EditorRect,
+  RelationWorkspaceDebug,
+  RelationWorkspaceHost,
+  RelationWorkspaceTransaction,
+  SubstituteTransactionOptions,
+  WorkspaceStatus,
+} from './relation-workspace'

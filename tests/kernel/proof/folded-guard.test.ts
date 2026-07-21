@@ -7,9 +7,11 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { boundaryForm } from '../../../src/kernel/diagram/canonical/explore'
 import { applyStep } from '../../../src/kernel/proof/step'
-import type { ProofContext, ProofStep } from '../../../src/kernel/proof/step'
+import { verifyTheory } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
 import { checkTheorem } from '../../../src/kernel/proof/theorem'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
+import { singleStepAction } from '../../../src/kernel/proof/action'
 import { applyRelUnfold } from '../../../src/kernel/rules/reldef'
 
 /**
@@ -37,7 +39,7 @@ const isConjunct = (n: DiagramNode): boolean => n.kind === 'term' && termEq(n.te
 describe('folded-guard integration proof', () => {
   it('unfolds a working copy while the ambient guard stays folded, and folded ≠ unfolded statements', () => {
     const relations = new Map([['R', bodyR()]])
-    const ctx: ProofContext = { theorems: new Map(), relations }
+    const ctx = verifyTheory({ relations: [...relations], theorems: [] })
 
     // lhs: a single folded reference R(x) with x as the boundary line.
     const lb = new DiagramBuilder()
@@ -70,7 +72,7 @@ describe('folded-guard integration proof', () => {
 
     // rhs keeps the ambient guard folded (the ref is still there)
     const rhs = mkDiagramWithBoundary(cur, lhs.boundary)
-    const thm: Theorem = { name: 'foldedGuard', lhs, rhs, steps }
+    const thm: Theorem = { name: 'foldedGuard', lhs, rhs, actions: steps.map((step) => singleStepAction(step.rule, step)) }
 
     // (a) the theorem verifies end to end
     expect(() => checkTheorem(thm, ctx)).not.toThrow()

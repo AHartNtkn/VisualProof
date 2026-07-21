@@ -6,11 +6,27 @@ import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { checkTheorem, applyTheorem } from '../../../src/kernel/proof/theorem'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
-import type { ProofContext } from '../../../src/kernel/proof/step'
+import { EMPTY_PROOF_CONTEXT, registerTheorem, verifyTheory, type ProofContext } from '../../../src/kernel/proof/context'
+import type { ProofStep } from '../../../src/kernel/proof/step'
+import type { ProofAction } from '../../../src/kernel/proof/action'
+import { applyAction, replayActions } from '../../../src/kernel/proof/action'
 import { replayProof } from '../../../src/kernel/proof/step'
+import { theoremFromJson, theoremToJson } from '../../../src/kernel/proof/json'
 
 const p = (s: string) => parseTerm(s)
-const ctx: ProofContext = { theorems: new Map(), relations: new Map() }
+const ctx: ProofContext = EMPTY_PROOF_CONTEXT
+const action = (label: string, ...steps: ProofStep[]): ProofAction => ({ label, steps, placements: [] })
+
+function applyCertifiedTheorem(
+  diagram: Parameters<typeof applyTheorem>[0],
+  theorem: Theorem,
+  at: Parameters<typeof applyTheorem>[3],
+  direction: Parameters<typeof applyTheorem>[4],
+  base: ProofContext = EMPTY_PROOF_CONTEXT,
+) {
+  const certified = registerTheorem(base, theorem)
+  return applyTheorem(diagram, certified, theorem.name, at, direction)
+}
 
 /**
  * The running example: P(x) := x = λa.a, Q(x) := x = λa.λb.a.
@@ -31,18 +47,42 @@ function dropQ(): Theorem {
   const rhs = mkDiagramWithBoundary(r.build(), [rb])
   return {
     name: 'dropQ', lhs, rhs,
-    steps: [{ rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } }],
+    actions: [action('erase Q', { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [lq], wires: [] } })],
   }
 }
 
 describe('checkTheorem', () => {
+  it('persists and honors action allocation during theorem replay', () => {
+    const lhsDiagram = new DiagramBuilder().build()
+    const reserved = `${lhsDiagram.root}_intro`
+    const reservedAction: ProofAction = {
+      label: 'reserved theorem introduction',
+      steps: [{ rule: 'closedTermIntro', region: lhsDiagram.root, term: p('\\x. x') }],
+      placements: [],
+      allocation: { regions: [], nodes: [reserved], wires: [reserved] },
+    }
+    const rhsDiagram = applyAction(lhsDiagram, reservedAction, ctx)
+    const theorem: Theorem = {
+      name: 'reserved-introduction',
+      lhs: mkDiagramWithBoundary(lhsDiagram, []),
+      rhs: mkDiagramWithBoundary(rhsDiagram, []),
+      actions: [reservedAction],
+    }
+
+    const loaded = theoremFromJson(JSON.parse(JSON.stringify(theoremToJson(theorem))))
+
+    expect(loaded.actions[0]?.allocation).toEqual(reservedAction.allocation)
+    expect(Object.keys(replayActions(loaded.lhs.diagram, loaded.actions, ctx).nodes)).toEqual([`${reserved}_0`])
+    expect(() => checkTheorem(loaded, ctx)).not.toThrow()
+  })
+
   it('accepts a valid proof', () => {
     expect(() => checkTheorem(dropQ(), ctx)).not.toThrow()
   })
 
   it('rejects proofs that do not arrive at the stated rhs', () => {
     const t = dropQ()
-    const broken: Theorem = { ...t, steps: [] }
+    const broken: Theorem = { ...t, actions: [] }
     expect(() => checkTheorem(broken, ctx))
       .toThrowError(/does not arrive at the stated right-hand side/)
   })
@@ -62,12 +102,12 @@ describe('checkTheorem', () => {
     const lhs = side(false)
     const rhs = side(true)
     expect(exploreForm(lhs.diagram)).toBe(exploreForm(rhs.diagram))
-    const forged: Theorem = { name: 'swap', lhs, rhs, steps: [] }
+    const forged: Theorem = { name: 'swap', lhs, rhs, actions: [] }
     expect(() => checkTheorem(forged, ctx))
       .toThrowError(/does not arrive at the stated right-hand side/)
   })
 
-  it('rejects arity mismatches and non-root boundary stubs, by name', () => {
+  it('rejects arity mismatches and cannot construct non-root theorem boundaries', () => {
     const t = dropQ()
     const bad: Theorem = { ...t, rhs: mkDiagramWithBoundary(t.rhs.diagram, []) }
     expect(() => checkTheorem(bad, ctx)).toThrowError(/boundary arity mismatch/)
@@ -76,8 +116,8 @@ describe('checkTheorem', () => {
     const cut = n.cut(n.root)
     const nn = n.termNode(cut, p('\\a. a'))
     const nw = n.wire(cut, [{ node: nn, port: { kind: 'output' } }])
-    const nonRoot: Theorem = { ...t, lhs: mkDiagramWithBoundary(n.build(), [nw]), steps: [] }
-    expect(() => checkTheorem(nonRoot, ctx)).toThrowError(/not scoped at the diagram root/)
+    expect(() => mkDiagramWithBoundary(n.build(), [nw]))
+      .toThrowError(/must be scoped at the diagram root/)
   })
 
   it('rejects proofs that destroy a boundary wire', () => {
@@ -88,16 +128,16 @@ describe('checkTheorem', () => {
     // explicitly as removal content:
     const destroying: Theorem = {
       ...t,
-      steps: [{
+      actions: [action('destroy boundary', {
         rule: 'erasure',
         sel: {
           region: t.lhs.diagram.root, regions: [],
           nodes: Object.keys(t.lhs.diagram.nodes),
           wires: [t.lhs.boundary[0]!],
         },
-      }],
+      })],
     }
-    expect(() => checkTheorem(destroying, ctx)).toThrowError(/boundary wire .* was destroyed/)
+    expect(() => checkTheorem(destroying, ctx)).toThrowError(/boundary wire .* has no semantic image/)
   })
 })
 
@@ -118,7 +158,7 @@ describe('applyTheorem', () => {
 
   it('forward at a positive region rewrites the occurrence in one step', () => {
     const { d, hp, hq, v } = host()
-    const out = applyTheorem(d, dropQ(), {
+    const out = applyCertifiedTheorem(d, dropQ(), {
       sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] },
       args: [v],
     }, 'forward')
@@ -138,7 +178,7 @@ describe('applyTheorem', () => {
     const hp = h.termNode(cut, p('\\a. a'))
     const v = h.wire(cut, [{ node: hp, port: { kind: 'output' } }])
     const d = h.build()
-    const strengthened = applyTheorem(d, dropQ(), {
+    const strengthened = applyCertifiedTheorem(d, dropQ(), {
       sel: { region: cut, regions: [], nodes: [hp], wires: [] },
       args: [v],
     }, 'reverse')
@@ -147,7 +187,7 @@ describe('applyTheorem', () => {
     // applying forward inside the cut is refused (negative)
     const [pid] = nodes.find(([, n]) => n.kind === 'term' && n.term.kind === 'lam' && n.term.body.kind === 'bvar')!
     const [qid] = nodes.find(([id]) => id !== pid)!
-    expect(() => applyTheorem(strengthened, dropQ(), {
+    expect(() => applyCertifiedTheorem(strengthened, dropQ(), {
       sel: { region: cut, regions: [], nodes: [pid, qid], wires: [] },
       args: [v],
     }, 'forward')).toThrowError(/requires a positive region/)
@@ -155,7 +195,7 @@ describe('applyTheorem', () => {
 
   it('refuses occurrences that do not match the theorem side', () => {
     const { d, hp, v } = host()
-    expect(() => applyTheorem(d, dropQ(), {
+    expect(() => applyCertifiedTheorem(d, dropQ(), {
       sel: { region: d.root, regions: [], nodes: [hp], wires: [] },
       args: [v],
     }, 'forward')).toThrowError(/not an occurrence of theorem 'dropQ'/)
@@ -165,7 +205,7 @@ describe('applyTheorem', () => {
     const { d, hp, hq, v } = host()
     let caught: unknown
     try {
-      applyTheorem(d, dropQ(), {
+      applyCertifiedTheorem(d, dropQ(), {
         sel: { region: d.root, regions: [], nodes: [hp, hq], wires: [] },
         args: [v],
       }, 'reverse')
@@ -179,14 +219,14 @@ describe('applyTheorem', () => {
     const sideNode = sideBuilder.termNode(sideBuilder.root, p('\\x. x'))
     const sideWire = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'output' } }])
     const side = mkDiagramWithBoundary(sideBuilder.build(), [sideWire, sideWire])
-    const theorem: Theorem = { name: 'aliasId', lhs: side, rhs: side, steps: [] }
+    const theorem: Theorem = { name: 'aliasId', lhs: side, rhs: side, actions: [] }
     expect(() => checkTheorem(theorem, ctx)).not.toThrow()
 
     const host = new DiagramBuilder()
     const node = host.termNode(host.root, p('\\x. x'))
     const wire = host.wire(host.root, [{ node, port: { kind: 'output' } }])
     const diagram = host.build()
-    expect(() => applyTheorem(diagram, theorem, {
+    expect(() => applyCertifiedTheorem(diagram, theorem, {
       sel: { region: diagram.root, regions: [], nodes: [node], wires: [] },
       args: [wire, wire],
     }, 'forward')).not.toThrow()
@@ -198,7 +238,7 @@ describe('applyTheorem', () => {
     const a = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 0 } }])
     const b = sideBuilder.wire(sideBuilder.root, [{ node: sideNode, port: { kind: 'arg', index: 1 } }])
     const side = mkDiagramWithBoundary(sideBuilder.build(), [a, b])
-    const theorem: Theorem = { name: 'pairId', lhs: side, rhs: side, steps: [] }
+    const theorem: Theorem = { name: 'pairId', lhs: side, rhs: side, actions: [] }
 
     const host = new DiagramBuilder()
     const node = host.ref(host.root, 'Pair', 2)
@@ -207,18 +247,24 @@ describe('applyTheorem', () => {
       { node, port: { kind: 'arg', index: 1 } },
     ])
     const diagram = host.build()
-    expect(() => applyTheorem(diagram, theorem, {
+    const relationBuilder = new DiagramBuilder()
+    const first = relationBuilder.wire(relationBuilder.root, [])
+    const second = relationBuilder.wire(relationBuilder.root, [])
+    const pairContext = verifyTheory({
+      relations: [['Pair', mkDiagramWithBoundary(relationBuilder.build(), [first, second])]],
+      theorems: [],
+    })
+    expect(() => applyCertifiedTheorem(diagram, theorem, {
       sel: { region: diagram.root, regions: [], nodes: [node], wires: [] },
       args: [shared, shared],
-    }, 'forward')).toThrowError(/not an occurrence of theorem 'pairId'/)
+    }, 'forward', pairContext)).toThrowError(/not an occurrence of theorem 'pairId'/)
   })
 })
 
 describe('theorem steps inside proofs (derived rules used natively)', () => {
   it('a registered theorem applies through replayProof without expansion', () => {
     const t = dropQ()
-    const theorems = new Map([[t.name, t]])
-    const c2: ProofContext = { theorems, relations: new Map() }
+    const c2 = registerTheorem(ctx, t)
     const { d, hp, hq, v } = (() => {
       const h = new DiagramBuilder()
       const hp = h.termNode(h.root, p('\\a. a'))
@@ -245,7 +291,7 @@ describe('boundary-wire id resurrection is refused', () => {
     const n = b.termNode(b.root, p('\\a. a'))
     b.wire(b.root, [{ node: n, port: { kind: 'output' } }])
     const side = mkDiagramWithBoundary(b.build(), [])
-    return { name: 'idT', lhs: side, rhs: side, steps: [] }
+    return { name: 'idT', lhs: side, rhs: side, actions: [] }
   }
 
   it('a proof that destroys the boundary wire and re-mints its id later is refused', () => {
@@ -265,17 +311,17 @@ describe('boundary-wire id resurrection is refused', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     const forged: Theorem = {
       name: 'forged', lhs, rhs,
-      steps: [
+      actions: [action('erase and replace',
         { rule: 'erasure', sel: { region: lhs.diagram.root, regions: [], nodes: [k], wires: [w0] } },
         {
           rule: 'theorem', name: 'idT',
           at: { sel: { region: lhs.diagram.root, regions: [], nodes: [idn], wires: [w1] }, args: [] },
           direction: 'forward',
         },
-      ],
+      )],
     }
-    const c: ProofContext = { theorems: new Map([[T.name, T]]), relations: new Map() }
-    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
+    const c = registerTheorem(ctx, T)
+    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' has no semantic image/)
   })
 
   it('a single theorem step cannot destroy and re-mint the boundary id within itself', () => {
@@ -293,13 +339,13 @@ describe('boundary-wire id resurrection is refused', () => {
     const rhs = mkDiagramWithBoundary(r.build(), [rb])
     const forged: Theorem = {
       name: 'forgedOneStep', lhs, rhs,
-      steps: [{
+      actions: [action('replace occurrence', {
         rule: 'theorem', name: 'idT',
         at: { sel: { region: lhs.diagram.root, regions: [], nodes: [idn], wires: [w0] }, args: [] },
         direction: 'forward',
-      }],
+      })],
     }
-    const c: ProofContext = { theorems: new Map([[T.name, T]]), relations: new Map() }
-    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' was destroyed/)
+    const c = registerTheorem(ctx, T)
+    expect(() => checkTheorem(forged, c)).toThrowError(/boundary wire 'w0' has no semantic image/)
   })
 })

@@ -2,8 +2,11 @@ import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import { polarity } from '../../kernel/diagram/regions'
 import { mkSelection } from '../../kernel/diagram/subgraph/selection'
-import { findOccurrences, occurrenceSelection, type Occurrence } from '../../kernel/diagram/subgraph/match'
-import type { ProofContext, ProofStep } from '../../kernel/proof/step'
+import { findOccurrences, type Occurrence } from '../../kernel/diagram/subgraph/match'
+import { occurrenceToSelection } from '../../kernel/diagram/subgraph/occurrence'
+import type { ProofContext } from '../../kernel/proof/context'
+import { assertProofContext } from '../../kernel/proof/context'
+import type { ProofStep } from '../../kernel/proof/step'
 import type { Hit } from '../hittest'
 import type { ProofOrientation } from './moves'
 
@@ -54,6 +57,7 @@ export function citationCandidates(
   orientation: ProofOrientation,
   fuel: number,
 ): { readonly applicable: readonly CitationCandidate[]; readonly closed: readonly CitationCandidate[] } {
+  assertProofContext(ctx)
   const direction = citationDirection(d, region, orientation)
   const applicable: CitationCandidate[] = []
   const closed: CitationCandidate[] = []
@@ -77,7 +81,7 @@ export function citationStep(
   region?: RegionId,
 ): ProofStep {
   if (candidate.occurrences === null) {
-    if (region === undefined) throw new Error(`closed citation '${candidate.name}' requires an insertion region`)
+    if (region === undefined) throw new Error(`closed citation '${candidate.name}' requires a target region`)
     return {
       rule: 'theorem',
       name: candidate.name,
@@ -93,7 +97,7 @@ export function citationStep(
     name: candidate.name,
     direction: candidate.direction,
     at: {
-      sel: occurrenceSelection(candidate.from, occurrence, d),
+      sel: occurrenceToSelection(d, candidate.from, occurrence),
       args: [...occurrence.attachments],
     },
   }

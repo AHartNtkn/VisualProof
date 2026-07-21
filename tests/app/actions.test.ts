@@ -1,19 +1,46 @@
 import { describe, it, expect } from 'vitest'
 import { parseTerm } from '../../src/kernel/term/parse'
+import { freePorts } from '../../src/kernel/term/term'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
-import { mkDiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { buildFregeTheory } from '../../src/theories/frege'
 import { verifyTheory } from '../../src/kernel/proof/store'
 import { applicableActions } from '../../src/app/actions'
 import { bootFixture } from './boot-fixture'
 import { applyConversion } from '../../src/kernel/rules/conversion'
 import { applyStep } from '../../src/kernel/proof/step'
+import { proposePortCorrespondence } from '../../src/kernel/rules/port-correspondence'
+import { termNodeAt } from '../../src/kernel/rules/access'
 
 const p = (s: string) => parseTerm(s)
 
 describe('applicableActions', () => {
-  it('offers erasure at positive selections and insertion at negative regions', () => {
+  it('offers inconsistent-cut elimination structurally at both polarities and orientations', () => {
+    const h = new DiagramBuilder()
+    const positive = h.cut(h.root)
+    const positiveFirst = h.termNode(positive, p('\\x. x'))
+    const positiveSecond = h.termNode(positive, p('\\x. \\y. x'))
+    h.wire(positive, [positiveFirst, positiveSecond]
+      .map((node) => ({ node, port: { kind: 'output' as const } })))
+    const enclosing = h.cut(h.root)
+    const negative = h.cut(enclosing)
+    const negativeFirst = h.termNode(negative, p('\\x. x'))
+    const negativeSecond = h.termNode(negative, p('\\x. \\y. x'))
+    h.wire(negative, [negativeFirst, negativeSecond]
+      .map((node) => ({ node, port: { kind: 'output' as const } })))
+    const d = h.build()
+    const proof = verifyTheory(buildFregeTheory())
+
+    for (const backward of [false, true]) {
+      for (const [region, cut] of [[d.root, positive], [enclosing, negative]] as const) {
+        const selection = mkSelection(d, { region, regions: [cut], nodes: [], wires: [] })
+        expect(applicableActions(d, selection, proof, backward).map((action) => action.kind))
+          .toContain('inconsistentCutElim')
+      }
+    }
+  })
+
+  it('offers erasure contextually while spawning remains on the direct canvas interaction', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('\\x. x'))
     const cut = h.cut(h.root)
@@ -23,14 +50,13 @@ describe('applicableActions', () => {
     const pos = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const atPos = applicableActions(d, pos, ctx).map((a) => a.kind)
     expect(atPos).toContain('erase')
-    expect(atPos).not.toContain('insert')
     expect(atPos).toContain('doubleCutWrap')
     expect(atPos).toContain('iterate')
-    expect(atPos).toContain('vacuousWrap')
+    expect(atPos).toContain('abstractWrap')
 
     const neg = mkSelection(d, { region: cut, regions: [], nodes: [], wires: [] })
     const atNeg = applicableActions(d, neg, ctx).map((a) => a.kind)
-    expect(atNeg).toContain('insert')
+    expect(atNeg).not.toContain('insert')
     expect(atNeg).not.toContain('erase')
   })
 
@@ -149,26 +175,12 @@ describe('reference-node gates', () => {
     const sel = mkSelection(d, { region: d.root, regions: [], nodes: [n], wires: [] })
     const withRel = verifyTheory(buildFregeTheory())
     expect(applicableActions(d, sel, withRel).map((a) => a.kind)).toContain('relFold')
-    const noRel = verifyTheory({ relations: {}, theorems: [] })
+    const noRel = verifyTheory({ relations: [], theorems: [] })
     expect(applicableActions(d, sel, noRel).map((a) => a.kind)).not.toContain('relFold')
   })
 })
 
 describe('descriptor → step construction (the shell contract)', () => {
-  it('insert: an enumerated insert commits as the shell builds it', () => {
-    const h = new DiagramBuilder()
-    const cut = h.cut(h.root)
-    const d = h.build()
-    const ctx = verifyTheory(buildFregeTheory())
-    const sel = mkSelection(d, { region: cut, regions: [], nodes: [], wires: [] })
-    expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('insert')
-    const b = new DiagramBuilder()
-    b.termNode(b.root, p('\\x. \\y. x'))
-    const pattern = mkDiagramWithBoundary(b.build(), [])
-    const out = applyStep(d, { rule: 'insertion', region: cut, pattern, attachments: [], binders: {} }, ctx)
-    expect(Object.values(out.nodes)).toHaveLength(1)
-  })
-
   it('convert: an enumerated convert commits via the certificate path', () => {
     const h = new DiagramBuilder()
     const n = h.termNode(h.root, p('(\\a. a) y'))
@@ -178,8 +190,10 @@ describe('descriptor → step construction (the shell contract)', () => {
     expect(applicableActions(d, sel, ctx).map((a) => a.kind)).toContain('convert')
     // the node's source free 'y' is canonical s0 after construction
     const target = p('s0')
-    const pre = applyConversion(d, n, target, 32)
-    const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, attachments: {} }, ctx)
+    const source = termNodeAt(d, n)
+    const correspondence = proposePortCorrespondence(source.term, target, source.freePorts, freePorts(target))
+    const pre = applyConversion(d, n, target, correspondence, 32)
+    const out = applyStep(d, { rule: 'conversion', node: n, term: target, certificate: pre.certificate, correspondence, attachments: {} }, ctx)
     expect(JSON.stringify(out.nodes[n])).toContain('"port"')
   })
 

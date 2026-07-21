@@ -1,4 +1,5 @@
 import type { Term } from '../kernel/term/term'
+import { freePorts } from '../kernel/term/term'
 import type { ReductionStep } from '../kernel/term/reduce'
 import type { ConversionCertificate } from '../kernel/term/certificate'
 import { headNormalize, weakHeadNormalize } from '../kernel/term/hnf'
@@ -6,6 +7,7 @@ import type { Diagram, NodeId } from '../kernel/diagram/diagram'
 import { termNodeAt } from '../kernel/rules/access'
 import { applyConversionByCertificate } from '../kernel/rules/conversion'
 import type { ProofStep } from '../kernel/proof/step'
+import { proposePortCorrespondence } from '../kernel/rules/port-correspondence'
 
 /**
  * Tactics: app-layer helpers that compute a rewrite and emit the ordinary
@@ -34,8 +36,10 @@ function applyHeadConversion(
     throw new Error(`the term is already in ${formName}; refusing a no-op conversion step`)
   }
   const certificate: ConversionCertificate = { leftSteps: result.steps, rightSteps: [] }
-  const step: ProofStep = { rule: 'conversion', node, term: result.term, certificate, attachments: {} }
-  return { diagram: applyConversionByCertificate(d, node, result.term, certificate, {}), step }
+  const source = termNodeAt(d, node)
+  const correspondence = proposePortCorrespondence(source.term, result.term, source.freePorts, freePorts(result.term))
+  const step: ProofStep = { rule: 'conversion', node, term: result.term, certificate, correspondence, attachments: {} }
+  return { diagram: applyConversionByCertificate(d, node, result.term, certificate, correspondence, {}), step }
 }
 
 /** Head-normalize a term node (head β-steps only, descending under the binder prefix) and emit the conversion step. */

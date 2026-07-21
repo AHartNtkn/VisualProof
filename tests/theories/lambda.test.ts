@@ -12,7 +12,7 @@ describe('the bundled λ demo theory', () => {
   it('the fixed-point proof carries an explicit certificate (no fueled search at replay)', () => {
     const theory = buildLambdaTheory()
     const fix = theory.theorems.find((t) => t.name === 'fixedPoint')!
-    const conv = fix.steps.find((s) => s.rule === 'conversion')
+    const conv = fix.actions.flatMap((action) => action.steps).find((s) => s.rule === 'conversion')
     expect(conv).toBeDefined()
     expect(conv!.rule === 'conversion' && conv!.certificate.leftSteps.length).toBeGreaterThan(0)
   })

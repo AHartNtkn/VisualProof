@@ -5,7 +5,8 @@ import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { exploreLabeling } from '../kernel/diagram/canonical/explore'
 import { findOccurrences } from '../kernel/diagram/subgraph/match'
-import type { ProofContext } from '../kernel/proof/step'
+import type { ProofContext } from '../kernel/proof/context'
+import { assertProofContext } from '../kernel/proof/context'
 
 /**
  * Name a live selection as a new relation: the EXTRACTED COPY of the selection
@@ -40,12 +41,12 @@ export function defineRelation(
   orderedWires: readonly WireId[],
   name: string,
   ctx: ProofContext,
-  relations: Readonly<Record<string, DiagramWithBoundary>>,
 ): { relation: DiagramWithBoundary } {
+  assertProofContext(ctx)
   if (name.trim() === '') {
     throw new Error('relation name is empty: type a name in the name input first')
   }
-  if (ctx.relations.has(name) || Object.prototype.hasOwnProperty.call(relations, name)) {
+  if (ctx.relations.has(name)) {
     throw new Error(`relation '${name}' already exists (loaded or defined this session); choose a fresh name`)
   }
   if (ctx.theorems.has(name)) {
@@ -127,6 +128,7 @@ export function inferFoldArgs(
   defId: string,
   ctx: ProofContext,
 ): WireId[] {
+  assertProofContext(ctx)
   const body = ctx.relations.get(defId)
   if (body === undefined) {
     throw new Error(`unknown relation '${defId}' (known: ${[...ctx.relations.keys()].join(', ') || 'none'})`)
@@ -160,4 +162,3 @@ export function inferFoldArgs(
     `the selection is not an occurrence of '${defId}': its shape must match the definition exactly (convert first if the difference is beta-eta)`,
   )
 }
-
