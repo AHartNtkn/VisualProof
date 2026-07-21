@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import {
   applyComprehensionConnection,
   beginComprehensionDraft,
@@ -12,7 +13,12 @@ import {
   connectionTargets,
   resolveConstructionLoupeKey,
 } from '../../src/game/interface/construction-loupe'
-import { addRefNode, addTermNode } from '../../src/game/interface/loupe/edit'
+import {
+  addEmptyBubble,
+  addEmptyCut,
+  addRefNode,
+  addTermNode,
+} from '../../src/game/interface/loupe/edit'
 import { parseTerm } from '../../src/kernel/term/parse'
 import { comprehensionFixture } from '../app/comprehension-fixture'
 
@@ -28,6 +34,19 @@ const key = (value: Partial<{
 })
 
 describe('game-owned construction loupe semantics', () => {
+  it('creates empty cut and quantified-bubble children in the requested region', () => {
+    const diagram = new DiagramBuilder().build()
+
+    const cut = addEmptyCut(diagram, diagram.root)
+    expect(cut.diagram.regions[cut.region]).toEqual({ kind: 'cut', parent: diagram.root })
+    expect(Object.values(cut.diagram.nodes).filter((node) => node.region === cut.region)).toEqual([])
+
+    const bubble = addEmptyBubble(cut.diagram, diagram.root, 2)
+    expect(bubble.diagram.regions[bubble.region]).toEqual({ kind: 'bubble', parent: diagram.root, arity: 2 })
+    expect(Object.values(bubble.diagram.nodes).filter((node) => node.region === bubble.region)).toEqual([])
+    expect(() => addEmptyBubble(diagram, diagram.root, -1)).toThrow(/valid arity/)
+  })
+
   it('keeps undo and redo inside retained draft history and branches locally', () => {
     const fixture = comprehensionFixture()
     let draft = beginComprehensionDraft(fixture.diagram, fixture.bubble)

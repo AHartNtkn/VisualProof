@@ -66,6 +66,38 @@ export function addAtomNode(d: Diagram, region: RegionId, binder: RegionId): { d
   }
 }
 
+function addEmptyRegion(
+  d: Diagram,
+  parent: RegionId,
+  make: (parent: RegionId) => Region,
+  base: string,
+): { diagram: Diagram; region: RegionId } {
+  if (d.regions[parent] === undefined) throw new Error(`unknown region '${parent}'`)
+  const region = freshId(new Set(Object.keys(d.regions)), base)
+  return {
+    region,
+    diagram: mkDiagram({
+      root: d.root,
+      regions: { ...d.regions, [region]: make(parent) },
+      nodes: { ...d.nodes },
+      wires: { ...d.wires },
+    }),
+  }
+}
+
+export function addEmptyCut(d: Diagram, parent: RegionId): { diagram: Diagram; region: RegionId } {
+  return addEmptyRegion(d, parent, (owner) => ({ kind: 'cut', parent: owner }), 'cut')
+}
+
+export function addEmptyBubble(
+  d: Diagram,
+  parent: RegionId,
+  arity: number,
+): { diagram: Diagram; region: RegionId } {
+  if (!Number.isInteger(arity) || arity < 0) throw new Error(`'${arity}' is not a valid arity`)
+  return addEmptyRegion(d, parent, (owner) => ({ kind: 'bubble', parent: owner, arity }), 'bub')
+}
+
 export type ConstructionHit =
   | { readonly kind: 'node'; readonly id: NodeId }
   | { readonly kind: 'region'; readonly id: RegionId }

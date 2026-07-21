@@ -8,7 +8,13 @@ import type { Vec2 } from '../../view/vec'
 import { adaptCanvas, type CanvasAdapter } from '../../view/canvas'
 import { seedProject } from '../../view/relax'
 import { existentialStubs, legPaths } from '../../view/wires'
-import { addAtomNode, addRefNode, addTermNode } from './loupe/edit'
+import {
+  addAtomNode,
+  addEmptyBubble,
+  addEmptyCut,
+  addRefNode,
+  addTermNode,
+} from './loupe/edit'
 import { wireHitTest, type Hit } from '../../interaction/hittest'
 import { ConstructController } from './loupe/interact/construct'
 import { SpawnCascade, boundPredicateOptions } from './loupe/interact/spawn'
@@ -139,6 +145,14 @@ export type ConstructionLoupeDebug = {
   readonly draftBodies: readonly { readonly node: NodeId; readonly kind: string; readonly x: number; readonly y: number; readonly point: Vec2 }[]
   readonly draftWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
   readonly hostWires: readonly { readonly wire: WireId; readonly point: Vec2 | null }[]
+  readonly draftRegions: readonly {
+    readonly id: RegionId
+    readonly kind: 'sheet' | 'cut' | 'bubble'
+    readonly parent: RegionId | null
+    readonly arity: number | null
+    readonly nodeCount: number
+    readonly childCount: number
+  }[]
   readonly connection: null | {
     readonly source: ComprehensionConnectionEndpoint
     readonly draftTargets: readonly WireId[]
@@ -260,6 +274,8 @@ export class ConstructionLoupe {
       spawnTerm: ({ source, invocation: at }) => this.#editAdd(() => addTermNode(this.#diagram(), at.region, parseTerm(source)), at.world),
       spawnRelation: ({ defId, arity, invocation: at }) => this.#editAdd(() => addRefNode(this.#diagram(), at.region, defId, arity), at.world),
       spawnBoundPredicate: ({ binder, invocation: at }) => this.#editAdd(() => addAtomNode(this.#diagram(), at.region, binder), at.world),
+      spawnCut: ({ invocation: at }) => this.#editRegion(() => addEmptyCut(this.#diagram(), at.region), at.world),
+      spawnBubble: ({ arity, invocation: at }) => this.#editRegion(() => addEmptyBubble(this.#diagram(), at.region, arity), at.world),
       binderColor: (binder) => bubbleHues(this.#diagram(), host.theme().bubbleLightness).get(binder) ?? host.theme().interaction.hover,
       openChanged: host.changed,
     })
@@ -399,6 +415,15 @@ export class ConstructionLoupe {
       })),
       draftWires: Object.keys(current.relation.diagram.wires).map((wire) => ({ wire, point: this.#wireClientPoint('draft', wire) })),
       hostWires: Object.keys(this.#host.diagram().wires).map((wire) => ({ wire, point: this.#wireClientPoint('host', wire) })),
+      draftRegions: Object.entries(current.relation.diagram.regions).map(([id, region]) => ({
+        id,
+        kind: region.kind,
+        parent: region.kind === 'sheet' ? null : region.parent,
+        arity: region.kind === 'bubble' ? region.arity : null,
+        nodeCount: Object.values(current.relation.diagram.nodes).filter((node) => node.region === id).length,
+        childCount: Object.values(current.relation.diagram.regions)
+          .filter((candidate) => candidate.kind !== 'sheet' && candidate.parent === id).length,
+      })),
       connection: source === null || targets === null ? null : {
         source, draftTargets: [...targets.draft], hostTargets: [...targets.host],
       },
@@ -446,6 +471,18 @@ export class ConstructionLoupe {
       const added = change()
       this.#draft = replaceComprehensionDiagram(this.#draft, added.diagram)
       this.#reconcile({ node: added.node, at })
+      return true
+    } catch (error) {
+      this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())
+      return false
+    }
+  }
+
+  #editRegion(change: () => { diagram: Diagram; region: RegionId }, at: Vec2): boolean {
+    try {
+      const added = change()
+      this.#draft = replaceComprehensionDiagram(this.#draft, added.diagram)
+      this.#reconcile({ node: `anchor:${added.region}`, at })
       return true
     } catch (error) {
       this.#host.refuse(error instanceof Error ? error.message : String(error), this.#centerClient())

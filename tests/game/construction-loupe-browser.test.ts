@@ -294,6 +294,39 @@ describe('rendered circular construction loupe', () => {
     } finally { await page.close() }
   })
 
+  it('offers and commits empty cut and quantifier-bubble spawn choices in order', async () => {
+    const page = await openFixture()
+    try {
+      const canvas = page.locator('.cursebreaker-construction-loupe__canvas')
+      const open = async (x: number, y: number): Promise<void> => {
+        await canvas.click({ button: 'right', position: { x, y } })
+        await expect.poll(() => page.locator('.vpa-spawn-cascade').count()).toBe(1)
+      }
+
+      await open(235, 235)
+      const rows = (await page.locator('.vpa-spawn-row').allTextContents()).map((text) => text.trim())
+      expect(rows.slice(0, 3)).toEqual(['λ term…', 'Empty cut', 'Empty quantifier bubble…'])
+      const before = await page.evaluate(() => window.__constructionLoupeFixture.regions())
+      await page.getByRole('button', { name: 'Empty cut', exact: true }).click()
+      const afterCut = await page.evaluate(() => window.__constructionLoupeFixture.regions())
+      expect(afterCut).toHaveLength(before.length + 1)
+      expect(afterCut.filter((region) => !before.some(({ id }) => id === region.id))).toEqual([
+        expect.objectContaining({ kind: 'cut', nodeCount: 0, childCount: 0 }),
+      ])
+
+      await open(285, 285)
+      await page.getByRole('button', { name: 'Empty quantifier bubble…', exact: true }).click()
+      const arity = page.getByLabel('Quantifier bubble arity')
+      await arity.fill('2')
+      await page.keyboard.press('Enter')
+      const afterBubble = await page.evaluate(() => window.__constructionLoupeFixture.regions())
+      expect(afterBubble).toHaveLength(afterCut.length + 1)
+      expect(afterBubble.filter((region) => !afterCut.some(({ id }) => id === region.id))).toEqual([
+        expect.objectContaining({ kind: 'bubble', arity: 2, nodeCount: 0, childCount: 0 }),
+      ])
+    } finally { await page.close() }
+  })
+
   it('keeps history shortcuts local and leaves proof-only F inert while the loupe owns input', async () => {
     const page = await openFixture()
     try {
@@ -329,6 +362,14 @@ declare global {
       mapClient(client: { readonly x: number; readonly y: number }): { readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } }
       lastContextMenuMapping(): null | { readonly client: { readonly x: number; readonly y: number }; readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } }
       history(): { readonly cursor: number; readonly length: number }
+      regions(): readonly {
+        readonly id: string
+        readonly kind: 'sheet' | 'cut' | 'bubble'
+        readonly parent: string | null
+        readonly arity: number | null
+        readonly nodeCount: number
+        readonly childCount: number
+      }[]
       probeInjectedMapper(): { readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } } | null
       probeSharedLifecycle(): { readonly cancellations: number; readonly modifiers: readonly boolean[] }
     }

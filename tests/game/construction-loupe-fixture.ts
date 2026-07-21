@@ -53,6 +53,7 @@ const state = {
     const debug = loupe!.debugState()
     return { cursor: debug.cursor, length: debug.historyLength }
   },
+  regions: () => loupe!.debugState().draftRegions,
   probeInjectedMapper: (): { readonly screen: { readonly x: number; readonly y: number }; readonly world: { readonly x: number; readonly y: number } } | null => {
     const realm = activeMount.ownerDocument.defaultView!
     const probeCanvas = activeMount.ownerDocument.createElement('canvas')

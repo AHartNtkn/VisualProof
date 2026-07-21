@@ -74,6 +74,15 @@ export type SpawnBoundPredicateRequest = {
   readonly invocation: SpawnInvocation
 }
 
+export type SpawnStructureRequest = {
+  readonly invocation: SpawnInvocation
+}
+
+export type SpawnBubbleRequest = {
+  readonly arity: number
+  readonly invocation: SpawnInvocation
+}
+
 export type SpawnCascadeOptions = {
   readonly host: HTMLElement
   /** Return false to keep the cascade open after a refused edit. */
@@ -82,6 +91,10 @@ export type SpawnCascadeOptions = {
   readonly spawnRelation: (request: SpawnRelationRequest) => boolean | void
   /** Return false to keep the cascade open after a refused edit. */
   readonly spawnBoundPredicate: (request: SpawnBoundPredicateRequest) => boolean | void
+  /** Return false to keep the cascade open after a refused edit. */
+  readonly spawnCut: (request: SpawnStructureRequest) => boolean | void
+  /** Return false to keep the cascade open after a refused edit. */
+  readonly spawnBubble: (request: SpawnBubbleRequest) => boolean | void
   /** Presentation color derived from the renderer's authoritative binder hue. */
   readonly binderColor: (binder: RegionId) => string
   /** View-only binder emphasis. Null clears every cascade-owned emphasis. */
@@ -198,6 +211,8 @@ export class SpawnCascade {
   readonly #spawnTerm: SpawnCascadeOptions['spawnTerm']
   readonly #spawnRelation: SpawnCascadeOptions['spawnRelation']
   readonly #spawnBoundPredicate: SpawnCascadeOptions['spawnBoundPredicate']
+  readonly #spawnCut: SpawnCascadeOptions['spawnCut']
+  readonly #spawnBubble: SpawnCascadeOptions['spawnBubble']
   readonly #binderColor: SpawnCascadeOptions['binderColor']
   readonly #hoverBinder: SpawnCascadeOptions['hoverBinder']
   readonly #openChanged: SpawnCascadeOptions['openChanged']
@@ -213,6 +228,8 @@ export class SpawnCascade {
     this.#spawnTerm = options.spawnTerm
     this.#spawnRelation = options.spawnRelation
     this.#spawnBoundPredicate = options.spawnBoundPredicate
+    this.#spawnCut = options.spawnCut
+    this.#spawnBubble = options.spawnBubble
     this.#binderColor = options.binderColor
     this.#hoverBinder = options.hoverBinder
     this.#openChanged = options.openChanged
@@ -271,7 +288,7 @@ export class SpawnCascade {
     this.#host.append(backdrop, menu)
     this.#openChanged?.(true)
 
-    let termMode = false
+    let entryMode: 'browse' | 'term' | 'bubble' = 'browse'
     const current = (): boolean => this.#menu === menu && this.#invocation === snapshot
 
     const row = (label: string, hint: string, pick: (() => void) | null): HTMLElement => {
@@ -363,7 +380,7 @@ export class SpawnCascade {
 
     const enterTermMode = (): void => {
       if (!current()) return
-      termMode = true
+      entryMode = 'term'
       submenu.style.display = 'none'
       search.value = ''
       search.type = 'text'
@@ -373,9 +390,33 @@ export class SpawnCascade {
       search.focus()
     }
 
+    const pickEmptyCut = (): void => {
+      if (!current()) return
+      const accepted = this.#spawnCut({ invocation: snapshot })
+      if (accepted !== false && current()) this.close()
+    }
+
+    const enterBubbleMode = (): void => {
+      if (!current()) return
+      entryMode = 'bubble'
+      submenu.style.display = 'none'
+      search.value = ''
+      search.type = 'number'
+      search.min = '0'
+      search.step = '1'
+      search.placeholder = 'quantifier arity'
+      search.setAttribute('aria-label', 'Quantifier bubble arity')
+      listing.replaceChildren(heading('Quantifier bubble'), row('Enter a nonnegative arity, then press Enter', '', null))
+      search.focus()
+    }
+
     const renderTree = (): void => {
       submenu.style.display = 'none'
-      const nodes: HTMLElement[] = [row('λ term…', '', enterTermMode)]
+      const nodes: HTMLElement[] = [
+        row('λ term…', '', enterTermMode),
+        row('Empty cut', '', pickEmptyCut),
+        row('Empty quantifier bubble…', '', enterBubbleMode),
+      ]
       if (predicates.length > 0) {
         nodes.push(heading('Bound predicates'), ...predicates.map(boundPredicateRow))
       }
@@ -396,7 +437,7 @@ export class SpawnCascade {
     }
 
     const renderSearch = (): void => {
-      if (termMode || !current()) return
+      if (entryMode !== 'browse' || !current()) return
       const query = search.value.trim()
       if (query === '') {
         renderTree()
@@ -421,9 +462,19 @@ export class SpawnCascade {
       }
       if (event.key !== 'Enter') return
       event.preventDefault()
-      if (termMode) {
+      if (entryMode === 'term') {
         if (search.value.trim() === '') return
         const accepted = this.#spawnTerm({ source: search.value, invocation: snapshot })
+        if (accepted !== false && current()) this.close()
+        return
+      }
+      if (entryMode === 'bubble') {
+        const arity = Number(search.value)
+        if (!Number.isInteger(arity) || arity < 0) {
+          search.setAttribute('aria-invalid', 'true')
+          return
+        }
+        const accepted = this.#spawnBubble({ arity, invocation: snapshot })
         if (accepted !== false && current()) this.close()
         return
       }
