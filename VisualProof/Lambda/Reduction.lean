@@ -152,6 +152,35 @@ theorem BetaEta.renameBound {a b : Term n α} (h : BetaEta a b)
   | symm _ ih => exact ih.symm
   | trans _ _ ih₁ ih₂ => exact ih₁.trans ih₂
 
+/-- Lambda congruence reflects beta-eta equivalence. Applying both renamed
+abstractions to the same fresh bound variable beta-reduces to their bodies. -/
+theorem BetaEta.lam_cancel {a b : Term (n + 1) α}
+    (h : BetaEta (Term.lam a) (Term.lam b)) : BetaEta a b := by
+  have congruent := (h.renameBound Fin.succ).appFn (Term.bvar 0)
+  have left : BetaEta
+      (Term.app ((Term.lam a).renameBound Fin.succ) (Term.bvar 0)) a := by
+    apply BetaEta.step
+    apply OneStep.beta
+    rw [Term.substBound_renameBound]
+    calc
+      _ = a.substBound Term.bvar := by
+        apply congrArg (fun substitution => a.substBound substitution)
+        funext index
+        refine Fin.cases ?_ (fun _ => ?_) index <;> rfl
+      _ = a := Term.substBound_id a
+  have right : BetaEta
+      (Term.app ((Term.lam b).renameBound Fin.succ) (Term.bvar 0)) b := by
+    apply BetaEta.step
+    apply OneStep.beta
+    rw [Term.substBound_renameBound]
+    calc
+      _ = b.substBound Term.bvar := by
+        apply congrArg (fun substitution => b.substBound substitution)
+        funext index
+        refine Fin.cases ?_ (fun _ => ?_) index <;> rfl
+      _ = b := Term.substBound_id b
+  exact left.symm.trans (congruent.trans right)
+
 private theorem OneStep.substBound {a b : Term n α} (h : OneStep a b)
     (σ : Fin n → Term m α) : OneStep (a.substBound σ) (b.substBound σ) := by
   induction h generalizing m with
@@ -2065,6 +2094,39 @@ private theorem List.Forall₂.get
       · exact hxy
       · exact ih j
 
+private theorem List.Forall₂.of_get
+    {r : α → β → Prop} {xs : List α} {ys : List β}
+    (hlen : xs.length = ys.length)
+    (hget : ∀ index : Fin xs.length,
+      r (xs.get index) (ys.get (Fin.cast hlen index))) :
+    List.Forall₂ r xs ys := by
+  induction xs generalizing ys with
+  | nil =>
+      cases ys with
+      | nil => exact .nil
+      | cons _ _ => simp at hlen
+  | cons x xs ih =>
+      cases ys with
+      | nil => simp at hlen
+      | cons y ys =>
+          have hlength : xs.length = ys.length := by simpa using hlen
+          apply List.Forall₂.cons
+          · have head := hget (Fin.mk 0 (by simp))
+            simpa using head
+          · apply ih hlength
+            intro index
+            have tail := hget index.succ
+            simpa using tail
+
+private theorem BetaEta.applyArgs₂ {fn fn' : Term n α}
+    {left right : List (Term n α)}
+    (head : BetaEta fn fn') (arguments : List.Forall₂ BetaEta left right) :
+    BetaEta (VisualProof.Lambda.applyArgs fn left)
+      (VisualProof.Lambda.applyArgs fn' right) := by
+  induction arguments generalizing fn fn' with
+  | nil => exact head
+  | cons argument rest ih => exact ih (head.app argument)
+
 private theorem Reduces.toBetaEta {a b : Term n α} (h : Reduces a b) :
     BetaEta a b := by
   induction h with
@@ -2079,6 +2141,14 @@ private theorem BetaEta.prefixClose {a b : Term (extendScope n k) α}
       change BetaEta (Term.lam (VisualProof.Lambda.prefixClose k a))
         (Term.lam (VisualProof.Lambda.prefixClose k b))
       exact (ih h).lam
+
+private theorem BetaEta.prefixClose_cancel
+    {a b : Term (extendScope n k) α}
+    (h : BetaEta (VisualProof.Lambda.prefixClose k a)
+      (VisualProof.Lambda.prefixClose k b)) : BetaEta a b := by
+  induction k generalizing n with
+  | zero => exact h
+  | succ k ih => exact ih h.lam_cancel
 
 theorem rigidHead_args
   {n : Nat} {α : Type u} {a b : Term n α}
@@ -2190,5 +2260,67 @@ theorem rigidHead_args_bindFree_bound
   simp at h
   rw [← prefixClose_bindFree_closed, ← prefixClose_bindFree_closed] at h
   exact h
+
+/-- Aligned bound rigid heads are reconstructed by congruence from pairwise
+beta-eta-equivalent closed argument abstractions. This is the converse logical
+kernel required when head-strip replaces, rather than retains, its head
+equation. -/
+theorem rigidHead_of_args_bindFree_bound
+    {α : Type u} {a b : Term 0 α} {sa sb : HeadSpine 0 α}
+    (ha : headSpine a = some sa)
+    (hb : headSpine b = some sb)
+    (sameBinders : sa.binders = sb.binders)
+    (headIndex : Fin sa.binders)
+    (firstHead : sa.head = .bound headIndex)
+    (secondHead : sb.head = .bound (Fin.cast sameBinders headIndex))
+    (sameLength : sa.args.length = sb.args.length)
+    (substitution : α → ClosedTerm)
+    (argumentsEquivalent : ∀ index (valid : index < sa.args.length),
+      BetaEta
+        ((prefixClose sa.binders (sa.args.get ⟨index, valid⟩)).bindFree
+          substitution)
+        ((prefixClose sb.binders
+          (sb.args.get ⟨index, sameLength ▸ valid⟩)).bindFree substitution)) :
+    BetaEta (a.bindFree substitution) (b.bindFree substitution) := by
+  cases sa with
+  | mk ka ahead aargs =>
+      cases sb with
+      | mk kb bhead bargs =>
+          dsimp only at ha hb sameBinders headIndex firstHead secondHead sameLength argumentsEquivalent ⊢
+          subst kb
+          let leftSpine : HeadSpine 0 Empty := {
+            binders := ka
+            head := .bound headIndex
+            args := aargs.map fun argument =>
+              argument.bindFree fun port => (substitution port).liftClosed
+          }
+          let rightSpine : HeadSpine 0 Empty := {
+            binders := ka
+            head := .bound headIndex
+            args := bargs.map fun argument =>
+              argument.bindFree fun port => (substitution port).liftClosed
+          }
+          have hleft : headSpine (a.bindFree substitution) = some leftSpine :=
+            headSpine_bindFree_bound ha headIndex firstHead substitution
+          have hright : headSpine (b.bindFree substitution) = some rightSpine :=
+            headSpine_bindFree_bound hb headIndex secondHead substitution
+          have hlength : leftSpine.args.length = rightSpine.args.length := by
+            simpa [leftSpine, rightSpine] using sameLength
+          have harguments : List.Forall₂ BetaEta leftSpine.args
+              rightSpine.args := by
+            apply List.Forall₂.of_get hlength
+            intro index
+            let original : Fin aargs.length :=
+              Fin.cast (by simp [leftSpine]) index
+            have equivalent := argumentsEquivalent original.val original.isLt
+            rw [prefixClose_bindFree_closed, prefixClose_bindFree_closed] at equivalent
+            have bodies := equivalent.prefixClose_cancel
+            simpa [leftSpine, rightSpine, original] using bodies
+          rw [headSpine_sound hleft, headSpine_sound hright]
+          unfold HeadSpine.toTerm
+          apply BetaEta.prefixClose
+          apply BetaEta.applyArgs₂
+          · exact .refl
+          · exact harguments
 
 end VisualProof.Lambda

@@ -282,6 +282,64 @@ theorem HeadStripPayload.shared_wire
     (payload.secondWire right) heq (payload.firstWire_occurs left)
     (payload.secondWire_occurs right)
 
+/-- The binary gate and the two selected occurrences determine the complete
+equation wire, up to endpoint order. -/
+theorem HeadStripPayload.outputEndpoints
+    (payload : HeadStripPayload input first second) :
+    (input.val.wires payload.outputWire).endpoints = [
+        { node := first, port := .output },
+        { node := second, port := .output }] ∨
+      (input.val.wires payload.outputWire).endpoints = [
+        { node := second, port := .output },
+        { node := first, port := .output }] := by
+  let endpoints := (input.val.wires payload.outputWire).endpoints
+  have firstMem : ({ node := first, port := .output } :
+      Diagram.CEndpoint input.val.nodeCount) ∈ endpoints := payload.firstOutput
+  have secondMem : ({ node := second, port := .output } :
+      Diagram.CEndpoint input.val.nodeCount) ∈ endpoints := payload.secondOutput
+  have lengthEq : endpoints.length = 2 := payload.outputBinary
+  have shape := endpoints.eq_getElem_of_length_eq_two lengthEq
+  rw [shape] at firstMem secondMem
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at firstMem secondMem
+  rcases firstMem with firstHead | firstNext <;>
+    rcases secondMem with secondHead | secondNext
+  · exfalso
+    apply payload.distinct
+    exact congrArg Diagram.CEndpoint.node (firstHead.trans secondHead.symm)
+  · left
+    change endpoints = _
+    rw [shape, ← firstHead, ← secondNext]
+  · right
+    change endpoints = _
+    rw [shape, ← secondHead, ← firstNext]
+  · exfalso
+    apply payload.distinct
+    exact congrArg Diagram.CEndpoint.node (firstNext.trans secondNext.symm)
+
+/-- A selected term's free support can never be the binary output equation. -/
+theorem HeadStripPayload.firstWire_ne_output
+    (payload : HeadStripPayload input first second)
+    (port : Fin payload.firstFreePorts) :
+    payload.firstWire port ≠ payload.outputWire := by
+  intro equality
+  have occurs := payload.firstWire_occurs port
+  rw [equality] at occurs
+  rcases payload.outputEndpoints with forward | backward
+  · simp [Diagram.ConcreteDiagram.EndpointOccurs, forward] at occurs
+  · simp [Diagram.ConcreteDiagram.EndpointOccurs, backward] at occurs
+
+/-- The second selected term's free support also survives output deletion. -/
+theorem HeadStripPayload.secondWire_ne_output
+    (payload : HeadStripPayload input first second)
+    (port : Fin payload.secondFreePorts) :
+    payload.secondWire port ≠ payload.outputWire := by
+  intro equality
+  have occurs := payload.secondWire_occurs port
+  rw [equality] at occurs
+  rcases payload.outputEndpoints with forward | backward
+  · simp [Diagram.ConcreteDiagram.EndpointOccurs, forward] at occurs
+  · simp [Diagram.ConcreteDiagram.EndpointOccurs, backward] at occurs
+
 def HeadStripPayload.firstArgument
     (payload : HeadStripPayload input first second)
     (index : Fin payload.firstOriginalSpine.args.length) :
@@ -325,6 +383,25 @@ def HeadStripPayload.argumentIndices
     decide ((payload.firstArgument index).mapFree payload.firstPort ≠
       (payload.secondArgument index).mapFree payload.secondPort)
 
+def headStripNodeDomain (input : Diagram.ConcreteDiagram)
+    (first second : Fin input.nodeCount) :
+    Diagram.SurvivorDomain input.nodeCount where
+  survives node := decide (node ≠ first ∧ node ≠ second)
+
+def headStripWireDomain (input : Diagram.ConcreteDiagram)
+    (output : Fin input.wireCount) :
+    Diagram.SurvivorDomain input.wireCount where
+  survives wire := decide (wire ≠ output)
+
+def headStripEndpoint?
+    (domain : Diagram.SurvivorDomain nodes)
+    (endpoint : Diagram.CEndpoint nodes) :
+    Option (Diagram.CEndpoint domain.count) :=
+  (domain.index? endpoint.node).map fun node =>
+    { node := node, port := endpoint.port }
+
+/-- Append-only semantic witness retained privately by the soundness proof.
+The executable head-strip result is `headStripRaw` below. -/
 def HeadStripPayload.firstAddedNode
     (payload : HeadStripPayload input first second)
     (position : Fin payload.argumentIndices.length) :
@@ -339,6 +416,22 @@ def HeadStripPayload.secondAddedNode
     Fin (input.val.nodeCount +
       (payload.argumentIndices.length + payload.argumentIndices.length)) :=
   Fin.natAdd input.val.nodeCount
+    (Fin.natAdd payload.argumentIndices.length position)
+
+def HeadStripPayload.firstReducedNode
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length) :
+    Fin ((headStripNodeDomain input.val first second).count +
+      (payload.argumentIndices.length + payload.argumentIndices.length)) :=
+  Fin.natAdd (headStripNodeDomain input.val first second).count
+    (Fin.castAdd payload.argumentIndices.length position)
+
+def HeadStripPayload.secondReducedNode
+    (payload : HeadStripPayload input first second)
+    (position : Fin payload.argumentIndices.length) :
+    Fin ((headStripNodeDomain input.val first second).count +
+      (payload.argumentIndices.length + payload.argumentIndices.length)) :=
+  Fin.natAdd (headStripNodeDomain input.val first second).count
     (Fin.natAdd payload.argumentIndices.length position)
 
 def headStripLiftEndpoint (added : Nat)
@@ -373,9 +466,9 @@ def HeadStripPayload.secondAddedFreeEndpoints
       else
         none
 
-/-- Add exactly the nontrivial rigid-head argument equations.  Each extracted
-argument is compacted to its actual free support before endpoints are added. -/
-def headStripRaw (input : Diagram.CheckedDiagram signature)
+/-- Append-only witness used to reuse the established forward decomposition
+simulation. It is not returned by `applyHeadStrip`. -/
+def headStripExpandedRaw (input : Diagram.CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second) :
     Diagram.ConcreteDiagram where
@@ -412,19 +505,124 @@ def headStripRaw (input : Diagram.CheckedDiagram signature)
           { node := payload.secondAddedNode position, port := .output }
         ] })
 
+/-- Proof-only provenance for `headStripExpandedRaw`. The executable rule uses
+`headStripWireProvenance` for the destructive result below. -/
+def headStripExpandedWireProvenance (input : Diagram.CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second) :
+    WireProvenance input.val (headStripExpandedRaw input payload) :=
+  WireProvenance.append input.val (headStripExpandedRaw input payload)
+    payload.argumentIndices.length rfl
+
+/-- Proof-only interface transport for `headStripExpandedRaw`. -/
+def headStripExpandedInterfaceTransport (input : Diagram.CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second) :
+    InterfaceTransport input.val (headStripExpandedRaw input payload) :=
+  InterfaceTransport.append input.val (headStripExpandedRaw input payload)
+    payload.argumentIndices.length rfl
+
+def HeadStripPayload.firstReducedFreeEndpoints
+    (payload : HeadStripPayload input first second)
+    (wire : Fin input.val.wireCount) :
+    List (Diagram.CEndpoint ((headStripNodeDomain input.val first second).count +
+      (payload.argumentIndices.length + payload.argumentIndices.length))) :=
+  (allFin payload.argumentIndices.length).flatMap fun position =>
+    let argument := payload.firstArgument (payload.argumentIndices.get position)
+    (allFin argument.freeSupport.length).filterMap fun port =>
+      let originalPort := argument.freeSupport.get port
+      if payload.firstWire originalPort = wire then
+        some { node := payload.firstReducedNode position, port := .free port }
+      else
+        none
+
+def HeadStripPayload.secondReducedFreeEndpoints
+    (payload : HeadStripPayload input first second)
+    (wire : Fin input.val.wireCount) :
+    List (Diagram.CEndpoint ((headStripNodeDomain input.val first second).count +
+      (payload.argumentIndices.length + payload.argumentIndices.length))) :=
+  (allFin payload.argumentIndices.length).flatMap fun position =>
+    let argument := payload.secondArgument (payload.argumentIndices.get position)
+    (allFin argument.freeSupport.length).filterMap fun port =>
+      let originalPort := argument.freeSupport.get port
+      if payload.secondWire originalPort = wire then
+        some { node := payload.secondReducedNode position, port := .free port }
+      else
+        none
+
+/-- Replace a binary rigid-head equation with exactly its nontrivial argument
+equations. The original term nodes and their equation wire do not survive. -/
+def headStripRaw (input : Diagram.CheckedDiagram signature)
+    {first second : Fin input.val.nodeCount}
+    (payload : HeadStripPayload input first second) :
+    Diagram.ConcreteDiagram where
+  regionCount := input.val.regionCount
+  nodeCount := (headStripNodeDomain input.val first second).count +
+    (payload.argumentIndices.length + payload.argumentIndices.length)
+  wireCount := (headStripWireDomain input.val payload.outputWire).count +
+    payload.argumentIndices.length
+  root := input.val.root
+  regions := input.val.regions
+  nodes := Fin.addCases
+    (fun node => input.val.nodes
+      ((headStripNodeDomain input.val first second).origin node)) fun fresh =>
+    Fin.addCases
+      (fun position =>
+        let argument := payload.firstArgument
+          (payload.argumentIndices.get position)
+        .term payload.region argument.freeSupport.length argument.compact)
+      (fun position =>
+        let argument := payload.secondArgument
+          (payload.argumentIndices.get position)
+        .term payload.region argument.freeSupport.length argument.compact)
+      fresh
+  wires := Fin.addCases
+    (fun wire =>
+      let originalId :=
+        (headStripWireDomain input.val payload.outputWire).origin wire
+      let original := input.val.wires originalId
+      { scope := original.scope
+        endpoints := (original.endpoints.filterMap
+            (headStripEndpoint? (headStripNodeDomain input.val first second))).map
+              (headStripLiftEndpoint
+                (payload.argumentIndices.length + payload.argumentIndices.length)) ++
+          payload.firstReducedFreeEndpoints originalId ++
+          payload.secondReducedFreeEndpoints originalId })
+    (fun position =>
+      { scope := payload.region
+        endpoints := [
+          { node := payload.firstReducedNode position, port := .output },
+          { node := payload.secondReducedNode position, port := .output }
+        ] })
+
 def headStripWireProvenance (input : Diagram.CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second) :
     WireProvenance input.val (headStripRaw input payload) :=
-  WireProvenance.append input.val (headStripRaw input payload)
-    payload.argumentIndices.length rfl
+  let domain := headStripWireDomain input.val payload.outputWire
+  WireProvenance.rootFiltered input.val (headStripRaw input payload)
+    (fun wire => (domain.index? wire).map fun compact =>
+      Fin.castAdd payload.argumentIndices.length compact) (by
+        intro left right mapped hleft hright
+        rw [Option.map_eq_some_iff] at hleft hright
+        obtain ⟨leftIndex, hleftIndex, hleftMapped⟩ := hleft
+        obtain ⟨rightIndex, hrightIndex, hrightMapped⟩ := hright
+        have indexEq : leftIndex = rightIndex := by
+          apply Fin.ext
+          simpa using congrArg Fin.val (hleftMapped.trans hrightMapped.symm)
+        subst rightIndex
+        have leftOrigin := (domain.index?_eq_some_iff left leftIndex).mp hleftIndex
+        have rightOrigin := (domain.index?_eq_some_iff right leftIndex).mp hrightIndex
+        exact leftOrigin.symm.trans rightOrigin)
 
 def headStripInterfaceTransport (input : Diagram.CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
     (payload : HeadStripPayload input first second) :
     InterfaceTransport input.val (headStripRaw input payload) :=
-  InterfaceTransport.append input.val (headStripRaw input payload)
-    payload.argumentIndices.length rfl
+  let domain := headStripWireDomain input.val payload.outputWire
+  InterfaceTransport.rootFiltered input.val (headStripRaw input payload)
+    (fun wire => (domain.index? wire).map fun compact =>
+      Fin.castAdd payload.argumentIndices.length compact)
 
 def applyHeadStrip (input : Diagram.CheckedDiagram signature)
     {first second : Fin input.val.nodeCount}
@@ -2435,6 +2633,61 @@ theorem headStrip_entails
       representatives representatives_quote
   exact firstQuoted.trans (quotedEquivalent.trans secondQuoted.symm)
 
+/-- Congruence is the converse half of rigid-head decomposition: equality of
+every aligned argument abstraction reconstructs equality of the two complete
+rigid-headed terms in the canonical model. -/
+theorem headStrip_reflects
+    {ports : Nat} {a b : Term 0 (Fin ports)}
+    {sa sb : HeadSpine 0 (Fin ports)}
+    (ha : headSpine a = some sa)
+    (hb : headSpine b = some sb)
+    (sameBinders : sa.binders = sb.binders)
+    (headIndex : Fin sa.binders)
+    (firstHead : sa.head = .bound headIndex)
+    (secondHead : sb.head = .bound (Fin.cast sameBinders headIndex))
+    (sameLength : sa.args.length = sb.args.length)
+    (environment : Fin ports → Individual)
+    (argumentsEqual : ∀ index (valid : index < sa.args.length),
+      canonicalModel.eval
+          (prefixClose sa.binders (sa.args.get ⟨index, valid⟩)) environment =
+        canonicalModel.eval
+          (prefixClose sb.binders
+            (sb.args.get ⟨index, sameLength ▸ valid⟩)) environment) :
+    canonicalModel.eval a environment = canonicalModel.eval b environment := by
+  classical
+  let representatives : Fin ports → ClosedTerm := fun port =>
+    Classical.choose (Quotient.exists_rep (environment port))
+  have representatives_quote : ∀ port,
+      quote (representatives port) = environment port := by
+    intro port
+    exact Classical.choose_spec (Quotient.exists_rep (environment port))
+  have argumentEquivalent : ∀ index (valid : index < sa.args.length),
+      BetaEta
+        ((prefixClose sa.binders (sa.args.get ⟨index, valid⟩)).bindFree
+          representatives)
+        ((prefixClose sb.binders
+          (sb.args.get ⟨index, sameLength ▸ valid⟩)).bindFree
+            representatives) := by
+    intro index valid
+    apply quote_eq_iff.mp
+    have firstQuoted := canonicalModel_eval_eq_quote
+      (prefixClose sa.binders (sa.args.get ⟨index, valid⟩)) environment
+      representatives representatives_quote
+    have secondQuoted := canonicalModel_eval_eq_quote
+      (prefixClose sb.binders
+        (sb.args.get ⟨index, sameLength ▸ valid⟩)) environment
+      representatives representatives_quote
+    exact firstQuoted.symm.trans
+      ((argumentsEqual index valid).trans secondQuoted)
+  have equivalent := rigidHead_of_args_bindFree_bound ha hb sameBinders
+    headIndex firstHead secondHead sameLength representatives argumentEquivalent
+  have leftEvaluation := canonicalModel_eval_eq_quote a environment
+    representatives representatives_quote
+  have rightEvaluation := canonicalModel_eval_eq_quote b environment
+    representatives representatives_quote
+  exact leftEvaluation.trans
+    ((Quotient.sound equivalent).trans rightEvaluation.symm)
+
 theorem HeadStripPayload.argumentEvaluationsEqual
     {signature : List Nat} {input : Diagram.CheckedDiagram signature}
     {first second : Fin input.val.nodeCount}
@@ -2479,13 +2732,11 @@ theorem HeadStripPayload.originalArgumentEvaluationsEqual
     HeadSpine.mapFree, HeadStripPayload.firstArgument,
     HeadStripPayload.secondArgument, prefixClose_mapFree] using h
 
-theorem headStrip_addition_equiv (original arguments : Prop)
-    (entailed : original → arguments) :
-    original ↔ original ∧ arguments := by
-  constructor
-  · intro horiginal
-    exact ⟨horiginal, entailed horiginal⟩
-  · exact And.left
+theorem headStrip_replacement_equiv (original arguments : Prop)
+    (decompose : original → arguments)
+    (reconstruct : arguments → original) :
+    original ↔ arguments :=
+  ⟨decompose, reconstruct⟩
 
 /-- A closed term always supplies its own fresh existential equality witness. -/
 theorem closedTermIntro_valid
