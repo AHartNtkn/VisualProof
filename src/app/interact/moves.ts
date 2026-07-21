@@ -448,7 +448,13 @@ export class ProofMoveController {
       return true
     }
     if (sample.key === 'Delete' || sample.key === 'Backspace') {
-      const step = contextualDeleteStep(this.#options.diagram(), discovery, this.#options.fuel())
+      let step: ProofStep | null
+      try {
+        step = contextualDeleteStep(this.#options.diagram(), discovery, this.#options.fuel())
+      } catch (error) {
+        this.#options.refuse(error instanceof Error ? error.message : String(error), this.#lastPointer)
+        return true
+      }
       if (step === null) this.#options.refuse('nothing here reads as a deletion', this.#lastPointer)
       else this.#commit(step)
       return true

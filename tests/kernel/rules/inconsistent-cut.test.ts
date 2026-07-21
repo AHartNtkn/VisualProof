@@ -251,6 +251,34 @@ describe('applyInconsistentCutElim', () => {
       .toThrowError(RuleError)
   })
 
+  it.each(['first', 'second'] as const)('rejects a missing %s certificate node with DiagramError', (side) => {
+    const { diagram, cut, first, second } = closedPair()
+
+    expect(() => applyInconsistentCutElim(
+      diagram,
+      cut,
+      side === 'first' ? 'missing' : first,
+      side === 'second' ? 'missing' : second,
+      emptyCertificate,
+    )).toThrowError(DiagramError)
+  })
+
+  it.each(['first', 'second'] as const)('rejects a non-term %s certificate node with RuleError', (side) => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const term = builder.termNode(cut, I)
+    const nonTerm = builder.ref(cut, 'not-a-term', 0)
+    const diagram = builder.build()
+
+    expect(() => applyInconsistentCutElim(
+      diagram,
+      cut,
+      side === 'first' ? nonTerm : term,
+      side === 'second' ? nonTerm : term,
+      emptyCertificate,
+    )).toThrowError(RuleError)
+  })
+
   it('rejects repeated node IDs', () => {
     const { diagram, cut, first } = closedPair()
 

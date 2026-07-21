@@ -149,8 +149,10 @@ function inconsistentController(
   orientation: 'forward' | 'backward',
   fuel = 64,
   host: HTMLElement = { ownerDocument: {} } as HTMLElement,
+  firstSource?: string,
+  secondSource?: string,
 ) {
-  const fixture = inconsistentCut()
+  const fixture = inconsistentCut(firstSource, secondSource)
   const steps: ProofStep[] = []
   const refusals: string[] = []
   let selection: Hit[] = [{ kind: 'region', id: fixture.cut }]
@@ -363,6 +365,27 @@ describe('inconsistent-cut interaction dispatch', () => {
     expect(forward.controller.keyDown(key('Delete'))).toBe(true)
     expect(backward.controller.keyDown(key('Delete'))).toBe(true)
     expect(backward.steps).toEqual(forward.steps)
+  })
+
+  it.each([
+    ['Backspace', 'forward'],
+    ['Backspace', 'backward'],
+    ['Delete', 'forward'],
+    ['Delete', 'backward'],
+  ] as const)('%s in %s consumes undecided authoring and reports the refusal', (pressed, orientation) => {
+    const fixture = inconsistentController(
+      orientation,
+      1,
+      undefined,
+      '(\\x. x x) (\\x. x x)',
+      '\\x. x',
+    )
+    let consumed: boolean | undefined
+
+    expect(() => { consumed = fixture.controller.keyDown(key(pressed)) }).not.toThrow()
+    expect(consumed).toBe(true)
+    expect(fixture.steps).toEqual([])
+    expect(fixture.refusals).toEqual(['inconsistency is undecided under the current fuel'])
   })
 
   it('authors and commits the same proof step from the contextual menu', () => {
