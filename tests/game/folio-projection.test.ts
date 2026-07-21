@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { diagramToJson } from '../../src/kernel/diagram/json'
 import { certifyCompletedArtifact } from '../../src/game/artifact-theorem'
 import { createInitialGameState } from '../../src/game/controller-state'
 import { projectFolio } from '../../src/game/interface/folio-projection'
@@ -77,6 +78,15 @@ describe('production excavation folio projection', () => {
     expect(archive.cultures[1]!.records.map(({ levelNumber }) => levelNumber)).toEqual(
       Array.from({ length: 18 }, (_, index) => index + 1),
     )
+    const first = catalog.puzzleIds[0]!
+    const fingerprint = catalog.puzzleFingerprint(first)
+    expect(archive.cultures[0]!.records[0]!.preview).toEqual({
+      key: `cursebreaker-thumbnail:dark-slate-v1:${fingerprint}:640x400`,
+      fingerprint,
+      diagram: diagramToJson(catalog.puzzle(first).diagram),
+      width: 640,
+      height: 400,
+    })
     expect(archive.cultures[0]!.records.map(({ status }) => status)).toEqual([
       ...Array.from({ length: 6 }, () => 'completed'),
       'unlocked',
@@ -112,6 +122,7 @@ describe('production excavation folio projection', () => {
     expect(sealed).toMatchObject({ id: packet, restrictedPacket: true, status: 'locked' })
     expect(released).toMatchObject({ id: packet, restrictedPacket: true, status: 'completed' })
     expect(released?.levelNumber).toBe(sealed?.levelNumber)
+    expect(released?.preview).toEqual(sealed?.preview)
   })
 
   it('allows theorem dragging only from completed records while a puzzle is active', () => {

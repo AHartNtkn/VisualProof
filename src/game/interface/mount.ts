@@ -23,6 +23,10 @@ import {
 import { mountLensEnvironment, type MountedLensEnvironment } from './lens-environment'
 import { mountFolioView, type MountedFolioView } from './folio-view'
 import { projectFolio } from './folio-projection'
+import {
+  createBrowserPuzzlePreviewService,
+  type PuzzlePreviewService,
+} from './puzzle-preview-service'
 import { gameProofMotionPreferences } from './proof-motion'
 import { GameProofViewport, type GameProofViewportDebug } from './proof-surface'
 import { mountTimelineLever, type MountedTimelineLever } from './timeline-lever'
@@ -114,6 +118,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
   readonly #platform: CursebreakerPlatform
   readonly #environment: MountedLensEnvironment
   readonly #presentation: MountedGamePresentationView
+  readonly #previewService: PuzzlePreviewService
   #state: GameControllerState
   #folio: MountedFolioView | null = null
   #proof: GameProofViewport | null = null
@@ -146,6 +151,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     const runtimeWindow = options.host.ownerDocument.defaultView
     if (runtimeWindow === null) throw new Error('Cursebreaker must mount in a live window')
     this.#window = runtimeWindow
+    this.#previewService = createBrowserPuzzlePreviewService()
 
     options.host.replaceChildren()
     this.#environment = mountLensEnvironment({
@@ -201,6 +207,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#timeline.dispose()
     this.#folio?.dispose()
     this.#folio = null
+    this.#previewService.dispose()
     this.#clearRefusal()
     this.#presentation.dispose()
     this.#environment.dispose()
@@ -365,6 +372,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#folio = mountFolioView({
       host: this.#environment.folioHost,
       projection: projectFolio(this.#catalog, this.#state, this.#state.mode),
+      previewService: this.#previewService,
       inputAllowed: () => this.#folioInputAllowed(),
       onSelectPuzzle: (puzzle) => this.dispatch({ kind: 'selectPuzzle', puzzle }),
       onRefusePuzzle: (puzzle) => this.dispatch({ kind: 'selectPuzzle', puzzle }),

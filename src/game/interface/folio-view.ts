@@ -2,6 +2,10 @@ import type { CultureId, PuzzleId } from '../types'
 import { clampSheetScroll } from './folio-layout'
 import type { FolioProjection, FolioRecordProjection } from './folio-projection'
 import { FolioMotion, type FolioMotionClock } from './folio-motion'
+import type {
+  PuzzlePreviewService,
+  PuzzlePreviewState,
+} from './puzzle-preview-service'
 import './folio.css'
 import './folio-motion.css'
 
@@ -14,6 +18,7 @@ export type FolioDragSample = {
 export type FolioViewOptions = {
   readonly host: HTMLElement
   readonly projection: FolioProjection
+  readonly previewService?: PuzzlePreviewService
   readonly inputAllowed?: () => boolean
   readonly motionClock?: FolioMotionClock
   readonly onSelectPuzzle: (puzzle: PuzzleId) => void
@@ -142,6 +147,18 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const recordElements = new Map<PuzzleId, HTMLElement>()
   const recordItems = new Map<PuzzleId, HTMLLIElement>()
   const cultureElements = new Map<CultureId, HTMLButtonElement>()
+  const previewStates = new Map<string, PuzzlePreviewState>()
+  const previewElements = new Map<string, Set<{
+    readonly frame: HTMLElement
+    readonly image: HTMLImageElement
+    readonly status: HTMLElement
+  }>>()
+  const previewSubscriptions = new Map<Element, () => void>()
+  const pendingPreviews = new Map<Element, FolioRecordProjection>()
+  const failedPreviews = new Map<Element, {
+    readonly record: FolioRecordProjection
+    exited: boolean
+  }>()
   let current = options.projection
   let coverState: 'open' | 'closed' = current.mode === 'archive' ? 'closed' : 'open'
   let activeDrag: ActiveDrag | null = null
@@ -149,6 +166,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   let recordGeneration = 0
   let restrictionTarget: HTMLElement | null = null
   let restrictionGeneration = 0
+  let previewObserver: IntersectionObserver | null = null
   let disposed = false
   const inputAllowed = (): boolean => options.inputAllowed?.() ?? true
 
@@ -167,6 +185,98 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       if (record !== undefined) return record
     }
     return null
+  }
+
+  const applyPreviewState = (
+    target: { readonly frame: HTMLElement; readonly image: HTMLImageElement; readonly status: HTMLElement },
+    state: PuzzlePreviewState,
+  ): void => {
+    target.frame.dataset.previewState = state.kind
+    if (state.kind === 'ready') {
+      target.image.src = state.url
+      target.status.textContent = ''
+      return
+    }
+    target.image.src = ''
+    target.status.textContent = state.kind === 'preparing'
+      ? 'Preparing preview…'
+      : 'Preview unavailable'
+  }
+
+  const publishPreview = (record: FolioRecordProjection, state: PuzzlePreviewState): void => {
+    previewStates.set(record.preview.key, state)
+    for (const target of previewElements.get(record.preview.key) ?? []) {
+      applyPreviewState(target, state)
+    }
+  }
+
+  const requestPreview = (target: Element, record: FolioRecordProjection): void => {
+    if (previewSubscriptions.has(target) || options.previewService === undefined) return
+    const remembered = previewStates.get(record.preview.key)
+    if (remembered?.kind === 'ready'
+      && options.previewService.currentUrl(record.preview.key) === remembered.url) return
+    if (remembered?.kind === 'ready') publishPreview(record, { kind: 'preparing' })
+    let terminal = false
+    const cancel = options.previewService.subscribe(
+      record.preview,
+      (state) => {
+        publishPreview(record, state)
+        if (state.kind === 'preparing') return
+        terminal = true
+        previewSubscriptions.get(target)?.()
+        previewSubscriptions.delete(target)
+        if (state.kind !== 'error' || previewObserver === null) return
+        previewObserver.unobserve(target)
+        failedPreviews.set(target, { record, exited: false })
+        previewObserver.observe(target)
+      },
+    )
+    if (terminal) cancel()
+    else previewSubscriptions.set(target, cancel)
+  }
+
+  const failPreviewImage = (record: FolioRecordProjection): void => {
+    options.previewService?.invalidate(record.preview.key)
+    publishPreview(record, { kind: 'error', message: 'preview image could not be decoded' })
+    for (const target of previewElements.get(record.preview.key) ?? []) {
+      previewSubscriptions.get(target.frame)?.()
+      previewSubscriptions.delete(target.frame)
+      if (previewObserver === null) continue
+      previewObserver.unobserve(target.frame)
+      failedPreviews.set(target.frame, { record, exited: false })
+      previewObserver.observe(target.frame)
+    }
+  }
+
+  const clearPreviewBindings = (): void => {
+    previewObserver?.disconnect()
+    for (const cancel of previewSubscriptions.values()) cancel()
+    previewSubscriptions.clear()
+    pendingPreviews.clear()
+    failedPreviews.clear()
+    previewElements.clear()
+    previewStates.clear()
+  }
+
+  const PreviewObserver = document.defaultView?.IntersectionObserver
+  if (PreviewObserver !== undefined) {
+    previewObserver = new PreviewObserver((entries) => {
+      for (const entry of entries) {
+        const failed = failedPreviews.get(entry.target)
+        if (failed !== undefined) {
+          if (!entry.isIntersecting) {
+            failed.exited = true
+          } else if (failed.exited) {
+            failedPreviews.delete(entry.target)
+            requestPreview(entry.target, failed.record)
+          }
+          continue
+        }
+        if (!entry.isIntersecting) continue
+        const record = pendingPreviews.get(entry.target)
+        if (record !== undefined) requestPreview(entry.target, record)
+      }
+    }, { root: sheet, rootMargin: '240px 0px' })
   }
 
   const clearRestriction = (): void => {
@@ -192,15 +302,42 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   const appendRecordFace = (
     target: HTMLElement,
     record: FolioRecordProjection,
+    schedulePreview = true,
   ): void => {
     const face = element(document, 'span', 'record-face')
+    const frame = element(document, 'span', 'curse-folio-puzzle-preview-frame')
+    frame.setAttribute('aria-hidden', 'true')
+    const image = element(document, 'img', 'curse-folio-puzzle-preview')
+    image.alt = ''
+    image.setAttribute('aria-hidden', 'true')
+    image.addEventListener('error', () => {
+      if (frame.dataset.previewState === 'ready') failPreviewImage(record)
+    })
+    const status = element(document, 'span', 'curse-folio-puzzle-preview-status')
+    frame.append(image, status)
+    const previewTarget = { frame, image, status }
+    const state = previewStates.get(record.preview.key) ?? { kind: 'preparing' as const }
+    applyPreviewState(previewTarget, state)
+    if (schedulePreview) {
+      let elements = previewElements.get(record.preview.key)
+      if (elements === undefined) {
+        elements = new Set()
+        previewElements.set(record.preview.key, elements)
+      }
+      elements.add(previewTarget)
+      if (previewObserver === null) requestPreview(frame, record)
+      else {
+        pendingPreviews.set(frame, record)
+        previewObserver.observe(frame)
+      }
+    }
     const name = element(document, 'strong', 'curse-folio-record-name')
     name.textContent = `${record.levelNumber}. ${record.name}`
     const accession = element(document, 'small', 'curse-folio-record-accession')
     accession.textContent = record.accession ?? 'Catalog entry pending accession'
     const summary = element(document, 'span', 'curse-folio-record-summary')
     summary.textContent = record.summary
-    face.append(name, accession, summary)
+    face.append(frame, name, accession, summary)
     target.append(face)
   }
 
@@ -345,7 +482,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     node.setPointerCapture(event.pointerId)
     node.classList.add('is-inspection-source')
     inspectionRecord.replaceChildren()
-    appendRecordFace(inspectionRecord, record)
+    appendRecordFace(inspectionRecord, record, false)
     inspectionRecord.dataset.liftedPuzzle = record.id
     inspectionRecord.dataset.status = record.status
     inspectionStage.setAttribute('aria-hidden', 'false')
@@ -428,6 +565,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
   }
 
   const render = (previous: FolioProjection | null): void => {
+    clearPreviewBindings()
     cancelActiveDrag()
     clearRestriction()
     root.dataset.mode = current.mode
@@ -531,6 +669,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       inspectionPositioner.style.removeProperty('--folio-drag-y')
       inspectionStage.setAttribute('aria-hidden', 'true')
       options.host.classList.remove('is-folio-drag-owner')
+      clearPreviewBindings()
       clearRestriction()
       listeners.abort()
       motion.settleAll()

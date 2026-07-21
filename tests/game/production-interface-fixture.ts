@@ -6,6 +6,13 @@ import { cultureId, puzzleId } from '../../src/game/types'
 
 const culture = cultureId('browser-culture')
 const completed = puzzleId('browser-completed-record')
+const preview = {
+  key: 'fixture:browser-completed-record',
+  fingerprint: 'browser-completed-record',
+  diagram: null,
+  width: 640 as const,
+  height: 400 as const,
+}
 const projection: FolioProjection = {
   mode: 'puzzle',
   selectedCulture: culture,
@@ -28,10 +35,10 @@ const projection: FolioProjection = {
       affordance: 'drag-theorem',
       priority: false,
       restrictedPacket: false,
+      preview,
     }],
   }],
 }
-
 const lensHost = document.querySelector<HTMLElement>('#lens-host')!
 const lens = mountLensEnvironment({
   host: lensHost,

@@ -16,6 +16,14 @@ const additionalRecords = [
   puzzleId('catalog-seal-4'),
 ] as const
 
+const preview = (id: string) => ({
+  key: `fixture:${id}`,
+  fingerprint: id,
+  diagram: null,
+  width: 640 as const,
+  height: 400 as const,
+})
+
 const record = (
   id: ReturnType<typeof puzzleId>,
   status: 'completed' | 'locked' | 'unlocked',
@@ -32,6 +40,7 @@ const record = (
   affordance: id === completed ? 'drag-theorem' as const : 'inert' as const,
   priority: false,
   restrictedPacket,
+  preview: preview(id),
 })
 
 const baseProjection = (): FolioProjection => ({

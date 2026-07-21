@@ -55,7 +55,10 @@ const openGame = async (page: Page): Promise<void> => {
 
 const openFirstPuzzle = async (page: Page): Promise<void> => {
   await openGame(page)
-  await page.locator('[data-puzzle="two-veils"]').click()
+  const record = page.locator('[data-puzzle="two-veils"]')
+  await expect(record.locator('.curse-folio-puzzle-preview-frame[data-preview-state="ready"]'))
+    .toBeVisible()
+  await record.click()
   await expect(page.locator('.curse-game-proof-canvas')).toBeVisible()
 }
 
@@ -71,6 +74,10 @@ test('one-product boot', async ({ page }) => {
   await expect(page.locator('#cursebreaker')).toBeVisible()
   await expect(page.locator('.curse-production-lens')).toBeVisible()
   await expect(page.locator('[data-puzzle="two-veils"]')).toBeVisible()
+  await expect(page.locator('[data-puzzle="two-veils"] .curse-folio-puzzle-preview-frame[data-preview-state="ready"]'))
+    .toBeVisible()
+  await page.locator('[data-puzzle="two-veils"]').hover()
+  await expect(page.locator('.curse-folio-puzzle-preview-inspection')).toHaveCount(0)
   await expect(page.locator('.curse-game-proof-canvas')).toHaveCount(0)
   await page.locator('[data-puzzle="two-veils"]').click()
   await expect(page.locator('.curse-game-proof-canvas')).toBeVisible()
