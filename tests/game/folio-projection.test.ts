@@ -1,10 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { diagramToJson } from '../../src/kernel/diagram/json'
-import { certifyCompletedArtifact } from '../../src/game/artifact-theorem'
 import { createInitialGameState } from '../../src/game/controller-state'
 import { projectFolio } from '../../src/game/interface/folio-projection'
-import { cultureId, puzzleId, type CompletedArtifact, type PuzzleId } from '../../src/game/types'
-import { singleStepAction } from '../../src/kernel/proof/action'
+import { cultureId, puzzleId, type PuzzleId } from '../../src/game/types'
 import { buildTestCatalog, minimalPuzzle, minimalSource, type TestCatalogSource } from './catalog-fixture'
 
 const FIELD = cultureId('field-culture')
@@ -39,28 +37,16 @@ function largeSource(): TestCatalogSource {
   }
 }
 
-const completedArtifacts = (
-  catalog: ReturnType<typeof buildTestCatalog>,
-  ids: readonly PuzzleId[],
-): ReadonlyMap<PuzzleId, CompletedArtifact> => {
-  let completed = new Map<PuzzleId, CompletedArtifact>()
-  const witness = minimalPuzzle().witness
-  const actions = witness.map((step) => singleStepAction(step.rule, step))
-  for (const id of ids) {
-    const artifact = certifyCompletedArtifact(catalog, completed, catalog.puzzle(id), actions)
-    completed = new Map(completed).set(id, artifact)
-  }
-  return completed
-}
+const completedPuzzles = (ids: readonly PuzzleId[]): ReadonlySet<PuzzleId> => new Set(ids)
 
 describe('production excavation folio projection', () => {
   it('keeps dozens of cultures and records in catalog order with real progress statuses', () => {
     const catalog = buildTestCatalog(largeSource())
     const initial = createInitialGameState(catalog, { reducedMotion: false })
-    const completed = completedArtifacts(catalog, catalog.puzzleIds.slice(0, 6))
+    const completed = completedPuzzles(catalog.puzzleIds.slice(0, 6))
     const state = {
       ...initial,
-      completedArtifacts: completed,
+      completedPuzzles: completed,
       scrollByCulture: new Map([
         [FIELD, 312],
         [VAULT, 47],
@@ -116,7 +102,7 @@ describe('production excavation folio projection', () => {
       .find(({ restrictedPacket }) => restrictedPacket)
     const released = projectFolio(catalog, {
       ...initial,
-      completedArtifacts: completedArtifacts(catalog, catalog.puzzleIds),
+      completedPuzzles: completedPuzzles(catalog.puzzleIds),
     }, 'archive').cultures[1]!.records.find(({ restrictedPacket }) => restrictedPacket)
 
     expect(sealed).toMatchObject({ id: packet, restrictedPacket: true, status: 'locked' })
@@ -125,14 +111,14 @@ describe('production excavation folio projection', () => {
     expect(released?.preview).toEqual(sealed?.preview)
   })
 
-  it('allows theorem dragging only from completed records while a puzzle is active', () => {
+  it('allows artifact dragging only from completed records while a puzzle is active', () => {
     const catalog = buildTestCatalog(largeSource())
     const initial = createInitialGameState(catalog, { reducedMotion: false })
-    const completed = completedArtifacts(catalog, catalog.puzzleIds.slice(0, 3))
-    const projection = projectFolio(catalog, { ...initial, completedArtifacts: completed }, 'puzzle')
+    const completed = completedPuzzles(catalog.puzzleIds.slice(0, 3))
+    const projection = projectFolio(catalog, { ...initial, completedPuzzles: completed }, 'puzzle')
 
     expect(projection.cultures[0]!.records.slice(0, 5).map(({ affordance }) => affordance))
-      .toEqual(['drag-theorem', 'drag-theorem', 'drag-theorem', 'inert', 'inert'])
+      .toEqual(['drag-artifact', 'drag-artifact', 'drag-artifact', 'inert', 'inert'])
     expect(projection.cultures[1]!.records.every(({ affordance }) => affordance === 'inert'))
       .toBe(true)
   })
@@ -140,8 +126,8 @@ describe('production excavation folio projection', () => {
   it('preserves catalog order and progress while making completion records inert', () => {
     const catalog = buildTestCatalog(largeSource())
     const initial = createInitialGameState(catalog, { reducedMotion: false })
-    const completed = completedArtifacts(catalog, catalog.puzzleIds.slice(0, 6))
-    const projection = projectFolio(catalog, { ...initial, completedArtifacts: completed }, 'completion')
+    const completed = completedPuzzles(catalog.puzzleIds.slice(0, 6))
+    const projection = projectFolio(catalog, { ...initial, completedPuzzles: completed }, 'completion')
 
     expect(projection.mode).toBe('completion')
     expect(projection.cultures[0]!.records.map(({ id }) => id)).toEqual(

@@ -1,12 +1,11 @@
 import { polarity } from '../../kernel/diagram/regions'
-import type { ProofAction } from '../../kernel/proof/action'
 import { DARK } from '../../view/paint'
 import type { Vec2 } from '../../view/vec'
-import { artifactTheoremContext } from '../artifact-theorem'
 import type { GameCatalog } from '../catalog'
 import type {
   GameControllerState,
 } from '../controller-state'
+import { snapshotGameControllerState } from '../controller-state'
 import {
   reduceGame,
   type GameAction,
@@ -14,7 +13,7 @@ import {
 } from '../controller'
 import type { CursebreakerPlatform } from '../platform'
 import { decodeGameSave, encodeGameSave } from '../save'
-import { currentDiagram, type GameSession } from '../session'
+import { currentDiagram, type GameSession, type GameSessionAction } from '../session'
 import { GameDomainError } from '../types'
 import {
   EMPTY_ARCHIVE_SUBSTRATE_SEED,
@@ -130,9 +129,11 @@ export class CursebreakerRuntime implements MountedCursebreaker {
   #refusal: HTMLOutputElement | null = null
   #refusalTimer: number | null = null
   #writeQueue: Promise<void> = Promise.resolve()
+  #saveWriteActive = false
+  #pendingSaveState: GameControllerState | null = null
   #effectQueue: Promise<void> = Promise.resolve()
   #saveFailure: unknown = null
-  #latestSave: unknown
+  #latestSave: unknown | null = null
   #removeExitListener: () => void
   #exitQueued = false
   #disposed = false
@@ -147,7 +148,6 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#catalog = options.catalog
     this.#platform = options.platform
     this.#state = options.state
-    this.#latestSave = encodeGameSave(this.#catalog, this.#state)
     const runtimeWindow = options.host.ownerDocument.defaultView
     if (runtimeWindow === null) throw new Error('Cursebreaker must mount in a live window')
     this.#window = runtimeWindow
@@ -238,7 +238,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
         client: this.canvasToClient(body.pos),
       }])
     return {
-      state: this.#state,
+      state: snapshotGameControllerState(this.#state),
       substrateSeed: this.#substrateSeed(this.#state),
       proof: this.#proof?.debug() ?? null,
       timeline: session === null ? null : {
@@ -272,7 +272,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
 
   #activeSession(state: GameControllerState): GameSession | null {
     if (state.mode !== 'puzzle' || state.activePuzzle === null) return null
-    return (state.completedArtifacts.has(state.activePuzzle)
+    return (state.completedPuzzles.has(state.activePuzzle)
       ? state.replays
       : state.firstAttempts).get(state.activePuzzle) ?? null
   }
@@ -290,9 +290,8 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     keepLiveFolio = false,
   ): void {
     this.#state = next
-    this.#latestSave = encodeGameSave(this.#catalog, next)
     this.#reconcile(previous, next, proofWillReconcile, keepLiveFolio)
-    this.#enqueueSave(this.#latestSave)
+    this.#enqueueSave(next)
   }
 
   #commitPreparedSteps(
@@ -311,7 +310,7 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       ...current,
       mode: authoritative.mode,
       activePuzzle: authoritative.activePuzzle,
-      completedArtifacts: authoritative.completedArtifacts,
+      completedPuzzles: authoritative.completedPuzzles,
       firstAttempts: authoritative.firstAttempts,
       replays: authoritative.replays,
       deliveredGuidance: authoritative.deliveredGuidance,
@@ -383,15 +382,15 @@ export class CursebreakerRuntime implements MountedCursebreaker {
           this.dispatch({ kind: 'setCultureScroll', culture, scroll })
         }
       },
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: (puzzle, sample) => {
+      onArtifactDragStart: () => {},
+      onArtifactDragMove: () => {},
+      onArtifactDragEnd: (puzzle, sample) => {
         this.#proof?.dropArtifact(this.#catalog.puzzle(puzzle), {
           x: sample.clientX,
           y: sample.clientY,
         })
       },
-      onTheoremDragCancel: () => {},
+      onArtifactDragCancel: () => {},
     })
   }
 
@@ -441,14 +440,15 @@ export class CursebreakerRuntime implements MountedCursebreaker {
       overlayHost: this.#environment.element,
       diagram: () => currentDiagram(this.#requireActiveSession()),
       boundary: () => [],
-      context: () => artifactTheoremContext(this.#catalog, this.#state.completedArtifacts),
+      context: () => this.#catalog.context,
+      artifactAvailable: (id) => this.#state.completedPuzzles.has(id),
       orientation: () => 'backward',
       theme: () => DARK,
       fuel: () => 256,
-      prepare: (action: ProofAction) => {
+      prepare: (action: GameSessionAction) => {
         const preparedFrom = this.#state
         const prepared = reduceGame(this.#catalog, preparedFrom, {
-          kind: 'applyProofAction', action,
+          kind: 'applySessionAction', action,
         })
         return () => this.#commitPreparedSteps(preparedFrom, prepared)
       },
@@ -505,8 +505,23 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     return this.#state.mode !== 'completion' && this.#state.transient === null
   }
 
-  #enqueueSave(document: unknown): void {
-    const queued = this.#writeQueue.then(() => this.#platform.writeSave(document))
+  #enqueueSave(state: GameControllerState): void {
+    this.#pendingSaveState = state
+    if (this.#saveWriteActive || this.#saveFailure !== null) return
+    this.#saveWriteActive = true
+    const queued = Promise.resolve().then(async () => {
+      try {
+        while (this.#pendingSaveState !== null) {
+          const pending = this.#pendingSaveState
+          this.#pendingSaveState = null
+          const document = encodeGameSave(this.#catalog, pending)
+          this.#latestSave = document
+          await this.#platform.writeSave(document)
+        }
+      } finally {
+        this.#saveWriteActive = false
+      }
+    })
     this.#writeQueue = queued
     void queued.catch((error: unknown) => {
       if (this.#saveFailure === null) this.#saveFailure = error
@@ -549,7 +564,8 @@ export class CursebreakerRuntime implements MountedCursebreaker {
     this.#exitQueued = true
     const queued = this.#effectQueue.then(async () => {
       await this.#writeQueue
-      await this.#platform.requestExit(this.#latestSave)
+      const document = this.#latestSave ?? encodeGameSave(this.#catalog, this.#state)
+      await this.#platform.requestExit(document)
     })
     this.#effectQueue = queued
     void queued.catch((error: unknown) => {

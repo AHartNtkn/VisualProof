@@ -11,6 +11,8 @@ import { drawShapes } from '../../view/canvas'
 import { existentialStubs, legPaths } from '../../view/wires'
 import type { Vec2 } from '../../view/vec'
 import type { PuzzleDefinition } from '../types'
+import type { ArtifactAction } from '../artifact'
+import type { GameSessionAction } from '../session'
 import { planArtifactDrop, type ArtifactDropPlan, type ArtifactDropTarget } from './artifact-drop'
 import { ConstructionLoupe, type ConstructionLoupeDebug } from './construction-loupe'
 import { hitTest, type Hit } from '../../interaction/hittest'
@@ -82,10 +84,11 @@ export type GameProofViewportModel = {
   diagram(): Diagram
   boundary(): readonly WireId[]
   context(): ProofContext
+  artifactAvailable(id: PuzzleDefinition['id']): boolean
   orientation(): 'forward' | 'backward'
   theme(): Theme
   fuel(): number
-  prepare(action: ProofAction): () => void
+  prepare(action: GameSessionAction): () => void
   motionPreferences(): ProofMotionPreferences
   inputAllowed(): boolean
   refuse(text: string, pointer: Vec2): void
@@ -251,8 +254,8 @@ export class GameProofViewport {
     }
     const result = planArtifactDrop({
       artifact,
+      available: this.#model.artifactAvailable(artifact.id),
       diagram: this.#model.diagram(),
-      context: this.#model.context(),
       target: this.artifactTargetAt(client),
       fuel: this.#model.fuel(),
     })
@@ -260,7 +263,7 @@ export class GameProofViewport {
       this.#model.refuse(result.reason, client)
       return result
     }
-    this.#apply(result.step)
+    this.#applyArtifactAction(result.action)
     return result
   }
 
@@ -413,6 +416,12 @@ export class GameProofViewport {
       commit()
       this.reconcileDiagram()
     }, this.#window.performance.now())
+  }
+
+  #applyArtifactAction(action: ArtifactAction): void {
+    const commit = this.#model.prepare(action)
+    commit()
+    this.reconcileDiagram()
   }
 
   #markerAt(id: string): Vec2 | null {

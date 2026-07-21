@@ -36,6 +36,7 @@ const guidance: GuidanceDefinition = {
 }
 const authority: GameRuntimeAuthority = {
   context: EMPTY_PROOF_CONTEXT,
+  artifact: () => undefined,
 }
 const openingIdentity = guidanceDeliveryIdentity(puzzle.id, opening.id)
 const recognizedIdentity = guidanceDeliveryIdentity(puzzle.id, recognizedUnwinnable.id)

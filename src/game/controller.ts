@@ -1,12 +1,16 @@
-import { artifactTheoremContext, certifyCompletedArtifact } from './artifact-theorem'
-import type { ProofAction } from '../kernel/proof/action'
 import type { GameCatalog } from './catalog'
 import {
   type GameControllerState,
   type InterfaceTextSize,
 } from './controller-state'
 import { isCultureUnlocked, isUnlocked } from './progress'
-import { applyGameAction, currentDiagram, moveCursor, startPuzzle } from './session'
+import {
+  applyGameAction,
+  currentDiagram,
+  moveCursor,
+  startPuzzle,
+  type GameSessionAction,
+} from './session'
 import { guidanceInterventionsFor, type TeacherSignal } from './teaching'
 import {
   GameDomainError,
@@ -17,7 +21,7 @@ import {
 
 export type GameAction =
   | { readonly kind: 'selectPuzzle'; readonly puzzle: PuzzleId }
-  | { readonly kind: 'applyProofAction'; readonly action: ProofAction }
+  | { readonly kind: 'applySessionAction'; readonly action: GameSessionAction }
   | { readonly kind: 'moveTimeline'; readonly cursor: number }
   | { readonly kind: 'escape' }
   | { readonly kind: 'openPause' }
@@ -67,7 +71,7 @@ const activeSession = (state: GameControllerState) => {
   if (state.mode !== 'puzzle' || state.activePuzzle === null) {
     throw new GameDomainError('a puzzle timeline is active only in puzzle mode')
   }
-  const sessions = state.completedArtifacts.has(state.activePuzzle) ? state.replays : state.firstAttempts
+  const sessions = state.completedPuzzles.has(state.activePuzzle) ? state.replays : state.firstAttempts
   const session = sessions.get(state.activePuzzle)
   if (session === undefined) {
     throw new GameDomainError(`active puzzle '${state.activePuzzle}' has no stored timeline`)
@@ -122,10 +126,10 @@ export function reduceGame(
   switch (action.kind) {
     case 'selectPuzzle': {
       const puzzle = catalog.puzzle(action.puzzle)
-      if (!isUnlocked(catalog, { completed: state.completedArtifacts }, puzzle.id)) {
+      if (!isUnlocked(catalog, { completed: state.completedPuzzles }, puzzle.id)) {
         return result(state, [{ kind: 'selectionRefused', puzzle: puzzle.id, reason: 'locked' }])
       }
-      const replay = state.completedArtifacts.has(puzzle.id)
+      const replay = state.completedPuzzles.has(puzzle.id)
       const sessions = replay ? state.replays : state.firstAttempts
       const session = sessions.get(puzzle.id) ?? startPuzzle(puzzle)
       const selected: GameControllerState = {
@@ -141,13 +145,14 @@ export function reduceGame(
       }
       return result(withGuidanceFor(catalog, selected, { kind: 'opening' }))
     }
-    case 'applyProofAction': {
+    case 'applySessionAction': {
       requireTimelineInputOwner(state)
       const puzzle = activePuzzle(catalog, state)
       const session = activeSession(state)
-      const replay = state.completedArtifacts.has(puzzle.id)
+      const replay = state.completedPuzzles.has(puzzle.id)
       const transition = applyGameAction(session, action.action, {
-        context: artifactTheoremContext(catalog, state.completedArtifacts),
+        context: catalog.context,
+        artifact: (id) => state.completedPuzzles.has(id) ? catalog.puzzle(id) : undefined,
       })
       if (transition.completedNow) {
         if (replay) {
@@ -166,18 +171,12 @@ export function reduceGame(
             transient: null,
           })
         }
-        const completedArtifact = certifyCompletedArtifact(
-          catalog,
-          state.completedArtifacts,
-          puzzle,
-          transition.session.timeline.actions.slice(0, transition.session.timeline.cursor),
-        )
         const firstAttempts = new Map(state.firstAttempts)
         firstAttempts.delete(puzzle.id)
         return result({
           ...state,
           mode: 'completion',
-          completedArtifacts: new Map(state.completedArtifacts).set(puzzle.id, completedArtifact),
+          completedPuzzles: new Set(state.completedPuzzles).add(puzzle.id),
           firstAttempts,
           completionReceipt: {
             puzzle: puzzle.id,
@@ -205,7 +204,7 @@ export function reduceGame(
       requireTimelineInputOwner(state)
       const puzzle = activePuzzle(catalog, state)
       const session = moveCursor(activeSession(state), action.cursor)
-      if (state.completedArtifacts.has(puzzle.id)) {
+      if (state.completedPuzzles.has(puzzle.id)) {
         return result(withGuidanceFor(catalog, {
           ...state,
           replays: new Map(state.replays).set(puzzle.id, session),
@@ -262,7 +261,7 @@ export function reduceGame(
       return result({ ...state, transient: null })
     case 'selectCulture': {
       catalog.culture(action.culture)
-      if (!isCultureUnlocked(catalog, { completed: state.completedArtifacts }, action.culture)) {
+      if (!isCultureUnlocked(catalog, { completed: state.completedPuzzles }, action.culture)) {
         return result(state, [{
           kind: 'cultureSelectionRefused', culture: action.culture, reason: 'locked',
         }])

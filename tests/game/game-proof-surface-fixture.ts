@@ -33,10 +33,12 @@ const surface = new GameProofViewport({
   diagram: () => diagram,
   boundary: () => [],
   context: () => EMPTY_PROOF_CONTEXT,
+  artifactAvailable: () => false,
   orientation: () => 'forward',
   theme: () => DARK,
   fuel: () => 256,
   prepare: (action) => {
+    if ('kind' in action) throw new Error('fixture does not prepare artifact actions')
     prepared++
     preparedSteps.push(...action.steps)
     const next = applyAction(diagram, action, EMPTY_PROOF_CONTEXT, 'backward')

@@ -528,11 +528,11 @@
   transform-origin: top left;
 }
 
-.inspection-positioner.is-theorem-lifted {
+.inspection-positioner.is-artifact-lifted {
   cursor: grabbing;
 }
 
-.artifact-record[data-affordance='drag-theorem'] {
+.artifact-record[data-affordance='drag-artifact'] {
   cursor: grab;
   touch-action: none;
 }

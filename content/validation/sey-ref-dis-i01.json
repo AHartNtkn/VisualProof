@@ -2,26 +2,14 @@
   "puzzle": "sey-ref-dis-i01",
   "solution": [
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:single-mark-return",
-          "at": {
-            "sel": {
-              "region": "r3",
-              "regions": [
-                "r1_0"
-              ],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "reverse"
-        }
-      ],
-      "placements": []
+      "kind": "artifactDissolve",
+      "artifact": "single-mark-return",
+      "selection": {
+        "region": "r3",
+        "regions": ["r1_0"],
+        "nodes": [],
+        "wires": []
+      }
     },
     {
       "label": "deiteration",
@@ -114,7 +102,7 @@
     "single-mark-return"
   ],
   "expectedRules": [
-    "theorem",
+    "artifactDissolve",
     "deiteration",
     "erasure",
     "vacuousElim",

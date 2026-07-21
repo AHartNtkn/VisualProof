@@ -117,7 +117,7 @@ const projection = (mode: FolioProjection['mode']): FolioProjection => ({
       unlocked: true,
       scroll: 85,
       records: [
-        { id: COMPLETED, levelNumber: 1, name: 'Completed', accession: 'A-1', summary: 'Cleared.', status: 'completed', affordance: mode === 'archive' ? 'select' : 'drag-theorem', priority: false, restrictedPacket: false, preview: preview(COMPLETED) },
+        { id: COMPLETED, levelNumber: 1, name: 'Completed', accession: 'A-1', summary: 'Cleared.', status: 'completed', affordance: mode === 'archive' ? 'select' : 'drag-artifact', priority: false, restrictedPacket: false, preview: preview(COMPLETED) },
         { id: AVAILABLE, levelNumber: 2, name: 'Available', accession: null, summary: 'Available.', status: 'unlocked', affordance: mode === 'archive' ? 'select' : 'inert', priority: true, restrictedPacket: false, preview: preview(AVAILABLE) },
         { id: LOCKED, levelNumber: 3, name: 'Locked', accession: null, summary: 'Restricted.', status: 'locked', affordance: mode === 'archive' ? 'resist' : 'inert', priority: false, restrictedPacket: true, preview: preview(LOCKED) },
       ],
@@ -149,10 +149,10 @@ describe('production excavation folio DOM view', () => {
       onSelectCulture: () => {},
       onRefuseCulture: () => {},
       onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => {},
-      onTheoremDragCancel: () => {},
+      onArtifactDragStart: () => {},
+      onArtifactDragMove: () => {},
+      onArtifactDragEnd: () => {},
+      onArtifactDragCancel: () => {},
     })
     const root = view.element as unknown as FakeElement
     const completed = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
@@ -199,10 +199,10 @@ describe('production excavation folio DOM view', () => {
       onSelectCulture: () => {},
       onRefuseCulture: () => {},
       onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => {},
-      onTheoremDragCancel: () => {},
+      onArtifactDragStart: () => {},
+      onArtifactDragMove: () => {},
+      onArtifactDragEnd: () => {},
+      onArtifactDragCancel: () => {},
     })
     const root = view.element as unknown as FakeElement
     const frame = root.querySelector(`[data-puzzle="${AVAILABLE}"]`)!
@@ -236,10 +236,10 @@ describe('production excavation folio DOM view', () => {
       onSelectCulture: () => {},
       onRefuseCulture: () => {},
       onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => {},
-      onTheoremDragCancel: () => {},
+      onArtifactDragStart: () => {},
+      onArtifactDragMove: () => {},
+      onArtifactDragEnd: () => {},
+      onArtifactDragCancel: () => {},
     })
     const root = view.element as unknown as FakeElement
     const record = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
@@ -273,10 +273,10 @@ describe('production excavation folio DOM view', () => {
       onSelectCulture: (id) => cultures.push(id),
       onRefuseCulture: (id) => refused.push(id),
       onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => {},
-      onTheoremDragCancel: () => {},
+      onArtifactDragStart: () => {},
+      onArtifactDragMove: () => {},
+      onArtifactDragEnd: () => {},
+      onArtifactDragCancel: () => {},
     })
     const root = view.element as unknown as FakeElement
     const dossier = root.querySelector('.active-dossier')!
@@ -334,10 +334,10 @@ describe('production excavation folio DOM view', () => {
       onSelectCulture: () => {},
       onRefuseCulture: () => {},
       onScroll: () => {},
-      onTheoremDragStart: (id) => calls.push(`start:${id}`),
-      onTheoremDragMove: (id) => calls.push(`move:${id}`),
-      onTheoremDragEnd: (id) => calls.push(`end:${id}`),
-      onTheoremDragCancel: (id) => calls.push(`cancel:${id}`),
+      onArtifactDragStart: (id) => calls.push(`start:${id}`),
+      onArtifactDragMove: (id) => calls.push(`move:${id}`),
+      onArtifactDragEnd: (id) => calls.push(`end:${id}`),
+      onArtifactDragCancel: (id) => calls.push(`cancel:${id}`),
     })
     const root = view.element as unknown as FakeElement
     const completed = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
@@ -349,11 +349,11 @@ describe('production excavation folio DOM view', () => {
     completed.dispatchEvent(eventWith('pointerdown', { button: 0, pointerId: 7, clientX: 30, clientY: 40 }))
     completed.dispatchEvent(eventWith('pointermove', { pointerId: 7, clientX: 44, clientY: 55 }))
     expect(completed.classList.contains('is-inspection-source')).toBe(true)
-    expect(positioner.classList.contains('is-theorem-lifted')).toBe(true)
+    expect(positioner.classList.contains('is-artifact-lifted')).toBe(true)
     expect(positioner.style.getPropertyValue('--folio-drag-x')).toBe('44px')
     expect(positioner.style.getPropertyValue('--folio-drag-y')).toBe('55px')
     completed.dispatchEvent(eventWith('pointerup', { pointerId: 7, clientX: 50, clientY: 60 }))
-    expect(positioner.classList.contains('is-theorem-lifted')).toBe(false)
+    expect(positioner.classList.contains('is-artifact-lifted')).toBe(false)
     expect(positioner.classList.contains('is-returning')).toBe(true)
     expect(root.dataset.motionRecordTarget).toBe(COMPLETED)
     expect(root.dataset.motionRecordKind).toBe('return')
@@ -379,10 +379,10 @@ describe('production excavation folio DOM view', () => {
       onSelectCulture: () => {},
       onRefuseCulture: () => {},
       onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => {},
-      onTheoremDragCancel: () => {},
+      onArtifactDragStart: () => {},
+      onArtifactDragMove: () => {},
+      onArtifactDragEnd: () => {},
+      onArtifactDragCancel: () => {},
     })
     const root = view.element as unknown as FakeElement
 
@@ -438,10 +438,10 @@ describe('production excavation folio DOM view', () => {
       onSelectCulture: () => {},
       onRefuseCulture: () => {},
       onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => calls.push('end'),
-      onTheoremDragCancel: () => calls.push('cancel'),
+      onArtifactDragStart: () => {},
+      onArtifactDragMove: () => {},
+      onArtifactDragEnd: () => calls.push('end'),
+      onArtifactDragCancel: () => calls.push('cancel'),
     })
     const root = view.element as unknown as FakeElement
     const first = root.querySelector(`[data-puzzle="${COMPLETED}"]`)!
@@ -466,7 +466,7 @@ describe('production excavation folio DOM view', () => {
     view.dispose()
     expect(calls).toEqual(['cancel', 'cancel'])
     expect(second.hasPointerCapture(12)).toBe(false)
-    expect(root.querySelector('.inspection-positioner')!.classList.contains('is-theorem-lifted'))
+    expect(root.querySelector('.inspection-positioner')!.classList.contains('is-artifact-lifted'))
       .toBe(false)
   })
 
@@ -482,10 +482,10 @@ describe('production excavation folio DOM view', () => {
       onSelectCulture: () => {},
       onRefuseCulture: () => {},
       onScroll: () => {},
-      onTheoremDragStart: () => {},
-      onTheoremDragMove: () => {},
-      onTheoremDragEnd: () => {},
-      onTheoremDragCancel: () => {},
+      onArtifactDragStart: () => {},
+      onArtifactDragMove: () => {},
+      onArtifactDragEnd: () => {},
+      onArtifactDragCancel: () => {},
     })
     const root = view.element as unknown as FakeElement
     const cover = root.querySelector('.folio-cover')!

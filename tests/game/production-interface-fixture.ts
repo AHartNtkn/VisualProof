@@ -32,7 +32,7 @@ const projection: FolioProjection = {
       accession: 'B-1',
       summary: 'A completed record used to verify drag geometry.',
       status: 'completed',
-      affordance: 'drag-theorem',
+      affordance: 'drag-artifact',
       priority: false,
       restrictedPacket: false,
       preview,
@@ -57,13 +57,13 @@ const options = {
   onSelectCulture: () => {},
   onRefuseCulture: () => {},
   onScroll: () => {},
-  onTheoremDragStart: (_puzzle: typeof completed, sample: { pointerId: number }) => {
+  onArtifactDragStart: (_puzzle: typeof completed, sample: { pointerId: number }) => {
     draggedRecord = lens.folioHost.querySelector(`[data-puzzle="${completed}"]`)
     pointerId = sample.pointerId
   },
-  onTheoremDragMove: () => {},
-  onTheoremDragEnd: () => {},
-  onTheoremDragCancel: () => cancellations.push('cancel'),
+  onArtifactDragMove: () => {},
+  onArtifactDragEnd: () => {},
+  onArtifactDragCancel: () => cancellations.push('cancel'),
 }
 let dragView: MountedFolioView = mountFolioView(options)
 
@@ -100,7 +100,7 @@ window.__productionInterfaceFixture = {
     cancellations: cancellations.length,
     connected: draggedRecord?.isConnected ?? false,
     lifted: lens.folioHost.querySelector('.inspection-positioner')
-      ?.classList.contains('is-theorem-lifted') ?? false,
+      ?.classList.contains('is-artifact-lifted') ?? false,
     returning: lens.folioHost.querySelector('.inspection-positioner')
       ?.classList.contains('is-returning') ?? false,
     sourceHidden: draggedRecord?.classList.contains('is-inspection-source') ?? false,

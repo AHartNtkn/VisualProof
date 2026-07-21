@@ -1,12 +1,9 @@
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
-import type { DiagramWithBoundary } from '../../kernel/diagram/boundary'
+import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../kernel/diagram/boundary'
 import { findOccurrences, type Occurrence } from '../../kernel/diagram/subgraph/match'
 import { occurrenceToSelection } from '../../kernel/diagram/subgraph/occurrence'
-import { mkSelection } from '../../kernel/diagram/subgraph/selection'
-import { applyStep, type ProofStep } from '../../kernel/proof/step'
-import type { ProofContext } from '../../kernel/proof/context'
+import { applyArtifactAction, type ArtifactAction } from '../artifact'
 import type { PuzzleDefinition } from '../types'
-import { artifactTheoremName } from '../artifact-theorem'
 import type { Hit } from '../../interaction/hittest'
 
 export type ArtifactDropTarget = {
@@ -23,7 +20,7 @@ export type ArtifactDropPlan =
   | {
       readonly ok: true
       readonly operation: 'dissolve' | 'manifest'
-      readonly step: Extract<ProofStep, { readonly rule: 'theorem' }>
+      readonly action: ArtifactAction
     }
   | {
       readonly ok: false
@@ -33,8 +30,8 @@ export type ArtifactDropPlan =
 
 export type ArtifactDropRequest = {
   readonly artifact: PuzzleDefinition
+  readonly available: boolean
   readonly diagram: Diagram
-  readonly context: ProofContext
   readonly target: ArtifactDropTarget
   readonly fuel: number
 }
@@ -67,9 +64,13 @@ const refusal = (code: ArtifactDropRefusalCode, reason: string): ArtifactDropPla
   reason,
 })
 
-const validates = (diagram: Diagram, step: ProofStep, context: ProofContext): boolean => {
+const validates = (
+  diagram: Diagram,
+  action: ArtifactAction,
+  artifact: PuzzleDefinition,
+): boolean => {
   try {
-    applyStep(diagram, step, context, 'backward')
+    applyArtifactAction(diagram, action, artifact)
     return true
   } catch {
     return false
@@ -82,19 +83,18 @@ const validates = (diagram: Diagram, step: ProofStep, context: ProofContext): bo
  * footprint. A wrong content hit therefore cannot degrade into an insertion.
  */
 export function planArtifactDrop(request: ArtifactDropRequest): ArtifactDropPlan {
-  const { artifact, diagram, context, target, fuel } = request
+  const { artifact, available, diagram, target, fuel } = request
   if (target.containingRegion === null || diagram.regions[target.containingRegion] === undefined) {
     return refusal('invalid-drop-target', 'the dropped artifact is outside the active seal')
   }
-  const name = artifactTheoremName(artifact.id)
-  const theorem = context.theorems.get(name)
-  if (theorem === undefined) {
+  if (!available) {
     return refusal('artifact-incomplete', 'only completed artifact records can alter a seal')
   }
+  const pattern = mkDiagramWithBoundary(artifact.diagram, [])
 
   let occurrences: readonly Occurrence[]
   try {
-    occurrences = findOccurrences(diagram, theorem.rhs, { fuel, mode: 'exact' }).matches
+    occurrences = findOccurrences(diagram, pattern, { fuel, mode: 'exact' }).matches
   } catch (error) {
     return refusal(
       'no-legal-artifact-operation',
@@ -104,40 +104,27 @@ export function planArtifactDrop(request: ArtifactDropRequest): ArtifactDropPlan
 
   if (target.hit !== null) {
     const selected = occurrences
-      .filter((occurrence) => occurrenceContains(occurrence, target.hit!, theorem.rhs))
+      .filter((occurrence) => occurrenceContains(occurrence, target.hit!, pattern))
       .sort((a, b) => occurrenceKey(a).localeCompare(occurrenceKey(b)))[0]
     if (selected !== undefined) {
-      const step: Extract<ProofStep, { readonly rule: 'theorem' }> = {
-        rule: 'theorem',
-        name,
-        direction: 'reverse',
-        at: {
-          sel: occurrenceToSelection(diagram, theorem.rhs, selected),
-          args: [...selected.attachments],
-        },
+      const action: ArtifactAction = {
+        kind: 'artifactDissolve',
+        artifact: artifact.id,
+        selection: occurrenceToSelection(diagram, pattern, selected),
       }
-      if (validates(diagram, step, context)) return { ok: true, operation: 'dissolve', step }
+      if (validates(diagram, action, artifact)) return { ok: true, operation: 'dissolve', action }
     }
   }
 
   const hitAllowsManifest = target.hit === null
     || (target.hit.kind === 'region' && target.hit.id === target.containingRegion)
   if (hitAllowsManifest) {
-    const step: Extract<ProofStep, { readonly rule: 'theorem' }> = {
-      rule: 'theorem',
-      name,
-      direction: 'forward',
-      at: {
-        sel: mkSelection(diagram, {
-          region: target.containingRegion,
-          regions: [],
-          nodes: [],
-          wires: [],
-        }),
-        args: [],
-      },
+    const action: ArtifactAction = {
+      kind: 'artifactManifest',
+      artifact: artifact.id,
+      region: target.containingRegion,
     }
-    if (validates(diagram, step, context)) return { ok: true, operation: 'manifest', step }
+    if (validates(diagram, action, artifact)) return { ok: true, operation: 'manifest', action }
   }
 
   return refusal(

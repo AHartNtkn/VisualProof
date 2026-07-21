@@ -9,10 +9,12 @@ export type GameProofInteractionRoute =
   | 'line-drag'
   | 'line-menu'
   | 'construction-loupe'
-  | 'artifact-drop'
 
-/** Exhaustive interaction ownership for every kernel proof rule. Adding a
-    kernel rule is a compile error here until the game assigns a real route. */
+type GameKernelRule = Exclude<ProofStep['rule'], 'theorem'>
+
+/** Exhaustive interaction ownership for every kernel rule exposed by the game.
+    General theorem citation is intentionally not a game mechanic; completed
+    artifacts use their own exact manifest/dissolve interaction. */
 export const GAME_PROOF_RULE_ROUTES = {
   closedTermIntro: 'empty-space-menu',
   openTermSpawn: 'empty-space-menu',
@@ -39,5 +41,4 @@ export const GAME_PROOF_RULE_ROUTES = {
   comprehensionAbstract: 'selection-menu',
   relFold: 'selection-menu',
   relUnfold: 'selection-menu',
-  theorem: 'artifact-drop',
-} as const satisfies Record<ProofStep['rule'], GameProofInteractionRoute>
+} as const satisfies Record<GameKernelRule, GameProofInteractionRoute>

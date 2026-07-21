@@ -2,24 +2,9 @@
   "puzzle": "artifact-selected-downstream-bridge",
   "solution": [
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:i-c3",
-          "at": {
-            "sel": {
-              "region": "r1",
-              "regions": [],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "forward"
-        }
-      ],
-      "placements": []
+      "kind": "artifactManifest",
+      "artifact": "i-c3",
+      "region": "r1"
     },
     {
       "label": "deiteration",
@@ -154,7 +139,7 @@
     "i-c4"
   ],
   "expectedRules": [
-    "theorem",
+    "artifactManifest",
     "deiteration",
     "erasure",
     "doubleCutElim"

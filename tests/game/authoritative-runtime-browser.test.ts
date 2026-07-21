@@ -466,7 +466,7 @@ describe('authoritative production renderer runtime', () => {
       const replacements = await page.evaluate(() =>
         window.__authoritativeRuntimeFixture.invalidSaveReplacements())
       expect(replacements).toHaveLength(1)
-      expect(replacements[0]).toMatchObject({ format: 'cursebreaker-save', version: 6, mode: 'archive' })
+      expect(replacements[0]).toMatchObject({ format: 'cursebreaker-save', version: 7, mode: 'archive' })
     } finally { await page.close() }
   })
 
@@ -481,7 +481,7 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('serializes every changed state write and reconciles authoritative fullscreen without looping', async () => {
+  it('coalesces changed states to the latest pending save and reconciles authoritative fullscreen', async () => {
     const page = await openFixture()
     try {
       await page.evaluate(() => {
@@ -496,10 +496,6 @@ describe('authoritative production renderer runtime', () => {
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.writes().length)).toBe(1)
       await page.evaluate(() => window.__authoritativeRuntimeFixture.releaseWrite(0))
       await page.waitForFunction(() => window.__authoritativeRuntimeFixture.writes().length === 2)
-      await page.evaluate(() => window.__authoritativeRuntimeFixture.releaseWrite(1))
-      await page.waitForFunction(() => window.__authoritativeRuntimeFixture.writes().length === 3)
-      await page.evaluate(() => window.__authoritativeRuntimeFixture.releaseWrite(2))
-      await page.waitForFunction(() => window.__authoritativeRuntimeFixture.writes().length === 4)
       expect(await page.evaluate(() => ({
         fullscreen: window.__authoritativeRuntimeFixture.state().settings.fullscreen,
         requests: window.__authoritativeRuntimeFixture.fullscreenRequests(),
@@ -508,13 +504,11 @@ describe('authoritative production renderer runtime', () => {
         fullscreen: true,
         requests: [false],
         writes: [
-          { reducedMotion: false, fullscreen: true, textSize: 'large' },
-          { reducedMotion: true, fullscreen: true, textSize: 'large' },
           { reducedMotion: true, fullscreen: false, textSize: 'large' },
           { reducedMotion: true, fullscreen: true, textSize: 'large' },
         ],
       })
-      await page.evaluate(() => window.__authoritativeRuntimeFixture.releaseWrite(3))
+      await page.evaluate(() => window.__authoritativeRuntimeFixture.releaseWrite(1))
       await page.evaluate(() => window.__authoritativeRuntimeFixture.settle())
     } finally { await page.close() }
   })
@@ -532,9 +526,6 @@ describe('authoritative production renderer runtime', () => {
       await menu.waitForFunction(() => window.__authoritativeRuntimeFixture.writes().length === 1)
       expect(await menu.evaluate(() => window.__authoritativeRuntimeFixture.exits())).toEqual([])
       await menu.evaluate(() => window.__authoritativeRuntimeFixture.releaseWrite(0))
-      await menu.waitForFunction(() => window.__authoritativeRuntimeFixture.writes().length === 2)
-      expect(await menu.evaluate(() => window.__authoritativeRuntimeFixture.exits())).toEqual([])
-      await menu.evaluate(() => window.__authoritativeRuntimeFixture.releaseWrite(1))
       await menu.waitForFunction(() => window.__authoritativeRuntimeFixture.exits().length === 1)
       expect(await menu.evaluate(() => (window.__authoritativeRuntimeFixture.exits()[0] as any).settings.textSize)).toBe('large')
     } finally { await menu.close() }
@@ -828,7 +819,7 @@ describe('authoritative production renderer runtime', () => {
           mode: 'archive',
           activePuzzle: null,
           attempts: {},
-          completedArtifacts: [],
+          completedPuzzles: [],
           completionReceipt: null,
           deliveredGuidance: [],
           guidance: null,
@@ -1065,7 +1056,7 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('routes live folio theorem drags through ordinary manifestation and refusal without false saves', async () => {
+  it('routes live folio artifact drags through manifestation and refusal without false saves', async () => {
     const page = await openFixture('artifact')
     try {
       const [artifact, manifest] = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles())
@@ -1087,8 +1078,8 @@ describe('authoritative production renderer runtime', () => {
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
       await page.mouse.down()
       await page.mouse.move(target.x, target.y)
-      const lifted = await page.locator('.inspection-positioner.is-theorem-lifted').boundingBox()
-      if (lifted === null) throw new Error('lifted theorem record has no presentation bounds')
+      const lifted = await page.locator('.inspection-positioner.is-artifact-lifted').boundingBox()
+      if (lifted === null) throw new Error('lifted artifact record has no presentation bounds')
       expect(lifted.x + lifted.width / 2).toBeCloseTo(target.x, 0)
       expect(lifted.y + lifted.height / 2).toBeCloseTo(target.y, 0)
       await page.mouse.up()
@@ -1103,12 +1094,12 @@ describe('authoritative production renderer runtime', () => {
         }
       }, { manifest: manifest! })).toMatchObject({
         state: {
-          mode: 'puzzle', cursor: 1, actions: ['theorem'],
+          mode: 'puzzle', cursor: 1, actions: ['artifactManifest'],
           proofInstance: beforeManifest.proofInstance,
         },
         savedAction: {
-          label: 'theorem',
-          steps: [{ rule: 'theorem', direction: 'forward' }],
+          kind: 'artifactManifest',
+          artifact,
         },
       })
       expect(await page.evaluate(() => window.__authoritativeRuntimeFixture.state().proofRebuilds))
@@ -1134,7 +1125,7 @@ describe('authoritative production renderer runtime', () => {
       await page.mouse.up()
       expect(await page.locator('.curse-refusal').count()).toBe(1)
       expect(await page.locator('.curse-refusal').textContent()).toMatch(/outside the active seal/)
-      expect(await replacement.getAttribute('class')).not.toContain('is-theorem-lifted')
+      expect(await replacement.getAttribute('class')).not.toContain('is-artifact-lifted')
       expect(await page.evaluate(() => ({
         cursor: window.__authoritativeRuntimeFixture.state().cursor,
         writes: window.__authoritativeRuntimeFixture.writes().length,
@@ -1142,7 +1133,7 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('routes a live folio theorem drag through ordinary exact dissolution', async () => {
+  it('routes a live folio artifact drag through exact dissolution', async () => {
     const page = await openFixture('artifact')
     try {
       const [artifact, , dissolve] = await page.evaluate(() => window.__authoritativeRuntimeFixture.puzzles())
@@ -1155,7 +1146,7 @@ describe('authoritative production renderer runtime', () => {
       await page.locator(`[data-puzzle="${dissolve}"]`).click()
       const target = await page.evaluate(() => window.__authoritativeRuntimeFixture.state()
         .proofRegions.find((region) => region.kind === 'bubble')?.client ?? null)
-      if (target === null) throw new Error('dissolution host has no rendered theorem footprint')
+      if (target === null) throw new Error('dissolution host has no rendered artifact footprint')
       const record = page.locator(`[data-puzzle="${artifact}"]`)
       const box = await record.boundingBox()
       if (box === null) throw new Error('completed artifact record is not rendered')
@@ -1382,7 +1373,7 @@ describe('authoritative production renderer runtime', () => {
     } finally { await page.close() }
   })
 
-  it('blocks folio navigation and theorem lift beneath pause ownership', async () => {
+  it('blocks folio navigation and artifact lift beneath pause ownership', async () => {
     const archive = await openFixture()
     try {
       const first = await archive.evaluate(() => window.__authoritativeRuntimeFixture.puzzles()[0]!)
@@ -1423,7 +1414,7 @@ describe('authoritative production renderer runtime', () => {
         'pointerdown',
         { pointerId: 29, button: 0, clientX: x, clientY: y, bubbles: true, cancelable: true },
       )), { x: box.x + box.width / 2, y: box.y + box.height / 2 })
-      expect(await record.getAttribute('class')).not.toContain('is-theorem-lifted')
+      expect(await record.getAttribute('class')).not.toContain('is-artifact-lifted')
       expect(await puzzle.evaluate(() => window.__authoritativeRuntimeFixture.writes().length)).toBe(writes)
     } finally { await puzzle.close() }
   })

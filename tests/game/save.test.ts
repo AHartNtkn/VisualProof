@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { actionToJson } from '../../src/kernel/proof/json'
+import { polarity } from '../../src/kernel/diagram/regions'
 import { singleStepAction } from '../../src/kernel/proof/action'
 import type { GameCatalog } from '../../src/game/catalog'
 import { createInitialGameState, type GameControllerState } from '../../src/game/controller-state'
@@ -36,7 +37,7 @@ const move = (
   puzzle: typeof FIRST | typeof SECOND,
   index: number,
 ) => act(state, {
-  kind: 'applyProofAction',
+  kind: 'applySessionAction',
   action: singleStepAction(
     controllerPuzzle(puzzle).witness[index]!.rule,
     controllerPuzzle(puzzle).witness[index]!,
@@ -74,7 +75,7 @@ describe('strict per-puzzle game save', () => {
 
     expect(loaded.mode).toBe('puzzle')
     expect(loaded.activePuzzle).toBe(SECOND)
-    expect(loaded.completedArtifacts).toEqual(state.completedArtifacts)
+    expect(loaded.completedPuzzles).toEqual(state.completedPuzzles)
     expect(loaded.firstAttempts).toEqual(state.firstAttempts)
     expect(loaded.firstAttempts.get(SECOND)?.timeline).toMatchObject({
       cursor: 0,
@@ -106,6 +107,33 @@ describe('strict per-puzzle game save', () => {
     expect(loaded.deliveredGuidance).toEqual(state.deliveredGuidance)
   })
 
+  it('round-trips active artifact actions while persisting completion only as puzzle IDs', () => {
+    let state = select(fresh(), FIRST)
+    for (let index = 0; index < 3; index += 1) state = move(state, FIRST, index)
+    state = act(state, { kind: 'levelSelection' })
+    state = select(state, SECOND)
+    const secondDiagram = catalog.puzzle(SECOND).diagram
+    const host = Object.keys(secondDiagram.regions)
+      .find((region) => polarity(secondDiagram, region) === 'negative')
+    if (host === undefined) throw new Error('fixture has no negative artifact host')
+    state = act(state, {
+      kind: 'applySessionAction',
+      action: { kind: 'artifactManifest', artifact: FIRST, region: host },
+    })
+
+    const encoded = encodeGameSave(catalog, state)
+    expect(encoded.completedPuzzles).toEqual([FIRST])
+    expect(encoded.attempts[SECOND]?.actions.at(-1)).toEqual({
+      kind: 'artifactManifest', artifact: FIRST, region: host,
+    })
+    const loaded = decodeGameSave(catalog, plain(encoded))
+    expect(loaded.firstAttempts.get(SECOND)?.timeline.actions.at(-1)).toEqual({
+      kind: 'artifactManifest', artifact: FIRST, region: host,
+    })
+    expect(loaded.completedPuzzles).toEqual(new Set([FIRST]))
+    expect(loaded.completedPuzzles).not.toHaveProperty('actions')
+  })
+
   it('rejects malformed and duplicate guidance deliveries while dropping stale overlay identities', () => {
     const base: any = plain(encodeGameSave(catalog, fresh()))
     base.deliveredGuidance = [SHARED_TEACHER_ID]
@@ -127,7 +155,7 @@ describe('strict per-puzzle game save', () => {
     let state = select(fresh(), FIRST)
     state = act(state, { kind: 'advanceGuidancePage' })
     const encoded: any = plain(encodeGameSave(catalog, state))
-    expect(encoded.version).toBe(6)
+    expect(encoded.version).toBe(7)
     expect(encoded.guidance).toEqual({
       puzzle: FIRST, intervention: SHARED_TEACHER_ID, page: 1,
     })
@@ -151,6 +179,7 @@ describe('strict per-puzzle game save', () => {
     expect(loaded.activePuzzle).toBe(FIRST)
     expect(loaded.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: false })
     expect(loaded.firstAttempts.has(FIRST)).toBe(false)
+    expect(encodeGameSave(catalog, state).completedPuzzles).toEqual([FIRST])
   })
 
   it('uses caller OS preference only for fresh startup and rejects an invalid supplied save', () => {
@@ -168,16 +197,11 @@ describe('strict per-puzzle game save', () => {
     expect(() => decodeGameSave(catalog, versionFive)).toThrow(/unsupported game save format or version/)
   })
 
-  it('rejects step-shaped v6 timelines and bare completed puzzle IDs', () => {
+  it('rejects displaced step timelines and legacy completion fields', () => {
     const stepTimeline: any = plain(encodeGameSave(catalog, fresh()))
     stepTimeline.attempts[FIRST] = { steps: [], cursor: 0 }
     stepTimeline.puzzleFingerprints[FIRST] = catalog.puzzleFingerprint(FIRST)
     expect(() => decodeGameSave(catalog, stepTimeline)).toThrow(/unknown field 'steps'/)
-
-    const bareCompletion: any = plain(encodeGameSave(catalog, fresh()))
-    bareCompletion.completedArtifacts = [FIRST]
-    bareCompletion.puzzleFingerprints[FIRST] = catalog.puzzleFingerprint(FIRST)
-    expect(() => decodeGameSave(catalog, bareCompletion)).toThrow(/completed artifact 0 must be an object/)
 
     const legacyCompletion: any = plain(encodeGameSave(catalog, fresh()))
     legacyCompletion.completed = []
@@ -284,7 +308,7 @@ describe('strict per-puzzle game save', () => {
 
   it('refuses unknown IDs, unknown fields, and missing or extra fingerprints', () => {
     const unknownId: any = plain(encodeGameSave(catalog, fresh()))
-    unknownId.completedArtifacts = [{ puzzle: 'unknown-puzzle', actions: [] }]
+    unknownId.completedPuzzles = ['unknown-puzzle']
     unknownId.puzzleFingerprints['unknown-puzzle'] = 'forged'
     expect(() => decodeGameSave(catalog, unknownId)).toThrow(/unknown puzzle/)
 

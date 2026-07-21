@@ -26,10 +26,10 @@ export type FolioViewOptions = {
   readonly onSelectCulture: (culture: CultureId) => void
   readonly onRefuseCulture: (culture: CultureId) => void
   readonly onScroll: (culture: CultureId, scroll: number) => void
-  readonly onTheoremDragStart: (puzzle: PuzzleId, sample: FolioDragSample) => void
-  readonly onTheoremDragMove: (puzzle: PuzzleId, sample: FolioDragSample) => void
-  readonly onTheoremDragEnd: (puzzle: PuzzleId, sample: FolioDragSample) => void
-  readonly onTheoremDragCancel: (puzzle: PuzzleId, sample: FolioDragSample) => void
+  readonly onArtifactDragStart: (puzzle: PuzzleId, sample: FolioDragSample) => void
+  readonly onArtifactDragMove: (puzzle: PuzzleId, sample: FolioDragSample) => void
+  readonly onArtifactDragEnd: (puzzle: PuzzleId, sample: FolioDragSample) => void
+  readonly onArtifactDragCancel: (puzzle: PuzzleId, sample: FolioDragSample) => void
 }
 
 export type MountedFolioView = {
@@ -416,7 +416,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     returningSource?.classList.remove('is-inspection-source')
     returningSource = null
     inspectionStage.setAttribute('aria-hidden', 'true')
-    inspectionPositioner.classList.remove('is-theorem-lifted', 'is-returning')
+    inspectionPositioner.classList.remove('is-artifact-lifted', 'is-returning')
     inspectionPositioner.style.removeProperty('--folio-drag-x')
     inspectionPositioner.style.removeProperty('--folio-drag-y')
     inspectionRecord.replaceChildren()
@@ -431,7 +431,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       drag.source.releasePointerCapture(drag.pointerId)
     }
     returningSource = drag.source
-    inspectionPositioner.classList.remove('is-theorem-lifted')
+    inspectionPositioner.classList.remove('is-artifact-lifted')
     inspectionPositioner.classList.add('is-returning')
     stageReturnGeometry(drag)
     void motion.recordInspection(drag.puzzle, false, current.reducedMotion)
@@ -446,9 +446,9 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     positionInspection(drag.lastSample)
     stageReturnGeometry(drag)
     if (cancelled || !inputAllowed()) {
-      options.onTheoremDragCancel(drag.puzzle, drag.lastSample)
+      options.onArtifactDragCancel(drag.puzzle, drag.lastSample)
     } else {
-      options.onTheoremDragEnd(drag.puzzle, drag.lastSample)
+      options.onArtifactDragEnd(drag.puzzle, drag.lastSample)
     }
     returnRecord(drag)
   }
@@ -457,7 +457,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     if (activeDrag === null) return
     const drag = activeDrag
     activeDrag = null
-    options.onTheoremDragCancel(drag.puzzle, drag.lastSample)
+    options.onArtifactDragCancel(drag.puzzle, drag.lastSample)
     returnRecord(drag)
   }
 
@@ -486,10 +486,10 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     inspectionRecord.dataset.liftedPuzzle = record.id
     inspectionRecord.dataset.status = record.status
     inspectionStage.setAttribute('aria-hidden', 'false')
-    inspectionPositioner.classList.add('is-theorem-lifted')
+    inspectionPositioner.classList.add('is-artifact-lifted')
     positionInspection(sample)
     stageReturnGeometry(drag)
-    options.onTheoremDragStart(record.id, sample)
+    options.onArtifactDragStart(record.id, sample)
   }
 
   const createRecord = (record: FolioRecordProjection): HTMLElement => {
@@ -503,7 +503,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
     })
     listen(node, 'pointerdown', ((event: PointerEvent) => {
       const projection = projectedRecord(record.id)
-      if (projection?.affordance === 'drag-theorem') beginDrag(node, projection, event)
+      if (projection?.affordance === 'drag-artifact') beginDrag(node, projection, event)
     }) as EventListener)
     listen(node, 'pointermove', ((event: PointerEvent) => {
       if (activeDrag?.pointerId !== event.pointerId || activeDrag.source !== node) return
@@ -511,7 +511,7 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
       activeDrag.lastSample = sample
       positionInspection(sample)
       stageReturnGeometry(activeDrag)
-      options.onTheoremDragMove(record.id, sample)
+      options.onArtifactDragMove(record.id, sample)
     }) as EventListener)
     listen(node, 'pointerup', ((event: PointerEvent) => finishDrag(event, false)) as EventListener)
     listen(node, 'pointercancel', ((event: PointerEvent) => finishDrag(event, true)) as EventListener)
@@ -659,12 +659,12 @@ export function mountFolioView(options: FolioViewOptions): MountedFolioView {
           drag.source.releasePointerCapture(drag.pointerId)
         }
         drag.source.classList.remove('is-inspection-source')
-        options.onTheoremDragCancel(drag.puzzle, drag.lastSample)
+        options.onArtifactDragCancel(drag.puzzle, drag.lastSample)
       }
       recordGeneration += 1
       returningSource?.classList.remove('is-inspection-source')
       returningSource = null
-      inspectionPositioner.classList.remove('is-theorem-lifted', 'is-returning')
+      inspectionPositioner.classList.remove('is-artifact-lifted', 'is-returning')
       inspectionPositioner.style.removeProperty('--folio-drag-x')
       inspectionPositioner.style.removeProperty('--folio-drag-y')
       inspectionStage.setAttribute('aria-hidden', 'true')

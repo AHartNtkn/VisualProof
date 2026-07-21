@@ -2,24 +2,9 @@
   "puzzle": "compound-theorem-source-choice",
   "solution": [
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:sey-lem-c01",
-          "at": {
-            "sel": {
-              "region": "continuation-outer",
-              "regions": [],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "forward"
-        }
-      ],
-      "placements": []
+      "kind": "artifactManifest",
+      "artifact": "sey-lem-c01",
+      "region": "continuation-outer"
     },
     {
       "label": "doubleCutElim",
@@ -166,7 +151,7 @@
     "sey-lem-c01"
   ],
   "expectedRules": [
-    "theorem",
+    "artifactManifest",
     "doubleCutElim",
     "deiteration",
     "erasure"

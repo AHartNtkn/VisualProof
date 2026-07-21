@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest'
 import * as catalogModule from '../../src/game/catalog'
 import * as contentModule from '../../src/game/content'
 import { diagramToJson } from '../../src/kernel/diagram/json'
-import {
-  artifactTheoremContext,
-  artifactTheoremName,
-  certifyCompletedArtifact,
-} from '../../src/game/artifact-theorem'
-import { singleStepAction } from '../../src/kernel/proof/action'
+import { applyArtifactAction } from '../../src/game/artifact'
 import { twoVeils } from './fixtures'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 
@@ -304,18 +299,19 @@ describe('layered portable game content', () => {
     })
   })
 
-  it('constructs completed artifact theorems from authenticated runtime witnesses', () => {
+  it('uses catalog diagrams directly for game-owned artifact manifestation', () => {
     const catalog = catalogModule.loadGameContent(portableFiles())
     const id = catalog.puzzleIds[0]!
     const puzzle = catalog.puzzle(id)
-    const action = singleStepAction('doubleCutElim', {
-      rule: 'doubleCutElim', region: twoVeils().eliminations[0]!,
-    })
-    const artifact = certifyCompletedArtifact(catalog, new Map(), puzzle, [action])
-    const context = artifactTheoremContext(catalog, new Map([[id, artifact]]))
-    const theorem = context.theorems.get(artifactTheoremName(id))
-    expect(theorem).toMatchObject({ actions: [], backActions: [action] })
-    expect(theorem?.rhs.diagram).toEqual(puzzle.diagram)
+    const host = new DiagramBuilder()
+    const negative = host.cut(host.root)
+    const manifested = applyArtifactAction(host.build(), {
+      kind: 'artifactManifest', artifact: id, region: negative,
+    }, puzzle)
+
+    expect(Object.values(manifested.regions).filter(({ kind }) => kind === 'cut'))
+      .toHaveLength(3)
+    expect(catalog.context.theorems.size).toBe(0)
   })
 
   it('tracks only transitively referenced definition semantics, independent of definition names', () => {

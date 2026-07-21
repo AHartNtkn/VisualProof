@@ -67,7 +67,7 @@ const restoredSave = (): unknown => {
   let state = createInitialGameState(catalog, { reducedMotion: false })
   const first = catalog.puzzleIds[0]!
   state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first }).state
-  state = reduceGame(catalog, state, { kind: 'applyProofAction', action: witnessFor(first)[0]! }).state
+  state = reduceGame(catalog, state, { kind: 'applySessionAction', action: witnessFor(first)[0]! }).state
   state = reduceGame(catalog, state, { kind: 'setCultureScroll', culture: state.selectedCulture, scroll: 137 }).state
   state = reduceGame(catalog, state, { kind: 'setReducedMotion', value: true }).state
   state = reduceGame(catalog, state, { kind: 'setFullscreen', value: false }).state
@@ -80,7 +80,7 @@ const completedSave = (): unknown => {
   const first = catalog.puzzleIds[0]!
   state = reduceGame(catalog, state, { kind: 'selectPuzzle', puzzle: first }).state
   for (const action of witnessFor(first)) {
-    state = reduceGame(catalog, state, { kind: 'applyProofAction', action }).state
+    state = reduceGame(catalog, state, { kind: 'applySessionAction', action }).state
   }
   return encodeGameSave(catalog, state)
 }
@@ -143,17 +143,17 @@ const platform: CursebreakerPlatform = {
 const stateProjection = (debug: CursebreakerDebugState) => ({
   mode: debug.state.mode,
   activePuzzle: debug.state.activePuzzle,
-  completedArtifacts: [...debug.state.completedArtifacts.keys()],
+  completedPuzzles: [...debug.state.completedPuzzles],
   cursor: debug.state.activePuzzle === null ? null : (
-    debug.state.completedArtifacts.has(debug.state.activePuzzle)
+    debug.state.completedPuzzles.has(debug.state.activePuzzle)
       ? debug.state.replays.get(debug.state.activePuzzle)?.timeline.cursor
       : debug.state.firstAttempts.get(debug.state.activePuzzle)?.timeline.cursor
   ) ?? null,
   actions: debug.state.activePuzzle === null ? [] : [...(
-    debug.state.completedArtifacts.has(debug.state.activePuzzle)
+    debug.state.completedPuzzles.has(debug.state.activePuzzle)
       ? debug.state.replays.get(debug.state.activePuzzle)?.timeline.actions
       : debug.state.firstAttempts.get(debug.state.activePuzzle)?.timeline.actions
-  ) ?? []].map((action) => action.label),
+  ) ?? []].map((action) => 'kind' in action ? action.kind : action.label),
   selectedCulture: debug.state.selectedCulture,
   selectedScroll: debug.state.scrollByCulture.get(debug.state.selectedCulture),
   settings: debug.state.settings,
@@ -213,7 +213,7 @@ const fixture = {
     if (active === null) throw new Error('no active puzzle')
     const action = witnessFor(active)[index]
     if (action === undefined) throw new Error(`active puzzle has no witness action ${index}`)
-    requireMounted().dispatch({ kind: 'applyProofAction', action })
+    requireMounted().dispatch({ kind: 'applySessionAction', action })
   },
   unwinnable: () => {
     const active = requireMounted().debug().state.activePuzzle
@@ -225,7 +225,7 @@ const fixture = {
       throw new Error('active puzzle has no recognized unwinnable demonstration')
     }
     for (const action of openingDemonstration(active, intervention.id)) {
-      requireMounted().dispatch({ kind: 'applyProofAction', action })
+      requireMounted().dispatch({ kind: 'applySessionAction', action })
     }
   },
   puzzles: () => catalog.puzzleIds,

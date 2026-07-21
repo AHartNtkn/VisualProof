@@ -1,6 +1,8 @@
-import { actionFromJson, actionToJson } from '../kernel/proof/json'
-import type { ProofAction } from '../kernel/proof/action'
-import { artifactTheoremContext, certifyCompletedArtifact } from './artifact-theorem'
+import {
+  gameSessionActionFromJson,
+  gameSessionActionToJson,
+  type SerializedGameSessionAction,
+} from './action'
 import type { GameCatalog } from './catalog'
 import {
   createInitialGameState,
@@ -11,33 +13,31 @@ import {
   type InterfaceTextSize,
 } from './controller-state'
 import { isCultureUnlocked, isUnlocked } from './progress'
-import { applyGameAction, moveCursor, startPuzzle, type GameSession } from './session'
+import {
+  applyGameAction,
+  moveCursor,
+  startPuzzle,
+  type GameSession,
+  type GameSessionAction,
+} from './session'
 import {
   GameDomainError,
   guidanceDeliveryIdentity,
-  type CompletedArtifact,
   type CultureId,
   type GuidanceDeliveryIdentity,
   type PuzzleId,
 } from './types'
 
-export type SerializedProofAction = Readonly<Record<string, unknown>>
-
 export type SerializedGameTimeline = {
-  readonly actions: readonly SerializedProofAction[]
+  readonly actions: readonly SerializedGameSessionAction[]
   readonly cursor: number
-}
-
-export type SerializedCompletedArtifact = {
-  readonly puzzle: PuzzleId
-  readonly actions: readonly SerializedProofAction[]
 }
 
 export type GameSave = {
   readonly format: 'cursebreaker-save'
-  readonly version: 6
+  readonly version: 7
   readonly puzzleFingerprints: Readonly<Record<string, string>>
-  readonly completedArtifacts: readonly SerializedCompletedArtifact[]
+  readonly completedPuzzles: readonly PuzzleId[]
   readonly attempts: Readonly<Record<string, SerializedGameTimeline>>
   readonly replays: Readonly<Record<string, SerializedGameTimeline>>
   readonly deliveredGuidance: readonly GuidanceDeliveryIdentity[]
@@ -58,7 +58,7 @@ const ROOT_FIELDS = [
   'format',
   'version',
   'puzzleFingerprints',
-  'completedArtifacts',
+  'completedPuzzles',
   'attempts',
   'replays',
   'deliveredGuidance',
@@ -88,11 +88,8 @@ const strictRecord = (
   return parsed
 }
 
-const serializedAction = (action: ProofAction): SerializedProofAction =>
-  strictRecord(actionToJson(action), 'serialized proof action')
-
 const serializeTimeline = (session: GameSession): SerializedGameTimeline => ({
-  actions: session.timeline.actions.map(serializedAction),
+  actions: session.timeline.actions.map(gameSessionActionToJson),
   cursor: session.timeline.cursor,
 })
 
@@ -105,7 +102,7 @@ const sortedTimelineRecord = (
 )
 
 const referencedPuzzles = (
-  completed: ReadonlyMap<PuzzleId, CompletedArtifact>,
+  completed: ReadonlySet<PuzzleId>,
   attempts: ReadonlyMap<PuzzleId, GameSession>,
   replays: ReadonlyMap<PuzzleId, GameSession>,
   receipt: CompletionReceipt | null,
@@ -119,23 +116,20 @@ const referencedPuzzles = (
 
 export function encodeGameSave(catalog: GameCatalog, state: GameControllerState): GameSave {
   const referenced = referencedPuzzles(
-    state.completedArtifacts,
+    state.completedPuzzles,
     state.firstAttempts,
     state.replays,
     state.completionReceipt,
   )
   const document: GameSave = {
     format: 'cursebreaker-save',
-    version: 6,
+    version: 7,
     puzzleFingerprints: Object.fromEntries(
       [...referenced]
         .sort()
         .map((id) => [id, catalog.puzzleFingerprint(id)]),
     ),
-    completedArtifacts: [...state.completedArtifacts].map(([puzzle, artifact]) => ({
-      puzzle,
-      actions: artifact.actions.map(serializedAction),
-    })),
+    completedPuzzles: [...state.completedPuzzles],
     attempts: sortedTimelineRecord(state.firstAttempts),
     replays: sortedTimelineRecord(state.replays),
     deliveredGuidance: [...state.deliveredGuidance]
@@ -157,7 +151,6 @@ export function encodeGameSave(catalog: GameCatalog, state: GameControllerState)
     ) as Readonly<Record<string, number>>,
     settings: state.settings,
   }
-  decodeGameSave(catalog, document)
   return document
 }
 
@@ -175,11 +168,11 @@ const readCultureId = (catalog: GameCatalog, value: unknown, label: string): Cul
   return id
 }
 
-const readActions = (value: unknown, label: string): readonly ProofAction[] => {
+const readActions = (value: unknown, label: string): readonly GameSessionAction[] => {
   if (!Array.isArray(value)) throw new GameDomainError(`${label} must be an array`)
   return value.map((entry, index) => {
     try {
-      return actionFromJson(entry, `${label}[${index}]`)
+      return gameSessionActionFromJson(entry, `${label}[${index}]`)
     } catch (error) {
       throw new GameDomainError(
         `invalid ${label} action ${index}: ${error instanceof Error ? error.message : String(error)}`,
@@ -188,41 +181,23 @@ const readActions = (value: unknown, label: string): readonly ProofAction[] => {
   })
 }
 
-const readCompletedArtifacts = (
+const readCompletedPuzzles = (
   catalog: GameCatalog,
   value: unknown,
-): ReadonlyMap<PuzzleId, CompletedArtifact> => {
-  if (!Array.isArray(value)) throw new GameDomainError('save completedArtifacts must be an array')
-  const completed = new Map<PuzzleId, CompletedArtifact>()
+): ReadonlySet<PuzzleId> => {
+  if (!Array.isArray(value)) throw new GameDomainError('save completedPuzzles must be an array')
+  const completed = new Set<PuzzleId>()
   for (const [index, entry] of value.entries()) {
-    const saved = strictRecord(
-      entry,
-      `save completed artifact ${index}`,
-      ['puzzle', 'actions'],
-    )
-    const puzzle = readPuzzleId(catalog, saved.puzzle, `save completed artifact ${index} puzzle`)
+    const puzzle = readPuzzleId(catalog, entry, `save completed puzzle ${index}`)
     if (completed.has(puzzle)) {
-      throw new GameDomainError(`save completedArtifacts repeats puzzle '${puzzle}'`)
+      throw new GameDomainError(`save completedPuzzles repeats puzzle '${puzzle}'`)
     }
     if (!isUnlocked(catalog, { completed }, puzzle)) {
       throw new GameDomainError(
         `completed puzzle '${puzzle}' appears before its unlock prerequisites`,
       )
     }
-    const actions = readActions(saved.actions, `save completed artifact '${puzzle}' actions`)
-    try {
-      const artifact = certifyCompletedArtifact(
-        catalog,
-        completed,
-        catalog.puzzle(puzzle),
-        actions,
-      )
-      completed.set(puzzle, artifact)
-    } catch (error) {
-      throw new GameDomainError(
-        `invalid completed artifact '${puzzle}': ${error instanceof Error ? error.message : String(error)}`,
-      )
-    }
+    completed.add(puzzle)
   }
   return completed
 }
@@ -231,7 +206,7 @@ const readTimeline = (
   catalog: GameCatalog,
   puzzle: PuzzleId,
   value: unknown,
-  completed: ReadonlyMap<PuzzleId, CompletedArtifact>,
+  completed: ReadonlySet<PuzzleId>,
 ): GameSession => {
   const saved = strictRecord(value, `saved timeline '${puzzle}'`, ['actions', 'cursor'])
   if (!Number.isSafeInteger(saved.cursor)) {
@@ -240,7 +215,8 @@ const readTimeline = (
   const actions = readActions(saved.actions, `saved timeline '${puzzle}' actions`)
   let session = startPuzzle(catalog.puzzle(puzzle))
   const authority = {
-    context: artifactTheoremContext(catalog, completed),
+    context: catalog.context,
+    artifact: (id: PuzzleId) => completed.has(id) ? catalog.puzzle(id) : undefined,
   }
   try {
     for (const action of actions) {
@@ -267,7 +243,7 @@ const readTimelineMap = (
   catalog: GameCatalog,
   value: unknown,
   label: string,
-  completed: ReadonlyMap<PuzzleId, CompletedArtifact>,
+  completed: ReadonlySet<PuzzleId>,
   classification: 'attempt' | 'replay',
 ): ReadonlyMap<PuzzleId, GameSession> => {
   const saved = strictRecord(value, label)
@@ -375,7 +351,7 @@ const validateMode = (
   mode: GamePrimaryMode,
   activePuzzle: PuzzleId | null,
   receipt: CompletionReceipt | null,
-  completed: ReadonlyMap<PuzzleId, CompletedArtifact>,
+  completed: ReadonlySet<PuzzleId>,
   attempts: ReadonlyMap<PuzzleId, GameSession>,
   replays: ReadonlyMap<PuzzleId, GameSession>,
 ): void => {
@@ -412,13 +388,13 @@ const validateMode = (
 
 export function decodeGameSave(catalog: GameCatalog, value: unknown): GameControllerState {
   const root = strictRecord(value, 'save', ROOT_FIELDS)
-  if (root.format !== 'cursebreaker-save' || root.version !== 6) {
+  if (root.format !== 'cursebreaker-save' || root.version !== 7) {
     throw new GameDomainError('unsupported game save format or version')
   }
-  const completed = readCompletedArtifacts(catalog, root.completedArtifacts)
+  const completedPuzzles = readCompletedPuzzles(catalog, root.completedPuzzles)
 
-  const attempts = readTimelineMap(catalog, root.attempts, 'save attempts', completed, 'attempt')
-  const replays = readTimelineMap(catalog, root.replays, 'save replays', completed, 'replay')
+  const attempts = readTimelineMap(catalog, root.attempts, 'save attempts', completedPuzzles, 'attempt')
+  const replays = readTimelineMap(catalog, root.replays, 'save replays', completedPuzzles, 'replay')
   const receipt = readReceipt(catalog, root.completionReceipt)
 
   const mode = root.mode
@@ -428,7 +404,7 @@ export function decodeGameSave(catalog: GameCatalog, value: unknown): GameContro
   const activePuzzle = root.activePuzzle === null
     ? null
     : readPuzzleId(catalog, root.activePuzzle, 'save active puzzle')
-  validateMode(catalog, mode, activePuzzle, receipt, completed, attempts, replays)
+  validateMode(catalog, mode, activePuzzle, receipt, completedPuzzles, attempts, replays)
 
   const deliveredGuidance = readGuidanceDeliveries(catalog, root.deliveredGuidance)
 
@@ -470,7 +446,7 @@ export function decodeGameSave(catalog: GameCatalog, value: unknown): GameContro
   const firstCulture = catalog.cultureIds[0]
   if (
     selectedCulture !== firstCulture
-    && !isCultureUnlocked(catalog, { completed }, selectedCulture)
+    && !isCultureUnlocked(catalog, { completed: completedPuzzles }, selectedCulture)
   ) {
     throw new GameDomainError(`selected culture '${selectedCulture}' is locked`)
   }
@@ -491,7 +467,7 @@ export function decodeGameSave(catalog: GameCatalog, value: unknown): GameContro
     scrollByCulture.set(id, rawScroll as number)
   }
 
-  const references = referencedPuzzles(completed, attempts, replays, receipt)
+  const references = referencedPuzzles(completedPuzzles, attempts, replays, receipt)
   const fingerprints = strictRecord(root.puzzleFingerprints, 'save puzzleFingerprints')
   for (const id of references) {
     if (!(id in fingerprints)) throw new GameDomainError(`missing logical fingerprint for '${id}'`)
@@ -510,7 +486,7 @@ export function decodeGameSave(catalog: GameCatalog, value: unknown): GameContro
   return {
     mode,
     activePuzzle,
-    completedArtifacts: completed,
+    completedPuzzles,
     firstAttempts: attempts,
     replays,
     deliveredGuidance,

@@ -37,7 +37,7 @@ const record = (
   accession: 'TEST-01',
   summary: 'Production motion and geometry evidence.',
   status,
-  affordance: id === completed ? 'drag-theorem' as const : 'inert' as const,
+  affordance: id === completed ? 'drag-artifact' as const : 'inert' as const,
   priority: false,
   restrictedPacket,
   preview: preview(id),
@@ -90,10 +90,10 @@ const folio = mountFolioView({
   onSelectCulture: () => {},
   onRefuseCulture: () => {},
   onScroll: () => {},
-  onTheoremDragStart: () => {},
-  onTheoremDragMove: () => {},
-  onTheoremDragEnd: () => {},
-  onTheoremDragCancel: () => {},
+  onArtifactDragStart: () => {},
+  onArtifactDragMove: () => {},
+  onArtifactDragEnd: () => {},
+  onArtifactDragCancel: () => {},
 })
 const recordMotionProbe = new FolioMotion(folio.element)
 

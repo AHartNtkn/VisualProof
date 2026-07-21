@@ -1,6 +1,5 @@
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { Diagram } from '../kernel/diagram/diagram'
-import type { ProofAction } from '../kernel/proof/action'
 import type { ProofContext } from '../kernel/proof/context'
 
 export type PuzzleId = string & { readonly __puzzleId: unique symbol }
@@ -23,11 +22,6 @@ export const cultureId = (value: string): CultureId => {
 export class GameDomainError extends Error {}
 
 export type GameRuleContext = Pick<ProofContext, 'relations'>
-
-export type CompletedArtifact = {
-  readonly puzzle: PuzzleId
-  readonly actions: readonly ProofAction[]
-}
 
 export type PuzzleDefinition = {
   readonly id: PuzzleId

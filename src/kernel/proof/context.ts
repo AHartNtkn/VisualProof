@@ -1,8 +1,7 @@
-import type { Diagram } from '../diagram/diagram'
-import type { DiagramWithBoundary } from '../diagram/boundary'
+import { mkDiagram, type Diagram } from '../diagram/diagram'
+import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../diagram/boundary'
 import type { Theorem } from './theorem'
 import { checkTheorem } from './theorem'
-import { dwbFromJson, dwbToJson, theoremFromJson, theoremToJson } from './json'
 import { ProofError } from './error'
 
 const proofContextBrand: unique symbol = Symbol('ProofContext')
@@ -140,7 +139,7 @@ const setValuesIntrinsic = Function.prototype.call.bind(Set.prototype.values) as
 const mapIteratorNextIntrinsic = Function.prototype.call.bind(getPrototypeOf(new Map().entries()).next) as <K, V>(iterator: MapIterator<[K, V]>) => IteratorResult<[K, V]>
 const setIteratorNextIntrinsic = Function.prototype.call.bind(getPrototypeOf(new Set().values()).next) as <T>(iterator: SetIterator<T>) => IteratorResult<T>
 
-/** Reject executable, exotic, accessor, and cyclic values before a codec reads them. */
+/** Reject executable, exotic, accessor, and cyclic values before immutable retention. */
 function assertSchemaCarrier(value: unknown, where: string, active: object[] = []): void {
   if (value === null || value === undefined) return
   const kind = typeof value
@@ -203,7 +202,7 @@ function assertSchemaCarrier(value: unknown, where: string, active: object[] = [
   }
 }
 
-/** Harden codec-produced, acyclic schema data without exposing native collections. */
+/** Retain acyclic schema data immutably without exposing native collections. */
 function immutableClone<T>(value: T): T {
   if (value === null || value === undefined || typeof value !== 'object') return value
   if (value instanceof ImmutableMap || value instanceof ImmutableSet) return value
@@ -286,13 +285,13 @@ export function assertProofContext(value: unknown): asserts value is ProofContex
 function checkedBoundary(value: DiagramWithBoundary, where: string): DiagramWithBoundary {
   try {
     assertSchemaCarrier(value, where)
-    const checked = immutableClone(dwbFromJson(dwbToJson(value), where))
-    for (const wire of checked.boundary) {
-      if (checked.diagram.wires[wire]!.scope !== checked.diagram.root) {
-        throw new Error(`boundary wire '${wire}' is not scoped at the diagram root`)
-      }
-    }
-    return checked
+    const diagram = mkDiagram({
+      root: value.diagram.root,
+      regions: value.diagram.regions,
+      nodes: value.diagram.nodes,
+      wires: value.diagram.wires,
+    })
+    return immutableClone(mkDiagramWithBoundary(diagram, value.boundary))
   } catch (error) {
     if (error instanceof ProofError) throw error
     throw new ProofError(`${where}: ${error instanceof Error ? error.message : String(error)}`)
@@ -355,10 +354,21 @@ export function extendRelations(
 function checkedTheorem(value: Theorem): Theorem {
   try {
     assertSchemaCarrier(value, 'theorem')
-    // The codec is the complete serialized theorem schema validator. Keep the
-    // already-validated witness maps in their original insertion order: their
-    // order carries lexical binder-spine evidence and is not presentation data.
-    theoremFromJson(theoremToJson(value))
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      throw new ProofError('theorem must be an object')
+    }
+    const carrier = value as unknown as Record<string, unknown>
+    const allowed = new Set(['name', 'lhs', 'rhs', 'actions', 'backActions'])
+    for (const key of Object.keys(carrier)) {
+      if (!allowed.has(key)) throw new ProofError(`theorem has unknown field '${key}'`)
+    }
+    if (typeof carrier.name !== 'string' || carrier.name.length === 0) {
+      throw new ProofError('theorem name must be a non-empty string')
+    }
+    if (!Array.isArray(carrier.actions)) throw new ProofError('theorem actions must be an array')
+    if (carrier.backActions !== undefined && !Array.isArray(carrier.backActions)) {
+      throw new ProofError('theorem backActions must be an array when present')
+    }
     const theorem = immutableClone(value)
     return immutableClone({
       ...theorem,

@@ -248,7 +248,7 @@ describe('approved production presentation conformance', () => {
       const pointer = { x: box.x + box.width / 2, y: box.y + box.height / 2 }
       await compactDrag.mouse.move(pointer.x, pointer.y)
       await compactDrag.mouse.down()
-      const lifted = await compactDrag.locator('.inspection-positioner.is-theorem-lifted')
+      const lifted = await compactDrag.locator('.inspection-positioner.is-artifact-lifted')
         .boundingBox()
       if (lifted === null) throw new Error('compact moving lift missing')
       expect(Math.hypot(

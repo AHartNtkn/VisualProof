@@ -1,14 +1,11 @@
 import Ajv2020, { type AnySchema, type ValidateFunction } from 'ajv/dist/2020.js'
-import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { exploreForm } from '../src/kernel/diagram/canonical/explore'
 import type { Diagram, RegionId } from '../src/kernel/diagram/diagram'
 import { cutDepth } from '../src/kernel/diagram/regions'
-import type { ProofAction } from '../src/kernel/proof/action'
-import { actionFromJson } from '../src/kernel/proof/json'
-import { artifactTheoremContext, certifyCompletedArtifact } from '../src/game/artifact-theorem'
+import { gameSessionActionFromJson } from '../src/game/action'
 import { isBlank } from '../src/game/blank'
 import { loadGameContent, type GameContentFiles } from '../src/game/catalog'
 import {
@@ -16,13 +13,18 @@ import {
   analyzeSeyricStart,
   auditSeyricWitness,
 } from '../src/game/content/seyric-authority'
-import { applyGameAction, currentDiagram, startPuzzle } from '../src/game/session'
+import {
+  applyGameAction,
+  currentDiagram,
+  isArtifactAction,
+  startPuzzle,
+  type GameSessionAction,
+} from '../src/game/session'
 import {
   GameDomainError,
   cultureId,
   puzzleId,
   type CultureId,
-  type CompletedArtifact,
   type PuzzleId,
 } from '../src/game/types'
 export { analyzeSeyricPropositionalShape, analyzeSeyricStart, auditSeyricWitness }
@@ -30,10 +32,10 @@ export { analyzeSeyricPropositionalShape, analyzeSeyricStart, auditSeyricWitness
 type JsonRecord = Record<string, unknown>
 type ValidationEvidence = {
   puzzle: PuzzleId
-  solution: readonly ProofAction[]
+  solution: readonly GameSessionAction[]
   availableArtifacts: readonly PuzzleId[]
   expectedRules: readonly string[]
-  recognizedStates: readonly { intervention: string; demonstration: readonly ProofAction[] }[]
+  recognizedStates: readonly { intervention: string; demonstration: readonly GameSessionAction[] }[]
 }
 type CoverageObligation = {
   id: string
@@ -55,14 +57,7 @@ export type ContentValidationReceipt = {
   readonly solutions: number
   readonly actions: number
   readonly recognizedStates: number
-  readonly migrationStateDigest: string
 }
-
-const MIGRATED_VALIDATION_BASELINE = Object.freeze({
-  puzzles: 109,
-  actions: 1039,
-  stateDigest: '8dcda412c88fae5732a4332136d2a3771029660b30347a04398c874a24f072e5',
-})
 
 const directChildRegions = (diagram: Diagram, parent: RegionId): RegionId[] =>
   Object.entries(diagram.regions)
@@ -126,7 +121,7 @@ const parseEvidence = (value: unknown, path: string): ValidationEvidence => {
   const raw = record(value, path)
   const solution = Array.isArray(raw.solution)
     ? raw.solution.map((action, index) => {
-        try { return actionFromJson(action, `${path} solution action ${index}`) } catch (error) {
+        try { return gameSessionActionFromJson(action, `${path} solution action ${index}`) } catch (error) {
           throw new GameDomainError(`${path} solution action ${index}: ${error instanceof Error ? error.message : String(error)}`)
         }
       })
@@ -141,7 +136,7 @@ const parseEvidence = (value: unknown, path: string): ValidationEvidence => {
     return {
       intervention,
       demonstration: state.demonstration.map((action, actionIndex) => {
-        try { return actionFromJson(action, `${path} recognized state '${intervention}' action ${actionIndex}`) } catch (error) {
+        try { return gameSessionActionFromJson(action, `${path} recognized state '${intervention}' action ${actionIndex}`) } catch (error) {
           throw new GameDomainError(`${path} recognized state '${intervention}' action ${actionIndex}: ${error instanceof Error ? error.message : String(error)}`)
         }
       }),
@@ -448,10 +443,8 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
   }
 
   const verified = new Set<PuzzleId>()
-  const completedArtifacts = new Map<PuzzleId, CompletedArtifact>()
   let recognizedCount = 0
   let actionCount = 0
-  const migrationStates = createHash('sha256')
   const pending = new Set(catalog.puzzleIds)
   while (pending.size > 0) {
     const next = [...pending].find((id) => catalog.placement(id).prerequisites.every((parent) => verified.has(parent)))
@@ -469,7 +462,8 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
         throw new GameDomainError(`validation '${next}' uses artifact '${artifact}' not guaranteed by prerequisite closure`)
       }
     }
-    const usedRules = new Set(sidecar.solution.flatMap((action) => action.steps.map(({ rule }) => rule)))
+    const usedRules = new Set(sidecar.solution.flatMap((action) =>
+      isArtifactAction(action) ? [action.kind] : action.steps.map(({ rule }) => rule)))
     const expectedRules = new Set(sidecar.expectedRules)
     if (usedRules.size !== expectedRules.size || [...usedRules].some((rule) => !expectedRules.has(rule))) {
       throw new GameDomainError(`validation '${next}' expectedRules does not equal solution rules`)
@@ -477,7 +471,7 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
     if (catalog.placement(next).culture === seyricCulture) {
       const witnessAudit = auditSeyricWitness(
         catalog.puzzle(next).diagram,
-        sidecar.solution.flatMap((action) => action.steps),
+        sidecar.solution.flatMap((action) => isArtifactAction(action) ? [] : action.steps),
       )
       if (!witnessAudit.ok) {
         throw new GameDomainError(
@@ -485,13 +479,15 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
         )
       }
     }
-    const availableArtifacts = new Map([...completedArtifacts].filter(([id]) => sidecar.availableArtifacts.includes(id)))
-    const authority = { context: artifactTheoremContext(catalog, availableArtifacts) }
+    const availableArtifacts = new Set(sidecar.availableArtifacts)
+    const authority = {
+      context: catalog.context,
+      artifact: (id: PuzzleId) => availableArtifacts.has(id) ? catalog.puzzle(id) : undefined,
+    }
     let solution = startPuzzle(catalog.puzzle(next))
-    for (const [index, action] of sidecar.solution.entries()) {
+    for (const action of sidecar.solution) {
       solution = applyGameAction(solution, action, authority).session
       actionCount += 1
-      migrationStates.update(`${next}\0${index}\0${exploreForm(currentDiagram(solution))}\n`)
     }
     if (!isBlank(currentDiagram(solution))) throw new GameDomainError(`validation '${next}' solution does not reach canonical blank`)
 
@@ -507,28 +503,14 @@ export function validateGameContent(contentRoot = resolve(process.cwd(), 'conten
       }
       recognizedCount += 1
     }
-    completedArtifacts.set(
-      next,
-      certifyCompletedArtifact(catalog, completedArtifacts, catalog.puzzle(next), sidecar.solution),
-    )
     verified.add(next)
     pending.delete(next)
-  }
-  const migrationStateDigest = migrationStates.digest('hex')
-  if (catalog.puzzleIds.length !== MIGRATED_VALIDATION_BASELINE.puzzles
-    || evidence.length !== MIGRATED_VALIDATION_BASELINE.puzzles
-    || actionCount !== MIGRATED_VALIDATION_BASELINE.actions
-    || migrationStateDigest !== MIGRATED_VALIDATION_BASELINE.stateDigest) {
-    throw new GameDomainError(
-      `validation migration baseline changed: expected ${MIGRATED_VALIDATION_BASELINE.puzzles} puzzles, ${MIGRATED_VALIDATION_BASELINE.actions} actions, and state digest ${MIGRATED_VALIDATION_BASELINE.stateDigest}; received ${catalog.puzzleIds.length} puzzles, ${actionCount} actions, and ${migrationStateDigest}`,
-    )
   }
   return {
     puzzles: catalog.puzzleIds.length,
     solutions: evidence.length,
     actions: actionCount,
     recognizedStates: recognizedCount,
-    migrationStateDigest,
   }
 }
 

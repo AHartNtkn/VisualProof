@@ -1,9 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { applyStep } from '../../src/kernel/proof/step'
 import { parseTerm } from '../../src/kernel/term/parse'
-import { singleStepAction } from '../../src/kernel/proof/action'
-import { artifactTheoremContext, certifyCompletedArtifact } from '../../src/game/artifact-theorem'
+import { applyArtifactAction } from '../../src/game/artifact'
 import { planArtifactDrop } from '../../src/game/interface/artifact-drop'
 import { buildTestCatalog, minimalPuzzle, minimalSource } from './catalog-fixture'
 import { twoVeils } from './fixtures'
@@ -17,17 +15,13 @@ const catalog = buildTestCatalog({
   puzzles: [testArtifact],
 })
 const artifact = catalog.puzzle(testArtifact.id)
-const completionAction = singleStepAction(testArtifact.witness[0]!.rule, testArtifact.witness[0]!)
-const completedArtifact = certifyCompletedArtifact(catalog, new Map(), artifact, [completionAction])
-const completedArtifacts = new Map([[artifact.id, completedArtifact]])
-const completed = artifactTheoremContext(catalog, completedArtifacts)
 
 describe('completed artifact drop authority', () => {
-  it('dissolves a cut-only exact occurrence through an ordinary reverse theorem step', () => {
+  it('dissolves a cut-only exact occurrence through a game-owned artifact action', () => {
     const result = planArtifactDrop({
       artifact,
+      available: true,
       diagram: artifact.diagram,
-      context: completed,
       target: {
         hit: { kind: 'region', id: artifactGoal.eliminations[0]! },
         containingRegion: artifact.diagram.root,
@@ -38,10 +32,10 @@ describe('completed artifact drop authority', () => {
     expect(result).toMatchObject({
       ok: true,
       operation: 'dissolve',
-      step: { rule: 'theorem', direction: 'reverse' },
+      action: { kind: 'artifactDissolve', artifact: artifact.id },
     })
     if (!result.ok) throw new Error(result.reason)
-    expect(Object.keys(applyStep(artifact.diagram, result.step, completed, 'backward').regions))
+    expect(Object.keys(applyArtifactAction(artifact.diagram, result.action, artifact).regions))
       .toEqual([artifact.diagram.root])
   })
 
@@ -51,8 +45,8 @@ describe('completed artifact drop authority', () => {
     const diagram = host.build()
     const result = planArtifactDrop({
       artifact,
+      available: true,
       diagram,
-      context: completed,
       target: { hit: { kind: 'region', id: negative }, containingRegion: negative },
       fuel: 256,
     })
@@ -60,23 +54,18 @@ describe('completed artifact drop authority', () => {
     expect(result).toMatchObject({
       ok: true,
       operation: 'manifest',
-      step: {
-        rule: 'theorem',
-        direction: 'forward',
-        at: { sel: { region: negative, regions: [], nodes: [], wires: [] }, args: [] },
-      },
+      action: { kind: 'artifactManifest', artifact: artifact.id, region: negative },
     })
     if (!result.ok) throw new Error(result.reason)
-    expect(Object.values(applyStep(diagram, result.step, completed, 'backward').regions)
+    expect(Object.values(applyArtifactAction(diagram, result.action, artifact).regions)
       .filter((region) => region.kind === 'cut')).toHaveLength(3)
   })
 
-  it('refuses incomplete artifacts, similar forms, and strict-subgraph hits without a step', () => {
-    const unavailable = artifactTheoremContext(catalog, new Map())
+  it('refuses incomplete artifacts, similar forms, and strict-subgraph hits without an action', () => {
     expect(planArtifactDrop({
       artifact,
+      available: false,
       diagram: artifact.diagram,
-      context: unavailable,
       target: { hit: { kind: 'region', id: artifactGoal.eliminations[0]! }, containingRegion: artifact.diagram.root },
       fuel: 256,
     })).toMatchObject({ ok: false, code: 'artifact-incomplete' })
@@ -86,26 +75,26 @@ describe('completed artifact drop authority', () => {
     const similarDiagram = similar.build()
     expect(planArtifactDrop({
       artifact,
+      available: true,
       diagram: similarDiagram,
-      context: completed,
       target: { hit: { kind: 'region', id: onlyCut }, containingRegion: similar.root },
       fuel: 256,
     })).toMatchObject({ ok: false, code: 'no-legal-artifact-operation' })
 
     expect(planArtifactDrop({
       artifact,
+      available: true,
       diagram: artifact.diagram,
-      context: completed,
       target: { hit: null, containingRegion: artifact.diagram.root },
       fuel: 256,
     })).toMatchObject({ ok: false, code: 'no-legal-artifact-operation' })
   })
 
-  it('refuses an outside-canvas target before theorem matching or insertion', () => {
+  it('refuses an outside-canvas target before matching or insertion', () => {
     expect(planArtifactDrop({
       artifact,
+      available: true,
       diagram: artifact.diagram,
-      context: completed,
       target: { hit: null, containingRegion: null },
       fuel: 256,
     })).toEqual({
@@ -123,8 +112,8 @@ describe('completed artifact drop authority', () => {
 
     expect(planArtifactDrop({
       artifact,
+      available: true,
       diagram,
-      context: completed,
       target: { hit: { kind: 'node', id: wrongNode }, containingRegion: negative },
       fuel: 256,
     })).toMatchObject({ ok: false, code: 'no-legal-artifact-operation' })
@@ -140,21 +129,23 @@ describe('completed artifact drop authority', () => {
 
     const leftPlan = planArtifactDrop({
       artifact,
+      available: true,
       diagram,
-      context: completed,
       target: { hit: { kind: 'region', id: left }, containingRegion: host.root },
       fuel: 256,
     })
     const rightPlan = planArtifactDrop({
       artifact,
+      available: true,
       diagram,
-      context: completed,
       target: { hit: { kind: 'region', id: right }, containingRegion: host.root },
       fuel: 256,
     })
 
-    expect(leftPlan.ok && leftPlan.step.at.sel.regions).toEqual([left])
-    expect(rightPlan.ok && rightPlan.step.at.sel.regions).toEqual([right])
+    expect(leftPlan.ok && leftPlan.action.kind === 'artifactDissolve'
+      && leftPlan.action.selection.regions).toEqual([left])
+    expect(rightPlan.ok && rightPlan.action.kind === 'artifactDissolve'
+      && rightPlan.action.selection.regions).toEqual([right])
   })
 
   it('does not treat the shared positive container as either occurrence footprint', () => {
@@ -167,19 +158,19 @@ describe('completed artifact drop authority', () => {
 
     expect(planArtifactDrop({
       artifact,
+      available: true,
       diagram,
-      context: completed,
       target: { hit: { kind: 'region', id: host.root }, containingRegion: host.root },
       fuel: 256,
     })).toMatchObject({ ok: false, code: 'no-legal-artifact-operation' })
   })
 
-  it('validates candidates without mutating the supplied diagram', () => {
+  it('plans candidates without mutating the supplied diagram', () => {
     const before = JSON.stringify(artifact.diagram)
     planArtifactDrop({
       artifact,
+      available: true,
       diagram: artifact.diagram,
-      context: completed,
       target: { hit: { kind: 'region', id: artifactGoal.eliminations[0]! }, containingRegion: artifact.diagram.root },
       fuel: 256,
     })

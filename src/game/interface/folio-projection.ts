@@ -11,7 +11,7 @@ import {
 } from './puzzle-preview-contract'
 
 export type FolioRecordStatus = 'locked' | 'unlocked' | 'completed'
-export type FolioRecordAffordance = 'select' | 'resist' | 'drag-theorem' | 'inert'
+export type FolioRecordAffordance = 'select' | 'resist' | 'drag-artifact' | 'inert'
 
 export type FolioRecordProjection = {
   readonly id: PuzzleId
@@ -48,7 +48,7 @@ const recordAffordance = (
   mode: FolioProjection['mode'],
   status: FolioRecordStatus,
 ): FolioRecordAffordance => {
-  if (mode === 'puzzle') return status === 'completed' ? 'drag-theorem' : 'inert'
+  if (mode === 'puzzle') return status === 'completed' ? 'drag-artifact' : 'inert'
   if (mode === 'completion') return 'inert'
   return status === 'locked' ? 'resist' : 'select'
 }
@@ -58,7 +58,7 @@ export function projectFolio(
   state: GameControllerState,
   mode: FolioProjection['mode'],
 ): FolioProjection {
-  const progress = { completed: state.completedArtifacts }
+  const progress = { completed: state.completedPuzzles }
   const cultures = catalog.cultureIds.map((id) => catalog.culture(id)).map((culture) => ({
     id: culture.id,
     name: culture.name,
@@ -70,7 +70,7 @@ export function projectFolio(
       .map((id, index): FolioRecordProjection => {
         const artifact = catalog.artifact(id)
         const fingerprint = catalog.puzzleFingerprint(id)
-        const status: FolioRecordStatus = state.completedArtifacts.has(id)
+        const status: FolioRecordStatus = state.completedPuzzles.has(id)
           ? 'completed'
           : isUnlocked(catalog, progress, id) ? 'unlocked' : 'locked'
         return {

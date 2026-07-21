@@ -83,6 +83,40 @@ describe('verified ProofContext authority', () => {
     expect(EMPTY_PROOF_CONTEXT.theorems.size).toBe(0)
   })
 
+  it('rejects malformed in-memory diagrams without a serialization round trip', () => {
+    const diagram = emptyDiagram()
+    const malformed = {
+      ...diagram,
+      regions: { ...diagram.regions, second: { kind: 'sheet' as const } },
+    }
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, {
+      name: 'malformed-diagram',
+      lhs: { diagram: malformed, boundary: [] },
+      rhs: { diagram: malformed, boundary: [] },
+      actions: [],
+    })).toThrow(/sheet|root/i)
+  })
+
+  it('validates the direct theorem carrier without a serialization round trip', () => {
+    const valid = identity('direct-carrier')
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, {
+      ...valid,
+      name: 5,
+    } as unknown as typeof valid)).toThrow(/name.*string/i)
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, {
+      ...valid,
+      extra: true,
+    } as unknown as typeof valid)).toThrow(/unknown field 'extra'/i)
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, {
+      ...valid,
+      actions: {},
+    } as unknown as typeof valid)).toThrow(/actions.*array/i)
+    expect(() => registerTheorem(EMPTY_PROOF_CONTEXT, {
+      ...valid,
+      backActions: null,
+    } as unknown as typeof valid)).toThrow(/backActions.*array/i)
+  })
+
   it('does not expose mutable certified maps or mutable stored theorem data', () => {
     const source = identity('stable')
     const ctx = registerTheorem(EMPTY_PROOF_CONTEXT, source)

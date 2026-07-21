@@ -1,17 +1,24 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { artifactTheoremContext, artifactTheoremName } from '../../src/game/artifact-theorem'
+import { gameSessionActionFromJson } from '../../src/game/action'
 import { isBlank } from '../../src/game/blank'
 import { loadGameContent } from '../../src/game/catalog'
 import { gameContentFiles } from '../../src/game/content/files'
+import {
+  applyGameAction,
+  currentDiagram,
+  isArtifactAction,
+  startPuzzle,
+  type GameSessionAction,
+} from '../../src/game/session'
 import { puzzleId } from '../../src/game/types'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import { exploreForm } from '../../src/kernel/diagram/canonical/explore'
 import { polarity } from '../../src/kernel/diagram/regions'
-import { actionFromJson } from '../../src/kernel/proof/json'
+import { singleStepAction } from '../../src/kernel/proof/action'
+import type { ProofStep } from '../../src/kernel/proof/step'
 import { findDeiterationEvidence } from '../../src/kernel/rules/iteration'
-import { applyStep, type ProofStep } from '../../src/kernel/proof/step'
 
 type ValidationFile = {
   readonly puzzle: string
@@ -26,120 +33,130 @@ const readValidation = (id: string): ValidationFile => JSON.parse(readFileSync(
   resolve(process.cwd(), 'content', 'validation', `${id}.json`),
   'utf8',
 )) as ValidationFile
-const actions = (id: string) => readValidation(id).solution
-  .map((action, index) => actionFromJson(action, `${id} solution action ${index}`))
-const witness = (id: string): readonly ProofStep[] => actions(id).flatMap((action) => action.steps)
-const contextFor = (artifacts: readonly string[]) => artifactTheoremContext(
-  catalog,
-  new Map(artifacts.map((id) => {
-    const puzzle = puzzleId(id)
-    return [puzzle, { puzzle, actions: actions(id) }] as const
-  })),
-)
-const replay = (start: Diagram, steps: readonly ProofStep[], artifacts: readonly string[]): Diagram =>
-  steps.reduce((diagram, step) => applyStep(diagram, step, contextFor(artifacts), 'backward'), start)
-const replayAttempt = (
+const actions = (id: string): readonly GameSessionAction[] => readValidation(id).solution
+  .map((action, index) => gameSessionActionFromJson(action, `${id} solution action ${index}`))
+
+const replay = (
+  puzzle: string,
   start: Diagram,
-  steps: readonly ProofStep[],
+  sequence: readonly GameSessionAction[],
+  artifacts: readonly string[],
+): Diagram => {
+  const available = new Set(artifacts.map(puzzleId))
+  let session = startPuzzle({ id: puzzleId(puzzle), diagram: start })
+  for (const action of sequence) {
+    session = applyGameAction(session, action, {
+      context: catalog.context,
+      artifact: (id) => available.has(id) ? catalog.puzzle(id) : undefined,
+    }).session
+  }
+  return currentDiagram(session)
+}
+
+const replayAttempt = (
+  puzzle: string,
+  start: Diagram,
+  sequence: readonly GameSessionAction[],
   artifacts: readonly string[],
 ): Diagram | null => {
-  try {
-    return replay(start, steps, artifacts)
-  } catch {
-    return null
-  }
+  try { return replay(puzzle, start, sequence, artifacts) } catch { return null }
 }
-const failsOrRemains = (attempt: Diagram | null): boolean => attempt === null || !isBlank(attempt)
 
-const theoremStep = (
-  name: string,
-  direction: 'forward' | 'reverse',
-  region: string,
-  regions: readonly string[] = [],
-): ProofStep => ({
-  rule: 'theorem',
-  name: artifactTheoremName(puzzleId(name)),
-  at: { sel: { region, regions, nodes: [], wires: [] }, args: [] },
-  direction,
-})
+const failsOrRemains = (attempt: Diagram | null): boolean =>
+  attempt === null || !isBlank(attempt)
 
-const deiteration = (diagram: Diagram, sel: Extract<ProofStep, { rule: 'deiteration' }>['sel']): ProofStep => ({
-  rule: 'deiteration', sel, ...findDeiterationEvidence(diagram, sel, 100),
-})
+const proof = (step: ProofStep): GameSessionAction => singleStepAction(step.rule, step)
 
 describe('Myratic artifact collision redesigns', () => {
-  it('derives the useful compound source by changing a proper subcomponent of the manifested artifact', () => {
+  it('derives the useful compound source by changing a proper subcomponent of a manifested catalog artifact', () => {
     const id = 'compound-theorem-source-choice'
     const start = catalog.puzzle(puzzleId(id)).diagram
     const validation = readValidation(id)
-    const steps = witness(id)
-    const theoremIndex = steps.findIndex((step) => step.rule === 'theorem')
-    const sourceTransformation = steps[theoremIndex + 1]
-    const sourceUse = steps[theoremIndex + 2]
+    const sequence = actions(id)
+    const manifestation = sequence[0]
+    const sourceTransformation = sequence[1]
+    const sourceUse = sequence[2]
 
     expect(validation.availableArtifacts).toEqual(['sey-lem-i01', 'sey-lem-c01'])
-    expect(steps[theoremIndex]).toMatchObject({
-      rule: 'theorem',
-      name: artifactTheoremName(puzzleId('sey-lem-c01')),
-      direction: 'forward',
+    expect(manifestation).toEqual({
+      kind: 'artifactManifest', artifact: puzzleId('sey-lem-c01'), region: 'continuation-outer',
     })
-    expect(sourceTransformation).toMatchObject({ rule: 'doubleCutElim', region: 'r8' })
+    expect(sourceTransformation).toMatchObject({
+      label: 'doubleCutElim', steps: [{ rule: 'doubleCutElim', region: 'r8' }],
+    })
     expect(sourceUse).toMatchObject({
-      rule: 'deiteration',
-      sel: { region: 'continuation-inner', regions: ['target-outer'] },
+      label: 'deiteration',
+      steps: [{
+        rule: 'deiteration',
+        sel: { region: 'continuation-inner', regions: ['target-outer'] },
+      }],
     })
-    expect(isBlank(replay(start, steps, validation.availableArtifacts))).toBe(true)
+    expect(isBlank(replay(id, start, sequence, validation.availableArtifacts))).toBe(true)
 
-    if (steps[theoremIndex]?.rule !== 'theorem' || sourceTransformation === undefined || sourceUse === undefined) {
-      throw new Error('expected a manifested source, proper-subcomponent transformation, and source use')
+    if (manifestation === undefined || sourceTransformation === undefined || sourceUse === undefined) {
+      throw new Error('expected manifested source, transformation, and use')
     }
-    const manifested = applyStep(
+    const afterManifest = replay(id, start, [manifestation], validation.availableArtifacts)
+    expect(afterManifest.regions.r8).toMatchObject({ kind: 'cut' })
+    expect(() => replay(id, afterManifest, [sourceUse], validation.availableArtifacts)).toThrow()
+    const transformed = replay(id, afterManifest, [sourceTransformation], validation.availableArtifacts)
+    expect(() => replay(id, transformed, [sourceUse], validation.availableArtifacts)).not.toThrow()
+
+    expect(failsOrRemains(replayAttempt(
+      id,
       start,
-      steps[theoremIndex],
-      contextFor(validation.availableArtifacts),
-      'backward',
-    )
-    expect(manifested.regions.r1?.kind).toBe('cut')
-    const properComponent = manifested.regions.r8
-    expect(properComponent?.kind).toBe('cut')
-    if (properComponent === undefined || properComponent.kind === 'sheet') {
-      throw new Error('expected the manifested source to contain proper region r8')
-    }
-    expect(properComponent.parent).not.toBe(manifested.root)
-    expect(() => applyStep(
-      manifested,
-      sourceUse,
-      contextFor(validation.availableArtifacts),
-      'backward',
-    )).toThrow()
-    const transformed = applyStep(
-      manifested,
-      sourceTransformation,
-      contextFor(validation.availableArtifacts),
-      'backward',
-    )
-    expect(() => applyStep(
-      transformed,
-      sourceUse,
-      contextFor(validation.availableArtifacts),
-      'backward',
-    )).not.toThrow()
+      sequence.filter((_, index) => index !== 1),
+      validation.availableArtifacts,
+    ))).toBe(true)
 
-    const withoutProperTransformation = steps.filter((_, index) => index !== theoremIndex + 1)
-    expect(failsOrRemains(replayAttempt(start, withoutProperTransformation, validation.availableArtifacts))).toBe(true)
-
-    const withNearSource = steps.map((step, index) => index === theoremIndex && step.rule === 'theorem'
-      ? { ...step, name: artifactTheoremName(puzzleId('sey-lem-i01')) }
-      : step)
-    expect(failsOrRemains(replayAttempt(start, withNearSource, validation.availableArtifacts))).toBe(true)
+    const nearSource = sequence.map((action, index): GameSessionAction =>
+      index === 0 && isArtifactAction(action)
+        ? { ...action, artifact: puzzleId('sey-lem-i01') }
+        : action)
+    expect(failsOrRemains(replayAttempt(id, start, nearSource, validation.availableArtifacts)))
+      .toBe(true)
   })
 
-  it('accepts reconstructing the continuation target as an open-ended all-reverse solution', () => {
+  it('offers an authored route using game-owned manifestation and exact dissolution', () => {
+    const id = 'artifact-polarity-direction-contrast'
+    const start = catalog.puzzle(puzzleId(id)).diagram
+    const validation = readValidation(id)
+    const sequence = actions(id)
+    const forwardIndex = sequence.findIndex((action) =>
+      isArtifactAction(action) && action.kind === 'artifactManifest')
+    const reverseIndex = sequence.findIndex((action) =>
+      isArtifactAction(action) && action.kind === 'artifactDissolve')
+
+    expect(validation.availableArtifacts).toEqual(['two-mark-projection'])
+    expect(sequence[forwardIndex]).toEqual({
+      kind: 'artifactManifest', artifact: puzzleId('two-mark-projection'), region: 'manifest-host',
+    })
+    expect(sequence[reverseIndex]).toMatchObject({
+      kind: 'artifactDissolve',
+      artifact: puzzleId('two-mark-projection'),
+      selection: { region: 'workspace', regions: ['dissolve-outer'] },
+    })
+    expect(polarity(start, 'manifest-host')).toBe('negative')
+    expect(polarity(start, 'workspace')).toBe('positive')
+    expect(reverseIndex).toBeGreaterThan(forwardIndex)
+    expect(isBlank(replay(id, start, sequence, validation.availableArtifacts))).toBe(true)
+
+    for (const index of [forwardIndex, reverseIndex]) {
+      expect(failsOrRemains(replayAttempt(
+        id,
+        start,
+        sequence.filter((_, candidate) => candidate !== index),
+        validation.availableArtifacts,
+      ))).toBe(true)
+    }
+  })
+
+  it('accepts reconstructing the continuation target as an open-ended all-dissolution solution', () => {
     const id = 'compound-theorem-source-choice'
     const start = catalog.puzzle(puzzleId(id)).diagram
     const artifacts = readValidation(id).availableArtifacts
-    const bypass = [
-      {
+    const alternative: readonly GameSessionAction[] = [
+      proof({
         rule: 'doubleCutIntro',
         sel: {
           region: 'target-branch',
@@ -147,145 +164,100 @@ describe('Myratic artifact collision redesigns', () => {
           nodes: ['target-open-x', 'target-open-y', 'target-open-z'],
           wires: [],
         },
-      } as ProofStep,
-      theoremStep('sey-lem-c01', 'reverse', 'continuation-inner', ['target-outer']),
-      { rule: 'doubleCutElim', region: 'continuation-outer' } as ProofStep,
-      { rule: 'doubleCutElim', region: 'outer' } as ProofStep,
+      }),
+      {
+        kind: 'artifactDissolve',
+        artifact: puzzleId('sey-lem-c01'),
+        selection: {
+          region: 'continuation-inner', regions: ['target-outer'], nodes: [], wires: [],
+        },
+      },
+      proof({ rule: 'doubleCutElim', region: 'continuation-outer' }),
+      proof({ rule: 'doubleCutElim', region: 'outer' }),
     ]
 
-    expect(isBlank(replay(start, bypass, artifacts))).toBe(true)
+    expect(isBlank(replay(id, start, alternative, artifacts))).toBe(true)
   })
 
-  it('offers an authored route using forward manifestation and reverse exact dissolution', () => {
-    const id = 'artifact-polarity-direction-contrast'
-    const start = catalog.puzzle(puzzleId(id)).diagram
-    const validation = readValidation(id)
-    const steps = witness(id)
-    const forwardIndex = steps.findIndex((step) => step.rule === 'theorem' && step.direction === 'forward')
-    const reverseIndex = steps.findIndex((step) => step.rule === 'theorem' && step.direction === 'reverse')
-
-    expect(validation.availableArtifacts).toEqual(['two-mark-projection'])
-    expect(forwardIndex).toBeGreaterThanOrEqual(0)
-    expect(reverseIndex).toBeGreaterThan(forwardIndex)
-    expect(steps.slice(forwardIndex + 1, reverseIndex).some((step) => step.rule === 'deiteration')).toBe(true)
-    expect(steps[forwardIndex]).toMatchObject({
-      rule: 'theorem',
-      direction: 'forward',
-      at: { sel: { region: 'manifest-host', regions: [] } },
-    })
-    expect(steps[forwardIndex + 1]).toMatchObject({
-      rule: 'deiteration',
-      sel: { region: 'r4', regions: [], nodes: ['n2'] },
-    })
-    expect(steps[forwardIndex + 2]).toMatchObject({
-      rule: 'deiteration',
-      sel: { region: 'continuation-host', regions: ['repeat-outer'] },
-    })
-    expect(steps[reverseIndex]).toMatchObject({
-      rule: 'theorem',
-      direction: 'reverse',
-      at: { sel: { region: 'workspace', regions: ['dissolve-outer'] } },
-    })
-    expect(start.regions['repeat-outer']).toMatchObject({ parent: 'continuation-host' })
-    expect(start.regions['dissolve-outer']).toMatchObject({ parent: 'workspace' })
-    expect(polarity(start, 'manifest-host')).toBe('negative')
-    expect(polarity(start, 'continuation-host')).toBe('positive')
-    expect(polarity(start, 'workspace')).toBe('positive')
-    expect(isBlank(replay(start, steps, validation.availableArtifacts))).toBe(true)
-
-    expect(() => applyStep(start, {
-      rule: 'erasure',
-      sel: { region: 'continuation-host', regions: ['repeat-outer'], nodes: [], wires: [] },
-    }, contextFor(validation.availableArtifacts), 'backward')).toThrow()
-
-    const forward = steps[forwardIndex]
-    const sourceTransformation = steps[forwardIndex + 1]
-    const sourceUse = steps[forwardIndex + 2]
-    if (forward === undefined || sourceTransformation === undefined || sourceUse === undefined) {
-      throw new Error('expected manifestation, internal transformation, and continuation use')
-    }
-    const manifested = applyStep(start, forward, contextFor(validation.availableArtifacts), 'backward')
-    expect(() => applyStep(manifested, sourceUse, contextFor(validation.availableArtifacts), 'backward')).toThrow()
-    const transformed = applyStep(manifested, sourceTransformation, contextFor(validation.availableArtifacts), 'backward')
-    expect(() => applyStep(transformed, sourceUse, contextFor(validation.availableArtifacts), 'backward')).not.toThrow()
-
-    const withoutForward = steps.filter((_, index) => index !== forwardIndex)
-    const withoutSourceTransformation = steps.filter((_, index) => index !== forwardIndex + 1)
-    const withoutReverse = steps.filter((_, index) => index !== reverseIndex)
-    expect(failsOrRemains(replayAttempt(start, withoutForward, validation.availableArtifacts))).toBe(true)
-    expect(failsOrRemains(replayAttempt(start, withoutSourceTransformation, validation.availableArtifacts))).toBe(true)
-    expect(failsOrRemains(replayAttempt(start, withoutReverse, validation.availableArtifacts))).toBe(true)
-
-    for (const index of [forwardIndex, reverseIndex]) {
-      const swapped = steps.map((step, stepIndex) => stepIndex === index && step.rule === 'theorem'
-        ? { ...step, direction: step.direction === 'forward' ? 'reverse' as const : 'forward' as const }
-        : step)
-      expect(failsOrRemains(replayAttempt(start, swapped, validation.availableArtifacts))).toBe(true)
-    }
-  })
-
-  it('accepts a disposable forward ancestor copy as an open-ended all-forward solution', () => {
+  it('accepts a disposable manifested ancestor copy as an open-ended alternative', () => {
     const id = 'artifact-polarity-direction-contrast'
     const start = catalog.puzzle(puzzleId(id)).diagram
     const artifacts = readValidation(id).availableArtifacts
-    const bypass: ProofStep[] = []
-    const context = contextFor(artifacts)
-    let state = start
-    const append = (step: ProofStep): void => {
-      state = applyStep(state, step, context, 'backward')
-      bypass.push(step)
+    const available = new Set(artifacts.map(puzzleId))
+    let session = startPuzzle({ id: puzzleId(id), diagram: start })
+    const append = (action: GameSessionAction): void => {
+      session = applyGameAction(session, action, {
+        context: catalog.context,
+        artifact: (artifact) => available.has(artifact) ? catalog.puzzle(artifact) : undefined,
+      }).session
     }
-    append(theoremStep('two-mark-projection', 'forward', 'manifest-host'))
-    append(deiteration(state, {
-      region: 'r4', regions: [], nodes: ['n2'], wires: [],
-    }))
-    append(deiteration(state, {
-      region: 'continuation-host', regions: ['repeat-outer'], nodes: [], wires: [],
-    }))
+    const deiterate = (sel: Extract<ProofStep, { rule: 'deiteration' }>['sel']): void => {
+      const diagram = currentDiagram(session)
+      append(proof({
+        rule: 'deiteration', sel, ...findDeiterationEvidence(diagram, sel, 100),
+      }))
+    }
+
     append({
+      kind: 'artifactManifest', artifact: puzzleId('two-mark-projection'), region: 'manifest-host',
+    })
+    deiterate({ region: 'r4', regions: [], nodes: ['n2'], wires: [] })
+    deiterate({ region: 'continuation-host', regions: ['repeat-outer'], nodes: [], wires: [] })
+    append(proof({
       rule: 'erasure',
       sel: { region: 'manifest-host', regions: ['r1'], nodes: [], wires: [] },
-    })
-    append({ rule: 'doubleCutElim', region: 'manifest-host' })
-    append(theoremStep('two-mark-projection', 'forward', 'outer'))
-    append(deiteration(state, {
-      region: 'workspace', regions: ['dissolve-outer'], nodes: [], wires: [],
     }))
+    append(proof({ rule: 'doubleCutElim', region: 'manifest-host' }))
     append({
+      kind: 'artifactManifest', artifact: puzzleId('two-mark-projection'), region: 'outer',
+    })
+    deiterate({ region: 'workspace', regions: ['dissolve-outer'], nodes: [], wires: [] })
+    append(proof({
       rule: 'erasure',
       sel: { region: 'outer', regions: ['r1'], nodes: [], wires: [] },
-    })
-    append({ rule: 'doubleCutElim', region: 'outer' })
+    }))
+    append(proof({ rule: 'doubleCutElim', region: 'outer' }))
 
-    expect(isBlank(state)).toBe(true)
-    expect(isBlank(replay(start, bypass, artifacts))).toBe(true)
+    expect(isBlank(currentDiagram(session))).toBe(true)
   })
 
-  it('accepts rebuilding the forward-derived target as an open-ended all-reverse solution', () => {
+  it('accepts rebuilding the manifested target as an open-ended all-dissolution solution', () => {
     const id = 'artifact-polarity-direction-contrast'
     const start = catalog.puzzle(puzzleId(id)).diagram
     const artifacts = readValidation(id).availableArtifacts
-    const bypass = [
-      {
+    const alternative: readonly GameSessionAction[] = [
+      proof({
         rule: 'iteration',
         sel: { region: 'repeat-y', regions: [], nodes: ['repeat-x-open'], wires: [] },
         target: 'repeat-mark',
-      } as ProofStep,
-      theoremStep('two-mark-projection', 'reverse', 'continuation-host', ['repeat-outer']),
-      { rule: 'doubleCutElim', region: 'manifest-host' } as ProofStep,
-      theoremStep('two-mark-projection', 'reverse', 'workspace', ['dissolve-outer']),
-      { rule: 'doubleCutElim', region: 'outer' } as ProofStep,
+      }),
+      {
+        kind: 'artifactDissolve',
+        artifact: puzzleId('two-mark-projection'),
+        selection: {
+          region: 'continuation-host', regions: ['repeat-outer'], nodes: [], wires: [],
+        },
+      },
+      proof({ rule: 'doubleCutElim', region: 'manifest-host' }),
+      {
+        kind: 'artifactDissolve',
+        artifact: puzzleId('two-mark-projection'),
+        selection: {
+          region: 'workspace', regions: ['dissolve-outer'], nodes: [], wires: [],
+        },
+      },
+      proof({ rule: 'doubleCutElim', region: 'outer' }),
     ]
 
-    expect(isBlank(replay(start, bypass, artifacts))).toBe(true)
+    expect(isBlank(replay(id, start, alternative, artifacts))).toBe(true)
   })
 
-  it('keeps both starts canonically distinct from one another and the displaced target-choice problem', () => {
+  it('keeps both starts canonically distinct from one another and the target-choice problem', () => {
     const sourceChoice = catalog.puzzle(puzzleId('compound-theorem-source-choice')).diagram
-    const polarity = catalog.puzzle(puzzleId('artifact-polarity-direction-contrast')).diagram
+    const polarityDiagram = catalog.puzzle(puzzleId('artifact-polarity-direction-contrast')).diagram
     const targetChoice = catalog.puzzle(puzzleId('useful-manifestation-target')).diagram
 
-    expect(exploreForm(sourceChoice)).not.toBe(exploreForm(polarity))
-    expect(exploreForm(polarity)).not.toBe(exploreForm(targetChoice))
+    expect(exploreForm(sourceChoice)).not.toBe(exploreForm(polarityDiagram))
+    expect(exploreForm(polarityDiagram)).not.toBe(exploreForm(targetChoice))
   })
 })

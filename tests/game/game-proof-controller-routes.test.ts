@@ -160,7 +160,7 @@ describe('actual game proof controller routes', () => {
     const inner = builder.bubble(middle, 0)
     builder.termNode(inner, parseTerm('x'))
     const diagram = builder.build()
-    const authority = { context: EMPTY_PROOF_CONTEXT }
+    const authority = { context: EMPTY_PROOF_CONTEXT, artifact: () => undefined }
     let session = startPuzzle({ id: puzzleId('nested-vacuous-batch'), diagram })
     let applyCalls = 0
     const selection = { value: [outer, middle, inner].map((id) => ({ kind: 'region' as const, id })) }

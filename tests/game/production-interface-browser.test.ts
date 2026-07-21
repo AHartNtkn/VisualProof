@@ -89,7 +89,7 @@ describe('production interface rendered geometry', () => {
       await page.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2)
       await page.mouse.down()
       await page.mouse.move(980, 350)
-      const lifted = await page.locator('.inspection-positioner.is-theorem-lifted').boundingBox()
+      const lifted = await page.locator('.inspection-positioner.is-artifact-lifted').boundingBox()
       if (lifted === null) throw new Error('lifted record has no rendered box')
       expect(lifted.x + lifted.width / 2).toBeCloseTo(980, 0)
       expect(lifted.y + lifted.height / 2).toBeCloseTo(350, 0)
@@ -129,7 +129,7 @@ describe('production interface rendered geometry', () => {
       await page.mouse.down()
       await page.mouse.move(900, 420)
       const compactOffsetLifted = await page
-        .locator('.inspection-positioner.is-theorem-lifted').boundingBox()
+        .locator('.inspection-positioner.is-artifact-lifted').boundingBox()
       if (compactOffsetLifted === null) throw new Error('compact-offset lift has no rendered box')
       expect(compactOffsetLifted.x + compactOffsetLifted.width / 2).toBeCloseTo(900, 0)
       expect(compactOffsetLifted.y + compactOffsetLifted.height / 2).toBeCloseTo(420, 0)

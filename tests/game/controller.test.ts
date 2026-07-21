@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { GameCatalog } from '../../src/game/catalog'
 import {
   createInitialGameState,
+  snapshotGameControllerState,
   type GameControllerState,
 } from '../../src/game/controller-state'
 import { reduceGame } from '../../src/game/controller'
@@ -47,17 +48,25 @@ const applyWitness = (
   puzzle: typeof FIRST | typeof SECOND,
   index: number,
 ) => transition(state, {
-  kind: 'applyProofAction',
+  kind: 'applySessionAction',
   action: gesture(controllerPuzzle(puzzle).witness[index]!),
 }).state
 
 describe('authoritative game controller', () => {
+  it('does not expose completion authority through state snapshots', () => {
+    const state = fresh()
+    const snapshot = snapshotGameControllerState(state)
+    ;(snapshot.completedPuzzles as Set<typeof FIRST>).add(FIRST)
+    expect(snapshot.completedPuzzles.has(FIRST)).toBe(true)
+    expect(state.completedPuzzles.has(FIRST)).toBe(false)
+  })
+
   it('starts in the archive with caller-owned reduced motion and first-launch defaults', () => {
     const state = fresh(true)
 
     expect(state.mode).toBe('archive')
     expect(state.activePuzzle).toBeNull()
-    expect(state.completedArtifacts.size).toBe(0)
+    expect(state.completedPuzzles.size).toBe(0)
     expect(state.firstAttempts.size).toBe(0)
     expect(state.replays.size).toBe(0)
     expect(state.guidance).toBeNull()
@@ -95,16 +104,13 @@ describe('authoritative game controller', () => {
   it('commits a prepared batch as one controller action while counting every ordinary proof move', () => {
     const witness = controllerPuzzle(FIRST).witness
     const state = transition(select(fresh(), FIRST), {
-      kind: 'applyProofAction',
+      kind: 'applySessionAction',
       action: compound('complete puzzle', witness),
     }).state
 
     expect(state.mode).toBe('completion')
     expect(state.completionReceipt).toEqual({ puzzle: FIRST, moves: 1, replay: false })
-    expect(state.completedArtifacts.has(FIRST)).toBe(true)
-    expect(state.completedArtifacts.get(FIRST)?.actions).toEqual([
-      compound('complete puzzle', witness),
-    ])
+    expect([...state.completedPuzzles]).toEqual([FIRST])
   })
 
   it('applies Escape precedence for editor, pause settings, pause, and no transient while guidance remains passive', () => {
@@ -163,7 +169,7 @@ describe('authoritative game controller', () => {
     const timeline = state.firstAttempts.get(FIRST)?.timeline
 
     expect(() => transition(state, {
-      kind: 'applyProofAction', action: gesture(controllerPuzzle(FIRST).witness[0]!),
+      kind: 'applySessionAction', action: gesture(controllerPuzzle(FIRST).witness[0]!),
     })).toThrow(/pause.*owns input/)
     expect(() => transition(state, { kind: 'moveTimeline', cursor: 0 }))
       .toThrow(/pause.*owns input/)
@@ -213,7 +219,7 @@ describe('authoritative game controller', () => {
     expect(state.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: true })
     expect(state.replays.has(FIRST)).toBe(false)
     expect(state.replays.get(SECOND)?.timeline.cursor).toBe(1)
-    expect([...state.completedArtifacts.keys()]).toEqual([FIRST, SECOND])
+    expect([...state.completedPuzzles]).toEqual([FIRST, SECOND])
   })
 
   it('retains future on rewind, branches only the active puzzle, and uses cursor zero as restart', () => {
@@ -231,7 +237,7 @@ describe('authoritative game controller', () => {
     expect(state.firstAttempts.get(SECOND)?.timeline.actions).toHaveLength(2)
     const untouchedFirst = state.firstAttempts.get(FIRST)
     state = transition(state, {
-      kind: 'applyProofAction',
+      kind: 'applySessionAction',
       action: gesture(controllerPuzzle(SECOND).witness[2]!),
     }).state
 
@@ -252,7 +258,7 @@ describe('authoritative game controller', () => {
 
     state = transition(state, { kind: 'moveTimeline', cursor: 0 }).state
     state = transition(state, {
-      kind: 'applyProofAction',
+      kind: 'applySessionAction',
       action: compound('two proof operations', [witness[0]!, witness[1]!]),
     }).state
     const branched = state.firstAttempts.get(FIRST)!.timeline
@@ -296,7 +302,7 @@ describe('authoritative game controller', () => {
     first = transition(first, { kind: 'openEditor' }).state
     const completed = applyWitness(first, FIRST, 2)
 
-    expect([...completed.completedArtifacts.keys()]).toEqual([FIRST])
+    expect([...completed.completedPuzzles]).toEqual([FIRST])
     expect(completed.firstAttempts.has(FIRST)).toBe(false)
     expect(completed.mode).toBe('completion')
     expect(completed.transient).toBeNull()
@@ -308,7 +314,7 @@ describe('authoritative game controller', () => {
     replay = applyWitness(replay, FIRST, 0)
     replay = applyWitness(replay, FIRST, 1)
     replay = applyWitness(replay, FIRST, 2)
-    expect([...replay.completedArtifacts.keys()]).toEqual([FIRST])
+    expect([...replay.completedPuzzles]).toEqual([FIRST])
     expect(replay.replays.has(FIRST)).toBe(false)
     expect(replay.completionReceipt).toEqual({ puzzle: FIRST, moves: 3, replay: true })
   })
@@ -376,7 +382,7 @@ describe('authoritative game controller', () => {
     const reached = applyGameAction(
       startPuzzle({ id: second.id, diagram: second.goal.diagram }),
       gesture(firstStep),
-      { context: buildTestCatalog(source).context },
+      { context: buildTestCatalog(source).context, artifact: () => undefined },
     )
     const authority = buildTestCatalog({
       ...source,
@@ -402,7 +408,7 @@ describe('authoritative game controller', () => {
     ).state
 
     state = reduceGame(authority, state, {
-      kind: 'applyProofAction', action: gesture(firstStep),
+      kind: 'applySessionAction', action: gesture(firstStep),
     }).state
     expect(state.guidance).toMatchObject({
       identity: { puzzle: SECOND, intervention: 'recognized-route' },
@@ -415,7 +421,7 @@ describe('authoritative game controller', () => {
   it('does not change controller state when a proof move is invalid', () => {
     const state = select(fresh(), FIRST)
     expect(() => transition(state, {
-      kind: 'applyProofAction',
+      kind: 'applySessionAction',
       action: gesture({ rule: 'doubleCutElim', region: 'forged-region' }),
     })).toThrow()
     expect(state.firstAttempts.get(FIRST)?.timeline).toMatchObject({ cursor: 0, actions: [] })

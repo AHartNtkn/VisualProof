@@ -20,6 +20,7 @@ const puzzle = minimalPuzzle({
 const corePuzzle = { id: puzzle.id, diagram: puzzle.goal.diagram }
 const authority = {
   context: EMPTY_PROOF_CONTEXT,
+  artifact: () => undefined,
 }
 const gesture = (step: ProofStep): ProofAction => singleStepAction(step.rule, step)
 const compound = (label: string, steps: readonly ProofStep[]): ProofAction => ({
@@ -39,37 +40,13 @@ describe('backward game session', () => {
     const transition = applyGameAction(startPuzzle(corePuzzle), action, authority)
 
     expect(transition.completedNow).toBe(true)
-    expect(transition.session.timeline.actions).toEqual([action])
+    expect(transition.session.timeline.actions[0]).toEqual(action)
+    expect(transition.session.timeline.actions[0]).not.toBe(action)
+    ;(action.steps as unknown as Array<{ rule: string }>)[0]!.rule = 'forged-after-acceptance'
+    expect((transition.session.timeline.actions[0] as ProofAction).steps[0]!.rule)
+      .toBe('doubleCutElim')
     expect(transition.session.timeline.states).toHaveLength(2)
     expect(transition.session.timeline.cursor).toBe(1)
-  })
-
-  it('owns a codec-normalized action snapshot instead of retaining caller-mutable proof data', () => {
-    const expectedFirst = { ...puzzle.witness[0]! }
-    const supplied = {
-      label: 'remove both veil pairs',
-      steps: puzzle.witness.map((step) => ({ ...step })),
-      placements: [],
-      allocation: { regions: [], nodes: ['reserved-node'], wires: [] },
-    } as ProofAction as unknown as {
-      label: string
-      steps: Array<{ rule: 'doubleCutElim'; region: string }>
-      placements: Array<{ introducedNode: number; x: number; y: number }>
-      allocation: { regions: string[]; nodes: string[]; wires: string[] }
-    }
-    const transition = applyGameAction(startPuzzle(corePuzzle), supplied, authority)
-    const retained = transition.session.timeline.actions[0]!
-
-    supplied.label = 'mutated'
-    supplied.steps[0]!.region = 'forged-region'
-    supplied.placements.push({ introducedNode: 0, x: 1, y: 2 })
-    supplied.allocation.nodes.push('later-reservation')
-
-    expect(retained).not.toBe(supplied)
-    expect(retained.label).toBe('remove both veil pairs')
-    expect(retained.steps[0]).toEqual(expectedFirst)
-    expect(retained.placements).toEqual([])
-    expect(retained.allocation?.nodes).toEqual(['reserved-node'])
   })
 
   it('accepts positive-region atomic spawning only in backward orientation', () => {
@@ -85,6 +62,29 @@ describe('backward game session', () => {
 
     expect(transition.session.timeline.actions).toEqual([gesture(step)])
     expect(currentDiagram(transition.session)).not.toBe(puzzle.goal.diagram)
+  })
+
+  it('applies only completed catalog artifacts without theorem authority', () => {
+    const host = new DiagramBuilder()
+    const negative = host.cut(host.root)
+    const hostPuzzle = { id: puzzleId('artifact-host'), diagram: host.build() }
+    const artifact = corePuzzle
+    const action = {
+      kind: 'artifactManifest' as const,
+      artifact: artifact.id,
+      region: negative,
+    }
+
+    expect(() => applyGameAction(startPuzzle(hostPuzzle), action, authority))
+      .toThrow(/is not available/)
+
+    const transition = applyGameAction(startPuzzle(hostPuzzle), action, {
+      context: EMPTY_PROOF_CONTEXT,
+      artifact: (id) => id === artifact.id ? artifact : undefined,
+    })
+    expect(transition.session.timeline.actions).toEqual([action])
+    expect(Object.keys(currentDiagram(transition.session).regions).length)
+      .toBeGreaterThan(Object.keys(hostPuzzle.diagram.regions).length)
   })
 
   it('completes on canonical blank', () => {

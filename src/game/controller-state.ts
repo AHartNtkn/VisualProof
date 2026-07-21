@@ -3,7 +3,6 @@ import type { GameSession } from './session'
 import type { PresentedGuidanceIntervention } from './teaching'
 import {
   GameDomainError,
-  type CompletedArtifact,
   type CultureId,
   type GuidanceDeliveryIdentity,
   type PuzzleId,
@@ -36,7 +35,7 @@ export type ActiveGuidance = PresentedGuidanceIntervention & {
 export type GameControllerState = {
   readonly mode: GamePrimaryMode
   readonly activePuzzle: PuzzleId | null
-  readonly completedArtifacts: ReadonlyMap<PuzzleId, CompletedArtifact>
+  readonly completedPuzzles: ReadonlySet<PuzzleId>
   readonly firstAttempts: ReadonlyMap<PuzzleId, GameSession>
   readonly replays: ReadonlyMap<PuzzleId, GameSession>
   readonly deliveredGuidance: readonly GuidanceDeliveryIdentity[]
@@ -52,6 +51,11 @@ export type InitialGamePreferences = {
   readonly reducedMotion: boolean
 }
 
+/** Detached diagnostic view; mutating it cannot alter controller authority. */
+export function snapshotGameControllerState(state: GameControllerState): GameControllerState {
+  return structuredClone(state)
+}
+
 export function createInitialGameState(
   catalog: GameCatalog,
   preferences: InitialGamePreferences,
@@ -61,7 +65,7 @@ export function createInitialGameState(
   return {
     mode: 'archive',
     activePuzzle: null,
-    completedArtifacts: new Map(),
+    completedPuzzles: new Set(),
     firstAttempts: new Map(),
     replays: new Map(),
     deliveredGuidance: [],

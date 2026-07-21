@@ -2,24 +2,9 @@
   "puzzle": "artifact-polarity-direction-contrast",
   "solution": [
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:two-mark-projection",
-          "at": {
-            "sel": {
-              "region": "manifest-host",
-              "regions": [],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "forward"
-        }
-      ],
-      "placements": []
+      "kind": "artifactManifest",
+      "artifact": "two-mark-projection",
+      "region": "manifest-host"
     },
     {
       "label": "deiteration",
@@ -162,26 +147,14 @@
       "placements": []
     },
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:two-mark-projection",
-          "at": {
-            "sel": {
-              "region": "workspace",
-              "regions": [
-                "dissolve-outer"
-              ],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "reverse"
-        }
-      ],
-      "placements": []
+      "kind": "artifactDissolve",
+      "artifact": "two-mark-projection",
+      "selection": {
+        "region": "workspace",
+        "regions": ["dissolve-outer"],
+        "nodes": [],
+        "wires": []
+      }
     },
     {
       "label": "doubleCutElim",
@@ -198,7 +171,8 @@
     "two-mark-projection"
   ],
   "expectedRules": [
-    "theorem",
+    "artifactManifest",
+    "artifactDissolve",
     "deiteration",
     "erasure",
     "doubleCutElim"

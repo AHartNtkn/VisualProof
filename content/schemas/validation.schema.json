@@ -13,7 +13,17 @@
         "y": { "type": "number" }
       }
     },
-    "action": {
+    "selection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["region", "regions", "nodes", "wires"],
+      "properties": {
+        "region": { "type": "string", "minLength": 1 },
+        "regions": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "nodes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "wires": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "proofAction": {
       "type": "object", "additionalProperties": false,
       "required": ["label", "steps", "placements"],
       "properties": {
@@ -30,6 +40,31 @@
           }
         }
       }
+    },
+    "artifactManifest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "artifact", "region"],
+      "properties": {
+        "kind": { "const": "artifactManifest" },
+        "artifact": { "$ref": "#/$defs/id" },
+        "region": { "type": "string", "minLength": 1 }
+      }
+    },
+    "artifactDissolve": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "artifact", "selection"],
+      "properties": {
+        "kind": { "const": "artifactDissolve" },
+        "artifact": { "$ref": "#/$defs/id" },
+        "selection": { "$ref": "#/$defs/selection" }
+      }
+    },
+    "action": {
+      "oneOf": [
+        { "$ref": "#/$defs/proofAction" },
+        { "$ref": "#/$defs/artifactManifest" },
+        { "$ref": "#/$defs/artifactDissolve" }
+      ]
     }
   },
   "type": "object", "additionalProperties": false,

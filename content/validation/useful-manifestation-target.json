@@ -2,24 +2,9 @@
   "puzzle": "useful-manifestation-target",
   "solution": [
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:two-mark-projection",
-          "at": {
-            "sel": {
-              "region": "r3",
-              "regions": [],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "forward"
-        }
-      ],
-      "placements": []
+      "kind": "artifactManifest",
+      "artifact": "two-mark-projection",
+      "region": "r3"
     },
     {
       "label": "deiteration",
@@ -141,7 +126,7 @@
     "two-mark-projection"
   ],
   "expectedRules": [
-    "theorem",
+    "artifactManifest",
     "deiteration",
     "erasure",
     "doubleCutElim"

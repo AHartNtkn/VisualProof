@@ -2,24 +2,9 @@
   "puzzle": "artifact-creates-copy-authority",
   "solution": [
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:single-mark-return",
-          "at": {
-            "sel": {
-              "region": "r1",
-              "regions": [],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "forward"
-        }
-      ],
-      "placements": []
+      "kind": "artifactManifest",
+      "artifact": "single-mark-return",
+      "region": "r1"
     },
     {
       "label": "deiteration",
@@ -113,7 +98,7 @@
     "single-mark-return"
   ],
   "expectedRules": [
-    "theorem",
+    "artifactManifest",
     "deiteration",
     "erasure",
     "doubleCutElim"

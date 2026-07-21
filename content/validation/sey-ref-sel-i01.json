@@ -2,48 +2,24 @@
   "puzzle": "sey-ref-sel-i01",
   "solution": [
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:single-mark-return",
-          "at": {
-            "sel": {
-              "region": "r2",
-              "regions": [
-                "r1_0"
-              ],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "reverse"
-        }
-      ],
-      "placements": []
+      "kind": "artifactDissolve",
+      "artifact": "single-mark-return",
+      "selection": {
+        "region": "r2",
+        "regions": ["r1_0"],
+        "nodes": [],
+        "wires": []
+      }
     },
     {
-      "label": "theorem",
-      "steps": [
-        {
-          "rule": "theorem",
-          "name": "game:artifact:nested-owner-introduction",
-          "at": {
-            "sel": {
-              "region": "r2",
-              "regions": [
-                "r1_1"
-              ],
-              "nodes": [],
-              "wires": []
-            },
-            "args": []
-          },
-          "direction": "reverse"
-        }
-      ],
-      "placements": []
+      "kind": "artifactDissolve",
+      "artifact": "nested-owner-introduction",
+      "selection": {
+        "region": "r2",
+        "regions": ["r1_1"],
+        "nodes": [],
+        "wires": []
+      }
     },
     {
       "label": "doubleCutElim",
@@ -61,7 +37,7 @@
     "nested-owner-introduction"
   ],
   "expectedRules": [
-    "theorem",
+    "artifactDissolve",
     "doubleCutElim"
   ],
   "recognizedStates": []

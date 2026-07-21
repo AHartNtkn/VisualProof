@@ -11,9 +11,9 @@ const expectedRules = [
   'congruenceJoin', 'conversion', 'deiteration', 'doubleCutElim',
   'doubleCutIntro', 'erasure', 'fission', 'fusion', 'headStrip',
   'inconsistentCutElim', 'iteration', 'openTermSpawn', 'relFold',
-  'relUnfold', 'relationSpawn', 'theorem', 'vacuousElim', 'vacuousIntro',
+  'relUnfold', 'relationSpawn', 'vacuousElim', 'vacuousIntro',
   'wireJoin', 'wireSever',
-] as const satisfies readonly ProofStep['rule'][]
+] as const satisfies readonly Exclude<ProofStep['rule'], 'theorem'>[]
 
 const routeOwners: Record<GameProofInteractionRoute, string> = {
   'empty-space-menu': 'GameProofMoveController.contextMenu',
@@ -24,14 +24,14 @@ const routeOwners: Record<GameProofInteractionRoute, string> = {
   'line-drag': 'ConnectionDragController/FissionDragController',
   'line-menu': 'GameProofMoveController.contextMenu',
   'construction-loupe': 'ConstructionLoupe',
-  'artifact-drop': 'GameProofViewport.dropArtifact',
 }
 
 describe('game proof-rule reachability contract', () => {
-  it('assigns all 26 kernel rules to an owned user interaction route', () => {
+  it('assigns every game-exposed kernel rule to an owned user interaction route', () => {
     const routed = Object.keys(GAME_PROOF_RULE_ROUTES).sort()
     expect(routed).toEqual([...expectedRules].sort())
-    expect(routed).toHaveLength(26)
+    expect(routed).toHaveLength(25)
+    expect(routed).not.toContain('theorem')
     for (const route of Object.values(GAME_PROOF_RULE_ROUTES)) {
       expect(routeOwners[route]).toBeTruthy()
     }

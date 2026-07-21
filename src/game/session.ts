@@ -1,13 +1,16 @@
 import type { Diagram } from '../kernel/diagram/diagram'
 import { applyAction, type ProofAction } from '../kernel/proof/action'
 import type { ProofContext } from '../kernel/proof/context'
-import { actionFromJson, actionToJson } from '../kernel/proof/json'
+import { applyArtifactAction, type ArtifactAction } from './artifact'
+import { snapshotGameSessionAction } from './action'
 import { isBlank } from './blank'
 import { GameDomainError, type PuzzleDefinition, type PuzzleId } from './types'
 
+export type GameSessionAction = ProofAction | ArtifactAction
+
 export type GameTimeline = {
   readonly states: readonly Diagram[]
-  readonly actions: readonly ProofAction[]
+  readonly actions: readonly GameSessionAction[]
   readonly cursor: number
 }
 
@@ -23,7 +26,11 @@ export type GameTransition = {
 
 export type GameRuntimeAuthority = {
   readonly context: ProofContext
+  artifact(id: PuzzleId): PuzzleDefinition | undefined
 }
+
+export const isArtifactAction = (action: GameSessionAction): action is ArtifactAction =>
+  'kind' in action
 
 export function startPuzzle(puzzle: PuzzleDefinition): GameSession {
   return { puzzle: puzzle.id, timeline: { states: [puzzle.diagram], actions: [], cursor: 0 } }
@@ -44,27 +51,35 @@ export function moveCursor(session: GameSession, cursor: number): GameSession {
 
 export function applyGameAction(
   session: GameSession,
-  action: ProofAction,
+  action: GameSessionAction,
   authority: GameRuntimeAuthority,
 ): GameTransition {
   const current = currentDiagram(session)
   if (isBlank(current)) {
     throw new GameDomainError('cannot apply a proof action from canonical blank')
   }
-  const ownedAction = actionFromJson(actionToJson(action), 'game proof action')
-  const next = applyAction(current, ownedAction, authority.context, 'backward', (diagram, stepIndex) => {
-    if (isBlank(diagram) && stepIndex < ownedAction.steps.length - 1) {
-      throw new GameDomainError('a proof action cannot continue after reaching canonical blank')
-    }
-  })
+  const next = isArtifactAction(action)
+    ? (() => {
+        const artifact = authority.artifact(action.artifact)
+        if (artifact === undefined) {
+          throw new GameDomainError(`completed artifact '${action.artifact}' is not available`)
+        }
+        return applyArtifactAction(current, action, artifact)
+      })()
+    : applyAction(current, action, authority.context, 'backward', (diagram, stepIndex) => {
+        if (isBlank(diagram) && stepIndex < action.steps.length - 1) {
+          throw new GameDomainError('a proof action cannot continue after reaching canonical blank')
+        }
+      })
 
   const states = session.timeline.states.slice(0, session.timeline.cursor + 1)
   const actions = session.timeline.actions.slice(0, session.timeline.cursor)
+  const retainedAction = snapshotGameSessionAction(action)
   const updated: GameSession = {
     ...session,
     timeline: {
       states: [...states, next],
-      actions: [...actions, ownedAction],
+      actions: [...actions, retainedAction],
       cursor: actions.length + 1,
     },
   }
