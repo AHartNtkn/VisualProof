@@ -41,13 +41,12 @@ import './construction-loupe.css'
 
 export type ConstructionLoupeKeyAction = 'commit' | 'close' | 'undo' | 'redo'
 
-export function resolveConstructionLoupeKey(sample: KeySample, editingText: boolean): ConstructionLoupeKeyAction | null {
+export function resolveConstructionLoupeKey(sample: KeySample, _editingText: boolean): ConstructionLoupeKeyAction | null {
   if (sample.repeat) return null
   const key = sample.key.toLowerCase()
   if ((sample.ctrlKey || sample.metaKey) && key === 'z') return sample.shiftKey ? 'redo' : 'undo'
   if (sample.key === 'Enter') return 'commit'
   if (sample.key === 'Escape') return 'close'
-  if (sample.key === 'Backspace' && !editingText) return 'close'
   return null
 }
 
@@ -217,7 +216,7 @@ export class ConstructionLoupe {
     this.#root.setAttribute('aria-label', `Circular relation construction loupe, arity ${this.#draft.arity}`)
     const instructions = document.createElement('p')
     instructions.className = 'cursebreaker-construction-loupe__instructions'
-    instructions.textContent = 'Enter commits. Escape or Backspace closes. Control Z undoes within this construction.'
+    instructions.textContent = 'Enter commits. Escape closes. Control Z undoes within this construction.'
     this.#canvas = document.createElement('canvas')
     this.#canvas.className = 'cursebreaker-construction-loupe__canvas'
     this.#canvas.setAttribute('aria-label', 'Anonymous circular relation draft')

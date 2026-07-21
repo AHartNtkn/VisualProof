@@ -180,6 +180,10 @@ describe('rendered circular construction loupe', () => {
       await canvas.click({ button: 'right', position: { x: 260, y: 260 } })
       await expect.poll(() => page.locator('.vpa-spawn-cascade').count()).toBe(1)
       await page.keyboard.press('Escape')
+      await canvas.focus()
+      await page.keyboard.press('Backspace')
+      await page.keyboard.press('Delete')
+      expect(await page.locator('.cursebreaker-construction-loupe').count()).toBe(1)
       await page.keyboard.press('Escape')
       await expect.poll(() => page.locator('.cursebreaker-construction-loupe').count()).toBe(0)
       expect(await page.evaluate(() => window.__constructionLoupeFixture.closed)).toBe(1)
@@ -193,7 +197,7 @@ describe('rendered circular construction loupe', () => {
     } finally { await page.close() }
   })
 
-  it('does not let Backspace close while the spawn search text entry is active', async () => {
+  it('keeps both destructive keys native while the spawn search text entry is active', async () => {
     const page = await openFixture()
     try {
       const canvas = page.locator('.cursebreaker-construction-loupe__canvas')
@@ -203,6 +207,10 @@ describe('rendered circular construction loupe', () => {
       await page.keyboard.press('Backspace')
       expect(await page.locator('.cursebreaker-construction-loupe').count()).toBe(1)
       expect(await search.inputValue()).toBe('ab')
+      await page.keyboard.press('Home')
+      await page.keyboard.press('Delete')
+      expect(await page.locator('.cursebreaker-construction-loupe').count()).toBe(1)
+      expect(await search.inputValue()).toBe('b')
     } finally { await page.close() }
   })
 
